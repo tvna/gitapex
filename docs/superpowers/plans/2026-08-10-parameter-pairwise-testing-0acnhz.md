@@ -127,6 +127,17 @@ than folding them into the generated table."
    and `test_evaluate_denies_and_aggregates_multiple_failures` as their
    own named functions, unfolded into the generated table (per the
    issue's Constraints: no reduction in existing regression coverage).
+5. Add one module-level assertion (not a separate artifact -- runs as
+   part of collection, e.g. at import time or in a dedicated
+   `test_pairwise_table_covers_every_valid_2_way_pair`) that
+   independently recomputes the full required 2-way pair set from the
+   two dimensions' domains (post-`filter_func`, i.e. only pairs
+   `filter_func` would accept), computes the pair set actually present
+   across the `AllPairs`-emitted rows, and fails loudly listing any
+   difference. `filter_func` only prevents an *invalid* row from being
+   emitted; it does not by itself prove the emitted, *valid* rows still
+   cover every required pair, so this closes that gap with a real,
+   collected check rather than an assumption.
 
 **Proof method:** `uv run --frozen pytest
 tests/test_gitapex_check_pr_issue_acm_disclosure.py -v` passes.
