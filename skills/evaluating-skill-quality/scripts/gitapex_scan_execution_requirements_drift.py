@@ -2,72 +2,49 @@
 """Cross-check a skill's declared spec.executionRequirements against real
 SKILL.md prose and bundled scripts/*.py content (issue #1022).
 
-Bundled with the evaluating-skill-quality skill itself (not a repo-wide
-.github/scripts/ CI gate): this is a companion to that skill's own
-read-only shape checker, skills/evaluating-skill-quality/scripts/
-gitapex_check_skill_shape.py, run the same way -- against one target skill
-directory at a time, as part of that skill's "Deterministic shape" lane
-(see SKILL.md's own Two lanes section). skills/evaluating-skill-quality/
-references/skill-metadata.schema.json validates executionRequirements'
-SHAPE only (its own docstring says so explicitly and names this exact
-companion-scanner pattern as the fix, already implemented once for
-metadata.name/skillDependencies/lifecycle.deprecated.replacement by
-.github/scripts/gitapex_scan_skill_metadata_schema.py, a *repo-wide* CI
-gate over every skill at once). Nothing before this scanner cross-checks
-one skill's own declared network mode/domains and tools read/write/shell
-tags against what that skill's own content actually does -- a skill could
-claim network.mode: disabled while a bundled script performs network I/O,
-or claim tools.write: [] while SKILL.md's own prose instructs a mutating
-action, with nothing to catch the drift.
+Bundled with the evaluating-skill-quality skill itself, alongside its
+read-only shape checker (gitapex_check_skill_shape.py) -- run the same
+way, against one target skill directory at a time, as part of that
+skill's "Deterministic shape" lane (see SKILL.md's Two lanes section).
+skills/evaluating-skill-quality/references/skill-metadata.schema.json
+validates executionRequirements' SHAPE only; this scanner cross-checks
+one skill's own declared network mode/domains and tools write/shell tags
+against what its own content actually does.
 
 Two independent, best-effort pattern-match checks, one per
-executionRequirements sub-block (mirrors gitapex_check_skill_shape.py's
-own per-subkey convention):
+executionRequirements sub-block:
 
 - find_network_drift: declared network.mode/domains vs. network-capable
   imports and literal https?:// hosts found in skill_dir/scripts/*.py.
 - find_tools_drift: declared tools.write/tools.shell vs. mutating-action
   language found anywhere in skill_dir/SKILL.md's full text. Deliberately
-  NOT anchored to a single "Procedure" heading: a live check across every
-  skill in this repository found the heading name itself varies (Steps,
-  Procedure, Exact sequence, Checklist, Overview, ...), so anchoring on one
-  name would silently blind the scanner on most real skills. tools.read is
-  not checked -- the issue's own criterion rows name only write/shell as
-  the safety-relevant under-declaration direction.
+  NOT anchored to a single "Procedure" heading: the heading name varies
+  across real skills (Steps, Procedure, Exact sequence, Checklist, ...),
+  so anchoring on one would blind the scanner on most of them. tools.read
+  is not checked -- only write/shell are the safety-relevant
+  under-declaration direction.
 
 Each finding carries a severity: "error" for under-declaration (declared
-narrower than actual -- the safety-relevant direction per issue #1022's own
-Acceptance Criteria Map) or "warning" for over-declaration (declared
-broader than actual content ever exercises -- a hygiene finding, reported
-but never failing a run on its own). This is a pattern-match net, not a
-formal proof: a network call routed through an unlisted helper, or a
-mutating action described in prose this scanner's verb/noun lists do not
-recognize, can still slip through undetected -- the same disclosed
-false-negative limitation this repository's other AST/pattern-based
-scanners already carry (see test_dynamically_constructed_host_evades_
-allowlist_check in this module's own test suite for one concrete,
-deliberately-constructed example, not only a prose claim).
+narrower than actual) or "warning" for over-declaration (declared broader
+than actual content ever exercises -- a hygiene finding, never failing a
+run on its own). This is a pattern-match net, not a formal proof: a
+network call routed through an unlisted helper or dynamically constructed
+host, or mutating-action language this scanner's verb/noun lists do not
+recognize, can slip through undetected (see
+test_dynamically_constructed_host_evades_allowlist_check for one
+deliberately-constructed example).
 
-Not registered in .gitapex/ssot.json and not wired as a "real repository
-has zero drift" gate the way gitapex_scan_skill_metadata_schema.py's own
-test_real_repository_* is -- mirrors gitapex_check_skill_shape.py's own
-un-registered status (grep confirms it carries no .gitapex/ssot.json gate
-entry of its own either): a per-skill checker invoked deliberately against
+Not registered in .gitapex/ssot.json, matching gitapex_check_skill_shape.py's
+own un-registered status: a per-skill checker invoked deliberately against
 one target at a time is not the shape of a repo-wide automatic gate. A
-live run against this repository's own skills/ tree today reports real
-findings issue #1022's own Non-goals explicitly excludes retroactively
-auditing/fixing here (e.g. planning-a-branch-from-an-issue declares
-shell: [] but its own Step 8 invokes `python3 scripts/
-gitapex_check_acm_present.py`) -- this module's own fixture-based unit
-tests are what CI enforces, the same as gitapex_check_skill_shape.py's own
-test_gitapex_check_skill_shape.py.
+live run against this repository's own skills/ tree reports real findings
+issue #1022's own Non-goals excludes retroactively fixing here -- this
+module's own fixture-based unit tests are what CI enforces.
 
 Self-contained, stdlib + PyYAML only, no cross-import from any other
-.github/scripts/*.py file (issue #1022's own Constraints) -- the skill
-directory discovery and sidecar-read helpers below intentionally duplicate
-gitapex_scan_skill_metadata_schema.py's own small versions rather than
-importing them, matching this repository's established convention for
-these standalone scripts.
+.github/scripts/*.py file -- the skill directory discovery and
+sidecar-read helpers below intentionally duplicate
+gitapex_scan_skill_metadata_schema.py's own small versions.
 
 Run standalone against one skill directory --
 ``python3 skills/evaluating-skill-quality/scripts/
@@ -103,7 +80,14 @@ SIDECAR_RELATIVE_PATH = "metadata/gitapex.yaml"
 MIN_EXPECTED_SKILL_DIRS = 15
 
 NETWORK_CAPABLE_MODULES = (
-    "urllib",
+    # Bare "urllib" also matched pure-parsing submodules with no network
+    # I/O of their own (import urllib.parse) -- found by an independent
+    # review; only the two network-capable submodules are listed now.
+    # "from urllib import request" still slips through unmatched (this
+    # pattern anchors on the dotted module path after import/from), a
+    # disclosed false-negative, not fixed here.
+    "urllib.request",
+    "urllib.error",
     "requests",
     "http.client",
     "socket",
@@ -120,32 +104,19 @@ _NETWORK_IMPORT_PATTERN = re.compile(
 _URL_HOST_PATTERN = re.compile(r"https?://([A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?)")
 
 _WRITE_VERBS = r"(?:writes?|wrote|creates?|drafts?|edits?|updates?|modifies|generates?|authors?)"
-# A single trailing \b applies to whichever alternative matched, regardless
-# of branch -- adversarial review of this file found every internal-\b
-# variant (a prior version wrote `commit` and `PR\b` inconsistently) let a
-# no-\b alternative match as a bare prefix of an unrelated word right after
-# it (e.g. "creates a review committee" matched via "commit", "creates a
-# script" via "script" inside "scripting"), a false positive with nothing
-# to do with writing a file. One trailing \b after the whole group closes
-# every alternative at once.
+# A single trailing \b (not one per alternative) applies to whichever
+# alternative matched -- otherwise a no-\b alternative matches as a bare
+# prefix of an unrelated word (e.g. "commit" inside "committee").
 _WRITE_NOUNS = r"(?:file|SKILL\.md|script|\.py|\.md|\.ya?ml|\.json|branch|commit|PR|pull request|issue|document)\b"
 _WRITE_INTENT_PATTERN = re.compile(
     rf"\b{_WRITE_VERBS}\b(?:\s+\S+){{0,4}}\s+{_WRITE_NOUNS}",
     re.IGNORECASE,
 )
-# Split into three alternations rather than one \b-wrapped group -- a prior
-# version wrapped every alternative (including four starting with a literal
-# backtick) in one leading \b, but \b demands a word/non-word transition and
-# a backtick is itself non-word, so every backtick-prefixed alternative was
-# unreachable whenever (as in virtually all real Markdown) the character
-# before the backtick was also non-word (whitespace/punctuation) -- found by
-# adversarial review of this file, reproduced directly against real
-# SKILL.md prose this scanner is meant to catch (e.g. "invokes `python3
-# scripts/...`" matched None). Only the generic run\s+` alternative
-# (anchored on the real word "run") ever matched, silently masking the bug.
-# The backtick-prefixed alternatives below need no \b at all: a literal
-# backtick is not a word character, so matching it directly already fixes
-# the position unambiguously.
+# Three alternations, not one \b-wrapped group: \b demands a word/non-word
+# transition, and a backtick is itself non-word, so a backtick-prefixed
+# alternative wrapped in a leading \b can never match right after ordinary
+# Markdown whitespace/punctuation. The backtick-prefixed alternatives below
+# need no \b: matching the backtick itself already anchors the position.
 _SHELL_INTENT_PATTERN = re.compile(
     r"\b(?:Bash tool|shell command|subprocess|CLI)\b"
     r"|run\s+`"
@@ -215,33 +186,28 @@ def find_network_drift(network: Any, skill_dir: pathlib.Path) -> list[Finding]:
     vs. network-capable imports/literal https?:// hosts found in
     skill_dir/scripts/*.py."""
     mode_value = network.get("mode") if isinstance(network, dict) else None
-    # dict.get(key, default) only substitutes the default when the key is
-    # ABSENT -- a real `mode: null` (valid YAML for an empty value) or an
-    # unrecognized/mis-cased string (e.g. "Disabled", "off") passed straight
-    # through as mode_value, and none of the three mode == "..." branches
-    # below matched it, so find_network_drift fell through and silently
-    # returned [] even against a script making real, unrestricted network
-    # calls -- a fail-OPEN default on malformed input, found by adversarial
-    # review of this file and reproduced directly (find_network_drift({
-    # "mode": None}, ...) against a skill_dir with a real `requests.get(...)`
-    # call returned [] before this fix). Any value outside the three
-    # recognized modes now falls back to "disabled", the strictest
-    # treatment -- fail-closed, matching this scanner's own documented
-    # equivalence of an absent network block to disabled.
+    # dict.get(key, default) only substitutes on an ABSENT key -- a real
+    # `mode: null` or an unrecognized/mis-cased string must not slip
+    # through unmatched by any branch below. Any value outside the three
+    # recognized modes falls back to "disabled", the strictest treatment,
+    # matching an absent network block's own equivalence to disabled.
     mode = mode_value if mode_value in ("disabled", "allowlist", "unrestricted") else "disabled"
     domains = network.get("domains") if isinstance(network, dict) else None
-    # Hostnames are case-insensitive (RFC 4343); lower-cased at declaration
-    # time so the allowlist set-difference below compares like-for-like --
-    # found by adversarial review of this file: a script referencing
-    # "https://GitHub.com/x" against a correctly declared `domains:
-    # [github.com]` previously produced a false-positive error finding.
+    # Hostnames are case-insensitive (RFC 4343); lower-cased here so the
+    # allowlist set-difference below compares like-for-like.
     declared_domains = {d.lower() for d in domains if isinstance(d, str)} if isinstance(domains, list) else set()
 
     script_texts = _bundled_script_texts(skill_dir)
     has_network_import = any(_NETWORK_IMPORT_PATTERN.search(text) for text in script_texts)
     referenced_hosts: set[str] = set()
     for text in script_texts:
-        referenced_hosts.update(host.lower() for host in _URL_HOST_PATTERN.findall(text))
+        # A commented-out reference (# see https://docs.python.org/...) is
+        # not executed and must not count as network usage -- found by an
+        # independent review; only import/from lines are already immune
+        # (a "# import requests" comment never matches ^\s*(?:import|from)),
+        # so only this URL-host extraction needed the filter.
+        code_only = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+        referenced_hosts.update(host.lower() for host in _URL_HOST_PATTERN.findall(code_only))
 
     findings: list[Finding] = []
     if mode == "disabled" and (has_network_import or referenced_hosts):
@@ -249,8 +215,9 @@ def find_network_drift(network: Any, skill_dir: pathlib.Path) -> list[Finding]:
             Finding(
                 "error",
                 "network-mode-vs-script-content: declared network.mode "
-                f"{mode!r} (or omitted) but bundled scripts show "
-                "network-capable usage",
+                f"{mode_value!r} (absent or unrecognized values are treated "
+                "as 'disabled') but bundled scripts show network-capable "
+                "usage",
             )
         )
     elif mode == "allowlist":
@@ -406,7 +373,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("target", help="Path to a skill directory (e.g. skills/<name>).")
     args = parser.parse_args(argv)
 
-    findings = find_skill_drift(pathlib.Path(args.target))
+    target = pathlib.Path(args.target)
+    if not target.is_dir():
+        # A wrong path or a file path must not be blamed on a missing
+        # sidecar (find_skill_drift's own metadata-file-present message) --
+        # found by an independent review.
+        print(f"error: {target} is not a skill directory")
+        return 1
+
+    findings = find_skill_drift(target)
     errors = [f for f in findings if f.severity == "error"]
     warnings = [f for f in findings if f.severity == "warning"]
 

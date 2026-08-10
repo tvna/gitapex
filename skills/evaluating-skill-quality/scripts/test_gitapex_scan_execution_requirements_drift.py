@@ -256,6 +256,28 @@ def test_allowlist_host_comparison_is_case_insensitive(tmp_path: pathlib.Path) -
     assert findings == []
 
 
+def test_urllib_parse_alone_is_not_network_capable(tmp_path: pathlib.Path) -> None:
+    """A prior version listed bare "urllib" in NETWORK_CAPABLE_MODULES, so
+    the trailing (?:\\.\\w+)* suffix let "import urllib.parse" match too --
+    but urllib.parse performs no network I/O of its own. A skill declaring
+    network.mode: disabled that only imports urllib.parse for pure URL
+    parsing must not be flagged."""
+    skill_dir = _make_skill(tmp_path, scripts={"helper.py": "import urllib.parse\n"})
+    assert scanner.find_network_drift({"mode": "disabled"}, skill_dir) == []
+
+
+def test_commented_out_url_does_not_count_as_network_usage(tmp_path: pathlib.Path) -> None:
+    """_URL_HOST_PATTERN previously scanned raw script text including
+    comment lines, so a doc reference like "# see https://docs.python.org/"
+    was treated as executed network usage."""
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={"helper.py": "# see https://docs.python.org/3/library/re.html\nimport pathlib\n"},
+    )
+    assert scanner.find_network_drift({"mode": "disabled"}, skill_dir) == []
+    assert scanner.find_network_drift({"mode": "allowlist", "domains": ["github.com"]}, skill_dir) == []
+
+
 # ---- find_drift (integration) ----
 
 
@@ -357,27 +379,33 @@ def test_main_requires_a_target_argument() -> None:
         scanner.main([])
 
 
-def test_main_clean_tree_exits_zero(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_nonexistent_target_fails_loudly(capsys: pytest.CaptureFixture[str]) -> None:
+    exit_code = scanner.main(["some/nonexistent/skill/dir"])
+    assert exit_code == 1
+    assert "is not a skill directory" in capsys.readouterr().out
+
+
+def test_main_clean_tree_exits_zero(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(scanner, "find_skill_drift", lambda skill_dir: [])
-    assert scanner.main(["some/skill/dir"]) == 0
+    assert scanner.main([str(tmp_path)]) == 0
 
 
-def test_main_warning_only_exits_zero(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_warning_only_exits_zero(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         scanner,
         "find_skill_drift",
         lambda skill_dir: [scanner.Finding("warning", "some over-declaration")],
     )
-    assert scanner.main(["some/skill/dir"]) == 0
+    assert scanner.main([str(tmp_path)]) == 0
 
 
-def test_main_error_exits_one(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_error_exits_one(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         scanner,
         "find_skill_drift",
         lambda skill_dir: [scanner.Finding("error", "some under-declaration")],
     )
-    assert scanner.main(["some/skill/dir"]) == 1
+    assert scanner.main([str(tmp_path)]) == 1
 
 
 def test_main_end_to_end_against_a_real_skill_dir_no_mocking(
@@ -535,3 +563,7 @@ def test_real_repository_scan_runs_without_raising() -> None:
     findings = scanner.find_drift()
     assert isinstance(findings, list)
     assert all(isinstance(f, scanner.Finding) for f in findings)
+    # A skill-discovery-floor finding means discovery itself failed, in
+    # which case every assertion above passes vacuously without the scan
+    # having read a single real skill -- found by an independent review.
+    assert not any("skill-discovery-floor" in f.message for f in findings)
