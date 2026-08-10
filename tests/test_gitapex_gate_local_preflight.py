@@ -124,21 +124,21 @@ def test_missing_local_stdin_stays_none(tmp_path: pathlib.Path) -> None:
 
 
 def test_unreadable_registry_raises(tmp_path: pathlib.Path) -> None:
-    with pytest.raises(gitapex_gate_local_preflight.PreflightRegistryError, match="cannot be read as UTF-8"):
+    with pytest.raises(gitapex_gate_local_preflight.PreflightRegistryError, match="cannot be read"):
         gitapex_gate_local_preflight.load_local_checks(tmp_path / "does-not-exist.json")
 
 
 def test_non_utf8_registry_raises(tmp_path: pathlib.Path) -> None:
     path = tmp_path / "ssot.json"
     path.write_bytes(b"\xff\xfe not utf-8")
-    with pytest.raises(gitapex_gate_local_preflight.PreflightRegistryError, match="cannot be read as UTF-8"):
+    with pytest.raises(gitapex_gate_local_preflight.PreflightRegistryError, match="is not valid UTF-8"):
         gitapex_gate_local_preflight.load_local_checks(path)
 
 
 def test_unparseable_registry_raises(tmp_path: pathlib.Path) -> None:
     path = tmp_path / "ssot.json"
     path.write_text("{not json", encoding="utf-8")
-    with pytest.raises(gitapex_gate_local_preflight.PreflightRegistryError, match="cannot be parsed as JSON"):
+    with pytest.raises(gitapex_gate_local_preflight.PreflightRegistryError, match="is not valid JSON"):
         gitapex_gate_local_preflight.load_local_checks(path)
 
 

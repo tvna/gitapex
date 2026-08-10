@@ -138,7 +138,6 @@ the wired set without running anything, or via the pytest gate in
 from __future__ import annotations
 
 import argparse
-import json
 import pathlib
 import subprocess
 import sys
@@ -146,6 +145,7 @@ from dataclasses import dataclass
 from typing import TextIO
 
 import _gitapex_argv_safety
+from _gitapex_schema_validation import load_json_or_raise
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
@@ -263,14 +263,7 @@ def load_local_checks(ssot_path: pathlib.Path = SSOT_PATH) -> list[LocalCheck]:
     short list -- when the registry cannot be read or parsed at all, since
     an empty result and an unreadable registry would otherwise be
     indistinguishable to a caller reading only the exit code."""
-    try:
-        raw = ssot_path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as error:
-        raise PreflightRegistryError(f"{ssot_path}: cannot be read as UTF-8: {error}") from error
-    try:
-        instance = json.loads(raw)
-    except json.JSONDecodeError as error:
-        raise PreflightRegistryError(f"{ssot_path}: cannot be parsed as JSON: {error}") from error
+    instance = load_json_or_raise(ssot_path, PreflightRegistryError)
     if not isinstance(instance, dict) or not isinstance(instance.get("gates"), list):
         raise PreflightRegistryError(f"{ssot_path}: no 'gates' array at the document root")
 
