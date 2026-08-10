@@ -30,6 +30,7 @@ import urllib.request
 
 import gitapex_check_pr_issue_acm_disclosure as checker
 import pytest
+from allpairspy import AllPairs
 
 
 class Response:
@@ -373,99 +374,205 @@ def _opener_for(body: str, state: str = "open"):
     return opener
 
 
-def test_classify_issue_passes_with_acm_table():
-    reason = checker.classify_issue("o", "r", 1, "tok", opener=_opener_for(_VALID_ACM_TABLE), sleeper=lambda _: None)
-    assert reason is None
-
-
 @pytest.mark.parametrize("category", ["chore", "docs", "defect"])
 def test_classify_issue_passes_with_non_tracking_waiver(category):
+    # Not part of the generated table below: "category" isn't one of its
+    # two dimensions -- the outcome dimension only distinguishes
+    # "non_tracking_waiver" as one bucket, deliberately not per-category
+    # (see the table's own module docstring), so this enumeration of
+    # waiver_category's three non-tracking values would otherwise lose
+    # coverage if folded in.
     body = f"ACM: not-applicable ({category}): reason here.\n"
     reason = checker.classify_issue("o", "r", 1, "tok", opener=_opener_for(body), sleeper=lambda _: None)
     assert reason is None
 
 
-def test_classify_issue_fails_with_tracking_waiver():
-    body = "ACM: not-applicable (tracking): umbrella issue.\n"
-    reason = checker.classify_issue("o", "r", 1, "tok", opener=_opener_for(body), sleeper=lambda _: None)
-    assert reason is not None
-    assert "tracking" in reason
-    assert "#1" in reason
-
-
-def test_classify_issue_fails_with_no_disclosure():
-    reason = checker.classify_issue(
-        "o", "r", 1, "tok", opener=_opener_for("just a plain issue body"), sleeper=lambda _: None
-    )
-    assert reason is not None
-    assert "no Acceptance Criteria Map" in reason
-
-
-def test_classify_issue_fails_when_closed_even_with_valid_acm():
-    reason = checker.classify_issue(
-        "o", "r", 1, "tok", opener=_opener_for(_VALID_ACM_TABLE, state="closed"), sleeper=lambda _: None
-    )
-    assert reason is not None
-    assert "already closed" in reason
-
-
-def test_classify_issue_reports_not_found_distinctly():
-    def opener(request: urllib.request.Request) -> Response:
-        raise http_error(404, "{}")
-
-    reason = checker.classify_issue("o", "r", 999, "tok", opener=opener, sleeper=lambda _: None)
-    assert reason == "#999: issue not found"
-
-
-def test_classify_issue_reports_fetch_failure_without_echoing_body():
-    def opener(request: urllib.request.Request) -> Response:
-        raise http_error(500, "{}")
-
-    reason = checker.classify_issue("o", "r", 999, "tok", opener=opener, sleeper=lambda _: None)
-    assert reason is not None
-    assert "#999" in reason
-    assert "could not fetch" in reason
-
-
 def test_classify_issue_never_echoes_issue_body_into_the_reason():
+    # Not part of the generated table below: a security property (no
+    # leakage of arbitrary body content), not a citation-shape/outcome
+    # interaction the two dimensions model.
     secret_looking_body = "SUPER-SECRET-MARKER-1234 no disclosure here"
     reason = checker.classify_issue("o", "r", 1, "tok", opener=_opener_for(secret_looking_body), sleeper=lambda _: None)
     assert "SUPER-SECRET-MARKER-1234" not in reason
 
 
 # ---------------------------------------------------------------------------
-# evaluate
+# evaluate / classify_issue -- allpairspy pairwise (2-way) generated table
 # ---------------------------------------------------------------------------
+#
+# Pilot for issue #1005/#1008: generates coverage for the prior OAT
+# (one-factor-at-a-time) test_evaluate_*/test_classify_issue_* functions
+# above via two independent dimensions, exercised end-to-end through
+# evaluate() (which itself calls classify_issue once per resolving
+# citation number):
+#
+#   - citation shape: what evaluate()'s own extract_citations call sees in
+#     the PR title/body.
+#   - outcome: what classify_issue resolves a single cited issue number to,
+#     once evaluate() actually reaches the network layer ("token_absent"
+#     doubles as the placeholder outcome for the two shapes -- none,
+#     context_only -- that never reach classify_issue at all).
+#
+# "Multi-resolving" (e.g. "Closes #1, Fixes #2") is deliberately excluded
+# from these dimensions: evaluate() calls classify_issue once per resolving
+# number and joins every failure, so a multi-issue case needs its own
+# per-issue outcome pair, not one flat "outcome" value -- exactly what the
+# kept test_evaluate_denies_and_aggregates_multiple_failures below exists
+# to cover, not a generated dimension.
+#
+# "none"/"context_only" are only ever valid paired with the single
+# "token_absent" placeholder outcome (see _is_valid_pair below) -- a
+# degenerate, non-combinatorial case with nothing for a pairwise algorithm
+# to search, so those two rows are listed directly rather than generated.
+# allpairspy's own IPO-style search (allpairspy/allpairs.py: __next__ stops
+# once one pass finds no *new* unique pair, not once every *reachable*
+# valid pair is covered) got stranded early when asked to search this
+# highly-asymmetric-validity space directly -- confirmed empirically:
+# feeding all four shapes plus a filter_func into one AllPairs call silently
+# returned only 6 of the 18 valid pairs, which is exactly the gap this
+# file's own test_pairwise_table_covers_every_valid_2_way_pair below exists
+# to catch rather than assume away. The two resolving shapes are valid with
+# every outcome, so that genuinely combinatorial subspace (2x8 = 16 pairs)
+# is what AllPairs generates below.
+
+_TRIVIAL_SHAPES = ["none", "context_only"]
+_RESOLVING_SHAPES = ["single_resolving", "same_repo_qualified_resolving"]
+_CITATION_SHAPES = _TRIVIAL_SHAPES + _RESOLVING_SHAPES
+_OUTCOMES = [
+    "token_absent",
+    "valid_acm",
+    "non_tracking_waiver",
+    "tracking_waiver",
+    "no_disclosure",
+    "closed",
+    "fetch_404",
+    "fetch_500",
+]
 
 
-def test_evaluate_denies_when_nothing_cited():
-    passed, message = checker.evaluate("o", "r", "title", "no citation", "tok")
-    assert passed is False
-    assert "cites no issue" in message
+def _is_valid_pair(shape, outcome):
+    # evaluate() never reaches classify_issue for a non-resolving shape
+    # (none/context_only) regardless of token -- only the "token_absent"
+    # placeholder outcome is meaningful there.
+    if shape in _TRIVIAL_SHAPES:
+        return outcome == "token_absent"
+    return True
 
 
-def test_evaluate_passes_context_only_citation_without_any_token_or_network():
-    # token=None and no opener that would ever be called for a resolving
-    # fetch -- if this reaches the network layer at all, the default
-    # opener would attempt a real connection and this test would hang or
-    # error, not silently pass.
-    passed, message = checker.evaluate("o", "r", "title", "Refs #5", None)
-    assert passed is True
-    assert "context-only" in message
+def _allpairs_filter(row):
+    # The resolving-shapes subspace below is fully valid today (every
+    # outcome applies to both resolving shapes), so this is a no-op in
+    # practice -- kept so a future change narrowing _RESOLVING_SHAPES' or
+    # _OUTCOMES' validity is still caught by generation, not silently
+    # under-covered.
+    if len(row) < 2:
+        return True
+    return _is_valid_pair(row[0], row[1])
 
 
-def test_evaluate_denies_when_resolving_citation_but_no_token():
-    passed, message = checker.evaluate("o", "r", "title", "Closes #5", None)
-    assert passed is False
-    assert "#5" in message
-    assert "GH_TOKEN" in message and "GITHUB_TOKEN" in message
+def _scenario_for(shape, outcome):
+    """Build the evaluate() call kwargs plus the expected (passed, message
+    substrings) for one generated (shape, outcome) pair."""
+    if shape == "none":
+        return (
+            {"owner": "o", "repo": "r", "title": "title", "body": "no citation here", "token": "tok"},
+            False,
+            ("cites no issue",),
+        )
+    if shape == "context_only":
+        # token=None and no opener -- if evaluate() reached the network
+        # layer at all for this shape, the default opener would attempt a
+        # real connection and this case would hang or error, not pass.
+        return (
+            {"owner": "o", "repo": "r", "title": "title", "body": "Refs #5", "token": None},
+            True,
+            ("context-only",),
+        )
 
+    if shape == "single_resolving":
+        owner, repo, number, body = "o", "r", 1, "Closes #1"
+    else:
+        owner, repo, number, body = "tvna", "gitapex", 12, "Fixes tvna/gitapex#12"
 
-def test_evaluate_passes_when_resolving_issue_is_clean():
-    passed, _message = checker.evaluate(
-        "o", "r", "title", "Closes #1", "tok", opener=_opener_for(_VALID_ACM_TABLE), sleeper=lambda _: None
+    if outcome == "token_absent":
+        return (
+            {"owner": owner, "repo": repo, "title": "title", "body": body, "token": None},
+            False,
+            (f"#{number}", "GH_TOKEN", "GITHUB_TOKEN"),
+        )
+
+    # outcome -> (issue body, issue state, HTTP error code or None, expected passed, expected message substrings)
+    outcome_specs = {
+        "valid_acm": (_VALID_ACM_TABLE, "open", None, True, ()),
+        "non_tracking_waiver": ("ACM: not-applicable (chore): reason.\n", "open", None, True, ()),
+        "tracking_waiver": ("ACM: not-applicable (tracking): x.\n", "open", None, False, (f"#{number}", "tracking")),
+        "no_disclosure": (
+            "just a plain issue body",
+            "open",
+            None,
+            False,
+            (f"#{number}", "no Acceptance Criteria Map"),
+        ),
+        "closed": (_VALID_ACM_TABLE, "closed", None, False, (f"#{number}", "already closed")),
+        "fetch_404": ("", "", 404, False, (f"#{number}", "issue not found")),
+        "fetch_500": ("", "", 500, False, (f"#{number}", "could not fetch")),
+    }
+    resp_body, state, http_code, expect_passed, expect_substrings = outcome_specs[outcome]
+
+    def opener(request: urllib.request.Request) -> Response:
+        if http_code is not None:
+            raise http_error(http_code, "{}")
+        return Response(200, json.dumps({"body": resp_body, "state": state}))
+
+    return (
+        {
+            "owner": owner,
+            "repo": repo,
+            "title": "title",
+            "body": body,
+            "token": "tok",
+            "opener": opener,
+            "sleeper": lambda _: None,
+        },
+        expect_passed,
+        expect_substrings,
     )
-    assert passed is True
+
+
+_REQUIRED_PAIRS = {
+    (shape, outcome) for shape in _CITATION_SHAPES for outcome in _OUTCOMES if _is_valid_pair(shape, outcome)
+}
+_PAIRWISE_TABLE = [(shape, "token_absent") for shape in _TRIVIAL_SHAPES] + [
+    tuple(row) for row in AllPairs([_RESOLVING_SHAPES, _OUTCOMES], filter_func=_allpairs_filter)
+]
+
+
+def test_pairwise_table_covers_every_valid_2_way_pair():
+    # filter_func only prevents an *invalid* row from being emitted; it
+    # does not by itself prove the emitted, valid rows still cover every
+    # required pair -- recompute both sets independently and diff them.
+    # Missing rows aren't the only way this table could silently drift: a
+    # future generator change could also emit a duplicate or an invalid
+    # row without breaking the missing-pair check above, so check those
+    # too rather than assuming the two counts stay in lockstep.
+    covered = set(_PAIRWISE_TABLE)
+    missing = _REQUIRED_PAIRS - covered
+    unexpected = covered - _REQUIRED_PAIRS
+    duplicates = len(_PAIRWISE_TABLE) - len(covered)
+    assert not missing, f"generated pairwise table is missing required 2-way pairs: {sorted(missing)}"
+    assert not unexpected, f"generated pairwise table has unexpected rows: {sorted(unexpected)}"
+    assert not duplicates, f"generated pairwise table has {duplicates} duplicate row(s)"
+
+
+@pytest.mark.parametrize(
+    ("shape", "outcome"), _PAIRWISE_TABLE, ids=[f"{shape}-{outcome}" for shape, outcome in _PAIRWISE_TABLE]
+)
+def test_evaluate_pairwise(shape, outcome):
+    kwargs, expect_passed, expect_substrings = _scenario_for(shape, outcome)
+    passed, message = checker.evaluate(**kwargs)
+    assert passed is expect_passed
+    for substring in expect_substrings:
+        assert substring in message
 
 
 def test_evaluate_does_not_bypass_a_same_repo_qualified_resolving_citation():
