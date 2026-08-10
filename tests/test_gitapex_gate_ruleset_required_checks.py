@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import json
 import pathlib
+import subprocess
+import sys
 from typing import Any
 
 import gitapex_gate_ruleset_required_checks as gate
@@ -162,7 +164,7 @@ def test_non_mapping_workflow_documents_are_skipped(tmp_path: pathlib.Path) -> N
 
 
 def test_load_json_rejects_a_missing_file(tmp_path: pathlib.Path) -> None:
-    with pytest.raises(gate.RulesetGateError, match="cannot read"):
+    with pytest.raises(gate.RulesetGateError, match="cannot be read"):
         gate.load_json(tmp_path / "absent.json")
 
 
@@ -178,7 +180,7 @@ def test_load_json_rejects_malformed_and_non_object_documents(tmp_path: pathlib.
 def test_load_json_rejects_a_non_utf8_file(tmp_path: pathlib.Path) -> None:
     path = tmp_path / "main.json"
     path.write_bytes(b'{"name": "\xff\xfe"}')
-    with pytest.raises(gate.RulesetGateError, match="cannot read"):
+    with pytest.raises(gate.RulesetGateError, match="is not valid UTF-8"):
         gate.load_json(path)
 
 
@@ -545,3 +547,60 @@ def test_the_schema_accepts_the_documented_rollback_enforcement_values() -> None
         ruleset["enforcement"] = value
         assert gate.find_schema_violations(ruleset) == []
         assert any("not 'active'" in finding for finding in gate.find_shape_violations(ruleset))
+
+
+def test_committed_ruleset_fields_match_projection_keys() -> None:
+    # One definition of the six-key ruleset shape, not two: CommittedRuleset's
+    # own fields are asserted (at import time) to match _gitapex_rulesets'
+    # PROJECTION_KEYS exactly. Confirmed directly here too, so a test failure
+    # (not only an import-time crash) names the drift.
+    import _gitapex_rulesets
+
+    assert set(gate.CommittedRuleset.model_fields) == set(_gitapex_rulesets.PROJECTION_KEYS)
+
+
+def test_committed_ruleset_field_drift_fails_loudly_at_import(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A future edit to only one of CommittedRuleset/PROJECTION_KEYS must fail
+    # this module's own import-time check, not silently drift -- proven by
+    # actually re-importing the gate module with PROJECTION_KEYS patched to a
+    # mismatched value, not merely re-deriving the same comparison in-process.
+    # A RuntimeError, not a bare assert: see the next test for why that
+    # distinction is load-bearing here.
+    import importlib
+    import sys
+
+    import _gitapex_rulesets
+
+    monkeypatch.setattr(_gitapex_rulesets, "PROJECTION_KEYS", ("name", "target"))
+    sys.modules.pop("gitapex_gate_ruleset_required_checks", None)
+    try:
+        with pytest.raises(RuntimeError, match="have drifted from"):
+            importlib.import_module("gitapex_gate_ruleset_required_checks")
+    finally:
+        # Undo the patch *before* reimporting -- otherwise the reimport below
+        # would still see the mismatched PROJECTION_KEYS and fail again.
+        monkeypatch.undo()
+        sys.modules.pop("gitapex_gate_ruleset_required_checks", None)
+        importlib.import_module("gitapex_gate_ruleset_required_checks")
+
+
+def test_committed_ruleset_field_drift_still_fires_under_python_dash_o() -> None:
+    # `assert` is stripped entirely under `python -O`/`PYTHONOPTIMIZE=1` --
+    # a bare assert here would silently stop catching drift in exactly that
+    # mode. Proven live in a subprocess, not merely by inspecting the source:
+    # patch PROJECTION_KEYS to a mismatched value, import the gate module
+    # under `-O`, and confirm the RuntimeError still fires.
+    script = (
+        "import _gitapex_rulesets\n"
+        "_gitapex_rulesets.PROJECTION_KEYS = ('name', 'target')\n"
+        "import gitapex_gate_ruleset_required_checks\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-O", "-c", script],
+        cwd=REPO_ROOT / ".github" / "scripts",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0, "expected the drifted-fields RuntimeError to abort the import under -O"
+    assert "have drifted from" in result.stderr, result.stderr

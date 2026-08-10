@@ -592,6 +592,15 @@ _LIST_FLAG_DESTS = (
 )
 
 
+def _missing_dests(obj: object, dests: tuple[str, ...]) -> list[str]:
+    """Every name in `dests` that `obj` carries no attribute for -- the
+    shared shape of both `_apply_check_diff` wiring guards below (one
+    probing the parsed CLI `args`, one probing a `SkillAuditFlags`
+    instance), which differ only in which object they probe and their own
+    surrounding message wording."""
+    return [dest for dest in dests if not hasattr(obj, dest)]
+
+
 def _apply_check_diff(args: argparse.Namespace) -> int | None:
     """Fill `args`' applicability flags from a locally computed diff.
 
@@ -606,7 +615,7 @@ def _apply_check_diff(args: argparse.Namespace) -> int | None:
     workflow-wiring drift gate exists for -- a check that silently never
     fires -- so neither degrades to a warning.
     """
-    unwired = [dest for dest in _LIST_FLAG_DESTS if not hasattr(args, dest)]
+    unwired = _missing_dests(args, _LIST_FLAG_DESTS)
     if unwired:
         print(
             "error: this CLI registers no flag for: "
@@ -630,7 +639,7 @@ def _apply_check_diff(args: argparse.Namespace) -> int | None:
         return 1
 
     probe = compute.SkillAuditFlags(applicable=False)
-    unpublished = [dest for dest in _LIST_FLAG_DESTS if not hasattr(probe, dest)]
+    unpublished = _missing_dests(probe, _LIST_FLAG_DESTS)
     if unpublished:
         print(
             "error: gitapex_compute_skill_audit_flags publishes no flag for: "

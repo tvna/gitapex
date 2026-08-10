@@ -87,9 +87,10 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from functools import partial
 from pathlib import Path
 
-from _gitapex_vocabulary_lock import ScanError, extract_section, read_text
+from _gitapex_vocabulary_lock import ScanError, check_number_word_matches, extract_section, read_text
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SKILL_DIR = REPO_ROOT / "skills" / "evaluating-skill-quality"
@@ -133,19 +134,6 @@ _DIMENSION_COUNT_RE = re.compile(r"\*\*([A-Za-z]+)[ -]dimensions?\*\*", re.IGNOR
 # clause, deliberately excluding the tooling-dependent 8-9 pair) is a
 # different, legitimate sub-range claim, not a full-span one.
 _RANGE_RE = re.compile(r"\bdimensions\s+1-(\d+)\b", re.IGNORECASE)
-
-_NUMBER_WORDS = {
-    "one": 1,
-    "two": 2,
-    "three": 3,
-    "four": 4,
-    "five": 5,
-    "six": 6,
-    "seven": 7,
-    "eight": 8,
-    "nine": 9,
-    "ten": 10,
-}
 
 
 def check_dimension_headings(rubric_text: str) -> tuple[int, list[str]]:
@@ -210,16 +198,26 @@ def check_dimension_count(skill_text: str, rubric_text: str, heading_count: int)
             f"the dimension-count lock cannot run, and {heading_count} '## N. <Name>' heading(s) are present"
         )
     for label, matches in ((SKILL_MD, skill_matches), (RUBRIC_MD, _DIMENSION_COUNT_RE.findall(rubric_text))):
-        for word in matches:
-            declared = _NUMBER_WORDS.get(word.lower())
-            if declared is None:
-                problems.append(f"{label}: dimension count declared as {word!r}, which is not a recognized number word")
-            elif declared != heading_count:
-                problems.append(
-                    f"{label}: declares {declared} dimensions but {RUBRIC_MD} carries {heading_count} "
-                    "'## N. <Name>' heading(s) -- update the count in the same change as the heading"
-                )
+        problems.extend(
+            check_number_word_matches(
+                matches,
+                heading_count,
+                partial(_format_unrecognized_dimension_count, label),
+                partial(_format_dimension_count_mismatch, label, heading_count),
+            )
+        )
     return problems
+
+
+def _format_unrecognized_dimension_count(label: str, word: str) -> str:
+    return f"{label}: dimension count declared as {word!r}, which is not a recognized number word"
+
+
+def _format_dimension_count_mismatch(label: str, heading_count: int, _word: str, declared: int) -> str:
+    return (
+        f"{label}: declares {declared} dimensions but {RUBRIC_MD} carries {heading_count} "
+        "'## N. <Name>' heading(s) -- update the count in the same change as the heading"
+    )
 
 
 def check_range_references(skill_text: str, rubric_text: str, heading_count: int) -> list[str]:

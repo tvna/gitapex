@@ -59,6 +59,12 @@
       "path": "skills/scorer-gated-skill-edits/references/eval-run.schema.json",
       "format": "json",
       "authority": "Shape of a scorer-gated-skill-edits gate-run record, read by eval-results-schema-drift. Authored inside the owning skill (issue #932) rather than in .gitapex/, so the contract travels with SKILL.md when the skill is installed elsewhere. One entry stands in for the pair: skills/scorer-gated-skill-edits/references/eval-scores.schema.json sits in the same directory, ships with the same skill, and is authoritative the same way for each per-model score file a gate-run record points at"
+    },
+    {
+      "id": "eval-model-allowlist",
+      "path": ".gitapex/eval-model-allowlist.yaml",
+      "format": "yaml",
+      "authority": "The reviewed approved_models/retired_models mappings gitapex_gate_eval_declared_model.py grades every committed model identifier against (issue #925). A model id may be committed only if it appears under approved_models, each row carrying the evidence a human weighed when approving it; retired_models exists purely to turn the most likely failure into a specific message. Externalized from the gate script's own hardcoded dict literals (issue #1013) -- pointing this entry directly at the script's module-level constants instead was considered and rejected: policy_sources[].format's enum (toml/json/yaml/rego) has no way to name a Python source file's own constants"
     }
   ],
   "gates": [
@@ -703,7 +709,7 @@
       "planes": ["ci", "local"],
       "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_eval_declared_model.py"],
       "trigger": "tests/test_gitapex_gate_eval_declared_model.py inside the pytest step of .github/workflows/test.yml",
-      "policy_refs": [],
+      "policy_refs": ["eval-model-allowlist"],
       "cluster": "test-integrity",
       "tracking_issue": 925,
       "status": "active",
@@ -726,10 +732,10 @@
     {
       "id": "ruleset-sync-gate",
       "kind": "script",
-      "script": ".github/scripts/gitapex_scan_ruleset_drift.py",
+      "script": [".github/scripts/gitapex_scan_ruleset_drift.py", ".github/scripts/gitapex_compute_ruleset_verify_scope.py"],
       "rule": "Every status-check context named in .github/rulesets/main.json as it exists on the pull request's BASE ref must also be required by the live main ruleset. One-directional by design: a context live but absent from the file is the shape of an in-flight removal and is left to the scheduled full scan. Exit 2 (no live ruleset yet, or no readable token) is surfaced as a warning, not a failure, because neither precondition is one a pull request can satisfy.",
       "planes": ["ci"],
-      "local_exclusion": "Reads the live GitHub Rulesets API with an Administration-scoped token and needs the pull request's own base SHA; neither exists on a working tree.",
+      "local_exclusion": "Reads the live GitHub Rulesets API with an Administration-scoped token and needs the pull request's own base SHA; neither exists on a working tree. gitapex_compute_ruleset_verify_scope.py itself is locally invocable (issue #1013) -- it only resolves which scope/source-of-truth this gate needs, not the live-API comparison itself.",
       "trigger": ".github/workflows/ruleset-verify.yml, the ruleset-scan job on pull_request (which resolves --scope required-checks from github.event_name)",
       "policy_refs": ["main-branch-ruleset"],
       "cluster": "self-governance",
@@ -740,10 +746,10 @@
     {
       "id": "ruleset-drift-scan",
       "kind": "script",
-      "script": ".github/scripts/gitapex_scan_ruleset_drift.py",
+      "script": [".github/scripts/gitapex_scan_ruleset_drift.py", ".github/scripts/gitapex_compute_ruleset_verify_scope.py"],
       "rule": "The live main ruleset's projection (name/target/enforcement/conditions/bypass_actors/rules) must equal .github/rulesets/main.json's. Catches a change made directly in the Settings UI, which no pull request would ever show. Exit 2 (no live ruleset yet, or no readable token) is surfaced as a warning, not a failure, for the same reason as ruleset-sync-gate.",
       "planes": ["ci"],
-      "local_exclusion": "Reads the live GitHub Rulesets API with an Administration-scoped token; there is no offline equivalent of what GitHub currently enforces.",
+      "local_exclusion": "Reads the live GitHub Rulesets API with an Administration-scoped token; there is no offline equivalent of what GitHub currently enforces. gitapex_compute_ruleset_verify_scope.py itself is locally invocable (issue #1013) -- it only resolves which scope/source-of-truth this gate needs, not the live-API comparison itself.",
       "trigger": ".github/workflows/ruleset-verify.yml, the same ruleset-scan job on daily cron 09:00 UTC + workflow_dispatch (which resolves --scope full from github.event_name)",
       "policy_refs": ["main-branch-ruleset"],
       "cluster": "self-governance",

@@ -87,11 +87,20 @@ reviews:
     # Disabled because they are genuinely duplicated by this repository's
     # own pinned gates, where a version difference would surface findings
     # the local gate does not:
-    #   ruff       -- pyproject.toml pins `ruff>=0.15,<0.16`, run by
-    #                 .pre-commit-config.yaml and lint.yml. CodeRabbit
-    #                 bundles ruff 0.16.1, outside that range, which is
-    #                 exactly the two-different-ruffs split issue #678
-    #                 exists to prevent.
+    #   ruff       -- pyproject.toml pins `ruff>=0.16,<0.17` (corrected
+    #                 2026-08-10, issue #1013: this comment previously
+    #                 stated a stale `>=0.15,<0.16` pin), run by
+    #                 .pre-commit-config.yaml and lint.yml. CodeRabbit's
+    #                 own bundled 0.16.1 -- the version recorded when
+    #                 this rationale was first written -- falls inside
+    #                 the *current* pin, unlike when the pin was still
+    #                 0.15.x, which was the two-different-ruffs split
+    #                 issue #678 exists to prevent. Whether that means
+    #                 CodeRabbit's own `ruff` check can now safely be
+    #                 re-enabled is a separate judgment call for the repo
+    #                 owner -- not decided here, and CodeRabbit's actual
+    #                 bundled version was not independently re-verified
+    #                 as part of this correction.
     #   actionlint -- pinned in flake.nix and run in lint.yml via a
     #                 digest-pinned image.
     ruff:

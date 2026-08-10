@@ -115,7 +115,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from _gitapex_vocabulary_lock import ScanError, extract_section, read_text
+from _gitapex_vocabulary_lock import ScanError, check_number_word_matches, extract_section, read_text
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SKILL_DIR = REPO_ROOT / "skills" / "evaluating-deterministic-gate-quality"
@@ -168,18 +168,6 @@ _NARROWER_THAN_ALL_RE = re.compile(r"narrower\s+than\s+all\s+([A-Za-z]+)\s*:", r
 # or renumbered by this module's own change, so the offset is a constant,
 # not something a future axis addition needs to touch.
 _SECURITY_LEVEL_NON_AXIS_BUCKETS = 3
-_NUMBER_WORDS = {
-    "one": 1,
-    "two": 2,
-    "three": 3,
-    "four": 4,
-    "five": 5,
-    "six": 6,
-    "seven": 7,
-    "eight": 8,
-    "nine": 9,
-    "ten": 10,
-}
 
 EXPECTED_CONTRACT_ROLES = frozenset({"precondition", "postcondition", "invariant", "mixed", "indeterminate"})
 EXPECTED_INPUT_DOMAIN_KINDS = frozenset(
@@ -242,19 +230,15 @@ def check_other_axes_counts(skill_text: str) -> list[str]:
     set is silence, not a finding.
     """
     expected = _other_axes_count(skill_text)
-    problems: list[str] = []
-    for word in _OTHER_AXES_RE.findall(skill_text):
-        stated = _NUMBER_WORDS.get(word.lower())
-        if stated is None:
-            problems.append(
-                f"{SKILL_MD}: cross-reference says 'the other {word} axes', which is not a recognized number word"
-            )
-        elif stated != expected:
-            problems.append(
-                f"{SKILL_MD}: cross-reference says 'the other {word} axes' but {expected} other "
-                "axes exist -- update every such count in the same change as the heading"
-            )
-    return problems
+    return check_number_word_matches(
+        _OTHER_AXES_RE.findall(skill_text),
+        expected,
+        lambda word: f"{SKILL_MD}: cross-reference says 'the other {word} axes', which is not a recognized number word",
+        lambda word, _stated: (
+            f"{SKILL_MD}: cross-reference says 'the other {word} axes' but {expected} other "
+            "axes exist -- update every such count in the same change as the heading"
+        ),
+    )
 
 
 def _other_axes_count(skill_text: str) -> int:
@@ -282,17 +266,15 @@ def check_axis_count(skill_text: str) -> list[str]:
             f"{SKILL_MD}: no '**<number> cross-cutting axes**' declaration found -- "
             f"the axis-count lock cannot run, and {len(headings)} '### Axis:' heading(s) are present"
         ]
-    problems: list[str] = []
-    for word in matches:
-        declared = _NUMBER_WORDS.get(word.lower())
-        if declared is None:
-            problems.append(f"{SKILL_MD}: axis count declared as {word!r}, which is not a recognized number word")
-        elif declared != len(headings):
-            problems.append(
-                f"{SKILL_MD}: declares {declared} cross-cutting axes but carries "
-                f"{len(headings)} '### Axis:' heading(s) -- update the count in the same change as the heading"
-            )
-    return problems
+    return check_number_word_matches(
+        matches,
+        len(headings),
+        lambda word: f"{SKILL_MD}: axis count declared as {word!r}, which is not a recognized number word",
+        lambda _word, declared: (
+            f"{SKILL_MD}: declares {declared} cross-cutting axes but carries "
+            f"{len(headings)} '### Axis:' heading(s) -- update the count in the same change as the heading"
+        ),
+    )
 
 
 def check_security_level_count(skill_dir: Path, other_axes_count: int) -> list[str]:
@@ -306,19 +288,18 @@ def check_security_level_count(skill_dir: Path, other_axes_count: int) -> list[s
             f"{SECURITY_LEVEL_MD}: no 'narrower than all <number>:' sentence found -- "
             "the security-level cross-reference lock cannot run"
         ]
-    word = match.group(1).lower()
-    stated = _NUMBER_WORDS.get(word)
-    if stated is None:
-        return [f"{SECURITY_LEVEL_MD}: count declared as {match.group(1)!r}, which is not a recognized number word"]
     expected = other_axes_count + _SECURITY_LEVEL_NON_AXIS_BUCKETS
-    if stated != expected:
-        return [
-            f"{SECURITY_LEVEL_MD}: says 'narrower than all {match.group(1)}' but "
+    return check_number_word_matches(
+        [match.group(1)],
+        expected,
+        lambda word: f"{SECURITY_LEVEL_MD}: count declared as {word!r}, which is not a recognized number word",
+        lambda word, _stated: (
+            f"{SECURITY_LEVEL_MD}: says 'narrower than all {word}' but "
             f'{expected} items are named in its own "What this axis does not cover" list '
             f"({other_axes_count} other axis/axes + {_SECURITY_LEVEL_NON_AXIS_BUCKETS} non-axis items) -- "
             "update the count in the same change as the heading"
-        ]
-    return []
+        ),
+    )
 
 
 def _enum_at(schema: object, *path: str) -> frozenset[str]:

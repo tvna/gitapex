@@ -20,7 +20,24 @@ mechanics, which have no gate-specific content, live here.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from pathlib import Path
+
+#: Shared by every count-lock caller in this gate family -- previously
+#: copied verbatim into each one. A caller needing a number above ten has
+#: none today; extend here, not per-caller, if that ever changes.
+NUMBER_WORDS = {
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+}
 
 
 class ScanError(Exception):
@@ -67,3 +84,38 @@ def extract_section(text: str, heading: str, path_label: str) -> str:
     if not body.strip():
         raise ScanError(f"{path_label}: section {heading!r} is empty")
     return body
+
+
+def check_number_word_matches(
+    matches: list[str],
+    expected: int,
+    format_unrecognized: Callable[[str], str],
+    format_mismatch: Callable[[str, int], str],
+) -> list[str]:
+    """The genuinely common half of every count-lock check in this gate
+    family: for each number word `matches` a caller's own regex found,
+    look it up in :data:`NUMBER_WORDS` and compare it to `expected`,
+    collecting one problem per unrecognized word or mismatch.
+
+    Deliberately narrow -- this is only the "declared word vs. expected
+    int" comparison loop. Each caller keeps its own regex (what counts as
+    a declaration), its own `expected` computation (what the real
+    document structure says the count should be), and its own message
+    wording via the two formatting callables: `format_unrecognized(word)`
+    for a word not in `NUMBER_WORDS`; `format_mismatch(word, stated)` for
+    a recognized word whose value does not equal `expected` -- both the
+    original matched text and its parsed value are passed through, since
+    an existing caller's message quotes the original word as matched
+    (preserving its exact case), not just the parsed int. A caller's own
+    additional structural checks (heading order, a fixed non-axis offset,
+    and similar) are not this function's concern and stay entirely
+    caller-side.
+    """
+    problems: list[str] = []
+    for word in matches:
+        stated = NUMBER_WORDS.get(word.lower())
+        if stated is None:
+            problems.append(format_unrecognized(word))
+        elif stated != expected:
+            problems.append(format_mismatch(word, stated))
+    return problems

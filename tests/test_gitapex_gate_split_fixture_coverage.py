@@ -85,7 +85,7 @@ def test_load_split_json_reads_a_well_formed_file(tmp_path: pathlib.Path):
 def test_load_split_json_missing_file():
     data, error = gate.load_split_json(pathlib.Path("/nonexistent/split.json"))
     assert data is None
-    assert "not found" in error
+    assert "cannot be read" in error
 
 
 def test_load_split_json_undecodable(tmp_path: pathlib.Path):
@@ -94,7 +94,7 @@ def test_load_split_json_undecodable(tmp_path: pathlib.Path):
     data, error = gate.load_split_json(path)
     assert data is None
     assert error is not None
-    assert "could not read" in error
+    assert "is not valid UTF-8" in error
 
 
 def test_load_split_json_malformed_json(tmp_path: pathlib.Path):
@@ -103,7 +103,7 @@ def test_load_split_json_malformed_json(tmp_path: pathlib.Path):
     data, error = gate.load_split_json(path)
     assert data is None
     assert error is not None
-    assert "could not parse as JSON" in error
+    assert "is not valid JSON" in error
 
 
 def test_load_split_json_rejects_non_object_top_level(tmp_path: pathlib.Path):
@@ -338,7 +338,7 @@ def test_check_precedence_branch_coverage_fails_loudly_on_malformed_split_json(t
     split_json.write_bytes(b"\xff\xfe bad")
     offender = gate.check_precedence_branch_coverage(skill_md, skill_md.read_text(), tmp_path)
     assert offender is not None
-    assert "could not read" in offender
+    assert "is not valid UTF-8" in offender
 
 
 def test_check_precedence_branch_coverage_passes_when_split_json_has_pair(tmp_path: pathlib.Path):
@@ -904,6 +904,31 @@ def test_main_check_c_not_double_reported_when_both_sides_passed(tmp_path: pathl
     assert rc == 1
     stderr = capsys.readouterr().err
     assert stderr.count("exercises-declaration gap") == 1
+
+
+def test_split_json_read_once_when_split_md_and_skill_md_touch_the_same_skill(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # issue #1013 row 8: check_precedence_branch_coverage (Check B) must not
+    # independently re-read a split.json the --split-md loop already read
+    # this run. Proven by counting real load_split_json calls, not just by
+    # asserting the (already-covered-elsewhere) result is correct.
+    skill_md, split_json = _write_split_json_and_skill_md(
+        tmp_path, "widget-polisher", "Step 4 takes precedence over the fallback.\n", {}, ["a.yaml"]
+    )
+    split_md = tmp_path / "evals" / "widget-polisher" / "split.md"
+    split_md.write_text(_split_md("| a.yaml | 1 | 2 |\n"), encoding="utf-8")
+
+    calls: list[pathlib.Path] = []
+    real_load_split_json = gate.load_split_json
+
+    def counting_load_split_json(path: pathlib.Path) -> tuple[dict[str, object] | None, str | None]:
+        calls.append(path)
+        return real_load_split_json(path)
+
+    monkeypatch.setattr(gate, "load_split_json", counting_load_split_json)
+    gate.main(["--split-md", str(split_md), "--skill-md", str(skill_md), "--repo-root", str(tmp_path)])
+    assert calls.count(split_json) == 1, calls
 
 
 def test_main_check_c_absent_when_sibling_split_json_missing(tmp_path: pathlib.Path):

@@ -53,7 +53,7 @@ def test_load_sot_reads_a_committed_definition(tmp_path: pathlib.Path) -> None:
 
 
 def test_load_sot_rejects_a_missing_file(tmp_path: pathlib.Path) -> None:
-    with pytest.raises(_gitapex_rulesets.RulesetError, match="cannot read"):
+    with pytest.raises(_gitapex_rulesets.RulesetError, match="cannot be read"):
         _gitapex_rulesets.load_sot(tmp_path / "absent.json")
 
 
@@ -62,7 +62,7 @@ def test_load_sot_rejects_a_non_utf8_file(tmp_path: pathlib.Path) -> None:
     # would escape every caller's `except RulesetError` as a raw traceback.
     path = tmp_path / "main.json"
     path.write_bytes(b'{"name": "\xff\xfe"}')
-    with pytest.raises(_gitapex_rulesets.RulesetError, match="cannot read"):
+    with pytest.raises(_gitapex_rulesets.RulesetError, match="is not valid UTF-8"):
         _gitapex_rulesets.load_sot(path)
 
 

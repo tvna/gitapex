@@ -214,9 +214,11 @@ _BARE_KEY = "lines"
 
 
 @dataclass(frozen=True)
-class Finding:
-    """One blocking defect: a wrong claim, or input this gate refuses to
-    grade as clean."""
+class _LocatedMessage:
+    """A `location`/`message` pair rendered as ``f"{location}: {message}"``
+    -- the shape `Finding` and `Note` share in full; they differ only in
+    what a caller does with one (block vs. print-only), not in shape or
+    rendering."""
 
     location: str
     message: str
@@ -226,16 +228,16 @@ class Finding:
 
 
 @dataclass(frozen=True)
-class Note:
+class Finding(_LocatedMessage):
+    """One blocking defect: a wrong claim, or input this gate refuses to
+    grade as clean."""
+
+
+@dataclass(frozen=True)
+class Note(_LocatedMessage):
     """One claim this gate deliberately did not verify, with the reason.
     Printed, never blocking -- an unverified claim must be visible rather
     than absent from the report entirely."""
-
-    location: str
-    message: str
-
-    def render(self) -> str:
-        return f"{self.location}: {self.message}"
 
 
 @dataclass(frozen=True)

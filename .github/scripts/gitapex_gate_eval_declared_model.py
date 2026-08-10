@@ -89,58 +89,11 @@ import yaml
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 EVALS_DIR = REPO_ROOT / "evals"
 MATRIX_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "waza-eval-matrix.yml"
-
-# The reviewed allowlist. A model id may be committed to this repository only
-# if it appears here, and it appears here only with the evidence a human
-# weighed when approving it. Adding a row is the review event this gate
-# exists to force; the string is not the point, the evidence column is.
-APPROVED_MODELS: dict[str, str] = {
-    "claude-sonnet-5": (
-        "Approved by the repository owner on issue #925. Evidence at approval "
-        "time: evals/untrusted-input-triage/behavioral-eval-2026-08-01.md "
-        "records a live run in which the retired claude-sonnet-4.6 produced an "
-        "authentication error and claude-sonnet-5 was substituted and executed "
-        "successfully, and "
-        "evals/evaluating-skill-quality/results/2026-07-28-issue-500-phase1/"
-        "manifest.json records claude-sonnet-5 as the sonnet tier of an "
-        "executed cross-model run. DISCLOSED LIMIT: both observations come "
-        "from the `claude -p` path, not from waza's copilot-sdk executor, "
-        "which no environment without COPILOT_BASE_URL / "
-        "COPILOT_PROVIDER_BASE_URL can probe. This row therefore attests that "
-        "the id is real and dispatchable somewhere, not that the executor the "
-        "suites name serves it."
-    ),
-    "google/gemma-4-31B-it": (
-        "Approved on issue #937, which brought the already-committed "
-        "HF_GEMMA4_MODEL value under this gate rather than leaving it ungraded. "
-        "Evidence at approval time is the one .github/workflows/"
-        "waza-eval-matrix.yml already records in its own header comment for "
-        "the eval-matrix-hf-gemma4 lane (issue #317, sub-task of #310): the "
-        "largest Gemma 4 variant whose published bf16 safetensors weights are "
-        "under 100GB, confirmed 62.6GB across two shards at "
-        "https://huggingface.co/google/gemma-4-31B-it. DISCLOSED LIMIT: that "
-        "is evidence the repository weighed a size/serving tradeoff, not that "
-        "the id is currently servable -- the lane has never run, and its own "
-        "workflow comment already discloses the unverified assumption that "
-        "waza's copilot-sdk executor treats a custom base URL as a generic "
-        "OpenAI/Copilot-compatible endpoint. Approving it here changes nothing "
-        "about that; it only means a future edit to the id passes through a "
-        "reviewed diff instead of rotting silently."
-    ),
-}
-
-# Ids known to be undispatchable, kept so the most likely failure reports its
-# actual cause. A row here is a strictly better error message, never an
-# additional permission -- allowlist_integrity() fails if an id is ever listed
-# in both mappings.
-RETIRED_MODELS: dict[str, str] = {
-    "claude-sonnet-4.6": (
-        "retired 2026-06-15 -- confirmed live in "
-        "evals/untrusted-input-triage/behavioral-eval-2026-08-01.md, where the "
-        "CLI itself warned 'Claude Sonnet 4 was retired on June 15, 2026' and "
-        "requesting it produced an authentication error (issue #925)"
-    ),
-}
+#: Registered in .gitapex/ssot.json's policy_sources as this gate's own
+#: reviewed-evidence data source (issue #1013) -- previously the two maps
+#: below were hardcoded Python dict literals with no policy_sources entry
+#: pointing at them at all.
+MODEL_ALLOWLIST_PATH = REPO_ROOT / ".gitapex" / "eval-model-allowlist.yaml"
 
 
 class DeclarationReadError(Exception):
@@ -149,8 +102,76 @@ class DeclarationReadError(Exception):
     Raised rather than skipped: a suite whose declaration this gate cannot
     find is a suite this gate is not actually grading, and silently passing it
     would reproduce the exact shape issue #925 reports -- a declaration nobody
-    checked (CLAUDE.md section 4, fail loudly).
+    checked (CLAUDE.md section 4, fail loudly). Also raised by
+    `_load_model_allowlist` below for the allowlist file itself, for the same
+    reason: an allowlist that failed to load is not an allowlist this gate
+    can grade against at all.
     """
+
+
+class _DuplicateKeyLoader(yaml.SafeLoader):
+    """`yaml.SafeLoader`, except a duplicate key in any mapping -- the
+    top-level `approved_models`/`retired_models` pair or a model id inside
+    either section -- raises instead of silently keeping the last value.
+    PyYAML's own default behavior (confirmed against the pinned version:
+    the later occurrence wins, no error) would let a duplicate model id
+    silently overwrite reviewed evidence with unreviewed text elsewhere in
+    the same diff, defeating the review-forcing property this file exists
+    for (see this module's own docstring)."""
+
+    def construct_mapping(self, node: yaml.MappingNode, deep: bool = False) -> dict[object, object]:
+        seen: set[object] = set()
+        for key_node, _value_node in node.value:
+            key = self.construct_object(key_node, deep=deep)
+            try:
+                if key in seen:
+                    raise yaml.YAMLError(f"duplicate key {key!r} in mapping")
+                seen.add(key)
+            except TypeError as error:
+                # A YAML sequence/mapping used as a mapping key (e.g. `? [x]`)
+                # constructs to an unhashable Python object -- `key in seen`
+                # then raises a bare TypeError, which is not a yaml.YAMLError
+                # and would otherwise escape _load_model_allowlist's own
+                # handler as a raw traceback instead of a DeclarationReadError.
+                raise yaml.YAMLError(f"unhashable key in mapping: {error}") from error
+        return super().construct_mapping(node, deep=deep)
+
+
+def _load_model_allowlist(path: pathlib.Path) -> tuple[dict[str, str], dict[str, str]]:
+    """`(approved_models, retired_models)` from `path`'s own
+    `approved_models`/`retired_models` YAML mappings. Fails loudly (never a
+    silently empty allowlist) on a missing/unreadable/malformed file or
+    either top-level key holding anything other than a mapping of
+    string -> string -- an allowlist that failed to load must not be
+    mistaken for an allowlist that is genuinely empty, which would grade
+    every declared model id as unapproved. Also fails loudly on a duplicate
+    mapping key (`_DuplicateKeyLoader`), rather than silently keeping
+    PyYAML's own last-value-wins default.
+    """
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        raise DeclarationReadError(f"{path}: cannot be read: {error}") from error
+    try:
+        document = yaml.load(raw, Loader=_DuplicateKeyLoader)  # noqa: S506 -- _DuplicateKeyLoader subclasses SafeLoader
+    except yaml.YAMLError as error:
+        raise DeclarationReadError(f"{path}: is not valid YAML: {error}") from error
+    if not isinstance(document, dict):
+        raise DeclarationReadError(f"{path}: must contain a YAML mapping, found {type(document).__name__}")
+
+    def section(key: str) -> dict[str, str]:
+        value = document.get(key)
+        if not isinstance(value, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in value.items()):
+            raise DeclarationReadError(f"{path}: '{key}' must be a mapping of model id (string) to evidence (string)")
+        return value
+
+    return section("approved_models"), section("retired_models")
+
+
+# The reviewed allowlist, loaded at import time. See MODEL_ALLOWLIST_PATH's
+# own header comment for the full rationale (what each map means, and why
+# a row there is the review event this gate exists to force).
+APPROVED_MODELS, RETIRED_MODELS = _load_model_allowlist(MODEL_ALLOWLIST_PATH)
 
 
 def _describe(model: str, approved: dict[str, str], retired: dict[str, str]) -> str:

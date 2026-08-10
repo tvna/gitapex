@@ -29,13 +29,17 @@ from __future__ import annotations
 
 import argparse
 import fnmatch
-import json
 import pathlib
 import sys
 from typing import Annotated, Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+from _gitapex_rulesets import PROJECTION_KEYS  # sys.path bootstrap above must run first
+from _gitapex_schema_validation import load_json_or_raise  # same bootstrap
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 DEFAULT_RULESET = REPO_ROOT / ".github" / "rulesets" / "main.json"
@@ -201,6 +205,22 @@ class CommittedRuleset(BaseModel):
     rules: list[CommittedRule]
 
 
+#: `CommittedRuleset`'s own field set must never silently drift from
+#: `_gitapex_rulesets.PROJECTION_KEYS` -- the six keys GitHub's ruleset
+#: POST/PUT body accepts, and the same set `canonical_projection` narrows
+#: every live/committed comparison to. An explicit RuntimeError, not a bare
+#: `assert`, over dynamic model generation: Pydantic's own per-field
+#: validation and error messages stay clearer with explicit fields than a
+#: generated class would give up, and unlike `assert`, a `RuntimeError`
+#: still fires when the interpreter runs under `python -O`/`PYTHONOPTIMIZE`,
+#: which strips every plain `assert` statement at compile time.
+if set(CommittedRuleset.model_fields) != set(PROJECTION_KEYS):
+    raise RuntimeError(
+        f"CommittedRuleset's fields {sorted(CommittedRuleset.model_fields)} have drifted from "
+        f"_gitapex_rulesets.PROJECTION_KEYS {sorted(PROJECTION_KEYS)} -- update both together"
+    )
+
+
 def find_schema_violations(ruleset: dict[str, Any]) -> list[str]:
     """Validation errors against `CommittedRuleset`, one finding per error.
 
@@ -216,15 +236,7 @@ def find_schema_violations(ruleset: dict[str, Any]) -> list[str]:
 
 
 def load_json(path: pathlib.Path) -> dict[str, Any]:
-    try:
-        document = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError) as error:
-        # UnicodeDecodeError is not an OSError subclass and needs its own arm,
-        # or a non-UTF-8 file escapes as a raw traceback rather than this
-        # gate's own typed error and its distinct exit code.
-        raise RulesetGateError(f"cannot read {path}: {error}") from error
-    except json.JSONDecodeError as error:
-        raise RulesetGateError(f"{path} is not valid JSON: {error}") from error
+    document = load_json_or_raise(path, RulesetGateError)
     if not isinstance(document, dict):
         raise RulesetGateError(f"{path} must contain a JSON object, found {type(document).__name__}")
     return document
