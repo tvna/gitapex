@@ -238,6 +238,7 @@ import argparse
 import glob as globlib
 import re
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -796,13 +797,10 @@ def check_unsatisfiable_assertion_pair(
     """
     grader_assertions = _grader_text_assertions(graders)
 
-    def _typed(key: str) -> list[str]:
-        return [v for v in (expected.get(key) or []) if isinstance(v, str)]
-
-    contains = [(v, "output_contains") for v in _typed("output_contains")]
-    icontains = [(v, "output_icontains") for v in _typed("output_icontains")]
-    not_contains = [(v, "output_not_contains") for v in _typed("output_not_contains")]
-    not_icontains = [(v, "output_not_icontains") for v in _typed("output_not_icontains")]
+    contains = [(v, "output_contains") for v in _typed_str_list(expected, "output_contains")]
+    icontains = [(v, "output_icontains") for v in _typed_str_list(expected, "output_icontains")]
+    not_contains = [(v, "output_not_contains") for v in _typed_str_list(expected, "output_not_contains")]
+    not_icontains = [(v, "output_not_icontains") for v in _typed_str_list(expected, "output_not_icontains")]
     contains += [(v, "graders.contains_cs") for v in grader_assertions["contains_cs"]]
     icontains += [(v, "graders.contains") for v in grader_assertions["contains"]]
     not_contains += [(v, "graders.not_contains_cs") for v in grader_assertions["not_contains_cs"]]
@@ -815,17 +813,54 @@ def check_unsatisfiable_assertion_pair(
         if isinstance(v, str)
     ]
 
+    def _first_by_key(pairs: list[tuple[str, str]], key: Callable[[str], str]) -> dict[str, tuple[str, str]]:
+        """One representative ``(value, source)`` per ``key(value)``, first-seen
+        wins. Used for the "requirement" side of a contradiction/redundancy
+        check: only one example is needed to prove a requirement exists for
+        that key, so collapsing extra requirement-side sources (e.g. the same
+        literal required via both ``expected:`` and ``graders:``) is correct,
+        not lossy (adversarial review finding on PR #986: the pre-fix version
+        did NOT dedupe this side, so a duplicated or multi-sourced requirement
+        produced one duplicate finding per occurrence).
+        """
+        result: dict[str, tuple[str, str]] = {}
+        for value, source in pairs:
+            result.setdefault(key(value), (value, source))
+        return result
+
+    def _group_by_key(pairs: list[tuple[str, str]], key: Callable[[str], str]) -> dict[str, list[tuple[str, str]]]:
+        """Every distinct ``(key(value), source)`` pair, grouped by
+        ``key(value)``. Used for the "ban" (or redundant "weak") side: unlike
+        the requirement side, each distinct source banning (or redundantly
+        asserting) the same key is its OWN independent contradiction/
+        redundancy -- issue #869's own merge of ``expected:`` and ``graders:``
+        sources into shared roles made this reachable for the first time
+        (adversarial review finding on PR #986: the pre-fix version collapsed
+        this side to a single first-match-wins entry via ``setdefault``, so a
+        second, differently-sourced ban or redundant assertion on the
+        identical string was silently dropped). A duplicate *within* one
+        source (the same literal listed twice under one key) is still
+        collapsed via the ``(key, source)`` identity, since that is authoring
+        noise, not two independent findings.
+        """
+        groups: dict[str, list[tuple[str, str]]] = {}
+        seen: set[tuple[str, str]] = set()
+        for value, source in pairs:
+            k = key(value)
+            dedup_key = (k, source)
+            if dedup_key in seen:
+                continue
+            seen.add(dedup_key)
+            groups.setdefault(k, []).append((value, source))
+        return groups
+
     # Anything that guarantees the substring's casefolded form is present:
     # a literal-presence requirement (output_contains/graders.contains_cs, or
     # a output_contains_near "all" member, which the near-check also
     # requires to be literally present), OR output_icontains/graders.contains
     # itself (which already matches case-insensitively).
-    require_casefolded_presence: dict[str, tuple[str, str]] = {}
-    for value, source in contains + near_members + icontains:
-        require_casefolded_presence.setdefault(value.casefold(), (value, source))
-    not_icontains_by_fold: dict[str, tuple[str, str]] = {}
-    for value, source in not_icontains:
-        not_icontains_by_fold.setdefault(value.casefold(), (value, source))
+    require_casefolded_presence = _first_by_key(contains + near_members + icontains, str.casefold)
+    not_icontains_by_fold = _group_by_key(not_icontains, str.casefold)
 
     findings: list[tuple[str, str, str, str]] = []
 
@@ -843,13 +878,10 @@ def check_unsatisfiable_assertion_pair(
     # differently-cased case-sensitive ban (e.g. icontains: ["foo"],
     # not_contains: ["Foo"]) is satisfiable (text containing only "FOO"),
     # the same already-documented mirrored-direction exemption above.
-    not_contains_by_value: dict[str, tuple[str, str]] = {}
-    for value, source in not_contains:
-        not_contains_by_value.setdefault(value, (value, source))
-    for required, required_source in contains + near_members:
-        banned_entry = not_contains_by_value.get(required)
-        if banned_entry is not None:
-            banned, banned_source = banned_entry
+    require_exact_presence = _first_by_key(contains + near_members, lambda v: v)
+    not_contains_by_value = _group_by_key(not_contains, lambda v: v)
+    for value, (required, required_source) in require_exact_presence.items():
+        for banned, banned_source in not_contains_by_value.get(value, []):
             findings.append(
                 (
                     banned_source,
@@ -863,9 +895,7 @@ def check_unsatisfiable_assertion_pair(
             )
 
     for folded, (required, required_source) in require_casefolded_presence.items():
-        banned_entry = not_icontains_by_fold.get(folded)
-        if banned_entry is not None:
-            banned, banned_source = banned_entry
+        for banned, banned_source in not_icontains_by_fold.get(folded, []):
             findings.append(
                 (
                     banned_source,
@@ -879,16 +909,10 @@ def check_unsatisfiable_assertion_pair(
             )
 
     def _redundant_pairs(strong: list[tuple[str, str]], weak: list[tuple[str, str]]) -> None:
-        strong_by_fold: dict[str, tuple[str, str]] = {}
-        for value, source in strong:
-            strong_by_fold.setdefault(value.casefold(), (value, source))
-        seen: set[str] = set()
-        for value, weak_source in weak:
-            folded = value.casefold()
-            matched = strong_by_fold.get(folded)
-            if matched is not None and folded not in seen:
-                seen.add(folded)
-                matched_value, matched_source = matched
+        strong_by_fold = _first_by_key(strong, str.casefold)
+        weak_by_fold = _group_by_key(weak, str.casefold)
+        for folded, (matched_value, matched_source) in strong_by_fold.items():
+            for value, weak_source in weak_by_fold.get(folded, []):
                 findings.append(
                     (
                         matched_source,
@@ -908,6 +932,16 @@ def check_unsatisfiable_assertion_pair(
     _redundant_pairs(icontains, contains)
     _redundant_pairs(not_icontains, not_contains)
     return findings
+
+
+def _typed_str_list(data: dict[str, Any], key: str) -> list[str]:
+    """``data[key]`` coerced to a ``list[str]``, dropping non-string entries
+    and treating a missing/``None`` key as empty. Shared by
+    ``check_unsatisfiable_assertion_pair`` and ``check_symmetric_bans``
+    (adversarial review, PR #986) so this coercion is spelled once instead of
+    once per key at each call site.
+    """
+    return [v for v in (data.get(key) or []) if isinstance(v, str)]
 
 
 def classify_ban_direction(value: str) -> str:
@@ -947,13 +981,13 @@ def check_symmetric_bans(data: dict[str, Any]) -> str | None:
         return None
     expected = data.get("expected") or {}
     grader_assertions = _grader_text_assertions(data.get("graders"))
-    positives = [v for v in (expected.get("output_contains") or []) if isinstance(v, str)]
-    positives += [v for v in (expected.get("output_icontains") or []) if isinstance(v, str)]
+    positives = _typed_str_list(expected, "output_contains")
+    positives += _typed_str_list(expected, "output_icontains")
     positives += grader_assertions["contains_cs"] + grader_assertions["contains"]
     if any(ENUM_TOKEN_RE.fullmatch(v) and "indeterminate" in v.lower() for v in positives):
         return None
-    bans = [v for v in (expected.get("output_not_contains") or []) if isinstance(v, str)]
-    bans += [v for v in (expected.get("output_not_icontains") or []) if isinstance(v, str)]
+    bans = _typed_str_list(expected, "output_not_contains")
+    bans += _typed_str_list(expected, "output_not_icontains")
     bans += grader_assertions["not_contains_cs"] + grader_assertions["not_contains"]
     if not bans:
         return (

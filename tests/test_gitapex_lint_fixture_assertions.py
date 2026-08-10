@@ -801,6 +801,47 @@ def test_unsatisfiable_pair_exact_case_check_ignores_differently_cased_pair():
     assert L.check_unsatisfiable_assertion_pair(expected) == []
 
 
+# ---- multi-source dedup fix (adversarial review, PR #986) ----
+
+
+def test_unsatisfiable_pair_does_not_duplicate_finding_for_a_repeated_requirement():
+    # Issue #869's own merge of expected: and graders: sources into shared
+    # roles means the "requirement" side can now legitimately list the same
+    # literal string more than once (a plain duplicate entry, or the same
+    # string required via both mechanisms) -- this must still produce exactly
+    # one finding per real contradiction, not one per occurrence.
+    expected = {"output_contains": ["Foo", "Foo"], "output_not_contains": ["Foo"]}
+    findings = L.check_unsatisfiable_assertion_pair(expected)
+    assert len(findings) == 1
+
+
+def test_unsatisfiable_pair_reports_every_distinct_ban_source_for_the_same_string():
+    # The mirror of the case above: two DIFFERENT sources (expected: and
+    # graders:) each independently ban the identical literal string that is
+    # required -- both are genuinely, independently unsatisfiable and must
+    # both be reported, not collapsed to a single first-match finding.
+    expected = {"output_contains": ["Foo"], "output_not_contains": ["Foo"]}
+    graders = [{"type": "text", "config": {"not_contains_cs": ["Foo"]}}]
+    findings = L.check_unsatisfiable_assertion_pair(expected, graders)
+    assert len(findings) == 2
+    keys = {key for key, _value, _rule, _detail in findings}
+    assert keys == {"output_not_contains", "graders.not_contains_cs"}
+    assert all(rule == "unsatisfiable-assertion-pair" for _k, _v, rule, _d in findings)
+
+
+def test_unsatisfiable_pair_reports_every_distinct_redundant_source():
+    # Same swallowed-finding class, but for the redundant-pair check: two
+    # different case-sensitive sources are each independently redundant with
+    # one case-insensitive requirement, and both should be reported.
+    expected = {"output_icontains": ["foo"], "output_contains": ["FOO"]}
+    graders = [{"type": "text", "config": {"contains_cs": ["Foo"]}}]
+    findings = L.check_unsatisfiable_assertion_pair(expected, graders)
+    assert len(findings) == 2
+    assert all(rule == "redundant-assertion-pair" for _k, _v, rule, _d in findings)
+    weak_sources = {detail.split("duplicates ")[1].split(":")[0] for _k, _v, _rule, detail in findings}
+    assert weak_sources == {"output_contains", "graders.contains_cs"}
+
+
 def test_unsatisfiable_pair_flags_redundant_graders_same_polarity_pair():
     graders = [{"type": "text", "config": {"contains_cs": ["Foo"], "contains": ["foo"]}}]
     findings = L.check_unsatisfiable_assertion_pair({}, graders)
