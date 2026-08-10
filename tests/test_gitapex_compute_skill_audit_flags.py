@@ -210,6 +210,39 @@ def test_design_doc_and_checker_script_signals_are_collected(repo: pathlib.Path)
     assert flags.changed_checker_scripts == ("skills/foo/scripts/gitapex_check_thing.py",)
 
 
+def test_checker_or_gate_union_includes_a_gate_path_no_checker_glob_matches(repo: pathlib.Path) -> None:
+    """Issue #998: `hooks/check-*.sh` is a gate (rule 1 of
+    `gitapex_detect_changed_gate_scripts.py`) but matches none of the
+    checker-script path globs, so the union is the only signal a
+    `defeat-test-disclosure` check scoped to "checker or gate script" can
+    rely on to reach it."""
+    _write(repo, "hooks/check-thing.sh")
+    _commit(repo)
+    flags = _flags(repo)
+    assert flags.changed_checker_scripts == ()
+    assert flags.changed_gate_scripts == ("hooks/check-thing.sh",)
+    assert flags.changed_checker_or_gate_scripts == ("hooks/check-thing.sh",)
+
+
+def test_checker_or_gate_union_combines_both_signals_sorted_and_deduped(repo: pathlib.Path) -> None:
+    _write(repo, "skills/foo/scripts/gitapex_check_thing.py")
+    _write(repo, "hooks/check-thing.sh")
+    # A `.github/scripts/gitapex_gate_*.py` path matches both the checker-script
+    # glob and the gate naming convention -- exercises the dedup, not just
+    # the union of two disjoint sets.
+    _write(repo, ".github/scripts/gitapex_gate_new.py")
+    _commit(repo)
+    flags = _flags(repo)
+    assert set(flags.changed_checker_scripts) & set(flags.changed_gate_scripts) == {
+        ".github/scripts/gitapex_gate_new.py"
+    }
+    assert flags.changed_checker_or_gate_scripts == (
+        ".github/scripts/gitapex_gate_new.py",
+        "hooks/check-thing.sh",
+        "skills/foo/scripts/gitapex_check_thing.py",
+    )
+
+
 # --- fail closed ---
 
 

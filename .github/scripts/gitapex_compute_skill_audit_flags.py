@@ -63,6 +63,16 @@ instead of the ambient process directory the bash relied on.
 
 Standard library only, so the calling workflow needs no dependency install.
 
+Issue #998 (refs #982, #997): adds `changed_checker_or_gate_scripts`, the
+sorted union of `changed_checker_scripts` and `changed_gate_scripts`. No
+new detection logic -- both source signals already exist and are
+independently tested; this only unions two already-trustworthy sets, for
+`gitapex_gate_skill_audit_disclosure.py`'s new `defeat-test-disclosure`
+check, which the issue's own title scopes to "checker **or** gate script"
+and therefore needs a scope neither existing signal alone covers (a
+`hooks/check-*.sh` gate matches `changed_gate_scripts` but no
+checker-script glob; see `2026-08-10-defeat-test-disclosure-design.md`).
+
 Usage::
 
     python3 gitapex_compute_skill_audit_flags.py \\
@@ -104,6 +114,7 @@ OUTPUT_KEYS = (
     "changed-design-docs",
     "changed-checker-scripts",
     "changed-gate-scripts",
+    "changed-checker-or-gate-scripts",
     "skill-md-changed",
 )
 
@@ -154,6 +165,7 @@ class SkillAuditFlags:
     changed_design_docs: tuple[str, ...] = ()
     changed_checker_scripts: tuple[str, ...] = ()
     changed_gate_scripts: tuple[str, ...] = ()
+    changed_checker_or_gate_scripts: tuple[str, ...] = ()
 
     def as_output_pairs(self) -> list[tuple[str, str]]:
         """The `$GITHUB_OUTPUT` key/value pairs, in `OUTPUT_KEYS` order."""
@@ -165,6 +177,7 @@ class SkillAuditFlags:
             ("changed-design-docs", ",".join(self.changed_design_docs)),
             ("changed-checker-scripts", ",".join(self.changed_checker_scripts)),
             ("changed-gate-scripts", ",".join(self.changed_gate_scripts)),
+            ("changed-checker-or-gate-scripts", ",".join(self.changed_checker_or_gate_scripts)),
             ("skill-md-changed", _bool_text(self.skill_md_changed)),
         ]
 
@@ -455,6 +468,7 @@ def compute_flags(
         changed_design_docs=tuple(design_docs),
         changed_checker_scripts=tuple(checker_scripts),
         changed_gate_scripts=tuple(gate_scripts),
+        changed_checker_or_gate_scripts=tuple(sorted(set(checker_scripts) | set(gate_scripts))),
     )
 
 

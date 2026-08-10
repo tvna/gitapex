@@ -739,10 +739,16 @@ def test_gate_quality_disclosure_rejects_not_run(verdict):
 
 
 @pytest.mark.parametrize(
-    "check_name", ["adversarial-coverage-mapping", "design-doc-adversarial-review", "checker-script-adversarial-review"]
+    "check_name",
+    [
+        "adversarial-coverage-mapping",
+        "design-doc-adversarial-review",
+        "checker-script-adversarial-review",
+        "defeat-test-disclosure",
+    ],
 )
 def test_the_other_process_checks_still_accept_not_run(check_name):
-    """The narrowing above must not leak into the three sibling checks,
+    """The narrowing above must not leak into the four sibling checks,
     where NOT-RUN is a legitimate answer."""
     body = _VALID_SECTION + f"- {check_name}: NOT-RUN\n"
     pattern = gate._PROCESS_DISCLOSURE_LINE_RES[check_name]
@@ -928,6 +934,109 @@ def test_regression_pr_651_main_fails_without_waiver(monkeypatch, capsys):
     assert _GATE_SCRIPT in err
 
 
+# --- Issue #998 (refs #982, #997): defeat-test-disclosure ---
+#
+# Same shared RAN/NOT-RUN/WAIVED shape as the checker-script block above
+# (unlike deterministic-gate-quality, which narrows to RAN-only), scoped to
+# the union of checker-script and gate paths -- reachable from a path
+# neither existing check's own glob covers, e.g. a hooks/check-*.sh gate.
+
+_CHECKER_OR_GATE_PATH = "hooks/check-thing.sh"
+
+
+def test_defeat_test_disclosure_not_required_when_list_empty():
+    assert gate.find_missing_defeat_test_disclosure("anything, no section", []) == []
+
+
+def test_missing_defeat_test_disclosure_reported_with_no_section():
+    body = "# My PR\n\nNo evidence section at all.\n"
+    assert gate.find_missing_defeat_test_disclosure(body, [_CHECKER_OR_GATE_PATH]) == [_CHECKER_OR_GATE_PATH]
+
+
+def test_missing_defeat_test_disclosure_reported_with_no_line():
+    assert gate.find_missing_defeat_test_disclosure(_VALID_SECTION, [_CHECKER_OR_GATE_PATH]) == [_CHECKER_OR_GATE_PATH]
+
+
+@pytest.mark.parametrize("verdict", ["RAN", "NOT-RUN", "ran", "not-run"])
+def test_defeat_test_disclosure_accepts_its_own_verdict_vocabulary(verdict):
+    body = _VALID_SECTION + f"- defeat-test-disclosure: {verdict}\n"
+    assert gate.find_missing_defeat_test_disclosure(body, [_CHECKER_OR_GATE_PATH]) == []
+
+
+def test_defeat_test_disclosure_waiver_satisfies_check():
+    body = _VALID_SECTION + "- defeat-test-disclosure: WAIVED: no new detection logic in this docstring-only edit\n"
+    assert gate.find_missing_defeat_test_disclosure(body, [_CHECKER_OR_GATE_PATH]) == []
+
+
+def test_defeat_test_disclosure_bare_waiver_with_no_reason_does_not_satisfy():
+    body = _VALID_SECTION + "- defeat-test-disclosure: WAIVED\n"
+    assert gate.find_missing_defeat_test_disclosure(body, [_CHECKER_OR_GATE_PATH]) == [_CHECKER_OR_GATE_PATH]
+
+
+def test_defeat_test_disclosure_unrecognized_verdict_does_not_satisfy():
+    body = _VALID_SECTION + "- defeat-test-disclosure: MAYBE\n"
+    assert gate.find_missing_defeat_test_disclosure(body, [_CHECKER_OR_GATE_PATH]) == [_CHECKER_OR_GATE_PATH]
+
+
+def test_defeat_test_disclosure_does_not_satisfy_checker_script_or_gate_quality():
+    """The three checks are independent claims about the same diff; a
+    defeat-test-disclosure line must not silently clear the other two."""
+    body = _VALID_SECTION + "- defeat-test-disclosure: RAN\n"
+    assert gate.find_missing_checker_script_disclosure(body, [_CHECKER_OR_GATE_PATH]) == [_CHECKER_OR_GATE_PATH]
+    assert gate.find_missing_gate_quality_disclosure(body, [_CHECKER_OR_GATE_PATH]) == [_CHECKER_OR_GATE_PATH]
+
+
+def test_checker_script_disclosure_does_not_satisfy_defeat_test():
+    """The converse of the check above: #997's own point is that a bare
+    checker-script-adversarial-review: RAN is not evidence a defeat test was
+    constructed."""
+    body = _VALID_SECTION + "- checker-script-adversarial-review: RAN\n"
+    assert gate.find_missing_defeat_test_disclosure(body, [_CHECKER_OR_GATE_PATH]) == [_CHECKER_OR_GATE_PATH]
+
+
+# This check's own defeat test (issue #998's own ask, applied reflexively to
+# the check that adds it): a deliberately malformed disclosure line that
+# must still FAIL, not just a happy-path line that passes. Each variant
+# defeats one structural requirement of `_line_pattern`'s regex.
+@pytest.mark.parametrize(
+    "malformed_line",
+    [
+        "- defeat-test-disclosure RAN\n",  # missing colon
+        "- defeat-test-disclosure: RANFOO\n",  # verdict word not on a token boundary
+        "- defeat-test-disclosure: NOT RUN\n",  # space instead of the required hyphen
+        "- defeat-test-disclosure: WAIVED\n",  # WAIVED with no reason text
+        "- xdefeat-test-disclosure: RAN\n",  # neighbouring check name, not an exact match
+    ],
+    ids=["no-colon", "verdict-not-on-boundary", "space-not-hyphen", "waived-no-reason", "neighbouring-name"],
+)
+def test_defeat_test_disclosure_regex_rejects_malformed_lines(malformed_line):
+    body = _VALID_SECTION + malformed_line
+    assert gate.find_missing_defeat_test_disclosure(body, [_CHECKER_OR_GATE_PATH]) == [_CHECKER_OR_GATE_PATH]
+
+
+# --- Issue #998: main() integration for the defeat-test-disclosure check ---
+
+
+def test_main_fails_when_defeat_test_disclosure_missing(monkeypatch, capsys):
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(_VALID_SECTION.encode("utf-8")))
+    assert gate.main(["--changed-checker-or-gate-scripts", _CHECKER_OR_GATE_PATH]) == 1
+    err = capsys.readouterr().err
+    assert "defeat-test-disclosure" in err
+    assert _CHECKER_OR_GATE_PATH in err
+
+
+def test_main_passes_when_defeat_test_disclosure_present(monkeypatch, capsys):
+    body = _VALID_SECTION + "- defeat-test-disclosure: RAN\n"
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(body.encode("utf-8")))
+    assert gate.main(["--changed-checker-or-gate-scripts", _CHECKER_OR_GATE_PATH]) == 0
+
+
+def test_defeat_test_disclosure_check_is_not_required_when_no_path_changed(monkeypatch):
+    body = _VALID_SECTION + "- design-doc-adversarial-review: RAN\n"
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(body.encode("utf-8")))
+    assert gate.main(["--changed-design-docs", "foo.md", "--changed-checker-or-gate-scripts", ""]) == 0
+
+
 # --- issue #874: the local --check-diff mode ---
 #
 # Exercised by direct import rather than only through the subprocess suite
@@ -937,7 +1046,10 @@ def test_regression_pr_651_main_fails_without_waiver(monkeypatch, capsys):
 # coverage floor .github/workflows/test.yml enforces.
 
 _BODY_WITH_GATE_DISCLOSURE = (
-    _VALID_SECTION + "- checker-script-adversarial-review: RAN\n- deterministic-gate-quality: RAN\n"
+    _VALID_SECTION
+    + "- checker-script-adversarial-review: RAN\n"
+    + "- deterministic-gate-quality: RAN\n"
+    + "- defeat-test-disclosure: RAN\n"
 )
 
 

@@ -18,11 +18,11 @@ Two claims, one file, because the second is worthless without the first:
    hook copy (`hooks/gitapex_check_skill_audit_disclosure_or_waiver.py`)
    defers to CI by its own docstring -- description-change WAIVED
    rejection, eval-coverage disclosure, security-relevance, design-doc
-   coverage, plus the deterministic-gate-quality check the retrospectives
-   cited most often -- asserted end-to-end through the documented local
-   command, in both its failing and its passing form. Before this, each of
-   these was reachable only from a failed required check on an
-   already-open PR.
+   coverage, the deterministic-gate-quality check the retrospectives cited
+   most often, plus the defeat-test-disclosure check (issue #998) -- each
+   asserted end-to-end through the documented local command, in both its
+   failing and its passing form. Before this, each of these was reachable
+   only from a failed required check on an already-open PR.
 
 Everything runs against a scratch git repository carrying the real
 registry and the real scripts, so the thing under test is the shipped
@@ -373,9 +373,57 @@ def test_extension_5_passes_on_ran(repo: pathlib.Path, outdir: pathlib.Path) -> 
     _seed_gate_script(repo)
     base = _git(repo, "rev-parse", "HEAD").stdout.strip()
     _commit(repo, "new gate")
-    body = "## Skill audit evidence\n\n- checker-script-adversarial-review: RAN\n- deterministic-gate-quality: RAN\n"
+    body = (
+        "## Skill audit evidence\n\n"
+        "- checker-script-adversarial-review: RAN\n"
+        "- deterministic-gate-quality: RAN\n"
+        "- defeat-test-disclosure: RAN\n"
+    )
     code, output = _run_local_wrapper(repo, base, body, outdir)
     assert code == 0, output
+
+
+def test_extension_6_defeat_test_disclosure_is_flagged_locally(repo: pathlib.Path, outdir: pathlib.Path) -> None:
+    """Issue #998: a bare checker-script-adversarial-review/deterministic-gate-quality
+    RAN disclosure does not also satisfy defeat-test-disclosure -- the three
+    are independent claims about the same diff."""
+    _seed_gate_script(repo)
+    base = _git(repo, "rev-parse", "HEAD").stdout.strip()
+    _commit(repo, "new gate")
+    body = "## Skill audit evidence\n\n- checker-script-adversarial-review: RAN\n- deterministic-gate-quality: RAN\n"
+    code, output = _run_local_wrapper(repo, base, body, outdir)
+    assert code == 1
+    assert "defeat-test-disclosure" in output
+
+
+def test_extension_6_passes_on_ran(repo: pathlib.Path, outdir: pathlib.Path) -> None:
+    _seed_gate_script(repo)
+    base = _git(repo, "rev-parse", "HEAD").stdout.strip()
+    _commit(repo, "new gate")
+    body = (
+        "## Skill audit evidence\n\n"
+        "- checker-script-adversarial-review: RAN\n"
+        "- deterministic-gate-quality: RAN\n"
+        "- defeat-test-disclosure: NOT-RUN\n"
+    )
+    code, output = _run_local_wrapper(repo, base, body, outdir)
+    assert code == 0, output
+
+
+def test_extension_6_reaches_a_gate_only_path_no_checker_glob_matches(repo: pathlib.Path, outdir: pathlib.Path) -> None:
+    """`_seed_gate_script` above writes `.github/scripts/gitapex_gate_new.py`,
+    which matches both source signals -- it cannot by itself prove the union
+    reaches a path only `changed_gate_scripts` covers. `hooks/check-*.sh`
+    matches no checker-script glob, so this diff owes deterministic-gate-quality
+    and defeat-test-disclosure but not checker-script-adversarial-review."""
+    _write(repo, "hooks/check-thing.sh")
+    base = _git(repo, "rev-parse", "HEAD").stdout.strip()
+    _commit(repo, "new hook gate")
+    body = "## Skill audit evidence\n\n- deterministic-gate-quality: RAN\n"
+    code, output = _run_local_wrapper(repo, base, body, outdir)
+    assert code == 1
+    assert "defeat-test-disclosure" in output
+    assert "checker-script-adversarial-review" not in output
 
 
 # --- the mode's own guardrails ---

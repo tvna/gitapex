@@ -92,6 +92,7 @@ jobs:
           CHANGED_DESIGN_DOCS: ${{ steps.diff.outputs.changed-design-docs }}
           CHANGED_CHECKER_SCRIPTS: ${{ steps.diff.outputs.changed-checker-scripts }}
           CHANGED_GATE_SCRIPTS: ${{ steps.diff.outputs.changed-gate-scripts }}
+          CHANGED_CHECKER_OR_GATE_SCRIPTS: ${{ steps.diff.outputs.changed-checker-or-gate-scripts }}
           SKILL_MD_CHANGED: ${{ steps.diff.outputs.skill-md-changed }}
         run: |
           set -euo pipefail
@@ -106,4 +107,5 @@ jobs:
             --changed-design-docs "$CHANGED_DESIGN_DOCS" \
             --changed-checker-scripts "$CHANGED_CHECKER_SCRIPTS" \
             --changed-gate-scripts "$CHANGED_GATE_SCRIPTS" \
+            --changed-checker-or-gate-scripts "$CHANGED_CHECKER_OR_GATE_SCRIPTS" \
             "${skill_md_changed_flag[@]}"

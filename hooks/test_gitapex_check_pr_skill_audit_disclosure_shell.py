@@ -193,7 +193,12 @@ def test_tier1_allows_the_same_diff_once_disclosed(repo: Path) -> None:
     _with_tier1(repo)
     _write(repo, ".github/scripts/gitapex_gate_new.py")
     _commit(repo, "new gate")
-    body = _BASE_EVIDENCE + "- checker-script-adversarial-review: RAN\n- deterministic-gate-quality: RAN\n"
+    body = (
+        _BASE_EVIDENCE
+        + "- checker-script-adversarial-review: RAN\n"
+        + "- deterministic-gate-quality: RAN\n"
+        + "- defeat-test-disclosure: RAN\n"
+    )
     result = _run(repo, body)
     assert result.returncode == 0, result.stderr
 
