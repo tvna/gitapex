@@ -54,10 +54,6 @@ dev = [
     # sweep and re-derive the thresholds before raising either bound.
     "radon>=6.0,<6.1",
     "xenon>=0.9,<0.10",
-    # Issue #1005/#1008: pairwise (2-way) combinatorial test-case generation
-    # for the evaluate/classify_issue pilot in
-    # tests/test_gitapex_check_pr_issue_acm_disclosure.py.
-    "allpairspy>=2.5.1",
 ]
 
 [tool.uv]
@@ -303,18 +299,6 @@ check_untyped_defs = false
 # "test body deliberately unchecked," not a broader relaxation.
 disable_error_code = ["no-any-return", "union-attr"]
 # tracking: issue #684 (repo-wide pytest suite)
-
-# Issue #1005/#1008: allpairspy 2.5.1's published wheel carries no py.typed
-# marker and no "Typing :: Typed" PyPI classifier -- verified by inspecting
-# the wheel's own file listing, not merely its metadata classifiers (the
-# PyPI JSON API's classifier list alone is a self-declared field, not
-# authoritative for py.typed presence). No types-allpairspy stub package
-# exists on PyPI either, so ignore_missing_imports is the correct fix here,
-# not a stub dependency.
-[[tool.mypy.overrides]]
-module = "allpairspy"
-ignore_missing_imports = true
-# tracking: issue #1005/#1008
 
 # Ported from upstream tvna/claude-md's pyproject.toml (its issue #192), the
 # same repository this one already ports its registry schema
