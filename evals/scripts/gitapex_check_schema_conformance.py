@@ -17,7 +17,9 @@ Three verdicts, chosen deliberately as three states, not a boolean:
   validates against the schema.
 - ``SCHEMA_INVALID`` -- the output carries a fenced ```json block that is
   either not valid JSON or fails schema validation (a real defect: the
-  reviewer attempted structured output and got it wrong).
+  reviewer attempted structured output and got it wrong). A ```json fence
+  opened but never closed (a truncated capture) counts as this case too --
+  it is an attempt that failed, not an absence of one.
 - ``SCHEMA_NOT_ATTEMPTED`` -- no fenced ```json block is present at all,
   which is a legitimate outcome during the design doc's own disclosed
   opt-in adoption window (existing fixtures were never asked to produce
@@ -28,7 +30,11 @@ checked -- the design doc's own Sequencing step 3 has `SKILL.md`'s
 Procedure step 6 "close with" the structured block, so the last fenced
 json block in the output is the one that carries the verdict; any earlier
 json fence is prose the review quoted along the way (e.g. a cited
-`rubric.md` worked example), not the output contract.
+`rubric.md` worked example), not the output contract. Fence delimiters are
+matched only at the start of a line (never as a bare substring), so a
+quoted string value that happens to contain literal backticks, or a
+defensively widened fence around quoted content, cannot be mistaken for
+the real opener or closer -- see `_iter_json_fences`'s own docstring.
 
 Standard library plus ``jsonschema`` (already a project dependency, used
 the same way `_gitapex_schema_validation.py` and its own callers already
@@ -41,8 +47,9 @@ import argparse
 import json
 import re
 import sys
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import jsonschema
 
@@ -53,20 +60,66 @@ SCHEMA_CONFIRMED = "SCHEMA_CONFIRMED"
 SCHEMA_INVALID = "SCHEMA_INVALID"
 SCHEMA_NOT_ATTEMPTED = "SCHEMA_NOT_ATTEMPTED"
 
-_JSON_FENCE_RE = re.compile(r"```json\s*\n(.*?)```", re.DOTALL | re.IGNORECASE)
+_FENCE_OPEN_RE = re.compile(r"^```json[ \t]*\r?\n", re.IGNORECASE | re.MULTILINE)
+_FENCE_CLOSE_RE = re.compile(r"^```[ \t]*\r?$", re.MULTILINE)
+
+
+def _iter_json_fences(text: str) -> Iterator[tuple[str, str | None, int]]:
+    """Yield ``(status, block, start)`` for every ```json fence found in
+    ``text``, in order. ``status`` is ``"found"`` (``block`` is the fenced
+    inner text) or ``"truncated"`` (an opening fence with no matching close;
+    ``block`` is ``None``) -- a truncated fence always ends the scan, since
+    there is no reliable close position to resume searching from.
+
+    Both delimiters are anchored to the start of a line (``re.MULTILINE``
+    ``^``/``$``), not matched as a bare substring. This matters against two
+    adversarial shapes an earlier, unanchored version of this regex missed:
+    a JSON string value that happens to contain a literal ```` ``` ```` --
+    JSON's grammar forbids a raw, unescaped newline inside a string, so such
+    a sequence can never legally sit alone on its own line, and anchoring
+    to line-start excludes it; and a widened fence (four or more backticks,
+    the documented defense in adversarial-self-audit.md's own quoting rule)
+    -- ```` ````json ```` does not match a literal 3-backtick open anchored
+    at line-start, so a defensively-widened fence around quoted content is
+    never mistaken for the real output contract's opener or closer."""
+    pos = 0
+    while True:
+        open_match = _FENCE_OPEN_RE.search(text, pos)
+        if open_match is None:
+            return
+        close_match = _FENCE_CLOSE_RE.search(text, open_match.end())
+        if close_match is None:
+            yield "truncated", None, open_match.start()
+            return
+        yield "found", text[open_match.end() : close_match.start()].strip(), open_match.start()
+        pos = close_match.end()
+
+
+def _locate_last_json_fence(text: str) -> tuple[str, str | None]:
+    """Return ``(status, block)`` for the *last* ```json fence in ``text``:
+    ``("absent", None)`` when no opening fence exists at all, ``("truncated",
+    None)`` when the last opening fence has no matching close, or
+    ``("found", block)`` otherwise."""
+    result: tuple[str, str | None] = ("absent", None)
+    for status, block, _ in _iter_json_fences(text):
+        result = (status, block)
+    return result
 
 
 def extract_json_block(text: str | None) -> str | None:
-    """Return the last fenced ```json ... ``` block's inner text from
-    ``text``, or ``None`` if no such fence exists. A ``None`` ``text`` is
-    treated the same as an absent block, matching how `gitapex_score_contract.py`'s
-    own ``score()`` treats a ``None`` output as empty rather than raising."""
+    """Return the last *complete* fenced ```json ... ``` block's inner text
+    from ``text``, or ``None`` when no complete block exists -- that covers
+    both no opening fence at all and a truncated one (an opening fence with
+    no matching close). Callers that must tell those two cases apart use
+    ``_evaluate``, which reports a truncated fence as ``SCHEMA_INVALID``
+    (an attempt that failed) rather than ``SCHEMA_NOT_ATTEMPTED``. A
+    ``None`` ``text`` is treated the same as an absent block, matching how
+    `gitapex_score_contract.py`'s own ``score()`` treats a ``None`` output
+    as empty rather than raising."""
     if text is None:
         return None
-    matches: list[str] = _JSON_FENCE_RE.findall(text)
-    if not matches:
-        return None
-    return matches[-1].strip()
+    status, block = _locate_last_json_fence(text)
+    return block if status == "found" else None
 
 
 def _evaluate(output_text: str | None, schema: dict[str, Any]) -> tuple[str, str | None]:
@@ -78,11 +131,17 @@ def _evaluate(output_text: str | None, schema: dict[str, Any]) -> tuple[str, str
     detail message, which left the "re-validation finds no error" branch
     unreachable in practice (the first pass already established one exists)
     and therefore untestable."""
-    block = extract_json_block(output_text)
-    if block is None:
+    if output_text is None:
         return SCHEMA_NOT_ATTEMPTED, None
+    status, block = _locate_last_json_fence(output_text)
+    if status == "absent":
+        return SCHEMA_NOT_ATTEMPTED, None
+    if status == "truncated":
+        return SCHEMA_INVALID, "opening ```json fence has no matching closing ``` fence (truncated output)"
     try:
-        instance = json.loads(block)
+        # status not in {"absent", "truncated"} means "found", which
+        # _iter_json_fences only ever yields paired with a str block.
+        instance = json.loads(cast(str, block))
     except json.JSONDecodeError as exc:
         return SCHEMA_INVALID, f"fenced json block is not valid JSON: {exc}"
     validator = jsonschema.Draft202012Validator(schema)

@@ -64,6 +64,33 @@ def test_extract_json_block_none_on_none_input():
     assert csc.extract_json_block(None) is None
 
 
+def test_extract_json_block_survives_literal_backticks_in_a_string_value():
+    # Regression: a non-anchored, non-greedy regex used to stop at the
+    # *first* ``` after the opener, even one embedded inside a JSON string.
+    text = '```json\n{"a": "text with ``` inside"}\n```'
+    assert csc.extract_json_block(text) == '{"a": "text with ``` inside"}'
+
+
+def test_extract_json_block_none_on_truncated_fence():
+    text = 'prose\n```json\n{"a": 1, "b":'
+    assert csc.extract_json_block(text) is None
+
+
+def test_extract_json_block_ignores_a_widened_defensive_fence():
+    # adversarial-self-audit.md's own defense: widen the fence beyond
+    # anything quoted inside it. A 4-backtick fence must not be mistaken
+    # for a plain 3-backtick ```json opener or closer.
+    text = "````json\nnot the real contract\n````\n" + '```json\n{"a": 1}\n```'
+    assert csc.extract_json_block(text) == '{"a": 1}'
+
+
+def test_extract_json_block_none_when_the_last_fence_is_truncated_despite_an_earlier_complete_one():
+    # Regression: a stale earlier block (e.g. a quoted worked example) must
+    # not be silently substituted when the real, later attempt is cut off.
+    text = '```json\n{"a": 1}\n```\nprose\n```json\n{"a": 2, "b":'
+    assert csc.extract_json_block(text) is None
+
+
 # ---- check_schema_conformance -----------------------------------------------
 
 
@@ -95,6 +122,24 @@ def test_invalid_on_schema_violation(real_schema):
 def test_invalid_when_json_is_not_an_object(real_schema):
     text = "```json\n[1, 2, 3]\n```"
     assert csc.check_schema_conformance(text, real_schema) == csc.SCHEMA_INVALID
+
+
+def test_invalid_on_truncated_fence_not_not_attempted(real_schema):
+    # Regression: a cut-off capture is an attempt that failed, distinct
+    # from no attempt at all -- it must not collapse to SCHEMA_NOT_ATTEMPTED.
+    text = 'prose\n```json\n{"schemaVersion": "1.0.0", "reviewMeta": {'
+    assert csc.check_schema_conformance(text, real_schema) == csc.SCHEMA_INVALID
+
+
+def test_confirmed_when_evidence_quote_cites_a_fenced_snippet(real_schema):
+    # Regression: evidence[].quote is designed to hold verbatim quotes from
+    # a target's own markdown, which may itself contain a fenced snippet.
+    instance = _valid_instance()
+    instance["dimensions"][0]["evidence"] = [
+        {"quote": "Step 4 says: ```bash\\nrun.sh\\n```", "sourceRef": "SKILL.md:4"}
+    ]
+    text = "```json\n" + json.dumps(instance) + "\n```"
+    assert csc.check_schema_conformance(text, real_schema) == csc.SCHEMA_CONFIRMED
 
 
 # ---- CLI (main) --------------------------------------------------------------
