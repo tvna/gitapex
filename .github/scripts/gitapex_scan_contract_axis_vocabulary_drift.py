@@ -87,6 +87,13 @@ whose section is empty, and malformed JSON each exit 2 rather than degrading
 to "nothing to check, pass". An anchor that matches more than one heading is
 also an error, not a first-match-wins guess.
 
+``ScanError``, ``read_text``, and ``extract_section`` moved to the shared
+``_gitapex_vocabulary_lock.py`` module (issue #993) once a second gate of
+this same shape (`gitapex_scan_skill_quality_rubric_vocabulary_drift.py`)
+needed the identical three primitives -- a duplicated copy of exactly the
+kind of drift this gate class exists to prevent, reproduced between the
+gates themselves. No behavior changed by that move.
+
 Usage::
 
     python3 .github/scripts/gitapex_scan_contract_axis_vocabulary_drift.py
@@ -107,6 +114,8 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+
+from _gitapex_vocabulary_lock import ScanError, extract_section, read_text
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SKILL_DIR = REPO_ROOT / "skills" / "evaluating-deterministic-gate-quality"
@@ -178,10 +187,6 @@ EXPECTED_INPUT_DOMAIN_KINDS = frozenset(
 )
 
 
-class ScanError(Exception):
-    """An input could not be read or parsed -- exit 2, never a silent pass."""
-
-
 @dataclass(frozen=True)
 class SectionRequirement:
     """One locked substring inside one file's own axis section.
@@ -216,47 +221,6 @@ DIVISION_REQUIREMENTS = (
     SectionRequirement("never-both rule", "Never both"),
     SectionRequirement("dimension 15 citation", "dimension 15"),
 )
-
-
-def read_text(path: Path) -> str:
-    """Read ``path`` as UTF-8, raising :class:`ScanError` on any failure.
-
-    Every read failure is the same outcome here -- the check could not run --
-    so an unreadable file must not reach the caller as an empty string that
-    every substring check would then report as ordinary drift.
-    """
-    try:
-        return path.read_text(encoding="utf-8")
-    except FileNotFoundError as error:
-        raise ScanError(f"{path}: not found") from error
-    except UnicodeDecodeError as error:
-        raise ScanError(f"{path}: could not decode as UTF-8: {error}") from error
-    except OSError as error:
-        raise ScanError(f"{path}: could not be read: {error}") from error
-
-
-def extract_section(text: str, heading: str, path_label: str) -> str:
-    """The body under ``heading``, up to the next heading of the same or a
-    shallower level.
-
-    Raises :class:`ScanError` when the heading is absent, appears more than
-    once, or opens an empty section: each means the structure this gate assumes
-    is not there, which is a "cannot check" answer, not a passing one.
-    """
-    level = len(heading) - len(heading.lstrip("#"))
-    occurrences = [m.start() for m in re.finditer(rf"^{re.escape(heading)}[ \t]*$", text, re.MULTILINE)]
-    if not occurrences:
-        raise ScanError(f"{path_label}: heading not found: {heading!r}")
-    if len(occurrences) > 1:
-        raise ScanError(f"{path_label}: heading appears {len(occurrences)} times, expected exactly once: {heading!r}")
-
-    start = occurrences[0] + len(heading)
-    rest = text[start:]
-    next_heading = re.search(rf"^#{{1,{level}}}[ \t]+\S", rest, re.MULTILINE)
-    body = rest[: next_heading.start()] if next_heading else rest
-    if not body.strip():
-        raise ScanError(f"{path_label}: section {heading!r} is empty")
-    return body
 
 
 def check_section(section: str, requirements: tuple[SectionRequirement, ...], where: str) -> list[str]:
