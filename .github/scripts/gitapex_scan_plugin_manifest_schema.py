@@ -92,6 +92,16 @@ def schema_conformance_findings(
         vendored_schema_path = VENDORED_SCHEMA_PATH
     instance = _gitapex_schema_validation.load_json_or_raise(plugin_manifest_path, ScanReadError)
     schema = _gitapex_schema_validation.load_json_or_raise(vendored_schema_path, ScanReadError)
+    # load_json_or_raise does not itself check the parsed value's shape (its
+    # own docstring says so: that is each caller's responsibility). A
+    # syntactically-valid-JSON-but-non-object vendored schema (e.g. a JSON
+    # array) reaches jsonschema.Draft202012Validator's own internals, which
+    # assume a dict and raise an uncaught AttributeError -- a real defect a
+    # live evaluating-deterministic-gate-quality review found by actually
+    # feeding it one. The sibling generator (gitapex_generate_plugin_manifest.py)
+    # already guards its own JSON source the same way; this mirrors that.
+    if not isinstance(schema, dict):
+        raise ScanReadError(f"{vendored_schema_path}: must be a JSON object, got {type(schema).__name__}")
     return [
         f"schema-conformance: {message.removeprefix('schema: ')}"
         for message in _gitapex_schema_validation.validate(instance, schema)

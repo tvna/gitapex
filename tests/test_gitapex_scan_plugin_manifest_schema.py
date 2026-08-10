@@ -70,6 +70,22 @@ def test_schema_conformance_findings_missing_manifest_raises(tmp_path: pathlib.P
         scanner.schema_conformance_findings(tmp_path / "nonexistent.json", schema_path)
 
 
+def test_schema_conformance_findings_non_object_schema_raises_cleanly(tmp_path: pathlib.Path) -> None:
+    """A syntactically-valid-JSON-but-non-object vendored schema (e.g. a
+    JSON array) must raise ScanReadError, not let jsonschema's own
+    internals crash with an unhandled AttributeError -- a live
+    evaluating-deterministic-gate-quality review found this defect by
+    actually feeding the gate one."""
+    manifest_path = tmp_path / "plugin.json"
+    schema_path = tmp_path / "schema.json"
+    _write_json(
+        manifest_path, {"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "name": "gitapex"}
+    )
+    _write_json(schema_path, [1, 2, 3])
+    with pytest.raises(scanner.ScanReadError, match="must be a JSON object"):
+        scanner.schema_conformance_findings(manifest_path, schema_path)
+
+
 # ---------------------------------------------------------------------------
 # vendor_digest_drift_findings
 # ---------------------------------------------------------------------------
