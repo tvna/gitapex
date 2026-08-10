@@ -154,8 +154,11 @@ An argv that would run a shell, or hand inline code to an interpreter, is
 refused before the runner starts anything -- the registry routes to tracked
 scripts, it is not a place to put commands.
 
-CI remains the authoritative merge gate; this is a fast first pass, the same
-relationship the prek hook has to `lint.yml`.
+CI remains the authoritative merge gate for every gate that also carries a
+`ci` plane; this is a fast first pass, the same relationship the prek hook
+has to `lint.yml`. One gate, `behind-base` (issue #985), carries `local`
+only -- for that one, this pre-push hook is the sole enforcement, with no
+CI-side backstop if it's bypassed.
 
 ## Issue citation convention
 

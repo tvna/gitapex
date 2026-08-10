@@ -58,6 +58,7 @@ def _synced_head(tmp_path: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
 # --- count_behind / fetch_base -----------------------------------------
 
 
+@pytest.mark.slow
 def test_up_to_date_head_has_zero_behind_and_zero_ahead(tmp_path: pathlib.Path) -> None:
     _origin, head = _synced_head(tmp_path)
     gate.fetch_base(head)
@@ -65,6 +66,7 @@ def test_up_to_date_head_has_zero_behind_and_zero_ahead(tmp_path: pathlib.Path) 
     assert result == gate.BehindBaseCount(behind=0, ahead=0)
 
 
+@pytest.mark.slow
 def test_head_ahead_of_base_is_not_behind(tmp_path: pathlib.Path) -> None:
     _origin, head = _synced_head(tmp_path)
     _commit(head, "b.txt", "local work")
@@ -73,6 +75,7 @@ def test_head_ahead_of_base_is_not_behind(tmp_path: pathlib.Path) -> None:
     assert result == gate.BehindBaseCount(behind=0, ahead=1)
 
 
+@pytest.mark.slow
 def test_fetch_picks_up_new_commits_pushed_to_origin(tmp_path: pathlib.Path) -> None:
     """The requester's own recorded decision: fetch_base must read real
     remote state, not whatever `head` last knew, so a base that moved
@@ -84,6 +87,7 @@ def test_fetch_picks_up_new_commits_pushed_to_origin(tmp_path: pathlib.Path) -> 
     assert result == gate.BehindBaseCount(behind=1, ahead=0)
 
 
+@pytest.mark.slow
 def test_behind_and_ahead_both_nonzero_when_diverged(tmp_path: pathlib.Path) -> None:
     origin, head = _synced_head(tmp_path)
     _commit(origin, "c.txt", "new base commit")
@@ -93,6 +97,7 @@ def test_behind_and_ahead_both_nonzero_when_diverged(tmp_path: pathlib.Path) -> 
     assert result == gate.BehindBaseCount(behind=1, ahead=1)
 
 
+@pytest.mark.slow
 def test_fetch_base_fails_closed_on_unreachable_remote(tmp_path: pathlib.Path) -> None:
     head = _init_repo(tmp_path / "head")
     _commit(head, "a.txt", "initial")
@@ -119,6 +124,7 @@ def test_fetch_base_fails_closed_on_timeout(tmp_path: pathlib.Path, monkeypatch:
         gate.fetch_base(tmp_path)
 
 
+@pytest.mark.slow
 def test_subprocess_output_is_never_strictly_utf8_decoded(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -140,6 +146,7 @@ def test_subprocess_output_is_never_strictly_utf8_decoded(
         gate.fetch_base(tmp_path)
 
 
+@pytest.mark.slow
 def test_count_behind_fails_closed_when_base_ref_does_not_exist(tmp_path: pathlib.Path) -> None:
     """No fetch happened, so `origin/main` was never created locally --
     the comparison itself must fail closed, distinct from a fetch failure.
@@ -147,10 +154,11 @@ def test_count_behind_fails_closed_when_base_ref_does_not_exist(tmp_path: pathli
     ancestor either), before `rev-list` is ever invoked."""
     head = _init_repo(tmp_path / "head")
     _commit(head, "a.txt", "initial")
-    with pytest.raises(gate.GateError, match="share no common ancestor"):
+    with pytest.raises(gate.GateError, match="cannot find a common ancestor"):
         gate.count_behind(head)
 
 
+@pytest.mark.slow
 def test_count_behind_fails_closed_on_unrelated_histories(tmp_path: pathlib.Path) -> None:
     """Regression: a real repro (not a mock) of two repos with no shared
     commit. `git rev-list --left-right --count` does not itself fail on
@@ -166,7 +174,7 @@ def test_count_behind_fails_closed_on_unrelated_histories(tmp_path: pathlib.Path
     _run(["git", "remote", "add", "origin", str(origin)], head)
     _run(["git", "fetch", "-q", "origin", "main"], head)
 
-    with pytest.raises(gate.GateError, match="share no common ancestor"):
+    with pytest.raises(gate.GateError, match="cannot find a common ancestor"):
         gate.count_behind(head)
 
 
@@ -181,6 +189,7 @@ def test_count_behind_fails_closed_when_git_is_missing_during_merge_base(
         gate.count_behind(tmp_path)
 
 
+@pytest.mark.slow
 def test_count_behind_fails_closed_when_git_is_missing_during_rev_list(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -205,6 +214,7 @@ def test_count_behind_fails_closed_when_git_is_missing_during_rev_list(
         gate.count_behind(head)
 
 
+@pytest.mark.slow
 def test_count_behind_fails_closed_when_rev_list_itself_exits_nonzero(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -244,12 +254,14 @@ def test_count_behind_fails_closed_on_unparseable_output(
 # --- CLI: main -----------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_main_returns_zero_when_up_to_date(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
     _origin, head = _synced_head(tmp_path)
     assert gate.main(["--root", str(head)]) == 0
     assert "OK:" in capsys.readouterr().out
 
 
+@pytest.mark.slow
 def test_main_returns_one_and_names_the_behind_count_and_remedy(
     tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -264,6 +276,7 @@ def test_main_returns_one_and_names_the_behind_count_and_remedy(
     assert "#985" in stderr
 
 
+@pytest.mark.slow
 def test_main_returns_two_and_names_the_fetch_failure_distinctly(
     tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -296,6 +309,7 @@ def test_main_returns_two_on_a_root_that_is_a_file(tmp_path: pathlib.Path, capsy
     assert "must be an existing directory" in capsys.readouterr().err
 
 
+@pytest.mark.slow
 def test_main_default_root_checks_the_real_repository(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """`--root`'s default is the module-level `REPO_ROOT`, not a value
     re-passed on every call -- exercised by pointing that module attribute

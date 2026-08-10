@@ -17,13 +17,23 @@ and commits reachable from `HEAD` but not `origin/main` (ahead). This gate
 fails when the behind count is greater than zero and passes -- regardless
 of the ahead count -- when it is zero.
 
-**Base ref is `origin/main`, hardcoded.** This matches
-`gitapex_gate_exception_handler_gaps.py`'s own existing `local_stdin`
-convention rather than resolving a per-branch upstream: `main` is the only
-base branch in this repository's flow today. Wrong the day this repository
-grows a second long-lived base branch -- named as a residual risk in issue
-#985's Acceptance Criteria Map, not solved here. The cost of getting it
-wrong is a false FAIL with an obvious message, not a silent pass.
+**Base ref is `origin/main`, hardcoded.** This matches the existing
+`exception-handler-gap` gate's own `local_stdin` producer argv in
+`.gitapex/ssot.json` (`git diff ... --merge-base origin/main HEAD`, consumed
+generically by `gitapex_gate_local_preflight.py` -- the hardcode lives in
+the registry entry, not inside `gitapex_gate_exception_handler_gaps.py`
+itself) rather than resolving a per-branch upstream: `main` is the only
+base branch in this repository's flow today. Two named residual risks, not
+solved here: this breaks the day the repository grows a second long-lived
+base branch (issue #985's own Acceptance Criteria Map), and it silently
+compares against the wrong history if the local `origin` remote is a
+personal fork rather than the canonical repository -- a standard
+fork-workflow shape this repository's own `CONTRIBUTING.md` does not
+currently document but does not rule out either. In both cases the cost of
+getting it wrong is a plausible-looking but wrong verdict, not a crash --
+the same class of risk `hooks/check-pr-upstream-pushed.sh`'s own
+`@{upstream}` resolution exists for a different question (a branch's push
+destination, not its merge-base), and is not a substitute here.
 
 **This gate fetches its own base ref before comparing** -- the requester's
 recorded decision in issue #985, chosen over reading a possibly-stale
@@ -123,17 +133,23 @@ def _run_git(root: pathlib.Path, args: list[str], *, label: str) -> subprocess.C
     regardless of its exit code -- callers decide what a nonzero
     ``returncode`` means for their own step. Raises :class:`GateError` for
     every way the subprocess itself can fail to produce one: a missing
-    ``git`` executable, or a hang past :data:`GIT_TIMEOUT_SECONDS`.
+    ``git`` executable, a hang past :data:`GIT_TIMEOUT_SECONDS`, or any
+    other subprocess-layer failure.
 
     ``errors="replace"`` rather than ``text=True``'s own strict default,
     matching ``gitapex_gate_local_preflight.py``'s own ``_run`` and the
     documented regression behind it: a byte sequence on stdout/stderr that
     is not valid UTF-8 (a corrupted object, a non-ASCII remote error
-    message) otherwise raises ``UnicodeDecodeError`` from inside
-    ``subprocess.run`` itself -- a ``ValueError``, uncaught by this
-    function's own ``except OSError`` -- and escapes as Python's default
-    exit code 1, indistinguishable from this gate's own documented "behind
-    base" FAIL."""
+    message) otherwise raises ``UnicodeDecodeError`` -- a ``ValueError``.
+    ``errors="replace"`` closes the one known decode path, but
+    ``gitapex_gate_local_preflight.py``'s own ``run_check`` additionally
+    catches ``ValueError``/``subprocess.SubprocessError`` as defense in
+    depth against any other layer raising one, on the documented reasoning
+    that a decode failure escaping as an uncaught traceback -- exit code 1,
+    indistinguishable from this gate's own documented exit-1 "behind base"
+    FAIL -- is a worse outcome than one extra except clause; this function
+    matches that same defense-in-depth shape rather than trusting
+    ``errors="replace"`` alone."""
     try:
         # S603/S607 waived: a fixed argv list with no shell, and `git` is
         # intentionally resolved from PATH -- pinning an absolute path
@@ -150,7 +166,7 @@ def _run_git(root: pathlib.Path, args: list[str], *, label: str) -> subprocess.C
         )
     except subprocess.TimeoutExpired as error:
         raise GateError(f"git {label} timed out after {GIT_TIMEOUT_SECONDS}s") from error
-    except OSError as error:
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
         raise GateError(f"cannot run git to {label}: {error}") from error
 
 
@@ -166,19 +182,33 @@ def fetch_base(root: pathlib.Path, remote: str = BASE_REMOTE, branch: str = BASE
 
 
 def _require_common_ancestor(root: pathlib.Path, base_ref: str) -> None:
-    """Raise :class:`GateError` when ``base_ref`` and ``HEAD`` share no
-    common ancestor. Checked explicitly, before the ``rev-list`` call in
-    :func:`count_behind`: unrelated histories do not make ``git rev-list
-    --left-right --count base_ref...HEAD`` fail -- it silently returns a
-    numeric ahead/behind pair for the *empty* merge base, which would
-    otherwise produce a plausible-looking but meaningless behind-base FAIL
-    (exit 1, "merge or rebase") instead of the honest "this comparison
-    cannot be trusted" signal (exit 2) an unrelated-history checkout (an
-    orphan branch, a wrong-remote misconfiguration) actually needs.
-    Verified directly against a real orphan-history pair, not assumed."""
+    """Raise :class:`GateError` when ``git merge-base`` cannot find a
+    common ancestor between ``base_ref`` and ``HEAD``. Checked explicitly,
+    before the ``rev-list`` call in :func:`count_behind`: unrelated
+    histories do not make ``git rev-list --left-right --count
+    base_ref...HEAD`` fail -- it silently returns a numeric ahead/behind
+    pair for the *empty* merge base, which would otherwise produce a
+    plausible-looking but meaningless behind-base FAIL (exit 1, "merge or
+    rebase") instead of the honest "this comparison cannot be trusted"
+    signal (exit 2) this case actually needs. Verified directly against a
+    real orphan-history pair, not assumed.
+
+    The raised message deliberately does not assert *why* no common
+    ancestor was found -- a nonzero ``merge-base`` exit has more than one
+    real cause (genuinely unrelated histories, ``base_ref`` never fetched
+    locally, or a shallow clone whose truncated history does not reach far
+    enough back), and this function cannot distinguish them from the exit
+    code alone. Naming one as though it were established (a prior revision
+    of this message unconditionally said "unrelated histories") would
+    mislead a contributor debugging a shallow-clone or missing-ref case
+    toward the wrong fix; git's own stderr, appended verbatim, carries
+    whatever specificity is actually available."""
     result = _run_git(root, ["merge-base", base_ref, "HEAD"], label=f"find a common ancestor with {base_ref}")
     if result.returncode != 0:
-        raise GateError(f"{base_ref} and HEAD share no common ancestor (unrelated histories): {result.stderr.strip()}")
+        raise GateError(
+            f"cannot find a common ancestor between {base_ref} and HEAD -- unrelated histories, "
+            f"{base_ref} not yet fetched, or a shallow clone: {result.stderr.strip()}"
+        )
 
 
 def count_behind(root: pathlib.Path, remote: str = BASE_REMOTE, branch: str = BASE_BRANCH) -> BehindBaseCount:

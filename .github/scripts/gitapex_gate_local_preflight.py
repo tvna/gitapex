@@ -77,7 +77,13 @@ reasons.
   ``-t pre-commit -t pre-push`` and then verify each shim actually resolves
   (issue #890), which closes the "configured here but never actually
   installed" half; nothing closes the ``--no-verify`` half. CI remains the
-  authoritative merge gate.
+  authoritative merge gate for every gate carrying a ``ci`` plane -- true
+  for 21 of the 22 wired gates. ``behind-base`` (issue #985) is the one
+  exception: it carries only ``local``, so for that gate specifically this
+  pre-push hook -- bypassable the same way as any other -- is the *only*
+  enforcement, with no CI-side backstop. Named as a real gap in that
+  gate's own docstring and issue #985's Acceptance Criteria Map, not
+  papered over here.
 - **Every wired gate runs through ``uv``.** CONTRIBUTING.md invokes this
   file with plain ``python3``, and so does the pre-push hook, because the
   runner itself needs no dependencies -- but all 22 wired argvs begin with
@@ -165,8 +171,8 @@ SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
 # directly rather than assumed: three warm standalone runs of that one
 # gate averaged under a second (~0.6 s), and the ~7-8 s combined figure
 # above is up from a ~4-6 s baseline measured for the previous, one-gate-
-# smaller wired set -- a real but small addition against a ceiling three
-# orders of magnitude larger.
+# smaller wired set -- a real but small addition against a ceiling
+# roughly two orders of magnitude larger (1800 s / ~7.5 s =~ 240x).
 DEFAULT_TIMEOUT_SECONDS = 1800
 
 # Registry plane that marks a gate as having a working-tree-only form -- see
