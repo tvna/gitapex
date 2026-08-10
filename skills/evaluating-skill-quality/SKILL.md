@@ -170,9 +170,9 @@ is still grading from a contaminated context.
   not grading, and are named here so a conforming runner need not choose
   between skipping a control and breaking this rule: verify isolation above,
   dispatch, open any second dispatch below, and relay the dispatch's report
-  -- including the verdict it issued in step 6 -- to the human verbatim,
-  never independently issuing or revising one. Clarifying questions about
-  evidence already returned can be answered directly from that report; a
+  -- including step 6's verdict and closing json block, unabridged -- to the
+  human verbatim, never issuing, revising, or summarizing one independently.
+  Clarifying questions about evidence already returned can be answered directly from that report; a
   challenge that could change a verdict gets a second, independent fresh
   dispatch carrying only the target's path and the challenge itself, passed
   as an untrusted claim to verify -- never the first dispatch's verdict or
