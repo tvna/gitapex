@@ -19,11 +19,10 @@ its own precondition-gated design pass.
 
 ## Sequencing precondition (re-checked this session, not assumed)
 
-#1002's own Constraints gate implementation -- not this design pass -- on
+`#1002`'s own Constraints gate implementation -- not this design pass -- on
 the `rubric.md` pruning-only chain "settling": no further pruning-only
 pass against `rubric.md`'s dimensions 1-9 open or in flight. Re-checked
-directly against GitHub state this session (`mcp__github__issue_read`,
-`search_issues`, `search_pull_requests`), not assumed from the issue body:
+directly against GitHub state this session, not assumed from the issue body:
 `#1001` (retemplate+prune) and `#1014` (Tier 1 pruning, ~110-120 lines)
 are both merged (`#1014` closed `state_reason: completed`, folded into
 merged PR #1018). A search for an open Tier 2 follow-up
@@ -179,11 +178,14 @@ may adjust shape during that implementation's own review):
           "type": "object",
           "required": ["ref", "provenance"],
           "additionalProperties": false,
+          "description": "Unlike the precedent (output-schema.json's own actor object states 'Required detail when provenance=verified' in prose only, with no schema if/then enforcing it), this draft mechanically enforces it: a record claiming a verified identity must carry non-empty supporting verification data, not merely assert the label.",
           "properties": {
             "ref": { "type": "string" },
             "provenance": { "enum": ["verified", "asserted"] },
-            "verification": { "type": "string" }
-          }
+            "verification": { "type": "string", "minLength": 1 }
+          },
+          "if": { "properties": { "provenance": { "const": "verified" } }, "required": ["provenance"] },
+          "then": { "required": ["ref", "provenance", "verification"] }
         },
         "targetRepoRef": { "type": "string" },
         "artifactRef": { "type": "string", "description": "The reviewed skill's directory, e.g. skills/duplicate-ticket-detector. Optional, matching the precedent's own artifactRef -- omitted only when targetRepoRef alone already identifies the one artifact under review." },
@@ -342,13 +344,20 @@ may adjust shape during that implementation's own review):
 
 Deliberately **not** drafted here, left to the implementing issue: the
 exact conditional `if`/`then` blocks enforcing (a) dimension IDs 1-9 each
-appear exactly once, (b) `unmeasured` is legal only for dimensions 8-9,
-and (c) `verdict.reason` is required for `Not-well-formed`/`Indeterminate`
--- `output-schema.json`'s own precedent (its dimension-23 `if`/`then`
-block) shows the mechanism exists in this repository's established
-JSON Schema style; writing the exact predicate correctly deserves its own
-implementation-time review pass rather than a first draft nobody
-re-checks.
+appear exactly once with no duplicate or gap, (b) `unmeasured` is legal
+only for dimensions 8-9, (c) a dimension entry legitimately carrying
+`unmeasured` for dimension 8 or 9 is exempted from the general
+`evidence`-required-and-non-empty rule Decision 3 depends on (currently
+unreconciled in the draft above: `dimensions.items.required` always
+includes `evidence` with `minItems: 1`, with no carve-out for this case
+yet), and (d) `verdict.reason` is required for
+`Not-well-formed`/`Indeterminate` -- `output-schema.json`'s own precedent
+(its dimension-23 `if`/`then` block) shows the mechanism exists in this
+repository's established JSON Schema style; writing the four predicates
+correctly, plus whatever checker-side rule confirms a `sourceRef` points
+to a real, re-derivable source (`gitapex_check_schema_conformance.py`'s
+own job, not this schema's), deserves its own implementation-time review
+pass rather than a first draft nobody re-checks.
 
 ## 3. Decision 2 -- versioning strategy
 
