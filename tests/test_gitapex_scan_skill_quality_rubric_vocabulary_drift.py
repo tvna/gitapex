@@ -201,6 +201,24 @@ def test_empty_dimension_section_fails(tmp_path: Path) -> None:
     assert any("'## 9.' has an empty section" in p for p in problems), problems
 
 
+def test_empty_dimension_section_is_not_masked_by_a_following_non_dimension_heading(tmp_path: Path) -> None:
+    """A dimension heading's own body ends at the next heading of ANY kind at
+    the same level, not only the next NUMBERED dimension heading -- an
+    intervening non-dimension '##' section must not be read as the empty
+    dimension's content and hide its emptiness (CodeRabbit review, PR #994)."""
+    skill_dir = _copy_skill(tmp_path)
+    path = skill_dir / "references" / "rubric.md"
+    text = path.read_text(encoding="utf-8")
+    marker = "## 6. "
+    idx = text.index(marker)
+    heading_end = text.index("\n", idx) + 1
+    injected = "## Not a dimension\n\nThis content must not count as dimension 6's body.\n\n"
+    text = text[:heading_end] + injected + text[heading_end:]
+    path.write_text(text, encoding="utf-8")
+    problems = G.scan(skill_dir)
+    assert any("'## 6.' has an empty section" in p for p in problems), problems
+
+
 def test_no_dimension_headings_is_a_scan_error(tmp_path: Path) -> None:
     skill_dir = _copy_skill(tmp_path)
     path = skill_dir / "references" / "rubric.md"

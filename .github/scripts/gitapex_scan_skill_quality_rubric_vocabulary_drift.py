@@ -112,6 +112,10 @@ MECHANISM_FIT_STEP_LABELS = (
 )
 
 _DIMENSION_HEADING_RE = re.compile(r"^## (\d+)\.[ \t]+\S.*$", re.MULTILINE)
+# A dimension section's real end: the next level-1 or level-2 heading of any
+# kind, numbered or not -- same "same level or shallower" rule extract_section
+# (in the shared _gitapex_vocabulary_lock module) uses for its own boundary.
+_NEXT_LEVEL_1_OR_2_HEADING_RE = re.compile(r"^#{1,2}[ \t]+\S", re.MULTILINE)
 # Matches both the plural prose form ("**nine dimensions**") and the
 # hyphenated adjectival form ("**nine-dimension**"); "dimensions?" makes the
 # trailing "s" optional so the singular hyphenated spelling also matches.
@@ -168,7 +172,12 @@ def check_dimension_headings(rubric_text: str) -> tuple[int, list[str]]:
 
     for index, match in enumerate(matches):
         start = match.end()
-        end = matches[index + 1].start() if index + 1 < len(matches) else len(rubric_text)
+        # The next heading at this level or shallower (## or #), not just the
+        # next NUMBERED dimension heading -- an intervening non-dimension
+        # `##` section (e.g. a stray subsection) would otherwise be read as
+        # this dimension's own body, masking a genuinely empty section.
+        next_heading = _NEXT_LEVEL_1_OR_2_HEADING_RE.search(rubric_text, start)
+        end = next_heading.start() if next_heading else len(rubric_text)
         if not rubric_text[start:end].strip():
             problems.append(f"{RUBRIC_MD}: dimension heading '## {numbers[index]}.' has an empty section")
 
