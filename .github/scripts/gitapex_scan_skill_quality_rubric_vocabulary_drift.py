@@ -119,7 +119,11 @@ _NEXT_LEVEL_1_OR_2_HEADING_RE = re.compile(r"^#{1,2}[ \t]+\S", re.MULTILINE)
 # Matches both the plural prose form ("**nine dimensions**") and the
 # hyphenated adjectival form ("**nine-dimension**"); "dimensions?" makes the
 # trailing "s" optional so the singular hyphenated spelling also matches.
-_DIMENSION_COUNT_RE = re.compile(r"\*\*([A-Za-z]+)[ -]dimensions?\*\*")
+# Case-insensitive: rubric.md already capitalizes sentence-initial
+# "Dimensions" (e.g. "Dimensions 8-9's ..."), so a future full-span or
+# count citation rephrased to start a sentence must not silently escape
+# this lock just because of a capital D.
+_DIMENSION_COUNT_RE = re.compile(r"\*\*([A-Za-z]+)[ -]dimensions?\*\*", re.IGNORECASE)
 # Only a range that STARTS at 1 is a full-span claim this gate can check --
 # "dimensions 8-9" (the Behavioural-evidence/Cross-model-robustness
 # exception pair) is a real, legitimate sub-range with no relationship to
@@ -128,7 +132,7 @@ _DIMENSION_COUNT_RE = re.compile(r"\*\*([A-Za-z]+)[ -]dimensions?\*\*")
 # 1-7" (the Verdicts section's "every dimension 1-7 clears" exception
 # clause, deliberately excluding the tooling-dependent 8-9 pair) is a
 # different, legitimate sub-range claim, not a full-span one.
-_RANGE_RE = re.compile(r"\bdimensions\s+1-(\d+)\b")
+_RANGE_RE = re.compile(r"\bdimensions\s+1-(\d+)\b", re.IGNORECASE)
 
 _NUMBER_WORDS = {
     "one": 1,

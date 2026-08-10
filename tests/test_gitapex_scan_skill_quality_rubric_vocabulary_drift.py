@@ -82,6 +82,17 @@ def test_stale_dimension_count_in_rubric_md_fails(tmp_path: Path) -> None:
     assert any("declares 10 dimensions but" in p for p in problems), problems
 
 
+def test_stale_dimension_count_is_caught_when_bold_declaration_is_capitalized(tmp_path: Path) -> None:
+    """The bold-declaration regex must not be case-sensitive on the literal
+    'dimensions' word -- a declaration rephrased as '**Nine Dimensions**'
+    (e.g. sentence-initial) must still be graded, not silently skipped
+    (/code-review finding, case-sensitive regex)."""
+    skill_dir = _copy_skill(tmp_path)
+    _mutate(skill_dir, "SKILL.md", "**nine dimensions**", "**Eight Dimensions**")
+    problems = G.scan(skill_dir)
+    assert any("declares 8 dimensions but" in p for p in problems), problems
+
+
 def test_unrecognized_dimension_count_word_fails(tmp_path: Path) -> None:
     skill_dir = _copy_skill(tmp_path)
     _mutate(skill_dir, "SKILL.md", "**nine dimensions**", "**several dimensions**")
@@ -143,6 +154,17 @@ def test_dimension_count_matches_after_a_tenth_dimension_is_declared(tmp_path: P
 def test_stale_range_reference_in_rubric_md_fails(tmp_path: Path) -> None:
     skill_dir = _copy_skill(tmp_path)
     _mutate(skill_dir, "references/rubric.md", "dimensions 1-9 below say to check", "dimensions 1-8 below say to check")
+    problems = G.scan(skill_dir)
+    assert any("cites 'dimensions 1-8' but 9 dimension" in p for p in problems), problems
+
+
+def test_stale_range_reference_is_caught_when_sentence_initially_capitalized(tmp_path: Path) -> None:
+    """rubric.md already capitalizes sentence-initial 'Dimensions' elsewhere
+    (e.g. 'Dimensions 8-9's ...'); a full-span citation rephrased the same
+    way must not silently escape this lock just because of a capital D
+    (/code-review finding, case-sensitive regex)."""
+    skill_dir = _copy_skill(tmp_path)
+    _mutate(skill_dir, "references/rubric.md", "dimensions 1-9 below say to check", "Dimensions 1-8 below say to check")
     problems = G.scan(skill_dir)
     assert any("cites 'dimensions 1-8' but 9 dimension" in p for p in problems), problems
 
