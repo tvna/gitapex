@@ -148,13 +148,13 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
-import json
 import re
 import sys
 from pathlib import Path
 from typing import TypeGuard
 
 import yaml
+from _gitapex_schema_validation import load_json_or_raise
 
 _YAML_NAME_RE = re.compile(r"`([A-Za-z0-9._-]+\.yaml)`")
 
@@ -195,6 +195,24 @@ _SPLIT_NAMES = ("train", "selection", "test")
 # split.json loading and shape helpers
 # ---------------------------------------------------------------------------
 
+#: One `main()` run's worth of already-loaded `split.json` files, keyed by
+#: path. Check B (`check_precedence_branch_coverage`) and the `--split-md`
+#: loop can both need the same skill's `split.json` in one run (a PR that
+#: touches a skill's `split.md` and its `SKILL.md` together) -- routing both
+#: through this cache means the second access is a dict lookup, not a
+#: second read/parse of the same file.
+_SplitJsonCache = dict[Path, "tuple[dict[str, object] | None, str | None]"]
+
+
+def _load_split_json_cached(path: Path, cache: _SplitJsonCache) -> tuple[dict[str, object] | None, str | None]:
+    if path not in cache:
+        cache[path] = load_split_json(path)
+    return cache[path]
+
+
+class _SplitLoadError(Exception):
+    """Internal-only: converted back to `(None, message)` immediately below."""
+
 
 def load_split_json(path: Path) -> tuple[dict[str, object] | None, str | None]:
     """Parse `path` (a skill's `split.json`) into its top-level object.
@@ -203,18 +221,17 @@ def load_split_json(path: Path) -> tuple[dict[str, object] | None, str | None]:
     is missing, unreadable, undecodable, not valid JSON, or not a JSON
     object -- every caller below reads `split.json` through this one
     function, so a malformed file is reported the same way regardless of
-    which check found it first.
+    which check found it first. Delegates the read/parse/shape-check to
+    `load_json_or_raise`, wrapping its raise-on-error contract back into
+    this function's own tuple-return convention -- `OSError` (which
+    `load_json_or_raise` already catches) covers a missing file via
+    `FileNotFoundError`, one of its subclasses, so no separate
+    `path.is_file()` pre-check is needed.
     """
-    if not path.is_file():
-        return None, f"{path}: not found"
     try:
-        raw = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as error:
-        return None, f"{path}: could not read ({error})"
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError as error:
-        return None, f"{path}: could not parse as JSON ({error})"
+        data = load_json_or_raise(path, _SplitLoadError)
+    except _SplitLoadError as error:
+        return None, str(error)
     if not isinstance(data, dict):
         return None, f"{path}: top-level JSON value must be an object"
     return data, None
@@ -362,18 +379,27 @@ def has_equivalence_class_pair(data: dict[str, object]) -> bool:
     )
 
 
-def check_precedence_branch_coverage(skill_md_path: Path, skill_text: str, repo_root: Path) -> str | None:
+def check_precedence_branch_coverage(
+    skill_md_path: Path, skill_text: str, repo_root: Path, cache: _SplitJsonCache | None = None
+) -> str | None:
     """Return an offender message if `skill_md_path` documents a
     precedence/branching rule with no equivalence-class pair declared in
     its skill's own `split.json`, else None. A skill with no `split.json`
-    at all is out of scope -- see module docstring, Check B."""
+    at all is out of scope -- see module docstring, Check B.
+
+    `cache` is optional and defaults to a fresh, call-local dict when
+    omitted (every existing direct caller/test keeps working unchanged);
+    `main()` passes its own run-wide cache so this function's own load
+    reuses a `split.json` the `--split-md` loop already read this run,
+    instead of reading it a second time.
+    """
     phrases = find_precedence_phrases(skill_text)
     if not phrases:
         return None
     split_json_path = repo_root / "evals" / skill_md_path.parent.name / "split.json"
     if not split_json_path.is_file():
         return None
-    data, error = load_split_json(split_json_path)
+    data, error = _load_split_json_cached(split_json_path, cache if cache is not None else {})
     if error:
         return f"{skill_md_path}: {error}"
     assert data is not None  # noqa: S101 -- error is None, so load_split_json guarantees data
@@ -562,10 +588,11 @@ def check_partition_arithmetic(path: Path, data: dict[str, object]) -> str | Non
     exclusions = set(exclusions_raw)
 
     listed = {name: set(values) for name, values in assignment_fixtures(data).items()}
+    all_listed = set().union(*listed.values())
     # A file that declares a partition but lists nothing must not pass
     # vacuously -- `0:0:0` against an absent listing otherwise reconciles
     # perfectly.
-    if not set().union(*listed.values()):
+    if not all_listed:
         return (
             f"{path}: declares a {declared[0]}:{declared[1]}:{declared[2]} partition but 'assignment' "
             "lists no fixture at all; the arithmetic cannot be checked"
@@ -573,7 +600,7 @@ def check_partition_arithmetic(path: Path, data: dict[str, object]) -> str | Non
 
     overlaps = sorted(
         f"{name} (in {' and '.join(s for s in _SPLIT_NAMES if name in listed[s])})"
-        for name in set().union(*listed.values())
+        for name in all_listed
         if sum(name in listed[s] for s in _SPLIT_NAMES) > 1
     )
     if overlaps:
@@ -583,7 +610,7 @@ def check_partition_arithmetic(path: Path, data: dict[str, object]) -> str | Non
             "cross-split mention cannot be reconciled by an exclusion"
         )
 
-    stale = sorted(exclusions - set().union(*listed.values()))
+    stale = sorted(exclusions - all_listed)
     if stale:
         return (
             f"{path}: declares arithmetic exclusion(s) {', '.join(stale)} that 'assignment' does not "
@@ -637,6 +664,7 @@ def main(argv: list[str] | None = None) -> int:
     # --split-md alone would silently skip it. Tracked so a PR touching
     # both sides of the same pair is not checked (and reported) twice.
     exercises_checked: set[Path] = set()
+    split_json_cache: _SplitJsonCache = {}
 
     for raw_path in args.split_md:
         path = Path(raw_path)
@@ -644,7 +672,7 @@ def main(argv: list[str] | None = None) -> int:
         if text is None:
             return 1
         split_json_path = path.parent / "split.json"
-        data, error = load_split_json(split_json_path)
+        data, error = _load_split_json_cached(split_json_path, split_json_cache)
         if error:
             print(f"error: {error}", file=sys.stderr)
             return 1
@@ -671,13 +699,13 @@ def main(argv: list[str] | None = None) -> int:
         text = _read(path)
         if text is None:
             return 1
-        offender = check_precedence_branch_coverage(path, text, repo_root)
+        offender = check_precedence_branch_coverage(path, text, repo_root, cache=split_json_cache)
         if offender:
             offenders.append(offender)
         sibling_split_json = repo_root / "evals" / path.parent.name / "split.json"
         if sibling_split_json.is_file() and sibling_split_json not in exercises_checked:
             exercises_checked.add(sibling_split_json)
-            sibling_data, sibling_error = load_split_json(sibling_split_json)
+            sibling_data, sibling_error = _load_split_json_cached(sibling_split_json, split_json_cache)
             if sibling_error or sibling_data is None:
                 offenders.append(f"{sibling_split_json}: {sibling_error}")
             else:
