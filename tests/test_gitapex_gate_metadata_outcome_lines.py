@@ -50,6 +50,63 @@ def _commit(root: pathlib.Path, message: str) -> str:
     return _git(root, "rev-parse", "HEAD")
 
 
+SHORT_SHA_LEN = 8
+
+# Enough re-rolls that exhausting them is not a thing that happens. A single
+# candidate misses with probability (10/16)**8 ~= 0.0233, and the loop below
+# evaluates _MAX_SHA_REROLLS + 1 = 21 of them, so giving up needs 21
+# consecutive misses: (10/16)**(8*21) ~= 5e-35. Bounded anyway rather than
+# `while True`, so a future change that makes the condition unsatisfiable
+# fails loudly instead of hanging the suite.
+_MAX_SHA_REROLLS = 20
+
+
+def _is_citable_short_sha(sha: str) -> bool:
+    """Whether the gate would read `sha[:SHORT_SHA_LEN]` as a commit citation.
+
+    One predicate, called from both the loop and the post-loop check below, so
+    the candidate named in the failure message is necessarily one that was
+    actually evaluated by the same rule.
+    """
+    return bool(gate._SHA_TOKEN_RE.fullmatch(sha[:SHORT_SHA_LEN]))
+
+
+def _commit_with_citable_short_sha(root: pathlib.Path, message: str) -> str:
+    """Commit, re-rolling until `sha[:SHORT_SHA_LEN]` is a token the gate reads
+    as a commit citation.
+
+    `gate._SHA_TOKEN_RE` requires at least one a-f digit, deliberately, so that
+    a seven-or-more-digit line count (`1234567->89`) is never sent to
+    `git rev-parse` as a candidate revision -- see that regex's own comment. An
+    all-numeric short SHA is excluded by that rule and is therefore not a
+    commit citation as far as this gate is concerned.
+
+    A commit's SHA is effectively random, so a test that embeds `sha[:8]`
+    verbatim lands on that excluded shape (10/16)**8 ~= 2.3% of runs and then
+    fails on the fixture's own value rather than on any gate behavior. Issue
+    #960 records the CI failure that cost, on a pull request whose diff could
+    not reach this code at all. Amending re-rolls the SHA (the commit's own
+    message changes, the tree does not), so the fixture lands inside the
+    documented contract instead of sampling from outside it.
+    """
+    sha = _commit(root, message)
+    for attempt in range(_MAX_SHA_REROLLS):
+        if _is_citable_short_sha(sha):
+            return sha
+        _git(root, "commit", "-q", "--amend", "-m", f"{message} (reroll {attempt})")
+        sha = _git(root, "rev-parse", "HEAD")
+    # The final amend's own result still has to be evaluated. Without this the
+    # loop would amend once more than it checks: the SHA named below would be a
+    # candidate no rule ever ran against, and the fixture repository would be
+    # left one rewrite past the last evaluated state.
+    if _is_citable_short_sha(sha):
+        return sha
+    raise AssertionError(
+        f"no commit in {_MAX_SHA_REROLLS + 1} candidates produced a {SHORT_SHA_LEN}-character short SHA "
+        f"matching the gate's own commit-ish token rule; last evaluated was {sha[:SHORT_SHA_LEN]!r}"
+    )
+
+
 def _write_skill(
     root: pathlib.Path,
     name: str,
@@ -324,11 +381,124 @@ def test_outcome_commit_key_is_checked_at_that_commit(tmp_path: pathlib.Path) ->
 
 
 @pytest.mark.slow
+def test_the_commit_helper_yields_a_short_sha_the_gate_reads_as_a_citation(tmp_path: pathlib.Path) -> None:
+    """Issue #960: pins `_commit_with_citable_short_sha`'s own postcondition.
+
+    Without it the re-roll loop could silently stop re-rolling -- returning an
+    all-numeric short SHA again -- and the only symptom would be the ~2.3%
+    flake coming back in the test below, which is exactly the failure mode
+    that is expensive to diagnose from CI.
+    """
+    _init_repo(tmp_path)
+    _write_skill(tmp_path, "alpha", skill_lines=4)
+    sha = _commit_with_citable_short_sha(tmp_path, "four lines")
+    assert gate._SHA_TOKEN_RE.fullmatch(sha[:SHORT_SHA_LEN])
+
+
+@pytest.mark.slow
+def test_the_commit_helper_rerolls_until_the_short_sha_is_citable(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Issue #960: exercises the re-roll branch, which a passing first roll skips.
+
+    ~97.7% of runs satisfy the condition immediately, so the loop body is dead
+    code in almost every run of the two tests above -- it could stop amending
+    entirely and they would still pass. Rejecting the first two candidates
+    forces it, and the assertions check the two things that make the loop
+    worth having: it kept going, and what it returned is a real commit.
+    """
+    _init_repo(tmp_path)
+    _write_skill(tmp_path, "alpha", skill_lines=4)
+
+    seen: list[str] = []
+
+    class _RejectFirstTwo:
+        def fullmatch(self, token: str) -> object | None:
+            seen.append(token)
+            return None if len(seen) <= 2 else token
+
+    monkeypatch.setattr(gate, "_SHA_TOKEN_RE", _RejectFirstTwo())
+    sha = _commit_with_citable_short_sha(tmp_path, "four lines")
+
+    assert len(seen) == 3, f"expected two re-rolls before acceptance, saw candidates {seen}"
+    assert len(set(seen)) == 3, f"re-rolling must change the SHA, got repeats: {seen}"
+    assert sha == _git(tmp_path, "rev-parse", "HEAD")
+    assert _git(tmp_path, "rev-parse", f"{sha}^{{commit}}") == sha
+
+
+@pytest.mark.slow
+def test_the_commit_helper_names_an_evaluated_candidate_when_it_gives_up(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Issue #960, review round 1: the give-up message must not name a candidate
+    no rule ever ran against.
+
+    The first version amended once after its final check, so the SHA in the
+    `AssertionError` was the untested result of that trailing amend and the
+    fixture repository was left one rewrite past the last evaluated state --
+    reachable exactly when the rule is stubbed or narrowed so nothing can
+    satisfy it, which is the path the message exists for.
+    """
+    _init_repo(tmp_path)
+    _write_skill(tmp_path, "alpha", skill_lines=4)
+
+    evaluated: list[str] = []
+
+    class _RejectEverything:
+        def fullmatch(self, token: str) -> object | None:
+            evaluated.append(token)
+            return None
+
+    monkeypatch.setattr(gate, "_SHA_TOKEN_RE", _RejectEverything())
+    with pytest.raises(AssertionError) as excinfo:
+        _commit_with_citable_short_sha(tmp_path, "four lines")
+
+    named = str(excinfo.value).split("last evaluated was ")[1].strip().strip("'\"")
+    assert named in evaluated, f"give-up message names {named!r}, which was never evaluated: {evaluated}"
+    assert named == evaluated[-1]
+    assert named == _git(tmp_path, "rev-parse", "HEAD")[:SHORT_SHA_LEN], (
+        "the repository was left past the last evaluated candidate"
+    )
+    assert len(evaluated) == _MAX_SHA_REROLLS + 1
+
+
+def test_an_all_numeric_short_sha_is_not_read_as_a_commit_citation(tmp_path: pathlib.Path) -> None:
+    """Issue #960: pins the exclusion `gate._SHA_TOKEN_RE`'s comment documents.
+
+    A token of only digits is not a commit citation even when it is a real
+    commit's real short SHA, because the rule that keeps a seven-or-more-digit
+    line count out of `git rev-parse` cannot tell the two apart. The claim
+    below therefore parses as unanchored and is checked against the working
+    tree, not against any commit. Deliberately built without a git repository:
+    that is the point -- nothing here reaches git at all.
+
+    Note what the assertion below actually says: the result is a `Finding`, not
+    a note. On a real sidecar this is a blocking false positive against a
+    correct claim, not a citation quietly downgraded to "unverified" -- issue
+    #965 tracks narrowing the rule so a resolvable all-numeric short SHA
+    anchors its claim. This test pins current behavior so that change is a
+    deliberate act with a failing test attached, rather than a silent drift.
+    """
+    _write_skill(
+        tmp_path,
+        "alpha",
+        skill_lines=40,
+        references=_entry("t", 'lines: "measured at 12345678: 1->4"\n'),
+    )
+    findings, _ = _scan(tmp_path)
+    assert len(findings) == 1
+    assert "the checked-out tree has 40" in findings[0].message
+
+
+@pytest.mark.slow
 def test_inline_sha_in_the_claim_value_anchors_it(tmp_path: pathlib.Path) -> None:
     _init_repo(tmp_path)
     _write_skill(tmp_path, "alpha", skill_lines=4)
-    old_sha = _commit(tmp_path, "four lines")
-    short = old_sha[:8]
+    # Issue #960: not `_commit`, whose short SHA is all digits ~2.3% of runs --
+    # a shape this gate documents as not a commit citation, which made this
+    # test fail on its own fixture value rather than on gate behavior.
+    old_sha = _commit_with_citable_short_sha(tmp_path, "four lines")
+    short = old_sha[:SHORT_SHA_LEN]
 
     _write_skill(
         tmp_path,

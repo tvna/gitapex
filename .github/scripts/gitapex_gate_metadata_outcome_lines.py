@@ -176,9 +176,30 @@ _PATH_TOKEN_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]*\.[A-Za-z0-9]+")
 # A commit-ish token. Confirmed against git before use -- never trusted on
 # shape alone, since an ordinary lowercase word can be all-hex. At least one
 # a-f digit is required so a seven-or-more-digit line count (`1234567->89`)
-# is not sent to `git rev-parse` as a candidate revision; an all-numeric
-# short SHA is a theoretical loss, and the alternative is treating every
-# large line count in the corpus as a possible commit citation.
+# is not sent to `git rev-parse` as a candidate revision. The alternative is
+# treating every large line count in the corpus as a possible commit
+# citation, so the requirement stays -- but what it costs was understated
+# here, twice, and issue #965 tracks narrowing it.
+#
+# It was called a "theoretical" loss until a real commit hit it: an
+# 8-character short SHA is all digits (10/16)**8 ~= 2.3% of the time, so any
+# test minting a real commit and citing `sha[:8]` verbatim fails at that
+# rate. That is what happened on PR #957, whose diff could not reach this
+# file (issue #960).
+#
+# It was then called an "accepted loss", which is also wrong, and worse: a
+# real sidecar citing an all-numeric short SHA does not degrade to
+# "unverified". The token is not recognised, `_explicit_rev` returns None,
+# the claim silently becomes unanchored, and `_verify` grades it against the
+# working tree -- a *blocking false positive* on a correct claim. That is
+# the same failure mode `_explicit_rev`'s own docstring below records as
+# already fixed for citations git cannot resolve; it survives here, one
+# stage earlier, for citations never recognised as citations at all.
+#
+# Current behavior is pinned by
+# tests/test_gitapex_gate_metadata_outcome_lines.py::
+# test_an_all_numeric_short_sha_is_not_read_as_a_commit_citation, so issue
+# #965 changing it means changing a failing test on purpose.
 _SHA_TOKEN_RE = re.compile(r"\b(?=[0-9a-f]{7,40}\b)[0-9a-f]*[a-f][0-9a-f]*\b")
 
 # Prose the corpus already uses to scope a claim to a past commit rather than
