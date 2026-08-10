@@ -300,10 +300,26 @@ def is_single_fixture_scoped(paragraph: str, table_fixtures: list[str]) -> bool:
     return set(table_fixtures) == {match.group(1)}
 
 
-def check_latest_gate_table_coverage(path: Path, text: str, declared_selection: list[str]) -> str | None:
+def check_latest_gate_table_coverage(
+    path: Path, text: str, declared_selection: list[str], assignment_present: bool
+) -> str | None:
     """Return an offender message if `path`'s (a `split.md`) most recent
     gate-result table omits a fixture `declared_selection` (that skill's
-    own `split.json` `assignment.selection` list) names, else None."""
+    own `split.json` `assignment.selection` list) names, else None.
+
+    `assignment_present` must be False when the sibling `split.json`'s own
+    `assignment` field is absent or not an object -- otherwise
+    `declared_selection` collapses to `[]` and an empty `missing` list
+    reads as "the table covers everything declared," passing vacuously no
+    matter how incomplete the real gate table is (the same fail-open
+    pattern this check's own docstring names PR #190 for, this time
+    triggered by a malformed `split.json` rather than a short table).
+    Schema-shape enforcement is `gitapex_scan_split_schema.py`'s own job,
+    T11; this check still defends its own arithmetic against a malformed
+    value rather than assuming that gate always ran first, matching
+    `check_partition_arithmetic`'s identical defense below."""
+    if not assignment_present:
+        return f"{path}: sibling split.json has no well-formed 'assignment' object -- cannot verify the gate-result table's fixture coverage"
     tables = find_gate_tables(text)
     if not tables:
         return None
@@ -635,7 +651,9 @@ def main(argv: list[str] | None = None) -> int:
         assert data is not None  # noqa: S101 -- error is falsy, so load_split_json guarantees data
 
         declared_selection = assignment_fixtures(data)["selection"]
-        offender = check_latest_gate_table_coverage(path, text, declared_selection)
+        offender = check_latest_gate_table_coverage(
+            path, text, declared_selection, assignment_present=isinstance(data.get("assignment"), dict)
+        )
         if offender:
             offenders.append(offender)
 

@@ -129,6 +129,26 @@ def test_iteration_heading_matched_case_insensitively(tmp_path):
     assert gate.find_missing_transfer_checks([path]) == []
 
 
+def test_title_less_iteration_heading_is_still_recognized_and_flagged(tmp_path):
+    # issue #928 adversarial review finding 2: a heading of bare
+    # '## Iteration:' (or with only trailing whitespace -- a plausible
+    # authoring mistake where the entry was added before its title was
+    # filled in) must not be invisible to this scan. Before the fix, the
+    # stricter `(\S.*)$` pattern failed to match this line at all, so the
+    # entry's own missing Transfer check went completely unreported.
+    content = "## Iteration:\n\nNothing else disclosed here.\n"
+    path = _write(tmp_path, "split.md", content)
+    missing = gate.find_missing_transfer_checks([path])
+    assert missing == [(path, "## Iteration:")]
+
+
+def test_title_less_iteration_heading_with_trailing_whitespace_is_recognized(tmp_path):
+    content = "## Iteration:   \n\nNothing else disclosed here.\n"
+    path = _write(tmp_path, "split.md", content)
+    missing = gate.find_missing_transfer_checks([path])
+    assert missing == [(path, "## Iteration:")]
+
+
 def test_missing_file_reported_as_failure(tmp_path):
     missing_path = str(tmp_path / "does-not-exist.md")
     assert gate.find_missing_transfer_checks([missing_path]) == [(missing_path, "<file unreadable>")]
@@ -210,9 +230,33 @@ def test_default_paths_globs_evals_split_md(tmp_path, monkeypatch):
     )
 
 
-def test_main_passes_with_no_matching_files(tmp_path, monkeypatch, capsys):
+def test_main_fails_closed_with_no_matching_files(tmp_path, monkeypatch, capsys):
+    # issue #928 adversarial review finding 3: zero files matched by the
+    # default glob (wrong working directory, or a checkout that lost most
+    # of evals/) must not read as "nothing to check, PASS" -- that is the
+    # same fail-open shape PR #651's own precedent named.
     monkeypatch.chdir(tmp_path)
-    assert gate.main([]) == 0
+    assert gate.main([]) == 1
+    assert "FAIL" in capsys.readouterr().err
+
+
+def test_main_fails_closed_below_min_expected_split_md_floor(tmp_path, monkeypatch, capsys):
+    # One real file found is still a discovery-failure shape, not a
+    # legitimately tiny repository -- same floor rationale as
+    # gitapex_scan_split_schema.py's own MIN_EXPECTED_SPLIT_JSON_FILES.
+    monkeypatch.chdir(tmp_path)
+    skill_dir = tmp_path / "evals" / "only-skill"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "split.md").write_text(_ENTRY_WITH_TRANSFER_CHECK, encoding="utf-8")
+    assert gate.main([]) == 1
+    assert "FAIL" in capsys.readouterr().err
+
+
+def test_main_explicit_paths_are_never_subject_to_the_min_expected_floor(tmp_path, capsys):
+    # The floor applies only to default-glob discovery; a caller passing an
+    # explicit (even short) path list is trusted as-is.
+    path = _write(tmp_path, "split.md", _ENTRY_WITH_TRANSFER_CHECK)
+    assert gate.main([path]) == 0
     assert "PASS" in capsys.readouterr().out
 
 
@@ -252,6 +296,12 @@ def test_main_uses_stdin_free_cli(tmp_path, monkeypatch):
     # This gate no longer reads a workflow-computed entries list from
     # stdin at all -- confirm gate.sys.stdin is simply never touched,
     # even by a no-args invocation that falls back to the default glob.
+    # Above MIN_EXPECTED_SPLIT_MD_FILES so the discovery-floor check (a
+    # separate concern from this test) does not also fire here.
     monkeypatch.chdir(tmp_path)
+    for skill in ("skill-a", "skill-b", "skill-c"):
+        skill_dir = tmp_path / "evals" / skill
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "split.md").write_text(_ENTRY_WITH_TRANSFER_CHECK, encoding="utf-8")
     monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(b"should never be read"))
     assert gate.main([]) == 0

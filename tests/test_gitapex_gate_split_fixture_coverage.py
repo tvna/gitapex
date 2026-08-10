@@ -157,7 +157,10 @@ def test_assignment_fixtures_ignores_a_malformed_entry():
 def test_full_coverage_table_passes():
     text = _split_md("| `edge.yaml` | 1.0 | 1.0 |\n| `c-selection.yaml` | 1.0 | 1.0 |\n")
     assert (
-        gate.check_latest_gate_table_coverage(pathlib.Path("split.md"), text, ["edge.yaml", "c-selection.yaml"]) is None
+        gate.check_latest_gate_table_coverage(
+            pathlib.Path("split.md"), text, ["edge.yaml", "c-selection.yaml"], assignment_present=True
+        )
+        is None
     )
 
 
@@ -165,9 +168,33 @@ def test_missing_declared_fixture_from_latest_table_fails():
     # Reproduces the #191 incident shape: split.json's declared selection
     # split has two fixtures, the reported gate table covers only one.
     text = _split_md("| `edge.yaml` | 1.0 | 1.0 |\n")
-    offender = gate.check_latest_gate_table_coverage(pathlib.Path("split.md"), text, ["edge.yaml", "c-selection.yaml"])
+    offender = gate.check_latest_gate_table_coverage(
+        pathlib.Path("split.md"), text, ["edge.yaml", "c-selection.yaml"], assignment_present=True
+    )
     assert offender is not None
     assert "c-selection.yaml" in offender
+
+
+def test_missing_assignment_object_fails_closed_not_vacuously():
+    # A malformed/absent split.json 'assignment' must not read as "the
+    # table covers everything declared" -- the same fail-open shape PR
+    # #651's own precedent named for a different gate (issue #928 adversarial
+    # review finding 1). declared_selection collapsing to [] because
+    # assignment itself is missing is exactly the case assignment_present
+    # exists to distinguish from "assignment is present and legitimately
+    # declares an empty selection split."
+    text = _split_md("| `edge.yaml` | 1.0 | 1.0 |\n")
+    offender = gate.check_latest_gate_table_coverage(pathlib.Path("split.md"), text, [], assignment_present=False)
+    assert offender is not None
+    assert "assignment" in offender
+
+
+def test_empty_but_present_assignment_selection_still_passes():
+    # Contrast with the above: a legitimately empty 'selection' array (the
+    # key exists, assignment is a well-formed object) is not malformed and
+    # must not be flagged.
+    text = _split_md("| `edge.yaml` | 1.0 | 1.0 |\n")
+    assert gate.check_latest_gate_table_coverage(pathlib.Path("split.md"), text, [], assignment_present=True) is None
 
 
 def test_scoped_single_fixture_followup_table_is_exempt():
@@ -180,7 +207,9 @@ def test_scoped_single_fixture_followup_table_is_exempt():
         "| Fixture | Before | After |\n|---|---|---|\n"
         "| `c-selection.yaml` | 1.0 | 1.0 |\n"
     )
-    offender = gate.check_latest_gate_table_coverage(pathlib.Path("split.md"), text, ["edge.yaml", "c-selection.yaml"])
+    offender = gate.check_latest_gate_table_coverage(
+        pathlib.Path("split.md"), text, ["edge.yaml", "c-selection.yaml"], assignment_present=True
+    )
     assert offender is None
 
 
@@ -196,7 +225,10 @@ def test_scoped_phrase_present_but_table_has_extra_fixture_is_not_exempt():
         "| `c-selection.yaml` | 1.0 | 1.0 |\n"
     )
     assert (
-        gate.check_latest_gate_table_coverage(pathlib.Path("split.md"), text, ["edge.yaml", "c-selection.yaml"]) is None
+        gate.check_latest_gate_table_coverage(
+            pathlib.Path("split.md"), text, ["edge.yaml", "c-selection.yaml"], assignment_present=True
+        )
+        is None
     )
     # Now widen the table to cover a second fixture while keeping the same
     # scoping phrase naming only the first -- edge.yaml is still missing
@@ -206,7 +238,7 @@ def test_scoped_phrase_present_but_table_has_extra_fixture_is_not_exempt():
         "| `c-selection.yaml` | 1.0 | 1.0 |\n| `other.yaml` | 1.0 | 1.0 |\n",
     )
     offender = gate.check_latest_gate_table_coverage(
-        pathlib.Path("split.md"), widened, ["edge.yaml", "c-selection.yaml"]
+        pathlib.Path("split.md"), widened, ["edge.yaml", "c-selection.yaml"], assignment_present=True
     )
     assert offender is not None
     assert "edge.yaml" in offender
@@ -214,7 +246,10 @@ def test_scoped_phrase_present_but_table_has_extra_fixture_is_not_exempt():
 
 def test_no_gate_table_at_all_passes():
     text = "# Held-out split\n\nSee split.json for the fixture listing.\n"
-    assert gate.check_latest_gate_table_coverage(pathlib.Path("split.md"), text, ["b.yaml"]) is None
+    assert (
+        gate.check_latest_gate_table_coverage(pathlib.Path("split.md"), text, ["b.yaml"], assignment_present=True)
+        is None
+    )
 
 
 def test_only_most_recent_table_is_checked():
@@ -225,7 +260,10 @@ def test_only_most_recent_table_is_checked():
     text += "| Fixture | Before | After |\n|---|---|---|\n"
     text += "| `edge.yaml` | 1.0 | 1.0 |\n| `c-selection.yaml` | 1.0 | 1.0 |\n"
     assert (
-        gate.check_latest_gate_table_coverage(pathlib.Path("split.md"), text, ["edge.yaml", "c-selection.yaml"]) is None
+        gate.check_latest_gate_table_coverage(
+            pathlib.Path("split.md"), text, ["edge.yaml", "c-selection.yaml"], assignment_present=True
+        )
+        is None
     )
 
 
@@ -910,7 +948,12 @@ def test_every_real_split_md_passes_check_a():
         data, error = gate.load_split_json(path.parent / "split.json")
         assert error is None, error
         declared_selection = gate.assignment_fixtures(data)["selection"]
-        offender = gate.check_latest_gate_table_coverage(path, path.read_text(encoding="utf-8"), declared_selection)
+        offender = gate.check_latest_gate_table_coverage(
+            path,
+            path.read_text(encoding="utf-8"),
+            declared_selection,
+            assignment_present=isinstance(data.get("assignment"), dict),
+        )
         assert offender is None, offender
 
 

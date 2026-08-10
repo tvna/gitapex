@@ -86,8 +86,28 @@ import sys
 from pathlib import Path
 
 DEFAULT_GLOB = "evals/*/split.md"
+# Guards against _default_paths() silently finding nothing (a wrong working
+# directory, a checkout that lost most of evals/) and main() then vacuously
+# reporting "PASS: no files matched" -- the same fail-open shape PR #651's
+# own precedent named, and the same purpose as
+# gitapex_scan_split_schema.py's own MIN_EXPECTED_SPLIT_JSON_FILES floor
+# (issue #928 adversarial review finding 3). This repository has 5 real
+# evals/*/split.md files today; the floor is set below that real count so a
+# partial-but-not-total discovery loss is not the trigger here (that shape
+# is instead caught per-entry by find_missing_transfer_checks itself), only
+# a near-total or total one. Applies only to the default-glob discovery
+# path -- explicit CLI-supplied paths are never silently substituted here.
+MIN_EXPECTED_SPLIT_MD_FILES = 3
 
-_ITERATION_HEADING_RE = re.compile(r"^##[ \t]+Iteration:[ \t]*(\S.*)$", re.IGNORECASE)
+# Deliberately `(.*)$` rather than `(\S.*)$`: a title-less heading (`##
+# Iteration:` alone, or with trailing whitespace only -- a plausible
+# authoring mistake where the entry was added before its title was filled
+# in) must still be recognized as an iteration entry, so its missing
+# Transfer check is caught rather than silently invisible to this scan
+# (issue #928 adversarial review finding 2 -- the stricter `\S.*` let such
+# a heading match nothing at all, and the entry vanished from this gate's
+# view entirely).
+_ITERATION_HEADING_RE = re.compile(r"^##[ \t]+Iteration:[ \t]*(.*)$", re.IGNORECASE)
 _H2_RE = re.compile(r"^##[ \t]+\S.*$")
 _H3_RE = re.compile(r"^###[ \t]+\S.*$")
 _TRANSFER_CHECK_HEADING_RE = re.compile(r"^###[ \t]+Transfer check[ \t]*$", re.IGNORECASE)
@@ -185,11 +205,18 @@ def main(argv: list[str] | None = None) -> int:
         help=f"split.md file paths to audit; defaults to the '{DEFAULT_GLOB}' glob when omitted.",
     )
     args = parser.parse_args(argv)
+    using_default_discovery = not args.paths
     paths = args.paths if args.paths else _default_paths()
 
-    if not paths:
-        print(f"PASS: no files matched '{DEFAULT_GLOB}'; nothing to check")
-        return 0
+    if using_default_discovery and len(paths) < MIN_EXPECTED_SPLIT_MD_FILES:
+        print(
+            f"FAIL: only {len(paths)} file(s) matched '{DEFAULT_GLOB}' "
+            f"(expected at least {MIN_EXPECTED_SPLIT_MD_FILES}) -- treating this as a "
+            "discovery failure (wrong working directory, or a checkout that lost most "
+            "of evals/) rather than reporting a vacuous pass",
+            file=sys.stderr,
+        )
+        return 1
 
     missing = find_missing_transfer_checks(paths)
     if not missing:
