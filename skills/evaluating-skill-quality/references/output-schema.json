@@ -1,0 +1,237 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/tvna/gitapex/blob/main/skills/evaluating-skill-quality/references/output-schema.json",
+  "title": "SkillQualityReviewResult",
+  "description": "Structured output contract for evaluating-skill-quality's Procedure step 6 verdict, from this repository's own design record (see this skill's tracking issue). Consumed by a companion schema-conformance checker script, never by the PR-body disclosure gate (gitapex_gate_skill_audit_disclosure.py), which keeps checking its own free-text WELL-FORMED-AND-MATURE-style tokens unmodified.",
+  "type": "object",
+  "required": ["schemaVersion", "reviewMeta", "shapeCheck", "mechanismFit", "dimensions", "verdict"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "type": "string", "const": "1.0.0" },
+
+    "reviewMeta": {
+      "type": "object",
+      "required": ["actor", "targetRepoRef", "skillBuildRef"],
+      "additionalProperties": false,
+      "description": "Mirrors evaluating-deterministic-gate-quality's own reviewMeta required/optional split (output-schema.json: actor/targetRepoRef/skillBuildRef required, artifactRef and dispatchIsolation optional) for one family vocabulary across both skill-quality-review schemas.",
+      "properties": {
+        "actor": {
+          "type": "object",
+          "required": ["ref", "provenance"],
+          "additionalProperties": false,
+          "description": "Unlike the precedent (whose actor object states 'Required detail when provenance=verified' in prose only, with no schema if/then enforcing it), this schema mechanically enforces it below: a record claiming a verified identity must carry non-empty supporting verification data, not merely assert the label.",
+          "properties": {
+            "ref": { "type": "string" },
+            "provenance": { "enum": ["verified", "asserted"] },
+            "verification": { "type": "string", "minLength": 1 }
+          },
+          "if": { "properties": { "provenance": { "const": "verified" } }, "required": ["provenance"] },
+          "then": { "required": ["ref", "provenance", "verification"] }
+        },
+        "targetRepoRef": { "type": "string" },
+        "artifactRef": {
+          "type": "string",
+          "description": "The reviewed skill's directory, e.g. skills/duplicate-ticket-detector. Optional -- omitted only when targetRepoRef alone already identifies the one artifact under review."
+        },
+        "skillBuildRef": {
+          "type": "string",
+          "description": "Commit or ref of SKILL.md/references/* that produced this verdict."
+        },
+        "dispatchIsolation": { "type": "boolean" }
+      }
+    },
+
+    "shapeCheck": {
+      "type": "object",
+      "required": ["checkerRef", "checks"],
+      "additionalProperties": false,
+      "description": "Procedure step 3's deterministic result -- reported structurally so a consumer can assert PASS/FAIL per named check instead of grepping prose.",
+      "properties": {
+        "checkerRef": {
+          "type": "string",
+          "description": "e.g. scripts/gitapex_check_skill_shape.py, or 'manual' when Python is unavailable."
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "verdict"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string" },
+              "verdict": { "enum": ["PASS", "FAIL"] },
+              "detail": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+
+    "mechanismFit": {
+      "type": "object",
+      "required": ["wrongMechanism", "cohesion", "blindSpotPass"],
+      "additionalProperties": false,
+      "properties": {
+        "wrongMechanism": {
+          "type": "object",
+          "required": ["finding"],
+          "additionalProperties": false,
+          "properties": {
+            "finding": { "type": "boolean" },
+            "betterMechanism": {
+              "enum": ["hook", "subagent", "claude-md", "output-style", "system-prompt-append", "rule", "none"]
+            },
+            "reason": { "type": "string" }
+          }
+        },
+        "cohesion": {
+          "type": "object",
+          "required": ["dominantType"],
+          "additionalProperties": false,
+          "description": "rubric.md's own seven-type taxonomy, cited verbatim.",
+          "properties": {
+            "dominantType": {
+              "enum": [
+                "functional",
+                "sequential",
+                "communicational-informational",
+                "procedural",
+                "temporal",
+                "logical",
+                "coincidental"
+              ]
+            },
+            "splitRecommended": { "type": "boolean" },
+            "reason": { "type": "string" }
+          }
+        },
+        "stepLevelFindings": {
+          "type": "array",
+          "description": "check is a free-form string, not a closed enum: the named step-level Mechanism-fit checks have grown by name more than once already (e.g. Subagent delegation scope, Invocation-mode fit) and a closed enum would need a schema bump on every future addition.",
+          "items": {
+            "type": "object",
+            "required": ["check", "finding"],
+            "additionalProperties": false,
+            "properties": {
+              "check": { "type": "string" },
+              "finding": { "type": "boolean" },
+              "detail": { "type": "string" }
+            }
+          }
+        },
+        "blindSpotPass": {
+          "type": "object",
+          "required": ["gapFound"],
+          "additionalProperties": false,
+          "properties": {
+            "gapFound": { "type": "boolean" },
+            "description": { "type": "string" }
+          }
+        }
+      }
+    },
+
+    "portabilityLevel": { "enum": ["Portable", "Repository-scoped", "Mixed"] },
+    "capabilityAssumption": { "enum": ["Broad", "Frontier", "Adaptive"] },
+
+    "compatibilityAwareness": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Warning-only, never participates in the verdict (rubric.md's Verdicts section).",
+      "properties": {
+        "runtimeBehaviorDiffersUndisclosed": { "type": "boolean" },
+        "note": { "type": "string" }
+      }
+    },
+    "confidentialityAwareness": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Warning-only, mirrors compatibilityAwareness's own shape.",
+      "properties": {
+        "exposureRisk": { "type": "boolean" },
+        "note": { "type": "string" }
+      }
+    },
+
+    "dimensions": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "description": "One entry per rubric.md dimension 1-9, in any order. The allOf below requires each dimensionId in {1..9} to appear at least once across exactly 9 entries -- by pigeonhole, that forces each to appear exactly once, so no separate uniqueItems-style rule is needed.",
+      "items": {
+        "type": "object",
+        "required": ["dimensionId", "verdict", "evidence"],
+        "additionalProperties": false,
+        "description": "evidence is always present but its minItems requirement is conditional (see this item's own allOf): non-empty for every ordinary verdict, so SCHEMA_CONFIRMED cannot validate a keyword-stuffed entry with no citations (rubric.md's Procedure step 5: 'No cited evidence means no review happened'); allowed empty only for the one legitimate case (a genuinely 'unmeasured' dimension 8 or 9, which this same allOf also confines dimensionId to).",
+        "properties": {
+          "dimensionId": { "type": "integer", "minimum": 1, "maximum": 9 },
+          "verdict": {
+            "enum": ["clear", "gap-minor", "gap-major", "unmeasured"],
+            "description": "'unmeasured' is legal only for dimensionId 8 or 9 (rubric.md's Verdicts section: dimensions 8-9 are the one exception where a named-but-unmeasured gap does not block Mature)."
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["quote", "sourceRef"],
+              "additionalProperties": false,
+              "properties": {
+                "quote": { "type": "string", "minLength": 1 },
+                "sourceRef": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "verdict": { "const": "unmeasured" } }, "required": ["verdict"] },
+            "then": { "properties": { "dimensionId": { "enum": [8, 9] } } },
+            "else": { "properties": { "evidence": { "minItems": 1 } } }
+          }
+        ]
+      },
+      "allOf": [
+        { "contains": { "properties": { "dimensionId": { "const": 1 } } } },
+        { "contains": { "properties": { "dimensionId": { "const": 2 } } } },
+        { "contains": { "properties": { "dimensionId": { "const": 3 } } } },
+        { "contains": { "properties": { "dimensionId": { "const": 4 } } } },
+        { "contains": { "properties": { "dimensionId": { "const": 5 } } } },
+        { "contains": { "properties": { "dimensionId": { "const": 6 } } } },
+        { "contains": { "properties": { "dimensionId": { "const": 7 } } } },
+        { "contains": { "properties": { "dimensionId": { "const": 8 } } } },
+        { "contains": { "properties": { "dimensionId": { "const": 9 } } } }
+      ]
+    },
+
+    "verdict": {
+      "type": "object",
+      "required": ["token"],
+      "additionalProperties": false,
+      "properties": {
+        "token": {
+          "enum": ["WELL-FORMED-AND-MATURE", "WELL-FORMED-NOT-MATURE", "NOT-WELL-FORMED", "INDETERMINATE"],
+          "description": "ALL-CAPS-WITH-HYPHENS, matching gitapex_gate_skill_audit_disclosure.py's own _VERDICTS vocabulary casing for the first three values. INDETERMINATE is this schema's own fourth state; the disclosure gate itself has no INDETERMINATE token and instead routes that case through its WAIVED-plus-reason escape hatch (rubric.md's Verdicts section)."
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Required when token is NOT-WELL-FORMED or INDETERMINATE, per rubric.md's own Verdicts section ('State the specific failing check(s)' / 'State the concrete blocking cause')."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "token": { "enum": ["NOT-WELL-FORMED", "INDETERMINATE"] } },
+            "required": ["token"]
+          },
+          "then": { "required": ["token", "reason"] }
+        }
+      ]
+    },
+
+    "supersedes": {
+      "type": "string",
+      "description": "Optional. When this record corrects an earlier one, a reference to the record it replaces -- reusing eval-run.schema.json's own 'a correction is a new record naming its predecessor, never an edit to it' convention."
+    }
+  }
+}
