@@ -82,6 +82,12 @@ OUTPUT_PATH = REPO_ROOT / "docs" / "skill-eval-status.md"
 _MODEL_IDENTIFIER_RE = re.compile(r"claude-[a-z0-9][a-z0-9.\-]*")
 
 
+class GenerationError(Exception):
+    """A checked-in input this generator depends on (the narrative source or,
+    in --check mode, the committed output) could not be read as UTF-8 text
+    -- exit 1 with a clear message, never an uncaught traceback."""
+
+
 def discover_skill_names(skills_dir: pathlib.Path = SKILLS_DIR, evals_dir: pathlib.Path = EVALS_DIR) -> list[str]:
     """Every skill in 1:1 parity (see gitapex_gate_skill_eval_yaml_parity.py),
     sorted for deterministic output. Reuses that module's own discovery
@@ -99,7 +105,7 @@ def _trials_per_task_of(eval_yaml_path: pathlib.Path) -> int | None:
     job to catch, not this generator's."""
     try:
         data = yaml.safe_load(eval_yaml_path.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError):
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
         return None
     if not isinstance(data, dict):
         return None
@@ -133,7 +139,7 @@ def find_evaluated_models(skill_name: str, evals_dir: pathlib.Path = EVALS_DIR) 
     for manifest_path in sorted(results_dir.glob("*/manifest.json")):
         try:
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
             continue
         models = manifest.get("models") if isinstance(manifest, dict) else None
         if not isinstance(models, dict):
@@ -196,7 +202,12 @@ def generate(
     """The full rendered docs/skill-eval-status.md content: the narrative
     source (HTML-comment banner intact, placeholders substituted) with a
     generated `## Index` table appended."""
-    narrative_text = narrative_path.read_text(encoding="utf-8")
+    try:
+        narrative_text = narrative_path.read_text(encoding="utf-8")
+    except OSError as error:
+        raise GenerationError(f"{narrative_path}: cannot be read: {error}") from error
+    except UnicodeDecodeError as error:
+        raise GenerationError(f"{narrative_path}: is not valid UTF-8: {error}") from error
     rendered_narrative = substitute_placeholders(narrative_text, evals_dir)
     skill_names = discover_skill_names(skills_dir, evals_dir)
     table = render_index_table(skill_names, evals_dir)
@@ -214,13 +225,20 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    rendered = generate()
+    try:
+        rendered = generate()
+    except GenerationError as error:
+        print(f"FAIL: {error}", file=sys.stderr)
+        return 1
 
     if args.check:
         try:
             committed = OUTPUT_PATH.read_text(encoding="utf-8")
         except OSError as error:
             print(f"FAIL: could not read {OUTPUT_PATH}: {error}", file=sys.stderr)
+            return 1
+        except UnicodeDecodeError as error:
+            print(f"FAIL: {OUTPUT_PATH} is not valid UTF-8: {error}", file=sys.stderr)
             return 1
         if rendered != committed:
             rendered_lines = rendered.splitlines()
