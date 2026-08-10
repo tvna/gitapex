@@ -77,7 +77,7 @@ implementation-time convention.
   substring scorer that confirms expected keywords appear, not that the
   full nine-dimension walk or Blind Spot Pass actually ran."
   `gitapex_score_contract.py`'s `score()` function (read directly,
-  lines 158-229) computes a `[0,1]` fraction of satisfied
+  lines 158-205) computes a `[0,1]` fraction of satisfied
   `output_contains`/`output_not_contains`/`_icontains`/`_near` substring
   assertions against free-text `output_text` -- it has no concept of a
   dimension, an evidence citation, or a verdict token as a structured
@@ -87,7 +87,9 @@ implementation-time convention.
   `--judge-verdict` and `--dispatch-trace-verdict` (issue #584) each take
   an already-computed verdict from the caller and append it as "an
   additional recorded field, never blended into the substring mean or
-  verdict" (module docstring, read directly). `--dispatch-trace-verdict`
+  verdict" (`main()`'s own function docstring,
+  `gitapex_score_contract.py:292-314`, read directly -- not the file's
+  top-level module docstring). `--dispatch-trace-verdict`
   specifically takes a three-state answer
   (`DISPATCH_TRACE_CONFIRMED`/`_NOT_CONFIRMED`/`_UNVERIFIED`) computed by
   a **separate** checker script
@@ -127,8 +129,10 @@ implementation-time convention.
   sub-check, exactly the property a new committed schema instance would
   become: "state materialized outside the agent context and read back
   across a dispatch, compaction, session, or later invocation," graded
-  against a precedence spine "ground truth > durable artifact > harness
-  state > context." A structured output record is a durable artifact by
+  against a precedence spine -- verbatim, "external ground truth > durable
+  local artifact > harness-managed state > conversation context"
+  (`state-management-quality.md:134-135`). A structured output record is
+  a durable artifact by
   that same rubric's own vocabulary -- worth citing when the follow-on
   implementation eventually applies `evaluating-skill-quality` to its
   own new schema file, not something this design doc needs to resolve.
@@ -167,12 +171,22 @@ may adjust shape during that implementation's own review):
 
     "reviewMeta": {
       "type": "object",
-      "required": ["actor", "targetRepoRef", "artifactRef", "skillBuildRef"],
-      "description": "Reuses evaluating-deterministic-gate-quality's own reviewMeta shape verbatim (actor{ref,provenance,verification}, targetRepoRef, artifactRef, skillBuildRef, dispatchIsolation) for one family vocabulary across both skill-quality-review schemas, rather than a second, subtly different reviewMeta shape.",
+      "required": ["actor", "targetRepoRef", "skillBuildRef"],
+      "additionalProperties": false,
+      "description": "Reuses evaluating-deterministic-gate-quality's own reviewMeta required/optional split exactly (output-schema.json:31: actor/targetRepoRef/skillBuildRef required, artifactRef and dispatchIsolation optional) for one family vocabulary across both skill-quality-review schemas -- required here, deliberately unlike the precedent's own field-by-field additionalProperties:false discipline, only in that this draft applies additionalProperties:false at every nested level rather than leaving some open, since a first draft has no legacy instances to stay lenient for.",
       "properties": {
-        "actor": { "type": "object", "required": ["ref", "provenance"] },
+        "actor": {
+          "type": "object",
+          "required": ["ref", "provenance"],
+          "additionalProperties": false,
+          "properties": {
+            "ref": { "type": "string" },
+            "provenance": { "enum": ["verified", "asserted"] },
+            "verification": { "type": "string" }
+          }
+        },
         "targetRepoRef": { "type": "string" },
-        "artifactRef": { "type": "string", "description": "The reviewed skill's directory, e.g. skills/duplicate-ticket-detector." },
+        "artifactRef": { "type": "string", "description": "The reviewed skill's directory, e.g. skills/duplicate-ticket-detector. Optional, matching the precedent's own artifactRef -- omitted only when targetRepoRef alone already identifies the one artifact under review." },
         "skillBuildRef": { "type": "string", "description": "Commit or ref of SKILL.md/references/* that produced this verdict." },
         "dispatchIsolation": { "type": "boolean" }
       }
@@ -181,6 +195,7 @@ may adjust shape during that implementation's own review):
     "shapeCheck": {
       "type": "object",
       "required": ["checkerRef", "checks"],
+      "additionalProperties": false,
       "description": "Step 3's deterministic result -- reported structurally so a consumer can assert PASS/FAIL per named check instead of grepping prose.",
       "properties": {
         "checkerRef": { "type": "string", "description": "e.g. scripts/gitapex_check_skill_shape.py, or 'manual' when Python is unavailable." },
@@ -189,6 +204,7 @@ may adjust shape during that implementation's own review):
           "items": {
             "type": "object",
             "required": ["name", "verdict"],
+            "additionalProperties": false,
             "properties": {
               "name": { "type": "string" },
               "verdict": { "enum": ["PASS", "FAIL"] },
@@ -202,10 +218,12 @@ may adjust shape during that implementation's own review):
     "mechanismFit": {
       "type": "object",
       "required": ["wrongMechanism", "cohesion", "blindSpotPass"],
+      "additionalProperties": false,
       "properties": {
         "wrongMechanism": {
           "type": "object",
           "required": ["finding"],
+          "additionalProperties": false,
           "properties": {
             "finding": { "type": "boolean" },
             "betterMechanism": { "enum": ["hook", "subagent", "claude-md", "output-style", "system-prompt-append", "rule", "none"] },
@@ -215,6 +233,7 @@ may adjust shape during that implementation's own review):
         "cohesion": {
           "type": "object",
           "required": ["dominantType"],
+          "additionalProperties": false,
           "description": "rubric.md's own seven-type taxonomy, cited verbatim.",
           "properties": {
             "dominantType": { "enum": ["functional", "sequential", "communicational-informational", "procedural", "temporal", "logical", "coincidental"] },
@@ -228,6 +247,7 @@ may adjust shape during that implementation's own review):
           "items": {
             "type": "object",
             "required": ["check", "finding"],
+            "additionalProperties": false,
             "properties": {
               "check": { "type": "string" },
               "finding": { "type": "boolean" },
@@ -238,6 +258,7 @@ may adjust shape during that implementation's own review):
         "blindSpotPass": {
           "type": "object",
           "required": ["gapFound"],
+          "additionalProperties": false,
           "properties": {
             "gapFound": { "type": "boolean" },
             "description": { "type": "string" }
@@ -251,6 +272,7 @@ may adjust shape during that implementation's own review):
 
     "compatibilityAwareness": {
       "type": "object",
+      "additionalProperties": false,
       "description": "Warning-only, never participates in the verdict (rubric.md:1996-1998).",
       "properties": {
         "runtimeBehaviorDiffersUndisclosed": { "type": "boolean" },
@@ -259,6 +281,7 @@ may adjust shape during that implementation's own review):
     },
     "confidentialityAwareness": {
       "type": "object",
+      "additionalProperties": false,
       "description": "Warning-only, mirrors compatibilityAwareness's own shape (#537).",
       "properties": {
         "exposureRisk": { "type": "boolean" },
@@ -273,7 +296,9 @@ may adjust shape during that implementation's own review):
       "description": "One entry per rubric.md dimension 1-9, in order. A follow-on drift-gate test (not this schema) must assert dimensionId values are exactly {1..9} with no duplicate or gap -- JSON Schema draft 2020-12 cannot express 'each value in {1..9} appears exactly once' cleanly without a per-value if/then chain that would itself become the next drift risk; eval-run.schema.json's own split const already accepts a test-enforced invariant over a schema-enforced one for a comparable case.",
       "items": {
         "type": "object",
-        "required": ["dimensionId", "verdict"],
+        "required": ["dimensionId", "verdict", "evidence"],
+        "additionalProperties": false,
+        "description": "evidence is required and non-empty by default (Decision 3 below depends on this: SCHEMA_CONFIRMED must not validate a keyword-stuffed nine-entry array with no citations, per rubric.md's own Procedure step 5 -- 'No cited evidence means no review happened'). The one legitimate exception, an 'unmeasured' dimension 8 or 9 genuinely having nothing to cite, is deferred to the same implementation-time if/then pass as the other two conditional predicates below, not solved by loosening this required/minItems pair for every entry.",
         "properties": {
           "dimensionId": { "type": "integer", "minimum": 1, "maximum": 9 },
           "verdict": {
@@ -282,9 +307,11 @@ may adjust shape during that implementation's own review):
           },
           "evidence": {
             "type": "array",
+            "minItems": 1,
             "items": {
               "type": "object",
               "required": ["quote", "sourceRef"],
+              "additionalProperties": false,
               "properties": {
                 "quote": { "type": "string" },
                 "sourceRef": { "type": "string" }
@@ -298,6 +325,7 @@ may adjust shape during that implementation's own review):
     "verdict": {
       "type": "object",
       "required": ["token"],
+      "additionalProperties": false,
       "properties": {
         "token": { "enum": ["Well-formed-and-mature", "Well-formed-not-mature", "Not-well-formed", "Indeterminate"] },
         "reason": { "type": "string", "description": "Required when token is Not-well-formed or Indeterminate, per rubric.md's own Verdicts section ('State the specific failing check(s)' / 'State the concrete blocking cause'). Left as a prose requirement here rather than a schema if/then -- straightforward to add at implementation time." }
@@ -346,7 +374,8 @@ parallel scorer script.
 `--judge-verdict` and `--dispatch-trace-verdict` already establish the
 exact shape needed: a caller-computed verdict, appended as "an additional
 recorded field, never blended into the substring mean or verdict"
-(module docstring, confirmed by direct read). Concretely:
+(`main()`'s own docstring, `gitapex_score_contract.py:292-314`, confirmed
+by direct read). Concretely:
 
 - A new checker, `evals/scripts/gitapex_check_schema_conformance.py`,
   mirroring `gitapex_check_dispatch_trace.py`'s own role: it extracts a
