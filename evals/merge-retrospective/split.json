@@ -1,0 +1,68 @@
+{
+  "assignment": {
+    "train": [
+      "normal.yaml",
+      "edge.yaml",
+      "propose-dont-implement.yaml",
+      "external-human-decision.yaml",
+      "zero-repair-docs-only-train.yaml",
+      "instruction-error-message-wording-train.yaml",
+      "carried-forward-gate-unimplemented-train.yaml",
+      "force-push-observed-train.yaml",
+      "title-convention-precedence-train.yaml"
+    ],
+    "selection": [
+      "guardrail.yaml",
+      "gate-lint-unused-import-selection.yaml",
+      "instruction-naming-convention-selection.yaml",
+      "external-decision-reviewer-style-tradeoff-selection.yaml",
+      "multi-repair-mixed-three-category-selection.yaml",
+      "no-title-convention-fallback-selection.yaml"
+    ],
+    "test": [
+      "tie-break-restraint-not-reclassified-test.yaml",
+      "carried-forward-gate-implemented-test.yaml",
+      "force-push-not-claimable-test.yaml"
+    ]
+  },
+  "partition": "9:6:3",
+  "split_arithmetic_exclusions": [],
+  "equivalence_classes": [
+    {
+      "train_fixture": "propose-dont-implement.yaml",
+      "held_out_fixture": "gate-lint-unused-import-selection.yaml"
+    },
+    {
+      "train_fixture": "instruction-error-message-wording-train.yaml",
+      "held_out_fixture": "instruction-naming-convention-selection.yaml"
+    },
+    {
+      "train_fixture": "external-human-decision.yaml",
+      "held_out_fixture": "external-decision-reviewer-style-tradeoff-selection.yaml"
+    },
+    {
+      "train_fixture": "zero-repair-docs-only-train.yaml",
+      "held_out_fixture": "guardrail.yaml"
+    },
+    {
+      "train_fixture": "normal.yaml",
+      "held_out_fixture": "multi-repair-mixed-three-category-selection.yaml"
+    },
+    {
+      "train_fixture": "edge.yaml",
+      "held_out_fixture": "tie-break-restraint-not-reclassified-test.yaml"
+    },
+    {
+      "train_fixture": "carried-forward-gate-unimplemented-train.yaml",
+      "held_out_fixture": "carried-forward-gate-implemented-test.yaml"
+    },
+    {
+      "train_fixture": "force-push-observed-train.yaml",
+      "held_out_fixture": "force-push-not-claimable-test.yaml"
+    },
+    {
+      "train_fixture": "title-convention-precedence-train.yaml",
+      "held_out_fixture": "no-title-convention-fallback-selection.yaml"
+    }
+  ]
+}

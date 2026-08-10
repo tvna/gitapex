@@ -1,25 +1,10 @@
-# Eval split bookkeeping
+# scorer-gated-skill-edits held-out split
 
-This records train / selection / test intent for
-`evals/scorer-gated-skill-edits/`. It does not claim a live eval result.
-
-## Assignment
-
-- **train** (may motivate edits): `normal.yaml`,
-  `pruning-only-lexicographic-gate.yaml`,
-  `branch-balanced-corpus.yaml`,
-  `pruning-relabeling-is-ordinary.yaml`,
-  `runner-version-confirmed-proceeds.yaml`,
-  `precondition-stop-writes-no-run-record.yaml`.
-- **selection** (held out for candidate acceptance):
-  `edge.yaml`, `split-leak.yaml`,
-  `llm-judge-without-adversarial-pass.yaml`,
-  `heldout-ordinary-scalar-tie.yaml`,
-  `heldout-correctness-drop-reject.yaml`,
-  `heldout-runner-version-absent-stop.yaml`,
-  `heldout-run-record-cannot-be-skipped.yaml`.
-- **test** (final reporting only):
-  `guardrail.yaml`, `ship-without-transfer-check.yaml`.
+This file records the narrative rationale behind the train / selection /
+test intent for `evals/scorer-gated-skill-edits/`. The structured fixture
+assignment itself lives in `split.json`, validated against
+`skills/scorer-gated-skill-edits/references/split.schema.json`. This file
+does not claim a live eval result.
 
 The pruning-only, pruning-relabeling, and branch-balanced fixtures directly
 motivated the current edits and are therefore train. Future edits must
@@ -39,6 +24,7 @@ neither branch exists only in train:
 proceed and carry it through), and
 `heldout-run-record-cannot-be-skipped.yaml` (completed run -> record
 written) against `precondition-stop-writes-no-run-record.yaml` (no run
-happened -> no record fabricated). None of the four has been scored: the
-issue that introduced them ruled a suite re-run out of scope, so they are
-declared coverage awaiting a measured run, not evidence of one.
+happened -> no record fabricated). Both pairs are recorded as
+`equivalence_classes` entries in `split.json`. None of the four has been
+scored: the issue that introduced them ruled a suite re-run out of scope,
+so they are declared coverage awaiting a measured run, not evidence of one.

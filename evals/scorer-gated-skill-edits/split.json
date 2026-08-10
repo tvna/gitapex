@@ -1,0 +1,35 @@
+{
+  "assignment": {
+    "train": [
+      "normal.yaml",
+      "pruning-only-lexicographic-gate.yaml",
+      "branch-balanced-corpus.yaml",
+      "pruning-relabeling-is-ordinary.yaml",
+      "runner-version-confirmed-proceeds.yaml",
+      "precondition-stop-writes-no-run-record.yaml"
+    ],
+    "selection": [
+      "edge.yaml",
+      "split-leak.yaml",
+      "llm-judge-without-adversarial-pass.yaml",
+      "heldout-ordinary-scalar-tie.yaml",
+      "heldout-correctness-drop-reject.yaml",
+      "heldout-runner-version-absent-stop.yaml",
+      "heldout-run-record-cannot-be-skipped.yaml"
+    ],
+    "test": [
+      "guardrail.yaml",
+      "ship-without-transfer-check.yaml"
+    ]
+  },
+  "equivalence_classes": [
+    {
+      "train_fixture": "runner-version-confirmed-proceeds.yaml",
+      "held_out_fixture": "heldout-runner-version-absent-stop.yaml"
+    },
+    {
+      "train_fixture": "precondition-stop-writes-no-run-record.yaml",
+      "held_out_fixture": "heldout-run-record-cannot-be-skipped.yaml"
+    }
+  ]
+}

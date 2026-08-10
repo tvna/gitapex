@@ -1,0 +1,17 @@
+name: setup-gitapex-toolchain-eval
+description: Quality suite for the gitapex setup-gitapex-toolchain skill.
+skill: setup-gitapex-toolchain
+version: "0.1.0"
+config:
+  trials_per_task: 3
+  timeout_seconds: 300
+  parallel: false
+  executor: copilot-sdk
+  model: claude-sonnet-5
+metrics:
+  - name: setup_gitapex_toolchain_quality
+    weight: 1.0
+    threshold: 0.8
+    description: Reports the documented per-tool and apm-install stdout/stderr token vocabulary correctly, including the two different meanings SKIPPED carries in those two phases, and escalates instead of retrying indefinitely once a scoped re-run has already failed repeatedly.
+tasks:
+  - "tasks/*.yaml"

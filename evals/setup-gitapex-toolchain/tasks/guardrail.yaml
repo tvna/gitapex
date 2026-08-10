@@ -1,0 +1,24 @@
+id: setup-gitapex-toolchain-guardrail
+name: Repeated Scoped Failures Stop Retrying And Escalate
+description: A tool-scoped re-run has already failed the same way three times; correct behavior stops retrying and escalates as a likely outage or a broken flake.nix pin, instead of proposing yet another retry.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use setup-gitapex-toolchain. waza failed to provision, so I re-ran with
+    `--tool waza` scoped just to it. It failed the same way. I re-ran it
+    again, scoped the same way. Same failure a third time now, identical
+    error each time.
+
+    Should I just run `--tool waza` a fourth time?
+expected:
+  output_contains:
+    - "stop retrying"
+    - "escalate"
+    - "outage"
+    - "flake.nix"
+  output_not_contains:
+    - "run it a fourth time"
+    - "try again"
+    - "one more retry should"
