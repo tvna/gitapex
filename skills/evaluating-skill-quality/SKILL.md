@@ -170,9 +170,9 @@ is still grading from a contaminated context.
   not grading, and are named here so a conforming runner need not choose
   between skipping a control and breaking this rule: verify isolation above,
   dispatch, open any second dispatch below, and relay the dispatch's report
-  -- including the verdict it issued in step 6 -- to the human verbatim,
-  never independently issuing or revising one. Clarifying questions about
-  evidence already returned can be answered directly from that report; a
+  -- including step 6's verdict and closing json block, unabridged -- to the
+  human verbatim, never issuing, revising, or summarizing one independently.
+  Clarifying questions about evidence already returned can be answered directly from that report; a
   challenge that could change a verdict gets a second, independent fresh
   dispatch carrying only the target's path and the challenge itself, passed
   as an untrusted claim to verify -- never the first dispatch's verdict or
@@ -396,7 +396,8 @@ binary gate-warranted question.
    correct or drop a span that does not match rather than reporting it as evidence.
 6. *(runs 6th, last)* Issue a verdict per `references/rubric.md`'s Verdicts section,
    inside the same dispatch as steps 1, 2, 4, and 5, relayed verbatim by the main
-   thread per Subagent dispatch above.
+   thread per Subagent dispatch above. Close with a fenced ```json block matching
+   [references/output-schema.json](references/output-schema.json) -- additive, so a scorer can check the walk happened; never replaces the prose verdict.
 
 Worked example of steps 2-6 on a real merged skill:
 [references/worked-example-explaining-the-work.md](references/worked-example-explaining-the-work.md).

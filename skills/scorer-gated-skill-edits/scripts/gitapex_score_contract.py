@@ -310,7 +310,16 @@ def main(argv: list[str] | None = None) -> int:
     script does not inspect any transcript itself) as
     ``DISPATCH_TRACE_CONFIRMED``, ``DISPATCH_TRACE_NOT_CONFIRMED``, or
     ``DISPATCH_TRACE_UNVERIFIED`` -- again a recorded field, never blended
-    into the substring score (issue #584).
+    into the substring score (issue #584). With ``--schema-conformance-verdict``
+    (single-run scoring only, same restriction as ``--dispatch-trace-verdict``),
+    similarly appends whether the run's own output carried a structured
+    verdict conforming to ``skills/evaluating-skill-quality/references/output-schema.json``
+    (already resolved by the caller, typically via
+    ``evals/scripts/gitapex_check_schema_conformance.py``; this script does
+    not parse or validate any JSON block itself) as
+    ``SCHEMA_CONFORMANCE_CONFIRMED``, ``SCHEMA_CONFORMANCE_INVALID``, or
+    ``SCHEMA_CONFORMANCE_NOT_ATTEMPTED`` -- again a recorded field, never
+    blended into the substring score (issue #1002).
     """
     parser = argparse.ArgumentParser(description="Score a run against a task's substring assertions.")
     parser.add_argument(
@@ -370,6 +379,18 @@ def main(argv: list[str] | None = None) -> int:
         "scoring only -- incompatible with --compare-to, whose scores list "
         "has no single transcript for this to describe.",
     )
+    parser.add_argument(
+        "--schema-conformance-verdict",
+        choices=["confirmed", "invalid", "not_attempted"],
+        help="Whether this run's own output carried a structured verdict "
+        "conforming to skills/evaluating-skill-quality/references/output-schema.json, "
+        "already resolved by the caller (typically via "
+        "evals/scripts/gitapex_check_schema_conformance.py's own "
+        "SCHEMA_CONFORMANCE= line). Recorded alongside the substring score, "
+        "never blended into it. Single-run scoring only -- incompatible with "
+        "--compare-to, whose scores list has no single run output for this "
+        "to describe (issue #1002).",
+    )
     args = parser.parse_args(argv)
 
     context_costs = (args.prior_context_cost, args.candidate_context_cost)
@@ -404,6 +425,14 @@ def main(argv: list[str] | None = None) -> int:
             "error: --dispatch-trace-verdict is not defined for --compare-to "
             "-- it describes one run's own transcript, not a selection-split "
             "scores list with no single transcript to describe",
+            file=sys.stderr,
+        )
+        return 1
+    if args.schema_conformance_verdict is not None and args.compare_to is not None:
+        print(
+            "error: --schema-conformance-verdict is not defined for "
+            "--compare-to -- it describes one run's own output, not a "
+            "selection-split scores list with no single run output to describe",
             file=sys.stderr,
         )
         return 1
@@ -471,6 +500,8 @@ def main(argv: list[str] | None = None) -> int:
     line = f"{score(output_text, assertions):.6f}"
     if args.dispatch_trace_verdict is not None:
         line += " DISPATCH_TRACE_" + args.dispatch_trace_verdict.upper()
+    if args.schema_conformance_verdict is not None:
+        line += " SCHEMA_CONFORMANCE_" + args.schema_conformance_verdict.upper()
     print(line)
     return 0
 

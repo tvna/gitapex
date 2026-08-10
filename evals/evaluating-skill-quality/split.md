@@ -3775,3 +3775,82 @@ silently omitted." A follow-up run in an environment where `waza`'s
 through `waza run` and file a proper `results/` directory recording this
 gap as fixed; (d) transfer check not run, the same pre-existing disclosed
 gap named above.
+
+## Iteration: issue #1002, structured output-record schema + Procedure step 6 addendum
+
+Candidate edit, ordinary class (adds new capability, not pruning):
+`skills/evaluating-skill-quality/references/output-schema.json` (new --
+a structured per-dimension review-result schema, per
+`docs/superpowers/specs/2026-08-10-evaluating-skill-quality-output-schema-design.md`),
+`SKILL.md` Procedure step 6 gains a short instruction to close with a
+fenced json block conforming to that schema, and the pre-existing
+"relay the dispatch's report ... verbatim" bullet is strengthened to
+name the closing json block explicitly (a live-proof finding this same
+gate run made, see below). Companion, out-of-skill-scope files also
+landed in the same PR: `evals/scripts/gitapex_check_schema_conformance.py`
+(new checker) and a `--schema-conformance-verdict` flag on
+`gitapex_score_contract.py`, mirroring `--dispatch-trace-verdict`'s own
+pattern (issue #584) -- both scored and tested independently of this
+skill's own gate, not part of this entry.
+
+### Gate result
+
+Isolated `claude -p` dispatches, per `references/adversarial-self-audit.md`'s
+2026-08-08/CLI-2.1.226 registry entry (this exact platform signature,
+re-confirmed live this run: positive control quoted a real CLAUDE.md
+sentence, negative control reported none loaded), via
+`evals/scripts/gitapex_check_dispatch_trace.py run` with
+`--marketplace-source`/`--plugin-name gitapex@gitapex` (the verified
+registration path, not bare `--plugin-dir`, per that same registry
+entry's own "missed-precondition failure mode" caution). Fixture:
+`tasks/edge.yaml` (selection split), scored with both the existing
+substring assertions and the new schema-conformance checker:
+
+| Run | SKILL.md state | Substring score | Schema conformance |
+|---|---|---|---|
+| before | committed `053edc9` (schema exists, Procedure step 6 not yet updated) | 0.800000 | `SCHEMA_NOT_ATTEMPTED` (correct -- nothing asked for a block) |
+| after (1st) | + step 6 addendum only | 0.800000 | `SCHEMA_NOT_ATTEMPTED` -- **live-proof finding**: the sub-dispatch's own raw output and `task_notification.summary` both *did* contain a fully schema-conformant closing json block (confirmed by direct inspection of the persisted sub-agent transcript file), but the outer/main-thread relay dropped it when producing its final response, despite the pre-existing "relay ... verbatim" bullet. That bullet named "the verdict it issued in step 6" but not the closing block explicitly. |
+| after (2nd, post-fix) | + strengthened relay-verbatim bullet (this PR's second commit to `SKILL.md`) | **1.000000** (strict improvement over before) | `SCHEMA_INVALID` -- the block now survives the relay and is present, but omits the required `shapeCheck.checkerRef` field (a minor, disclosed model-output gap, not a mechanism failure) |
+
+Verdict: **KEEP**. The substring score alone strictly improves (0.8 ->
+1.0) on the one live-scored selection fixture, satisfying the ordinary
+class's own strict-improve-or-reject rule independent of the new
+schema-conformance axis. The schema-conformance signal itself moved
+from "never attempted" to "attempted, present, 90% conformant" across
+two live iterations, with one real defect (the relay drop) found and
+fixed live rather than assumed away -- exactly the class of gap this
+schema's own construct-validity purpose exists to surface. The residual
+`checkerRef` omission is disclosed, not hidden, and is expected,
+ordinary noise for a first-iteration structured-output instruction (the
+design doc's own draft-schema caveat: "the implementing issue may adjust
+field names/enums during its own review"), not evidence the mechanism
+does not work.
+
+### Not run, disclosed honestly rather than asserted
+
+- **`battle-testing-a-skill`** against the diff: attempted once,
+  diff-scoped (`the-diff.patch`, same isolated-dispatch recipe above),
+  killed after the 540s timeout with zero result lines -- the same
+  "full-scope dispatches ... too large" shape the isolation registry
+  already names for this skill's own self-referential review, not a
+  contamination or mechanism failure. **Disclosed as
+  `battle-testing-a-skill: WAIVED: diff-scoped live dispatch timed out
+  at 540s with no completed result twice in this session (self-review
+  and battle-test); re-attempt with a longer budget or a narrower prompt
+  is a follow-up, not fabricated here.`**
+- **`evaluating-skill-quality` self-review** of this exact diff: same
+  outcome -- the outer dispatch returned only an interim "still working"
+  placeholder, and its nested sub-dispatches mostly reported `stopped`
+  rather than `completed`. **Disclosed as
+  `evaluating-skill-quality: WAIVED: same diff-scoped-dispatch timeout as
+  battle-testing-a-skill above; the edge.yaml before/after/after2 runs
+  above are genuine live dispatches of this skill and are the actual
+  live-proof evidence for this cycle, but they review an external
+  target, not this skill's own changed content, so they do not
+  substitute for a self-review verdict.`**
+
+### Transfer check
+
+Not run this cycle, for the same reason as the two waivers above --
+no completed dispatch to transfer-check. Carried forward as an open
+item alongside the `checkerRef` gap and the not-run self-audits.

@@ -223,6 +223,7 @@ module = [
     "test_gitapex_check_middleware_table_shape",
     "test_gitapex_check_pr_issue_acm_disclosure",
     "test_gitapex_check_pr_issue_acm_disclosure_shell",
+    "test_gitapex_check_schema_conformance",
     "test_gitapex_check_skill_audit_disclosure_hook_sync",
     "test_gitapex_check_skill_shape",
     "test_gitapex_cicd_gate_cluster_design_retro_prefix",

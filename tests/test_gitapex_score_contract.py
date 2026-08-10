@@ -557,6 +557,116 @@ def test_main_rejects_invalid_dispatch_trace_verdict_choice(capsys):
         gitapex_score_contract.main(["--dispatch-trace-verdict", "yes"])
 
 
+def test_main_schema_conformance_confirmed_appends_marker(tmp_path, capsys):
+    apath = tmp_path / "assertions.json"
+    apath.write_text(json.dumps({"output_contains": ["Facts"]}), encoding="utf-8")
+    opath = tmp_path / "run.txt"
+    opath.write_text("Facts and more", encoding="utf-8")
+    rc = gitapex_score_contract.main(
+        [
+            "--assertions",
+            str(apath),
+            "--output",
+            str(opath),
+            "--schema-conformance-verdict",
+            "confirmed",
+        ]
+    )
+    assert rc == 0
+    assert capsys.readouterr().out.strip() == "1.000000 SCHEMA_CONFORMANCE_CONFIRMED"
+
+
+def test_main_schema_conformance_invalid_appends_marker(tmp_path, capsys):
+    apath = tmp_path / "assertions.json"
+    apath.write_text(json.dumps({"output_contains": ["Facts"]}), encoding="utf-8")
+    opath = tmp_path / "run.txt"
+    opath.write_text("Facts and more", encoding="utf-8")
+    rc = gitapex_score_contract.main(
+        [
+            "--assertions",
+            str(apath),
+            "--output",
+            str(opath),
+            "--schema-conformance-verdict",
+            "invalid",
+        ]
+    )
+    assert rc == 0
+    assert capsys.readouterr().out.strip() == "1.000000 SCHEMA_CONFORMANCE_INVALID"
+
+
+def test_main_schema_conformance_not_attempted_appends_marker(tmp_path, capsys):
+    apath = tmp_path / "assertions.json"
+    apath.write_text(json.dumps({"output_contains": ["Facts"]}), encoding="utf-8")
+    opath = tmp_path / "run.txt"
+    opath.write_text("no match here", encoding="utf-8")
+    rc = gitapex_score_contract.main(
+        [
+            "--assertions",
+            str(apath),
+            "--output",
+            str(opath),
+            "--schema-conformance-verdict",
+            "not_attempted",
+        ]
+    )
+    assert rc == 0
+    assert capsys.readouterr().out.strip() == "0.000000 SCHEMA_CONFORMANCE_NOT_ATTEMPTED"
+
+
+def test_main_schema_conformance_verdict_omitted_leaves_output_unchanged(tmp_path, capsys):
+    apath = tmp_path / "assertions.json"
+    apath.write_text(json.dumps({"output_contains": ["Facts"]}), encoding="utf-8")
+    opath = tmp_path / "run.txt"
+    opath.write_text("Facts", encoding="utf-8")
+    rc = gitapex_score_contract.main(["--assertions", str(apath), "--output", str(opath)])
+    assert rc == 0
+    assert capsys.readouterr().out.strip() == "1.000000"
+
+
+def test_main_rejects_schema_conformance_verdict_with_compare_to(tmp_path, capsys):
+    scores = tmp_path / "scores.txt"
+    scores.write_text("0.9\n1.0\n", encoding="utf-8")
+    rc = gitapex_score_contract.main(
+        [
+            "--compare-to",
+            "0.9",
+            "--scores",
+            str(scores),
+            "--schema-conformance-verdict",
+            "confirmed",
+        ]
+    )
+    assert rc == 1
+    assert "not defined for --compare-to" in capsys.readouterr().err
+
+
+def test_main_rejects_invalid_schema_conformance_verdict_choice(capsys):
+    with pytest.raises(SystemExit):
+        gitapex_score_contract.main(["--schema-conformance-verdict", "yes"])
+
+
+def test_main_dispatch_trace_and_schema_conformance_verdicts_both_appended(tmp_path, capsys):
+    apath = tmp_path / "assertions.json"
+    apath.write_text(json.dumps({"output_contains": ["Facts"]}), encoding="utf-8")
+    opath = tmp_path / "run.txt"
+    opath.write_text("Facts", encoding="utf-8")
+    rc = gitapex_score_contract.main(
+        [
+            "--assertions",
+            str(apath),
+            "--output",
+            str(opath),
+            "--dispatch-trace-verdict",
+            "confirmed",
+            "--schema-conformance-verdict",
+            "confirmed",
+        ]
+    )
+    assert rc == 0
+    assert capsys.readouterr().out.strip() == "1.000000 DISPATCH_TRACE_CONFIRMED SCHEMA_CONFORMANCE_CONFIRMED"
+
+
 @pytest.mark.parametrize("invalid", ["nan", "inf", "-0.1", "1.1"])
 def test_main_rejects_invalid_correctness_scores(tmp_path, capsys, invalid):
     scores = tmp_path / "scores.txt"
