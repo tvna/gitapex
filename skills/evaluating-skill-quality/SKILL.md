@@ -396,7 +396,8 @@ binary gate-warranted question.
    correct or drop a span that does not match rather than reporting it as evidence.
 6. *(runs 6th, last)* Issue a verdict per `references/rubric.md`'s Verdicts section,
    inside the same dispatch as steps 1, 2, 4, and 5, relayed verbatim by the main
-   thread per Subagent dispatch above.
+   thread per Subagent dispatch above. Close with a fenced ```json block matching
+   [references/output-schema.json](references/output-schema.json) -- additive, so a scorer can check the walk happened; never replaces the prose verdict.
 
 Worked example of steps 2-6 on a real merged skill:
 [references/worked-example-explaining-the-work.md](references/worked-example-explaining-the-work.md).
