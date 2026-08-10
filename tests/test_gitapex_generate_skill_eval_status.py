@@ -217,6 +217,34 @@ def test_generate_appends_index_after_narrative(tmp_path: pathlib.Path) -> None:
     assert "| `foo` |" in rendered
 
 
+def test_generate_parses_each_eval_yaml_once_not_twice(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # issue #1013 row 8: substitute_placeholders (TRIALS_3_COUNT) and
+    # render_index_table (per-skill Trials column) previously each parsed
+    # every eval.yaml independently -- generate() now computes one shared
+    # map and threads it through both. Proven by counting real
+    # _trials_per_task_of calls, not just asserting the (already-covered-
+    # elsewhere) rendered output is correct.
+    narrative_path = tmp_path / "narrative.md"
+    narrative_path.write_text("{{TOTAL_EVAL_YAML_COUNT}} suites, {{TRIALS_3_COUNT}} at trials=3.\n", encoding="utf-8")
+    skills_dir = tmp_path / "skills"
+    evals_dir = tmp_path / "evals"
+    for skill in ("foo", "bar"):
+        (skills_dir / skill).mkdir(parents=True)
+        _write_eval_yaml(evals_dir, skill)
+
+    calls: list[pathlib.Path] = []
+    real_trials_per_task_of = generator._trials_per_task_of
+
+    def counting_trials_per_task_of(path: pathlib.Path) -> int | None:
+        calls.append(path)
+        return real_trials_per_task_of(path)
+
+    monkeypatch.setattr(generator, "_trials_per_task_of", counting_trials_per_task_of)
+    generator.generate(narrative_path, skills_dir, evals_dir)
+    assert len(calls) == 2, calls
+    assert len(set(calls)) == 2, calls
+
+
 def test_generate_adds_trailing_newline_when_narrative_lacks_one(tmp_path: pathlib.Path) -> None:
     narrative_path = tmp_path / "narrative.md"
     narrative_path.write_text("# Title, no trailing newline", encoding="utf-8")

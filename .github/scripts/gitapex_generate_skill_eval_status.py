@@ -142,10 +142,28 @@ def _trials_per_task_of(eval_yaml_path: pathlib.Path) -> int | None:
     return trials if isinstance(trials, int) else None
 
 
-def load_trials_per_task(skill_name: str, evals_dir: pathlib.Path | None = None) -> int | None:
+def _trials_per_task_map(evals_dir: pathlib.Path) -> dict[str, int | None]:
+    """skill-directory-name -> `config.trials_per_task`, for every
+    `evals/*/eval.yaml` under `evals_dir`, each file parsed exactly once.
+    `generate()` computes this a single time and threads it through to
+    both `substitute_placeholders` and `render_index_table`, which
+    previously each parsed the same files independently -- once for the
+    `TRIALS_3_COUNT` placeholder, once per skill for the index table."""
+    return {path.parent.name: _trials_per_task_of(path) for path in sorted(evals_dir.glob("*/eval.yaml"))}
+
+
+def load_trials_per_task(
+    skill_name: str, evals_dir: pathlib.Path | None = None, trials_map: dict[str, int | None] | None = None
+) -> int | None:
     """`config.trials_per_task` from `evals/<skill>/eval.yaml`. See
     `discover_skill_names`'s docstring for why `evals_dir` defaults to
-    `None` and is resolved inside the body, not as the parameter default."""
+    `None` and is resolved inside the body, not as the parameter default.
+
+    `trials_map`, when given (as `generate()` does), is read instead of
+    re-parsing `skill_name`'s own `eval.yaml` a second time this run.
+    """
+    if trials_map is not None:
+        return trials_map.get(skill_name)
     evals_dir = EVALS_DIR if evals_dir is None else evals_dir
     return _trials_per_task_of(evals_dir / skill_name / "eval.yaml")
 
@@ -196,17 +214,20 @@ def has_result_record(skill_name: str, evals_dir: pathlib.Path | None = None) ->
     return any(results_dir.glob("*/manifest.json"))
 
 
-def render_index_table(skill_names: list[str], evals_dir: pathlib.Path | None = None) -> str:
+def render_index_table(
+    skill_names: list[str], evals_dir: pathlib.Path | None = None, trials_map: dict[str, int | None] | None = None
+) -> str:
     """See `discover_skill_names`'s docstring for why `evals_dir` defaults
     to `None` and is resolved inside the body, not as the parameter
-    default."""
+    default. `trials_map`, when given, is passed through to
+    `load_trials_per_task` -- see that function's own docstring."""
     evals_dir = EVALS_DIR if evals_dir is None else evals_dir
     lines = [
         "| Skill | Trials | Fixtures | Models observed | Result record | Eval status |",
         "| --- | --- | --- | --- | --- | --- |",
     ]
     for name in skill_names:
-        trials = load_trials_per_task(name, evals_dir)
+        trials = load_trials_per_task(name, evals_dir, trials_map)
         trials_cell = str(trials) if trials is not None else "?"
         fixtures_cell = str(count_fixtures(name, evals_dir))
         models = find_evaluated_models(name, evals_dir)
@@ -217,18 +238,25 @@ def render_index_table(skill_names: list[str], evals_dir: pathlib.Path | None = 
     return "\n".join(lines) + "\n"
 
 
-def substitute_placeholders(narrative_text: str, evals_dir: pathlib.Path | None = None) -> str:
+def substitute_placeholders(
+    narrative_text: str, evals_dir: pathlib.Path | None = None, trials_map: dict[str, int | None] | None = None
+) -> str:
     """Replace every `{{TOKEN}}` placeholder in the narrative source with
     its live-derived value. Unknown tokens are left as-is rather than
     raising -- a typo in a new placeholder should surface as a visibly
     literal `{{...}}` in the rendered doc during review, not a crash that
     blocks every other regeneration. See `discover_skill_names`'s
     docstring for why `evals_dir` defaults to `None` and is resolved
-    inside the body, not as the parameter default."""
+    inside the body, not as the parameter default.
+
+    `trials_map`, when given, is read instead of re-parsing every
+    `evals/*/eval.yaml` a second time this run -- see `_trials_per_task_map`.
+    """
     evals_dir = EVALS_DIR if evals_dir is None else evals_dir
-    eval_yaml_paths = sorted(evals_dir.glob("*/eval.yaml"))
-    total = len(eval_yaml_paths)
-    trials_3 = sum(1 for path in eval_yaml_paths if _trials_per_task_of(path) == 3)
+    if trials_map is None:
+        trials_map = _trials_per_task_map(evals_dir)
+    total = len(trials_map)
+    trials_3 = sum(1 for trials in trials_map.values() if trials == 3)
     substitutions = {
         "TOTAL_EVAL_YAML_COUNT": str(total),
         "TRIALS_3_COUNT": str(trials_3),
@@ -253,9 +281,10 @@ def generate(
     skills_dir = SKILLS_DIR if skills_dir is None else skills_dir
     evals_dir = EVALS_DIR if evals_dir is None else evals_dir
     narrative_text = _read_utf8_text(narrative_path)
-    rendered_narrative = substitute_placeholders(narrative_text, evals_dir)
+    trials_map = _trials_per_task_map(evals_dir)
+    rendered_narrative = substitute_placeholders(narrative_text, evals_dir, trials_map)
     skill_names = discover_skill_names(skills_dir, evals_dir)
-    table = render_index_table(skill_names, evals_dir)
+    table = render_index_table(skill_names, evals_dir, trials_map)
     if not rendered_narrative.endswith("\n"):
         rendered_narrative += "\n"
     return f"{rendered_narrative}\n## Index\n\n{table}"
