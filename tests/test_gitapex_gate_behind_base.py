@@ -15,6 +15,7 @@ own fetch) is exercised for real, not asserted about a stub.
 
 from __future__ import annotations
 
+import os
 import pathlib
 import subprocess
 
@@ -109,22 +110,124 @@ def test_fetch_base_fails_closed_when_git_is_missing(tmp_path: pathlib.Path, mon
         gate.fetch_base(tmp_path)
 
 
+def test_fetch_base_fails_closed_on_timeout(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def _hang(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise subprocess.TimeoutExpired(cmd="git", timeout=gate.GIT_TIMEOUT_SECONDS)
+
+    monkeypatch.setattr(gate.subprocess, "run", _hang)
+    with pytest.raises(gate.GateError, match=f"timed out after {gate.GIT_TIMEOUT_SECONDS}s"):
+        gate.fetch_base(tmp_path)
+
+
+def test_subprocess_output_is_never_strictly_utf8_decoded(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression: a non-UTF-8 byte on git's stdout/stderr must not crash
+    this gate with an uncaught UnicodeDecodeError -- which would exit with
+    Python's own default code 1, indistinguishable from this gate's
+    documented exit-1 "behind base" FAIL. Reproduced with a real fake
+    `git` executable emitting invalid UTF-8 on PATH, not a mock of
+    subprocess.run, so the actual errors="replace" decoding path in
+    _run_git is exercised for real rather than asserted about a stub."""
+    fake_bin = tmp_path / "fakebin"
+    fake_bin.mkdir()
+    fake_git = fake_bin / "git"
+    fake_git.write_bytes(b"#!/bin/sh\nprintf '\\xff\\xfe not valid utf-8'\nexit 1\n")
+    fake_git.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{fake_bin}{os.pathsep}{os.environ['PATH']}")
+
+    with pytest.raises(gate.GateError, match="git fetch"):
+        gate.fetch_base(tmp_path)
+
+
 def test_count_behind_fails_closed_when_base_ref_does_not_exist(tmp_path: pathlib.Path) -> None:
     """No fetch happened, so `origin/main` was never created locally --
-    the comparison itself must fail closed, distinct from a fetch failure."""
+    the comparison itself must fail closed, distinct from a fetch failure.
+    Caught by the merge-base check first (no ref means no common
+    ancestor either), before `rev-list` is ever invoked."""
     head = _init_repo(tmp_path / "head")
     _commit(head, "a.txt", "initial")
-    with pytest.raises(gate.GateError, match="git rev-list"):
+    with pytest.raises(gate.GateError, match="share no common ancestor"):
         gate.count_behind(head)
 
 
-def test_count_behind_fails_closed_when_git_is_missing(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_count_behind_fails_closed_on_unrelated_histories(tmp_path: pathlib.Path) -> None:
+    """Regression: a real repro (not a mock) of two repos with no shared
+    commit. `git rev-list --left-right --count` does not itself fail on
+    this input -- it silently returns a numeric ahead/behind pair for the
+    empty merge base -- so without the explicit merge-base check this
+    would produce a plausible-looking but meaningless behind-base FAIL
+    instead of the honest "cannot be trusted" exit 2."""
+    origin = _init_repo(tmp_path / "origin")
+    _commit(origin, "a.txt", "origin commit")
+
+    head = _init_repo(tmp_path / "head")
+    _commit(head, "b.txt", "unrelated head commit")
+    _run(["git", "remote", "add", "origin", str(origin)], head)
+    _run(["git", "fetch", "-q", "origin", "main"], head)
+
+    with pytest.raises(gate.GateError, match="share no common ancestor"):
+        gate.count_behind(head)
+
+
+def test_count_behind_fails_closed_when_git_is_missing_during_merge_base(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     def _no_git(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
         raise OSError("No such file or directory: 'git'")
 
     monkeypatch.setattr(gate.subprocess, "run", _no_git)
-    with pytest.raises(gate.GateError, match="cannot run git to compare"):
+    with pytest.raises(gate.GateError, match="cannot run git to find a common ancestor"):
         gate.count_behind(tmp_path)
+
+
+def test_count_behind_fails_closed_when_git_is_missing_during_rev_list(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The merge-base check must succeed (real git) so the rev-list call is
+    the one that hits a missing git -- exercised with a real fetch/repo
+    rather than a fully mocked subprocess, so this is a true second-call
+    failure, not an accidental first-call one."""
+    _origin, head = _synced_head(tmp_path)
+    gate.fetch_base(head)
+
+    real_run = gate.subprocess.run
+    calls = {"n": 0}
+
+    def _fail_second_call(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return real_run(*args, **kwargs)  # type: ignore[no-any-return, call-overload]
+        raise OSError("No such file or directory: 'git'")
+
+    monkeypatch.setattr(gate.subprocess, "run", _fail_second_call)
+    with pytest.raises(gate.GateError, match="cannot run git to compare"):
+        gate.count_behind(head)
+
+
+def test_count_behind_fails_closed_when_rev_list_itself_exits_nonzero(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Distinct from every case above: the merge-base check passes for
+    real (a common ancestor genuinely exists), but the rev-list call
+    itself returns a nonzero exit code -- a real git failure mode
+    (corruption, a race deleting an object) rather than a missing
+    executable or a no-common-ancestor precondition."""
+    _origin, head = _synced_head(tmp_path)
+    gate.fetch_base(head)
+
+    real_run = gate.subprocess.run
+    calls = {"n": 0}
+
+    def _fail_rev_list(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return real_run(*args, **kwargs)  # type: ignore[no-any-return, call-overload]
+        return subprocess.CompletedProcess(args=[], returncode=128, stdout="", stderr="fatal: bad object HEAD")
+
+    monkeypatch.setattr(gate.subprocess, "run", _fail_rev_list)
+    with pytest.raises(gate.GateError, match="git rev-list against origin/main failed"):
+        gate.count_behind(head)
 
 
 def test_count_behind_fails_closed_on_unparseable_output(

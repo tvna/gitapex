@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""CI/local gate: fail the local preflight when the current branch is
-behind its base.
+"""Local-preflight gate: fail the local preflight when the current branch
+is behind its base.
 
 Issue #985. 17 open retrospective issues (#896, #897, #914, #921, #927,
 #935, #945, #946, #948, #951, #956, #958, #966, #970, #972, #973, #974)
@@ -51,6 +51,25 @@ Exit codes: 0 up to date, 1 behind base, 2 the check could not be trusted
 git working tree) -- mirrors `gitapex_gate_hidden_characters.py`'s own
 0/1/2 convention.
 
+**Registered `local`-only (no `ci` plane) -- this repository's first gate
+with that shape, and a deliberate, disclosed choice rather than an
+oversight.** Its only enforcement is therefore the `pre-push` hook
+`gitapex_gate_local_preflight.py` wires it into: bypassable with
+`git push --no-verify`, and absent entirely on a clone that never ran
+`prek install` (both documented limits `gitapex_gate_local_preflight.py`'s
+own docstring already names for every gate it wires, not new to this
+one). The considered alternative is infrastructure-owned, not another
+repository-authored gate: GitHub's branch-protection ruleset already
+supports `strict_required_status_checks_policy` -- "pull requests
+targeting a matching branch must be tested with the latest code" -- which
+would enforce the same freshness requirement natively, ahead of merge,
+with no bypass. Issue #985's Acceptance Criteria Map leaves adding a `ci`
+plane (or flipping that ruleset setting) as an open decision for a later
+pass, not a gap in this one: GitHub already surfaces behind-ness on the
+PR itself, so a CI-side copy of this exact check may be redundant rather
+than defensive, and that argument belongs in the PR body, not asserted
+away here.
+
 Run standalone: ``python3 .github/scripts/gitapex_gate_behind_base.py``
 (compares this checkout's ``HEAD`` against a freshly fetched
 ``origin/main``), or via the pytest gate in
@@ -72,6 +91,17 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 BASE_REMOTE = "origin"
 BASE_BRANCH = "main"
 
+# Ceiling for one git subprocess (fetch, merge-base, or rev-list). This
+# gate has no ceiling of its own otherwise: run through
+# gitapex_gate_local_preflight.py it would only be bounded by that
+# runner's own DEFAULT_TIMEOUT_SECONDS = 1800, sized for mypy's worst
+# case, not a git call -- and run standalone (the CLI, or the pytest gate
+# in tests/test_gitapex_gate_behind_base.py) it would have no bound at
+# all. 60s is generous for a local merge-base/rev-list (near-instant) and
+# for a fetch over an ordinary network, while still failing loudly on a
+# hung connection instead of blocking indefinitely.
+GIT_TIMEOUT_SECONDS = 60
+
 
 class GateError(Exception):
     """The check could not be trusted -- exit 2, never a silent pass and
@@ -88,45 +118,81 @@ class BehindBaseCount:
     ahead: int
 
 
-def fetch_base(root: pathlib.Path, remote: str = BASE_REMOTE, branch: str = BASE_BRANCH) -> None:
-    """Fetch ``branch`` from ``remote`` so the comparison in
-    :func:`count_behind` reads real remote state rather than whatever ref
-    this checkout last pulled. Raises :class:`GateError` -- never falls
-    back to a possibly-stale local ref -- on any fetch failure: an offline
-    machine, an unreachable remote, or an auth failure."""
+def _run_git(root: pathlib.Path, args: list[str], *, label: str) -> subprocess.CompletedProcess[str]:
+    """Run ``git -C root <args>`` and return the completed process,
+    regardless of its exit code -- callers decide what a nonzero
+    ``returncode`` means for their own step. Raises :class:`GateError` for
+    every way the subprocess itself can fail to produce one: a missing
+    ``git`` executable, or a hang past :data:`GIT_TIMEOUT_SECONDS`.
+
+    ``errors="replace"`` rather than ``text=True``'s own strict default,
+    matching ``gitapex_gate_local_preflight.py``'s own ``_run`` and the
+    documented regression behind it: a byte sequence on stdout/stderr that
+    is not valid UTF-8 (a corrupted object, a non-ASCII remote error
+    message) otherwise raises ``UnicodeDecodeError`` from inside
+    ``subprocess.run`` itself -- a ``ValueError``, uncaught by this
+    function's own ``except OSError`` -- and escapes as Python's default
+    exit code 1, indistinguishable from this gate's own documented "behind
+    base" FAIL."""
     try:
         # S603/S607 waived: a fixed argv list with no shell, and `git` is
         # intentionally resolved from PATH -- pinning an absolute path
         # would break the three environments this has to run in (GitHub
         # runner, the nix devShell, a contributor's machine). Same
         # rationale as every other gate script in this file's family.
-        result = subprocess.run(  # noqa: S603
-            ["git", "-C", str(root), "fetch", remote, branch],  # noqa: S607
+        return subprocess.run(  # noqa: S603
+            ["git", "-C", str(root), *args],  # noqa: S607
             capture_output=True,
             text=True,
+            errors="replace",
             check=False,
+            timeout=GIT_TIMEOUT_SECONDS,
         )
+    except subprocess.TimeoutExpired as error:
+        raise GateError(f"git {label} timed out after {GIT_TIMEOUT_SECONDS}s") from error
     except OSError as error:
-        raise GateError(f"cannot run git to fetch {remote} {branch}: {error}") from error
+        raise GateError(f"cannot run git to {label}: {error}") from error
+
+
+def fetch_base(root: pathlib.Path, remote: str = BASE_REMOTE, branch: str = BASE_BRANCH) -> None:
+    """Fetch ``branch`` from ``remote`` so the comparison in
+    :func:`count_behind` reads real remote state rather than whatever ref
+    this checkout last pulled. Raises :class:`GateError` -- never falls
+    back to a possibly-stale local ref -- on any fetch failure: an offline
+    machine, an unreachable remote, an auth failure, or a hang."""
+    result = _run_git(root, ["fetch", remote, branch], label=f"fetch {remote} {branch}")
     if result.returncode != 0:
         raise GateError(f"git fetch {remote} {branch} failed: {result.stderr.strip()}")
+
+
+def _require_common_ancestor(root: pathlib.Path, base_ref: str) -> None:
+    """Raise :class:`GateError` when ``base_ref`` and ``HEAD`` share no
+    common ancestor. Checked explicitly, before the ``rev-list`` call in
+    :func:`count_behind`: unrelated histories do not make ``git rev-list
+    --left-right --count base_ref...HEAD`` fail -- it silently returns a
+    numeric ahead/behind pair for the *empty* merge base, which would
+    otherwise produce a plausible-looking but meaningless behind-base FAIL
+    (exit 1, "merge or rebase") instead of the honest "this comparison
+    cannot be trusted" signal (exit 2) an unrelated-history checkout (an
+    orphan branch, a wrong-remote misconfiguration) actually needs.
+    Verified directly against a real orphan-history pair, not assumed."""
+    result = _run_git(root, ["merge-base", base_ref, "HEAD"], label=f"find a common ancestor with {base_ref}")
+    if result.returncode != 0:
+        raise GateError(f"{base_ref} and HEAD share no common ancestor (unrelated histories): {result.stderr.strip()}")
 
 
 def count_behind(root: pathlib.Path, remote: str = BASE_REMOTE, branch: str = BASE_BRANCH) -> BehindBaseCount:
     """Behind/ahead counts between ``{remote}/{branch}`` and ``HEAD``. Must
     run after :func:`fetch_base` so the comparison ref is current. Raises
     :class:`GateError` -- distinct from a fetch failure -- when the
-    comparison itself cannot be computed (e.g. no common ancestor)."""
+    comparison itself cannot be computed: no common ancestor (checked by
+    :func:`_require_common_ancestor` first), a ``rev-list`` failure, or
+    unparseable ``rev-list`` output."""
     base_ref = f"{remote}/{branch}"
-    try:
-        result = subprocess.run(  # noqa: S603
-            ["git", "-C", str(root), "rev-list", "--left-right", "--count", f"{base_ref}...HEAD"],  # noqa: S607
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-    except OSError as error:
-        raise GateError(f"cannot run git to compare against {base_ref}: {error}") from error
+    _require_common_ancestor(root, base_ref)
+    result = _run_git(
+        root, ["rev-list", "--left-right", "--count", f"{base_ref}...HEAD"], label=f"compare against {base_ref}"
+    )
     if result.returncode != 0:
         raise GateError(f"git rev-list against {base_ref} failed: {result.stderr.strip()}")
     try:
