@@ -34,6 +34,18 @@ recognize, can slip through undetected (see
 test_dynamically_constructed_host_evades_allowlist_check for one
 deliberately-constructed example).
 
+Language scope: find_network_drift only reads skill_dir/scripts/*.py --
+a bundled non-Python script (a .sh file, for instance; this repository's
+own skills/executing-a-branch-plan/scripts/check_task_bash_safety.sh is
+one real example) is invisible to it, network-capable shell commands
+(curl, wget, nc, ...) included. This matters beyond this one repository:
+evaluating-skill-quality itself travels as a portable skill (see its own
+spec.portability), so a consuming repository's own skills may bundle
+scripts in other languages this scanner was never taught to read. Not
+fixed here -- see test_non_python_bundled_scripts_are_not_scanned for a
+concrete, deliberately-constructed proof of the gap, not only this
+paragraph's claim.
+
 Not registered in .gitapex/ssot.json, matching gitapex_check_skill_shape.py's
 own un-registered status: a per-skill checker invoked deliberately against
 one target at a time is not the shape of a repo-wide automatic gate. A
