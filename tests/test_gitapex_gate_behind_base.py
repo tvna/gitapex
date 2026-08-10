@@ -296,11 +296,16 @@ def test_main_returns_two_on_a_root_that_is_a_file(tmp_path: pathlib.Path, capsy
     assert "must be an existing directory" in capsys.readouterr().err
 
 
-def test_main_default_root_checks_the_real_repository() -> None:
-    """The real checkout's own branch is not asserted pass/fail here (that
-    depends on this session's live git state), only that main() runs to
-    completion against the real repo root without raising."""
-    assert gate.main([]) in (0, 1, 2)
+def test_main_default_root_checks_the_real_repository(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`--root`'s default is the module-level `REPO_ROOT`, not a value
+    re-passed on every call -- exercised by pointing that module attribute
+    at a local, synced fixture repo rather than the real checkout, so this
+    test is deterministic (no live git state, no real network fetch, no
+    dependence on this session's own branch position relative to
+    origin/main)."""
+    _origin, head = _synced_head(tmp_path)
+    monkeypatch.setattr(gate, "REPO_ROOT", head)
+    assert gate.main([]) == 0
 
 
 # --- GateBehindBaseArgs validation ---------------------------------------
