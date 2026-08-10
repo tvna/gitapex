@@ -306,7 +306,13 @@ def has_marker_comment(
                 raise GitHubApiError(
                     f"GET {url} returned a comments-list item of type {type(comment).__name__}, expected an object"
                 )
-        if any(_MARKER in comment.get("body", "") for comment in comments):
+        # `.get("body") or ""`, not `.get("body", "")`: a comment dict with a
+        # present-but-null "body" (valid GitHub API JSON) would otherwise
+        # pass the dict-item shape check above and still crash `in` on None
+        # -- same fallback idiom `fetch_issue` already uses in the sibling
+        # hooks/gitapex_check_pr_issue_acm_disclosure.py (a /code-review finding on
+        # this same PR).
+        if any(_MARKER in (comment.get("body") or "") for comment in comments):
             return True
         if len(comments) < _COMMENTS_PAGE_SIZE:
             return False

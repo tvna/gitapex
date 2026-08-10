@@ -317,6 +317,17 @@ def test_has_marker_comment_raises_cleanly_on_non_dict_list_item():
         gate.has_marker_comment("tvna", "gitapex", 414, "tok", opener=opener)
 
 
+def test_has_marker_comment_tolerates_a_null_body_field():
+    # A /code-review finding on this same PR: a comment dict with a
+    # present-but-null "body" (valid GitHub API JSON) passes the dict-item
+    # shape check above but used to crash `in` on None instead of just
+    # being treated as no-marker-here.
+    def opener(request: urllib.request.Request) -> Response:
+        return Response(200, json.dumps([{"id": 1, "body": None}]))
+
+    assert gate.has_marker_comment("tvna", "gitapex", 414, "tok", opener=opener) is False
+
+
 def test_post_comment_includes_marker_and_waiver_guidance():
     captured = {}
 

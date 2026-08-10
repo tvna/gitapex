@@ -546,14 +546,16 @@ def test_main_reports_error_for_non_utf8_payload_file(tmp_path, capsys):
     assert str(path) in err
 
 
-@pytest.mark.parametrize("field_name", ["owner", "repo"])
+@pytest.mark.parametrize("field_name", ["owner", "repo", "title", "body"])
 @pytest.mark.parametrize("bad_value", [123, ["a", "list"], {"a": "dict"}, True])
-def test_main_reports_error_for_non_string_owner_or_repo(monkeypatch, capsys, field_name, bad_value):
-    # Issue #995: `payload.get("owner") or ""`/`payload.get("repo") or ""`
-    # tolerate an absent/None field but pass a truthy non-string value
-    # (e.g. an int from a malformed hook-stdin payload) through unchanged,
-    # which used to crash `re.escape()` inside
-    # `_normalize_same_repo_citations` with an uncaught TypeError.
+def test_main_reports_error_for_non_string_payload_field(monkeypatch, capsys, field_name, bad_value):
+    # Issue #995: `payload.get(field) or ""` tolerates an absent/None field
+    # but passes a truthy non-string value (e.g. an int from a malformed
+    # hook-stdin payload) through unchanged. owner/repo then crash
+    # `re.escape()` inside `_normalize_same_repo_citations`; title/body
+    # crash `_FENCE_RE.sub()` inside `_strip_fences` (found by a
+    # /code-review pass on this same PR: the first version of this guard
+    # covered owner/repo only) -- both an uncaught TypeError.
     payload = {"owner": "o", "repo": "r", "title": "t", "body": "Closes #1"}
     payload[field_name] = bad_value
     monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(payload)))
@@ -565,11 +567,21 @@ def test_main_reports_error_for_non_string_owner_or_repo(monkeypatch, capsys, fi
 
 def test_main_allows_owner_and_repo_absent_or_null(monkeypatch, capsys):
     # Absent/None must keep falling through to the existing `or ""`
-    # fallback, not the new type-check deny path.
+    # fallback, not the new type-check deny path -- owner/repo null with a
+    # real title/body citation still passes.
     payload = json.dumps({"title": "t", "body": "Refs #1", "owner": None, "repo": None})
     monkeypatch.setattr("sys.stdin", io.StringIO(payload))
     assert checker.main([]) == 0
     assert "PASS" in capsys.readouterr().out
+
+
+def test_main_allows_all_fields_absent_or_null(monkeypatch, capsys):
+    # Same fallback, all four fields null at once: falls through to the
+    # normal "cites nothing" deny verdict, not a crash.
+    payload = json.dumps({"owner": None, "repo": None, "title": None, "body": None})
+    monkeypatch.setattr("sys.stdin", io.StringIO(payload))
+    assert checker.main([]) == 1
+    assert "cites no issue" in capsys.readouterr().err
 
 
 def test_main_prefers_gh_token_over_github_token(monkeypatch):

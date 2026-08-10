@@ -228,14 +228,21 @@ def _call(
     opener: Callable[[urllib.request.Request], Any],
     sleeper: Callable[[float], None],
     max_attempts: int = _MAX_ATTEMPTS,
-) -> dict[str, Any]:
+) -> Any:
     """GET the GitHub API, retrying transient (network/5xx) failures up to
     `max_attempts` times. Mirrors gitapex_gate_acm_issue_disclosure.py's and
     gitapex_post_merge_retro.py's own `_call` shape, at a lower max_attempts (see
     module docstring). Raises GitHubApiError("not-found") on a 404
     (single-shot, no retry) so callers can report it distinctly from a
     genuine fetch failure; any other unrecoverable outcome raises
-    GitHubApiError("fetch-failed: HTTP <code or 'network error'>")."""
+    GitHubApiError("fetch-failed: HTTP <code or 'network error'>").
+
+    Returns unvalidated parsed JSON, not a guaranteed `dict` (issue #995:
+    the prior `-> dict[str, Any]` annotation was never a runtime check --
+    same class of stale-annotation gap `_gitapex_github_http.py`'s docstring
+    now calls out explicitly for its own `fetch_json_page`/
+    `fetch_json_document`); `fetch_issue` below is the one caller, and it
+    shape-checks the return value itself before use."""
     last_code = 0
     last_body = ""
     for attempt in range(1, max_attempts + 1):
@@ -399,12 +406,15 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    # `payload.get("owner") or ""`/`payload.get("repo") or ""` below tolerate
-    # an absent/None field, but a truthy non-string value (e.g. an int or
-    # list) would pass unchanged and later crash `re.escape()` inside
-    # `_normalize_same_repo_citations` with an uncaught TypeError instead of
-    # this documented error path.
-    for field_name in ("owner", "repo"):
+    # `payload.get(field) or ""` below tolerates an absent/None field, but a
+    # truthy non-string value (e.g. an int or list) would pass unchanged and
+    # crash later on: owner/repo reach `re.escape()` inside
+    # `_normalize_same_repo_citations`, and title/body reach `_FENCE_RE.sub()`
+    # inside `_strip_fences` -- both an uncaught TypeError instead of this
+    # documented error path (a /code-review finding on this same PR: the
+    # first version of this guard covered owner/repo only, leaving
+    # title/body with the identical exposure).
+    for field_name in ("owner", "repo", "title", "body"):
         field_value = payload.get(field_name)
         if field_value is not None and not isinstance(field_value, str):
             print(
