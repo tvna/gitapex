@@ -97,7 +97,7 @@ territory):
 ### Blind spot pass
 
 A precondition step (`SKILL.md`'s Procedure step 2, alongside the Mechanism
-fit checks), not a tenth dimension -- the fixed nine-dimension count is
+fit checks), not a tenth dimension -- the fixed **nine-dimension** count is
 unchanged by this section. (As a point of local fact about this
 repository specifically, not part of this skill's own portable content:
 `evals/evaluating-skill-quality/tasks/guardrail.yaml` checks the reviewer

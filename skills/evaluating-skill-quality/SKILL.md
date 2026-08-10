@@ -24,7 +24,7 @@ skill artifact itself is good, not whether a change is correct.
   convention; when the target is a skill vendored from one that has not,
   those checks fail as expected -- not a defect in the reviewed skill --
   so record them explicitly as not-applicable, never as six findings.
-- **Probabilistic maturity** -- nine dimensions of judgment that need a model
+- **Probabilistic maturity** -- **nine dimensions** of judgment that need a model
   or human, not a script. Full rubric with pass/fail evidence:
   [references/rubric.md](references/rubric.md).
 
