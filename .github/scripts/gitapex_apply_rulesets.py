@@ -41,7 +41,9 @@ from typing import Any
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 from _gitapex_github_http import (  # sys.path bootstrap above must run first
+    _HTTP_TIMEOUT_SECONDS,
     GitHubApiError,
+    build_headers,
     default_opener,
     fetch_json_document,
 )
@@ -56,9 +58,6 @@ from _gitapex_rulesets import (  # same bootstrap
     resolve_live_ruleset,
 )
 
-_HTTP_TIMEOUT_SECONDS = 30
-_API_VERSION = "2022-11-28"
-
 #: Signature of the mutating half of the API surface, injected so tests drive
 #: the create/replace decision end to end without a network or a credential.
 Writer = Callable[[str, str, dict[str, Any]], dict[str, Any]]
@@ -67,19 +66,19 @@ Writer = Callable[[str, str, dict[str, Any]], dict[str, Any]]
 def send_write(url: str, method: str, body: dict[str, Any]) -> dict[str, Any]:
     """POST or PUT one ruleset body and return the parsed response.
 
-    Deliberately not routed through `_gitapex_github_http`: that module is the
-    shared *read* client, and every one of its callers is a read-only gate.
-    Keeping the single write path in the single write-capable script means a
-    reviewer auditing "what in this repository can mutate GitHub state" reads
-    one function, not a shared module used by six scripts.
+    Header construction is shared with `_gitapex_github_http`'s own read
+    path via `build_headers` -- only the header literals were ever
+    duplicated. The actual write -- this function's own URL/method/body
+    construction, the `urlopen` call below, and its exception handling --
+    stays entirely local, so a reviewer auditing "what in this repository
+    can mutate GitHub state" still reads one function, not a shared module
+    used by every read-only caller too.
     """
     token = read_token()
     payload = json.dumps(body).encode("utf-8")
     request = urllib.request.Request(url, data=payload, method=method)  # noqa: S310 -- fixed https://api.github.com URL
-    request.add_header("Authorization", f"Bearer {token}")
-    request.add_header("Accept", "application/vnd.github+json")
-    request.add_header("X-GitHub-Api-Version", _API_VERSION)
-    request.add_header("Content-Type", "application/json")
+    for name, value in build_headers(token, content_type="application/json").items():
+        request.add_header(name, value)
     try:
         with urllib.request.urlopen(request, timeout=_HTTP_TIMEOUT_SECONDS) as response:  # noqa: S310 -- as above
             decoded = json.loads(response.read().decode("utf-8", errors="replace"))

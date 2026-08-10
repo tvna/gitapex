@@ -17,6 +17,7 @@ import pathlib
 import urllib.error
 from typing import Any
 
+import _gitapex_github_http
 import gitapex_apply_rulesets as apply_rulesets
 import pytest
 
@@ -147,6 +148,31 @@ def test_send_write_posts_the_body_and_parses_the_response(monkeypatch: pytest.M
     assert seen["method"] == "POST"
     assert seen["body"] == {"name": "n"}
     assert seen["auth"] == "Bearer tok"
+
+
+def test_send_write_header_parity_with_the_shared_read_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Header parity over the fields the read and write paths actually
+    # share (Authorization/Accept/X-GitHub-Api-Version) -- Content-Type is
+    # write-only by design (a GET has no body), so a full dict-equality
+    # assertion would fail even when the shared headers are correct.
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    seen: dict[str, Any] = {}
+
+    def fake_urlopen(request: Any, timeout: int = 0) -> Response:
+        seen["request"] = request
+        return Response(json.dumps({"id": 7}))
+
+    monkeypatch.setattr(apply_rulesets.urllib.request, "urlopen", fake_urlopen)
+    apply_rulesets.send_write("https://api.github.test/x", "POST", {"name": "n"})
+
+    request = seen["request"]
+    read_headers = _gitapex_github_http.build_headers("tok")
+    for name, value in read_headers.items():
+        # Request.get_header does not itself .capitalize() the lookup key
+        # (only .add_header does, on the way in) -- match its own storage
+        # convention rather than relying on a same-cased coincidence.
+        assert request.get_header(name.capitalize()) == value, name
+    assert request.get_header("Content-Type".capitalize()) == "application/json"
 
 
 def test_send_write_surfaces_an_http_error_body(monkeypatch: pytest.MonkeyPatch) -> None:

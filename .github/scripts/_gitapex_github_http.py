@@ -42,6 +42,30 @@ class GitHubApiError(RuntimeError):
     """Raised when the GitHub REST API returns a non-recoverable error."""
 
 
+def build_headers(token: str, *, content_type: str | None = None) -> dict[str, str]:
+    """The `Authorization`/`Accept`/`X-GitHub-Api-Version` headers every
+    caller in this repository sends, plus `Content-Type` when given.
+
+    Shared by this module's own read path and `gitapex_apply_rulesets.py`'s
+    write path (`send_write`) -- previously two independent copies of the
+    same three header literals plus this module's own `_API_VERSION`/
+    `_HTTP_TIMEOUT_SECONDS` constants, re-declared verbatim in that file.
+    Only header-literal construction is shared: the actual mutating
+    request (URL, method, body, the `urlopen` call, and its own exception
+    handling) stays entirely inside `send_write`, so "what in this
+    repository can mutate GitHub state" still reads as one function, not a
+    shared module used by every read-only caller too.
+    """
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": _API_VERSION,
+    }
+    if content_type is not None:
+        headers["Content-Type"] = content_type
+    return headers
+
+
 def default_opener(request: urllib.request.Request) -> Any:
     # S310 justification: every caller builds `request` from a fixed
     # https://api.github.com URL plus trusted env-var-derived segments.
@@ -100,9 +124,8 @@ def fetch_json_document(
     last_body = ""
     for attempt in range(1, 4):
         request = urllib.request.Request(url, method="GET")  # noqa: S310 -- fixed https://api.github.com URL
-        request.add_header("Authorization", f"Bearer {token}")
-        request.add_header("Accept", "application/vnd.github+json")
-        request.add_header("X-GitHub-Api-Version", _API_VERSION)
+        for name, value in build_headers(token).items():
+            request.add_header(name, value)
         try:
             with opener(request) as response:
                 last_code = int(response.status)

@@ -75,3 +75,18 @@ def test_fetch_json_page_sends_expected_headers() -> None:
     assert captured[0].headers["Authorization"] == "Bearer sekrit"
     assert captured[0].headers["Accept"] == "application/vnd.github+json"
     assert captured[0].headers["X-github-api-version"] == "2022-11-28"
+
+
+def test_build_headers_omits_content_type_by_default() -> None:
+    headers = _gitapex_github_http.build_headers("sekrit")
+    assert headers == {
+        "Authorization": "Bearer sekrit",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    assert "Content-Type" not in headers
+
+
+def test_build_headers_adds_content_type_when_given() -> None:
+    headers = _gitapex_github_http.build_headers("sekrit", content_type="application/json")
+    assert headers["Content-Type"] == "application/json"
