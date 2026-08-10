@@ -88,11 +88,37 @@ class GenerationError(Exception):
     -- exit 1 with a clear message, never an uncaught traceback."""
 
 
-def discover_skill_names(skills_dir: pathlib.Path = SKILLS_DIR, evals_dir: pathlib.Path = EVALS_DIR) -> list[str]:
+def _read_utf8_text(path: pathlib.Path) -> str:
+    """Read `path` as UTF-8 text, or raise `GenerationError` naming `path`
+    and the failure -- the one read boundary both the narrative-source read
+    (in `generate()`) and the --check-mode committed-output read (in
+    `main()`) go through, so the two do not carry independently-drifting
+    copies of the same OSError/UnicodeDecodeError handling."""
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError as error:
+        raise GenerationError(f"{path}: cannot be read: {error}") from error
+    except UnicodeDecodeError as error:
+        raise GenerationError(f"{path}: is not valid UTF-8: {error}") from error
+
+
+def discover_skill_names(skills_dir: pathlib.Path | None = None, evals_dir: pathlib.Path | None = None) -> list[str]:
     """Every skill in 1:1 parity (see gitapex_gate_skill_eval_yaml_parity.py),
     sorted for deterministic output. Reuses that module's own discovery
     rather than re-globbing, so the two never silently diverge on what
-    counts as a real skill."""
+    counts as a real skill.
+
+    `skills_dir`/`evals_dir` default to `None`, resolved to the current
+    module-level `SKILLS_DIR`/`EVALS_DIR` inside the body rather than as
+    the parameter's own default value -- a default value is bound once at
+    function-definition time, so `= SKILLS_DIR` here would freeze in the
+    *original* directory forever and silently ignore any later
+    reassignment of the module attribute (a test's `monkeypatch.setattr`,
+    or any other legitimate override). Every other function in this
+    module taking a `*_dir`/`*_path` parameter follows the same pattern
+    for the same reason."""
+    skills_dir = SKILLS_DIR if skills_dir is None else skills_dir
+    evals_dir = EVALS_DIR if evals_dir is None else evals_dir
     names = parity.discover_skill_names(skills_dir) & parity.discover_eval_yaml_skill_names(evals_dir)
     return sorted(names)
 
@@ -116,22 +142,31 @@ def _trials_per_task_of(eval_yaml_path: pathlib.Path) -> int | None:
     return trials if isinstance(trials, int) else None
 
 
-def load_trials_per_task(skill_name: str, evals_dir: pathlib.Path = EVALS_DIR) -> int | None:
-    """`config.trials_per_task` from `evals/<skill>/eval.yaml`."""
+def load_trials_per_task(skill_name: str, evals_dir: pathlib.Path | None = None) -> int | None:
+    """`config.trials_per_task` from `evals/<skill>/eval.yaml`. See
+    `discover_skill_names`'s docstring for why `evals_dir` defaults to
+    `None` and is resolved inside the body, not as the parameter default."""
+    evals_dir = EVALS_DIR if evals_dir is None else evals_dir
     return _trials_per_task_of(evals_dir / skill_name / "eval.yaml")
 
 
-def count_fixtures(skill_name: str, evals_dir: pathlib.Path = EVALS_DIR) -> int:
-    """Number of `evals/<skill>/tasks/*.yaml` fixture files."""
+def count_fixtures(skill_name: str, evals_dir: pathlib.Path | None = None) -> int:
+    """Number of `evals/<skill>/tasks/*.yaml` fixture files. See
+    `discover_skill_names`'s docstring for why `evals_dir` defaults to
+    `None` and is resolved inside the body, not as the parameter default."""
+    evals_dir = EVALS_DIR if evals_dir is None else evals_dir
     return len(list((evals_dir / skill_name / "tasks").glob("*.yaml")))
 
 
-def find_evaluated_models(skill_name: str, evals_dir: pathlib.Path = EVALS_DIR) -> list[str]:
+def find_evaluated_models(skill_name: str, evals_dir: pathlib.Path | None = None) -> list[str]:
     """Every distinct `claude-*` model identifier found across every
     `evals/<skill>/results/*/manifest.json`'s own `models` object,
     sorted. Empty list means no result record names a model at all
     (either no result record exists, or every one that does withholds
-    the model name)."""
+    the model name). See `discover_skill_names`'s docstring for why
+    `evals_dir` defaults to `None` and is resolved inside the body, not as
+    the parameter default."""
+    evals_dir = EVALS_DIR if evals_dir is None else evals_dir
     results_dir = evals_dir / skill_name / "results"
     if not results_dir.is_dir():
         return []
@@ -148,17 +183,24 @@ def find_evaluated_models(skill_name: str, evals_dir: pathlib.Path = EVALS_DIR) 
     return sorted(identifiers)
 
 
-def has_result_record(skill_name: str, evals_dir: pathlib.Path = EVALS_DIR) -> bool:
+def has_result_record(skill_name: str, evals_dir: pathlib.Path | None = None) -> bool:
     """Whether at least one `evals/<skill>/results/*/manifest.json` exists
     -- a run was recorded at all, independent of whether it names a
-    model."""
+    model. See `discover_skill_names`'s docstring for why `evals_dir`
+    defaults to `None` and is resolved inside the body, not as the
+    parameter default."""
+    evals_dir = EVALS_DIR if evals_dir is None else evals_dir
     results_dir = evals_dir / skill_name / "results"
     if not results_dir.is_dir():
         return False
     return any(results_dir.glob("*/manifest.json"))
 
 
-def render_index_table(skill_names: list[str], evals_dir: pathlib.Path = EVALS_DIR) -> str:
+def render_index_table(skill_names: list[str], evals_dir: pathlib.Path | None = None) -> str:
+    """See `discover_skill_names`'s docstring for why `evals_dir` defaults
+    to `None` and is resolved inside the body, not as the parameter
+    default."""
+    evals_dir = EVALS_DIR if evals_dir is None else evals_dir
     lines = [
         "| Skill | Trials | Fixtures | Models observed | Result record | Eval status |",
         "| --- | --- | --- | --- | --- | --- |",
@@ -175,12 +217,15 @@ def render_index_table(skill_names: list[str], evals_dir: pathlib.Path = EVALS_D
     return "\n".join(lines) + "\n"
 
 
-def substitute_placeholders(narrative_text: str, evals_dir: pathlib.Path = EVALS_DIR) -> str:
+def substitute_placeholders(narrative_text: str, evals_dir: pathlib.Path | None = None) -> str:
     """Replace every `{{TOKEN}}` placeholder in the narrative source with
     its live-derived value. Unknown tokens are left as-is rather than
     raising -- a typo in a new placeholder should surface as a visibly
     literal `{{...}}` in the rendered doc during review, not a crash that
-    blocks every other regeneration."""
+    blocks every other regeneration. See `discover_skill_names`'s
+    docstring for why `evals_dir` defaults to `None` and is resolved
+    inside the body, not as the parameter default."""
+    evals_dir = EVALS_DIR if evals_dir is None else evals_dir
     eval_yaml_paths = sorted(evals_dir.glob("*/eval.yaml"))
     total = len(eval_yaml_paths)
     trials_3 = sum(1 for path in eval_yaml_paths if _trials_per_task_of(path) == 3)
@@ -195,19 +240,19 @@ def substitute_placeholders(narrative_text: str, evals_dir: pathlib.Path = EVALS
 
 
 def generate(
-    narrative_path: pathlib.Path = NARRATIVE_PATH,
-    skills_dir: pathlib.Path = SKILLS_DIR,
-    evals_dir: pathlib.Path = EVALS_DIR,
+    narrative_path: pathlib.Path | None = None,
+    skills_dir: pathlib.Path | None = None,
+    evals_dir: pathlib.Path | None = None,
 ) -> str:
     """The full rendered docs/skill-eval-status.md content: the narrative
     source (HTML-comment banner intact, placeholders substituted) with a
-    generated `## Index` table appended."""
-    try:
-        narrative_text = narrative_path.read_text(encoding="utf-8")
-    except OSError as error:
-        raise GenerationError(f"{narrative_path}: cannot be read: {error}") from error
-    except UnicodeDecodeError as error:
-        raise GenerationError(f"{narrative_path}: is not valid UTF-8: {error}") from error
+    generated `## Index` table appended. See `discover_skill_names`'s
+    docstring for why every path parameter defaults to `None` and is
+    resolved inside the body, not as the parameter default."""
+    narrative_path = NARRATIVE_PATH if narrative_path is None else narrative_path
+    skills_dir = SKILLS_DIR if skills_dir is None else skills_dir
+    evals_dir = EVALS_DIR if evals_dir is None else evals_dir
+    narrative_text = _read_utf8_text(narrative_path)
     rendered_narrative = substitute_placeholders(narrative_text, evals_dir)
     skill_names = discover_skill_names(skills_dir, evals_dir)
     table = render_index_table(skill_names, evals_dir)
@@ -226,26 +271,16 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        # Passed explicitly, not relied on as generate()'s own default
-        # argument values: a default is bound once at function-definition
-        # time, so calling generate() bare would freeze in the *original*
-        # NARRATIVE_PATH/SKILLS_DIR/EVALS_DIR forever, silently ignoring a
-        # test's monkeypatch of the module attribute (or any future
-        # legitimate reassignment of it). These names are looked up here
-        # instead, at call time, which does track a patched value.
-        rendered = generate(NARRATIVE_PATH, SKILLS_DIR, EVALS_DIR)
+        rendered = generate()
     except GenerationError as error:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1
 
     if args.check:
         try:
-            committed = OUTPUT_PATH.read_text(encoding="utf-8")
-        except OSError as error:
-            print(f"FAIL: could not read {OUTPUT_PATH}: {error}", file=sys.stderr)
-            return 1
-        except UnicodeDecodeError as error:
-            print(f"FAIL: {OUTPUT_PATH} is not valid UTF-8: {error}", file=sys.stderr)
+            committed = _read_utf8_text(OUTPUT_PATH)
+        except GenerationError as error:
+            print(f"FAIL: {error}", file=sys.stderr)
             return 1
         if rendered != committed:
             rendered_lines = rendered.splitlines()
