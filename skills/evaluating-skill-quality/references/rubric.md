@@ -1198,12 +1198,14 @@ and for `network` at
 
 ## 1. Discovery -- name and description
 
+Checks whether `name` and `description` name concrete conditions specific
+enough that the skill wins its intended request and cedes a neighbour's,
+rather than matching everything and therefore nothing.
+
 `scripts/gitapex_check_skill_shape.py` (see SKILL.md, Two lanes) confirms a
 trigger *exists* by shape -- present, no XML tags, under the length cap,
 with the exact limits owned by that script rather than restated here.
-This dimension judges whether it is the *right* trigger -- whether the
-skill would win its intended request and lose a neighbour's. Per
-Anthropic's best-practices doc, `name` and
+Per Anthropic's best-practices doc, `name` and
 `description` "are particularly critical. Claude uses these when deciding
 whether to trigger the skill" -- this is the highest-leverage text in the
 whole skill, not a formality.
@@ -1251,6 +1253,10 @@ whole skill, not a formality.
   names the trigger terms.
 
 ## 2. Conciseness
+
+Checks whether every paragraph earns its token cost, rather than
+re-teaching a well-known concept or carrying text with no remaining
+behavior-controlling reason.
 
 Challenge each paragraph: does the model need this explanation, does it
 already know this, does the paragraph justify its token cost? A "no" to any
@@ -1344,6 +1350,10 @@ apply the plain examples below only when no declaration exists or applies.
 
 ## 3. Degree of freedom
 
+Checks whether the prescription level (prose vs. parameterised pattern vs.
+exact steps) matches the operation's actual fragility, in either
+direction.
+
 Prescription must match the operation's fragility:
 
 - **High freedom (prose)** -- open field, many valid routes; multiple
@@ -1359,7 +1369,17 @@ judgment task over-constrains a smart model; loose prose for a fragile,
 irreversible operation invites improvisation where there is exactly one
 safe way.
 
+- **Fail:** a fragile, irreversible operation (e.g. a destructive
+  migration) left as open prose with no fixed sequence, inviting
+  improvisation where exactly one safe way exists.
+- **Pass:** a fragile step is pinned to exact commands and order while an
+  open-ended judgment call stays prose, not folded into a rigid checklist.
+
 ## 4. Clarity and structure
+
+Checks whether the skill's structure -- terminology, examples, ordered
+steps, feedback loops, templates, branch triggers, completion criteria --
+is genuinely clear, not merely long enough to read that way.
 
 - **Consistent terminology** -- one term per concept, throughout the skill
   and its references.
@@ -1386,12 +1406,21 @@ safe way.
   finite set (files, dimensions, findings, branches), the criterion is
   exhaustive: every member is accounted for, not merely sampled.
 
+- **Fail:** two names for the same concept scattered across `SKILL.md` and
+  its references, or a long, skippable-but-risky workflow given as a prose
+  paragraph instead of a copyable checklist.
+- **Pass:** one term per concept throughout, concrete input/output
+  examples instead of descriptions of good output, and every procedural
+  step names the observable result that proves it finished.
+
 ## 5. Progressive disclosure
 
+Checks whether the split between `SKILL.md` and `references/` forces the
+common case through more than one read, and whether each reference is
+named, organised, and pointed to for what it is needed for.
+
 `SKILL.md`'s deterministic checklist confirms reference depth and TOC
-presence by shape. This dimension judges the *meaning* behind the split --
-naming, linking, and whether the common case is forced through more than
-one read.
+presence by shape.
 
 - Reference files named for content (`decision-handoff.md`, not `doc2.md`),
   organised by domain.
@@ -1409,7 +1438,18 @@ one read.
   reads on every single use belongs inlined in `SKILL.md`. Both directions
   are failures.
 
+- **Fail:** a reference named `doc2.md` with no branch-point pointer in
+  `SKILL.md`, or content the model reads on every single use pushed out to
+  a reference that must be opened just to complete the ordinary path.
+- **Pass:** `SKILL.md` links to each reference exactly where it becomes
+  necessary, stating what context requires the read and what the reader
+  will obtain; the common case resolves from `SKILL.md` alone.
+
 ## 6. Durability
+
+Checks whether the skill's content stays correct as time, install
+surface, tool names, or repository identity shift, rather than silently
+rotting or breaking once copied or revisited later.
 
 - No time-sensitive content ("before August 2025 use the old API"). Any
   historical content is explicitly marked as such, not left to silently rot.
@@ -1467,6 +1507,15 @@ one read.
   portability litmus test in [Portability level](#portability-level)
   above.
 
+- **Fail:** "before August 2025 use the old API" stated as current
+  guidance with no explicit historical marking, or a bare `#149`
+  issue/PR-number citation inside content declared Portable that silently
+  resolves to the wrong issue once vendored.
+- **Pass:** time-bound content is explicitly marked historical, paths use
+  forward slashes throughout, and a Portable skill states its own
+  convention as an illustrative default with a stated fallback to the
+  consumer repository's real convention.
+
 **State management quality, when the procedure carries state across a context
 boundary.** The bullets above grade whether the skill *text* still holds as
 time, install surface, tool names, and repository identity shift. A procedure
@@ -1503,6 +1552,11 @@ reserve with different standing.
 
 ## 7. Bundled scripts (only if the skill ships code)
 
+Checks whether a skill's bundled scripts handle their own error
+conditions, justify their configuration, state execution intent, and
+document themselves well enough that a model can invoke them without
+reading the source.
+
 - **Solve, don't punt** -- scripts handle their own error conditions
   (missing file, permission denied) rather than throwing and leaving the
   model to cope.
@@ -1519,6 +1573,14 @@ reserve with different standing.
 - **Verifiable intermediate outputs** for high-stakes batch work -- a
   plan -> validate -> execute pattern with a machine-checkable plan file.
 
+- **Fail:** a script that throws on a missing file and leaves the model to
+  cope, or a magic constant with no comment explaining why that value was
+  chosen.
+- **Pass:** the script handles its own error conditions, every
+  configuration value is justified inline, and its documentation states
+  what it does, its inputs/outputs, and whether the model should run it or
+  read it as reference.
+
 **Test methodology and test code structure, when the script ships its own
 test suite.** The five bullets above grade the script's code quality; a
 bundled test suite earns its own deeper grading pass -- test-level
@@ -1532,6 +1594,11 @@ not itself a finding. Full detail:
 [script-test-quality.md](script-test-quality.md).
 
 ## 8. Behavioural evidence
+
+Checks whether the skill was validated against a documented "without the
+skill" baseline across concrete scenarios, including the failure/
+guardrail case it exists to prevent, rather than assumed correct from
+having passed every other dimension.
 
 Anthropic's standard is evaluation-*driven* development, not evaluation as
 an afterthought: build evaluations **before** writing extensive
@@ -1843,7 +1910,18 @@ here to a precondition check instead of a result. A dimension-5 pass is
 not evidence this sub-check has been measured; the two answer different
 questions and neither substitutes for the other.
 
+- **Fail:** a skill that reads well and clears every structural check but
+  was never run against its candidate task without the skill, so no
+  baseline exists to show it actually closes a real gap.
+- **Pass:** the skill's candidate task was run without the skill first,
+  the specific gaps documented, and the skill passes at least three
+  scenarios (including the guardrail case) measured against that
+  documented baseline.
+
 ## 9. Cross-model robustness
+
+Checks whether the skill's guidance holds across the model tiers it is
+likely to run under, rather than being tuned for and only verified on one.
 
 A skill's effect depends on the model running it. Anthropic's own
 best-practices doc names the concrete tier spread to test against:
@@ -1890,6 +1968,13 @@ robustness from a single-model read. A qualitative read is still allowed
 (e.g. "this skill is a fixed low-freedom policy, so over-prescription risk
 is probably low, but this is a read, not measured evidence") as long as it
 is labeled as such.
+
+- **Fail:** a low-freedom, heavily-scaffolded skill authored and tested
+  only on Opus, tuned tight enough that it over-constrains a weaker tier
+  reading the exact same steps.
+- **Pass:** judged (or explicitly declared unjudged) against every tier in
+  the skill's likely spread, naming which tier's behavior was actually
+  observed versus assumed.
 
 ## Verdicts
 

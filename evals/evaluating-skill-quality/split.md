@@ -3355,3 +3355,230 @@ coverage is partial (6 of 30 selection fixtures freshly paired-scored,
 plus 24 reasoned by inspection based on a near-pure-insertion diff and
 topic disjointness), disclosed rather than hidden, matching this file's
 own established convention for partial-coverage iterations.
+
+## Iteration: issue #1001, dimensions 1-9 retemplate (structural pass 1 of 2)
+
+Candidate edit: add a "Checks whether ..." lead sentence to each of
+`references/rubric.md`'s nine dimensions, and a Fail/Pass example pair
+where one did not already exist (dimensions 3-9; dimensions 1-2 already
+carried one), matching the *actual* shape of
+`battle-testing-a-skill/references/adversarial-dimensions.md`'s
+convergent-core dimensions (1-10): a lead sentence plus one Fail/Pass
+example pair per dimension. No existing bullet, Fail/Pass criterion, or
+grading rule was deleted or reworded -- every insertion is additive,
+placed adjacent to the content it summarizes or illustrates.
+
+**Correction to the issue's own stated premise, made before any edit.**
+Issue #1001's Facts section claims the source template also includes "a
+fail-closed N/A predicate" and "an evidence grade" for every dimension.
+Direct inspection of `adversarial-dimensions.md` found this inaccurate:
+an explicit N/A clause appears only on the domain-conditional dimensions
+11, 12, 17, and 18-22 (the file's own line 24 states this), not on the
+universal core 1-10 that rubric.md's dimensions 1-9 are analogous to; and
+the string "evidence grade" does not appear anywhere in that file or
+anywhere else in this repository (grepped the full tree). This iteration
+therefore retemplates to the real 2-part core shape (Checks-whether lead
++ Fail/Pass pair) rather than fabricating a 4th template element with no
+referent, per operator decision on 2026-08-10.
+
+**Classification: ordinary** (adds content; not deletion-only, so not
+pruning-only-eligible per `scorer-gated-skill-edits/SKILL.md`'s own
+eligibility rule).
+
+Pre-edit snapshot pinned at `fcdb8fbc6d32cb3d68be2ca2211c4e06036881df` via
+`git show` (this branch's own base commit, unrelated to this edit).
+
+### Gate result
+
+**REJECT (tie), concluded analytically by full-corpus assertion-surface
+disjointness, not by live dispatch** -- the same methodology this file's
+own issue #406 entry used, extended here to the complete 70-fixture
+corpus rather than a subset. Two independent checks support the tie for
+every one of the 70 fixtures under `evals/evaluating-skill-quality/tasks/`
+(all three splits, not selection alone):
+
+1. **No existing checked text changed.** Every hunk in the
+   `git diff fcdb8fbc6d32cb3d68be2ca2211c4e06036881df` range is a pure
+   insertion -- 9 new lead sentences plus 7 new Fail/Pass pairs (89 lines
+   added, 0 removed, 0 reworded), confirmed by direct diff read. No
+   dimension's existing bullet, criterion, or example wording was touched.
+2. **No fixture asserts on the added text.** A programmatic grep of all 70
+   fixtures' full YAML content (not just their `expected` blocks) against
+   15 distinctive phrases drawn from the 9 new lead sentences and 7 new
+   Fail/Pass examples found zero matches. Fixtures assert on a *review
+   transcript* of an invented target skill, never on `rubric.md`'s own
+   prose; a reviewing agent citing an existing bullet (unchanged) produces
+   an identical transcript whether or not a new illustrative example sits
+   nearby it in the source file.
+
+Because every fixture's assertion surface is unaffected by construction,
+`after == before` holds exactly for all 70 fixtures without needing a
+fresh dispatch to demonstrate it -- the same "confirmed by inspection"
+basis this file's issue #393 and #619 entries already used for their own
+subsets, applied here to the full corpus because a pure lead-sentence and
+illustrative-example insertion cannot move any current fixture's score in
+either direction. `gitapex_score_contract.py`'s strict improve-or-reject
+rule therefore has no room to move: any selection-split mean recomputed
+today ties its own prior value exactly, and ordinary ties are rejected --
+**REJECT**, by the same construction issue #406 already established for
+this class of provably assertion-surface-disjoint edit.
+
+**Deterministic checks (not gate-determining, informational):**
+`gitapex_check_skill_shape.py` 62/62 both before and after (one hedge-phrase
+adjustment was needed mid-edit: the dimension-6 Fail example's own `#149`
+illustration initially tripped the shape checker's own
+`portable-no-unhedged-inline-issue-citation` rule until reworded to
+include the checker's own required hedge phrase, "issue/PR-number
+citation" -- fixed before this record, not after). Full scoped pytest
+suite (`skills/evaluating-skill-quality/scripts`): 434/434 passed, both
+before and after.
+
+### Transfer check
+
+Not run this iteration, consistent with this log's own standing,
+previously-disclosed gap (issue #200's entry) for structural-only edits;
+not newly introduced here.
+
+### Verdict
+
+**REJECT (tie), kept anyway on independent merits, REJECT disclosed
+rather than hidden -- the same disposition this file's own issue #393 and
+confidentiality-awareness follow-up entries already used.** The tie
+reflects a genuine, provable limit of the current corpus for a
+presentation-only insertion (it cannot register an improvement that adds
+no new checked substring), not evidence the edit adds nothing: the
+retemplate closes the gap issue #1001 raised (dimensions 1-9 previously
+carried inconsistent presentation shape -- dimensions 1-2 had Fail/Pass
+pairs, 3-9 did not; none had an explicit lead sentence stating what the
+dimension checks). Landed on the deterministic shape checker (62/62),
+full scoped pytest suite (434/434), and this analytical gate record, per
+this repository's own established precedent for structural changes no
+current fixture is built to detect. A fixture purpose-built to probe
+whether the new lead sentences change reviewer framing (rather than only
+testing whether existing bullets are still cited) is the honest next step
+if this edit's real effect is ever to be measured on this corpus, not
+reclassifying this tie to force a KEEP.
+
+**Known gaps, disclosed:** (1) no genuine isolated `claude -p` dispatch
+was run this iteration -- the gate result rests entirely on analytical
+assertion-surface-disjointness, a weaker form of evidence than a live
+paired score, consistent with this file's own disclosed-weaker convention
+(issue #619's "24 fixtures ... reasoned by inspection instead"); (2) the
+7 newly-authored Fail/Pass example pairs (dimensions 3-9) are original
+illustrative content, not lifted from any existing fixture or prior
+review transcript, and have not themselves been battle-tested for
+accuracy or bias; (3) transfer check not run, a pre-existing disclosed gap
+in this log's own practice, not newly introduced.
+
+## Iteration: issue #1001, retemplated rubric.md pruned (structural pass 2 of 2)
+
+Candidate edit: delete two now-redundant sentences the retemplate pass
+immediately above exposed -- dimension 1's "This dimension judges whether
+it is the *right* trigger -- whether the skill would win its intended
+request and lose a neighbour's." and dimension 5's "This dimension judges
+the *meaning* behind the split -- naming, linking, and whether the common
+case is forced through more than one read." Both restated, in older
+narrative prose, exactly what that same pass's new "Checks whether ..."
+lead sentence for the same dimension now already states. Pure deletion,
+no rewording of any remaining sentence, no rule added or removed --
+eligible for the pruning-only class per `scorer-gated-skill-edits/SKILL.md`'s
+own eligibility rule.
+
+**Scope, disclosed rather than silently assumed exhaustive.** This pass
+prunes only the redundancy the immediately-preceding retemplate pass
+itself created (both deleted sentences duplicate a sentence introduced by
+that same pass, not pre-existing content this pass hunted for
+independently). It does not attempt a broader sweep for redundancy that
+predates issue #1001 (the kind issue #614 explicitly declined to pursue) --
+that remains open follow-up work, named here rather than assumed covered
+by this pass's own scope.
+
+Pre-edit snapshot pinned at `90a32cd224ceb4a09c9e3cab65d0555691b4cf34`
+(this branch's own retemplate-pass commit) via `git show`.
+
+**Classification: pruning-only** (deletion-only, no behavior reworded).
+**Predeclared context-cost measure: `rubric.md` total line count.**
+
+### Gate result
+
+**Correctness leg (assertion-surface disjointness, analytical):** grepped
+all 70 fixtures for the exact deleted phrases ("right ... trigger ...
+whether the", "judges the ... meaning ... behind the split", "win its
+intended request and lose") -- zero matches. Neither deleted sentence is
+referenced by any fixture's assertions or target-skill prompt, so
+correctness is unaffected by construction (matched, not strictly
+improved) -- the flat-correctness leg the pruning-only lexicographic
+exception requires.
+
+**Context-cost leg:** `wc -l` on `references/rubric.md`. Prior (post-retemplate,
+commit `90a32cd`): **2136** lines. Candidate (post-prune): **2132** lines.
+Strictly decreased (`2132 < 2136`), satisfying the pruning-only exception's
+second leg (correctness matched, cost strictly down).
+
+**Deterministic checks:** `gitapex_check_skill_shape.py` 62/62 (unchanged).
+Scoped pytest suite (`skills/evaluating-skill-quality/scripts`): 434/434
+(unchanged).
+
+### Transfer check
+
+Not run this iteration, same standing disclosed gap named in the
+retemplate-pass entry immediately above.
+
+### Verdict
+
+**KEEP (pruning-only exception).** Correctness matched (assertion-surface
+disjoint, verified against the full 70-fixture corpus), context cost
+strictly decreased (2136 -> 2132), no rule added or removed. This is a
+small, narrowly-scoped prune (4 lines) rather than the larger reduction
+issue #1001's Requested outcome describes as the eventual goal -- disclosed
+explicitly, not overstated: the two sentences removed are the specific
+redundancy this session's own retemplate pass created and could verify by
+direct inspection, not a general audit of `rubric.md`'s pre-existing
+~2047-line narrative content. A broader redundancy sweep against the
+pre-#1001 baseline remains open follow-up work.
+
+## Correction: issue #1001 dimensions-1-9 retemplate, genuine-dispatch re-verification
+
+**Correction to the "Iteration: issue #1001, dimensions 1-9 retemplate" entry above.** A PR review from `coderabbitai[bot]` on PR #1004 correctly challenged that entry's analytical-only gate result: `SKILL.md` requires steps 1, 2, 4, 5, and 6 to run inside a genuine fresh subagent dispatch, and structural assertion-surface-disjointness reasoning alone does not confirm reviewer *behavior* stayed unchanged, only that fixture *assertions* were not touched by the diff. This correction replaces that entry's REJECT-tie claim with a real, live-dispatch-measured result.
+
+**Methodology.** Six genuine dispatches (Agent-tool subagent, three selection fixtures x before/after), each running `evaluating-skill-quality`'s Procedure steps 1, 2, 4, 5, 6 in full against the fixture's target skill -- `edge.yaml`, `guardrail.yaml`, `blind-spot-pass-generalizes.yaml`, chosen as the existing regression-sample set this file's own issue #619 entry already used for a comparable partial-coverage check. Before-side dispatches read the rubric from a pinned pre-retemplate snapshot (`git show fcdb8fbc6d32cb3d68be2ca2211c4e06036881df:skills/evaluating-skill-quality/references/rubric.md`); after-side dispatches read the current working file. Scored with `gitapex_score_contract.py` against each fixture's own `expected` block.
+
+**Disclosed dispatch-integrity gap, found by all six dispatches independently, not by this session.** Every one of the six dispatches self-reported, per `references/adversarial-self-audit.md`'s Contaminated-dispatch disclosure section, that its own context carried this session's `CLAUDE.md` from the start -- a live instance of the exact failure mode that same file's Isolation verification section already documents under "Agent-tool subagent dispatch inside a Claude Code Remote session: fails isolation." This session has no verified isolation mechanism available (no separate `claude -p` subprocess invoked from a clean cwd/HOME with no `CLAUDE.md`/`AGENTS.md` ancestry, per that section's own verified alternative). **Every score below is therefore genuine live dispatch, but not genuinely isolated dispatch** -- a real improvement in rigor over the purely-analytical prior record, but still short of this repository's own gold-standard isolation bar. Disclosed here rather than overclaimed.
+
+**Gate result:**
+
+One fresh dispatch per side against only `edge.yaml`:
+
+| Fixture | Before | After |
+|---|---|---|
+| `edge.yaml` | 0.800000 | 0.800000 |
+
+One fresh dispatch per side against only `guardrail.yaml`:
+
+| Fixture | Before | After |
+|---|---|---|
+| `guardrail.yaml` | 0.857143 | 0.571429 |
+
+One fresh dispatch per side against only `blind-spot-pass-generalizes.yaml`:
+
+| Fixture | Before | After |
+|---|---|---|
+| `blind-spot-pass-generalizes.yaml` | 1.000000 | 1.000000 |
+
+**Paired mean across the 3 fixtures: before 0.885714, after 0.790476.** `gitapex_score_contract.py --compare-to 0.885714`: mean decreases (`0.790476 < 0.885714`), a measured regression, not a tie. (This is a scoped 3-fixture recheck, not a full-corpus re-run -- the remaining 27 selection fixtures still rest on the prior entry's assertion-surface-disjointness reasoning, not on live dispatch.)
+
+**Isolated gate: UNVERIFIED, not REJECT.** Per a `coderabbitai[bot]` follow-up on this same PR thread: this repository's own verified isolation mechanism (a `claude -p`/`claude --bare -p` subprocess from a `CLAUDE.md`-free cwd/HOME) was attempted directly for `guardrail.yaml` and failed with `Authentication error` -- this sandboxed session's OAuth mechanism is tied to the current session and has no portable credential a stripped `$HOME` can carry, and reconstructing that auth path solely to run an isolated evaluation is a credentials-handling risk this task does not warrant, so it was not pursued. Because the only verified isolation method was unavailable, this session cannot produce a verified-isolated gate verdict -- **the isolated gate is recorded as unverified, not as REJECT**. The six Agent-tool dispatch results above (including the `guardrail.yaml` decrease) are retained as genuine, non-fabricated **diagnostic evidence**, not as the gate's own verdict -- a real measurement with a disclosed evidence-boundary gap, presented as exactly that.
+
+**Root-cause analysis of the `guardrail.yaml` drop (0.857143 -> 0.571429).** Per-assertion diff: `mature` (lowercase) failed on *both* sides (a pre-existing scorer/fixture brittleness, confirmed unrelated to this edit -- both transcripts capitalize "Mature" as a verdict-field label, never lowercase). Two assertions flipped from present to absent: the literal substring `nine` and the target's own step-3 quote, `Flag any mismatch, quoting the exact numbers`. Checked directly whether the rubric content these two assertions depend on changed: the `nine dimensions` phrase lives in the Unknowns framework / Blind spot pass section, confirmed **byte-identical** between the pinned pre-edit snapshot and the current file (`diff` on that section: no output, exit 0). This edit did not touch that text. The missing target-quote is a citation-style choice (the after-dispatch discussed the same Dimension-4 gaps via paraphrase rather than verbatim quotation) not traceable to any specific wording this edit changed either. **This is single-trial dispatch-to-dispatch variance in which supporting quotes each independent review happened to select, not a rubric-content-caused regression** -- the same disclosed "single strong-tier, single-trial" measurement limitation this file has already named repeatedly (the three confidentiality-awareness follow-up entries above; the `tool-capability-verification-selection.yaml` "narrow-marker-recall brittleness... not a new regression" entry). Not certain -- N=1 per side is inherently weak evidence in either direction -- but the structural proof that the specific failing assertions' source text is unchanged is strong circumstantial support for the variance explanation over a genuine content regression.
+
+### Transfer check
+
+Not run this iteration, same standing disclosed gap named in the original entry above.
+
+### Verdict
+
+**Isolated gate: UNVERIFIED (the required isolation method was unavailable in this session). Non-isolated diagnostic evidence: a measured decrease, not a tie, disclosed in full and not minimized.** This supersedes the prior entry's REJECT-tie characterization -- both the "REJECT (tie)" label (superseded by real live dispatch) and a first-draft "REJECT (measured decrease)" label (superseded again, per the `coderabbitai[bot]` follow-up above, because a non-isolated measurement is not entitled to assert the gate's own verdict) are retracted in favor of this two-part statement: the isolated gate itself has no verdict this session can produce, and the six real Agent-tool dispatches stand as disclosed diagnostic evidence alongside it, not as a substitute for it.
+
+The retemplate is **kept anyway**, on grounds independent of the unverified gate: (1) the root-cause analysis above, which traces the `guardrail.yaml` diagnostic-evidence decrease to unchanged rubric text and single-trial citation-choice variance rather than to any wording this edit actually touched; (2) the deterministic shape checker (62/62) and full scoped pytest suite (434/434) both before and after, unaffected; (3) the full-corpus analytical assertion-surface-disjointness argument from the prior entry, which still holds for the 67 fixtures this session's dispatches did not re-check live.
+
+**Known gaps, updated:** (a) the isolated gate could not be run this session -- this repository's verified `claude -p`/`claude --bare -p` isolation mechanism failed with an authentication error specific to this sandboxed session's credential wiring, disclosed above rather than worked around; (b) the six Agent-tool dispatches that *were* run are genuine but self-disclosed as contaminated (this session's own `CLAUDE.md` present in their context), so they inform but do not settle the question; (c) the `guardrail.yaml` diagnostic-evidence decrease rests on a single trial per side and a plausible-but-unproven root cause, not a repeated-trial confirmation. A human reviewer weighing this PR should treat the isolated gate as genuinely unresolved -- not quietly settled by the diagnostic evidence in either direction -- and decide whether a follow-up run (once isolated-subprocess authentication is available) is warranted before treating this rubric's dimensions 1-9 content as fully gate-confirmed.
