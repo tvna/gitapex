@@ -8,9 +8,15 @@
   "policy_sources": [
     {
       "id": "plugin-manifest",
-      "path": ".claude-plugin/plugin.json",
+      "path": "plugin.json",
       "format": "json",
-      "authority": "name/version single source of truth; apm.yml mirrors it (see apm-manifest-drift)"
+      "authority": "name/version/description/author/homepage/repository/license single source of truth for the gitapex plugin's identity; .claude-plugin/plugin.json is mechanically generated from it (see plugin-manifest-mirror-drift), and apm.yml mirrors name/version from that generated copy (see apm-manifest-drift)"
+    },
+    {
+      "id": "agent-plugins-plugin-schema",
+      "path": ".gitapex/agent-plugins-plugin.schema.json",
+      "format": "json",
+      "authority": "Agent Plugins Specification (agent-plugins.org) v1.0.0's plugin.json JSON Schema, vendored verbatim at agentplugins/agent-plugins-spec commit bd383552095128f6effe895b9257cfd580a6d179 (no tag/release exists upstream as of this pin) -- authoritative shape for the repository-root plugin.json, read by plugin-manifest-schema-conformance"
     },
     {
       "id": "pyproject-coverage",
@@ -373,13 +379,54 @@
       "id": "apm-manifest-drift",
       "kind": "script",
       "script": ".github/scripts/gitapex_scan_apm_manifest_drift.py",
-      "rule": "apm.yml's name/version must equal .claude-plugin/plugin.json's (plugin.json is authoritative); raises if either manifest is missing a mirrored field.",
+      "rule": "apm.yml's name/version must equal .claude-plugin/plugin.json's (.claude-plugin/plugin.json is authoritative for this comparison -- it is itself generated from the repository-root plugin.json, see plugin-manifest-mirror-drift); raises if either manifest is missing a mirrored field.",
       "planes": ["ci", "local"],
       "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_apm_manifest_drift.py"],
       "trigger": "tests/test_gitapex_scan_apm_manifest_drift.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": ["plugin-manifest"],
       "cluster": "supply-chain",
       "tracking_issue": 234,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "plugin-manifest-mirror-drift",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_generate_plugin_manifest.py",
+      "rule": ".claude-plugin/plugin.json must exactly match a fresh regeneration from the repository-root plugin.json (the plugin-identity SSOT) with only the $schema key stripped and key order otherwise preserved.",
+      "planes": ["ci", "local"],
+      "local_invocation": [
+        "uv",
+        "run",
+        "--frozen",
+        "python3",
+        ".github/scripts/gitapex_generate_plugin_manifest.py",
+        "--check"
+      ],
+      "trigger": "tests/test_gitapex_generate_plugin_manifest.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": ["plugin-manifest"],
+      "cluster": "supply-chain",
+      "tracking_issue": 1028,
+      "status": "active",
+      "supersedes": null
+    },
+    {
+      "id": "plugin-manifest-schema-conformance",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_scan_plugin_manifest_schema.py",
+      "rule": "Validates the repository-root plugin.json against the vendored Agent Plugins Specification v1.0.0 plugin.schema.json (Draft202012Validator, format assertion enabled); flags vendor-digest-drift if the vendored schema's sha256 no longer matches its recorded digest. --verify-upstream (opt-in, network) additionally byte-compares the vendored file against what agentplugins/agent-plugins-spec publishes at the pinned commit.",
+      "planes": ["ci", "local"],
+      "local_invocation": [
+        "uv",
+        "run",
+        "--frozen",
+        "python3",
+        ".github/scripts/gitapex_scan_plugin_manifest_schema.py"
+      ],
+      "trigger": "tests/test_gitapex_scan_plugin_manifest_schema.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": ["plugin-manifest", "agent-plugins-plugin-schema"],
+      "cluster": "supply-chain",
+      "tracking_issue": 1028,
       "status": "active",
       "supersedes": null
     },
