@@ -137,7 +137,7 @@ def test_write_declared_but_no_match_is_warning(tmp_path: pathlib.Path) -> None:
     skill_dir = _make_skill(tmp_path, skill_md="# Example\n\n## Steps\n\n1. Read the input.\n")
     findings = scanner.find_tools_drift({"write": ["files"], "shell": []}, skill_dir)
     assert _severities(findings) == ["warning"]
-    assert "tools-write-vs-skill-md" in findings[0].message
+    assert "tools-write-over-declared" in findings[0].message
     assert "over-declared" in findings[0].message
 
 
@@ -164,7 +164,7 @@ def test_shell_declared_but_no_match_is_warning(tmp_path: pathlib.Path) -> None:
     skill_dir = _make_skill(tmp_path, skill_md="# Example\n\n## Steps\n\n1. Read the input.\n")
     findings = scanner.find_tools_drift({"write": [], "shell": ["git"]}, skill_dir)
     assert _severities(findings) == ["warning"]
-    assert "tools-shell-vs-skill-md" in findings[0].message
+    assert "tools-shell-over-declared" in findings[0].message
 
 
 def test_fully_clean_skill_has_no_tools_findings(tmp_path: pathlib.Path) -> None:
@@ -176,6 +176,132 @@ def test_missing_skill_md_does_not_crash(tmp_path: pathlib.Path) -> None:
     skill_dir = tmp_path / "no-skill-md"
     skill_dir.mkdir()
     assert scanner.find_tools_drift({"write": [], "shell": []}, skill_dir) == []
+
+
+# ---- find_tools_drift: script-content signal (AST-based) ----
+
+
+def test_write_under_declared_via_open_write_mode(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": 'open("out.txt", "w").close()\n'})
+    findings = scanner.find_tools_drift({"write": [], "shell": []}, skill_dir)
+    assert any("tools-write-vs-script-content" in f.message for f in findings)
+
+
+def test_write_under_declared_via_open_write_mode_keyword(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": 'open("out.txt", mode="a").close()\n'})
+    findings = scanner.find_tools_drift({"write": [], "shell": []}, skill_dir)
+    assert any("tools-write-vs-script-content" in f.message for f in findings)
+
+
+def test_open_read_mode_is_not_a_write_signal(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": 'open("in.txt", "r").close()\n'})
+    findings = scanner.find_tools_drift({"write": [], "shell": []}, skill_dir)
+    assert not any("tools-write-vs-script-content" in f.message for f in findings)
+
+
+def test_open_default_mode_is_not_a_write_signal(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": 'open("in.txt").close()\n'})
+    findings = scanner.find_tools_drift({"write": [], "shell": []}, skill_dir)
+    assert not any("tools-write-vs-script-content" in f.message for f in findings)
+
+
+def test_open_with_unrelated_keyword_and_no_mode_is_not_a_write_signal(tmp_path: pathlib.Path) -> None:
+    """A keyword-only call with no "mode" keyword at all (e.g. only
+    encoding=) must walk past every keyword without matching, not crash
+    or false-positive."""
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": 'open("in.txt", encoding="utf-8").close()\n'})
+    findings = scanner.find_tools_drift({"write": [], "shell": []}, skill_dir)
+    assert not any("tools-write-vs-script-content" in f.message for f in findings)
+
+
+def test_write_under_declared_via_os_remove(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": 'import os\nos.remove("out.txt")\n'})
+    findings = scanner.find_tools_drift({"write": [], "shell": []}, skill_dir)
+    assert any("tools-write-vs-script-content" in f.message for f in findings)
+
+
+def test_write_under_declared_via_pathlib_write_text(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={"fetch.py": 'import pathlib\npathlib.Path("out.txt").write_text("x")\n'},
+    )
+    findings = scanner.find_tools_drift({"write": [], "shell": []}, skill_dir)
+    assert any("tools-write-vs-script-content" in f.message for f in findings)
+
+
+def test_write_declared_and_matches_script_content_is_clean(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": 'import os\nos.remove("out.txt")\n'})
+    findings = scanner.find_tools_drift({"write": ["files"], "shell": []}, skill_dir)
+    assert findings == []
+
+
+def test_shell_under_declared_via_subprocess_run(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": 'import subprocess\nsubprocess.run(["git", "status"])\n'})
+    findings = scanner.find_tools_drift({"write": [], "shell": []}, skill_dir)
+    assert any("tools-shell-vs-script-content" in f.message for f in findings)
+
+
+def test_shell_under_declared_via_aliased_subprocess_import(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={"fetch.py": 'import subprocess as sp\nsp.run(["git", "status"])\n'},
+    )
+    findings = scanner.find_tools_drift({"write": [], "shell": []}, skill_dir)
+    assert any("tools-shell-vs-script-content" in f.message for f in findings)
+
+
+def test_shell_under_declared_via_from_subprocess_import(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={"fetch.py": 'from subprocess import run\nrun(["git", "status"])\n'},
+    )
+    findings = scanner.find_tools_drift({"write": [], "shell": []}, skill_dir)
+    assert any("tools-shell-vs-script-content" in f.message for f in findings)
+
+
+def test_shell_declared_and_matches_script_content_is_clean(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": 'import subprocess\nsubprocess.run(["git", "status"])\n'})
+    findings = scanner.find_tools_drift({"write": [], "shell": ["git"]}, skill_dir)
+    assert findings == []
+
+
+def test_unrelated_dot_run_method_is_not_a_shell_signal(tmp_path: pathlib.Path) -> None:
+    """A bare method name match on ".run(" would be a severe false-positive
+    source: "run" is an extremely common method name on unrelated objects
+    (a test runner, a workflow class). Only a call resolved back to a real
+    subprocess/os import counts."""
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={"fetch.py": "class Workflow:\n    def run(self):\n        pass\n\nWorkflow().run()\n"},
+    )
+    findings = scanner.find_tools_drift({"write": [], "shell": []}, skill_dir)
+    assert not any("tools-shell-vs-script-content" in f.message for f in findings)
+
+
+def test_over_declared_is_joint_not_per_source(tmp_path: pathlib.Path) -> None:
+    """Over-declaration must not fire just because ONE source shows no
+    evidence -- a skill can validly declare tools.write purely because its
+    own SKILL.md prose instructs the agent to write files, with zero
+    bundled scripts ever doing so directly. Only "neither source shows
+    evidence" is real over-declaration."""
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md="# Example\n\n## Steps\n\n1. Creates a new file for the fixture.\n",
+        scripts={"helper.py": "import pathlib\n"},
+    )
+    findings = scanner.find_tools_drift({"write": ["files"], "shell": []}, skill_dir)
+    assert findings == []
+
+
+def test_over_declared_fires_when_neither_source_has_evidence(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md="# Example\n\n## Steps\n\n1. Read the input.\n",
+        scripts={"helper.py": "import pathlib\n"},
+    )
+    findings = scanner.find_tools_drift({"write": ["files"], "shell": []}, skill_dir)
+    assert _severities(findings) == ["warning"]
+    assert "tools-write-over-declared" in findings[0].message
 
 
 # ---- regression tests for bugs found by an independent adversarial review
