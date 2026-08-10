@@ -3469,3 +3469,70 @@ illustrative content, not lifted from any existing fixture or prior
 review transcript, and have not themselves been battle-tested for
 accuracy or bias; (3) transfer check not run, a pre-existing disclosed gap
 in this log's own practice, not newly introduced.
+
+## Iteration: issue #1001, retemplated rubric.md pruned (structural pass 2 of 2)
+
+Candidate edit: delete two now-redundant sentences the retemplate pass
+immediately above exposed -- dimension 1's "This dimension judges whether
+it is the *right* trigger -- whether the skill would win its intended
+request and lose a neighbour's." and dimension 5's "This dimension judges
+the *meaning* behind the split -- naming, linking, and whether the common
+case is forced through more than one read." Both restated, in older
+narrative prose, exactly what that same pass's new "Checks whether ..."
+lead sentence for the same dimension now already states. Pure deletion,
+no rewording of any remaining sentence, no rule added or removed --
+eligible for the pruning-only class per `scorer-gated-skill-edits/SKILL.md`'s
+own eligibility rule.
+
+**Scope, disclosed rather than silently assumed exhaustive.** This pass
+prunes only the redundancy the immediately-preceding retemplate pass
+itself created (both deleted sentences duplicate a sentence introduced by
+that same pass, not pre-existing content this pass hunted for
+independently). It does not attempt a broader sweep for redundancy that
+predates issue #1001 (the kind issue #614 explicitly declined to pursue) --
+that remains open follow-up work, named here rather than assumed covered
+by this pass's own scope.
+
+Pre-edit snapshot pinned at `90a32cd224ceb4a09c9e3cab65d0555691b4cf34`
+(this branch's own retemplate-pass commit) via `git show`.
+
+**Classification: pruning-only** (deletion-only, no behavior reworded).
+**Predeclared context-cost measure: `rubric.md` total line count.**
+
+### Gate result
+
+**Correctness leg (assertion-surface disjointness, analytical):** grepped
+all 70 fixtures for the exact deleted phrases ("right ... trigger ...
+whether the", "judges the ... meaning ... behind the split", "win its
+intended request and lose") -- zero matches. Neither deleted sentence is
+referenced by any fixture's assertions or target-skill prompt, so
+correctness is unaffected by construction (matched, not strictly
+improved) -- the flat-correctness leg the pruning-only lexicographic
+exception requires.
+
+**Context-cost leg:** `wc -l` on `references/rubric.md`. Prior (post-retemplate,
+commit `90a32cd`): **2136** lines. Candidate (post-prune): **2132** lines.
+Strictly decreased (`2132 < 2136`), satisfying the pruning-only exception's
+second leg (correctness matched, cost strictly down).
+
+**Deterministic checks:** `gitapex_check_skill_shape.py` 62/62 (unchanged).
+Scoped pytest suite (`skills/evaluating-skill-quality/scripts`): 434/434
+(unchanged).
+
+### Transfer check
+
+Not run this iteration, same standing disclosed gap named in the
+retemplate-pass entry immediately above.
+
+### Verdict
+
+**KEEP (pruning-only exception).** Correctness matched (assertion-surface
+disjoint, verified against the full 70-fixture corpus), context cost
+strictly decreased (2136 -> 2132), no rule added or removed. This is a
+small, narrowly-scoped prune (4 lines) rather than the larger reduction
+issue #1001's Requested outcome describes as the eventual goal -- disclosed
+explicitly, not overstated: the two sentences removed are the specific
+redundancy this session's own retemplate pass created and could verify by
+direct inspection, not a general audit of `rubric.md`'s pre-existing
+~2047-line narrative content. A broader redundancy sweep against the
+pre-#1001 baseline remains open follow-up work.

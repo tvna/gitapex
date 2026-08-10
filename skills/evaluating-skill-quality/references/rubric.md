@@ -1205,9 +1205,7 @@ rather than matching everything and therefore nothing.
 `scripts/gitapex_check_skill_shape.py` (see SKILL.md, Two lanes) confirms a
 trigger *exists* by shape -- present, no XML tags, under the length cap,
 with the exact limits owned by that script rather than restated here.
-This dimension judges whether it is the *right* trigger -- whether the
-skill would win its intended request and lose a neighbour's. Per
-Anthropic's best-practices doc, `name` and
+Per Anthropic's best-practices doc, `name` and
 `description` "are particularly critical. Claude uses these when deciding
 whether to trigger the skill" -- this is the highest-leverage text in the
 whole skill, not a formality.
@@ -1422,9 +1420,7 @@ common case through more than one read, and whether each reference is
 named, organised, and pointed to for what it is needed for.
 
 `SKILL.md`'s deterministic checklist confirms reference depth and TOC
-presence by shape. This dimension judges the *meaning* behind the split --
-naming, linking, and whether the common case is forced through more than
-one read.
+presence by shape.
 
 - Reference files named for content (`decision-handoff.md`, not `doc2.md`),
   organised by domain.
