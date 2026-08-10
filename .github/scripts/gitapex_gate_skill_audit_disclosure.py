@@ -108,6 +108,36 @@ comment for why "NOT-RUN" is not an acceptable answer for this one.
   that correspondence, so a gate registered at an unreachable path fails
   rather than silently skipping the job.
 
+Issue #998 (refs #982, #984, #988, #989, #990, #997): a sixth
+process-disclosure check, using the shared RAN/NOT-RUN/WAIVED vocabulary
+(same as every check in this table except `deterministic-gate-quality`
+above).
+
+- `defeat-test-disclosure`: required when the calling workflow's diff
+  touches a deterministic checker script *or* a deterministic gate --
+  the union of `checker-script-adversarial-review`'s and
+  `deterministic-gate-quality`'s own scopes (`gitapex_compute_skill_audit_flags.py`'s
+  `changed_checker_or_gate_scripts`), not either alone, since issue #998's
+  own title scopes this to "checker/gate scripts" and a `hooks/check-*.sh`
+  gate matches no checker-script glob. Deliberately a distinct flag from
+  `checker-script-adversarial-review`, for the same reason
+  `deterministic-gate-quality` above is not folded into it either: the two
+  disclose different processes. `checker-script-adversarial-review` asks
+  whether a review round happened at all; this asks whether at least one
+  test was specifically constructed to defeat the new or changed detection
+  logic, not merely to exercise its happy path. Issue #997 supplies the
+  direct evidence a bare `RAN` on the former does not close this gap: PR
+  #994 disclosed `checker-script-adversarial-review: RAN` on its first
+  commit and that review round still missed a heading-boundary bug and a
+  case-sensitivity gap, each caught only by a second, independent pass.
+
+  `NOT-RUN` stays legitimate here (unlike `deterministic-gate-quality`'s
+  RAN-only narrowing): a docstring-only or lint-only edit to a checker
+  script has no new detection logic to construct a defeat test against, so
+  disallowing an honest `NOT-RUN` would only pressure an author toward a
+  fabricated one. See `docs/superpowers/specs/2026-08-10-defeat-test-disclosure-design.md`
+  for the full decision record.
+
 Issue #874: the same applicability facts can now be computed locally,
 before a push, via `--check-diff BASE_REF HEAD_REF --body-file PATH`. That
 mode calls `gitapex_compute_skill_audit_flags.py` -- the module the CI
@@ -212,14 +242,14 @@ _EVAL_COVERAGE_CHECK_NAME = "eval-coverage-disclosure"
 _EVAL_COVERAGE_WAIVER_RE = _waived_pattern(_EVAL_COVERAGE_CHECK_NAME)
 
 # Issue #517 (refs #454, #277) / #565 (refs #560 repair 5) / #673 (refs
-# #665 repair 1): four process-disclosure checks, each required only when
-# the calling workflow supplies a non-empty item list for it. Each row
-# carries its own accepted-verdict tuple; three take the shared
-# "RAN"/"NOT-RUN" pair (case-insensitive, same as every other vocabulary
-# here) disclosing whether the named process happened at all, and the
-# fourth narrows it -- see its own comment. "WAIVED: <reason>" is accepted
-# for every row, via the shared _line_pattern factory, same as the two
-# audits in _VERDICTS.
+# #665 repair 1) / #998 (refs #982, #997): five process-disclosure checks,
+# each required only when the calling workflow supplies a non-empty item
+# list for it. Each row carries its own accepted-verdict tuple; four take
+# the shared "RAN"/"NOT-RUN" pair (case-insensitive, same as every other
+# vocabulary here) disclosing whether the named process happened at all,
+# and one (deterministic-gate-quality) narrows it -- see its own comment.
+# "WAIVED: <reason>" is accepted for every row, via the shared
+# _line_pattern factory, same as the two audits in _VERDICTS.
 #
 # A registry, not four hand-copied name/CLI-flag/help-text/FAIL-message
 # constants: by the third such check (adversarial-coverage-mapping,
@@ -339,6 +369,34 @@ _PROCESS_DISCLOSURE_CHECKS = (
         ),
         verdicts=("RAN",),
     ),
+    # Issue #998 (refs #982, #997): distinct from checker-script-adversarial-review
+    # even though its scope is a superset of that check's own (the union
+    # with deterministic-gate-quality's scope, not a subset of either) --
+    # "a review round happened" and "a defeat test was specifically
+    # constructed" are different claims, and #997 is direct evidence a
+    # bare RAN on the former does not establish the latter. NOT-RUN stays
+    # legitimate: unlike deterministic-gate-quality's rubric (which already
+    # exists, so "I did not read it" was never an honest excuse), many real
+    # diffs to a checker/gate script (docstring or lint-only edits) touch
+    # no detection logic a defeat test could meaningfully target.
+    _ProcessDisclosureCheck(
+        name="defeat-test-disclosure",
+        cli_flag="--changed-checker-or-gate-scripts",
+        cli_dest="changed_checker_or_gate_scripts",
+        help_text=(
+            "Comma-separated deterministic checker-or-gate-script paths "
+            "(the union of --changed-checker-scripts and "
+            "--changed-gate-scripts), as computed by "
+            "gitapex_compute_skill_audit_flags.py's "
+            "changed_checker_or_gate_scripts (issue #998)."
+        ),
+        fail_subject="changed deterministic checker or gate script",
+        fail_hint=(
+            ", disclosing whether at least one test was constructed specifically to defeat "
+            "(not merely exercise the happy path of) the new or changed detection logic"
+        ),
+        verdicts=_PROCESS_DISCLOSURE_VERDICTS,
+    ),
 )
 
 _PROCESS_DISCLOSURE_LINE_RES = {
@@ -412,8 +470,8 @@ def _missing_in_section(section: str | None, items: list[str], pattern: re.Patte
 
     Takes the extracted section rather than the raw body so a caller
     grading several checks against one body normalizes and extracts once
-    instead of once per check -- main() grades seven, and re-deriving an
-    invariant value seven times is the avoidable overhead
+    instead of once per check -- main() grades eight, and re-deriving an
+    invariant value eight times is the avoidable overhead
     `evaluating-deterministic-gate-quality`'s dimension 19 asks about.
     """
     if not items:
@@ -487,15 +545,26 @@ def find_missing_gate_quality_disclosure(body_text: str | None, changed_gate_scr
     )
 
 
+def find_missing_defeat_test_disclosure(body_text: str | None, changed_checker_or_gate_scripts: list[str]) -> list[str]:
+    """Return changed_checker_or_gate_scripts unchanged if none of them is
+    covered by a defeat-test-disclosure RAN/NOT-RUN/WAIVED line in the PR
+    body (issue #998, refs #982, #997); else [].
+    """
+    return _find_missing_disclosure(
+        body_text, changed_checker_or_gate_scripts, _PROCESS_DISCLOSURE_LINE_RES["defeat-test-disclosure"]
+    )
+
+
 def _parse_comma_list(raw: str | None) -> list[str]:
     """Comma-separated tokens -> a sorted, deduped list with no empty items.
 
     Deliberately named for the wire format rather than for skill names:
-    only two of this CLI's five list-valued flags carry skill names. The
-    other three (`--changed-design-docs`, `--changed-checker-scripts`,
-    `--changed-gate-scripts`) carry repository-relative file paths, so a
-    skill-name-specific contract here would misdescribe most call sites and
-    point a reader auditing path handling at the wrong abstraction.
+    only two of this CLI's six list-valued flags carry skill names. The
+    other four (`--changed-design-docs`, `--changed-checker-scripts`,
+    `--changed-gate-scripts`, `--changed-checker-or-gate-scripts`) carry
+    repository-relative file paths, so a skill-name-specific contract here
+    would misdescribe most call sites and point a reader auditing path
+    handling at the wrong abstraction.
 
     The sort is load-bearing, not incidental: it fixes the order these
     items appear in the FAIL messages below, so a failing run is
@@ -601,7 +670,7 @@ def _apply_check_diff(args: argparse.Namespace) -> int | None:
 def main(argv: list[str] | None = None) -> int:
     """CLI: exit 0 iff the given PR body discloses every applicable check --
     the two #248 audits when a SKILL.md changed, the two #427
-    description-change-only checks, and each #517/#565/#673
+    description-change-only checks, and each #517/#565/#673/#998
     process-disclosure check the workflow flags as applicable -- else 1.
     """
     parser = argparse.ArgumentParser(
@@ -678,11 +747,11 @@ def main(argv: list[str] | None = None) -> int:
         if early_exit is not None:
             return early_exit
 
-    # Normalize and extract once, then grade all seven checks against the
+    # Normalize and extract once, then grade all eight checks against the
     # result. Each `find_missing_*` wrapper re-derives this from the raw
     # body on its own, which is correct for a single-check caller (and for
     # the tests, which call them by name) but would repeat two string
-    # copies and two regex searches seven times here.
+    # copies and two regex searches eight times here.
     section = _extract_section(_normalize_body(body_text))
 
     missing = _missing_base_disclosures(section) if args.skill_md_changed else []
