@@ -114,12 +114,12 @@ used to be discovered one red check at a time on an already-open PR.
 
 The same `uv run prek install -t pre-commit -t pre-push` above also installs
 a **pre-push** hook that runs every gate with a working-tree-only form in
-one pass, before the push leaves your machine. A warm run of all 22 wired
-gates measures roughly 7-8 seconds end to end (up from ~4-6 seconds for 21
-gates before issue #985's `behind-base` gate, this runner's first gate
-that makes a network call -- it fetches `origin/main` before comparing,
-measured separately at well under a second warm). Run it by hand any time
-with:
+one pass, before the push leaves your machine. A warm run of all 25 wired
+gates measures roughly 8-9 seconds end to end (up from ~4-6 seconds for the
+24-gate set before issue #985's `behind-base` gate, this runner's first
+gate that makes a network call -- it fetches `origin/main` before
+comparing, measured separately at well under a second warm). Run it by
+hand any time with:
 
 ```console
 python3 .github/scripts/gitapex_gate_local_preflight.py
@@ -133,7 +133,7 @@ If a clone predates this hook, re-run the install command above once to pick
 it up, then confirm both shims with the check in the previous section.
 `git push --no-verify` skips it, as with any pre-push hook.
 
-The runner itself needs no dependencies, but all 22 wired gates run through
+The runner itself needs no dependencies, but all 25 wired gates run through
 `uv` (the same `uv run` pins CI uses). Without `uv` on PATH every one of
 them reports `FAIL ... failed to run` -- that is one missing tool, not a
 whole broken wired set.

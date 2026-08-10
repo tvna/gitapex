@@ -1,4 +1,4 @@
-# Held-out split for scorer-gated-skill-edits
+# evaluating-skill-quality held-out split
 
 Train / selection / test partition for `evals/evaluating-skill-quality/`,
 established so `scorer-gated-skill-edits`' precondition gate (a real scorer plus a
@@ -7,9 +7,11 @@ held-out split, both required before any iterative edit to this skill's
 `skills/scorer-gated-skill-edits/SKILL.md` for the gate itself and
 `skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py` for the scorer, which
 scores each fixture's `expected.output_contains` / `output_not_contains`
-block deterministically.
+block deterministically. The train/selection/test fixture assignment lives
+in `split.json`, validated against
+`skills/scorer-gated-skill-edits/references/split.schema.json`.
 
-## Corpus size and the 2:1:7 caveat
+## Corpus size caveat
 
 SkillOpt's default split ratio is 2:1:7. At 52 fixtures that ratio gives a
 selection split of roughly five tasks, too thin to gate a strict
@@ -71,82 +73,6 @@ convention without being read as a second, conflicting declaration.
 ```markdown
 Split-arithmetic exclusions: `some-fixture.yaml` -- why it is not counted
 ```
-
-## Assignment
-
-- **train** (motivates edits; read for evidence, never scored for
-  acceptance): `normal.yaml`, `mechanism-fit-claudemd.yaml`,
-  `no-unauthorized-eval-tooling.yaml`, `scoring-axis-cost-only-eval.yaml`,
-  `ordering-rule-totality-review.yaml`, `blind-spot-pass-domain-gap.yaml`,
-  `model-effort-tier-fit-unjustified-model.yaml`,
-  `portability-declarative-fact-claim.yaml`, `branch-and-step-contracts.yaml`,
-  `sentence-level-pruning.yaml`, `progressive-disclosure-placement.yaml`,
-  `heldout-semantic-noop-vs-brevity.yaml`,
-  `capability-assumption-broad-excuses-explanation.yaml`,
-  `ablation-capability-no-mechanism.yaml`,
-  `tool-capability-verification-train.yaml`,
-  `consumer-repo-convention-deference-train.yaml`,
-  `compatibility-claude-fork-train.yaml`,
-  `compatibility-hermes-platform-train.yaml`,
-  `cohesion-independently-changeable-branches-train.yaml`,
-  `reference-load-precision-train.yaml`,
-  `opus5-redundant-verification-fail.yaml`,
-  `opus5-unbounded-subagent-fail.yaml`,
-  `confidentiality-awareness-train.yaml`,
-  `dispatch-required-negative-control.yaml` (issue #584 -- see that entry in
-  `eval-status.md`; not scored for acceptance here, added for split-listing
-  consistency with `normal.yaml`),
-  `declaration-structure-fit-train.yaml`,
-  `sediment-correction-narration-train.yaml`,
-  `duplication-repeated-restatement-train.yaml`,
-  `multi-turn-settled-dimension-relaxation-train.yaml` (issue #332's ACM-7
-  audit round -- see that entry in `eval-status.md`; a regression fixture
-  for a safeguard this skill's own `references/adversarial-self-audit.md`
-  already states, and, like every other train fixture here, read for
-  evidence rather than scored for acceptance. Counted in the `1:0:0`
-  multi-turn-relaxation addition above, so it does not share
-  `dispatch-required-negative-control.yaml`'s excluded footing -- issue #907
-  dropped an earlier claim here that it did).
-- **selection** (gates acceptance; scored before/after a candidate edit,
-  strict improve-or-reject, ties rejected): `edge.yaml`,
-  `mechanism-fit-subagent.yaml`, `third-party-not-authoritative.yaml`,
-  `scoring-axis-uncontrolled-speed-claim.yaml`,
-  `ordering-rule-totality-distinct-skill.yaml`,
-  `blind-spot-pass-generalizes.yaml`,
-  `model-effort-tier-fit-unjustified-effort.yaml`,
-  `portability-issue-number-citation.yaml`, `heldout-vague-completion.yaml`,
-  `capability-assumption-frontier-flags-explanation.yaml`,
-  `ablation-capability-runner-exists-not-run.yaml`,
-  `tool-capability-verification-selection.yaml`,
-  `consumer-repo-convention-deference-selection.yaml`,
-  `compatibility-devin-trigger-selection.yaml`,
-  `compatibility-openclaw-gate-selection.yaml`,
-  `compatibility-independent-blocker-selection.yaml`,
-  `compatibility-conflicting-allowed-tools-semantics-selection.yaml`,
-  `compatibility-documentation-silence-unknown-selection.yaml`,
-  `compatibility-undeclared-runtime-extension-selection.yaml`,
-  `cohesion-temporal-grouping-selection.yaml`,
-  `reference-load-precision-selection.yaml`,
-  `opus5-redundant-verification-generalizes.yaml`,
-  `opus5-unbounded-subagent-generalizes.yaml`,
-  `confidentiality-awareness-selection.yaml`,
-  `confidentiality-awareness-payment-data-selection.yaml`,
-  `confidentiality-awareness-mnpi-selection.yaml`,
-  `confidentiality-awareness-trade-secret-selection.yaml`,
-  `declaration-structure-fit-selection.yaml`,
-  `sediment-correction-narration-selection.yaml`,
-  `duplication-repeated-restatement-selection.yaml`.
-- **test** (read once, for a final report only, never to motivate or gate
-  an edit): `guardrail.yaml`, `no-fabricated-violation.yaml`,
-  `portability-classification.yaml`, `blind-spot-pass-not-silent.yaml`,
-  `model-effort-tier-fit-justified.yaml`,
-  `portability-legitimate-illustrative-citation.yaml`,
-  `capability-assumption-adaptive-progressive-disclosure.yaml`,
-  `ablation-capability-already-run.yaml`,
-  `compatibility-declared-hermes-test.yaml`,
-  `compatibility-portable-standard-test.yaml`,
-  `cohesion-sequential-orchestrator-restraint.yaml`,
-  `opus5-restraint-domain-verification-and-bounded-subagent.yaml`.
 
 ## Compatibility-awareness branch coverage
 
@@ -662,9 +588,35 @@ held out across iterations. If a future edit targets a topic none of the
 27 fixtures probe, add motivated cases to train and fresh generalization
 cases to selection before scoring, and record the addition here.
 
-## Rejected-edit log
+## Blind spot pass
 
-**Iteration: issue #116 gate 3, ranking/tie-break totality item.**
+This corpus's own blind-spot disclosures are not consolidated into one
+section; they live inline, within `## Compatibility-awareness branch
+coverage` above, next to the fixture sets they qualify. That section
+documents fixture-corpus construction broadly (compatibility, cohesion,
+capability-assumption, ablation-capability, tool-capability, scoring-axis,
+ordering-rule-totality, model-effort-tier-fit, portability, opus5, and
+confidentiality-awareness fixtures) -- a wider scope than a blind-spot
+declaration alone, so it is kept as its own section rather than renamed.
+Two disclosures already state a genuine remaining gap explicitly:
+
+- The compatibility-awareness corpus (see `## Compatibility-awareness
+  branch coverage` above): "It does not prove how an undocumented future
+  runtime field behaves; the compatibility baseline must label such cases
+  Unknown and must be refreshed as product documentation changes."
+- The confidentiality-awareness corpus (same section, gitapex#537
+  addition): "It does not cover the `CONFIDENTIALITY_ACKNOWLEDGED` state
+  ... or a target that mentions sensitive data only as a Stop-boundary
+  prohibition rather than an ordinary step -- both left as a disclosed,
+  open gap for a future addition rather than silently assumed covered."
+
+This section is added by the split.md/split.json migration (issue #928) to
+satisfy the standardized heading convention shared across this repository's
+five gated skills' `split.md` files; it does not restate or replace either
+disclosure above, both of which remain the authoritative, dated record.
+
+## Iteration: issue #116 gate 3, ranking/tie-break totality item
+
 Candidate edit: add a bullet to `references/rubric.md`'s Dimension 4
 (Clarity and structure) requiring totality verification for any
 enumerated ranking/tie-break rule (every pair of distinct values
@@ -675,7 +627,9 @@ Precondition and splits: satisfied for that historical iteration, per this
 file's then-current corpus (13 fixtures,
 5:5:3 with this iteration's additions -- see Assignment above).
 
-Gate result: the selection-split baseline (5 fixtures: `edge.yaml`,
+### Gate result
+
+The selection-split baseline (5 fixtures: `edge.yaml`,
 `mechanism-fit-subagent.yaml`, `third-party-not-authoritative.yaml`,
 `scoring-axis-uncontrolled-speed-claim.yaml`,
 `ordering-rule-totality-distinct-skill.yaml`) was measured live -- one
@@ -710,9 +664,20 @@ tightening onto this already-scored fixture, since editing a fixture
 after seeing its selection-split score is exactly the gate-leak this
 skill's Stop boundaries forbid.
 
+### Transfer check
+
+Not run this iteration, consistent with every prior
+entry in this log -- named as a pre-existing, still-open gap in this
+file's own practice (per issue #200's entry), not silently assumed clear
+for this edit specifically.
+
+### Verdict
+
 This edit is **not applied** to `references/rubric.md` in this PR.
 
-**Iteration: #393, dogfooding-driven dimension 2/5/7 fixes.** Candidate
+## Iteration: #393, dogfooding-driven dimension 2/5/7 fixes
+
+Candidate
 edit (already merged; this entry records the gate retroactively, per
 issue #398): deduplicate a near-verbatim triplicated "step-level finding"
 disclaimer across `references/rubric.md`'s three step-level Mechanism-fit
@@ -782,6 +747,8 @@ is sound regardless -- but the historical gap itself is real and is
 gates, if wanted, is separate follow-up work (see issue #398's Scope
 section), not a precondition for scoring #393 itself.
 
+### Gate result
+
 Methodology: 12 of the 14 selection fixtures' target sections are
 confirmed untouched across the entire `86deac0..HEAD` range (the
 gap-discovery diff above doubles as this confirmation) and reuse their
@@ -848,7 +815,9 @@ ordinary gate's strict-improve-or-reject rule does not consider context
 cost at all -- correctness is tied, and a tie is rejected regardless of
 what else changed.
 
-**Transfer check:** not run this iteration. This boundary ("Never ship a
+### Transfer check
+
+Not run this iteration. This boundary ("Never ship a
 skill that has not passed a transfer check") specifically guards a
 KEEP/ship decision; since this iteration's own result is REJECT, not a
 recommendation to keep or ship, the boundary is not itself violated by
@@ -856,6 +825,8 @@ this record. Its absence across every OTHER entry in this log (all of
 which end in KEEP, none of which ran a transfer check) remains the same
 disclosed, unresolved gap issue #200 first named -- raised again here,
 not newly introduced by this entry.
+
+### Verdict
 
 **REJECT.** Ordinary gate, exact tie (0.957143 -> 0.957143) across all 14
 selection fixtures (12 confirmed unaffected by direct inspection, 2
@@ -878,8 +849,9 @@ record (several undocumented intervening iterations between issue #334
 and #393, found while tracing the before-baseline) is disclosed above and
 tracked separately (issue #398) rather than backfilled here.
 
-**Iteration: issue #406, Contract discipline precondition-enumeration
-sync.** Candidate edit, two parts, both confined to
+## Iteration: issue #406, Contract discipline precondition-enumeration sync
+
+Candidate edit, two parts, both confined to
 `references/rubric.md`'s `## Contract discipline` section: (Part 1)
 correct the precondition bullet's two stale enumeration gaps -- it
 described step 2 as only "mechanism fit is checked" and step 4 as only
@@ -921,7 +893,9 @@ strict improve-or-reject gate with ties rejected applies, not the
 pruning-only lexicographic exception -- the same classification the issue
 #393 entry above was corrected to).
 
-**Gate result: REJECT (tie), concluded analytically from the gate's
+### Gate result
+
+**REJECT (tie), concluded analytically from the gate's
 construction rather than by re-running the selection split.** Three
 independent legs, each verified against the actual current (post-merge)
 state, support the tie:
@@ -969,6 +943,15 @@ outcome that construction already fixes -- a direct consequence of the
 scorer's bounded range and the edit's assertion-surface disjointness, not
 an assumption substituted for measurement.
 
+### Transfer check
+
+Not run this iteration, consistent with every prior
+entry in this log -- named as a pre-existing, still-open gap in this
+file's own practice (per issue #200's entry), not silently assumed clear
+for this edit specifically.
+
+### Verdict
+
 **Why this REJECT ships the edit anyway.** This is the same disposition
 the issue #393 entry above reached: a corpus-coverage-gap tie is "not
 evidence [the] content was harmful," and the content "remains merged on
@@ -1005,9 +988,8 @@ rule, with a train case motivating it and a distinct selection case
 testing generalization, then re-gate. Until such a fixture exists, REJECT
 is the expected and correct gate outcome for any edit to this section.
 
-## Kept-edit log
+## Iteration: issue #149, Unknowns framework / Blind spot pass
 
-**Iteration: issue #149, Unknowns framework / Blind spot pass.**
 Candidate edit: add a new `## Unknowns framework` section (four-quadrant
 Known/Unknown Knowns/Unknowns framing, adapted from Anthropic's own field
 guide on working with Claude models) and a `### Blind spot pass`
@@ -1052,6 +1034,8 @@ first:
    gate below is the complete re-run against the corrected fixtures, not
    the partial one.
 
+### Gate result
+
 **Full selection-split result, matched methodology, both directions, all
 6 fixtures, one fresh dispatch per fixture per side (2 for
 `blind-spot-pass-generalizes.yaml`, averaged to one fixture-level score;
@@ -1082,10 +1066,21 @@ gap (fabrication risk, credential redaction, reviewer-injected content,
 ticket-triage policy soundness), and the rest correctly said no gap was
 found on targets where none applied.
 
+### Transfer check
+
+Not run this iteration, consistent with every prior
+entry in this log -- named as a pre-existing, still-open gap in this
+file's own practice (per issue #200's entry), not silently assumed clear
+for this edit specifically.
+
+### Verdict
+
 **KEEP.** Strict improvement, matched methodology, complete 6-fixture
 selection split -- not a partial or disclosed-limitation record.
 
-**Iteration: issue #155, Model/effort tier fit.** Candidate edit: add a new
+## Iteration: issue #155, Model/effort tier fit
+
+Candidate edit: add a new
 `### Model/effort tier fit` subsection to `references/rubric.md` (a fifth
 Mechanism-fit check, grounded in Anthropic's own guidance on choosing a
 model tier and reasoning-effort level in Claude Code); wire it into
@@ -1093,6 +1088,8 @@ model tier and reasoning-effort level in Claude Code); wire it into
 
 Precondition and splits: satisfied (19 fixtures, 7:7:5 with this
 iteration's additions -- see Assignment above).
+
+### Gate result
 
 Methodology, disclosed reuse: the other 6 selection fixtures' **before**
 score for this gate = their **after** score from #149's already-completed
@@ -1166,13 +1163,23 @@ phrase, `"pin justified"`, which is present regardless of how the
 sentence leading into it is capitalized. Re-scored after the fix:
 1.000000.
 
+### Transfer check
+
+Not run this iteration, consistent with every prior
+entry in this log -- named as a pre-existing, still-open gap in this
+file's own practice (per issue #200's entry), not silently assumed clear
+for this edit specifically.
+
+### Verdict
+
 **KEEP.** Strict improvement on the selection split (one real dip,
 independently confirmed unrelated to the edit and disclosed), a clean
 generalization result on the fixture built to test the new check, and a
 confirmed restraint result on the held-out justified-pin fixture.
 
-**Iteration: issue #165, portability litmus test for declarative
-fact-claims.** Candidate edit: add an explicit litmus test to
+## Iteration: issue #165, portability litmus test for declarative fact-claims
+
+Candidate edit: add an explicit litmus test to
 `references/rubric.md`'s Portability level section ("would this exact
 sentence remain true, unchanged, if this file were copied into a
 repository carrying none of the origin repo's state?"), applied to every
@@ -1210,6 +1217,8 @@ issue.
 
 Precondition and splits: satisfied (22 fixtures, 8:8:6 with this
 iteration's additions -- see Assignment above).
+
+### Gate result
 
 Methodology, disclosed reuse: the other 7 selection fixtures' **before**
 score for this gate = their **after** score from #155's already-completed
@@ -1282,6 +1291,15 @@ way, correctly concluded the citation clears the carve-out, and did not
 flag a false positive -- confirming the stricter check does not over-fire
 on a legitimate illustrative reference.
 
+### Transfer check
+
+Not run this iteration, consistent with every prior
+entry in this log -- named as a pre-existing, still-open gap in this
+file's own practice (per issue #200's entry), not silently assumed clear
+for this edit specifically.
+
+### Verdict
+
 **KEEP.** Strict improvement on the selection split, a genuine
 (construct-valid, after tightening one fixture's own assertion)
 generalization result on the fixture built to test the new check, two
@@ -1289,8 +1307,9 @@ unrelated fixture-assertion bugs found and fixed along the way (disclosed,
 not silently patched), and a confirmed restraint result on the held-out
 legitimate-citation fixture.
 
-**Iteration: issue #183, Sub-project B, Capability assumption grading
-semantics.** Candidate edit: add the full per-dimension Broad / Frontier /
+## Iteration: issue #183, Sub-project B, Capability assumption grading semantics
+
+Candidate edit: add the full per-dimension Broad / Frontier /
 Adaptive grading effect to `references/rubric.md`'s Capability assumption
 section for dimensions 2 (Conciseness), 3 (Degree of freedom), and 9
 (Cross-model robustness), and an Adaptive-only effect for dimension 5
@@ -1306,6 +1325,8 @@ fixtures, 13:10:7 -- see Assignment above; the corpus grew to 33,
 14:11:8 once this PR merged alongside issue #185's own iteration below,
 which was landing in parallel -- see the Merge reconciliation entry at
 the end of this log for the combined, re-verified result).
+
+### Gate result
 
 Methodology, disclosed reuse: the other 9 selection fixtures'
 **before** score for this gate = their **after** score from issue #165's
@@ -1470,6 +1491,15 @@ repeated here, since that re-grade is against a real shipped skill, not
 a held-out fixture) -- see that file for the specific dimension verdict
 that changed.
 
+### Transfer check
+
+Not run this iteration, consistent with every prior
+entry in this log -- named as a pre-existing, still-open gap in this
+file's own practice (per issue #200's entry), not silently assumed clear
+for this edit specifically.
+
+### Verdict
+
 **KEEP.** Strict improvement on the selection split (one real, disclosed,
 edit-unrelated dip; two fixtures scored for the first time), a genuine
 content-driven generalization result on the fixture built to test the new
@@ -1478,7 +1508,9 @@ negation-trap fixture bug found and fixed before any score was banked,
 and a restraint result on the held-out Adaptive fixture that is stronger
 evidence of rigor than the clean pass it was designed to check for.
 
-**Iteration: ablation-capability sub-check (dimension 8).** Candidate edit:
+## Iteration: ablation-capability sub-check (dimension 8)
+
+Candidate edit:
 add a new bold-lead paragraph to `references/rubric.md`'s dimension 8
 (Behavioural evidence), right after the existing "Check the target
 repository for an eval mechanism" paragraph, requiring the review to
@@ -1526,6 +1558,8 @@ as the new fixture. Both dispatches confirm what its content already
 implies (it targets dimension 4's completion-criteria language, nothing
 in dimension 8): identical `COMPLETION_CRITERIA: FAIL` verdicts either
 side of the edit.
+
+### Gate result
 
 Methodology: one fresh, isolated subagent dispatch per side for each of
 the two fixtures needing a genuine pair (this repository has no
@@ -1611,6 +1645,15 @@ negative ban on the two sub-check phrasings: the same negation-trap risk
 already found and fixed once in this iteration (above) would recur if a
 correct restraint response quoted either phrase only to reject it.
 
+### Transfer check
+
+Not run this iteration, consistent with every prior
+entry in this log -- named as a pre-existing, still-open gap in this
+file's own practice (per issue #200's entry), not silently assumed clear
+for this edit specifically.
+
+### Verdict
+
 **KEEP.** Strict improvement on the corrected 10-fixture selection split,
 a genuine generalization result on the fixture built to test the new
 check, one selection fixture omitted from the first-draft table and
@@ -1641,6 +1684,8 @@ present, complete, and mutually unaffected post-merge. `SKILL.md` had no
 conflict (unchanged by #185). `docs/skill-eval-status.md` and this file
 both had textual insertions at overlapping points, resolved by hand,
 preserving both iterations' entries in full rather than dropping either.
+
+### Gate result
 
 Re-verification, one fresh dispatch per fixture whose assertions plausibly
 interact with content either edit touches, against the actual merged
@@ -1698,6 +1743,8 @@ fresh dispatch would re-derive an already-known answer, the same "never
 both" redundancy this file's own methodology notes have avoided
 throughout.
 
+### Verdict
+
 **KEEP.** Strict improvement on the true, fully-merged 11-fixture
 selection split (0.954545 -> 1.000000), with the one fixture whose
 content could plausibly have interacted with both edits re-verified
@@ -1705,9 +1752,9 @@ fresh against the real merged file rather than assumed, and a
 three-times-recurring fixture-assertion brittleness fixed at the root
 instead of disclosed a third time.
 
-**Iteration: issue #200, Tool-capability verification (sixth Mechanism-fit
-check) + consumer-repo issue/PR-convention deference (Dimension 6
-bullet).** Candidate edit: add a `### Tool-capability verification`
+## Iteration: issue #200, Tool-capability verification (sixth Mechanism-fit check) + consumer-repo issue/PR-convention deference (Dimension 6 bullet)
+
+Candidate edit: add a `### Tool-capability verification`
 subsection to `references/rubric.md`'s Mechanism fit section (a target's
 own claim that a named tool/MCP subcall can detect, verify, or reconstruct
 something must be checked against that tool's actual schema/docs, not
@@ -1725,6 +1772,8 @@ issue #192.
 
 Precondition and splits: satisfied (37 fixtures, 16:13:8 with this
 iteration's additions -- see Assignment above).
+
+### Gate result
 
 Methodology, disclosed reuse: the two edits land in disjoint rubric
 sections (Mechanism fit; Dimension 6), each new bullet is appended after
@@ -1829,11 +1878,15 @@ positively invoked either new check, each explicitly stating "not
 applicable" for Tool-capability verification and passing Dimension 6
 cleanly.
 
-**Transfer check:** not run this iteration. No prior entry in this log has
+### Transfer check
+
+Not run this iteration. No prior entry in this log has
 recorded an adjacent-model/harness transfer check (SkillOpt Section 4.3)
 for any iterative rubric edit to date -- named here as a pre-existing,
 still-open gap in this file's own practice, not silently assumed clear
 for this edit specifically.
+
+### Verdict
 
 **KEEP.** Strict improvement on the selection split (0.923077 -> 0.971154)
 across all 13 fixtures, with 7 pre-existing fixtures confirmed unaffected
@@ -1924,14 +1977,17 @@ authoring guidance, out of scope for a single skill-content iteration, and
 is instead the subject of a tracked follow-up (see the post-merge
 retrospective for this PR).
 
+### Verdict
+
 **KEEP stands** after the corrections above: none of the four bugs
 found changes any recorded before/after score, the named structural
 limitation is disclosed rather than concealed, and the rubric-text and
 citation fixes strictly improve the shipped content without touching the
 scored fixtures' assertions in a way that would change the table.
 
-**Iteration: issue #334, Skill vs. multiple skills / cohesion (fourth
-whole-artifact Mechanism-fit check).** Candidate edit: add a `### Skill
+## Iteration: issue #334, Skill vs. multiple skills / cohesion (fourth whole-artifact Mechanism-fit check)
+
+Candidate edit: add a `### Skill
 vs. multiple skills / cohesion` subsection to `references/rubric.md`'s
 Mechanism fit section, grounded in structured design's classic cohesion
 taxonomy (Stevens/Myers/Constantine 1974's original six types; Yourdon/
@@ -1951,6 +2007,8 @@ presupposition. Full text: see this PR's diff.
 
 Precondition and splits: satisfied (40 fixtures, 17:14:9 with this
 iteration's additions -- see Assignment above).
+
+### Gate result
 
 Methodology, disclosed reuse and limitations: this edit lands entirely
 inside Mechanism fit plus the Verdicts section, so any selection fixture
@@ -2095,10 +2153,14 @@ the first version of this entry relied on; the two other after-dispatches'
 independent restraint findings, cited above, still stand as additional,
 not substitute, corroborating evidence.
 
-**Transfer check:** not run this iteration, consistent with every prior
+### Transfer check
+
+Not run this iteration, consistent with every prior
 entry in this log -- named as a pre-existing, still-open gap in this
 file's own practice (per issue #200's entry), not silently assumed clear
 for this edit specifically.
+
+### Verdict
 
 **KEEP.** Strict improvement on the selection split (0.901786 -> 0.957143)
 across all 14 fixtures, with two disclosed dips on fixtures this edit's
@@ -2110,7 +2172,8 @@ memorized wording), and a restraint result corroborated by two other
 fixtures' independent, unprompted after-dispatch findings rather than by
 the purpose-built restraint fixture alone.
 
-**Iteration: issue #477, Reference-load precision (dimension 8 sub-check).**
+## Iteration: issue #477, Reference-load precision (dimension 8 sub-check)
+
 Candidate edit: add a new bold-lead-in paragraph to `references/rubric.md`
 dimension 8 defining a True Positive/False Positive/False Negative/True
 Negative classification for whether a skill's `references/*.md` files are
@@ -2127,6 +2190,8 @@ transcript-gated rather than assumed always-applicable.
 
 Precondition and splits: satisfied (52 fixtures, 20:21:11 with this
 iteration's additions -- see Assignment above).
+
+### Gate result
 
 **Live gate, matched methodology, fresh dispatch per side, scored with
 `scripts/gitapex_score_contract.py`:**
@@ -2189,6 +2254,8 @@ paragraph, at the very end of dimension 8, and does not alter, remove, or
 renumber any existing sentence any of those 19 fixtures' `output_contains`/
 `output_not_contains` assertions target.
 
+### Verdict
+
 **KEEP, on qualitative grounds, with the quantitative tie disclosed rather
 than hidden.** The strict quantitative gate does not show an improvement
 on this measurement: a Sonnet-5-tier and a Haiku-4.5-tier reviewer both
@@ -2219,7 +2286,9 @@ rather than requiring it be re-derived from first principles every time,
 even though this iteration's measurement shows a capable reviewer does
 not strictly need that scaffolding on this one scenario.
 
-**Transfer check:** not run this iteration, consistent with every prior
+### Transfer check
+
+Not run this iteration, consistent with every prior
 entry in this log -- named as a pre-existing, still-open gap in this
 file's own practice (per issue #200's entry), not silently assumed clear
 for this edit specifically.
@@ -2273,6 +2342,8 @@ hand-typed recollection that happens to cover both branches -- targets the
 paragraph's own new, specific requirement (confirm authenticity before
 classifying) rather than a conclusion generic reasoning already reaches.
 
+### Gate result
+
 **Re-run selection-split result, matched methodology, one fresh dispatch
 per side, Sonnet 5, scored with `gitapex_score_contract.py --assertions
 assertions.json --output run.txt`:**
@@ -2294,6 +2365,8 @@ the first round is unaffected by this revision (its assertion fix was
 unrelated to reference-load precision) and continues to serve as a
 regression-only check, not re-run here.
 
+### Verdict
+
 **KEEP.** The first round's qualitative-grounds KEEP is superseded by this
 round's genuine quantitative improvement on the purpose-built selection
 fixture -- the tension the fresh self-review correctly flagged (citing a
@@ -2305,7 +2378,9 @@ round: this revision touches only the already-isolated new paragraph and
 the one fixture built to test it, altering no sentence any other selection
 fixture's assertions target.
 
-**Transfer check:** still not run, same disclosed gap as above.
+### Transfer check
+
+Still not run, same disclosed gap as above.
 
 **Second confirming round (same issue #477, third commit).** Two more
 independent fresh dispatches (one `evaluating-skill-quality` self-review,
@@ -2400,6 +2475,8 @@ review comments, all substantive:
   AGENTS.md's own live-proof discipline ("waive the live check only on
   the owner's explicit, recorded approval") means this session does not
   unilaterally decide to accept the proxy as sufficient.
+
+### Gate result
 
 **Expanded regression sweep (operator-directed, PR #481 follow-up).** Per
 the operator's explicit choice to expand coverage within this session's
@@ -2547,7 +2624,9 @@ Full four-agent research trail, synthesis, and adversarial verification:
 PR #481's comment thread (the multi-agent Workflow run this entry
 summarizes).
 
-**Iteration: issue #495, Opus 5 prompting-guide alignment.** Candidate
+## Iteration: issue #495, Opus 5 prompting-guide alignment
+
+Candidate
 edit, two parts: (Part 1) a new Dimension 2 (Conciseness) grounded Fail
 instance in `references/rubric.md` -- a generic re-verification/self-
 correction instruction with no domain-specific reason, on Frontier-declared
@@ -2590,7 +2669,9 @@ transcripts). The restraint fixture's original `output_not_contains:
 negation-trap reason, before it could false-fail a correct restraint pass,
 per this file's own "rewrote as positive-only assertions" precedent.
 
-**Gate result, live dispatches, matched methodology, isolated `claude -p`
+### Gate result
+
+**Live dispatches, matched methodology, isolated `claude -p`
 subprocess per `references/adversarial-self-audit.md`'s Isolation-
 verification registry (this platform/version's entry already confirmed;
 `Agent`-tool dispatch remains confirmed-contaminated here), scored with
@@ -2671,13 +2752,17 @@ scope: a bundled-script bare-issue-citation scope hole (Dimension 6), and
 Dimension 5's mandatory-reference-read count now exceeding three for an
 ordinary review, a tension that predates this edit.
 
-**Transfer check:** not run this iteration, the same disclosed,
+### Transfer check
+
+Not run this iteration, the same disclosed,
 unresolved gap issue #200 first named and every entry in this log since
 has carried forward.
 
 **Deterministic checks, run after every fix in this iteration:**
 `gitapex_check_skill_shape.py` 46/46, full pytest suite (`skills/evaluating-
 skill-quality/scripts/` + `tests/`) 768/768.
+
+### Verdict
 
 **KEEP.** Strict selection-split improvement (2 fixtures move 0.75 -> 1.0,
 20 confirmed unaffected by direct inspection), a clean restraint result
@@ -2714,7 +2799,9 @@ PR #496), both fixed in the same PR:**
 Neither correction changes the KEEP verdict above: both are fixes to
 fixture/checker precision, not to the rubric content the gate scored.
 
-**Iteration: gitapex#537, Confidentiality awareness axis.** Candidate
+## Iteration: gitapex#537, Confidentiality awareness axis
+
+Candidate
 edit: add a new `## Confidentiality awareness` warning-only, cross-cutting
 axis to `references/rubric.md` (mirroring `## Compatibility awareness`'s
 three-state structure), a merged `## Compatibility and confidentiality
@@ -2729,6 +2816,8 @@ prohibition is hook-backed.
 Precondition and splits: satisfied (59 fixtures, 23:24:12 -- see
 Assignment above); 2 new fixtures added this iteration
 (`confidentiality-awareness-train.yaml` / `-selection.yaml`).
+
+### Gate result
 
 **Methodology.** Isolation used the verified `claude -p` subprocess
 alternative from `references/adversarial-self-audit.md`'s registry (this
@@ -2792,8 +2881,12 @@ Compatibility and confidentiality awareness`, whose casing is
 necessarily different because it names two axes in one sentence-style
 heading; not a fixture-authoring bug).
 
-**Transfer check:** not run this iteration, the same disclosed, unresolved
+### Transfer check
+
+Not run this iteration, the same disclosed, unresolved
 gap every entry in this log since issue #200 has carried forward.
+
+### Verdict
 
 **KEEP.** Strict selection-split improvement on the one fixture built to
 test this exact change (0.666667 -> 1.000000), 23 pre-existing selection
@@ -2801,8 +2894,9 @@ fixtures confirmed unaffected by direct inspection, and unprompted
 independent corroboration from the pre-edit dispatch's own Blind spot pass
 that the closed gap was real.
 
-**Iteration: gitapex#614, Opus-5-driven narrative-bloat trim (capabilityAssumption
-stays Broad).** Candidate edit: cut correction-history narration, repeated
+## Iteration: gitapex#614, Opus-5-driven narrative-bloat trim (capabilityAssumption stays Broad)
+
+Candidate edit: cut correction-history narration, repeated
 ownership/hedge citations, and an unbounded subagent-delegation
 invitation across `SKILL.md` and four `references/*.md` files, grounded
 in Anthropic's Claude Opus 5 and Prompting Claude Opus 5 guidance. No new
@@ -2833,7 +2927,9 @@ edited content files.
 Pre-edit snapshot pinned at `513e244a7573ea6be189593e46ffd7976884534a` via
 `git show`; post-edit snapshot committed at `1a646dd684c89298fc0707d65a693dfcca7e262f`.
 
-**Gate result.** Isolated `claude -p` dispatches (this session's own
+### Gate result
+
+Isolated `claude -p` dispatches (this session's own
 verified isolation recipe, `references/adversarial-self-audit.md`'s
 Isolation verification registry) against 27 selection-split fixtures,
 both pre- and post-edit states, run via a `Workflow` fan-out. 38/54
@@ -2941,9 +3037,13 @@ had self-flagged. Full report: this iteration's PR description.
 **Deterministic checks:** `gitapex_check_skill_shape.py` 58/58 after the edits
 (committed state).
 
-**Transfer check:** not run this iteration, the same disclosed,
+### Transfer check
+
+Not run this iteration, the same disclosed,
 unresolved gap every entry in this log since issue #200 has carried
 forward.
+
+### Verdict
 
 **KEEP (pruning-only).** Context cost strictly decreased (3558 -> 3493
 lines) and correctness did not fall on any of the 13 paired-scored
@@ -2957,8 +3057,9 @@ An independent scoped adversarial pass (battle-testing-a-skill's lens
 applied to the diff) returned PASS and specifically cleared the one
 non-narrative substantive change.
 
-**Iteration: gitapex#619, three new evaluation criteria from issue
-#614's own cycle.** Candidate edit: three new checks added to
+## Iteration: gitapex#619, three new evaluation criteria from issue #614's own cycle
+
+Candidate edit: three new checks added to
 `references/rubric.md`, motivated by gaps the issue #614 trim cycle
 itself surfaced -- (1) a **Declaration-vs-structure fit** precondition-
 check paragraph in the Capability assumption section (does a Broad/
@@ -2981,7 +3082,9 @@ Pre-edit snapshot pinned at `28a0d75b6da4d05aa0738fbe60afb8898d28d623`
 post-edit snapshot committed through
 `56ea2bc5fa8b9b71c14e04ca1bd77c5d046e2e3f`.
 
-**Gate result.** Isolated `claude -p` dispatches (this session's own
+### Gate result
+
+Isolated `claude -p` dispatches (this session's own
 verified isolation recipe, `references/adversarial-self-audit.md`'s
 Isolation verification registry), run as direct sequential/small-batch
 Bash calls rather than a `Workflow` fan-out -- the prior iteration's own
@@ -3048,6 +3151,8 @@ regressions across all 6, driven primarily by the motivating fixture
 (`declaration-structure-fit-selection.yaml`, 0.75 -> 1.0) directly
 demonstrating the new check's discriminating power; the other two new
 fixtures tie or improve, never regress.
+
+### Gate result
 
 **Correction, same iteration: genuine-dispatch re-verification of the
 gate above.** The isolated dispatches scored in the table above never
@@ -3225,9 +3330,13 @@ finding.
 **Deterministic checks:** `gitapex_check_skill_shape.py` 58/58 after every round
 of edits (final committed state).
 
-**Transfer check:** not run this iteration, the same disclosed,
+### Transfer check
+
+Not run this iteration, the same disclosed,
 unresolved gap every entry in this log since issue #200 has carried
 forward.
+
+### Verdict
 
 **KEEP, qualified by the genuine-dispatch correction above.** The
 `0.875000 -> 0.958333, zero regressions` figure reflects the initial

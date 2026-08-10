@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """One consolidated local pre-push / pre-PR-open gate runner (issue #876).
 
-This repository enforces 40 registered deterministic gates. Before this
+This repository enforces 49 registered deterministic gates. Before this
 script existed, roughly half of them had a perfectly good working-tree-only
 invocation and yet ran *only* as separate CI jobs, so an agent preparing a
 PR discovered gaps one CI job at a time on an already-open PR -- push, wait,
@@ -29,7 +29,7 @@ required exactly when ``planes`` contains ``"local"``, and ``local_exclusion``
 it does not. A new gate therefore cannot land in the registry without one or
 the other, and ``gitapex_scan_ssot_schema.py`` (itself one of the gates this
 runner runs) fails the build if it does. That is the drift-test branch issue
-#876's third criterion explicitly allows, and it is what keeps the 22
+#876's third criterion explicitly allows, and it is what keeps the 24
 currently-excluded gates readable as deliberate exclusions rather than as
 coverage this runner silently lost.
 
@@ -78,7 +78,7 @@ reasons.
   (issue #890), which closes the "configured here but never actually
   installed" half; nothing closes the ``--no-verify`` half. CI remains the
   authoritative merge gate for every gate carrying a ``ci`` plane -- true
-  for 21 of the 22 wired gates. ``behind-base`` (issue #985) is the one
+  for 24 of the 25 wired gates. ``behind-base`` (issue #985) is the one
   exception: it carries only ``local``, so for that gate specifically this
   pre-push hook -- bypassable the same way as any other -- is the *only*
   enforcement, with no CI-side backstop. Named as a real gap in that
@@ -86,7 +86,7 @@ reasons.
   papered over here.
 - **Every wired gate runs through ``uv``.** CONTRIBUTING.md invokes this
   file with plain ``python3``, and so does the pre-push hook, because the
-  runner itself needs no dependencies -- but all 22 wired argvs begin with
+  runner itself needs no dependencies -- but all 25 wired argvs begin with
   ``uv``, since each gate carries its own pinned invocation. Without ``uv``
   on PATH every one of them reports ``FAIL ... failed to run``, which
   reads as a whole broken wired set rather than one missing tool. ``uv`` is
@@ -159,9 +159,11 @@ SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
 # own _GROUP_TIMEOUT_SECONDS = 600 -- so that one gate's own theoretical
 # worst case is ~4800 s, not 600 s. A ceiling matching that would be useless
 # as a hang guard (80 minutes of a silent pre-push), so this is a judgment
-# call in the other direction. For scale: a warm run of all 22 wired gates
-# combined measures ~7-8 s end to end, so 1800 s is a hang guard rather than
-# a budget, and it comfortably clears a cold mypy cache while still failing
+# call in the other direction. For scale: a warm run of all 25 wired gates
+# combined measures roughly 8-9 s end to end (up from 4-6 s measured for
+# the 24-gate set before issue #985's `behind-base` gate), so 1800 s is a
+# hang guard rather than a budget, and it comfortably clears a cold mypy
+# cache while still failing
 # loudly rather than blocking a push indefinitely. The residual risk is named rather than hidden: a genuinely
 # cold cache on a slow machine can exceed this and report a timeout FAIL on
 # a gate CI would pass. `--timeout-seconds` raises it for that case.
@@ -169,10 +171,9 @@ SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
 # Issue #985 added `behind-base`, this runner's first gate that makes a
 # network call (it fetches `origin/main` before comparing). Measured
 # directly rather than assumed: three warm standalone runs of that one
-# gate averaged under a second (~0.6 s), and the ~7-8 s combined figure
-# above is up from a ~4-6 s baseline measured for the previous, one-gate-
-# smaller wired set -- a real but small addition against a ceiling
-# roughly two orders of magnitude larger (1800 s / ~7.5 s =~ 240x).
+# gate averaged under a second (~0.6 s), and the ~8-9 s combined figure
+# above is a real but small addition against a ceiling roughly two orders
+# of magnitude larger (1800 s / ~8.5 s =~ 210x).
 DEFAULT_TIMEOUT_SECONDS = 1800
 
 # Registry plane that marks a gate as having a working-tree-only form -- see

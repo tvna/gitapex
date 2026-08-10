@@ -22,105 +22,21 @@ jobs:
     steps:
       - name: Harden runner + checkout
         uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
-        with:
-          fetch-depth: '0'
 
-      # Refs #517 (refs #487): this checks diff *content* (whether a
-      # newly-added Kept-edit-log entry discloses a Transfer check line),
-      # not PR-body text, so unlike skill-audit-gate.yml this workflow has
-      # no `edited` trigger type -- editing the PR description doesn't
-      # change anything this gate cares about. A three-dot (merge-base)
-      # diff, D/R100-excluded, mirrors skill-audit-gate.yml's own rationale:
-      # a split.md change already merged to the base branch after this PR
-      # forked must never be misattributed to this PR, and a pure deletion
-      # or byte-identical rename has no new entry to check.
-      - name: Determine newly-added Kept-edit-log entries
-        id: diff
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          set -euo pipefail
-          if ! diff_output=$(git diff --name-status "$BASE_SHA...$HEAD_SHA" -- 'evals/*/split.md'); then
-            echo "::error::git diff failed between $BASE_SHA and $HEAD_SHA" >&2
-            exit 1
-          fi
-          changed=$(printf '%s\n' "$diff_output" | grep -vE '^(D|R100)[[:space:]]' || true)
-          if [ -z "$changed" ]; then
-            echo "No added/modified evals/*/split.md in this diff; skipping."
-            echo "applicable=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          echo "Added/modified split.md files:"
-          echo "$changed"
-
-          merge_base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
-          entries_file="$RUNNER_TEMP/new_kept_edit_entries.tsv"
-          : > "$entries_file"
-          while IFS=$'\t' read -r status path newpath; do
-            [ -z "$status" ] && continue
-            case "$status" in
-              R*) old_path="$path"; new_path="$newpath" ;;
-              *) old_path="$path"; new_path="$path" ;;
-            esac
-            # Newly-added '**Iteration:' header lines only -- a diff hunk
-            # touching unrelated text in an existing entry (or reformatting
-            # an existing entry without changing its own header line) must
-            # not re-trigger this check; only an entry whose own header
-            # line is new counts as "newly added" here.
-            #
-            # Computed as a content-based multiset diff (old iteration-line
-            # texts vs. new iteration-line texts via `comm`), not
-            # `git diff -U0 -- "$new_path"`: restricting a diff to a single
-            # pathspec drops the *other* endpoint of a rename from git's
-            # view entirely, so git cannot pair the rename and instead
-            # renders the whole renamed-with-modification file as a full
-            # addition (the same class of bug gitapex_skill_description_diff.py's
-            # own docstring documents fixing for description-diffing, refs
-            # PR #428's rename-false-positive review finding) -- every
-            # pre-existing entry in a file renamed alongside an unrelated
-            # edit would then be wrongly reported as "newly added". `comm`
-            # instead compares the two blobs' own content directly and is
-            # immune to this: it needs no rename detection because it
-            # never restricts a tree-diff pathspec in the first place.
-            # `sort`'s own exit code is what `pipefail` reports for each
-            # pipeline below, and `sort` succeeds even when `git show`
-            # fails (e.g. old_path not present at merge_base, a newly
-            # added file) and its upstream `grep` finds nothing -- so both
-            # temp files come out correctly empty in that case with no
-            # explicit fallback needed.
-            old_lines_file=$(mktemp)
-            new_lines_file=$(mktemp)
-            # `|| true` on both: under `pipefail`, a bare pipeline reports
-            # non-zero if ANY stage fails, even when the rightmost stage
-            # (sort) itself succeeds on empty input -- verified directly
-            # (`false | grep nomatch | sort` reports exit 1 under
-            # pipefail despite sort succeeding). grep legitimately finds
-            # zero '**Iteration:' lines whenever a changed split.md
-            # doesn't touch the Kept-edit-log section at all, and git show
-            # legitimately fails when old_path didn't exist at merge_base
-            # (a newly added file) -- both are expected, not errors.
-            git show "${merge_base}:${old_path}" 2>/dev/null \
-              | grep -E '^\*\*Iteration:' | sort > "$old_lines_file" || true
-            git show "${HEAD_SHA}:${new_path}" \
-              | grep -E '^\*\*Iteration:' | sort > "$new_lines_file" || true
-            new_texts=$(comm -13 "$old_lines_file" "$new_lines_file" || true)
-            rm -f "$old_lines_file" "$new_lines_file"
-            if [ -n "$new_texts" ]; then
-              while IFS= read -r new_line; do
-                [ -z "$new_line" ] && continue
-                printf '%s\t%s\n' "$new_path" "$new_line" >> "$entries_file"
-              done <<< "$new_texts"
-            fi
-          done <<< "$changed"
-
-          {
-            echo "applicable=true"
-            echo "entries-file=${entries_file}"
-          } >> "$GITHUB_OUTPUT"
-
+      # Issue #928: gitapex_gate_transfer_check_disclosure.py was rewritten
+      # to scan every '## Iteration:' entry in every evals/*/split.md file
+      # whole-file (not diff-scoped) -- the standardized heading form all 5
+      # files now use, superseding the old '**Iteration:' bold-paragraph
+      # convention this step used to diff-detect via git/grep/comm before
+      # calling the script with '--entries'. That flag no longer exists on
+      # the rewritten script (it now takes explicit paths, or globs
+      # 'evals/*/split.md' with none given), so the diff-detection step is
+      # removed rather than adapted: the ACM row this gate implements
+      # ("every iteration entry in every file is in scope ... not diff-
+      # scoped only") means a whole-repo run is the correct shape, not a
+      # narrower one. The `paths` trigger above still limits *when* this
+      # workflow runs to a PR that touches a split.md file at all.
       - name: Check Transfer check disclosure
-        if: steps.diff.outputs.applicable == 'true'
         run: |
           set -euo pipefail
-          python3 .github/scripts/gitapex_gate_transfer_check_disclosure.py --entries "${{ steps.diff.outputs.entries-file }}"
+          python3 .github/scripts/gitapex_gate_transfer_check_disclosure.py

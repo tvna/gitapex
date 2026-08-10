@@ -9,9 +9,14 @@ second corpus in this repository to satisfy that gate --
 first and the precedent this file follows for naming and ratio-deviation
 reasoning. The scorer is the same shared
 `skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py`; no new script
-was needed.
+was needed. The structured train/selection/test fixture assignment,
+declared partition, split-arithmetic exclusions, and equivalence-class
+pairs live in `split.json` (`evals/merge-retrospective/split.json`),
+conforming to
+`skills/scorer-gated-skill-edits/references/split.schema.json`; this file
+carries the narrative that assignment alone doesn't capture.
 
-## Corpus size and the 2:1:7 caveat
+## Corpus size caveat
 
 SkillOpt's default split ratio is 2:1:7. At 18 fixtures that ratio gives a
 selection split of roughly two tasks -- too thin to gate a strict
@@ -34,9 +39,9 @@ named coverage gap open.
 
 Split-arithmetic exclusions: none
 
-Every fixture the Assignment section lists is counted in the `9:6:3`
-declared above -- 9 train, 6 selection, 3 test, matching exactly, with no
-listing-consistency entry sitting outside the arithmetic. That line is
+Every fixture `split.json`'s `assignment` object lists is counted in the
+`9:6:3` declared above -- 9 train, 6 selection, 3 test, matching exactly,
+with no listing-consistency entry sitting outside the arithmetic. That line is
 machine-readable: `.github/scripts/gitapex_gate_split_fixture_coverage.py`'s
 Check D (gitapex#907) parses the declared partition and this line, then
 asserts each split's unique listed count minus its declared exclusions
@@ -106,28 +111,6 @@ a final report only) rather than selection, since a restraint check that
 already informed fixture design should not also gate acceptance of the
 same edit that motivated it.
 
-## Assignment
-
-- **train** (motivates edits; read for evidence, never scored for
-  acceptance), 9 fixtures: `normal.yaml`, `edge.yaml`,
-  `propose-dont-implement.yaml`, `external-human-decision.yaml`,
-  `zero-repair-docs-only-train.yaml`,
-  `instruction-error-message-wording-train.yaml`,
-  `carried-forward-gate-unimplemented-train.yaml`,
-  `force-push-observed-train.yaml`,
-  `title-convention-precedence-train.yaml`.
-- **selection** (gates acceptance; scored before/after a candidate edit,
-  strict improve-or-reject, ties rejected), 6 fixtures: `guardrail.yaml`,
-  `gate-lint-unused-import-selection.yaml`,
-  `instruction-naming-convention-selection.yaml`,
-  `external-decision-reviewer-style-tradeoff-selection.yaml`,
-  `multi-repair-mixed-three-category-selection.yaml`,
-  `no-title-convention-fallback-selection.yaml`.
-- **test** (read once, for a final report only, never to motivate or gate
-  an edit), 3 fixtures: `tie-break-restraint-not-reclassified-test.yaml`,
-  `carried-forward-gate-implemented-test.yaml`,
-  `force-push-not-claimable-test.yaml`.
-
 The five pre-existing fixtures (`normal.yaml`, `edge.yaml`,
 `guardrail.yaml`, `external-human-decision.yaml`,
 `propose-dont-implement.yaml`) predate this split and had no train/
@@ -196,10 +179,12 @@ quote of either; this is the same class of run-to-run wording risk
 than treated as blocking, and is left as-is since it is `guardrail.yaml`'s
 pre-existing, unaudited convention, not something this PR introduced.
 
-## Rejected-edit log
+## Iteration log
 
-None yet -- no candidate edit has been gated against this split.
-
-## Kept-edit log
-
-None yet -- no candidate edit has been gated against this split.
+No `## Iteration:` entries exist yet: no candidate edit has been gated
+against this split. Once one is, it uses the standardized
+`## Iteration: <issue>, <title>` heading, with `### Gate result`,
+`### Transfer check`, `### Rejected-edit log`, and `### Verdict`
+subsections -- superseding the previous separate top-level `## Kept-edit
+log` / `## Rejected-edit log` sections this file used before this
+migration.
