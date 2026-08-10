@@ -83,7 +83,14 @@ jobs:
 
       # The one place the two scopes differ. Everything downstream reads these
       # outputs, so a third caller later means one more branch here rather than
-      # a third workflow file.
+      # a third workflow file. Issue #1013 (task 13) moved this step's own
+      # logic into .github/scripts/gitapex_compute_ruleset_verify_scope.py,
+      # mirroring skill-audit-gate.yml's own analogous extraction (issue #874,
+      # gitapex_compute_skill_audit_flags.py) -- see that script's own module
+      # docstring for the full rationale, unchanged from what lived here
+      # inline. --runner-temp and --step-summary-file are omitted: the script
+      # defaults both from $RUNNER_TEMP/$GITHUB_STEP_SUMMARY, which GitHub
+      # Actions already sets for every job.
       - name: Resolve scan scope and source of truth
         id: plan
         env:
@@ -91,41 +98,8 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" != "pull_request" ]; then
-            echo "Comparing the live ruleset against main's committed source of truth, in full."
-            {
-              echo "applicable=true"
-              echo "scope=full"
-              echo "sot=.github/rulesets/main.json"
-            } >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          # `git show <base_sha>:<path>` rather than a second checkout: the base
-          # commit is already present thanks to fetch-depth 0, and materialising
-          # exactly one file keeps the head-ref working tree untouched.
-          #
-          # Distinguish "the base ref has no ruleset file yet" from "git could
-          # not answer". Swallowing every git failure as the former reads a
-          # missing base commit -- routine after a force-push to the base
-          # branch -- as "nothing to check" and passes the gate green. Only a
-          # readable base commit that genuinely lacks the file is a skip.
-          if ! git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
-            echo "::error::base commit $BASE_SHA is not present; cannot establish what the base ref requires."
-            exit 1
-          fi
-          if ! git cat-file -e "$BASE_SHA:.github/rulesets/main.json" 2>/dev/null; then
-            echo "The base ref carries no .github/rulesets/main.json; this pull request introduces it." \
-              >> "$GITHUB_STEP_SUMMARY"
-            echo "applicable=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          sot_file="$RUNNER_TEMP/base_main_ruleset.json"
-          git show "$BASE_SHA:.github/rulesets/main.json" > "$sot_file"
-          {
-            echo "applicable=true"
-            echo "scope=required-checks"
-            echo "sot=$sot_file"
-          } >> "$GITHUB_OUTPUT"
+          python3 .github/scripts/gitapex_compute_ruleset_verify_scope.py \
+            --event-name "$EVENT_NAME" --base-sha "$BASE_SHA" >> "$GITHUB_OUTPUT"
 
       # Exit 2 means the scan never got to look (no live ruleset carries the
       # name yet, or no readable token) -- a precondition neither a pull request
