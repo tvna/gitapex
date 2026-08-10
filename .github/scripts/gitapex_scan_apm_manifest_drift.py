@@ -1,15 +1,22 @@
 #!/usr/bin/env python3
 """Guard the plugin-identity single-source-of-truth invariant.
 
-``.claude-plugin/plugin.json`` is the version source of truth for the gitapex
-plugin (see ``docs/repository-layout.md``). ``apm.yml`` must also carry ``name``
+``.claude-plugin/plugin.json`` mirrors the gitapex plugin's identity from the
+repository-root ``plugin.json`` (the plugin-identity source of truth since
+issue #1028; see ``docs/repository-layout.md`` and
+``gitapex_generate_plugin_manifest.py``). ``apm.yml`` must also carry ``name``
 and ``version`` -- apm's manifest schema requires both -- which duplicates that
-identity into a second tracked file. Left unguarded, the two copies drift: a
-release bumps ``plugin.json`` while ``apm.yml`` keeps the stale version.
+identity into a third tracked file, one mirror-hop removed from the SSOT.
+Left unguarded, the copies drift: a release bumps ``plugin.json`` while
+``apm.yml`` (or the generated ``.claude-plugin/plugin.json`` mirror) keeps a
+stale version.
 
 This scanner is the drift gate shipped alongside that duplication: it fails if
-``apm.yml``'s ``name`` or ``version`` disagrees with ``plugin.json``. It does not
-invent a value -- ``plugin.json`` stays authoritative; ``apm.yml`` mirrors it.
+``apm.yml``'s ``name`` or ``version`` disagrees with ``.claude-plugin/plugin.json``.
+It does not invent a value -- ``.claude-plugin/plugin.json`` stays authoritative
+for this comparison; ``apm.yml`` mirrors it. (That file is itself now generated
+from the repository-root ``plugin.json`` -- see ``plugin-manifest-mirror-drift``
+-- which does not change this script's own comparison.)
 
 Run standalone (exit 1 on drift) or via the pytest gate in
 ``tests/test_gitapex_scan_apm_manifest_drift.py``.
@@ -28,8 +35,9 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 APM_MANIFEST = REPO_ROOT / "apm.yml"
 PLUGIN_MANIFEST = REPO_ROOT / ".claude-plugin" / "plugin.json"
 
-# Fields that both manifests declare and must therefore agree on. plugin.json is
-# authoritative; apm.yml mirrors it.
+# Fields that both manifests declare and must therefore agree on.
+# .claude-plugin/plugin.json is authoritative for this comparison; apm.yml
+# mirrors it.
 MIRRORED_FIELDS = ("name", "version")
 
 
