@@ -136,6 +136,29 @@ def test_load_model_allowlist_non_string_value_raises(tmp_path: pathlib.Path) ->
         gate._load_model_allowlist(path)
 
 
+def test_load_model_allowlist_duplicate_model_id_within_a_section_raises(tmp_path: pathlib.Path) -> None:
+    # PyYAML's own default (yaml.safe_load) keeps the last occurrence of a
+    # duplicate key silently -- a duplicate model id here would let a
+    # second, unreviewed evidence string silently replace a reviewed one.
+    path = tmp_path / "allowlist.yaml"
+    path.write_text(
+        "approved_models:\n  model-x: first evidence\n  model-x: second evidence\nretired_models: {}\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(gate.DeclarationReadError, match="is not valid YAML"):
+        gate._load_model_allowlist(path)
+
+
+def test_load_model_allowlist_duplicate_section_key_raises(tmp_path: pathlib.Path) -> None:
+    path = tmp_path / "allowlist.yaml"
+    path.write_text(
+        "approved_models:\n  model-x: first\napproved_models:\n  model-y: second\nretired_models: {}\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(gate.DeclarationReadError, match="is not valid YAML"):
+        gate._load_model_allowlist(path)
+
+
 # --- the gate ---------------------------------------------------------------
 
 

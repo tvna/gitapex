@@ -93,29 +93,47 @@ jobs:
 """
 
 
-def test_missing_step_is_detected(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        gitapex_run_precommit_mypy, "MYPY_GROUPS", (("a", ("a",)), ("b", ("b",)), ("c", ("c",)), ("d", ("d",)))
+def _workflow_text_for(labels: tuple[str, ...]) -> str:
+    """A `_SYNTHETIC_WORKFLOW_TEMPLATE`-shaped workflow with one `mypy (X)`
+    step per entry in `labels`, in order -- a duplicate label produces two
+    separate steps sharing that name, exactly as a real drifted `test.yml`
+    would."""
+    steps = "\n".join(
+        f"      - name: mypy ({label})\n        run: uv run --frozen mypy --config-file pyproject.toml {label}"
+        for label in labels
     )
-    workflow_groups = _mypy_step_groups_from_workflow_text(_SYNTHETIC_WORKFLOW_TEMPLATE)
+    return f"jobs:\n  mypy:\n    steps:\n{steps}\n"
+
+
+_CORRECT_MYPY_GROUPS = (("a", ("a",)), ("b", ("b",)), ("c", ("c",)))
+
+
+def test_missing_step_is_detected(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The workflow itself is missing the "c" step MYPY_GROUPS still
+    # declares -- exercises _mypy_step_groups_from_workflow_text's own
+    # extraction against a genuinely short workflow, not just a tuple
+    # comparison against a padded MYPY_GROUPS.
+    monkeypatch.setattr(gitapex_run_precommit_mypy, "MYPY_GROUPS", _CORRECT_MYPY_GROUPS)
+    workflow_groups = _mypy_step_groups_from_workflow_text(_workflow_text_for(("a", "b")))
     assert workflow_groups != _declared_groups()
 
 
 def test_extra_step_is_detected(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(gitapex_run_precommit_mypy, "MYPY_GROUPS", (("a", ("a",)), ("b", ("b",))))
-    workflow_groups = _mypy_step_groups_from_workflow_text(_SYNTHETIC_WORKFLOW_TEMPLATE)
+    # The workflow carries a "d" step MYPY_GROUPS never declared.
+    monkeypatch.setattr(gitapex_run_precommit_mypy, "MYPY_GROUPS", _CORRECT_MYPY_GROUPS)
+    workflow_groups = _mypy_step_groups_from_workflow_text(_workflow_text_for(("a", "b", "c", "d")))
     assert workflow_groups != _declared_groups()
 
 
 def test_duplicated_step_is_detected(monkeypatch: pytest.MonkeyPatch) -> None:
-    # The case a bare set comparison would miss: two occurrences of the same
-    # group collapse to one element in a set, so {"a", "b", "c"} ==
-    # {"a", "a", "b", "c"} would wrongly report no drift. The tuple
+    # The workflow itself declares two separate "mypy (a)" steps -- proves
+    # _mypy_step_groups_from_workflow_text extracts both (not collapsing
+    # them the way a bare set comparison would: {"a", "b", "c"} ==
+    # {"a", "a", "b", "c"} would wrongly report no drift). The tuple
     # comparison this test file uses throughout does not have that gap.
-    monkeypatch.setattr(
-        gitapex_run_precommit_mypy, "MYPY_GROUPS", (("a", ("a",)), ("a", ("a",)), ("b", ("b",)), ("c", ("c",)))
-    )
-    workflow_groups = _mypy_step_groups_from_workflow_text(_SYNTHETIC_WORKFLOW_TEMPLATE)
+    monkeypatch.setattr(gitapex_run_precommit_mypy, "MYPY_GROUPS", _CORRECT_MYPY_GROUPS)
+    workflow_groups = _mypy_step_groups_from_workflow_text(_workflow_text_for(("a", "a", "b", "c")))
+    assert workflow_groups == (("a",), ("a",), ("b",), ("c",))
     assert workflow_groups != _declared_groups()
 
 

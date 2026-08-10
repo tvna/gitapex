@@ -109,6 +109,26 @@ class DeclarationReadError(Exception):
     """
 
 
+class _DuplicateKeyLoader(yaml.SafeLoader):
+    """`yaml.SafeLoader`, except a duplicate key in any mapping -- the
+    top-level `approved_models`/`retired_models` pair or a model id inside
+    either section -- raises instead of silently keeping the last value.
+    PyYAML's own default behavior (confirmed against the pinned version:
+    the later occurrence wins, no error) would let a duplicate model id
+    silently overwrite reviewed evidence with unreviewed text elsewhere in
+    the same diff, defeating the review-forcing property this file exists
+    for (see this module's own docstring)."""
+
+    def construct_mapping(self, node: yaml.MappingNode, deep: bool = False) -> dict[object, object]:
+        seen: set[object] = set()
+        for key_node, _value_node in node.value:
+            key = self.construct_object(key_node, deep=deep)
+            if key in seen:
+                raise yaml.YAMLError(f"duplicate key {key!r} in mapping")
+            seen.add(key)
+        return super().construct_mapping(node, deep=deep)
+
+
 def _load_model_allowlist(path: pathlib.Path) -> tuple[dict[str, str], dict[str, str]]:
     """`(approved_models, retired_models)` from `path`'s own
     `approved_models`/`retired_models` YAML mappings. Fails loudly (never a
@@ -116,14 +136,16 @@ def _load_model_allowlist(path: pathlib.Path) -> tuple[dict[str, str], dict[str,
     either top-level key holding anything other than a mapping of
     string -> string -- an allowlist that failed to load must not be
     mistaken for an allowlist that is genuinely empty, which would grade
-    every declared model id as unapproved.
+    every declared model id as unapproved. Also fails loudly on a duplicate
+    mapping key (`_DuplicateKeyLoader`), rather than silently keeping
+    PyYAML's own last-value-wins default.
     """
     try:
         raw = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as error:
         raise DeclarationReadError(f"{path}: cannot be read: {error}") from error
     try:
-        document = yaml.safe_load(raw)
+        document = yaml.load(raw, Loader=_DuplicateKeyLoader)  # noqa: S506 -- _DuplicateKeyLoader subclasses SafeLoader
     except yaml.YAMLError as error:
         raise DeclarationReadError(f"{path}: is not valid YAML: {error}") from error
     if not isinstance(document, dict):
