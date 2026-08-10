@@ -107,8 +107,8 @@ repos:
       # already-open PR. This runs all of them in one pass at pre-push --
       # the last local moment before a gap becomes a CI round-trip, and
       # deliberately not pre-commit: it grades committed state (HEAD vs
-      # origin/main), not a staged index, and at 4-6 s warm end to end for
-      # all 24 wired gates it is too slow to sit on every single commit.
+      # origin/main), not a staged index, and at ~8-9 s warm end to end for
+      # all 25 wired gates it is too slow to sit on every single commit.
       #
       # The wired set is not listed here: the runner discovers it from
       # .gitapex/ssot.json's `local` plane, so a newly wired gate needs no
