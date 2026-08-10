@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import json
 import pathlib
+import subprocess
+import sys
 from typing import Any
 
 import gitapex_gate_ruleset_required_checks as gate
@@ -559,9 +561,11 @@ def test_committed_ruleset_fields_match_projection_keys() -> None:
 
 def test_committed_ruleset_field_drift_fails_loudly_at_import(monkeypatch: pytest.MonkeyPatch) -> None:
     # A future edit to only one of CommittedRuleset/PROJECTION_KEYS must fail
-    # this module's own import-time assertion, not silently drift -- proven by
+    # this module's own import-time check, not silently drift -- proven by
     # actually re-importing the gate module with PROJECTION_KEYS patched to a
     # mismatched value, not merely re-deriving the same comparison in-process.
+    # A RuntimeError, not a bare assert: see the next test for why that
+    # distinction is load-bearing here.
     import importlib
     import sys
 
@@ -570,7 +574,7 @@ def test_committed_ruleset_field_drift_fails_loudly_at_import(monkeypatch: pytes
     monkeypatch.setattr(_gitapex_rulesets, "PROJECTION_KEYS", ("name", "target"))
     sys.modules.pop("gitapex_gate_ruleset_required_checks", None)
     try:
-        with pytest.raises(AssertionError, match="have drifted from"):
+        with pytest.raises(RuntimeError, match="have drifted from"):
             importlib.import_module("gitapex_gate_ruleset_required_checks")
     finally:
         # Undo the patch *before* reimporting -- otherwise the reimport below
@@ -578,3 +582,25 @@ def test_committed_ruleset_field_drift_fails_loudly_at_import(monkeypatch: pytes
         monkeypatch.undo()
         sys.modules.pop("gitapex_gate_ruleset_required_checks", None)
         importlib.import_module("gitapex_gate_ruleset_required_checks")
+
+
+def test_committed_ruleset_field_drift_still_fires_under_python_dash_o() -> None:
+    # `assert` is stripped entirely under `python -O`/`PYTHONOPTIMIZE=1` --
+    # a bare assert here would silently stop catching drift in exactly that
+    # mode. Proven live in a subprocess, not merely by inspecting the source:
+    # patch PROJECTION_KEYS to a mismatched value, import the gate module
+    # under `-O`, and confirm the RuntimeError still fires.
+    script = (
+        "import _gitapex_rulesets\n"
+        "_gitapex_rulesets.PROJECTION_KEYS = ('name', 'target')\n"
+        "import gitapex_gate_ruleset_required_checks\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-O", "-c", script],
+        cwd=REPO_ROOT / ".github" / "scripts",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0, "expected the drifted-fields RuntimeError to abort the import under -O"
+    assert "have drifted from" in result.stderr, result.stderr

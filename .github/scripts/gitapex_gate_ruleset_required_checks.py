@@ -208,14 +208,17 @@ class CommittedRuleset(BaseModel):
 #: `CommittedRuleset`'s own field set must never silently drift from
 #: `_gitapex_rulesets.PROJECTION_KEYS` -- the six keys GitHub's ruleset
 #: POST/PUT body accepts, and the same set `canonical_projection` narrows
-#: every live/committed comparison to. An assertion over dynamic model
-#: generation on purpose: Pydantic's own per-field validation and error
-#: messages stay clearer with explicit fields than a generated class would
-#: give up.
-assert set(CommittedRuleset.model_fields) == set(PROJECTION_KEYS), (  # noqa: S101 -- import-time drift gate, deliberate
-    f"CommittedRuleset's fields {sorted(CommittedRuleset.model_fields)} have drifted from "
-    f"_gitapex_rulesets.PROJECTION_KEYS {sorted(PROJECTION_KEYS)} -- update both together"
-)
+#: every live/committed comparison to. An explicit RuntimeError, not a bare
+#: `assert`, over dynamic model generation: Pydantic's own per-field
+#: validation and error messages stay clearer with explicit fields than a
+#: generated class would give up, and unlike `assert`, a `RuntimeError`
+#: still fires when the interpreter runs under `python -O`/`PYTHONOPTIMIZE`,
+#: which strips every plain `assert` statement at compile time.
+if set(CommittedRuleset.model_fields) != set(PROJECTION_KEYS):
+    raise RuntimeError(
+        f"CommittedRuleset's fields {sorted(CommittedRuleset.model_fields)} have drifted from "
+        f"_gitapex_rulesets.PROJECTION_KEYS {sorted(PROJECTION_KEYS)} -- update both together"
+    )
 
 
 def find_schema_violations(ruleset: dict[str, Any]) -> list[str]:
