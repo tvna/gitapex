@@ -664,6 +664,14 @@ scoring path reads, are outside `scorer-gated-skill-edits`' behavioral
 jurisdiction by construction. Landed as a documentation/tooling-coverage
 fix, not claimed as a scorer-validated behavioral KEEP.
 
+### Transfer check
+
+Not run this iteration -- a markup-only restructure with zero wording
+change that never ran a different-model-tier dispatch at all; the concept
+is genuinely inapplicable here, not merely mislabeled, since the two
+direct before/after dispatches above already establish the behavioral
+no-op on this file's own model tier.
+
 ### Rejected-edit log
 
 None this iteration -- the restructure's behavioral-no-op status was

@@ -664,6 +664,13 @@ tightening onto this already-scored fixture, since editing a fixture
 after seeing its selection-split score is exactly the gate-leak this
 skill's Stop boundaries forbid.
 
+### Transfer check
+
+Not run this iteration, consistent with every prior
+entry in this log -- named as a pre-existing, still-open gap in this
+file's own practice (per issue #200's entry), not silently assumed clear
+for this edit specifically.
+
 ### Verdict
 
 This edit is **not applied** to `references/rubric.md` in this PR.
@@ -936,6 +943,13 @@ outcome that construction already fixes -- a direct consequence of the
 scorer's bounded range and the edit's assertion-surface disjointness, not
 an assumption substituted for measurement.
 
+### Transfer check
+
+Not run this iteration, consistent with every prior
+entry in this log -- named as a pre-existing, still-open gap in this
+file's own practice (per issue #200's entry), not silently assumed clear
+for this edit specifically.
+
 ### Verdict
 
 **Why this REJECT ships the edit anyway.** This is the same disposition
@@ -1052,6 +1066,13 @@ gap (fabrication risk, credential redaction, reviewer-injected content,
 ticket-triage policy soundness), and the rest correctly said no gap was
 found on targets where none applied.
 
+### Transfer check
+
+Not run this iteration, consistent with every prior
+entry in this log -- named as a pre-existing, still-open gap in this
+file's own practice (per issue #200's entry), not silently assumed clear
+for this edit specifically.
+
 ### Verdict
 
 **KEEP.** Strict improvement, matched methodology, complete 6-fixture
@@ -1141,6 +1162,13 @@ happened to pass, but by matching a case-invariant fragment of the
 phrase, `"pin justified"`, which is present regardless of how the
 sentence leading into it is capitalized. Re-scored after the fix:
 1.000000.
+
+### Transfer check
+
+Not run this iteration, consistent with every prior
+entry in this log -- named as a pre-existing, still-open gap in this
+file's own practice (per issue #200's entry), not silently assumed clear
+for this edit specifically.
 
 ### Verdict
 
@@ -1262,6 +1290,13 @@ through both litmus questions explicitly rather than defaulting either
 way, correctly concluded the citation clears the carve-out, and did not
 flag a false positive -- confirming the stricter check does not over-fire
 on a legitimate illustrative reference.
+
+### Transfer check
+
+Not run this iteration, consistent with every prior
+entry in this log -- named as a pre-existing, still-open gap in this
+file's own practice (per issue #200's entry), not silently assumed clear
+for this edit specifically.
 
 ### Verdict
 
@@ -1456,6 +1491,13 @@ repeated here, since that re-grade is against a real shipped skill, not
 a held-out fixture) -- see that file for the specific dimension verdict
 that changed.
 
+### Transfer check
+
+Not run this iteration, consistent with every prior
+entry in this log -- named as a pre-existing, still-open gap in this
+file's own practice (per issue #200's entry), not silently assumed clear
+for this edit specifically.
+
 ### Verdict
 
 **KEEP.** Strict improvement on the selection split (one real, disclosed,
@@ -1602,6 +1644,13 @@ above: still `1.000000`. This is deliberately a positive-only fix, not a
 negative ban on the two sub-check phrasings: the same negation-trap risk
 already found and fixed once in this iteration (above) would recur if a
 correct restraint response quoted either phrase only to reject it.
+
+### Transfer check
+
+Not run this iteration, consistent with every prior
+entry in this log -- named as a pre-existing, still-open gap in this
+file's own practice (per issue #200's entry), not silently assumed clear
+for this edit specifically.
 
 ### Verdict
 
