@@ -28,7 +28,7 @@
       "id": "skill-metadata-sidecar",
       "path": "skills/*/metadata/gitapex.yaml",
       "format": "yaml",
-      "authority": "per-skill capabilityAssumption (read by routine-scope-enforcement), spec.lifecycle.renamedFrom (read by skill-rename-lifecycle), the full document shape (read by skill-metadata-schema-drift against skills/evaluating-skill-quality/references/skill-metadata.schema.json), and spec.executionRequirements (read by execution-requirements-drift against SKILL.md prose and bundled scripts/*.py content); one entry stands in for the glob since every sidecar shares one schema"
+      "authority": "per-skill capabilityAssumption (read by routine-scope-enforcement), spec.lifecycle.renamedFrom (read by skill-rename-lifecycle), and the full document shape (read by skill-metadata-schema-drift against skills/evaluating-skill-quality/references/skill-metadata.schema.json); one entry stands in for the glob since every sidecar shares one schema"
     },
     {
       "id": "pyproject-mypy-config",
@@ -311,20 +311,6 @@
       "cluster": "skill-lifecycle",
       "tracking_issue": 745,
       "status": "active",
-      "supersedes": null
-    },
-    {
-      "id": "execution-requirements-drift",
-      "kind": "script",
-      "script": ".github/scripts/gitapex_scan_execution_requirements_drift.py",
-      "rule": "Every skill's declared spec.executionRequirements (network.mode/domains, tools.write/tools.shell) must not diverge from pattern-matched network-capable imports/hosts in its bundled scripts/*.py content and mutating-action language in its SKILL.md prose; under-declaration (declared narrower than actual) is an error-severity finding, over-declaration (declared broader than actual content ever exercises) is a warning-severity finding -- a best-effort deterministic net, not a formal proof.",
-      "planes": ["ci"],
-      "local_exclusion": "Not wired into gitapex_gate_local_preflight.py's automated pre-push bundle yet: a live run of `python3 .github/scripts/gitapex_scan_execution_requirements_drift.py` against this repository's real skills/ tree today reports real error-severity findings (e.g. planning-a-branch-from-an-issue declares tools.shell: [] but its own Step 8 invokes python3 scripts/gitapex_check_acm_present.py) -- pre-existing drift issue #1022's own Non-goals explicitly excludes retroactively auditing and fixing in this change. Bundling it into the automated pre-push runner today would fail every contributor's push on unrelated drift. A contributor can still run it standalone by hand; a future retroactive-sweep issue should add planes: local + local_invocation once real drift is fixed and status moves to active.",
-      "trigger": "tests/test_gitapex_scan_execution_requirements_drift.py inside the pytest step of .github/workflows/test.yml (fixture-based unit tests only; no real-skills-corpus zero-drift assertion yet -- deferred retroactive sweep per issue #1022's own disclosed non-goal)",
-      "policy_refs": ["skill-metadata-sidecar"],
-      "cluster": "skill-lifecycle",
-      "tracking_issue": 1022,
-      "status": "experimental",
       "supersedes": null
     },
     {

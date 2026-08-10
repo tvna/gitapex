@@ -2,20 +2,27 @@
 """Cross-check a skill's declared spec.executionRequirements against real
 SKILL.md prose and bundled scripts/*.py content (issue #1022).
 
-skills/evaluating-skill-quality/references/skill-metadata.schema.json
-validates executionRequirements' SHAPE only (its own docstring says so
-explicitly and names this exact companion-scanner pattern as the fix,
-already implemented once for metadata.name/skillDependencies/lifecycle.
-deprecated.replacement by .github/scripts/gitapex_scan_skill_metadata_schema.py).
-Nothing before this scanner cross-checks the declared network mode/domains
-and tools read/write/shell tags against what a skill's own content actually
-does -- a skill could claim network.mode: disabled while a bundled script
-performs network I/O, or claim tools.write: [] while SKILL.md's own prose
-instructs a mutating action, with nothing to catch the drift.
+Bundled with the evaluating-skill-quality skill itself (not a repo-wide
+.github/scripts/ CI gate): this is a companion to that skill's own
+read-only shape checker, skills/evaluating-skill-quality/scripts/
+gitapex_check_skill_shape.py, run the same way -- against one target skill
+directory at a time, as part of that skill's "Deterministic shape" lane
+(see SKILL.md's own Two lanes section). skills/evaluating-skill-quality/
+references/skill-metadata.schema.json validates executionRequirements'
+SHAPE only (its own docstring says so explicitly and names this exact
+companion-scanner pattern as the fix, already implemented once for
+metadata.name/skillDependencies/lifecycle.deprecated.replacement by
+.github/scripts/gitapex_scan_skill_metadata_schema.py, a *repo-wide* CI
+gate over every skill at once). Nothing before this scanner cross-checks
+one skill's own declared network mode/domains and tools read/write/shell
+tags against what that skill's own content actually does -- a skill could
+claim network.mode: disabled while a bundled script performs network I/O,
+or claim tools.write: [] while SKILL.md's own prose instructs a mutating
+action, with nothing to catch the drift.
 
 Two independent, best-effort pattern-match checks, one per
-executionRequirements sub-block (mirrors skills/evaluating-skill-quality/
-scripts/gitapex_check_skill_shape.py's own per-subkey convention):
+executionRequirements sub-block (mirrors gitapex_check_skill_shape.py's
+own per-subkey convention):
 
 - find_network_drift: declared network.mode/domains vs. network-capable
   imports and literal https?:// hosts found in skill_dir/scripts/*.py.
@@ -37,19 +44,23 @@ formal proof: a network call routed through an unlisted helper, or a
 mutating action described in prose this scanner's verb/noun lists do not
 recognize, can still slip through undetected -- the same disclosed
 false-negative limitation this repository's other AST/pattern-based
-scanners already carry.
+scanners already carry (see test_dynamically_constructed_host_evades_
+allowlist_check in this module's own test suite for one concrete,
+deliberately-constructed example, not only a prose claim).
 
-Deliberately NOT wired as a "real repository has zero drift" gate the way
-gitapex_scan_skill_metadata_schema.py's own test_real_repository_* is:
-issue #1022's own Non-goals explicitly excludes retroactively auditing
-every existing skills/*/metadata/gitapex.yaml sidecar for a pre-existing
-mismatch, and a live check found several already exist (e.g.
-planning-a-branch-from-an-issue declares shell: [] but its own Step 8
-invokes `python3 scripts/gitapex_check_acm_present.py`). Registered in
-.gitapex/ssot.json at status: "experimental" for exactly this reason --
-this scanner's own fixture-based unit tests are the enforced gate for now;
-a future retroactive-sweep issue promoting it to "active" once real drift
-is fixed is a natural follow-up, not this scanner's own job.
+Not registered in .gitapex/ssot.json and not wired as a "real repository
+has zero drift" gate the way gitapex_scan_skill_metadata_schema.py's own
+test_real_repository_* is -- mirrors gitapex_check_skill_shape.py's own
+un-registered status (grep confirms it carries no .gitapex/ssot.json gate
+entry of its own either): a per-skill checker invoked deliberately against
+one target at a time is not the shape of a repo-wide automatic gate. A
+live run against this repository's own skills/ tree today reports real
+findings issue #1022's own Non-goals explicitly excludes retroactively
+auditing/fixing here (e.g. planning-a-branch-from-an-issue declares
+shell: [] but its own Step 8 invokes `python3 scripts/
+gitapex_check_acm_present.py`) -- this module's own fixture-based unit
+tests are what CI enforces, the same as gitapex_check_skill_shape.py's own
+test_gitapex_check_skill_shape.py.
 
 Self-contained, stdlib + PyYAML only, no cross-import from any other
 .github/scripts/*.py file (issue #1022's own Constraints) -- the skill
@@ -58,13 +69,17 @@ gitapex_scan_skill_metadata_schema.py's own small versions rather than
 importing them, matching this repository's established convention for
 these standalone scripts.
 
-Run standalone (exit 0 clean or warnings-only, 1 on any error-severity
-finding or a read error) or via the pytest gate in
-tests/test_gitapex_scan_execution_requirements_drift.py.
+Run standalone against one skill directory --
+``python3 skills/evaluating-skill-quality/scripts/
+gitapex_scan_execution_requirements_drift.py <skill-dir>`` (exit 0 clean or
+warnings-only, 1 on any error-severity finding or a read error) -- or via
+the pytest gate in skills/evaluating-skill-quality/scripts/
+test_gitapex_scan_execution_requirements_drift.py.
 """
 
 from __future__ import annotations
 
+import argparse
 import pathlib
 import re
 import sys
@@ -72,8 +87,12 @@ from typing import Any, NamedTuple
 
 import yaml
 
-REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
-SKILLS_DIR = REPO_ROOT / "skills"
+# This file lives at skills/evaluating-skill-quality/scripts/<name>.py, so
+# parents[2] is skills/ itself -- one level deeper than a .github/scripts/
+# script's own parents[2] (repo root), since this module moved into the
+# evaluating-skill-quality skill's own scripts/ bundle rather than staying
+# a repo-root-level CI script.
+SKILLS_DIR = pathlib.Path(__file__).resolve().parents[2]
 # Mirrors gitapex_scan_skill_metadata_schema.py's own SIDECAR_RELATIVE_PATH
 # constant, duplicated as a literal rather than imported (see module
 # docstring's own no-cross-import constraint).
@@ -101,17 +120,36 @@ _NETWORK_IMPORT_PATTERN = re.compile(
 _URL_HOST_PATTERN = re.compile(r"https?://([A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?)")
 
 _WRITE_VERBS = r"(?:writes?|wrote|creates?|drafts?|edits?|updates?|modifies|generates?|authors?)"
-_WRITE_NOUNS = (
-    r"(?:file|SKILL\.md|script|\.py\b|\.md\b|\.json\b|\.ya?ml\b|"
-    r"branch|commit|PR\b|pull request|issue\b|document)"
-)
+# A single trailing \b applies to whichever alternative matched, regardless
+# of branch -- adversarial review of this file found every internal-\b
+# variant (a prior version wrote `commit` and `PR\b` inconsistently) let a
+# no-\b alternative match as a bare prefix of an unrelated word right after
+# it (e.g. "creates a review committee" matched via "commit", "creates a
+# script" via "script" inside "scripting"), a false positive with nothing
+# to do with writing a file. One trailing \b after the whole group closes
+# every alternative at once.
+_WRITE_NOUNS = r"(?:file|SKILL\.md|script|\.py|\.md|\.ya?ml|\.json|branch|commit|PR|pull request|issue|document)\b"
 _WRITE_INTENT_PATTERN = re.compile(
     rf"\b{_WRITE_VERBS}\b(?:\s+\S+){{0,4}}\s+{_WRITE_NOUNS}",
     re.IGNORECASE,
 )
+# Split into three alternations rather than one \b-wrapped group -- a prior
+# version wrapped every alternative (including four starting with a literal
+# backtick) in one leading \b, but \b demands a word/non-word transition and
+# a backtick is itself non-word, so every backtick-prefixed alternative was
+# unreachable whenever (as in virtually all real Markdown) the character
+# before the backtick was also non-word (whitespace/punctuation) -- found by
+# adversarial review of this file, reproduced directly against real
+# SKILL.md prose this scanner is meant to catch (e.g. "invokes `python3
+# scripts/...`" matched None). Only the generic run\s+` alternative
+# (anchored on the real word "run") ever matched, silently masking the bug.
+# The backtick-prefixed alternatives below need no \b at all: a literal
+# backtick is not a word character, so matching it directly already fixes
+# the position unambiguously.
 _SHELL_INTENT_PATTERN = re.compile(
-    r"\b(?:Bash tool|shell command|subprocess|run\s+`|"
-    r"`git (?:commit|push|merge|rebase|checkout)|`python3 |`uv run|`npm |CLI)\b",
+    r"\b(?:Bash tool|shell command|subprocess|CLI)\b"
+    r"|run\s+`"
+    r"|`(?:git (?:commit|push|merge|rebase|checkout)|python3 |uv run|npm )",
     re.IGNORECASE,
 )
 
@@ -176,15 +214,34 @@ def find_network_drift(network: Any, skill_dir: pathlib.Path) -> list[Finding]:
     """network-mode-vs-script-content: declared executionRequirements.network
     vs. network-capable imports/literal https?:// hosts found in
     skill_dir/scripts/*.py."""
-    mode = network.get("mode", "disabled") if isinstance(network, dict) else "disabled"
+    mode_value = network.get("mode") if isinstance(network, dict) else None
+    # dict.get(key, default) only substitutes the default when the key is
+    # ABSENT -- a real `mode: null` (valid YAML for an empty value) or an
+    # unrecognized/mis-cased string (e.g. "Disabled", "off") passed straight
+    # through as mode_value, and none of the three mode == "..." branches
+    # below matched it, so find_network_drift fell through and silently
+    # returned [] even against a script making real, unrestricted network
+    # calls -- a fail-OPEN default on malformed input, found by adversarial
+    # review of this file and reproduced directly (find_network_drift({
+    # "mode": None}, ...) against a skill_dir with a real `requests.get(...)`
+    # call returned [] before this fix). Any value outside the three
+    # recognized modes now falls back to "disabled", the strictest
+    # treatment -- fail-closed, matching this scanner's own documented
+    # equivalence of an absent network block to disabled.
+    mode = mode_value if mode_value in ("disabled", "allowlist", "unrestricted") else "disabled"
     domains = network.get("domains") if isinstance(network, dict) else None
-    declared_domains = set(domains) if isinstance(domains, list) else set()
+    # Hostnames are case-insensitive (RFC 4343); lower-cased at declaration
+    # time so the allowlist set-difference below compares like-for-like --
+    # found by adversarial review of this file: a script referencing
+    # "https://GitHub.com/x" against a correctly declared `domains:
+    # [github.com]` previously produced a false-positive error finding.
+    declared_domains = {d.lower() for d in domains if isinstance(d, str)} if isinstance(domains, list) else set()
 
     script_texts = _bundled_script_texts(skill_dir)
     has_network_import = any(_NETWORK_IMPORT_PATTERN.search(text) for text in script_texts)
     referenced_hosts: set[str] = set()
     for text in script_texts:
-        referenced_hosts.update(_URL_HOST_PATTERN.findall(text))
+        referenced_hosts.update(host.lower() for host in _URL_HOST_PATTERN.findall(text))
 
     findings: list[Finding] = []
     if mode == "disabled" and (has_network_import or referenced_hosts):
@@ -280,13 +337,42 @@ def _spec_of(instance: Any) -> dict[str, Any]:
     return spec if isinstance(spec, dict) else {}
 
 
+def find_skill_drift(skill_dir: pathlib.Path) -> list[Finding]:
+    """Every drift finding for exactly one skill directory: reads its own
+    metadata/gitapex.yaml sidecar and runs find_network_drift/find_tools_drift
+    against it. Messages carry no skill-name prefix (single-target use, the
+    same convention gitapex_check_skill_shape.py's own single-target CLI
+    follows) -- find_drift() below adds one when aggregating across many."""
+    sidecar = skill_dir / SIDECAR_RELATIVE_PATH
+    if not sidecar.is_file():
+        return [Finding("error", f"metadata-file-present: missing {sidecar}")]
+    try:
+        instance = _load_sidecar(sidecar)
+    except ReadError as error:
+        return [Finding("error", str(error))]
+
+    execution_requirements = _spec_of(instance).get("executionRequirements")
+    if not isinstance(execution_requirements, dict):
+        execution_requirements = {}
+
+    findings: list[Finding] = []
+    findings.extend(find_network_drift(execution_requirements.get("network"), skill_dir))
+    findings.extend(find_tools_drift(execution_requirements.get("tools"), skill_dir))
+    return findings
+
+
 def find_drift(
     skills_dir: pathlib.Path = SKILLS_DIR,
     min_expected_skill_dirs: int = MIN_EXPECTED_SKILL_DIRS,
 ) -> list[Finding]:
     """Every drift finding across every discovered skill's declared
-    executionRequirements. Empty list means no drift detected (a clean
-    scan, not a proof of correctness -- see module docstring)."""
+    executionRequirements -- find_skill_drift() run once per skill, with its
+    findings prefixed by the skill directory name. Empty list means no
+    drift detected (a clean scan, not a proof of correctness -- see module
+    docstring). Not the CLI's own entry point (see main(), which checks
+    exactly one skill directory, matching this skill's "Deterministic
+    shape" lane); kept for the real-repository smoke test and any future
+    batch use."""
     skill_dirs = discover_skill_dirs(skills_dir)
     if len(skill_dirs) < min_expected_skill_dirs:
         return [
@@ -304,30 +390,23 @@ def find_drift(
     findings: list[Finding] = []
     for skill_dir in skill_dirs:
         prefix = skill_dir.name
-        sidecar = skill_dir / SIDECAR_RELATIVE_PATH
-        if not sidecar.is_file():
-            findings.append(Finding("error", f"{prefix}: metadata-file-present: missing {sidecar}"))
-            continue
-        try:
-            instance = _load_sidecar(sidecar)
-        except ReadError as error:
-            findings.append(Finding("error", f"{prefix}: {error}"))
-            continue
-
-        execution_requirements = _spec_of(instance).get("executionRequirements")
-        if not isinstance(execution_requirements, dict):
-            execution_requirements = {}
-
-        for finding in find_network_drift(execution_requirements.get("network"), skill_dir):
+        for finding in find_skill_drift(skill_dir):
             findings.append(Finding(finding.severity, f"{prefix}: {finding.message}"))
-        for finding in find_tools_drift(execution_requirements.get("tools"), skill_dir):
-            findings.append(Finding(finding.severity, f"{prefix}: {finding.message}"))
-
     return findings
 
 
-def main() -> int:
-    findings = find_drift()
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Check one skill's declared spec.executionRequirements against its "
+            "actual SKILL.md prose and bundled scripts/*.py content (read-only, "
+            "best-effort pattern-match -- not a formal proof)."
+        )
+    )
+    parser.add_argument("target", help="Path to a skill directory (e.g. skills/<name>).")
+    args = parser.parse_args(argv)
+
+    findings = find_skill_drift(pathlib.Path(args.target))
     errors = [f for f in findings if f.severity == "error"]
     warnings = [f for f in findings if f.severity == "warning"]
 

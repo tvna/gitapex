@@ -23,7 +23,7 @@ skill artifact itself is good, not whether a change is correct.
   assume the target lives in a repository that has adopted this metadata
   convention; when the target is a skill vendored from one that has not,
   those checks fail as expected -- not a defect in the reviewed skill --
-  so record them explicitly as not-applicable, never as six findings.
+  so record them explicitly as not-applicable, never as six findings. A companion checker, `python3 skills/evaluating-skill-quality/scripts/gitapex_scan_execution_requirements_drift.py <skill-dir>`, cross-checks declared `executionRequirements` against real content (best-effort, not proof).
 - **Probabilistic maturity** -- **nine dimensions** of judgment that need a model
   or human, not a script. Full rubric with pass/fail evidence:
   [references/rubric.md](references/rubric.md).
