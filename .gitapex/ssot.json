@@ -766,6 +766,20 @@
       "supersedes": null
     },
     {
+      "id": "skill-quality-rubric-vocabulary-drift",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_scan_skill_quality_rubric_vocabulary_drift.py",
+      "rule": "evaluating-skill-quality's own nine-dimension rubric and Mechanism-fit vocabulary must stay internally consistent: every bold dimension-count declaration in SKILL.md and references/rubric.md matches the real number of '## N. <Name>' headings in rubric.md, every literal 'dimensions 1-N' full-span range citation in either file matches that same count, rubric.md's nine dimension headings are present exactly once each, numbered 1 through the real count with no gap or duplicate, in ascending order, and non-empty, and SKILL.md's Mechanism fit section carries all nine named step-level check labels. A missing or unreadable file, zero dimension headings found, or a missing/duplicate/empty Mechanism-fit section fails closed rather than passing.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_skill_quality_rubric_vocabulary_drift.py"],
+      "trigger": "tests/test_gitapex_scan_skill_quality_rubric_vocabulary_drift.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "self-governance",
+      "tracking_issue": 993,
+      "status": "active",
+      "supersedes": null
+    },
+    {
       "id": "behind-base",
       "kind": "script",
       "script": ".github/scripts/gitapex_gate_behind_base.py",
