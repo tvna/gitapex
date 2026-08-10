@@ -159,6 +159,20 @@ def test_load_model_allowlist_duplicate_section_key_raises(tmp_path: pathlib.Pat
         gate._load_model_allowlist(path)
 
 
+def test_load_model_allowlist_unhashable_mapping_key_raises(tmp_path: pathlib.Path) -> None:
+    # A YAML sequence used as a mapping key (`? [model-x]`) constructs to an
+    # unhashable Python list -- proves _DuplicateKeyLoader's own duplicate
+    # check converts the resulting TypeError into DeclarationReadError
+    # rather than letting a raw TypeError escape.
+    path = tmp_path / "allowlist.yaml"
+    path.write_text(
+        "approved_models: {}\nretired_models: {}\n? [model-x]\n: evidence\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(gate.DeclarationReadError, match="is not valid YAML"):
+        gate._load_model_allowlist(path)
+
+
 # --- the gate ---------------------------------------------------------------
 
 

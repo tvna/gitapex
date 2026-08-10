@@ -123,9 +123,17 @@ class _DuplicateKeyLoader(yaml.SafeLoader):
         seen: set[object] = set()
         for key_node, _value_node in node.value:
             key = self.construct_object(key_node, deep=deep)
-            if key in seen:
-                raise yaml.YAMLError(f"duplicate key {key!r} in mapping")
-            seen.add(key)
+            try:
+                if key in seen:
+                    raise yaml.YAMLError(f"duplicate key {key!r} in mapping")
+                seen.add(key)
+            except TypeError as error:
+                # A YAML sequence/mapping used as a mapping key (e.g. `? [x]`)
+                # constructs to an unhashable Python object -- `key in seen`
+                # then raises a bare TypeError, which is not a yaml.YAMLError
+                # and would otherwise escape _load_model_allowlist's own
+                # handler as a raw traceback instead of a DeclarationReadError.
+                raise yaml.YAMLError(f"unhashable key in mapping: {error}") from error
         return super().construct_mapping(node, deep=deep)
 
 
