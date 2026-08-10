@@ -328,6 +328,19 @@ def test_has_marker_comment_tolerates_a_null_body_field():
     assert gate.has_marker_comment("tvna", "gitapex", 414, "tok", opener=opener) is False
 
 
+def test_has_marker_comment_raises_cleanly_on_a_non_string_body():
+    # A CodeRabbit review finding on this same PR: the dict-item shape check
+    # says nothing about "body"'s own type -- a truthy non-string body
+    # (e.g. an int) used to crash `in` with an uncaught TypeError; a dict
+    # body would silently check key membership instead of raising, a wrong
+    # marker decision rather than a loud one.
+    def opener(request: urllib.request.Request) -> Response:
+        return Response(200, json.dumps([{"id": 1, "body": 12345}]))
+
+    with pytest.raises(gate.GitHubApiError, match="non-string 'body'"):
+        gate.has_marker_comment("tvna", "gitapex", 414, "tok", opener=opener)
+
+
 def test_post_comment_includes_marker_and_waiver_guidance():
     captured = {}
 

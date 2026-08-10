@@ -291,7 +291,18 @@ def fetch_issue(
     data = _call(url, token, opener, sleeper)
     if not isinstance(data, dict):
         raise GitHubApiError(f"GET {url} returned {type(data).__name__}, expected a JSON object")
-    return {"body": data.get("body") or "", "state": data.get("state") or ""}
+    body = data.get("body")
+    state = data.get("state")
+    # A CodeRabbit review finding on this same PR: the dict-shape check above
+    # says nothing about these two fields' own types -- a truthy non-string
+    # `body` (e.g. an int) used to pass the `or ""` fallback unchanged and
+    # crash `acm_checker.has_acm_disclosure`'s own `.replace()` call with an
+    # uncaught AttributeError, the identical failure class this PR fixes
+    # everywhere else.
+    for field_name, field_value in (("body", body), ("state", state)):
+        if field_value is not None and not isinstance(field_value, str):
+            raise GitHubApiError(f"GET {url} returned a non-string issue '{field_name}': {type(field_value).__name__}")
+    return {"body": body or "", "state": state or ""}
 
 
 def classify_issue(

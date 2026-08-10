@@ -336,6 +336,31 @@ def test_fetch_issue_raises_cleanly_on_non_dict_response():
         checker.fetch_issue("tvna", "gitapex", 657, "tok", opener=opener, sleeper=lambda _: None)
 
 
+@pytest.mark.parametrize("field_name", ["body", "state"])
+def test_fetch_issue_raises_cleanly_on_non_string_field(field_name):
+    # A CodeRabbit review finding on this PR: the dict-shape check on `data`
+    # says nothing about `body`/`state`'s own types -- a truthy non-string
+    # value (e.g. an int) used to pass `data.get(field) or ""` unchanged,
+    # later crashing `acm_checker.has_acm_disclosure`'s `.replace()` call
+    # with an uncaught AttributeError instead of this documented error.
+    payload = {"body": "the body", "state": "open"}
+    payload[field_name] = 12345
+
+    def opener(request: urllib.request.Request) -> Response:
+        return Response(200, json.dumps(payload))
+
+    with pytest.raises(checker.GitHubApiError, match=f"non-string issue '{field_name}'"):
+        checker.fetch_issue("tvna", "gitapex", 657, "tok", opener=opener, sleeper=lambda _: None)
+
+
+def test_fetch_issue_allows_null_body_and_state():
+    def opener(request: urllib.request.Request) -> Response:
+        return Response(200, json.dumps({"body": None, "state": None}))
+
+    result = checker.fetch_issue("tvna", "gitapex", 657, "tok", opener=opener, sleeper=lambda _: None)
+    assert result == {"body": "", "state": ""}
+
+
 # ---------------------------------------------------------------------------
 # classify_issue
 # ---------------------------------------------------------------------------

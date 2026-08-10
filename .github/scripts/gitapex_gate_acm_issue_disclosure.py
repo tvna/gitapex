@@ -306,6 +306,17 @@ def has_marker_comment(
                 raise GitHubApiError(
                     f"GET {url} returned a comments-list item of type {type(comment).__name__}, expected an object"
                 )
+            # A CodeRabbit review finding on this same PR: the dict-item
+            # check above says nothing about "body"'s own type -- a truthy
+            # non-string body (e.g. an int) crashes `in` with an uncaught
+            # TypeError, and a dict body would silently check key membership
+            # instead of raising, producing a wrong marker decision rather
+            # than a loud one.
+            comment_body = comment.get("body")
+            if comment_body is not None and not isinstance(comment_body, str):
+                raise GitHubApiError(
+                    f"GET {url} returned a comment with a non-string 'body': {type(comment_body).__name__}"
+                )
         # `.get("body") or ""`, not `.get("body", "")`: a comment dict with a
         # present-but-null "body" (valid GitHub API JSON) would otherwise
         # pass the dict-item shape check above and still crash `in` on None
