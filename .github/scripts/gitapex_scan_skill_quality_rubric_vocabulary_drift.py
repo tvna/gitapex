@@ -31,6 +31,12 @@ holds no such file), so there is no schema enum to lock against. Adding one
 is tracked separately (issue #993's own "Out of scope" section) rather than
 forced into this change.
 
+``ScanError``, ``read_text``, and ``extract_section`` live in the shared
+``_gitapex_vocabulary_lock.py`` module (also used by the precedent this
+mirrors) rather than being copied here a second time -- a duplicated copy
+of exactly the primitives a vocabulary-lock gate is built from is the same
+two-copies-drift failure mode this gate class exists to prevent.
+
 Checks, grouped by the file they read:
 
   ``SKILL.md``
@@ -83,6 +89,8 @@ import re
 import sys
 from pathlib import Path
 
+from _gitapex_vocabulary_lock import ScanError, extract_section, read_text
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SKILL_DIR = REPO_ROOT / "skills" / "evaluating-skill-quality"
 
@@ -130,53 +138,6 @@ _NUMBER_WORDS = {
     "nine": 9,
     "ten": 10,
 }
-
-
-class ScanError(Exception):
-    """An input could not be read or parsed -- exit 2, never a silent pass."""
-
-
-def read_text(path: Path) -> str:
-    """Read ``path`` as UTF-8, raising :class:`ScanError` on any failure.
-
-    Every read failure is the same outcome here -- the check could not run --
-    so an unreadable file must not reach the caller as an empty string that
-    every substring check would then report as ordinary drift.
-    """
-    try:
-        return path.read_text(encoding="utf-8")
-    except FileNotFoundError as error:
-        raise ScanError(f"{path}: not found") from error
-    except UnicodeDecodeError as error:
-        raise ScanError(f"{path}: could not decode as UTF-8: {error}") from error
-    except OSError as error:
-        raise ScanError(f"{path}: could not be read: {error}") from error
-
-
-def extract_section(text: str, heading: str, path_label: str) -> str:
-    """The body under ``heading``, up to the next heading of the same or a
-    shallower level.
-
-    Raises :class:`ScanError` when the heading is absent, appears more than
-    once, or opens an empty section: each means the structure this gate
-    assumes is not there, which is a "cannot check" answer, not a passing
-    one. Same shape as `gitapex_scan_contract_axis_vocabulary_drift.py`'s
-    own `extract_section`.
-    """
-    level = len(heading) - len(heading.lstrip("#"))
-    occurrences = [m.start() for m in re.finditer(rf"^{re.escape(heading)}[ \t]*$", text, re.MULTILINE)]
-    if not occurrences:
-        raise ScanError(f"{path_label}: heading not found: {heading!r}")
-    if len(occurrences) > 1:
-        raise ScanError(f"{path_label}: heading appears {len(occurrences)} times, expected exactly once: {heading!r}")
-
-    start = occurrences[0] + len(heading)
-    rest = text[start:]
-    next_heading = re.search(rf"^#{{1,{level}}}[ \t]+\S", rest, re.MULTILINE)
-    body = rest[: next_heading.start()] if next_heading else rest
-    if not body.strip():
-        raise ScanError(f"{path_label}: section {heading!r} is empty")
-    return body
 
 
 def check_dimension_headings(rubric_text: str) -> tuple[int, list[str]]:
