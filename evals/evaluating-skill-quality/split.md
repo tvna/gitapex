@@ -3582,3 +3582,196 @@ Not run this iteration, same standing disclosed gap named in the original entry 
 The retemplate is **kept anyway**, on grounds independent of the unverified gate: (1) the root-cause analysis above, which traces the `guardrail.yaml` diagnostic-evidence decrease to unchanged rubric text and single-trial citation-choice variance rather than to any wording this edit actually touched; (2) the deterministic shape checker (62/62) and full scoped pytest suite (434/434) both before and after, unaffected; (3) the full-corpus analytical assertion-surface-disjointness argument from the prior entry, which still holds for the 67 fixtures this session's dispatches did not re-check live.
 
 **Known gaps, updated:** (a) the isolated gate could not be run this session -- this repository's verified `claude -p`/`claude --bare -p` isolation mechanism failed with an authentication error specific to this sandboxed session's credential wiring, disclosed above rather than worked around; (b) the six Agent-tool dispatches that *were* run are genuine but self-disclosed as contaminated (this session's own `CLAUDE.md` present in their context), so they inform but do not settle the question; (c) the `guardrail.yaml` diagnostic-evidence decrease rests on a single trial per side and a plausible-but-unproven root cause, not a repeated-trial confirmation. A human reviewer weighing this PR should treat the isolated gate as genuinely unresolved -- not quietly settled by the diagnostic evidence in either direction -- and decide whether a follow-up run (once isolated-subprocess authentication is available) is warranted before treating this rubric's dimensions 1-9 content as fully gate-confirmed.
+
+## Iteration: issue #1014, Tier 1 rubric.md redundancy pruning
+
+Candidate edit: nine Tier 1 pruning candidates from issue #1014's own
+Requested outcome, all confined to
+`skills/evaluating-skill-quality/references/rubric.md`, all re-verified
+against the actual file content at implementation time (several of the
+issue's own cited line ranges had shifted, as the issue itself anticipated):
+(1) collapse the References section's duplicated visible bullet list and
+separate link-reference-definition block to the definitions alone (both
+carry the same URL/title data; the definitions alone keep every inline
+`[label]` citation working, confirmed by a direct link-integrity check
+below); (2) trim the Verdicts section's closing paragraph, which restated
+Mechanism fit's own "well-formed/mature presuppose whole-artifact mechanism
+fit" ownership; (3) drop the ordinal/recap opener ("A fourth/sixth/seventh/
+eighth/ninth ... check, distinct from the N above") on six Mechanism-fit
+subsections, keeping each check's own substantive "not X, but Y"
+differentiation; (4) drop the `guardrail.yaml` parenthetical, which the
+source text itself already called "illustrative confirmation, not something
+this claim depends on to be true"; (5) drop the declaration-vs-structure-fit
+worked-precedent history paragraph (the issue/614 "sat at 497-498/500 lines"
+narrative); (6) drop three point-in-time repository censuses (which skills
+pin a model/effort tier today, which declare `network`, and a coverage-tool
+worked-example parenthetical) that control no grading and will silently
+rot; (7) consolidate the bare-issue-citation rationale, duplicated verbatim
+between Portability level's all-levels rule and dimension 6's Portable-only
+bullet, to one home plus a cross-reference; (8) trim the cohesion check's
+mid-check ownership justification, which restated the section's own closing
+"exactly one owner" statement; (9) trim two of three restatements of
+"Model/effort tier fit stays declaration-independent; Capability assumption
+owns the declaration-vs-pin cross-check at step 4," keeping the fullest
+statement (the "exactly one owner" bullet in Capability assumption) as
+canonical and shortening the other two to pointers.
+
+**Classification: pruning-only** (every hunk is deletion, cross-reference
+consolidation, or a shortened non-rule-bearing reword; confirmed by direct
+`git diff` review -- no dimension's Applicability, Check, Fail, or Pass
+text is added, removed, or narrowed anywhere in the diff).
+**Predeclared context-cost measure: `rubric.md` total line count**, the
+same measure the issue #1001 pass-2 pruning entry above used.
+
+Pre-edit snapshot pinned at `fa6ad7f52ced5bd1c2b828c7b2229875c7cd18a9`
+(`origin/main` at the time this branch was created, and the exact commit
+issue #1014 itself cites) via `git show`.
+
+**Link-integrity check (References collapse, item 1).** A script comparing
+every `[label][text]` / bare `[label]` reference-style usage in the body
+against the surviving `[label]: url "title"` definitions found zero missing
+definitions after the edit -- every inline citation the body actually uses
+(`ab`, `cc`, `fable`, `skillopt`, and the fixture-relevant labels used only
+inside the References list itself) still resolves. No inline citation site
+was touched.
+
+### Gate result
+
+**Correctness leg, two independent methods, per issue #1014's own explicit
+requirement that a KEEP not rest on analytical reasoning alone.**
+
+1. **Full-corpus assertion-surface disjointness (analytical).** All 70
+   fixtures under `evals/evaluating-skill-quality/tasks/` were grepped for
+   15 distinctive phrases drawn from every deleted/reworded passage above
+   (e.g. `"dimension 4 is the one that reuses this check's enumeration
+   later"`, `"sat at 497-498/500 lines"`, `"A fourth whole-artifact check,
+   alongside the three above"`, `"so tier fit currently has no coverage at
+   all"`). Zero matches -- no fixture's `output_contains`/
+   `output_not_contains` assertions or target-skill prompt reference any of
+   this edit's touched prose, so no fixture's score can move on account of
+   it, the same construction this file's issue #406 and issue #1001
+   retemplate entries already used for their own subsets/full corpus.
+2. **Genuine isolated live dispatch (not analytical-only), unlike the
+   issue #1001 correction entry above -- isolation was available and
+   verified working in this session.** `claude -p` from a stripped
+   `$HOME` and a `cwd` outside this repository entirely was tested first
+   and confirmed genuinely isolated (no `CLAUDE.md`/project-instruction
+   content reachable, independently confirmed by asking the isolated
+   session directly), unlike the disclosed OAuth/authentication failure
+   the issue #1001 correction entry hit in an earlier session. Three
+   selection-split fixtures were run, one fresh dispatch per side each,
+   each dispatch reading the mandatory common-case set (`SKILL.md` +
+   `references/rubric.md` + `references/adversarial-self-audit.md`, copied
+   into the isolated `cwd` so `Read` stays sandboxed to it) and performing
+   Procedure steps 1, 2, 4, 5, 6 by hand (this session has no registered
+   `Skill` tool for this repository's own unpublished
+   `evaluating-skill-quality` content in the isolated environment, the
+   same disclosed workaround every prior iteration in this log has used),
+   scored with `gitapex_score_contract.py`:
+
+   | Fixture | Before | After |
+   |---|---|---|
+   | `guardrail.yaml` | 0.857143 (fresh, isolated) | 0.857143 (fresh, isolated) |
+   | `edge.yaml` | 1.000000 (fresh, isolated) | 1.000000 (fresh, isolated) |
+   | `declaration-structure-fit-selection.yaml` | 1.000000 (fresh, isolated) | 1.000000 (fresh, isolated) |
+
+   `declaration-structure-fit-selection.yaml` was chosen deliberately, not
+   as a generic regression sample: it is the fixture that directly probes
+   the Declaration-vs-structure-fit check whose worked-precedent history
+   paragraph item 5 deleted, and it ties at the scorer's ceiling on both
+   sides -- direct evidence the deleted provenance narrative was not
+   load-bearing for that check's own grading behavior.
+
+   `guardrail.yaml`'s exact tie (0.857143 == 0.857143) is a flat correctness
+   match, satisfying the pruning-only leg ("correctness may not fall") on
+   its own -- but the *specific* assertion that failed differs per side:
+   `mature` (lowercase) failed on the *after* dispatch only (it wrote
+   `**Mature**`/`MATURE`, never lowercase `mature`), while `nine`
+   (lowercase) failed on the *before* dispatch only (it wrote `## Nine-
+   dimension walk`, never lowercase `nine`, while the *after* dispatch's
+   own "Blind spot pass" prose happened to write lowercase "nine
+   dimensions"). Checked directly whether either deleted/edited passage
+   controls either heading or word choice: it does not -- the "Nine-
+   dimension walk"/"Mechanism fit findings" section headings are each
+   dispatch's own output-formatting choice, not sourced from any rubric.md
+   text this edit touched, and the underlying "fixed nine-dimension count"
+   claim itself (`references/rubric.md` lines 90/100/104 in the edited
+   file) is confirmed byte-unchanged by this edit. **This is the same
+   single-trial capitalization/word-choice variance this file's own issue
+   #1001 correction entry already root-caused for an unrelated
+   `guardrail.yaml` drop** ("both transcripts capitalize 'Mature' as a
+   verdict-field label, never lowercase") -- disclosed as the same
+   standing brittleness class, not a new content regression.
+
+**Context-cost leg:** `wc -l` on `references/rubric.md`. Prior (pinned
+`fa6ad7f`): **2132** lines. Candidate (post-prune, this branch's HEAD):
+**2039** lines. Strictly decreased (`2039 < 2132`, a 93-line reduction --
+issue #1014's own ~110-120 estimate was explicitly provisional and is
+revised down here to the actual measured figure), satisfying the
+pruning-only exception's second leg.
+
+**Deterministic checks:** `gitapex_check_skill_shape.py` 62/62 both before
+and after (unaffected -- confirmed by direct re-run against the edited
+tree, including `toc:rubric.md` and `anchor-targets-resolve:rubric.md`,
+which independently confirm the References collapse broke no internal
+anchor link). Full scoped pytest suite
+(`skills/evaluating-skill-quality/scripts`): 434/434 both before and after.
+
+### Transfer check
+
+Not run this iteration, same standing disclosed gap named in every prior
+entry in this log (issue #200's entry first named it).
+
+### Verdict
+
+**KEEP (pruning-only exception).** Correctness matched across all three
+live-dispatched selection fixtures (two exact ties at 1.0, one exact tie
+at 0.857143 whose single differing assertion per side is disclosed,
+root-caused to a pre-existing casing/word-choice brittleness class this
+file has already documented, and unrelated to any touched passage) and
+confirmed unaffected by full-corpus analytical assertion-surface
+disjointness for the remaining 27 selection fixtures; context cost
+strictly decreased (2132 -> 2039). Unlike the issue #1001 correction entry
+immediately above, this session's isolated-dispatch mechanism worked, so
+this KEEP rests on genuine isolated live measurement plus the analytical
+leg together, not on analytical reasoning alone or on a disclosed
+`UNVERIFIED` fallback -- satisfying issue #1014's own explicit requirement
+that this pass not repeat issue #1001's two corrected mistakes.
+
+**Known gaps, disclosed:** (a) only 3 of 30 selection fixtures were
+live-dispatched (`guardrail.yaml`, `edge.yaml`,
+`declaration-structure-fit-selection.yaml`, the last chosen specifically
+for direct relevance to item 5's touched section); the remaining 27 rest
+on the full-corpus analytical assertion-surface-disjointness leg, not live
+measurement -- consistent with this file's own established practice
+(issue #393, issue #406, issue #1001 retemplate) of live-dispatching only
+the fixtures plausibly reachable by a given edit's touched text while
+confirming the rest by inspection; (b) 1 trial per side per fixture, no
+repeat-run variance data; (c) **`waza` (confirmed present, `waza --version`
+reports `0.38.0`) could not execute any trial in this session** --
+`eval.yaml`'s configured `executor: copilot-sdk` requires GitHub Copilot
+CLI authentication, and every `waza` invocation attempted here, including
+the credential-independent `waza models`, failed with `not authenticated
+-- run "copilot login" first`. Provisioning Copilot credentials solely to
+satisfy this gate is a credential-acquisition decision outside this task's
+authorization, so it was not pursued; this session used genuine `claude -p`
+subprocess dispatch plus `gitapex_score_contract.py` directly instead, the
+same mechanism every prior iteration in this log has used for gating
+`evaluating-skill-quality`'s own rubric. **No
+`evals/evaluating-skill-quality/results/` directory was written for this
+run**: `.github/scripts/gitapex_scan_eval_results_schema.py` correctly
+rejects a new run directory claiming `record_contract: "pre-contract"`
+(that exemption is fixed to the 8 directories that predate issue #926's
+run-record contract, confirmed by running the scanner directly against a
+first-draft attempt), and this run cannot honestly satisfy
+`record_contract: "gate-run"`'s required `runner` field, since `waza`
+executed no trial here to report a version *for*. Filing a manifest
+missing on either honest option would be worse than filing none; the real
+scores above are the actual record, kept in this entry per SKILL.md
+Procedure step 7's own escape hatch for the fields that cannot be filled
+honestly, per its Stop boundary: never leave a field "blank, guessed, or
+silently omitted." A follow-up run in an environment where `waza`'s
+`copilot-sdk` executor is authenticated should re-run this fixture subset
+through `waza run` and file a proper `results/` directory recording this
+gap as fixed; (d) transfer check not run, the same pre-existing disclosed
+gap named above.
