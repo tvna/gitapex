@@ -226,7 +226,14 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        rendered = generate()
+        # Passed explicitly, not relied on as generate()'s own default
+        # argument values: a default is bound once at function-definition
+        # time, so calling generate() bare would freeze in the *original*
+        # NARRATIVE_PATH/SKILLS_DIR/EVALS_DIR forever, silently ignoring a
+        # test's monkeypatch of the module attribute (or any future
+        # legitimate reassignment of it). These names are looked up here
+        # instead, at call time, which does track a patched value.
+        rendered = generate(NARRATIVE_PATH, SKILLS_DIR, EVALS_DIR)
     except GenerationError as error:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1

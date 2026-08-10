@@ -217,6 +217,34 @@ def test_generate_appends_index_after_narrative(tmp_path: pathlib.Path) -> None:
     assert "| `foo` |" in rendered
 
 
+def test_generate_adds_trailing_newline_when_narrative_lacks_one(tmp_path: pathlib.Path) -> None:
+    narrative_path = tmp_path / "narrative.md"
+    narrative_path.write_text("# Title, no trailing newline", encoding="utf-8")
+    skills_dir = tmp_path / "skills"
+    evals_dir = tmp_path / "evals"
+    (skills_dir / "foo").mkdir(parents=True)
+    _write_eval_yaml(evals_dir, "foo")
+    rendered = generator.generate(narrative_path, skills_dir, evals_dir)
+    assert rendered.startswith("# Title, no trailing newline\n\n## Index\n\n")
+
+
+def test_generate_missing_narrative_file_raises_generation_error(tmp_path: pathlib.Path) -> None:
+    narrative_path = tmp_path / "does-not-exist.md"
+    skills_dir = tmp_path / "skills"
+    evals_dir = tmp_path / "evals"
+    with pytest.raises(generator.GenerationError, match="cannot be read"):
+        generator.generate(narrative_path, skills_dir, evals_dir)
+
+
+def test_generate_non_utf8_narrative_file_raises_generation_error(tmp_path: pathlib.Path) -> None:
+    narrative_path = tmp_path / "narrative.md"
+    narrative_path.write_bytes(b"\xff\xfe not utf-8")
+    skills_dir = tmp_path / "skills"
+    evals_dir = tmp_path / "evals"
+    with pytest.raises(generator.GenerationError, match="not valid UTF-8"):
+        generator.generate(narrative_path, skills_dir, evals_dir)
+
+
 def test_main_check_mode_passes_when_output_matches(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -276,6 +304,42 @@ def test_main_check_mode_missing_output_file_fails_cleanly(
 
     assert generator.main(["--check"]) == 1
     assert "FAIL" in capsys.readouterr().err
+
+
+def test_main_check_mode_non_utf8_output_file_fails_cleanly(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    narrative_path = tmp_path / "narrative.md"
+    narrative_path.write_text("# Title\n\nNo tokens here.\n", encoding="utf-8")
+    skills_dir = tmp_path / "skills"
+    evals_dir = tmp_path / "evals"
+    (skills_dir / "foo").mkdir(parents=True)
+    _write_eval_yaml(evals_dir, "foo")
+    output_path = tmp_path / "output.md"
+    output_path.write_bytes(b"\xff\xfe not utf-8")
+
+    monkeypatch.setattr(generator, "NARRATIVE_PATH", narrative_path)
+    monkeypatch.setattr(generator, "SKILLS_DIR", skills_dir)
+    monkeypatch.setattr(generator, "EVALS_DIR", evals_dir)
+    monkeypatch.setattr(generator, "OUTPUT_PATH", output_path)
+
+    assert generator.main(["--check"]) == 1
+    err = capsys.readouterr().err
+    assert "FAIL" in err
+    assert "not valid UTF-8" in err
+
+
+def test_main_missing_narrative_file_fails_cleanly(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(generator, "NARRATIVE_PATH", tmp_path / "does-not-exist.md")
+    monkeypatch.setattr(generator, "SKILLS_DIR", tmp_path / "skills")
+    monkeypatch.setattr(generator, "EVALS_DIR", tmp_path / "evals")
+
+    assert generator.main([]) == 1
+    err = capsys.readouterr().err
+    assert "FAIL" in err
+    assert "cannot be read" in err
 
 
 # ---------------------------------------------------------------------------
