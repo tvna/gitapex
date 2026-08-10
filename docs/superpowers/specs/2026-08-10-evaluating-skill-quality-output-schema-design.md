@@ -329,8 +329,11 @@ may adjust shape during that implementation's own review):
       "required": ["token"],
       "additionalProperties": false,
       "properties": {
-        "token": { "enum": ["Well-formed-and-mature", "Well-formed-not-mature", "Not-well-formed", "Indeterminate"] },
-        "reason": { "type": "string", "description": "Required when token is Not-well-formed or Indeterminate, per rubric.md's own Verdicts section ('State the specific failing check(s)' / 'State the concrete blocking cause'). Left as a prose requirement here rather than a schema if/then -- straightforward to add at implementation time." }
+        "token": {
+          "enum": ["WELL-FORMED-AND-MATURE", "WELL-FORMED-NOT-MATURE", "NOT-WELL-FORMED", "INDETERMINATE"],
+          "description": "ALL-CAPS-WITH-HYPHENS, matching gitapex_gate_skill_audit_disclosure.py's own _VERDICTS vocabulary casing for the first three values exactly -- not a coincidence to preserve unflagged, but a deliberate match to this repository's one entrenched casing convention for this exact verdict family (also used in every metadata/gitapex.yaml decision-log verdict: entry and evals/*/eval-status.md). INDETERMINATE is this schema's own fourth state; the disclosure gate itself has no INDETERMINATE token and instead routes that case through its WAIVED: <reason> escape hatch (rubric.md's Verdicts section says as much), so this value has no direct disclosure-gate counterpart -- it exists here because a structured record can distinguish the case a free-text PR-body line collapses into WAIVED."
+        },
+        "reason": { "type": "string", "description": "Required when token is NOT-WELL-FORMED or INDETERMINATE, per rubric.md's own Verdicts section ('State the specific failing check(s)' / 'State the concrete blocking cause'). Left as a prose requirement here rather than a schema if/then -- straightforward to add at implementation time." }
       }
     },
 
@@ -404,11 +407,15 @@ by direct read). Concretely:
   job, keeping the substring scorer's own responsibility unchanged.
 - This buys the actual thing `eval-status.md`'s named gap complains
   about -- "confirms expected keywords appear, not that the full
-  nine-dimension walk ... actually ran" -- because
-  `SCHEMA_CONFIRMED` requires all nine `dimensions[]` entries with
-  `dimensionId`s 1-9 to be present with a non-empty `evidence[]` citing a
-  real `sourceRef`, which a keyword-stuffed non-walk cannot satisfy by
-  accident the way a substring match can.
+  nine-dimension walk ... actually ran" -- once the deferred
+  dimensionId-coverage `if`/`then` check and the checker-side `sourceRef`
+  re-derivability rule (both named in the "Deliberately not drafted here"
+  paragraph below) also ship alongside the schema: today's draft alone
+  requires nine `dimensions[]` entries with a non-empty `evidence[]`, but
+  without those two pieces a degenerate nine-entry array (e.g. all nine
+  sharing `dimensionId: 1`) still validates, so the anti-gaming property
+  this bullet describes is a claim about the schema plus its two deferred
+  companions, not about the draft alone.
 
 Rejected alternative: a from-scratch "successor scorer" replacing
 `gitapex_score_contract.py`'s substring logic wholesale. Rejected because
