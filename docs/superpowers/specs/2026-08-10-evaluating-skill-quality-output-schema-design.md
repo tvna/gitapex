@@ -315,8 +315,8 @@ may adjust shape during that implementation's own review):
               "required": ["quote", "sourceRef"],
               "additionalProperties": false,
               "properties": {
-                "quote": { "type": "string" },
-                "sourceRef": { "type": "string" }
+                "quote": { "type": "string", "minLength": 1 },
+                "sourceRef": { "type": "string", "minLength": 1 }
               }
             }
           }
@@ -489,7 +489,7 @@ plan/ACM in the PR body). The follow-on implementation issue should scope,
 in order:
 
 1. `skills/evaluating-skill-quality/references/output-schema.json`,
-   refining Decision 1's draft (including the three deferred `if`/`then`
+   refining Decision 1's draft (including the four deferred `if`/`then`
    predicates) and re-verifying every cited line/count against `main` at
    that time.
 2. `evals/scripts/gitapex_check_schema_conformance.py` and the
