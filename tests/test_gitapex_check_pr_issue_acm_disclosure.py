@@ -324,6 +324,18 @@ def test_fetch_issue_returns_body_and_state():
     assert result == {"body": "the body", "state": "open"}
 
 
+def test_fetch_issue_raises_cleanly_on_non_dict_response():
+    # Issue #995: `_call`'s return value is unvalidated parsed JSON
+    # (`_gitapex_github_http.py`'s own contract) -- a non-dict response body
+    # used to raise an uncaught AttributeError on `data.get(...)` instead of
+    # this module's own documented GitHubApiError.
+    def opener(request: urllib.request.Request) -> Response:
+        return Response(200, json.dumps(["not", "a", "dict"]))
+
+    with pytest.raises(checker.GitHubApiError, match="expected a JSON object"):
+        checker.fetch_issue("tvna", "gitapex", 657, "tok", opener=opener, sleeper=lambda _: None)
+
+
 # ---------------------------------------------------------------------------
 # classify_issue
 # ---------------------------------------------------------------------------
@@ -532,6 +544,32 @@ def test_main_reports_error_for_non_utf8_payload_file(tmp_path, capsys):
     err = capsys.readouterr().err
     assert "not valid UTF-8" in err
     assert str(path) in err
+
+
+@pytest.mark.parametrize("field_name", ["owner", "repo"])
+@pytest.mark.parametrize("bad_value", [123, ["a", "list"], {"a": "dict"}, True])
+def test_main_reports_error_for_non_string_owner_or_repo(monkeypatch, capsys, field_name, bad_value):
+    # Issue #995: `payload.get("owner") or ""`/`payload.get("repo") or ""`
+    # tolerate an absent/None field but pass a truthy non-string value
+    # (e.g. an int from a malformed hook-stdin payload) through unchanged,
+    # which used to crash `re.escape()` inside
+    # `_normalize_same_repo_citations` with an uncaught TypeError.
+    payload = {"owner": "o", "repo": "r", "title": "t", "body": "Closes #1"}
+    payload[field_name] = bad_value
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(payload)))
+    assert checker.main([]) == 1
+    err = capsys.readouterr().err
+    assert f"field '{field_name}'" in err
+    assert type(bad_value).__name__ in err
+
+
+def test_main_allows_owner_and_repo_absent_or_null(monkeypatch, capsys):
+    # Absent/None must keep falling through to the existing `or ""`
+    # fallback, not the new type-check deny path.
+    payload = json.dumps({"title": "t", "body": "Refs #1", "owner": None, "repo": None})
+    monkeypatch.setattr("sys.stdin", io.StringIO(payload))
+    assert checker.main([]) == 0
+    assert "PASS" in capsys.readouterr().out
 
 
 def test_main_prefers_gh_token_over_github_token(monkeypatch):

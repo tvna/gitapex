@@ -276,10 +276,14 @@ def fetch_issue(
     sleeper: Callable[[float], None] | None = None,
 ) -> dict[str, str]:
     """Return {'body': str, 'state': str} for issue `number`. Raises
-    GitHubApiError -- see `_call`'s docstring for its two message shapes."""
+    GitHubApiError -- see `_call`'s docstring for its two message shapes,
+    plus a non-dict response body (`_call`'s return value is unvalidated
+    parsed JSON, per `_gitapex_github_http.py`'s own contract)."""
     sleeper = sleeper if sleeper is not None else time.sleep
     url = f"{_API_ROOT}/repos/{owner}/{repo}/issues/{number}"
     data = _call(url, token, opener, sleeper)
+    if not isinstance(data, dict):
+        raise GitHubApiError(f"GET {url} returned {type(data).__name__}, expected a JSON object")
     return {"body": data.get("body") or "", "state": data.get("state") or ""}
 
 
@@ -394,6 +398,21 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 1
+
+    # `payload.get("owner") or ""`/`payload.get("repo") or ""` below tolerate
+    # an absent/None field, but a truthy non-string value (e.g. an int or
+    # list) would pass unchanged and later crash `re.escape()` inside
+    # `_normalize_same_repo_citations` with an uncaught TypeError instead of
+    # this documented error path.
+    for field_name in ("owner", "repo"):
+        field_value = payload.get(field_name)
+        if field_value is not None and not isinstance(field_value, str):
+            print(
+                f"error: payload ({payload_source}) field '{field_name}' must be a string, "
+                f"got {type(field_value).__name__}",
+                file=sys.stderr,
+            )
+            return 1
 
     token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
     passed, message = evaluate(

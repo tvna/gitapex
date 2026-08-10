@@ -57,7 +57,14 @@ def fetch_json_page(
     """GET one page of a GitHub REST list endpoint that returns a JSON
     array, retrying transient failures. Generic across endpoints (issues,
     pulls, ...) -- the retry/backoff shape has nothing endpoint-specific
-    about it."""
+    about it.
+
+    Contract: the return value is unvalidated parsed JSON (this function
+    only checks HTTP status and JSON-parseability, not shape) -- every
+    caller must shape-check it before use (a non-list response, or a list
+    containing a non-dict item) rather than assume the annotated type
+    holds at runtime. `_gitapex_rulesets.py` is the existing example to
+    follow (issue #995)."""
     page: list[dict[str, Any]] = fetch_json_document(url, token, opener, sleeper)
     return page
 
@@ -84,6 +91,10 @@ def fetch_json_document(
     Behaviour for existing callers is byte-for-byte unchanged; they still
     get `list[dict[str, Any]]`, still raise `GitHubApiError` on the same
     conditions.
+
+    Contract: like `fetch_json_page`, the return value is unvalidated
+    parsed JSON -- every caller must shape-check it before use.
+    `_gitapex_rulesets.py` is the existing example to follow (issue #995).
     """
     last_code = 0
     last_body = ""

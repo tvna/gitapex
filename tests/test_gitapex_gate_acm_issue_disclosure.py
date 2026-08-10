@@ -297,6 +297,26 @@ def test_has_marker_comment_returns_false_after_exhausting_all_pages():
     assert gate.has_marker_comment("tvna", "gitapex", 414, "tok", opener=opener) is False
 
 
+def test_has_marker_comment_raises_cleanly_on_non_list_response():
+    # Issue #995: `comments` used to be iterated on trust -- a non-list
+    # comments-list response (e.g. a malformed/unexpected GitHub API body)
+    # raised an uncaught error deep inside the `any(...)` generator instead
+    # of this gate's own documented GitHubApiError.
+    def opener(request: urllib.request.Request) -> Response:
+        return Response(200, json.dumps({"not": "a list"}))
+
+    with pytest.raises(gate.GitHubApiError, match="expected a JSON array"):
+        gate.has_marker_comment("tvna", "gitapex", 414, "tok", opener=opener)
+
+
+def test_has_marker_comment_raises_cleanly_on_non_dict_list_item():
+    def opener(request: urllib.request.Request) -> Response:
+        return Response(200, json.dumps(["not a dict"]))
+
+    with pytest.raises(gate.GitHubApiError, match="expected an object"):
+        gate.has_marker_comment("tvna", "gitapex", 414, "tok", opener=opener)
+
+
 def test_post_comment_includes_marker_and_waiver_guidance():
     captured = {}
 
