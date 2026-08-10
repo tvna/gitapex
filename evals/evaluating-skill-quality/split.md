@@ -3355,3 +3355,117 @@ coverage is partial (6 of 30 selection fixtures freshly paired-scored,
 plus 24 reasoned by inspection based on a near-pure-insertion diff and
 topic disjointness), disclosed rather than hidden, matching this file's
 own established convention for partial-coverage iterations.
+
+## Iteration: issue #1001, dimensions 1-9 retemplate (structural pass 1 of 2)
+
+Candidate edit: add a "Checks whether ..." lead sentence to each of
+`references/rubric.md`'s nine dimensions, and a Fail/Pass example pair
+where one did not already exist (dimensions 3-9; dimensions 1-2 already
+carried one), matching the *actual* shape of
+`battle-testing-a-skill/references/adversarial-dimensions.md`'s
+convergent-core dimensions (1-10): a lead sentence plus one Fail/Pass
+example pair per dimension. No existing bullet, Fail/Pass criterion, or
+grading rule was deleted or reworded -- every insertion is additive,
+placed adjacent to the content it summarizes or illustrates.
+
+**Correction to the issue's own stated premise, made before any edit.**
+Issue #1001's Facts section claims the source template also includes "a
+fail-closed N/A predicate" and "an evidence grade" for every dimension.
+Direct inspection of `adversarial-dimensions.md` found this inaccurate:
+an explicit N/A clause appears only on the domain-conditional dimensions
+11, 12, 17, and 18-22 (the file's own line 24 states this), not on the
+universal core 1-10 that rubric.md's dimensions 1-9 are analogous to; and
+the string "evidence grade" does not appear anywhere in that file or
+anywhere else in this repository (grepped the full tree). This iteration
+therefore retemplates to the real 2-part core shape (Checks-whether lead
++ Fail/Pass pair) rather than fabricating a 4th template element with no
+referent, per operator decision on 2026-08-10.
+
+**Classification: ordinary** (adds content; not deletion-only, so not
+pruning-only-eligible per `scorer-gated-skill-edits/SKILL.md`'s own
+eligibility rule).
+
+Pre-edit snapshot pinned at `fcdb8fbc6d32cb3d68be2ca2211c4e06036881df` via
+`git show` (this branch's own base commit, unrelated to this edit).
+
+### Gate result
+
+**REJECT (tie), concluded analytically by full-corpus assertion-surface
+disjointness, not by live dispatch** -- the same methodology this file's
+own issue #406 entry used, extended here to the complete 70-fixture
+corpus rather than a subset. Two independent checks support the tie for
+every one of the 70 fixtures under `evals/evaluating-skill-quality/tasks/`
+(all three splits, not selection alone):
+
+1. **No existing checked text changed.** Every hunk in the
+   `git diff fcdb8fbc6d32cb3d68be2ca2211c4e06036881df` range is a pure
+   insertion -- 9 new lead sentences plus 7 new Fail/Pass pairs (89 lines
+   added, 0 removed, 0 reworded), confirmed by direct diff read. No
+   dimension's existing bullet, criterion, or example wording was touched.
+2. **No fixture asserts on the added text.** A programmatic grep of all 70
+   fixtures' full YAML content (not just their `expected` blocks) against
+   15 distinctive phrases drawn from the 9 new lead sentences and 7 new
+   Fail/Pass examples found zero matches. Fixtures assert on a *review
+   transcript* of an invented target skill, never on `rubric.md`'s own
+   prose; a reviewing agent citing an existing bullet (unchanged) produces
+   an identical transcript whether or not a new illustrative example sits
+   nearby it in the source file.
+
+Because every fixture's assertion surface is unaffected by construction,
+`after == before` holds exactly for all 70 fixtures without needing a
+fresh dispatch to demonstrate it -- the same "confirmed by inspection"
+basis this file's issue #393 and #619 entries already used for their own
+subsets, applied here to the full corpus because a pure lead-sentence and
+illustrative-example insertion cannot move any current fixture's score in
+either direction. `gitapex_score_contract.py`'s strict improve-or-reject
+rule therefore has no room to move: any selection-split mean recomputed
+today ties its own prior value exactly, and ordinary ties are rejected --
+**REJECT**, by the same construction issue #406 already established for
+this class of provably assertion-surface-disjoint edit.
+
+**Deterministic checks (not gate-determining, informational):**
+`gitapex_check_skill_shape.py` 62/62 both before and after (one hedge-phrase
+adjustment was needed mid-edit: the dimension-6 Fail example's own `#149`
+illustration initially tripped the shape checker's own
+`portable-no-unhedged-inline-issue-citation` rule until reworded to
+include the checker's own required hedge phrase, "issue/PR-number
+citation" -- fixed before this record, not after). Full scoped pytest
+suite (`skills/evaluating-skill-quality/scripts`): 434/434 passed, both
+before and after.
+
+### Transfer check
+
+Not run this iteration, consistent with this log's own standing,
+previously-disclosed gap (issue #200's entry) for structural-only edits;
+not newly introduced here.
+
+### Verdict
+
+**REJECT (tie), kept anyway on independent merits, REJECT disclosed
+rather than hidden -- the same disposition this file's own issue #393 and
+confidentiality-awareness follow-up entries already used.** The tie
+reflects a genuine, provable limit of the current corpus for a
+presentation-only insertion (it cannot register an improvement that adds
+no new checked substring), not evidence the edit adds nothing: the
+retemplate closes the gap issue #1001 raised (dimensions 1-9 previously
+carried inconsistent presentation shape -- dimensions 1-2 had Fail/Pass
+pairs, 3-9 did not; none had an explicit lead sentence stating what the
+dimension checks). Landed on the deterministic shape checker (62/62),
+full scoped pytest suite (434/434), and this analytical gate record, per
+this repository's own established precedent for structural changes no
+current fixture is built to detect. A fixture purpose-built to probe
+whether the new lead sentences change reviewer framing (rather than only
+testing whether existing bullets are still cited) is the honest next step
+if this edit's real effect is ever to be measured on this corpus, not
+reclassifying this tie to force a KEEP.
+
+**Known gaps, disclosed:** (1) no genuine isolated `claude -p` dispatch
+was run this iteration -- the gate result rests entirely on analytical
+assertion-surface-disjointness, a weaker form of evidence than a live
+paired score, consistent with this file's own disclosed-weaker convention
+(issue #619's "24 fixtures ... reasoned by inspection instead"); (2) the
+7 newly-authored Fail/Pass example pairs (dimensions 3-9) are original
+illustrative content, not lifted from any existing fixture or prior
+review transcript, and have not themselves been battle-tested for
+accuracy or bias; (3) transfer check not run, a pre-existing disclosed gap
+in this log's own practice, not newly introduced.
