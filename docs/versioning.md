@@ -10,7 +10,7 @@ CLI-only change actually shipped.
 
 | Product | Scope | Tag format | Version file | Status |
 |---|---|---|---|---|
-| **plugin** | `skills/`, `.claude-plugin/plugin.json` | `plugin-vX.Y.Z` | `.claude-plugin/plugin.json` | Live now (`0.1.0`) |
+| **plugin** | `skills/`, `.claude-plugin/plugin.json` | `plugin-vX.Y.Z` | `plugin.json` | Live now (`0.1.0`) |
 | **cli** | The future gitapex single-binary CLI: SSOT config (`.gitapex/ssot.json`) plus a modular policy-engine-driven governance/gate-control layer for business-domain changes (embedded Rego via `regorus`, per issue #125's decided design), including git/GitHub middleware and SaaS-integration operations -- the originally-scoped approved read-only gh wrapper is one governed-operation instance within this, not the whole product (see `docs/superpowers/specs/2026-07-15-gitapex-cli-governance-design.md` and tracking issue #82). Currently Python tooling under `.github/scripts/`; **Rust, decided 2026-07-18** (see `docs/superpowers/specs/2026-07-16-business-domain-policy-engine-tradeoff.md`'s Rust-vs-Go decision brief), conditional on the `regorus` conformance fixture-suite (#125) passing -- revisit to Go only if that tripwire fires, while the switch is still a design edit, not a code rewrite | `cli-vX.Y.Z` | To be decided when the CLI product exists | Reserved — no version file yet |
 | **compose** | Future deployment/dev topology (e.g. docker-compose) | `compose-vX.Y.Z` | To be decided when compose assets exist | Reserved — no version file yet |
 
