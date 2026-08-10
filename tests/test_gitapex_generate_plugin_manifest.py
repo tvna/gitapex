@@ -1,7 +1,7 @@
 """Tests for the .claude-plugin/plugin.json generator
 (.github/scripts/gitapex_generate_plugin_manifest.py).
 
-Issue #<ISSUE_NUMBER>. The final test is the drift check itself: regenerating
+Issue #1028. The final test is the drift check itself: regenerating
 into memory from the real repository-root plugin.json must produce exactly
 the committed .claude-plugin/plugin.json -- the mirror this migration
 introduces, replacing .claude-plugin/plugin.json as the plugin-identity

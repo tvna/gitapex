@@ -2,7 +2,7 @@
 """Generate .claude-plugin/plugin.json (the Claude Code/Codex plugin manifest)
 from the repository-root plugin.json (the Agent Plugins Specification
 (agent-plugins.org) v1.0.0 manifest, and this repository's own
-plugin-identity single source of truth as of issue #<ISSUE_NUMBER>).
+plugin-identity single source of truth as of issue #1028).
 
 Before this script, .claude-plugin/plugin.json was itself the SSOT for the
 plugin's name/version/description/author/homepage/repository/license, hand-
@@ -32,7 +32,7 @@ upstream plugin.schema.json -- that is a separate concern, covered by
 gitapex_scan_plugin_manifest_schema.py. This script trusts plugin.json is a
 JSON object with a $schema key to strip and does no further inspection.
 
-ACTIVE (issue #<ISSUE_NUMBER>): enforced via the pytest gate in
+ACTIVE (issue #1028): enforced via the pytest gate in
 tests/test_gitapex_generate_plugin_manifest.py -- no dedicated CI workflow
 step, the same established convention as
 gitapex_generate_skill_eval_status.py and this repository's other
