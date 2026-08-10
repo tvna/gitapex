@@ -118,6 +118,25 @@ It reads a skill's own stable text (its `rubric.md`, if it has one, and its
      keys for its indeterminate-direction ban is not wrongly flagged as
      having "no bans in either direction".
 
+  5c. Task-level graders (#869) -- migrating an `output_contains`/
+     `output_not_contains` assertion out of the `expected:` block into
+     waza's own native `graders: [{type: text, config: {...}}]` mechanism
+     (#859) used to drop it out of every check above's scope, since none of
+     them read `graders` at all. Checks 1-5b now also read a `type: text`
+     grader's `config.contains`/`config.not_contains`/`config.contains_cs`/
+     `config.not_contains_cs` (`_grader_text_assertions`), routed into the
+     same roles their `expected:`-block counterparts already fill:
+     `contains_cs`/`not_contains_cs` (case-sensitive, per waza's own schema)
+     as `output_contains`/`output_not_contains`; `contains`/`not_contains`
+     (case-insensitive) as `output_icontains`/`output_not_icontains`. This
+     means check 1 (case-sensitivity) runs against `contains_cs` but not
+     `contains`, for the same reason it already skips `output_icontains`.
+     Check 5b (unsatisfiable/redundant pair) merges both blocks together, so
+     a contradiction spanning an `expected:` assertion and a `graders:`
+     assertion on the same fixture -- not just a same-block one -- is
+     caught, since this repository's own migrated fixtures use both blocks
+     at once.
+
 Two further checks exist but ship **off by default**, opt in with
 `--check-prompt-echo` / `--check-cross-task`, and never affect the exit
 code even when enabled (they print as non-blocking notes): real-corpus
@@ -219,6 +238,7 @@ import argparse
 import glob as globlib
 import re
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -452,11 +472,18 @@ class TaskFixture(BaseModel):
 
     ``graders`` (issue #859) is waza's own native task-level mechanism
     (``graders: [{type: text, config: {contains/not_contains/...}}]``,
-    schema-validated by ``waza check`` itself) -- this linter does not
-    read its contents, so it is typed as opaque ``list[Any]`` purely to
-    keep such fixtures from falling into ``_load_fixture_dict``'s
-    ValidationError fallback path, which would silently exclude them from
-    every other check in this file.
+    schema-validated by ``waza check`` itself) -- it is typed as opaque
+    ``list[Any]`` here purely to keep such fixtures from falling into
+    ``_load_fixture_dict``'s ValidationError fallback path, which would
+    silently exclude them from every other check in this file; this model
+    does not validate a grader's own shape (that is ``waza check``'s job).
+    Since issue #869, ``_grader_text_assertions`` does read a ``type: text``
+    grader's ``config.contains``/``config.not_contains``/``config.
+    contains_cs``/``config.not_contains_cs`` out of this opaque list, so the
+    substring-quality checks (case-sensitivity, negation-trap, paraphrase-
+    drift, short-word-collision, symmetric-ban, unsatisfiable/redundant-pair)
+    cover an assertion the same way regardless of whether it lives in
+    ``expected:`` or ``graders:``.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -572,6 +599,67 @@ def _as_tag_list(value: object) -> list[str]:
     return [str(value)]
 
 
+# waza's own task-level grader config keys (schema: .gitapex/waza-task.schema.json's
+# textGraderConfig) this linter's checks now also read (issue #869). ``contains``/
+# ``not_contains`` match case-insensitively -- routed like ``output_icontains``/
+# ``output_not_icontains`` -- ``contains_cs``/``not_contains_cs`` match case-
+# sensitively -- routed like ``output_contains``/``output_not_contains``. Kept as
+# a module-level constant so both ``_grader_text_assertions`` and its callers
+# share one spelling of the four keys.
+GRADER_TEXT_KEYS = ("contains", "not_contains", "contains_cs", "not_contains_cs")
+
+
+def _grader_text_assertions(graders: object) -> dict[str, list[str]]:
+    """Merge the ``contains``/``not_contains``/``contains_cs``/``not_contains_cs``
+    entries from every ``type: text`` grader's ``config`` across a fixture's
+    ``graders:`` list (issue #869) into one dict keyed by those four names --
+    parallel to this linter's existing ``expected.output_contains`` family, so
+    migrating an assertion from ``expected:`` into waza's own native ``graders:``
+    mechanism (issue #859) does not silently drop it out of this linter's scope.
+
+    A fixture can declare more than one ``type: text`` grader; their configs are
+    merged, not just the first one read. Non-``type: text`` graders, non-dict
+    entries, and non-string config values are skipped rather than raising --
+    waza's own schema (``waza check``), not this linter, is the source of truth
+    for whether a grader is well-formed; this function only extracts what it can
+    use, the same tolerant-parsing convention as ``_as_tag_list`` and
+    ``_load_fixture_dict``'s malformed-input fallback.
+
+    Each of the four config keys must itself be a ``list`` before iterating
+    it (adversarial review before this shipped): waza's own schema declares
+    them array-of-string, but schema validation is advisory-only in this
+    repository's CI (``waza check`` runs with ``continue-on-error: true``),
+    so a malformed fixture reaching this linter is a real, not hypothetical,
+    input. Iterating a non-list value unconditionally has two distinct
+    failure modes a bare ``config.get(key) or []`` does not guard against:
+    a truthy non-iterable scalar (``contains: 5``) raises an uncaught
+    ``TypeError`` that would abort linting for every other fixture too, not
+    just the offending one -- the exact invariant
+    ``lint_skill_tasks``'s own docstring documents twice-adversarially-
+    hardening; and a bare string scalar (``contains: "hooks or
+    permission"``, forgetting the ``- item`` YAML list form -- the same
+    authoring mistake ``_as_tag_list`` exists to handle for ``tags``) is
+    itself iterable, so it would silently mis-parse into one single-
+    character "assertion" per character instead of surfacing as a
+    malformed-fixture problem or being linted as the real, intended phrase.
+    """
+    result: dict[str, list[str]] = {key: [] for key in GRADER_TEXT_KEYS}
+    if not isinstance(graders, list):
+        return result
+    for grader in graders:
+        if not isinstance(grader, dict) or grader.get("type") != "text":
+            continue
+        config = grader.get("config")
+        if not isinstance(config, dict):
+            continue
+        for key in GRADER_TEXT_KEYS:
+            raw_values = config.get(key)
+            if not isinstance(raw_values, list):
+                continue
+            result[key].extend(v for v in raw_values if isinstance(v, str))
+    return result
+
+
 def check_case(value: str, anchors: list[str]) -> str | None:
     """Warn when a multi-word assertion matches a rubric anchor
     case-insensitively but with different casing than every anchor it
@@ -657,12 +745,16 @@ def check_short_word_collision(value: str) -> str | None:
     return hits[0] if hits else None
 
 
-def check_unsatisfiable_assertion_pair(expected: dict[str, Any]) -> list[tuple[str, str, str, str]]:
+def check_unsatisfiable_assertion_pair(
+    expected: dict[str, Any], graders: object = None
+) -> list[tuple[str, str, str, str]]:
     """Detect assertion pairs across ``output_contains``/``output_icontains``/
-    ``output_not_icontains``/``output_contains_near`` that can never jointly
-    score 1.0, or that redundantly assert the same casefolded substring
-    twice (#628). Returns a list of ``(key, value, rule, detail)`` tuples,
-    mirroring ``lint_task``'s other per-value checks.
+    ``output_not_icontains``/``output_contains_near`` (plus, since issue #869,
+    the same roles filled by a ``type: text`` grader's ``config.contains``/
+    ``config.contains_cs``/``config.not_contains``/``config.not_contains_cs``)
+    that can never jointly score 1.0, or that redundantly assert the same
+    casefolded substring twice (#628). Returns a list of ``(key, value, rule,
+    detail)`` tuples, mirroring ``lint_task``'s other per-value checks.
 
     See the module docstring's check 5b for the full reasoning, including
     why the mirrored ``output_not_contains``/``output_icontains`` direction
@@ -680,75 +772,176 @@ def check_unsatisfiable_assertion_pair(expected: dict[str, Any]) -> list[tuple[s
     redundant the same way the positive-direction pair is (the stronger,
     case-insensitive ban always subsumes the weaker, case-sensitive one on
     that substring) -- the first draft only checked the positive direction.
+
+    Issue #869 (``graders`` optional, defaulting to ``None`` so every existing
+    caller that only ever checked the ``expected:`` block keeps working
+    unchanged): ``contains_cs``/``not_contains_cs`` merge into the same role as
+    ``output_contains``/``output_not_contains`` (case-sensitive), ``contains``/
+    ``not_contains`` into the same role as ``output_icontains``/
+    ``output_not_icontains`` (case-insensitive) -- so a contradiction or
+    redundancy spanning BOTH the ``expected:`` block and ``graders:`` (a
+    fixture using one mechanism for some assertions and the other for others,
+    which this repository's own migrated fixtures do) is caught too, not just
+    a same-block one. Each value now carries its originating key (e.g.
+    ``"graders.not_contains"``) through to the reported finding, rather than
+    the fixed ``expected:``-block key names the pre-#869 version always used,
+    so a grader-sourced finding is labeled accurately.
+
+    A CodeRabbit review on PR #986 caught a further gap, pre-dating #869 but
+    made directly reachable by the ``contains_cs``/``not_contains_cs`` roles
+    it adds: an exact-case requirement (``output_contains``/``graders.
+    contains_cs``/an ``output_contains_near`` member) and an exact-case ban
+    (``output_not_contains``/``graders.not_contains_cs``) naming the
+    identical literal string never jointly hold either, independent of the
+    casefolded check above -- see the inline comment at its own call site.
     """
-    contains = [v for v in (expected.get("output_contains") or []) if isinstance(v, str)]
-    icontains = [v for v in (expected.get("output_icontains") or []) if isinstance(v, str)]
-    not_contains = [v for v in (expected.get("output_not_contains") or []) if isinstance(v, str)]
-    not_icontains = [v for v in (expected.get("output_not_icontains") or []) if isinstance(v, str)]
+    grader_assertions = _grader_text_assertions(graders)
+
+    contains = [(v, "output_contains") for v in _typed_str_list(expected, "output_contains")]
+    icontains = [(v, "output_icontains") for v in _typed_str_list(expected, "output_icontains")]
+    not_contains = [(v, "output_not_contains") for v in _typed_str_list(expected, "output_not_contains")]
+    not_icontains = [(v, "output_not_icontains") for v in _typed_str_list(expected, "output_not_icontains")]
+    contains += [(v, "graders.contains_cs") for v in grader_assertions["contains_cs"]]
+    icontains += [(v, "graders.contains") for v in grader_assertions["contains"]]
+    not_contains += [(v, "graders.not_contains_cs") for v in grader_assertions["not_contains_cs"]]
+    not_icontains += [(v, "graders.not_contains") for v in grader_assertions["not_contains"]]
     near_members = [
-        v
+        (v, "output_contains_near")
         for entry in (expected.get("output_contains_near") or [])
         if isinstance(entry, dict)
         for v in (entry.get("all") or [])
         if isinstance(v, str)
     ]
 
+    def _first_by_key(pairs: list[tuple[str, str]], key: Callable[[str], str]) -> dict[str, tuple[str, str]]:
+        """One representative ``(value, source)`` per ``key(value)``, first-seen
+        wins. Used for the "requirement" side of a contradiction/redundancy
+        check: only one example is needed to prove a requirement exists for
+        that key, so collapsing extra requirement-side sources (e.g. the same
+        literal required via both ``expected:`` and ``graders:``) is correct,
+        not lossy (adversarial review finding on PR #986: the pre-fix version
+        did NOT dedupe this side, so a duplicated or multi-sourced requirement
+        produced one duplicate finding per occurrence).
+        """
+        result: dict[str, tuple[str, str]] = {}
+        for value, source in pairs:
+            result.setdefault(key(value), (value, source))
+        return result
+
+    def _group_by_key(pairs: list[tuple[str, str]], key: Callable[[str], str]) -> dict[str, list[tuple[str, str]]]:
+        """Every distinct ``(key(value), source)`` pair, grouped by
+        ``key(value)``. Used for the "ban" (or redundant "weak") side: unlike
+        the requirement side, each distinct source banning (or redundantly
+        asserting) the same key is its OWN independent contradiction/
+        redundancy -- issue #869's own merge of ``expected:`` and ``graders:``
+        sources into shared roles made this reachable for the first time
+        (adversarial review finding on PR #986: the pre-fix version collapsed
+        this side to a single first-match-wins entry via ``setdefault``, so a
+        second, differently-sourced ban or redundant assertion on the
+        identical string was silently dropped). A duplicate *within* one
+        source (the same literal listed twice under one key) is still
+        collapsed via the ``(key, source)`` identity, since that is authoring
+        noise, not two independent findings.
+        """
+        groups: dict[str, list[tuple[str, str]]] = {}
+        seen: set[tuple[str, str]] = set()
+        for value, source in pairs:
+            k = key(value)
+            dedup_key = (k, source)
+            if dedup_key in seen:
+                continue
+            seen.add(dedup_key)
+            groups.setdefault(k, []).append((value, source))
+        return groups
+
     # Anything that guarantees the substring's casefolded form is present:
-    # a literal-presence requirement (output_contains, or a
-    # output_contains_near "all" member, which the near-check also
-    # requires to be literally present), OR output_icontains itself
-    # (which already matches case-insensitively).
-    require_casefolded_presence: dict[str, str] = {}
-    for value in contains + near_members + icontains:
-        require_casefolded_presence.setdefault(value.casefold(), value)
-    not_icontains_by_fold: dict[str, str] = {}
-    for value in not_icontains:
-        not_icontains_by_fold.setdefault(value.casefold(), value)
+    # a literal-presence requirement (output_contains/graders.contains_cs, or
+    # a output_contains_near "all" member, which the near-check also
+    # requires to be literally present), OR output_icontains/graders.contains
+    # itself (which already matches case-insensitively).
+    require_casefolded_presence = _first_by_key(contains + near_members + icontains, str.casefold)
+    not_icontains_by_fold = _group_by_key(not_icontains, str.casefold)
 
     findings: list[tuple[str, str, str, str]] = []
-    for folded, required in require_casefolded_presence.items():
-        banned = not_icontains_by_fold.get(folded)
-        if banned is not None:
+
+    # Exact-case contradiction (adversarial review, CodeRabbit finding on
+    # PR #986): a case-sensitive requirement (output_contains/graders.
+    # contains_cs, or an output_contains_near "all" member) and a case-
+    # sensitive ban (output_not_contains/graders.not_contains_cs) on the
+    # IDENTICAL literal string can never jointly hold -- this predates issue
+    # #869 (it already missed a plain output_contains: ["Foo"] vs.
+    # output_not_contains: ["Foo"] pair) but issue #869's own contains_cs/
+    # not_contains_cs roles make it directly reachable via graders too, so
+    # it is fixed here rather than filed as a separate gap. Deliberately
+    # keyed on ``icontains`` NOT being included on the requirement side: a
+    # case-insensitive requirement (icontains) paired with a same-folded but
+    # differently-cased case-sensitive ban (e.g. icontains: ["foo"],
+    # not_contains: ["Foo"]) is satisfiable (text containing only "FOO"),
+    # the same already-documented mirrored-direction exemption above.
+    require_exact_presence = _first_by_key(contains + near_members, lambda v: v)
+    not_contains_by_value = _group_by_key(not_contains, lambda v: v)
+    for value, (required, required_source) in require_exact_presence.items():
+        for banned, banned_source in not_contains_by_value.get(value, []):
             findings.append(
                 (
-                    "output_not_icontains",
+                    banned_source,
                     banned,
                     "unsatisfiable-assertion-pair",
-                    f"{required!r} is required (via output_contains/"
-                    f"output_contains_near/output_icontains) and {banned!r} is "
-                    f"banned case-insensitively for the same substring -- "
+                    f"{required!r} is required (via {required_source}) and {banned!r} is "
+                    f"banned case-sensitively (via {banned_source}) for the identical string -- "
                     f"satisfying the requirement guarantees the ban fails, so "
                     f"this fixture can never score 1.0",
                 )
             )
 
-    def _redundant_pairs(strong: list[str], weak: list[str], strong_key: str, weak_key: str) -> None:
-        strong_by_fold: dict[str, str] = {}
-        for value in strong:
-            strong_by_fold.setdefault(value.casefold(), value)
-        seen: set[str] = set()
-        for value in weak:
-            folded = value.casefold()
-            matched = strong_by_fold.get(folded)
-            if matched is not None and folded not in seen:
-                seen.add(folded)
+    for folded, (required, required_source) in require_casefolded_presence.items():
+        for banned, banned_source in not_icontains_by_fold.get(folded, []):
+            findings.append(
+                (
+                    banned_source,
+                    banned,
+                    "unsatisfiable-assertion-pair",
+                    f"{required!r} is required (via {required_source}) and {banned!r} is "
+                    f"banned case-insensitively (via {banned_source}) for the same substring -- "
+                    f"satisfying the requirement guarantees the ban fails, so "
+                    f"this fixture can never score 1.0",
+                )
+            )
+
+    def _redundant_pairs(strong: list[tuple[str, str]], weak: list[tuple[str, str]]) -> None:
+        strong_by_fold = _first_by_key(strong, str.casefold)
+        weak_by_fold = _group_by_key(weak, str.casefold)
+        for folded, (matched_value, matched_source) in strong_by_fold.items():
+            for value, weak_source in weak_by_fold.get(folded, []):
                 findings.append(
                     (
-                        strong_key,
-                        matched,
+                        matched_source,
+                        matched_value,
                         "redundant-assertion-pair",
-                        f"{matched!r} ({strong_key}) duplicates {weak_key}: "
+                        f"{matched_value!r} ({matched_source}) duplicates {weak_source}: "
                         f"{value!r} (same substring, case-insensitively) -- the "
-                        f"{strong_key} form alone already covers it",
+                        f"{matched_source} form alone already covers it",
                     )
                 )
 
     # Same-polarity redundancy, both directions: the case-insensitive form
-    # (icontains/not_icontains) alone already covers the case-sensitive
-    # form (contains/not_contains) for the identical folded substring.
-    _redundant_pairs(icontains, contains, "output_icontains", "output_contains")
-    _redundant_pairs(not_icontains, not_contains, "output_not_icontains", "output_not_contains")
+    # (icontains/not_icontains, or graders.contains/graders.not_contains)
+    # alone already covers the case-sensitive form (contains/not_contains,
+    # or graders.contains_cs/graders.not_contains_cs) for the identical
+    # folded substring.
+    _redundant_pairs(icontains, contains)
+    _redundant_pairs(not_icontains, not_contains)
     return findings
+
+
+def _typed_str_list(data: dict[str, Any], key: str) -> list[str]:
+    """``data[key]`` coerced to a ``list[str]``, dropping non-string entries
+    and treating a missing/``None`` key as empty. Shared by
+    ``check_unsatisfiable_assertion_pair`` and ``check_symmetric_bans``
+    (adversarial review, PR #986) so this coercion is spelled once instead of
+    once per key at each call site.
+    """
+    return [v for v in (data.get(key) or []) if isinstance(v, str)]
 
 
 def classify_ban_direction(value: str) -> str:
@@ -773,18 +966,29 @@ def check_symmetric_bans(data: dict[str, Any]) -> str | None:
     closed.yaml` -- whose description explains stopping "as INDETERMINATE"
     as a report field, and whose bans are unrelated report-field names,
     not claim directions -- would be wrongly held to this rule.
+
+    Issue #869: a ``type: text`` grader's ``config.contains``/``config.
+    contains_cs`` count as valid positive declarations and ``config.
+    not_contains``/``config.not_contains_cs`` as valid bans too, the same way
+    ``output_icontains``/``output_not_icontains`` already do -- so a fixture
+    whose symmetric ban lives in ``graders:`` instead of ``expected:`` is not
+    wrongly flagged as having no bans (or no enum exemption) in either
+    direction.
     """
     haystack = " ".join(str(data.get(k) or "") for k in ("id", "name", "description"))
     haystack += " " + " ".join(_as_tag_list(data.get("tags")))
     if not INDETERMINATE_MARKER_RE.search(haystack):
         return None
     expected = data.get("expected") or {}
-    positives = [v for v in (expected.get("output_contains") or []) if isinstance(v, str)]
-    positives += [v for v in (expected.get("output_icontains") or []) if isinstance(v, str)]
+    grader_assertions = _grader_text_assertions(data.get("graders"))
+    positives = _typed_str_list(expected, "output_contains")
+    positives += _typed_str_list(expected, "output_icontains")
+    positives += grader_assertions["contains_cs"] + grader_assertions["contains"]
     if any(ENUM_TOKEN_RE.fullmatch(v) and "indeterminate" in v.lower() for v in positives):
         return None
-    bans = [v for v in (expected.get("output_not_contains") or []) if isinstance(v, str)]
-    bans += [v for v in (expected.get("output_not_icontains") or []) if isinstance(v, str)]
+    bans = _typed_str_list(expected, "output_not_contains")
+    bans += _typed_str_list(expected, "output_not_icontains")
+    bans += grader_assertions["not_contains_cs"] + grader_assertions["not_contains"]
     if not bans:
         return (
             "claims the underlying fact cannot be determined but declares "
@@ -880,6 +1084,69 @@ def check_dispatch_declaration_coverage(
     )
 
 
+def _lint_positive_values(
+    name: str,
+    key: str,
+    values: list[str],
+    anchors: list[str],
+    corpus_flat: str,
+    corpus_tokens: list[str],
+    *,
+    check_case_enabled: bool,
+) -> list[Warning_]:
+    """Checks 1 (case-sensitivity, gated by ``check_case_enabled``), 3
+    (paraphrase-drift), and 4 (short-word-collision) against one positive
+    ("this substring must appear") assertion list. Shared by
+    ``output_contains``/``output_icontains`` and their ``graders:``
+    equivalents ``contains_cs``/``contains`` (issue #869) -- factored out of
+    four near-identical inline loops so the same check sequence cannot
+    silently drift between an ``expected:``-block key and its ``graders:``
+    counterpart the next time one of these checks changes.
+    """
+    warnings: list[Warning_] = []
+    for value in values:
+        if check_case_enabled:
+            anchor = check_case(value, anchors)
+            if anchor:
+                warnings.append(
+                    Warning_(
+                        name, key, value, "case-sensitivity", f"matches rubric anchor {anchor!r} with different casing"
+                    )
+                )
+        drift = check_paraphrase(value, corpus_flat, corpus_tokens)
+        if drift:
+            warnings.append(Warning_(name, key, value, "paraphrase-drift", f"not a rubric substring but {drift}"))
+        collision = check_short_word_collision(value)
+        if collision:
+            warnings.append(
+                Warning_(
+                    name,
+                    key,
+                    value,
+                    "short-word-collision",
+                    f"short and alphabetic; also a bare substring of the common word {collision!r}",
+                )
+            )
+    return warnings
+
+
+def _lint_negative_values(name: str, key: str, values: list[str], negation_haystack: str) -> list[Warning_]:
+    """Check 2 (negation-trap) against one negative ("this substring must
+    NOT appear") assertion list. Shared by ``output_not_contains``/
+    ``output_not_icontains`` and their ``graders:`` equivalents
+    ``not_contains_cs``/``not_contains`` (issue #869) -- see
+    ``_lint_positive_values``.
+    """
+    warnings: list[Warning_] = []
+    for value in values:
+        neg = check_negation(value, negation_haystack)
+        if neg:
+            warnings.append(
+                Warning_(name, key, value, "negation-trap", f"banning it also rejects a correct denial -- {neg}")
+            )
+    return warnings
+
+
 def lint_task(
     task_path: Path,
     fixture: TaskFixture,
@@ -903,35 +1170,17 @@ def lint_task(
     name = task_path.name
     warnings: list[Warning_] = []
 
-    for value in expected.output_contains or []:
-        anchor = check_case(value, anchors)
-        if anchor:
-            warnings.append(
-                Warning_(
-                    name,
-                    "output_contains",
-                    value,
-                    "case-sensitivity",
-                    f"matches rubric anchor {anchor!r} with different casing",
-                )
-            )
-        drift = check_paraphrase(value, corpus_flat, corpus_tokens)
-        if drift:
-            warnings.append(
-                Warning_(name, "output_contains", value, "paraphrase-drift", f"not a rubric substring but {drift}")
-            )
-        collision = check_short_word_collision(value)
-        if collision:
-            warnings.append(
-                Warning_(
-                    name,
-                    "output_contains",
-                    value,
-                    "short-word-collision",
-                    f"short and alphabetic; also a bare substring of the common word {collision!r}",
-                )
-            )
-        if check_prompt_echo_enabled:
+    warnings += _lint_positive_values(
+        name,
+        "output_contains",
+        expected.output_contains or [],
+        anchors,
+        corpus_flat,
+        corpus_tokens,
+        check_case_enabled=True,
+    )
+    if check_prompt_echo_enabled:
+        for value in expected.output_contains or []:
             echo = check_prompt_echo(value, prompt_flat)
             if echo:
                 warnings.append(Warning_(name, "output_contains", value, "prompt-echo", echo, blocking=False))
@@ -941,37 +1190,21 @@ def lint_task(
     # (case-sensitivity) is deliberately NOT run here -- see the module
     # docstring's check 5b for why a casing difference is expected, not a
     # defect, for a key whose whole point is to ignore case.
-    for value in expected.output_icontains or []:
-        drift = check_paraphrase(value, corpus_flat, corpus_tokens)
-        if drift:
-            warnings.append(
-                Warning_(name, "output_icontains", value, "paraphrase-drift", f"not a rubric substring but {drift}")
-            )
-        collision = check_short_word_collision(value)
-        if collision:
-            warnings.append(
-                Warning_(
-                    name,
-                    "output_icontains",
-                    value,
-                    "short-word-collision",
-                    f"short and alphabetic; also a bare substring of the common word {collision!r}",
-                )
-            )
+    warnings += _lint_positive_values(
+        name,
+        "output_icontains",
+        expected.output_icontains or [],
+        anchors,
+        corpus_flat,
+        corpus_tokens,
+        check_case_enabled=False,
+    )
 
-    for value in expected.output_not_contains or []:
-        neg = check_negation(value, negation_haystack)
-        if neg:
-            warnings.append(
-                Warning_(
-                    name,
-                    "output_not_contains",
-                    value,
-                    "negation-trap",
-                    f"banning it also rejects a correct denial -- {neg}",
-                )
-            )
-        if check_cross_task_enabled:
+    warnings += _lint_negative_values(
+        name, "output_not_contains", expected.output_not_contains or [], negation_haystack
+    )
+    if check_cross_task_enabled:
+        for value in expected.output_not_contains or []:
             collider = check_cross_task_collision(name, value, positive_index)
             if collider:
                 warnings.append(
@@ -987,24 +1220,47 @@ def lint_task(
 
     # output_not_icontains (#628): check 2 (negation trap) applies the same
     # way regardless of case-sensitivity.
-    for value in expected.output_not_icontains or []:
-        neg = check_negation(value, negation_haystack)
-        if neg:
-            warnings.append(
-                Warning_(
-                    name,
-                    "output_not_icontains",
-                    value,
-                    "negation-trap",
-                    f"banning it also rejects a correct denial -- {neg}",
-                )
-            )
+    warnings += _lint_negative_values(
+        name, "output_not_icontains", expected.output_not_icontains or [], negation_haystack
+    )
+
+    # graders[].config (issue #869): a type: text grader's contains_cs/
+    # not_contains_cs are case-sensitive, routed the same way as
+    # output_contains/output_not_contains above (checks 1, 3, 4 / check 2);
+    # contains/not_contains are case-insensitive, routed the same way as
+    # output_icontains/output_not_icontains (checks 3, 4 / check 2) -- see
+    # the module docstring and _grader_text_assertions.
+    grader_assertions = _grader_text_assertions(fixture.graders)
+    warnings += _lint_positive_values(
+        name,
+        "graders.contains_cs",
+        grader_assertions["contains_cs"],
+        anchors,
+        corpus_flat,
+        corpus_tokens,
+        check_case_enabled=True,
+    )
+    warnings += _lint_positive_values(
+        name,
+        "graders.contains",
+        grader_assertions["contains"],
+        anchors,
+        corpus_flat,
+        corpus_tokens,
+        check_case_enabled=False,
+    )
+    warnings += _lint_negative_values(
+        name, "graders.not_contains_cs", grader_assertions["not_contains_cs"], negation_haystack
+    )
+    warnings += _lint_negative_values(
+        name, "graders.not_contains", grader_assertions["not_contains"], negation_haystack
+    )
 
     symmetric = check_symmetric_bans(fixture.model_dump())
     if symmetric:
         warnings.append(Warning_(name, "output_not_contains", fixture.id, "symmetric-ban", symmetric))
 
-    for key, value, rule, detail in check_unsatisfiable_assertion_pair(expected.model_dump()):
+    for key, value, rule, detail in check_unsatisfiable_assertion_pair(expected.model_dump(), fixture.graders):
         warnings.append(Warning_(name, key, value, rule, detail))
 
     return warnings

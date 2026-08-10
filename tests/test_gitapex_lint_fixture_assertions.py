@@ -14,6 +14,7 @@ from pathlib import Path
 
 import gitapex_lint_fixture_assertions as L
 import pytest
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -126,6 +127,18 @@ def _write_task(tmp_path, expected):
         body.append(f"  {key}:")
         body += [f'    - "{v}"' for v in values]
     (tmp_path / "t.yaml").write_text("\n".join(body) + "\n", encoding="utf-8")
+    return tmp_path
+
+
+def _write_task_with_graders(tmp_path, *, expected=None, graders=None):
+    # Issue #869: graders is a nested list-of-dicts shape _write_task's
+    # hand-rolled string building does not support -- yaml.safe_dump is used
+    # instead of extending that helper's string-join approach, so a nested
+    # config dict round-trips correctly.
+    task = {"id": "t", "name": "T", "inputs": {"prompt": "p"}, "expected": expected or {}}
+    if graders is not None:
+        task["graders"] = graders
+    (tmp_path / "t.yaml").write_text(yaml.safe_dump(task), encoding="utf-8")
     return tmp_path
 
 
@@ -736,6 +749,294 @@ def test_icontains_different_case_than_anchor_is_not_flagged_for_case_sensitivit
     assert L.main(["--tasks-glob", str(tasks / "*.yaml"), "--rubric", str(rubric), "--skill", str(skill)]) == 0
 
 
+# ---- issue #869: graders[].config extraction and check wiring ----
+
+
+def test_grader_text_assertions_merges_across_multiple_text_graders():
+    graders = [
+        {"type": "text", "config": {"contains": ["a"], "not_contains": ["b"]}},
+        {"type": "text", "config": {"contains": ["c"], "contains_cs": ["D"], "not_contains_cs": ["E"]}},
+    ]
+    assert L._grader_text_assertions(graders) == {
+        "contains": ["a", "c"],
+        "not_contains": ["b"],
+        "contains_cs": ["D"],
+        "not_contains_cs": ["E"],
+    }
+
+
+def test_grader_text_assertions_ignores_non_text_graders():
+    graders = [{"type": "python", "config": {"assertions": ["1 == 1"]}}]
+    assert L._grader_text_assertions(graders) == {
+        "contains": [],
+        "not_contains": [],
+        "contains_cs": [],
+        "not_contains_cs": [],
+    }
+
+
+def test_grader_text_assertions_ignores_malformed_entries():
+    graders = [
+        "not-a-dict",
+        {"type": "text"},
+        {"type": "text", "config": "not-a-dict"},
+        {"type": "text", "config": {"contains": ["ok", 5, None]}},
+    ]
+    assert L._grader_text_assertions(graders) == {
+        "contains": ["ok"],
+        "not_contains": [],
+        "contains_cs": [],
+        "not_contains_cs": [],
+    }
+
+
+def test_grader_text_assertions_skips_non_list_scalar_config_value_without_crashing():
+    # Adversarial review regression: waza's own schema declares these keys
+    # array-of-string, but waza check runs with continue-on-error: true in
+    # this repository's CI, so a malformed fixture with e.g. `contains: 5`
+    # or `contains: true` is a reachable input, not hypothetical. A bare
+    # `config.get(key) or []` iterates the truthy scalar directly and raises
+    # TypeError -- this must instead skip the key, the same tolerant-
+    # parsing convention as every other malformed shape in this function.
+    graders = [{"type": "text", "config": {"contains": 5, "not_contains": True, "contains_cs": ["ok"]}}]
+    assert L._grader_text_assertions(graders) == {
+        "contains": [],
+        "not_contains": [],
+        "contains_cs": ["ok"],
+        "not_contains_cs": [],
+    }
+
+
+def test_grader_text_assertions_skips_bare_string_scalar_instead_of_splitting_into_characters():
+    # Adversarial review regression: a fixture author forgetting the
+    # "- item" YAML list form (`contains: "hooks or permission"` instead of
+    # `contains: ["hooks or permission"]`) is itself a string, which is
+    # iterable -- without a list-type guard this would silently produce
+    # ['h', 'o', 'o', 'k', 's', ...] instead of surfacing as a malformed
+    # config or preserving the author's real intended phrase.
+    graders = [{"type": "text", "config": {"contains": "hooks or permission"}}]
+    assert L._grader_text_assertions(graders) == {
+        "contains": [],
+        "not_contains": [],
+        "contains_cs": [],
+        "not_contains_cs": [],
+    }
+
+
+def test_grader_text_assertions_handles_non_list_input():
+    assert L._grader_text_assertions(None) == {
+        "contains": [],
+        "not_contains": [],
+        "contains_cs": [],
+        "not_contains_cs": [],
+    }
+
+
+def test_grader_contains_cs_case_sensitivity_is_flagged(tmp_path):
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_task_with_graders(tasks, graders=[{"type": "text", "config": {"contains_cs": ["blind spot"]}}])
+    rubric, skill = _corpus_files(tmp_path)
+    assert L.main(["--tasks-glob", str(tasks / "*.yaml"), "--rubric", str(rubric), "--skill", str(skill)]) == 1
+
+
+def test_grader_contains_case_insensitive_is_not_flagged_for_case_sensitivity(tmp_path):
+    # Mirrors test_icontains_different_case_than_anchor_is_not_flagged_for_case_sensitivity:
+    # contains (case-insensitive) must never trigger check_case.
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_task_with_graders(tasks, graders=[{"type": "text", "config": {"contains": ["blind spot"]}}])
+    rubric, skill = _corpus_files(tmp_path)
+    assert L.main(["--tasks-glob", str(tasks / "*.yaml"), "--rubric", str(rubric), "--skill", str(skill)]) == 0
+
+
+def test_grader_contains_paraphrase_drift_is_flagged(tmp_path):
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_task_with_graders(tasks, graders=[{"type": "text", "config": {"contains": ["hooks or permission"]}}])
+    rubric, skill = _corpus_files(tmp_path)
+    assert L.main(["--tasks-glob", str(tasks / "*.yaml"), "--rubric", str(rubric), "--skill", str(skill)]) == 1
+
+
+def test_grader_contains_cs_short_word_collision_is_flagged(tmp_path):
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_task_with_graders(tasks, graders=[{"type": "text", "config": {"contains_cs": ["actor"]}}])
+    rubric, skill = _corpus_files(tmp_path)
+    assert L.main(["--tasks-glob", str(tasks / "*.yaml"), "--rubric", str(rubric), "--skill", str(skill)]) == 1
+
+
+def test_grader_not_contains_cs_negation_trap_is_flagged(tmp_path):
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_task_with_graders(tasks, graders=[{"type": "text", "config": {"not_contains_cs": ["tenth dimension"]}}])
+    rubric, skill = _corpus_files(tmp_path)
+    assert L.main(["--tasks-glob", str(tasks / "*.yaml"), "--rubric", str(rubric), "--skill", str(skill)]) == 1
+
+
+def test_grader_not_contains_negation_trap_is_flagged(tmp_path):
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_task_with_graders(tasks, graders=[{"type": "text", "config": {"not_contains": ["tenth dimension"]}}])
+    rubric, skill = _corpus_files(tmp_path)
+    assert L.main(["--tasks-glob", str(tasks / "*.yaml"), "--rubric", str(rubric), "--skill", str(skill)]) == 1
+
+
+def test_grader_clean_assertions_exit_zero(tmp_path):
+    # No regression: a well-formed graders block (quoting the rubric
+    # verbatim, single-word positive assertion) must not be flagged.
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_task_with_graders(
+        tasks,
+        expected={"output_not_contains": ["LGTM"]},
+        graders=[{"type": "text", "config": {"contains_cs": ["Blind spot pass"]}}],
+    )
+    rubric, skill = _corpus_files(tmp_path)
+    assert L.main(["--tasks-glob", str(tasks / "*.yaml"), "--rubric", str(rubric), "--skill", str(skill)]) == 0
+
+
+# ---- check_unsatisfiable_assertion_pair extended to graders (issue #869) ----
+
+
+def test_unsatisfiable_pair_flags_graders_contains_cs_vs_expected_not_icontains():
+    expected = {"output_not_icontains": ["foo"]}
+    graders = [{"type": "text", "config": {"contains_cs": ["Foo"]}}]
+    findings = L.check_unsatisfiable_assertion_pair(expected, graders)
+    assert len(findings) == 1
+    key, value, rule, _detail = findings[0]
+    assert key == "output_not_icontains"
+    assert rule == "unsatisfiable-assertion-pair"
+    assert "foo" in value
+
+
+def test_unsatisfiable_pair_flags_expected_contains_vs_graders_not_contains():
+    expected = {"output_contains": ["Foo"]}
+    graders = [{"type": "text", "config": {"not_contains": ["foo"]}}]
+    findings = L.check_unsatisfiable_assertion_pair(expected, graders)
+    assert len(findings) == 1
+    key, _value, rule, _detail = findings[0]
+    assert key == "graders.not_contains"
+    assert rule == "unsatisfiable-assertion-pair"
+
+
+# ---- exact-case contradiction (CodeRabbit finding, PR #986) ----
+
+
+def test_unsatisfiable_pair_flags_exact_case_requirement_vs_ban_in_expected_block():
+    # Pre-dates issue #869: a plain output_contains/output_not_contains pair
+    # naming the identical literal string previously produced no finding at
+    # all (neither of the pre-#869 checks compared these two lists against
+    # each other). Fixed as part of #869 since the new contains_cs/
+    # not_contains_cs roles make the same gap directly reachable via
+    # graders too.
+    expected = {"output_contains": ["Foo"], "output_not_contains": ["Foo"]}
+    findings = L.check_unsatisfiable_assertion_pair(expected)
+    assert len(findings) == 1
+    key, value, rule, _detail = findings[0]
+    assert key == "output_not_contains"
+    assert value == "Foo"
+    assert rule == "unsatisfiable-assertion-pair"
+
+
+def test_unsatisfiable_pair_flags_exact_case_contradiction_within_one_grader():
+    graders = [{"type": "text", "config": {"contains_cs": ["Foo"], "not_contains_cs": ["Foo"]}}]
+    findings = L.check_unsatisfiable_assertion_pair({}, graders)
+    assert len(findings) == 1
+    key, value, rule, _detail = findings[0]
+    assert key == "graders.not_contains_cs"
+    assert value == "Foo"
+    assert rule == "unsatisfiable-assertion-pair"
+
+
+def test_unsatisfiable_pair_flags_exact_case_contradiction_across_expected_and_graders():
+    expected = {"output_contains": ["Foo"]}
+    graders = [{"type": "text", "config": {"not_contains_cs": ["Foo"]}}]
+    findings = L.check_unsatisfiable_assertion_pair(expected, graders)
+    assert len(findings) == 1
+    key, value, rule, _detail = findings[0]
+    assert key == "graders.not_contains_cs"
+    assert value == "Foo"
+    assert rule == "unsatisfiable-assertion-pair"
+
+
+def test_unsatisfiable_pair_exact_case_check_ignores_differently_cased_pair():
+    # A case-insensitive requirement paired with a same-folded but
+    # differently-cased case-sensitive ban is satisfiable (text containing
+    # only "FOO" satisfies both icontains: ["foo"] and not_contains: ["Foo"]
+    # at once) -- the new exact-value check must not flag this, only an
+    # identical literal string.
+    expected = {"output_icontains": ["foo"], "output_not_contains": ["Foo"]}
+    assert L.check_unsatisfiable_assertion_pair(expected) == []
+
+
+# ---- multi-source dedup fix (adversarial review, PR #986) ----
+
+
+def test_unsatisfiable_pair_does_not_duplicate_finding_for_a_repeated_requirement():
+    # Issue #869's own merge of expected: and graders: sources into shared
+    # roles means the "requirement" side can now legitimately list the same
+    # literal string more than once (a plain duplicate entry, or the same
+    # string required via both mechanisms) -- this must still produce exactly
+    # one finding per real contradiction, not one per occurrence.
+    expected = {"output_contains": ["Foo", "Foo"], "output_not_contains": ["Foo"]}
+    findings = L.check_unsatisfiable_assertion_pair(expected)
+    assert len(findings) == 1
+
+
+def test_unsatisfiable_pair_reports_every_distinct_ban_source_for_the_same_string():
+    # The mirror of the case above: two DIFFERENT sources (expected: and
+    # graders:) each independently ban the identical literal string that is
+    # required -- both are genuinely, independently unsatisfiable and must
+    # both be reported, not collapsed to a single first-match finding.
+    expected = {"output_contains": ["Foo"], "output_not_contains": ["Foo"]}
+    graders = [{"type": "text", "config": {"not_contains_cs": ["Foo"]}}]
+    findings = L.check_unsatisfiable_assertion_pair(expected, graders)
+    assert len(findings) == 2
+    keys = {key for key, _value, _rule, _detail in findings}
+    assert keys == {"output_not_contains", "graders.not_contains_cs"}
+    assert all(rule == "unsatisfiable-assertion-pair" for _k, _v, rule, _d in findings)
+
+
+def test_unsatisfiable_pair_reports_every_distinct_redundant_source():
+    # Same swallowed-finding class, but for the redundant-pair check: two
+    # different case-sensitive sources are each independently redundant with
+    # one case-insensitive requirement, and both should be reported.
+    expected = {"output_icontains": ["foo"], "output_contains": ["FOO"]}
+    graders = [{"type": "text", "config": {"contains_cs": ["Foo"]}}]
+    findings = L.check_unsatisfiable_assertion_pair(expected, graders)
+    assert len(findings) == 2
+    assert all(rule == "redundant-assertion-pair" for _k, _v, rule, _d in findings)
+    weak_sources = {detail.split("duplicates ")[1].split(":")[0] for _k, _v, _rule, detail in findings}
+    assert weak_sources == {"output_contains", "graders.contains_cs"}
+
+
+def test_unsatisfiable_pair_flags_redundant_graders_same_polarity_pair():
+    graders = [{"type": "text", "config": {"contains_cs": ["Foo"], "contains": ["foo"]}}]
+    findings = L.check_unsatisfiable_assertion_pair({}, graders)
+    assert len(findings) == 1
+    key, _value, rule, _detail = findings[0]
+    assert key == "graders.contains"
+    assert rule == "redundant-assertion-pair"
+
+
+def test_unsatisfiable_pair_none_graders_behaves_like_absent():
+    expected = {"output_contains": ["Foo"], "output_icontains": ["foo"]}
+    assert L.check_unsatisfiable_assertion_pair(expected, None) == L.check_unsatisfiable_assertion_pair(expected)
+
+
+def test_unsatisfiable_pair_is_wired_into_lint_task_via_main_for_graders(tmp_path):
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    _write_task_with_graders(
+        tasks,
+        expected={"output_contains": ["Foo"]},
+        graders=[{"type": "text", "config": {"not_contains": ["foo"]}}],
+    )
+    rubric, skill = _corpus_files(tmp_path)
+    assert L.main(["--tasks-glob", str(tasks / "*.yaml"), "--rubric", str(rubric), "--skill", str(skill)]) == 1
+
+
 # ---- check_symmetric_bans extended to icontains/not_icontains (issue #628) ----
 
 
@@ -786,6 +1087,48 @@ def test_symmetric_bans_passes_both_directions_via_not_icontains():
     assert detail is None
 
 
+def test_symmetric_bans_counts_graders_not_contains_as_a_ban():
+    # Issue #869: a type: text grader's config.not_contains counts as a ban
+    # declaration the same way output_not_icontains already does.
+    detail = L.check_symmetric_bans(
+        {
+            "id": "t",
+            "name": "T",
+            "description": "Whether X occurred cannot be determined from available data.",
+            "expected": {},
+            "graders": [{"type": "text", "config": {"not_contains": ["no force-push occurred"]}}],
+        }
+    )
+    assert detail is not None
+    assert "positive-claim" in detail
+
+
+def test_symmetric_bans_passes_both_directions_split_across_expected_and_graders():
+    # One direction declared in expected:, the other in graders: -- proves
+    # the two sources are merged, not checked independently of each other.
+    detail = L.check_symmetric_bans(
+        {
+            "id": "t",
+            "name": "T",
+            "description": "Whether X occurred cannot be determined from available data.",
+            "expected": {"output_not_contains": ["A force-push occurred"]},
+            "graders": [{"type": "text", "config": {"not_contains_cs": ["no force-push occurred"]}}],
+        }
+    )
+    assert detail is None
+
+
+def test_symmetric_bans_exempts_enum_style_indeterminate_status_via_graders_contains():
+    task = {
+        "id": "t",
+        "name": "T",
+        "description": "Requires an unknown caller to stop as INDETERMINATE.",
+        "expected": {"output_not_contains": ["model_route: inherited"]},
+        "graders": [{"type": "text", "config": {"contains_cs": ["route_status", "INDETERMINATE"]}}],
+    }
+    assert L.check_symmetric_bans(task) is None
+
+
 # ---- check_prompt_echo (issue #516, #191 -- opt in, non-blocking) ----
 
 
@@ -820,6 +1163,57 @@ def test_cross_task_collision_excludes_enum_style_token():
     # ban sibling UPPER_SNAKE_CASE labels -- a correct design, not a bug.
     index = {"other.yaml": {"status: no_compatibility_warning"}}
     assert L.check_cross_task_collision("self.yaml", "Status: NO_COMPATIBILITY_WARNING", index) is None
+
+
+# ---- lint_task's own --check-prompt-echo/--check-cross-task wiring, not just
+# the underlying check functions in isolation (both pre-date issue #869 but
+# had no end-to-end coverage through main() before this file's own change) ----
+
+
+def test_check_prompt_echo_flag_is_wired_through_main(tmp_path, capsys):
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    task = {
+        "id": "t",
+        "name": "T",
+        "inputs": {"prompt": "Please review this for dimension eight please."},
+        "expected": {"output_contains": ["dimension eight"]},
+    }
+    (tasks / "t.yaml").write_text(yaml.safe_dump(task), encoding="utf-8")
+    rubric, skill = _corpus_files(tmp_path)
+    rc = L.main(
+        ["--tasks-glob", str(tasks / "*.yaml"), "--rubric", str(rubric), "--skill", str(skill), "--check-prompt-echo"]
+    )
+    assert rc == 0  # non-blocking: never flips the exit code
+    assert "prompt-echo" in capsys.readouterr().out
+
+
+def test_check_cross_task_flag_is_wired_through_main(tmp_path, capsys):
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    (tasks / "a.yaml").write_text(
+        yaml.safe_dump(
+            {"id": "a", "name": "A", "inputs": {"prompt": "p"}, "expected": {"output_contains": ["quorum reached"]}}
+        ),
+        encoding="utf-8",
+    )
+    (tasks / "b.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "id": "b",
+                "name": "B",
+                "inputs": {"prompt": "p"},
+                "expected": {"output_not_contains": ["quorum reached"]},
+            }
+        ),
+        encoding="utf-8",
+    )
+    rubric, skill = _corpus_files(tmp_path)
+    rc = L.main(
+        ["--tasks-glob", str(tasks / "*.yaml"), "--rubric", str(rubric), "--skill", str(skill), "--check-cross-task"]
+    )
+    assert rc == 0  # non-blocking: never flips the exit code
+    assert "cross-task-collision" in capsys.readouterr().out
 
 
 # ---- check_adversarial_coverage (issue #516, #473 -- discovery mode only) ----
