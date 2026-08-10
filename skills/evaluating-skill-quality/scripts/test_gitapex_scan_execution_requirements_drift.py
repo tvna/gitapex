@@ -266,6 +266,32 @@ def test_urllib_parse_alone_is_not_network_capable(tmp_path: pathlib.Path) -> No
     assert scanner.find_network_drift({"mode": "disabled"}, skill_dir) == []
 
 
+def test_from_urllib_import_request_is_now_caught(tmp_path: pathlib.Path) -> None:
+    """The old regex-based scanner disclosed "from urllib import request"
+    as an unfixed false negative, since it anchored on the dotted module
+    path after import/from and could not see that "request" here names
+    the network-capable urllib.request submodule. AST-based import
+    resolution closes this: _tree_has_network_import checks both the
+    ImportFrom node's own module ("urllib") and each imported name
+    joined onto it ("urllib.request")."""
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": "from urllib import request\n"})
+    findings = scanner.find_network_drift({"mode": "disabled"}, skill_dir)
+    assert _severities(findings) == ["error"]
+
+
+def test_unparseable_script_is_flagged_not_silently_skipped(tmp_path: pathlib.Path) -> None:
+    """A bundled .py file that is not valid Python (a real SyntaxError)
+    must not be silently excluded from analysis and treated as clean --
+    dimension 15's fail-closed default. find_network_drift reports it as
+    its own undetermined finding rather than either crashing or passing
+    the skill vacuously."""
+    skill_dir = _make_skill(tmp_path, scripts={"broken.py": "def f(:\n    pass\n"})
+    findings = scanner.find_network_drift({"mode": "disabled"}, skill_dir)
+    assert _severities(findings) == ["error"]
+    assert "network-script-unparseable" in findings[0].message
+    assert "broken.py" in findings[0].message
+
+
 def test_commented_out_url_does_not_count_as_network_usage(tmp_path: pathlib.Path) -> None:
     """_URL_HOST_PATTERN previously scanned raw script text including
     comment lines, so a doc reference like "# see https://docs.python.org/"

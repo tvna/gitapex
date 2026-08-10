@@ -11,28 +11,61 @@ validates executionRequirements' SHAPE only; this scanner cross-checks
 one skill's own declared network mode/domains and tools write/shell tags
 against what its own content actually does.
 
-Two independent, best-effort pattern-match checks, one per
-executionRequirements sub-block:
+Two independent checks, one per executionRequirements sub-block, that
+differ in kind, not just in what they check -- a distinction worth
+stating explicitly rather than lumping both under one "best-effort"
+label (a distinction a live design discussion on issue #1022 surfaced,
+including primary-source research into whether a dynamic/DAST-style
+approach could replace either: Python's own sys.addaudithook (PEP 578)
+docs state plainly it is "not suitable for implementing a 'sandbox'"
+and requires the target code to actually execute to fire, and
+established DAST tooling targets a *running* application's own HTTP/UI
+surface, neither of which fits a read-only pre-execution checker that
+must never itself run a skill's bundled scripts):
 
 - find_network_drift: declared network.mode/domains vs. network-capable
-  imports and literal https?:// hosts found in skill_dir/scripts/*.py.
+  imports and literal https?:// hosts found in skill_dir/scripts/*.py --
+  DETERMINISTIC, via Python's own ast module (stdlib), not a text regex.
+  A real parse tree has no comment nodes at all, so a commented-out
+  reference can never register as usage without a filter having to say
+  so; import resolution checks the exact dotted module path Python
+  itself would resolve ("import X", "import X.Y", and "from X import Y"
+  are each handled on their own real shape, not approximated by one
+  regex trying to cover all three). Still a net, not a formal proof of
+  runtime behavior -- see the Residual limitations paragraph below for
+  what AST parsing does not and structurally cannot close.
 - find_tools_drift: declared tools.write/tools.shell vs. mutating-action
-  language found anywhere in skill_dir/SKILL.md's full text. Deliberately
-  NOT anchored to a single "Procedure" heading: the heading name varies
-  across real skills (Steps, Procedure, Exact sequence, Checklist, ...),
-  so anchoring on one would blind the scanner on most of them. tools.read
+  language found anywhere in skill_dir/SKILL.md's full text --
+  BEST-EFFORT PATTERN-MATCH, and irreducibly so: SKILL.md is natural-
+  language prose, not code, so there is no parser (AST or otherwise)
+  that resolves "does this English sentence describe a mutating
+  action" the way ast.parse resolves an import statement. This is a
+  property of the input (prose vs. code), not an implementation gap a
+  rewrite could close. Deliberately NOT anchored to a single
+  "Procedure" heading either: the heading name varies across real
+  skills (Steps, Procedure, Exact sequence, Checklist, ...), so
+  anchoring on one would blind the scanner on most of them. tools.read
   is not checked -- only write/shell are the safety-relevant
   under-declaration direction.
 
 Each finding carries a severity: "error" for under-declaration (declared
 narrower than actual) or "warning" for over-declaration (declared broader
 than actual content ever exercises -- a hygiene finding, never failing a
-run on its own). This is a pattern-match net, not a formal proof: a
-network call routed through an unlisted helper or dynamically constructed
-host, or mutating-action language this scanner's verb/noun lists do not
-recognize, can slip through undetected (see
+run on its own).
+
+Residual limitations, even in find_network_drift's deterministic half:
+determinism means "the same input always parses to the same finding,"
+not "every real network call is caught." A call routed through an
+unlisted helper function, a host built at runtime (string
+concatenation, an f-string with a non-literal segment), or a network
+call gated behind a condition that never actually triggers can still
+slip past AST analysis exactly as it would past a human reading the
+same source -- these are facts about what static analysis can see, not
+a defect in using ast over regex (see
 test_dynamically_constructed_host_evades_allowlist_check for one
-deliberately-constructed example).
+deliberately-constructed example). find_tools_drift's own natural-
+language matching carries the same class of gap for the same reason
+prose has no parser.
 
 Language scope: find_network_drift only reads skill_dir/scripts/*.py --
 a bundled non-Python script (a .sh file, for instance; this repository's
@@ -69,6 +102,7 @@ test_gitapex_scan_execution_requirements_drift.py.
 from __future__ import annotations
 
 import argparse
+import ast
 import pathlib
 import re
 import sys
@@ -92,12 +126,11 @@ SIDECAR_RELATIVE_PATH = "metadata/gitapex.yaml"
 MIN_EXPECTED_SKILL_DIRS = 15
 
 NETWORK_CAPABLE_MODULES = (
-    # Bare "urllib" also matched pure-parsing submodules with no network
-    # I/O of their own (import urllib.parse) -- found by an independent
-    # review; only the two network-capable submodules are listed now.
-    # "from urllib import request" still slips through unmatched (this
-    # pattern anchors on the dotted module path after import/from), a
-    # disclosed false-negative, not fixed here.
+    # Bare "urllib" also matches pure-parsing submodules with no network
+    # I/O of their own (urllib.parse) -- only the two network-capable
+    # submodules are listed. Exact dotted-path membership (below), not a
+    # prefix regex, decides a match, so this stays precise regardless of
+    # import shape (`import X`, `import X.Y`, or `from X import Y`).
     "urllib.request",
     "urllib.error",
     "requests",
@@ -109,11 +142,48 @@ NETWORK_CAPABLE_MODULES = (
     "httpx",
     "aiohttp",
 )
-_NETWORK_IMPORT_PATTERN = re.compile(
-    r"^\s*(?:import|from)\s+(" + "|".join(re.escape(m) for m in NETWORK_CAPABLE_MODULES) + r")(?:\.\w+)*\b",
-    re.MULTILINE,
-)
 _URL_HOST_PATTERN = re.compile(r"https?://([A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?)")
+
+
+def _is_network_capable_module(dotted_name: str) -> bool:
+    """Whether ``dotted_name`` names a recognized network-capable module or
+    a submodule of one (e.g. "requests.exceptions" via "requests"), but
+    never the reverse ("requests" alone does not match "requests.get" as a
+    module name -- module names and call expressions are different
+    things)."""
+    return any(dotted_name == m or dotted_name.startswith(m + ".") for m in NETWORK_CAPABLE_MODULES)
+
+
+def _tree_has_network_import(tree: ast.AST) -> bool:
+    """AST-based, not regex-over-text: a real parse tree has no comment
+    nodes at all (a "# import requests" comment can never appear here),
+    and precisely resolves every import shape -- "import X", "import X.Y",
+    "from X import Y" (checked as both "X" itself and "X.Y", since Y may
+    be a network-capable submodule of X, e.g. "from urllib import
+    request") -- rather than a regex anchored on one textual shape."""
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            if any(_is_network_capable_module(alias.name) for alias in node.names):
+                return True
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            candidates = (node.module, *(f"{node.module}.{alias.name}" for alias in node.names))
+            if any(_is_network_capable_module(c) for c in candidates):
+                return True
+    return False
+
+
+def _tree_referenced_hosts(tree: ast.AST) -> set[str]:
+    """Every https?://host substring found inside a real string literal
+    constant anywhere in the parse tree (module/function docstrings and
+    f-string literal segments included, via ast.Constant -- a comment can
+    never appear here at all, unlike the prior regex-over-raw-text
+    version, which needed an explicit comment-line filter to exclude it)."""
+    hosts: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            hosts.update(host.lower() for host in _URL_HOST_PATTERN.findall(node.value))
+    return hosts
+
 
 _WRITE_VERBS = r"(?:writes?|wrote|creates?|drafts?|edits?|updates?|modifies|generates?|authors?)"
 # A single trailing \b (not one per alternative) applies to whichever
@@ -186,17 +256,32 @@ def _read_text_best_effort(path: pathlib.Path) -> str:
         return ""
 
 
-def _bundled_script_texts(skill_dir: pathlib.Path) -> list[str]:
+def _bundled_script_trees(skill_dir: pathlib.Path) -> tuple[list[ast.AST], list[str]]:
+    """Every skill_dir/scripts/*.py file, parsed. Returns (trees,
+    unparseable_names): a file that is not valid Python (SyntaxError) is
+    excluded from trees and its name collected separately, rather than
+    either crashing the scan or silently treating it as clean -- the
+    caller turns unparseable_names into its own finding (dimension 15:
+    an inability to verify is a deny, not an assume-clean)."""
     scripts_dir = skill_dir / "scripts"
     if not scripts_dir.is_dir():
-        return []
-    return [_read_text_best_effort(p) for p in sorted(scripts_dir.glob("*.py"))]
+        return [], []
+    trees: list[ast.AST] = []
+    unparseable: list[str] = []
+    for path in sorted(scripts_dir.glob("*.py")):
+        text = _read_text_best_effort(path)
+        try:
+            trees.append(ast.parse(text, filename=str(path)))
+        except SyntaxError:
+            unparseable.append(path.name)
+    return trees, unparseable
 
 
 def find_network_drift(network: Any, skill_dir: pathlib.Path) -> list[Finding]:
     """network-mode-vs-script-content: declared executionRequirements.network
     vs. network-capable imports/literal https?:// hosts found in
-    skill_dir/scripts/*.py."""
+    skill_dir/scripts/*.py, via AST parsing (deterministic -- see module
+    docstring's own Language scope / Determinism note)."""
     mode_value = network.get("mode") if isinstance(network, dict) else None
     # dict.get(key, default) only substitutes on an ABSENT key -- a real
     # `mode: null` or an unrecognized/mis-cased string must not slip
@@ -209,19 +294,21 @@ def find_network_drift(network: Any, skill_dir: pathlib.Path) -> list[Finding]:
     # allowlist set-difference below compares like-for-like.
     declared_domains = {d.lower() for d in domains if isinstance(d, str)} if isinstance(domains, list) else set()
 
-    script_texts = _bundled_script_texts(skill_dir)
-    has_network_import = any(_NETWORK_IMPORT_PATTERN.search(text) for text in script_texts)
+    trees, unparseable = _bundled_script_trees(skill_dir)
+    has_network_import = any(_tree_has_network_import(tree) for tree in trees)
     referenced_hosts: set[str] = set()
-    for text in script_texts:
-        # A commented-out reference (# see https://docs.python.org/...) is
-        # not executed and must not count as network usage -- found by an
-        # independent review; only import/from lines are already immune
-        # (a "# import requests" comment never matches ^\s*(?:import|from)),
-        # so only this URL-host extraction needed the filter.
-        code_only = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
-        referenced_hosts.update(host.lower() for host in _URL_HOST_PATTERN.findall(code_only))
+    for tree in trees:
+        referenced_hosts.update(_tree_referenced_hosts(tree))
 
-    findings: list[Finding] = []
+    findings: list[Finding] = [
+        Finding(
+            "error",
+            f"network-script-unparseable: scripts/{name} is not valid Python "
+            "-- could not be analyzed for network-capable usage, treated as "
+            "undetermined rather than clean",
+        )
+        for name in unparseable
+    ]
     if mode == "disabled" and (has_network_import or referenced_hosts):
         findings.append(
             Finding(
@@ -378,8 +465,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=(
             "Check one skill's declared spec.executionRequirements against its "
-            "actual SKILL.md prose and bundled scripts/*.py content (read-only, "
-            "best-effort pattern-match -- not a formal proof)."
+            "actual SKILL.md prose and bundled scripts/*.py content (read-only). "
+            "Network/import checks are AST-based and deterministic; SKILL.md "
+            "prose matching is an irreducibly best-effort heuristic. Neither is "
+            "a formal proof of runtime behavior."
         )
     )
     parser.add_argument("target", help="Path to a skill directory (e.g. skills/<name>).")
