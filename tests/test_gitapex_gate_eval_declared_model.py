@@ -84,6 +84,58 @@ def _write_workflow(root: pathlib.Path, text: str = _MINIMAL_WORKFLOW) -> pathli
     return path
 
 
+# --- _load_model_allowlist ---------------------------------------------------
+
+
+def test_load_model_allowlist_reads_the_real_committed_file() -> None:
+    # The gate's own module-level APPROVED_MODELS/RETIRED_MODELS are this
+    # call's result at import time -- proven directly rather than assumed.
+    approved, retired = gate._load_model_allowlist(gate.MODEL_ALLOWLIST_PATH)
+    assert approved == gate.APPROVED_MODELS
+    assert retired == gate.RETIRED_MODELS
+    assert "claude-sonnet-5" in approved
+    assert "claude-sonnet-4.6" in retired
+
+
+def test_load_model_allowlist_missing_file_raises(tmp_path: pathlib.Path) -> None:
+    with pytest.raises(gate.DeclarationReadError, match="cannot be read"):
+        gate._load_model_allowlist(tmp_path / "absent.yaml")
+
+
+def test_load_model_allowlist_malformed_yaml_raises(tmp_path: pathlib.Path) -> None:
+    path = tmp_path / "allowlist.yaml"
+    path.write_text("approved_models: [1, 2\n", encoding="utf-8")
+    with pytest.raises(gate.DeclarationReadError, match="is not valid YAML"):
+        gate._load_model_allowlist(path)
+
+
+def test_load_model_allowlist_non_mapping_document_raises(tmp_path: pathlib.Path) -> None:
+    path = tmp_path / "allowlist.yaml"
+    path.write_text("- just\n- a\n- list\n", encoding="utf-8")
+    with pytest.raises(gate.DeclarationReadError, match="must contain a YAML mapping"):
+        gate._load_model_allowlist(path)
+
+
+@pytest.mark.parametrize("missing_key", ["approved_models", "retired_models"])
+def test_load_model_allowlist_missing_required_key_raises(tmp_path: pathlib.Path, missing_key: str) -> None:
+    keys = {"approved_models": {"a": "evidence"}, "retired_models": {}}
+    del keys[missing_key]
+    path = tmp_path / "allowlist.yaml"
+    path.write_text(yaml.safe_dump(keys), encoding="utf-8")
+    with pytest.raises(gate.DeclarationReadError, match=f"'{missing_key}' must be a mapping"):
+        gate._load_model_allowlist(path)
+
+
+def test_load_model_allowlist_non_string_value_raises(tmp_path: pathlib.Path) -> None:
+    path = tmp_path / "allowlist.yaml"
+    path.write_text(
+        yaml.safe_dump({"approved_models": {"a": 123}, "retired_models": {}}),
+        encoding="utf-8",
+    )
+    with pytest.raises(gate.DeclarationReadError, match="'approved_models' must be a mapping"):
+        gate._load_model_allowlist(path)
+
+
 # --- the gate ---------------------------------------------------------------
 
 

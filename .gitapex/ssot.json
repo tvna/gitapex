@@ -59,6 +59,12 @@
       "path": "skills/scorer-gated-skill-edits/references/eval-run.schema.json",
       "format": "json",
       "authority": "Shape of a scorer-gated-skill-edits gate-run record, read by eval-results-schema-drift. Authored inside the owning skill (issue #932) rather than in .gitapex/, so the contract travels with SKILL.md when the skill is installed elsewhere. One entry stands in for the pair: skills/scorer-gated-skill-edits/references/eval-scores.schema.json sits in the same directory, ships with the same skill, and is authoritative the same way for each per-model score file a gate-run record points at"
+    },
+    {
+      "id": "eval-model-allowlist",
+      "path": ".gitapex/eval-model-allowlist.yaml",
+      "format": "yaml",
+      "authority": "The reviewed approved_models/retired_models mappings gitapex_gate_eval_declared_model.py grades every committed model identifier against (issue #925). A model id may be committed only if it appears under approved_models, each row carrying the evidence a human weighed when approving it; retired_models exists purely to turn the most likely failure into a specific message. Externalized from the gate script's own hardcoded dict literals (issue #1013) -- pointing this entry directly at the script's module-level constants instead was considered and rejected: policy_sources[].format's enum (toml/json/yaml/rego) has no way to name a Python source file's own constants"
     }
   ],
   "gates": [
@@ -703,7 +709,7 @@
       "planes": ["ci", "local"],
       "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_eval_declared_model.py"],
       "trigger": "tests/test_gitapex_gate_eval_declared_model.py inside the pytest step of .github/workflows/test.yml",
-      "policy_refs": [],
+      "policy_refs": ["eval-model-allowlist"],
       "cluster": "test-integrity",
       "tracking_issue": 925,
       "status": "active",

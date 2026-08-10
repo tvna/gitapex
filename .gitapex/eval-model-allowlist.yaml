@@ -1,0 +1,63 @@
+# Reviewed model-identifier allowlist for
+# .github/scripts/gitapex_gate_eval_declared_model.py (issue #925).
+#
+# Registered in .gitapex/ssot.json as the eval-declared-model-allowlist
+# gate's policy_sources entry (issue #1013) -- previously these two maps
+# were hardcoded Python dict literals inside the gate script itself, with
+# no policy_sources entry pointing at them at all. Moved here rather than
+# the smaller alternative the issue's own Acceptance Criteria Map also
+# named (a policy_sources entry pointing directly at the script's module-
+# level constants): .gitapex/ssot.schema.json's policy_sources[].format
+# enum is `["toml", "json", "yaml", "rego"]` only, with no way to name a
+# Python source file's own constants as a serialization format, so that
+# smaller branch is not representable in the current schema. This file is
+# the schema-compliant realization of the same row.
+#
+# A model id may be committed to this repository only if it appears under
+# approved_models, and it appears there only with the evidence a human
+# weighed when approving it -- adding a row is the review event this gate
+# exists to force; the string is not the point, the evidence is. See the
+# gate script's own module docstring for the full rationale, including why
+# a declaration here is not provenance of an executed run.
+
+approved_models:
+  claude-sonnet-5: >-
+    Approved by the repository owner on issue #925. Evidence at approval
+    time: evals/untrusted-input-triage/behavioral-eval-2026-08-01.md
+    records a live run in which the retired claude-sonnet-4.6 produced an
+    authentication error and claude-sonnet-5 was substituted and executed
+    successfully, and
+    evals/evaluating-skill-quality/results/2026-07-28-issue-500-phase1/manifest.json
+    records claude-sonnet-5 as the sonnet tier of an executed cross-model
+    run. DISCLOSED LIMIT: both observations come from the `claude -p`
+    path, not from waza's copilot-sdk executor, which no environment
+    without COPILOT_BASE_URL / COPILOT_PROVIDER_BASE_URL can probe. This
+    row therefore attests that the id is real and dispatchable somewhere,
+    not that the executor the suites name serves it.
+  google/gemma-4-31B-it: >-
+    Approved on issue #937, which brought the already-committed
+    HF_GEMMA4_MODEL value under this gate rather than leaving it
+    ungraded. Evidence at approval time is the one
+    .github/workflows/waza-eval-matrix.yml already records in its own
+    header comment for the eval-matrix-hf-gemma4 lane (issue #317,
+    sub-task of #310): the largest Gemma 4 variant whose published bf16
+    safetensors weights are under 100GB, confirmed 62.6GB across two
+    shards at https://huggingface.co/google/gemma-4-31B-it. DISCLOSED
+    LIMIT: that is evidence the repository weighed a size/serving
+    tradeoff, not that the id is currently servable -- the lane has never
+    run, and its own workflow comment already discloses the unverified
+    assumption that waza's copilot-sdk executor treats a custom base URL
+    as a generic OpenAI/Copilot-compatible endpoint. Approving it here
+    changes nothing about that; it only means a future edit to the id
+    passes through a reviewed diff instead of rotting silently.
+
+# Ids known to be undispatchable, kept so the most likely failure reports
+# its actual cause. A row here is a strictly better error message, never
+# an additional permission -- the gate's own allowlist_integrity check
+# fails if an id is ever listed in both maps.
+retired_models:
+  claude-sonnet-4.6: >-
+    retired 2026-06-15 -- confirmed live in
+    evals/untrusted-input-triage/behavioral-eval-2026-08-01.md, where the
+    CLI itself warned 'Claude Sonnet 4 was retired on June 15, 2026' and
+    requesting it produced an authentication error (issue #925)
