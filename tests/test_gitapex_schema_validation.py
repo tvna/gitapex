@@ -113,6 +113,7 @@ def test_validate_enables_format_checker() -> None:
 _SCANNER_SCRIPTS = (
     REPO_ROOT / ".github" / "scripts" / "gitapex_scan_ssot_schema.py",
     REPO_ROOT / ".github" / "scripts" / "gitapex_scan_skill_metadata_schema.py",
+    REPO_ROOT / ".github" / "scripts" / "gitapex_scan_plugin_manifest_schema.py",
 )
 
 # Matches a real `import jsonschema` / `from jsonschema import ...`

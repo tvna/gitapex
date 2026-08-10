@@ -76,13 +76,20 @@ def _read_utf8_text(path: pathlib.Path) -> str:
         raise GenerationError(f"{path}: is not valid UTF-8: {error}") from error
 
 
-def strip_schema_key(source_text: str, source_path: pathlib.Path = SOURCE_PATH) -> dict[str, object]:
+def strip_schema_key(source_text: str, source_path: pathlib.Path | None = None) -> dict[str, object]:
     """Parse `source_text` as a JSON object and return a copy with the
     top-level $schema key removed, preserving every other key's original
     order -- json.loads already preserves source key order in the returned
     dict, so no explicit reordering is needed. Raises GenerationError
     (naming `source_path`, used only for the error message) if the text is
-    not valid JSON, or is valid JSON that is not a top-level object."""
+    not valid JSON, or is valid JSON that is not a top-level object.
+    `source_path` defaults to None, resolved to the current module-level
+    SOURCE_PATH inside the body rather than as the parameter's own default
+    value -- mirrors generate()'s own reasoning: a default value is bound
+    once at function-definition time, so `= SOURCE_PATH` here would freeze
+    in the *original* path forever and silently ignore a test's own
+    monkeypatch.setattr override."""
+    source_path = SOURCE_PATH if source_path is None else source_path
     try:
         data = json.loads(source_text)
     except json.JSONDecodeError as error:
@@ -96,7 +103,7 @@ def render_mirror(mirror_data: dict[str, object]) -> str:
     """The exact text to write to .claude-plugin/plugin.json: 2-space
     indent, a trailing newline -- matches the committed file's existing
     formatting convention exactly."""
-    return json.dumps(mirror_data, indent=2) + "\n"
+    return json.dumps(mirror_data, indent=2, ensure_ascii=False) + "\n"
 
 
 def generate(source_path: pathlib.Path | None = None) -> str:

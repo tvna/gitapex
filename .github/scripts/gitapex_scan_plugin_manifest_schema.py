@@ -92,7 +92,10 @@ def schema_conformance_findings(
         vendored_schema_path = VENDORED_SCHEMA_PATH
     instance = _gitapex_schema_validation.load_json_or_raise(plugin_manifest_path, ScanReadError)
     schema = _gitapex_schema_validation.load_json_or_raise(vendored_schema_path, ScanReadError)
-    return [f"schema-conformance: {message}" for message in _gitapex_schema_validation.validate(instance, schema)]
+    return [
+        f"schema-conformance: {message.removeprefix('schema: ')}"
+        for message in _gitapex_schema_validation.validate(instance, schema)
+    ]
 
 
 def vendor_digest_drift_findings(vendored_schema_path: pathlib.Path | None = None) -> list[str]:

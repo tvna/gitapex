@@ -13,6 +13,12 @@
       "authority": "name/version/description/author/homepage/repository/license single source of truth for the gitapex plugin's identity; .claude-plugin/plugin.json is mechanically generated from it (see plugin-manifest-mirror-drift), and apm.yml mirrors name/version from that generated copy (see apm-manifest-drift)"
     },
     {
+      "id": "claude-plugin-manifest",
+      "path": ".claude-plugin/plugin.json",
+      "format": "json",
+      "authority": "Generated mirror of the repository-root plugin.json (see plugin-manifest-mirror-drift); authoritative only for apm-manifest-drift's own name/version comparison against apm.yml"
+    },
+    {
       "id": "agent-plugins-plugin-schema",
       "path": ".gitapex/agent-plugins-plugin.schema.json",
       "format": "json",
@@ -383,7 +389,7 @@
       "planes": ["ci", "local"],
       "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_apm_manifest_drift.py"],
       "trigger": "tests/test_gitapex_scan_apm_manifest_drift.py inside the pytest step of .github/workflows/test.yml",
-      "policy_refs": ["plugin-manifest"],
+      "policy_refs": ["claude-plugin-manifest"],
       "cluster": "supply-chain",
       "tracking_issue": 234,
       "status": "active",
@@ -404,7 +410,7 @@
         "--check"
       ],
       "trigger": "tests/test_gitapex_generate_plugin_manifest.py inside the pytest step of .github/workflows/test.yml",
-      "policy_refs": ["plugin-manifest"],
+      "policy_refs": ["plugin-manifest", "claude-plugin-manifest"],
       "cluster": "supply-chain",
       "tracking_issue": 1028,
       "status": "active",

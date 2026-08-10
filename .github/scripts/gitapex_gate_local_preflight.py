@@ -161,8 +161,10 @@ SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
 # as a hang guard (80 minutes of a silent pre-push), so this is a judgment
 # call in the other direction. For scale: a warm run of all 28 wired gates
 # combined measures roughly 7 s end to end (up from 4-6 s measured for the
-# 24-gate set before issue #985's `behind-base` gate, and ~8-9 s for the
-# 26-gate set before issue #1028's two schema/manifest gates), so 1800 s is
+# 24-gate set before issue #985's `behind-base` gate, and ~8-9 s measured
+# earlier for the 26-gate set before issue #1028's two schema/manifest gates
+# -- both are warm-run measurements on different hardware, not a strict
+# per-gate cost trend), so 1800 s is
 # a hang guard rather than a budget, and it comfortably clears a cold mypy
 # cache while still failing
 # loudly rather than blocking a push indefinitely. The residual risk is named rather than hidden: a genuinely

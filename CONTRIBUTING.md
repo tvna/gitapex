@@ -115,12 +115,12 @@ used to be discovered one red check at a time on an already-open PR.
 The same `uv run prek install -t pre-commit -t pre-push` above also installs
 a **pre-push** hook that runs every gate with a working-tree-only form in
 one pass, before the push leaves your machine. A warm run of all 28 wired
-gates measures roughly 7 seconds end to end (issue #1028's two added
-gates land on ~8-9 seconds measured for the prior 26-gate set; up from
-~4-6 seconds for the 24-gate set before issue #985's `behind-base` gate,
-this runner's first gate that makes a network call -- it fetches
-`origin/main` before comparing, measured separately at well under a second
-warm). Run it by hand any time with:
+gates measures roughly 7 seconds end to end (the prior 26-gate set measured
+~8-9 seconds; both are warm-run measurements, not a strict budget, and can
+vary by hardware -- up from ~4-6 seconds for the 24-gate set before issue
+#985's `behind-base` gate, this runner's first gate that makes a network
+call -- it fetches `origin/main` before comparing, measured separately at
+well under a second warm). Run it by hand any time with:
 
 ```console
 python3 .github/scripts/gitapex_gate_local_preflight.py

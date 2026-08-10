@@ -182,3 +182,51 @@ def test_main_returns_one_and_prints_findings_on_violation(
 
 def test_real_repository_plugin_manifest_is_schema_valid() -> None:
     assert scanner.main([]) == 0
+
+
+def test_main_verify_upstream_appends_the_network_findings(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    manifest_path = tmp_path / "plugin.json"
+    schema_path = tmp_path / "schema.json"
+    _write_json(
+        manifest_path, {"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "name": "gitapex"}
+    )
+    _write_json(schema_path, _VALID_SCHEMA)
+    monkeypatch.setattr(scanner, "PLUGIN_MANIFEST_PATH", manifest_path)
+    monkeypatch.setattr(scanner, "VENDORED_SCHEMA_PATH", schema_path)
+    monkeypatch.setattr(scanner, "VENDORED_SCHEMA_SHA256", hashlib.sha256(schema_path.read_bytes()).hexdigest())
+
+    response = mock.MagicMock()
+    response.read.return_value = b'{"different": true}'
+    response.__enter__.return_value = response
+    with mock.patch("gitapex_scan_plugin_manifest_schema.urllib.request.urlopen", return_value=response):
+        assert scanner.main(["--verify-upstream"]) == 1
+    out = capsys.readouterr().out
+    assert "upstream-drift:" in out
+
+
+def test_main_reports_a_scan_read_error_without_a_traceback(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    schema_path = tmp_path / "schema.json"
+    _write_json(schema_path, _VALID_SCHEMA)
+    monkeypatch.setattr(scanner, "PLUGIN_MANIFEST_PATH", tmp_path / "nonexistent.json")
+    monkeypatch.setattr(scanner, "VENDORED_SCHEMA_PATH", schema_path)
+
+    assert scanner.main([]) == 1
+    err = capsys.readouterr().err
+    assert "FAIL:" in err
+
+
+def test_upstream_drift_findings_raises_scan_read_error_when_vendored_copy_unreadable(
+    tmp_path: pathlib.Path,
+) -> None:
+    response = mock.MagicMock()
+    response.read.return_value = b'{"a": 1}'
+    response.__enter__.return_value = response
+    with (
+        mock.patch("gitapex_scan_plugin_manifest_schema.urllib.request.urlopen", return_value=response),
+        pytest.raises(scanner.ScanReadError),
+    ):
+        scanner.upstream_drift_findings(tmp_path / "nonexistent-vendored-schema.json")

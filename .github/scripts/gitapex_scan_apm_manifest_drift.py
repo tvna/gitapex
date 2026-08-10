@@ -117,9 +117,12 @@ def main() -> int:
         print(f"apm manifest drift: {error}")
         return 1
     if findings:
-        print("apm manifest drift: apm.yml must mirror .claude-plugin/plugin.json (the version source of truth):")
+        print(
+            "apm manifest drift: apm.yml must mirror .claude-plugin/plugin.json "
+            "(itself generated from the repository-root plugin.json -- edit that, then regenerate):"
+        )
         for field, plugin_value, apm_value in findings:
-            print(f"  {field}: plugin.json={plugin_value!r} != apm.yml={apm_value!r}")
+            print(f"  {field}: .claude-plugin/plugin.json={plugin_value!r} != apm.yml={apm_value!r}")
         return 1
     print("No apm manifest drift found.")
     return 0
