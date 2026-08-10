@@ -299,7 +299,31 @@ def has_marker_comment(
             f"?per_page={_COMMENTS_PAGE_SIZE}&page={page}"
         )
         comments = _call("GET", url, token, opener, sleeper)
-        if any(_MARKER in comment.get("body", "") for comment in comments):
+        if not isinstance(comments, list):
+            raise GitHubApiError(f"GET {url} returned {type(comments).__name__}, expected a JSON array")
+        for comment in comments:
+            if not isinstance(comment, dict):
+                raise GitHubApiError(
+                    f"GET {url} returned a comments-list item of type {type(comment).__name__}, expected an object"
+                )
+            # A CodeRabbit review finding on this same PR: the dict-item
+            # check above says nothing about "body"'s own type -- a truthy
+            # non-string body (e.g. an int) crashes `in` with an uncaught
+            # TypeError, and a dict body would silently check key membership
+            # instead of raising, producing a wrong marker decision rather
+            # than a loud one.
+            comment_body = comment.get("body")
+            if comment_body is not None and not isinstance(comment_body, str):
+                raise GitHubApiError(
+                    f"GET {url} returned a comment with a non-string 'body': {type(comment_body).__name__}"
+                )
+        # `.get("body") or ""`, not `.get("body", "")`: a comment dict with a
+        # present-but-null "body" (valid GitHub API JSON) would otherwise
+        # pass the dict-item shape check above and still crash `in` on None
+        # -- same fallback idiom `fetch_issue` already uses in the sibling
+        # hooks/gitapex_check_pr_issue_acm_disclosure.py (a /code-review finding on
+        # this same PR).
+        if any(_MARKER in (comment.get("body") or "") for comment in comments):
             return True
         if len(comments) < _COMMENTS_PAGE_SIZE:
             return False

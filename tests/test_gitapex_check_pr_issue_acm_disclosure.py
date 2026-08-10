@@ -324,6 +324,43 @@ def test_fetch_issue_returns_body_and_state():
     assert result == {"body": "the body", "state": "open"}
 
 
+def test_fetch_issue_raises_cleanly_on_non_dict_response():
+    # Issue #995: `_call`'s return value is unvalidated parsed JSON
+    # (`_gitapex_github_http.py`'s own contract) -- a non-dict response body
+    # used to raise an uncaught AttributeError on `data.get(...)` instead of
+    # this module's own documented GitHubApiError.
+    def opener(request: urllib.request.Request) -> Response:
+        return Response(200, json.dumps(["not", "a", "dict"]))
+
+    with pytest.raises(checker.GitHubApiError, match="expected a JSON object"):
+        checker.fetch_issue("tvna", "gitapex", 657, "tok", opener=opener, sleeper=lambda _: None)
+
+
+@pytest.mark.parametrize("field_name", ["body", "state"])
+def test_fetch_issue_raises_cleanly_on_non_string_field(field_name):
+    # A CodeRabbit review finding on this PR: the dict-shape check on `data`
+    # says nothing about `body`/`state`'s own types -- a truthy non-string
+    # value (e.g. an int) used to pass `data.get(field) or ""` unchanged,
+    # later crashing `acm_checker.has_acm_disclosure`'s `.replace()` call
+    # with an uncaught AttributeError instead of this documented error.
+    payload = {"body": "the body", "state": "open"}
+    payload[field_name] = 12345
+
+    def opener(request: urllib.request.Request) -> Response:
+        return Response(200, json.dumps(payload))
+
+    with pytest.raises(checker.GitHubApiError, match=f"non-string issue '{field_name}'"):
+        checker.fetch_issue("tvna", "gitapex", 657, "tok", opener=opener, sleeper=lambda _: None)
+
+
+def test_fetch_issue_allows_null_body_and_state():
+    def opener(request: urllib.request.Request) -> Response:
+        return Response(200, json.dumps({"body": None, "state": None}))
+
+    result = checker.fetch_issue("tvna", "gitapex", 657, "tok", opener=opener, sleeper=lambda _: None)
+    assert result == {"body": "", "state": ""}
+
+
 # ---------------------------------------------------------------------------
 # classify_issue
 # ---------------------------------------------------------------------------
@@ -532,6 +569,44 @@ def test_main_reports_error_for_non_utf8_payload_file(tmp_path, capsys):
     err = capsys.readouterr().err
     assert "not valid UTF-8" in err
     assert str(path) in err
+
+
+@pytest.mark.parametrize("field_name", ["owner", "repo", "title", "body"])
+@pytest.mark.parametrize("bad_value", [123, ["a", "list"], {"a": "dict"}, True])
+def test_main_reports_error_for_non_string_payload_field(monkeypatch, capsys, field_name, bad_value):
+    # Issue #995: `payload.get(field) or ""` tolerates an absent/None field
+    # but passes a truthy non-string value (e.g. an int from a malformed
+    # hook-stdin payload) through unchanged. owner/repo then crash
+    # `re.escape()` inside `_normalize_same_repo_citations`; title/body
+    # crash `_FENCE_RE.sub()` inside `_strip_fences` (found by a
+    # /code-review pass on this same PR: the first version of this guard
+    # covered owner/repo only) -- both an uncaught TypeError.
+    payload = {"owner": "o", "repo": "r", "title": "t", "body": "Closes #1"}
+    payload[field_name] = bad_value
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(payload)))
+    assert checker.main([]) == 1
+    err = capsys.readouterr().err
+    assert f"field '{field_name}'" in err
+    assert type(bad_value).__name__ in err
+
+
+def test_main_allows_owner_and_repo_absent_or_null(monkeypatch, capsys):
+    # Absent/None must keep falling through to the existing `or ""`
+    # fallback, not the new type-check deny path -- owner/repo null with a
+    # real title/body citation still passes.
+    payload = json.dumps({"title": "t", "body": "Refs #1", "owner": None, "repo": None})
+    monkeypatch.setattr("sys.stdin", io.StringIO(payload))
+    assert checker.main([]) == 0
+    assert "PASS" in capsys.readouterr().out
+
+
+def test_main_allows_all_fields_absent_or_null(monkeypatch, capsys):
+    # Same fallback, all four fields null at once: falls through to the
+    # normal "cites nothing" deny verdict, not a crash.
+    payload = json.dumps({"owner": None, "repo": None, "title": None, "body": None})
+    monkeypatch.setattr("sys.stdin", io.StringIO(payload))
+    assert checker.main([]) == 1
+    assert "cites no issue" in capsys.readouterr().err
 
 
 def test_main_prefers_gh_token_over_github_token(monkeypatch):
