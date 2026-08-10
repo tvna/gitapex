@@ -201,7 +201,7 @@ _SPLIT_NAMES = ("train", "selection", "test")
 #: touches a skill's `split.md` and its `SKILL.md` together) -- routing both
 #: through this cache means the second access is a dict lookup, not a
 #: second read/parse of the same file.
-_SplitJsonCache = dict[Path, "tuple[dict[str, object] | None, str | None]"]
+_SplitJsonCache = dict[Path, tuple[dict[str, object] | None, str | None]]
 
 
 def _load_split_json_cached(path: Path, cache: _SplitJsonCache) -> tuple[dict[str, object] | None, str | None]:

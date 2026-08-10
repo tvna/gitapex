@@ -128,25 +128,19 @@ def _load_model_allowlist(path: pathlib.Path) -> tuple[dict[str, str], dict[str,
         raise DeclarationReadError(f"{path}: is not valid YAML: {error}") from error
     if not isinstance(document, dict):
         raise DeclarationReadError(f"{path}: must contain a YAML mapping, found {type(document).__name__}")
-    result: list[dict[str, str]] = []
-    for key in ("approved_models", "retired_models"):
-        section = document.get(key)
-        if not isinstance(section, dict) or not all(
-            isinstance(k, str) and isinstance(v, str) for k, v in section.items()
-        ):
+
+    def section(key: str) -> dict[str, str]:
+        value = document.get(key)
+        if not isinstance(value, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in value.items()):
             raise DeclarationReadError(f"{path}: '{key}' must be a mapping of model id (string) to evidence (string)")
-        result.append(section)
-    return result[0], result[1]
+        return value
+
+    return section("approved_models"), section("retired_models")
 
 
-# The reviewed allowlist. A model id may be committed to this repository only
-# if it appears here, and it appears here only with the evidence a human
-# weighed when approving it. Adding a row is the review event this gate
-# exists to force; the string is not the point, the evidence column is.
-# Ids known to be undispatchable are the second map, kept so the most likely
-# failure reports its actual cause. A row there is a strictly better error
-# message, never an additional permission -- allowlist_integrity() fails if
-# an id is ever listed in both maps.
+# The reviewed allowlist, loaded at import time. See MODEL_ALLOWLIST_PATH's
+# own header comment for the full rationale (what each map means, and why
+# a row there is the review event this gate exists to force).
 APPROVED_MODELS, RETIRED_MODELS = _load_model_allowlist(MODEL_ALLOWLIST_PATH)
 
 

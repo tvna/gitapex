@@ -87,6 +87,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from functools import partial
 from pathlib import Path
 
 from _gitapex_vocabulary_lock import ScanError, check_number_word_matches, extract_section, read_text
@@ -197,18 +198,26 @@ def check_dimension_count(skill_text: str, rubric_text: str, heading_count: int)
             f"the dimension-count lock cannot run, and {heading_count} '## N. <Name>' heading(s) are present"
         )
     for label, matches in ((SKILL_MD, skill_matches), (RUBRIC_MD, _DIMENSION_COUNT_RE.findall(rubric_text))):
-
-        def format_unrecognized(word: str, label: str = label) -> str:
-            return f"{label}: dimension count declared as {word!r}, which is not a recognized number word"
-
-        def format_mismatch(_word: str, declared: int, label: str = label) -> str:
-            return (
-                f"{label}: declares {declared} dimensions but {RUBRIC_MD} carries {heading_count} "
-                "'## N. <Name>' heading(s) -- update the count in the same change as the heading"
+        problems.extend(
+            check_number_word_matches(
+                matches,
+                heading_count,
+                partial(_format_unrecognized_dimension_count, label),
+                partial(_format_dimension_count_mismatch, label, heading_count),
             )
-
-        problems.extend(check_number_word_matches(matches, heading_count, format_unrecognized, format_mismatch))
+        )
     return problems
+
+
+def _format_unrecognized_dimension_count(label: str, word: str) -> str:
+    return f"{label}: dimension count declared as {word!r}, which is not a recognized number word"
+
+
+def _format_dimension_count_mismatch(label: str, heading_count: int, _word: str, declared: int) -> str:
+    return (
+        f"{label}: declares {declared} dimensions but {RUBRIC_MD} carries {heading_count} "
+        "'## N. <Name>' heading(s) -- update the count in the same change as the heading"
+    )
 
 
 def check_range_references(skill_text: str, rubric_text: str, heading_count: int) -> list[str]:

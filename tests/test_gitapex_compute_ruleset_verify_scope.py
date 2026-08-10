@@ -200,6 +200,21 @@ def test_output_matches_the_prior_inline_bash_behavior_pull_request_without_rule
     assert module_result == bash_result
 
 
+# --- _show_at_commit's own defeat case ---------------------------------------
+
+
+def test_show_at_commit_raises_when_git_show_fails(repo: pathlib.Path) -> None:
+    # A defeat case for _show_at_commit's own error handling, not reachable
+    # through compute_scope's own happy path: compute_scope only ever calls
+    # _show_at_commit after _path_exists_at_commit has already confirmed the
+    # path exists, so this direct call proves the raise-on-failure branch
+    # actually fires rather than assuming `git show` can never fail once
+    # `cat-file -e` would have passed.
+    base_sha = _git(repo, "rev-parse", "HEAD").stdout.strip()
+    with pytest.raises(scope_module.RulesetVerifyScopeError, match=r"git show .* failed"):
+        scope_module._show_at_commit(repo, base_sha, "not/a/real/path.json")
+
+
 # --- CLI / main() ------------------------------------------------------------
 
 
@@ -250,3 +265,32 @@ def test_main_defaults_step_summary_file_from_environment(
     rc = scope_module.main(["--event-name", "pull_request", "--base-sha", base_sha, "--repo-root", str(repo)])
     assert rc == 0
     assert "carries no" in summary_file.read_text(encoding="utf-8")
+
+
+def test_main_explicit_runner_temp_flag_overrides_the_environment(
+    repo: pathlib.Path, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _write_ruleset(repo)
+    base_sha = _commit(repo, "add ruleset")
+    env_runner_temp = tmp_path / "env-runner-temp"
+    explicit_runner_temp = tmp_path / "explicit-runner-temp"
+    env_runner_temp.mkdir()
+    explicit_runner_temp.mkdir()
+    monkeypatch.setenv("RUNNER_TEMP", str(env_runner_temp))
+    rc = scope_module.main(
+        [
+            "--event-name",
+            "pull_request",
+            "--base-sha",
+            base_sha,
+            "--repo-root",
+            str(repo),
+            "--runner-temp",
+            str(explicit_runner_temp),
+        ]
+    )
+    assert rc == 0
+    stdout = capsys.readouterr().out
+    assert str(explicit_runner_temp) in stdout
+    assert (explicit_runner_temp / "base_main_ruleset.json").is_file()
+    assert not (env_runner_temp / "base_main_ruleset.json").is_file()
