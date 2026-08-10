@@ -551,9 +551,17 @@ def test_pairwise_table_covers_every_valid_2_way_pair():
     # filter_func only prevents an *invalid* row from being emitted; it
     # does not by itself prove the emitted, valid rows still cover every
     # required pair -- recompute both sets independently and diff them.
+    # Missing rows aren't the only way this table could silently drift: a
+    # future generator change could also emit a duplicate or an invalid
+    # row without breaking the missing-pair check above, so check those
+    # too rather than assuming the two counts stay in lockstep.
     covered = set(_PAIRWISE_TABLE)
     missing = _REQUIRED_PAIRS - covered
+    unexpected = covered - _REQUIRED_PAIRS
+    duplicates = len(_PAIRWISE_TABLE) - len(covered)
     assert not missing, f"generated pairwise table is missing required 2-way pairs: {sorted(missing)}"
+    assert not unexpected, f"generated pairwise table has unexpected rows: {sorted(unexpected)}"
+    assert not duplicates, f"generated pairwise table has {duplicates} duplicate row(s)"
 
 
 @pytest.mark.parametrize(
