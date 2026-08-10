@@ -98,11 +98,7 @@ territory):
 
 A precondition step (`SKILL.md`'s Procedure step 2, alongside the Mechanism
 fit checks), not a tenth dimension -- the fixed **nine-dimension** count is
-unchanged by this section. (As a point of local fact about this
-repository specifically, not part of this skill's own portable content:
-`evals/evaluating-skill-quality/tasks/guardrail.yaml` checks the reviewer
-still says "nine" -- illustrative confirmation, not something this claim
-depends on to be true.)
+unchanged by this section.
 
 Before walking dimensions 1-9, name explicitly whether the target's specific
 domain exposes a quality concern that none of the nine dimensions,
@@ -279,7 +275,7 @@ convention that keeps portability declarations terse up top applies here.
 
 ### Skill vs. multiple skills / cohesion
 
-A fourth whole-artifact check, alongside the three above: not which *kind*
+A whole-artifact check distinct from mechanism kind: not which *kind*
 of mechanism a target should be, but whether a target correctly scoped as
 a skill is *one* skill or should split into several. Adapted, for skill
 artifacts, from structured design's classic cohesion spectrum -- Stevens,
@@ -296,13 +292,9 @@ above.
 reads, not an optional branch) and its enumerated procedure branches to:
 one user-visible outcome, the invariants every branch shares, and the
 reasons the file would ever change. Enumerate the branches directly here
-rather than waiting on dimension 4's own branch-trigger walk: this check
-runs at Procedure step 2, before the nine-dimension walk (step 5) reaches
-dimension 4, so no branch inventory yet exists to reuse at this point --
-dimension 4 is the one that reuses this check's enumeration later,
-per Contract discipline's "never both" rule (see this dimension's own
-cross-reference below), not the reverse. Report the dominant cohesion type
-with cited
+rather than waiting on dimension 4's own branch-trigger walk (this check's
+own ownership of that enumeration is stated below). Report the dominant
+cohesion type with cited
 evidence -- quote the specific text that shows the mapping -- and name a
 secondary type only when the target genuinely mixes patterns; never infer
 cohesion from how well-written the prose is. A reviewer stating the
@@ -378,10 +370,11 @@ asks how content already agreed to belong together should be laid out).
 
 ### Skill-step vs. bundled script
 
-The four checks above ask whether a skill is the right *artifact*, or, for
-the cohesion check, the right artifact *boundary*. This fifth asks, within
-a correctly-scoped skill, whether a given *step* is best done by model
-reasoning or delegated to a bundled script the skill calls. It is distinct
+Distinct from the whole-artifact checks above, which ask whether a skill is
+the right *artifact* (or, for the cohesion check, the right artifact
+*boundary*): this asks, within a correctly-scoped skill, whether a given
+*step* is best done by model reasoning or delegated to a bundled script the
+skill calls. It is distinct
 from the hook check: a hook is event-bound; a step inside a skill's
 procedure fires when the model reaches it, not on an event, so a hook
 cannot own it -- the mechanism choice for such a step is model-reasoning
@@ -431,8 +424,7 @@ than a reviewed one -- an intentional parallel, not the same check.
 
 ### Model/effort tier fit
 
-A sixth Mechanism-fit check, distinct from the five above: not whether
-the skill is the right *artifact*, but whether a model-tier or
+Not whether the skill is the right *artifact*, but whether a model-tier or
 reasoning-effort *pin* the skill's own content makes -- in prose
 instructions to the invoking agent, or in a bundled Workflow script's
 `agent()` calls -- is itself justified. Grounded in Anthropic's own
@@ -482,19 +474,16 @@ the source's criteria is not a review, it is noise.
 
 Step-level finding, the same standing as above.
 
-This check never cross-references the target's declared
-`capabilityAssumption` -- it runs at Procedure step 2, before the sidecar
-is even read, and stays declaration-independent by design. See
-[Capability assumption](#capability-assumption) for the separate
-declaration-vs-pin consistency check, which owns that cross-reference at
-step 4.
+This check stays declaration-independent by design -- see [Capability
+assumption](#capability-assumption) for the owning declaration-vs-pin
+consistency check.
 
 ### Tool-capability verification
 
-A seventh Mechanism-fit check, distinct from the six above: not whether the
-target chose the right kind of artifact, or the right model/effort tier,
-but whether a claim the target's own content makes about what a named tool
-or MCP subcall *can do* is actually true. A Stop boundary or guardrail step
+Not whether the target chose the right kind of artifact, or the right
+model/effort tier, but whether a claim the target's own content makes
+about what a named tool or MCP subcall *can do* is actually true. A Stop
+boundary or guardrail step
 is only as sound as the tool capability it leans on, and a plausible-
 sounding claim is not evidence the cited tool actually supports it (same
 reasoned-extension disclosure as the isolation-for-neutrality trigger
@@ -541,10 +530,10 @@ Step-level finding, the same standing as the two checks above.
 
 ### Subagent delegation scope
 
-An eighth Mechanism-fit check, distinct from the seven above: not whether a
-skill *should* delegate to a subagent at all (the whole-artifact "Skill vs.
-subagent" question above), but whether a skill whose own content *does*
-instruct subagent dispatch bounds when and how many. Grounded in "Prompting
+Not whether a skill *should* delegate to a subagent at all (the
+whole-artifact "Skill vs. subagent" question above), but whether a skill
+whose own content *does* instruct subagent dispatch bounds when and how
+many. Grounded in "Prompting
 Claude Opus 5" ([opus5]): "Claude Opus 5 delegates to subagents more readily
 than prior models. Delegation pays off on genuinely independent, sizeable
 tracks of work, but it multiplies cost and time when applied to small
@@ -580,10 +569,10 @@ Step-level finding, the same standing as the three checks above.
 
 ### Invocation-mode fit
 
-A ninth Mechanism-fit check, distinct from the eight above: not whether the
-target chose the right artifact, tier, tool claim, or delegation bound, but
-whether *who is actually allowed to invoke it* matches the trigger its own
-content claims. Grounded in [Claude Code skills][cc], which documents the
+Not whether the target chose the right artifact, tier, tool claim, or
+delegation bound, but whether *who is actually allowed to invoke it*
+matches the trigger its own content claims. Grounded in [Claude Code
+skills][cc], which documents the
 two fields that gate this and states the default plainly: by default "both
 you and Claude can invoke any skill," `disable-model-invocation: true`
 means "Only you can invoke the skill," and `user-invocable: false` means
@@ -919,16 +908,9 @@ the skill's `metadata/gitapex.yaml` sidecar. The three levels are defined
 in `SKILL.md`, checkable without opening this file.
 
 This axis pins nothing and never executes: it only calibrates how
-strictly dimensions 2, 3, 5, and 9 grade, below. Distinct from
-[Model/effort tier fit](#modeleffort-tier-fit): that check judges a
-model-or-effort *pin the target's own content makes*, which the invoking
-agent acts on at runtime, and it fires only when such a pin actually
-exists in the target's prose or a bundled Workflow script -- an absence
-is not a finding, and none of this repository's skills contain one today,
-so tier fit currently has no coverage at all over the population this axis
-exists for. Capability assumption instead recalibrates the *reviewer's*
-strictness against the declared regime, with full coverage over every
-skill regardless of whether that skill pins anything. Never merge the two
+strictly dimensions 2, 3, 5, and 9 grade, below -- distinct from [Model/effort
+tier fit](#modeleffort-tier-fit), which judges a pin the target's own
+content makes rather than recalibrating the reviewer. Never merge the two
 checks and never let one substitute for the other: a skill can declare
 Frontier and pin nothing (the common case), or declare Broad and
 legitimately pin a strong model for one fragile step, without either
@@ -983,15 +965,10 @@ Confidentiality-acknowledged check already applies to a safeguard claim)
 -- name the specific body content that would plausibly move, and that the
 declaration is foreclosing a structural fix rather than a considered
 choice. **Pass**: `Broad`/`Frontier` carries a disclosure meeting the bar
-above, or there is no ceiling pressure to begin with. Grounded in this
-skill's own history:
-`evaluating-skill-quality`'s own `SKILL.md` sat at 497-498/500 lines
-while declaring `Broad`, with no disclosure of the Adaptive tradeoff
-anywhere until an operator asked -- resolved by `metadata/gitapex.yaml`'s
-issue/614 decision entry, the worked precedent this check generalizes
-from. A step-level finding graded during dimension 2's walk (the ceiling
-pressure is a conciseness symptom), not a new precondition step -- it
-needs no new `SKILL.md` Procedure checkpoint.
+above, or there is no ceiling pressure to begin with. A step-level finding
+graded during dimension 2's walk (the ceiling pressure is a conciseness
+symptom), not a new precondition step -- it needs no new `SKILL.md`
+Procedure checkpoint.
 
 **Per-dimension grading effect:**
 
@@ -1184,12 +1161,7 @@ different rule instead: it is a single declaration (`mode` required once
 means no network access, `allowlist` means only the listed exact hosts,
 and `unrestricted` means no restriction from this declaration, schema-
 permitted but requiring the declaring PR's own explicit argument against
-this repository's security invariants 6 and 9 before first real use. Two
-skills declare `network` today:
-`setup-gitapex-toolchain` (`allowlist`, `domains: [github.com]`, its own
-release-download target) and `grounding-in-primary-sources`
-(`unrestricted`, since its own primary-source-fetching procedure targets
-whichever external tool's docs a claim needs, not a fixed domain set).
+this repository's security invariants 6 and 9 before first real use.
 This repository has also recorded the full schema, semantics, and
 rationale for `tools` at
 `docs/superpowers/specs/2026-07-25-skill-execution-requirements-envelope-design.md`
@@ -1467,13 +1439,14 @@ rotting or breaking once copied or revisited later.
 - A default with an escape hatch, not a menu of options.
 - No bare (`#149`) or even fully-qualified (`owner/repo#149`) GitHub
   issue/PR-number citation inside content declared (or read as)
-  **Portable**. A bare `#N` auto-links relative to whichever repository
-  currently hosts the file and silently resolves to the wrong issue once
-  vendored; a fully qualified link avoids the wrong-resolution risk but
-  is still the origin repository's own issue-tracker bookkeeping blended
-  into portable teaching content -- the same portable-core/repo-detail
-  split the Mixed classification above and dimension 5 already require
-  for other content. Route dated, issue-linked history to the origin
+  **Portable** (see the "Bare issue/PR-number citations are barred at
+  every level" rule under Portability level above for why a bare `#N` is
+  a defect regardless of declared level; a fully qualified link avoids
+  that wrong-resolution risk but is still the origin repository's own
+  issue-tracker bookkeeping blended into portable teaching content -- the
+  same portable-core/repo-detail split the Mixed classification above and
+  dimension 5 already require for other content). Route dated,
+  issue-linked history to the origin
   repository's own status documentation (e.g. a `docs/`-level eval or
   change log) instead of a worked example inside the skill's own folder.
 - Inside content declared (or read as) **Portable** (mirroring the
@@ -1688,11 +1661,9 @@ bookkeeping (see above) discloses it as a deliberate, named gap -- the
 same disclosed-vs-silent distinction this dimension already applies to a
 missing baseline. A repository that maintains its own coverage-measurement
 tooling for this (this repository's own
-`evals/scripts/gitapex_check_dimension_coverage.py` is one instance, run against
-the `evaluating-deterministic-gate-quality` skill's corpus as a worked
-example) makes this check mechanical; without one, cross-reference the
-rubric's own numbered list
-against the corpus by hand.
+`evals/scripts/gitapex_check_dimension_coverage.py` is one instance) makes
+this check mechanical; without one, cross-reference the rubric's own
+numbered list against the corpus by hand.
 
 **`waza check`'s output is useful evidence, but verify its heuristics
 against the primary spec before trusting a verdict from it** -- do not
@@ -2038,80 +2009,16 @@ kinds of changes.
 fit and adequate cohesion -- the skill is the right container (not better
 as a hook, subagent, or CLAUDE.md content), and its content is not a
 coincidental or independently-triggerable/usable/changeable grouping that
-should split into several skills. A step-level finding (Skill-step vs.
-bundled script, Model/effort tier fit, or Tool-capability verification) is
+should split into several skills, per [Mechanism fit](#mechanism-fit)'s own
+ownership of that rule. A step-level finding (Skill-step vs. bundled
+script, Model/effort tier fit, or Tool-capability verification) is
 reported for triage but does not by itself block either verdict.
-
-A skill can be well-formed or even mature by every dimension below and
-still be the wrong artifact, or the wrong boundary -- content that should be
-a hook, CLAUDE.md, or a subagent, or a bundle of unrelated responsibilities
-that should be several skills, dressed up as a well-written skill. A
-wrong-mechanism or low-cohesion finding (see [Mechanism
-fit](#mechanism-fit)) is reported alongside, not replaced by, the
-well-formed/mature verdict: naming both is more useful than picking one,
-since a reviewer fixing the mechanism or boundary still needs to know
-whether the content itself was any good.
 
 ## References
 
-Every inline `[label]` citation above resolves to the source below.
-
-- **[ab]** Anthropic -- Skill authoring best practices.
-  <https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices>
-- **[ao]** Anthropic -- Agent Skills overview.
-  <https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview>
-- **[cc]** Anthropic -- Claude Code skills.
-  <https://code.claude.com/docs/en/skills>
-- **[cce]** Anthropic -- Claude Code skills, Evaluate and iterate on a skill.
-  <https://code.claude.com/docs/en/skills#evaluate-and-iterate-on-a-skill>
-- **[skillopt]** Yang et al., SkillOpt: Executive Strategy for Self-Evolving
-  Agent Skills, Microsoft, 2026 (arXiv:2605.23904).
-  <https://arxiv.org/abs/2605.23904>
-- **[dbc]** Bertrand Meyer, Applying "Design by Contract", IEEE Computer
-  25(10):40-51, October 1992.
-  <https://se.inf.ethz.ch/~meyer/publications/computer/contract.pdf>
-- **[sd]** W. P. Stevens, G. J. Myers, and L. L. Constantine, Structured
-  Design, IBM Systems Journal 13(2):115-139, 1974 -- the original
-  coupling/cohesion paper; introduces six of the seven cohesion types
-  (coincidental, logical, temporal, communicational, sequential,
-  functional).
-  <https://dl.acm.org/doi/10.5555/1241515.1241533>
-- **[ycsd]** Edward Yourdon and Larry L. Constantine, Structured Design:
-  Fundamentals of a Discipline of Computer Program and Systems Design,
-  Yourdon Press, 1978 -- adds the seventh cohesion type, procedural, to
-  [sd]'s original six.
-  <https://dl.acm.org/doi/book/10.5555/578522>
-- **[soc]** E. W. Dijkstra, On the role of scientific thought (EWD447), 1974;
-  reprinted in Selected Writings on Computing: A Personal Perspective,
-  Springer-Verlag, 1982.
-  <https://www.cs.utexas.edu/~EWD/transcriptions/EWD04xx/EWD447.html>
-- **[steering]** Anthropic -- Steering Claude Code: skills, hooks, subagents
-  and more.
-  <https://claude.com/blog/steering-claude-code-skills-hooks-rules-subagents-and-more>
-- **[fable]** Thariq Shihipar, Anthropic -- A Field Guide to Fable: Finding
-  Your Unknowns.
-  <https://claude.com/blog/a-field-guide-to-claude-fable-finding-your-unknowns>
-- **[modeleffort]** Lydia Hallie, Anthropic (Claude Code team) -- Choosing
-  a Claude model and effort level in Claude Code.
-  <https://claude.com/blog/claude-model-and-effort-level-in-claude-code>
-- **[opus5]** Anthropic -- Prompting Claude Opus 5.
-  <https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5>
-- **[kapoor]** Kapoor, Stroebl, Siegel, Nadgir, Narayanan -- AI Agents That
-  Matter, 2024 (arXiv:2407.01502).
-  <https://arxiv.org/abs/2407.01502>
-- **[passk]** Chen et al. -- Evaluating Large Language Models Trained on
-  Code, OpenAI, 2021 (arXiv:2107.03374).
-  <https://arxiv.org/abs/2107.03374>
-- **[passhatk]** Yao, Shinn, Razavi, Narasimhan -- tau-bench: A
-  Benchmark for Tool-Agent-User Interaction in Real-World Domains, 2024
-  (arXiv:2406.12045).
-  <https://arxiv.org/abs/2406.12045>
-- **[metrrct]** Becker, Rush, Barnes, Rein -- Measuring the Impact of
-  Early-2025 AI on Experienced Open-Source Developer Productivity, METR,
-  2025 (arXiv:2507.09089).
-  <https://arxiv.org/abs/2507.09089>
-
-<!-- Link reference definitions below power the inline [label] shortcuts; keep in sync with the visible list above. -->
+Every inline `[label]` citation above resolves to the source below (label,
+URL, and title all carried in the one link-reference definition each line
+is; no separate visible listing to keep in sync).
 
 [ab]: https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices "Anthropic -- Skill authoring best practices"
 [ao]: https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview "Anthropic -- Agent Skills overview"
