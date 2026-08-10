@@ -80,7 +80,7 @@ reasons.
   authoritative merge gate.
 - **Every wired gate runs through ``uv``.** CONTRIBUTING.md invokes this
   file with plain ``python3``, and so does the pre-push hook, because the
-  runner itself needs no dependencies -- but all 21 wired argvs begin with
+  runner itself needs no dependencies -- but all 22 wired argvs begin with
   ``uv``, since each gate carries its own pinned invocation. Without ``uv``
   on PATH every one of them reports ``FAIL ... failed to run``, which
   reads as a whole broken wired set rather than one missing tool. ``uv`` is
@@ -96,7 +96,16 @@ reasons.
   without it the producer fails and that one gate reports FAIL with git's
   own message; the other gates still run and still report. A *stale*
   ``origin/main`` widens the diff rather than narrowing it, so it errs
-  toward grading more than the branch changed, never less.
+  toward grading more than the branch changed, never less. ``behind-base``
+  (issue #985) falsifies this staleness assumption for its own case
+  instead of inheriting it: it fetches ``origin/main`` itself before
+  comparing, rather than reading whatever local ref this checkout last
+  pulled, because for a behind-base comparison specifically a stale ref
+  errs the other way -- it makes a genuinely behind branch read as
+  up to date. That fetch is this runner's first network call; a failed
+  fetch fails that one gate closed (a distinct message from an ordinary
+  behind-base FAIL) rather than falling back to the stale ref it exists to
+  avoid.
 - This grades **committed** state (``HEAD`` and the working tree as it is on
   disk), not a staged index -- which is exactly why it is wired at
   ``pre-push`` and not ``pre-commit``. ``.pre-commit-config.yaml``'s
@@ -144,12 +153,20 @@ SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
 # own _GROUP_TIMEOUT_SECONDS = 600 -- so that one gate's own theoretical
 # worst case is ~4800 s, not 600 s. A ceiling matching that would be useless
 # as a hang guard (80 minutes of a silent pre-push), so this is a judgment
-# call in the other direction. For scale: a warm run of all 21 wired gates
-# combined measured 4-6 s end to end, so 1800 s is a hang guard rather than
+# call in the other direction. For scale: a warm run of all 22 wired gates
+# combined measures ~7-8 s end to end, so 1800 s is a hang guard rather than
 # a budget, and it comfortably clears a cold mypy cache while still failing
 # loudly rather than blocking a push indefinitely. The residual risk is named rather than hidden: a genuinely
 # cold cache on a slow machine can exceed this and report a timeout FAIL on
 # a gate CI would pass. `--timeout-seconds` raises it for that case.
+#
+# Issue #985 added `behind-base`, this runner's first gate that makes a
+# network call (it fetches `origin/main` before comparing). Measured
+# directly rather than assumed: three warm standalone runs of that one
+# gate averaged under a second (~0.6 s), and the ~7-8 s combined figure
+# above is up from a ~4-6 s baseline measured for the previous, one-gate-
+# smaller wired set -- a real but small addition against a ceiling three
+# orders of magnitude larger.
 DEFAULT_TIMEOUT_SECONDS = 1800
 
 # Registry plane that marks a gate as having a working-tree-only form -- see
