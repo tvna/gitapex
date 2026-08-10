@@ -44,8 +44,13 @@ from __future__ import annotations
 import difflib
 import json
 import pathlib
+import sys
 from collections.abc import Callable, Sequence
 from typing import Any
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+from _gitapex_schema_validation import load_json_or_raise  # sys.path bootstrap above must run first
 
 API_ROOT = "https://api.github.com"
 
@@ -116,18 +121,7 @@ def load_sot(path: pathlib.Path) -> dict[str, Any]:
     body, and both drift scopes would report a clean comparison against
     nothing at all.
     """
-    try:
-        raw = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as error:
-        # UnicodeDecodeError is not an OSError subclass, so it needs its own
-        # arm: without it, a source-of-truth file saved in a non-UTF-8 encoding
-        # escapes every caller's `except RulesetError` as a raw traceback
-        # instead of the documented clean-error path.
-        raise RulesetError(f"cannot read ruleset source of truth {path}: {error}") from error
-    try:
-        document = json.loads(raw)
-    except json.JSONDecodeError as error:
-        raise RulesetError(f"{path} is not valid JSON: {error}") from error
+    document = load_json_or_raise(path, RulesetError)
     if not isinstance(document, dict):
         raise RulesetError(f"{path} must contain a JSON object, found {type(document).__name__}")
     name = document.get("name")
