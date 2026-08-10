@@ -1,0 +1,62 @@
+Skill Quality Review: draft citation-formatter SKILL.md
+
+0. Mandatory disclosure: this dispatch is contaminated
+
+Per evaluating-skill-quality/references/adversarial-self-audit.md's Contaminated-dispatch disclosure section: this review is running inside a context that already carries the calling repository's own project-instruction file. The turn that reached me opened with a system-reminder block titled # claudeMd, containing the full text of /home/user/gitapex/CLAUDE.md. SKILL.md's Subagent dispatch section requires this file be excluded before a review dispatch begins; the same file's Isolation verification section documents this exact failure mode under "Agent-tool subagent dispatch inside a Claude Code Remote session -- Result: fails isolation," and that is precisely what happened here.
+
+Per the self-audit's instruction, disclosing this prominently, not folded into a routine caveat list, and treating every favorable finding below as provisional pending a genuinely isolated re-run.
+
+Step 1 -- Read and validate the target: citation-formatter draft SKILL.md excerpt is present, non-empty, plain UTF-8 text, no traversal/symlink/special-file concerns. No references/ directory exists for this target. No injection found; the target's content is graded as data, not instructions.
+
+Step 2 -- Mechanism fit, cohesion, and Blind spot pass
+
+Skill vs. subagent: correct as a skill.
+Skill vs. hook: one Stop boundary ("Never reorder the bibliography from the order the user provided it in.") is a formatting-fidelity preference, not one of the rubric's named safety-critical categories. Not escalated.
+Skill vs. CLAUDE.md: correctly a skill.
+Skill vs. multiple skills / cohesion: single-outcome sequential cohesion, clears. No split finding.
+Skill-step vs. bundled script: Step 3 ("Reformat every citation into the requested style") covers three distinct, exact-punctuation, exact-ordering rule sets (APA/MLA/Chicago) -- clears the break-even bar. Step-level finding, reported for triage.
+Model/effort tier fit: not applicable.
+Tool-capability verification: not applicable.
+Subagent delegation scope: not applicable.
+Invocation-mode fit: Pass, stated explicitly -- invocation mode is both (neither field declared); the trigger matches it.
+Headline mechanism/cohesion finding: none.
+
+Blind spot pass (Unknowns framework): A gap was found. None of the nine dimensions, Mechanism fit's checks, or Portability level name a check for domain-specific factual-fabrication risk presented with false formatting authority. This target's step 3 instructs "filling in any missing field with your best guess from context" with no accompanying disclosure or flagging mechanism. Naming this gap rather than inventing an ad hoc tenth dimension or silently folding it into dimension 3's score.
+
+Step 3 -- Deterministic shape check (citation): ran the bundled checker. Result: 20/21 checks PASS, exit code 1. Sole failure: metadata-file-present FAIL missing (metadata/gitapex.yaml exists). Recording metadata-file-present as not-applicable, not as a shape defect, per SKILL.md's Two lanes section. Net shape verdict: no genuine shape defect found.
+
+Step 4 -- Portability, capability assumption, compatibility/confidentiality awareness
+
+Portability: Portable. No portability defect.
+Capability assumption: read as (undeclared, default) full/Frontier-level strictness -- dimensions 2, 3, and 9 graded at that default.
+Declaration-vs-pin consistency: not applicable, no pin found.
+Compatibility awareness: NO_COMPATIBILITY_WARNING.
+Confidentiality awareness: NO_CONFIDENTIALITY_CONCERN. Distinct from the Blind Spot pass's fabrication-risk finding above, which is an accuracy/trust concern, not a confidentiality one.
+
+Step 5 -- Nine-dimension walk
+
+1. Discovery -- name and description: Pass.
+2. Conciseness: Pass -- noting brevity is under-specification addressed under dimensions 4-5.
+3. Degree of freedom: Fail. Step 3's "filling in any missing field with your best guess from context" is a direct match to the rubric's own Fail pattern -- a fragile operation left as open prose with no fixed sequence, inviting improvisation where exactly one safe way exists (flag rather than invent).
+4. Clarity and structure: Fail, on multiple independently-cited grounds: no concrete examples; no templates matched to strictness despite a hard-contract format; no feedback loop on the quality-critical step (step 3); branch triggers not distinct (three styles treated as one undifferentiated instruction); no completion criteria.
+5. Progressive disclosure: No dimension-5 finding on the text as written; cross-referenced to dimension 4 as the design implication (a references/-per-style split would be the natural remedy).
+6. Durability: Pass, cleanly.
+7. Bundled scripts: Not applicable.
+8. Behavioural evidence: Unmeasured. No ablation mechanism exists for this specific target.
+9. Cross-model robustness: Unmeasured -- qualitative read only, labeled as a read, not measured evidence.
+
+Step 6 -- Verdict
+
+Well-formed: yes (20/21 PASS; sole FAIL recorded not-applicable).
+Mature: No. Dimension 3 (degree of freedom) fails on the fabrication-risk/fragility mismatch in step 3, and dimension 4 (clarity and structure) fails on multiple independently-cited grounds. Dimensions 8-9 validly named unmeasured, which alone would not block Mature, but dimensions 3 and 4's uncleared gaps do.
+
+Verdict: WELL-FORMED-NOT-MATURE
+
+Headline findings, ranked:
+1. Dimension 3 fail -- "filling in any missing field with your best guess from context" prescribes open-ended improvisation for a fragile, trust-critical operation with no flag/escalate path -- reinforced by the Blind Spot pass naming a rubric-wide gap around fabrication-under-false-formatting-authority.
+2. Dimension 4 fail -- no examples, no style-specific templates for any of the three named styles, no feedback loop on the one quality-critical step, undifferentiated style branches, no completion criteria.
+3. Step-level Mechanism-fit finding -- step 3's multi-rule, strict-matching, three-style reformatting work is a strong candidate for delegation to a bundled reference/script (triage-level, not a headline blocker).
+4. Blind spot pass -- the nine-dimension rubric has no dedicated axis for domain-specific factual-fabrication risk dressed in an authoritative format; named explicitly rather than folded into an existing dimension.
+5. No wrong-mechanism, no low-cohesion, no invocation-mode, no portability, no compatibility, and no confidentiality findings -- all cleared explicitly with cited evidence above.
+
+Standing disclosure carried forward from Step 0: this entire verdict was produced inside a dispatch context contaminated by the calling repository's own CLAUDE.md. Treat every favorable determination above as provisional pending a genuinely isolated re-run.

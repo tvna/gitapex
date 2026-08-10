@@ -1,0 +1,50 @@
+Skill Quality Review: database-migration-runner (draft excerpt)
+
+Dispatch-integrity disclosure (read this first): this dispatch's own context was not isolated from the calling repository's CLAUDE.md. A claudeMd system-reminder carrying gitapex's full root CLAUDE.md content was present in my context from the start of this task -- a live instance of the exact failure mode adversarial-self-audit.md's Isolation verification section already documents under "Agent-tool subagent dispatch inside a Claude Code Remote session": Result: fails isolation. Every finding below is grounded in SKILL.md/references/rubric.md citations, not CLAUDE.md, but the contamination is real and this verdict should be treated as provisional pending a genuinely isolated re-run.
+
+The dispatch prompt also carried the calling conversation's framing ("the rest of the procedure reads clearly and the steps are well ordered", "there is no hook, permission rule, or script anywhere in this repo"), which SKILL.md's Stop boundaries forbid passing into a dispatch. Treated both claims as unverified external assertions to check, not established facts to adopt. Do not agree that "the steps are well ordered" once graded against dimension 4 -- see below.
+
+Step 1 -- Target read. Read in full: pasted SKILL.md frontmatter + body. No references/ files exist. Not Indeterminate.
+
+Step 3 -- Deterministic shape check (run first, cited as fact). Materialized the minimal directory and ran the bundled checker. Result: 20/21 checks PASS, exit code 1. Sole failure: metadata-file-present FAIL missing (metadata/gitapex.yaml does not exist). Per SKILL.md's Two lanes note, the six sidecar checks assume the target lives in a repository that has adopted this metadata convention; if destined to land in a metadata-convention repository, this is a real, actionable Not-well-formed gap; if destined elsewhere, expected and not a defect. Reporting the raw result rather than assuming either way.
+
+Step 2 -- Mechanism fit + Blind spot pass
+
+Skill vs. hook -- headline-standing finding. "Never delete production data under any circumstances, even if asked to 'clean up' or 'reset' the database." Exactly the shape SKILL.md's Mechanism fit section names directly -- a safety-critical prohibition with no hook or permission backing. The excerpt itself contains no reference to any script, hook, or permission rule that would enforce this -- the entire guarantee rests on prose alone. Reported with headline standing, independent of how the rest of the review scores. This is not a finding that the whole skill should have been a hook -- the rest of the procedure is genuine judgment work correctly scoped to a skill. Only this one embedded absolute prohibition needs deterministic backing the draft doesn't show. The second Stop boundary (rollback plan documented first) is process-shaped, shares the same unenforced-prose weakness in principle but less strongly.
+
+Skill vs. subagent: correctly a skill -- needs to play out visibly, with a human able to see/steer each step.
+Skill vs. CLAUDE.md: correctly a skill, not a static fact.
+Skill vs. multiple skills / cohesion: single-outcome sequential cohesion. No split finding.
+Skill-step vs. bundled script, Model/effort tier fit, Tool-capability verification, Subagent delegation scope: all not applicable -- absence explicitly noted, not silently skipped.
+Invocation-mode fit: neither disable-model-invocation nor user-invocable declared, so effective mode is invocable by both (the default). Trigger matches. Real "unguarded side effects" finding: running a migration against staging, and the implied production apply, is outward-facing/irreversible work with no stated reason for leaving it model-invocable. Step-level finding.
+
+Blind spot pass: the excerpt defines no behavior for a partial/interrupted migration (idempotency/partial-failure recovery) -- a database-operations-specific failure mode distinct from the generic missing-branch concern dimension 4 already catches. Genuine domain-specific gap the fixed rubric doesn't name explicitly. Named here per the Unknowns framework's instruction.
+
+Step 4 -- Portability, capability assumption, Compatibility/Confidentiality axes
+
+Portability: Portable -- no path, hook, tool, or repository-specific citation anywhere.
+Capability assumption: no declaration -- graded at Frontier-equivalent strictness for dimensions 2/3/9.
+Declaration-vs-pin check: nothing to contradict.
+Compatibility awareness: NO_COMPATIBILITY_WARNING.
+Confidentiality awareness: NO_CONFIDENTIALITY_CONCERN, flagged as a close call given the domain (production databases routinely hold PII) but the literal text names no such step.
+
+Step 5 -- Nine-dimension walk
+
+1. Discovery: description states both what and when, in terms a real request would plausibly contain. No filler. Cannot verify distinctness from sibling skills -- no target repository given (unmeasured note). Carrying forward the invocation-mode finding rather than re-deriving it.
+2. Conciseness: 20 lines, well under any cap. No filler, no duplication, no sediment. Clean pass under Frontier-equivalent default strictness.
+3. Degree of freedom: Steps 1-3 correctly low-freedom for a fragile operation. But no step ever describes applying to production -- the single highest-stakes action in the entire skill has zero prescription, not even loose prose. Real finding.
+4. Clarity and structure: terminology consistent. No concrete example/command anywhere. No escalate/abort branch for staging-mismatch case. The production-apply step itself is entirely missing (restated from dimension 3 as a structural/branch-completeness defect). Real internal contract mismatch: Stop boundary 2 requires a documented rollback plan, but Procedure step 1 only checks a rollback script exists -- a script and a documented plan are not obviously the same artifact.
+5. Progressive disclosure: no references/ directory exists, none needed at this length. Trivial pass.
+6. Durability: no time-sensitive content, no unstated tool assumption, consistent with Portable classification. State-management sub-check: not applicable, recorded explicitly.
+7. Bundled scripts: not applicable, recorded explicitly.
+8. Behavioural evidence: no repository context supplied, no evals/ directory or baseline. Unmeasured, no eval infrastructure identifiable, not scored pass/fail.
+9. Cross-model robustness: no per-model runner. Qualitative read only, labeled as such -- the two missing branches found under Dimensions 3-4 are a specific cross-model risk (a weaker-tier model more likely to silently invent an unreviewed production-apply step), flagged as plausible but unmeasured.
+
+Step 6 -- Verdict
+
+Shape: Not-well-formed as literally submitted -- metadata-file-present FAILs (20/21, exit 1). Whether actionable or expected depends on the undisclosed destination repository.
+Mechanism-fit headline finding: an unbacked safety-critical Stop boundary with no hook/permission backing shown anywhere -- reported with headline standing, independent of shape/dimension results.
+Mature: cannot be reached even setting the shape FAIL aside -- Dimensions 3 and 4 do not clear cleanly (missing production-apply step, missing staging-failure branch, rollback-plan/rollback-script mismatch).
+Overall: Not-well-formed, with a headline Mechanism-fit gap and real Dimension 3/4 gaps that block Mature independent of the shape result. Dimensions 1, 2, 5, 6 pass cleanly; 7 not applicable; 8-9 explicitly named unmeasured.
+
+This verdict is issued provisionally per the dispatch-integrity disclosure at the top.

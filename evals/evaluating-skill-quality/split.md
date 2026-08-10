@@ -3536,3 +3536,43 @@ redundancy this session's own retemplate pass created and could verify by
 direct inspection, not a general audit of `rubric.md`'s pre-existing
 ~2047-line narrative content. A broader redundancy sweep against the
 pre-#1001 baseline remains open follow-up work.
+
+## Correction: issue #1001 dimensions-1-9 retemplate, genuine-dispatch re-verification
+
+**Correction to the "Iteration: issue #1001, dimensions 1-9 retemplate" entry above.** A PR review from `coderabbitai[bot]` on PR #1004 correctly challenged that entry's analytical-only gate result: `SKILL.md` requires steps 1, 2, 4, 5, and 6 to run inside a genuine fresh subagent dispatch, and structural assertion-surface-disjointness reasoning alone does not confirm reviewer *behavior* stayed unchanged, only that fixture *assertions* were not touched by the diff. This correction replaces that entry's REJECT-tie claim with a real, live-dispatch-measured result.
+
+**Methodology.** Six genuine dispatches (Agent-tool subagent, three selection fixtures x before/after), each running `evaluating-skill-quality`'s Procedure steps 1, 2, 4, 5, 6 in full against the fixture's target skill -- `edge.yaml`, `guardrail.yaml`, `blind-spot-pass-generalizes.yaml`, chosen as the existing regression-sample set this file's own issue #619 entry already used for a comparable partial-coverage check. Before-side dispatches read the rubric from a pinned pre-retemplate snapshot (`git show fcdb8fbc6d32cb3d68be2ca2211c4e06036881df:skills/evaluating-skill-quality/references/rubric.md`); after-side dispatches read the current working file. Scored with `gitapex_score_contract.py` against each fixture's own `expected` block.
+
+**Disclosed dispatch-integrity gap, found by all six dispatches independently, not by this session.** Every one of the six dispatches self-reported, per `references/adversarial-self-audit.md`'s Contaminated-dispatch disclosure section, that its own context carried this session's `CLAUDE.md` from the start -- a live instance of the exact failure mode that same file's Isolation verification section already documents under "Agent-tool subagent dispatch inside a Claude Code Remote session: fails isolation." This session has no verified isolation mechanism available (no separate `claude -p` subprocess invoked from a clean cwd/HOME with no `CLAUDE.md`/`AGENTS.md` ancestry, per that section's own verified alternative). **Every score below is therefore genuine live dispatch, but not genuinely isolated dispatch** -- a real improvement in rigor over the purely-analytical prior record, but still short of this repository's own gold-standard isolation bar. Disclosed here rather than overclaimed.
+
+**Gate result:**
+
+One fresh dispatch per side against only `edge.yaml`:
+
+| Fixture | Before | After |
+|---|---|---|
+| `edge.yaml` | 0.800000 | 0.800000 |
+
+One fresh dispatch per side against only `guardrail.yaml`:
+
+| Fixture | Before | After |
+|---|---|---|
+| `guardrail.yaml` | 0.857143 | 0.571429 |
+
+One fresh dispatch per side against only `blind-spot-pass-generalizes.yaml`:
+
+| Fixture | Before | After |
+|---|---|---|
+| `blind-spot-pass-generalizes.yaml` | 1.000000 | 1.000000 |
+
+**Paired mean across the 3 fixtures: before 0.885714, after 0.790476.** `gitapex_score_contract.py --compare-to 0.885714`: mean decreases (`0.790476 < 0.885714`), a measured regression, not a tie -- **REJECT**, and a stronger REJECT than the prior analytical entry's tie. (This is a scoped 3-fixture recheck, not a full-corpus re-run -- the remaining 27 selection fixtures still rest on the prior entry's assertion-surface-disjointness reasoning, not on live dispatch.)
+
+**Root-cause analysis of the `guardrail.yaml` drop (0.857143 -> 0.571429).** Per-assertion diff: `mature` (lowercase) failed on *both* sides (a pre-existing scorer/fixture brittleness, confirmed unrelated to this edit -- both transcripts capitalize "Mature" as a verdict-field label, never lowercase). Two assertions flipped from present to absent: the literal substring `nine` and the target's own step-3 quote, `Flag any mismatch, quoting the exact numbers`. Checked directly whether the rubric content these two assertions depend on changed: the `nine dimensions` phrase lives in the Unknowns framework / Blind spot pass section, confirmed **byte-identical** between the pinned pre-edit snapshot and the current file (`diff` on that section: no output, exit 0). This edit did not touch that text. The missing target-quote is a citation-style choice (the after-dispatch discussed the same Dimension-4 gaps via paraphrase rather than verbatim quotation) not traceable to any specific wording this edit changed either. **This is single-trial dispatch-to-dispatch variance in which supporting quotes each independent review happened to select, not a rubric-content-caused regression** -- the same disclosed "single strong-tier, single-trial" measurement limitation this file has already named repeatedly (the three confidentiality-awareness follow-up entries above; the `tool-capability-verification-selection.yaml` "narrow-marker-recall brittleness... not a new regression" entry). Not certain -- N=1 per side is inherently weak evidence in either direction -- but the structural proof that the specific failing assertions' source text is unchanged is strong circumstantial support for the variance explanation over a genuine content regression.
+
+### Transfer check
+
+Not run this iteration, same standing disclosed gap named in the original entry above.
+
+### Verdict
+
+**REJECT (measured decrease, not a tie), kept anyway -- disclosed in full, not minimized.** This supersedes the prior entry's REJECT-tie characterization with a more rigorous, more honest one: live dispatch found a real paired-mean decrease on the 3-fixture regression sample, and this record does not talk that number down. The decision to keep the retemplate anyway rests on: (1) the root-cause analysis above, which traces the specific decrease to unchanged rubric text and single-trial citation-choice variance rather than to any wording this edit actually touched; (2) the deterministic shape checker (62/62) and full scoped pytest suite (434/434) both before and after, unaffected; (3) the disclosed dispatch-integrity gap above, which if anything means this measurement is a *lower* bound on rigor, not an inflated one -- a cleaner, isolated re-run remains the honest way to fully resolve this, named as open follow-up rather than assumed unnecessary. **Known gaps, updated:** the prior entry's "no genuine dispatch was run" gap is now closed; two new ones replace it -- (a) dispatch was genuine but not verifiably isolated from this session's `CLAUDE.md`, and (b) the `guardrail.yaml` regression signal rests on a single trial per side and a plausible-but-unproven root cause, not a repeated-trial confirmation. A human reviewer weighing this PR should treat the guardrail-fixture regression as a real, disclosed, not-fully-resolved data point, not a settled non-issue.

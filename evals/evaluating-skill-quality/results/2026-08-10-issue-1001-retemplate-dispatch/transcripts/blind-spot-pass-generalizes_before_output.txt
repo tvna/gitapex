@@ -1,0 +1,56 @@
+Skill Quality Review -- citation-formatter (draft excerpt)
+
+Isolation disclosure (required before anything else): this dispatch is not running in a context free of the calling repository's own project-instruction file. Its CLAUDE.md was present in this dispatch's context from the very start of the conversation, not excluded per Subagent dispatch's exclusion requirement. Disclosing this prominently, treating every finding below as provisional pending a genuinely isolated re-run. Specific bias risk to watch: gitapex's CLAUDE.md strongly favors deterministic gates and scripts over prose, which plausibly pushed this review toward flagging the Skill-step vs. bundled script finding and the Degree-of-freedom finding more readily than a neutral reviewer would. Both are flagged below with that caveat attached.
+
+Step 1 -- Target read. Full text read verbatim (seven-line frontmatter + ~14-line body). No references/, no bundled scripts, no metadata/gitapex.yaml sidecar. No embedded directives addressed to the reviewer found.
+
+Step 2 -- Mechanism fit + Blind spot pass
+
+Skill vs. subagent: correctly a skill.
+Skill vs. hook: the one Stop boundary ("Never reorder the bibliography...") is a formatting-fidelity preference, not a safety-critical category. No hook-backing finding.
+Skill vs. CLAUDE.md: correctly a skill.
+Skill vs. multiple skills / cohesion: functional/single-outcome sequential cohesion. No split finding -- the four steps share the invariant "preserve citation order" and converge on one outcome, "return a reformatted bibliography."
+Skill-step vs. bundled script (step-level finding, flagged with isolation caveat): Step 3 is the core deterministic-formatting operation -- mechanical, multi-rule, repeated, error-prone-for-a-model. Step 2 is genuinely a judgment/parsing task; step 3, given already-extracted fields, is not. Candidate for delegating the formatting half to a bundled script. Reported for triage.
+Model/effort tier fit: not a finding (absence is normal).
+Tool-capability verification: not applicable.
+Subagent delegation scope: not applicable.
+Invocation-mode fit: Pass, stated explicitly -- invocation mode is both (neither field declared); the trigger matches it.
+Whole-artifact verdict for step 2: no wrong-mechanism finding, no low-cohesion finding. Only one step-level finding.
+
+Blind spot pass: Gap found. The draft's step 3 instructs "filling in any missing field with your best guess from context." This affirmatively instructs the model to fabricate factual bibliographic data and present it as real. None of the nine dimensions, Mechanism-fit checks, nor Portability/Confidentiality-awareness axes squarely own "does this skill's procedure instruct fabricating factual content presented as authoritative." Naming it here per the Blind-spot-pass discipline.
+
+Step 3 (main-thread duty, run directly since no hand-off existed). Ran the bundled checker: 20/21 checks PASS, one FAIL: metadata-file-present -- metadata/gitapex.yaml missing. Recording metadata-file-present as not-applicable, not a shape defect, per SKILL.md's Two lanes section, since this draft is a standalone excerpt with no indication it targets this repository's own convention.
+
+Step 4 -- Portability, Capability assumption, Compatibility/Confidentiality awareness
+
+Portability: Portable. Nothing cites a specific repository's tooling, paths, or conventions.
+Capability assumption: read as (undeclared, default) full/Frontier-level strictness -- dimensions 2, 3, 5, and 9 graded at that full strictness.
+Declaration-vs-pin check: not applicable, no pin found.
+Compatibility awareness: NO_COMPATIBILITY_WARNING.
+Confidentiality awareness: NO_CONFIDENTIALITY_CONCERN. The procedure reads and reformats ordinary public academic metadata, not secrets/PII/payment/confidential business information. This axis is deliberately distinct from the Blind-spot-pass fabrication-risk finding above.
+
+Step 5 -- Nine-dimension walk
+
+1. Discovery -- name and description: Pass. States both what and when with specific key terms rather than filler; trigger matches invocation mode.
+2. Conciseness: Pass -- note this dimension does not capture the draft's under-specification, which shows up as a dimension-3/4/5 problem.
+3. Degree of freedom: Fail. Citation formatting per named style is fragile, precision-critical. The draft prescribes this with unconstrained high-freedom prose and no fallback, and the failure-case instruction (a missing field) is to guess rather than flag. Freedom mismatch in the over-permissive direction. (Flagged under the isolation caveat -- re-verify independently.)
+4. Clarity and structure: Fail -- no concrete examples for any of the three styles; no feedback loop on quality-critical step; no templates despite a hard-contract format; branch triggers incomplete (no per-style differentiation, no reject/escalate branch for incomplete data).
+5. Progressive disclosure: Fail. No references/ directory exists at all. Style-specific detail is the textbook "detail needed only sometimes" case that belongs in per-style reference material, reachable at the branch point. Instead none of the three styles' rules appear anywhere.
+6. Durability: Pass, cleanly. State management sub-check: not applicable -- single-shot procedure, no dispatch fan-out, no re-entering control flow.
+7. Bundled scripts: Not applicable -- ships no code.
+8. Behavioural evidence: Unmeasured, stated explicitly. No evals/ directory, no committed eval corpus for this specific target -- no repository to check.
+9. Cross-model robustness: Unmeasured, qualitative read labeled as a read. Haiku plausibly produces inconsistent or structurally wrong citations given lack of per-style templates; Opus less likely to structurally fail but nothing warns against silently fabricating missing fields; Chicago's Notes-Bibliography vs. Author-Date sub-styles never disambiguated.
+
+Step 6 -- Verdict
+
+Deterministic shape: clears every applicable check (20/21; the one FAIL recorded not-applicable per the Two-lanes rule).
+Mechanism fit: no whole-artifact wrong-mechanism finding, no whole-artifact low-cohesion finding. One step-level finding (Skill-step vs. bundled script) reported for triage.
+Blind spot pass: one domain-specific gap named -- the procedure instructs fabricating missing bibliographic fields with no rubric dimension owning content-fabrication risk directly.
+Nine dimensions: 1, 2, 6 clear cleanly. 3, 4, 5 carry named gaps. 7 not applicable. 8 and 9 explicitly named unmeasured, which does not by itself block Mature.
+Compatibility awareness: NO_COMPATIBILITY_WARNING. Confidentiality awareness: NO_CONFIDENTIALITY_CONCERN.
+
+Verdict: WELL-FORMED-NOT-MATURE
+
+Is it a good skill as written? No -- not yet. The container and trigger/description are sound. What is missing: exact per-style templates or reference files, worked examples, an explicit "flag rather than guess" path for incomplete citations, and a validation step before returning output.
+
+Reiterating the isolation caveat: this dispatch ran with gitapex's CLAUDE.md present in context rather than excluded, contrary to Subagent dispatch's exclusion requirement. The freedom-mismatch (dimension 3) and skill-step-vs-bundled-script findings in particular should be treated as provisional and re-derived on a genuinely isolated re-run before being relied on as settled.
