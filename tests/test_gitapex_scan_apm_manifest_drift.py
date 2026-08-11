@@ -244,4 +244,4 @@ def test_main_prints_findings_and_returns_one_on_drift(capsys, monkeypatch):
     out = capsys.readouterr().out
     assert rc == 1
     assert "apm manifest drift" in out
-    assert "version: plugin.json='0.1.0' != apm.yml='0.2.0'" in out
+    assert "version: .claude-plugin/plugin.json='0.1.0' != apm.yml='0.2.0'" in out

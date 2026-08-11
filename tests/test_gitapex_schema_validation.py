@@ -56,6 +56,28 @@ def test_load_json_or_raise_raises_given_error_cls_on_invalid_json(tmp_path: pat
         _gitapex_schema_validation.load_json_or_raise(path, _FakeReadError)
 
 
+def test_check_schema_or_raise_accepts_a_valid_schema() -> None:
+    schema: dict[str, Any] = {"type": "object", "properties": {"name": {"type": "string"}}}
+    _gitapex_schema_validation.check_schema_or_raise(schema, _FakeReadError)  # does not raise
+
+
+def test_check_schema_or_raise_raises_given_error_cls_on_invalid_schema() -> None:
+    # "type" must be a string or array of strings, not an int -- a
+    # dict-shaped but semantically-invalid schema that a plain
+    # isinstance(dict) guard would let through, but which crashes
+    # jsonschema's own validator construction/iteration with an uncaught
+    # TypeError if not caught here first (found live by a
+    # gitapex_scan_plugin_manifest_schema.py-scoped adversarial review).
+    schema: dict[str, Any] = {"type": 1}
+    with pytest.raises(_FakeReadError, match="is not a valid JSON Schema"):
+        _gitapex_schema_validation.check_schema_or_raise(schema, _FakeReadError)
+
+
+def test_check_schema_or_raise_names_the_given_schema_name_in_the_message() -> None:
+    with pytest.raises(_FakeReadError, match=re.escape("my-schema.json: is not a valid JSON Schema")):
+        _gitapex_schema_validation.check_schema_or_raise({"type": 1}, _FakeReadError, "my-schema.json")
+
+
 def test_build_validator_accepts_a_valid_instance() -> None:
     schema: dict[str, Any] = {"type": "object", "properties": {"since": {"type": "string", "format": "date"}}}
     validator = _gitapex_schema_validation.build_validator(schema)
@@ -113,6 +135,7 @@ def test_validate_enables_format_checker() -> None:
 _SCANNER_SCRIPTS = (
     REPO_ROOT / ".github" / "scripts" / "gitapex_scan_ssot_schema.py",
     REPO_ROOT / ".github" / "scripts" / "gitapex_scan_skill_metadata_schema.py",
+    REPO_ROOT / ".github" / "scripts" / "gitapex_scan_plugin_manifest_schema.py",
 )
 
 # Matches a real `import jsonschema` / `from jsonschema import ...`

@@ -3,8 +3,11 @@
 # (docs/motivation.md), so `apm install` provisions them too.
 #
 # name/version are required by apm's manifest schema; they mirror
-# .claude-plugin/plugin.json (the version source of truth). The drift gate in
-# .github/scripts/gitapex_scan_apm_manifest_drift.py keeps the two in lockstep.
+# .claude-plugin/plugin.json, which is itself mechanically generated from the
+# repository-root plugin.json (the plugin-identity source of truth since
+# issue #1028; see gitapex_generate_plugin_manifest.py). The drift
+# gate in .github/scripts/gitapex_scan_apm_manifest_drift.py keeps apm.yml and
+# .claude-plugin/plugin.json in lockstep -- unaffected by that generation step.
 name: gitapex
 version: 0.1.0
 devDependencies:

@@ -1,0 +1,469 @@
+"""Tests for the plugin.json schema-conformance gate
+(.github/scripts/gitapex_scan_plugin_manifest_schema.py).
+
+Issue #1028. plugin.json is this repository's plugin-identity
+source of truth; this gate checks it validates against the vendored Agent
+Plugins Specification v1.0.0 plugin.schema.json
+(.gitapex/agent-plugins-plugin.schema.json), that the vendored copy's own
+sha256 matches its recorded digest, and (opt-in, --verify-upstream) that
+the vendored copy still matches what agentplugins/agent-plugins-spec
+publishes at the pinned commit. The final test is the real-repository
+check itself.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import pathlib
+from unittest import mock
+
+import gitapex_scan_plugin_manifest_schema as scanner
+import pytest
+
+_VALID_SCHEMA: dict[str, object] = {
+    "type": "object",
+    "properties": {
+        "$schema": {"const": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"},
+        "name": {"type": "string", "pattern": "^[a-z0-9-]+$"},
+    },
+    "required": ["$schema", "name"],
+    "additionalProperties": False,
+}
+
+
+def _write_json(path: pathlib.Path, data: object) -> None:
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# schema_conformance_findings
+# ---------------------------------------------------------------------------
+
+
+def test_schema_conformance_findings_empty_for_valid_manifest(tmp_path: pathlib.Path) -> None:
+    manifest_path = tmp_path / "plugin.json"
+    schema_path = tmp_path / "schema.json"
+    _write_json(
+        manifest_path, {"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "name": "gitapex"}
+    )
+    _write_json(schema_path, _VALID_SCHEMA)
+    assert scanner.schema_conformance_findings(manifest_path, schema_path) == []
+
+
+def test_schema_conformance_findings_reports_violation(tmp_path: pathlib.Path) -> None:
+    manifest_path = tmp_path / "plugin.json"
+    schema_path = tmp_path / "schema.json"
+    _write_json(
+        manifest_path, {"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "name": "Not_Valid!"}
+    )
+    _write_json(schema_path, _VALID_SCHEMA)
+    findings = scanner.schema_conformance_findings(manifest_path, schema_path)
+    assert len(findings) == 1
+    assert findings[0].startswith("schema-conformance: ")
+
+
+def test_schema_conformance_findings_missing_manifest_raises(tmp_path: pathlib.Path) -> None:
+    schema_path = tmp_path / "schema.json"
+    _write_json(schema_path, _VALID_SCHEMA)
+    with pytest.raises(scanner.ScanReadError):
+        scanner.schema_conformance_findings(tmp_path / "nonexistent.json", schema_path)
+
+
+def test_schema_conformance_findings_invalid_schema_raises_cleanly(tmp_path: pathlib.Path) -> None:
+    """A dict-shaped but semantically-invalid JSON Schema (e.g. a non-string
+    "type") passes the isinstance(dict) guard but must still raise
+    ScanReadError via check_schema, not let jsonschema's validator
+    construction crash with an unhandled TypeError -- a CodeRabbit review
+    finding, confirmed live before this fix landed."""
+    manifest_path = tmp_path / "plugin.json"
+    schema_path = tmp_path / "schema.json"
+    _write_json(
+        manifest_path, {"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "name": "gitapex"}
+    )
+    _write_json(schema_path, {"type": 1})
+    with pytest.raises(scanner.ScanReadError, match="is not a valid JSON Schema"):
+        scanner.schema_conformance_findings(manifest_path, schema_path)
+
+
+def test_schema_conformance_findings_non_object_schema_raises_cleanly(tmp_path: pathlib.Path) -> None:
+    """A syntactically-valid-JSON-but-non-object vendored schema (e.g. a
+    JSON array) must raise ScanReadError, not let jsonschema's own
+    internals crash with an unhandled AttributeError -- a live
+    evaluating-deterministic-gate-quality review found this defect by
+    actually feeding the gate one."""
+    manifest_path = tmp_path / "plugin.json"
+    schema_path = tmp_path / "schema.json"
+    _write_json(
+        manifest_path, {"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "name": "gitapex"}
+    )
+    _write_json(schema_path, [1, 2, 3])
+    with pytest.raises(scanner.ScanReadError, match="must be a JSON object"):
+        scanner.schema_conformance_findings(manifest_path, schema_path)
+
+
+# ---------------------------------------------------------------------------
+# pydantic_conformance_findings
+# ---------------------------------------------------------------------------
+
+
+def test_pydantic_conformance_findings_empty_for_valid_manifest(tmp_path: pathlib.Path) -> None:
+    manifest_path = tmp_path / "plugin.json"
+    _write_json(
+        manifest_path,
+        {
+            "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+            "name": "gitapex",
+            "homepage": "https://github.com/tvna/gitapex",
+        },
+    )
+    assert scanner.pydantic_conformance_findings(manifest_path) == []
+
+
+def test_pydantic_conformance_findings_rejects_a_malformed_url_jsonschema_would_accept(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The one genuine additional-value check this layer adds over
+    schema-conformance: the real vendored schema declares "homepage" a
+    plain "type": "string" with no format assertion, so a malformed URL
+    passes schema_conformance_findings cleanly -- but PluginManifest types
+    it AnyUrl, so it must fail here. Uses the real vendored schema (default
+    vendored_schema_path) rather than a hand-rolled one, to prove this
+    against the actual file schema_conformance_findings validates against,
+    not an approximation of it."""
+    manifest_path = tmp_path / "plugin.json"
+    _write_json(
+        manifest_path,
+        {
+            "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+            "name": "gitapex",
+            "homepage": "not a url",
+        },
+    )
+    assert scanner.schema_conformance_findings(manifest_path) == []
+    findings = scanner.pydantic_conformance_findings(manifest_path)
+    assert len(findings) == 1
+    assert findings[0].startswith("pydantic-conformance: homepage")
+
+
+def test_pydantic_conformance_findings_rejects_unknown_field(tmp_path: pathlib.Path) -> None:
+    manifest_path = tmp_path / "plugin.json"
+    _write_json(
+        manifest_path,
+        {"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "name": "gitapex", "bogus": 1},
+    )
+    findings = scanner.pydantic_conformance_findings(manifest_path)
+    assert len(findings) == 1
+    assert findings[0].startswith("pydantic-conformance: bogus")
+
+
+def test_pydantic_conformance_findings_missing_manifest_raises(tmp_path: pathlib.Path) -> None:
+    with pytest.raises(scanner.ScanReadError):
+        scanner.pydantic_conformance_findings(tmp_path / "nonexistent.json")
+
+
+def test_pydantic_conformance_findings_non_object_manifest_is_an_ordinary_finding(tmp_path: pathlib.Path) -> None:
+    """Symmetric with schema_conformance_findings' own tolerance of a
+    non-object plugin.json (jsonschema reports it as an ordinary
+    "is not of type 'object'" finding, not a raise): PluginManifest.model_validate
+    raises a clean pydantic ValidationError for a non-dict instance rather
+    than crashing, so this layer reports the same shape mismatch as an
+    ordinary "pydantic-conformance: " finding instead of raising
+    ScanReadError -- previously the two layers disagreed here, and a
+    ScanReadError raised mid-computation in main() discarded whatever
+    schema_conformance_findings had already computed (see
+    test_main_reports_both_layers_findings_for_a_non_object_manifest)."""
+    manifest_path = tmp_path / "plugin.json"
+    manifest_path.write_text("[1, 2, 3]", encoding="utf-8")
+    findings = scanner.pydantic_conformance_findings(manifest_path)
+    assert len(findings) == 1
+    assert findings[0].startswith("pydantic-conformance: ")
+
+
+def test_pydantic_conformance_findings_missing_manifest_raises_even_with_a_non_dict_result_path(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Guards against a regression where removing the isinstance(dict)
+    guard also accidentally removed the read/parse failure path -- a
+    missing file must still raise ScanReadError, not be silently treated
+    as an empty finding list."""
+    with pytest.raises(scanner.ScanReadError):
+        scanner.pydantic_conformance_findings(tmp_path / "nonexistent.json")
+
+
+# ---------------------------------------------------------------------------
+# manifest_instance sharing (schema_conformance_findings and
+# pydantic_conformance_findings both accept an already-loaded instance so
+# main() does not read/parse plugin.json twice per run)
+# ---------------------------------------------------------------------------
+
+
+def test_schema_conformance_findings_manifest_instance_skips_the_file_read(tmp_path: pathlib.Path) -> None:
+    schema_path = tmp_path / "schema.json"
+    _write_json(schema_path, _VALID_SCHEMA)
+    findings = scanner.schema_conformance_findings(
+        tmp_path / "does-not-exist.json",
+        schema_path,
+        manifest_instance={
+            "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+            "name": "gitapex",
+        },
+    )
+    assert findings == []
+
+
+def test_pydantic_conformance_findings_manifest_instance_skips_the_file_read(tmp_path: pathlib.Path) -> None:
+    findings = scanner.pydantic_conformance_findings(
+        tmp_path / "does-not-exist.json",
+        manifest_instance={
+            "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+            "name": "gitapex",
+        },
+    )
+    assert findings == []
+
+
+def test_real_repository_plugin_manifest_is_pydantic_valid() -> None:
+    assert scanner.pydantic_conformance_findings() == []
+
+
+# ---------------------------------------------------------------------------
+# vendor_digest_drift_findings
+# ---------------------------------------------------------------------------
+
+
+def test_vendor_digest_drift_findings_empty_when_digest_matches(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    schema_path = tmp_path / "schema.json"
+    schema_path.write_bytes(b'{"a": 1}')
+    digest = hashlib.sha256(schema_path.read_bytes()).hexdigest()
+    monkeypatch.setattr(scanner, "VENDORED_SCHEMA_SHA256", digest)
+    assert scanner.vendor_digest_drift_findings(schema_path) == []
+
+
+def test_vendor_digest_drift_findings_reports_mismatch(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    schema_path = tmp_path / "schema.json"
+    schema_path.write_bytes(b'{"a": 1}')
+    monkeypatch.setattr(scanner, "VENDORED_SCHEMA_SHA256", "0" * 64)
+    findings = scanner.vendor_digest_drift_findings(schema_path)
+    assert len(findings) == 1
+    assert findings[0].startswith("vendor-digest-drift: ")
+
+
+def test_vendor_digest_drift_findings_missing_file_raises(tmp_path: pathlib.Path) -> None:
+    with pytest.raises(scanner.ScanReadError):
+        scanner.vendor_digest_drift_findings(tmp_path / "nonexistent.json")
+
+
+# ---------------------------------------------------------------------------
+# upstream_drift_findings (network mocked)
+# ---------------------------------------------------------------------------
+
+
+def test_upstream_drift_findings_empty_when_bytes_match(tmp_path: pathlib.Path) -> None:
+    schema_path = tmp_path / "schema.json"
+    schema_path.write_bytes(b'{"a": 1}')
+    response = mock.MagicMock()
+    response.read.return_value = b'{"a": 1}'
+    response.__enter__.return_value = response
+    with mock.patch("gitapex_scan_plugin_manifest_schema.urllib.request.urlopen", return_value=response):
+        assert scanner.upstream_drift_findings(schema_path) == []
+
+
+def test_upstream_drift_findings_reports_mismatch(tmp_path: pathlib.Path) -> None:
+    schema_path = tmp_path / "schema.json"
+    schema_path.write_bytes(b'{"a": 1}')
+    response = mock.MagicMock()
+    response.read.return_value = b'{"a": 2}'
+    response.__enter__.return_value = response
+    with mock.patch("gitapex_scan_plugin_manifest_schema.urllib.request.urlopen", return_value=response):
+        findings = scanner.upstream_drift_findings(schema_path)
+    assert len(findings) == 1
+    assert findings[0].startswith("upstream-drift: ")
+
+
+def test_upstream_drift_findings_fetch_failure_is_a_finding(tmp_path: pathlib.Path) -> None:
+    schema_path = tmp_path / "schema.json"
+    schema_path.write_bytes(b'{"a": 1}')
+    with mock.patch("gitapex_scan_plugin_manifest_schema.urllib.request.urlopen", side_effect=OSError("network down")):
+        findings = scanner.upstream_drift_findings(schema_path)
+    assert len(findings) == 1
+    assert findings[0].startswith("upstream-drift: ")
+
+
+# ---------------------------------------------------------------------------
+# main()
+# ---------------------------------------------------------------------------
+
+
+def test_main_returns_zero_and_prints_pass_when_clean(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    manifest_path = tmp_path / "plugin.json"
+    schema_path = tmp_path / "schema.json"
+    _write_json(
+        manifest_path, {"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "name": "gitapex"}
+    )
+    _write_json(schema_path, _VALID_SCHEMA)
+    monkeypatch.setattr(scanner, "PLUGIN_MANIFEST_PATH", manifest_path)
+    monkeypatch.setattr(scanner, "VENDORED_SCHEMA_PATH", schema_path)
+    monkeypatch.setattr(scanner, "VENDORED_SCHEMA_SHA256", hashlib.sha256(schema_path.read_bytes()).hexdigest())
+
+    assert scanner.main([]) == 0
+    assert "No plugin manifest schema drift found." in capsys.readouterr().out
+
+
+def test_main_returns_one_and_prints_findings_on_violation(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    manifest_path = tmp_path / "plugin.json"
+    schema_path = tmp_path / "schema.json"
+    _write_json(
+        manifest_path, {"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "name": "Not_Valid!"}
+    )
+    _write_json(schema_path, _VALID_SCHEMA)
+    monkeypatch.setattr(scanner, "PLUGIN_MANIFEST_PATH", manifest_path)
+    monkeypatch.setattr(scanner, "VENDORED_SCHEMA_PATH", schema_path)
+    monkeypatch.setattr(scanner, "VENDORED_SCHEMA_SHA256", hashlib.sha256(schema_path.read_bytes()).hexdigest())
+
+    assert scanner.main([]) == 1
+    out = capsys.readouterr().out
+    assert "schema-conformance:" in out
+
+
+# ---------------------------------------------------------------------------
+# Real-repository self-validation (the gate itself)
+# ---------------------------------------------------------------------------
+
+
+def test_real_repository_plugin_manifest_is_schema_valid() -> None:
+    assert scanner.main([]) == 0
+
+
+def test_main_includes_pydantic_conformance_findings(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    manifest_path = tmp_path / "plugin.json"
+    schema_path = tmp_path / "schema.json"
+    schema_with_homepage = {
+        **_VALID_SCHEMA,
+        "properties": {**_VALID_SCHEMA["properties"], "homepage": {"type": "string"}},  # type: ignore[dict-item]
+    }
+    _write_json(
+        manifest_path,
+        {
+            "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+            "name": "gitapex",
+            "homepage": "not a url",
+        },
+    )
+    _write_json(schema_path, schema_with_homepage)
+    monkeypatch.setattr(scanner, "PLUGIN_MANIFEST_PATH", manifest_path)
+    monkeypatch.setattr(scanner, "VENDORED_SCHEMA_PATH", schema_path)
+    monkeypatch.setattr(scanner, "VENDORED_SCHEMA_SHA256", hashlib.sha256(schema_path.read_bytes()).hexdigest())
+
+    assert scanner.main([]) == 1
+    out = capsys.readouterr().out
+    assert "pydantic-conformance:" in out
+
+
+def test_main_reads_plugin_manifest_exactly_once(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A code-review finding: schema_conformance_findings and
+    pydantic_conformance_findings used to each independently read/parse
+    plugin.json from disk, so every push/CI run parsed the same file
+    twice for no behavioral reason. main() now loads it once and passes
+    the parsed instance to both."""
+    manifest_path = tmp_path / "plugin.json"
+    schema_path = tmp_path / "schema.json"
+    _write_json(
+        manifest_path, {"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "name": "gitapex"}
+    )
+    _write_json(schema_path, _VALID_SCHEMA)
+    monkeypatch.setattr(scanner, "PLUGIN_MANIFEST_PATH", manifest_path)
+    monkeypatch.setattr(scanner, "VENDORED_SCHEMA_PATH", schema_path)
+    monkeypatch.setattr(scanner, "VENDORED_SCHEMA_SHA256", hashlib.sha256(schema_path.read_bytes()).hexdigest())
+
+    real_load = scanner._gitapex_schema_validation.load_json_or_raise
+    calls: list[pathlib.Path] = []
+
+    def _tracking_load(path: pathlib.Path, error_cls: type[Exception]) -> object:
+        calls.append(path)
+        return real_load(path, error_cls)
+
+    monkeypatch.setattr(scanner._gitapex_schema_validation, "load_json_or_raise", _tracking_load)
+
+    assert scanner.main([]) == 0
+    assert calls.count(manifest_path) == 1
+
+
+def test_main_reports_both_layers_findings_for_a_non_object_manifest(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The regression this fixes: pydantic_conformance_findings used to
+    raise ScanReadError for a non-object plugin.json before the chained
+    `+` in main() completed, discarding the schema-conformance finding
+    schema_conformance_findings had already computed for the same file --
+    despite the module docstring describing the two checks as symmetric
+    parallel layers. Both must now report their own finding for the same
+    shape mismatch."""
+    manifest_path = tmp_path / "plugin.json"
+    schema_path = tmp_path / "schema.json"
+    manifest_path.write_text("[1, 2, 3]", encoding="utf-8")
+    _write_json(schema_path, _VALID_SCHEMA)
+    monkeypatch.setattr(scanner, "PLUGIN_MANIFEST_PATH", manifest_path)
+    monkeypatch.setattr(scanner, "VENDORED_SCHEMA_PATH", schema_path)
+    monkeypatch.setattr(scanner, "VENDORED_SCHEMA_SHA256", hashlib.sha256(schema_path.read_bytes()).hexdigest())
+
+    assert scanner.main([]) == 1
+    out = capsys.readouterr().out
+    assert "schema-conformance:" in out
+    assert "pydantic-conformance:" in out
+
+
+def test_main_verify_upstream_appends_the_network_findings(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    manifest_path = tmp_path / "plugin.json"
+    schema_path = tmp_path / "schema.json"
+    _write_json(
+        manifest_path, {"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "name": "gitapex"}
+    )
+    _write_json(schema_path, _VALID_SCHEMA)
+    monkeypatch.setattr(scanner, "PLUGIN_MANIFEST_PATH", manifest_path)
+    monkeypatch.setattr(scanner, "VENDORED_SCHEMA_PATH", schema_path)
+    monkeypatch.setattr(scanner, "VENDORED_SCHEMA_SHA256", hashlib.sha256(schema_path.read_bytes()).hexdigest())
+
+    response = mock.MagicMock()
+    response.read.return_value = b'{"different": true}'
+    response.__enter__.return_value = response
+    with mock.patch("gitapex_scan_plugin_manifest_schema.urllib.request.urlopen", return_value=response):
+        assert scanner.main(["--verify-upstream"]) == 1
+    out = capsys.readouterr().out
+    assert "upstream-drift:" in out
+
+
+def test_main_reports_a_scan_read_error_without_a_traceback(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    schema_path = tmp_path / "schema.json"
+    _write_json(schema_path, _VALID_SCHEMA)
+    monkeypatch.setattr(scanner, "PLUGIN_MANIFEST_PATH", tmp_path / "nonexistent.json")
+    monkeypatch.setattr(scanner, "VENDORED_SCHEMA_PATH", schema_path)
+
+    assert scanner.main([]) == 1
+    err = capsys.readouterr().err
+    assert "FAIL:" in err
+
+
+def test_upstream_drift_findings_raises_scan_read_error_when_vendored_copy_unreadable(
+    tmp_path: pathlib.Path,
+) -> None:
+    response = mock.MagicMock()
+    response.read.return_value = b'{"a": 1}'
+    response.__enter__.return_value = response
+    with (
+        mock.patch("gitapex_scan_plugin_manifest_schema.urllib.request.urlopen", return_value=response),
+        pytest.raises(scanner.ScanReadError),
+    ):
+        scanner.upstream_drift_findings(tmp_path / "nonexistent-vendored-schema.json")
