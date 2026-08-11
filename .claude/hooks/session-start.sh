@@ -18,6 +18,55 @@ python3 "${CLAUDE_PROJECT_DIR:-.}/skills/setup-gitapex-toolchain/scripts/gitapex
   --env-file "${CLAUDE_ENV_FILE:-}" \
   || echo "gitapex: toolchain provisioning reported a failure; see stderr above. Some binaries or apm install's output may be missing this session." >&2
 
+# Issue #1033: fetch the repository's configured default branch so a fresh
+# ephemeral checkout has it available locally without a contributor fetching
+# it by hand. The branch name is read from .gitapex/default-branch.json, a
+# standalone config file -- not .gitapex/ssot.json, whose own schema and
+# drift gate (gitapex_scan_ssot_schema.py) document it as "references and
+# routing only, never policy values" and enforce a closed meta{} field set;
+# a literal branch-name value has no home there. This file's own presence is
+# the gate (a checkout without .gitapex/default-branch.json skips the step),
+# mirroring the apm.yml guard the blocks below use for the same purpose.
+# Fail-soft like every other step in this script: a missing/malformed config
+# file or a network failure must never block session start.
+default_branch_config="${CLAUDE_PROJECT_DIR:-.}/.gitapex/default-branch.json"
+if [ -f "$default_branch_config" ]; then
+  default_branch="$(python3 -c '
+import json
+import sys
+
+try:
+    with open(sys.argv[1], encoding="utf-8") as config_file:
+        config = json.load(config_file)
+    branch = config.get("default_branch")
+    if isinstance(branch, str) and branch:
+        print(branch)
+except (OSError, ValueError):
+    pass
+' "$default_branch_config")"
+  if [ -z "$default_branch" ]; then
+    echo "gitapex: ${default_branch_config} present but default_branch is missing/empty; skipping fetch." >&2
+  elif [ "$(git check-ref-format --branch "$default_branch" 2>/dev/null)" != "$default_branch" ]; then
+    # git check-ref-format --branch also resolves indirect syntax like
+    # "@{-1}" to a commit-ish rather than rejecting it outright, so an
+    # exact-match check (not just a zero exit status) is required to catch
+    # that case too, on top of the malformed-name/refspec-shaped cases it
+    # rejects on its own.
+    echo "gitapex: ${default_branch_config}'s default_branch '${default_branch}' is not a valid exact branch name; skipping fetch." >&2
+  else
+    # GIT_TERMINAL_PROMPT=0: never block session start on a credential
+    # prompt. timeout: bound a stalled transport the same way, rather than
+    # hanging indefinitely. Both fail into the same non-fatal warning as
+    # every other failure mode here. refs/heads/ prefix: fetch exactly the
+    # branch just validated, not whatever ref resolution would otherwise
+    # pick for a same-named tag.
+    GIT_TERMINAL_PROMPT=0 timeout 30s git -C "${CLAUDE_PROJECT_DIR:-.}" fetch origin "refs/heads/${default_branch}" \
+      || echo "gitapex: could not fetch default branch '${default_branch}' from origin this session (non-fatal)." >&2
+  fi
+else
+  echo "gitapex: ${default_branch_config} not found; skipping default-branch fetch." >&2
+fi
+
 # Issue #749 (follow-up to #725): flake.nix's devShell shellHook
 # installs the local prek pre-commit hook automatically for persistent
 # surfaces (`nix develop`); this ephemeral-web session had no
