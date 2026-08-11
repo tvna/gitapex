@@ -28,7 +28,11 @@ carries no ruleset file yet" (`applicable=false`, not an error).
 Swallowing every git failure as the latter would read a missing base
 commit -- routine after a force-push to the base branch -- as "nothing to
 check" and pass the gate green; only a readable base commit that
-genuinely lacks the file is a skip.
+genuinely lacks the file is a skip. The same distinction applies to the
+path-existence check itself (issue #1024): a tree/symlink/gitlink at
+`.github/rulesets/main.json` resolves to the same `applicable=false` as a
+genuinely absent file, but a `git ls-tree` failure unrelated to absence
+still raises rather than being read as "missing" too.
 
 Output contract: `key=value` lines on stdout only, suitable for appending
 directly to `$GITHUB_OUTPUT` -- exactly the two shapes the original bash
@@ -72,8 +76,38 @@ def _commit_exists(repo_root: pathlib.Path, commit_ish: str) -> bool:
     return _git(["cat-file", "-e", f"{commit_ish}^{{commit}}"], repo_root).returncode == 0
 
 
+_REGULAR_FILE_MODES = ("100644", "100755")
+
+
+def _path_mode_at_commit(repo_root: pathlib.Path, commit_ish: str, path: str) -> str | None:
+    # `cat-file -e`/`-t` alone cannot tell a regular file apart from a tree
+    # (directory) or a symlink at this path: a symlink is itself *stored*
+    # as a blob object (its content is the link target string), so
+    # `cat-file -t` reports "blob" for a symlink exactly as it does for a
+    # real file -- only the tree entry's own mode (100644/100755 for a
+    # regular file, 120000 for a symlink, 040000 for a tree, 160000 for a
+    # gitlink/submodule reference) distinguishes them. A downstream `git
+    # show` on a tree or a symlink materializes a directory listing or the
+    # link target, not the file's own content -- see issue #1024. `ls-tree`
+    # on the exact path exits 0 with one output line (mode, type, sha,
+    # path) when the path exists, exit 0 with empty output when it
+    # genuinely does not -- and, distinctly, a non-zero exit on some other
+    # git failure, which must not be read as "missing" (the module
+    # docstring's own fail-loud-vs-skip distinction for `_commit_exists`
+    # applies equally here: an unreadable check is a hard stop, not a
+    # silent "no ruleset yet" skip).
+    result = _git(["ls-tree", commit_ish, "--", path], repo_root)
+    if result.returncode != 0:
+        raise RulesetVerifyScopeError(f"git ls-tree {commit_ish} -- {path} failed: {result.stderr.strip()}")
+    if not result.stdout.strip():
+        return None
+    return result.stdout.split(maxsplit=1)[0]
+
+
 def _path_exists_at_commit(repo_root: pathlib.Path, commit_ish: str, path: str) -> bool:
-    return _git(["cat-file", "-e", f"{commit_ish}:{path}"], repo_root).returncode == 0
+    """True iff `path` names a readable regular file (a blob, not a tree,
+    symlink, or gitlink) at `commit_ish`. See `_path_mode_at_commit`."""
+    return _path_mode_at_commit(repo_root, commit_ish, path) in _REGULAR_FILE_MODES
 
 
 def _show_at_commit(repo_root: pathlib.Path, commit_ish: str, path: str) -> str:
@@ -108,10 +142,25 @@ def compute_scope(
             f"base commit {base_sha} is not present; cannot establish what the base ref requires."
         )
 
-    if not _path_exists_at_commit(repo_root, base_sha, MAIN_RULESET_PATH):
+    ruleset_mode = _path_mode_at_commit(repo_root, base_sha, MAIN_RULESET_PATH)
+    if ruleset_mode not in _REGULAR_FILE_MODES:
         if step_summary_file is not None:
             with step_summary_file.open("a", encoding="utf-8") as handle:
-                handle.write(f"The base ref carries no {MAIN_RULESET_PATH}; this pull request introduces it.\n")
+                if ruleset_mode is None:
+                    handle.write(f"The base ref carries no {MAIN_RULESET_PATH}; this pull request introduces it.\n")
+                else:
+                    # Distinct from genuine absence (issue #1024 follow-up,
+                    # whole-branch review finding I1): the base ref *does*
+                    # carry something at this path -- a tree/symlink/gitlink,
+                    # not a regular file -- so "carries no ... introduces it"
+                    # would misdirect a human debugging this. `applicable`
+                    # still resolves to "false" either way; only the message
+                    # differs, matching this module's own existing behavior
+                    # for the applicable value.
+                    handle.write(
+                        f"The base ref's {MAIN_RULESET_PATH} is not a regular file "
+                        f"(git tree-entry mode {ruleset_mode}); treating it as no ruleset yet.\n"
+                    )
         return {"applicable": "false"}
 
     sot_text = _show_at_commit(repo_root, base_sha, MAIN_RULESET_PATH)
