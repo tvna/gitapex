@@ -105,6 +105,7 @@ def test_pull_request_base_with_tree_at_ruleset_path_is_applicable_false(
     runner_temp.mkdir()
     outputs = scope_module.compute_scope("pull_request", base_sha, repo, runner_temp, None)
     assert outputs == {"applicable": "false"}
+    assert not (runner_temp / "base_main_ruleset.json").exists()
 
 
 def test_pull_request_base_with_symlinked_ruleset_path_is_applicable_false(
@@ -126,6 +127,7 @@ def test_pull_request_base_with_symlinked_ruleset_path_is_applicable_false(
     runner_temp.mkdir()
     outputs = scope_module.compute_scope("pull_request", base_sha, repo, runner_temp, None)
     assert outputs == {"applicable": "false"}
+    assert not (runner_temp / "base_main_ruleset.json").exists()
 
 
 def test_pull_request_base_lacking_ruleset_file_writes_step_summary(repo: pathlib.Path, tmp_path: pathlib.Path) -> None:
