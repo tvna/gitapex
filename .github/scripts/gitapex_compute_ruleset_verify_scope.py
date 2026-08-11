@@ -28,7 +28,11 @@ carries no ruleset file yet" (`applicable=false`, not an error).
 Swallowing every git failure as the latter would read a missing base
 commit -- routine after a force-push to the base branch -- as "nothing to
 check" and pass the gate green; only a readable base commit that
-genuinely lacks the file is a skip.
+genuinely lacks the file is a skip. The same distinction applies to the
+path-existence check itself (issue #1024): a tree/symlink/gitlink at
+`.github/rulesets/main.json` resolves to the same `applicable=false` as a
+genuinely absent file, but a `git ls-tree` failure unrelated to absence
+still raises rather than being read as "missing" too.
 
 Output contract: `key=value` lines on stdout only, suitable for appending
 directly to `$GITHUB_OUTPUT` -- exactly the two shapes the original bash
@@ -81,9 +85,16 @@ def _path_exists_at_commit(repo_root: pathlib.Path, commit_ish: str, path: str) 
     # regular file, 120000 for a symlink, 040000 for a tree) distinguishes
     # them. A downstream `git show` on a tree or a symlink materializes a
     # directory listing or the link target, not the file's own content --
-    # see issue #1024. `ls-tree` on the exact path returns one line (mode,
-    # type, sha, path) when it exists, nothing when it does not.
+    # see issue #1024. `ls-tree` on the exact path exits 0 with one output
+    # line (mode, type, sha, path) when the path exists, exit 0 with empty
+    # output when it genuinely does not -- and, distinctly, a non-zero exit
+    # on some other git failure, which must not be read as "missing" (the
+    # module docstring's own fail-loud-vs-skip distinction for
+    # `_commit_exists` applies equally here: an unreadable check is a hard
+    # stop, not a silent "no ruleset yet" skip).
     result = _git(["ls-tree", commit_ish, "--", path], repo_root)
+    if result.returncode != 0:
+        raise RulesetVerifyScopeError(f"git ls-tree {commit_ish} -- {path} failed: {result.stderr.strip()}")
     if not result.stdout.strip():
         return False
     mode = result.stdout.split(maxsplit=1)[0]

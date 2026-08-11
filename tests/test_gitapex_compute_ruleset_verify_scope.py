@@ -255,6 +255,21 @@ def test_show_at_commit_raises_when_git_show_fails(repo: pathlib.Path) -> None:
         scope_module._show_at_commit(repo, base_sha, "not/a/real/path.json")
 
 
+# --- _path_exists_at_commit's own defeat case --------------------------------
+
+
+def test_path_exists_at_commit_raises_on_an_ls_tree_failure_rather_than_reporting_missing(
+    repo: pathlib.Path,
+) -> None:
+    # Defeat case for the fail-closed fix above: a `git ls-tree` failure
+    # unrelated to genuine absence (an unresolvable commit-ish here) must
+    # raise, not silently read as "path does not exist" -- the same
+    # fail-loud-vs-skip distinction _commit_exists already establishes
+    # applies to this path check too (see issue #1024's follow-up review).
+    with pytest.raises(scope_module.RulesetVerifyScopeError, match=r"git ls-tree .* failed"):
+        scope_module._path_exists_at_commit(repo, "not-a-real-commit-ish", "some/path.json")
+
+
 # --- CLI / main() ------------------------------------------------------------
 
 
