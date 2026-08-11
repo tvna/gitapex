@@ -44,11 +44,24 @@ try:
 except (OSError, ValueError):
     pass
 ' "$default_branch_config")"
-  if [ -n "$default_branch" ]; then
-    git -C "${CLAUDE_PROJECT_DIR:-.}" fetch origin "$default_branch" \
-      || echo "gitapex: could not fetch default branch '${default_branch}' from origin this session (non-fatal)." >&2
-  else
+  if [ -z "$default_branch" ]; then
     echo "gitapex: ${default_branch_config} present but default_branch is missing/empty; skipping fetch." >&2
+  elif [ "$(git check-ref-format --branch "$default_branch" 2>/dev/null)" != "$default_branch" ]; then
+    # git check-ref-format --branch also resolves indirect syntax like
+    # "@{-1}" to a commit-ish rather than rejecting it outright, so an
+    # exact-match check (not just a zero exit status) is required to catch
+    # that case too, on top of the malformed-name/refspec-shaped cases it
+    # rejects on its own.
+    echo "gitapex: ${default_branch_config}'s default_branch '${default_branch}' is not a valid exact branch name; skipping fetch." >&2
+  else
+    # GIT_TERMINAL_PROMPT=0: never block session start on a credential
+    # prompt. timeout: bound a stalled transport the same way, rather than
+    # hanging indefinitely. Both fail into the same non-fatal warning as
+    # every other failure mode here. refs/heads/ prefix: fetch exactly the
+    # branch just validated, not whatever ref resolution would otherwise
+    # pick for a same-named tag.
+    GIT_TERMINAL_PROMPT=0 timeout 30s git -C "${CLAUDE_PROJECT_DIR:-.}" fetch origin "refs/heads/${default_branch}" \
+      || echo "gitapex: could not fetch default branch '${default_branch}' from origin this session (non-fatal)." >&2
   fi
 else
   echo "gitapex: ${default_branch_config} not found; skipping default-branch fetch." >&2

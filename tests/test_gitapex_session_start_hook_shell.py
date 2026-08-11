@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import stat
@@ -143,6 +144,15 @@ def _clone_work_repo(origin_dir: Path, work_dir: Path) -> None:
     subprocess.run(["git", "clone", "-q", str(origin_dir), str(work_dir)], check=True)
 
 
+def _assert_no_fetch_happened(work_dir: Path) -> None:
+    # A fresh `git clone` never writes FETCH_HEAD on its own (verified
+    # against this environment's git); a skip path that fetched anyway
+    # despite its own warning would still leave the warning text present,
+    # so asserting the warning alone cannot catch that regression -- only
+    # checking the actual repository state can.
+    assert not (work_dir / ".git" / "FETCH_HEAD").exists()
+
+
 def test_fetches_the_configured_default_branch_from_origin(tmp_path: Path) -> None:
     # Issue #1033: .gitapex/default-branch.json's own presence is the gate
     # for this step (see the script's own comment for why the branch name
@@ -190,6 +200,7 @@ def test_skips_fetch_and_warns_when_default_branch_config_is_missing(tmp_path: P
 
     assert result.returncode == 0
     assert "default-branch.json not found; skipping default-branch fetch" in result.stderr
+    _assert_no_fetch_happened(work_dir)
 
 
 def test_skips_fetch_and_warns_when_default_branch_value_is_empty(tmp_path: Path) -> None:
@@ -204,6 +215,64 @@ def test_skips_fetch_and_warns_when_default_branch_value_is_empty(tmp_path: Path
 
     assert result.returncode == 0
     assert "default_branch is missing/empty; skipping fetch" in result.stderr
+    _assert_no_fetch_happened(work_dir)
+
+
+@pytest.mark.parametrize(
+    "malformed_branch",
+    [
+        "release:refs/heads/unrelated",  # refspec-shaped -- must not update an unintended local ref
+        "@{-1}",  # indirect syntax -- git check-ref-format --branch resolves this to a commit-ish
+        "topic..invalid",  # rejected outright by git check-ref-format
+    ],
+)
+def test_skips_fetch_and_warns_when_default_branch_is_not_an_exact_branch_name(
+    tmp_path: Path, malformed_branch: str
+) -> None:
+    origin_dir = tmp_path / "origin.git"
+    work_dir = tmp_path / "work"
+    _init_bare_origin_with_commit(origin_dir, "main")
+    _clone_work_repo(origin_dir, work_dir)
+    (work_dir / ".gitapex").mkdir()
+    (work_dir / ".gitapex" / "default-branch.json").write_text(
+        json.dumps({"default_branch": malformed_branch}), encoding="utf-8"
+    )
+
+    result = _run({"CLAUDE_CODE_REMOTE": "true", "CLAUDE_PROJECT_DIR": str(work_dir)})
+
+    assert result.returncode == 0
+    assert "is not a valid exact branch name; skipping fetch" in result.stderr
+    _assert_no_fetch_happened(work_dir)
+    # The refspec case's own attack: a `git fetch origin
+    # "release:refs/heads/unrelated"` would silently create refs/heads/unrelated.
+    assert not (work_dir / ".git" / "refs" / "heads" / "unrelated").exists()
+
+
+def test_exits_zero_and_warns_when_origin_is_unreachable(tmp_path: Path) -> None:
+    origin_dir = tmp_path / "origin.git"
+    work_dir = tmp_path / "work"
+    _init_bare_origin_with_commit(origin_dir, "main")
+    _clone_work_repo(origin_dir, work_dir)
+    (work_dir / ".gitapex").mkdir()
+    (work_dir / ".gitapex" / "default-branch.json").write_text('{"default_branch": "main"}\n', encoding="utf-8")
+    # Point origin at a path with no git repository at all, so the fetch
+    # fails fast (no such repository) rather than hanging -- proving the
+    # fail-soft path still holds now that the fetch is wrapped in
+    # GIT_TERMINAL_PROMPT=0 / timeout.
+    subprocess.run(
+        ["git", "-C", str(work_dir), "remote", "set-url", "origin", str(tmp_path / "does-not-exist.git")],
+        check=True,
+    )
+
+    result = _run({"CLAUDE_CODE_REMOTE": "true", "CLAUDE_PROJECT_DIR": str(work_dir)})
+
+    # Deliberately not asserting FETCH_HEAD's absence here: a fetch that
+    # fails still touches/creates an (empty) FETCH_HEAD as part of git's
+    # own fetch machinery -- that check only distinguishes "never
+    # attempted" (the skip-path tests above) from "attempted", not
+    # "attempted and failed" from "attempted and succeeded".
+    assert result.returncode == 0
+    assert "could not fetch default branch 'main' from origin this session (non-fatal)" in result.stderr
 
 
 def test_exits_zero_and_warns_when_uv_not_on_path() -> None:
