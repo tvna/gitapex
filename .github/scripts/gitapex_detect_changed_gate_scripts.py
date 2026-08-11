@@ -101,7 +101,10 @@ An empty *selection* is legitimate here and is not an error -- a diff
 genuinely touching no gate is the common case, and the caller acts on the
 empty list by not requiring the disclosure.
 
-Standard library only, so the calling workflow needs no dependency install.
+This script's own callers (`gitapex_compute_skill_audit_flags.py`, invoked
+via `uv run` in `skill-audit-gate.yml`) already run under `uv run`, so a
+real `pydantic` import is safe here (issue #1040, refs #1035's `uv run`
+standardization that made this class of dependency safe repo-wide).
 
 Usage::
 
@@ -122,6 +125,8 @@ import json
 import pathlib
 import re
 import sys
+
+from pydantic import BaseModel, ValidationError, field_validator
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 SSOT_RELATIVE_PATH = ".gitapex/ssot.json"
@@ -243,17 +248,21 @@ def select(name_status_text: str, registered: set[str]) -> list[str]:
     return sorted(selected)
 
 
-class DetectChangedGateScriptsArgs:
+class DetectChangedGateScriptsArgs(BaseModel):
     """Typed view of `main`'s parsed CLI namespace. `repo_root` must be an
     existing directory -- every existing caller already passes one, so this
     only gives a --repo-root pointing nowhere a clear, early error instead
     of the deeper, less specific "gate registry cannot be read" ScopeError
     it would otherwise surface."""
 
-    def __init__(self, *, repo_root: pathlib.Path) -> None:
-        if not repo_root.is_dir():
-            raise ValueError(f"--repo-root must be an existing directory, got {repo_root}")
-        self.repo_root = repo_root
+    repo_root: pathlib.Path
+
+    @field_validator("repo_root")
+    @classmethod
+    def _repo_root_must_exist(cls, value: pathlib.Path) -> pathlib.Path:
+        if not value.is_dir():
+            raise ValueError(f"--repo-root must be an existing directory, got {value}")
+        return value
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -272,7 +281,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         validated = DetectChangedGateScriptsArgs(repo_root=args.repo_root)
-    except ValueError:
+    except ValidationError:
         print(f"{args.repo_root}: --repo-root must be an existing directory", file=sys.stderr)
         return 2
 

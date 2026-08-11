@@ -51,7 +51,10 @@ this repository decodes as UTF-8 (verified directly), so this is not
 presently a live restriction -- it is a deliberate choice not to let a
 future binary or non-UTF-8 addition silently narrow this gate's coverage.
 
-Standard library only, so the calling workflow needs no dependency install.
+This gate's own production invocation (`hidden-characters-gate.yml`) runs
+under `uv run`, so a real `pydantic` import is safe here (issue #1040,
+refs #1035's `uv run` standardization that made this class of dependency
+safe repo-wide).
 
 Run standalone or via the pytest gate in
 `tests/test_gitapex_gate_hidden_characters.py`.
@@ -65,6 +68,8 @@ import subprocess
 import sys
 import unicodedata
 from dataclasses import dataclass
+
+from pydantic import BaseModel, ValidationError, field_validator
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 
@@ -192,16 +197,20 @@ def violations_in(paths: list[pathlib.Path], root: pathlib.Path) -> list[Violati
     return violations
 
 
-class GateHiddenCharactersArgs:
+class GateHiddenCharactersArgs(BaseModel):
     """Typed view of `main`'s parsed CLI namespace. `root` must be an
     existing directory -- every existing caller already passes one, so this
     only gives a --root pointing nowhere a clear, early error instead of
     the deeper "git ls-files failed" ScanError it would otherwise surface."""
 
-    def __init__(self, *, root: pathlib.Path) -> None:
-        if not root.is_dir():
-            raise ValueError(f"--root must be an existing directory, got {root}")
-        self.root = root
+    root: pathlib.Path
+
+    @field_validator("root")
+    @classmethod
+    def _root_must_exist(cls, value: pathlib.Path) -> pathlib.Path:
+        if not value.is_dir():
+            raise ValueError(f"--root must be an existing directory, got {value}")
+        return value
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -220,7 +229,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         validated = GateHiddenCharactersArgs(root=args.root)
-    except ValueError:
+    except ValidationError:
         print(f"{args.root}: --root must be an existing directory", file=sys.stderr)
         return 2
 
