@@ -2,6 +2,53 @@
 
 Date: 2026-08-11
 
+## Superseded
+
+Implemented (commit df00458), then reverted (commit 180c648) the same day:
+`.github/workflows/ruleset-verify.yml`'s "Resolve scan scope and source of
+truth" step invokes this script via bare `python3`, with no
+dependency-install step at all (no `setup-python`, no `uv sync`/`astral-sh/
+setup-uv`, no `pip install`) -- so the module-level `import pydantic` this
+design added raised `ModuleNotFoundError` on every real run, live-confirmed
+via CI check run 93696199208 and by extracting the script and running it
+under the bare system interpreter. This was masked locally because both the
+implementer and the task-level review verified only via `uv run pytest`,
+which supplies pydantic from the project's managed venv -- not this script's
+actual production invocation path. The precedent this design followed
+(`evals/scripts/gitapex_run_ablation.py`'s own pydantic CLI-arg wrap) is
+itself only ever run via `uv run pytest` (its only reference in any workflow
+file is inside `test.yml`'s pytest step); it does not transfer to a script
+invoked as a standalone `python3` CI step with no dependency install. The
+rest of this document is kept for its rationale, not as a plan to implement
+as written -- any revisit must start from that invocation-context constraint
+(see the branch's whole-branch review, PR #1031, for the corrected invariant
+and options).
+
+**Corrected invariant** (the revert commit's own message overstated this --
+whole-branch review finding C2, independently re-verified directly against
+every workflow file rather than trusted as stated): it is not true that
+every pydantic-importing `.github/scripts/*.py` file is exercised only
+through the `uv`-managed pytest suite. `gitapex_sync_pr_publish.py` and
+`gitapex_gate_evals_scripts_coverage.py` both import pydantic (`from
+pydantic import ...` at module scope) *and* are invoked directly from a
+workflow (`sync-agent-instructions.yml:108`, `test.yml:47`) -- safely,
+because both call sites use `uv run --frozen python3 ...` in a job that
+first runs `astral-sh/setup-uv`, not bare `python3`. The other three
+pydantic-importing scripts (`gitapex_gate_ruleset_required_checks.py`,
+`gitapex_scan_eval_results_schema.py`, `gitapex_scan_ssot_schema.py`) are
+not directly invoked by any workflow at all -- exercised only via `uv run
+pytest`. Checked every `python3 .github/scripts/*.py` invocation across
+`.github/workflows/*.yml` not preceded by `uv run` (24 call sites, live
+`grep` count) against the 5-script pydantic-import list (`grep -l "^from
+pydantic import\|^import pydantic"`): zero overlap. The real, generalizable
+invariant a future gate should encode is:
+
+> A `.github/scripts/*.py` file invoked from a workflow step whose `run:`
+> does not start with `uv run` must import stdlib only.
+
+not "pydantic scripts are pytest-only," which is the weaker, factually
+wrong claim the revert commit stated.
+
 Refs #1024 (the PR #1031 fix). Small, scoped follow-up requested directly
 after that PR: add pydantic validation to
 `.github/scripts/gitapex_compute_ruleset_verify_scope.py`, following this

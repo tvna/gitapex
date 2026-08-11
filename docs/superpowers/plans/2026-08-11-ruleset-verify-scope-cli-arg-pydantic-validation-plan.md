@@ -1,5 +1,15 @@
 # Ruleset-Verify-Scope CLI-Arg Pydantic Validation Implementation Plan
 
+## Superseded
+
+Executed (commit df00458), then reverted (commit 180c648) the same day: the
+target script is invoked via bare `python3` with no dependency-install step
+in `.github/workflows/ruleset-verify.yml`, so the `import pydantic` this
+plan's Task 1 added broke that workflow's only real invocation
+(`ModuleNotFoundError`, live-confirmed in CI). See the companion design
+doc's own `## Superseded` section for the full explanation. Do not
+re-dispatch Task 1 as written without resolving that constraint first.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Validate `--repo-root` and the resolved `--runner-temp` in `.github/scripts/gitapex_compute_ruleset_verify_scope.py`'s `main()` via a pydantic model immediately after `parser.parse_args()`, so a nonexistent path fails with a clear, flag-naming message instead of a confusing error deep inside a `git` subprocess call or a file write.
