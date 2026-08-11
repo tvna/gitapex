@@ -51,8 +51,6 @@ import pathlib
 import subprocess
 import sys
 
-from pydantic import BaseModel, ValidationError, field_validator
-
 MAIN_RULESET_PATH = ".github/rulesets/main.json"
 
 
@@ -151,54 +149,6 @@ def _render(outputs: dict[str, str]) -> str:
     return "\n".join(f"{key}={value}" for key, value in outputs.items())
 
 
-class _ComputeRulesetVerifyScopeArgs(BaseModel):
-    """Validates the two `main()` CLI values that previously had no
-    validation at all: `--repo-root` and the resolved `--runner-temp`
-    (after its own $RUNNER_TEMP-env/cwd fallback) must each be an
-    existing directory. `--event-name`/`--base-sha` are deliberately not
-    modeled here: `compute_scope()` already owns their own validation,
-    covered by that function's own direct unit tests -- duplicating it
-    here would either compete with that check or remove it from a
-    function this file's own tests call directly (see issue #1024's
-    follow-up design doc,
-    docs/superpowers/specs/2026-08-11-ruleset-verify-scope-cli-arg-pydantic-validation-design.md).
-    `--step-summary-file` is also not modeled: opened via `.open("a")`,
-    which creates the file if absent, so it carries no existence
-    precondition (a missing *parent* directory is a known, disclosed,
-    out-of-scope limitation -- see that same design doc)."""
-
-    repo_root: pathlib.Path
-    runner_temp: pathlib.Path
-
-    @field_validator("repo_root")
-    @classmethod
-    def _repo_root_must_exist(cls, value: pathlib.Path) -> pathlib.Path:
-        if not value.is_dir():
-            raise ValueError(f"--repo-root does not exist or is not a directory: {value}")
-        return value
-
-    @field_validator("runner_temp")
-    @classmethod
-    def _runner_temp_must_exist(cls, value: pathlib.Path) -> pathlib.Path:
-        if not value.is_dir():
-            raise ValueError(f"--runner-temp does not exist or is not a directory: {value}")
-        return value
-
-
-def _validation_error_message(exc: ValidationError) -> str:
-    """The first error's original message, unwrapped from pydantic's own
-    "Value error, " prefix -- same helper shape as
-    evals/scripts/gitapex_run_ablation.py's own `_validation_error_message`,
-    duplicated rather than imported (this file has no dependency on that
-    unrelated CLI script)."""
-    error = exc.errors()[0]
-    ctx = error.get("ctx") or {}
-    original = ctx.get("error")
-    if isinstance(original, Exception):
-        return str(original)
-    return str(error["msg"])
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Compute ruleset-verify.yml's scan-scope outputs. Prints "
@@ -239,15 +189,7 @@ def main(argv: list[str] | None = None) -> int:
         step_summary_file = pathlib.Path(os.environ["GITHUB_STEP_SUMMARY"])
 
     try:
-        validated_args = _ComputeRulesetVerifyScopeArgs(repo_root=args.repo_root, runner_temp=runner_temp)
-    except ValidationError as exc:
-        print(f"error: {_validation_error_message(exc)}", file=sys.stderr)
-        return 1
-
-    try:
-        outputs = compute_scope(
-            args.event_name, args.base_sha, validated_args.repo_root, validated_args.runner_temp, step_summary_file
-        )
+        outputs = compute_scope(args.event_name, args.base_sha, args.repo_root, runner_temp, step_summary_file)
     except RulesetVerifyScopeError as error:
         print(f"::error::{error}", file=sys.stderr)
         return 1
