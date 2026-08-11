@@ -101,11 +101,24 @@ An empty *selection* is legitimate here and is not an error -- a diff
 genuinely touching no gate is the common case, and the caller acts on the
 empty list by not requiring the disclosure.
 
-Standard library only, so the calling workflow needs no dependency install.
+This script's own CI caller (`gitapex_compute_skill_audit_flags.py`,
+invoked via `uv run` in `skill-audit-gate.yml`) runs under `uv run`, so a
+real `pydantic` import is safe on that path (issue #1040, refs #1035's
+`uv run` standardization that made this class of dependency safe
+repo-wide). One local, non-CI caller does not: `hooks/check-pr-skill-
+audit-disclosure.sh`'s tier-1 pre-check invokes
+`gitapex_gate_skill_audit_disclosure.py` (which imports this module
+transitively) via bare `python3`. That path already fails closed rather
+than crashing -- `gitapex_gate_skill_audit_disclosure.py --check-diff`
+catches the resulting `ModuleNotFoundError` and prints a clean
+`error: ...` message -- and the hook then falls back to its own narrower
+tier-2 check with a stderr warning; CI's `skill-audit-gate.yml` (always
+`uv run`) remains the authoritative verdict either way, so this narrows
+local pre-push coverage in a pydantic-less ambient `python3`, never CI's.
 
 Usage::
 
-    git diff --name-status BASE...HEAD | python3 gitapex_detect_changed_gate_scripts.py
+    git diff --name-status BASE...HEAD | uv run --frozen python3 gitapex_detect_changed_gate_scripts.py
 
 Reads `--name-status` lines on stdin, writes the comma-joined selection to
 stdout (empty line when nothing matched) and diagnostics to stderr, so the
@@ -122,6 +135,8 @@ import json
 import pathlib
 import re
 import sys
+
+from pydantic import BaseModel, ValidationError, field_validator
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 SSOT_RELATIVE_PATH = ".gitapex/ssot.json"
@@ -243,17 +258,21 @@ def select(name_status_text: str, registered: set[str]) -> list[str]:
     return sorted(selected)
 
 
-class DetectChangedGateScriptsArgs:
+class DetectChangedGateScriptsArgs(BaseModel):
     """Typed view of `main`'s parsed CLI namespace. `repo_root` must be an
     existing directory -- every existing caller already passes one, so this
     only gives a --repo-root pointing nowhere a clear, early error instead
     of the deeper, less specific "gate registry cannot be read" ScopeError
     it would otherwise surface."""
 
-    def __init__(self, *, repo_root: pathlib.Path) -> None:
-        if not repo_root.is_dir():
-            raise ValueError(f"--repo-root must be an existing directory, got {repo_root}")
-        self.repo_root = repo_root
+    repo_root: pathlib.Path
+
+    @field_validator("repo_root")
+    @classmethod
+    def _repo_root_must_exist(cls, value: pathlib.Path) -> pathlib.Path:
+        if not value.is_dir():
+            raise ValueError(f"--repo-root must be an existing directory, got {value}")
+        return value
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -272,7 +291,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         validated = DetectChangedGateScriptsArgs(repo_root=args.repo_root)
-    except ValueError:
+    except ValidationError:
         print(f"{args.repo_root}: --repo-root must be an existing directory", file=sys.stderr)
         return 2
 

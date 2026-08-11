@@ -15,9 +15,10 @@
 # a required check) from a workflow that never fires for a given PR (which
 # leaves a required check Pending forever). This job is intended for
 # promotion to a required status check, so a filter would permanently block
-# any PR that happens not to touch a matched path. The scan is stdlib-only
-# Python over the files a diff actually adds lines to, so running it
-# unconditionally costs a few seconds.
+# any PR that happens not to touch a matched path. The scan (a real
+# `pydantic` import as of issue #1040, see below) runs over only the files
+# a diff actually adds lines to, so running it unconditionally still costs
+# a few seconds.
 name: Exception-handler gap gate
 
 on:
@@ -97,10 +98,11 @@ jobs:
       #   on a name this gate cannot resolve, and not a shape a .py file in
       #   this repository has ever had.
       #
-      # Issue #1035: the gate is standard-library only, but every
-      # `.github/scripts/*.py` invocation now goes through `uv run`
-      # regardless (see that issue's own Facts for why bare `python3` is
-      # no longer safe to assume stdlib-only stays stdlib-only forever).
+      # Issue #1035: every `.github/scripts/*.py` invocation goes through
+      # `uv run` regardless of whether the script needs a third-party
+      # dependency. Issue #1040 made that not merely defensive here: this
+      # gate now carries a real `pydantic` import (its own CLI-arg
+      # validation), so `uv run` is load-bearing, not a stdlib-era holdover.
       - name: Grade the decoded reads and JSON accesses this diff adds
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
