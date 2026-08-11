@@ -103,7 +103,7 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
-          uv run --frozen python3 .github/scripts/gitapex_compute_ruleset_verify_scope.py \
+          uv run -qq --frozen python3 .github/scripts/gitapex_compute_ruleset_verify_scope.py \
             --event-name "$EVENT_NAME" --base-sha "$BASE_SHA" >> "$GITHUB_OUTPUT"
 
       # Exit 2 means the scan never got to look (no live ruleset carries the

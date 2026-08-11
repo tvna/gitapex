@@ -188,6 +188,66 @@ def test_uv_run_substring_inside_an_unrelated_word_does_not_suppress_detection(t
     assert len(gate.find_bare_invocations(workflows_dir)) == 1
 
 
+def test_unrelated_uv_run_command_on_the_same_line_does_not_suppress_detection(tmp_path: pathlib.Path) -> None:
+    # Code-review defeat case: `uv run` present on the same line, but
+    # wrapping a DIFFERENT command (joined by `&&`), not the flagged
+    # invocation -- a plain "does the line contain uv run" check would
+    # have missed this.
+    workflows_dir = _write(
+        tmp_path,
+        "shellop.yml",
+        "jobs:\n"
+        "  a:\n"
+        "    steps:\n"
+        "      - name: run\n"
+        "        run: |\n"
+        "          uv run --frozen true && python3 .github/scripts/gitapex_gate_foo.py\n",
+    )
+    findings = gate.find_bare_invocations(workflows_dir)
+    assert len(findings) == 1
+    assert "gitapex_gate_foo.py" in findings[0][2]
+
+
+def test_uv_run_in_a_trailing_comment_does_not_suppress_a_preceding_bare_invocation(
+    tmp_path: pathlib.Path,
+) -> None:
+    # Another defeat case: "uv run" text appears on the same line, but
+    # AFTER the bare invocation (in a trailing comment), not wrapping it.
+    workflows_dir = _write(
+        tmp_path,
+        "trailingcomment.yml",
+        "jobs:\n"
+        "  a:\n"
+        "    steps:\n"
+        "      - name: run\n"
+        "        run: |\n"
+        "          python3 .github/scripts/gitapex_gate_foo.py  # TODO: migrate to uv run\n",
+    )
+    findings = gate.find_bare_invocations(workflows_dir)
+    assert len(findings) == 1
+    assert "gitapex_gate_foo.py" in findings[0][2]
+
+
+def test_two_invocations_on_one_line_are_graded_independently(tmp_path: pathlib.Path) -> None:
+    workflows_dir = _write(
+        tmp_path,
+        "mixed.yml",
+        "jobs:\n"
+        "  a:\n"
+        "    steps:\n"
+        "      - name: run\n"
+        "        run: |\n"
+        "          python3 .github/scripts/gitapex_bare.py"
+        " && uv run --frozen python3 .github/scripts/gitapex_wrapped.py\n",
+    )
+    findings = gate.find_bare_invocations(workflows_dir)
+    # Exactly one finding, not two: the wrapped invocation is correctly
+    # excluded even though its script name appears in the same reported
+    # line text as the bare one (both are on the same physical line).
+    assert len(findings) == 1
+    assert "gitapex_bare.py" in findings[0][2]
+
+
 # --- fail-closed on malformed/incomplete input (dimension 15) ---
 
 
@@ -210,6 +270,19 @@ def test_undecodable_file_is_a_finding_not_a_skip(tmp_path: pathlib.Path) -> Non
     workflows_dir = tmp_path / ".github" / "workflows"
     workflows_dir.mkdir(parents=True)
     (workflows_dir / "bad.yml").write_bytes(b"\xff\xfe\x00bad")
+    findings = gate.find_bare_invocations(workflows_dir)
+    assert len(findings) == 1
+    assert "could not decode" in findings[0][2]
+
+
+def test_unreadable_file_is_a_finding_not_an_uncaught_exception(tmp_path: pathlib.Path) -> None:
+    # A path glob() discovers can still fail to read for reasons other
+    # than a decode error (permissions, deleted mid-scan) -- read_text()
+    # on a directory raises IsADirectoryError (an OSError subclass), a
+    # portable way to reproduce that without relying on permission bits.
+    workflows_dir = tmp_path / ".github" / "workflows"
+    workflows_dir.mkdir(parents=True)
+    (workflows_dir / "trap.yml").mkdir()
     findings = gate.find_bare_invocations(workflows_dir)
     assert len(findings) == 1
     assert "could not decode" in findings[0][2]

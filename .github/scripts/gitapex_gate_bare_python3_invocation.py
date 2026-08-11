@@ -10,30 +10,50 @@ and source of truth" step) invoked it via bare `python3`, with no
 dependency-install step at all -- the added import raised
 `ModuleNotFoundError` live in CI (check run 93696199208) the same day it
 merged. `.gitapex/ssot.json`'s own `local_invocation` field already
-documented `uv run --frozen python3 ...` as the convention for every
-registered gate (live-verified during this issue's implementation: all 27
-gate entries carrying that field already used it); only the CI `run:`
-steps themselves had drifted from it. This gate closes that drift so a
-future PR cannot silently reintroduce it.
+documented `uv run` as the convention for every registered gate
+(live-verified against the base commit this issue branched from: 28
+gate entries carried a `local_invocation`, and all 28 already started
+with `uv run` -- 26 of them as `uv run --frozen python3 ...`, plus
+`python-lint` as `uv run --locked ruff ...` and
+`cyclomatic-complexity-floor` as `uv run --frozen xenon ...`); only the
+CI `run:` steps for `.github/scripts/*.py` invocations themselves had
+drifted from that convention. This gate closes that drift so a future PR
+cannot silently reintroduce it.
 
 Scope: parses each workflow file's YAML and scans every step's `run:`
-string, line by line, for a `python3 .github/scripts/*.py` invocation not
-paired with `uv run` on the same line -- the same shape as the manual
-`grep -rn "python3 \\.github/scripts" .github/workflows/*.yml | grep -v
-"uv run"` this issue's own Facts section used to inventory the original
-24 call sites, scoped to parsed `run:` step text (not arbitrary comment
-lines elsewhere in the file) to avoid false-flagging prose that merely
-mentions the invocation shape without executing it.
+string, line by line, for a `python3 .github/scripts/*.py` invocation
+that is not immediately preceded (only `uv run` plus zero or more
+`--flag`/`--flag=value` tokens allowed in between -- no shell operator, no
+other command word) by `uv run` on the same line -- the same shape as the
+manual `grep -rn "python3 \\.github/scripts" .github/workflows/*.yml |
+grep -v "uv run"` this issue's own Facts section used to inventory the
+original 24 call sites, scoped to parsed `run:` step text (not arbitrary
+comment lines elsewhere in the file) to avoid false-flagging prose that
+merely mentions the invocation shape without executing it. The adjacency
+requirement (not merely "`uv run` appears somewhere on the line") closes
+a defeat found in review: `uv run --frozen true && python3
+.github/scripts/gate.py` would otherwise read as covered, since a plain
+same-line substring check cannot tell "wraps this invocation" from
+"appears elsewhere on this line, followed by an unrelated command".
 
 Residual risk, stated rather than hidden (issue #1035's own Acceptance
-Criteria Map already names this): a `run:` block that assembles the
-invocation dynamically -- through a shell variable, a multi-line `case`
-branch, or string concatenation -- is not resolved by this line-level
-text match. That gap is accepted at this issue's scope: every call site
-inventoried live against this repository's actual workflow files at
-issue-creation time was a direct literal invocation, and a dynamic form
-would be a new authoring pattern to catch in a follow-up, not a
-known-missed case here.
+Criteria Map already names the general shape; the two bullets below are
+this implementation's own further-narrowed instances of it):
+
+- A `run:` block that assembles the invocation dynamically -- through a
+  shell variable, a multi-line `case` branch, or string concatenation --
+  is not resolved by this line-level text match. No such dynamic form
+  exists in this repository's real workflow files today, verified live at
+  issue-creation time.
+- The adjacency check is itself line-scoped: a backslash-continued `uv run
+  --frozen` on one physical line followed by `python3
+  .github/scripts/gate.py` on the
+  next (a legitimate backslash line-continuation, not a dynamic
+  invocation) is not recognized as wrapped and would false-positive as
+  bare. Not observed in any of this repository's real call sites today
+  (every one keeps `uv run ... python3 ... script.py` on one physical
+  line), so accepted as a known gap rather than joining continuation
+  lines before matching.
 
 Usage:
     uv run --frozen python3 .github/scripts/gitapex_gate_bare_python3_invocation.py [workflows_dir]
@@ -68,10 +88,18 @@ WORKFLOWS_DIR = pathlib.Path(".github/workflows")
 # `xargs ... python3 script.py` line -- the three shapes this
 # repository's 24 original call sites actually used.
 _SCRIPT_INVOCATION_RE = re.compile(r"python3\s+\.github/scripts/\S+\.py")
-# Word-boundary "uv run" so this never matches a coincidental
-# substring (e.g. a path segment) -- though no such collision is known to
-# exist in this repository's workflows today.
-_UV_RUN_RE = re.compile(r"\buv\s+run\b")
+# `uv run`, optionally followed by long-form flags (`--frozen`,
+# `--flag=value` -- the only shapes this repository's real call sites use;
+# a space-separated flag value is deliberately not supported, since
+# supporting it risks the flag-value regex swallowing the literal word
+# "python3" itself), immediately followed by a `python3 .github/scripts/*.py`
+# invocation. A match's END position lands exactly on the wrapped
+# invocation's own end (both patterns share the same `\.py` tail), so
+# comparing end positions -- not just "does this pattern match somewhere on
+# the line" -- is what proves `uv run` actually wraps a SPECIFIC invocation
+# rather than merely co-occurring with it (e.g. in a trailing comment, or
+# before an unrelated `&&`-joined command).
+_UV_WRAPPED_INVOCATION_RE = re.compile(r"\buv\s+run(?:\s+-{1,2}[\w-]+(?:=\S+)?)*\s+python3\s+\.github/scripts/\S+\.py")
 
 
 def find_bare_invocations(workflows_dir: pathlib.Path = WORKFLOWS_DIR) -> list[tuple[str, int, str]]:
@@ -94,10 +122,12 @@ def find_bare_invocations(workflows_dir: pathlib.Path = WORKFLOWS_DIR) -> list[t
 
 def _scan_workflow(workflow: pathlib.Path) -> list[tuple[str, int, str]]:
     try:
-        content = workflow.read_text()
-    except UnicodeDecodeError as exc:
-        # Fail closed, not skip: a file that isn't valid text can't be
-        # scanned for a `run:` block, so it cannot be verified clean.
+        content = workflow.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        # Fail closed, not skip: a file that isn't valid text -- or that
+        # became unreadable (permissions, deleted mid-scan) after glob()
+        # discovered it -- can't be scanned for a `run:` block, so it
+        # cannot be verified clean.
         return [(str(workflow), 0, f"could not decode as UTF-8, cannot verify: {exc}")]
 
     try:
@@ -134,11 +164,11 @@ def _scan_workflow(workflow: pathlib.Path) -> list[tuple[str, int, str]]:
                 continue
             step_name = step.get("name", "<unnamed step>")
             for lineno, line in enumerate(run.splitlines(), start=1):
-                if not _SCRIPT_INVOCATION_RE.search(line):
-                    continue
-                if _UV_RUN_RE.search(line):
-                    continue
-                findings.append((f"{workflow} [{job_name}/{step_name}]", lineno, line.strip()))
+                wrapped_ends = {m.end() for m in _UV_WRAPPED_INVOCATION_RE.finditer(line)}
+                for match in _SCRIPT_INVOCATION_RE.finditer(line):
+                    if match.end() in wrapped_ends:
+                        continue
+                    findings.append((f"{workflow} [{job_name}/{step_name}]", lineno, line.strip()))
     return findings
 
 

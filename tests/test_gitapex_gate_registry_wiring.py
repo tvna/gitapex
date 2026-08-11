@@ -563,8 +563,9 @@ def test_find_orphaned_flags_excludes_a_flag_belonging_to_uv_run_before_the_scri
     script -- preceding the filename rather than following it. This
     reconstructs the false positive that shape produced on `main`
     (`skill-audit-gate.yml` passing `--frozen` to
-    `gitapex_gate_skill_audit_disclosure.py`) before `_text_from_first_token`
-    scoped extraction to at-or-after the script's own filename."""
+    `gitapex_gate_skill_audit_disclosure.py`) before
+    `_invocation_argument_windows` scoped extraction to text following the
+    script's own real invocation."""
     scripts_dir, workflows_dir = _make_dirs(tmp_path)
     (scripts_dir / "gate_example.py").write_text(_REGISTRY_SOURCE, encoding="utf-8")
     (workflows_dir / "ci.yml").write_text(
@@ -590,6 +591,45 @@ def test_find_orphaned_flags_still_catches_a_real_stale_flag_after_uv_run(tmp_pa
 
     assert len(findings) == 1
     assert "--stale-flag" in findings[0]
+
+
+def test_find_orphaned_flags_excludes_a_flag_after_a_second_scripts_invocation_in_the_same_block(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Code-review defeat case: two `uv run`-prefixed invocations in one
+    `run:` block. The second script's own flags (including its own
+    `--frozen`) must not bleed into the first script's window just
+    because the window used to run to the end of the whole block."""
+    scripts_dir, workflows_dir = _make_dirs(tmp_path)
+    (scripts_dir / "gate_example.py").write_text(_REGISTRY_SOURCE, encoding="utf-8")
+    (workflows_dir / "ci.yml").write_text(
+        "run: |\n"
+        '  uv run --frozen python3 .github/scripts/gate_example.py --alpha-items "$A"\n'
+        '  uv run --frozen python3 .github/scripts/other_script.py --beta-items "$B"\n',
+        encoding="utf-8",
+    )
+
+    assert wiring.find_orphaned_flags(scripts_dir, workflows_dir) == []
+
+
+def test_find_orphaned_flags_ignores_a_decoy_mention_of_the_filename_before_the_real_invocation(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Code-review defeat case: the script's bare filename appears earlier
+    in the same run block (a comment), before the real invocation.
+    Anchoring on the invocation shape (`python... .github/scripts/name`),
+    not the bare filename, means that earlier mention does not become the
+    window's own false starting point."""
+    scripts_dir, workflows_dir = _make_dirs(tmp_path)
+    (scripts_dir / "gate_example.py").write_text(_REGISTRY_SOURCE, encoding="utf-8")
+    (workflows_dir / "ci.yml").write_text(
+        "run: |\n"
+        "  echo see .github/scripts/gate_example.py docs --stale-decoy-flag\n"
+        '  uv run --frozen python3 .github/scripts/gate_example.py --alpha-items "$A"\n',
+        encoding="utf-8",
+    )
+
+    assert wiring.find_orphaned_flags(scripts_dir, workflows_dir) == []
 
 
 def test_find_orphaned_flags_returns_empty_when_nothing_is_registered(tmp_path: pathlib.Path) -> None:

@@ -88,6 +88,15 @@ def repo(tmp_path):
         ".github/scripts/gitapex_detect_changed_gate_scripts.py",
         ".github/scripts/gitapex_skill_description_diff.py",
         ".github/scripts/gitapex_skill_security_relevance.py",
+        # Issue #1035: the real `run:` block now invokes the script through
+        # `uv run --frozen`, which resolves against a `pyproject.toml`/
+        # `uv.lock` pair in its own cwd (this fixture's scratch repo) --
+        # without these two, `uv run` silently falls back to the ambient
+        # system Python instead of the project's pinned one (verified
+        # live), which would let this suite keep passing for reasons
+        # unrelated to what it claims to test.
+        "pyproject.toml",
+        "uv.lock",
     ):
         target = tmp_path / relative
         target.parent.mkdir(parents=True, exist_ok=True)

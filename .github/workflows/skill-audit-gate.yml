@@ -79,7 +79,7 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          uv run --frozen python3 .github/scripts/gitapex_compute_skill_audit_flags.py \
+          uv run -qq --frozen python3 .github/scripts/gitapex_compute_skill_audit_flags.py \
             --base-ref "$BASE_SHA" --head-ref "$HEAD_SHA" \
             --format github-output >> "$GITHUB_OUTPUT"
 
