@@ -1,0 +1,76 @@
+# Issue #1052 (refs #1047, #1049): issue #1040's own first two waves each
+# needed a follow-up commit to fix a "standard library only"/"stdlib-only"
+# claim, or a bare `python3 <file>.py` invocation example, left stale after
+# a diff added a real third-party import to a `.github/scripts/*.py`/
+# `evals/scripts/*.py` file -- once inside the changed file itself, once in
+# a file that references or imports it. Both retrospectives (#1047, #1049)
+# concluded a manual grep sweep repeated by hand each wave is not a
+# reliable substitute for a deterministic gate. This job runs that gate.
+#
+# Deliberately no `paths:` filter, following exception-handler-gap-gate.yml's
+# and plugin-root-brace-notation-gate.yml's own stated rationale: a workflow
+# that never fires for a given PR leaves a required status check Pending
+# forever, whereas a job that runs and reports `skipped`-shaped output (this
+# gate's own "OK: no ... claims found" on a diff with nothing in scope) does
+# not. The scan itself only reads files a diff adds a top-level import to,
+# plus their known importers and referencing workflow files, so running it
+# unconditionally costs a few seconds.
+name: Stdlib-only claim drift gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  stdlib-only-claim-drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      # `ref:` pinned to the PR head, matching exception-handler-gap-gate.yml's
+      # own reasoning: this gate reads each candidate file's real,
+      # post-image content off the working tree (its own docstring, its
+      # importers, its referencing workflow files), so the tree checked out
+      # has to *be* that post-image, not the default merge ref, which can
+      # diverge from it for a file the base branch also changed.
+      #
+      # fetch-depth: 0 so the merge-base below resolves.
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+        with:
+          fetch-depth: '0'
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      # git merge-base (not base.sha directly), same reasoning as
+      # exception-handler-gap-gate.yml and gitignore-pattern-coverage-gate.yml:
+      # a change that landed on the base branch after this PR forked must
+      # never be misattributed to it. --no-renames, same reasoning too: a
+      # file promoted into .github/scripts/ or evals/scripts/ via a rename
+      # must not arrive as a zero-added-lines "similarity index 100%"
+      # header, invisible to this gate's own diff-based import detection.
+      - name: Flag stale stdlib-only/bare-python3 claims after a third-party import lands
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if ! merge_base=$(git merge-base "$BASE_SHA" "$HEAD_SHA"); then
+            echo "::error::git merge-base failed between $BASE_SHA and $HEAD_SHA" >&2
+            exit 1
+          fi
+          git -c core.quotePath=false diff -U0 --no-renames "$merge_base" "$HEAD_SHA" \
+              -- '.github/scripts/*.py' 'evals/scripts/*.py' \
+            | uv run --frozen python3 .github/scripts/gitapex_gate_stdlib_only_claim_drift.py
