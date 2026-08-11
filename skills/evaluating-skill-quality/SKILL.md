@@ -23,7 +23,7 @@ skill artifact itself is good, not whether a change is correct.
   assume the target lives in a repository that has adopted this metadata
   convention; when the target is a skill vendored from one that has not,
   those checks fail as expected -- not a defect in the reviewed skill --
-  so record them explicitly as not-applicable, never as six findings.
+  so record them explicitly as not-applicable, never as six findings. Also run the companion checker, `python3 skills/evaluating-skill-quality/scripts/gitapex_scan_execution_requirements_drift.py <skill-dir>`, which cross-checks declared `executionRequirements` against real content (best-effort, not proof) -- both checkers are the deterministic-shape step Procedure step 3 requires.
 - **Probabilistic maturity** -- **nine dimensions** of judgment that need a model
   or human, not a script. Full rubric with pass/fail evidence:
   [references/rubric.md](references/rubric.md).
@@ -371,8 +371,8 @@ binary gate-warranted question.
    not as the headline. Also run the Blind spot pass per the Unknowns framework
    section above -- name a rubric gap if the target's domain exposes one, or state
    explicitly that none was found.
-3. *(runs 1st, main thread, before dispatch)* Run the deterministic shape checker per
-   the Two lanes section above (or apply its checks by hand where Python is
+3. *(runs 1st, main thread, before dispatch)* Run both deterministic shape checkers
+   per the Two lanes section above (or apply their checks by hand where Python is
    unavailable); cite the exact violation. A FAIL does not shorten the review either
    (see this section's preamble above); carry it into the dispatch as an established
    fact (Subagent dispatch's "never both" handoff), reported alongside the dimension

