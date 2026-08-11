@@ -50,6 +50,11 @@ jobs:
       - name: Harden runner + checkout
         uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
       # ISSUE_BODY carries untrusted external text (anyone who can open or
       # edit an issue controls it) -- passed via env, never interpolated
       # directly into this step's shell script, mirroring
@@ -64,5 +69,5 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           set -euo pipefail
-          printf '%s' "$ISSUE_BODY" | python3 .github/scripts/gitapex_gate_acm_issue_disclosure.py \
+          printf '%s' "$ISSUE_BODY" | uv run --frozen python3 .github/scripts/gitapex_gate_acm_issue_disclosure.py \
             --owner tvna --repo gitapex --issue-number "$ISSUE_NUMBER"

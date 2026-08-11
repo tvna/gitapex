@@ -35,6 +35,11 @@ jobs:
           ref: main
           fetch-depth: '0'
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
       # Issue #297 (refs #187, #242, #246): mechanizes merge-retrospective's
       # Step 0 (retrospective-labelled issues with no citing commit on
       # main) instead of leaving it a manual audit every cycle. No
@@ -46,7 +51,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -o pipefail
-          python3 .github/scripts/gitapex_scan_retrospective_gate_drift.py \
+          uv run --frozen python3 .github/scripts/gitapex_scan_retrospective_gate_drift.py \
             --owner tvna --repo gitapex --ref HEAD --threshold 20 \
             | tee -a "$GITHUB_STEP_SUMMARY"
 
@@ -80,6 +85,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -o pipefail
-          python3 .github/scripts/gitapex_compute_gprr.py \
+          uv run --frozen python3 .github/scripts/gitapex_compute_gprr.py \
             --owner tvna --repo gitapex \
             | tee -a "$GITHUB_STEP_SUMMARY"

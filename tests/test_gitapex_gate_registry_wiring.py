@@ -554,6 +554,44 @@ def test_find_orphaned_flags_is_clean_when_every_passed_flag_is_known(tmp_path: 
     assert wiring.find_orphaned_flags(scripts_dir, workflows_dir) == []
 
 
+def test_find_orphaned_flags_excludes_a_flag_belonging_to_uv_run_before_the_script(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Issue #1035: standardizing every `.github/scripts/*.py` invocation
+    on `uv run` put a `--flag`-shaped token (`--frozen`) in the same run
+    block as the script's filename, but belonging to `uv`, not the
+    script -- preceding the filename rather than following it. This
+    reconstructs the false positive that shape produced on `main`
+    (`skill-audit-gate.yml` passing `--frozen` to
+    `gitapex_gate_skill_audit_disclosure.py`) before `_text_from_first_token`
+    scoped extraction to at-or-after the script's own filename."""
+    scripts_dir, workflows_dir = _make_dirs(tmp_path)
+    (scripts_dir / "gate_example.py").write_text(_REGISTRY_SOURCE, encoding="utf-8")
+    (workflows_dir / "ci.yml").write_text(
+        'run: uv run --frozen python3 .github/scripts/gate_example.py --alpha-items "$A" --beta-items "$B"',
+        encoding="utf-8",
+    )
+
+    assert wiring.find_orphaned_flags(scripts_dir, workflows_dir) == []
+
+
+def test_find_orphaned_flags_still_catches_a_real_stale_flag_after_uv_run(tmp_path: pathlib.Path) -> None:
+    """The scoping fix above must not become a new blind spot: a genuinely
+    orphaned flag placed *after* the script's filename, in a `uv run`-
+    prefixed invocation, is still caught."""
+    scripts_dir, workflows_dir = _make_dirs(tmp_path)
+    (scripts_dir / "gate_example.py").write_text(_REGISTRY_SOURCE, encoding="utf-8")
+    (workflows_dir / "ci.yml").write_text(
+        'run: uv run --frozen python3 .github/scripts/gate_example.py --alpha-items "$A" --stale-flag "$B"',
+        encoding="utf-8",
+    )
+
+    findings = wiring.find_orphaned_flags(scripts_dir, workflows_dir)
+
+    assert len(findings) == 1
+    assert "--stale-flag" in findings[0]
+
+
 def test_find_orphaned_flags_returns_empty_when_nothing_is_registered(tmp_path: pathlib.Path) -> None:
     scripts_dir, workflows_dir = _make_dirs(tmp_path)
     (scripts_dir / "not_a_registry.py").write_text("X = 1\n", encoding="utf-8")

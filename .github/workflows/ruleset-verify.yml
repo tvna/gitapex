@@ -81,6 +81,11 @@ jobs:
           ref: ${{ github.event_name == 'pull_request' && github.ref || 'main' }}
           fetch-depth: '0'
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
       # The one place the two scopes differ. Everything downstream reads these
       # outputs, so a third caller later means one more branch here rather than
       # a third workflow file. Issue #1013 (task 13) moved this step's own
@@ -98,7 +103,7 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
-          python3 .github/scripts/gitapex_compute_ruleset_verify_scope.py \
+          uv run --frozen python3 .github/scripts/gitapex_compute_ruleset_verify_scope.py \
             --event-name "$EVENT_NAME" --base-sha "$BASE_SHA" >> "$GITHUB_OUTPUT"
 
       # Exit 2 means the scan never got to look (no live ruleset carries the
@@ -117,7 +122,7 @@ jobs:
         run: |
           set -uo pipefail
           set +e
-          python3 .github/scripts/gitapex_scan_ruleset_drift.py \
+          uv run --frozen python3 .github/scripts/gitapex_scan_ruleset_drift.py \
             --repo "$TARGET_REPO" --sot "$SOT_FILE" --scope "$SCOPE" 2>&1 \
             | tee -a "$GITHUB_STEP_SUMMARY"
           code=${PIPESTATUS[0]}

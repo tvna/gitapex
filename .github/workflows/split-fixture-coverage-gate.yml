@@ -28,6 +28,11 @@ jobs:
         with:
           fetch-depth: '0'
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
       # Issue #526 (unifying #191/#352's proposed gates): only split.md/
       # SKILL.md files this PR actually added or modified need checking,
       # matching retro-title-convention-citation-gate.yml's own rationale
@@ -80,7 +85,7 @@ jobs:
           set -euo pipefail
           mapfile -t split_args < <(printf '%s\n' "$SPLIT_FILES" | grep -v '^$' || true)
           mapfile -t skill_args < <(printf '%s\n' "$SKILL_FILES" | grep -v '^$' || true)
-          cmd=(python3 .github/scripts/gitapex_gate_split_fixture_coverage.py --repo-root .)
+          cmd=(uv run --frozen python3 .github/scripts/gitapex_gate_split_fixture_coverage.py --repo-root .)
           if [ "${#split_args[@]}" -gt 0 ]; then
             cmd+=(--split-md "${split_args[@]}")
           fi

@@ -851,6 +851,20 @@
       "tracking_issue": 985,
       "status": "active",
       "supersedes": null
+    },
+    {
+      "id": "bare-python3-invocation",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_gate_bare_python3_invocation.py",
+      "rule": "Every .github/scripts/*.py invocation in any .github/workflows/*.yml or *.yaml run: step must go through uv run; a bare python3 .github/scripts/*.py invocation fails. Parses each workflow's YAML and scans only run: step text (not arbitrary comment lines elsewhere in the file). Exits 1, never a silent pass, when the workflow directory is missing, no workflow files are found, a file cannot be decoded, or a file's YAML does not parse to the expected jobs: {...: {steps: [...]}} shape.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_bare_python3_invocation.py"],
+      "trigger": ".github/workflows/bare-python3-invocation-gate.yml on pull_request/workflow_dispatch, plus tests/test_gitapex_gate_bare_python3_invocation.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "supply-chain",
+      "tracking_issue": 1035,
+      "status": "active",
+      "supersedes": null
     }
   ],
   "clusters": {

@@ -23,6 +23,11 @@ jobs:
         with:
           fetch-depth: '0'
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
       # Issue #520 (row 3, refs #350): the flagged pattern (a review-
       # response draft or doc/PR-body diff naming a specific tool's
       # absence/presence as an evidence-limitation reason) can live in the
@@ -65,7 +70,7 @@ jobs:
           added_file="$RUNNER_TEMP/added_lines.txt"
           if ! git diff -U1000000 "$BASE_SHA...$HEAD_SHA" -- \
               'docs/*.md' 'docs/**/*.md' 'evals/*.md' 'evals/**/*.md' 'skills/*.md' 'skills/**/*.md' \
-              | python3 .github/scripts/gitapex_extract_diff_added_lines.py > "$added_file"; then
+              | uv run --frozen python3 .github/scripts/gitapex_extract_diff_added_lines.py > "$added_file"; then
             echo "::error::git diff/extraction failed between $BASE_SHA and $HEAD_SHA" >&2
             exit 1
           fi
@@ -86,6 +91,6 @@ jobs:
       - name: Check provenance disclosure
         run: |
           set -euo pipefail
-          python3 .github/scripts/gitapex_gate_provenance_disclosure.py \
+          uv run --frozen python3 .github/scripts/gitapex_gate_provenance_disclosure.py \
             --body "$RUNNER_TEMP/pr_body.txt" \
             --diff-added "${{ steps.diff.outputs.added-file }}"

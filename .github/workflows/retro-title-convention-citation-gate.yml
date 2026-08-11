@@ -27,6 +27,11 @@ jobs:
         with:
           fetch-depth: '0'
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
       # Issue #520 (row 1, refs #344): only files this PR actually adds or
       # modifies need checking -- pre-existing, already-shipped content is
       # out of scope for a gate whose job is to catch a claim *before it
@@ -83,5 +88,5 @@ jobs:
           # quote/backslash interpretation -- a doc path containing a space
           # or a single quote must pass through as one argument, not get
           # split or abort xargs with "unmatched quote".
-          printf '%s\n' "$FILES" | xargs -d '\n' -r python3 .github/scripts/gitapex_gate_retro_title_convention_citation.py \
+          printf '%s\n' "$FILES" | xargs -d '\n' -r uv run --frozen python3 .github/scripts/gitapex_gate_retro_title_convention_citation.py \
             --owner "${{ github.repository_owner }}" --repo "${{ github.event.repository.name }}"

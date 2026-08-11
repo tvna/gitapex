@@ -133,17 +133,24 @@ YAML parsing -- same stdlib-only constraint as the rest of this module):
 a single-line ``run: <command>`` is that line's remainder; a block form
 (``run: |``/``run: >``) collects every following line more indented than
 the ``run:`` key itself, stopping at the first line that dedents back to it
-or below. Flag-shaped tokens are then extracted only from run blocks that
-themselves mention the script's filename as a whole token.
+or below. Flag-shaped tokens are then extracted only from the portion of a
+matching run block starting at that block's first bounded occurrence of the
+script's filename, not the whole block -- issue #1035's own standardization
+onto ``uv run`` (e.g. ``uv run --frozen python3 .github/scripts/gate_x.py
+--foo``) put a real, observed instance of the next blind spot on `main`:
+without this scoping, ``--frozen`` (a flag belonging to ``uv``, preceding
+the script's own filename in the same run block) would misattribute to the
+script as an orphaned flag. Scoping to at-or-after the filename excludes
+anything before the invocation while keeping every flag that follows it.
 
 **Known blind spots for this direction, disclosed rather than solved:**
 
 - A flag-shaped token (``--foo``) inside a comment line within a matching
-  run block, or inside a quoted *value* string rather than an actual
-  argument position, is indistinguishable from a real invocation argument
-  to this plain-text scan and would be flagged the same way. Not yet
-  observed in this repository's one real invocation, measured at the point
-  this direction was added.
+  run block *at or after* the script's own filename, or inside a quoted
+  *value* string rather than an actual argument position, is
+  indistinguishable from a real invocation argument to this plain-text scan
+  and would be flagged the same way. Not yet observed in this repository's
+  real invocations, measured at the point this direction was last revised.
 - Only long-form ``--flag`` tokens are considered candidates; a short-form
   single-dash flag (``-x``) is never extracted, matching this repository's
   own convention of registering only long-form flags today.
@@ -210,14 +217,32 @@ class RegistryReadError(Exception):
     uncaught traceback."""
 
 
+def _token_pattern(token: str) -> re.Pattern[str]:
+    return re.compile(rf"(?<!{_ADJACENT_CHAR_RE}){re.escape(token)}(?!{_ADJACENT_CHAR_RE})")
+
+
 def _contains_token(text: str, token: str) -> bool:
     """True if `token` appears in `text` with no identifier/flag/filename
     character immediately before or after it -- so `--foo` does not match
     inside `--foo-bar`, and `gate_x.py` does not match inside
     `sub_gate_x.py`. See the module docstring's "What counts as wired"
     section for why a plain substring test is not enough."""
-    pattern = re.compile(rf"(?<!{_ADJACENT_CHAR_RE}){re.escape(token)}(?!{_ADJACENT_CHAR_RE})")
-    return pattern.search(text) is not None
+    return _token_pattern(token).search(text) is not None
+
+
+def _text_from_first_token(text: str, token: str) -> str:
+    """The suffix of `text` starting at the first bounded occurrence of
+    `token` (see `_contains_token`), or `""` if `token` does not occur.
+    Issue #1035: a `run:` block invoking a script through `uv run` (e.g.
+    `uv run --frozen python3 .github/scripts/gate_x.py --foo`) carries a
+    `--flag`-shaped token (`--frozen`) that precedes the script's own
+    filename and belongs to `uv`, not to the script -- scoping flag
+    extraction to text at-or-after the script name excludes it while
+    keeping every flag that follows, matching the module docstring's own
+    "must not misattribute a flag" scoping rule one level finer than the
+    whole-block scoping it already does."""
+    match = _token_pattern(token).search(text)
+    return text[match.start() :] if match else ""
 
 
 def _read_text_or_raise(path: Path) -> str:
@@ -429,9 +454,10 @@ def find_orphaned_flags(scripts_dir: Path = SCRIPTS_DIR, workflows_dir: Path = W
                 continue
             orphaned: set[str] = set()
             for block in _iter_run_blocks(text):
-                if not _contains_token(block, script.name):
+                invocation = _text_from_first_token(block, script.name)
+                if not invocation:
                     continue
-                orphaned.update(_iter_flag_tokens(block) - known_flags)
+                orphaned.update(_iter_flag_tokens(invocation) - known_flags)
             for flag in sorted(orphaned):
                 findings.append(
                     f"{workflow.name}: passes {flag!r} to {script.name} but it defines no such "
