@@ -101,14 +101,24 @@ An empty *selection* is legitimate here and is not an error -- a diff
 genuinely touching no gate is the common case, and the caller acts on the
 empty list by not requiring the disclosure.
 
-This script's own callers (`gitapex_compute_skill_audit_flags.py`, invoked
-via `uv run` in `skill-audit-gate.yml`) already run under `uv run`, so a
-real `pydantic` import is safe here (issue #1040, refs #1035's `uv run`
-standardization that made this class of dependency safe repo-wide).
+This script's own CI caller (`gitapex_compute_skill_audit_flags.py`,
+invoked via `uv run` in `skill-audit-gate.yml`) runs under `uv run`, so a
+real `pydantic` import is safe on that path (issue #1040, refs #1035's
+`uv run` standardization that made this class of dependency safe
+repo-wide). One local, non-CI caller does not: `hooks/check-pr-skill-
+audit-disclosure.sh`'s tier-1 pre-check invokes
+`gitapex_gate_skill_audit_disclosure.py` (which imports this module
+transitively) via bare `python3`. That path already fails closed rather
+than crashing -- `gitapex_gate_skill_audit_disclosure.py --check-diff`
+catches the resulting `ModuleNotFoundError` and prints a clean
+`error: ...` message -- and the hook then falls back to its own narrower
+tier-2 check with a stderr warning; CI's `skill-audit-gate.yml` (always
+`uv run`) remains the authoritative verdict either way, so this narrows
+local pre-push coverage in a pydantic-less ambient `python3`, never CI's.
 
 Usage::
 
-    git diff --name-status BASE...HEAD | python3 gitapex_detect_changed_gate_scripts.py
+    git diff --name-status BASE...HEAD | uv run --frozen python3 gitapex_detect_changed_gate_scripts.py
 
 Reads `--name-status` lines on stdin, writes the comma-joined selection to
 stdout (empty line when nothing matched) and diagnostics to stderr, so the

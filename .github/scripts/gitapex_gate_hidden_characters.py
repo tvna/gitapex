@@ -56,7 +56,9 @@ under `uv run`, so a real `pydantic` import is safe here (issue #1040,
 refs #1035's `uv run` standardization that made this class of dependency
 safe repo-wide).
 
-Run standalone or via the pytest gate in
+Run via `uv run` (needed for the pydantic import -- a bare `python3`
+invocation without pydantic installed now fails at import time, before
+argparse even runs) or via the pytest gate in
 `tests/test_gitapex_gate_hidden_characters.py`.
 """
 

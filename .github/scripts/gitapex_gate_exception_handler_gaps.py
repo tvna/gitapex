@@ -229,7 +229,7 @@ Usage::
 
     git -c core.quotePath=false diff -U0 --no-renames \\
         "$MERGE_BASE" "$HEAD_SHA" -- '*.py' \\
-      | python3 .github/scripts/gitapex_gate_exception_handler_gaps.py
+      | uv run --frozen python3 .github/scripts/gitapex_gate_exception_handler_gaps.py
 
 Both flags are load-bearing, not tidiness: rename detection hides a file
 promoted into a graded directory behind a zero-added-line header, and
@@ -247,7 +247,9 @@ an in-scope file that cannot be read or parsed). The 2 case is dimension
 15 of `skills/evaluating-deterministic-gate-quality/references/
 dimensions.md`: a file this gate cannot grade must never pass silently.
 
-Run standalone or via the pytest gate in
+Run via `uv run` (needed for the pydantic import -- a bare `python3`
+invocation without pydantic installed now fails at import time, before
+argparse even runs) or via the pytest gate in
 `tests/test_gitapex_gate_exception_handler_gaps.py`.
 """
 
