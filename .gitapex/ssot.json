@@ -420,7 +420,7 @@
       "id": "plugin-manifest-schema-conformance",
       "kind": "script",
       "script": ".github/scripts/gitapex_scan_plugin_manifest_schema.py",
-      "rule": "Validates the repository-root plugin.json against the vendored Agent Plugins Specification v1.0.0 plugin.schema.json (Draft202012Validator, format assertion enabled); flags vendor-digest-drift if the vendored schema's sha256 no longer matches its recorded digest. --verify-upstream (opt-in, network) additionally byte-compares the vendored file against what agentplugins/agent-plugins-spec publishes at the pinned commit.",
+      "rule": "Validates the repository-root plugin.json against the vendored Agent Plugins Specification v1.0.0 plugin.schema.json (Draft202012Validator, format assertion enabled), and in parallel against a PluginManifest pydantic model that additionally types homepage/repository/author.url as AnyUrl (stricter than the vendored schema's untyped strings); flags vendor-digest-drift if the vendored schema's sha256 no longer matches its recorded digest. --verify-upstream (opt-in, network) additionally byte-compares the vendored file against what agentplugins/agent-plugins-spec publishes at the pinned commit.",
       "planes": ["ci", "local"],
       "local_invocation": [
         "uv",

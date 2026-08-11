@@ -103,6 +103,77 @@ def test_schema_conformance_findings_non_object_schema_raises_cleanly(tmp_path: 
 
 
 # ---------------------------------------------------------------------------
+# pydantic_conformance_findings
+# ---------------------------------------------------------------------------
+
+
+def test_pydantic_conformance_findings_empty_for_valid_manifest(tmp_path: pathlib.Path) -> None:
+    manifest_path = tmp_path / "plugin.json"
+    _write_json(
+        manifest_path,
+        {
+            "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+            "name": "gitapex",
+            "homepage": "https://github.com/tvna/gitapex",
+        },
+    )
+    assert scanner.pydantic_conformance_findings(manifest_path) == []
+
+
+def test_pydantic_conformance_findings_rejects_a_malformed_url_jsonschema_would_accept(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The one genuine additional-value check this layer adds over
+    schema-conformance: the real vendored schema declares "homepage" a
+    plain "type": "string" with no format assertion, so a malformed URL
+    passes schema_conformance_findings cleanly -- but PluginManifest types
+    it AnyUrl, so it must fail here. Uses the real vendored schema (default
+    vendored_schema_path) rather than a hand-rolled one, to prove this
+    against the actual file schema_conformance_findings validates against,
+    not an approximation of it."""
+    manifest_path = tmp_path / "plugin.json"
+    _write_json(
+        manifest_path,
+        {
+            "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+            "name": "gitapex",
+            "homepage": "not a url",
+        },
+    )
+    assert scanner.schema_conformance_findings(manifest_path) == []
+    findings = scanner.pydantic_conformance_findings(manifest_path)
+    assert len(findings) == 1
+    assert findings[0].startswith("pydantic-conformance: homepage")
+
+
+def test_pydantic_conformance_findings_rejects_unknown_field(tmp_path: pathlib.Path) -> None:
+    manifest_path = tmp_path / "plugin.json"
+    _write_json(
+        manifest_path,
+        {"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "name": "gitapex", "bogus": 1},
+    )
+    findings = scanner.pydantic_conformance_findings(manifest_path)
+    assert len(findings) == 1
+    assert findings[0].startswith("pydantic-conformance: bogus")
+
+
+def test_pydantic_conformance_findings_missing_manifest_raises(tmp_path: pathlib.Path) -> None:
+    with pytest.raises(scanner.ScanReadError):
+        scanner.pydantic_conformance_findings(tmp_path / "nonexistent.json")
+
+
+def test_pydantic_conformance_findings_non_object_manifest_raises_cleanly(tmp_path: pathlib.Path) -> None:
+    manifest_path = tmp_path / "plugin.json"
+    manifest_path.write_text("[1, 2, 3]", encoding="utf-8")
+    with pytest.raises(scanner.ScanReadError, match="must be a JSON object"):
+        scanner.pydantic_conformance_findings(manifest_path)
+
+
+def test_real_repository_plugin_manifest_is_pydantic_valid() -> None:
+    assert scanner.pydantic_conformance_findings() == []
+
+
+# ---------------------------------------------------------------------------
 # vendor_digest_drift_findings
 # ---------------------------------------------------------------------------
 
@@ -214,6 +285,33 @@ def test_main_returns_one_and_prints_findings_on_violation(
 
 def test_real_repository_plugin_manifest_is_schema_valid() -> None:
     assert scanner.main([]) == 0
+
+
+def test_main_includes_pydantic_conformance_findings(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    manifest_path = tmp_path / "plugin.json"
+    schema_path = tmp_path / "schema.json"
+    schema_with_homepage = {
+        **_VALID_SCHEMA,
+        "properties": {**_VALID_SCHEMA["properties"], "homepage": {"type": "string"}},  # type: ignore[dict-item]
+    }
+    _write_json(
+        manifest_path,
+        {
+            "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+            "name": "gitapex",
+            "homepage": "not a url",
+        },
+    )
+    _write_json(schema_path, schema_with_homepage)
+    monkeypatch.setattr(scanner, "PLUGIN_MANIFEST_PATH", manifest_path)
+    monkeypatch.setattr(scanner, "VENDORED_SCHEMA_PATH", schema_path)
+    monkeypatch.setattr(scanner, "VENDORED_SCHEMA_SHA256", hashlib.sha256(schema_path.read_bytes()).hexdigest())
+
+    assert scanner.main([]) == 1
+    out = capsys.readouterr().out
+    assert "pydantic-conformance:" in out
 
 
 def test_main_verify_upstream_appends_the_network_findings(

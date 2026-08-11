@@ -18,7 +18,7 @@ this pin (confirmed by listing the repository's tags directly) -- so the
 pin is a commit SHA, not a tag, and this docstring records that as a fact
 observed at pin time, not a promise upstream will ever cut one.
 
-Three checks:
+Four checks:
 
 1. ``schema-conformance``: the real repository-root plugin.json validates
    against the vendored schema (jsonschema.Draft202012Validator, format
@@ -27,10 +27,23 @@ Three checks:
    gitapex_scan_skill_metadata_schema.py use, so this does not carry a
    third independently-drifting copy of the same
    load-or-raise/validator-build/iter-errors logic).
-2. ``vendor-digest-drift``: the vendored schema file's sha256 must equal
+2. ``pydantic-conformance``: plugin.json parses against the PluginManifest
+   pydantic model below. This is a parallel layer, not a replacement for
+   schema-conformance -- deliberately not re-deriving constraints the
+   vendored JSON Schema already asserts (name's pattern/length,
+   additionalProperties: false, required fields), which would just be a
+   second, independently-drifting copy of the same rule. The one place
+   this model is genuinely stricter: ``homepage``/``repository`` (and
+   ``author.url``) are typed ``AnyUrl``, so a malformed URL fails here even
+   though the vendored schema only declares them ``"type": "string"`` with
+   no format assertion. The other typed fields exist for a future
+   consumer's benefit (a typed ``PluginManifest`` instead of hand-rolled
+   ``dict.get``), mirroring gitapex_scan_ssot_schema.py's own stated
+   rationale for pairing jsonschema with a pydantic model.
+3. ``vendor-digest-drift``: the vendored schema file's sha256 must equal
    VENDORED_SCHEMA_SHA256 below, recorded at vendor time -- catches an
    accidental hand-edit of the vendored copy.
-3. ``--verify-upstream`` (opt-in, network, off by default): fetches
+4. ``--verify-upstream`` (opt-in, network, off by default): fetches
    schemas/1.0.0/plugin.schema.json from agentplugins/agent-plugins-spec at
    VENDORED_SPEC_COMMIT and byte-compares it against the vendored copy --
    the only check that actually proves the vendored file matches upstream;
@@ -49,9 +62,11 @@ import hashlib
 import pathlib
 import sys
 import urllib.request
+from typing import Any
 from urllib.error import URLError
 
 import _gitapex_schema_validation
+from pydantic import AnyUrl, BaseModel, ConfigDict, Field, ValidationError
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 PLUGIN_MANIFEST_PATH = REPO_ROOT / "plugin.json"
@@ -107,6 +122,67 @@ def schema_conformance_findings(
         f"schema-conformance: {message.removeprefix('schema: ')}"
         for message in _gitapex_schema_validation.validate(instance, schema)
     ]
+
+
+class PluginManifestAuthor(BaseModel):
+    """The vendored schema's ``author`` object -- ``additionalProperties: false``,
+    all three fields optional. ``url`` is typed ``AnyUrl`` (the one place this
+    model is stricter than the vendored schema, which declares it a plain
+    ``"type": "string"``)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = None
+    email: str | None = None
+    url: AnyUrl | None = None
+
+
+class PluginManifest(BaseModel):
+    """A typed mirror of the vendored plugin.schema.json's top-level shape.
+    Deliberately does not re-derive constraints schema_conformance_findings
+    already checks (name's pattern/length, required fields,
+    additionalProperties: false is achieved here via extra="forbid" rather
+    than reasserting the pattern) -- see this module's own docstring,
+    check 2, for why: a pydantic layer that only restates jsonschema's own
+    rules is a second, independently-drifting copy of the same rule, not
+    genuine additional value. ``homepage``/``repository`` are typed
+    ``AnyUrl``, the one field pair where this model is genuinely stricter
+    than the vendored schema (which declares them plain strings)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_: str | None = Field(default=None, alias="$schema")
+    name: str
+    version: str | None = None
+    description: str | None = None
+    author: PluginManifestAuthor | None = None
+    homepage: AnyUrl | None = None
+    repository: AnyUrl | None = None
+    license: str | None = None
+    keywords: list[str] | None = None
+    extensions: dict[str, dict[str, Any]] | None = None
+
+
+def pydantic_conformance_findings(plugin_manifest_path: pathlib.Path | None = None) -> list[str]:
+    """Every pydantic ValidationError plugin.json raises against
+    PluginManifest, each prefixed "pydantic-conformance: " -- empty list
+    means plugin.json parses cleanly as a PluginManifest. A parallel layer
+    to schema_conformance_findings, not a replacement -- see this module's
+    docstring, check 2."""
+    if plugin_manifest_path is None:
+        plugin_manifest_path = PLUGIN_MANIFEST_PATH
+    instance = _gitapex_schema_validation.load_json_or_raise(plugin_manifest_path, ScanReadError)
+    if not isinstance(instance, dict):
+        raise ScanReadError(f"{plugin_manifest_path}: must be a JSON object, got {type(instance).__name__}")
+    try:
+        PluginManifest.model_validate(instance)
+    except ValidationError as error:
+        findings: list[str] = []
+        for err in error.errors():
+            location = "/".join(str(part) for part in err["loc"]) or "<root>"
+            findings.append(f"pydantic-conformance: {location}: {err['msg']}")
+        return findings
+    return []
 
 
 def vendor_digest_drift_findings(vendored_schema_path: pathlib.Path | None = None) -> list[str]:
@@ -165,7 +241,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        findings = schema_conformance_findings() + vendor_digest_drift_findings()
+        findings = schema_conformance_findings() + pydantic_conformance_findings() + vendor_digest_drift_findings()
         if args.verify_upstream:
             findings += upstream_drift_findings()
     except ScanReadError as error:
