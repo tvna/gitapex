@@ -73,12 +73,21 @@ def _commit_exists(repo_root: pathlib.Path, commit_ish: str) -> bool:
 
 
 def _path_exists_at_commit(repo_root: pathlib.Path, commit_ish: str, path: str) -> bool:
-    # `cat-file -e` alone returns 0 for a tree (directory) or a symlink at
-    # this path just as it does for a blob, and a downstream `git show`
-    # on either materializes something that is not the file's own content
-    # (a directory listing, or the symlink target string) -- see issue #1024.
-    # Only a blob is a genuinely readable ruleset file.
-    return _git(["cat-file", "-t", f"{commit_ish}:{path}"], repo_root).stdout.strip() == "blob"
+    # `cat-file -e`/`-t` alone cannot tell a regular file apart from a tree
+    # (directory) or a symlink at this path: a symlink is itself *stored*
+    # as a blob object (its content is the link target string), so
+    # `cat-file -t` reports "blob" for a symlink exactly as it does for a
+    # real file -- only the tree entry's own mode (100644/100755 for a
+    # regular file, 120000 for a symlink, 040000 for a tree) distinguishes
+    # them. A downstream `git show` on a tree or a symlink materializes a
+    # directory listing or the link target, not the file's own content --
+    # see issue #1024. `ls-tree` on the exact path returns one line (mode,
+    # type, sha, path) when it exists, nothing when it does not.
+    result = _git(["ls-tree", commit_ish, "--", path], repo_root)
+    if not result.stdout.strip():
+        return False
+    mode = result.stdout.split(maxsplit=1)[0]
+    return mode in ("100644", "100755")
 
 
 def _show_at_commit(repo_root: pathlib.Path, commit_ish: str, path: str) -> str:

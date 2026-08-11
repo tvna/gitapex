@@ -107,6 +107,27 @@ def test_pull_request_base_with_tree_at_ruleset_path_is_applicable_false(
     assert outputs == {"applicable": "false"}
 
 
+def test_pull_request_base_with_symlinked_ruleset_path_is_applicable_false(
+    repo: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    # Issue #1024: a *symlink* committed at .github/rulesets/main.json
+    # must also resolve the same as a genuinely missing file. A symlink
+    # is itself stored as a blob object in git (its content is the link
+    # target string), so a bare `git cat-file -t` blob check alone
+    # cannot tell it apart from a real file -- only the tree entry's own
+    # mode (120000 for a symlink) does. Without that mode check, this
+    # used to report applicable=true and materialize `git show`'s link
+    # target string as the "sot" file, which is not JSON at all.
+    ruleset_dir = repo / ".github" / "rulesets"
+    ruleset_dir.mkdir(parents=True)
+    (ruleset_dir / "main.json").symlink_to("/etc/passwd")
+    base_sha = _commit(repo, "main.json is a symlink, not a blob")
+    runner_temp = tmp_path / "runner-temp"
+    runner_temp.mkdir()
+    outputs = scope_module.compute_scope("pull_request", base_sha, repo, runner_temp, None)
+    assert outputs == {"applicable": "false"}
+
+
 def test_pull_request_base_lacking_ruleset_file_writes_step_summary(repo: pathlib.Path, tmp_path: pathlib.Path) -> None:
     base_sha = _git(repo, "rev-parse", "HEAD").stdout.strip()
     summary_file = tmp_path / "summary.md"
