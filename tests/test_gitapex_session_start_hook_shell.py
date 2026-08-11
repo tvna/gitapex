@@ -125,6 +125,87 @@ def test_exits_zero_and_warns_when_claude_cli_not_on_path() -> None:
     assert "claude CLI not found on PATH; skipping gitapex's own plugin registration" in result.stderr
 
 
+def _init_bare_origin_with_commit(origin_dir: Path, branch: str) -> None:
+    subprocess.run(["git", "init", "-q", "--bare", "--initial-branch", branch, str(origin_dir)], check=True)
+    seed_dir = origin_dir.parent / f"{origin_dir.name}-seed"
+    subprocess.run(["git", "clone", "-q", str(origin_dir), str(seed_dir)], check=True)
+    (seed_dir / "README.md").write_text("seed\n", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=str(seed_dir), check=True)
+    subprocess.run(
+        ["git", "-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "-q", "-m", "seed"],
+        cwd=str(seed_dir),
+        check=True,
+    )
+    subprocess.run(["git", "push", "-q", "origin", branch], cwd=str(seed_dir), check=True)
+
+
+def _clone_work_repo(origin_dir: Path, work_dir: Path) -> None:
+    subprocess.run(["git", "clone", "-q", str(origin_dir), str(work_dir)], check=True)
+
+
+def test_fetches_the_configured_default_branch_from_origin(tmp_path: Path) -> None:
+    # Issue #1033: .gitapex/default-branch.json's own presence is the gate
+    # for this step (see the script's own comment for why the branch name
+    # lives there and not in .gitapex/ssot.json). A local file:// origin,
+    # not the real GitHub remote, keeps this deterministic and offline-safe
+    # rather than depending on live network access to github.com.
+    origin_dir = tmp_path / "origin.git"
+    work_dir = tmp_path / "work"
+    _init_bare_origin_with_commit(origin_dir, "release")
+    _clone_work_repo(origin_dir, work_dir)
+    (work_dir / ".gitapex").mkdir()
+    (work_dir / ".gitapex" / "default-branch.json").write_text('{"default_branch": "release"}\n', encoding="utf-8")
+
+    # Advance the origin past what work_dir cloned, so a real fetch is the
+    # only way work_dir's remote-tracking ref could move.
+    seed_dir = tmp_path / "origin.git-seed"
+    (seed_dir / "README.md").write_text("seed\nmore\n", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=str(seed_dir), check=True)
+    subprocess.run(
+        ["git", "-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "-q", "-m", "advance"],
+        cwd=str(seed_dir),
+        check=True,
+    )
+    subprocess.run(["git", "push", "-q", "origin", "release"], cwd=str(seed_dir), check=True)
+    advanced_sha = subprocess.run(
+        ["git", "rev-parse", "release"], cwd=str(seed_dir), check=True, capture_output=True, text=True
+    ).stdout.strip()
+
+    result = _run({"CLAUDE_CODE_REMOTE": "true", "CLAUDE_PROJECT_DIR": str(work_dir)})
+
+    assert result.returncode == 0
+    fetch_head_sha = subprocess.run(
+        ["git", "rev-parse", "FETCH_HEAD"], cwd=str(work_dir), check=True, capture_output=True, text=True
+    ).stdout.strip()
+    assert fetch_head_sha == advanced_sha
+
+
+def test_skips_fetch_and_warns_when_default_branch_config_is_missing(tmp_path: Path) -> None:
+    origin_dir = tmp_path / "origin.git"
+    work_dir = tmp_path / "work"
+    _init_bare_origin_with_commit(origin_dir, "main")
+    _clone_work_repo(origin_dir, work_dir)
+
+    result = _run({"CLAUDE_CODE_REMOTE": "true", "CLAUDE_PROJECT_DIR": str(work_dir)})
+
+    assert result.returncode == 0
+    assert "default-branch.json not found; skipping default-branch fetch" in result.stderr
+
+
+def test_skips_fetch_and_warns_when_default_branch_value_is_empty(tmp_path: Path) -> None:
+    origin_dir = tmp_path / "origin.git"
+    work_dir = tmp_path / "work"
+    _init_bare_origin_with_commit(origin_dir, "main")
+    _clone_work_repo(origin_dir, work_dir)
+    (work_dir / ".gitapex").mkdir()
+    (work_dir / ".gitapex" / "default-branch.json").write_text('{"default_branch": ""}\n', encoding="utf-8")
+
+    result = _run({"CLAUDE_CODE_REMOTE": "true", "CLAUDE_PROJECT_DIR": str(work_dir)})
+
+    assert result.returncode == 0
+    assert "default_branch is missing/empty; skipping fetch" in result.stderr
+
+
 def test_exits_zero_and_warns_when_uv_not_on_path() -> None:
     # Simulate a session-start environment with no `uv` on PATH (e.g. a
     # container image that skipped it) -- the hook must still exit 0 and

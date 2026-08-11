@@ -18,6 +18,42 @@ python3 "${CLAUDE_PROJECT_DIR:-.}/skills/setup-gitapex-toolchain/scripts/gitapex
   --env-file "${CLAUDE_ENV_FILE:-}" \
   || echo "gitapex: toolchain provisioning reported a failure; see stderr above. Some binaries or apm install's output may be missing this session." >&2
 
+# Issue #1033: fetch the repository's configured default branch so a fresh
+# ephemeral checkout has it available locally without a contributor fetching
+# it by hand. The branch name is read from .gitapex/default-branch.json, a
+# standalone config file -- not .gitapex/ssot.json, whose own schema and
+# drift gate (gitapex_scan_ssot_schema.py) document it as "references and
+# routing only, never policy values" and enforce a closed meta{} field set;
+# a literal branch-name value has no home there. This file's own presence is
+# the gate (a checkout without .gitapex/default-branch.json skips the step),
+# mirroring the apm.yml guard the blocks below use for the same purpose.
+# Fail-soft like every other step in this script: a missing/malformed config
+# file or a network failure must never block session start.
+default_branch_config="${CLAUDE_PROJECT_DIR:-.}/.gitapex/default-branch.json"
+if [ -f "$default_branch_config" ]; then
+  default_branch="$(python3 -c '
+import json
+import sys
+
+try:
+    with open(sys.argv[1], encoding="utf-8") as config_file:
+        config = json.load(config_file)
+    branch = config.get("default_branch")
+    if isinstance(branch, str) and branch:
+        print(branch)
+except (OSError, ValueError):
+    pass
+' "$default_branch_config")"
+  if [ -n "$default_branch" ]; then
+    git -C "${CLAUDE_PROJECT_DIR:-.}" fetch origin "$default_branch" \
+      || echo "gitapex: could not fetch default branch '${default_branch}' from origin this session (non-fatal)." >&2
+  else
+    echo "gitapex: ${default_branch_config} present but default_branch is missing/empty; skipping fetch." >&2
+  fi
+else
+  echo "gitapex: ${default_branch_config} not found; skipping default-branch fetch." >&2
+fi
+
 # Issue #749 (follow-up to #725): flake.nix's devShell shellHook
 # installs the local prek pre-commit hook automatically for persistent
 # surfaces (`nix develop`); this ephemeral-web session had no
