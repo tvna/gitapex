@@ -108,6 +108,27 @@ def test_pull_request_base_with_tree_at_ruleset_path_is_applicable_false(
     assert not (runner_temp / "base_main_ruleset.json").exists()
 
 
+def test_pull_request_base_with_tree_at_ruleset_path_writes_an_accurate_step_summary(
+    repo: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    # Whole-branch review finding (issue #1024 follow-up): the base ref
+    # *does* carry something at this path (a tree), so "carries no
+    # .../main.json; this pull request introduces it" is factually wrong
+    # here and actively misdirects a human debugging it -- reproduced
+    # live before writing this test. The summary must instead say the
+    # path exists but is not a regular file.
+    ruleset_dir = repo / ".github" / "rulesets" / "main.json"
+    ruleset_dir.mkdir(parents=True)
+    (ruleset_dir / "inner.json").write_text('{"oops": "not a real ruleset"}\n', encoding="utf-8")
+    base_sha = _commit(repo, "main.json is a tree, not a blob")
+    summary_file = tmp_path / "summary.md"
+    scope_module.compute_scope("pull_request", base_sha, repo, repo, summary_file)
+    summary_text = summary_file.read_text(encoding="utf-8")
+    assert "carries no" not in summary_text
+    assert "not a regular file" in summary_text
+    assert "040000" in summary_text
+
+
 def test_pull_request_base_with_symlinked_ruleset_path_is_applicable_false(
     repo: pathlib.Path, tmp_path: pathlib.Path
 ) -> None:
@@ -123,6 +144,45 @@ def test_pull_request_base_with_symlinked_ruleset_path_is_applicable_false(
     ruleset_dir.mkdir(parents=True)
     (ruleset_dir / "main.json").symlink_to("/etc/passwd")
     base_sha = _commit(repo, "main.json is a symlink, not a blob")
+    runner_temp = tmp_path / "runner-temp"
+    runner_temp.mkdir()
+    outputs = scope_module.compute_scope("pull_request", base_sha, repo, runner_temp, None)
+    assert outputs == {"applicable": "false"}
+    assert not (runner_temp / "base_main_ruleset.json").exists()
+
+
+def test_pull_request_base_with_symlinked_ruleset_path_writes_an_accurate_step_summary(
+    repo: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    # Same accuracy requirement as the tree case, for a symlink (mode 120000).
+    ruleset_dir = repo / ".github" / "rulesets"
+    ruleset_dir.mkdir(parents=True)
+    (ruleset_dir / "main.json").symlink_to("/etc/passwd")
+    base_sha = _commit(repo, "main.json is a symlink, not a blob")
+    summary_file = tmp_path / "summary.md"
+    scope_module.compute_scope("pull_request", base_sha, repo, repo, summary_file)
+    summary_text = summary_file.read_text(encoding="utf-8")
+    assert "carries no" not in summary_text
+    assert "not a regular file" in summary_text
+    assert "120000" in summary_text
+
+
+def test_pull_request_base_with_gitlink_at_ruleset_path_is_applicable_false(
+    repo: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    # M1 (whole-branch review): the module docstring and _path_exists_at_commit's
+    # own comment claim a gitlink (mode 160000, a submodule reference) is
+    # rejected the same as a tree or symlink, but that claim previously had
+    # no direct test -- only the tree and symlink cases did. `git
+    # update-index --add --cacheinfo 160000,<sha>,<path>` fakes a gitlink
+    # entry without needing a real submodule remote.
+    fake_submodule_sha = "0" * 39 + "1"
+    _git(repo, "update-index", "--add", "--cacheinfo", f"160000,{fake_submodule_sha},.github/rulesets/main.json")
+    # Not _commit(): its `git add -A` sees the gitlink's own path as
+    # having no backing working-tree directory (there's no real
+    # submodule checkout here) and un-stages it again before commit.
+    _git(repo, "commit", "-qm", "main.json is a gitlink, not a blob")
+    base_sha = _git(repo, "rev-parse", "HEAD").stdout.strip()
     runner_temp = tmp_path / "runner-temp"
     runner_temp.mkdir()
     outputs = scope_module.compute_scope("pull_request", base_sha, repo, runner_temp, None)
