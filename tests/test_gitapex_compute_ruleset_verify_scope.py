@@ -88,6 +88,25 @@ def test_pull_request_base_lacking_ruleset_file_is_applicable_false(repo: pathli
     assert outputs == {"applicable": "false"}
 
 
+def test_pull_request_base_with_tree_at_ruleset_path_is_applicable_false(
+    repo: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    # Issue #1024: a *directory* committed at .github/rulesets/main.json
+    # (not a blob) must resolve the same as a genuinely missing file --
+    # `git cat-file -e` returns 0 for a tree just as it does for a blob,
+    # so without a blob-type check this used to report applicable=true
+    # and materialize `git show`'s tree listing as the "sot" file, which
+    # is not JSON at all.
+    ruleset_dir = repo / ".github" / "rulesets" / "main.json"
+    ruleset_dir.mkdir(parents=True)
+    (ruleset_dir / "inner.json").write_text('{"oops": "not a real ruleset"}\n', encoding="utf-8")
+    base_sha = _commit(repo, "main.json is a tree, not a blob")
+    runner_temp = tmp_path / "runner-temp"
+    runner_temp.mkdir()
+    outputs = scope_module.compute_scope("pull_request", base_sha, repo, runner_temp, None)
+    assert outputs == {"applicable": "false"}
+
+
 def test_pull_request_base_lacking_ruleset_file_writes_step_summary(repo: pathlib.Path, tmp_path: pathlib.Path) -> None:
     base_sha = _git(repo, "rev-parse", "HEAD").stdout.strip()
     summary_file = tmp_path / "summary.md"

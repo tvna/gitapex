@@ -73,7 +73,12 @@ def _commit_exists(repo_root: pathlib.Path, commit_ish: str) -> bool:
 
 
 def _path_exists_at_commit(repo_root: pathlib.Path, commit_ish: str, path: str) -> bool:
-    return _git(["cat-file", "-e", f"{commit_ish}:{path}"], repo_root).returncode == 0
+    # `cat-file -e` alone returns 0 for a tree (directory) or a symlink at
+    # this path just as it does for a blob, and a downstream `git show`
+    # on either materializes something that is not the file's own content
+    # (a directory listing, or the symlink target string) -- see issue #1024.
+    # Only a blob is a genuinely readable ruleset file.
+    return _git(["cat-file", "-t", f"{commit_ish}:{path}"], repo_root).stdout.strip() == "blob"
 
 
 def _show_at_commit(repo_root: pathlib.Path, commit_ish: str, path: str) -> str:
