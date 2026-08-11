@@ -164,7 +164,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"PASS: {OUTPUT_PATH} matches a fresh regeneration")
         return 0
 
-    OUTPUT_PATH.write_text(rendered, encoding="utf-8")
+    try:
+        OUTPUT_PATH.write_text(rendered, encoding="utf-8")
+    except OSError as error:
+        print(f"FAIL: {OUTPUT_PATH}: cannot be written: {error}", file=sys.stderr)
+        return 1
     print(f"Wrote {OUTPUT_PATH}")
     return 0
 

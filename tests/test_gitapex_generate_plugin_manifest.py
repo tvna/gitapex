@@ -175,6 +175,26 @@ def test_main_missing_source_file_fails_cleanly(
     assert "cannot be read" in err
 
 
+def test_main_write_failure_fails_cleanly(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A CodeRabbit review finding: OUTPUT_PATH.write_text's OSError (e.g.
+    the output path is a directory, or the disk is full) must fail cleanly
+    with FAIL: and exit 1, not surface as an uncaught traceback."""
+    source_path = tmp_path / "plugin.json"
+    source_path.write_text(json.dumps({"$schema": "x", "name": "foo"}), encoding="utf-8")
+    output_path = tmp_path / "output-is-a-directory"
+    output_path.mkdir()
+
+    monkeypatch.setattr(generator, "SOURCE_PATH", source_path)
+    monkeypatch.setattr(generator, "OUTPUT_PATH", output_path)
+
+    assert generator.main([]) == 1
+    err = capsys.readouterr().err
+    assert "FAIL" in err
+    assert "cannot be written" in err
+
+
 # ---------------------------------------------------------------------------
 # Real-repository self-validation (the gate itself)
 # ---------------------------------------------------------------------------

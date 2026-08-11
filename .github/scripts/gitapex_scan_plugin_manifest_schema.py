@@ -102,6 +102,7 @@ def schema_conformance_findings(
     # already guards its own JSON source the same way; this mirrors that.
     if not isinstance(schema, dict):
         raise ScanReadError(f"{vendored_schema_path}: must be a JSON object, got {type(schema).__name__}")
+    _gitapex_schema_validation.check_schema_or_raise(schema, ScanReadError, str(vendored_schema_path))
     return [
         f"schema-conformance: {message.removeprefix('schema: ')}"
         for message in _gitapex_schema_validation.validate(instance, schema)

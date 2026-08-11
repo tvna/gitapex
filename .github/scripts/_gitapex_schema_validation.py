@@ -74,6 +74,23 @@ def load_json_or_raise(path: pathlib.Path, error_cls: type[Exception]) -> Any:
         raise error_cls(f"{path}: is not valid JSON: {error}") from error
 
 
+def check_schema_or_raise(schema: dict[str, Any], error_cls: type[Exception], schema_name: str = "schema") -> None:
+    """Validate that `schema` is itself a well-formed JSON Schema (draft
+    2020-12) before it is ever handed to `build_validator`/`validate`. A
+    dict-shaped but semantically-invalid schema (e.g. {"type": 1} -- "type"
+    must be a string or array of strings) passes a plain isinstance(dict)
+    guard but crashes jsonschema's own validator construction/iteration
+    with an uncaught TypeError, not the clean jsonschema.exceptions.
+    SchemaError check_schema raises -- a real defect a live
+    evaluating-deterministic-gate-quality review found by actually feeding
+    gitapex_scan_plugin_manifest_schema.py one. Raises `error_cls` (naming
+    `schema_name`) on a SchemaError; does nothing on a valid schema."""
+    try:
+        jsonschema.Draft202012Validator.check_schema(schema)
+    except jsonschema.exceptions.SchemaError as error:
+        raise error_cls(f"{schema_name}: is not a valid JSON Schema: {error.message}") from error
+
+
 def build_validator(schema: dict[str, Any]) -> jsonschema.Draft202012Validator:
     """A Draft202012Validator for `schema` with format assertion always
     enabled -- the JSON Schema spec itself permits a consumer to ignore

@@ -50,7 +50,11 @@ long-lived `develop`/`release` branches.
 ## No automation yet
 
 Unlike `tvna/clairvoyance`, this repository does not (yet) run
-semantic-release, version-drift CI gates, or scheduled release workflows.
-The repository-root `plugin.json`'s `version` is bumped by hand. A future issue can introduce
-that automation once the manual process becomes a bottleneck, or once the
-`cli`/`compose` products exist and need it too.
+semantic-release or scheduled release workflows. Manifest drift checks
+(`plugin-manifest-mirror-drift`, `plugin-manifest-schema-conformance`,
+`apm-manifest-drift`) validate that the plugin version is propagated
+correctly between tracked manifests once it changes, but nothing bumps it
+automatically. The repository-root `plugin.json`'s `version` is bumped by
+hand. A future issue can introduce that automation once the manual process
+becomes a bottleneck, or once the `cli`/`compose` products exist and need
+it too.
