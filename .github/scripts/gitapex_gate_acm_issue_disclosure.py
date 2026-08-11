@@ -51,19 +51,27 @@ issue creation -- it never blocks), applying it uniformly to every
 opened/edited issue costs nothing beyond a label on an issue whose
 author had no ACM convention in mind.
 
-Deliberately stdlib-only and self-contained, matching this repository's
-existing .github/scripts/*.py convention of not importing across files.
+Self-contained, matching this repository's existing .github/scripts/*.py
+convention of not importing across files -- except for a real `pydantic`
+import (issue #1040) used to validate the parsed CLI namespace. This
+gate's own production invocation (`acm-issue-gate.yml`) runs under
+`uv run`, so that import is safe here (refs #1035's `uv run`
+standardization that made this class of dependency safe repo-wide); the
+PreToolUse hook path (`hooks/check-issue-acm-disclosure.sh`) never
+touches this file at all, calling its own stdlib-only sibling
+`hooks/gitapex_check_acm_present_or_waiver.py` instead (see that hook's
+own comment), so it is unaffected by this import.
 The GitHub API retry/error shape (`_call`, `GitHubApiError`) is copied
 from gitapex_post_merge_retro.py rather than shared, for the same reason.
 
 Usage (the check alone, no network calls, no side effects)::
 
-    python3 .github/scripts/gitapex_gate_acm_issue_disclosure.py --check-only --body <path>
-    printf '%s' "$ISSUE_BODY" | python3 .github/scripts/gitapex_gate_acm_issue_disclosure.py --check-only
+    uv run --frozen python3 .github/scripts/gitapex_gate_acm_issue_disclosure.py --check-only --body <path>
+    printf '%s' "$ISSUE_BODY" | uv run --frozen python3 .github/scripts/gitapex_gate_acm_issue_disclosure.py --check-only
 
 Usage (full run: check, then label/comment as needed)::
 
-    python3 .github/scripts/gitapex_gate_acm_issue_disclosure.py \\
+    uv run --frozen python3 .github/scripts/gitapex_gate_acm_issue_disclosure.py \\
         --owner tvna --repo gitapex --issue-number 123 <<< "$ISSUE_BODY"
 
 Environment variables:
@@ -93,6 +101,8 @@ import urllib.request
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
+
+from pydantic import BaseModel, ValidationError, model_validator
 
 _API_ROOT = "https://api.github.com"
 _API_VERSION = "2022-11-28"
@@ -358,28 +368,23 @@ def post_comment(
     _call("POST", url, token, opener, sleeper, body={"body": body})
 
 
-class AcmIssueDisclosureArgs:
+class AcmIssueDisclosureArgs(BaseModel):
     """Typed view of `main`'s parsed CLI namespace. `--owner`/`--repo`/
     `--issue-number` are required unless `--check-only` -- folds the
     hand-rolled combination check `main` used to perform itself into one
     validator, replacing rather than duplicating it."""
 
-    def __init__(
-        self,
-        *,
-        body: str | None,
-        check_only: bool,
-        owner: str | None,
-        repo: str | None,
-        issue_number: int | None,
-    ) -> None:
-        if not check_only and (not owner or not repo or issue_number is None):
+    body: str | None
+    check_only: bool
+    owner: str | None
+    repo: str | None
+    issue_number: int | None
+
+    @model_validator(mode="after")
+    def _owner_repo_issue_number_required_outside_check_only(self) -> AcmIssueDisclosureArgs:
+        if not self.check_only and (not self.owner or not self.repo or self.issue_number is None):
             raise ValueError("--owner, --repo, and --issue-number are required outside --check-only")
-        self.body = body
-        self.check_only = check_only
-        self.owner = owner
-        self.repo = repo
-        self.issue_number = issue_number
+        return self
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -405,7 +410,7 @@ def main(argv: list[str] | None = None) -> int:
             repo=args.repo,
             issue_number=args.issue_number,
         )
-    except ValueError:
+    except ValidationError:
         print("error: --owner, --repo, and --issue-number are required outside --check-only", file=sys.stderr)
         return 1
 

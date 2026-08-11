@@ -80,10 +80,18 @@ PR itself, so a CI-side copy of this exact check may be redundant rather
 than defensive, and that argument belongs in the PR body, not asserted
 away here.
 
-Run standalone: ``python3 .github/scripts/gitapex_gate_behind_base.py``
-(compares this checkout's ``HEAD`` against a freshly fetched
-``origin/main``), or via the pytest gate in
-``tests/test_gitapex_gate_behind_base.py``.
+This gate's own production invocation (its `.gitapex/ssot.json`
+`local_invocation`, dispatched by `gitapex_gate_local_preflight.py`) runs
+under `uv run`, so a real `pydantic` import is safe here (issue #1040,
+refs #1035's `uv run` standardization that made this class of dependency
+safe repo-wide).
+
+Run via `uv run` (needed for the pydantic import -- a bare `python3`
+invocation without pydantic installed now fails at import time, before
+argparse even runs): ``uv run --frozen python3
+.github/scripts/gitapex_gate_behind_base.py`` (compares this checkout's
+``HEAD`` against a freshly fetched ``origin/main``), or via the pytest
+gate in ``tests/test_gitapex_gate_behind_base.py``.
 """
 
 from __future__ import annotations
@@ -93,6 +101,8 @@ import pathlib
 import subprocess
 import sys
 from dataclasses import dataclass
+
+from pydantic import BaseModel, ValidationError, field_validator
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 
@@ -232,17 +242,21 @@ def count_behind(root: pathlib.Path, remote: str = BASE_REMOTE, branch: str = BA
         raise GateError(f"unexpected 'git rev-list --left-right --count' output: {result.stdout!r}") from error
 
 
-class GateBehindBaseArgs:
+class GateBehindBaseArgs(BaseModel):
     """Typed view of ``main``'s parsed CLI namespace. ``root`` must be an
     existing directory, mirroring ``gitapex_gate_hidden_characters.py``'s own
     ``GateHiddenCharactersArgs``: a ``--root`` pointing nowhere gets a clear,
     early error instead of the deeper git failure it would otherwise
     surface as an indistinguishable ``GateError``."""
 
-    def __init__(self, *, root: pathlib.Path) -> None:
-        if not root.is_dir():
-            raise ValueError(f"--root must be an existing directory, got {root}")
-        self.root = root
+    root: pathlib.Path
+
+    @field_validator("root")
+    @classmethod
+    def _root_must_exist(cls, value: pathlib.Path) -> pathlib.Path:
+        if not value.is_dir():
+            raise ValueError(f"--root must be an existing directory, got {value}")
+        return value
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -260,7 +274,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         validated = GateBehindBaseArgs(root=args.root)
-    except ValueError:
+    except ValidationError:
         print(f"{args.root}: --root must be an existing directory", file=sys.stderr)
         return 2
 
