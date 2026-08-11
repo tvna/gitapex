@@ -32,19 +32,23 @@ false-pass a since-closed/renumbered issue) is checked two ways:
   read-only issues-list pattern) and fails if every citation in an
   offending file is unresolvable (deleted, or never existed).
 
-Deliberately stdlib-only and self-contained, matching this repository's
-existing .github/scripts/*.py convention of not importing across files.
+Self-contained, matching this repository's existing .github/scripts/*.py
+convention of not importing across files -- except for a real `pydantic`
+import (issue #1040) used to validate the parsed CLI namespace. This
+gate's own production invocation (`retro-title-convention-citation-gate.yml`)
+runs under `uv run`, so that import is safe here (refs #1035's `uv run`
+standardization that made this class of dependency safe repo-wide).
 The GitHub API retry/error shape is copied from gitapex_scan_retrospective_gate_drift.py
 rather than shared, for the same reason that script gives for not importing
 gitapex_sync_pr_publish.py.
 
 Usage (the check alone, no network calls, no side effects)::
 
-    python3 .github/scripts/gitapex_gate_retro_title_convention_citation.py --check-only FILE [FILE ...]
+    uv run --frozen python3 .github/scripts/gitapex_gate_retro_title_convention_citation.py --check-only FILE [FILE ...]
 
 Usage (full run: also resolves each citation against the GitHub API)::
 
-    python3 .github/scripts/gitapex_gate_retro_title_convention_citation.py \\
+    uv run --frozen python3 .github/scripts/gitapex_gate_retro_title_convention_citation.py \\
         --owner tvna --repo gitapex FILE [FILE ...]
 
 Environment variables:
@@ -73,6 +77,8 @@ import urllib.request
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
+
+from pydantic import BaseModel, ValidationError, model_validator
 
 _API_ROOT = "https://api.github.com"
 _API_VERSION = "2022-11-28"
@@ -240,26 +246,22 @@ def find_unresolvable_offenders(
     return f"{path}: title/identity convention claim cites {cited}, but none resolve to a real issue/PR"
 
 
-class RetroTitleConventionCitationArgs:
+class RetroTitleConventionCitationArgs(BaseModel):
     """Typed view of `main`'s parsed CLI namespace. `--owner`/`--repo` are
     required unless `--check-only` -- folds the hand-rolled combination
     check `main` used to perform itself into one validator, replacing
     rather than duplicating it."""
 
-    def __init__(
-        self,
-        *,
-        files: list[str],
-        check_only: bool,
-        owner: str | None,
-        repo: str | None,
-    ) -> None:
-        if not check_only and (not owner or not repo):
+    files: list[str]
+    check_only: bool
+    owner: str | None
+    repo: str | None
+
+    @model_validator(mode="after")
+    def _owner_repo_required_outside_check_only(self) -> RetroTitleConventionCitationArgs:
+        if not self.check_only and (not self.owner or not self.repo):
             raise ValueError("--owner and --repo are required outside --check-only")
-        self.files = files
-        self.check_only = check_only
-        self.owner = owner
-        self.repo = repo
+        return self
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -285,7 +287,7 @@ def main(argv: list[str] | None = None) -> int:
             owner=args.owner,
             repo=args.repo,
         )
-    except ValueError:
+    except ValidationError:
         print("error: --owner and --repo are required outside --check-only", file=sys.stderr)
         return 1
 

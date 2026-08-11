@@ -38,11 +38,13 @@ jobs:
         with:
           enable-cache: true
 
-      # Issue #1035: the gate is standard-library only, but every
-      # `.github/scripts/*.py` invocation now goes through `uv run`
-      # regardless. It does shell out to `git ls-files` to read the
-      # tracked-file set, which the checkout above provides; a shallow
-      # clone is sufficient, so no fetch-depth override is needed.
+      # Issue #1035: every `.github/scripts/*.py` invocation goes through
+      # `uv run`. Issue #1040 gave this gate a real `pydantic` import, so
+      # `uv run` is now load-bearing here too, not merely a blanket
+      # convention -- a bare `python3` invocation fails at import time. It
+      # also shells out to `git ls-files` to read the tracked-file set,
+      # which the checkout above provides; a shallow clone is sufficient,
+      # so no fetch-depth override is needed.
       - name: Check hook commands brace the plugin-root variable
         run: |
           set -euo pipefail

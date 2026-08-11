@@ -40,7 +40,10 @@ list rather than a string. Claude Code documents `command` as a string, so
 such a hook would already be inert, and this gate exists to protect hooks
 that would otherwise work.
 
-Standard library only, so the calling workflow needs no dependency install.
+This gate's own production invocation (`plugin-root-brace-notation-gate.yml`,
+plus its `.gitapex/ssot.json` `local_invocation`) runs under `uv run`, so a
+real `pydantic` import is safe here (issue #1040, refs #1035's `uv run`
+standardization that made this class of dependency safe repo-wide).
 
 Exit codes: 0 clean, 1 violation found, 2 the scan could not be trusted
 (no surfaces discovered, an unreadable or malformed file). The 2 case
@@ -48,7 +51,9 @@ mirrors `gitapex_gate_evals_scripts_coverage.py`'s own rule that an empty match 
 is an error, never a silent pass -- otherwise a renamed `hooks.json` turns
 this gate into a permanent green no-op nobody notices.
 
-Run standalone or via the pytest gate in
+Run via `uv run` (needed for the pydantic import -- a bare `python3`
+invocation without pydantic installed now fails at import time, before
+argparse even runs) or via the pytest gate in
 `tests/test_gitapex_gate_plugin_root_brace_notation.py`.
 """
 
@@ -61,6 +66,8 @@ import re
 import subprocess
 import sys
 from collections.abc import Iterator
+
+from pydantic import BaseModel, ValidationError, field_validator
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 
@@ -191,16 +198,20 @@ def violations_in(paths: list[pathlib.Path], root: pathlib.Path) -> list[tuple[s
     return violations
 
 
-class GatePluginRootBraceNotationArgs:
+class GatePluginRootBraceNotationArgs(BaseModel):
     """Typed view of `main`'s parsed CLI namespace. `root` must be an
     existing directory -- every existing caller already passes one, so this
     only gives a --root pointing nowhere a clear, early error instead of
     the deeper "git ls-files failed" ScanError it would otherwise surface."""
 
-    def __init__(self, *, root: pathlib.Path) -> None:
-        if not root.is_dir():
-            raise ValueError(f"--root must be an existing directory, got {root}")
-        self.root = root
+    root: pathlib.Path
+
+    @field_validator("root")
+    @classmethod
+    def _root_must_exist(cls, value: pathlib.Path) -> pathlib.Path:
+        if not value.is_dir():
+            raise ValueError(f"--root must be an existing directory, got {value}")
+        return value
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -218,7 +229,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         validated = GatePluginRootBraceNotationArgs(root=args.root)
-    except ValueError:
+    except ValidationError:
         print(f"{args.root}: --root must be an existing directory", file=sys.stderr)
         return 2
 
