@@ -126,6 +126,7 @@ import ast
 import pathlib
 import re
 import sys
+import urllib.parse
 from typing import Any, NamedTuple
 
 import yaml
@@ -162,16 +163,35 @@ NETWORK_CAPABLE_MODULES = (
     "httpx",
     "aiohttp",
 )
-_URL_HOST_PATTERN = re.compile(r"https?://([A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?)")
+# Matches the whole authority+path+query "rest of the URL" up to a
+# character that could never legally be part of one in source text (real
+# whitespace, a quote closing the string literal, or Markdown/HTML
+# wrapping) -- deliberately broad, not a hand-rolled hostname character
+# class. A prior version restricted the captured group to
+# [A-Za-z0-9.-] and silently truncated at the first character outside
+# that set (e.g. an underscore), so "https://internal_evilhost.attacker.com"
+# matched only "internal" -- exactly the allowlisted-looking prefix an
+# attacker would choose, defeating the allowlist check entirely. Real host
+# extraction is delegated to urllib.parse.urlsplit below instead, the same
+# stdlib parser Python's own networking code uses, rather than a second
+# hand-rolled character class that could suffer the identical bug for a
+# different character.
+_URL_LITERAL_PATTERN = re.compile(r"https?://[^\s\"'<>)]+")
+
+
+def _dotted_name_matches(dotted_name: str, target_modules: tuple[str, ...]) -> bool:
+    """Whether ``dotted_name`` names one of ``target_modules`` or a
+    submodule of one (e.g. "requests.exceptions" via "requests", or
+    "os.path" via "os"), but never the reverse ("requests" alone does not
+    match "requests.get" as a module name -- module names and call
+    expressions are different things)."""
+    return any(dotted_name == m or dotted_name.startswith(m + ".") for m in target_modules)
 
 
 def _is_network_capable_module(dotted_name: str) -> bool:
     """Whether ``dotted_name`` names a recognized network-capable module or
-    a submodule of one (e.g. "requests.exceptions" via "requests"), but
-    never the reverse ("requests" alone does not match "requests.get" as a
-    module name -- module names and call expressions are different
-    things)."""
-    return any(dotted_name == m or dotted_name.startswith(m + ".") for m in NETWORK_CAPABLE_MODULES)
+    a submodule of one."""
+    return _dotted_name_matches(dotted_name, NETWORK_CAPABLE_MODULES)
 
 
 def _tree_has_network_import(tree: ast.AST) -> bool:
@@ -192,16 +212,49 @@ def _tree_has_network_import(tree: ast.AST) -> bool:
     return False
 
 
+def _docstring_constant_ids(tree: ast.AST) -> set[int]:
+    """id() of every ast.Constant node that is a module/class/function
+    docstring (a bare string expression as the first statement of that
+    node's own body) -- used to exclude documentation/citation text from
+    network-host detection. A doc citation like "see
+    <https://code.claude.com/docs/en/hooks>" is exactly as much "not code"
+    from a network-usage standpoint as a comment is, but ast.Constant does
+    not distinguish a docstring from an ordinary string literal on its own;
+    this walk identifies docstrings the same deterministic way
+    ast.get_docstring does, by body-position, rather than guessing from
+    content."""
+    ids: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+            body = node.body
+            if (
+                body
+                and isinstance(body[0], ast.Expr)
+                and isinstance(body[0].value, ast.Constant)
+                and isinstance(body[0].value.value, str)
+            ):
+                ids.add(id(body[0].value))
+    return ids
+
+
 def _tree_referenced_hosts(tree: ast.AST) -> set[str]:
-    """Every https?://host substring found inside a real string literal
-    constant anywhere in the parse tree (module/function docstrings and
-    f-string literal segments included, via ast.Constant -- a comment can
-    never appear here at all, unlike the prior regex-over-raw-text
-    version, which needed an explicit comment-line filter to exclude it)."""
+    """Every https?://host referenced inside a real string literal constant
+    anywhere in the parse tree (f-string literal segments included, module/
+    class/function docstrings excluded via _docstring_constant_ids -- a
+    comment can never appear here at all, unlike the prior regex-over-raw-
+    text version, which needed an explicit comment-line filter to exclude
+    it). The host itself is extracted with urllib.parse.urlsplit rather
+    than a hand-rolled character class, so a userinfo prefix or port
+    suffix is stripped correctly and no character silently truncates the
+    match (see _URL_LITERAL_PATTERN's own comment)."""
+    docstring_ids = _docstring_constant_ids(tree)
     hosts: set[str] = set()
     for node in ast.walk(tree):
-        if isinstance(node, ast.Constant) and isinstance(node.value, str):
-            hosts.update(host.lower() for host in _URL_HOST_PATTERN.findall(node.value))
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in docstring_ids:
+            for literal in _URL_LITERAL_PATTERN.findall(node.value):
+                hostname = urllib.parse.urlsplit(literal).hostname
+                if hostname:
+                    hosts.add(hostname.lower())
     return hosts
 
 
@@ -238,6 +291,8 @@ _SHELL_INVOKING_CALLS = frozenset(
         "os.spawnv",
         "os.spawnve",
         "os.spawnvp",
+        "os.posix_spawn",
+        "os.posix_spawnp",
     }
 )
 _FILE_MUTATING_CALLS = frozenset(
@@ -253,6 +308,11 @@ _FILE_MUTATING_CALLS = frozenset(
         "os.removedirs",
         "os.chmod",
         "os.truncate",
+        "os.ftruncate",
+        "os.mkfifo",
+        "os.mknod",
+        "os.chown",
+        "os.lchown",
         "os.symlink",
         "os.link",
         "shutil.copy",
@@ -261,6 +321,7 @@ _FILE_MUTATING_CALLS = frozenset(
         "shutil.copytree",
         "shutil.move",
         "shutil.rmtree",
+        "shutil.chown",
     }
 )
 # pathlib.Path's own write methods, matched by method name alone (no
@@ -268,41 +329,70 @@ _FILE_MUTATING_CALLS = frozenset(
 # _tree_referenced_hosts' bare string-literal matching, not full type
 # checking), since a bound Path variable's own origin is not staticized
 # by a plain ast.walk the way an imported module's origin is.
-_PATH_WRITE_METHOD_NAMES = frozenset({"write_text", "write_bytes"})
+_PATH_WRITE_METHOD_NAMES = frozenset(
+    {
+        "write_text",
+        "write_bytes",
+        "unlink",
+        "rmdir",
+        "mkdir",
+        "touch",
+        "rename",
+        "replace",
+        "symlink_to",
+        "hardlink_to",
+        "chmod",
+        "lchmod",
+    }
+)
 
 
-def _module_aliases(tree: ast.AST, target_modules: tuple[str, ...]) -> dict[str, str]:
+def _module_aliases(tree: ast.AST, target_modules: tuple[str, ...]) -> dict[str, set[str]]:
     """Maps each local name this module's own code actually uses back to
-    its real dotted origin -- "import subprocess as sp" -> {"sp":
-    "subprocess"}, "from os import system" -> {"system": "os.system"} --
-    for every import that resolves into one of ``target_modules``. A call
-    site's own local name (whatever alias the author chose) is looked up
-    here rather than assumed to equal the module's own canonical name."""
-    aliases: dict[str, str] = {}
+    every real dotted origin it could resolve to for one of
+    ``target_modules`` (or a submodule of one) -- "import subprocess as
+    sp" -> {"sp": {"subprocess"}}, "from os import system" -> {"system":
+    {"os.system"}}, a plain unaliased "import os.path" -> {"os": {"os"}}
+    (Python itself binds the local name "os", the top-level package, not
+    "os.path", when no "as" clause is given -- ``os.system(...)`` after
+    "import os.path" is ordinary, valid code).
+
+    A SET of origins per local name, not a single value: ast.walk has no
+    scope awareness, so a name reused across independent function scopes
+    (e.g. "sp" imported as "subprocess" in one function and later as "os"
+    in an unrelated one) must not let the later import silently erase the
+    earlier real one in a flat dict -- either origin resolving to a
+    tracked capability is genuine evidence of that capability, not just
+    whichever import this walk happened to see last."""
+    aliases: dict[str, set[str]] = {}
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
-                if alias.name in target_modules:
-                    aliases[alias.asname or alias.name] = alias.name
-        elif isinstance(node, ast.ImportFrom) and node.module in target_modules:
+                if alias.asname:
+                    local_name, origin = alias.asname, alias.name
+                else:
+                    local_name = origin = alias.name.split(".")[0]
+                if _dotted_name_matches(origin, target_modules):
+                    aliases.setdefault(local_name, set()).add(origin)
+        elif isinstance(node, ast.ImportFrom) and node.module and _dotted_name_matches(node.module, target_modules):
             for alias in node.names:
-                aliases[alias.asname or alias.name] = f"{node.module}.{alias.name}"
+                aliases.setdefault(alias.asname or alias.name, set()).add(f"{node.module}.{alias.name}")
     return aliases
 
 
-def _resolve_call_target(node: ast.Call, aliases: dict[str, str]) -> str | None:
-    """The real "module.function" a call resolves to, per ``aliases``, or
-    None if it cannot be resolved this way (e.g. a call through an
-    attribute chain deeper than one level, or a name never imported from
-    one of the tracked modules) -- never guessed."""
+def _resolve_call_targets(node: ast.Call, aliases: dict[str, set[str]]) -> set[str]:
+    """Every real "module.function" ``node`` could resolve to, per
+    ``aliases`` -- empty if it cannot be resolved this way at all (e.g. a
+    call through an attribute chain deeper than one level, or a name never
+    imported from one of the tracked modules) -- never guessed."""
     func = node.func
     if isinstance(func, ast.Name):
-        return aliases.get(func.id)
+        return aliases.get(func.id, set())
     if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
-        base = aliases.get(func.value.id)
-        if base:
-            return f"{base}.{func.attr}"
-    return None
+        bases = aliases.get(func.value.id)
+        if bases:
+            return {f"{base}.{func.attr}" for base in bases}
+    return set()
 
 
 def _open_call_is_write(node: ast.Call) -> bool:
@@ -332,7 +422,7 @@ def _tree_has_shell_invocation(tree: ast.AST) -> bool:
     _module_aliases) rather than matched on a bare method name."""
     aliases = _module_aliases(tree, ("subprocess", "os"))
     for node in ast.walk(tree):
-        if isinstance(node, ast.Call) and _resolve_call_target(node, aliases) in _SHELL_INVOKING_CALLS:
+        if isinstance(node, ast.Call) and _resolve_call_targets(node, aliases) & _SHELL_INVOKING_CALLS:
             return True
     return False
 
@@ -345,7 +435,7 @@ def _tree_has_file_write(tree: ast.AST) -> bool:
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
-        if _resolve_call_target(node, aliases) in _FILE_MUTATING_CALLS:
+        if _resolve_call_targets(node, aliases) & _FILE_MUTATING_CALLS:
             return True
         if isinstance(node.func, ast.Attribute) and node.func.attr in _PATH_WRITE_METHOD_NAMES:
             return True
@@ -379,9 +469,17 @@ _SHELL_INTENT_PATTERN = re.compile(
 class Finding(NamedTuple):
     """One drift finding. severity is "error" (under-declared -- the
     safety-relevant direction) or "warning" (over-declared -- a hygiene
-    finding, never failing a run on its own)."""
+    finding, never failing a run on its own). kind is "deterministic" (an
+    AST-parsed fact -- a real import, call, or file read/parse outcome) or
+    "heuristic" (SKILL.md natural-language pattern matching, irreducibly
+    best-effort -- see module docstring). The module docstring's own claim
+    that the two checks "differ in kind, not just in what they check" was
+    previously only prose, recoverable (if at all) by parsing a substring
+    out of message's own check_id prefix; this field carries that
+    distinction into the data a caller actually consumes."""
 
     severity: str
+    kind: str
     message: str
 
 
@@ -401,8 +499,16 @@ def discover_skill_dirs(skills_dir: pathlib.Path = SKILLS_DIR) -> list[pathlib.P
 
 def _load_sidecar(path: pathlib.Path) -> Any:
     """Read and YAML-parse ``path``. Raises ReadError rather than letting a
-    non-UTF-8 file or invalid YAML syntax surface as an uncaught
-    exception."""
+    non-UTF-8 file, invalid YAML syntax, or pathologically deep nesting
+    surface as an uncaught exception. RecursionError is caught alongside
+    yaml.YAMLError, not folded into the same except clause -- it is not a
+    YAMLError subclass, so a deeply nested sidecar (e.g. thousands of
+    nested "[" flow-sequence levels) would otherwise propagate straight out
+    of this function uncaught, crashing the whole scan instead of
+    reporting one clean finding -- the same bug this module's own sibling,
+    gitapex_scan_skill_metadata_schema.py's load_sidecar, already fixed
+    (found there by an earlier adversarial review); this duplicated copy
+    had not carried that fix forward until now."""
     try:
         text = path.read_text(encoding="utf-8")
     except OSError as error:
@@ -413,6 +519,8 @@ def _load_sidecar(path: pathlib.Path) -> Any:
         return yaml.safe_load(text)
     except yaml.YAMLError as error:
         raise ReadError(f"{path}: is not valid YAML: {error}") from error
+    except RecursionError as error:
+        raise ReadError(f"{path}: is too deeply nested to parse: {error}") from error
 
 
 def _read_text_best_effort(path: pathlib.Path) -> str:
@@ -426,19 +534,42 @@ def _read_text_best_effort(path: pathlib.Path) -> str:
 
 
 def _bundled_script_trees(skill_dir: pathlib.Path) -> tuple[list[ast.AST], list[str]]:
-    """Every skill_dir/scripts/*.py file, parsed. Returns (trees,
-    unparseable_names): a file that is not valid Python (SyntaxError) is
-    excluded from trees and its name collected separately, rather than
-    either crashing the scan or silently treating it as clean -- the
-    caller turns unparseable_names into its own finding (dimension 15:
-    an inability to verify is a deny, not an assume-clean)."""
+    """Every skill_dir/scripts/*.py file that is not the skill's own test
+    suite, parsed. Test files (pytest's own "test_*.py" discovery
+    convention, the one this repository's own scripts actually use) are
+    excluded -- a script's unit tests legitimately construct test-double
+    URLs, mocked subprocess calls, and similar test-only content that is
+    not the skill's own shipped capability; including them misattributes
+    that content as real drift (found live against this repository's own
+    skills/setup-gitapex-toolchain and skills/drafting-an-adr, each
+    reporting a finding whose only real source was its own test file, not
+    its implementation script).
+
+    Returns (trees, unreadable_or_unparseable_names): a file that cannot
+    even be read (a permission error, or content that is not valid UTF-8)
+    or that is not valid Python (SyntaxError) is excluded from trees and
+    its name collected separately, rather than either crashing the scan or
+    silently treating it as clean -- the caller turns that list into its
+    own finding (dimension 15: an inability to verify is a deny, not an
+    assume-clean). A prior version routed the read through a helper that
+    swallowed OSError/UnicodeDecodeError into an empty string, which
+    ast.parse("") accepts as a valid, empty module -- silently scoring an
+    unreadable script as having no network/write/shell signal at all,
+    exactly the assume-clean outcome this function's own docstring says it
+    refuses to produce; reading directly here closes that gap."""
     scripts_dir = skill_dir / "scripts"
     if not scripts_dir.is_dir():
         return [], []
     trees: list[ast.AST] = []
     unparseable: list[str] = []
     for path in sorted(scripts_dir.glob("*.py")):
-        text = _read_text_best_effort(path)
+        if path.name.startswith("test_"):
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            unparseable.append(path.name)
+            continue
         try:
             trees.append(ast.parse(text, filename=str(path)))
         except SyntaxError:
@@ -446,11 +577,23 @@ def _bundled_script_trees(skill_dir: pathlib.Path) -> tuple[list[ast.AST], list[
     return trees, unparseable
 
 
-def find_network_drift(network: Any, skill_dir: pathlib.Path) -> list[Finding]:
+def find_network_drift(
+    network: Any,
+    skill_dir: pathlib.Path,
+    _scripts: tuple[list[ast.AST], list[str]] | None = None,
+) -> list[Finding]:
     """network-mode-vs-script-content: declared executionRequirements.network
     vs. network-capable imports/literal https?:// hosts found in
     skill_dir/scripts/*.py, via AST parsing (deterministic -- see module
-    docstring's own Language scope / Determinism note)."""
+    docstring's own Language scope / Determinism note).
+
+    ``_scripts``, if given, is a pre-computed ``_bundled_script_trees(skill_dir)``
+    result -- an internal parameter, not part of this function's stable
+    two-argument contract (every existing caller and test keeps working
+    unchanged): find_skill_drift parses skill_dir/scripts/*.py once and
+    passes the same result to both find_network_drift and
+    find_tools_drift, instead of each independently re-reading and
+    re-parsing every bundled script from disk."""
     mode_value = network.get("mode") if isinstance(network, dict) else None
     # dict.get(key, default) only substitutes on an ABSENT key -- a real
     # `mode: null` or an unrecognized/mis-cased string must not slip
@@ -463,7 +606,7 @@ def find_network_drift(network: Any, skill_dir: pathlib.Path) -> list[Finding]:
     # allowlist set-difference below compares like-for-like.
     declared_domains = {d.lower() for d in domains if isinstance(d, str)} if isinstance(domains, list) else set()
 
-    trees, unparseable = _bundled_script_trees(skill_dir)
+    trees, unparseable = _scripts if _scripts is not None else _bundled_script_trees(skill_dir)
     has_network_import = any(_tree_has_network_import(tree) for tree in trees)
     referenced_hosts: set[str] = set()
     for tree in trees:
@@ -472,9 +615,11 @@ def find_network_drift(network: Any, skill_dir: pathlib.Path) -> list[Finding]:
     findings: list[Finding] = [
         Finding(
             "error",
-            f"network-script-unparseable: scripts/{name} is not valid Python "
-            "-- could not be analyzed for network-capable usage, treated as "
-            "undetermined rather than clean",
+            "deterministic",
+            f"network-script-unparseable: scripts/{name} could not be read "
+            "or parsed as valid Python -- could not be analyzed for "
+            "network-capable usage, treated as undetermined rather than "
+            "clean",
         )
         for name in unparseable
     ]
@@ -482,6 +627,7 @@ def find_network_drift(network: Any, skill_dir: pathlib.Path) -> list[Finding]:
         findings.append(
             Finding(
                 "error",
+                "deterministic",
                 "network-mode-vs-script-content: declared network.mode "
                 f"{mode_value!r} (absent or unrecognized values are treated "
                 "as 'disabled') but bundled scripts show network-capable "
@@ -493,6 +639,7 @@ def find_network_drift(network: Any, skill_dir: pathlib.Path) -> list[Finding]:
             findings.append(
                 Finding(
                     "error",
+                    "deterministic",
                     "network-mode-vs-script-content: bundled scripts reference "
                     f"host {host!r} not present in declared allowlist domains "
                     f"{sorted(declared_domains)}",
@@ -502,6 +649,7 @@ def find_network_drift(network: Any, skill_dir: pathlib.Path) -> list[Finding]:
         findings.append(
             Finding(
                 "warning",
+                "deterministic",
                 "network-mode-vs-script-content: declared network.mode "
                 "'unrestricted' but no bundled script shows network-capable "
                 "usage (over-declared)",
@@ -510,13 +658,13 @@ def find_network_drift(network: Any, skill_dir: pathlib.Path) -> list[Finding]:
     return findings
 
 
-def _under_declared_or_none(declared: bool, signal: bool, check_id: str, evidence: str) -> Finding | None:
+def _under_declared_or_none(declared: bool, signal: bool, check_id: str, evidence: str, kind: str) -> Finding | None:
     """Under-declaration is checked per evidence source, independently:
     either source alone (prose OR script) proves real usage regardless of
     what the other source shows, so a positive signal from just one of
     them is already a genuine finding."""
     if not declared and signal:
-        return Finding("error", f"{check_id}: {evidence}")
+        return Finding("error", kind, f"{check_id}: {evidence}")
     return None
 
 
@@ -527,10 +675,15 @@ def _over_declared_or_none(declared: bool, prose_signal: bool, script_signal: bo
     purely because its own SKILL.md prose instructs the invoking agent to
     write files, with zero bundled scripts ever doing so directly, or the
     reverse) -- so this must not fire just because one source alone shows
-    nothing; only when neither does."""
+    nothing; only when neither does. Tagged "heuristic": even though the
+    script-content half of this joint check is deterministic, the finding
+    as a whole rests on the prose signal's own absence, which -- like any
+    negative from a natural-language heuristic -- is weaker evidence than
+    a positive; a warning only, never blocking a run."""
     if declared and not prose_signal and not script_signal:
         return Finding(
             "warning",
+            "heuristic",
             f"tools-{tag}-over-declared: declared executionRequirements.tools.{tag} but neither "
             "SKILL.md prose nor any bundled script's own code shows matching "
             f"{tag} usage (over-declared)",
@@ -538,7 +691,11 @@ def _over_declared_or_none(declared: bool, prose_signal: bool, script_signal: bo
     return None
 
 
-def find_tools_drift(tools: Any, skill_dir: pathlib.Path) -> list[Finding]:
+def find_tools_drift(
+    tools: Any,
+    skill_dir: pathlib.Path,
+    _scripts: tuple[list[ast.AST], list[str]] | None = None,
+) -> list[Finding]:
     """tools-write/tools-shell drift, checked against two independent
     evidence sources per tag (see module docstring's own "skill itself"
     vs. "script" distinction):
@@ -558,7 +715,11 @@ def find_tools_drift(tools: Any, skill_dir: pathlib.Path) -> list[Finding]:
     A script that fails to parse is silently excluded from the
     script-content signal here (not double-reported): find_network_drift
     already surfaces it as its own network-script-unparseable finding
-    when both run together via find_skill_drift."""
+    when both run together via find_skill_drift.
+
+    ``_scripts`` mirrors find_network_drift's own internal parameter of
+    the same name -- a pre-computed ``_bundled_script_trees(skill_dir)``
+    result, not part of the stable two-argument contract."""
     write_tags = tools.get("write") if isinstance(tools, dict) else None
     shell_tags = tools.get("shell") if isinstance(tools, dict) else None
     write_declared = bool(write_tags)
@@ -566,7 +727,7 @@ def find_tools_drift(tools: Any, skill_dir: pathlib.Path) -> list[Finding]:
 
     skill_md = skill_dir / "SKILL.md"
     text = _read_text_best_effort(skill_md) if skill_md.is_file() else ""
-    trees, _unparseable = _bundled_script_trees(skill_dir)
+    trees, _unparseable = _scripts if _scripts is not None else _bundled_script_trees(skill_dir)
 
     write_prose_signal = bool(_WRITE_INTENT_PATTERN.search(text))
     write_script_signal = any(_tree_has_file_write(tree) for tree in trees)
@@ -579,12 +740,14 @@ def find_tools_drift(tools: Any, skill_dir: pathlib.Path) -> list[Finding]:
             write_prose_signal,
             "tools-write-vs-skill-md",
             "declared executionRequirements.tools.write is empty/absent but SKILL.md shows mutating-action language",
+            "heuristic",
         ),
         _under_declared_or_none(
             write_declared,
             write_script_signal,
             "tools-write-vs-script-content",
             "declared executionRequirements.tools.write is empty/absent but a bundled script performs a real file-write operation",
+            "deterministic",
         ),
         _over_declared_or_none(write_declared, write_prose_signal, write_script_signal, "write"),
         _under_declared_or_none(
@@ -592,12 +755,14 @@ def find_tools_drift(tools: Any, skill_dir: pathlib.Path) -> list[Finding]:
             shell_prose_signal,
             "tools-shell-vs-skill-md",
             "declared executionRequirements.tools.shell is empty/absent but SKILL.md shows shell-invocation language",
+            "heuristic",
         ),
         _under_declared_or_none(
             shell_declared,
             shell_script_signal,
             "tools-shell-vs-script-content",
             "declared executionRequirements.tools.shell is empty/absent but a bundled script performs a real subprocess/shell invocation",
+            "deterministic",
         ),
         _over_declared_or_none(shell_declared, shell_prose_signal, shell_script_signal, "shell"),
     )
@@ -619,19 +784,20 @@ def find_skill_drift(skill_dir: pathlib.Path) -> list[Finding]:
     follows) -- find_drift() below adds one when aggregating across many."""
     sidecar = skill_dir / SIDECAR_RELATIVE_PATH
     if not sidecar.is_file():
-        return [Finding("error", f"metadata-file-present: missing {sidecar}")]
+        return [Finding("error", "deterministic", f"metadata-file-present: missing {sidecar}")]
     try:
         instance = _load_sidecar(sidecar)
     except ReadError as error:
-        return [Finding("error", str(error))]
+        return [Finding("error", "deterministic", str(error))]
 
     execution_requirements = _spec_of(instance).get("executionRequirements")
     if not isinstance(execution_requirements, dict):
         execution_requirements = {}
 
+    scripts = _bundled_script_trees(skill_dir)
     findings: list[Finding] = []
-    findings.extend(find_network_drift(execution_requirements.get("network"), skill_dir))
-    findings.extend(find_tools_drift(execution_requirements.get("tools"), skill_dir))
+    findings.extend(find_network_drift(execution_requirements.get("network"), skill_dir, scripts))
+    findings.extend(find_tools_drift(execution_requirements.get("tools"), skill_dir, scripts))
     return findings
 
 
@@ -652,6 +818,7 @@ def find_drift(
         return [
             Finding(
                 "error",
+                "deterministic",
                 f"skill-discovery-floor: found only {len(skill_dirs)} skill "
                 f"director{'y' if len(skill_dirs) == 1 else 'ies'} with a "
                 f"SKILL.md under {skills_dir} (expected at least "
@@ -665,7 +832,7 @@ def find_drift(
     for skill_dir in skill_dirs:
         prefix = skill_dir.name
         for finding in find_skill_drift(skill_dir):
-            findings.append(Finding(finding.severity, f"{prefix}: {finding.message}"))
+            findings.append(Finding(finding.severity, finding.kind, f"{prefix}: {finding.message}"))
     return findings
 
 
@@ -697,11 +864,11 @@ def main(argv: list[str] | None = None) -> int:
     if errors:
         print("executionRequirements drift (error):")
         for finding in errors:
-            print(f"  {finding.message}")
+            print(f"  [{finding.kind}] {finding.message}")
     if warnings:
         print("executionRequirements drift (warning, non-blocking):")
         for finding in warnings:
-            print(f"  {finding.message}")
+            print(f"  [{finding.kind}] {finding.message}")
     if not findings:
         print("No executionRequirements drift found.")
 
