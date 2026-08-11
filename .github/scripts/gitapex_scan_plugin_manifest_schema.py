@@ -90,22 +90,34 @@ _HTTP_TIMEOUT_SECONDS = 30
 class ScanReadError(Exception):
     """plugin.json or the vendored schema could not be read as UTF-8 text or
     parsed as JSON at all -- exit 1, never a traceback. Distinct from a
-    schema-invalid-but-parseable plugin.json, which
-    schema_conformance_findings reports as an ordinary finding."""
+    schema-invalid-but-parseable plugin.json (including one that parses to a
+    non-object, e.g. a JSON array), which both schema_conformance_findings
+    and pydantic_conformance_findings report as an ordinary finding rather
+    than raising this."""
 
 
 def schema_conformance_findings(
     plugin_manifest_path: pathlib.Path | None = None,
     vendored_schema_path: pathlib.Path | None = None,
+    *,
+    manifest_instance: Any = None,
 ) -> list[str]:
     """Every JSON-Schema violation plugin.json has against the vendored
     schema, each prefixed "schema-conformance: " -- empty list means
-    plugin.json is a schema-valid Agent Plugins manifest."""
+    plugin.json is a schema-valid Agent Plugins manifest. `manifest_instance`,
+    when given, is used as-is instead of re-reading/re-parsing
+    `plugin_manifest_path` -- main() loads plugin.json once and passes the
+    same parsed instance to both this and pydantic_conformance_findings, so
+    a single run does not read and JSON-parse the same file twice."""
     if plugin_manifest_path is None:
         plugin_manifest_path = PLUGIN_MANIFEST_PATH
     if vendored_schema_path is None:
         vendored_schema_path = VENDORED_SCHEMA_PATH
-    instance = _gitapex_schema_validation.load_json_or_raise(plugin_manifest_path, ScanReadError)
+    instance = (
+        manifest_instance
+        if manifest_instance is not None
+        else _gitapex_schema_validation.load_json_or_raise(plugin_manifest_path, ScanReadError)
+    )
     schema = _gitapex_schema_validation.load_json_or_raise(vendored_schema_path, ScanReadError)
     # load_json_or_raise does not itself check the parsed value's shape (its
     # own docstring says so: that is each caller's responsibility). A
@@ -163,17 +175,35 @@ class PluginManifest(BaseModel):
     extensions: dict[str, dict[str, Any]] | None = None
 
 
-def pydantic_conformance_findings(plugin_manifest_path: pathlib.Path | None = None) -> list[str]:
+def pydantic_conformance_findings(
+    plugin_manifest_path: pathlib.Path | None = None,
+    *,
+    manifest_instance: Any = None,
+) -> list[str]:
     """Every pydantic ValidationError plugin.json raises against
     PluginManifest, each prefixed "pydantic-conformance: " -- empty list
     means plugin.json parses cleanly as a PluginManifest. A parallel layer
     to schema_conformance_findings, not a replacement -- see this module's
-    docstring, check 2."""
+    docstring, check 2. `manifest_instance` behaves as in
+    schema_conformance_findings: when given, it is used as-is instead of a
+    fresh read/parse of `plugin_manifest_path`.
+
+    Deliberately does not require `instance` to be a dict before calling
+    model_validate: PluginManifest.model_validate(x) raises a clean
+    ValidationError (not a crash) for any non-dict x, so a syntactically
+    valid but non-object plugin.json (e.g. a JSON array) is reported as an
+    ordinary pydantic-conformance finding here, the same way
+    schema_conformance_findings already reports it as an ordinary
+    schema-conformance finding -- both parallel layers stay symmetric,
+    rather than one tolerating the shape mismatch while the other raises
+    ScanReadError and discards the other's already-computed findings."""
     if plugin_manifest_path is None:
         plugin_manifest_path = PLUGIN_MANIFEST_PATH
-    instance = _gitapex_schema_validation.load_json_or_raise(plugin_manifest_path, ScanReadError)
-    if not isinstance(instance, dict):
-        raise ScanReadError(f"{plugin_manifest_path}: must be a JSON object, got {type(instance).__name__}")
+    instance = (
+        manifest_instance
+        if manifest_instance is not None
+        else _gitapex_schema_validation.load_json_or_raise(plugin_manifest_path, ScanReadError)
+    )
     try:
         PluginManifest.model_validate(instance)
     except ValidationError as error:
@@ -241,7 +271,12 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        findings = schema_conformance_findings() + pydantic_conformance_findings() + vendor_digest_drift_findings()
+        manifest_instance = _gitapex_schema_validation.load_json_or_raise(PLUGIN_MANIFEST_PATH, ScanReadError)
+        findings = (
+            schema_conformance_findings(manifest_instance=manifest_instance)
+            + pydantic_conformance_findings(manifest_instance=manifest_instance)
+            + vendor_digest_drift_findings()
+        )
         if args.verify_upstream:
             findings += upstream_drift_findings()
     except ScanReadError as error:

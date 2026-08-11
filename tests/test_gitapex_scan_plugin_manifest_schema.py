@@ -162,11 +162,65 @@ def test_pydantic_conformance_findings_missing_manifest_raises(tmp_path: pathlib
         scanner.pydantic_conformance_findings(tmp_path / "nonexistent.json")
 
 
-def test_pydantic_conformance_findings_non_object_manifest_raises_cleanly(tmp_path: pathlib.Path) -> None:
+def test_pydantic_conformance_findings_non_object_manifest_is_an_ordinary_finding(tmp_path: pathlib.Path) -> None:
+    """Symmetric with schema_conformance_findings' own tolerance of a
+    non-object plugin.json (jsonschema reports it as an ordinary
+    "is not of type 'object'" finding, not a raise): PluginManifest.model_validate
+    raises a clean pydantic ValidationError for a non-dict instance rather
+    than crashing, so this layer reports the same shape mismatch as an
+    ordinary "pydantic-conformance: " finding instead of raising
+    ScanReadError -- previously the two layers disagreed here, and a
+    ScanReadError raised mid-computation in main() discarded whatever
+    schema_conformance_findings had already computed (see
+    test_main_reports_both_layers_findings_for_a_non_object_manifest)."""
     manifest_path = tmp_path / "plugin.json"
     manifest_path.write_text("[1, 2, 3]", encoding="utf-8")
-    with pytest.raises(scanner.ScanReadError, match="must be a JSON object"):
-        scanner.pydantic_conformance_findings(manifest_path)
+    findings = scanner.pydantic_conformance_findings(manifest_path)
+    assert len(findings) == 1
+    assert findings[0].startswith("pydantic-conformance: ")
+
+
+def test_pydantic_conformance_findings_missing_manifest_raises_even_with_a_non_dict_result_path(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Guards against a regression where removing the isinstance(dict)
+    guard also accidentally removed the read/parse failure path -- a
+    missing file must still raise ScanReadError, not be silently treated
+    as an empty finding list."""
+    with pytest.raises(scanner.ScanReadError):
+        scanner.pydantic_conformance_findings(tmp_path / "nonexistent.json")
+
+
+# ---------------------------------------------------------------------------
+# manifest_instance sharing (schema_conformance_findings and
+# pydantic_conformance_findings both accept an already-loaded instance so
+# main() does not read/parse plugin.json twice per run)
+# ---------------------------------------------------------------------------
+
+
+def test_schema_conformance_findings_manifest_instance_skips_the_file_read(tmp_path: pathlib.Path) -> None:
+    schema_path = tmp_path / "schema.json"
+    _write_json(schema_path, _VALID_SCHEMA)
+    findings = scanner.schema_conformance_findings(
+        tmp_path / "does-not-exist.json",
+        schema_path,
+        manifest_instance={
+            "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+            "name": "gitapex",
+        },
+    )
+    assert findings == []
+
+
+def test_pydantic_conformance_findings_manifest_instance_skips_the_file_read(tmp_path: pathlib.Path) -> None:
+    findings = scanner.pydantic_conformance_findings(
+        tmp_path / "does-not-exist.json",
+        manifest_instance={
+            "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+            "name": "gitapex",
+        },
+    )
+    assert findings == []
 
 
 def test_real_repository_plugin_manifest_is_pydantic_valid() -> None:
@@ -311,6 +365,59 @@ def test_main_includes_pydantic_conformance_findings(
 
     assert scanner.main([]) == 1
     out = capsys.readouterr().out
+    assert "pydantic-conformance:" in out
+
+
+def test_main_reads_plugin_manifest_exactly_once(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A code-review finding: schema_conformance_findings and
+    pydantic_conformance_findings used to each independently read/parse
+    plugin.json from disk, so every push/CI run parsed the same file
+    twice for no behavioral reason. main() now loads it once and passes
+    the parsed instance to both."""
+    manifest_path = tmp_path / "plugin.json"
+    schema_path = tmp_path / "schema.json"
+    _write_json(
+        manifest_path, {"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "name": "gitapex"}
+    )
+    _write_json(schema_path, _VALID_SCHEMA)
+    monkeypatch.setattr(scanner, "PLUGIN_MANIFEST_PATH", manifest_path)
+    monkeypatch.setattr(scanner, "VENDORED_SCHEMA_PATH", schema_path)
+    monkeypatch.setattr(scanner, "VENDORED_SCHEMA_SHA256", hashlib.sha256(schema_path.read_bytes()).hexdigest())
+
+    real_load = scanner._gitapex_schema_validation.load_json_or_raise
+    calls: list[pathlib.Path] = []
+
+    def _tracking_load(path: pathlib.Path, error_cls: type[Exception]) -> object:
+        calls.append(path)
+        return real_load(path, error_cls)
+
+    monkeypatch.setattr(scanner._gitapex_schema_validation, "load_json_or_raise", _tracking_load)
+
+    assert scanner.main([]) == 0
+    assert calls.count(manifest_path) == 1
+
+
+def test_main_reports_both_layers_findings_for_a_non_object_manifest(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The regression this fixes: pydantic_conformance_findings used to
+    raise ScanReadError for a non-object plugin.json before the chained
+    `+` in main() completed, discarding the schema-conformance finding
+    schema_conformance_findings had already computed for the same file --
+    despite the module docstring describing the two checks as symmetric
+    parallel layers. Both must now report their own finding for the same
+    shape mismatch."""
+    manifest_path = tmp_path / "plugin.json"
+    schema_path = tmp_path / "schema.json"
+    manifest_path.write_text("[1, 2, 3]", encoding="utf-8")
+    _write_json(schema_path, _VALID_SCHEMA)
+    monkeypatch.setattr(scanner, "PLUGIN_MANIFEST_PATH", manifest_path)
+    monkeypatch.setattr(scanner, "VENDORED_SCHEMA_PATH", schema_path)
+    monkeypatch.setattr(scanner, "VENDORED_SCHEMA_SHA256", hashlib.sha256(schema_path.read_bytes()).hexdigest())
+
+    assert scanner.main([]) == 1
+    out = capsys.readouterr().out
+    assert "schema-conformance:" in out
     assert "pydantic-conformance:" in out
 
 
