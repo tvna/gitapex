@@ -8,8 +8,9 @@
 # Deliberately no `paths:` filter, following waza-eval-gate.yml's own
 # rationale: a workflow that never fires for a given PR leaves a required
 # status check Pending forever, whereas a job that runs and passes is safe
-# to promote to required later. The scan is stdlib-only Python over three
-# small files, so running it unconditionally costs a few seconds.
+# to promote to required later. The scan itself is a fast Python pass over
+# three small files (issue #1040 added a real `pydantic` import, so it is
+# no longer stdlib-only, but still runs unconditionally in a few seconds).
 name: Plugin-root brace notation gate
 
 on:
