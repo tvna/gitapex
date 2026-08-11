@@ -55,6 +55,14 @@ _COPIED = (
     ".github/scripts/gitapex_detect_changed_gate_scripts.py",
     ".github/scripts/gitapex_skill_description_diff.py",
     ".github/scripts/gitapex_skill_security_relevance.py",
+    # Issue #1035: the real `run:` block now invokes the script through
+    # `uv run --frozen`, which resolves against a `pyproject.toml`/
+    # `uv.lock` pair in its own cwd (this fixture's scratch repo, per
+    # `_workflow_flags`'s `cwd=repo`) -- without these two, `uv run`
+    # fails with no project found rather than exercising the shipped
+    # command line.
+    "pyproject.toml",
+    "uv.lock",
 )
 
 _PLAIN_SKILL_MD = """---

@@ -31,6 +31,11 @@ jobs:
       - name: Harden runner + checkout
         uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
       # Issue #520 (row 2, refs #348): every Routine-connection doc
       # currently in the repository is checked on each run, not just the
       # ones this diff touches -- a change to a skill's own
@@ -69,4 +74,4 @@ jobs:
           # -d '\n': see retro-title-convention-citation-gate.yml's own
           # xargs step for why plain whitespace/quote splitting is unsafe
           # for a file-path list.
-          printf '%s\n' "$DOCS" | xargs -d '\n' -r python3 .github/scripts/gitapex_gate_routine_scope_enforcement.py --skills-root skills
+          printf '%s\n' "$DOCS" | xargs -d '\n' -r uv run --frozen python3 .github/scripts/gitapex_gate_routine_scope_enforcement.py --skills-root skills

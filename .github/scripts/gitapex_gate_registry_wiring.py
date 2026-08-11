@@ -133,17 +133,48 @@ YAML parsing -- same stdlib-only constraint as the rest of this module):
 a single-line ``run: <command>`` is that line's remainder; a block form
 (``run: |``/``run: >``) collects every following line more indented than
 the ``run:`` key itself, stopping at the first line that dedents back to it
-or below. Flag-shaped tokens are then extracted only from run blocks that
-themselves mention the script's filename as a whole token.
+or below. Flag-shaped tokens are then extracted only from the portion of a
+matching run block following a real ``python<suffix> .github/scripts/<name>``
+invocation of the script -- anchored on the invocation shape itself (see
+``_invocation_anchor_re``), not a bare filename token -- and truncated at
+the next ``uv run``-prefixed command or the end of the block, whichever
+comes first (see ``_invocation_argument_windows``). Issue #1035's own
+standardization onto ``uv run`` (e.g. ``uv run --frozen python3
+.github/scripts/gate_x.py --foo``) put a real, observed instance of the
+leading-edge blind spot on `main`: without the invocation-anchored start,
+``--frozen`` (a flag belonging to ``uv``, preceding the script's own
+invocation in the same run block) would misattribute to the script as an
+orphaned flag. Code review of that same fix found two further instances of
+the identical "must not misattribute a flag" principle it had not yet
+closed, both now closed by the anchor-and-truncate design above:
+anchoring on the bare filename (rather than the invocation shape) let an
+earlier, non-invocation mention of the same filename in the same block (a
+comment, an echo) supply a false starting point; and scanning to the end
+of the whole block (rather than truncating at the next ``uv run``) let a
+*second* script's own invocation, later in the same block, bleed its own
+flags into the first script's window.
 
 **Known blind spots for this direction, disclosed rather than solved:**
 
-- A flag-shaped token (``--foo``) inside a comment line within a matching
-  run block, or inside a quoted *value* string rather than an actual
-  argument position, is indistinguishable from a real invocation argument
-  to this plain-text scan and would be flagged the same way. Not yet
-  observed in this repository's one real invocation, measured at the point
-  this direction was added.
+- A flag-shaped token (``--foo``) inside a comment line that itself
+  contains the literal ``python<suffix> .github/scripts/<name>`` phrase (matching
+  the invocation anchor even though nothing executes), or inside a quoted
+  *value* string rather than an actual argument position, is
+  indistinguishable from a real invocation argument to this plain-text scan
+  and would be flagged the same way. Substantially narrower than the
+  prior "any mention of the bare filename" blind spot it replaces -- a
+  decoy now has to reproduce the exact invocation syntax, not just name
+  the script -- but not eliminated. Not yet observed in this repository's
+  real invocations, measured at the point this direction was last revised.
+- A flag-shaped token supplied only through a shell variable (``FLAGS=
+  "--stale-flag"; uv run --frozen python3 .github/scripts/gate_x.py
+  $FLAGS``) is not resolved by this plain-text scan either way: it was
+  visible to the pre-anchor whole-block scan only by accident (the literal
+  assignment text happened to fall inside the scanned block, whether or
+  not it preceded the invocation), and the invocation-anchored window does
+  not attempt real shell-variable substitution to recover it. Real shell
+  semantics are out of scope for a stdlib-only text scan; see the module
+  docstring's own stdlib-only rationale above.
 - Only long-form ``--flag`` tokens are considered candidates; a short-form
   single-dash flag (``-x``) is never extracted, matching this repository's
   own convention of registering only long-form flags today.
@@ -198,6 +229,12 @@ _FLAG_TOKEN_RE = re.compile(rf"(?<!{_ADJACENT_CHAR_RE})--[A-Za-z][A-Za-z0-9-]*(?
 # whatever follows on the same line -- see _iter_run_blocks.
 _RUN_KEY_RE = re.compile(r"^([ \t]*)run:(.*)$")
 
+# Marks the start of a new `uv run`-prefixed command -- used by
+# _invocation_argument_windows to stop flag extraction at the next
+# invocation in the same run block, so a second script's own flags
+# (including its own `--frozen`) are never misattributed to the first.
+_UV_RUN_RE = re.compile(r"\buv\s+run\b")
+
 # argparse always registers these regardless of what a script's own code
 # adds -- never a genuinely orphaned flag.
 _ALWAYS_AVAILABLE_FLAGS = frozenset({"-h", "--help"})
@@ -210,14 +247,62 @@ class RegistryReadError(Exception):
     uncaught traceback."""
 
 
+def _token_pattern(token: str) -> re.Pattern[str]:
+    return re.compile(rf"(?<!{_ADJACENT_CHAR_RE}){re.escape(token)}(?!{_ADJACENT_CHAR_RE})")
+
+
 def _contains_token(text: str, token: str) -> bool:
     """True if `token` appears in `text` with no identifier/flag/filename
     character immediately before or after it -- so `--foo` does not match
     inside `--foo-bar`, and `gate_x.py` does not match inside
     `sub_gate_x.py`. See the module docstring's "What counts as wired"
     section for why a plain substring test is not enough."""
-    pattern = re.compile(rf"(?<!{_ADJACENT_CHAR_RE}){re.escape(token)}(?!{_ADJACENT_CHAR_RE})")
-    return pattern.search(text) is not None
+    return _token_pattern(token).search(text) is not None
+
+
+def _invocation_anchor_re(script_name: str) -> re.Pattern[str]:
+    """A real `python<suffix> .github/scripts/<script_name>` invocation --
+    `python\\w*` (matching `python3`, `python`, `python3.12`, ...) rather
+    than a literal `python3`, since this module is not scoped to `python3`
+    specifically the way `gitapex_gate_bare_python3_invocation.py` is --
+    this module's own existing test fixtures already exercise a plain
+    `python .github/scripts/...` shape. Requiring the `python<suffix>`
+    prefix, rather than a bare filename token, keeps the window anchored
+    to something invocation-shaped: code review found anchoring on the
+    bare filename (an earlier revision of this module) misidentifies an
+    earlier, non-invocation mention of the same filename in the same run
+    block (a comment, an echo) as the invocation's own start, which can
+    re-widen the flag-extraction window to include text that does not
+    belong to any real argument list."""
+    return re.compile(rf"python\w*\s+\.github/scripts/{re.escape(script_name)}(?!{_ADJACENT_CHAR_RE})")
+
+
+def _invocation_argument_windows(text: str, script_name: str) -> list[str]:
+    """Text following each real `python3 .github/scripts/<script_name>`
+    invocation in `text`, one window per occurrence, each truncated at the
+    next `uv run`-prefixed command (a second script's own invocation in
+    the same run block) or the end of `text`, whichever comes first.
+    Empty list means `script_name` is never actually invoked in `text`
+    (only, at most, mentioned).
+
+    Issue #1035: a `run:` block invoking a script through `uv run` (e.g.
+    `uv run --frozen python3 .github/scripts/gate_x.py --foo`) carries a
+    `--flag`-shaped token (`--frozen`) that precedes the script's own
+    invocation and belongs to `uv`, not to the script -- anchoring on the
+    invocation itself and starting each window right after it excludes
+    `--frozen` while keeping every flag that follows, matching the module
+    docstring's own "must not misattribute a flag" scoping rule one level
+    finer than the whole-block scoping it already does. The `uv run`
+    truncation on the trailing side closes the converse case: a second
+    script invoked later in the same block (`... gate_a.py --alpha && uv
+    run --frozen python3 .github/scripts/gate_b.py --beta`) must not have
+    its own `--frozen`/`--beta` misattributed to `gate_a.py`'s window."""
+    windows: list[str] = []
+    for match in _invocation_anchor_re(script_name).finditer(text):
+        tail = text[match.end() :]
+        boundary = _UV_RUN_RE.search(tail)
+        windows.append(tail[: boundary.start()] if boundary else tail)
+    return windows
 
 
 def _read_text_or_raise(path: Path) -> str:
@@ -429,9 +514,8 @@ def find_orphaned_flags(scripts_dir: Path = SCRIPTS_DIR, workflows_dir: Path = W
                 continue
             orphaned: set[str] = set()
             for block in _iter_run_blocks(text):
-                if not _contains_token(block, script.name):
-                    continue
-                orphaned.update(_iter_flag_tokens(block) - known_flags)
+                for window in _invocation_argument_windows(block, script.name):
+                    orphaned.update(_iter_flag_tokens(window) - known_flags)
             for flag in sorted(orphaned):
                 findings.append(
                     f"{workflow.name}: passes {flag!r} to {script.name} but it defines no such "

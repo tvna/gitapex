@@ -23,6 +23,11 @@ jobs:
       - name: Harden runner + checkout
         uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
       # Issue #928: gitapex_gate_transfer_check_disclosure.py was rewritten
       # to scan every '## Iteration:' entry in every evals/*/split.md file
       # whole-file (not diff-scoped) -- the standardized heading form all 5
@@ -39,4 +44,4 @@ jobs:
       - name: Check Transfer check disclosure
         run: |
           set -euo pipefail
-          python3 .github/scripts/gitapex_gate_transfer_check_disclosure.py
+          uv run --frozen python3 .github/scripts/gitapex_gate_transfer_check_disclosure.py

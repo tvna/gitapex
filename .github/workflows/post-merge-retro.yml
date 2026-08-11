@@ -70,6 +70,11 @@ jobs:
         with:
           ref: main
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
       # Issue #314 (sub-issue of #140): minimal post-merge-auto-retro slice
       # -- open + dedup only, GITHUB_TOKEN-only, no new secret. The
       # trusted-bot allowlist, FP-prior skip, ledger, rescan, and
@@ -90,7 +95,7 @@ jobs:
           PR_URL: ${{ github.event.pull_request.html_url }}
         run: |
           set -euo pipefail
-          python3 .github/scripts/gitapex_post_merge_retro.py \
+          uv run --frozen python3 .github/scripts/gitapex_post_merge_retro.py \
             --owner "$REPO_OWNER" \
             --repo "$REPO_NAME" \
             --pr-number "$PR_NUMBER" \

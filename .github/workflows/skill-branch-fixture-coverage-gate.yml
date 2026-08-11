@@ -25,6 +25,11 @@ jobs:
         with:
           fetch-depth: '0'
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
       # Issue #49 repair 1 (re-escalated, unbuilt, across #419, #440,
       # #454, #548): a SKILL.md's own Stop-boundary bullets and named
       # dispatch branches must not outgrow its evals/<skill>/tasks/
@@ -115,4 +120,4 @@ jobs:
         if: steps.diff.outputs.applicable == 'true'
         run: |
           set -euo pipefail
-          python3 .github/scripts/gitapex_gate_skill_branch_fixture_coverage.py --entries "${{ steps.diff.outputs.entries-file }}"
+          uv run --frozen python3 .github/scripts/gitapex_gate_skill_branch_fixture_coverage.py --entries "${{ steps.diff.outputs.entries-file }}"

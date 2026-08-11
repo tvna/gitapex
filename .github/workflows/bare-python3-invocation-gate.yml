@@ -1,0 +1,48 @@
+# Issue #1035: no `.github/scripts/*.py` invocation in any workflow `run:`
+# step may bypass `uv run` -- the drift that let
+# `gitapex_compute_ruleset_verify_scope.py` gain an `import pydantic` its
+# only production caller (a bare `python3` invocation, no dependency-install
+# step) could never satisfy, breaking live in CI (check run 93696199208).
+#
+# Deliberately no `paths:` filter, matching hidden-characters-gate.yml's and
+# plugin-root-brace-notation-gate.yml's own stated rationale: GitHub
+# distinguishes a job that runs and reports `skipped` (which does not block
+# a required check) from a workflow that never fires for a given PR (which
+# leaves a required check Pending forever). This gate is a candidate for
+# promotion to a required status check, so a `paths:` filter would
+# permanently block any PR that happens not to touch `.github/workflows/**`.
+# The scan reads every workflow file every run and is a few hundred
+# milliseconds of pure-Python + PyYAML work, so running it unconditionally
+# costs nothing worth trading that guarantee for.
+name: Bare python3 invocation gate
+
+on:
+  pull_request: {}
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bare-python3-invocation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Check every .github/scripts/*.py invocation uses uv run
+        run: |
+          set -euo pipefail
+          uv run --frozen python3 .github/scripts/gitapex_gate_bare_python3_invocation.py
