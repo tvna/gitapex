@@ -36,24 +36,41 @@ a defeat found in review: `uv run --frozen true && python3
 same-line substring check cannot tell "wraps this invocation" from
 "appears elsewhere on this line, followed by an unrelated command".
 
+A whole-line shell comment (the line's first non-whitespace character is
+`#`) is skipped before matching, since a `python3 .github/scripts/*.py`
+phrase inside one never executes -- code review found this class of false
+positive live (a `# python3 .github/scripts/gate.py` documentation line).
+A *trailing* comment after real code on the same line is not stripped
+(see the residual-risk bullets below): telling a trailing comment apart
+from a quoted string containing `#` needs real shell parsing, which is
+out of scope here.
+
 Residual risk, stated rather than hidden (issue #1035's own Acceptance
-Criteria Map already names the general shape; the two bullets below are
-this implementation's own further-narrowed instances of it):
+Criteria Map already names the general shape; the bullets below are this
+implementation's own further-narrowed instances of it):
 
 - A `run:` block that assembles the invocation dynamically -- through a
   shell variable, a multi-line `case` branch, or string concatenation --
   is not resolved by this line-level text match. No such dynamic form
   exists in this repository's real workflow files today, verified live at
   issue-creation time.
-- The adjacency check is itself line-scoped: a backslash-continued `uv run
-  --frozen` on one physical line followed by `python3
-  .github/scripts/gate.py` on the
-  next (a legitimate backslash line-continuation, not a dynamic
-  invocation) is not recognized as wrapped and would false-positive as
-  bare. Not observed in any of this repository's real call sites today
-  (every one keeps `uv run ... python3 ... script.py` on one physical
-  line), so accepted as a known gap rather than joining continuation
-  lines before matching.
+- The adjacency check is itself line-scoped: a backslash-continued `uv
+  run --frozen` on one physical line followed by `python3
+  .github/scripts/gate.py` on the next (a legitimate backslash
+  line-continuation, not a dynamic invocation) is not recognized as
+  wrapped and would false-positive as bare. Not observed in any of this
+  repository's real call sites today (every one keeps `uv run ... python3
+  ... script.py` on one physical line), so accepted as a known gap rather
+  than joining continuation lines before matching.
+- A *trailing* comment (real code earlier on the line, a comment after
+  it) is not stripped before matching. A bare `python3 .github/scripts/*.py`
+  phrase inside such a trailing comment (e.g. `uv run --frozen python3
+  .github/scripts/real.py  # see also python3 .github/scripts/fake.py`)
+  is indistinguishable from a real invocation and would be flagged the
+  same way -- the mirror image of the whole-line-comment case this
+  revision closes, left open because distinguishing "trailing comment"
+  from "real code after a `#` that is part of a quoted string" needs real
+  shell parsing.
 
 Usage:
     uv run --frozen python3 .github/scripts/gitapex_gate_bare_python3_invocation.py [workflows_dir]
@@ -164,6 +181,14 @@ def _scan_workflow(workflow: pathlib.Path) -> list[tuple[str, int, str]]:
                 continue
             step_name = step.get("name", "<unnamed step>")
             for lineno, line in enumerate(run.splitlines(), start=1):
+                if line.lstrip().startswith("#"):
+                    # A whole-line shell comment never executes, so a
+                    # `python3 .github/scripts/*.py` phrase inside one is not
+                    # a real invocation -- distinguishable from a genuinely
+                    # unsupported shell form (a trailing comment after real
+                    # code, a quoted string) without real shell parsing,
+                    # since a comment's own leading `#` is unambiguous.
+                    continue
                 wrapped_ends = {m.end() for m in _UV_WRAPPED_INVOCATION_RE.finditer(line)}
                 for match in _SCRIPT_INVOCATION_RE.finditer(line):
                     if match.end() in wrapped_ends:

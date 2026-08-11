@@ -228,6 +228,38 @@ def test_uv_run_in_a_trailing_comment_does_not_suppress_a_preceding_bare_invocat
     assert "gitapex_gate_foo.py" in findings[0][2]
 
 
+def test_whole_line_comment_mentioning_the_invocation_shape_is_not_flagged(tmp_path: pathlib.Path) -> None:
+    # CodeRabbit review (PR #1041): a documentation line that is entirely
+    # a shell comment never executes, so a `python3 .github/scripts/*.py`
+    # phrase inside one must not be graded as a real invocation.
+    workflows_dir = _write(
+        tmp_path,
+        "wholelinecomment.yml",
+        "jobs:\n"
+        "  a:\n"
+        "    steps:\n"
+        "      - name: run\n"
+        "        run: |\n"
+        "          # python3 .github/scripts/gitapex_gate_foo.py\n"
+        "          uv run --frozen python3 .github/scripts/gitapex_gate_real.py\n",
+    )
+    assert gate.find_bare_invocations(workflows_dir) == []
+
+
+def test_indented_whole_line_comment_is_not_flagged(tmp_path: pathlib.Path) -> None:
+    workflows_dir = _write(
+        tmp_path,
+        "indentedcomment.yml",
+        "jobs:\n"
+        "  a:\n"
+        "    steps:\n"
+        "      - name: run\n"
+        "        run: |\n"
+        "              # python3 .github/scripts/gitapex_gate_foo.py\n",
+    )
+    assert gate.find_bare_invocations(workflows_dir) == []
+
+
 def test_two_invocations_on_one_line_are_graded_independently(tmp_path: pathlib.Path) -> None:
     workflows_dir = _write(
         tmp_path,
