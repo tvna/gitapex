@@ -7,8 +7,9 @@
 # Deliberately no `paths:` filter, following waza-eval-gate.yml's own
 # rationale: a workflow that never fires for a given PR leaves a required
 # status check Pending forever, whereas a job that runs and passes is safe
-# to promote to required later. The scan is stdlib-only Python over every
-# tracked file, so running it unconditionally costs a few seconds.
+# to promote to required later. The scan (a real `pydantic` import as of
+# issue #1040, see below) runs unconditionally over every tracked file and
+# still costs only a few seconds.
 name: Hidden characters gate
 
 on:
@@ -37,11 +38,14 @@ jobs:
         with:
           enable-cache: true
 
-      # Issue #1035: the gate is standard-library only, but every
-      # `.github/scripts/*.py` invocation now goes through `uv run`
-      # regardless. It does shell out to `git ls-files` to read the
-      # tracked-file set, which the checkout above provides; a shallow
-      # clone is sufficient, so no fetch-depth override is needed.
+      # Issue #1035: every `.github/scripts/*.py` invocation goes through
+      # `uv run` regardless of whether the script needs a third-party
+      # dependency. Issue #1040 made that not merely defensive here: this
+      # gate now carries a real `pydantic` import (its own CLI-arg
+      # validation), so `uv run` is load-bearing, not a stdlib-era holdover.
+      # It also shells out to `git ls-files` to read the tracked-file set,
+      # which the checkout above provides; a shallow clone is sufficient,
+      # so no fetch-depth override is needed.
       - name: Check for hidden/invisible characters in tracked files
         run: |
           set -euo pipefail

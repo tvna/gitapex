@@ -61,7 +61,14 @@ out to: `gitapex_detect_changed_gate_scripts` (gate membership),
 here, so every git invocation is anchored to an explicit `repo_root`
 instead of the ambient process directory the bash relied on.
 
-Standard library only, so the calling workflow needs no dependency install.
+This module's own code is standard library only, but issue #1040 gave
+one of the three helper scripts it imports
+(`gitapex_detect_changed_gate_scripts`) a real `pydantic` import for its
+own CLI-arg validation -- so a dependency install is now required
+transitively. `skill-audit-gate.yml`'s own invocation already runs this
+module under `uv run`, so that path is unaffected; a bare `python3`
+invocation (see Usage below) now requires pydantic on the ambient
+interpreter.
 
 Issue #998 (refs #982, #997): adds `changed_checker_or_gate_scripts`, the
 sorted union of `changed_checker_scripts` and `changed_gate_scripts`. No
@@ -75,7 +82,7 @@ checker-script glob; see `2026-08-10-defeat-test-disclosure-design.md`).
 
 Usage::
 
-    python3 gitapex_compute_skill_audit_flags.py \\
+    uv run --frozen python3 gitapex_compute_skill_audit_flags.py \\
         --base-ref BASE --head-ref HEAD --format github-output >> "$GITHUB_OUTPUT"
 
 Exit codes: 0 flags computed, 1 the flags could not be trusted.
