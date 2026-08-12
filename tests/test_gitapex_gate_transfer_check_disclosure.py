@@ -302,6 +302,19 @@ def test_args_accepts_an_explicit_paths_list():
     assert validated.paths == ["a.md", "b.md"]
 
 
+def test_args_default_paths_list_is_not_shared_across_instances():
+    # Adversarial check (issue #1062): `paths: list[str] = []` is a
+    # mutable default -- confirm pydantic deep-copies it per instance
+    # rather than handing every default-constructed instance the same
+    # underlying list object, which would let one call site's mutation
+    # leak into every other unrelated instance built without an explicit
+    # `paths=`.
+    first = gate.TransferCheckDisclosureArgs()
+    second = gate.TransferCheckDisclosureArgs()
+    first.paths.append("mutated")
+    assert second.paths == []
+
+
 def test_main_uses_stdin_free_cli(tmp_path, monkeypatch):
     # This gate no longer reads a workflow-computed entries list from
     # stdin at all -- confirm gate.sys.stdin is simply never touched,
