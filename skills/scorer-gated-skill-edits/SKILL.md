@@ -213,10 +213,10 @@ just measures the wrong thing.
   `output_not_contains` phrase that a correct *denial* would also contain.
   Each of these has silently false-failed a correct run.
 - Where the environment ships a deterministic checker for the second rule,
-  run it before the gate (this repository provides one alongside its
-  `gitapex_check_skill_shape.py`): it catches the casing, negation-trap, and
-  paraphrase-drift cases mechanically, leaving only the discrimination rule
-  to human judgment.
+  run it before the gate (this repository provides one as part of its own
+  eval tooling, separate from `gitapex_check_skill_shape.py`): it catches
+  the casing, negation-trap, and paraphrase-drift cases mechanically,
+  leaving only the discrimination rule to human judgment.
 - **Casing is not cosmetic here.** `gitapex_score_contract.py` matches
   `output_contains`/`output_not_contains` case-sensitively by design;
   waza's own built-in `expected.output_contains` grading (used by

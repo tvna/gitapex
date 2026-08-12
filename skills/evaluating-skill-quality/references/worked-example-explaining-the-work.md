@@ -182,7 +182,7 @@ does not apply. No MCP tool is referenced. The one path in the skill
 (line 24; gitapex's own state on this path is covered under Portability
 level above) uses forward slashes:
 
-```
+```text
 docs/adr/NNNN-*.md
 ```
 
