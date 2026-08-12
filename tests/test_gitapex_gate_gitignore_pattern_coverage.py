@@ -177,3 +177,16 @@ def test_main_reports_error_for_undecodable_added_file(tmp_path, capsys):
     added_file.write_bytes(b"\xff\xfe bad")
     assert gate.main(["--added", str(added_file)]) == 1
     assert "could not read" in capsys.readouterr().err
+
+
+# --- GitignorePatternCoverageArgs -----------------------------------------
+
+
+def test_args_defaults_added_to_none():
+    validated = gate.GitignorePatternCoverageArgs()
+    assert validated.added is None
+
+
+def test_args_accepts_an_added_path_string():
+    validated = gate.GitignorePatternCoverageArgs(added="/tmp/added.txt")
+    assert validated.added == "/tmp/added.txt"

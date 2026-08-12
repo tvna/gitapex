@@ -42,15 +42,31 @@ parameter name, before counting an `environment_id` mention as concrete.
 Deliberately stdlib-only and self-contained, matching this repository's
 existing .github/scripts/*.py convention of not importing across files.
 
-Usage::
+Issue #1062 (wave 3 of #1040's batch pydantic CLI-arg validation rollout):
+`main`'s parsed namespace is now passed through
+`RoutineScopeEnforcementArgs` immediately after `parser.parse_args(argv)`,
+matching the wrap `gitapex_gate_hidden_characters.py`/`gitapex_gate_behind_base.py`
+already apply. `docs` (`nargs="+"`, so `argparse` itself already rejects a
+zero-length list) and `skills_root` (defaults to `"skills"`) have no
+constraint beyond that already-guaranteed `list[str]`/`str` shape -- so
+construction can currently never raise `ValidationError` for a real CLI
+invocation; the model exists for consistency with #1040's repo-wide
+convention (a typed seam between `parse_args` and business logic). This
+gate's own production invocation (`routine-scope-enforcement-gate.yml`)
+already runs under `uv run` (issue #1035), so the added `pydantic` import
+is safe here.
 
-    python3 .github/scripts/gitapex_gate_routine_scope_enforcement.py \\
+Usage (run via `uv run` -- needed for the pydantic import)::
+
+    uv run --frozen python3 .github/scripts/gitapex_gate_routine_scope_enforcement.py \\
         --skills-root skills DOC [DOC ...]
 
 Exit codes:
     0  No applicable doc, or every Broad-capability doc cites a concrete
        scoping mechanism.
     1  A Broad-capability doc cites none, or a given file could not be read.
+    2  CLI arguments failed validation (unreachable via this script's own
+       argparse-guaranteed shape today; see RoutineScopeEnforcementArgs).
 """
 
 from __future__ import annotations
@@ -59,6 +75,8 @@ import argparse
 import re
 import sys
 from pathlib import Path
+
+from pydantic import BaseModel, ValidationError
 
 _SUPERSEDED_RE = re.compile(r"\*\*Superseded\b", re.IGNORECASE)
 
@@ -207,6 +225,15 @@ def broad_skills_without_scoping(
     return broad_skills
 
 
+class RoutineScopeEnforcementArgs(BaseModel):
+    """Typed view of `main`'s parsed CLI namespace (issue #1062). See the
+    module docstring's own issue #1062 section for why neither field
+    carries an additional field validator."""
+
+    docs: list[str]
+    skills_root: str = "skills"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Flag a Routine-connection doc declaring a Broad-capability "
@@ -219,10 +246,17 @@ def main(argv: list[str] | None = None) -> int:
         help="Root directory containing skills/<name>/metadata/gitapex.yaml (default: skills)",
     )
     args = parser.parse_args(argv)
-    skills_root = Path(args.skills_root)
+
+    try:
+        validated = RoutineScopeEnforcementArgs(docs=args.docs, skills_root=args.skills_root)
+    except ValidationError:
+        print("error: invalid CLI arguments", file=sys.stderr)
+        return 2
+
+    skills_root = Path(validated.skills_root)
 
     offenders: list[str] = []
-    for raw_path in args.docs:
+    for raw_path in validated.docs:
         path = Path(raw_path)
         try:
             text = path.read_text(encoding="utf-8")

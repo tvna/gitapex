@@ -292,6 +292,16 @@ def test_main_truncates_long_iteration_headings_in_failure_output(tmp_path, caps
     assert "..." in err
 
 
+def test_args_defaults_paths_to_empty_list():
+    validated = gate.TransferCheckDisclosureArgs()
+    assert validated.paths == []
+
+
+def test_args_accepts_an_explicit_paths_list():
+    validated = gate.TransferCheckDisclosureArgs(paths=["a.md", "b.md"])
+    assert validated.paths == ["a.md", "b.md"]
+
+
 def test_main_uses_stdin_free_cli(tmp_path, monkeypatch):
     # This gate no longer reads a workflow-computed entries list from
     # stdin at all -- confirm gate.sys.stdin is simply never touched,

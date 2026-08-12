@@ -57,3 +57,12 @@ def test_main_untrusted_with_label_exits_zero() -> None:
 
 def test_main_empty_labels_argument_defaults_to_no_labels() -> None:
     assert gate.main(["--author-association", "CONTRIBUTOR", "--labels", ""]) == 1
+
+
+# --- LowTrustWorkflowHooksArgs -------------------------------------------
+
+
+def test_args_accepts_a_required_author_association_with_default_labels() -> None:
+    validated = gate.LowTrustWorkflowHooksArgs(author_association="OWNER")
+    assert validated.author_association == "OWNER"
+    assert validated.labels == ""

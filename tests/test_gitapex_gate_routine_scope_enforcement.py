@@ -267,6 +267,14 @@ def test_main_missing_file_errors(tmp_path, capsys):
     assert "error" in capsys.readouterr().err
 
 
+# --- RoutineScopeEnforcementArgs ------------------------------------------
+
+
+def test_args_defaults_skills_root_to_skills():
+    validated = gate.RoutineScopeEnforcementArgs(docs=["a.md"])
+    assert validated.skills_root == "skills"
+
+
 def test_real_repo_routine_docs_pass():
     """Live-document regression check: both real ranking-the-open-queue
     Routine-connection docs in this repository must pass -- the superseded
