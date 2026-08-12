@@ -29,12 +29,19 @@ means "arbitrary-target grading corpus" for that skill (issue #364's own
 "Decide where it lives" question). Each manifest entry names one guardrail
 clause as an exact anchor string, the file it must still appear in, and the
 issue that added it. This script reads every discovered manifest and
-confirms every anchor is still present in its named file, byte-for-byte
-after whitespace-run normalization (the same reduction
+confirms every anchor is still present, within a single block, in its
+named file -- reusing
 `evaluating-skill-quality/references/adversarial-self-audit.md`'s Citation
-fidelity section applies to prose quotations, reused here rather than
-re-derived, so a soft rewrap of the guarding sentence does not itself read
-as a regression).
+fidelity rule rather than re-deriving it: a block is a run of lines broken
+by a blank line, a fenced-code delimiter, a heading, or the start of a new
+list item or table row; matching is whitespace-normalized *within* a
+block, never across one, so an anchor tolerates a soft rewrap of the
+sentence it quotes but cannot be satisfied by splicing text from two
+different paragraphs, list items, or sides of a heading. Unlike that
+file's own dual prose/fenced-block rule, a fenced block here is still
+whitespace-normalized rather than matched byte-for-byte -- every anchor in
+this corpus is prose, so that distinction has no live case to exercise;
+disclosed here rather than silently narrowed.
 
 Read-only: reads the discovered manifests and the files they name. No
 writes, no network, no mutation. Mirrors `gitapex_check_skill_shape.py`'s
@@ -55,6 +62,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -64,6 +72,17 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MANIFEST_GLOB = "skills/*/evals/guardrail-manifest.yaml"
+
+# Block-boundary lines, per adversarial-self-audit.md's Citation fidelity
+# rule: a heading, or the start of a new list item or table row. A blank
+# line and a fenced-code delimiter are handled separately in
+# _split_into_blocks below, since both need state (blank: just a flush;
+# fence: a toggle spanning multiple lines) that a single per-line regex
+# cannot express.
+_HEADING_RE = re.compile(r"^#{1,6}\s")
+_LIST_ITEM_RE = re.compile(r"^\s*(?:[-*+]\s|\d+\.\s)")
+_TABLE_ROW_RE = re.compile(r"^\s*\|")
+_FENCE_RE = re.compile(r"^\s*(```|~~~)")
 
 
 def _normalize(text: str) -> str:
@@ -76,6 +95,51 @@ def _normalize(text: str) -> str:
     different value.
     """
     return " ".join(text.split())
+
+
+def _split_into_blocks(text: str) -> list[str]:
+    """Split ``text`` into blocks per adversarial-self-audit.md's Citation
+    fidelity rule: a run of lines broken by a blank line, a fenced-code
+    delimiter, a heading, or the start of a new list item or table row.
+
+    A multi-line list item's own wrapped continuation lines (indented,
+    matching none of the boundary patterns) stay part of the item's block
+    -- only a line that itself opens a new heading/list-item/table-row/fence
+    starts a fresh one. This is what lets a guardrail anchor span a soft
+    wrap within one Procedure step or Stop-boundary bullet while still
+    being unable to span into the next one.
+    """
+    blocks: list[str] = []
+    current: list[str] = []
+    fence_marker: str | None = None
+
+    def flush() -> None:
+        if current:
+            blocks.append("\n".join(current))
+            current.clear()
+
+    for line in text.split("\n"):
+        stripped = line.strip()
+        if fence_marker is not None:
+            current.append(line)
+            if stripped.startswith(fence_marker):
+                fence_marker = None
+                flush()
+            continue
+        fence_match = _FENCE_RE.match(line)
+        if fence_match:
+            flush()
+            fence_marker = fence_match.group(1)
+            current.append(line)
+            continue
+        if not stripped:
+            flush()
+            continue
+        if _HEADING_RE.match(line) or _LIST_ITEM_RE.match(line) or _TABLE_ROW_RE.match(line):
+            flush()
+        current.append(line)
+    flush()
+    return blocks
 
 
 class GuardrailEntry(BaseModel):
@@ -137,10 +201,18 @@ class ManifestError(Exception):
 
 
 def load_manifest(path: Path) -> GuardrailManifest:
-    if not path.is_file():
-        raise ManifestError(f"{path}: not a file")
+    # A single read_text() call, not an is_file() precondition followed by
+    # a separate read: the two are not atomic, so a manifest deleted or
+    # made unreadable between them would otherwise raise an uncaught
+    # OSError past this function's documented ManifestError contract.
+    # FileNotFoundError/IsADirectoryError/PermissionError (all OSError
+    # subclasses) are caught here as one failure mode instead.
     try:
         raw = path.read_text(encoding="utf-8")
+    except FileNotFoundError as error:
+        raise ManifestError(f"{path}: not a file") from error
+    except OSError as error:
+        raise ManifestError(f"{path}: could not read file: {error}") from error
     except UnicodeDecodeError as error:
         raise ManifestError(f"{path}: could not decode as UTF-8: {error}") from error
     try:
@@ -168,13 +240,19 @@ class EntryResult:
 
 def check_entry(skill_dir: Path, entry: GuardrailEntry) -> EntryResult:
     target = skill_dir / entry.file
-    if not target.is_file():
-        return EntryResult(entry, False, f"{entry.file}: file not found")
+    # Same TOCTOU fix as load_manifest: one read_text() call, its
+    # exceptions caught directly, rather than an is_file() check the
+    # actual read can still race past.
     try:
         text = target.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return EntryResult(entry, False, f"{entry.file}: file not found")
+    except OSError as error:
+        return EntryResult(entry, False, f"{entry.file}: could not read file: {error}")
     except UnicodeDecodeError as error:
         return EntryResult(entry, False, f"{entry.file}: could not decode as UTF-8: {error}")
-    if _normalize(entry.anchor) in _normalize(text):
+    normalized_anchor = _normalize(entry.anchor)
+    if any(normalized_anchor in _normalize(block) for block in _split_into_blocks(text)):
         return EntryResult(entry, True, f"{entry.file}: anchor present ({entry.description})")
     return EntryResult(entry, False, f"{entry.file}: anchor not found -- {entry.description} (source: {entry.source})")
 
