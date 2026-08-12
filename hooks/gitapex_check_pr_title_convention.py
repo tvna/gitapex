@@ -27,10 +27,11 @@ import sys
 #: tests/test_gitapex_pr_title_convention_regex_sync.py.
 #: `\Z`, not `$`: Python's `$` also matches just before a trailing newline
 #: at the end of the string, which would silently accept a title carrying
-#: one. `.` does not match `\n` by default, so an embedded newline
-#: anywhere else already fails to reach `\Z` on its own.
+#: one. `[^\r\n]`, not `.`: `.` matches any character except `\n` by
+#: default, which would still accept a title ending in a bare `\r` (a
+#: line terminator on its own) -- caught by review on PR #1059.
 CONVENTIONAL_COMMIT_RE = re.compile(
-    r"^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([\w./-]+\))?!?: .{1,72}\Z"
+    r"^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([\w./-]+\))?!?: [^\r\n]{1,72}\Z"
 )
 
 

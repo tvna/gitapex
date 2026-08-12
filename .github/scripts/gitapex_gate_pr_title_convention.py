@@ -57,10 +57,11 @@ import sys
 #: tests/test_gitapex_pr_title_convention_regex_sync.py.
 #: `\Z`, not `$`: Python's `$` also matches just before a trailing newline
 #: at the end of the string, which would silently accept a title carrying
-#: one. `.` does not match `\n` by default, so an embedded newline
-#: anywhere else already fails to reach `\Z` on its own.
+#: one. `[^\r\n]`, not `.`: `.` matches any character except `\n` by
+#: default, which would still accept a title ending in a bare `\r` (a
+#: line terminator on its own) -- caught by review on PR #1059.
 CONVENTIONAL_COMMIT_RE = re.compile(
-    r"^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([\w./-]+\))?!?: .{1,72}\Z"
+    r"^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([\w./-]+\))?!?: [^\r\n]{1,72}\Z"
 )
 
 
@@ -84,10 +85,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: standard input is not valid UTF-8: {error}", file=sys.stderr)
         return 1
     if is_conventional_commit_title(title):
-        print(f"PASS: PR title {title!r} matches Conventional Commits format")
+        print("PASS: PR title matches Conventional Commits format")
         return 0
     print(
-        f"FAIL: PR title {title!r} does not match Conventional Commits format -- expected "
+        # The title itself is never echoed here: it is externally supplied,
+        # unauthenticated text (anyone who can open or edit a pull request
+        # controls it) that could carry pasted credentials or PII -- caught
+        # by review on PR #1059.
+        "FAIL: PR title does not match Conventional Commits format -- expected "
         "'type(scope)!: description' with type in feat|fix|docs|style|refactor|"
         "perf|test|build|ci|chore|revert, a non-empty description of at most 72 "
         "characters, and an optional scope/breaking-change marker",

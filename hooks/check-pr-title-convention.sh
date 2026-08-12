@@ -74,8 +74,6 @@ if [ "$has_title" != "true" ]; then
   deny "Blocked by hooks/check-pr-title-convention.sh: mcp__github__create_pull_request call carries no title field. Failing closed."
 fi
 
-title=$(printf '%s' "$input" | jq -r '.tool_input.title // ""')
-
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 check_script="$script_dir/gitapex_check_pr_title_convention.py"
 
@@ -83,8 +81,24 @@ if [ ! -f "$check_script" ]; then
   deny "Blocked by hooks/check-pr-title-convention.sh: cannot verify the PR title's Conventional Commits format -- gitapex_check_pr_title_convention.py was not found at $check_script (corrupted or incomplete plugin bundle). Failing closed."
 fi
 
-if printf '%s' "$title" | python3 "$check_script" >/dev/null 2>&1; then
+# jq's output is piped straight into python3, never captured into a shell
+# variable first: `title=$(...)` command substitution unconditionally
+# strips every trailing newline, which silently defeats the very
+# trailing-newline rejection CONVENTIONAL_COMMIT_RE exists to enforce (a
+# title ending in a literal `\n` would reach the checker already stripped
+# and wrongly pass) -- confirmed live by adversarial review on PR #1059.
+# `-j` (join), not `-r` (raw): `-r` itself appends a trailing newline
+# after every output, which -- once no longer absorbed by the `$(...)`
+# capture this replaced -- would reach the checker as an unconditional
+# extra `\n` and false-reject every otherwise-valid title. `-j` emits the
+# string with no added newline, so only a newline genuinely present in
+# the title's own JSON value reaches the checker.
+if printf '%s' "$input" | jq -j '.tool_input.title // ""' | python3 "$check_script" >/dev/null 2>&1; then
   exit 0
 fi
 
-deny "Blocked by hooks/check-pr-title-convention.sh (issue #1058): PR title '$title' does not match Conventional Commits format -- expected 'type(scope)!: description' with type in feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert. See CONVENTIONAL_COMMIT_RE in hooks/gitapex_check_pr_title_convention.py."
+# The title itself is never echoed here: it is externally supplied,
+# unauthenticated text (anyone who can open or edit a pull request
+# controls it) that could carry pasted credentials or PII -- caught by
+# review on PR #1059.
+deny "Blocked by hooks/check-pr-title-convention.sh (issue #1058): PR title does not match Conventional Commits format -- expected 'type(scope)!: description' with type in feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert. See CONVENTIONAL_COMMIT_RE in hooks/gitapex_check_pr_title_convention.py."

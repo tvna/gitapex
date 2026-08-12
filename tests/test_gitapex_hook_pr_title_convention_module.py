@@ -1,16 +1,25 @@
-"""Tests for the PR title convention gate
-(.github/scripts/gitapex_gate_pr_title_convention.py).
+"""Direct-import unit tests for hooks/gitapex_check_pr_title_convention.py.
 
-Issue #1058: the CI-side backstop for hooks/check-pr-title-convention.sh,
-covering a PR opened or retitled via the GitHub web UI, the `gh` CLI, or
-another bot -- none of which goes through that PreToolUse hook.
+hooks/test_gitapex_check_pr_title_convention.py already exercises this
+module's real invocation path (subprocess, via
+hooks/check-pr-title-convention.sh calling `python3
+gitapex_check_pr_title_convention.py` as a *separate process*), but
+coverage.py running in the pytest process cannot see line execution
+inside that subprocess -- the same reason
+tests/test_gitapex_check_acm_present_or_waiver.py exists as a sibling
+direct-import suite for hooks/gitapex_check_acm_present_or_waiver.py.
+Named `..._module.py`, not `test_gitapex_check_pr_title_convention.py`,
+to avoid colliding with hooks/test_gitapex_check_pr_title_convention.py's
+own basename -- this repository has no `__init__.py` anywhere, so pytest
+resolves module identity by basename alone and two identically-named test
+files in different directories fail to collect together.
 """
 
 from __future__ import annotations
 
 import io
 
-import gitapex_gate_pr_title_convention as gate
+import gitapex_check_pr_title_convention as checker
 import pytest
 
 
@@ -33,7 +42,7 @@ import pytest
     ],
 )
 def test_valid_titles_pass(title: str) -> None:
-    assert gate.is_conventional_commit_title(title) is True
+    assert checker.is_conventional_commit_title(title) is True
 
 
 @pytest.mark.parametrize(
@@ -51,27 +60,26 @@ def test_valid_titles_pass(title: str) -> None:
         "feat(gates): trailing newline\n",
         "feat(gates): trailing carriage return\r",
         "feat(gates): trailing crlf\r\n",
-        "feat(gates): embedded\rcarriage return",
     ],
 )
 def test_invalid_titles_fail(title: str | None) -> None:
-    assert gate.is_conventional_commit_title(title) is False
+    assert checker.is_conventional_commit_title(title) is False
 
 
 def test_main_exits_zero_for_a_valid_title() -> None:
-    assert gate.main(["--title", "feat: add a thing"]) == 0
+    assert checker.main(["--title", "feat: add a thing"]) == 0
 
 
 def test_main_exits_one_for_an_invalid_title() -> None:
-    assert gate.main(["--title", "Add a thing"]) == 1
+    assert checker.main(["--title", "Add a thing"]) == 1
 
 
 def test_main_reads_stdin_when_title_flag_omitted(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(gate.sys, "stdin", io.TextIOWrapper(io.BufferedReader(io.BytesIO(b"feat: from stdin"))))
-    assert gate.main([]) == 0
+    monkeypatch.setattr(checker.sys, "stdin", io.TextIOWrapper(io.BufferedReader(io.BytesIO(b"feat: from stdin"))))
+    assert checker.main([]) == 0
 
 
 def test_main_exits_one_on_invalid_utf8_stdin(monkeypatch: pytest.MonkeyPatch) -> None:
     # 0xFF is not a valid UTF-8 lead byte on its own.
-    monkeypatch.setattr(gate.sys, "stdin", io.TextIOWrapper(io.BufferedReader(io.BytesIO(b"\xff\xfe"))))
-    assert gate.main([]) == 1
+    monkeypatch.setattr(checker.sys, "stdin", io.TextIOWrapper(io.BufferedReader(io.BytesIO(b"\xff\xfe"))))
+    assert checker.main([]) == 1

@@ -71,6 +71,25 @@ def test_denied_when_create_title_field_is_missing() -> None:
     assert_denied(run({"owner": "tvna", "repo": "gitapex", "body": "x"}))
 
 
+def test_denied_when_create_title_has_trailing_newline() -> None:
+    # Regression pin for a live-tested defect found by adversarial review
+    # on PR #1059: an earlier version of check-pr-title-convention.sh
+    # captured the title via `title=$(...)` command substitution, which
+    # unconditionally strips trailing newlines -- silently defeating the
+    # exact rejection CONVENTIONAL_COMMIT_RE's `\Z` anchor exists to
+    # enforce. The fix pipes jq's output directly into python3 with no
+    # intermediate shell-variable capture.
+    assert_denied(run({"owner": "tvna", "repo": "gitapex", "title": _VALID_TITLE + "\n", "body": "x"}))
+
+
+def test_denied_when_create_title_has_trailing_carriage_return() -> None:
+    assert_denied(run({"owner": "tvna", "repo": "gitapex", "title": _VALID_TITLE + "\r", "body": "x"}))
+
+
+def test_denied_when_create_title_has_trailing_crlf() -> None:
+    assert_denied(run({"owner": "tvna", "repo": "gitapex", "title": _VALID_TITLE + "\r\n", "body": "x"}))
+
+
 def test_allowed_when_create_title_is_conventional() -> None:
     assert_allowed(run({"owner": "tvna", "repo": "gitapex", "title": _VALID_TITLE, "body": "x"}))
 

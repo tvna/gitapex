@@ -52,3 +52,11 @@ def test_conventional_commit_regex_stays_in_sync_between_the_two_copies() -> Non
         ".github/scripts/gitapex_gate_pr_title_convention.py's CONVENTIONAL_COMMIT_RE "
         "patterns have drifted apart -- update both together (issue #1058)"
     )
+    # `.pattern` equality alone would still pass if one copy added a flag
+    # (e.g. re.IGNORECASE) the other lacks -- same string, different
+    # matching behavior. Caught by review on PR #1059.
+    assert hook_module.CONVENTIONAL_COMMIT_RE.flags == ci_module.CONVENTIONAL_COMMIT_RE.flags, (
+        "hooks/gitapex_check_pr_title_convention.py and "
+        ".github/scripts/gitapex_gate_pr_title_convention.py's CONVENTIONAL_COMMIT_RE "
+        "flags have drifted apart -- update both together (issue #1058)"
+    )
