@@ -3649,6 +3649,25 @@ def test_external_citations_resolve_rejects_prefix_overlap_false_match(tmp_path)
     assert "docs/a.md" in by["external-citations-resolve"].evidence
 
 
+def test_external_citations_resolve_tolerates_sentence_final_period(tmp_path):
+    # Regression guard (review finding, follow-up to the token-set fix
+    # above): a real, correctly declared citation immediately followed by
+    # a sentence-ending period with no space ("documented in docs/a.md.")
+    # must still resolve -- REPO_PATH_CITATION_RE's own character class
+    # includes "." for real extensions, so the raw extracted token is
+    # "docs/a.md." and would otherwise report a genuine citation as stale
+    # purely because of how its sentence ends.
+    d = _write_skill(tmp_path)
+    (d / "SKILL.md").write_text(
+        (d / "SKILL.md").read_text(encoding="utf-8") + "\nThis behavior is documented in docs/a.md.\n",
+        encoding="utf-8",
+    )
+    _write_external_citations_sidecar(d, "  externalCitations:\n    - path: docs/a.md\n      role: input-source\n")
+    by = _by_name(css.check_shape(d))
+    assert by["external-citations-well-formed"].passed is True
+    assert by["external-citations-resolve"].passed is True
+
+
 def test_external_citations_resolve_runs_when_portability_invalid(tmp_path):
     # Regression guard (code-review finding, follow-up to the sidecar-
     # unreadable fix above): sidecar_portability.state also reads

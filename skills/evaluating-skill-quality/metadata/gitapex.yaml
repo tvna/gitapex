@@ -454,10 +454,16 @@ spec:
       summary: "PR review round 4: fixed a stale-declaration false-negative in external-citations-resolve -- plain substring matching let a declared path falsely resolve via prefix overlap with a different real citation (e.g. docs/a.md against docs/a.mdx). Now matched against REPO_PATH_CITATION_RE's own extracted citation tokens, keeping the check's 'exact literal match' claim actually exact."
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1055"
-      summary: "PR review round 4: test_declared_external_citation_does_not_rescue_issue_number_citation declared an invalid path (an issue-number literal, failing the evals/docs schema pattern), so declared_citation_paths stayed empty regardless of the scoping guard under test -- tautological. Replaced with a well-formed docs/ declaration alongside the undeclared issue-number citation it was meant to test."
+      summary: "PR review round 4: test_declared_external_citation_does_not_rescue_issue_number_citation declared an invalid path (an issue-number literal, failing the evals/docs schema pattern), so declared_citation_paths stayed empty regardless of the scoping guard under test -- fixed the schema-validity half. A follow-up audit entry below discloses this rewrite's own remaining limitation."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1055"
+      summary: "PR review round 5 (independent re-review of round 4's own fixes): round 4's token-set fix for the prefix-overlap bug introduced a live regression -- REPO_PATH_CITATION_RE's own character class includes '.', so a genuine citation immediately followed by a sentence-final period (e.g. 'documented in docs/a.md.') was extracted with the period attached and reported stale. Fixed with the same established rstrip('.,;:)') precedent SCRIPTS_PATH_BARE_RE already uses for this identical class of bug."
     - kind: audit
       anchor: "https://github.com/tvna/gitapex/issues/1055"
-      summary: "Re-verified live after all three round-4 fixes plus two new regression tests: 64/64 self-dogfood PASS, full pytest suite 528/528 passed, repo-wide schema drift scanner clean. This diff's own new-test count is 20, not the earlier round's stale '15' figure (verified via a diff-line function count against origin/main)."
+      summary: "PR review round 5: round 4's rewritten scoping-guard test still cannot falsify the 'name == portable-no-inline-path-citation' guard itself -- verified live by deleting that guard; the test suite still passed. Root cause: evals/docs paths and '#N' issue citations are disjoint shapes, so no schema-valid declared path can equal a matched issue citation. Disclosed as an inherent test-design limit, not fabricated as covered."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/1055"
+      summary: "Re-verified live after the round-5 fix plus its own new regression test: 64/64 self-dogfood PASS, full pytest suite 529/529 passed, repo-wide schema drift scanner clean, ruff/mypy clean. This diff's own new-test count is 21."
   skillDependencies:
     requires: []
     relatedTo:

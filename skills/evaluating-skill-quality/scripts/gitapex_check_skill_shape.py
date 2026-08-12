@@ -4130,9 +4130,19 @@ def _external_citation_declaration_offenders(
     ``REPO_PATH_CITATION_RE`` accepts (including ``.``) makes prefix
     overlap between two distinct real citations possible. Anchoring to
     the regex's own extracted tokens keeps "exact literal match" exact.
+
+    A trailing ``".,;:)"`` is stripped from each extracted token before
+    the match, the same established fix (a prior review finding) already
+    applied to ``SCRIPTS_PATH_BARE_RE``'s own bare-prose matches below:
+    sentence-final punctuation immediately after a real extension (e.g.
+    "documented in docs/a.md.") is captured by this regex's own character
+    class -- which must include "." for real extensions -- and would
+    otherwise make a genuine, correctly declared citation report as stale
+    purely because of how its sentence ends; no real path ends in one of
+    these characters, so stripping them is never lossy.
     """
     haystack = "\n".join(source_text for _label, source_text in _citation_sources(skill_md, skill_dir, body))
-    cited_tokens = frozenset(m.group(0) for m in REPO_PATH_CITATION_RE.finditer(haystack))
+    cited_tokens = frozenset(m.group(0).rstrip(".,;:)") for m in REPO_PATH_CITATION_RE.finditer(haystack))
     offenders = []
     for entry in external_citations:
         path = entry.get("path")
