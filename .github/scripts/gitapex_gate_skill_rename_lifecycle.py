@@ -39,6 +39,18 @@ parser would never do) -- `_renamed_from` below bounds the match to the
 specifically to stay consistent with that parser's actual behavior, even
 though it remains a light, standalone scan rather than a full manifest
 parse.
+
+Issue #1071 (wave 4 of #1040's batch pydantic CLI-arg validation rollout):
+`main`'s parsed namespace is now passed through
+`GateSkillRenameLifecycleArgs` immediately after `parser.parse_args(argv)`,
+matching the wrap already applied in waves 1-3. `removed` (optional str
+path, defaults to None -- reads stdin when omitted) has no constraint
+beyond that already-guaranteed `str | None` shape, so construction can
+currently never raise `ValidationError` for a real CLI invocation; the
+model exists for consistency with #1040's repo-wide convention (a typed
+seam between `parse_args` and business logic). This gate's own production
+invocation (`skill-rename-lifecycle-gate.yml`) already runs under `uv run`
+(issue #1035), so the added `pydantic` import is safe here.
 """
 
 from __future__ import annotations
@@ -48,6 +60,8 @@ import json
 import re
 import sys
 from pathlib import Path
+
+from pydantic import BaseModel, ValidationError
 
 # Bounds the spec.lifecycle: block: the header line at exactly 2-space
 # indent, then every immediately-following line indented 4+ spaces (the
@@ -136,6 +150,14 @@ def find_offenders(removed_names: list[str], repo_root: Path) -> list[str]:
     ]
 
 
+class GateSkillRenameLifecycleArgs(BaseModel):
+    """Typed view of `main`'s parsed CLI namespace (issue #1071). See the
+    module docstring's own issue #1071 section for why `removed` carries no
+    additional field validator."""
+
+    removed: str | None = None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Check that every skill directory removed in this PR "
@@ -148,14 +170,22 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
+        validated = GateSkillRenameLifecycleArgs(removed=args.removed)
+    except ValidationError:
+        print("error: invalid CLI arguments", file=sys.stderr)
+        return 2
+
+    try:
         text = (
-            Path(args.removed).read_text(encoding="utf-8") if args.removed else sys.stdin.buffer.read().decode("utf-8")
+            Path(validated.removed).read_text(encoding="utf-8")
+            if validated.removed
+            else sys.stdin.buffer.read().decode("utf-8")
         )
     except FileNotFoundError:
-        print(f"error: removed-names file not found: {args.removed}", file=sys.stderr)
+        print(f"error: removed-names file not found: {validated.removed}", file=sys.stderr)
         return 1
     except UnicodeDecodeError as error:
-        source = args.removed if args.removed else "standard input"
+        source = validated.removed if validated.removed else "standard input"
         print(f"error: {source} is not valid UTF-8: {error}", file=sys.stderr)
         return 1
 

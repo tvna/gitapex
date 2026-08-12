@@ -14,6 +14,7 @@ from pathlib import Path
 
 import gitapex_run_betterleaks as runner
 import pytest
+from conftest import make_validation_error
 
 
 def _completed(returncode: int) -> subprocess.CompletedProcess[bytes]:
@@ -160,3 +161,24 @@ def test_mode_is_required_and_constrained() -> None:
         runner.main([])
     with pytest.raises(SystemExit):
         runner.main(["--mode", "everything"])
+
+
+def test_args_accepts_both_valid_modes() -> None:
+    assert runner.RunBetterleaksArgs(mode="staged").mode == "staged"
+    assert runner.RunBetterleaksArgs(mode="history").mode == "history"
+
+
+def test_args_rejects_an_invalid_mode() -> None:
+    with pytest.raises(runner.ValidationError):
+        runner.RunBetterleaksArgs(mode="everything")  # type: ignore[arg-type]
+
+
+def test_main_exits_two_when_args_fail_validation(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def _raise(*_args: object, **_kwargs: object) -> None:
+        raise make_validation_error()
+
+    monkeypatch.setattr(runner, "RunBetterleaksArgs", _raise)
+    assert runner.main(["--mode", "staged"]) == 2
+    assert "invalid CLI arguments" in capsys.readouterr().err

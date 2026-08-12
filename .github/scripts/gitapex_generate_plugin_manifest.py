@@ -39,12 +39,34 @@ gitapex_generate_skill_eval_status.py and this repository's other
 scanner-shaped gates.
 """
 
+# Not folded into the module docstring above: `argparse.ArgumentParser` below
+# is constructed with `description=__doc__, formatter_class=RawDescriptionHelpFormatter`,
+# so anything added there changes real `--help` output -- the exact thing
+# waves 1-3 of #1040's batch confirmed byte-identical before/after as their
+# own proof method. Kept as a plain comment instead so that guarantee still
+# holds for this wave.
+#
+# Issue #1071 (wave 4 of #1040's batch pydantic CLI-arg validation rollout):
+# `main`'s parsed namespace is now passed through `GeneratePluginManifestArgs`
+# immediately after `parser.parse_args(argv)`, matching the wrap already
+# applied in waves 1-3. `check` (`action="store_true"`) has no constraint
+# beyond the `bool` shape `argparse` already guarantees, so construction can
+# currently never raise `ValidationError` for a real CLI invocation; the
+# model exists for consistency with #1040's repo-wide convention (a typed
+# seam between `parse_args` and business logic). This script's own
+# production invocation is exercised in-process by pytest (see the module
+# docstring's ACTIVE note above), not a separate bare-`python3` workflow
+# step, so the added `pydantic` import needs no `uv run` prefix of its own
+# to be safe.
+
 from __future__ import annotations
 
 import argparse
 import json
 import pathlib
 import sys
+
+from pydantic import BaseModel, ValidationError
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 SOURCE_PATH = REPO_ROOT / "plugin.json"
@@ -121,6 +143,14 @@ def generate(source_path: pathlib.Path | None = None) -> str:
     return render_mirror(mirror_data)
 
 
+class GeneratePluginManifestArgs(BaseModel):
+    """Typed view of `main`'s parsed CLI namespace (issue #1071). See the
+    module docstring's own issue #1071 section for why `check` carries no
+    additional field validator."""
+
+    check: bool = False
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
@@ -131,12 +161,18 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
+        validated = GeneratePluginManifestArgs(check=args.check)
+    except ValidationError:
+        print("FAIL: invalid CLI arguments", file=sys.stderr)
+        return 2
+
+    try:
         rendered = generate()
     except GenerationError as error:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1
 
-    if args.check:
+    if validated.check:
         try:
             committed = _read_utf8_text(OUTPUT_PATH)
         except GenerationError as error:

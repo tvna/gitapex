@@ -15,6 +15,7 @@ from typing import Any
 
 import gitapex_scan_ruleset_drift as drift
 import pytest
+from conftest import make_validation_error
 
 SOT: dict[str, Any] = {
     "name": "main-protection",
@@ -249,3 +250,36 @@ def test_a_reordered_required_status_checks_list_is_not_drift(tmp_path: pathlib.
     live["rules"][1]["parameters"]["required_status_checks"] = list(reversed(checks))
     report, code = drift.run("o/r", write_sot(tmp_path), "full", live_fetcher(live))
     assert code == drift.EXIT_IN_SYNC, report
+
+
+# --- ScanRulesetDriftArgs ---------------------------------------------------
+
+
+def test_args_accepts_both_valid_scopes() -> None:
+    assert drift.ScanRulesetDriftArgs(repo="o/r", sot="main.json", scope="full").scope == "full"
+    assert drift.ScanRulesetDriftArgs(repo="o/r", sot="main.json", scope="required-checks").scope == "required-checks"
+
+
+def test_args_defaults_token_env_to_github_token() -> None:
+    validated = drift.ScanRulesetDriftArgs(repo="o/r", sot="main.json", scope="full")
+    assert validated.token_env == "GITHUB_TOKEN"
+
+
+def test_args_rejects_an_invalid_scope() -> None:
+    with pytest.raises(drift.ValidationError):
+        drift.ScanRulesetDriftArgs(repo="o/r", sot="main.json", scope="everything")  # type: ignore[arg-type]
+
+
+def test_main_exits_three_when_args_fail_validation(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # EXIT_INVALID_ARGS (3), deliberately distinct from EXIT_UNVERIFIED (2)
+    # -- see the module docstring's issue #1071 section for why reusing 2
+    # here would blur an existing, load-bearing distinction.
+    def _raise(*_args: object, **_kwargs: object) -> None:
+        raise make_validation_error()
+
+    monkeypatch.setattr(drift, "ScanRulesetDriftArgs", _raise)
+    code = drift.main(["--repo", "o/r", "--sot", str(write_sot(tmp_path)), "--scope", "full"])
+    assert code == drift.EXIT_INVALID_ARGS == 3
+    assert "invalid CLI arguments" in capsys.readouterr().err

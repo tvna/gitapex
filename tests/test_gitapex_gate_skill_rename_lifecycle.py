@@ -15,7 +15,9 @@ directory listings, which is unaffected by how much content changed.
 from __future__ import annotations
 
 import gitapex_gate_skill_rename_lifecycle as gate
+import pytest
 from conftest import FakeStdin as _FakeStdin
+from conftest import make_validation_error
 
 
 def _write_sidecar(tmp_path, new_name, *, renamed_from=None, under_wrong_key=False):
@@ -233,3 +235,23 @@ def test_main_reports_error_for_non_utf8_stdin(monkeypatch, capsys):
     err = capsys.readouterr().err
     assert "standard input" in err and "not valid UTF-8" in err
     assert "Traceback" not in err
+
+
+# --- GateSkillRenameLifecycleArgs -----------------------------------------
+
+
+def test_args_defaults_removed_to_none():
+    assert gate.GateSkillRenameLifecycleArgs().removed is None
+
+
+def test_args_accepts_a_removed_path_string():
+    assert gate.GateSkillRenameLifecycleArgs(removed="/tmp/removed.txt").removed == "/tmp/removed.txt"
+
+
+def test_main_exits_two_when_args_fail_validation(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]):
+    def _raise(*_args: object, **_kwargs: object) -> None:
+        raise make_validation_error()
+
+    monkeypatch.setattr(gate, "GateSkillRenameLifecycleArgs", _raise)
+    assert gate.main(["--removed", "/dev/null"]) == 2
+    assert "invalid CLI arguments" in capsys.readouterr().err

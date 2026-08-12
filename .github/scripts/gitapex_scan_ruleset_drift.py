@@ -56,6 +56,36 @@ and to keep that from becoming a silent forever-pass, the specific failure text
 workflows pipe into the job summary.
 """
 
+# Not folded into the module docstring above: `argparse.ArgumentParser` below
+# is constructed with `description=__doc__`, so anything added there changes
+# real `--help` output -- the exact thing waves 1-3 of #1040's batch
+# confirmed byte-identical before/after as their own proof method. Kept as a
+# plain comment instead so that guarantee still holds for this wave.
+#
+# Issue #1071 (wave 4 of #1040's batch pydantic CLI-arg validation rollout):
+# `main`'s parsed namespace is now passed through `ScanRulesetDriftArgs`
+# immediately after `parse_args()` returns, matching the wrap already
+# applied in waves 1-3. `scope` is typed as the same two-value `Literal`
+# argparse's own `choices=("required-checks", "full")` already enforces --
+# this repo's established Literal-narrowing convention (e.g.
+# gitapex_scan_ssot_schema.py's fields) for a field argparse's own
+# `choices=` already constrains. `repo`, `sot`, and `token_env` have no
+# constraint beyond the `str` shape argparse already guarantees --
+# `token_env` names an environment variable only; the CLI argument is never
+# the token value itself (validated as a plain string, never inspected or
+# logged). So construction can currently never raise `ValidationError` for a
+# real CLI invocation.
+#
+# Unlike waves 1-3's other files, this one cannot reuse exit code 2 for a
+# CLI validation failure: `EXIT_UNVERIFIED` already owns 2, and the whole
+# point of this module's three-valued exit code (see the module docstring
+# above) is keeping "drift" and "unverified" distinguishable -- collapsing a
+# third, unrelated failure mode into either would blur that distinction
+# again. `EXIT_INVALID_ARGS = 3` is introduced instead, unreachable via any
+# real invocation today for the same reason the other waves' new exit-2
+# paths are, but present for consistency with the established convention
+# without colliding with existing semantics.
+
 from __future__ import annotations
 
 import argparse
@@ -64,7 +94,9 @@ import pathlib
 import sys
 import time
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Literal
+
+from pydantic import BaseModel, ValidationError
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
@@ -91,6 +123,12 @@ EXIT_DRIFT = 1
 #: never got to look"; see the module docstring for why that distinction is
 #: load-bearing rather than cosmetic.
 EXIT_UNVERIFIED = 2
+#: The CLI arguments themselves failed ScanRulesetDriftArgs validation
+#: (issue #1071). Deliberately not EXIT_UNVERIFIED: that code means "the API
+#: could not be read", a different and more specific fact than "the inputs
+#: to this scan were malformed" -- see the module docstring's own issue
+#: #1071 section.
+EXIT_INVALID_ARGS = 3
 
 
 def default_fetch(url: str, token: str) -> Any:
@@ -195,17 +233,44 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+class ScanRulesetDriftArgs(BaseModel):
+    """Typed view of `main`'s parsed CLI namespace (issue #1071). See the
+    module docstring's own issue #1071 section for why `scope` is a Literal,
+    why the other fields carry no additional field validator, and why a
+    CLI-validation failure returns EXIT_INVALID_ARGS rather than reusing
+    EXIT_UNVERIFIED."""
+
+    repo: str
+    sot: str
+    scope: Literal["required-checks", "full"]
+    # Suppression rationale: this is the name of an environment variable, not a
+    # credential value -- same as the pre-existing `--token-env` argparse default
+    # a few lines above, which ruff does not flag because it is a keyword argument
+    # rather than a class-level assignment.
+    token_env: str = "GITHUB_TOKEN"  # noqa: S105
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
-    token = os.environ.get(args.token_env, "")
+
+    try:
+        validated = ScanRulesetDriftArgs(repo=args.repo, sot=args.sot, scope=args.scope, token_env=args.token_env)
+    except ValidationError:
+        print("::error::invalid CLI arguments", file=sys.stderr)
+        print("Nothing was verified -- the CLI arguments themselves failed validation.")
+        return EXIT_INVALID_ARGS
+
+    token = os.environ.get(validated.token_env, "")
     if not token:
         print(
-            f"{args.token_env} is empty, so nothing was verified: the rulesets API is not readable with the "
+            f"{validated.token_env} is empty, so nothing was verified: the rulesets API is not readable with the "
             "default job token. Complete the RULESETS_PAT handoff in docs/runbooks/rulesets.md."
         )
         return EXIT_UNVERIFIED
     try:
-        report, code = run(args.repo, pathlib.Path(args.sot), args.scope, lambda url: default_fetch(url, token))
+        report, code = run(
+            validated.repo, pathlib.Path(validated.sot), validated.scope, lambda url: default_fetch(url, token)
+        )
     except GitHubApiError as error:
         # The read failed, so nothing was compared. Printed on stdout, not
         # stderr: both workflows pipe only stdout into $GITHUB_STEP_SUMMARY, so
