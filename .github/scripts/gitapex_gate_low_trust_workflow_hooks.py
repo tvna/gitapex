@@ -23,8 +23,11 @@ would, without requiring a branch-protection setting change this script
 cannot make itself. No CODEOWNERS file exists in this repository and none
 is added here (see the design doc cited below for why).
 
-Deliberately stdlib-only, matching `gitapex_gate_gitignore_pattern_coverage.py`'s
-shape. No network calls -- the workflow supplies both inputs as CLI args.
+No network calls -- the workflow supplies both inputs as CLI args. Was
+stdlib-only through wave 2 of issue #1040's batch; issue #1062 (wave 3)
+added the `pydantic` import below, so this file now requires `uv run`
+like `gitapex_gate_hidden_characters.py`/`gitapex_gate_behind_base.py` already
+do, not a bare `python3` invocation.
 
 Design: docs/superpowers/specs/2026-08-06-screening-low-trust-contribution-gaps-design.md
 

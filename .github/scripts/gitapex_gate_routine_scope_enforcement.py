@@ -39,8 +39,12 @@ ambiguity (only count a "model identifier" hit with same-line corroborating
 context): require the *value shape* (`env_`/`ccpool_` prefix), not just the
 parameter name, before counting an `environment_id` mention as concrete.
 
-Deliberately stdlib-only and self-contained, matching this repository's
-existing .github/scripts/*.py convention of not importing across files.
+Self-contained -- matching this repository's existing .github/scripts/*.py
+convention of not importing across files -- though no longer stdlib-only:
+was stdlib-only through wave 2 of issue #1040's batch; issue #1062 (wave 3)
+added the `pydantic` import below, so this file now requires `uv run` like
+`gitapex_gate_hidden_characters.py`/`gitapex_gate_behind_base.py` already do, not
+a bare `python3` invocation.
 
 Issue #1062 (wave 3 of #1040's batch pydantic CLI-arg validation rollout):
 `main`'s parsed namespace is now passed through
