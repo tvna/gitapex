@@ -197,8 +197,8 @@ Unmeasured for pass/fail, not skipped, as of this snapshot: neither an
 committed eval directory for this skill existed in this repository at
 review time. Check the
 target repository's current state before relying on this -- gitapex has
-since added eval directories for several skills, including this one,
-which would change this scoring if re-run
+since added `evals/` directories for several skills (e.g.
+`evals/explaining-the-work`), which would change this scoring if re-run
 today. There is no suite exercising this skill's trigger against a
 documented no-skill baseline, so this dimension cannot be scored pass or
 fail on behavioural grounds -- an open gap in the repository's committed
