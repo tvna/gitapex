@@ -680,28 +680,22 @@ grading below.
     unrelated repository" (the portability litmus test) -- these are
     different questions, and Portable-declared content must pass both,
     not just the first.
-  - **`evals/` and `docs/` path citations are barred unconditionally from
-    Portable content, hedged or not, in bare prose or inline code alike**
-    -- both roots name locations outside the skill's own directory that a
-    plugin install or a vendoring copy does not carry along, the same
-    "must resolve inside the skill's own directory" boundary [Dependency
-    file portability](#dependency-file-portability) below already applies
-    to a bundled *file*, applied here to a *prose citation* instead. A
-    hedge phrase ("this repository has also recorded...") discloses the
-    dependency; it does not remove it -- summarize the needed content
-    directly, or move it into the skill's own `references/`, instead of
-    citing it from `evals/` or `docs/`. An earlier revision of this rule
-    gave `evals/` a hedge escape in inline-code form while unconditionally
-    banning `docs/` -- an enumerated, asymmetric exception that itself
-    reproduced the "recurs for the next unlisted case" problem this rule
-    exists to close; both roots now get identical, unconditional
+  - **`evals/` and `docs/` path citations get identical treatment in
+    Portable content, in bare prose or inline code alike** -- both roots
+    name locations outside the skill's own directory that a plugin install
+    or a vendoring copy does not carry along, the same "must resolve
+    inside the skill's own directory" boundary [Dependency file
+    portability](#dependency-file-portability) below already applies to a
+    bundled *file*, applied here to a *prose citation* instead. An earlier
+    revision of this rule gave `evals/` a hedge escape in inline-code form
+    while unconditionally banning `docs/` -- an enumerated, asymmetric
+    exception that itself reproduced the "recurs for the next unlisted
+    case" problem this rule exists to close; both roots now get identical
     treatment.
-    - **What the underlying defect actually is, since the deterministic
-      check above is a conservative, literal-pattern backstop that cannot
-      itself tell the difference**: a repo-external path is a real
-      dimension-6 defect only when the skill's own *control* -- its
-      procedure or judgment logic -- depends on that path to decide how
-      to behave (e.g. citing a design doc's schema to know what a field
+    - **What the underlying defect actually is**: a repo-external path is
+      a real dimension-6 defect only when the skill's own *control* -- its
+      procedure or judgment logic -- depends on that path to decide how to
+      behave (e.g. citing a design doc's schema to know what a field
       means, or a numbered invariant list to know what to check). A path
       cited only as an **input source** ("read whatever eval data the
       calling repository has, if any") or an **output destination**
@@ -709,23 +703,32 @@ grading below.
       repository") is not a control dependency: the skill's own procedure
       neither reads nor needs that path to produce its result, so nothing
       breaks when it is copied elsewhere and the path does not travel
-      with it. The deterministic check still flags a literal `evals/`/
-      `docs/` citation in either legitimate role -- it cannot distinguish
-      roles from a regex match -- so a Portable skill must still avoid
-      writing the literal path even for a genuine input-source or
-      output-destination reference (describe the role in prose instead,
-      the same way this skill's own SKILL.md Notes section describes its
-      verdict's downstream consumer without citing the literal path). The
-      *severity* of a flagged citation, when a human or model reviewer
-      reads the surrounding prose, still turns on this three-way test:
-      an unavoidable control-dependency citation is the real defect the
-      Portable litmus test above exists to catch; an input-source or
-      output-destination description that merely used the wrong,
-      still-flagged phrasing is a durability nit to reword, not the same
-      class of finding.
+      with it.
+    - **The deterministic check's hedge vocabulary encodes this
+      distinction, narrowly.** A hedge phrase ("this repository has also
+      recorded...") that marks a citation as a *deliberate, known-real*
+      reference to this repository's own file discloses a control
+      dependency; it does not remove it -- this half of the hedge
+      vocabulary (`this repository` / `gitapex`) never rescues an
+      inline-code match, and never rescues a bare-prose one either (bare
+      prose has never had a hedge escape at all). The other half (`the
+      calling repository` / `the target repository`) marks the opposite:
+      a generic illustrative placeholder for *whatever* repository the
+      skill lands in, not a citation to this origin repository's own real
+      file at all (establishing-ubiquitous-language's "record resolved
+      terms in the calling repository's own glossary doc (e.g.
+      `docs/glossary.md`)" is the canonical real example -- a portable
+      **output-destination** description, not a control dependency) --
+      only this narrower half still rescues an inline-code match. When
+      neither hedge shape fits and the citation is a genuine input-source
+      or output-destination reference regardless, summarize the role in
+      prose without the literal path (this skill's own SKILL.md Notes
+      section describes its verdict's downstream consumer this way) rather
+      than force an artificial "the calling repository" phrasing onto a
+      sentence that is not actually generic.
     Enforced by `portable-no-repo-path-citation` (bare-prose form,
-    unconditional as always) and `portable-no-inline-path-citation`
-    (inline-code form, unconditional as of this rule).
+    unconditional, no hedge ever) and `portable-no-inline-path-citation`
+    (inline-code form, rescued only by the generic-role hedge half above).
 - **Repository-scoped** -- a repository-scoped skill that reads as if it
   were portable is a dimension-1/6 defect (it misleads a future vendoring
   decision), not the scoping choice itself. An undeclared level that

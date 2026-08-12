@@ -1984,27 +1984,32 @@ def test_wrapped_mixed_marker_still_skips_path_scan_but_not_issue_scan(tmp_path)
     assert names["no-bare-issue-citation"].passed is False
 
 
-# ---- Portable inline-code repo-path citation scan (issue #220, made ----
-# ---- unconditional by issue #1051) ----
+# ---- Portable inline-code repo-path citation scan (issue #220, narrowed ----
+# ---- to a generic-role-only hedge by issue #1051) ----
 #
 # #171's illustrative-span exemption treats every inline-code citation as
 # automatically safe. #220's own reported bug is exactly that gap: an
 # inline-code citation of a real origin-repository path
 # (`docs/superpowers/specs/...`) that passed the #171 scan cleanly despite
 # having no hedge explaining it is this repository's own file. #220's own
-# fix added a hedge-phrase escape (an approved phrase nearby rescued the
-# citation) -- but #1051 found that escape itself was the gap: a real
-# citation in rubric.md's own Execution requirements section carried
-# exactly such a hedge and still pointed at a file that does not travel
-# with a vendored copy of the skill, because disclosing a dependency does
-# not remove it. This check no longer accepts any hedge for a repo-path
-# citation, so most of the tests below now assert the FAIL side
-# unconditionally, including for content that used to be the documented
-# PASS case. The hedge-proximity/self-satisfy/semicolon-clause-splitting
-# mechanics these tests used to exercise via repo-path fixtures remain
-# covered via the issue-number citation checks below (which still use a
-# hedge), since `_inline_citation_offenders` shares that machinery across
-# every citation kind in `_INLINE_CITATION_CHECK_SPECS`.
+# fix accepted the full HEDGE_PHRASES vocabulary -- but #1051 found that
+# the *disclosing* half of that vocabulary ("this repository" / "gitapex")
+# was itself the gap: a real citation in rubric.md's own Execution
+# requirements section carried exactly such a hedge and still pointed at a
+# file that does not travel with a vendored copy of the skill, because
+# disclosing a real dependency does not remove it. The *other* half ("the
+# calling repository" / "the target repository") is categorically
+# different -- it marks a citation as a generic illustrative placeholder
+# for whatever repository the skill lands in, never a citation to this
+# origin repository's own real file (establishing-ubiquitous-language's
+# "the calling repository's own glossary doc (e.g. `docs/glossary.md`)" is
+# the canonical real example) -- so only that narrower half still rescues
+# a match (`GENERIC_ROLE_HEDGE_PHRASES`). The hedge-proximity/self-satisfy/
+# semicolon-clause-splitting mechanics remain covered via the issue-number
+# citation checks below (which still use the full, separate
+# ISSUE_CITATION_HEDGE_PHRASES vocabulary), since `_inline_citation_offenders`
+# shares that machinery across every citation kind in
+# `_INLINE_CITATION_CHECK_SPECS`.
 
 
 def test_portable_unhedged_inline_repo_path_fails(tmp_path):
@@ -2019,9 +2024,12 @@ def test_portable_unhedged_inline_repo_path_fails(tmp_path):
 @pytest.mark.parametrize(
     "body",
     [
-        # rubric.md's own former phrasing (issue #220 era) -- used to pass
-        # under the hedge escape; now must fail identically to an unhedged
-        # citation, since #1051 removed that escape.
+        # The disclosing half of the old hedge vocabulary ("this
+        # repository" / "gitapex") never rescues a match, before or after
+        # #1051 -- these mark a citation as a deliberate, known-real
+        # reference to this repository's own file, exactly the #220
+        # failure shape (a hedge discloses a real dependency without
+        # removing it).
         "This repository has also recorded the design spec at `docs/superpowers/specs/2026-07-20-x.md`.",
         "This repository has also used the same move informally, once, "
         "to find gaps in its own *skill coverage* rather than in one "
@@ -2033,25 +2041,35 @@ def test_portable_unhedged_inline_repo_path_fails(tmp_path):
         "`docs/superpowers/specs/2026-07-20-judge-mode-scorer-design.md`; "
         "a vendored copy of this skill has no such file and does not "
         "need one.",
-        # The opposite direction: a generic, illustrative path name for
-        # whatever repository the skill lands in, matching
-        # establishing-ubiquitous-language's own former phrasing -- also
-        # now fails, since the check no longer distinguishes "generic
-        # illustrative naming" from "this repo's own real file" at all.
-        "Record the winning term in the calling repository's own glossary doc (e.g. `docs/glossary.md`).",
-        # An evals/ citation -- previously the ONE prefix that still kept
-        # its hedge escape (issue #1051's own asymmetric interim state);
-        # now identical treatment to docs/.
-        "Check the target repository for an eval mechanism -- for a "
-        "Claude Code target, that's an `evals/evals.json` file.",
         "gitapex's own repository does not currently have a `docs/adr/` directory.",
     ],
-    ids=["this-repository", "rubric-style", "scorer-gated-style", "calling-repository", "evals-prefix", "gitapex"],
+    ids=["this-repository", "rubric-style", "scorer-gated-style", "gitapex"],
 )
-def test_hedge_phrase_no_longer_rescues_repo_path_citation(tmp_path, body):
+def test_disclosing_hedge_phrase_still_fails_repo_path_citation(tmp_path, body):
     d = _write_raw(tmp_path, _portable_body(body))
     result = _by_name(css.check_shape(d))["portable-no-inline-path-citation"]
     assert result.passed is False
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        # The generic-role half of the hedge vocabulary ("the calling
+        # repository" / "the target repository") marks a citation as a
+        # placeholder for whatever repository the skill lands in, not a
+        # citation to this origin repository's own real file -- these
+        # still pass, unaffected by #1051's narrowing (establishing-
+        # ubiquitous-language's own real phrasing for the first case).
+        "Record the winning term in the calling repository's own glossary doc (e.g. `docs/glossary.md`).",
+        "Check the target repository for an eval mechanism -- for a "
+        "Claude Code target, that's an `evals/evals.json` file.",
+    ],
+    ids=["calling-repository", "target-repository"],
+)
+def test_generic_role_hedge_phrase_still_passes_repo_path_citation(tmp_path, body):
+    d = _write_raw(tmp_path, _portable_body(body))
+    result = _by_name(css.check_shape(d))["portable-no-inline-path-citation"]
+    assert result.passed is True
 
 
 def test_semicolon_inside_one_citations_own_aside_does_not_split(tmp_path):

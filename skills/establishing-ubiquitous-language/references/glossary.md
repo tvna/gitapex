@@ -2,8 +2,7 @@
 
 This file is a template, not live repository state: it ships empty and is
 not the default write target. Per `../SKILL.md` step 4, record resolved
-terms in the calling repository's own glossary doc (e.g. a `glossary.md`
-file, wherever that repository keeps its own documentation)
+terms in the calling repository's own glossary doc (e.g. `docs/glossary.md`)
 so the record lives with the repo it describes, not inside a vendored or
 read-only-installed skill folder. Use this template only when the calling
 repository has no established glossary location yet.
