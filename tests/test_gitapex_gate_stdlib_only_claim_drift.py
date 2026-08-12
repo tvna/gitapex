@@ -343,11 +343,80 @@ def test_comma_separated_import_of_only_stdlib_modules_is_not_flagged(tmp_path: 
     assert gate.find_stale_claims(diff_text, tmp_path) == []
 
 
-def test_comma_separated_import_skips_an_empty_alias_segment() -> None:
-    # A doubled comma yields an empty segment between "os" and "pydantic";
-    # _imported_root_modules must skip it instead of treating "" as a
-    # module name.
-    assert gate._imported_root_modules("import os,,pydantic") == ["os", "pydantic"]
+def test_doubled_comma_is_invalid_syntax_and_names_no_modules() -> None:
+    # A doubled comma ("import os,,pydantic") is not valid Python; ast.parse
+    # raises SyntaxError, and _imported_root_modules treats that the same
+    # as any other line that names no import at all -- an empty list, never
+    # a bogus module name derived from the malformed text.
+    assert gate._imported_root_modules("import os,,pydantic") == []
+
+
+# --- adversarial-review findings: ast.parse replacing the old hand-rolled
+# comma/whitespace tokenizer (issue #1052's own PR, second review round) ---
+
+
+def test_trailing_comment_comma_is_not_parsed_as_a_second_import() -> None:
+    # Real defeat case: the old regex/split tokenizer captured the whole
+    # rest of the line including a trailing "#" comment, so a comma inside
+    # unrelated comment prose was misread as a second imported alias.
+    assert gate._imported_root_modules("import os  # noqa: E501, F401") == ["os"]
+
+
+def test_semicolon_chained_import_statement_is_parsed_as_two_real_imports() -> None:
+    # Real defeat case: the old tokenizer left a stray ";" attached to the
+    # first name ("os;") instead of recognizing two separate statements.
+    assert gate._imported_root_modules("import os; import sys") == ["os", "sys"]
+
+
+def test_backslash_continuation_names_no_modules_rather_than_a_stray_backslash() -> None:
+    # Real defeat case: a line-continued "import os, \\" (continuing onto a
+    # second physical line the diff parser never sees) left a bare "\\"
+    # parsed as if it were a module name under the old tokenizer.
+    assert gate._imported_root_modules("import os, \\") == []
+
+
+def test_invalid_import_syntax_names_no_modules() -> None:
+    # Real defeat case: 'import "os";' is not valid Python (import expects
+    # a name, not a string literal); the old regex still captured the
+    # quoted text as a bogus "module name" and would have flagged a file
+    # for an import that was never syntactically valid in the first place.
+    assert gate._imported_root_modules('import "os";') == []
+
+
+def test_comment_comma_does_not_cause_a_false_positive_end_to_end(tmp_path: pathlib.Path) -> None:
+    _write(
+        tmp_path,
+        ".github/scripts/gitapex_gate_foo.py",
+        '"""Standard library only."""\n\nimport os  # note: os, urllib3 unrelated\n',
+    )
+    diff_text = _diff(".github/scripts/gitapex_gate_foo.py", ["import os  # note: os, urllib3 unrelated"])
+    assert gate.find_stale_claims(diff_text, tmp_path) == []
+
+
+def test_malformed_diff_text_containing_a_bare_marker_substring_still_raises_scan_error(
+    tmp_path: pathlib.Path,
+) -> None:
+    # Real defeat case: the malformed-diff guard originally checked whether
+    # any marker occurred ANYWHERE in the text, so ordinary prose merely
+    # mentioning "---" or "@@" mid-sentence satisfied it without being a
+    # diff at all. The fix anchors each marker to the start of some line.
+    prose = "This PR looks fine --- go ahead and merge (cc @@release-bot)\n"
+    with pytest.raises(gate.ScanError):
+        gate.find_stale_claims(prose, tmp_path)
+
+
+def test_crlf_diff_still_detects_an_added_third_party_import(tmp_path: pathlib.Path) -> None:
+    # Real defeat case: a CRLF-encoded diff (git's local plane under
+    # core.autocrlf, or a re-saved --diff file) left a trailing "\r"
+    # attached to the "+++ b/<path>" header's path, which then failed
+    # _TARGET_DIR_RE's own $-anchored match and silently dropped the file.
+    rel_path = ".github/scripts/gitapex_gate_foo.py"
+    _write(tmp_path, rel_path, '"""Standard library only."""\n\nimport pydantic\n')
+    lf_diff = _diff(rel_path, ["import pydantic"])
+    crlf_diff = lf_diff.replace("\n", "\r\n")
+    findings = gate.find_stale_claims(crlf_diff, tmp_path)
+    assert len(findings) == 1
+    assert findings[0].source == "the changed file's own content"
 
 
 # --- CLI ---

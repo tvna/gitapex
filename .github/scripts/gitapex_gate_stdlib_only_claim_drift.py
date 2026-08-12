@@ -69,6 +69,7 @@ scan could not be trusted (a malformed diff, an unreadable file, or a
 from __future__ import annotations
 
 import argparse
+import ast
 import pathlib
 import re
 import sys
@@ -77,15 +78,6 @@ from dataclasses import dataclass
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 _TARGET_DIR_RE = re.compile(r"^(?:\.github/scripts/|evals/scripts/)([^/]+)\.py$")
-
-# A top-level (column-0) `import a, b, c` or `from x import ...`. `import`
-# form captures the whole comma-separated alias list -- `import os,
-# pydantic` names two independent root modules, and code review correctly
-# found that capturing only the first one misses `pydantic` entirely.
-# `from x import ...` has only one module to classify regardless of how
-# many names follow `import`.
-_IMPORT_STMT_RE = re.compile(r"^import\s+(?P<names>.+)$")
-_FROM_IMPORT_RE = re.compile(r"^from\s+(?P<module>[A-Za-z_]\w*)\s+import\b")
 
 # Either literal phrase, case-insensitive, anywhere in the text.
 _STALE_PHRASE_RE = re.compile(r"standard library only|stdlib-only|stdlib only", re.IGNORECASE)
@@ -108,14 +100,23 @@ _PROXIMITY_WINDOW = 400
 _UV_RUN_MENTION_RE = re.compile(r"\buv\s+run\b", re.IGNORECASE)
 
 # `git diff` always emits at least one `diff --git ` line per file, even
-# for a single-file diff -- so a non-empty input carrying none of these
-# structural markers is not a unified diff at all (garbage input, a
+# for a single-file diff -- so a non-empty input with no LINE starting with
+# one of these markers is not a unified diff at all (garbage input, a
 # truncated pipe, a caller pointing `--diff` at the wrong file). Code
 # review correctly found that silently returning "nothing found" for such
 # input contradicted this module's own documented exit-2 promise for "a
 # malformed diff": unstructured text should never be indistinguishable
-# from a genuinely empty, clean diff.
+# from a genuinely empty, clean diff. Anchored to line-start (matching how
+# `parse_diff_added_third_party_imports` itself recognizes these same
+# markers), not a bare substring-anywhere search: adversarial review found
+# ordinary prose merely mentioning "---" or "@@" mid-sentence (e.g. a PR
+# comment "looks fine --- go ahead (cc @@release-bot)") otherwise satisfied
+# a substring check without being a diff at all.
 _DIFF_STRUCTURE_MARKERS = ("diff --git ", "--- ", "+++ ", "@@")
+
+
+def _looks_like_a_diff(diff_text: str) -> bool:
+    return any(line.startswith(marker) for line in diff_text.split("\n") for marker in _DIFF_STRUCTURE_MARKERS)
 
 
 class ScanError(Exception):
@@ -137,25 +138,33 @@ def _is_stdlib(module_name: str) -> bool:
 
 
 def _imported_root_modules(content: str) -> list[str]:
-    """Return every root module name a single top-level `import ...` or
-    `from ... import ...` statement names. `import a, b as c` names two
-    independent root modules (`a`, `b`) -- code review correctly found
-    that capturing only the text right after `import` misses every name
-    but the first in a comma-separated list. `from x import ...` always
-    names exactly one module (`x`) regardless of how many names follow
-    `import`, so that case stays a single-capture match."""
-    match = _IMPORT_STMT_RE.match(content)
-    if match:
-        roots = []
-        for alias in match.group("names").split(","):
-            name = alias.strip().split()[0] if alias.strip() else ""
-            if name:
-                roots.append(name.split(".", 1)[0])
-        return roots
-    match = _FROM_IMPORT_RE.match(content)
-    if match:
-        return [match.group("module")]
-    return []
+    """Return every root module name a single line of `import ...`/
+    `from ... import ...` source names, via `ast.parse` -- the same
+    approach `gitapex_gate_exception_handler_gaps.py` and
+    `gitapex_gate_registry_wiring.py` already use to classify Python
+    source structurally rather than re-deriving import-statement grammar
+    by hand (reuse finding from adversarial review, issue #1052's own
+    PR). A hand-rolled comma/whitespace split was tried first and found,
+    by that same review, to mis-tokenize a trailing inline comment
+    containing a comma (`import os  # note: os, urllib3 unrelated`), a
+    semicolon-chained statement (`import os; import sys`), and a
+    backslash line-continuation (`import os, \\`) -- three independent
+    false-positive shapes `ast.parse` does not share, since it parses
+    real Python grammar rather than approximating it. Content that is
+    not valid standalone Python (e.g. a truncated continuation, or
+    `import "os";`) raises `SyntaxError`; treated as "no import here",
+    the same as a line that never matched the old regexes at all."""
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return []
+    roots: list[str] = []
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            roots.extend(alias.name.split(".", 1)[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            roots.append(node.module.split(".", 1)[0])
+    return roots
 
 
 def parse_diff_added_third_party_imports(diff_text: str) -> set[str]:
@@ -167,7 +176,13 @@ def parse_diff_added_third_party_imports(diff_text: str) -> set[str]:
     changed: set[str] = set()
     current_path: str | None = None
     in_hunk = False
-    for line in diff_text.split("\n"):
+    # Normalize CRLF before splitting: without this, a trailing "\r" stays
+    # attached to a `+++ b/<path>` header's path (git's own local-plane
+    # invocation, or a re-saved `--diff` file, can carry CRLF even though
+    # this repo's CI pipes LF-only output), which then fails
+    # `_TARGET_DIR_RE`'s `$`-anchored match and silently drops the file --
+    # a false negative found by adversarial review (issue #1052's own PR).
+    for line in diff_text.replace("\r\n", "\n").split("\n"):
         if line.startswith("diff --git ") or line.startswith("--- "):
             in_hunk = False
             continue
@@ -332,7 +347,7 @@ def find_stale_claims(diff_text: str, root: pathlib.Path) -> list[Finding]:
     `_DIFF_STRUCTURE_MARKERS`) -- an empty *result* (no file in a
     genuinely empty or genuinely clean diff gained a third-party import)
     is legitimate and distinct from an incomplete or untrustworthy scan."""
-    if diff_text.strip() and not any(marker in diff_text for marker in _DIFF_STRUCTURE_MARKERS):
+    if diff_text.strip() and not _looks_like_a_diff(diff_text):
         raise ScanError(
             f"input does not look like a unified diff (no diff --git/---/+++/@@ line found): {diff_text[:80]!r}"
         )
