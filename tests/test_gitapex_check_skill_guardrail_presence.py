@@ -310,14 +310,24 @@ def test_split_into_blocks_keeps_fenced_block_together_and_separate() -> None:
 
 
 # --- check_entry: cross-block splice defeat tests ---------------------------
+#
+# Each anchor here is constructed so that whitespace-normalizing the whole
+# file (the pre-fix behavior) *would* reproduce it exactly -- verified
+# below, and independently by a CodeRabbit review round on this PR, which
+# caught that this file's first version used anchors and fixtures that
+# never matched under whole-file normalization either, so those tests
+# would have stayed green even against the un-fixed checker. A defeat test
+# that cannot fail against the code it is meant to defeat is not a defeat
+# test; each fixture's own docstring below states the reconstructed
+# whole-file match it defeats.
 
 
 def test_check_entry_fail_anchor_spliced_across_blank_line(tmp_path: pathlib.Path) -> None:
-    """Defeat test: whole-file normalization would let 'Never do the
-    dangerous thing.' match text split across a blank-line paragraph
-    boundary ('Never do the dangerous.' / 'thing.' as two unrelated
-    sentences) -- it must not, since the two halves are different blocks."""
-    (tmp_path / "SKILL.md").write_text("Never do the dangerous.\n\nA new paragraph says thing.", encoding="utf-8")
+    """Defeat test: normalizing "Never do the\\n\\ndangerous thing." as one
+    string reproduces "Never do the dangerous thing." exactly -- the bug
+    this test defeats. Block-scoped matching splits at the blank line into
+    two separate blocks, neither of which contains the anchor alone."""
+    (tmp_path / "SKILL.md").write_text("Never do the\n\ndangerous thing.", encoding="utf-8")
     entry = guardrail_presence.GuardrailEntry.model_validate(_VALID_ENTRY)
     result = guardrail_presence.check_entry(tmp_path, entry)
     assert not result.ok
@@ -325,20 +335,30 @@ def test_check_entry_fail_anchor_spliced_across_blank_line(tmp_path: pathlib.Pat
 
 
 def test_check_entry_fail_anchor_spliced_across_heading(tmp_path: pathlib.Path) -> None:
-    """Defeat test: the same splice, this time across a heading boundary
-    instead of a blank line."""
-    (tmp_path / "SKILL.md").write_text("Never do the dangerous.\n## Heading\nA section says thing.", encoding="utf-8")
-    entry = guardrail_presence.GuardrailEntry.model_validate(_VALID_ENTRY)
+    """Defeat test: same shape as the blank-line case, across a heading
+    boundary. The anchor here intentionally embeds the heading marker
+    itself ("## Heading"), since that is exactly what whole-file
+    normalization would splice into the middle of the surrounding prose."""
+    heading_entry = {
+        **_VALID_ENTRY,
+        "anchor": "Never do the ## Heading dangerous thing.",
+    }
+    (tmp_path / "SKILL.md").write_text("Never do the\n## Heading\ndangerous thing.", encoding="utf-8")
+    entry = guardrail_presence.GuardrailEntry.model_validate(heading_entry)
     result = guardrail_presence.check_entry(tmp_path, entry)
     assert not result.ok
 
 
 def test_check_entry_fail_anchor_spliced_across_list_items(tmp_path: pathlib.Path) -> None:
-    """Defeat test: the same splice, this time across two adjacent list
-    items -- each bullet is its own block even with no blank line between
-    them."""
-    (tmp_path / "SKILL.md").write_text("- Never do the dangerous.\n- A second bullet says thing.", encoding="utf-8")
-    entry = guardrail_presence.GuardrailEntry.model_validate(_VALID_ENTRY)
+    """Defeat test: same shape again, across two adjacent list items with
+    no blank line between them. The anchor embeds the second item's own
+    "-" marker, matching what whole-file normalization would splice in."""
+    list_entry = {
+        **_VALID_ENTRY,
+        "anchor": "- Never do the - dangerous thing.",
+    }
+    (tmp_path / "SKILL.md").write_text("- Never do the\n- dangerous thing.", encoding="utf-8")
+    entry = guardrail_presence.GuardrailEntry.model_validate(list_entry)
     result = guardrail_presence.check_entry(tmp_path, entry)
     assert not result.ok
 
