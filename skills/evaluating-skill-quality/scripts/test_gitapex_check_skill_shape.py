@@ -3519,6 +3519,21 @@ def test_external_citations_absent_is_well_formed(tmp_path):
     assert css.main([str(d)]) == 0
 
 
+def test_external_citations_checks_fail_when_sidecar_unreadable(tmp_path):
+    # Regression guard (code-review finding): an unreadable sidecar must
+    # not let external-citations-resolve silently default to "not
+    # declared (optional)" PASS -- every sibling sidecar-derived check
+    # (references-well-formed, skill-dependencies-well-formed, ...)
+    # explicitly FAILs in this branch, and these two must too.
+    d = _write_skill(tmp_path)
+    sidecar = d / "metadata/gitapex.yaml"
+    sidecar.write_bytes(b"\xff\xfe\x00\x01invalid")
+    by = _by_name(css.check_shape(d))
+    assert by["external-citations-well-formed"].passed is False
+    assert by["external-citations-resolve"].passed is False
+    assert css.main([str(d)]) == 1
+
+
 def test_external_citations_valid_list_resolves(tmp_path):
     d = _write_skill(
         tmp_path,
@@ -3578,7 +3593,28 @@ def test_external_citations_invalid_role_fails_well_formed(tmp_path):
     )
     by = _by_name(css.check_shape(d))
     assert by["external-citations-well-formed"].passed is False
-    assert "not a list of item mappings with a valid role" in by["external-citations-well-formed"].evidence
+    assert (
+        "not a list of item mappings with a valid evals/docs path and role"
+        in by["external-citations-well-formed"].evidence
+    )
+
+
+def test_external_citations_path_outside_evals_docs_fails_well_formed(tmp_path):
+    # Regression guard (code-review finding): this mechanism exists solely
+    # to rescue REPO_PATH_CITATION_RE's own evals/docs citations, so a
+    # declared path outside both prefixes (e.g. a bare README.md) could
+    # never be a real rescue target and must be rejected, not silently
+    # accepted as a meaningless-but-valid declaration.
+    d = _write_external_citations_sidecar(
+        _write_skill(tmp_path),
+        "  externalCitations:\n    - path: README.md\n      role: input-source\n",
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["external-citations-well-formed"].passed is False
+    assert (
+        "not a list of item mappings with a valid evals/docs path and role"
+        in by["external-citations-well-formed"].evidence
+    )
 
 
 def test_external_citations_stale_declaration_fails_resolve(tmp_path):

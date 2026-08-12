@@ -159,9 +159,10 @@ Checks (the canonical list -- the manual fallback is to apply these):
     only nested maps and list items under them are skipped by the parser,
     and indented lines are never flagged as malformed regardless of shape.
     spec.externalCitations (issue #1055), if present, is a non-empty list
-    of item mappings, each a flat path/role pair (role one of
-    input-source/output-destination) with no unrecognized key
-    (external-citations-well-formed); every declared path must literally
+    of item mappings, each a flat path/role pair (path rooted at evals/ or
+    docs/; role one of input-source/output-destination) with no
+    unrecognized key (external-citations-well-formed); every declared path
+    must literally
     (exact-substring) appear somewhere in SKILL.md or references/*.md,
     catching a stale declaration whose citation no longer exists
     (external-citations-resolve). This is an opt-in supplement to
@@ -536,6 +537,17 @@ EXTERNAL_CITATION_ITEM_INDENT = 4
 # speculative -- both values are already this repository's own established
 # vocabulary from that section's prose.
 EXTERNAL_CITATION_ROLES = ("input-source", "output-destination")
+# A declared spec.externalCitations path must be rooted at evals/ or docs/,
+# the same two prefixes REPO_PATH_CITATION_RE's own evals/docs alternative
+# gates -- this mechanism exists to rescue exactly that check's own
+# citations, so a path outside both prefixes could never be a real rescue
+# target in the first place (code-review finding, issue #1055). Mirrors
+# skill-metadata.schema.json's own externalCitationItem.path pattern; kept
+# as a separate, hand-duplicated regex here rather than shared, matching
+# this module's own established convention for a schema constraint that
+# also needs enforcing in this dependency-free parser (see
+# EXEC_REQ_NETWORK_SUBKEYS' own comment for the precedent).
+EXTERNAL_CITATION_PATH_RE = re.compile(r"^(?:evals|docs)/[A-Za-z0-9._/-]+$")
 # "Keep SKILL.md body under 500 lines for optimal performance" (same doc;
 # also code.claude.com/docs/en/skills).
 BODY_MAX_LINES = 500
@@ -3538,6 +3550,25 @@ def check_shape(target: Path) -> list[CheckResult]:
             )
             results.append(
                 CheckResult(
+                    "external-citations-well-formed",
+                    False,
+                    "spec.externalCitations, if present, is a non-empty list of "
+                    "item mappings, each with path/role (role one of "
+                    f"{EXTERNAL_CITATION_ROLES}) and no unrecognized key",
+                    evidence,
+                )
+            )
+            results.append(
+                CheckResult(
+                    "external-citations-resolve",
+                    False,
+                    "every spec.externalCitations path literally appears somewhere "
+                    "in SKILL.md or references/*.md (no stale declaration)",
+                    evidence,
+                )
+            )
+            results.append(
+                CheckResult(
                     "skill-dependencies-well-formed",
                     False,
                     "spec.skillDependencies, if present, is a mapping with only "
@@ -3776,13 +3807,14 @@ def check_shape(target: Path) -> list[CheckResult]:
             external_citations = spec.get("externalCitations")
             external_citations_well_formed_rule = (
                 "spec.externalCitations, if present, is a non-empty list of "
-                "item mappings, each with path/role (role one of "
-                f"{EXTERNAL_CITATION_ROLES}) and no unrecognized key"
+                "item mappings, each with a path rooted at evals/ or docs/ "
+                "and a role one of "
+                f"{EXTERNAL_CITATION_ROLES}, and no unrecognized key"
             )
             is_ext_citation_item = lambda c: (  # noqa: E731 -- local, single use
                 isinstance(c, dict)
                 and isinstance(c.get("path"), str)
-                and c.get("path")
+                and bool(EXTERNAL_CITATION_PATH_RE.match(c["path"]))
                 and c.get("role") in EXTERNAL_CITATION_ROLES
             )
             if not spec_is_mapping:
@@ -3831,7 +3863,7 @@ def check_shape(target: Path) -> list[CheckResult]:
                 ext_evidence = (
                     "empty list"
                     if external_citations == []
-                    else f"not a list of item mappings with a valid role: {external_citations!r}"
+                    else f"not a list of item mappings with a valid evals/docs path and role: {external_citations!r}"
                 )
                 results.append(
                     CheckResult(
@@ -4005,29 +4037,37 @@ def check_shape(target: Path) -> list[CheckResult]:
                 )
             )
 
-    if not external_citations_declared:
-        results.append(
-            CheckResult(
-                "external-citations-resolve",
-                True,
-                "every spec.externalCitations path literally appears somewhere "
-                "in SKILL.md or references/*.md (no stale declaration)",
-                "not declared (optional)",
+    # A "manifest is None" (unreadable sidecar) already emitted a failed
+    # external-citations-resolve above, alongside every sibling
+    # sidecar-derived check -- skip here so this unconditional block does
+    # not silently overwrite that FAIL with a "not declared (optional)"
+    # PASS (code-review finding, issue #1055: _by_name's dict comprehension
+    # keeps only the LAST same-named CheckResult, so appending twice is not
+    # merely redundant, it is a real gate bypass).
+    if sidecar_portability.state != "unusable":
+        if not external_citations_declared:
+            results.append(
+                CheckResult(
+                    "external-citations-resolve",
+                    True,
+                    "every spec.externalCitations path literally appears somewhere "
+                    "in SKILL.md or references/*.md (no stale declaration)",
+                    "not declared (optional)",
+                )
             )
-        )
-    else:
-        stale_external_citations = _external_citation_declaration_offenders(
-            external_citations_declared, skill_md, skill_dir, body
-        )
-        results.append(
-            CheckResult(
-                "external-citations-resolve",
-                not stale_external_citations,
-                "every spec.externalCitations path literally appears somewhere "
-                "in SKILL.md or references/*.md (no stale declaration)",
-                "all resolve" if not stale_external_citations else "stale: " + ", ".join(stale_external_citations),
+        else:
+            stale_external_citations = _external_citation_declaration_offenders(
+                external_citations_declared, skill_md, skill_dir, body
             )
-        )
+            results.append(
+                CheckResult(
+                    "external-citations-resolve",
+                    not stale_external_citations,
+                    "every spec.externalCitations path literally appears somewhere "
+                    "in SKILL.md or references/*.md (no stale declaration)",
+                    "all resolve" if not stale_external_citations else "stale: " + ", ".join(stale_external_citations),
+                )
+            )
 
     results.extend(_issue_citation_checks(skill_md, skill_dir, body, extra_sources=sidecar_citation_sources))
     results.extend(_cross_skill_citation_checks(skill_md, skill_dir, body, anchor_slug_cache))

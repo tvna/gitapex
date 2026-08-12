@@ -121,8 +121,8 @@
       "properties": {
         "path": {
           "type": "string",
-          "minLength": 1,
-          "description": "The literal citation text as it appears in SKILL.md or a references/*.md file (e.g. this skill's own gate-record subdirectory, or a design-doc path under this repository's own docs), not a glob or pattern."
+          "pattern": "^(?:evals|docs)/[A-Za-z0-9._/-]+$",
+          "description": "The literal citation text as it appears in SKILL.md or a references/*.md file (e.g. this skill's own gate-record subdirectory, or a design-doc path under this repository's own docs), not a glob or pattern. Rooted at evals/ or docs/, the same two prefixes REPO_PATH_CITATION_RE gates in the bundled shape checker -- this mechanism exists to rescue exactly that check's own citations, so a path outside both prefixes could never be a real rescue target in the first place."
         },
         "role": {
           "type": "string",
