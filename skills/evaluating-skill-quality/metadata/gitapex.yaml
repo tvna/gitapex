@@ -466,10 +466,13 @@ spec:
       summary: "Re-verified live after the round-5 fix plus its own new regression test: 64/64 self-dogfood PASS, full pytest suite 529/529 passed, repo-wide schema drift scanner clean, ruff/mypy clean. This diff's own new-test count is 21."
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1055"
-      summary: "PR review round 6 (/code-review multi-angle fan-out): fixed a real gap -- external-citations-resolve fired unconditionally even with no metadata/gitapex.yaml at all, breaking the well-formed/resolve pairing every sibling sidecar-derived check maintains (only metadata-file-present:False should appear then). Now also gated on sidecar.is_file(), matching that convention."
+      summary: "PR review round 6: fixed a real gap -- external-citations-resolve fired unconditionally even with no metadata/gitapex.yaml at all, breaking the well-formed/resolve pairing every sibling sidecar-derived check maintains (only metadata-file-present:False should appear then). Now also gated on sidecar.is_file(), matching that convention."
     - kind: audit
       anchor: "https://github.com/tvna/gitapex/issues/1055"
       summary: "PR review round 6: a separately reported finding (opening-line path value not comment-stripped, unlike its own continuation-line role field) was investigated and rejected -- _strip_bare_comment only nulls a value starting with '#', it does not strip trailing comments generally; the parser's own documented design deliberately relies on fail-closed-against-the-enum/pattern instead, matching every other sidecar field's behavior."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1064"
+      summary: "PR review (CodeRabbit) on this correction's own follow-up PR: fixed an undisclosed internal '/code-review' tooling marker reintroduced into this entry's own prior text, and cached sidecar.is_file() once as sidecar_present instead of calling it a second time at the external-citations-resolve guard, avoiding a possible desync if the sidecar changed mid-run. Added css.main() coverage to the regression test. Re-verified: pytest and self-dogfood green, ruff/mypy clean."
   skillDependencies:
     requires: []
     relatedTo:

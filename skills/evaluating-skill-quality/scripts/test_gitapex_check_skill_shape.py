@@ -3532,6 +3532,7 @@ def test_external_citations_checks_absent_when_sidecar_missing(tmp_path):
     assert by["metadata-file-present"].passed is False
     assert "external-citations-well-formed" not in by
     assert "external-citations-resolve" not in by
+    assert css.main([str(d)]) == 1
 
 
 def test_external_citations_checks_fail_when_sidecar_unreadable(tmp_path):

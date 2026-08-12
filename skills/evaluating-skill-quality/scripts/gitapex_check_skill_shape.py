@@ -3471,7 +3471,14 @@ def check_shape(target: Path) -> list[CheckResult]:
     # guard silently skipped external-citations-resolve for that second,
     # unrelated case).
     external_citations_sidecar_unreadable = False
-    if not sidecar.is_file():
+    # Cached once, not re-derived at the external-citations-resolve guard
+    # below: a second sidecar.is_file() call there could observe a
+    # different result if the sidecar were created or removed between the
+    # two checks, silently desyncing metadata-file-present from
+    # external-citations-resolve within the same check_shape() run
+    # (CodeRabbit review, issue #1064's own PR).
+    sidecar_present = sidecar.is_file()
+    if not sidecar_present:
         results.append(CheckResult("metadata-file-present", False, f"{SIDECAR_RELATIVE_PATH} exists", "missing"))
         sidecar_portability = SidecarPortability(state="absent")
     else:
@@ -4067,7 +4074,8 @@ def check_shape(target: Path) -> list[CheckResult]:
     # code-review finding on the first fix: the broader state-based guard
     # silently skipped external-citations-resolve there too).
     #
-    # Also guarded on sidecar.is_file(): when the sidecar is missing
+    # Also requires sidecar_present (the cached sidecar.is_file() result
+    # from above, not a second live call): when the sidecar is missing
     # entirely, every sibling sidecar-derived check (skill-dependencies-*,
     # references-well-formed, etc.) is omitted outright rather than firing
     # a "not declared (optional)" PASS -- only metadata-file-present:False
@@ -4075,7 +4083,7 @@ def check_shape(target: Path) -> list[CheckResult]:
     # pairing (a later code-review finding): it fired unconditionally even
     # for a skill directory with no metadata/gitapex.yaml at all, while its
     # own external-citations-well-formed sibling was correctly omitted.
-    if not external_citations_sidecar_unreadable and sidecar.is_file():
+    if not external_citations_sidecar_unreadable and sidecar_present:
         if not external_citations_declared:
             results.append(
                 CheckResult(
