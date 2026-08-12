@@ -1,0 +1,57 @@
+# Issue #1058: a pull request's title must match Conventional Commits
+# format. hooks/check-pr-title-convention.sh already guards the
+# agent-mediated path (mcp__github__create_pull_request /
+# mcp__github__update_pull_request); this workflow is the CI-side backstop
+# for a PR opened or retitled via the GitHub web UI, the `gh` CLI, or
+# another bot, none of which goes through that hook at all.
+#
+# Deliberately no `paths:` filter, for the same reason lint.yml and
+# hidden-characters-gate.yml both state at length in their own headers (see
+# also gitapex_gate_ruleset_required_checks.py's module docstring): a
+# workflow that never fires for a given pull request leaves a required
+# status check `Pending` forever, with no in-repository fix. This job is
+# intended to be registered as a required status check
+# (.github/rulesets/main.json), so it must run unconditionally.
+#
+# `types: [opened, edited, synchronize]` -- `opened` and `synchronize` are
+# the two activity types gitapex_gate_ruleset_required_checks.py requires
+# any required-check-backing workflow to name explicitly; `edited` is added
+# on top so a title-only edit (no new commits) still re-runs this check.
+name: PR title convention gate
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr-title-convention:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      # PR_TITLE carries untrusted external text (anyone who can open or
+      # edit a pull request controls it) -- passed via env, piped to the
+      # script's own stdin, never interpolated into a shell command line,
+      # mirroring acm-issue-gate.yml's own ISSUE_BODY handling.
+      - name: Check PR title matches Conventional Commits format
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$PR_TITLE" | uv run --frozen python3 .github/scripts/gitapex_gate_pr_title_convention.py

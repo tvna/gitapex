@@ -35,7 +35,8 @@
           {"context": "exception-handler-gaps"},
           {"context": "hidden-characters"},
           {"context": "plugin-root-brace-notation"},
-          {"context": "provenance-disclosure"}
+          {"context": "provenance-disclosure"},
+          {"context": "pr-title-convention"}
         ]
       }
     }
