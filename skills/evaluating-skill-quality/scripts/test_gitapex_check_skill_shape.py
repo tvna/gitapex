@@ -3519,6 +3519,22 @@ def test_external_citations_absent_is_well_formed(tmp_path):
     assert css.main([str(d)]) == 0
 
 
+def test_external_citations_checks_absent_when_sidecar_missing(tmp_path):
+    # Regression guard (issue #1064): when metadata/gitapex.yaml is absent
+    # entirely, every sibling sidecar-derived check (external-citations-
+    # well-formed, skill-dependencies-well-formed, references-well-formed,
+    # ...) is omitted outright -- only metadata-file-present: False is
+    # emitted. external-citations-resolve must follow that same
+    # omission convention instead of firing as a false "not declared
+    # (optional)" PASS.
+    d = _write_skill(tmp_path, sidecar=False)
+    by = _by_name(css.check_shape(d))
+    assert by["metadata-file-present"].passed is False
+    assert "external-citations-well-formed" not in by
+    assert "external-citations-resolve" not in by
+    assert css.main([str(d)]) == 1
+
+
 def test_external_citations_checks_fail_when_sidecar_unreadable(tmp_path):
     # Regression guard (code-review finding): an unreadable sidecar must
     # not let external-citations-resolve silently default to "not
