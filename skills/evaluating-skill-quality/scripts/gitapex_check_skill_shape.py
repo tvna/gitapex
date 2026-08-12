@@ -3103,7 +3103,8 @@ def _inline_citation_offenders(
                     blanked[pos] = " "
             blanked_lower = "".join(blanked)
             for spec_idx, (citation_re, hedge_phrases, declared_paths) in enumerate(specs):
-                spec_matches = [(cs, m) for cs in code_spans if (m := citation_re.search(cs.group(2))) is not None]
+                spec_matches = [(cs, list(citation_re.finditer(cs.group(2)))) for cs in code_spans]
+                spec_matches = [(cs, ms) for cs, ms in spec_matches if ms]
                 if not spec_matches:
                     continue
                 prev_has_own_citation = i > 0 and any(citation_re.search(cs.group(2)) for cs in all_code_spans[i - 1])
@@ -3111,9 +3112,15 @@ def _inline_citation_offenders(
                 hedged = any(phrase in blanked_lower or phrase in candidate_prev for phrase in hedge_phrases)
                 if hedged:
                     continue
-                for cs, citation_match in spec_matches:
-                    declared = bool(declared_paths) and citation_match.group(0) in declared_paths
-                    if not declared:
+                for cs, matches in spec_matches:
+                    # A span is rescued only when EVERY citation match it
+                    # carries is declared -- per-citation, not clause-wide
+                    # (issue #1055): a span packing one declared and one
+                    # undeclared citation (e.g. `` `docs/a.md docs/b.md` ``)
+                    # must still surface the undeclared one, so a single
+                    # ``.search()`` (first match only) is not enough here.
+                    all_declared = bool(declared_paths) and all(m.group(0) in declared_paths for m in matches)
+                    if not all_declared:
                         offenders_per_spec[spec_idx].append(cs.group(0))
     return [_dedup(offenders) for offenders in offenders_per_spec]
 
@@ -4105,21 +4112,31 @@ def _external_citation_declaration_offenders(
     external_citations: list[dict[str, object]], skill_md: Path, skill_dir: Path, body: list[str]
 ) -> list[str]:
     """Return each ``spec.externalCitations`` declared ``path`` (issue
-    #1055) with no literal (exact-substring) match anywhere in SKILL.md or
-    references/*.md -- a stale declaration naming a citation this skill no
-    longer actually carries. Matches ``_citation_sources``' own raw,
-    unfenced text (a declared path legitimately citing an illustrative
-    fenced example is still a real citation this check should find), the
-    same exact-literal-substring matching Q3 of issue #1055's design
-    decision settled on -- deliberately not a regex or line-anchored
-    match, mirroring how a declaration is expected to quote its own
-    citation's exact text.
+    #1055) with no literal, exact match against a real citation-shaped
+    token anywhere in SKILL.md or references/*.md -- a stale declaration
+    naming a citation this skill no longer actually carries. Matches
+    ``_citation_sources``' own raw, unfenced text (a declared path
+    legitimately citing an illustrative fenced example is still a real
+    citation this check should find), the same exact-literal matching Q3
+    of issue #1055's design decision settled on -- deliberately not a
+    regex or line-anchored match, mirroring how a declaration is expected
+    to quote its own citation's exact text.
+
+    Matched against ``REPO_PATH_CITATION_RE``'s own extracted tokens, not
+    a raw substring test over the whole haystack: a plain ``path in
+    haystack`` check would let a declaration for ``docs/a.md`` falsely
+    "resolve" against a real, different citation like ``docs/a.mdx`` --
+    ``docs/a.md`` is a literal prefix of it -- since the character class
+    ``REPO_PATH_CITATION_RE`` accepts (including ``.``) makes prefix
+    overlap between two distinct real citations possible. Anchoring to
+    the regex's own extracted tokens keeps "exact literal match" exact.
     """
     haystack = "\n".join(source_text for _label, source_text in _citation_sources(skill_md, skill_dir, body))
+    cited_tokens = frozenset(m.group(0) for m in REPO_PATH_CITATION_RE.finditer(haystack))
     offenders = []
     for entry in external_citations:
         path = entry.get("path")
-        if isinstance(path, str) and path and path not in haystack:
+        if isinstance(path, str) and path and path not in cited_tokens:
             offenders.append(path)
     return offenders
 

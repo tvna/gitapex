@@ -3631,6 +3631,24 @@ def test_external_citations_stale_declaration_fails_resolve(tmp_path):
     assert css.main([str(d)]) == 1
 
 
+def test_external_citations_resolve_rejects_prefix_overlap_false_match(tmp_path):
+    # Regression guard (review finding): a declared path that is a literal
+    # PREFIX of a different, real citation (docs/a.md vs. the actually-cited
+    # docs/a.mdx) must still be reported stale -- a raw `path in haystack`
+    # substring test would wrongly "resolve" it via prefix overlap, since
+    # REPO_PATH_CITATION_RE's own character class permits `.`.
+    d = _write_skill(tmp_path)
+    (d / "SKILL.md").write_text(
+        (d / "SKILL.md").read_text(encoding="utf-8") + "\nSee `docs/a.mdx` for background.\n",
+        encoding="utf-8",
+    )
+    _write_external_citations_sidecar(d, "  externalCitations:\n    - path: docs/a.md\n      role: input-source\n")
+    by = _by_name(css.check_shape(d))
+    assert by["external-citations-well-formed"].passed is True
+    assert by["external-citations-resolve"].passed is False
+    assert "docs/a.md" in by["external-citations-resolve"].evidence
+
+
 def test_external_citations_resolve_runs_when_portability_invalid(tmp_path):
     # Regression guard (code-review finding, follow-up to the sidecar-
     # unreadable fix above): sidecar_portability.state also reads
@@ -3710,6 +3728,27 @@ def test_undeclared_inline_path_citation_still_fails_without_hedge(tmp_path):
     assert "docs/adr/0002-declared.md" not in result.evidence
 
 
+def test_declared_path_does_not_blanket_rescue_undeclared_span_mate(tmp_path):
+    # Regression guard (review finding): a single inline-code span carrying
+    # TWO citations, only one declared, must not be rescued wholesale just
+    # because the first citation `citation_re.search` finds is declared --
+    # the per-citation promise above only holds if every match within the
+    # span is checked, not just the first.
+    d = _write_skill(tmp_path)
+    (d / "SKILL.md").write_text(
+        (d / "SKILL.md").read_text(encoding="utf-8")
+        + "\nSee `docs/adr/0002-declared.md docs/adr/0003-undeclared.md` for background.\n",
+        encoding="utf-8",
+    )
+    _write_external_citations_sidecar(
+        d, "  externalCitations:\n    - path: docs/adr/0002-declared.md\n      role: input-source\n"
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["portable-no-inline-path-citation"]
+    assert result.passed is False
+    assert "docs/adr/0003-undeclared.md" in result.evidence
+
+
 def test_declared_external_citation_does_not_rescue_bare_prose_citation(tmp_path):
     # Non-goal, stated explicitly in issue #1055: the bare-prose repo-path
     # check (portable-no-repo-path-citation) stays unconditional and
@@ -3769,13 +3808,22 @@ def test_external_citations_block_closes_before_sibling_key(tmp_path):
 
 def test_declared_external_citation_does_not_rescue_issue_number_citation(tmp_path):
     # The issue-number spec's own declared_paths stays empty -- issue
-    # #1055 only revisits the repo-path row.
+    # #1055 only revisits the repo-path row. A genuinely well-formed
+    # externalCitations declaration (a valid evals/docs path, otherwise
+    # this test would pass vacuously regardless of the scoping guard,
+    # since a malformed declaration never reaches declared_citation_paths
+    # at all) must still leave an undeclared issue-number citation
+    # unrescued.
     d = _write_skill(tmp_path)
     (d / "SKILL.md").write_text(
-        (d / "SKILL.md").read_text(encoding="utf-8") + "\nSee `#149` for the original report.\n", encoding="utf-8"
+        (d / "SKILL.md").read_text(encoding="utf-8")
+        + "\nSee `#149` for the original report, and `docs/x.md` for background.\n",
+        encoding="utf-8",
     )
-    _write_external_citations_sidecar(d, "  externalCitations:\n    - path: '#149'\n      role: input-source\n")
+    _write_external_citations_sidecar(d, "  externalCitations:\n    - path: docs/x.md\n      role: input-source\n")
     by = _by_name(css.check_shape(d))
+    assert by["external-citations-well-formed"].passed is True
+    assert by["external-citations-resolve"].passed is True
     assert by["portable-no-unhedged-inline-issue-citation"].passed is False
 
 

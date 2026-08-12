@@ -446,6 +446,18 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1055"
       summary: "Removed every embedded issue/PR-URL history citation from skill-metadata.schema.json's own field descriptions (externalCitations, referenceItem, executionRequirements and its packages/network sub-blocks): the schema declares the sidecar's design contract, not a provenance log -- that role already belongs to this sidecar's own spec.references. Substantive rationale text was kept verbatim; only the citation was dropped."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1055"
+      summary: "PR review round 4 (independent two-layer review, drafting-a-pr-to-merge): fixed a real regression in _inline_citation_offenders -- a single inline-code span carrying two citations was rescued wholesale when only the first match (via .search, not .finditer) was declared, silently hiding an undeclared span-mate. Every match within a span must now be declared before the whole span is rescued, per-citation as designed."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1055"
+      summary: "PR review round 4: fixed a stale-declaration false-negative in external-citations-resolve -- plain substring matching let a declared path falsely resolve via prefix overlap with a different real citation (e.g. docs/a.md against docs/a.mdx). Now matched against REPO_PATH_CITATION_RE's own extracted citation tokens, keeping the check's 'exact literal match' claim actually exact."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1055"
+      summary: "PR review round 4: test_declared_external_citation_does_not_rescue_issue_number_citation declared an invalid path (an issue-number literal, failing the evals/docs schema pattern), so declared_citation_paths stayed empty regardless of the scoping guard under test -- tautological. Replaced with a well-formed docs/ declaration alongside the undeclared issue-number citation it was meant to test."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/1055"
+      summary: "Re-verified live after all three round-4 fixes plus two new regression tests: 64/64 self-dogfood PASS, full pytest suite 528/528 passed, repo-wide schema drift scanner clean. This diff's own new-test count is 20, not the earlier round's stale '15' figure (verified via a diff-line function count against origin/main)."
   skillDependencies:
     requires: []
     relatedTo:
