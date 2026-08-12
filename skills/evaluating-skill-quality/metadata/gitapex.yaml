@@ -464,6 +464,15 @@ spec:
     - kind: audit
       anchor: "https://github.com/tvna/gitapex/issues/1055"
       summary: "Re-verified live after the round-5 fix plus its own new regression test: 64/64 self-dogfood PASS, full pytest suite 529/529 passed, repo-wide schema drift scanner clean, ruff/mypy clean. This diff's own new-test count is 21."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1064"
+      summary: "external-citations-resolve fired as a false 'not declared (optional)' PASS even when a skill has no metadata/gitapex.yaml sidecar at all, breaking the omission convention every sibling sidecar-derived check already follows. Fixed by gating its emission on sidecar.is_file() in addition to the existing external_citations_sidecar_unreadable guard, and added regression test test_external_citations_checks_absent_when_sidecar_missing."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/1064"
+      summary: "Re-verified live on a fresh branch rebased onto post-merge main: full pytest suite 530/530 passed, self-dogfood against evaluating-skill-quality 64/64 PASS, repo-wide skill-metadata schema drift scanner clean, ruff check/format and mypy clean."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1064"
+      summary: "PR review (CodeRabbit): the fix's sidecar.is_file() guard was called twice (once before parsing, once at the external-citations-resolve decision), a redundant re-check that could desync if the sidecar changed mid-run. Cached the initial result once as sidecar_present and reused it at both sites. Re-verified: 530/530 pytest, 64/64 self-dogfood, ruff/mypy clean."
   skillDependencies:
     requires: []
     relatedTo:

@@ -3471,7 +3471,14 @@ def check_shape(target: Path) -> list[CheckResult]:
     # guard silently skipped external-citations-resolve for that second,
     # unrelated case).
     external_citations_sidecar_unreadable = False
-    if not sidecar.is_file():
+    # Cached once, not re-derived at the external-citations-resolve guard
+    # below: a second sidecar.is_file() call there could observe a
+    # different result if the sidecar were created or removed between the
+    # two checks, silently desyncing metadata-file-present from
+    # external-citations-resolve within the same check_shape() run
+    # (CodeRabbit review, issue #1064's own PR).
+    sidecar_present = sidecar.is_file()
+    if not sidecar_present:
         results.append(CheckResult("metadata-file-present", False, f"{SIDECAR_RELATIVE_PATH} exists", "missing"))
         sidecar_portability = SidecarPortability(state="absent")
     else:
@@ -4066,7 +4073,16 @@ def check_shape(target: Path) -> list[CheckResult]:
     # unrelated case where this block must still run (a follow-up
     # code-review finding on the first fix: the broader state-based guard
     # silently skipped external-citations-resolve there too).
-    if not external_citations_sidecar_unreadable:
+    #
+    # Also requires sidecar_present (the cached sidecar.is_file() result
+    # from above, not a second live call): when the sidecar is absent
+    # entirely, every sibling sidecar-derived check (references-well-formed,
+    # skill-dependencies-well-formed, ...) is omitted outright -- only
+    # metadata-file-present: False is emitted. Without this guard,
+    # external-citations-resolve broke that convention by firing here as a
+    # false "not declared (optional)" PASS even with no sidecar at all
+    # (issue #1064).
+    if not external_citations_sidecar_unreadable and sidecar_present:
         if not external_citations_declared:
             results.append(
                 CheckResult(
