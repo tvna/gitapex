@@ -92,13 +92,13 @@ its own owning issues/files, never gitapex's.
    section has a worked example of this from gitapex's own history).
 8. **Run the shape checks before committing:** this repository's own
    skill-shape checker against any skill whose files changed
-   (`references/gitapex-cross-links.md` names gitapex's own command),
-   this skill's own axis-shape checker (Run `gitapex_check_axis_shape.py`):
-   `python3 scripts/gitapex_check_axis_shape.py <path-to-your-scope-map>`, and
+   (`references/gitapex-cross-links.md` names gitapex's own command);
+   run `gitapex_check_axis_shape.py` (this skill's own axis-shape checker):
+   `python3 scripts/gitapex_check_axis_shape.py <path-to-your-scope-map>`; and
    -- if the edit touched a table-rendered evidence file such as this
-   skill's own `references/middleware-inventory.md` -- its table-shape
-   checker. See `gitapex_check_middleware_table_shape.py` for the exact
-   invocation, pointed at that same file.
+   skill's own `references/middleware-inventory.md` -- run
+   `gitapex_check_middleware_table_shape.py` (its table-shape checker):
+   `python3 scripts/gitapex_check_middleware_table_shape.py <path-to-that-file>`.
 
 ## Output
 

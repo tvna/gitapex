@@ -451,20 +451,32 @@ Checks (the canonical list -- the manual fallback is to apply these):
     location-shaped phrasing is otherwise sparse, so a broader vocabulary
     would have no evidence base and a much larger false-positive surface.
   - No voodoo constant (no-voodoo-constant, issue #1045's Acceptance
-    Criteria Map item A): every module-level ALL-CAPS-named assignment
+    Criteria Map item A): every module-level ALL-CAPS-named target
     (``^[A-Z][A-Z0-9_]*$``, the conventional constant-naming heuristic
     that keeps this check from flagging an ordinary variable or a
     regex-compiled pattern like ``NAME_RE = re.compile(...)``, whose RHS
-    is a Call, not a literal) in every non-test ``*.py`` file directly
-    under the skill's own ``scripts/`` directory (``test_*.py`` files are
-    excluded -- test fixture literals are not "configuration" and would
-    be enormous false-positive noise, e.g. this very checker's own
-    ``test_gitapex_check_skill_shape.py``) whose right-hand side is a
-    "simple literal" (a bare ``ast.Constant``, or an ``ast.Tuple``/
-    ``ast.List``/``ast.Set`` of nothing but ``ast.Constant`` elements)
-    must carry an adjacent justifying comment: either a trailing ``#``
-    comment on the assignment's own source line, or a comment-only line
-    immediately above it (blank lines skipped when walking upward).
+    is a Call, not a literal) of a plain assignment or an annotated
+    assignment with a value (``TIMEOUT: int = 30``; a bare annotation with
+    no value, ``TIMEOUT: int``, has nothing to scan) in every non-test
+    ``*.py`` file directly under the skill's own ``scripts/`` directory
+    (``test_*.py`` files are excluded -- test fixture literals are not
+    "configuration" and would be enormous false-positive noise, e.g. this
+    very checker's own ``test_gitapex_check_skill_shape.py``) whose
+    right-hand side is a "simple literal" (a bare ``ast.Constant``; an
+    ``ast.Tuple``/``ast.List``/``ast.Set`` of nothing but ``ast.Constant``
+    elements; or an ``ast.Dict`` whose every key and value is itself an
+    ``ast.Constant``) must carry an adjacent justifying comment: either a
+    real ``COMMENT`` token, per Python's own ``tokenize`` module (not a
+    naive ``"#" in line`` scan, which false-passes on a ``#`` character
+    living inside a string-literal RHS itself, e.g.
+    ``PREFIX = "issue #"``, which carries no real comment), on any
+    physical line the statement itself spans -- covers both a trailing
+    comment on a single-line assignment and one on a multi-line container
+    literal's own opening line (``NAME = (  # explanation`` ... ``)``) --
+    or a comment-only line immediately above the statement's first line
+    (blank lines skipped when walking upward). A chained assignment
+    (``FOO = bar = 1``) is evaluated per-target, not gated on every target
+    matching the ALL-CAPS heuristic together.
     Deliberately only checks module-level statements (``ast.parse``'s
     top-level ``tree.body``, never recursed into a function or class
     body) -- a constant assigned inside a function is a local, not a
@@ -488,9 +500,15 @@ Checks (the canonical list -- the manual fallback is to apply these):
     anywhere in SKILL.md or references/* (via ``_citation_sources``, the
     same source set every prose citation check above scans) as an
     inline-code span of its own exact filename (`` `filename` ``) must
-    have at least one such mention whose own source line also carries
-    explicit execution-intent phrasing: ``Run `filename` `` or ``See
-    `filename` for ...``. A script never mentioned this way anywhere is
+    have at least one such mention whose own enclosing paragraph
+    (``_markdown_paragraphs`` -- blank-line-delimited, with internal
+    hard-wrapped newlines joined to a single space, so a citation and its
+    qualifying phrase still match when a line-wrap falls between them)
+    also carries explicit execution-intent phrasing: ``Run `filename` ``
+    or ``See `filename` ... for ...`` (case-insensitive -- a natural,
+    grammatically lowercase mid-sentence "run"/"see" counts the same as a
+    sentence-initial capitalized one; case carries no semantic
+    distinction for this check). A script never mentioned this way anywhere is
     silently skipped, not flagged -- an unlinked/unreferenced script is a
     separate dimension-5 progressive-disclosure concern, out of scope for
     this check, per its own "referenced from SKILL.md/references/"
@@ -514,8 +532,10 @@ import json
 import os.path
 import re
 import sys
+import tokenize
 from collections.abc import Iterable
 from dataclasses import dataclass
+from io import StringIO
 from pathlib import Path
 
 # The Claude Developer Platform Skills API enforces description <= 1024
@@ -4875,19 +4895,28 @@ _ALL_CAPS_CONST_NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
 
 def _is_simple_literal_node(node: ast.expr) -> bool:
-    """Whether ``node`` (an ``ast.Assign.value``) is a "simple literal" for
-    the no-voodoo-constant check: a bare ``ast.Constant``, or an
+    """Whether ``node`` (an assignment's RHS value) is a "simple literal"
+    for the no-voodoo-constant check: a bare ``ast.Constant``, an
     ``ast.Tuple``/``ast.List``/``ast.Set`` whose every element is itself an
     ``ast.Constant`` (covers e.g. this file's own
     ``EXEC_REQ_NETWORK_MODES = ("disabled", "allowlist", "unrestricted")``-
-    shaped constants). Deliberately excludes any RHS containing a Call, a
-    Name reference, or a nested container -- those are outside this check's
-    narrow "bare data literal with no adjacent justification" scope.
+    shaped constants), or an ``ast.Dict`` whose every key and value is
+    itself an ``ast.Constant`` (a literal-keys-and-values config mapping is
+    exactly the "voodoo constant" shape this check exists to catch; a
+    ``None`` key -- the AST's own shape for a ``**spread`` entry -- fails
+    the ``ast.Constant`` check and so is correctly excluded). Deliberately
+    excludes any RHS containing a Call, a Name reference, or a nested
+    container -- those are outside this check's narrow "bare data literal
+    with no adjacent justification" scope.
     """
     if isinstance(node, ast.Constant):
         return True
     if isinstance(node, (ast.Tuple, ast.List, ast.Set)):
         return all(isinstance(elt, ast.Constant) for elt in node.elts)
+    if isinstance(node, ast.Dict):
+        return all(isinstance(k, ast.Constant) for k in node.keys) and all(
+            isinstance(v, ast.Constant) for v in node.values
+        )
     return False
 
 
@@ -4908,29 +4937,91 @@ def _bundled_python_scripts(skill_dir: Path) -> list[Path]:
     ]
 
 
+def _assignment_target_names(node: ast.stmt) -> tuple[list[str], ast.expr | None]:
+    """Return (bare-Name target names, RHS value) for a module-level
+    ``ast.Assign`` or ``ast.AnnAssign`` statement, uniformly -- an
+    ``ast.AnnAssign`` (``TIMEOUT: int = 30``) carries a single ``target``,
+    not a ``targets`` list, and its own ``value`` is ``None`` for a
+    bare annotation with no assignment (``TIMEOUT: int``, nothing to
+    scan). Any other statement type, or an ``ast.AnnAssign`` with no
+    value, returns ``([], None)``.
+
+    Each target is evaluated independently by the caller rather than
+    requiring every target in a chained assignment (``FOO = bar = 1``) to
+    match the ALL-CAPS heuristic together -- a tuple-unpacking, attribute,
+    or subscript target is simply excluded from the returned name list
+    (not a reason to discard the whole statement), since those are not
+    simple named constants either.
+    """
+    if isinstance(node, ast.Assign):
+        return [t.id for t in node.targets if isinstance(t, ast.Name)], node.value
+    if isinstance(node, ast.AnnAssign) and node.value is not None and isinstance(node.target, ast.Name):
+        return [node.target.id], node.value
+    return [], None
+
+
+def _comment_line_numbers(source: str) -> set[int]:
+    """Physical (1-indexed) line numbers carrying a real ``COMMENT`` token,
+    per Python's own tokenizer -- correctly distinguishes an actual
+    comment from a ``#`` character living inside a string literal (the
+    tokenizer never emits a ``COMMENT`` token for one), unlike a naive
+    ``"#" in line`` text scan. Returns an empty set on any tokenizer error
+    -- callers already treat a file that fails ``ast.parse`` as
+    contributing zero offenders, so a source that also fails to tokenize
+    (unlikely once it has already parsed, but not impossible for exotic
+    encodings) degrades to "no comments found" rather than raising.
+    """
+    comment_lines: set[int] = set()
+    try:
+        for tok in tokenize.generate_tokens(StringIO(source).readline):
+            if tok.type == tokenize.COMMENT:
+                comment_lines.add(tok.start[0])
+    except (tokenize.TokenError, IndentationError, SyntaxError, UnicodeDecodeError):
+        return set()
+    return comment_lines
+
+
+def _has_adjacent_comment(node: ast.stmt, lines: list[str], comment_lines: set[int]) -> bool:
+    """Whether ``node`` (an ``ast.Assign``/``ast.AnnAssign`` statement) has
+    an adjacent justifying comment: (a) a real ``COMMENT`` token (per
+    ``comment_lines``, tokenizer-derived -- never a ``#`` living inside a
+    string-literal RHS, e.g. ``PREFIX = "issue #"``) exists on ANY
+    physical line the statement itself spans (``node.lineno`` through
+    ``node.end_lineno`` inclusive) -- covers both a trailing comment on a
+    single-line assignment and a trailing comment on a multi-line
+    container literal's own opening line (e.g.
+    ``NAME = (  # explanation`` ... ``)``), which a strict
+    "only the very last line" check would miss; or (b) the nearest
+    non-blank source line above the statement's first line is itself a
+    comment-only line.
+    """
+    end_lineno = node.end_lineno or node.lineno
+    if any(lineno in comment_lines for lineno in range(node.lineno, end_lineno + 1)):
+        return True
+    prev_idx = node.lineno - 2
+    while prev_idx >= 0:
+        prev_line = lines[prev_idx].strip()
+        if not prev_line:
+            prev_idx -= 1
+            continue
+        return prev_line.startswith("#")
+    return False
+
+
 def _voodoo_constant_offenders(scripts: list[Path]) -> list[str]:
     """Return ``scripts/FILE.py:LINE:NAME`` for each module-level,
-    ALL-CAPS-named, simple-literal assignment in ``scripts`` with no
-    adjacent justifying comment -- see the module docstring's
-    no-voodoo-constant entry for the full rule and its deliberate escape
-    hatch (any adjacent comment, however short, satisfies this check).
+    ALL-CAPS-named, simple-literal assignment or annotated assignment in
+    ``scripts`` with no adjacent justifying comment -- see the module
+    docstring's no-voodoo-constant entry for the full rule and its
+    deliberate escape hatch (any adjacent comment, however short,
+    satisfies this check).
 
     Only ``tree.body`` (module-level statements) is walked, never
     recursed into a function or class body -- a constant assigned inside a
     function is a local, not a "voodoo constant" in the configuration
-    sense this check targets. A tuple-unpacking, attribute, or subscript
-    assignment target is skipped (only a bare ``ast.Name`` target
-    qualifies) since those are not simple named constants either.
-
-    "Adjacent" is checked two ways: (a) the assignment's own raw source
-    line contains a ``#`` anywhere after column 0 -- a naive ``"#" in
-    line`` check is safe here since a ``#`` cannot legally appear
-    unescaped in the simple-literal RHS shapes this scans (a Call-built
-    RHS like a regex pattern is already excluded by
-    ``_is_simple_literal_node``); or (b) the nearest non-blank source line
-    above the assignment is itself a comment-only line. A file that fails
-    to parse (``SyntaxError``) contributes zero offenders -- a malformed
-    script is a different problem, not this check's.
+    sense this check targets. A file that fails to parse (``SyntaxError``)
+    contributes zero offenders -- a malformed script is a different
+    problem, not this check's.
     """
     offenders: list[str] = []
     for script in scripts:
@@ -4943,34 +5034,17 @@ def _voodoo_constant_offenders(scripts: list[Path]) -> list[str]:
         except SyntaxError:
             continue
         lines = source.splitlines()
+        comment_lines = _comment_line_numbers(source)
         relpath = f"scripts/{script.name}"
         for node in tree.body:
-            if not isinstance(node, ast.Assign):
+            names, value = _assignment_target_names(node)
+            if not names or value is None or not _is_simple_literal_node(value):
                 continue
-            if not all(isinstance(t, ast.Name) for t in node.targets):
-                continue
-            names = [t.id for t in node.targets if isinstance(t, ast.Name)]
-            if not names or not all(_ALL_CAPS_CONST_NAME_RE.match(n) for n in names):
-                continue
-            if not _is_simple_literal_node(node.value):
-                continue
-            lineno = node.lineno
-            line_text = lines[lineno - 1] if 0 < lineno <= len(lines) else ""
-            if "#" in line_text:
-                continue
-            prev_idx = lineno - 2
-            has_comment_above = False
-            while prev_idx >= 0:
-                prev_line = lines[prev_idx].strip()
-                if not prev_line:
-                    prev_idx -= 1
-                    continue
-                has_comment_above = prev_line.startswith("#")
-                break
-            if has_comment_above:
+            if _has_adjacent_comment(node, lines, comment_lines):
                 continue
             for name in names:
-                offenders.append(f"{relpath}:{lineno}:{name}")
+                if _ALL_CAPS_CONST_NAME_RE.match(name):
+                    offenders.append(f"{relpath}:{node.lineno}:{name}")
     return offenders
 
 
@@ -5009,24 +5083,49 @@ def _bundled_scripts(skill_dir: Path) -> list[Path]:
     return [p for p in sorted(scripts_dir.iterdir()) if p.is_file()]
 
 
+def _markdown_paragraphs(source_text: str) -> list[str]:
+    """Blank-line-delimited paragraphs from ``source_text``, each with its
+    own internal hard-wrapped newlines joined to a single space -- the
+    same unit Markdown itself treats a hard-wrapped sentence as. A
+    citation and its qualifying execution-intent phrase can legitimately
+    fall on different physical source lines purely because of where a
+    line-wrap happens to land (this repository's own Markdown is
+    hard-wrapped around 80 columns); paragraph-level matching recognizes
+    them as adjacent regardless, where a strict same-physical-line match
+    would not.
+    """
+    paragraphs: list[str] = []
+    current: list[str] = []
+    for line in source_text.split("\n"):
+        if line.strip() == "":
+            if current:
+                paragraphs.append(" ".join(current))
+                current = []
+        else:
+            current.append(line)
+    if current:
+        paragraphs.append(" ".join(current))
+    return paragraphs
+
+
 def _script_execution_intent_offenders(
     skill_md: Path, skill_dir: Path, body: list[str], scripts: list[Path]
 ) -> list[str]:
     """Return ``label:filename`` for each bundled script in ``scripts``
     that IS mentioned somewhere in ``_citation_sources`` as an inline-code
     span of its own exact filename (`` `filename` ``) but carries no such
-    mention whose own source line also states explicit execution intent
-    (``Run `filename` `` or ``See `filename` for ...``) -- see the module
-    docstring's script-execution-intent-stated entry for the full rule.
+    mention whose own enclosing paragraph (``_markdown_paragraphs`` --
+    blank-line-delimited, hard-wrapped newlines joined) also states
+    explicit execution intent (``Run `filename` `` or
+    ``See `filename` ... for ...``) -- see the module docstring's
+    script-execution-intent-stated entry for the full rule.
 
     A script never mentioned this way anywhere is skipped entirely, not an
     offender -- an unlinked/unreferenced script is a separate
     dimension-5 progressive-disclosure concern, out of scope for this
-    check. A same-line check is sufficient: every real usage in this
-    repository's own skills writes these phrases on one line. The result
-    is deduplicated by filename -- a script mentioned in multiple files
-    with no qualifying phrase in any of them is reported once, labelled by
-    the first source it was found unqualified in.
+    check. The result is deduplicated by filename -- a script mentioned in
+    multiple files with no qualifying phrase in any of them is reported
+    once, labelled by the first source it was found unqualified in.
     """
     sources = _citation_sources(skill_md, skill_dir, body)
     offenders: list[str] = []
@@ -5034,19 +5133,26 @@ def _script_execution_intent_offenders(
     for script in scripts:
         filename = script.name
         token = f"`{filename}`"
-        run_re = re.compile(r"\bRun\s+`" + re.escape(filename) + r"`")
-        see_re = re.compile(r"\bSee\s+`" + re.escape(filename) + r"`[^\n]*\bfor\b")
+        # Case-insensitive: "run"/"see" mid-sentence ("...also run `x.py`
+        # to...") is natural, grammatically-required lowercase prose, not
+        # a defect -- only the capitalized, sentence-initial imperative
+        # form the rubric's own illustrative example happens to use. Case
+        # carries no semantic distinction for "does this state execution
+        # intent," so gating on it would only pressure authors toward
+        # awkward, sentence-initial-only phrasing to satisfy the check.
+        run_re = re.compile(r"\bRun\s+`" + re.escape(filename) + r"`", re.IGNORECASE)
+        see_re = re.compile(r"\bSee\s+`" + re.escape(filename) + r"`[^\n]*\bfor\b", re.IGNORECASE)
         mentioned = False
         satisfied = False
         first_offending_label: str | None = None
         for label, source_text in sources:
             if token not in source_text:
                 continue
-            for line in source_text.split("\n"):
-                if token not in line:
+            for para in _markdown_paragraphs(source_text):
+                if token not in para:
                     continue
                 mentioned = True
-                if run_re.search(line) or see_re.search(line):
+                if run_re.search(para) or see_re.search(para):
                     satisfied = True
                     break
                 if first_offending_label is None:

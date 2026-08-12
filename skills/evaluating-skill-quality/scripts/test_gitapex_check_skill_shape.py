@@ -6277,6 +6277,83 @@ def test_voodoo_constant_function_level_not_flagged(tmp_path):
     assert result.evidence == "none"
 
 
+def test_voodoo_constant_hash_inside_string_literal_still_flagged(tmp_path):
+    # Regression: a "#" living INSIDE a string-literal RHS (not a real
+    # trailing comment) must not false-pass a naive "#" in line scan --
+    # the check must locate real comment text strictly after the
+    # statement's own end position.
+    d = _write_raw(tmp_path, _simple_body("No prose reference needed."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text('PREFIX = "issue #"\n', encoding="utf-8")
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is False
+    assert "scripts/checker.py:1:PREFIX" in result.evidence
+
+
+def test_voodoo_constant_annotated_assignment_flagged(tmp_path):
+    # Regression: ast.AnnAssign (TIMEOUT: int = 30) is a different node
+    # type from ast.Assign and must not be silently invisible to the scan.
+    d = _write_raw(tmp_path, _simple_body("No prose reference needed."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text("TIMEOUT: int = 30\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is False
+    assert "scripts/checker.py:1:TIMEOUT" in result.evidence
+
+
+def test_voodoo_constant_annotated_assignment_with_comment_passes(tmp_path):
+    d = _write_raw(tmp_path, _simple_body("No prose reference needed."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text("TIMEOUT: int = 30  # seconds\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is True
+    assert result.evidence == "none"
+
+
+def test_voodoo_constant_bare_annotation_no_value_not_flagged(tmp_path):
+    # TIMEOUT: int (no "= value") has nothing to scan -- not a literal
+    # assignment at all.
+    d = _write_raw(tmp_path, _simple_body("No prose reference needed."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text("TIMEOUT: int\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is True
+    assert result.evidence == "none"
+
+
+def test_voodoo_constant_dict_literal_flagged(tmp_path):
+    # Regression: an ast.Dict of literal keys/values is exactly the
+    # "voodoo constant" config-data shape this check exists to catch.
+    d = _write_raw(tmp_path, _simple_body("No prose reference needed."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text('CONFIG = {"a": 1, "b": 2}\n', encoding="utf-8")
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is False
+    assert "scripts/checker.py:1:CONFIG" in result.evidence
+
+
+def test_voodoo_constant_dict_literal_with_comment_passes(tmp_path):
+    d = _write_raw(tmp_path, _simple_body("No prose reference needed."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text('CONFIG = {"a": 1, "b": 2}  # defaults\n', encoding="utf-8")
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is True
+    assert result.evidence == "none"
+
+
+def test_voodoo_constant_chained_assignment_evaluated_per_target(tmp_path):
+    # Regression: FOO = bar = 1 must not be silently skipped just because
+    # one of the two chained targets ("bar") is not ALL-CAPS -- FOO is
+    # still a genuine uncommented constant.
+    d = _write_raw(tmp_path, _simple_body("No prose reference needed."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text("FOO = bar = 1\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is False
+    assert "scripts/checker.py:1:FOO" in result.evidence
+    assert "bar" not in result.evidence
+
+
 def test_script_execution_intent_run_phrasing_passes(tmp_path):
     d = _write_raw(tmp_path, _simple_body("Run `checker.py` to verify the shape."))
     (d / "scripts").mkdir()
