@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import gitapex_gate_transfer_check_disclosure as gate
 from conftest import FakeStdin as _FakeStdin
+from conftest import make_validation_error
 
 _ENTRY_WITH_TRANSFER_CHECK = """\
 ## Iteration: issue #1, first edit.
@@ -300,6 +301,16 @@ def test_args_defaults_paths_to_empty_list():
 def test_args_accepts_an_explicit_paths_list():
     validated = gate.TransferCheckDisclosureArgs(paths=["a.md", "b.md"])
     assert validated.paths == ["a.md", "b.md"]
+
+
+def test_main_exits_two_when_args_fail_validation(tmp_path, monkeypatch, capsys):
+    def _raise(*args, **kwargs):
+        raise make_validation_error()
+
+    monkeypatch.setattr(gate, "TransferCheckDisclosureArgs", _raise)
+    path = _write(tmp_path, "split.md", _ENTRY_WITH_TRANSFER_CHECK)
+    assert gate.main([path]) == 2
+    assert "invalid CLI arguments" in capsys.readouterr().err
 
 
 def test_args_default_paths_list_is_not_shared_across_instances():

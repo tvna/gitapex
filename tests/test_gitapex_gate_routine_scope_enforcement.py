@@ -10,6 +10,7 @@ instruction.
 from __future__ import annotations
 
 import gitapex_gate_routine_scope_enforcement as gate
+from conftest import make_validation_error
 
 
 def _write_sidecar(tmp_path, name, capability):
@@ -273,6 +274,17 @@ def test_main_missing_file_errors(tmp_path, capsys):
 def test_args_defaults_skills_root_to_skills():
     validated = gate.RoutineScopeEnforcementArgs(docs=["a.md"])
     assert validated.skills_root == "skills"
+
+
+def test_main_exits_two_when_args_fail_validation(tmp_path, capsys, monkeypatch):
+    def _raise(*args, **kwargs):
+        raise make_validation_error()
+
+    monkeypatch.setattr(gate, "RoutineScopeEnforcementArgs", _raise)
+    doc = tmp_path / "routine-doc.md"
+    doc.write_text(_PROMPT_ONLY_DOC, encoding="utf-8")
+    assert gate.main(["--skills-root", str(tmp_path / "skills"), str(doc)]) == 2
+    assert "invalid CLI arguments" in capsys.readouterr().err
 
 
 def test_real_repo_routine_docs_pass():
