@@ -5025,15 +5025,15 @@ def _voodoo_constant_offenders(scripts: list[Path]) -> list[str]:
     function is a local, not a "voodoo constant" in the configuration
     sense this check targets. A file that fails to parse (``SyntaxError``)
     contributes zero offenders -- a malformed script is a different
-    problem, not this check's (and one other gates, e.g. a full pytest
-    run, already catch). A file that cannot even be read as UTF-8 text
-    (``UnicodeDecodeError``/``OSError``) is different: unlike a syntax
-    error, nothing else in this repository's own gates is guaranteed to
-    notice a bundled script that is simply unreadable, so silently
-    skipping it here would let the check pass vacuously for a script
-    nobody actually scanned -- reported as an offender instead, matching
-    this file's own ``skill-md-readable`` check's fail-loud precedent for
-    the same failure mode on ``SKILL.md`` itself.
+    problem, not this check's (this repository's other gates, e.g. a
+    full pytest run, already catch it). A file that cannot even be read
+    as UTF-8 text (``UnicodeDecodeError``/``OSError``) is different:
+    unlike a syntax error, nothing else in this repository's own gates
+    is guaranteed to notice a bundled script that is simply unreadable,
+    so silently skipping it here would let the check pass vacuously for
+    a script nobody actually scanned -- reported as an offender instead,
+    matching this file's own ``skill-md-readable`` check's fail-loud
+    precedent for the same failure mode on ``SKILL.md`` itself.
     """
     offenders: list[str] = []
     for script in scripts:
