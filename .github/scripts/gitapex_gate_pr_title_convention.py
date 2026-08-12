@@ -30,11 +30,25 @@ hooks/gitapex_check_pr_title_convention.py rather than importing it --
 docs/repository-layout.md, only skills/ and hooks/ are deployed), so the
 hook-side checker cannot depend on this file, and this file stays
 standalone for the same reason in the other direction. The two copies are
-kept in sync by tests/test_gitapex_pr_title_convention_regex_sync.py.
+kept in sync by tests/test_gitapex_pr_title_convention_regex_sync.py --
+that test compares `CONVENTIONAL_COMMIT_RE.pattern`/`.flags` directly, so
+this module keeps that compiled pattern as a plain module-level constant
+rather than folding it invisibly into `PrTitle` below.
 
-Standard library only: unlike several sibling `.github/scripts/*.py`
-gates, this one validates no CLI arguments beyond the fixed `--title`
-escape hatch below, so it carries no `pydantic` import.
+Domain validation via a real `pydantic` import (unlike this file's earlier
+revision, which validated no CLI arguments beyond the fixed `--title`
+escape hatch and so carried none): `PrTitle.title` uses
+`CONVENTIONAL_COMMIT_RE` directly as a `Field(pattern=...)` constraint, so
+pydantic -- not a hand-rolled `if`/regex branch -- is what decides
+PASS/FAIL. `hooks/gitapex_check_pr_title_convention.py` stays
+stdlib-only and does NOT get this same treatment: per
+docs/repository-layout.md, only skills/ and hooks/ ship with the plugin,
+and that hook must run via a bare `python3` invocation with no virtualenv
+guaranteed (no `uv run`), so a real third-party import there would break
+in an installed-plugin consumer checkout. This file's own production
+invocation always goes through `uv run` (see Usage below and this
+repository's `uv run` standardization, issue #1035), so the import is
+safe here.
 
 Usage::
 
@@ -49,6 +63,8 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+
+from pydantic import BaseModel, Field, ValidationError
 
 #: Conventional Commits v1.0.0 type list, plus an optional `(scope)` and an
 #: optional breaking-change `!`, plus a non-empty description. Mirrored
@@ -65,9 +81,28 @@ CONVENTIONAL_COMMIT_RE = re.compile(
 )
 
 
+class PrTitle(BaseModel):
+    """A candidate PR title, validated against Conventional Commits format.
+
+    `Field(pattern=CONVENTIONAL_COMMIT_RE)` -- a compiled `re.Pattern`, not
+    a second pattern string -- is the actual PASS/FAIL decision: pydantic
+    applies `CONVENTIONAL_COMMIT_RE.match` against `title` during
+    construction and raises `ValidationError` on a non-match, verified
+    directly (a bare `str` field accepts `None`-coerced-to-string or an
+    unanchored partial match under pydantic's own lax-mode defaults; this
+    does neither -- confirmed empirically before relying on it here).
+    """
+
+    title: str = Field(pattern=CONVENTIONAL_COMMIT_RE)
+
+
 def is_conventional_commit_title(title: str | None) -> bool:
     """Return True iff `title` matches Conventional Commits format."""
-    return bool(CONVENTIONAL_COMMIT_RE.match(title or ""))
+    try:
+        PrTitle(title=title)  # type: ignore[arg-type]
+    except ValidationError:
+        return False
+    return True
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -84,21 +119,23 @@ def main(argv: list[str] | None = None) -> int:
     except UnicodeDecodeError as error:
         print(f"error: standard input is not valid UTF-8: {error}", file=sys.stderr)
         return 1
-    if is_conventional_commit_title(title):
-        print("PASS: PR title matches Conventional Commits format")
-        return 0
-    print(
-        # The title itself is never echoed here: it is externally supplied,
-        # unauthenticated text (anyone who can open or edit a pull request
-        # controls it) that could carry pasted credentials or PII -- caught
-        # by review on PR #1059.
-        "FAIL: PR title does not match Conventional Commits format -- expected "
-        "'type(scope)!: description' with type in feat|fix|docs|style|refactor|"
-        "perf|test|build|ci|chore|revert, a non-empty description of at most 72 "
-        "characters, and an optional scope/breaking-change marker",
-        file=sys.stderr,
-    )
-    return 1
+    try:
+        PrTitle(title=title)
+    except ValidationError:
+        print(
+            # The title itself is never echoed here: it is externally
+            # supplied, unauthenticated text (anyone who can open or edit
+            # a pull request controls it) that could carry pasted
+            # credentials or PII -- caught by review on PR #1059.
+            "FAIL: PR title does not match Conventional Commits format -- expected "
+            "'type(scope)!: description' with type in feat|fix|docs|style|refactor|"
+            "perf|test|build|ci|chore|revert, a non-empty description of at most 72 "
+            "characters, and an optional scope/breaking-change marker",
+            file=sys.stderr,
+        )
+        return 1
+    print("PASS: PR title matches Conventional Commits format")
+    return 0
 
 
 if __name__ == "__main__":
