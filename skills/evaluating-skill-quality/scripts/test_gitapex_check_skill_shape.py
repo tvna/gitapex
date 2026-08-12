@@ -6278,10 +6278,10 @@ def test_voodoo_constant_function_level_not_flagged(tmp_path):
 
 
 def test_voodoo_constant_hash_inside_string_literal_still_flagged(tmp_path):
-    # Regression: a "#" living INSIDE a string-literal RHS (not a real
-    # trailing comment) must not false-pass a naive "#" in line scan --
-    # the check must locate real comment text strictly after the
-    # statement's own end position.
+    # Regression: a "#" living INSIDE a string-literal RHS is not a real
+    # comment and must not false-pass a naive "#" in line scan -- the
+    # check counts only real tokenize.COMMENT tokens on the lines the
+    # statement spans.
     d = _write_raw(tmp_path, _simple_body("No prose reference needed."))
     (d / "scripts").mkdir()
     (d / "scripts" / "checker.py").write_text('PREFIX = "issue #"\n', encoding="utf-8")
@@ -6352,6 +6352,79 @@ def test_voodoo_constant_chained_assignment_evaluated_per_target(tmp_path):
     assert result.passed is False
     assert "scripts/checker.py:1:FOO" in result.evidence
     assert "bar" not in result.evidence
+
+
+def test_voodoo_constant_syntax_error_file_skipped(tmp_path):
+    # A script with a real syntax error contributes zero offenders --
+    # ast.parse's own SyntaxError is caught per file, not raised out of
+    # check_shape().
+    d = _write_raw(tmp_path, _simple_body("No prose reference needed."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text("def f(:\n    pass\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is True
+    assert result.evidence == "none"
+
+
+def test_voodoo_constant_unreadable_file_reported_not_skipped(tmp_path):
+    # A script that is not valid UTF-8 is reported as an offender, not
+    # silently skipped -- read_text's own UnicodeDecodeError is caught per
+    # file (never raised out of check_shape()), but unlike a syntax error
+    # it must not pass vacuously: nothing else in this repository's gates
+    # is guaranteed to notice an unreadable bundled script.
+    d = _write_raw(tmp_path, _simple_body("No prose reference needed."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_bytes(b"TIMEOUT_SECONDS = 30\n\xff\xfe")
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is False
+    assert "scripts/checker.py:0:unreadable (UnicodeDecodeError)" in result.evidence
+
+
+def test_script_execution_intent_lowercase_run_passes(tmp_path):
+    # Regression: mid-sentence lowercase "run" (grammatically required,
+    # not sentence-initial) must count the same as a capitalized one --
+    # case carries no semantic distinction for this check.
+    d = _write_raw(tmp_path, _simple_body("You should also run `checker.py` before merging."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text("# stub\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["script-execution-intent-stated"]
+    assert result.passed is True
+    assert result.evidence == "none"
+
+
+def test_script_execution_intent_shell_script_without_phrase_fails(tmp_path):
+    # The check's scope is any file extension under scripts/, not just
+    # .py -- a cited .sh script with no qualifying phrase is an offender
+    # too.
+    d = _write_raw(tmp_path, _simple_body("The `helper.sh` file exists."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "helper.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["script-execution-intent-stated"]
+    assert result.passed is False
+    assert "helper.sh" in result.evidence
+
+
+def test_voodoo_constant_comment_on_opening_line_of_multiline_literal_passes(tmp_path):
+    # Regression: a trailing comment on a multi-line container literal's
+    # own OPENING line -- the exact case that motivated scanning every
+    # line the statement spans, not only the last one -- must satisfy the
+    # check.
+    d = _write_raw(tmp_path, _simple_body("No prose reference needed."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text(
+        'MODES = (  # closed vocabulary\n    "a",\n    "b",\n)\n', encoding="utf-8"
+    )
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is True
+    assert result.evidence == "none"
+
+
+def test_comment_line_numbers_tokenize_error_returns_empty_set():
+    # Direct unit test of the tokenizer-error fallback: a genuinely
+    # unterminated multi-line construct raises tokenize.TokenError even
+    # independent of whether the source would also fail ast.parse: the
+    # function degrades to "no comments found" rather than raising.
+    assert css._comment_line_numbers("x = (1, 2") == set()
 
 
 def test_script_execution_intent_run_phrasing_passes(tmp_path):

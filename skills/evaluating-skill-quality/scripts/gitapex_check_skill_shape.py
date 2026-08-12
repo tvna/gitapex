@@ -488,7 +488,11 @@ Checks (the canonical list -- the manual fallback is to apply these):
     own stated residual-risk note that a well-known constant needs a
     one-line-comment escape hatch. A script with a syntax error
     contributes zero offenders for this check (parsed independently per
-    file; a malformed script is a different problem, not this check's).
+    file; a malformed script is a different problem this repository's
+    other gates already catch). A script that cannot even be read as
+    UTF-8 text is reported as an offender instead of silently skipped --
+    unlike a syntax error, nothing else is guaranteed to notice an
+    unreadable bundled script, so skipping it here would pass vacuously.
     Silently passes with "not declared (optional)" evidence, the same
     absent-optional-content convention used throughout this docstring,
     when the skill has no ``scripts/`` directory at all or it contains no
@@ -5021,13 +5025,22 @@ def _voodoo_constant_offenders(scripts: list[Path]) -> list[str]:
     function is a local, not a "voodoo constant" in the configuration
     sense this check targets. A file that fails to parse (``SyntaxError``)
     contributes zero offenders -- a malformed script is a different
-    problem, not this check's.
+    problem, not this check's (and one other gates, e.g. a full pytest
+    run, already catch). A file that cannot even be read as UTF-8 text
+    (``UnicodeDecodeError``/``OSError``) is different: unlike a syntax
+    error, nothing else in this repository's own gates is guaranteed to
+    notice a bundled script that is simply unreadable, so silently
+    skipping it here would let the check pass vacuously for a script
+    nobody actually scanned -- reported as an offender instead, matching
+    this file's own ``skill-md-readable`` check's fail-loud precedent for
+    the same failure mode on ``SKILL.md`` itself.
     """
     offenders: list[str] = []
     for script in scripts:
         try:
             source = script.read_text(encoding="utf-8")
-        except (UnicodeDecodeError, OSError):
+        except (UnicodeDecodeError, OSError) as exc:
+            offenders.append(f"scripts/{script.name}:0:unreadable ({type(exc).__name__})")
             continue
         try:
             tree = ast.parse(source, filename=str(script))
