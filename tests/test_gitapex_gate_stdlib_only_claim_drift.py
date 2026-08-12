@@ -240,6 +240,48 @@ def test_unrelated_workflow_not_referencing_the_file_is_not_flagged(tmp_path: pa
     assert findings == []
 
 
+def test_a_clean_importer_alongside_a_non_importing_script_is_not_flagged(tmp_path: pathlib.Path) -> None:
+    # Exercises find_direct_importers' own loop continuing past both a
+    # non-importing candidate (the `if import_re.search(...)` false
+    # branch) and a clean importer (find_stale_claims' own importer-loop
+    # false branch) without appending either.
+    _write(tmp_path, ".github/scripts/gitapex_gate_foo.py", '"""Clean."""\n\nimport pydantic\n')
+    _write(tmp_path, ".github/scripts/gitapex_unrelated.py", '"""Does not import gitapex_gate_foo at all."""\n')
+    _write(
+        tmp_path, ".github/scripts/gitapex_clean_caller.py", '"""Clean, no stale claim."""\n\nimport gitapex_gate_foo\n'
+    )
+    diff_text = _diff(".github/scripts/gitapex_gate_foo.py", ["import pydantic"])
+    assert gate.find_stale_claims(diff_text, tmp_path) == []
+
+
+def test_a_clean_referencing_workflow_is_not_flagged(tmp_path: pathlib.Path) -> None:
+    # Exercises find_stale_claims' own workflow-loop false branch: the
+    # workflow references the changed file (so it's a real candidate)
+    # but carries no stale claim.
+    _write(tmp_path, ".github/scripts/gitapex_gate_foo.py", '"""Clean."""\n\nimport pydantic\n')
+    _write(
+        tmp_path,
+        ".github/workflows/foo-gate.yml",
+        "name: Foo gate\njobs:\n  foo:\n    steps:\n      - run: uv run --frozen python3 .github/scripts/gitapex_gate_foo.py\n",
+    )
+    diff_text = _diff(".github/scripts/gitapex_gate_foo.py", ["import pydantic"])
+    assert gate.find_stale_claims(diff_text, tmp_path) == []
+
+
+def test_diff_header_without_a_b_prefix_is_used_as_is(tmp_path: pathlib.Path) -> None:
+    # git supports --no-prefix, producing "+++ path" instead of
+    # "+++ b/path"; the path must still resolve correctly.
+    _write(tmp_path, ".github/scripts/gitapex_gate_foo.py", '"""Standard library only."""\n\nimport pydantic\n')
+    rel_path = ".github/scripts/gitapex_gate_foo.py"
+    diff_text = (
+        f"diff --git a/{rel_path} b/{rel_path}\nindex 0000000..1111111 100644\n--- {rel_path}\n+++ {rel_path}\n"
+        "@@ -0,0 +1,1 @@\n+import pydantic\n"
+    )
+    findings = gate.find_stale_claims(diff_text, tmp_path)
+    assert len(findings) == 1
+    assert findings[0].changed_file == rel_path
+
+
 def test_no_findings_when_no_file_gains_a_third_party_import(tmp_path: pathlib.Path) -> None:
     diff_text = _diff(".github/scripts/gitapex_gate_foo.py", ["import json"])
     assert gate.find_stale_claims(diff_text, tmp_path) == []
@@ -270,6 +312,21 @@ def test_unreadable_importer_raises_scan_error(tmp_path: pathlib.Path) -> None:
 
 
 # --- CLI ---
+
+
+def test_main_reads_diff_from_stdin_when_no_diff_flag_given(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    diff_bytes = _diff(".github/scripts/gitapex_gate_foo.py", ["import json"]).encode("utf-8")
+    monkeypatch.setattr("sys.stdin.buffer.read", lambda: diff_bytes)
+    rc = gate.main(["--root", str(tmp_path)])
+    assert rc == 0
+    assert "OK" in capsys.readouterr().out
+
+
+def test_main_returns_two_on_undecodable_stdin(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("sys.stdin.buffer.read", lambda: b"\xff\xfe\x00bad")
+    assert gate.main([]) == 2
 
 
 def test_main_returns_zero_and_prints_ok_on_clean_diff(
