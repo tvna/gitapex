@@ -78,10 +78,14 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 _TARGET_DIR_RE = re.compile(r"^(?:\.github/scripts/|evals/scripts/)([^/]+)\.py$")
 
-# A top-level (column-0) `import x` or `from x import ...`. Matches only the
-# first identifier -- a dotted import (`import os.path`) is classified by
-# its own leading component, matching Python's own import-resolution unit.
-_IMPORT_RE = re.compile(r"^(?:import\s+([A-Za-z_]\w*)|from\s+([A-Za-z_]\w*)\s+import\b)")
+# A top-level (column-0) `import a, b, c` or `from x import ...`. `import`
+# form captures the whole comma-separated alias list -- `import os,
+# pydantic` names two independent root modules, and code review correctly
+# found that capturing only the first one misses `pydantic` entirely.
+# `from x import ...` has only one module to classify regardless of how
+# many names follow `import`.
+_IMPORT_STMT_RE = re.compile(r"^import\s+(?P<names>.+)$")
+_FROM_IMPORT_RE = re.compile(r"^from\s+(?P<module>[A-Za-z_]\w*)\s+import\b")
 
 # Either literal phrase, case-insensitive, anywhere in the text.
 _STALE_PHRASE_RE = re.compile(r"standard library only|stdlib-only|stdlib only", re.IGNORECASE)
@@ -103,6 +107,16 @@ _NEGATION_RE = re.compile(r"(?:no longer|not|isn't|is not|n't)\s*$", re.IGNORECA
 _PROXIMITY_WINDOW = 400
 _UV_RUN_MENTION_RE = re.compile(r"\buv\s+run\b", re.IGNORECASE)
 
+# `git diff` always emits at least one `diff --git ` line per file, even
+# for a single-file diff -- so a non-empty input carrying none of these
+# structural markers is not a unified diff at all (garbage input, a
+# truncated pipe, a caller pointing `--diff` at the wrong file). Code
+# review correctly found that silently returning "nothing found" for such
+# input contradicted this module's own documented exit-2 promise for "a
+# malformed diff": unstructured text should never be indistinguishable
+# from a genuinely empty, clean diff.
+_DIFF_STRUCTURE_MARKERS = ("diff --git ", "--- ", "+++ ", "@@")
+
 
 class ScanError(Exception):
     """The scan could not be trusted -- exit 2, never a silent pass."""
@@ -120,6 +134,28 @@ class Finding:
 
 def _is_stdlib(module_name: str) -> bool:
     return module_name in sys.stdlib_module_names
+
+
+def _imported_root_modules(content: str) -> list[str]:
+    """Return every root module name a single top-level `import ...` or
+    `from ... import ...` statement names. `import a, b as c` names two
+    independent root modules (`a`, `b`) -- code review correctly found
+    that capturing only the text right after `import` misses every name
+    but the first in a comma-separated list. `from x import ...` always
+    names exactly one module (`x`) regardless of how many names follow
+    `import`, so that case stays a single-capture match."""
+    match = _IMPORT_STMT_RE.match(content)
+    if match:
+        roots = []
+        for alias in match.group("names").split(","):
+            name = alias.strip().split()[0] if alias.strip() else ""
+            if name:
+                roots.append(name.split(".", 1)[0])
+        return roots
+    match = _FROM_IMPORT_RE.match(content)
+    if match:
+        return [match.group("module")]
+    return []
 
 
 def parse_diff_added_third_party_imports(diff_text: str) -> set[str]:
@@ -165,11 +201,7 @@ def parse_diff_added_third_party_imports(diff_text: str) -> set[str]:
             continue
         if not _TARGET_DIR_RE.match(current_path):
             continue
-        match = _IMPORT_RE.match(content)
-        if not match:
-            continue
-        module_name = match.group(1) or match.group(2)
-        if module_name and not _is_stdlib(module_name):
+        if any(not _is_stdlib(name) for name in _imported_root_modules(content)):
             changed.add(current_path)
     return changed
 
@@ -294,9 +326,16 @@ def find_referencing_workflows(filename: str, root: pathlib.Path) -> list[pathli
 def find_stale_claims(diff_text: str, root: pathlib.Path) -> list[Finding]:
     """Return every stale-claim finding for files whose diff adds a
     top-level third-party import. Raises `ScanError` rather than returning
-    an empty list when any file this check needs to read cannot be read --
-    an empty *result* (no file in the diff gained a third-party import) is
-    legitimate and distinct from an incomplete scan."""
+    an empty list when any file this check needs to read cannot be read,
+    or when `diff_text` is non-empty but carries none of `git diff`'s own
+    structural markers (not a unified diff at all -- see
+    `_DIFF_STRUCTURE_MARKERS`) -- an empty *result* (no file in a
+    genuinely empty or genuinely clean diff gained a third-party import)
+    is legitimate and distinct from an incomplete or untrustworthy scan."""
+    if diff_text.strip() and not any(marker in diff_text for marker in _DIFF_STRUCTURE_MARKERS):
+        raise ScanError(
+            f"input does not look like a unified diff (no diff --git/---/+++/@@ line found): {diff_text[:80]!r}"
+        )
     findings: list[Finding] = []
     for rel_path in sorted(parse_diff_added_third_party_imports(diff_text)):
         abs_path = root / rel_path

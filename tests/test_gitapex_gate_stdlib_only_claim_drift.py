@@ -196,13 +196,18 @@ def test_source_b_direct_importer_is_checked(tmp_path: pathlib.Path) -> None:
 
 def test_source_b_ignores_the_changed_file_importing_itself(tmp_path: pathlib.Path) -> None:
     # find_direct_importers must exclude the changed file itself even if
-    # its own content happens to match the "imports itself" regex shape
-    # (it never does in real code, but the exclusion is what prevents
-    # double-counting the source-(a) finding as a spurious source-(b) one).
-    _write(tmp_path, ".github/scripts/gitapex_gate_foo.py", '"""Clean."""\n\nimport pydantic\n')
+    # its own content happens to match the "imports itself" regex shape --
+    # otherwise the source-(a) finding below would be double-counted as a
+    # spurious second, source-(b) finding pointing at the same file.
+    _write(
+        tmp_path,
+        ".github/scripts/gitapex_gate_foo.py",
+        '"""Standard library only."""\n\nimport pydantic\nimport gitapex_gate_foo\n',
+    )
     diff_text = _diff(".github/scripts/gitapex_gate_foo.py", ["import pydantic"])
     findings = gate.find_stale_claims(diff_text, tmp_path)
-    assert findings == []
+    assert len(findings) == 1
+    assert findings[0].source == "the changed file's own content"
 
 
 def test_source_c_referencing_workflow_is_checked_even_when_not_adjacent_to_run_step(
@@ -311,6 +316,40 @@ def test_unreadable_importer_raises_scan_error(tmp_path: pathlib.Path) -> None:
         gate.find_stale_claims(diff_text, tmp_path)
 
 
+def test_unreadable_referencing_workflow_raises_scan_error(tmp_path: pathlib.Path) -> None:
+    _write(tmp_path, ".github/scripts/gitapex_gate_foo.py", '"""Clean."""\n\nimport pydantic\n')
+    (tmp_path / ".github" / "workflows").mkdir(parents=True)
+    (tmp_path / ".github" / "workflows" / "trap.yml").mkdir()
+    diff_text = _diff(".github/scripts/gitapex_gate_foo.py", ["import pydantic"])
+    with pytest.raises(gate.ScanError):
+        gate.find_stale_claims(diff_text, tmp_path)
+
+
+# --- comma-separated imports (code review found: `import os, pydantic` only
+# captured "os", silently missing "pydantic") ---
+
+
+def test_comma_separated_import_detects_every_named_module(tmp_path: pathlib.Path) -> None:
+    _write(tmp_path, ".github/scripts/gitapex_gate_foo.py", '"""Standard library only."""\n\nimport os, pydantic\n')
+    diff_text = _diff(".github/scripts/gitapex_gate_foo.py", ["import os, pydantic"])
+    findings = gate.find_stale_claims(diff_text, tmp_path)
+    assert len(findings) == 1
+    assert findings[0].source == "the changed file's own content"
+
+
+def test_comma_separated_import_of_only_stdlib_modules_is_not_flagged(tmp_path: pathlib.Path) -> None:
+    _write(tmp_path, ".github/scripts/gitapex_gate_foo.py", '"""Standard library only."""\n\nimport os, sys, json\n')
+    diff_text = _diff(".github/scripts/gitapex_gate_foo.py", ["import os, sys, json"])
+    assert gate.find_stale_claims(diff_text, tmp_path) == []
+
+
+def test_comma_separated_import_skips_an_empty_alias_segment() -> None:
+    # A doubled comma yields an empty segment between "os" and "pydantic";
+    # _imported_root_modules must skip it instead of treating "" as a
+    # module name.
+    assert gate._imported_root_modules("import os,,pydantic") == ["os", "pydantic"]
+
+
 # --- CLI ---
 
 
@@ -372,10 +411,34 @@ def test_main_returns_two_when_scan_error_is_raised(tmp_path: pathlib.Path) -> N
     assert rc == 2
 
 
+def test_main_returns_two_on_malformed_non_diff_text(tmp_path: pathlib.Path) -> None:
+    # code review found: find_stale_claims' own docstring promised exit
+    # code 2 for a malformed diff, but nothing enforced it until the
+    # _DIFF_STRUCTURE_MARKERS check was added -- this is the CLI-level
+    # proof that the promise now holds.
+    diff_file = tmp_path / "not-a-diff.txt"
+    diff_file.write_text("this is not a unified diff at all\njust some prose\n", encoding="utf-8")
+    rc = gate.main(["--diff", str(diff_file), "--root", str(tmp_path)])
+    assert rc == 2
+
+
+def test_find_stale_claims_raises_on_malformed_non_diff_text(tmp_path: pathlib.Path) -> None:
+    with pytest.raises(gate.ScanError):
+        gate.find_stale_claims("this is not a unified diff at all\njust some prose\n", tmp_path)
+
+
 # --- live proof against this repository's own real tree: after this gate
 # lands, its own real files must stay clean (the actual regression
 # backstop -- deliberately reads the real tree, not a fixture) ---
 
 
 def test_this_repositorys_own_current_state_has_no_stale_claims() -> None:
-    assert gate.find_stale_claims("", REPO_ROOT) == []
+    # A real, non-empty diff -- reconstructed as if the whole file were
+    # newly added -- against an actual pydantic-importing file already in
+    # this tree (issue #1040 wave 1), so this test genuinely exercises all
+    # three text sources against real repo content instead of trivially
+    # passing on an empty diff that has nothing to check.
+    rel_path = ".github/scripts/gitapex_gate_hidden_characters.py"
+    real_file = REPO_ROOT / rel_path
+    diff_text = _diff(rel_path, real_file.read_text(encoding="utf-8").splitlines())
+    assert gate.find_stale_claims(diff_text, REPO_ROOT) == []
