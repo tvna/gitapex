@@ -65,8 +65,7 @@ in a Portable-declared skill -- asserting a fixed answer either way (that
 it is always backed, or always prose-only) would itself be a defect,
 since the true answer depends on wherever the skill happens to be
 running. Dated development history of how this boundary's wording
-reached its current state, in this repository's own bookkeeping:
-`docs/skill-eval-status.md`.
+reached its current state lives in this repository's own bookkeeping.
 
 **Skill-step vs. bundled script**: passes. This skill's own deterministic
 shape lane was delegated to `scripts/gitapex_check_skill_shape.py`, so applying
@@ -168,7 +167,7 @@ toc:worked-example-explaining-the-work.md  PASS    282 lines, TOC found  (refere
 toc:worked-example-self-review.md          PASS    634 lines, TOC found  (reference over 100 lines has a TOC)
 no-bare-issue-citation                     PASS    none  (No bare-prose GitHub issue/PR-number citation, at any portability level)
 portable-no-repo-path-citation             PASS    none  (Portable content has no bare-prose origin-repository path citation)
-portable-no-unhedged-inline-path-citation  PASS    none  (Portable content has no inline-code origin-repository path citation without an approved hedge phrase ('this repository', 'the calling repository', 'the target repository', 'gitapex') in its own sentence or the sentence immediately before it)
+portable-no-inline-path-citation           PASS    none  (Portable content has no inline-code origin-repository path citation (barred unconditionally, no hedge exempts it))
 
 27/27 checks passed
 ```
@@ -239,8 +238,8 @@ it is a materialized instance of exactly the trend the original note
 flagged as a risk to watch, not merely a hypothetical anymore, and should
 be actively re-checked (not assumed still fine) at the next edit rather
 than treated as settled by this one clean check. Line-count history and
-which specific edits contributed, in this repository's own bookkeeping:
-`docs/skill-eval-status.md`.
+which specific edits contributed lives in this repository's own
+bookkeeping.
 
 **Update (capability-assumption axis re-grade, Broad):** this skill now
 declares `capabilityAssumption: Broad` in its `metadata/gitapex.yaml`
@@ -584,8 +583,8 @@ not a blocking gap for this dimension.
 ### 8. Behavioural evidence
 
 Unmeasured for pass/fail, not skipped: as of this snapshot, this
-repository's own `evals/evaluating-skill-quality/eval.yaml`
-is committed, but no baseline-vs-no-skill comparison has been run against
+repository's own eval manifest for this skill is committed, but no
+baseline-vs-no-skill comparison has been run against
 it (per Anthropic's evaluation-driven-development standard, dimension 8's
 primary bar). Mechanism-present, baseline-unmeasured -- the same gap named
 for `explaining-the-work` in the other worked example.
@@ -614,7 +613,7 @@ does not meet the letter of the discipline this dimension names.
 gap has since been closed for several specific edits to this skill, not
 retroactively for its whole authoring history -- each time via a
 documented held-out train/selection/test split, recorded in this
-repository's own `evals/evaluating-skill-quality/split.md`, scored
+repository's own eval bookkeeping, scored
 before and after with
 `skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py`, requiring a
 strict improvement (ties rejected) before the edit was kept. That is real,
@@ -629,9 +628,7 @@ match the assertion to what the rubric actually prescribes rather than an
 assumed casing, and ban only affirmative claims, never a phrase a correct
 denial would also contain. Full per-edit record, in this repository's own
 bookkeeping -- which specific change each gate covered, the exact
-before/after scores, and the fixture bugs found along the way:
-`evals/evaluating-skill-quality/split.md`'s Kept-edit log and
-`docs/skill-eval-status.md`.
+before/after scores, and the fixture bugs found along the way.
 
 ### 9. Cross-model robustness
 
@@ -697,8 +694,8 @@ against whatever environment it actually runs in, rather than asserting
 a fixed answer -- the correct portable posture for a Portable-declared
 skill, since a hardcoded "yes, backed" claim would itself be a defect
 once vendored somewhere with no such hook. Development history of how
-this boundary's wording reached this state, in this repository's own
-bookkeeping: `docs/skill-eval-status.md`.
+this boundary's wording reached this state lives in this repository's
+own bookkeeping.
 
 **Well-formed, not yet mature.** This verdict was *mature* until the
 state-management sub-check was added to dimension 6; that sub-check fires on
@@ -784,8 +781,8 @@ the automated scorer (`gitapex_score_contract.py`'s substring matching) actually
 measures the judgment it is scoring -- left unfixed here, correctly, per
 the Blind spot pass's own instruction that a durable rubric change is a
 deliberate, `scorer-gated-skill-edits`-gated edit, not something a single review
-session improvises. Dated record of which edit this run followed, in
-this repository's own bookkeeping: `docs/skill-eval-status.md`.
+session improvises. Dated record of which edit this run followed lives
+in this repository's own bookkeeping.
 
 ## Verification: subagent dispatch (dated addendum)
 
@@ -827,7 +824,7 @@ conversation. What this single run does not establish: cross-model
 behavior, or whether isolation measurably changes verdicts relative to a
 main-thread run on the *same* target with prior framing (that A/B
 comparison is future work, named rather than assumed -- see this
-repository's own `docs/skill-eval-status.md`).
+repository's own development-history bookkeeping).
 
 ## References
 
@@ -839,5 +836,4 @@ that does not belong blended into a Portable skill's worked-example
 content, the same class of gap dimension 5's Mixed-portability guidance
 names for a portable-core-plus-repo-specific-detail split. This
 skill's own dated, issue-linked development history lives entirely in
-this repository's own bookkeeping instead: `docs/skill-eval-status.md`
-and `evals/evaluating-skill-quality/split.md`'s Kept-edit log.
+this repository's own bookkeeping instead.

@@ -1867,8 +1867,9 @@ def test_portable_unhedged_repo_path_citation_fails(tmp_path):
 def test_portable_inline_code_citation_is_excluded(tmp_path):
     # The rubric's own way of quoting a bad-example token: inline code.
     # This exclusion is specific to the two bare-prose checks below --
-    # portable-no-unhedged-inline-path-citation (issue #220) and
-    # portable-no-unhedged-inline-issue-citation (issue #263) both inspect
+    # portable-no-inline-path-citation (issue #220, made unconditional by
+    # issue #1051) and portable-no-unhedged-inline-issue-citation
+    # (issue #263) both inspect
     # exactly this kind of inline-code span and DO flag it, since this
     # fixture's `evals/foo/bar.yaml` and `#149`/`owner/repo#149` citations
     # have no hedge phrase nearby; see test_portable_unhedged_inline_repo_path_fails
@@ -1884,7 +1885,7 @@ def test_portable_inline_code_citation_is_excluded(tmp_path):
     res = _by_name(css.check_shape(d))
     assert res["no-bare-issue-citation"].passed is True
     assert res["portable-no-repo-path-citation"].passed is True
-    assert res["portable-no-unhedged-inline-path-citation"].passed is False
+    assert res["portable-no-inline-path-citation"].passed is False
     assert res["portable-no-unhedged-inline-issue-citation"].passed is False
 
 
@@ -1933,7 +1934,7 @@ def test_non_portable_skill_skips_path_scan_but_not_issue_scan(tmp_path):
     )
     names = _by_name(css.check_shape(d))
     assert "portable-no-repo-path-citation" not in names
-    assert "portable-no-unhedged-inline-path-citation" not in names
+    assert "portable-no-inline-path-citation" not in names
     assert "portable-no-unhedged-inline-issue-citation" not in names
     assert names["no-bare-issue-citation"].passed is False
     assert "#149" in names["no-bare-issue-citation"].evidence
@@ -1978,33 +1979,44 @@ def test_wrapped_mixed_marker_still_skips_path_scan_but_not_issue_scan(tmp_path)
     )
     names = _by_name(css.check_shape(d))
     assert "portable-no-repo-path-citation" not in names
-    assert "portable-no-unhedged-inline-path-citation" not in names
+    assert "portable-no-inline-path-citation" not in names
     assert "portable-no-unhedged-inline-issue-citation" not in names
     assert names["no-bare-issue-citation"].passed is False
 
 
-# ---- Portable inline-code repo-path citation hedge scan (issue #220) ----
+# ---- Portable inline-code repo-path citation scan (issue #220, narrowed ----
+# ---- to a generic-role-only hedge by issue #1051) ----
 #
 # #171's illustrative-span exemption treats every inline-code citation as
 # automatically safe. #220's own reported bug is exactly that gap: an
 # inline-code citation of a real origin-repository path
 # (`docs/superpowers/specs/...`) that passed the #171 scan cleanly despite
-# having no hedge explaining it is this repository's own file. These tests
-# cover the negative (no hedge -> still flagged) and positive (an approved
-# hedge phrase -> passes) cases the acceptance criteria call for, plus the
-# two real citations issue #220 names by name. The hedge search is bounded
-# to a citation's own sentence or the sentence immediately before it (not
-# the whole paragraph) and excludes the citation's own matched text --
-# see test_hedge_in_next_sentence_of_same_paragraph_does_not_count and
-# test_citation_text_cannot_self_satisfy_hedge below for why both of those
-# narrower bounds matter.
+# having no hedge explaining it is this repository's own file. #220's own
+# fix accepted the full HEDGE_PHRASES vocabulary -- but #1051 found that
+# the *disclosing* half of that vocabulary ("this repository" / "gitapex")
+# was itself the gap: a real citation in rubric.md's own Execution
+# requirements section carried exactly such a hedge and still pointed at a
+# file that does not travel with a vendored copy of the skill, because
+# disclosing a real dependency does not remove it. The *other* half ("the
+# calling repository" / "the target repository") is categorically
+# different -- it marks a citation as a generic illustrative placeholder
+# for whatever repository the skill lands in, never a citation to this
+# origin repository's own real file (establishing-ubiquitous-language's
+# "the calling repository's own glossary doc (e.g. `docs/glossary.md`)" is
+# the canonical real example) -- so only that narrower half still rescues
+# a match (`GENERIC_ROLE_HEDGE_PHRASES`). The hedge-proximity/self-satisfy/
+# semicolon-clause-splitting mechanics remain covered via the issue-number
+# citation checks below (which still use the full, separate
+# ISSUE_CITATION_HEDGE_PHRASES vocabulary), since `_inline_citation_offenders`
+# shares that machinery across every citation kind in
+# `_INLINE_CITATION_CHECK_SPECS`.
 
 
 def test_portable_unhedged_inline_repo_path_fails(tmp_path):
     # The reported bug's exact shape: a real-looking inline-code citation
     # with no hedge anywhere nearby.
     d = _write_raw(tmp_path, _portable_body("See the design spec: `docs/superpowers/specs/2026-07-20-x.md`."))
-    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-path-citation"]
+    result = _by_name(css.check_shape(d))["portable-no-inline-path-citation"]
     assert result.passed is False
     assert "docs/superpowers/specs/2026-07-20-x.md" in result.evidence
 
@@ -2012,177 +2024,101 @@ def test_portable_unhedged_inline_repo_path_fails(tmp_path):
 @pytest.mark.parametrize(
     "body",
     [
-        # rubric.md's own established phrasing.
+        # The disclosing half of the old hedge vocabulary ("this
+        # repository" / "gitapex") never rescues a match, before or after
+        # #1051 -- these mark a citation as a deliberate, known-real
+        # reference to this repository's own file, exactly the #220
+        # failure shape (a hedge discloses a real dependency without
+        # removing it).
         "This repository has also recorded the design spec at `docs/superpowers/specs/2026-07-20-x.md`.",
-        # Mirrors the exact citation named in issue #220's acceptance criteria
-        # 2: rubric.md's "This repository has also used the same move
-        # informally ..." sentence, confirmed not to false-positive.
         "This repository has also used the same move informally, once, "
         "to find gaps in its own *skill coverage* rather than in one "
         "skill's rubric "
         "(`docs/superpowers/specs/2026-07-15-triage-cluster-design.md`: "
         '"a Fable-assisted skill-gap analysis").',
-        # Mirrors the exact citation named in issue #220's acceptance criteria
-        # 3: scorer-gated-skill-edits/SKILL.md's added-in-#217 hedge.
         "This repository has also recorded the design spec for that flag, "
         "for readers working in this specific repository, at "
         "`docs/superpowers/specs/2026-07-20-judge-mode-scorer-design.md`; "
         "a vendored copy of this skill has no such file and does not "
         "need one.",
-        # The opposite direction: a generic, illustrative path name for
-        # whatever repository the skill lands in, matching
-        # establishing-ubiquitous-language's own phrasing.
-        "Record the winning term in the calling repository's own glossary doc (e.g. `docs/glossary.md`).",
-        # rubric.md's own dimension-8 phrasing.
-        "Check the target repository for an eval mechanism -- for a "
-        "Claude Code target, that's an `evals/evals.json` file.",
-        # worked-example-explaining-the-work.md's own phrasing.
         "gitapex's own repository does not currently have a `docs/adr/` directory.",
     ],
-    ids=["this-repository", "rubric-style", "scorer-gated-style", "calling-repository", "target-repository", "gitapex"],
+    ids=["this-repository", "rubric-style", "scorer-gated-style", "gitapex"],
 )
-def test_approved_hedge_phrase_passes(tmp_path, body):
+def test_disclosing_hedge_phrase_still_fails_repo_path_citation(tmp_path, body):
     d = _write_raw(tmp_path, _portable_body(body))
-    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-path-citation"]
-    assert result.passed is True
+    result = _by_name(css.check_shape(d))["portable-no-inline-path-citation"]
+    assert result.passed is False
 
 
-def test_leading_hedge_covers_a_list_of_different_paths(tmp_path):
-    # Real content in this repository (worked-example-self-review.md, "in
-    # this repository's own bookkeeping ...: `evals/.../split.md`'s
-    # Kept-edit log and `docs/skill-eval-status.md`.") uses ONE leading
-    # hedge to introduce a comma-joined list of TWO DIFFERENT path
-    # citations in a single clause -- this must keep passing. A stricter
-    # per-citation windowing design (tried and reverted while closing a
-    # Codex-reported issue-citation exploit on PR #273) broke this exact
-    # pattern, which is why the fix for that exploit is a conditional
-    # bridging-semicolon split (see _split_at_bridging_semicolon) plus a
-    # "previous clause already cites something" guard, not per-citation
-    # isolation within one clause.
-    d = _write_raw(
-        tmp_path,
-        _portable_body(
-            "In this repository's own bookkeeping: `evals/x/split.md`'s Kept-edit log and `docs/skill-eval-status.md`."
-        ),
-    )
-    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-path-citation"]
+@pytest.mark.parametrize(
+    "body",
+    [
+        # The generic-role half of the hedge vocabulary ("the calling
+        # repository" / "the target repository") marks a citation as a
+        # placeholder for whatever repository the skill lands in, not a
+        # citation to this origin repository's own real file -- these
+        # still pass, unaffected by #1051's narrowing (establishing-
+        # ubiquitous-language's own real phrasing for the first case).
+        "Record the winning term in the calling repository's own glossary doc (e.g. `docs/glossary.md`).",
+        "Check the target repository for an eval mechanism -- for a "
+        "Claude Code target, that's an `evals/evals.json` file.",
+    ],
+    ids=["calling-repository", "target-repository"],
+)
+def test_generic_role_hedge_phrase_still_passes_repo_path_citation(tmp_path, body):
+    d = _write_raw(tmp_path, _portable_body(body))
+    result = _by_name(css.check_shape(d))["portable-no-inline-path-citation"]
     assert result.passed is True
 
 
 def test_semicolon_inside_one_citations_own_aside_does_not_split(tmp_path):
-    # Real, pre-existing content in this repository
-    # (worked-example-explaining-the-work.md) uses a semicolon INSIDE a
-    # single parenthetical aside about ONE citation, with the hedge word
-    # landing after the semicolon: "`docs/adr/NNNN-*.md` (line 24;
-    # gitapex's own state on this path is covered under Portability level
-    # above), uses forward slashes." A blanket semicolon split (a second
-    # cut of the #273 fix, after the bare-word-hedge fix) broke this by
-    # separating the citation from its own hedge; splitting only when a
-    # citation appears on BOTH sides of the semicolon (there is no second
-    # citation here) fixes it without reopening the Codex-reported case.
+    # Retargeted to the issue-number citation check (issue #1051): the
+    # underlying mechanic -- a semicolon INSIDE a single parenthetical
+    # aside about ONE citation must not wrongly split into two clauses --
+    # is shared infrastructure (_split_at_bridging_semicolon) also used by
+    # the repo-path check, but repo-path fixtures no longer have a PASS
+    # side to demonstrate this against (no hedge rescues them any more).
+    # The issue-number check still uses a hedge, so it can still show the
+    # "does not incorrectly split and lose the hedge" behavior directly.
     d = _write_raw(
         tmp_path,
         _portable_body(
-            "The one path in the skill, `docs/adr/NNNN-*.md` (line 24; "
-            "gitapex's own state on this path is covered elsewhere), uses "
-            "forward slashes."
+            "The field's shape, `#88` (must be an anchored reference; see "
+            "the schema for the full grammar), is illustrative."
         ),
     )
-    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-path-citation"]
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-issue-citation"]
     assert result.passed is True
 
 
 def test_semicolon_with_citations_on_both_sides_still_splits(tmp_path):
-    # The other half of the same fix: when a citation genuinely does
-    # appear on both sides of a semicolon, it must still split -- this is
-    # exactly Codex's reported shape, generalized to the repo-path spec so
-    # both specs' behavior stays consistent (specs share the same clause
-    # splitter, see _inline_citation_offenders's own docstring).
-    d = _write_raw(
-        tmp_path,
-        _portable_body("This repository has also recorded `docs/a.md`; see `docs/b.md` for the unrelated details."),
-    )
-    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-path-citation"]
-    assert result.passed is False
-    assert "docs/b.md" in result.evidence
-    assert "docs/a.md" not in result.evidence
-
-
-def test_hedge_in_different_paragraph_does_not_count(tmp_path):
-    # Bounded distance, not whole-document: a hedge phrase two paragraphs
-    # away must not exempt an unrelated citation in its own paragraph.
+    # Retargeted to the issue-number citation check for the same reason as
+    # the test above: a genuine both-sides-of-semicolon citation must
+    # still split, with only the unhedged side flagged.
     d = _write_raw(
         tmp_path,
         _portable_body(
-            "This repository has also recorded some background context "
-            "elsewhere.\n\n"
-            "See the design spec: `docs/superpowers/specs/2026-07-20-x.md`."
+            "`trackingIssue` must be an anchored reference like `#88`; see PR `#42` for the unrelated details."
         ),
     )
-    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-path-citation"]
+    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-issue-citation"]
     assert result.passed is False
+    assert "#42" in result.evidence
+    assert "#88" not in result.evidence
 
 
-def test_hedge_in_next_sentence_of_same_paragraph_does_not_count(tmp_path):
-    # Regression guard for a review finding on the first cut of this check:
-    # paragraph-wide scoping let a hedge written for one citation silently
-    # exempt a completely unrelated citation several sentences later in the
-    # same paragraph (reproduced for real in this repository's own
-    # worked-example-self-review.md before it was fixed). The bound is now
-    # a citation's own sentence or the one immediately before it, so a
-    # hedge three sentences away must not count.
-    d = _write_raw(
-        tmp_path,
-        _portable_body(
-            "This repository has also recorded background context here. "
-            "A second, unrelated sentence with no citation. "
-            "See the design spec: `docs/superpowers/specs/2026-07-20-x.md`."
-        ),
-    )
-    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-path-citation"]
-    assert result.passed is False
-
-
-def test_citation_text_cannot_self_satisfy_hedge(tmp_path):
-    # Regression guard: the hedge search must exclude the citation's own
-    # matched inline-code text, so a path whose filename happens to contain
-    # a HEDGE_PHRASES word (e.g. "gitapex") cannot self-satisfy the
-    # requirement with no hedge actually written by the author. A real file
-    # at exactly this path exists in this repository.
-    d = _write_raw(
-        tmp_path,
-        _portable_body("See the design spec: `docs/superpowers/specs/2026-07-15-gitapex-cli-governance-design.md`."),
-    )
-    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-path-citation"]
-    assert result.passed is False
-
-
-def test_hedge_wrapped_across_lines_within_paragraph_counts(tmp_path):
-    # A hedge phrase that Markdown line-wraps across two lines of the same
-    # sentence must still be found -- whitespace is normalized before the
-    # search, matching how the real establishing-ubiquitous-language
-    # citation is actually wrapped in the repository.
-    d = _write_raw(
-        tmp_path,
-        _portable_body(
-            "Record the winning term in the calling\nrepository's own glossary doc (e.g. `docs/glossary.md`)."
-        ),
-    )
-    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-path-citation"]
-    assert result.passed is True
-
-
-def test_fenced_inline_repo_path_still_excluded_from_hedge_scan(tmp_path):
+def test_fenced_inline_repo_path_still_excluded_from_scan(tmp_path):
     # A citation inside a fenced code block stays exempt unconditionally
-    # (issue #171 acceptance criterion 3) -- this new, narrower check must
-    # not reopen that case.
+    # (issue #171 acceptance criterion 3) -- this must hold regardless of
+    # whether the check itself is hedge-checked or fully unconditional.
     d = _write_raw(
         tmp_path,
         _portable_body(
             "Bad-example target content under review:\n\n```\nsee `docs/superpowers/specs/2026-07-20-x.md`\n```"
         ),
     )
-    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-path-citation"]
+    result = _by_name(css.check_shape(d))["portable-no-inline-path-citation"]
     assert result.passed is True
 
 
@@ -2194,7 +2130,7 @@ def test_unhedged_inline_repo_path_in_reference_file_fails(tmp_path):
         _portable_body("Clean body."),
         references={"notes.md": "See `docs/superpowers/specs/x.md` for context.\n"},
     )
-    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-path-citation"]
+    result = _by_name(css.check_shape(d))["portable-no-inline-path-citation"]
     assert result.passed is False
     assert "references/notes.md:`docs/superpowers/specs/x.md`" in result.evidence
 
@@ -2382,10 +2318,11 @@ def test_comma_joined_different_citations_share_the_clause_hedge(tmp_path):
     # share that clause's hedge search, so an unhedged real citation can
     # slip through alongside a legitimately hedged one. An earlier, more
     # aggressive per-citation windowing design closed this specific case,
-    # but broke a real, legitimate pattern already in this repository's own
-    # content (see test_leading_hedge_covers_a_list_of_different_paths):
-    # one leading hedge introducing a LIST of several different citations,
-    # comma-joined, with no semicolon between them. Distinguishing "a list"
+    # but broke a real, legitimate pattern this repository's own content
+    # used to rely on before issue #1051 removed the repo-path check's
+    # hedge escape entirely: one leading hedge introducing a LIST of
+    # several different citations, comma-joined, with no semicolon between
+    # them. Distinguishing "a list"
     # from "an unrelated aside" from punctuation alone is exactly the kind
     # of natural-language judgment this deterministic checker's own
     # docstring says it does not attempt -- the semicolon-based clause
@@ -2401,8 +2338,8 @@ def test_color_hedge_in_previous_sentence_does_not_exempt_next_sentence_citation
     # Same conflation as the two tests above, recurring across a sentence
     # boundary: the "previous sentence" fallback exists for a pure hedge
     # sentence with NO citation of its own (see
-    # test_hedge_in_next_sentence_of_same_paragraph_does_not_count's own
-    # fixture for the established pattern). When the previous sentence
+    # test_issue_hedge_in_next_sentence_of_same_paragraph_does_not_count's
+    # own fixture for the established pattern). When the previous sentence
     # instead has its OWN single citation, that sentence's hedge is already
     # "spent" justifying it and must not leak into an unrelated citation in
     # the very next sentence.
@@ -2683,7 +2620,7 @@ def test_hedge_in_prior_paragraph_does_not_count(tmp_path):
 # (issue #254).
 _PATH_CITATION_CHECKS = (
     "portable-no-repo-path-citation",
-    "portable-no-unhedged-inline-path-citation",
+    "portable-no-inline-path-citation",
     "portable-no-unhedged-inline-issue-citation",
 )
 
@@ -5491,10 +5428,11 @@ def test_raw_placeholder_in_reference_file_fails(tmp_path):
 #
 # Extends REPO_PATH_CITATION_RE, so these reuse the same two checks
 # (portable-no-repo-path-citation for bare prose,
-# portable-no-unhedged-inline-path-citation for inline code) the evals/docs
-# path-citation tests above already cover -- these fixtures instead exercise
-# the new CLAUDE.md alternative, covering all three real phrasings in use
-# elsewhere in this repository (ch./chapter/section).
+# portable-no-inline-path-citation for inline code, unconditional as of
+# issue #1051) the evals/docs path-citation tests above already cover --
+# these fixtures instead exercise the new CLAUDE.md alternative, covering
+# all three real phrasings in use elsewhere in this repository
+# (ch./chapter/section).
 
 
 def test_portable_bare_claude_md_ch_citation_fails(tmp_path):
@@ -5520,15 +5458,19 @@ def test_portable_bare_claude_md_section_citation_fails(tmp_path):
 
 def test_portable_unhedged_inline_claude_md_citation_fails(tmp_path):
     d = _write_raw(tmp_path, _portable_body("See `CLAUDE.md ch.2` for the rule."))
-    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-path-citation"]
+    result = _by_name(css.check_shape(d))["portable-no-inline-path-citation"]
     assert result.passed is False
     assert "CLAUDE.md ch.2" in result.evidence
 
 
-def test_portable_hedged_inline_claude_md_citation_passes(tmp_path):
+def test_portable_hedged_inline_claude_md_citation_still_fails(tmp_path):
+    # Issue #1051: a hedge no longer rescues any repo-path citation,
+    # CLAUDE.md-chapter included -- this used to pass under the
+    # hedge-checked design; it must now fail identically to the unhedged
+    # case above.
     d = _write_raw(tmp_path, _portable_body("This repository's own convention cites `CLAUDE.md ch.2` here."))
-    result = _by_name(css.check_shape(d))["portable-no-unhedged-inline-path-citation"]
-    assert result.passed is True
+    result = _by_name(css.check_shape(d))["portable-no-inline-path-citation"]
+    assert result.passed is False
 
 
 def test_non_portable_skill_skips_claude_md_scan(tmp_path):
