@@ -25,12 +25,14 @@ for the full rationale and the alternatives it rejected:
   DETERMINISTIC, via Python's own ast module (stdlib), not a text regex.
   A real parse tree has no comment nodes at all, so a commented-out
   reference can never register as usage without a filter having to say
-  so; import resolution checks the exact dotted module path Python
-  itself would resolve ("import X", "import X.Y", and "from X import Y"
-  are each handled on their own real shape, not approximated by one
-  regex trying to cover all three). Still a net, not a formal proof of
-  runtime behavior -- see the Residual limitations paragraph below for
-  what AST parsing does not and structurally cannot close.
+  so; the parser distinguishes each real import syntax shape ("import X",
+  "import X.Y", and "from X import Y" are each walked as their own
+  distinct node, not approximated by one regex trying to cover all
+  three) before checking the parsed dotted module name against a fixed
+  allowlist -- string-membership matching, not Python's own runtime
+  import resolution. Still a net, not a formal proof of runtime
+  behavior -- see the Residual limitations paragraph below for what AST
+  parsing does not and structurally cannot close.
 - find_tools_drift: declared tools.write/tools.shell vs. TWO independent
   evidence sources, checked separately (see test_gitapex_scan_
   execution_requirements_drift.py's own test names for the exact split):
@@ -73,16 +75,20 @@ run on its own).
 Residual limitations, even in find_network_drift's deterministic half:
 determinism means "the same input always parses to the same finding,"
 not "every real network call is caught." A call routed through an
-unlisted helper function, a host built at runtime (string
-concatenation, an f-string with a non-literal segment), or a network
-call gated behind a condition that never actually triggers can still
-slip past AST analysis exactly as it would past a human reading the
-same source -- these are facts about what static analysis can see, not
-a defect in using ast over regex (see
+unlisted helper function, or a host built at runtime (string
+concatenation, an f-string with a non-literal segment) can still slip
+past AST analysis exactly as it would past a human reading the same
+source -- these are facts about what static analysis can see, not a
+defect in using ast over regex (see
 test_dynamically_constructed_host_evades_allowlist_check for one
-deliberately-constructed example). find_tools_drift's own natural-
-language matching carries the same class of gap for the same reason
-prose has no parser.
+deliberately-constructed example). Conditional gating does not, by
+itself, evade this scanner: ast.walk sees every import/call regardless
+of surrounding control flow (an "if False:"-guarded import is still a
+real ast.Import node in the tree), unlike a human skimming the source
+who might reasonably assume unreachable code is irrelevant.
+find_tools_drift's own natural-language matching carries the same
+class of runtime-construction gap for the same reason prose has no
+parser.
 
 Language scope: find_network_drift only reads skill_dir/scripts/*.py --
 a bundled non-Python script (a .sh file, for instance; this repository's
