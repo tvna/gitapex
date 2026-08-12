@@ -1636,6 +1636,49 @@ reading the source.
   what it does, its inputs/outputs, and whether the model should run it or
   read it as reference.
 
+**Comment categorization (Interface vs. Implementation).** Grounded in
+John Ousterhout's Stanford CS190 "Writing Comments" lecture ([ouster]):
+"Interface: what someone needs to know in order to use this class or
+method" versus "Implementation: how the method or class works internally
+to implement the advertised interface." Applied to a bundled script's own
+comments, key the category to whether the skill tells Claude to execute
+the script or read it as reference -- the same distinction the
+"Dependencies listed; execution intent stated" bullet above already
+requires the skill to state. An execute-only script's comments are
+Interface documentation first: what an invoking agent must know before
+calling it (inputs, outputs, flags, exit codes), and per the source's own
+completeness requirement must be "Complete: must include everything that
+any user might need to know," never assuming the invoking agent will open
+the source to find a missing detail. A read-as-reference script's
+comments carry more Implementation documentation instead -- "tricky
+aspects, non-obvious reasons for code," boundary conditions, units, and
+invariants -- since an agent told to read the script for its algorithm is
+exactly the reader implementation comments serve. Ousterhout's own
+separation principle applies directly: "do not describe the
+implementation in the interface documentation" -- a script whose
+top-of-file usage comment wanders into internal mechanism, or whose
+inline implementation comments never state what a caller needs to know at
+all, fails this categorization regardless of how well-written the prose
+is in isolation.
+
+**Context economy (token cost).** A read-as-reference script's comments
+are loaded into context every time an agent reads the file -- the same
+recurring cost dimension 2's "does the paragraph justify its token cost"
+challenge already applies to prose. Anthropic's own guidance that a
+bundled script "save[s] tokens (no need to include code in context)"
+([ab]) only holds when the script is actually executed, not read.
+Execute-only scripts get no verbosity penalty from this axis: nothing in
+them enters context regardless of length, so comment verbosity is a
+non-issue there. Read-as-reference scripts get a verbosity-vs-value check
+instead: each comment line is a recurring cost every future read pays, so
+a comment earning its place needs to state something a reader could not
+recover faster from the code itself -- the same standard dimension 2
+applies to prose, applied here to a script's own comments. Prose-only
+judgment: no shape-checker mechanization is planned for this axis: which
+comment lines earn their token cost is a per-comment value judgment, not
+a mechanically checkable rule the way an unjustified constant or a
+missing execution-intent phrase is.
+
 **Test methodology and test code structure, when the script ships its own
 test suite.** The five bullets above grade the script's code quality; a
 bundled test suite earns its own deeper grading pass -- test-level
@@ -2117,3 +2160,4 @@ is; no separate visible listing to keep in sync).
 [fable]: https://claude.com/blog/a-field-guide-to-claude-fable-finding-your-unknowns "Thariq Shihipar, Anthropic -- A Field Guide to Fable: Finding Your Unknowns"
 [modeleffort]: https://claude.com/blog/claude-model-and-effort-level-in-claude-code "Lydia Hallie, Anthropic (Claude Code team) -- Choosing a Claude model and effort level in Claude Code"
 [opus5]: https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5 "Anthropic -- Prompting Claude Opus 5"
+[ouster]: https://web.stanford.edu/~ouster/cgi-bin/cs190-winter18/lecture.php?topic=comments "John Ousterhout, Stanford CS190 -- Writing Comments (lecture notes)"
