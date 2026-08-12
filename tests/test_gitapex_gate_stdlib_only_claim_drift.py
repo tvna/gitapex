@@ -69,6 +69,24 @@ def test_empty_diff_yields_empty_set() -> None:
     assert gate.parse_diff_added_third_party_imports("") == set()
 
 
+def test_added_line_colliding_with_a_file_header_does_not_hide_a_later_import() -> None:
+    # Adversarial-review finding (issue #1052's own PR): an added line
+    # whose own content starts with "++ " is diff-prefixed to "+++ ...",
+    # identical to a real `+++ b/<path>` file header. Without gating the
+    # header check on `not in_hunk`, this line was misread as a second
+    # file header mid-hunk, silently dropping every real added line after
+    # it in the same hunk -- including the import a few lines later.
+    diff_text = _diff(
+        ".github/scripts/gitapex_gate_foo.py",
+        [
+            "# unified diff hunk header example:",
+            "++ b/faketrap.py",
+            "import pydantic",
+        ],
+    )
+    assert gate.parse_diff_added_third_party_imports(diff_text) == {".github/scripts/gitapex_gate_foo.py"}
+
+
 # --- has_stale_claim: the two real defect shapes, and the two real false
 # positives found and fixed while measuring this gate against this
 # repository's own already-corrected text (defeat-test-disclosure) ---
@@ -107,6 +125,25 @@ def test_accurate_disclosure_with_nearby_uv_run_mention_is_not_flagged() -> None
         "unaffected."
     )
     assert gate.has_stale_claim(text, "gitapex_compute_skill_audit_flags.py") is False
+
+
+def test_boilerplate_usage_block_does_not_suppress_a_genuinely_stale_claim() -> None:
+    # Adversarial-review finding (issue #1052's own PR): nearly every
+    # .github/scripts/*.py docstring shows an indented `Usage:: uv run
+    # --frozen python3 <file>.py` example regardless of whether the file
+    # needs a third-party dependency. A bare "is uv run mentioned
+    # anywhere nearby" check would suppress a genuinely stale,
+    # uncorrected claim sitting near that routine boilerplate -- exactly
+    # the flagship PR #1044 defect shape. The fix excludes indented
+    # (Usage::-example) lines from the proximity search; only an
+    # unindented, prose "uv run" mention -- a real corrective disclosure
+    # -- suppresses.
+    text = (
+        "Standard library only, so the calling workflow needs no dependency install.\n\n"
+        "Usage::\n\n"
+        "    uv run --frozen python3 gitapex_gate_foo.py\n"
+    )
+    assert gate.has_stale_claim(text, "gitapex_gate_foo.py") is True
 
 
 def test_negated_stale_phrase_is_not_flagged() -> None:

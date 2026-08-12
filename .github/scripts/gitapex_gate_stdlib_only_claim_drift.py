@@ -132,22 +132,32 @@ def parse_diff_added_third_party_imports(diff_text: str) -> set[str]:
     current_path: str | None = None
     in_hunk = False
     for line in diff_text.split("\n"):
-        if line.startswith("+++ "):
+        if line.startswith("diff --git ") or line.startswith("--- "):
+            in_hunk = False
+            continue
+        # A real `+++ b/<path>` header only ever appears before the first
+        # `@@` of a file (never `in_hunk`). Gating on that -- rather than
+        # matching the literal `+++ ` prefix unconditionally -- is load-
+        # bearing: an *added* line whose own content starts with `++ `
+        # (e.g. a docstring discussing diff/patch anatomy, exactly the kind
+        # of prose this repository's own gate scripts already contain) is
+        # diff-prefixed to `+++ <that content>` and would otherwise be
+        # misread as a second file header mid-hunk, silently dropping every
+        # real added line -- including the one this gate exists to catch --
+        # for the rest of that hunk. Found by adversarial review (issue
+        # #1052's own PR).
+        if not in_hunk and line.startswith("+++ "):
             path = line[len("+++ ") :]
             if path.startswith("b/"):
                 path = path[2:]
             current_path = None if path == "/dev/null" else path
-            in_hunk = False
-            continue
-        if line.startswith("diff --git ") or line.startswith("--- "):
-            in_hunk = False
             continue
         if line.startswith("@@"):
             in_hunk = True
             continue
         if not in_hunk or current_path is None:
             continue
-        if not line.startswith("+") or line.startswith("+++"):
+        if not line.startswith("+"):
             continue
         content = line[1:]
         if content != content.lstrip():
@@ -190,31 +200,49 @@ def has_bare_invocation_example(text: str, filename: str) -> bool:
     return False
 
 
+def _unindented_uv_run_nearby(text: str, start: int, end: int) -> bool:
+    """True iff a "uv run" mention appears within `_PROXIMITY_WINDOW`
+    characters of `[start, end)`, counting only *unindented* lines.
+    Excluding indented lines is load-bearing, not tidiness: this
+    repository's own `Usage::` docstring convention shows an indented `uv
+    run --frozen python3 <file>.py` example in nearly every
+    `.github/scripts/*.py` file's docstring, regardless of whether that
+    file needs a third-party dependency -- so a bare "is there a 'uv run'
+    anywhere nearby" check would suppress a genuinely stale, uncorrected
+    claim sitting near that routine boilerplate, exactly the flagship PR
+    #1044 defect shape this gate exists to catch. A real corrective
+    disclosure (e.g. gitapex_compute_skill_audit_flags.py's own post-fix
+    text) states the "uv run" mention in ordinary, unindented prose, not
+    inside the indented Usage:: example -- found by adversarial review
+    (issue #1052's own PR)."""
+    window = text[max(0, start - _PROXIMITY_WINDOW) : end + _PROXIMITY_WINDOW]
+    unindented = "\n".join(line for line in window.split("\n") if not line[:1].isspace())
+    return bool(_UV_RUN_MENTION_RE.search(unindented))
+
+
 def has_stale_phrase(text: str, *, check_uv_run_proximity: bool) -> bool:
     """True iff a "standard library only"/"stdlib-only" phrase appears
     un-negated (see `_NEGATION_RE`). When `check_uv_run_proximity` is set,
-    also suppress a match with a "uv run" mention within
-    `_PROXIMITY_WINDOW` characters -- an accurate disclosure like "my own
-    code is standard library only, but ... uv run" (a real false positive
-    found while measuring this gate against
-    `gitapex_compute_skill_audit_flags.py`'s own post-fix docstring)
-    legitimately still contains the phrase. Deliberately NOT applied to a
-    workflow YAML's own text (the caller passes `check_uv_run_proximity=
-    False` there): a correctly-wired workflow's `run:` step always
-    contains "uv run" somewhere in the file, so proximity-suppressing on
-    that basis would blind this check to a genuinely stale, unrelated
-    top-of-file comment merely for being a short file -- exactly issue
-    #1049's own real regression shape. The negation guard alone is what
-    must catch an already-corrected workflow comment (see
-    `test_negated_stale_phrase_is_not_flagged`)."""
+    also suppress a match with an unindented "uv run" mention within
+    `_PROXIMITY_WINDOW` characters (see `_unindented_uv_run_nearby`) -- an
+    accurate disclosure like "my own code is standard library only, but
+    ... uv run" (a real false positive found while measuring this gate
+    against `gitapex_compute_skill_audit_flags.py`'s own post-fix
+    docstring) legitimately still contains the phrase. Deliberately NOT
+    applied to a workflow YAML's own text (the caller passes
+    `check_uv_run_proximity=False` there): a correctly-wired workflow's
+    `run:` step always contains "uv run" somewhere in the file, so
+    proximity-suppressing on that basis would blind this check to a
+    genuinely stale, unrelated top-of-file comment merely for being a
+    short file -- exactly issue #1049's own real regression shape. The
+    negation guard alone is what must catch an already-corrected workflow
+    comment (see `test_negated_stale_phrase_is_not_flagged`)."""
     for match in _STALE_PHRASE_RE.finditer(text):
         preceding = text[max(0, match.start() - 30) : match.start()]
         if _NEGATION_RE.search(preceding):
             continue
-        if check_uv_run_proximity:
-            window = text[max(0, match.start() - _PROXIMITY_WINDOW) : match.end() + _PROXIMITY_WINDOW]
-            if _UV_RUN_MENTION_RE.search(window):
-                continue
+        if check_uv_run_proximity and _unindented_uv_run_nearby(text, match.start(), match.end()):
+            continue
         return True
     return False
 
