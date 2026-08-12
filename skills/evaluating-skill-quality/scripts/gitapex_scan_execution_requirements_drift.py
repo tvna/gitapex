@@ -14,14 +14,11 @@ against what its own content actually does.
 Two independent checks, one per executionRequirements sub-block, that
 differ in kind, not just in what they check -- a distinction worth
 stating explicitly rather than lumping both under one "best-effort"
-label (a distinction a live design discussion on issue #1022 surfaced,
-including primary-source research into whether a dynamic/DAST-style
-approach could replace either: Python's own sys.addaudithook (PEP 578)
-docs state plainly it is "not suitable for implementing a 'sandbox'"
-and requires the target code to actually execute to fire, and
-established DAST tooling targets a *running* application's own HTTP/UI
-surface, neither of which fits a read-only pre-execution checker that
-must never itself run a skill's bundled scripts):
+label. find_network_drift's own detection mechanism (static AST
+parsing, not a dynamic/DAST-style approach) is a considered decision,
+not just an implementation default -- see
+docs/adr/0003-use-static-ast-not-dynamic-detection-for-network-drift.md
+for the full rationale and the alternatives it rejected:
 
 - find_network_drift: declared network.mode/domains vs. network-capable
   imports and literal https?:// hosts found in skill_dir/scripts/*.py --
