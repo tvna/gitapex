@@ -4066,7 +4066,16 @@ def check_shape(target: Path) -> list[CheckResult]:
     # unrelated case where this block must still run (a follow-up
     # code-review finding on the first fix: the broader state-based guard
     # silently skipped external-citations-resolve there too).
-    if not external_citations_sidecar_unreadable:
+    #
+    # Also guarded on sidecar.is_file(): when the sidecar is missing
+    # entirely, every sibling sidecar-derived check (skill-dependencies-*,
+    # references-well-formed, etc.) is omitted outright rather than firing
+    # a "not declared (optional)" PASS -- only metadata-file-present:False
+    # appears. Without this guard, external-citations-resolve broke that
+    # pairing (a later code-review finding): it fired unconditionally even
+    # for a skill directory with no metadata/gitapex.yaml at all, while its
+    # own external-citations-well-formed sibling was correctly omitted.
+    if not external_citations_sidecar_unreadable and sidecar.is_file():
         if not external_citations_declared:
             results.append(
                 CheckResult(
