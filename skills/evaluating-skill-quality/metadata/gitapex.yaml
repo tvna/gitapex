@@ -428,7 +428,21 @@ spec:
     - kind: audit
       anchor: "https://github.com/tvna/gitapex/issues/1055"
       summary: "Live verification: gitapex_check_skill_shape.py run against this skill's own current state returned 64/64 PASS. Full pytest suite: 424/424 passed (15 new tests), 98% line coverage on the checker script. The repo-wide sidecar schema drift scanner found no drift across all sidecars after the schema addition. A review pass caught and fixed one defect: this entry's own prior miscount of the new-test count (12, not 15)."
-  skillDependencies:
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1055"
+      summary: "PR review round 2 (CodeRabbit): fixed 2 real findings with regression tests -- external-citations-well-formed/-resolve now FAIL (not silently absent/false-PASS) when the sidecar is unreadable; spec.externalCitations.path is now restricted to evals/or docs/ via schema pattern plus checker regex, since this mechanism only ever rescues those two prefixes."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1055"
+      summary: "PR review round 2 (CodeRabbit): also replaced the sidecar's own prior audit entry's internal '/code-review' command marker with neutral wording, per this repository's own undisclosed-tooling-fingerprint rule."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/1055"
+      summary: "PR review round 2 (CodeRabbit): a 4th finding proposing a Markdown-only source set for external-citations-resolve was independently verified against _citation_sources' own established extension-agnostic convention (a prior issue's precedent) and withdrawn by the reviewer after explanation."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1055"
+      summary: "PR review round 3 (independent code-review pass on round 2's own fix): the round-2 unreadable-sidecar guard (sidecar_portability.state != 'unusable') was too broad, also matching a parsed manifest with invalid spec.portability -- external-citations-resolve was silently never appended there. Replaced with a precise external_citations_sidecar_unreadable flag."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/1055"
+      summary: "PR review round 3: also fixed a minor duplicate regex-search in _inline_citation_offenders (correctness-neutral efficiency only). Re-verified live after both fixes: 64/64 self-dogfood PASS, full pytest suite green."
     requires: []
     relatedTo:
       - battle-testing-a-skill

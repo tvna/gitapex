@@ -3631,6 +3631,34 @@ def test_external_citations_stale_declaration_fails_resolve(tmp_path):
     assert css.main([str(d)]) == 1
 
 
+def test_external_citations_resolve_runs_when_portability_invalid(tmp_path):
+    # Regression guard (code-review finding, follow-up to the sidecar-
+    # unreadable fix above): sidecar_portability.state also reads
+    # "unusable" for a PARSED manifest with an invalid/missing
+    # spec.portability -- a case unrelated to sidecar readability, where
+    # external-citations-well-formed already runs normally and must not
+    # silently skip external-citations-resolve too.
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  capabilityAssumption: Broad\n"
+        "  externalCitations:\n"
+        "    - path: docs/no-such-file.md\n"
+        "      role: input-source\n",
+        encoding="utf-8",
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["portability-declared"].passed is False
+    assert by["external-citations-well-formed"].passed is True
+    assert "external-citations-resolve" in by
+    assert by["external-citations-resolve"].passed is False
+    assert "docs/no-such-file.md" in by["external-citations-resolve"].evidence
+
+
 def test_external_citations_malformed_declaration_has_nothing_to_resolve(tmp_path):
     # A malformed/empty externalCitations never reaches
     # external_citations_declared -- external-citations-resolve degrades to

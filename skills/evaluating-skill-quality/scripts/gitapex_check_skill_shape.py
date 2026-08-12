@@ -3103,7 +3103,7 @@ def _inline_citation_offenders(
                     blanked[pos] = " "
             blanked_lower = "".join(blanked)
             for spec_idx, (citation_re, hedge_phrases, declared_paths) in enumerate(specs):
-                spec_matches = [cs for cs in code_spans if citation_re.search(cs.group(2))]
+                spec_matches = [(cs, m) for cs in code_spans if (m := citation_re.search(cs.group(2))) is not None]
                 if not spec_matches:
                     continue
                 prev_has_own_citation = i > 0 and any(citation_re.search(cs.group(2)) for cs in all_code_spans[i - 1])
@@ -3111,13 +3111,8 @@ def _inline_citation_offenders(
                 hedged = any(phrase in blanked_lower or phrase in candidate_prev for phrase in hedge_phrases)
                 if hedged:
                     continue
-                for cs in spec_matches:
-                    citation_match = citation_re.search(cs.group(2))
-                    declared = (
-                        bool(declared_paths)
-                        and citation_match is not None
-                        and citation_match.group(0) in declared_paths
-                    )
+                for cs, citation_match in spec_matches:
+                    declared = bool(declared_paths) and citation_match.group(0) in declared_paths
                     if not declared:
                         offenders_per_spec[spec_idx].append(cs.group(0))
     return [_dedup(offenders) for offenders in offenders_per_spec]
@@ -3456,6 +3451,19 @@ def check_shape(target: Path) -> list[CheckResult]:
     # whenever the sidecar is absent, unreadable, or the field itself is
     # malformed/empty, matching every other declared-list default here.
     external_citations_declared: list[dict[str, object]] = []
+    # True only when the sidecar exists but could not be read/parsed at
+    # all (manifest is None below) -- the one case where
+    # external-citations-well-formed/-resolve were already emitted as
+    # FAILed above, so the unconditional block near the end of this
+    # function must not append a second, silently-overwriting result.
+    # Deliberately NOT sidecar_portability.state != "unusable": that state
+    # also covers a *parsed* manifest with an invalid spec.portability
+    # (see below), where external-citations-well-formed already ran
+    # normally and external-citations-resolve must still run too
+    # (code-review finding, issue #1055 follow-up: the broader state-based
+    # guard silently skipped external-citations-resolve for that second,
+    # unrelated case).
+    external_citations_sidecar_unreadable = False
     if not sidecar.is_file():
         results.append(CheckResult("metadata-file-present", False, f"{SIDECAR_RELATIVE_PATH} exists", "missing"))
         sidecar_portability = SidecarPortability(state="absent")
@@ -3502,6 +3510,7 @@ def check_shape(target: Path) -> list[CheckResult]:
             read_error = type(exc).__name__
 
         if manifest is None:
+            external_citations_sidecar_unreadable = True
             evidence = f"unreadable: {read_error}"
             results.append(
                 CheckResult(
@@ -4043,8 +4052,14 @@ def check_shape(target: Path) -> list[CheckResult]:
     # not silently overwrite that FAIL with a "not declared (optional)"
     # PASS (code-review finding, issue #1055: _by_name's dict comprehension
     # keeps only the LAST same-named CheckResult, so appending twice is not
-    # merely redundant, it is a real gate bypass).
-    if sidecar_portability.state != "unusable":
+    # merely redundant, it is a real gate bypass). Guarded on the precise
+    # external_citations_sidecar_unreadable flag, NOT
+    # sidecar_portability.state != "unusable" -- that state also fires for
+    # a parsed manifest with an invalid spec.portability, a second,
+    # unrelated case where this block must still run (a follow-up
+    # code-review finding on the first fix: the broader state-based guard
+    # silently skipped external-citations-resolve there too).
+    if not external_citations_sidecar_unreadable:
         if not external_citations_declared:
             results.append(
                 CheckResult(
