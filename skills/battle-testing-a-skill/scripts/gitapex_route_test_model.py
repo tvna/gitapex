@@ -23,7 +23,7 @@ from pathlib import Path
 # ceiling rather than below it, since a caller that wants fewer trials
 # already has an explicit way to ask (the CLI's --trials flag).
 DEFAULT_TRIALS = 3
-MAX_TRIALS = 3
+MAX_TRIALS = 3  # same hard execution-budget ceiling as DEFAULT_TRIALS above
 
 
 def _validate_model_slug(value: object, field: str) -> str:

@@ -55,8 +55,8 @@ limits.
 
 - `python3 >= 3.12` (`extract_wrapper_dir`'s tar extraction path relies
   on `filter="data"`, PEP 706, stdlib only since 3.12).
-- `gitapex_provision_class_b.py` is stdlib-only -- no `pip install` or `uv sync`
-  needed to run it directly.
+- Run `gitapex_provision_class_b.py` directly -- it is stdlib-only, so no
+  `pip install` or `uv sync` is needed first.
 - Outbound network access to `github.com` release assets, and whatever
   `apm install` itself reaches. A session with no network access cannot
   provision anything: the download step fails, and so does this skill's
