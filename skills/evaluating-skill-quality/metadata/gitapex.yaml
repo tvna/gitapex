@@ -443,6 +443,9 @@ spec:
     - kind: audit
       anchor: "https://github.com/tvna/gitapex/issues/1055"
       summary: "PR review round 3: also fixed a minor duplicate regex-search in _inline_citation_offenders (correctness-neutral efficiency only). Re-verified live after both fixes: 64/64 self-dogfood PASS, full pytest suite green."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1055"
+      summary: "Removed every embedded issue/PR-URL history citation from skill-metadata.schema.json's own field descriptions (externalCitations, referenceItem, executionRequirements and its packages/network sub-blocks): the schema declares the sidecar's design contract, not a provenance log -- that role already belongs to this sidecar's own spec.references. Substantive rationale text was kept verbatim; only the citation was dropped."
   skillDependencies:
     requires: []
     relatedTo:
