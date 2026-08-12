@@ -422,6 +422,48 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/920"
       summary: "Added a state-minimality lens to references/state-management-quality.md, ahead of the axes as a cross-cutting question, not a twelfth axis: the axis count stays eleven and the trigger is untouched, so the firing set does not move. It asks whether a recorded value is re-derivable from ground truth, whether every field has a named consumer, and whether granularity is the minimum its consumer requires. Grounded in Toyota's Just-in-Time statement, whose amount clause nothing here owned."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1055"
+      summary: "Added spec.externalCitations to metadata/gitapex.yaml's schema and gitapex_check_skill_shape.py's checker: a new top-level list field (path/role, role input-source or output-destination), supplementing (not replacing) GENERIC_ROLE_HEDGE_PHRASES, matched by exact literal path substring. Adds external-citations-well-formed/-resolve checks and a per-citation rescue in portable-no-inline-path-citation only; the bare-prose repo-path check stays unconditional and unaffected."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/1055"
+      summary: "Live verification: gitapex_check_skill_shape.py run against this skill's own current state returned 64/64 PASS. Full pytest suite: 424/424 passed (15 new tests), 98% line coverage on the checker script. The repo-wide sidecar schema drift scanner found no drift across all sidecars after the schema addition. A review pass caught and fixed one defect: this entry's own prior miscount of the new-test count (12, not 15)."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1055"
+      summary: "PR review round 2 (CodeRabbit): fixed 2 real findings with regression tests -- external-citations-well-formed/-resolve now FAIL (not silently absent/false-PASS) when the sidecar is unreadable; spec.externalCitations.path is now restricted to evals/or docs/ via schema pattern plus checker regex, since this mechanism only ever rescues those two prefixes."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1055"
+      summary: "PR review round 2 (CodeRabbit): also replaced the sidecar's own prior audit entry's internal '/code-review' command marker with neutral wording, per this repository's own undisclosed-tooling-fingerprint rule."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/1055"
+      summary: "PR review round 2 (CodeRabbit): a 4th finding proposing a Markdown-only source set for external-citations-resolve was independently verified against _citation_sources' own established extension-agnostic convention (a prior issue's precedent) and withdrawn by the reviewer after explanation."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1055"
+      summary: "PR review round 3 (independent code-review pass on round 2's own fix): the round-2 unreadable-sidecar guard (sidecar_portability.state != 'unusable') was too broad, also matching a parsed manifest with invalid spec.portability -- external-citations-resolve was silently never appended there. Replaced with a precise external_citations_sidecar_unreadable flag."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/1055"
+      summary: "PR review round 3: also fixed a minor duplicate regex-search in _inline_citation_offenders (correctness-neutral efficiency only). Re-verified live after both fixes: 64/64 self-dogfood PASS, full pytest suite green."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1055"
+      summary: "Removed every embedded issue/PR-URL history citation from skill-metadata.schema.json's own field descriptions (externalCitations, referenceItem, executionRequirements and its packages/network sub-blocks): the schema declares the sidecar's design contract, not a provenance log -- that role already belongs to this sidecar's own spec.references. Substantive rationale text was kept verbatim; only the citation was dropped."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1055"
+      summary: "PR review round 4 (independent two-layer review, drafting-a-pr-to-merge): fixed a real regression in _inline_citation_offenders -- a single inline-code span carrying two citations was rescued wholesale when only the first match (via .search, not .finditer) was declared, silently hiding an undeclared span-mate. Every match within a span must now be declared before the whole span is rescued, per-citation as designed."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1055"
+      summary: "PR review round 4: fixed a stale-declaration false-negative in external-citations-resolve -- plain substring matching let a declared path falsely resolve via prefix overlap with a different real citation (e.g. docs/a.md against docs/a.mdx). Now matched against REPO_PATH_CITATION_RE's own extracted citation tokens, keeping the check's 'exact literal match' claim actually exact."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1055"
+      summary: "PR review round 4: test_declared_external_citation_does_not_rescue_issue_number_citation declared an invalid path (an issue-number literal, failing the evals/docs schema pattern), so declared_citation_paths stayed empty regardless of the scoping guard under test -- fixed the schema-validity half. A follow-up audit entry below discloses this rewrite's own remaining limitation."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1055"
+      summary: "PR review round 5 (independent re-review of round 4's own fixes): round 4's token-set fix for the prefix-overlap bug introduced a live regression -- REPO_PATH_CITATION_RE's own character class includes '.', so a genuine citation immediately followed by a sentence-final period (e.g. 'documented in docs/a.md.') was extracted with the period attached and reported stale. Fixed with the same established rstrip('.,;:)') precedent SCRIPTS_PATH_BARE_RE already uses for this identical class of bug."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/1055"
+      summary: "PR review round 5: round 4's rewritten scoping-guard test still cannot falsify the 'name == portable-no-inline-path-citation' guard itself -- verified live by deleting that guard; the test suite still passed. Root cause: evals/docs paths and '#N' issue citations are disjoint shapes, so no schema-valid declared path can equal a matched issue citation. Disclosed as an inherent test-design limit, not fabricated as covered."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/1055"
+      summary: "Re-verified live after the round-5 fix plus its own new regression test: 64/64 self-dogfood PASS, full pytest suite 529/529 passed, repo-wide schema drift scanner clean, ruff/mypy clean. This diff's own new-test count is 21."
   skillDependencies:
     requires: []
     relatedTo:

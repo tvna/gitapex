@@ -158,6 +158,17 @@ Checks (the canonical list -- the manual fallback is to apply these):
     children) is dropped entirely, not gated/checked here or anywhere --
     only nested maps and list items under them are skipped by the parser,
     and indented lines are never flagged as malformed regardless of shape.
+    spec.externalCitations (issue #1055), if present, is a non-empty list
+    of item mappings, each a flat path/role pair (path rooted at evals/ or
+    docs/; role one of input-source/output-destination) with no
+    unrecognized key (external-citations-well-formed); every declared path
+    must literally
+    (exact-substring) appear somewhere in SKILL.md or references/*.md,
+    catching a stale declaration whose citation no longer exists
+    (external-citations-resolve). This is an opt-in supplement to
+    GENERIC_ROLE_HEDGE_PHRASES, not a replacement -- see the Portable
+    inline-code repo-path citation entry below for how a declared entry
+    rescues an inline-code citation.
   - references/ files: exactly one level deep, any extension (a bundled
     JSON schema is as legitimate a dependency file as a Markdown doc).
   - any references/*.md file over 100 lines: contains a table of contents
@@ -343,7 +354,13 @@ Checks (the canonical list -- the manual fallback is to apply these):
     docstring above already covers -- this check never runs on blocks,
     only on inline code, since a worked example's illustrative fenced
     output is a different, already-settled case that this check does not
-    reopen.
+    reopen. A second, independent rescue (issue #1055): a citation whose
+    own matched text exactly equals a well-formed spec.externalCitations
+    declared path also passes, regardless of any nearby hedge phrase --
+    per-citation, not clause-wide, since a declaration is a fact about one
+    specific path. This supplements GENERIC_ROLE_HEDGE_PHRASES; it does not
+    replace it, and it is deliberately NOT applied to the bare-prose
+    (portable-no-repo-path-citation) or issue-number check.
   - Portable inline-code issue/PR-number citation without a hedge (the
     same blind spot as the repo-path check above, but for issue numbers
     instead of paths): the bare-issue-citation scan's inline-code exclusion
@@ -500,6 +517,37 @@ REFERENCES_KIND_VOCAB = (
     "elision",
     "correction",
 )
+# spec.externalCitations (issue #1055): a Portable skill's own opt-in
+# declaration that a specific evals/docs/CLAUDE.md-chapter path citation
+# names an input source or output destination, not a control dependency --
+# see rubric.md's Portability level section for the underlying distinction
+# this supplements, not replaces, GENERIC_ROLE_HEDGE_PHRASES for. Each item
+# is a flat two-field mapping (no nested "outcome" sub-block, unlike
+# spec.references' own items), structurally the simpler of the two list-of-
+# mappings fields this sidecar has.
+EXTERNAL_CITATION_ITEM_SUBKEYS = ("path", "role")
+EXTERNAL_CITATION_ITEM_REQUIRED_SUBKEYS = ("path", "role")
+# Exactly 4 spaces, matching REFERENCES_ITEM_INDENT's own convention -- one
+# level under spec.externalCitations' own 2-space key.
+EXTERNAL_CITATION_ITEM_INDENT = 4
+# A repo-external path cited only as an input source (read whatever the
+# calling repository has) or an output destination (this skill's own
+# result is consumed downstream by X) is not a control dependency -- see
+# rubric.md's Portability level section. Closed vocabulary; not
+# speculative -- both values are already this repository's own established
+# vocabulary from that section's prose.
+EXTERNAL_CITATION_ROLES = ("input-source", "output-destination")
+# A declared spec.externalCitations path must be rooted at evals/ or docs/,
+# the same two prefixes REPO_PATH_CITATION_RE's own evals/docs alternative
+# gates -- this mechanism exists to rescue exactly that check's own
+# citations, so a path outside both prefixes could never be a real rescue
+# target in the first place (code-review finding, issue #1055). Mirrors
+# skill-metadata.schema.json's own externalCitationItem.path pattern; kept
+# as a separate, hand-duplicated regex here rather than shared, matching
+# this module's own established convention for a schema constraint that
+# also needs enforcing in this dependency-free parser (see
+# EXEC_REQ_NETWORK_SUBKEYS' own comment for the precedent).
+EXTERNAL_CITATION_PATH_RE = re.compile(r"^(?:evals|docs)/[A-Za-z0-9._/-]+$")
 # "Keep SKILL.md body under 500 lines for optimal performance" (same doc;
 # also code.claude.com/docs/en/skills).
 BODY_MAX_LINES = 500
@@ -1335,6 +1383,18 @@ class ManifestParse:
     ``domains``; the second holds each ``domains`` list item that is
     mapping-shaped or inconsistently indented. Both empty when the field
     is absent or parsed cleanly.
+
+    ``malformed_external_citation_items`` and
+    ``unknown_external_citation_item_keys`` are spec.externalCitations'
+    equivalents to ``malformed_reference_items``/
+    ``unknown_reference_item_keys`` (issue #1055): the former holds each
+    externalCitations list item's own opening line (trimmed) that could
+    not be read as a well-formed item mapping (bad indent, not "<key>:
+    <value>" shaped, an opening key outside EXTERNAL_CITATION_ITEM_SUBKEYS,
+    or missing ``path``/``role`` by the time it closes); the latter holds
+    each key found inside an otherwise-well-opened item that is not
+    ``path``/``role``. Both empty when the field is absent or parsed
+    cleanly.
     """
 
     root: dict[str, object]
@@ -1350,6 +1410,8 @@ class ManifestParse:
     malformed_execution_requirement_tools_items: list[str]
     unknown_execution_requirement_network_keys: list[str]
     malformed_execution_requirement_network_items: list[str]
+    malformed_external_citation_items: list[str]
+    unknown_external_citation_item_keys: list[str]
 
 
 def _parse_manifest(text: str) -> ManifestParse:
@@ -1577,6 +1639,15 @@ def _parse_manifest(text: str) -> ManifestParse:
     malformed: list[str] = []
     malformed_refs: list[str] = []
     unknown_ref_item_keys: list[str] = []
+    # spec.externalCitations' own state, structurally parallel to
+    # spec.references' above but simpler -- each item is a flat two-field
+    # mapping (path/role) with no nested "outcome" sub-block.
+    collecting_ext_citations: list[dict[str, object]] | None = None
+    current_ext_citation_item: dict[str, object] | None = None
+    current_ext_citation_item_valid = True
+    current_ext_citation_open_line = ""
+    malformed_ext_citations: list[str] = []
+    unknown_ext_citation_item_keys: list[str] = []
     in_skill_deps = False
     skill_deps: dict[str, object] = {}
     # Whether spec.skillDependencies has seen at least one real child line
@@ -1658,6 +1729,28 @@ def _parse_manifest(text: str) -> ManifestParse:
         if collecting_refs is not None and current is not None:
             current["references"] = collecting_refs
         collecting_refs = None
+
+    def _finalize_current_ext_citation_item() -> None:
+        nonlocal current_ext_citation_item, current_ext_citation_item_valid, current_ext_citation_open_line
+        if current_ext_citation_item is not None:
+            missing = [k for k in EXTERNAL_CITATION_ITEM_REQUIRED_SUBKEYS if k not in current_ext_citation_item]
+            if current_ext_citation_item_valid and missing:
+                joined = ", ".join(missing)
+                malformed_ext_citations.append(
+                    f"{current_ext_citation_open_line} (missing required field(s): {joined})"
+                )
+            elif current_ext_citation_item_valid and collecting_ext_citations is not None:
+                collecting_ext_citations.append(current_ext_citation_item)
+        current_ext_citation_item = None
+        current_ext_citation_item_valid = True
+        current_ext_citation_open_line = ""
+
+    def _finalize_ext_citations() -> None:
+        nonlocal collecting_ext_citations
+        _finalize_current_ext_citation_item()
+        if collecting_ext_citations is not None and current is not None:
+            current["externalCitations"] = collecting_ext_citations
+        collecting_ext_citations = None
 
     def _finalize_dep_list() -> None:
         nonlocal collecting_dep_list, collecting_dep_key, dep_list_indent
@@ -1822,6 +1915,53 @@ def _parse_manifest(text: str) -> ManifestParse:
             # Finalize it and fall through to process this line normally
             # below.
             _finalize_refs()
+        if collecting_ext_citations is not None:
+            item = REFERENCES_LIST_ITEM_RE.match(line)
+            if item:
+                # A new "- <key>: <value>" item marker always closes
+                # whatever item came before it -- same rule as
+                # spec.references' own items above.
+                _finalize_current_ext_citation_item()
+                item_indent = len(line) - len(line.lstrip(" "))
+                raw_text = item.group(1).strip()
+                opened = _match_key_line(INLINE_KEY_VALUE_RE, raw_text)
+                current_ext_citation_open_line = line.strip()
+                if (
+                    item_indent != EXTERNAL_CITATION_ITEM_INDENT
+                    or opened is None
+                    or opened[0] not in EXTERNAL_CITATION_ITEM_SUBKEYS
+                ):
+                    malformed_ext_citations.append(line.strip())
+                    current_ext_citation_item = {}
+                    current_ext_citation_item_valid = False
+                else:
+                    key, value = opened
+                    current_ext_citation_item = {}
+                    current_ext_citation_item_valid = True
+                    if value:
+                        current_ext_citation_item[key] = _unquote(value)
+                continue
+            if current_ext_citation_item is not None:
+                matched = _match_key_line(KEY_LINE_RE_6, line)
+                if matched:
+                    key, value = matched
+                    value = _strip_bare_comment(value)
+                    if key not in EXTERNAL_CITATION_ITEM_SUBKEYS:
+                        unknown_ext_citation_item_keys.append(line.strip())
+                    elif value:
+                        current_ext_citation_item[key] = _unquote(value)
+                    continue
+                indent = len(line) - len(line.lstrip(" "))
+                if line[:1] in (" ", "\t") and indent >= 6:
+                    # Same fail-closed reasoning as spec.references' own
+                    # equivalent branch.
+                    current_ext_citation_item_valid = False
+                    unknown_ext_citation_item_keys.append(line.strip())
+                    continue
+            # Neither a new item marker nor a continuation of the current
+            # one: the externalCitations list ends here. Finalize it and
+            # fall through to process this line normally below.
+            _finalize_ext_citations()
         if collecting_dep_list is not None:
             item = SKILL_DEP_LIST_ITEM_RE.match(line)
             if item:
@@ -2151,6 +2291,8 @@ def _parse_manifest(text: str) -> ManifestParse:
                 # without tracking a separate current-top-key variable.
                 if key == "references" and current is root.get("spec") and not value:
                     collecting_refs = []
+                elif key == "externalCitations" and current is root.get("spec") and not value:
+                    collecting_ext_citations = []
                 elif key == "skillDependencies" and current is root.get("spec") and not value:
                     in_skill_deps = True
                     skill_deps = {}
@@ -2178,6 +2320,7 @@ def _parse_manifest(text: str) -> ManifestParse:
             continue
         malformed.append(line.strip())
     _finalize_refs()
+    _finalize_ext_citations()
     _finalize_skill_deps()
     _finalize_lifecycle()
     _finalize_execution_requirements()
@@ -2195,6 +2338,8 @@ def _parse_manifest(text: str) -> ManifestParse:
         malformed_execution_requirement_tools_items=malformed_exec_tools_items,
         unknown_execution_requirement_network_keys=unknown_exec_network_keys,
         malformed_execution_requirement_network_items=malformed_exec_network_items,
+        malformed_external_citation_items=malformed_ext_citations,
+        unknown_external_citation_item_keys=unknown_ext_citation_item_keys,
     )
 
 
@@ -2844,10 +2989,11 @@ def _split_at_bridging_semicolon(sentence: str, citation_res: tuple[re.Pattern[s
 
 def _inline_citation_offenders(
     defenced_text: str,
-    specs: tuple[tuple[re.Pattern[str], tuple[str, ...]], ...],
+    specs: tuple[tuple[re.Pattern[str], tuple[str, ...], frozenset[str]], ...],
 ) -> list[list[str]]:
-    """Return, for each ``(citation_re, hedge_phrases)`` pair in ``specs``,
-    the list of inline-code citations matching that ``citation_re`` in
+    """Return, for each ``(citation_re, hedge_phrases, declared_paths)``
+    triple in ``specs``, the list of inline-code citations matching that
+    ``citation_re`` in
     ``defenced_text`` (already fence-blanked via ``_blank_fenced_blocks``)
     that have no phrase from that spec's ``hedge_phrases`` in their own
     sentence (or bridging-semicolon-split clause, see
@@ -2922,8 +3068,17 @@ def _inline_citation_offenders(
     "fenced code blocks stay exempt unconditionally" note. Each spec's
     result list is order-preserving and deduplicated, matching
     ``_portable_citation_offenders``.
+
+    ``declared_paths`` (issue #1055) supplements ``hedge_phrases`` for a
+    spec that carries one: a citation whose own matched text exactly
+    equals a member of ``declared_paths`` is rescued even when its clause
+    carries no hedge phrase at all, per-citation rather than clause-wide --
+    a ``spec.externalCitations`` declaration is a fact about one specific
+    path, unlike a hedge phrase, which is prose covering everything in its
+    own clause. Empty for the issue-number spec, which this proposal does
+    not touch.
     """
-    citation_res = tuple(citation_re for citation_re, _hedge_phrases in specs)
+    citation_res = tuple(citation_re for citation_re, _hedge_phrases, _declared_paths in specs)
     offenders_per_spec: list[list[str]] = [[] for _ in specs]
     for para in _PARAGRAPH_SPLIT_RE.split(defenced_text):
         if not para.strip():
@@ -2947,15 +3102,26 @@ def _inline_citation_offenders(
                 for pos in range(cs.start(), cs.end()):
                     blanked[pos] = " "
             blanked_lower = "".join(blanked)
-            for spec_idx, (citation_re, hedge_phrases) in enumerate(specs):
-                spec_matches = [cs for cs in code_spans if citation_re.search(cs.group(2))]
+            for spec_idx, (citation_re, hedge_phrases, declared_paths) in enumerate(specs):
+                spec_matches = [(cs, list(citation_re.finditer(cs.group(2)))) for cs in code_spans]
+                spec_matches = [(cs, ms) for cs, ms in spec_matches if ms]
                 if not spec_matches:
                     continue
                 prev_has_own_citation = i > 0 and any(citation_re.search(cs.group(2)) for cs in all_code_spans[i - 1])
                 candidate_prev = "" if prev_has_own_citation else prev_lower
                 hedged = any(phrase in blanked_lower or phrase in candidate_prev for phrase in hedge_phrases)
-                if not hedged:
-                    offenders_per_spec[spec_idx].extend(cs.group(0) for cs in spec_matches)
+                if hedged:
+                    continue
+                for cs, matches in spec_matches:
+                    # A span is rescued only when EVERY citation match it
+                    # carries is declared -- per-citation, not clause-wide
+                    # (issue #1055): a span packing one declared and one
+                    # undeclared citation (e.g. `` `docs/a.md docs/b.md` ``)
+                    # must still surface the undeclared one, so a single
+                    # ``.search()`` (first match only) is not enough here.
+                    all_declared = bool(declared_paths) and all(m.group(0) in declared_paths for m in matches)
+                    if not all_declared:
+                        offenders_per_spec[spec_idx].append(cs.group(0))
     return [_dedup(offenders) for offenders in offenders_per_spec]
 
 
@@ -3284,6 +3450,27 @@ def check_shape(target: Path) -> list[CheckResult]:
     )
 
     sidecar = skill_dir / SIDECAR_RELATIVE_PATH
+    # Every well-formed spec.externalCitations item (path/role), populated
+    # below only when the sidecar parses cleanly -- fed into
+    # external-citations-resolve and the inline-path-citation rescue
+    # further down, both of which run after ``body`` exists, unlike
+    # every other sidecar-derived check above (issue #1055). Stays []
+    # whenever the sidecar is absent, unreadable, or the field itself is
+    # malformed/empty, matching every other declared-list default here.
+    external_citations_declared: list[dict[str, object]] = []
+    # True only when the sidecar exists but could not be read/parsed at
+    # all (manifest is None below) -- the one case where
+    # external-citations-well-formed/-resolve were already emitted as
+    # FAILed above, so the unconditional block near the end of this
+    # function must not append a second, silently-overwriting result.
+    # Deliberately NOT sidecar_portability.state != "unusable": that state
+    # also covers a *parsed* manifest with an invalid spec.portability
+    # (see below), where external-citations-well-formed already ran
+    # normally and external-citations-resolve must still run too
+    # (code-review finding, issue #1055 follow-up: the broader state-based
+    # guard silently skipped external-citations-resolve for that second,
+    # unrelated case).
+    external_citations_sidecar_unreadable = False
     if not sidecar.is_file():
         results.append(CheckResult("metadata-file-present", False, f"{SIDECAR_RELATIVE_PATH} exists", "missing"))
         sidecar_portability = SidecarPortability(state="absent")
@@ -3308,6 +3495,8 @@ def check_shape(target: Path) -> list[CheckResult]:
             malformed_execution_requirement_tools_items = parsed.malformed_execution_requirement_tools_items
             unknown_execution_requirement_network_keys = parsed.unknown_execution_requirement_network_keys
             malformed_execution_requirement_network_items = parsed.malformed_execution_requirement_network_items
+            malformed_external_citation_items = parsed.malformed_external_citation_items
+            unknown_external_citation_item_keys = parsed.unknown_external_citation_item_keys
             read_error: str | None = None
         except (OSError, UnicodeDecodeError) as exc:
             manifest = None
@@ -3322,10 +3511,13 @@ def check_shape(target: Path) -> list[CheckResult]:
             unknown_execution_requirement_tools_keys = []
             malformed_execution_requirement_tools_items = []
             unknown_execution_requirement_network_keys = []
+            malformed_external_citation_items = []
+            unknown_external_citation_item_keys = []
             malformed_execution_requirement_network_items = []
             read_error = type(exc).__name__
 
         if manifest is None:
+            external_citations_sidecar_unreadable = True
             evidence = f"unreadable: {read_error}"
             results.append(
                 CheckResult(
@@ -3369,6 +3561,25 @@ def check_shape(target: Path) -> list[CheckResult]:
                     "references-grammar",
                     False,
                     'spec.references, if present, has each entry shaped "<kind> | <anchor> | <summary>[ | <outcome>]"',
+                    evidence,
+                )
+            )
+            results.append(
+                CheckResult(
+                    "external-citations-well-formed",
+                    False,
+                    "spec.externalCitations, if present, is a non-empty list of "
+                    "item mappings, each with path/role (role one of "
+                    f"{EXTERNAL_CITATION_ROLES}) and no unrecognized key",
+                    evidence,
+                )
+            )
+            results.append(
+                CheckResult(
+                    "external-citations-resolve",
+                    False,
+                    "every spec.externalCitations path literally appears somewhere "
+                    "in SKILL.md or references/*.md (no stale declaration)",
                     evidence,
                 )
             )
@@ -3609,6 +3820,89 @@ def check_shape(target: Path) -> list[CheckResult]:
                     if isinstance(outcome, dict):
                         ref_texts.extend(str(v) for v in outcome.values())
                 sidecar_citation_sources.append(("metadata/gitapex.yaml:spec.references", "\n".join(ref_texts)))
+            external_citations = spec.get("externalCitations")
+            external_citations_well_formed_rule = (
+                "spec.externalCitations, if present, is a non-empty list of "
+                "item mappings, each with a path rooted at evals/ or docs/ "
+                "and a role one of "
+                f"{EXTERNAL_CITATION_ROLES}, and no unrecognized key"
+            )
+            is_ext_citation_item = lambda c: (  # noqa: E731 -- local, single use
+                isinstance(c, dict)
+                and isinstance(c.get("path"), str)
+                and bool(EXTERNAL_CITATION_PATH_RE.match(c["path"]))
+                and c.get("role") in EXTERNAL_CITATION_ROLES
+            )
+            if not spec_is_mapping:
+                results.append(
+                    CheckResult(
+                        "external-citations-well-formed",
+                        False,
+                        external_citations_well_formed_rule,
+                        f"spec is not a mapping: {spec_raw!r}",
+                    )
+                )
+            elif malformed_external_citation_items:
+                count = len(malformed_external_citation_items)
+                results.append(
+                    CheckResult(
+                        "external-citations-well-formed",
+                        False,
+                        external_citations_well_formed_rule,
+                        f"{count} malformed entr{'y' if count == 1 else 'ies'}: {malformed_external_citation_items[0]!r}",
+                    )
+                )
+            elif unknown_external_citation_item_keys:
+                count = len(unknown_external_citation_item_keys)
+                results.append(
+                    CheckResult(
+                        "external-citations-well-formed",
+                        False,
+                        external_citations_well_formed_rule,
+                        f"{count} unknown key{'' if count == 1 else 's'}: {unknown_external_citation_item_keys[0]!r}",
+                    )
+                )
+            elif external_citations is None:
+                results.append(
+                    CheckResult(
+                        "external-citations-well-formed",
+                        True,
+                        external_citations_well_formed_rule,
+                        "not declared (optional)",
+                    )
+                )
+            elif not (
+                isinstance(external_citations, list)
+                and external_citations
+                and all(is_ext_citation_item(c) for c in external_citations)
+            ):
+                ext_evidence = (
+                    "empty list"
+                    if external_citations == []
+                    else f"not a list of item mappings with a valid evals/docs path and role: {external_citations!r}"
+                )
+                results.append(
+                    CheckResult(
+                        "external-citations-well-formed", False, external_citations_well_formed_rule, ext_evidence
+                    )
+                )
+            else:
+                ext_count = len(external_citations)
+                ext_noun = "entry" if ext_count == 1 else "entries"
+                results.append(
+                    CheckResult(
+                        "external-citations-well-formed",
+                        True,
+                        external_citations_well_formed_rule,
+                        f"{ext_count} {ext_noun}",
+                    )
+                )
+                # Only a genuinely well-formed list feeds external-citations-
+                # resolve/the inline-citation rescue further down -- a
+                # malformed or absent declaration has nothing valid to
+                # resolve against, matching how a malformed spec.references
+                # never reaches sidecar_citation_sources above.
+                external_citations_declared = external_citations
             lifecycle_raw = spec.get("lifecycle") if spec_is_mapping else None
             lifecycle_dict = lifecycle_raw if isinstance(lifecycle_raw, dict) else {}
             for lifecycle_key in ("experimental", "deprecated"):
@@ -3759,6 +4053,44 @@ def check_shape(target: Path) -> list[CheckResult]:
                 )
             )
 
+    # A "manifest is None" (unreadable sidecar) already emitted a failed
+    # external-citations-resolve above, alongside every sibling
+    # sidecar-derived check -- skip here so this unconditional block does
+    # not silently overwrite that FAIL with a "not declared (optional)"
+    # PASS (code-review finding, issue #1055: _by_name's dict comprehension
+    # keeps only the LAST same-named CheckResult, so appending twice is not
+    # merely redundant, it is a real gate bypass). Guarded on the precise
+    # external_citations_sidecar_unreadable flag, NOT
+    # sidecar_portability.state != "unusable" -- that state also fires for
+    # a parsed manifest with an invalid spec.portability, a second,
+    # unrelated case where this block must still run (a follow-up
+    # code-review finding on the first fix: the broader state-based guard
+    # silently skipped external-citations-resolve there too).
+    if not external_citations_sidecar_unreadable:
+        if not external_citations_declared:
+            results.append(
+                CheckResult(
+                    "external-citations-resolve",
+                    True,
+                    "every spec.externalCitations path literally appears somewhere "
+                    "in SKILL.md or references/*.md (no stale declaration)",
+                    "not declared (optional)",
+                )
+            )
+        else:
+            stale_external_citations = _external_citation_declaration_offenders(
+                external_citations_declared, skill_md, skill_dir, body
+            )
+            results.append(
+                CheckResult(
+                    "external-citations-resolve",
+                    not stale_external_citations,
+                    "every spec.externalCitations path literally appears somewhere "
+                    "in SKILL.md or references/*.md (no stale declaration)",
+                    "all resolve" if not stale_external_citations else "stale: " + ", ".join(stale_external_citations),
+                )
+            )
+
     results.extend(_issue_citation_checks(skill_md, skill_dir, body, extra_sources=sidecar_citation_sources))
     results.extend(_cross_skill_citation_checks(skill_md, skill_dir, body, anchor_slug_cache))
     results.extend(_mechanism_fit_checks(skill_md, skill_dir, body))
@@ -3766,11 +4098,57 @@ def check_shape(target: Path) -> list[CheckResult]:
     results.extend(_raw_placeholder_checks(skill_md, skill_dir, body))
     results.extend(_step_location_checks(skill_md, skill_dir, body))
     if _is_portable(body, sidecar_portability):
-        results.extend(_portable_path_citation_checks(skill_md, skill_dir, body))
+        declared_citation_paths = frozenset(
+            c["path"] for c in external_citations_declared if isinstance(c.get("path"), str)
+        )
+        results.extend(_portable_path_citation_checks(skill_md, skill_dir, body, declared_citation_paths))
         results.extend(_portable_skill_citation_checks(skill_md, skill_dir, body))
         results.extend(_out_of_skill_scripts_checks(skill_md, skill_dir, body))
 
     return results
+
+
+def _external_citation_declaration_offenders(
+    external_citations: list[dict[str, object]], skill_md: Path, skill_dir: Path, body: list[str]
+) -> list[str]:
+    """Return each ``spec.externalCitations`` declared ``path`` (issue
+    #1055) with no literal, exact match against a real citation-shaped
+    token anywhere in SKILL.md or references/*.md -- a stale declaration
+    naming a citation this skill no longer actually carries. Matches
+    ``_citation_sources``' own raw, unfenced text (a declared path
+    legitimately citing an illustrative fenced example is still a real
+    citation this check should find), the same exact-literal matching Q3
+    of issue #1055's design decision settled on -- deliberately not a
+    regex or line-anchored match, mirroring how a declaration is expected
+    to quote its own citation's exact text.
+
+    Matched against ``REPO_PATH_CITATION_RE``'s own extracted tokens, not
+    a raw substring test over the whole haystack: a plain ``path in
+    haystack`` check would let a declaration for ``docs/a.md`` falsely
+    "resolve" against a real, different citation like ``docs/a.mdx`` --
+    ``docs/a.md`` is a literal prefix of it -- since the character class
+    ``REPO_PATH_CITATION_RE`` accepts (including ``.``) makes prefix
+    overlap between two distinct real citations possible. Anchoring to
+    the regex's own extracted tokens keeps "exact literal match" exact.
+
+    A trailing ``".,;:)"`` is stripped from each extracted token before
+    the match, the same established fix (a prior review finding) already
+    applied to ``SCRIPTS_PATH_BARE_RE``'s own bare-prose matches below:
+    sentence-final punctuation immediately after a real extension (e.g.
+    "documented in docs/a.md.") is captured by this regex's own character
+    class -- which must include "." for real extensions -- and would
+    otherwise make a genuine, correctly declared citation report as stale
+    purely because of how its sentence ends; no real path ends in one of
+    these characters, so stripping them is never lossy.
+    """
+    haystack = "\n".join(source_text for _label, source_text in _citation_sources(skill_md, skill_dir, body))
+    cited_tokens = frozenset(m.group(0).rstrip(".,;:)") for m in REPO_PATH_CITATION_RE.finditer(haystack))
+    offenders = []
+    for entry in external_citations:
+        path = entry.get("path")
+        if isinstance(path, str) and path and path not in cited_tokens:
+            offenders.append(path)
+    return offenders
 
 
 def _citation_sources(skill_md: Path, skill_dir: Path, body: list[str]) -> list[tuple[str, str]]:
@@ -4180,7 +4558,9 @@ _INLINE_CITATION_CHECK_SPECS = (
 )
 
 
-def _portable_path_citation_checks(skill_md: Path, skill_dir: Path, body: list[str]) -> list[CheckResult]:
+def _portable_path_citation_checks(
+    skill_md: Path, skill_dir: Path, body: list[str], declared_citation_paths: frozenset[str] = frozenset()
+) -> list[CheckResult]:
     """The Portable-only repo-path and inline-code-issue-number self-citation
     checks over SKILL.md body and references/*.md. Each source contributes
     its offenders labelled by file, so a failure points at the exact file to
@@ -4191,11 +4571,25 @@ def _portable_path_citation_checks(skill_md: Path, skill_dir: Path, body: list[s
     and the issue-number citation entry for why the inline-code
     issue-number check joins the two repo-path checks here rather than
     the unconditional one).
+
+    ``declared_citation_paths`` (issue #1055) is the skill's own
+    well-formed ``spec.externalCitations`` path set -- passed through to
+    ``portable-no-inline-path-citation`` only (via ``_inline_citation_offenders``'s
+    ``declared_paths``), supplementing ``GENERIC_ROLE_HEDGE_PHRASES`` rather
+    than replacing it, per this issue's own design decision. Deliberately
+    NOT applied to ``portable-no-repo-path-citation`` (the bare-prose form)
+    or the issue-number spec -- both stay out of scope, per the issue's own
+    Non-goals.
     """
     path_hits: list[str] = []
     inline_hits_per_spec: list[list[str]] = [[] for _ in _INLINE_CITATION_CHECK_SPECS]
     inline_specs = tuple(
-        (citation_re, hedge_phrases) for _name, citation_re, hedge_phrases, _label in _INLINE_CITATION_CHECK_SPECS
+        (
+            citation_re,
+            hedge_phrases,
+            declared_citation_paths if name == "portable-no-inline-path-citation" else frozenset(),
+        )
+        for name, citation_re, hedge_phrases, _label in _INLINE_CITATION_CHECK_SPECS
     )
     for label, source_text in _citation_sources(skill_md, skill_dir, body):
         # Fence-blanked once and shared -- the bare-prose scan and the

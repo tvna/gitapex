@@ -56,7 +56,13 @@
         },
         "skillDependencies": { "$ref": "#/$defs/skillDependencies" },
         "lifecycle": { "$ref": "#/$defs/lifecycle" },
-        "executionRequirements": { "$ref": "#/$defs/executionRequirements" }
+        "executionRequirements": { "$ref": "#/$defs/executionRequirements" },
+        "externalCitations": {
+          "type": "array",
+          "minItems": 1,
+          "description": "spec.externalCitations: a Portable skill's own opt-in declaration that a specific evals/ or docs/ path citation it carries names an input source or output destination for the skill's own procedure, not a control dependency the procedure reads to decide how to behave -- see references/rubric.md's Portability level section for the underlying distinction. Supplements the bundled shape checker's existing GENERIC_ROLE_HEDGE_PHRASES nearby-hedge-phrase rescue for the inline-code repo-path citation check; it does not replace it, so a skill relying on the existing hedge-phrase convention (e.g. establishing-ubiquitous-language) is unaffected. Each declared path must exactly (literal substring) match a real citation the checker finds in SKILL.md/references/*.md, or it is a stale-declaration finding. If present, must be non-empty -- the same 'explicit empty list is not a valid way to say not yet declared' rule spec.references already uses; omit the key entirely instead.",
+          "items": { "$ref": "#/$defs/externalCitationItem" }
+        }
       },
       "allOf": [
         {
@@ -82,7 +88,7 @@
       "type": "object",
       "required": ["kind", "anchor", "summary"],
       "additionalProperties": false,
-      "description": "One maintainer-facing provenance event (a decision, an audit round, a correction, ...) -- REFERENCES_ITEM_SUBKEYS. Deliberately one event per item, not several fused together (https://github.com/tvna/gitapex/issues/488): an over-budget summary is a decomposition problem, not a length-limit problem.",
+      "description": "One maintainer-facing provenance event (a decision, an audit round, a correction, ...) -- REFERENCES_ITEM_SUBKEYS. Deliberately one event per item, not several fused together: an over-budget summary is a decomposition problem, not a length-limit problem.",
       "properties": {
         "kind": {
           "type": "string",
@@ -104,6 +110,24 @@
           "type": "object",
           "description": "Optional, free-form key/value atoms (verdict, found, fixed, before, after, ...) -- no closed vocabulary; real entries use too varied a set of outcome facts for a fixed schema to fit.",
           "additionalProperties": { "type": ["string", "number", "boolean"] }
+        }
+      }
+    },
+    "externalCitationItem": {
+      "type": "object",
+      "required": ["path", "role"],
+      "additionalProperties": false,
+      "description": "One declared evals/ or docs/ path citation, mirroring spec.skillDependencies' own 'declare, then resolve a dangling reference' shape one field over. path is matched by exact literal substring against the skill's own real citations by the bundled shape checker (deliberately not a regex or line-anchored anchor -- a declared role can still misrepresent a citation's true function, exactly as a hedge phrase can; this schema gates shape only, never honesty).",
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^(?:evals|docs)/[A-Za-z0-9._/-]+$",
+          "description": "The literal citation text as it appears in SKILL.md or a references/*.md file (e.g. this skill's own gate-record subdirectory, or a design-doc path under this repository's own docs), not a glob or pattern. Rooted at evals/ or docs/, the same two prefixes REPO_PATH_CITATION_RE gates in the bundled shape checker -- this mechanism exists to rescue exactly that check's own citations, so a path outside both prefixes could never be a real rescue target in the first place."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["input-source", "output-destination"],
+          "description": "Whether this skill's own procedure treats the cited path as something it reads (input-source) or as a downstream consumer of its own result (output-destination) -- either way, not a control dependency the procedure's own behavior branches on. See references/rubric.md's Portability level section for the full input-source/output-destination-vs-control-dependency distinction."
         }
       }
     },
@@ -204,7 +228,7 @@
     "executionRequirements": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Three recognized subkeys so far (tools, packages, network); further categories (filesystem/mcp/credentials/browser/externalServices/context) are deferred -- until they land, any key other than these here is a real unknown key, not reserved space, matching this skill's own bundled shape checker's current behavior for tools and network (packages is schema-only for now -- https://github.com/tvna/gitapex/issues/804 -- and is not yet recognized by that hand-rolled parser).",
+      "description": "Three recognized subkeys so far (tools, packages, network); further categories (filesystem/mcp/credentials/browser/externalServices/context) are deferred -- until they land, any key other than these here is a real unknown key, not reserved space, matching this skill's own bundled shape checker's current behavior for tools and network (packages is schema-only for now and is not yet recognized by that hand-rolled parser).",
       "properties": {
         "tools": { "$ref": "#/$defs/executionRequirementsTools" },
         "packages": { "$ref": "#/$defs/executionRequirementsPackages" },
@@ -236,7 +260,7 @@
       "type": "object",
       "propertyNames": { "pattern": "^[a-z][a-z0-9-]*$" },
       "additionalProperties": { "$ref": "#/$defs/packageList" },
-      "description": "spec.executionRequirements.packages (https://github.com/tvna/gitapex/issues/804): non-stdlib runtime package dependencies a skill's own implementation script(s) require to run, keyed by a free-form ecosystem identifier (e.g. \"pip\", \"npm\", \"cargo\", \"gem\") -- no closed enum of supported ecosystems; any key matching propertyNames' kebab-case-like pattern is schema-valid, so a future ecosystem needs no schema change to become usable. Independent of spec.portability -- portability measures whether a skill's own instructions resolve inside its own directory (a domain-knowledge/path-locality axis), never a runtime package-dependency-footprint axis; this field exists so a runtime dependency is never disclosed by misusing portability instead. Each ecosystem's value is a $defs.packageList."
+      "description": "spec.executionRequirements.packages: non-stdlib runtime package dependencies a skill's own implementation script(s) require to run, keyed by a free-form ecosystem identifier (e.g. \"pip\", \"npm\", \"cargo\", \"gem\") -- no closed enum of supported ecosystems; any key matching propertyNames' kebab-case-like pattern is schema-valid, so a future ecosystem needs no schema change to become usable. Independent of spec.portability -- portability measures whether a skill's own instructions resolve inside its own directory (a domain-knowledge/path-locality axis), never a runtime package-dependency-footprint axis; this field exists so a runtime dependency is never disclosed by misusing portability instead. Each ecosystem's value is a $defs.packageList."
     },
     "packageList": {
       "type": "array",
@@ -248,12 +272,12 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["mode"],
-      "description": "spec.executionRequirements.network (https://github.com/tvna/gitapex/issues/845), resolving the mixed scalar-plus-list shape https://github.com/tvna/gitapex/issues/349 deferred: every other gated sub-block so far is either all-list (skillDependencies, tools) or all-scalar-leaves (lifecycle's sub-blocks) -- network mixes a scalar (mode) with a list (domains) in the SAME sub-block. domains matching semantics: exact-host match (a domain string must equal the request's host exactly; no suffix or wildcard expansion) -- the conservative default this issue's own Proposed solution recommends, avoiding the ambiguity a suffix or wildcard rule would introduce before a runtime compatibility matrix (https://github.com/tvna/gitapex/issues/307 W2) exists to validate enforceability against any real adapter.",
+      "description": "spec.executionRequirements.network: every other gated sub-block so far is either all-list (skillDependencies, tools) or all-scalar-leaves (lifecycle's sub-blocks) -- network mixes a scalar (mode) with a list (domains) in the SAME sub-block. domains matching semantics: exact-host match (a domain string must equal the request's host exactly; no suffix or wildcard expansion) -- the conservative default, avoiding the ambiguity a suffix or wildcard rule would introduce before a runtime compatibility matrix exists to validate enforceability against any real adapter.",
       "properties": {
         "mode": {
           "type": "string",
           "enum": ["disabled", "allowlist", "unrestricted"],
-          "description": "disabled: no network access -- a deliberate 'declared, network prohibited' statement, distinct from an absent network block ('not yet declared'). allowlist: only the exact hosts in domains are reachable; requires a non-empty domains list. unrestricted: no network restriction from this declaration; defensible only with an explicit argument, in the declaring PR's own description, against https://github.com/tvna/gitapex/issues/307's security invariant 6 (no effective write path through network/external services) and invariant 9 (network isolation is a distinct axis) -- schema-permitted, never silently assumed safe by this schema alone."
+          "description": "disabled: no network access -- a deliberate 'declared, network prohibited' statement, distinct from an absent network block ('not yet declared'). allowlist: only the exact hosts in domains are reachable; requires a non-empty domains list. unrestricted: no network restriction from this declaration; defensible only with an explicit argument, in the declaring PR's own description, against this repository's own stated security invariants that no effective write path exists through network/external services and that network isolation is a distinct axis -- schema-permitted, never silently assumed safe by this schema alone."
         },
         "domains": {
           "type": "array",
