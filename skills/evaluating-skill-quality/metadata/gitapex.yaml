@@ -422,6 +422,12 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/920"
       summary: "Added a state-minimality lens to references/state-management-quality.md, ahead of the axes as a cross-cutting question, not a twelfth axis: the axis count stays eleven and the trigger is untouched, so the firing set does not move. It asks whether a recorded value is re-derivable from ground truth, whether every field has a named consumer, and whether granularity is the minimum its consumer requires. Grounded in Toyota's Just-in-Time statement, whose amount clause nothing here owned."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1055"
+      summary: "Added spec.externalCitations to metadata/gitapex.yaml's schema and gitapex_check_skill_shape.py's checker: a new top-level list field (path/role, role input-source or output-destination), supplementing (not replacing) GENERIC_ROLE_HEDGE_PHRASES, matched by exact literal path substring. Adds external-citations-well-formed/-resolve checks and a per-citation rescue in portable-no-inline-path-citation only; the bare-prose repo-path check stays unconditional and unaffected."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/1055"
+      summary: "Live verification: gitapex_check_skill_shape.py run against this skill's own current state returned 64/64 PASS. Full pytest suite: 424/424 passed (15 new tests), 98% line coverage on the checker script. The repo-wide sidecar schema drift scanner found no drift across all sidecars after the schema addition. A /code-review pass caught and fixed one defect: this entry's own prior miscount of the new-test count (12, not 15)."
   skillDependencies:
     requires: []
     relatedTo:

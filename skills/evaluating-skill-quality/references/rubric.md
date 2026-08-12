@@ -729,6 +729,42 @@ grading below.
     Enforced by `portable-no-repo-path-citation` (bare-prose form,
     unconditional, no hedge ever) and `portable-no-inline-path-citation`
     (inline-code form, rescued only by the generic-role hedge half above).
+    - **A second, structured rescue path supplements the hedge-phrase
+      mechanism: `spec.externalCitations`.** A Portable
+      skill's own `metadata/gitapex.yaml` sidecar may declare, per
+      `evals/`/`docs/` path citation it carries, an exact literal `path`
+      string plus a closed `role` (`input-source` or `output-destination`
+      -- the same two roles named above, spelled as an enum instead of a
+      hedge phrase). The bundled shape checker cross-references each
+      declaration against the skill's own real citations, exact-substring,
+      not a regex or line anchor: a declared path with no matching
+      citation anywhere in `SKILL.md`/`references/*.md` is a stale
+      declaration (`external-citations-resolve`), and a citation whose own
+      matched text equals a declared path is rescued in
+      `portable-no-inline-path-citation` regardless of any nearby hedge
+      phrase (per-citation, not clause-wide -- a declaration is a fact
+      about one specific path, unlike a hedge phrase's clause-wide prose
+      reach). This closes the *proximity-ambiguity* gap the nearby-hedge-
+      phrase text search still carries -- an exact structured
+      cross-reference instead of a fuzzy "somewhere in this sentence or
+      the one before it" search -- **not** an increase in determinism over
+      the existing mechanism: `GENERIC_ROLE_HEDGE_PHRASES` was already
+      fully deterministic as a computation before this addition. A
+      declared role can still misrepresent a citation's true function,
+      exactly as a hedge phrase can; this mechanism narrows the *shape*
+      ambiguity, never the underlying honesty judgment, which stays with
+      this dimension's own model-judged review regardless of which rescue
+      path a citation takes.
+    - **Supplements, never replaces, the hedge-phrase convention.** A
+      skill may use either mechanism, both, or neither for a given
+      citation; `spec.externalCitations` is opt-in, and a skill already
+      relying on `GENERIC_ROLE_HEDGE_PHRASES` (e.g.
+      establishing-ubiquitous-language's "the calling repository's own
+      glossary doc" phrasing) is unaffected. Deliberately scoped to
+      `portable-no-inline-path-citation` only: the bare-prose repo-path
+      check (`portable-no-repo-path-citation`) stays unconditional with no
+      rescue of any kind, and the inline-code issue/PR-number check keeps
+      its own separate, unrelated hedge vocabulary untouched.
 - **Repository-scoped** -- a repository-scoped skill that reads as if it
   were portable is a dimension-1/6 defect (it misleads a future vendoring
   decision), not the scoping choice itself. An undeclared level that

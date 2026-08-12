@@ -3490,6 +3490,231 @@ def test_references_well_formed_fails_when_spec_is_not_a_mapping(tmp_path):
     assert "not a mapping" in by["references-well-formed"].evidence
 
 
+# ---- external-citations-well-formed / external-citations-resolve, and the
+#      inline-citation-rescue supplement (issue #1055) ----
+
+
+def _write_external_citations_sidecar(d, body, *, portability="Portable"):
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        f"  portability: {portability}\n"
+        "  capabilityAssumption: Broad\n"
+        f"{body}",
+        encoding="utf-8",
+    )
+    return d
+
+
+def test_external_citations_absent_is_well_formed(tmp_path):
+    d = _write_skill(tmp_path)
+    by = _by_name(css.check_shape(d))
+    assert by["external-citations-well-formed"].passed is True
+    assert by["external-citations-well-formed"].evidence == "not declared (optional)"
+    assert by["external-citations-resolve"].passed is True
+    assert by["external-citations-resolve"].evidence == "not declared (optional)"
+    assert css.main([str(d)]) == 0
+
+
+def test_external_citations_valid_list_resolves(tmp_path):
+    d = _write_skill(
+        tmp_path,
+        references={"other.md": "# Other\n\nSee `docs/adr/0001-example.md` for background.\n"},
+    )
+    _write_external_citations_sidecar(
+        d,
+        "  externalCitations:\n"
+        "    - path: docs/adr/0001-example.md\n"
+        "      role: input-source\n"
+        "    - path: evals/downstream/consumer.json\n"
+        "      role: output-destination\n",
+    )
+    (d / "SKILL.md").write_text(
+        (d / "SKILL.md").read_text(encoding="utf-8")
+        + "\nThis skill's own result feeds `evals/downstream/consumer.json` next.\n",
+        encoding="utf-8",
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["external-citations-well-formed"].passed is True
+    assert by["external-citations-well-formed"].evidence == "2 entries"
+    assert by["external-citations-resolve"].passed is True
+    assert by["external-citations-resolve"].evidence == "all resolve"
+
+
+def test_external_citations_empty_list_fails_well_formed(tmp_path):
+    d = _write_external_citations_sidecar(_write_skill(tmp_path), "  externalCitations:\n")
+    by = _by_name(css.check_shape(d))
+    assert by["external-citations-well-formed"].passed is False
+    assert by["external-citations-well-formed"].evidence == "empty list"
+    assert css.main([str(d)]) == 1
+
+
+def test_external_citations_unknown_key_fails_well_formed(tmp_path):
+    d = _write_external_citations_sidecar(
+        _write_skill(tmp_path),
+        "  externalCitations:\n    - path: docs/x.md\n      role: input-source\n      extra: foo\n",
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["external-citations-well-formed"].passed is False
+    assert "unknown key" in by["external-citations-well-formed"].evidence
+
+
+def test_external_citations_missing_required_field_is_malformed(tmp_path):
+    d = _write_external_citations_sidecar(_write_skill(tmp_path), "  externalCitations:\n    - path: docs/x.md\n")
+    by = _by_name(css.check_shape(d))
+    assert by["external-citations-well-formed"].passed is False
+    assert "malformed entry" in by["external-citations-well-formed"].evidence
+
+
+def test_external_citations_invalid_role_fails_well_formed(tmp_path):
+    # role outside EXTERNAL_CITATION_ROLES (a real closed enum, not a
+    # free-form tag like executionRequirements.tools) is not a valid item.
+    d = _write_external_citations_sidecar(
+        _write_skill(tmp_path),
+        "  externalCitations:\n    - path: docs/x.md\n      role: control-dependency\n",
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["external-citations-well-formed"].passed is False
+    assert "not a list of item mappings with a valid role" in by["external-citations-well-formed"].evidence
+
+
+def test_external_citations_stale_declaration_fails_resolve(tmp_path):
+    # A declared path with no matching literal citation anywhere in
+    # SKILL.md/references/*.md is stale -- the issue's own core ask.
+    d = _write_external_citations_sidecar(
+        _write_skill(tmp_path),
+        "  externalCitations:\n    - path: docs/no-such-file.md\n      role: input-source\n",
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["external-citations-well-formed"].passed is True
+    assert by["external-citations-resolve"].passed is False
+    assert "docs/no-such-file.md" in by["external-citations-resolve"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_external_citations_malformed_declaration_has_nothing_to_resolve(tmp_path):
+    # A malformed/empty externalCitations never reaches
+    # external_citations_declared -- external-citations-resolve degrades to
+    # "not declared" rather than resolving against garbage, mirroring
+    # skill-dependencies-resolve's own "nothing to check" branches.
+    d = _write_external_citations_sidecar(_write_skill(tmp_path), "  externalCitations:\n")
+    by = _by_name(css.check_shape(d))
+    assert by["external-citations-well-formed"].passed is False
+    assert by["external-citations-resolve"].passed is True
+    assert by["external-citations-resolve"].evidence == "not declared (optional)"
+
+
+def test_declared_external_citation_rescues_inline_path_citation(tmp_path):
+    # The core supplement (issue #1055): a well-formed spec.externalCitations
+    # declaration rescues portable-no-inline-path-citation even with no
+    # GENERIC_ROLE_HEDGE_PHRASES hedge anywhere nearby.
+    d = _write_skill(tmp_path)
+    (d / "SKILL.md").write_text(
+        (d / "SKILL.md").read_text(encoding="utf-8") + "\nSee `docs/adr/0002-declared.md` for the decision record.\n",
+        encoding="utf-8",
+    )
+    _write_external_citations_sidecar(
+        d, "  externalCitations:\n    - path: docs/adr/0002-declared.md\n      role: input-source\n"
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["portable-no-inline-path-citation"].passed is True
+    assert by["external-citations-well-formed"].passed is True
+    assert by["external-citations-resolve"].passed is True
+    assert css.main([str(d)]) == 0
+
+
+def test_undeclared_inline_path_citation_still_fails_without_hedge(tmp_path):
+    # Regression guard: declaring one path must not blanket-rescue every
+    # inline-code repo-path citation -- only the exact declared path is
+    # rescued, per-citation, matching Q3's exact-literal-substring design.
+    d = _write_skill(tmp_path)
+    (d / "SKILL.md").write_text(
+        (d / "SKILL.md").read_text(encoding="utf-8")
+        + "\nSee `docs/adr/0002-declared.md` for the decision, and `docs/adr/0003-undeclared.md` too.\n",
+        encoding="utf-8",
+    )
+    _write_external_citations_sidecar(
+        d, "  externalCitations:\n    - path: docs/adr/0002-declared.md\n      role: input-source\n"
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["portable-no-inline-path-citation"]
+    assert result.passed is False
+    assert "docs/adr/0003-undeclared.md" in result.evidence
+    assert "docs/adr/0002-declared.md" not in result.evidence
+
+
+def test_declared_external_citation_does_not_rescue_bare_prose_citation(tmp_path):
+    # Non-goal, stated explicitly in issue #1055: the bare-prose repo-path
+    # check (portable-no-repo-path-citation) stays unconditional and
+    # unaffected by this proposal -- a declaration never rescues it.
+    d = _write_skill(tmp_path)
+    (d / "SKILL.md").write_text(
+        (d / "SKILL.md").read_text(encoding="utf-8") + "\nSee docs/adr/0002-declared.md for the decision record.\n",
+        encoding="utf-8",
+    )
+    _write_external_citations_sidecar(
+        d, "  externalCitations:\n    - path: docs/adr/0002-declared.md\n      role: input-source\n"
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["portable-no-repo-path-citation"].passed is False
+    assert "docs/adr/0002-declared.md" in by["portable-no-repo-path-citation"].evidence
+
+
+def test_external_citations_wrong_indent_item_is_malformed(tmp_path):
+    # item_indent (2) != EXTERNAL_CITATION_ITEM_INDENT (4) -- the same
+    # fixed-indent convention every other gated block enforces.
+    d = _write_external_citations_sidecar(
+        _write_skill(tmp_path),
+        "  externalCitations:\n    - path: docs/x.md\n      role: input-source\n  - path: docs/y.md\n    role: input-source\n",
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["external-citations-well-formed"].passed is False
+    assert "malformed entry" in by["external-citations-well-formed"].evidence
+
+
+def test_external_citations_stray_continuation_line_fails_closed(tmp_path):
+    # A line at the item's own 6-space continuation depth that is not
+    # "<key>: <value>" shaped invalidates the item and is tracked as an
+    # unknown key -- the same fail-closed reasoning every other gated
+    # block's own continuation branch uses.
+    d = _write_external_citations_sidecar(
+        _write_skill(tmp_path),
+        "  externalCitations:\n    - path: docs/x.md\n      role: input-source\n      just some stray text\n",
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["external-citations-well-formed"].passed is False
+    assert "unknown key" in by["external-citations-well-formed"].evidence
+
+
+def test_external_citations_block_closes_before_sibling_key(tmp_path):
+    # externalCitations followed by another spec key (not end-of-file)
+    # exercises the mid-loop dedent-detection path, not just the
+    # end-of-function finalize call every other test here relies on.
+    d = _write_external_citations_sidecar(
+        _write_skill(tmp_path),
+        "  externalCitations:\n    - path: docs/x.md\n      role: input-source\n  skillDependencies:\n    requires: []\n",
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["external-citations-well-formed"].passed is True
+    assert by["external-citations-well-formed"].evidence == "1 entry"
+    assert by["skill-dependencies-well-formed"].passed is True
+
+
+def test_declared_external_citation_does_not_rescue_issue_number_citation(tmp_path):
+    # The issue-number spec's own declared_paths stays empty -- issue
+    # #1055 only revisits the repo-path row.
+    d = _write_skill(tmp_path)
+    (d / "SKILL.md").write_text(
+        (d / "SKILL.md").read_text(encoding="utf-8") + "\nSee `#149` for the original report.\n", encoding="utf-8"
+    )
+    _write_external_citations_sidecar(d, "  externalCitations:\n    - path: '#149'\n      role: input-source\n")
+    by = _by_name(css.check_shape(d))
+    assert by["portable-no-unhedged-inline-issue-citation"].passed is False
+
+
 # ---- skill-dependencies-well-formed / skill-dependencies-resolve /
 #      requires-portability-compatible (Sub-project D) ----
 
