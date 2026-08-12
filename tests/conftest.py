@@ -7,7 +7,33 @@ import pathlib
 import re
 import subprocess
 
+from pydantic import BaseModel, ValidationError
+
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+
+class _Unsatisfiable(BaseModel):
+    """Throwaway model with one required field, used only by
+    `make_validation_error` below to manufacture a real pydantic
+    `ValidationError` instance."""
+
+    required: int
+
+
+def make_validation_error() -> ValidationError:
+    """A genuine `pydantic.ValidationError` instance, for monkeypatching a
+    gate's own `*Args` model class to exercise its `except ValidationError`
+    branch in tests. Several `.github/scripts/gitapex_gate_*.py` gates
+    (issue #1062, wave 3 of #1040's batch) wrap `argparse`-guaranteed CLI
+    input in a pydantic model whose fields can never actually fail
+    validation from real CLI input -- their `except ValidationError` branch
+    is therefore only reachable by monkeypatching the model class itself to
+    raise, not by constructing genuinely invalid input."""
+    try:
+        _Unsatisfiable()  # type: ignore[call-arg]
+    except ValidationError as error:
+        return error
+    raise AssertionError("expected ValidationError")
 
 
 class FakeStdin:

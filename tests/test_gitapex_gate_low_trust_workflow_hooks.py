@@ -1,4 +1,6 @@
 import gitapex_gate_low_trust_workflow_hooks as gate
+import pytest
+from conftest import make_validation_error
 
 
 def test_owner_passes_without_label() -> None:
@@ -57,3 +59,23 @@ def test_main_untrusted_with_label_exits_zero() -> None:
 
 def test_main_empty_labels_argument_defaults_to_no_labels() -> None:
     assert gate.main(["--author-association", "CONTRIBUTOR", "--labels", ""]) == 1
+
+
+# --- LowTrustWorkflowHooksArgs -------------------------------------------
+
+
+def test_args_accepts_a_required_author_association_with_default_labels() -> None:
+    validated = gate.LowTrustWorkflowHooksArgs(author_association="OWNER")
+    assert validated.author_association == "OWNER"
+    assert validated.labels == ""
+
+
+def test_main_exits_two_when_args_fail_validation(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def _raise(*args: object, **kwargs: object) -> None:
+        raise make_validation_error()
+
+    monkeypatch.setattr(gate, "LowTrustWorkflowHooksArgs", _raise)
+    assert gate.main(["--author-association", "OWNER"]) == 2
+    assert "invalid CLI arguments" in capsys.readouterr().err

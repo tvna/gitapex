@@ -23,19 +23,40 @@ would, without requiring a branch-protection setting change this script
 cannot make itself. No CODEOWNERS file exists in this repository and none
 is added here (see the design doc cited below for why).
 
-Deliberately stdlib-only, matching `gitapex_gate_gitignore_pattern_coverage.py`'s
-shape. No network calls -- the workflow supplies both inputs as CLI args.
+No network calls -- the workflow supplies both inputs as CLI args. Was
+stdlib-only through wave 2 of issue #1040's batch; issue #1062 (wave 3)
+added the `pydantic` import below, so this file now requires `uv run`
+like `gitapex_gate_hidden_characters.py`/`gitapex_gate_behind_base.py` already
+do, not a bare `python3` invocation.
 
 Design: docs/superpowers/specs/2026-08-06-screening-low-trust-contribution-gaps-design.md
 
-Usage::
+Issue #1062 (wave 3 of #1040's batch pydantic CLI-arg validation rollout):
+`main`'s parsed namespace is now passed through `LowTrustWorkflowHooksArgs`
+immediately after `parser.parse_args(argv)`, matching the wrap
+`gitapex_gate_hidden_characters.py`/`gitapex_gate_behind_base.py` already apply.
+Unlike those two files' own `--root` (a filesystem path with a real
+existence constraint), neither `author_association` (required, no
+`type=`) nor `labels` (defaults to `""`) has any constraint beyond the
+`str` shape `argparse` already guarantees -- so construction can
+currently never raise `ValidationError` for a real CLI invocation; the
+model exists for consistency with #1040's repo-wide convention (a typed
+seam between `parse_args` and business logic), not because either field
+has a known-invalid case today. This gate's own production invocation
+(`low-trust-workflow-hooks-gate.yml`) already runs under `uv run`
+(issue #1035), so the added `pydantic` import is safe here.
 
-    python3 .github/scripts/gitapex_gate_low_trust_workflow_hooks.py \\
+Usage (run via `uv run` -- needed for the pydantic import, matching
+`gitapex_gate_hidden_characters.py`'s own convention)::
+
+    uv run --frozen python3 .github/scripts/gitapex_gate_low_trust_workflow_hooks.py \\
         --author-association CONTRIBUTOR --labels bug,workflow-hooks-reviewed
 
 Exit codes:
     0  Trusted author, or an untrusted author with the review label present.
     1  Untrusted author, review label absent.
+    2  CLI arguments failed validation (unreachable via this script's own
+       argparse-guaranteed shape today; see LowTrustWorkflowHooksArgs).
 """
 
 from __future__ import annotations
@@ -43,8 +64,19 @@ from __future__ import annotations
 import argparse
 import sys
 
+from pydantic import BaseModel, ValidationError
+
 TRUSTED_ASSOCIATIONS = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
 REVIEW_LABEL = "workflow-hooks-reviewed"
+
+
+class LowTrustWorkflowHooksArgs(BaseModel):
+    """Typed view of `main`'s parsed CLI namespace (issue #1062). See the
+    module docstring's own issue #1062 section for why neither field
+    carries an additional field validator."""
+
+    author_association: str
+    labels: str = ""
 
 
 def is_trusted(author_association: str) -> bool:
@@ -88,8 +120,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    labels = [label for label in args.labels.split(",") if label.strip()]
-    passed, message = check(args.author_association, labels)
+    try:
+        validated = LowTrustWorkflowHooksArgs(author_association=args.author_association, labels=args.labels)
+    except ValidationError:
+        print("::error::invalid CLI arguments", file=sys.stderr)
+        return 2
+
+    labels = [label for label in validated.labels.split(",") if label.strip()]
+    passed, message = check(validated.author_association, labels)
     if passed:
         print(message)
         return 0

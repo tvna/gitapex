@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import gitapex_gate_gitignore_pattern_coverage as gate
 from conftest import FakeStdin as _FakeStdin
+from conftest import make_validation_error
 
 
 def _write_test_file(tmp_path, name, content):
@@ -177,3 +178,25 @@ def test_main_reports_error_for_undecodable_added_file(tmp_path, capsys):
     added_file.write_bytes(b"\xff\xfe bad")
     assert gate.main(["--added", str(added_file)]) == 1
     assert "could not read" in capsys.readouterr().err
+
+
+# --- GitignorePatternCoverageArgs -----------------------------------------
+
+
+def test_args_defaults_added_to_none():
+    validated = gate.GitignorePatternCoverageArgs()
+    assert validated.added is None
+
+
+def test_args_accepts_an_added_path_string():
+    validated = gate.GitignorePatternCoverageArgs(added="/tmp/added.txt")
+    assert validated.added == "/tmp/added.txt"
+
+
+def test_main_exits_two_when_args_fail_validation(monkeypatch, capsys):
+    def _raise(*args, **kwargs):
+        raise make_validation_error()
+
+    monkeypatch.setattr(gate, "GitignorePatternCoverageArgs", _raise)
+    assert gate.main([]) == 2
+    assert "invalid CLI arguments" in capsys.readouterr().err

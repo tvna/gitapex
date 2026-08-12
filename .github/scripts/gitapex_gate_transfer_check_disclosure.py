@@ -62,6 +62,22 @@ file scope) to stop computing a diff at all and instead invoke this
 script argument-free so it audits the current `evals/*/split.md` glob
 directly, matching this script's own new whole-file contract.
 
+Issue #1062 (wave 3 of #1040's batch pydantic CLI-arg validation rollout):
+`main`'s parsed namespace is now passed through
+`TransferCheckDisclosureArgs` immediately after `parser.parse_args(argv)`,
+matching the wrap `gitapex_gate_hidden_characters.py`/`gitapex_gate_behind_base.py`
+already apply. `paths` (`nargs="*"`, default `[]`) has no constraint
+beyond that already-guaranteed `list[str]` shape -- deliberately no
+non-empty-list requirement: an empty `paths` list is this script's own
+signal to fall back to the default `evals/*/split.md` glob discovery
+(`using_default_discovery` above), a currently-load-bearing behavior this
+wrap must not disturb. So construction can currently never raise
+`ValidationError` for a real CLI invocation; the model exists for
+consistency with #1040's repo-wide convention (a typed seam between
+`parse_args` and business logic). This gate's own production invocation
+(`transfer-check-disclosure-gate.yml`) already runs under `uv run` (issue
+#1035), so the added `pydantic` import is safe here.
+
 Line/entry selection mirrors the multiplicity- and span-handling
 discipline the previous version established
 (`gitapex_gate_skill_rename_lifecycle.py`'s own "read the current on-disk
@@ -84,6 +100,8 @@ import argparse
 import re
 import sys
 from pathlib import Path
+
+from pydantic import BaseModel, ValidationError
 
 DEFAULT_GLOB = "evals/*/split.md"
 # Guards against _default_paths() silently finding nothing (a wrong working
@@ -190,10 +208,20 @@ def _truncate(text, limit=100):
     return text if len(text) <= limit else text[: limit - 3] + "..."
 
 
+class TransferCheckDisclosureArgs(BaseModel):
+    """Typed view of `main`'s parsed CLI namespace (issue #1062). See the
+    module docstring's own issue #1062 section for why `paths` carries no
+    additional field validator."""
+
+    paths: list[str] = []
+
+
 def main(argv: list[str] | None = None) -> int:
     """CLI: exit 0 iff every `## Iteration:` entry in every given (or
     glob-discovered) `evals/*/split.md` file discloses a non-empty
-    `### Transfer check` subsection, else 1."""
+    `### Transfer check` subsection, 1 if not, 2 if the CLI arguments
+    themselves failed validation (unreachable via this script's own
+    argparse-guaranteed shape today; see TransferCheckDisclosureArgs)."""
     parser = argparse.ArgumentParser(
         description="Check that every '## Iteration:' entry in every evals/*/split.md "
         "file (whole-file, every entry, not diff-scoped) discloses a non-empty "
@@ -205,8 +233,15 @@ def main(argv: list[str] | None = None) -> int:
         help=f"split.md file paths to audit; defaults to the '{DEFAULT_GLOB}' glob when omitted.",
     )
     args = parser.parse_args(argv)
-    using_default_discovery = not args.paths
-    paths = args.paths if args.paths else _default_paths()
+
+    try:
+        validated = TransferCheckDisclosureArgs(paths=args.paths)
+    except ValidationError:
+        print("FAIL: invalid CLI arguments", file=sys.stderr)
+        return 2
+
+    using_default_discovery = not validated.paths
+    paths = validated.paths if validated.paths else _default_paths()
 
     if using_default_discovery and len(paths) < MIN_EXPECTED_SPLIT_MD_FILES:
         print(

@@ -16,6 +16,30 @@ reference the pattern's literal text -- this could miss an indirectly
 constructed test (e.g. one that builds the path via `pathlib.Path(...) /
 "a" / "b"` joins instead of a literal string). That is a known, accepted
 limitation (see issue #519's Acceptance Criteria Map), not an oversight.
+
+Issue #1062 (wave 3 of #1040's batch pydantic CLI-arg validation rollout):
+`main`'s parsed namespace is now passed through `GitignorePatternCoverageArgs`
+immediately after `parser.parse_args(argv)`, matching the wrap
+`gitapex_gate_hidden_characters.py`/`gitapex_gate_behind_base.py` already apply.
+`--added` (`str | None`, defaults to `None`) has no constraint beyond that
+already-guaranteed shape -- deliberately no path-existence check here: a
+nonexistent `--added` path is already handled gracefully downstream (the
+`OSError`/`UnicodeDecodeError` catch around the file read, tested by
+`test_main_reports_error_for_missing_added_file`), and duplicating that as
+a pydantic field validator would only add a second, differently-worded
+error path for the same input. So construction can currently never raise
+`ValidationError` for a real CLI invocation; the model exists for
+consistency with #1040's repo-wide convention (a typed seam between
+`parse_args` and business logic). This gate's own production invocation
+(`gitignore-pattern-coverage-gate.yml`) already runs under `uv run`
+(issue #1035), so the added `pydantic` import is safe here.
+
+Exit codes:
+    0  No patterns added, or every added pattern has test coverage.
+    1  An added pattern has no test coverage, or the `--added`/stdin input
+       could not be read.
+    2  CLI arguments failed validation (unreachable via this script's own
+       argparse-guaranteed shape today; see GitignorePatternCoverageArgs).
 """
 
 from __future__ import annotations
@@ -24,6 +48,17 @@ import argparse
 import re
 import sys
 from pathlib import Path
+
+from pydantic import BaseModel, ValidationError
+
+
+class GitignorePatternCoverageArgs(BaseModel):
+    """Typed view of `main`'s parsed CLI namespace (issue #1062). See the
+    module docstring's own issue #1062 section for why `added` carries no
+    additional field validator."""
+
+    added: str | None = None
+
 
 # Strips a leading negation marker and surrounding slashes so
 # "/.claude/worktrees/" and ".claude/worktrees" compare equal -- gitignore
@@ -107,8 +142,14 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        if args.added:
-            with Path(args.added).open(encoding="utf-8") as handle:
+        validated = GitignorePatternCoverageArgs(added=args.added)
+    except ValidationError:
+        print("error: invalid CLI arguments", file=sys.stderr)
+        return 2
+
+    try:
+        if validated.added:
+            with Path(validated.added).open(encoding="utf-8") as handle:
                 text = handle.read()
         else:
             text = sys.stdin.buffer.read().decode("utf-8")
@@ -119,7 +160,7 @@ def main(argv: list[str] | None = None) -> int:
         # UTF-8 stdin) must also fail with this message, not an unhandled
         # traceback or (for stdin under a surrogateescape locale) silently
         # corrupted text.
-        source = args.added if args.added else "standard input"
+        source = validated.added if validated.added else "standard input"
         print(f"error: could not read {source!r}: {exc}", file=sys.stderr)
         return 1
 
