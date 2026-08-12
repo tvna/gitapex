@@ -865,6 +865,24 @@
       "tracking_issue": 1035,
       "status": "active",
       "supersedes": null
+    },
+    {
+      "id": "stdlib-only-claim-drift",
+      "kind": "script",
+      "script": [
+        ".github/scripts/gitapex_gate_stdlib_only_claim_drift.py",
+        ".github/workflows/stdlib-only-claim-drift-gate.yml"
+      ],
+      "rule": "A diff adding a top-level third-party import to a .github/scripts/*.py or evals/scripts/*.py file must not leave a stale 'standard library only'/'stdlib-only' claim, or a bare python3 <file>.py invocation example, in that file's own content, in any other script that imports it directly, or in any .github/workflows/*.yml file referencing it by name (issue #1047, #1049). A negated claim ('no longer stdlib-only') or an accurate disclosure with a nearby 'uv run' mention is not flagged. Deliberately not exhaustive -- a paraphrased or reformatted claim can still false-negative; see the script's own docstring.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_stdlib_only_claim_drift.py"],
+      "local_stdin": ["git", "-c", "core.quotePath=false", "diff", "-U0", "--no-renames", "--merge-base", "origin/main", "HEAD", "--", ".github/scripts/*.py", "evals/scripts/*.py"],
+      "trigger": ".github/workflows/stdlib-only-claim-drift-gate.yml on pull_request, plus tests/test_gitapex_gate_stdlib_only_claim_drift.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "test-integrity",
+      "tracking_issue": 1052,
+      "status": "active",
+      "supersedes": null
     }
   ],
   "clusters": {
