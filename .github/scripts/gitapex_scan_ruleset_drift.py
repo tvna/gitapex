@@ -64,27 +64,17 @@ workflows pipe into the job summary.
 #
 # Issue #1071 (wave 4 of #1040's batch pydantic CLI-arg validation rollout):
 # `main`'s parsed namespace is now passed through `ScanRulesetDriftArgs`
-# immediately after `parse_args()` returns, matching the wrap already
-# applied in waves 1-3. `scope` is typed as the same two-value `Literal`
-# argparse's own `choices=("required-checks", "full")` already enforces --
-# this repo's established Literal-narrowing convention (e.g.
-# gitapex_scan_ssot_schema.py's fields) for a field argparse's own
-# `choices=` already constrains. `repo`, `sot`, and `token_env` have no
-# constraint beyond the `str` shape argparse already guarantees --
-# `token_env` names an environment variable only; the CLI argument is never
-# the token value itself (validated as a plain string, never inspected or
-# logged). So construction can currently never raise `ValidationError` for a
-# real CLI invocation.
-#
-# Unlike waves 1-3's other files, this one cannot reuse exit code 2 for a
-# CLI validation failure: `EXIT_UNVERIFIED` already owns 2, and the whole
-# point of this module's three-valued exit code (see the module docstring
-# above) is keeping "drift" and "unverified" distinguishable -- collapsing a
-# third, unrelated failure mode into either would blur that distinction
-# again. `EXIT_INVALID_ARGS = 3` is introduced instead, unreachable via any
-# real invocation today for the same reason the other waves' new exit-2
-# paths are, but present for consistency with the established convention
-# without colliding with existing semantics.
+# immediately after `parse_args()` returns -- a typed seam between
+# `parse_args` and business logic, matching the shape waves 1-3 established.
+# Unlike those waves' plain-passthrough fields, this module's own exit code
+# is already three-valued and load-bearing (see the module docstring above),
+# so a pydantic wrap's `except ValidationError` deny-branch would need a
+# fourth exit code purely to guard a state argparse's own `choices=`/`str`
+# typing already makes unreachable -- dead code with a dead exit-code
+# surface. A plain frozen dataclass gives the same typed seam without it:
+# `scope`'s `Literal` still documents/type-checks the two values argparse's
+# own `choices=("required-checks", "full")` already enforces, with no
+# runtime re-validation and no invalid-args branch to guard.
 
 from __future__ import annotations
 
@@ -94,9 +84,8 @@ import pathlib
 import sys
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any, Literal
-
-from pydantic import BaseModel, ValidationError
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
@@ -123,12 +112,6 @@ EXIT_DRIFT = 1
 #: never got to look"; see the module docstring for why that distinction is
 #: load-bearing rather than cosmetic.
 EXIT_UNVERIFIED = 2
-#: The CLI arguments themselves failed ScanRulesetDriftArgs validation
-#: (issue #1071). Deliberately not EXIT_UNVERIFIED: that code means "the API
-#: could not be read", a different and more specific fact than "the inputs
-#: to this scan were malformed" -- see the module docstring's own issue
-#: #1071 section.
-EXIT_INVALID_ARGS = 3
 
 
 def default_fetch(url: str, token: str) -> Any:
@@ -233,12 +216,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-class ScanRulesetDriftArgs(BaseModel):
+@dataclass(frozen=True)
+class ScanRulesetDriftArgs:
     """Typed view of `main`'s parsed CLI namespace (issue #1071). See the
-    module docstring's own issue #1071 section for why `scope` is a Literal,
-    why the other fields carry no additional field validator, and why a
-    CLI-validation failure returns EXIT_INVALID_ARGS rather than reusing
-    EXIT_UNVERIFIED."""
+    module docstring's own issue #1071 section for why `scope` is a
+    documentation-only Literal rather than a runtime-validated field."""
 
     repo: str
     sot: str
@@ -252,13 +234,7 @@ class ScanRulesetDriftArgs(BaseModel):
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
-
-    try:
-        validated = ScanRulesetDriftArgs(repo=args.repo, sot=args.sot, scope=args.scope, token_env=args.token_env)
-    except ValidationError:
-        print("::error::invalid CLI arguments", file=sys.stderr)
-        print("Nothing was verified -- the CLI arguments themselves failed validation.")
-        return EXIT_INVALID_ARGS
+    validated = ScanRulesetDriftArgs(**vars(args))
 
     token = os.environ.get(validated.token_env, "")
     if not token:
