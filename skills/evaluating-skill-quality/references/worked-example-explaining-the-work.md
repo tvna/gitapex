@@ -56,20 +56,21 @@ Read as: mostly **Portable**, with one borderline point. The routing
 rules (How/What/Why/Why-not, the why-not template's `<=120` char and
 citable-issue requirements) are generic conventions, not gitapex-specific
 paths or business logic -- they would apply unchanged in any repository.
-The one soft dependency: the why-not template's destination,
-`docs/adr/NNNN-*.md` (line 24, a path gitapex's own repository may not
-have -- see below), assumes an ADR directory at that path.
+The one soft dependency: the why-not template's destination -- an ADR
+file location at line 24, following a convention gitapex's own
+repository may not itself have (see below) -- assumes an ADR directory
+exists at that convention's location.
 Architecture Decision Records are a common, generic software-engineering
 convention (not gitapex-specific business logic), and the reference is a
 template the model writes into a new comment, not a path it reads to
 decide behavior -- so this does not fail dimension 6's strict Portable
 bar (no behavior-controlling *read* of that path). Worth naming anyway:
-gitapex's own repository has no `docs/adr/` directory today (confirmed
+gitapex's own repository has no such ADR directory today (confirmed
 absent), so the template points at a location that does not yet exist
 even in its origin repository. A cleaner Portable version would phrase
-this as "the calling
-repository's own ADR location, e.g. `docs/adr/NNNN-*.md`" rather than a
-bare example that reads as a fixed path.
+this as "the calling repository's own ADR location, following whatever
+convention that repository uses" rather than a bare example that reads
+as a fixed path.
 
 ## Deterministic shape
 
@@ -177,9 +178,13 @@ been split out.
 
 Pass. No time-sensitive content (no dated API or version reference). No
 external tool or package dependency, so the "state the install step" rule
-does not apply. No MCP tool is referenced. The one path in the skill,
-`docs/adr/NNNN-*.md` (line 24; gitapex's own state on this path is
-covered under Portability level above), uses forward slashes.
+does not apply. No MCP tool is referenced. The one path in the skill
+(line 24; gitapex's own state on this path is covered under Portability
+level above) uses forward slashes:
+
+```
+docs/adr/NNNN-*.md
+```
 
 ### 7. Bundled scripts
 
@@ -188,12 +193,12 @@ N/A. The skill ships no code.
 ### 8. Behavioural evidence
 
 Unmeasured for pass/fail, not skipped, as of this snapshot: neither an
-`evals/evals.json` (the Claude Code `skill-creator` format) nor an
-`evals/` directory for this skill was committed in this repository at
+`evals.json` manifest (the Claude Code `skill-creator` format) nor a
+committed eval directory for this skill existed in this repository at
 review time. Check the
 target repository's current state before relying on this -- gitapex has
-since added `evals/` directories for several skills (e.g.
-`evals/explaining-the-work`), which would change this scoring if re-run
+since added eval directories for several skills, including this one,
+which would change this scoring if re-run
 today. There is no suite exercising this skill's trigger against a
 documented no-skill baseline, so this dimension cannot be scored pass or
 fail on behavioural grounds -- an open gap in the repository's committed

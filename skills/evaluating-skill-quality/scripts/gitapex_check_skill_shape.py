@@ -309,28 +309,38 @@ Checks (the canonical list -- the manual fallback is to apply these):
     dimension-6 Portable-skill rule; the semantic judgment of whether a
     citation is illustrative context vs. the skill's own bookkeeping
     stays with that model-judged dimension.
-  - Portable inline-code repo-path citation without a hedge, narrowing
-    the blind spot the exemption above leaves open: treating
+  - Portable inline-code repo-path citation, unconditional (issue #1051,
+    narrowing the blind spot the exemption above leaves open): treating
     every inline-code path citation as automatically illustrative was
-    itself the gap -- an inline-code `evals/...`/`docs/...` citation reads
-    exactly as authoritative as a bare-prose one to a reader who has no
-    way to tell "illustrative example" from "this repository's own real
-    file" from the backticks alone. This check re-inspects exactly the
-    inline-code spans the bare-prose scan above deliberately skips, and
-    fails one that has no approved hedge phrase (HEDGE_PHRASES) in its own
-    sentence or the sentence immediately before it -- this repository's
-    own established convention for marking such a citation as deliberate
-    rather than a dangling self-reference (see e.g. rubric.md's "This
-    repository has also used ..." and scorer-gated-skill-edits/SKILL.md's
-    "This repository has also recorded ..."). The citation's own inline-code
-    text is excluded from that hedge search, so a citation cannot
-    self-satisfy the requirement merely because its own path happens to
-    contain a hedge word (e.g. a path under `docs/superpowers/specs/`
-    literally named with "gitapex" in it). Fenced code blocks stay exempt
-    unconditionally, as the module docstring above already covers -- this
-    check never runs on blocks, only on inline code, since a worked
-    example's illustrative fenced output is a different, already-settled
-    case that this check does not reopen.
+    itself the original gap -- an inline-code `evals/...`/`docs/...`
+    citation reads exactly as authoritative as a bare-prose one to a
+    reader who has no way to tell "illustrative example" from "this
+    repository's own real file" from the backticks alone. This check
+    re-inspects exactly the inline-code spans the bare-prose scan above
+    deliberately skips, and fails EVERY match unconditionally -- no hedge
+    phrase rescues it, regardless of nearby prose. An earlier revision of
+    this check accepted an approved hedge phrase (HEDGE_PHRASES) in the
+    citation's own sentence or the sentence immediately before it (e.g.
+    rubric.md's "This repository has also used ..." and
+    scorer-gated-skill-edits/SKILL.md's "This repository has also
+    recorded ...") for an `evals/...` citation while unconditionally
+    banning a `docs/...` one -- a corpus incident (rubric.md's own
+    Execution requirements section) showed that asymmetry lets a hedge
+    *disclose* a dependency without *removing* it: the cited file still
+    does not travel with a vendored copy either way. Both prefixes now
+    get the same unconditional treatment; the hedge-phrase machinery this
+    check still shares with the issue-number check below (via
+    `_inline_citation_offenders`'s `hedge_phrases` parameter) is invoked
+    with an empty tuple here, so `any(... for phrase in hedge_phrases)` is
+    always `False` and every match is always an offender -- not a special
+    case the shared helper needs to branch on, only something
+    `_portable_path_citation_checks`'s own CheckResult-message loop
+    accounts for (an empty hedge-phrase tuple gets its own, non-misleading
+    rule text rather than printing a literal empty `()`). Fenced code
+    blocks stay exempt unconditionally, as the module docstring above
+    already covers -- this check never runs on blocks, only on inline
+    code, since a worked example's illustrative fenced output is a
+    different, already-settled case that this check does not reopen.
   - Portable inline-code issue/PR-number citation without a hedge (the
     same blind spot as the repo-path check above, but for issue numbers
     instead of paths): the bare-issue-citation scan's inline-code exclusion
@@ -819,6 +829,23 @@ ISSUE_CITATION_RE = re.compile(r"(?:[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-
 # pattern-wide ``re.IGNORECASE``, so the evals/docs alternative, whose
 # real targets are always lowercase POSIX paths, keeps its existing
 # case-sensitive behavior unchanged.
+#
+# evals/, docs/, and CLAUDE.md-chapter citations, unconditionally, as of
+# issue #1051 -- a corpus incident (rubric.md's own Execution requirements
+# section) showed a hedge phrase can *disclose* a repo-path dependency
+# without *removing* it: the cited file still does not travel with a
+# vendored copy of the skill, hedged or not. Earlier revisions of this
+# check gave evals/ a hedge escape in inline-code form while unconditionally
+# banning docs/ -- an asymmetric, enumerated exception table that itself
+# reproduces the same class of gap (a future third top-level dir would need
+# its own manual entry in that table to get the strict treatment). Both
+# prefixes now get identical, unconditional treatment in both the
+# bare-prose and inline-code checks: no hedge phrase rescues a match
+# against this pattern, ever, matching the same resolve-inside-the-skill-
+# directory-or-fail rule SCRIPTS_PATH_BARE_RE below already applies to
+# scripts/ citations (the one prefix that legitimately CAN resolve inside
+# the citing skill's own directory, so it gets a resolution check instead
+# of an unconditional ban).
 REPO_PATH_CITATION_RE = re.compile(
     r"(?:evals|docs)/[A-Za-z0-9._/-]+"
     r"|(?i:CLAUDE\.md\s+(?:ch\.|chapter|section)\s*\d+)"
@@ -2800,13 +2827,15 @@ def _inline_citation_offenders(
     ``_split_at_bridging_semicolon``) or the one immediately before it (see
     the module docstring's repo-path and issue-number citation entries for
     the rationale, and the clause-splitting note below). The returned list
-    is ordered the same as ``specs``. Shared by the repo-path check
-    (``REPO_PATH_CITATION_RE``/``HEDGE_PHRASES``) and the issue-number
-    check (``ISSUE_CITATION_RE``/``ISSUE_CITATION_HEDGE_PHRASES``) -- the
-    citation shape and hedge vocabulary differ per spec, but the
-    paragraph/sentence tokenization and the inline-code-span search below
-    are identical, so both specs are evaluated in one pass over the same
-    tokens rather than one pass per spec.
+    is ordered the same as ``specs``. Shared by the evals/docs/CLAUDE.md-
+    chapter repo-path check (``REPO_PATH_CITATION_RE``/an empty hedge-phrase
+    tuple, so every match is unconditionally an offender -- see
+    ``_INLINE_CITATION_CHECK_SPECS``) and the issue-number check
+    (``ISSUE_CITATION_RE``/``ISSUE_CITATION_HEDGE_PHRASES``) -- the citation
+    shape and hedge vocabulary differ per spec, but the paragraph/sentence
+    tokenization and the inline-code-span search below are identical, so
+    both specs are evaluated in one pass over the same tokens rather than
+    one pass per spec.
 
     Bounded to a paragraph first (a run of contiguous non-blank lines),
     then to a sentence within it via ``_SENTENCE_SPLIT_RE``, each further
@@ -4103,9 +4132,18 @@ def _step_location_checks(skill_md: Path, skill_dir: Path, body: list[str]) -> l
 # label) for each Portable-only inline-code citation check. Table-driven so
 # a third citation kind is "add a row", not "copy the block a third time" --
 # ``_portable_path_citation_checks`` below builds one ``CheckResult`` per
-# row from a single loop instead of a hand-duplicated block per kind.
+# row from a single loop instead of a hand-duplicated block per kind. An
+# empty ``hedge_phrases`` tuple (the repo-path row, issue #1051) means no
+# phrase can ever satisfy ``_inline_citation_offenders``'s
+# ``any(... for phrase in hedge_phrases)`` hedge search, so every matching
+# citation is unconditionally an offender -- the row's own zero-hedge
+# treatment, not a special case the loop below needs to branch on for
+# offender detection, only for the CheckResult message it produces. The
+# issue-number row keeps its own, separate hedge-phrase list unchanged --
+# issue #1051 only revisits the repo-path row's escape, not the
+# issue-number citation rule this table also drives.
 _INLINE_CITATION_CHECK_SPECS = (
-    ("portable-no-unhedged-inline-path-citation", REPO_PATH_CITATION_RE, HEDGE_PHRASES, "origin-repository path"),
+    ("portable-no-inline-path-citation", REPO_PATH_CITATION_RE, (), "origin-repository path"),
     ("portable-no-unhedged-inline-issue-citation", ISSUE_CITATION_RE, ISSUE_CITATION_HEDGE_PHRASES, "issue/PR-number"),
 )
 
@@ -4153,13 +4191,23 @@ def _portable_path_citation_checks(skill_md: Path, skill_dir: Path, body: list[s
     for (check_name, _citation_re, hedge_phrases, kind_label), hits in zip(
         _INLINE_CITATION_CHECK_SPECS, inline_hits_per_spec, strict=True
     ):
+        if hedge_phrases:
+            rule = (
+                f"Portable content has no inline-code {kind_label} citation "
+                f"without an approved hedge phrase {hedge_phrases} in its own "
+                "sentence or the sentence immediately before it"
+            )
+        else:
+            # An empty hedge-phrase tuple means this citation kind
+            # (evals/docs/CLAUDE.md-chapter repo-path, issue #1051) has no
+            # hedge escape at all -- state that directly rather than
+            # printing a misleading empty "()".
+            rule = f"Portable content has no inline-code {kind_label} citation (barred unconditionally, no hedge exempts it)"
         results.append(
             CheckResult(
                 check_name,
                 not hits,
-                f"Portable content has no inline-code {kind_label} citation "
-                f"without an approved hedge phrase {hedge_phrases} in its own "
-                "sentence or the sentence immediately before it",
+                rule,
                 "none" if not hits else "found: " + ", ".join(hits),
             )
         )

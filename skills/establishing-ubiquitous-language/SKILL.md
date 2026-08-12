@@ -27,7 +27,8 @@ issues, and conversation.
    win -- never pick silently. Do not resolve it by fiat, by frequency
    count, or by whichever term you happened to write first.
 4. **Maintain the glossary.** Record the winning term in the calling
-   repository's own glossary doc (e.g. `docs/glossary.md`), creating it
+   repository's own glossary doc (e.g. a `glossary.md` file, wherever
+   that repository keeps its own documentation), creating it
    there if none exists yet, as the source of truth -- noting the
    superseded synonym so it does not resurface unrecognized later. Do not
    write real entries into this skill's own

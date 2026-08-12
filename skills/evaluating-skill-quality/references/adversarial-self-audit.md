@@ -311,8 +311,9 @@ mechanism, not only the ones already recorded below.
 - **Reconfirmed 2026-08-01, with an explicit non-default `--model` selected
   (the fable-tier model this repository's own `battle-testing-a-skill`
   cites for blind-spot/unknown-unknown enumeration, named without its
-  version suffix here per `docs/skill-authoring-standards.md` rule 1), plus
-  a methodology pitfall found along the way.** Same identifying signals as
+  version suffix here per this repository's own illustrative-model-
+  identifier rule), plus a methodology pitfall found along the way.**
+  Same identifying signals as
   above (`CLAUDE_CODE_REMOTE=true`, `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=
   cloud_default`, `claude --version` again `2.1.220 (Claude Code)`). Run
   while battle-testing a sibling skill in this repository whose Procedure
@@ -339,12 +340,11 @@ mechanism, not only the ones already recorded below.
     `claude`'s CLAUDE.md/AGENTS.md discovery follows the real process
     working directory, not the `$PWD` environment variable. Wrapping the
     invocation in a real `(cd <isolated-cwd> && ...)` (or an equivalent
-    `cwd=` subprocess argument, as this repository's own
-    `evals/scripts/gitapex_check_dispatch_trace.py`'s `run_live_dispatch` already
-    does correctly) fixed it, and the
-    corrected run is the negative control recorded above. Recorded here so
-    a future caller hand-rolling this recipe outside that script does not
-    repeat the same mistake.
+    `cwd=` subprocess argument, as this repository's own dispatch-trace
+    tooling's live-dispatch helper already does correctly) fixed it, and
+    the corrected run is the negative control recorded above. Recorded
+    here so a future caller hand-rolling this recipe outside that tooling
+    does not repeat the same mistake.
 - **Reconfirmed 2026-08-08, at a newer CLI version, with a second
   methodology pitfall found.** Same identifying signals as above
   (`CLAUDE_CODE_REMOTE=true`, `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=
@@ -470,14 +470,13 @@ mechanism, not only the ones already recorded below.
   on, which silently truncates the dispatch's output to a bare approval
   request instead of a real review.
 - **This is now a default, checked-for step, not prose alone.** This
-  repository's own `evals/scripts/gitapex_check_dispatch_trace.py`'s `run`
-  subcommand takes `--marketplace-source`/`--plugin-name`, which run this
-  exact registration
+  repository's own dispatch-trace tooling's `run` subcommand takes
+  `--marketplace-source`/`--plugin-name`, which run this exact registration
   against the isolated `$HOME` and **fail loudly (exit 2) before any
   dispatch is attempted** if the target has no
   `.claude-plugin/marketplace.json` -- the missed-precondition failure mode
   above can no longer pass through undetected. A caller reproducing this
-  recipe by hand outside that script must still perform the same check
+  recipe by hand outside that tooling must still perform the same check
   itself: confirm `.claude-plugin/marketplace.json` exists in the isolated
   target before treating any resulting score as evidence of genuine
   dispatch.

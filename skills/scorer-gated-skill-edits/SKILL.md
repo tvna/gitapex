@@ -116,11 +116,7 @@ evaluation. Name the gap; never fake a score to proceed.
      (`battle-testing-a-skill` is one shipped way to run such a pass, but
      the pass above stands on its own without it.) This same rule also
      covers `gitapex_score_contract.py`'s own optional `--judge-verdict
-     {agree,disagree}` flag. (This repository has also recorded the design
-     spec for that flag, for readers working in this specific repository,
-     at `docs/superpowers/specs/2026-07-20-judge-mode-scorer-design.md`; a
-     vendored copy of this skill has no such file and does not need one --
-     the flag's contract is fully stated below.) It records the outcome of
+     {agree,disagree}` flag; the flag's contract is fully stated below. It records the outcome of
      this adversarially-verified pass alongside
      the substring `--compare-to` verdict -- opt-in, never blending into or
      overriding the recorded substring mean -- so a disagreement is
@@ -217,8 +213,7 @@ just measures the wrong thing.
   `output_not_contains` phrase that a correct *denial* would also contain.
   Each of these has silently false-failed a correct run.
 - Where the environment ships a deterministic checker for the second rule,
-  run it before the gate (this repository provides
-  `evals/scripts/gitapex_lint_fixture_assertions.py` alongside its
+  run it before the gate (this repository provides one alongside its
   `gitapex_check_skill_shape.py`): it catches the casing, negation-trap, and
   paraphrase-drift cases mechanically, leaving only the discrimination rule
   to human judgment.

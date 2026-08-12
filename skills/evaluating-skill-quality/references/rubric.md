@@ -680,6 +680,26 @@ grading below.
     unrelated repository" (the portability litmus test) -- these are
     different questions, and Portable-declared content must pass both,
     not just the first.
+  - **`evals/` and `docs/` path citations are barred unconditionally from
+    Portable content, hedged or not, in bare prose or inline code alike**
+    -- both roots name locations outside the skill's own directory that a
+    plugin install or a vendoring copy does not carry along, the same
+    "must resolve inside the skill's own directory" boundary [Dependency
+    file portability](#dependency-file-portability) below already applies
+    to a bundled *file*, applied here to a *prose citation* instead. A
+    hedge phrase ("this repository has also recorded...") discloses the
+    dependency; it does not remove it, and a Portable skill has no
+    legitimate operational reason to point a reader outside its own
+    folder at all -- summarize the needed content directly, or move it
+    into the skill's own `references/`, instead of citing it from `evals/`
+    or `docs/`. An earlier revision of this rule gave `evals/` a hedge
+    escape in inline-code form while unconditionally banning `docs/` --
+    an enumerated, asymmetric exception that itself reproduced the
+    "recurs for the next unlisted case" problem this rule exists to
+    close; both roots now get identical, unconditional treatment.
+    Enforced by `portable-no-repo-path-citation` (bare-prose form,
+    unconditional as always) and `portable-no-inline-path-citation`
+    (inline-code form, unconditional as of this rule).
 - **Repository-scoped** -- a repository-scoped skill that reads as if it
   were portable is a dimension-1/6 defect (it misleads a future vendoring
   decision), not the scoping choice itself. An undeclared level that
@@ -751,9 +771,9 @@ number: the sidecar travels with its skill directory too, and a bare `#N`
 loses its meaning the same way once that happens. The
 `no-bare-issue-citation` shape check enforces this unconditionally across
 `SKILL.md`, `references/*.md`, and the sidecar's own `spec.references`/
-`lifecycle.experimental`/`deprecated.reason` text alike, while the two
+`lifecycle.experimental`/`deprecated.reason` text alike, while the
 repo-path shape checks (`portable-no-repo-path-citation`,
-`portable-no-unhedged-inline-path-citation`) stay gated to Portable only.
+`portable-no-inline-path-citation`) stay gated to Portable only.
 
 ## Compatibility awareness
 
@@ -1160,13 +1180,10 @@ different rule instead: it is a single declaration (`mode` required once
 `network` is present at all), not a per-subkey allowlist -- `disabled`
 means no network access, `allowlist` means only the listed exact hosts,
 and `unrestricted` means no restriction from this declaration, schema-
-permitted but requiring the declaring PR's own explicit argument against
-this repository's security invariants 6 and 9 before first real use.
-This repository has also recorded the full schema, semantics, and
-rationale for `tools` at
-`docs/superpowers/specs/2026-07-25-skill-execution-requirements-envelope-design.md`
-and for `network` at
-`docs/superpowers/specs/2026-08-08-skill-execution-requirements-network-category-design.md`.
+permitted but requiring the declaring PR's own explicit written
+justification for why the skill's real behavior needs unrestricted
+network access, checked against whatever security policy the calling
+repository has adopted, before first real use.
 
 ## 1. Discovery -- name and description
 
@@ -1584,14 +1601,15 @@ never checked against a no-skill baseline may be solving an imagined
 problem.
 
 **Check the target repository for an eval mechanism before scoring this
-dimension** -- for a Claude Code target, that's an `evals/evals.json` file
-usable with the official `skill-creator` plugin
+dimension** -- for a Claude Code target, that's an `evals.json` manifest,
+conventionally under an `evals/` directory, usable with the official
+`skill-creator` plugin
 (`/plugin install skill-creator@claude-plugins-official`, per
 [Claude Code's own eval-and-iterate docs][cce]); for other targets, an
 `evals/` directory or a third-party runner such as
 `waza` (`microsoft/waza`) if the repo already uses one. Check whether the
-target repository has committed eval data (an `evals/` directory or
-`evals/evals.json`) for the specific skill under review -- `skill-creator`
+target repository has committed eval data (an `evals/` directory or an
+`evals.json` manifest) for the specific skill under review -- `skill-creator`
 and `waza` may be available as session-local tooling without being part of
 the repo; their presence in one session's environment does not make this
 dimension "measured" for the repo itself. Whatever the target, never silently skip
@@ -1660,10 +1678,8 @@ as a finding for this dimension unless the target's own eval-status
 bookkeeping (see above) discloses it as a deliberate, named gap -- the
 same disclosed-vs-silent distinction this dimension already applies to a
 missing baseline. A repository that maintains its own coverage-measurement
-tooling for this (this repository's own
-`evals/scripts/gitapex_check_dimension_coverage.py` is one instance) makes
-this check mechanical; without one, cross-reference the rubric's own
-numbered list against the corpus by hand.
+tooling for this makes this check mechanical; without one, cross-reference
+the rubric's own numbered list against the corpus by hand.
 
 **`waza check`'s output is useful evidence, but verify its heuristics
 against the primary spec before trusting a verdict from it** -- do not

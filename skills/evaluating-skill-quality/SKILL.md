@@ -339,7 +339,7 @@ check enforces both and fails closed on any unrecognized key. No behavior
 change: no skill's own runtime procedure may read or branch on it, same as
 Portability level, Capability assumption, and Lifecycle. Full schema,
 semantics, and rationale: [references/rubric.md](references/rubric.md)'s
-Execution requirements section and the design docs it cites.
+Execution requirements section.
 
 ## Procedure
 
@@ -481,11 +481,11 @@ actually specifies.
 ## Notes
 
 Portability rationale: self-contained -- carries its own rubric and bundled
-read-only `gitapex_check_skill_shape.py`. Its content cites this-repository design
-docs in a few places (e.g. rubric.md's Execution requirements section),
-always through the approved hedge convention that marks such a citation as
-acknowledged provenance, not an operational dependency this skill's own
-procedure must resolve. The declared level lives in `metadata/gitapex.yaml`.
+read-only `gitapex_check_skill_shape.py`. No content cites a path outside
+this skill's own directory; `evals/` and `docs/` citations are barred
+unconditionally from Portable-declared content (see rubric.md's
+Portability level and Dependency file portability sections), not merely
+hedged. The declared level lives in `metadata/gitapex.yaml`.
 
 Downstream verdict consumption, for readers working in this repository
 (gitapex): `.github/scripts/gitapex_gate_skill_audit_disclosure.py`, wired by
