@@ -18,6 +18,7 @@ import pathlib
 
 import gitapex_generate_plugin_manifest as generator
 import pytest
+from conftest import make_validation_error
 
 # ---------------------------------------------------------------------------
 # strip_schema_key
@@ -193,6 +194,30 @@ def test_main_write_failure_fails_cleanly(
     err = capsys.readouterr().err
     assert "FAIL" in err
     assert "cannot be written" in err
+
+
+# ---------------------------------------------------------------------------
+# GeneratePluginManifestArgs
+# ---------------------------------------------------------------------------
+
+
+def test_args_defaults_check_to_false() -> None:
+    assert generator.GeneratePluginManifestArgs().check is False
+
+
+def test_args_accepts_an_explicit_check() -> None:
+    assert generator.GeneratePluginManifestArgs(check=True).check is True
+
+
+def test_main_exits_two_when_args_fail_validation(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def _raise(*_args: object, **_kwargs: object) -> None:
+        raise make_validation_error()
+
+    monkeypatch.setattr(generator, "GeneratePluginManifestArgs", _raise)
+    assert generator.main([]) == 2
+    assert "FAIL: invalid CLI arguments" in capsys.readouterr().err
 
 
 # ---------------------------------------------------------------------------

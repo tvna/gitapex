@@ -56,6 +56,26 @@ and to keep that from becoming a silent forever-pass, the specific failure text
 workflows pipe into the job summary.
 """
 
+# Not folded into the module docstring above: `argparse.ArgumentParser` below
+# is constructed with `description=__doc__`, so anything added there changes
+# real `--help` output -- the exact thing waves 1-3 of #1040's batch
+# confirmed byte-identical before/after as their own proof method. Kept as a
+# plain comment instead so that guarantee still holds for this wave.
+#
+# Issue #1071 (wave 4 of #1040's batch pydantic CLI-arg validation rollout):
+# `main`'s parsed namespace is now passed through `ScanRulesetDriftArgs`
+# immediately after `parse_args()` returns -- a typed seam between
+# `parse_args` and business logic, matching the shape waves 1-3 established.
+# Unlike those waves' plain-passthrough fields, this module's own exit code
+# is already three-valued and load-bearing (see the module docstring above),
+# so a pydantic wrap's `except ValidationError` deny-branch would need a
+# fourth exit code purely to guard a state argparse's own `choices=`/`str`
+# typing already makes unreachable -- dead code with a dead exit-code
+# surface. A plain frozen dataclass gives the same typed seam without it:
+# `scope`'s `Literal` still documents/type-checks the two values argparse's
+# own `choices=("required-checks", "full")` already enforces, with no
+# runtime re-validation and no invalid-args branch to guard.
+
 from __future__ import annotations
 
 import argparse
@@ -64,7 +84,8 @@ import pathlib
 import sys
 import time
 from collections.abc import Callable
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Literal
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
@@ -195,17 +216,37 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+@dataclass(frozen=True)
+class ScanRulesetDriftArgs:
+    """Typed view of `main`'s parsed CLI namespace (issue #1071). See the
+    module docstring's own issue #1071 section for why `scope` is a
+    documentation-only Literal rather than a runtime-validated field."""
+
+    repo: str
+    sot: str
+    scope: Literal["required-checks", "full"]
+    # Suppression rationale: this is the name of an environment variable, not a
+    # credential value -- same as the pre-existing `--token-env` argparse default
+    # a few lines above, which ruff does not flag because it is a keyword argument
+    # rather than a class-level assignment.
+    token_env: str = "GITHUB_TOKEN"  # noqa: S105
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
-    token = os.environ.get(args.token_env, "")
+    validated = ScanRulesetDriftArgs(**vars(args))
+
+    token = os.environ.get(validated.token_env, "")
     if not token:
         print(
-            f"{args.token_env} is empty, so nothing was verified: the rulesets API is not readable with the "
+            f"{validated.token_env} is empty, so nothing was verified: the rulesets API is not readable with the "
             "default job token. Complete the RULESETS_PAT handoff in docs/runbooks/rulesets.md."
         )
         return EXIT_UNVERIFIED
     try:
-        report, code = run(args.repo, pathlib.Path(args.sot), args.scope, lambda url: default_fetch(url, token))
+        report, code = run(
+            validated.repo, pathlib.Path(validated.sot), validated.scope, lambda url: default_fetch(url, token)
+        )
     except GitHubApiError as error:
         # The read failed, so nothing was compared. Printed on stdout, not
         # stderr: both workflows pipe only stdout into $GITHUB_STEP_SUMMARY, so

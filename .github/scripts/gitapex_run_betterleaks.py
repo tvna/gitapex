@@ -38,6 +38,28 @@ section 4 forbids echoing secret values into any output sink; the hook must be
 able to say *which rule matched where* without reproducing the value.
 """
 
+# Not folded into the module docstring above: `argparse.ArgumentParser` below
+# is constructed with `description=__doc__`, so anything added there changes
+# real `--help` output -- the exact thing waves 1-3 of #1040's batch confirmed
+# byte-identical before/after as their own proof method. Kept as a plain
+# comment instead so that guarantee still holds for this wave.
+#
+# Issue #1071 (wave 4 of #1040's batch pydantic CLI-arg validation rollout):
+# `main`'s parsed namespace is now passed through `RunBetterleaksArgs`
+# immediately after `parser.parse_args(argv)`, matching the wrap already
+# applied in waves 1-3. `mode` is typed as the same two-value `Literal`
+# argparse's own `choices=sorted(_MODE_FLAGS)` already enforces -- this
+# repo's established Literal-narrowing convention (e.g.
+# gitapex_scan_ssot_schema.py's fields) for a field argparse's own `choices=`
+# already constrains, not a new validation argparse did not already perform.
+# So construction can currently never raise `ValidationError` for a real CLI
+# invocation; the model exists for consistency with #1040's repo-wide
+# convention (a typed seam between `parse_args` and business logic). This
+# hook's own production invocation (`.pre-commit-config.yaml`'s
+# `betterleaks-staged`/`betterleaks-full-history` hooks) already runs under
+# `uv run --frozen` (issue #1035), so the added `pydantic` import is safe
+# here.
+
 from __future__ import annotations
 
 import argparse
@@ -45,6 +67,9 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Literal
+
+from pydantic import BaseModel, ValidationError
 
 # A git hook has no subprocess timeout of its own, so a hung scanner would
 # block `git commit` or `git push` indefinitely. The same reasoning (and the
@@ -111,6 +136,14 @@ def build_command(betterleaks: str, mode: str) -> tuple[str, ...]:
     return (betterleaks, "git", *_MODE_FLAGS[mode], *_COMMON_FLAGS)
 
 
+class RunBetterleaksArgs(BaseModel):
+    """Typed view of `main`'s parsed CLI namespace (issue #1071). See the
+    module docstring's own issue #1071 section for why `mode`'s Literal
+    type cannot currently raise ValidationError from a real invocation."""
+
+    mode: Literal["history", "staged"]
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -121,24 +154,30 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    try:
+        validated = RunBetterleaksArgs(mode=args.mode)
+    except ValidationError:
+        print("error: invalid CLI arguments", file=sys.stderr)
+        return 2
+
     betterleaks = shutil.which("betterleaks")
     if betterleaks is None:
         print(_MISSING_BINARY_MESSAGE, file=sys.stderr)
         return 1
 
-    command = build_command(betterleaks, args.mode)
+    command = build_command(betterleaks, validated.mode)
     try:
         # Suppression rationale: `command` carries no untrusted input. Its executable is
         # the absolute path shutil.which resolved above, and every remaining
         # element is a module-level literal selected by an argparse `choices`
-        # constraint -- args.mode cannot reach here as anything but "staged" or
-        # "history".
+        # constraint (now also RunBetterleaksArgs' Literal type) -- validated.mode
+        # cannot reach here as anything but "staged" or "history".
         completed = subprocess.run(  # noqa: S603
             command, cwd=repo_root(), timeout=_SCAN_TIMEOUT_SECONDS
         )
     except subprocess.TimeoutExpired:
         print(
-            f"betterleaks --mode {args.mode} exceeded {_SCAN_TIMEOUT_SECONDS}s and was killed. "
+            f"betterleaks --mode {validated.mode} exceeded {_SCAN_TIMEOUT_SECONDS}s and was killed. "
             "Failing the hook rather than passing an unfinished scan.",
             file=sys.stderr,
         )
