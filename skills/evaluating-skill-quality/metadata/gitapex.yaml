@@ -443,6 +443,7 @@ spec:
     - kind: audit
       anchor: "https://github.com/tvna/gitapex/issues/1055"
       summary: "PR review round 3: also fixed a minor duplicate regex-search in _inline_citation_offenders (correctness-neutral efficiency only). Re-verified live after both fixes: 64/64 self-dogfood PASS, full pytest suite green."
+  skillDependencies:
     requires: []
     relatedTo:
       - battle-testing-a-skill
