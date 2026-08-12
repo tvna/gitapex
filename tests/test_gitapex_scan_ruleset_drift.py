@@ -282,4 +282,6 @@ def test_main_exits_three_when_args_fail_validation(
     monkeypatch.setattr(drift, "ScanRulesetDriftArgs", _raise)
     code = drift.main(["--repo", "o/r", "--sot", str(write_sot(tmp_path)), "--scope", "full"])
     assert code == drift.EXIT_INVALID_ARGS == 3
-    assert "invalid CLI arguments" in capsys.readouterr().err
+    captured = capsys.readouterr()
+    assert "invalid CLI arguments" in captured.err
+    assert "Nothing was verified -- the CLI arguments themselves failed validation." in captured.out
