@@ -883,6 +883,25 @@
       "tracking_issue": 1052,
       "status": "active",
       "supersedes": null
+    },
+    {
+      "id": "pr-title-convention",
+      "kind": "script",
+      "script": [
+        "hooks/check-pr-title-convention.sh",
+        "hooks/gitapex_check_pr_title_convention.py",
+        ".github/scripts/gitapex_gate_pr_title_convention.py",
+        ".github/workflows/pr-title-convention-gate.yml"
+      ],
+      "rule": "A pull request's title must match Conventional Commits format: type(scope)!: description, type in feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert, scope and the breaking-change '!' optional, description 1-72 characters. The PreToolUse hook denies a create_pull_request call outright, and denies an update_pull_request call only when it carries a title field; the CI twin re-checks on pull_request:[opened, edited, synchronize] as a required status check, covering a PR opened or retitled via the GitHub web UI, the gh CLI, or another bot.",
+      "planes": ["pretooluse", "ci"],
+      "local_exclusion": "Grades a PR title against live GitHub PR state; no title exists locally before the PR is opened.",
+      "trigger": "PreToolUse matcher mcp__github__create_pull_request and mcp__github__update_pull_request (hooks/hooks.json); .github/workflows/pr-title-convention-gate.yml on pull_request:[opened, edited, synchronize], registered as a required status check in .github/rulesets/main.json",
+      "policy_refs": [],
+      "cluster": "github-operations",
+      "tracking_issue": 1058,
+      "status": "active",
+      "supersedes": null
     }
   ],
   "clusters": {
