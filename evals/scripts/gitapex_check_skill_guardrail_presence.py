@@ -47,9 +47,9 @@ matched" guard -- 2 = a manifest itself could not be read or does not match
 its schema).
 
 Usage:
-  python3 gitapex_check_skill_guardrail_presence.py
-  python3 gitapex_check_skill_guardrail_presence.py --skill-dir skills/battle-testing-a-skill
-  python3 gitapex_check_skill_guardrail_presence.py --manifest path/to/guardrail-manifest.yaml
+  uv run --frozen python3 gitapex_check_skill_guardrail_presence.py
+  uv run --frozen python3 gitapex_check_skill_guardrail_presence.py --skill-dir skills/battle-testing-a-skill
+  uv run --frozen python3 gitapex_check_skill_guardrail_presence.py --manifest path/to/guardrail-manifest.yaml
 """
 
 from __future__ import annotations
