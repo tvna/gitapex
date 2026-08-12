@@ -688,15 +688,41 @@ grading below.
     file portability](#dependency-file-portability) below already applies
     to a bundled *file*, applied here to a *prose citation* instead. A
     hedge phrase ("this repository has also recorded...") discloses the
-    dependency; it does not remove it, and a Portable skill has no
-    legitimate operational reason to point a reader outside its own
-    folder at all -- summarize the needed content directly, or move it
-    into the skill's own `references/`, instead of citing it from `evals/`
-    or `docs/`. An earlier revision of this rule gave `evals/` a hedge
-    escape in inline-code form while unconditionally banning `docs/` --
-    an enumerated, asymmetric exception that itself reproduced the
-    "recurs for the next unlisted case" problem this rule exists to
-    close; both roots now get identical, unconditional treatment.
+    dependency; it does not remove it -- summarize the needed content
+    directly, or move it into the skill's own `references/`, instead of
+    citing it from `evals/` or `docs/`. An earlier revision of this rule
+    gave `evals/` a hedge escape in inline-code form while unconditionally
+    banning `docs/` -- an enumerated, asymmetric exception that itself
+    reproduced the "recurs for the next unlisted case" problem this rule
+    exists to close; both roots now get identical, unconditional
+    treatment.
+    - **What the underlying defect actually is, since the deterministic
+      check above is a conservative, literal-pattern backstop that cannot
+      itself tell the difference**: a repo-external path is a real
+      dimension-6 defect only when the skill's own *control* -- its
+      procedure or judgment logic -- depends on that path to decide how
+      to behave (e.g. citing a design doc's schema to know what a field
+      means, or a numbered invariant list to know what to check). A path
+      cited only as an **input source** ("read whatever eval data the
+      calling repository has, if any") or an **output destination**
+      ("this skill's own verdict is consumed downstream by X in this
+      repository") is not a control dependency: the skill's own procedure
+      neither reads nor needs that path to produce its result, so nothing
+      breaks when it is copied elsewhere and the path does not travel
+      with it. The deterministic check still flags a literal `evals/`/
+      `docs/` citation in either legitimate role -- it cannot distinguish
+      roles from a regex match -- so a Portable skill must still avoid
+      writing the literal path even for a genuine input-source or
+      output-destination reference (describe the role in prose instead,
+      the same way this skill's own SKILL.md Notes section describes its
+      verdict's downstream consumer without citing the literal path). The
+      *severity* of a flagged citation, when a human or model reviewer
+      reads the surrounding prose, still turns on this three-way test:
+      an unavoidable control-dependency citation is the real defect the
+      Portable litmus test above exists to catch; an input-source or
+      output-destination description that merely used the wrong,
+      still-flagged phrasing is a durability nit to reword, not the same
+      class of finding.
     Enforced by `portable-no-repo-path-citation` (bare-prose form,
     unconditional as always) and `portable-no-inline-path-citation`
     (inline-code form, unconditional as of this rule).

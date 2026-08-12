@@ -481,11 +481,11 @@ actually specifies.
 ## Notes
 
 Portability rationale: self-contained -- carries its own rubric and bundled
-read-only `gitapex_check_skill_shape.py`, with no procedural (not merely
-hedged) dependency on a path outside its own directory; the next
-paragraph's paths are reader context only. `evals`/`docs` citations are
-barred unconditionally from Portable-declared content (rubric.md's
-Portability level section). Declared level: `metadata/gitapex.yaml`.
+read-only `gitapex_check_skill_shape.py`, with no control dependency on a
+path outside its own directory; the next paragraph names this skill's
+own output destination, not a control input (rubric.md's Portability
+level section). `evals`/`docs` citations are barred unconditionally
+regardless of role. Declared level: `metadata/gitapex.yaml`.
 
 Downstream verdict consumption, for readers working in this repository
 (gitapex): `.github/scripts/gitapex_gate_skill_audit_disclosure.py`, wired by
