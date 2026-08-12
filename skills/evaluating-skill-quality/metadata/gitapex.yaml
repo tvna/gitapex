@@ -473,6 +473,16 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1064"
       summary: "PR review (CodeRabbit): the fix's sidecar.is_file() guard was called twice (once before parsing, once at the external-citations-resolve decision), a redundant re-check that could desync if the sidecar changed mid-run. Cached the initial result once as sidecar_present and reused it at both sites. Re-verified: 530/530 pytest, 64/64 self-dogfood, ruff/mypy clean."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/364"
+      summary: "Built the deferred dimension-14 self-referential corpus's deterministic half: evals/guardrail-manifest.yaml (co-located, distinct from top-level evals/evaluating-skill-quality/) names five guardrail clauses across this SKILL.md and references/adversarial-self-audit.md; evals/scripts/gitapex_check_skill_guardrail_presence.py checks each is still present, whitespace-normalized. No new workflow/gate registration needed -- it runs under this repo's existing pytest suite (test.yml)."
+      outcome:
+        verdict: KEEP
+        anchors: 5
+        coverage_percent: 100
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/364"
+      summary: "The behavioral half (feed this skill a degraded copy of itself, confirm its own procedure catches the gap generically) was not built: no waza/model-CLI toolchain or live-dispatch budget was available this session to measure it, and an unverified fixture would be exactly the kind of unearned confidence this skill's own Stop boundaries warn against for a reviewed target. Recorded per this issue's own explicit escape hatch rather than silently dropped; full rationale in evals/README.md."
   skillDependencies:
     requires: []
     relatedTo:
