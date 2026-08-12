@@ -1630,15 +1630,14 @@ never checked against a no-skill baseline may be solving an imagined
 problem.
 
 **Check the target repository for an eval mechanism before scoring this
-dimension** -- for a Claude Code target, that's an `evals.json` manifest,
-conventionally under an `evals/` directory, usable with the official
-`skill-creator` plugin
+dimension** -- for a Claude Code target, that's an `evals/evals.json` file
+usable with the official `skill-creator` plugin
 (`/plugin install skill-creator@claude-plugins-official`, per
 [Claude Code's own eval-and-iterate docs][cce]); for other targets, an
 `evals/` directory or a third-party runner such as
 `waza` (`microsoft/waza`) if the repo already uses one. Check whether the
-target repository has committed eval data (an `evals/` directory or an
-`evals.json` manifest) for the specific skill under review -- `skill-creator`
+target repository has committed eval data (an `evals/` directory or
+`evals/evals.json`) for the specific skill under review -- `skill-creator`
 and `waza` may be available as session-local tooling without being part of
 the repo; their presence in one session's environment does not make this
 dimension "measured" for the repo itself. Whatever the target, never silently skip
