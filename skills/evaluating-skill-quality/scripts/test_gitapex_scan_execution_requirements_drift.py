@@ -1161,6 +1161,29 @@ def test_non_script_asset_under_scripts_dir_produces_no_finding(tmp_path: pathli
     assert scanner.find_network_drift({"mode": "disabled"}, skill_dir) == []
 
 
+def test_looks_like_bundled_script_treats_unopenable_file_as_not_a_script(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """_looks_like_bundled_script's own OSError fallback (an extensionless
+    file that cannot even be opened to peek at a shebang -- a permission
+    error or a race where the file disappears mid-scan): treated as "not a
+    script" rather than raising, mirroring _bundled_script_trees' own
+    OSError handling elsewhere in this module. Exercised via monkeypatch
+    rather than a real permission-denied file, since this suite may run as
+    root (permission checks would not actually fail in that case)."""
+    skill_dir = _make_skill(tmp_path)
+    scripts_dir = skill_dir / "scripts"
+    scripts_dir.mkdir()
+    (scripts_dir / "mystery").write_bytes(b"not actually a script")
+
+    def _raise_os_error(self: pathlib.Path, mode: str = "r") -> None:
+        raise OSError("simulated unopenable file")
+
+    monkeypatch.setattr(pathlib.Path, "open", _raise_os_error)
+
+    assert scanner._looks_like_bundled_script(scripts_dir / "mystery") is False
+
+
 def test_unreadable_script_suppresses_unrestricted_over_declared_warning(tmp_path: pathlib.Path) -> None:
     """Found live by an adversarial review (issue #1079): an unreadable
     non-Python script used to produce BOTH the new
