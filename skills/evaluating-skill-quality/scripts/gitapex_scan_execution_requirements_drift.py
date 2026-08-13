@@ -14,11 +14,13 @@ against what its own content actually does.
 Two independent checks, one per executionRequirements sub-block, that
 differ in kind, not just in what they check -- a distinction worth
 stating explicitly rather than lumping both under one "best-effort"
-label. find_network_drift's own detection mechanism (static AST
-parsing, not a dynamic/DAST-style approach) is a considered decision,
-not just an implementation default -- see
-docs/adr/0003-use-static-ast-not-dynamic-detection-for-network-drift.md
-for the full rationale and the alternatives it rejected:
+label. find_network_drift's own detection mechanism -- static AST
+parsing for its Python-script lane, heuristic text-pattern matching for
+its non-Python-script lane, neither a dynamic/DAST-style approach -- is
+a considered decision for both lanes, not just an implementation
+default -- see
+docs/adr/0003-use-static-analysis-not-dynamic-execution-or-fail-closed-flagging-for-find-network-drift.md
+for the full rationale and the alternatives each lane rejected:
 
 - find_network_drift: declared network.mode/domains vs. network-capable
   imports and literal https?:// hosts found in skill_dir/scripts/*.py --
@@ -98,7 +100,11 @@ real example) cannot be AST-parsed by this module at all, so it is
 covered by a second, best-effort text-pattern lane instead (see
 _NETWORK_COMMAND_PATTERN below) -- the same "irreducibly best-effort,
 kind: 'heuristic'" precedent find_tools_drift's own "-vs-skill-md" lane
-already established for prose that has no parser. That lane checks all
+already established for prose that has no parser; this lane's own
+rejected alternatives (fail-closed flagging, a bashlex AST dependency)
+are documented in the same
+docs/adr/0003-use-static-analysis-not-dynamic-execution-or-fail-closed-flagging-for-find-network-drift.md
+cited above. That lane checks all
 three network.mode values, not just 'disabled': a network-capable
 command match flags under-declared usage in 'disabled' mode; a literal
 https?:// host found in the same text (via _URL_LITERAL_PATTERN, the
