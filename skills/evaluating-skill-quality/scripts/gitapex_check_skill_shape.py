@@ -450,6 +450,75 @@ Checks (the canonical list -- the manual fallback is to apply these):
     declared portability. Deliberately narrow: this repository's own real
     location-shaped phrasing is otherwise sparse, so a broader vocabulary
     would have no evidence base and a much larger false-positive surface.
+  - No voodoo constant (no-voodoo-constant, issue #1045's Acceptance
+    Criteria Map item A): every module-level ALL-CAPS-named target
+    (``^[A-Z][A-Z0-9_]*$``, the conventional constant-naming heuristic
+    that keeps this check from flagging an ordinary variable or a
+    regex-compiled pattern like ``NAME_RE = re.compile(...)``, whose RHS
+    is a Call, not a literal) of a plain assignment or an annotated
+    assignment with a value (``TIMEOUT: int = 30``; a bare annotation with
+    no value, ``TIMEOUT: int``, has nothing to scan) in every non-test
+    ``*.py`` file directly under the skill's own ``scripts/`` directory
+    (``test_*.py`` files are excluded -- test fixture literals are not
+    "configuration" and would be enormous false-positive noise, e.g. this
+    very checker's own ``test_gitapex_check_skill_shape.py``) whose
+    right-hand side is a "simple literal" (a bare ``ast.Constant``; an
+    ``ast.Tuple``/``ast.List``/``ast.Set`` of nothing but ``ast.Constant``
+    elements; or an ``ast.Dict`` whose every key and value is itself an
+    ``ast.Constant``) must carry an adjacent justifying comment: either a
+    real ``COMMENT`` token, per Python's own ``tokenize`` module (not a
+    naive ``"#" in line`` scan, which false-passes on a ``#`` character
+    living inside a string-literal RHS itself, e.g.
+    ``PREFIX = "issue #"``, which carries no real comment), on any
+    physical line the statement itself spans -- covers both a trailing
+    comment on a single-line assignment and one on a multi-line container
+    literal's own opening line (``NAME = (  # explanation`` ... ``)``) --
+    or a comment-only line immediately above the statement's first line
+    (blank lines skipped when walking upward). A chained assignment
+    (``FOO = bar = 1``) is evaluated per-target, not gated on every target
+    matching the ALL-CAPS heuristic together.
+    Deliberately only checks module-level statements (``ast.parse``'s
+    top-level ``tree.body``, never recursed into a function or class
+    body) -- a constant assigned inside a function is a local, not a
+    "voodoo constant" in the configuration sense this check targets.
+    Escape hatch, by design: ANY adjacent comment satisfies this check,
+    however short -- it flags only a total absence of justification, not
+    comment quality (comment quality stays the model-judged dimension-7
+    review's job, not this mechanical check's), matching issue #1045's
+    own stated residual-risk note that a well-known constant needs a
+    one-line-comment escape hatch. A script with a syntax error
+    contributes zero offenders for this check (parsed independently per
+    file; a malformed script is a different problem this repository's
+    other gates already catch). A script that cannot even be read as
+    UTF-8 text is reported as an offender instead of silently skipped --
+    unlike a syntax error, nothing else is guaranteed to notice an
+    unreadable bundled script, so skipping it here would pass vacuously.
+    Silently passes with "not declared (optional)" evidence, the same
+    absent-optional-content convention used throughout this docstring,
+    when the skill has no ``scripts/`` directory at all or it contains no
+    qualifying non-test ``.py`` file.
+  - Script execution intent stated (script-execution-intent-stated, issue
+    #1045's Acceptance Criteria Map item A): every file directly under
+    the skill's own ``scripts/`` directory (any extension, not just
+    ``.py`` -- a referenced ``.sh`` script counts too) that is mentioned
+    anywhere in SKILL.md or references/* (via ``_citation_sources``, the
+    same source set every prose citation check above scans) as an
+    inline-code span of its own exact filename (`` `filename` ``) must
+    have at least one such mention whose own enclosing paragraph
+    (``_markdown_paragraphs`` -- blank-line-delimited, with internal
+    hard-wrapped newlines joined to a single space, so a citation and its
+    qualifying phrase still match when a line-wrap falls between them)
+    also carries explicit execution-intent phrasing: ``Run `filename` ``
+    or ``See `filename` ... for ...`` (case-insensitive -- a natural,
+    grammatically lowercase mid-sentence "run"/"see" counts the same as a
+    sentence-initial capitalized one; case carries no semantic
+    distinction for this check). A script never mentioned this way anywhere is
+    silently skipped, not flagged -- an unlinked/unreferenced script is a
+    separate dimension-5 progressive-disclosure concern, out of scope for
+    this check, per its own "referenced from SKILL.md/references/"
+    applicability. Silently passes with "not declared (optional)"
+    evidence when the skill has no ``scripts/`` directory at all or it is
+    empty.
 
 Usage:
   python3 gitapex_check_skill_shape.py <skill-dir-or-SKILL.md>
@@ -461,13 +530,16 @@ when no readable SKILL.md is found.
 from __future__ import annotations
 
 import argparse
+import ast
 import datetime
 import json
 import os.path
 import re
 import sys
+import tokenize
 from collections.abc import Iterable
 from dataclasses import dataclass
+from io import StringIO
 from pathlib import Path
 
 # The Claude Developer Platform Skills API enforces description <= 1024
@@ -476,7 +548,7 @@ from pathlib import Path
 # Code's own frontmatter parsing, so this checker uses the platform's
 # tighter cap to stay valid on both surfaces.
 DESCRIPTION_MAX_CHARS = 1024
-NAME_MAX_CHARS = 64
+NAME_MAX_CHARS = 64  # same Skills API cap family as DESCRIPTION_MAX_CHARS above
 # Cap on spec.references' summary field (and spec.lifecycle.experimental/
 # deprecated.reason) in metadata/gitapex.yaml -- these free-text fields have
 # no length limit otherwise and can grow unbounded by mixing multiple
@@ -496,7 +568,7 @@ REFERENCES_ENTRY_MAX_CHARS = 500
 # open, ... -- with no closed vocabulary of its own, since real entries use
 # too varied a set of outcome facts for a fixed schema to fit).
 REFERENCES_ITEM_SUBKEYS = ("kind", "anchor", "summary", "outcome")
-REFERENCES_ITEM_REQUIRED_SUBKEYS = ("kind", "anchor", "summary")
+REFERENCES_ITEM_REQUIRED_SUBKEYS = ("kind", "anchor", "summary")  # outcome is the one optional subkey
 # Exactly 4 spaces -- one level under spec.references' own 2-space key,
 # matching every other gated block's own fixed-indent convention.
 REFERENCES_ITEM_INDENT = 4
@@ -526,7 +598,7 @@ REFERENCES_KIND_VOCAB = (
 # spec.references' own items), structurally the simpler of the two list-of-
 # mappings fields this sidecar has.
 EXTERNAL_CITATION_ITEM_SUBKEYS = ("path", "role")
-EXTERNAL_CITATION_ITEM_REQUIRED_SUBKEYS = ("path", "role")
+EXTERNAL_CITATION_ITEM_REQUIRED_SUBKEYS = ("path", "role")  # both subkeys are required; no optional field here
 # Exactly 4 spaces, matching REFERENCES_ITEM_INDENT's own convention -- one
 # level under spec.externalCitations' own 2-space key.
 EXTERNAL_CITATION_ITEM_INDENT = 4
@@ -555,7 +627,7 @@ BODY_MAX_LINES = 500
 # for when a reference file earns a table of contents, chosen as a round
 # threshold past which skimming a flat file gets slow.
 TOC_MIN_LINES = 100
-RESERVED_NAME_WORDS = ("anthropic", "claude")
+RESERVED_NAME_WORDS = ("anthropic", "claude")  # Anthropic's own reserved skill-name words
 
 # Invocation-control frontmatter. Both fields are Claude Code product
 # extensions the Agent Skills standard does not define; both are booleans
@@ -567,7 +639,7 @@ RESERVED_NAME_WORDS = ("anthropic", "claude")
 # differently-cased "Disable-Model-Invocation" is a different key the
 # runtime would not read either -- correctly invisible to this check.
 INVOCATION_TRUE_LITERALS = ("true", "yes", "on", "1")
-INVOCATION_FALSE_LITERALS = ("false", "no", "off", "0")
+INVOCATION_FALSE_LITERALS = ("false", "no", "off", "0")  # the false half of the same documented vocabulary above
 # disable-model-invocation defaults to false (Claude may auto-load);
 # user-invocable defaults to true (the skill shows in the / menu). The
 # defaults matter here because the pair only fails as a COMBINATION, so an
@@ -585,9 +657,9 @@ SIDECAR_RELATIVE_PATH = "metadata/gitapex.yaml"
 # Kubernetes-manifest-shaped envelope, borrowed as a convention only; the
 # version lets the schema grow without breaking older sidecars.
 EXPECTED_API_VERSION = "gitapex.io/v1alpha1"
-EXPECTED_KIND = "SkillMetadata"
-PORTABILITY_LEVELS = ("Portable", "Repository-scoped", "Mixed")
-CAPABILITY_ASSUMPTIONS = ("Broad", "Frontier", "Adaptive")
+EXPECTED_KIND = "SkillMetadata"  # the sidecar's fixed manifest kind, alongside EXPECTED_API_VERSION above
+PORTABILITY_LEVELS = ("Portable", "Repository-scoped", "Mixed")  # closed vocabulary for spec.portability
+CAPABILITY_ASSUMPTIONS = ("Broad", "Frontier", "Adaptive")  # closed vocabulary for spec.capabilityAssumption
 # A plain "- <value>" list item, indented 2 or more spaces -- real YAML
 # accepts a block sequence indented level with its mapping key (2 spaces,
 # same as spec.references' own key) or further indented (4 spaces, this
@@ -799,7 +871,7 @@ EXEC_REQ_TOOLS_LIST_ITEM_RE = re.compile(r"^[ ]{6,}-\s*(.*)$")
 # stated explicitly here per this issue's own disclosure requirement,
 # rather than silently claiming a generalization that was not attempted.
 EXEC_REQ_NETWORK_SUBKEYS = ("mode", "domains")
-EXEC_REQ_NETWORK_MODES = ("disabled", "allowlist", "unrestricted")
+EXEC_REQ_NETWORK_MODES = ("disabled", "allowlist", "unrestricted")  # closed vocabulary for network.mode
 
 TAG_RE = re.compile(r"</?[A-Za-z][^>]*>")
 # A YAML plain (unquoted) scalar cannot safely contain ": " (colon followed
@@ -815,7 +887,14 @@ UNSAFE_COMMENT_RE = re.compile(r"(?:^|\s)#")
 NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 # Accept either "Table of contents" or a bare "Contents" heading.
 TOC_RE = re.compile(r"^#+\s+(?:table of )?contents\b", re.IGNORECASE | re.MULTILINE)
-BLOCK_SCALAR_INDICATORS = (">", "|", ">-", "|-", ">+", "|+")
+BLOCK_SCALAR_INDICATORS = (
+    ">",
+    "|",
+    ">-",
+    "|-",
+    ">+",
+    "|+",
+)  # YAML block-scalar indicators (folded/literal, chomping variants)
 # Markdown inline link syntax: [text](target).
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 # Reference-style link definitions: [label]: target -- the destination a
@@ -854,7 +933,7 @@ SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.\-]*:")
 # skill vendored in from another repository that has no sidecar. Skills in
 # this repository declare portability in metadata/gitapex.yaml instead.
 PORTABILITY_RE = re.compile(r"\bportability\s*:", re.IGNORECASE)
-PORTABILITY_MAX_BODY_LINE = 6
+PORTABILITY_MAX_BODY_LINE = 6  # the fallback body marker must appear "near the top", not anywhere in the body
 PORTABLE_LEVEL_RE = re.compile(r"\bportable\b", re.IGNORECASE)
 NON_PORTABLE_LEVEL_RE = re.compile(r"\b(?:mixed|repository-scoped|repo-scoped)\b", re.IGNORECASE)
 # A GitHub issue/PR-number citation: an optional "owner/repo" prefix, then
@@ -4113,6 +4192,8 @@ def check_shape(target: Path) -> list[CheckResult]:
     results.extend(_illustrative_model_id_checks(skill_md, skill_dir, body))
     results.extend(_raw_placeholder_checks(skill_md, skill_dir, body))
     results.extend(_step_location_checks(skill_md, skill_dir, body))
+    results.extend(_no_voodoo_constant_checks(skill_md, skill_dir, body))
+    results.extend(_script_execution_intent_checks(skill_md, skill_dir, body))
     if _is_portable(body, sidecar_portability):
         declared_citation_paths = frozenset(
             c["path"] for c in external_citations_declared if isinstance(c.get("path"), str)
@@ -4802,6 +4883,318 @@ def _out_of_skill_scripts_checks(skill_md: Path, skill_dir: Path, body: list[str
             "portable-no-out-of-skill-scripts-citation",
             not offenders,
             "Portable content has no bare-prose 'scripts/...' path citation outside the skill's own directory",
+            "none" if not offenders else "found: " + ", ".join(offenders),
+        ),
+    ]
+
+
+# Conventional constant-naming heuristic (no-voodoo-constant, issue #1045
+# ACM item A): a bare-uppercase-leading identifier of only letters, digits,
+# and underscores. This is the scoping filter that keeps the check from
+# flagging an ordinary lowercase/mixed-case variable, or a regex-compiled
+# module "constant" like ``NAME_RE = re.compile(...)`` -- that RHS is a
+# Call, not a literal, and so is excluded by ``_is_simple_literal_node``
+# below regardless of the name matching this pattern.
+_ALL_CAPS_CONST_NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
+
+
+def _is_simple_literal_node(node: ast.expr) -> bool:
+    """Whether ``node`` (an assignment's RHS value) is a "simple literal"
+    for the no-voodoo-constant check: a bare ``ast.Constant``, an
+    ``ast.Tuple``/``ast.List``/``ast.Set`` whose every element is itself an
+    ``ast.Constant`` (covers e.g. this file's own
+    ``EXEC_REQ_NETWORK_MODES = ("disabled", "allowlist", "unrestricted")``-
+    shaped constants), or an ``ast.Dict`` whose every key and value is
+    itself an ``ast.Constant`` (a literal-keys-and-values config mapping is
+    exactly the "voodoo constant" shape this check exists to catch; a
+    ``None`` key -- the AST's own shape for a ``**spread`` entry -- fails
+    the ``ast.Constant`` check and so is correctly excluded). Deliberately
+    excludes any RHS containing a Call, a Name reference, or a nested
+    container -- those are outside this check's narrow "bare data literal
+    with no adjacent justification" scope.
+    """
+    if isinstance(node, ast.Constant):
+        return True
+    if isinstance(node, (ast.Tuple, ast.List, ast.Set)):
+        return all(isinstance(elt, ast.Constant) for elt in node.elts)
+    if isinstance(node, ast.Dict):
+        return all(isinstance(k, ast.Constant) for k in node.keys) and all(
+            isinstance(v, ast.Constant) for v in node.values
+        )
+    return False
+
+
+def _bundled_python_scripts(skill_dir: Path) -> list[Path]:
+    """Every non-test ``*.py`` file directly under the skill's own
+    ``scripts/`` directory, sorted for deterministic offender ordering.
+    Returns an empty list when ``scripts/`` does not exist -- the shared
+    "not declared (optional)" precondition both new bundled-script checks
+    use. ``test_*.py`` files are excluded: test fixture literals are not
+    "configuration" and would be enormous false-positive noise (e.g. this
+    very checker's own 6000+-line ``test_gitapex_check_skill_shape.py``).
+    """
+    scripts_dir = skill_dir / "scripts"
+    if not scripts_dir.is_dir():
+        return []
+    return [
+        p for p in sorted(scripts_dir.iterdir()) if p.is_file() and p.suffix == ".py" and not p.name.startswith("test_")
+    ]
+
+
+def _assignment_target_names(node: ast.stmt) -> tuple[list[str], ast.expr | None]:
+    """Return (bare-Name target names, RHS value) for a module-level
+    ``ast.Assign`` or ``ast.AnnAssign`` statement, uniformly -- an
+    ``ast.AnnAssign`` (``TIMEOUT: int = 30``) carries a single ``target``,
+    not a ``targets`` list, and its own ``value`` is ``None`` for a
+    bare annotation with no assignment (``TIMEOUT: int``, nothing to
+    scan). Any other statement type, or an ``ast.AnnAssign`` with no
+    value, returns ``([], None)``.
+
+    Each target is evaluated independently by the caller rather than
+    requiring every target in a chained assignment (``FOO = bar = 1``) to
+    match the ALL-CAPS heuristic together -- a tuple-unpacking, attribute,
+    or subscript target is simply excluded from the returned name list
+    (not a reason to discard the whole statement), since those are not
+    simple named constants either.
+    """
+    if isinstance(node, ast.Assign):
+        return [t.id for t in node.targets if isinstance(t, ast.Name)], node.value
+    if isinstance(node, ast.AnnAssign) and node.value is not None and isinstance(node.target, ast.Name):
+        return [node.target.id], node.value
+    return [], None
+
+
+def _comment_line_numbers(source: str) -> set[int]:
+    """Physical (1-indexed) line numbers carrying a real ``COMMENT`` token,
+    per Python's own tokenizer -- correctly distinguishes an actual
+    comment from a ``#`` character living inside a string literal (the
+    tokenizer never emits a ``COMMENT`` token for one), unlike a naive
+    ``"#" in line`` text scan. Returns an empty set on any tokenizer error
+    -- callers already treat a file that fails ``ast.parse`` as
+    contributing zero offenders, so a source that also fails to tokenize
+    (unlikely once it has already parsed, but not impossible for exotic
+    encodings) degrades to "no comments found" rather than raising.
+    """
+    comment_lines: set[int] = set()
+    try:
+        for tok in tokenize.generate_tokens(StringIO(source).readline):
+            if tok.type == tokenize.COMMENT:
+                comment_lines.add(tok.start[0])
+    except (tokenize.TokenError, IndentationError, SyntaxError, UnicodeDecodeError):
+        return set()
+    return comment_lines
+
+
+def _has_adjacent_comment(node: ast.stmt, lines: list[str], comment_lines: set[int]) -> bool:
+    """Whether ``node`` (an ``ast.Assign``/``ast.AnnAssign`` statement) has
+    an adjacent justifying comment: (a) a real ``COMMENT`` token (per
+    ``comment_lines``, tokenizer-derived -- never a ``#`` living inside a
+    string-literal RHS, e.g. ``PREFIX = "issue #"``) exists on ANY
+    physical line the statement itself spans (``node.lineno`` through
+    ``node.end_lineno`` inclusive) -- covers both a trailing comment on a
+    single-line assignment and a trailing comment on a multi-line
+    container literal's own opening line (e.g.
+    ``NAME = (  # explanation`` ... ``)``), which a strict
+    "only the very last line" check would miss; or (b) the nearest
+    non-blank source line above the statement's first line is itself a
+    comment-only line.
+    """
+    end_lineno = node.end_lineno or node.lineno
+    if any(lineno in comment_lines for lineno in range(node.lineno, end_lineno + 1)):
+        return True
+    prev_idx = node.lineno - 2
+    while prev_idx >= 0:
+        prev_line = lines[prev_idx].strip()
+        if not prev_line:
+            prev_idx -= 1
+            continue
+        return prev_line.startswith("#")
+    return False
+
+
+def _voodoo_constant_offenders(scripts: list[Path]) -> list[str]:
+    """Return ``scripts/FILE.py:LINE:NAME`` for each module-level,
+    ALL-CAPS-named, simple-literal assignment or annotated assignment in
+    ``scripts`` with no adjacent justifying comment -- see the module
+    docstring's no-voodoo-constant entry for the full rule and its
+    deliberate escape hatch (any adjacent comment, however short,
+    satisfies this check).
+
+    Only ``tree.body`` (module-level statements) is walked, never
+    recursed into a function or class body -- a constant assigned inside a
+    function is a local, not a "voodoo constant" in the configuration
+    sense this check targets. A file that fails to parse (``SyntaxError``)
+    contributes zero offenders -- a malformed script is a different
+    problem, not this check's (this repository's other gates, e.g. a
+    full pytest run, already catch it). A file that cannot even be read
+    as UTF-8 text (``UnicodeDecodeError``/``OSError``) is different:
+    unlike a syntax error, nothing else in this repository's own gates
+    is guaranteed to notice a bundled script that is simply unreadable,
+    so silently skipping it here would let the check pass vacuously for
+    a script nobody actually scanned -- reported as an offender instead,
+    matching this file's own ``skill-md-readable`` check's fail-loud
+    precedent for the same failure mode on ``SKILL.md`` itself.
+    """
+    offenders: list[str] = []
+    for script in scripts:
+        try:
+            source = script.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError) as exc:
+            offenders.append(f"scripts/{script.name}:0:unreadable ({type(exc).__name__})")
+            continue
+        try:
+            tree = ast.parse(source, filename=str(script))
+        except SyntaxError:
+            continue
+        lines = source.splitlines()
+        comment_lines = _comment_line_numbers(source)
+        relpath = f"scripts/{script.name}"
+        for node in tree.body:
+            names, value = _assignment_target_names(node)
+            if not names or value is None or not _is_simple_literal_node(value):
+                continue
+            if _has_adjacent_comment(node, lines, comment_lines):
+                continue
+            for name in names:
+                if _ALL_CAPS_CONST_NAME_RE.match(name):
+                    offenders.append(f"{relpath}:{node.lineno}:{name}")
+    return offenders
+
+
+def _no_voodoo_constant_checks(skill_md: Path, skill_dir: Path, body: list[str]) -> list[CheckResult]:
+    """The check_shape() entry point for _voodoo_constant_offenders,
+    issue #1045's Acceptance Criteria Map item A. Runs unconditionally, at
+    every portability level -- unlike the Portable-gated checks above, an
+    uncommented configuration constant is a defect regardless of a skill's
+    declared portability.
+    """
+    rule = "every bundled script's module-level ALL-CAPS constant assignment has an adjacent justifying comment (no voodoo constants)"
+    scripts = _bundled_python_scripts(skill_dir)
+    if not scripts:
+        return [CheckResult("no-voodoo-constant", True, rule, "not declared (optional)")]
+    offenders = sorted(_voodoo_constant_offenders(scripts))
+    return [
+        CheckResult(
+            "no-voodoo-constant",
+            not offenders,
+            rule,
+            "none" if not offenders else "found: " + ", ".join(offenders),
+        ),
+    ]
+
+
+def _bundled_scripts(skill_dir: Path) -> list[Path]:
+    """Every file (any extension) directly under the skill's own
+    ``scripts/`` directory, sorted for deterministic offender ordering --
+    the script-execution-intent-stated check's own scope, wider than
+    ``_bundled_python_scripts`` above since a referenced ``.sh`` script
+    counts too. Returns an empty list when ``scripts/`` does not exist.
+    """
+    scripts_dir = skill_dir / "scripts"
+    if not scripts_dir.is_dir():
+        return []
+    return [p for p in sorted(scripts_dir.iterdir()) if p.is_file()]
+
+
+def _markdown_paragraphs(source_text: str) -> list[str]:
+    """Blank-line-delimited paragraphs from ``source_text``, each with its
+    own internal hard-wrapped newlines joined to a single space -- the
+    same unit Markdown itself treats a hard-wrapped sentence as. A
+    citation and its qualifying execution-intent phrase can legitimately
+    fall on different physical source lines purely because of where a
+    line-wrap happens to land (this repository's own Markdown is
+    hard-wrapped around 80 columns); paragraph-level matching recognizes
+    them as adjacent regardless, where a strict same-physical-line match
+    would not.
+    """
+    paragraphs: list[str] = []
+    current: list[str] = []
+    for line in source_text.split("\n"):
+        if line.strip() == "":
+            if current:
+                paragraphs.append(" ".join(current))
+                current = []
+        else:
+            current.append(line)
+    if current:
+        paragraphs.append(" ".join(current))
+    return paragraphs
+
+
+def _script_execution_intent_offenders(
+    skill_md: Path, skill_dir: Path, body: list[str], scripts: list[Path]
+) -> list[str]:
+    """Return ``label:filename`` for each bundled script in ``scripts``
+    that IS mentioned somewhere in ``_citation_sources`` as an inline-code
+    span of its own exact filename (`` `filename` ``) but carries no such
+    mention whose own enclosing paragraph (``_markdown_paragraphs`` --
+    blank-line-delimited, hard-wrapped newlines joined) also states
+    explicit execution intent (``Run `filename` `` or
+    ``See `filename` ... for ...``) -- see the module docstring's
+    script-execution-intent-stated entry for the full rule.
+
+    A script never mentioned this way anywhere is skipped entirely, not an
+    offender -- an unlinked/unreferenced script is a separate
+    dimension-5 progressive-disclosure concern, out of scope for this
+    check. The result is deduplicated by filename -- a script mentioned in
+    multiple files with no qualifying phrase in any of them is reported
+    once, labelled by the first source it was found unqualified in.
+    """
+    sources = _citation_sources(skill_md, skill_dir, body)
+    offenders: list[str] = []
+    seen: set[str] = set()
+    for script in scripts:
+        filename = script.name
+        token = f"`{filename}`"
+        # Case-insensitive: "run"/"see" mid-sentence ("...also run `x.py`
+        # to...") is natural, grammatically-required lowercase prose, not
+        # a defect -- only the capitalized, sentence-initial imperative
+        # form the rubric's own illustrative example happens to use. Case
+        # carries no semantic distinction for "does this state execution
+        # intent," so gating on it would only pressure authors toward
+        # awkward, sentence-initial-only phrasing to satisfy the check.
+        run_re = re.compile(r"\bRun\s+`" + re.escape(filename) + r"`", re.IGNORECASE)
+        see_re = re.compile(r"\bSee\s+`" + re.escape(filename) + r"`[^\n]*\bfor\b", re.IGNORECASE)
+        mentioned = False
+        satisfied = False
+        first_offending_label: str | None = None
+        for label, source_text in sources:
+            if token not in source_text:
+                continue
+            for para in _markdown_paragraphs(source_text):
+                if token not in para:
+                    continue
+                mentioned = True
+                if run_re.search(para) or see_re.search(para):
+                    satisfied = True
+                    break
+                if first_offending_label is None:
+                    first_offending_label = label
+            if satisfied:
+                break
+        if mentioned and not satisfied and filename not in seen:
+            offenders.append(f"{first_offending_label}:{filename}")
+            seen.add(filename)
+    return offenders
+
+
+def _script_execution_intent_checks(skill_md: Path, skill_dir: Path, body: list[str]) -> list[CheckResult]:
+    """The check_shape() entry point for _script_execution_intent_offenders,
+    issue #1045's Acceptance Criteria Map item A. Runs unconditionally, at
+    every portability level -- like _no_voodoo_constant_checks above, this
+    is about a skill's own bundled scripts, orthogonal to the portability
+    axis.
+    """
+    rule = "a bundled script referenced from SKILL.md/references/ states explicit execution intent ('Run `X`' or 'See `X` for ...')"
+    scripts = _bundled_scripts(skill_dir)
+    if not scripts:
+        return [CheckResult("script-execution-intent-stated", True, rule, "not declared (optional)")]
+    offenders = _script_execution_intent_offenders(skill_md, skill_dir, body, scripts)
+    return [
+        CheckResult(
+            "script-execution-intent-stated",
+            not offenders,
+            rule,
             "none" if not offenders else "found: " + ", ".join(offenders),
         ),
     ]

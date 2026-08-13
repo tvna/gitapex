@@ -222,7 +222,7 @@ SIDECAR_RELATIVE_PATH = "metadata/gitapex.yaml"
 # finding, never as silent "no drift."
 MIN_EXPECTED_SKILL_DIRS = 15
 
-NETWORK_CAPABLE_MODULES = (
+NETWORK_CAPABLE_MODULES = (  # modules whose import signals real network I/O capability
     # Bare "urllib" also matches pure-parsing submodules with no network
     # I/O of their own (urllib.parse) -- only the two network-capable
     # submodules are listed. Exact dotted-path membership (below), not a

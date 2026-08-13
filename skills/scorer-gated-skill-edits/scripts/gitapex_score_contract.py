@@ -99,7 +99,7 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
-CORRECTNESS_DECIMALS = 6
+CORRECTNESS_DECIMALS = 6  # rounding precision for the reported correctness score
 
 
 def _assertion_list(assertions: Mapping[str, Any], key: str) -> list[Any]:

@@ -63,7 +63,8 @@ pre-verified (Step 8 states the full rule; it is not repeated here).
    (what this issue explicitly does not cover), each only from stated
    or clearly implied scope, not invention.
 6. Validate the drafted body carries the ACM table before creating the
-   issue: `python3 scripts/gitapex_check_acm_present.py --body <draft-file>`
+   issue (Run `gitapex_check_acm_present.py`):
+   `python3 scripts/gitapex_check_acm_present.py --body <draft-file>`
    (or pipe the draft on stdin) rather than re-reasoning "does this have
    the table" in prose each run.
 7. Ask one focused question only when a stated criterion is genuinely
