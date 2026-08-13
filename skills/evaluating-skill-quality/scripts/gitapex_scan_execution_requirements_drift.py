@@ -87,17 +87,93 @@ deliberately-constructed example). find_tools_drift's own natural-
 language matching carries the same class of gap for the same reason
 prose has no parser.
 
-Language scope: find_network_drift only reads skill_dir/scripts/*.py --
-a bundled non-Python script (a .sh file, for instance; this repository's
-own skills/executing-a-branch-plan/scripts/check_task_bash_safety.sh is
-one real example) is invisible to it, network-capable shell commands
-(curl, wget, nc, ...) included. This matters beyond this one repository:
-evaluating-skill-quality itself travels as a portable skill (see its own
-spec.portability), so a consuming repository's own skills may bundle
-scripts in other languages this scanner was never taught to read. Not
-fixed here -- see test_non_python_bundled_scripts_are_not_scanned for a
-concrete, deliberately-constructed proof of the gap, not only this
-paragraph's claim.
+Language scope: find_network_drift's AST-based half only reads
+skill_dir/scripts/*.py. A bundled non-Python script (a .sh file, for
+instance; this repository's own
+skills/executing-a-branch-plan/scripts/check_task_bash_safety.sh is one
+real example) cannot be AST-parsed by this module at all, so it is
+covered by a second, best-effort text-pattern lane instead (see
+_NETWORK_COMMAND_PATTERN below) -- the same "irreducibly best-effort,
+kind: 'heuristic'" precedent find_tools_drift's own "-vs-skill-md" lane
+already established for prose that has no parser. That lane checks all
+three network.mode values, not just 'disabled': a network-capable
+command match flags under-declared usage in 'disabled' mode; a literal
+https?:// host found in the same text (via _URL_LITERAL_PATTERN, the
+same extraction the AST lane already applies to Python string-constant
+text) is checked against declared allowlist domains in 'allowlist' mode,
+tagged kind="heuristic" alongside the AST lane's own kind="deterministic"
+per-host findings; and either signal, or an undetermined
+unparseable/unreadable script (see below), suppresses 'unrestricted'
+mode's over-declaration warning. A bare command match with no
+extractable hostname (e.g. "ssh some-host") has nothing further to check
+under allowlist mode beyond its own command-pattern-vs-disabled-mode
+role (this matters beyond this one repository too: evaluating-skill-
+quality itself travels as a portable skill, per its own
+spec.portability, so a consuming repository's own skills may bundle
+scripts in other languages this scanner was never taught to read).
+
+This lane also mirrors several of the AST lane's own already-fixed
+correctness properties, each found live against this repository's own
+skills/ tree by adversarial review rounds rather than only reasoned
+about in the abstract:
+
+- A bundled non-Python file named "test_*" is excluded, the same
+  pytest-discovery exclusion _bundled_script_trees already applies to
+  *.py (a bundled non-Python test/fixture script's own network calls are
+  not the skill's real shipped capability, no more than a Python test
+  file's are).
+- Only a file that looks like a bundled script -- a known script
+  extension or a leading shebang line, see _looks_like_bundled_script --
+  is read at all. An earlier version of this lane read every non-.py
+  file under scripts/ unconditionally, so a bundled non-script asset (an
+  image, a JSON/YAML fixture) that happened not to decode as UTF-8 text
+  was misread as an unreadable "script" and flagged as undetermined
+  network-capable usage even though it was never a script in the first
+  place.
+- A recognized script that cannot be read as UTF-8 text is surfaced as
+  its own "non-python-script-unreadable" finding rather than silently
+  scored clean, the same "undetermined, not clean" treatment
+  network-script-unparseable already gives an unparseable .py file --
+  and, symmetrically, that same undetermined state (like an unparseable
+  .py file) suppresses 'unrestricted' mode's over-declaration warning
+  rather than letting the two findings contradict each other in the same
+  scan.
+- A whole-line comment ('#'-prefixed) is stripped before matching, the
+  one mechanical guarantee this text-only lane can give that a comment
+  can never register as usage -- found live against
+  check_task_bash_safety.sh's own comment mentioning "curl"/"wget" while
+  documenting the exact fetch-and-execute pattern it exists to block.
+
+What this lane does NOT close, and does not try to: a command name (or
+URL) quoted as text inside an unrelated string/regex literal on a real
+code line (check_task_bash_safety.sh's own fetch_exec_re variable
+legitimately quotes "curl|wget" as detection text, not as an invocation,
+and still matches) -- the same class of imprecision this module's own
+SKILL.md prose heuristic already carries unmitigated for negated/quoted/
+example text, and the same class the AST lane itself already accepts for
+a non-docstring Python string constant containing pattern text (see
+_tree_referenced_hosts, which excludes only docstrings). Disclosed as a
+residual limitation rather than chased with a full shell/string-literal
+parser disproportionate to a "best-effort" tier check. A host built at
+runtime via shell variable/command substitution rather than appearing as
+a literal string is the same class of false negative
+test_dynamically_constructed_host_evades_allowlist_check already proves
+for the AST lane.
+
+See test_non_python_bundled_scripts_get_heuristic_network_scan and
+test_non_python_allowlist_mode_flags_out_of_list_host for concrete,
+deliberately-constructed proofs this lane catches real network-capable
+shell content under 'disabled' and 'allowlist' modes respectively;
+test_benign_non_python_bundled_script_produces_no_finding,
+test_non_python_test_file_is_excluded_from_network_scan,
+test_non_script_asset_under_scripts_dir_produces_no_finding, and
+test_non_python_comment_only_network_mention_produces_no_finding for
+negative-case proofs; test_unreadable_non_python_script_is_undetermined_
+not_clean and test_unreadable_script_suppresses_unrestricted_over_
+declared_warning for the fail-closed-on-unreadable proofs; and
+test_non_python_quoted_network_command_text_still_produces_finding for
+the disclosed residual limitation, proven concretely rather than only
+asserted here.
 
 Not registered in .gitapex/ssot.json, matching gitapex_check_skill_shape.py's
 own un-registered status: a per-skill checker invoked deliberately against
@@ -177,6 +253,88 @@ NETWORK_CAPABLE_MODULES = (
 # hand-rolled character class that could suffer the identical bug for a
 # different character.
 _URL_LITERAL_PATTERN = re.compile(r"https?://[^\s\"'<>)]+")
+# Command-name match only, analogous in spirit to _SHELL_INTENT_PATTERN/
+# _WRITE_INTENT_PATTERN's own SKILL.md prose matching: a non-Python bundled
+# script has no AST this module can parse, so a network-capable command
+# invocation is the only tractable signal, not a formal proof of network
+# I/O (a script could reference one of these names in a comment, or an
+# aliased/indirected call could evade this pattern entirely -- the same
+# disclosed evasion class as the existing prose heuristic, see module
+# docstring's own Language scope note).
+_NETWORK_COMMAND_PATTERN = re.compile(
+    r"\b(?:curl|wget|nc|ncat|netcat|ssh|scp|sftp|ftp|telnet)\b",
+    re.IGNORECASE,
+)
+# Known non-Python script-file extensions -- one of the two signals
+# (alongside a leading shebang, checked separately) deciding whether a
+# scripts/ file is a bundled script this new lane should read at all, as
+# opposed to a non-script asset (a bundled image, JSON/YAML fixture, or
+# other binary/data file) that happens to sit in the same directory. Found
+# live: without either signal, a plain PNG under scripts/ (no shebang, no
+# script extension) was misread as an unreadable "script" and flagged as
+# undetermined network-capable usage, even though it is not a script at
+# all. Extension-based, not exhaustive -- a real script in an unlisted
+# language with no shebang line would still be missed (the same disclosed
+# language-scope gap as everywhere else in this heuristic lane).
+_SCRIPT_EXTENSIONS = frozenset(
+    {".sh", ".bash", ".zsh", ".ksh", ".fish", ".ps1", ".bat", ".cmd", ".rb", ".pl", ".php", ".js", ".mjs", ".ts"}
+)
+_SHEBANG_PREFIX = b"#!"
+# Strips a whole line whose first non-whitespace content is a comment
+# marker, before _NETWORK_COMMAND_PATTERN runs -- the one mechanical
+# guarantee this text-only lane can give that a comment can never register
+# as usage, the same guarantee the AST lane gets structurally for free (a
+# real parse tree has no comment nodes at all; see module docstring). Found
+# live: this repository's own
+# skills/executing-a-branch-plan/scripts/check_task_bash_safety.sh mentions
+# "curl"/"wget" only in a comment documenting the exact fetch-and-execute
+# pattern it exists to block, and used to be misreported as real network
+# usage before this exclusion. Three patterns, not one, because
+# _SCRIPT_EXTENSIONS spans languages with different whole-line comment
+# syntax: '#' covers shell/Ruby/Perl/PowerShell (and any shebang-detected
+# script with no recognized extension); '//' additionally covers
+# JavaScript/TypeScript/PHP (found live by an adversarial review: a
+# "// curl ..." line in a bundled .js script was NOT excluded by the '#'
+# pattern alone and still produced a false finding); 'REM'/'::' cover
+# Windows batch (.bat/.cmd). Applied per-file by _strip_line_comments based
+# on the file's own suffix, not unconditionally, since a language whose
+# comment marker also has a real-code meaning elsewhere (':' in shell,
+# for instance) must not have every such line stripped. Does NOT exclude a
+# trailing end-of-line comment, nor a command name quoted as text inside an
+# unrelated string/regex literal (check_task_bash_safety.sh's own
+# fetch_exec_re variable legitimately quotes "curl|wget" as detection
+# text, not as an invocation, and still matches after this exclusion) --
+# an accepted residual limitation, the same class of imprecision this
+# module's own SKILL.md prose heuristic
+# (_SHELL_INTENT_PATTERN/_WRITE_INTENT_PATTERN) already carries unmitigated
+# for negated/quoted/example text. See
+# test_non_python_comment_only_network_mention_produces_no_finding,
+# test_non_python_slash_comment_only_network_mention_produces_no_finding,
+# and test_non_python_quoted_network_command_text_still_produces_finding
+# for these proven concretely, not only asserted here.
+_HASH_COMMENT_LINE_PATTERN = re.compile(r"^[ \t]*#.*$", re.MULTILINE)
+_SLASH_COMMENT_LINE_PATTERN = re.compile(r"^[ \t]*//.*$", re.MULTILINE)
+_BATCH_COMMENT_LINE_PATTERN = re.compile(r"^[ \t]*(?:REM\b.*|::.*)$", re.MULTILINE | re.IGNORECASE)
+# Extensions whose whole-line comment syntax is '//' (also accepting '#',
+# since PHP supports both) rather than '#' alone.
+_SLASH_COMMENT_EXTENSIONS = frozenset({".js", ".mjs", ".ts", ".php"})
+_BATCH_COMMENT_EXTENSIONS = frozenset({".bat", ".cmd"})
+
+
+def _strip_line_comments(text: str, suffix: str) -> str:
+    """Strip whole-line comments from ``text`` using the comment syntax
+    appropriate to ``suffix`` (see _HASH_COMMENT_LINE_PATTERN's own
+    comment for why this is suffix-aware rather than one pattern applied
+    unconditionally to every non-Python script). A shebang-detected script
+    with an unrecognized or absent suffix falls back to '#', the
+    convention the large majority of Unix scripting languages this lane
+    targets share."""
+    suffix = suffix.lower()
+    if suffix in _BATCH_COMMENT_EXTENSIONS:
+        return _BATCH_COMMENT_LINE_PATTERN.sub("", text)
+    if suffix in _SLASH_COMMENT_EXTENSIONS:
+        return _SLASH_COMMENT_LINE_PATTERN.sub("", _HASH_COMMENT_LINE_PATTERN.sub("", text))
+    return _HASH_COMMENT_LINE_PATTERN.sub("", text)
 
 
 def _dotted_name_matches(dotted_name: str, target_modules: tuple[str, ...]) -> bool:
@@ -577,6 +735,70 @@ def _bundled_script_trees(skill_dir: pathlib.Path) -> tuple[list[ast.AST], list[
     return trees, unparseable
 
 
+def _looks_like_bundled_script(path: pathlib.Path) -> bool:
+    """Whether ``path`` looks like a non-Python bundled script this lane
+    should read at all, as opposed to a non-script asset (a bundled image,
+    JSON/YAML fixture, or other binary/data file) sitting in the same
+    scripts/ directory -- decided by a known script extension
+    (_SCRIPT_EXTENSIONS) or a leading shebang line, checked on raw bytes
+    so a non-UTF-8 file can still be recognized as a script (and thus
+    correctly reported as unreadable-and-undetermined, not silently
+    skipped) purely from its first two bytes, without needing a successful
+    text decode first."""
+    if path.suffix.lower() in _SCRIPT_EXTENSIONS:
+        return True
+    try:
+        with path.open("rb") as handle:
+            return handle.read(len(_SHEBANG_PREFIX)) == _SHEBANG_PREFIX
+    except OSError:
+        return False
+
+
+def _bundled_non_python_script_texts(skill_dir: pathlib.Path) -> tuple[dict[str, str], list[str]]:
+    """Every non-``.py`` file directly under skill_dir/scripts/ that looks
+    like a bundled script (see _looks_like_bundled_script) and is not the
+    skill's own test suite ("test_" prefix, same pytest-discovery
+    convention and exclusion _bundled_script_trees already applies to
+    *.py -- a bundled non-Python test/fixture script's own network calls
+    against a mock or local test endpoint are exactly as much "not the
+    skill's real shipped capability" as a Python test file's are; found
+    live for the .py case against this repository's own
+    skills/setup-gitapex-toolchain and skills/drafting-an-adr, and nothing
+    about a different file extension makes that risk go away).
+
+    Returns (name -> text, unreadable_names): a recognized script that
+    cannot be read as UTF-8 text is excluded from the text dict and its
+    name collected separately, rather than silently contributing zero
+    pattern matches -- the same "an inability to verify is a deny, not an
+    assume-clean" rule _bundled_script_trees's own docstring states for
+    the parallel .py case. A prior version of this helper routed reads
+    through _read_text_best_effort, which folds an unreadable file into
+    "" -- _NETWORK_COMMAND_PATTERN.search("") never matches, so a
+    genuinely network-capable but unreadable/non-UTF-8 script was scored
+    clean exactly like an empty or absent one, the same assume-clean
+    outcome this function's own docstring refuses to produce; a version
+    after that read every non-.py file unconditionally, which instead
+    flagged ordinary non-script assets (a bundled PNG, for instance) as
+    an undetermined "script" -- both found by independent adversarial
+    review rounds; _looks_like_bundled_script's own extension-or-shebang
+    gate is what keeps this version from repeating either mistake."""
+    scripts_dir = skill_dir / "scripts"
+    if not scripts_dir.is_dir():
+        return {}, []
+    texts: dict[str, str] = {}
+    unreadable: list[str] = []
+    for path in sorted(scripts_dir.iterdir()):
+        if not path.is_file() or path.suffix == ".py" or path.name.startswith("test_"):
+            continue
+        if not _looks_like_bundled_script(path):
+            continue
+        try:
+            texts[path.name] = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            unreadable.append(path.name)
+    return texts, unreadable
+
+
 def find_network_drift(
     network: Any,
     skill_dir: pathlib.Path,
@@ -585,7 +807,12 @@ def find_network_drift(
     """network-mode-vs-script-content: declared executionRequirements.network
     vs. network-capable imports/literal https?:// hosts found in
     skill_dir/scripts/*.py, via AST parsing (deterministic -- see module
-    docstring's own Language scope / Determinism note).
+    docstring's own Language scope / Determinism note); plus a second,
+    best-effort text-pattern check (kind="heuristic") for network-capable
+    command usage in every non-``.py`` file under skill_dir/scripts/, which
+    the AST-based check above cannot read at all (see module docstring's
+    own Language scope note for what this second check does and does not
+    cover).
 
     ``_scripts``, if given, is a pre-computed ``_bundled_script_trees(skill_dir)``
     result -- an internal parameter, not part of this function's stable
@@ -612,6 +839,25 @@ def find_network_drift(
     for tree in trees:
         referenced_hosts.update(_tree_referenced_hosts(tree))
 
+    non_python_scripts, non_python_unreadable = _bundled_non_python_script_texts(skill_dir)
+    non_python_texts_sans_comments = {
+        name: _strip_line_comments(text, pathlib.Path(name).suffix) for name, text in non_python_scripts.items()
+    }
+    non_python_network_command_hits = sorted(
+        name for name, text in non_python_texts_sans_comments.items() if _NETWORK_COMMAND_PATTERN.search(text)
+    )
+    non_python_hosts: set[str] = set()
+    for text in non_python_texts_sans_comments.values():
+        for literal in _URL_LITERAL_PATTERN.findall(text):
+            hostname = urllib.parse.urlsplit(literal).hostname
+            if hostname:
+                non_python_hosts.add(hostname.lower())
+    # An unreadable/unparseable script's real content is genuinely unknown
+    # (see the two findings built from unparseable/non_python_unreadable
+    # below) -- undetermined is not the same claim as "verified clean", so
+    # neither over-declaration suppression below may treat it as clean.
+    content_fully_undetermined = bool(unparseable or non_python_unreadable)
+
     findings: list[Finding] = [
         Finding(
             "error",
@@ -622,6 +868,17 @@ def find_network_drift(
             "clean",
         )
         for name in unparseable
+    ] + [
+        Finding(
+            "error",
+            "deterministic",
+            f"non-python-script-unreadable: scripts/{name} is not a Python "
+            "script this scanner can AST-parse, and could not even be read "
+            "as UTF-8 text for the best-effort heuristic network-command "
+            "scan -- could not be analyzed for network-capable usage, "
+            "treated as undetermined rather than clean",
+        )
+        for name in non_python_unreadable
     ]
     if mode == "disabled" and (has_network_import or referenced_hosts):
         findings.append(
@@ -645,7 +902,27 @@ def find_network_drift(
                     f"{sorted(declared_domains)}",
                 )
             )
-    elif mode == "unrestricted" and not has_network_import and not referenced_hosts:
+        for host in sorted(non_python_hosts - declared_domains):
+            findings.append(
+                Finding(
+                    "error",
+                    "heuristic",
+                    "network-mode-vs-non-python-script-content: bundled "
+                    f"non-Python scripts reference host {host!r} not present "
+                    f"in declared allowlist domains {sorted(declared_domains)} "
+                    "-- flagged as a best-effort heuristic match (a literal "
+                    "https?:// string found in a non-Python bundled script's "
+                    "own text), not a formal proof",
+                )
+            )
+    elif (
+        mode == "unrestricted"
+        and not has_network_import
+        and not referenced_hosts
+        and not non_python_network_command_hits
+        and not non_python_hosts
+        and not content_fully_undetermined
+    ):
         findings.append(
             Finding(
                 "warning",
@@ -654,6 +931,28 @@ def find_network_drift(
                 "'unrestricted' but no bundled script shows network-capable "
                 "usage (over-declared)",
             )
+        )
+    # Heuristic, non-Python lane: command-pattern findings are only raised
+    # for "disabled" -- allowlist's own per-host check above and
+    # unrestricted's over-declaration suppression already account for
+    # non_python_network_command_hits/non_python_hosts directly, and a bare
+    # command match with no extractable hostname (e.g. "ssh some-host") has
+    # nothing further to check under allowlist mode once its own host-based
+    # check above has run.
+    if mode == "disabled":
+        findings.extend(
+            Finding(
+                "error",
+                "heuristic",
+                f"network-command-in-non-python-script: scripts/{name} is not "
+                "a Python script this scanner can AST-parse, but its text "
+                "contains a network-capable command pattern "
+                "(curl/wget/nc/ncat/netcat/ssh/scp/sftp/ftp/telnet) while "
+                f"declared network.mode is {mode_value!r} (absent or "
+                "unrecognized values are treated as 'disabled') -- flagged "
+                "as a best-effort heuristic match, not a formal proof",
+            )
+            for name in non_python_network_command_hits
         )
     return findings
 
