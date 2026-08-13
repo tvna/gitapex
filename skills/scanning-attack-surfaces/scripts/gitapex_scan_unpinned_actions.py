@@ -40,7 +40,7 @@ FULL_SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 # Local actions ("./path/to/action") and Docker actions ("docker://image:tag")
 # are not third-party version references -- excluded, not flagged.
 NON_THIRD_PARTY_PREFIXES = ("./", "docker://")
-QUOTE_CHARS = ("'", '"')
+QUOTE_CHARS = ("'", '"')  # the two quote characters YAML allows around a scalar value
 
 
 def _strip_matching_quotes(action: str, ref: str) -> tuple[str, str]:

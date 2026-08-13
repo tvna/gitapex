@@ -33,6 +33,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+# The four Class B toolchain binaries this module provisions -- see the
+# module docstring's own list, kept in sync with flake.nix's inventory.
 CLASS_B_TOOL_NAMES: tuple[str, ...] = ("waza", "apm", "rtk", "betterleaks")
 
 _NIX_SYSTEMS: tuple[str, ...] = (

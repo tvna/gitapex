@@ -226,8 +226,7 @@ just measures the wrong thing.
   rubric's own casing exactly (the rule above) is what keeps a fixture's
   verdict identical under both scorers -- there is no separate
   case-insensitive convention to opt into for these two keys (that's what
-  `output_icontains`/`output_not_icontains` are for, see
-  `scripts/gitapex_score_contract.py`'s module docstring).
+  `output_icontains`/`output_not_icontains` are for; see `gitapex_score_contract.py` for the module docstring).
 
 ## Output
 

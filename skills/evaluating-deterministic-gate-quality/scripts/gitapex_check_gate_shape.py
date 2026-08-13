@@ -163,10 +163,11 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+# The closed vocabulary a per-dimension verdict string is checked against.
 VERDICT_PASSED = "pass"
-VERDICT_FAILED = "fail"
-VERDICT_NOT_APPLICABLE = "not_applicable"
-VERDICT_INDETERMINATE = "indeterminate"
+VERDICT_FAILED = "fail"  # the failing half of the pass/fail pair above
+VERDICT_NOT_APPLICABLE = "not_applicable"  # the dimension does not apply to this gate
+VERDICT_INDETERMINATE = "indeterminate"  # evidence was insufficient to reach pass/fail
 
 
 @dataclass(frozen=True)

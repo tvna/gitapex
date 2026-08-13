@@ -279,6 +279,17 @@ own vendoring/install process, not this skill's own output, matching
 `drafting-an-acm-issue/SKILL.md`'s own identical note for its bundled
 script.
 
+Each of these bundled scripts can also be run directly, independent of
+the pipeline step that normally invokes it: run `check_task_bash_safety.sh`
+to inspect the PreToolUse hook backing Decision 17's task-agent Bash
+exclusion list in isolation; run `gitapex_check_file_ownership_conflicts.py`
+to mechanize step 3's own file-ownership pre-filter on its own; and run
+`gitapex_check_canonical_governance_paths.py` to mechanize step 2/6's own
+literal/canonical governance-path pre-filter on its own. Both checkers
+call the same shared normalization helper before comparing paths as
+strings -- see `_gitapex_path_normalize.py` for the normalization logic
+itself.
+
 Capability assumption: **Adaptive**. Was declared `Frontier` by review
 oversight, with no `model:`/`effort:` pin anywhere to justify targeting
 only a strong-reasoning tier -- corrected here, not merely relabeled: an

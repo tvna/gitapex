@@ -146,6 +146,21 @@ def test_well_formed_skill_kitchen_sink_covers_every_known_check_name(tmp_path):
     d = _write_skill(
         tmp_path, name="kitchen-sink-skill", portability="Portable", references={"notes.md": "Some reference notes.\n"}
     )
+    # Append (not replace) a sentence citing a compliant bundled script, so
+    # no-voodoo-constant and script-execution-intent-stated (issue #1045
+    # ACM item A) are genuinely exercised through their real PASS logic --
+    # not the vacuous empty-scripts-dir "not declared (optional)" branch --
+    # the same "exercised by the real check, not only its own narrow unit
+    # test" bar this test's own docstring already holds every other check
+    # to. The existing filler body content is left intact.
+    skill_md_path = d / "SKILL.md"
+    skill_md_path.write_text(
+        skill_md_path.read_text(encoding="utf-8") + "Run `checker.py` to verify.\n", encoding="utf-8"
+    )
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text(
+        "TIMEOUT_SECONDS = 30  # generous margin for slow CI runners\n", encoding="utf-8"
+    )
     (d / "metadata/gitapex.yaml").write_text(
         "apiVersion: gitapex.io/v1alpha1\n"
         "kind: SkillMetadata\n"
@@ -184,6 +199,10 @@ def test_well_formed_skill_kitchen_sink_covers_every_known_check_name(tmp_path):
         "fixture -- either the fixture needs updating to trigger the new "
         "check's precondition, or the check is unreachable dead code."
     )
+    assert by["no-voodoo-constant"].passed is True
+    assert by["no-voodoo-constant"].evidence == "none"
+    assert by["script-execution-intent-stated"].passed is True
+    assert by["script-execution-intent-stated"].evidence == "none"
 
 
 def test_accepts_skill_md_path_directly(tmp_path):
@@ -6168,3 +6187,280 @@ def test_invocation_mode_quoted_value_accepted(tmp_path):
 def test_invocation_mode_failure_fails_the_cli(tmp_path):
     d = _invocation_skill(tmp_path, "disable-model-invocation: true", "user-invocable: false")
     assert css.main([str(d)]) != 0
+
+
+# ---- Bundled-script comment/citation checks (issue #1045's Acceptance
+# ---- Criteria Map item A: no-voodoo-constant, script-execution-intent-
+# ---- stated) ----
+#
+# Both run unconditionally, at every portability level -- they are about a
+# skill's own bundled scripts under scripts/, orthogonal to the portability
+# axis every Portable-gated check above is scoped to.
+
+
+def test_bundled_script_checks_not_declared_when_no_scripts_dir(tmp_path):
+    d = _write_raw(tmp_path, _simple_body("No scripts here."))
+    results = _by_name(css.check_shape(d))
+    assert results["no-voodoo-constant"].passed is True
+    assert results["no-voodoo-constant"].evidence == "not declared (optional)"
+    assert results["script-execution-intent-stated"].passed is True
+    assert results["script-execution-intent-stated"].evidence == "not declared (optional)"
+
+
+def test_voodoo_constant_with_trailing_comment_passes(tmp_path):
+    d = _write_raw(tmp_path, _simple_body("Run `checker.py` to verify."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text(
+        "TIMEOUT_SECONDS = 30  # generous margin for slow CI runners\n", encoding="utf-8"
+    )
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is True
+    assert result.evidence == "none"
+
+
+def test_voodoo_constant_with_comment_above_passes(tmp_path):
+    # The other half of the "adjacent" definition: a comment-only line
+    # immediately above the assignment, not just a trailing inline one.
+    d = _write_raw(tmp_path, _simple_body("Run `checker.py` to verify."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text(
+        "# Generous margin for slow CI runners.\nTIMEOUT_SECONDS = 30\n", encoding="utf-8"
+    )
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is True
+    assert result.evidence == "none"
+
+
+def test_voodoo_constant_without_comment_fails(tmp_path):
+    d = _write_raw(tmp_path, _simple_body("Run `checker.py` to verify."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text("TIMEOUT_SECONDS = 30\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is False
+    assert "scripts/checker.py:1:TIMEOUT_SECONDS" in result.evidence
+
+
+def test_voodoo_constant_test_file_excluded(tmp_path):
+    # test_*.py fixture files are not "configuration" -- excluded by name,
+    # regardless of how many uncommented ALL-CAPS literals they contain.
+    d = _write_raw(tmp_path, _simple_body("No prose reference needed."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "test_checker.py").write_text("TIMEOUT_SECONDS = 30\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is True
+    assert result.evidence == "not declared (optional)"
+
+
+def test_voodoo_constant_lowercase_variable_not_flagged(tmp_path):
+    # The ALL-CAPS naming heuristic is the scoping filter -- an ordinary
+    # lowercase/mixed-case module variable is never a "voodoo constant" in
+    # the sense this check targets.
+    d = _write_raw(tmp_path, _simple_body("No prose reference needed."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text("timeout_seconds = 30\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is True
+    assert result.evidence == "none"
+
+
+def test_voodoo_constant_function_level_not_flagged(tmp_path):
+    # Only module-level (tree.body) statements are walked -- a local
+    # inside a function body is not a "voodoo constant" in the
+    # configuration sense this check targets.
+    d = _write_raw(tmp_path, _simple_body("No prose reference needed."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text(
+        "def foo():\n    TIMEOUT_SECONDS = 30\n    return TIMEOUT_SECONDS\n", encoding="utf-8"
+    )
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is True
+    assert result.evidence == "none"
+
+
+def test_voodoo_constant_hash_inside_string_literal_still_flagged(tmp_path):
+    # Regression: a "#" living INSIDE a string-literal RHS is not a real
+    # comment and must not false-pass a naive "#" in line scan -- the
+    # check counts only real tokenize.COMMENT tokens on the lines the
+    # statement spans.
+    d = _write_raw(tmp_path, _simple_body("No prose reference needed."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text('PREFIX = "issue #"\n', encoding="utf-8")
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is False
+    assert "scripts/checker.py:1:PREFIX" in result.evidence
+
+
+def test_voodoo_constant_annotated_assignment_flagged(tmp_path):
+    # Regression: ast.AnnAssign (TIMEOUT: int = 30) is a different node
+    # type from ast.Assign and must not be silently invisible to the scan.
+    d = _write_raw(tmp_path, _simple_body("No prose reference needed."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text("TIMEOUT: int = 30\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is False
+    assert "scripts/checker.py:1:TIMEOUT" in result.evidence
+
+
+def test_voodoo_constant_annotated_assignment_with_comment_passes(tmp_path):
+    d = _write_raw(tmp_path, _simple_body("No prose reference needed."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text("TIMEOUT: int = 30  # seconds\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is True
+    assert result.evidence == "none"
+
+
+def test_voodoo_constant_bare_annotation_no_value_not_flagged(tmp_path):
+    # TIMEOUT: int (no "= value") has nothing to scan -- not a literal
+    # assignment at all.
+    d = _write_raw(tmp_path, _simple_body("No prose reference needed."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text("TIMEOUT: int\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is True
+    assert result.evidence == "none"
+
+
+def test_voodoo_constant_dict_literal_flagged(tmp_path):
+    # Regression: an ast.Dict of literal keys/values is exactly the
+    # "voodoo constant" config-data shape this check exists to catch.
+    d = _write_raw(tmp_path, _simple_body("No prose reference needed."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text('CONFIG = {"a": 1, "b": 2}\n', encoding="utf-8")
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is False
+    assert "scripts/checker.py:1:CONFIG" in result.evidence
+
+
+def test_voodoo_constant_dict_literal_with_comment_passes(tmp_path):
+    d = _write_raw(tmp_path, _simple_body("No prose reference needed."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text('CONFIG = {"a": 1, "b": 2}  # defaults\n', encoding="utf-8")
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is True
+    assert result.evidence == "none"
+
+
+def test_voodoo_constant_chained_assignment_evaluated_per_target(tmp_path):
+    # Regression: FOO = bar = 1 must not be silently skipped just because
+    # one of the two chained targets ("bar") is not ALL-CAPS -- FOO is
+    # still a genuine uncommented constant.
+    d = _write_raw(tmp_path, _simple_body("No prose reference needed."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text("FOO = bar = 1\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is False
+    assert "scripts/checker.py:1:FOO" in result.evidence
+    assert "bar" not in result.evidence
+
+
+def test_voodoo_constant_syntax_error_file_skipped(tmp_path):
+    # A script with a real syntax error contributes zero offenders --
+    # ast.parse's own SyntaxError is caught per file, not raised out of
+    # check_shape().
+    d = _write_raw(tmp_path, _simple_body("No prose reference needed."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text("def f(:\n    pass\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is True
+    assert result.evidence == "none"
+
+
+def test_voodoo_constant_unreadable_file_reported_not_skipped(tmp_path):
+    # A script that is not valid UTF-8 is reported as an offender, not
+    # silently skipped -- read_text's own UnicodeDecodeError is caught per
+    # file (never raised out of check_shape()), but unlike a syntax error
+    # it must not pass vacuously: nothing else in this repository's gates
+    # is guaranteed to notice an unreadable bundled script.
+    d = _write_raw(tmp_path, _simple_body("No prose reference needed."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_bytes(b"TIMEOUT_SECONDS = 30\n\xff\xfe")
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is False
+    assert "scripts/checker.py:0:unreadable (UnicodeDecodeError)" in result.evidence
+
+
+def test_script_execution_intent_lowercase_run_passes(tmp_path):
+    # Regression: mid-sentence lowercase "run" (grammatically required,
+    # not sentence-initial) must count the same as a capitalized one --
+    # case carries no semantic distinction for this check.
+    d = _write_raw(tmp_path, _simple_body("You should also run `checker.py` before merging."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text("# stub\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["script-execution-intent-stated"]
+    assert result.passed is True
+    assert result.evidence == "none"
+
+
+def test_script_execution_intent_shell_script_without_phrase_fails(tmp_path):
+    # The check's scope is any file extension under scripts/, not just
+    # .py -- a cited .sh script with no qualifying phrase is an offender
+    # too.
+    d = _write_raw(tmp_path, _simple_body("The `helper.sh` file exists."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "helper.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["script-execution-intent-stated"]
+    assert result.passed is False
+    assert "helper.sh" in result.evidence
+
+
+def test_voodoo_constant_comment_on_opening_line_of_multiline_literal_passes(tmp_path):
+    # Regression: a trailing comment on a multi-line container literal's
+    # own OPENING line -- the exact case that motivated scanning every
+    # line the statement spans, not only the last one -- must satisfy the
+    # check.
+    d = _write_raw(tmp_path, _simple_body("No prose reference needed."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text(
+        'MODES = (  # closed vocabulary\n    "a",\n    "b",\n)\n', encoding="utf-8"
+    )
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is True
+    assert result.evidence == "none"
+
+
+def test_comment_line_numbers_tokenize_error_returns_empty_set():
+    # Direct unit test of the tokenizer-error fallback: a genuinely
+    # unterminated multi-line construct raises tokenize.TokenError even
+    # independent of whether the source would also fail ast.parse: the
+    # function degrades to "no comments found" rather than raising.
+    assert css._comment_line_numbers("x = (1, 2") == set()
+
+
+def test_script_execution_intent_run_phrasing_passes(tmp_path):
+    d = _write_raw(tmp_path, _simple_body("Run `checker.py` to verify the shape."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text("# stub\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["script-execution-intent-stated"]
+    assert result.passed is True
+    assert result.evidence == "none"
+
+
+def test_script_execution_intent_see_for_phrasing_passes(tmp_path):
+    d = _write_raw(tmp_path, _simple_body("See `checker.py` for the full verification procedure."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text("# stub\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["script-execution-intent-stated"]
+    assert result.passed is True
+    assert result.evidence == "none"
+
+
+def test_script_execution_intent_missing_phrase_fails(tmp_path):
+    d = _write_raw(tmp_path, _simple_body("The `checker.py` script performs verification."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text("# stub\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["script-execution-intent-stated"]
+    assert result.passed is False
+    assert "checker.py" in result.evidence
+
+
+def test_script_execution_intent_unmentioned_script_not_flagged(tmp_path):
+    # A script never cited anywhere is out of scope for this check (a
+    # separate dimension-5 progressive-disclosure concern) -- it may still
+    # fail some other, unrelated check, but not this one.
+    d = _write_raw(tmp_path, _simple_body("Nothing about scripts here."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text("# stub\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["script-execution-intent-stated"]
+    assert result.passed is True
+    assert result.evidence == "none"
