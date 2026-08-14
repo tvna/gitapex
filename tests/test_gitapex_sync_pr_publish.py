@@ -944,3 +944,129 @@ def test_main_rejects_blank_title(monkeypatch: pytest.MonkeyPatch, capsys, tmp_p
     )
     assert rc == 1
     assert "Error:" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# Issue #1087: min_length=1 alone accepts a whitespace-only string. Each of
+# base/branch/title/commit_subject shares this file's generic "field:
+# message" rendering (see the ValidationError handler's own comment), so a
+# whitespace-only value renders self-describing and field-labeled, same
+# shape as their blank-value siblings above. body_file's own validator
+# raises a distinct, self-describing message (not the shared "must not be
+# blank" text) specifically so its own field-label-stripping special case
+# in the ValidationError handler can never collapse it into an
+# unattributable duplicate alongside another blank/whitespace-only field --
+# the exact defect class the tests above (test_main_blank_title_and_
+# body_file_both_labeled) already guard for the blank case.
+# ---------------------------------------------------------------------------
+
+
+def test_main_rejects_whitespace_only_base(monkeypatch: pytest.MonkeyPatch, capsys, tmp_path) -> None:
+    monkeypatch.setenv("GH_TOKEN", "tok")
+    monkeypatch.setenv("REPO", "o/r")
+    body_file = tmp_path / "body.md"
+    body_file.write_text("body")
+    rc = spp.main(
+        ["--base", " ", "--branch", "chore", "--title", "t", "--body-file", str(body_file), "--commit-subject", "s"]
+    )
+    assert rc == 1
+    assert capsys.readouterr().err == "Error: base: must not be blank\n"
+
+
+def test_main_rejects_whitespace_only_branch(monkeypatch: pytest.MonkeyPatch, capsys, tmp_path) -> None:
+    monkeypatch.setenv("GH_TOKEN", "tok")
+    monkeypatch.setenv("REPO", "o/r")
+    body_file = tmp_path / "body.md"
+    body_file.write_text("body")
+    rc = spp.main(
+        ["--base", "main", "--branch", "\t", "--title", "t", "--body-file", str(body_file), "--commit-subject", "s"]
+    )
+    assert rc == 1
+    assert capsys.readouterr().err == "Error: branch: must not be blank\n"
+
+
+def test_main_rejects_whitespace_only_title(monkeypatch: pytest.MonkeyPatch, capsys, tmp_path) -> None:
+    monkeypatch.setenv("GH_TOKEN", "tok")
+    monkeypatch.setenv("REPO", "o/r")
+    body_file = tmp_path / "body.md"
+    body_file.write_text("body")
+    rc = spp.main(
+        ["--base", "main", "--branch", "chore", "--title", "  ", "--body-file", str(body_file), "--commit-subject", "s"]
+    )
+    assert rc == 1
+    assert capsys.readouterr().err == "Error: title: must not be blank\n"
+
+
+def test_main_rejects_whitespace_only_commit_subject(monkeypatch: pytest.MonkeyPatch, capsys, tmp_path) -> None:
+    monkeypatch.setenv("GH_TOKEN", "tok")
+    monkeypatch.setenv("REPO", "o/r")
+    body_file = tmp_path / "body.md"
+    body_file.write_text("body")
+    rc = spp.main(
+        ["--base", "main", "--branch", "chore", "--title", "t", "--body-file", str(body_file), "--commit-subject", " "]
+    )
+    assert rc == 1
+    assert capsys.readouterr().err == "Error: commit_subject: must not be blank\n"
+
+
+def test_main_rejects_whitespace_only_body_file(monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    monkeypatch.setenv("GH_TOKEN", "tok")
+    monkeypatch.setenv("REPO", "o/r")
+    rc = spp.main(["--base", "main", "--branch", "chore", "--title", "t", "--body-file", " ", "--commit-subject", "s"])
+    assert rc == 1
+    # No "body_file: " prefix (matching this field's existing "not found"
+    # message shape), but the message itself names the field: distinct text
+    # from the other four fields' shared "must not be blank" so it can
+    # never read as an unattributable duplicate when combined with one of
+    # them (see test_main_whitespace_only_title_and_body_file_both_labeled
+    # below).
+    assert capsys.readouterr().err == "Error: body file path must not be blank\n"
+
+
+def test_main_whitespace_only_title_and_body_file_both_labeled(monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    """Defeats the collapse this file's ValidationError handler was
+    specifically hardened against for the blank case (see
+    test_main_blank_title_and_body_file_both_labeled): two fields failing
+    the same whitespace-only check in the same run must not collapse into
+    one unattributable, seemingly-duplicated line."""
+    monkeypatch.setenv("GH_TOKEN", "tok")
+    monkeypatch.setenv("REPO", "o/r")
+    rc = spp.main(["--base", "main", "--branch", "chore", "--title", " ", "--body-file", " ", "--commit-subject", "s"])
+    assert rc == 1
+    assert capsys.readouterr().err == "Error: title: must not be blank; body file path must not be blank\n"
+
+
+def test_main_keeps_padded_but_meaningful_values_unmutated(monkeypatch: pytest.MonkeyPatch, capsys, tmp_path) -> None:
+    """Issue #1087: validation must not silently trim -- a value with real
+    content plus surrounding whitespace reaches publish_files_pr() exactly
+    as typed."""
+    monkeypatch.setenv("GH_TOKEN", "tok")
+    monkeypatch.setenv("REPO", "o/r")
+    body_file = tmp_path / " body.md"
+    body_file.write_text("body")
+    received = {}
+
+    def fake_publish_files_pr(**kwargs: object) -> str:
+        received.update(kwargs)
+        return "up-to-date"
+
+    monkeypatch.setattr(spp, "publish_files_pr", fake_publish_files_pr)
+    rc = spp.main(
+        [
+            "--base",
+            " main ",
+            "--branch",
+            " chore ",
+            "--title",
+            " t ",
+            "--body-file",
+            str(body_file),
+            "--commit-subject",
+            " s ",
+        ]
+    )
+    assert rc == 0
+    assert received["base"] == " main "
+    assert received["branch"] == " chore "
+    assert received["title"] == " t "
+    assert received["commit_subject"] == " s "

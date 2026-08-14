@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import http.client
 import json
+import pathlib
 import subprocess
 import urllib.error
 import urllib.request
@@ -534,6 +535,114 @@ def test_main_rejects_blank_ssot_path(monkeypatch, capsys):
     exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", "--ssot-path", ""])
     assert exit_code == 1
     assert "invalid arguments" in capsys.readouterr().err
+
+
+def test_main_rejects_whitespace_only_owner(monkeypatch, capsys):
+    """Issue #1087: min_length=1 alone accepts a whitespace-only value;
+    the field must reject it the same as a truly blank one."""
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    exit_code = gate.main(["--owner", " ", "--repo", "gitapex"])
+    assert exit_code == 1
+    assert "error: invalid arguments: --owner (must not be blank)" in capsys.readouterr().err
+
+
+def test_main_rejects_whitespace_only_repo(monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    exit_code = gate.main(["--owner", "tvna", "--repo", "\t"])
+    assert exit_code == 1
+    assert "error: invalid arguments: --repo (must not be blank)" in capsys.readouterr().err
+
+
+def test_main_rejects_whitespace_only_ref(monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", "--ref", " "])
+    assert exit_code == 1
+    assert "error: invalid arguments: --ref (must not be blank)" in capsys.readouterr().err
+
+
+def test_main_rejects_whitespace_only_cwd(monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", "--cwd", " "])
+    assert exit_code == 1
+    assert "error: invalid arguments: --cwd (must not be blank)" in capsys.readouterr().err
+
+
+def test_main_rejects_whitespace_only_label(monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", "--label", "  "])
+    assert exit_code == 1
+    assert "error: invalid arguments: --label (must not be blank)" in capsys.readouterr().err
+
+
+def test_main_rejects_whitespace_only_ssot_path(monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", "--ssot-path", "\t"])
+    assert exit_code == 1
+    assert "error: invalid arguments: --ssot-path (must not be blank)" in capsys.readouterr().err
+
+
+def test_main_names_every_whitespace_only_flag_in_declaration_order(monkeypatch, capsys):
+    """Issue #1087: mirrors the pre-existing all-blank defeat test above --
+    all six whitespace-only flags are reported at once, in the model's own
+    field-declaration order."""
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    argv = ["--owner", " ", "--repo", " ", "--ref", " ", "--cwd", " ", "--label", " ", "--ssot-path", " "]
+    assert gate.main(argv) == 1
+    blank = "(must not be blank)"
+    assert (
+        f"error: invalid arguments: --owner {blank}, --repo {blank}, --ref {blank}, "
+        f"--cwd {blank}, --label {blank}, --ssot-path {blank}" in capsys.readouterr().err
+    )
+
+
+def test_main_keeps_padded_but_meaningful_values_unmutated(monkeypatch, capsys):
+    """Issue #1087: validation must not silently trim -- a value with real
+    content plus surrounding whitespace reaches every downstream call
+    exactly as typed."""
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    received = {}
+
+    def fake_list_labelled_issues(owner, repo, label, token):
+        received["owner"] = owner
+        received["repo"] = repo
+        received["label"] = label
+        return []
+
+    def fake_git_commit_messages(ref, cwd):
+        received["ref"] = ref
+        received["cwd"] = cwd
+        return []
+
+    def fake_load_gate_tracking_issues(path):
+        received["ssot_path_joined"] = path
+        return set()
+
+    monkeypatch.setattr(gate, "list_labelled_issues", fake_list_labelled_issues)
+    monkeypatch.setattr(gate, "git_commit_messages", fake_git_commit_messages)
+    monkeypatch.setattr(gate, "load_gate_tracking_issues", fake_load_gate_tracking_issues)
+    exit_code = gate.main(
+        [
+            "--owner",
+            " tvna ",
+            "--repo",
+            " gitapex ",
+            "--ref",
+            " HEAD ",
+            "--cwd",
+            " . ",
+            "--label",
+            " retrospective ",
+            "--ssot-path",
+            " .gitapex/ssot.json ",
+        ]
+    )
+    assert exit_code == 0
+    assert received["owner"] == " tvna "
+    assert received["repo"] == " gitapex "
+    assert received["label"] == " retrospective "
+    assert received["ref"] == " HEAD "
+    assert received["cwd"] == " . "
+    assert received["ssot_path_joined"] == str(pathlib.Path(" . ") / " .gitapex/ssot.json ")
 
 
 def test_main_renders_underscored_field_as_its_hyphenated_flag(monkeypatch, capsys):
