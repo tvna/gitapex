@@ -61,7 +61,8 @@ Layered validation, mirroring .gitapex/ssot.schema.json's own scanner
      detecting a cycle genuinely needs the WHOLE graph, so that detection
      step still runs once, after every skill has been read.
 
-Run standalone (exit 0 clean, 1 on drift or a read error) or via the pytest
+Run standalone (exit 0 clean, 1 on drift or a read error, 2 if a required
+dependency -- PyYAML -- is missing from the import path) or via the pytest
 gate in tests/test_gitapex_scan_skill_metadata_schema.py.
 """
 
@@ -72,7 +73,37 @@ import sys
 from typing import Any
 
 import _gitapex_schema_validation
-import yaml
+
+try:
+    import yaml
+except ModuleNotFoundError as error:
+    # why-not(#1089): mirrors gitapex_scan_execution_requirements_drift.py's
+    # own __name__-gated guard (issue #1076) verbatim in shape -- only
+    # convert to SystemExit when run as a script. A bare SystemExit raised
+    # while this module is merely *imported* (e.g. pytest collecting
+    # tests/test_gitapex_scan_skill_metadata_schema.py's own `import ... as
+    # scanner`) is not a plain Exception, so pytest's collection handler
+    # can't catch it cleanly -- issue #1076 live-verified this surfaces as
+    # INTERNALERROR (exit 3) instead of a clean collection error (exit 2),
+    # swallowing this guard's own message under a crash dump. The __name__
+    # check keeps every import path exactly as graceful as the pre-#1089
+    # unguarded `import yaml` was; only the documented CLI entry point
+    # (`python3 gitapex_scan_skill_metadata_schema.py`) gets the friendly
+    # message. error.name narrows further to "PyYAML itself is absent": a
+    # broken/partial install raises this same exception type with
+    # error.name == "yaml.<submodule>", not "yaml", and this guard's
+    # remediation ("uv sync --group dev") would not fix a corrupted
+    # install, so that case re-raises unmodified rather than being
+    # misdiagnosed.
+    if error.name != "yaml" or __name__ != "__main__":
+        raise
+    print(
+        f"error: {error}. This script requires PyYAML, which is not on "
+        "the import path -- install the dev dependency group first: "
+        "uv sync --group dev",
+        file=sys.stderr,
+    )
+    raise SystemExit(2) from error
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 SKILLS_DIR = REPO_ROOT / "skills"
