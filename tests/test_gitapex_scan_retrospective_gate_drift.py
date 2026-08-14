@@ -534,3 +534,26 @@ def test_main_rejects_blank_ssot_path(monkeypatch, capsys):
     exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", "--ssot-path", ""])
     assert exit_code == 1
     assert "invalid arguments" in capsys.readouterr().err
+
+
+def test_main_renders_underscored_field_as_its_hyphenated_flag(monkeypatch, capsys):
+    """Issue #822: `ssot_path` is the model's field name but `--ssot-path`
+    is the flag an operator actually typed, so the `ValidationError`
+    handler must report the hyphenated flag, never the raw field name and
+    never pydantic's own message text."""
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    assert gate.main(["--owner", "tvna", "--repo", "gitapex", "--ssot-path", ""]) == 1
+    stderr = capsys.readouterr().err
+    assert "error: invalid arguments: --ssot-path" in stderr
+    assert "ssot_path" not in stderr
+    assert "String should have at least 1 character" not in stderr
+
+
+def test_main_names_every_offending_flag_in_declaration_order(monkeypatch, capsys):
+    """Issue #822: all six blank flags are reported at once, in the model's
+    own field-declaration order -- matching what the hand-rolled
+    `_validate_cli_args` this replaces reported."""
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    argv = ["--owner", "", "--repo", "", "--ref", "", "--cwd", "", "--label", "", "--ssot-path", ""]
+    assert gate.main(argv) == 1
+    assert "error: invalid arguments: --owner, --repo, --ref, --cwd, --label, --ssot-path" in capsys.readouterr().err

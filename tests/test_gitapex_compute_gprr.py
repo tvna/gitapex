@@ -330,6 +330,21 @@ def test_main_rejects_blank_label(monkeypatch: pytest.MonkeyPatch, capsys: pytes
     assert "invalid arguments" in capsys.readouterr().err
 
 
+def test_main_names_offending_flags_and_leaks_no_pydantic_text(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Issue #822: the `ValidationError` handler renders the model's own
+    failing field names as this CLI's flag names, in field-declaration
+    order, and never echoes pydantic's raw message text (which is not part
+    of this CLI's contract, so a pydantic version bump must not change what
+    an operator reads) nor the rejected value itself."""
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    assert gprr.main(["--owner", "", "--repo", "", "--label", ""]) == 1
+    stderr = capsys.readouterr().err
+    assert "error: invalid arguments: --owner, --repo, --label" in stderr
+    assert "String should have at least 1 character" not in stderr
+
+
 def test_main_exits_one_on_issue_fetch_github_api_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
 

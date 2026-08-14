@@ -264,3 +264,15 @@ def test_main_rejects_blank_base_path(capsys):
     )
     assert exit_code == 1
     assert "invalid arguments" in capsys.readouterr().err
+
+
+def test_main_renders_underscored_fields_as_their_hyphenated_flags(capsys):
+    """Issue #822: `base_rev`/`base_path` are the model's field names but
+    `--base-rev`/`--base-path` are the flags an operator actually typed, so
+    the `ValidationError` handler must report the hyphenated flags, in
+    field-declaration order, and never pydantic's own message text."""
+    assert sdd.main(["--base-rev", "", "--head-rev", "HEAD", "--base-path", "", "--head-path", "b"]) == 1
+    stderr = capsys.readouterr().err
+    assert "error: invalid arguments: --base-rev, --base-path" in stderr
+    assert "base_rev" not in stderr
+    assert "String should have at least 1 character" not in stderr
