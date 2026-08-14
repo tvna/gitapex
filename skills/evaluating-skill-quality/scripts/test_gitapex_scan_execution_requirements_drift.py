@@ -32,6 +32,7 @@ one target skill at a time as part of evaluating-skill-quality's own
 from __future__ import annotations
 
 import ast
+import builtins
 import importlib
 import pathlib
 import sys
@@ -818,6 +819,40 @@ def test_missing_pyyaml_exits_with_clear_message_not_a_traceback(
     stderr = capsys.readouterr().err
     assert "PyYAML" in stderr
     assert "uv sync --group dev" in stderr
+
+
+def test_broken_yaml_installation_error_propagates_unmodified(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Adversarial-review finding on this same guard (issue #1076): a
+    ModuleNotFoundError raised from INSIDE an already-found but
+    broken/partial PyYAML install (e.g. one of its own internal
+    submodules missing) carries error.name == "yaml.<submodule>", not
+    "yaml" -- a live probe against a deliberately broken fake `yaml`
+    package confirmed this exact shape. This guard's own remediation
+    ("install the dev dependency group") would not fix a corrupted
+    install, so misreporting it as a plain missing-PyYAML case would send
+    a reader chasing the wrong problem. Simulated via builtins.__import__
+    patching (distinct from the missing-package test above's
+    sys.modules-value-None trick, since there is no single sys.modules
+    entry that represents "this package exists but one of its own
+    internal imports fails") -- asserts the ORIGINAL ModuleNotFoundError
+    propagates uncaught, not converted to this guard's SystemExit(2)."""
+    module_name = "gitapex_scan_execution_requirements_drift"
+    real_import = builtins.__import__
+
+    def _fake_import(name: str, *args: object, **kwargs: object) -> object:
+        if name == "yaml":
+            raise ModuleNotFoundError("No module named 'yaml.tokens'", name="yaml.tokens")
+        return real_import(name, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(builtins, "__import__", _fake_import)
+    monkeypatch.delitem(sys.modules, module_name, raising=False)
+
+    with pytest.raises(ModuleNotFoundError) as exc_info:
+        importlib.import_module(module_name)
+
+    assert exc_info.value.name == "yaml.tokens"
 
 
 # ---- error-path coverage: discover_skill_dirs / _load_sidecar / _spec_of ----
