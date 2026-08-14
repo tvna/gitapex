@@ -222,10 +222,11 @@ except ModuleNotFoundError as error:
     # code. 2 matches this file's own argparse usage already implicitly
     # exiting 2 on a bad invocation (the same "couldn't even run the
     # check" class), not a new, unrelated convention.
-    sys.stderr.write(
+    print(
         f"error: {error}. This script requires PyYAML, which is not on "
         "the import path -- install the dev dependency group first: "
-        "uv sync --group dev\n"
+        "uv sync --group dev",
+        file=sys.stderr,
     )
     raise SystemExit(2) from error
 
