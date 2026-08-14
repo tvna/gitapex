@@ -878,6 +878,30 @@ def test_main_body_file_oserror_reports_as_clean_body_file_error(monkeypatch: py
     assert "Traceback" not in err
 
 
+def test_main_body_file_directory_reports_as_clean_error_not_traceback(
+    monkeypatch: pytest.MonkeyPatch, capsys, tmp_path
+) -> None:
+    # CodeRabbit review on this PR (issue #1087): Path.exists() accepts a
+    # directory, so the pre-existing exists()-based check let a directory
+    # path through to main()'s body_path.read_text(), which raises an
+    # uncaught IsADirectoryError -- the exact class of raw-traceback
+    # failure this issue exists to eliminate. is_file() rejects it in the
+    # validator instead, before read_text() is ever reached. Confirmed by
+    # direct execution before this test was written.
+    monkeypatch.setenv("GH_TOKEN", "tok")
+    monkeypatch.setenv("REPO", "o/r")
+    body_dir = tmp_path / "body-as-a-directory"
+    body_dir.mkdir()
+    rc = spp.main(
+        ["--base", "main", "--branch", "chore", "--title", "t", "--body-file", str(body_dir), "--commit-subject", "s"]
+    )
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert err == f"Error: body file not found: {body_dir}\n"
+    assert "Traceback" not in err
+    assert "IsADirectoryError" not in err
+
+
 def test_main_runtime_error_from_collect_additions(monkeypatch: pytest.MonkeyPatch, capsys, tmp_path) -> None:
     monkeypatch.setenv("GH_TOKEN", "tok")
     monkeypatch.setenv("REPO", "o/r")
@@ -1039,11 +1063,20 @@ def test_main_whitespace_only_title_and_body_file_both_labeled(monkeypatch: pyte
 def test_main_keeps_padded_but_meaningful_values_unmutated(monkeypatch: pytest.MonkeyPatch, capsys, tmp_path) -> None:
     """Issue #1087: validation must not silently trim -- a value with real
     content plus surrounding whitespace reaches publish_files_pr() exactly
-    as typed."""
+    as typed.
+
+    body_file is proven the same way at the filesystem level, not just by
+    string equality: the padding is on the *filename itself* (via a chdir
+    plus a relative name), so a future validator that stripped-and-stored
+    the value would look up a different, non-existent file and fail --
+    a prior version of this test padded only the directory component,
+    which Path.is_file() does not care about either way, so it would not
+    actually have caught that regression (CodeRabbit review on this PR)."""
     monkeypatch.setenv("GH_TOKEN", "tok")
     monkeypatch.setenv("REPO", "o/r")
-    body_file = tmp_path / " body.md"
-    body_file.write_text("body")
+    monkeypatch.chdir(tmp_path)
+    padded_name = " body.md "
+    (tmp_path / padded_name).write_text("body")
     received = {}
 
     def fake_publish_files_pr(**kwargs: object) -> str:
@@ -1060,7 +1093,7 @@ def test_main_keeps_padded_but_meaningful_values_unmutated(monkeypatch: pytest.M
             "--title",
             " t ",
             "--body-file",
-            str(body_file),
+            padded_name,
             "--commit-subject",
             " s ",
         ]
@@ -1070,3 +1103,4 @@ def test_main_keeps_padded_but_meaningful_values_unmutated(monkeypatch: pytest.M
     assert received["branch"] == " chore "
     assert received["title"] == " t "
     assert received["commit_subject"] == " s "
+    assert received["body"] == "body"

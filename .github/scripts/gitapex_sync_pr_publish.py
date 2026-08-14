@@ -497,33 +497,36 @@ class _CliArgs(BaseModel):
     @classmethod
     def _body_file_must_exist(cls, value: str) -> str:
         # A whitespace-only path is rejected up front (issue #1087) rather
-        # than left to the exists() check below: relying on no file ever
-        # being named e.g. " " is incidental, not a guarantee, and a
-        # directory of that name would pass exists() only to raise
-        # IsADirectoryError as an uncaught traceback when read_text() is
-        # called on it later in main(). The message is deliberately its own
-        # self-describing "body file ..." text, not the generic "must not
-        # be blank" the other fields below share -- main()'s ValidationError
-        # handler strips the "body_file: " prefix for this field's own
-        # value_error type (see its own comment), so a shared, non-field-
-        # named message here would render as an unattributable duplicate
-        # when another field is also blank in the same run.
+        # than left to the is_file() check below: relying on no file ever
+        # being named e.g. " " is incidental, not a guarantee. The message
+        # is deliberately its own self-describing "body file ..." text, not
+        # the generic "must not be blank" the other fields below share --
+        # main()'s ValidationError handler strips the "body_file: " prefix
+        # for this field's own value_error type (see its own comment), so a
+        # shared, non-field-named message here would render as an
+        # unattributable duplicate when another field is also blank in the
+        # same run.
         if not value.strip():
             raise ValueError("body file path must not be blank")
-        # Path.exists() itself can raise OSError (e.g. ENAMETOOLONG for an
-        # over-long path component) rather than returning False -- found by
-        # adversarial review to propagate straight through pydantic
-        # uncaught, since pydantic only converts a validator's own
-        # ValueError/TypeError/AssertionError into a ValidationError, not
-        # an arbitrary OSError raised by a stdlib call inside it. Folding
-        # it into the same self-describing "body file not found" message
-        # keeps it on the one code path main()'s except ValidationError
-        # (and its body_file-message special case) already handles.
+        # is_file(), not exists(): a directory passes exists() but is not
+        # readable as a file, so main()'s later body_path.read_text() would
+        # raise an uncaught IsADirectoryError -- confirmed live, the same
+        # class of raw-traceback failure issue #1087 exists to eliminate,
+        # caught by CodeRabbit review on this PR. is_file() itself can still
+        # raise OSError (e.g. ENAMETOOLONG for an over-long path component)
+        # rather than returning False -- found by adversarial review to
+        # propagate straight through pydantic uncaught, since pydantic only
+        # converts a validator's own ValueError/TypeError/AssertionError
+        # into a ValidationError, not an arbitrary OSError raised by a
+        # stdlib call inside it. Folding it into the same self-describing
+        # "body file not found" message keeps it on the one code path
+        # main()'s except ValidationError (and its body_file-message
+        # special case) already handles.
         try:
-            exists = Path(value).exists()
+            is_file = Path(value).is_file()
         except OSError as exc:
             raise ValueError(f"body file not found: {value} ({exc})") from exc
-        if not exists:
+        if not is_file:
             raise ValueError(f"body file not found: {value}")
         return value
 
