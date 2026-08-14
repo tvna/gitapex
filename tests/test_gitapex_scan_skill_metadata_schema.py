@@ -872,6 +872,43 @@ def test_broken_yaml_installation_error_propagates_unmodified(
     assert exc_info.value.name == "yaml.tokens"
 
 
+def test_broken_yaml_installation_in_script_mode_propagates_unmodified(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CodeRabbit review finding on PR #1091: the guard's own `if error.name
+    != "yaml" or __name__ != "__main__": raise` is a boolean OR of two
+    independent conditions, but no other test isolates the error.name check
+    while __name__ == "__main__" is simultaneously true --
+    test_missing_pyyaml_exits_with_clear_message_not_a_traceback covers
+    script mode only with PyYAML entirely absent (error.name == "yaml",
+    already satisfying the OR's first half on its own regardless of the
+    __name__ check), and test_broken_yaml_installation_error_propagates_
+    unmodified above covers a broken/partial install only via plain import
+    (__name__ != "__main__", already satisfying the OR's second half on its
+    own regardless of the error.name check's own correctness). This test
+    isolates the intersection: a broken/partial install
+    (error.name == "yaml.tokens", not "yaml") encountered via the CLI entry
+    point itself (__name__ == "__main__", via runpy.run_path the same way
+    the script-mode test above does), proving the error.name check still
+    correctly re-raises rather than being masked by the __name__ check
+    alone -- a hypothetical guard that dropped the error.name check would
+    pass every other PyYAML-guard test here but not this one."""
+    script_path = str(pathlib.Path(scanner.__file__))
+    real_import = builtins.__import__
+
+    def _fake_import(name: str, *args: object, **kwargs: object) -> object:
+        if name == "yaml":
+            raise ModuleNotFoundError("No module named 'yaml.tokens'", name="yaml.tokens")
+        return real_import(name, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(builtins, "__import__", _fake_import)
+
+    with pytest.raises(ModuleNotFoundError) as exc_info:
+        runpy.run_path(script_path, run_name="__main__")
+
+    assert exc_info.value.name == "yaml.tokens"
+
+
 # ---- the real gate ----
 
 
