@@ -32,7 +32,9 @@ one target skill at a time as part of evaluating-skill-quality's own
 from __future__ import annotations
 
 import ast
+import importlib
 import pathlib
+import sys
 
 import gitapex_scan_execution_requirements_drift as scanner
 import pytest
@@ -782,6 +784,40 @@ def test_main_end_to_end_against_a_real_skill_dir_no_mocking(
     assert exit_code == 1
     captured = capsys.readouterr()
     assert "tools-write-vs-skill-md" in captured.out
+
+
+# ---- missing PyYAML dependency (issue #1076) ----
+
+
+def test_missing_pyyaml_exits_with_clear_message_not_a_traceback(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Issue #1076: this module's own top-level `import yaml` used to be
+    unguarded, so a surface without the dev dependency group installed
+    (pyproject.toml declares PyYAML only under `[dependency-groups] dev`,
+    never a root `dependencies` entry) raised a raw, unhandled
+    ModuleNotFoundError with no actionable next step. Simulates that
+    surface without a real PyYAML-less venv: setting `sys.modules["yaml"]
+    = None` is CPython's own documented mechanism for making a subsequent
+    `import yaml` raise ModuleNotFoundError (see importlib._bootstrap.
+    _find_and_load), and deleting this module's own cached sys.modules
+    entry forces a fresh top-level exec that actually re-hits the guarded
+    import line -- reusing the already-imported `scanner` object here
+    would skip the guard entirely and let this test pass vacuously. A
+    still-unguarded import would let ModuleNotFoundError itself escape
+    `pytest.raises(SystemExit)` uncaught, failing this test loudly rather
+    than silently -- the defeat case this test exists to rule out."""
+    module_name = "gitapex_scan_execution_requirements_drift"
+    monkeypatch.setitem(sys.modules, "yaml", None)
+    monkeypatch.delitem(sys.modules, module_name, raising=False)
+
+    with pytest.raises(SystemExit) as exc_info:
+        importlib.import_module(module_name)
+
+    assert exc_info.value.code == 2
+    stderr = capsys.readouterr().err
+    assert "PyYAML" in stderr
+    assert "uv sync --group dev" in stderr
 
 
 # ---- error-path coverage: discover_skill_dirs / _load_sidecar / _spec_of ----

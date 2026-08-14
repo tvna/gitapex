@@ -190,7 +190,8 @@ gitapex_scan_skill_metadata_schema.py's own small versions.
 Run standalone against one skill directory --
 ``python3 skills/evaluating-skill-quality/scripts/
 gitapex_scan_execution_requirements_drift.py <skill-dir>`` (exit 0 clean or
-warnings-only, 1 on any error-severity finding or a read error) -- or via
+warnings-only, 1 on any error-severity finding or a read error, 2 if a
+required dependency -- PyYAML -- is missing from the import path) -- or via
 the pytest gate in skills/evaluating-skill-quality/scripts/
 test_gitapex_scan_execution_requirements_drift.py.
 """
@@ -205,7 +206,28 @@ import sys
 import urllib.parse
 from typing import Any, NamedTuple
 
-import yaml
+try:
+    import yaml
+except ModuleNotFoundError as error:
+    # Issue #1076: this module's own docstring above already discloses
+    # "stdlib + PyYAML only" as a deliberate, real dependency -- this guard
+    # turns a missing install into a clear, actionable message instead of
+    # a raw traceback with no next step, the same "clear message, never a
+    # bare crash" standard every other error path in this file already
+    # holds itself to (see ReadError below). Exit 2, not 1: this file's
+    # own main() already uses 1 for "the scanner ran and found an
+    # error-severity finding" (see ReadError's own docstring) -- a missing
+    # dependency fires before any target is even read, so it is not a
+    # finding about scanned content and must not collapse into the same
+    # code. 2 matches this file's own argparse usage already implicitly
+    # exiting 2 on a bad invocation (the same "couldn't even run the
+    # check" class), not a new, unrelated convention.
+    sys.stderr.write(
+        f"error: {error}. This script requires PyYAML, which is not on "
+        "the import path -- install the dev dependency group first: "
+        "uv sync --group dev\n"
+    )
+    raise SystemExit(2) from error
 
 # This file lives at skills/evaluating-skill-quality/scripts/<name>.py, so
 # parents[2] is skills/ itself -- one level deeper than a .github/scripts/
