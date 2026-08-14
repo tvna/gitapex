@@ -13,8 +13,12 @@ find_deprecated_replacement_drift, find_requires_cycle), and the CLI
 
 from __future__ import annotations
 
+import builtins
+import importlib
 import json
 import pathlib
+import runpy
+import sys
 from typing import Any
 
 import gitapex_scan_skill_metadata_schema as scanner
@@ -764,6 +768,108 @@ def test_main_returns_1_on_sidecar_read_error(
     monkeypatch.setattr(scanner, "find_drift", _raise)
     assert scanner.main() == 1
     assert "boom" in capsys.readouterr().out
+
+
+# ---- missing PyYAML dependency (issue #1089) ----
+#
+# Mirrors skills/evaluating-skill-quality/scripts/
+# test_gitapex_scan_execution_requirements_drift.py's own coverage for the
+# same __name__-gated guard shape (issue #1076), ported onto this module's
+# own top-level `import yaml`.
+
+
+def test_missing_pyyaml_exits_with_clear_message_not_a_traceback(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Issue #1089: this module's own top-level `import yaml` was unguarded,
+    so a surface without the dev dependency group installed (pyproject.toml
+    declares PyYAML only under `[dependency-groups] dev`, never a root
+    `dependencies` entry) raised a raw, unhandled ModuleNotFoundError with no
+    actionable next step. Simulates that surface without a real PyYAML-less
+    venv: setting `sys.modules["yaml"] = None` is CPython's own documented
+    mechanism for making a subsequent `import yaml` raise
+    ModuleNotFoundError. Runs the script fresh via `runpy.run_path(...,
+    run_name="__main__")` rather than `importlib.import_module()`: the
+    guard's SystemExit(2) only fires under `__name__ == "__main__"` (see the
+    regression test below for why), and run_path is the standard-library way
+    to execute a file as if it were `__main__` in-process, without a real
+    subprocess. A still-unguarded import would let ModuleNotFoundError
+    itself escape `pytest.raises(SystemExit)` uncaught, failing this test
+    loudly rather than silently -- the defeat case this test exists to rule
+    out."""
+    monkeypatch.setitem(sys.modules, "yaml", None)
+    script_path = str(pathlib.Path(scanner.__file__))
+
+    with pytest.raises(SystemExit) as exc_info:
+        runpy.run_path(script_path, run_name="__main__")
+
+    assert exc_info.value.code == 2
+    stderr = capsys.readouterr().err
+    assert "PyYAML" in stderr
+    assert "uv sync --group dev" in stderr
+
+
+def test_missing_pyyaml_on_plain_import_propagates_cleanly_not_systemexit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression test for the bug issue #1076's own second /code-review pass
+    caught before merge, on the same guard shape ported here: converting a
+    missing PyYAML into SystemExit(2) unconditionally -- including when this
+    module is merely *imported* rather than run as a script -- breaks
+    pytest's own collection machinery. A bare SystemExit raised during
+    collection (e.g. this file's own `import ... as scanner` line) is not a
+    plain Exception, so pytest's collection handler can't catch it cleanly;
+    issue #1076 live-verified this surfaces as INTERNALERROR (exit 3)
+    instead of a clean collection error (exit 2), swallowing the guard's own
+    message under a crash dump. Asserts the fix: a plain import with PyYAML
+    missing must let ModuleNotFoundError itself propagate, matching
+    pre-guard behavior, not be converted to SystemExit -- reusing the
+    already-imported `scanner` object here would skip the guard entirely and
+    let this test pass vacuously, so this evicts the cached module first to
+    force a fresh top-level exec, the same way the CLI-path test above
+    does."""
+    module_name = "gitapex_scan_skill_metadata_schema"
+    monkeypatch.setitem(sys.modules, "yaml", None)
+    monkeypatch.delitem(sys.modules, module_name, raising=False)
+
+    with pytest.raises(ModuleNotFoundError) as exc_info:
+        importlib.import_module(module_name)
+
+    assert exc_info.value.name == "yaml"
+
+
+def test_broken_yaml_installation_error_propagates_unmodified(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Adversarial-review finding on this same guard shape (issue #1076): a
+    ModuleNotFoundError raised from INSIDE an already-found but
+    broken/partial PyYAML install (e.g. one of its own internal submodules
+    missing) carries error.name == "yaml.<submodule>", not "yaml" -- a live
+    probe against a deliberately broken fake `yaml` package confirmed this
+    exact shape. This guard's own remediation ("install the dev dependency
+    group") would not fix a corrupted install, so misreporting it as a plain
+    missing-PyYAML case would send a reader chasing the wrong problem.
+    Simulated via builtins.__import__ patching (distinct from the
+    missing-package test above's sys.modules-value-None trick, since there
+    is no single sys.modules entry that represents "this package exists but
+    one of its own internal imports fails") -- asserts the ORIGINAL
+    ModuleNotFoundError propagates uncaught, not converted to this guard's
+    SystemExit(2)."""
+    module_name = "gitapex_scan_skill_metadata_schema"
+    real_import = builtins.__import__
+
+    def _fake_import(name: str, *args: object, **kwargs: object) -> object:
+        if name == "yaml":
+            raise ModuleNotFoundError("No module named 'yaml.tokens'", name="yaml.tokens")
+        return real_import(name, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(builtins, "__import__", _fake_import)
+    monkeypatch.delitem(sys.modules, module_name, raising=False)
+
+    with pytest.raises(ModuleNotFoundError) as exc_info:
+        importlib.import_module(module_name)
+
+    assert exc_info.value.name == "yaml.tokens"
 
 
 # ---- the real gate ----
