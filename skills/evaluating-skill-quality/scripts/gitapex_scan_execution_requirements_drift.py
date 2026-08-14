@@ -209,29 +209,23 @@ from typing import Any, NamedTuple
 try:
     import yaml
 except ModuleNotFoundError as error:
-    # Issue #1076: this module's own docstring above already discloses
-    # "stdlib + PyYAML only" as a deliberate, real dependency -- this guard
-    # turns a missing install into a clear, actionable message instead of
-    # a raw traceback with no next step, the same "clear message, never a
-    # bare crash" standard every other error path in this file already
-    # holds itself to (see ReadError below). Exit 2, not 1: this file's
-    # own main() already uses 1 for "the scanner ran and found an
-    # error-severity finding" (see ReadError's own docstring) -- a missing
-    # dependency fires before any target is even read, so it is not a
-    # finding about scanned content and must not collapse into the same
-    # code. 2 matches this file's own argparse usage already implicitly
-    # exiting 2 on a bad invocation (the same "couldn't even run the
-    # check" class), not a new, unrelated convention.
-    #
-    # error.name narrows this to the exact "PyYAML itself is absent" case
-    # -- found by an adversarial review: a broken/partial PyYAML install
-    # (e.g. one of its own internal submodules missing) raises this same
-    # exception type but with error.name == "yaml.<submodule>", not
-    # "yaml", and this guard's own remediation ("uv sync --group dev")
-    # would not fix a corrupted install. Re-raising anything but the exact
-    # top-level-package-missing case preserves the real error instead of
-    # misreporting a different problem under a wrong, confident diagnosis.
-    if error.name != "yaml":
+    # why-not(#1076): only convert to SystemExit when run as a script.
+    # A bare SystemExit raised while this module is merely *imported* (e.g.
+    # pytest collecting test_gitapex_scan_execution_requirements_drift.py's
+    # own `import ... as scanner`) is not a plain Exception, so pytest's
+    # collection handler can't catch it cleanly -- live-verified: it surfaces
+    # as INTERNALERROR (exit 3) instead of a normal, clean collection error
+    # (exit 2), swallowing this guard's own message under a crash dump. The
+    # __name__ check keeps every import path exactly as graceful as the
+    # pre-#1076 unguarded `import yaml` was; only the documented CLI entry
+    # point (`python3 gitapex_scan_execution_requirements_drift.py
+    # <skill-dir>`) gets the friendly message. error.name narrows further to
+    # "PyYAML itself is absent": a broken/partial install raises this same
+    # exception type with error.name == "yaml.<submodule>", not "yaml", and
+    # this guard's remediation ("uv sync --group dev") would not fix a
+    # corrupted install, so that case re-raises unmodified rather than being
+    # misdiagnosed.
+    if error.name != "yaml" or __name__ != "__main__":
         raise
     print(
         f"error: {error}. This script requires PyYAML, which is not on "
