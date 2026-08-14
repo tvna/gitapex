@@ -294,6 +294,24 @@ def test_main_rejects_non_positive_pr_number(monkeypatch, capsys):
     assert "invalid arguments" in capsys.readouterr().err
 
 
+def test_main_renders_underscored_field_as_its_hyphenated_flag(monkeypatch, capsys):
+    """Issue #822: `pr_number` is the model's field name but `--pr-number`
+    is the flag an operator actually typed, so the `ValidationError`
+    handler must report the hyphenated flag, never the raw field name,
+    never pydantic's own message text, and never the rejected value."""
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    assert pmr.main(["--owner", "tvna", "--repo", "gitapex", "--pr-number", "-7"]) == 1
+    stderr = capsys.readouterr().err
+    # The constraint wording, not just the flag name: naming only
+    # `--pr-number` would tell an operator which flag was rejected but not
+    # what it needed, which is the actionability the replaced hand-rolled
+    # message carried and this handler must not drop.
+    assert "error: invalid arguments: --pr-number (must be a positive integer)" in stderr
+    assert "pr_number" not in stderr
+    assert "-7" not in stderr
+    assert "Input should be greater than 0" not in stderr
+
+
 # ---------------------------------------------------------------------------
 # Drift gate: the workflow's own "permanent human-review-of-merge" posture
 # (issue #318's own commit on post-merge-retro.yml) is enforced here, not

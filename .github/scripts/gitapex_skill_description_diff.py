@@ -26,6 +26,26 @@ and skills/*/scripts/*.py independently self-contained (see
 gitapex_gate_skill_rename_lifecycle.py's own docstring for the same rationale), and
 this script only ever needs the one `description` field, not the full
 frontmatter shape gitapex_check_skill_shape.py validates.
+
+Run via `uv run` (needed for the pydantic import -- a bare `python3`
+invocation without pydantic installed fails at import time, before argparse
+even runs). Two callers reach this module, and only one of them satisfies
+that:
+
+- skill-audit-gate.yml's CI path, via an in-process `import
+  gitapex_skill_description_diff` from gitapex_compute_skill_audit_flags.py,
+  itself `uv run`-invoked. This is the authoritative path.
+- hooks/check-pr-skill-audit-disclosure.sh's tier-1 local pre-check, which
+  invokes gitapex_gate_skill_audit_disclosure.py under a bare `python3`.
+  That path already could not import pydantic before this module needed it
+  (gitapex_detect_changed_gate_scripts.py, reached through the same import
+  chain, has imported pydantic at module scope since issue #1040 wave 1),
+  so the hook's own `except ImportError` handler catches it and falls
+  through to its narrower tier-2 check with a warning -- the documented
+  degradation, not a hard failure. This module joining that class does not
+  change the hook's behavior, but the fall-through is silent enough that
+  no deterministic gate currently covers it: bare-python3-invocation-gate.yml
+  scans workflow `run:` steps only, not hooks/*.sh.
 """
 
 from __future__ import annotations
@@ -34,6 +54,8 @@ import argparse
 import re
 import subprocess
 import sys
+
+from pydantic import BaseModel, Field, ValidationError
 
 _BLOCK_SCALAR_INDICATORS = frozenset({">", ">-", ">+", "|", "|-", "|+"})
 _DESCRIPTION_KEY_RE = re.compile(r"^description:[ \t]*(.*)$")
@@ -112,27 +134,26 @@ def _read_at_revision(rev, path):
     return result.stdout
 
 
-def _validate_cli_args(base_rev, head_rev, base_path, head_path):
-    """Return a pydantic-``ValidationError``-style detail string (one
-    ``<field>: <message>`` clause per violated constraint, joined with
-    ``"; "``, in field-declaration order) if any of the four arguments is
-    blank -- argparse's own ``required=True`` only guarantees the flag was
-    passed, not that its value is non-empty, and a blank rev/path was never
-    a meaningful input to ``_read_at_revision`` -- else None. Message text
-    is a byte-for-byte match of the pydantic ``Field(min_length=1)`` errors
-    this replaces (verified directly against the installed pydantic
-    version), so this plain-Python check is a drop-in replacement, not
-    merely an equivalent-intent one."""
-    errors = []
-    if not base_rev:
-        errors.append("base_rev: String should have at least 1 character")
-    if not head_rev:
-        errors.append("head_rev: String should have at least 1 character")
-    if not base_path:
-        errors.append("base_path: String should have at least 1 character")
-    if not head_path:
-        errors.append("head_path: String should have at least 1 character")
-    return "; ".join(errors) if errors else None
+# This CLI's own wording for each constraint the model below imposes, keyed
+# by pydantic's own error type. pydantic's message text is deliberately not
+# echoed -- it is not part of this CLI's contract, so a version bump must
+# not change what an operator reads -- but naming only the offending flag
+# and nothing else leaves the operator without the reason. An unmapped type
+# falls back to a generic label rather than raising, so a future constraint
+# kind can never turn a rejected argument into a traceback.
+_CONSTRAINT_HINTS = {"string_too_short": "must not be blank"}
+
+
+class SkillDescriptionDiffArgs(BaseModel):
+    """Typed view of `main`'s parsed CLI namespace. All four fields reject
+    a blank value -- argparse's own ``required=True`` only guarantees the
+    flag was passed, not that its value is non-empty, and a blank rev/path
+    was never a meaningful input to ``_read_at_revision``."""
+
+    base_rev: str = Field(min_length=1)
+    head_rev: str = Field(min_length=1)
+    base_path: str = Field(min_length=1)
+    head_path: str = Field(min_length=1)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -155,9 +176,22 @@ def main(argv: list[str] | None = None) -> int:
         help="Path at --head-rev (the post-rename path for a renamed file).",
     )
     args = parser.parse_args(argv)
-    detail = _validate_cli_args(args.base_rev, args.head_rev, args.base_path, args.head_path)
-    if detail is not None:
-        print(f"error: invalid arguments: {detail}", file=sys.stderr)
+    try:
+        SkillDescriptionDiffArgs(
+            base_rev=args.base_rev,
+            head_rev=args.head_rev,
+            base_path=args.base_path,
+            head_path=args.head_path,
+        )
+    except ValidationError as error:
+        # Only the offending flag names and this CLI's own constraint
+        # wording are echoed -- never pydantic's own message text, and
+        # never the rejected value itself.
+        invalid = ", ".join(
+            f"--{str(item['loc'][0]).replace('_', '-')} ({_CONSTRAINT_HINTS.get(item['type'], 'invalid value')})"
+            for item in error.errors()
+        )
+        print(f"error: invalid arguments: {invalid}", file=sys.stderr)
         return 1
 
     base_text = _read_at_revision(args.base_rev, args.base_path)

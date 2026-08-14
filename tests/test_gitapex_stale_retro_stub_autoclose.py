@@ -436,6 +436,21 @@ def test_main_rejects_non_positive_stale_hours(monkeypatch, capsys):
     assert "invalid arguments" in capsys.readouterr().err
 
 
+def test_main_renders_underscored_field_as_its_hyphenated_flag(monkeypatch, capsys):
+    """Issue #822: `stale_hours` is the model's field name but
+    `--stale-hours` is the flag an operator actually typed, so the
+    `ValidationError` handler must report the hyphenated flag, never the
+    raw field name and never pydantic's own message text."""
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    assert sra.main(["--owner", "tvna", "--repo", "gitapex", "--stale-hours", "-3"]) == 1
+    stderr = capsys.readouterr().err
+    # The constraint wording, not just the flag name -- see
+    # test_gitapex_post_merge_retro.py's own sibling assertion for why.
+    assert "error: invalid arguments: --stale-hours (must be a positive integer)" in stderr
+    assert "stale_hours" not in stderr
+    assert "Input should be greater than 0" not in stderr
+
+
 def test_main_closes_stale_issues_and_reports(monkeypatch, capsys):
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
     monkeypatch.setattr(sra, "list_open_retro_issues", lambda *a, **k: [_issue(314, STUB_BODY, 49)])

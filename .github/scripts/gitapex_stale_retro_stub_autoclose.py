@@ -32,14 +32,20 @@ the literal marker text still appears in `gitapex_post_merge_retro.py`'s source,
 so the two cannot silently re-diverge the way the title/query pair did
 before issue #341's fix.
 
-Deliberately stdlib-only, mirroring `gitapex_post_merge_retro.py` and
-`gitapex_scan_retrospective_gate_drift.py`'s own shape and retry-with-backoff
-logic.
+Deliberately dependency-light (stdlib plus `pydantic`, this repository's own
+pinned CLI-arg validation dependency), mirroring `gitapex_post_merge_retro.py`
+and `gitapex_scan_retrospective_gate_drift.py`'s own shape and
+retry-with-backoff logic.
 
 Usage::
 
-    python3 .github/scripts/gitapex_stale_retro_stub_autoclose.py \\
+    uv run --frozen python3 .github/scripts/gitapex_stale_retro_stub_autoclose.py \\
         --owner tvna --repo gitapex --stale-hours 48
+
+Run via `uv run` (needed for the pydantic import -- a bare `python3`
+invocation without pydantic installed now fails at import time, before
+argparse even runs), matching stale-retro-stub-autoclose.yml's own
+invocation.
 
 Environment variables:
     GITHUB_TOKEN  GitHub token with issues:write (the default Actions
@@ -65,6 +71,8 @@ import urllib.request
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
+
+from pydantic import BaseModel, Field, ValidationError
 
 _API_ROOT = "https://api.github.com"
 _API_VERSION = "2022-11-28"
@@ -350,20 +358,27 @@ def close_stub_issue(
 # ---------------------------------------------------------------------------
 
 
-def _validate_cli_args(owner: str, repo: str, stale_hours: int) -> str | None:
-    """Return a pydantic-``ValidationError``-style detail string (one
-    ``<field>: <message>`` clause per violated constraint, joined with
-    ``"; "``, in field-declaration order) if ``owner``/``repo`` are blank
-    or ``stale_hours`` is not positive, else None. Message text matches
-    the sibling scripts' own pydantic-equivalent wording."""
-    errors: list[str] = []
-    if not owner:
-        errors.append("owner: String should have at least 1 character")
-    if not repo:
-        errors.append("repo: String should have at least 1 character")
-    if stale_hours <= 0:
-        errors.append("stale_hours: Input should be greater than 0")
-    return "; ".join(errors) if errors else None
+# This CLI's own wording for each constraint the model below imposes, keyed
+# by pydantic's own error type. pydantic's message text is deliberately not
+# echoed -- it is not part of this CLI's contract, so a version bump must
+# not change what an operator reads -- but naming only the offending flag
+# and nothing else would leave a rejected `--stale-hours 0` unactionable.
+# An unmapped type falls back to a generic label rather than raising, so a
+# future constraint kind can never turn a rejected argument into a
+# traceback.
+_CONSTRAINT_HINTS = {"string_too_short": "must not be blank", "greater_than": "must be a positive integer"}
+
+
+class StaleRetroStubAutocloseArgs(BaseModel):
+    """Typed view of `main`'s parsed CLI namespace. ``owner``/``repo``
+    reject blank (argparse's own ``required=True`` only guarantees the flag
+    was passed, not that its value is non-empty) and ``stale_hours`` must
+    be positive -- a zero or negative age window would close every open
+    stub the moment it was opened."""
+
+    owner: str = Field(min_length=1)
+    repo: str = Field(min_length=1)
+    stale_hours: int = Field(gt=0)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -379,9 +394,17 @@ def main(argv: list[str] | None = None) -> int:
         help=f"Close a stub only once it is at least this many hours old (default: {_DEFAULT_STALE_HOURS})",
     )
     args = parser.parse_args(argv)
-    detail = _validate_cli_args(args.owner, args.repo, args.stale_hours)
-    if detail is not None:
-        print(f"error: invalid arguments: {detail}", file=sys.stderr)
+    try:
+        StaleRetroStubAutocloseArgs(owner=args.owner, repo=args.repo, stale_hours=args.stale_hours)
+    except ValidationError as error:
+        # Only the offending flag names and this CLI's own constraint
+        # wording are echoed -- never pydantic's own message text, and
+        # never the rejected value itself.
+        invalid = ", ".join(
+            f"--{str(item['loc'][0]).replace('_', '-')} ({_CONSTRAINT_HINTS.get(item['type'], 'invalid value')})"
+            for item in error.errors()
+        )
+        print(f"error: invalid arguments: {invalid}", file=sys.stderr)
         return 1
 
     token = os.environ.get("GITHUB_TOKEN", "")
