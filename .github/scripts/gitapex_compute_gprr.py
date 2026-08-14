@@ -19,7 +19,8 @@ Reuses `_gitapex_github_http.py`'s generic paginated-fetch-with-retry client for
 the merged-pull-request query, and `gitapex_scan_retrospective_gate_drift.py`'s
 `list_labelled_issue_records` for the issue-specific fetch, per the
 issue's own constraint, rather than a second hand-rolled GitHub API
-client. Stdlib-only, matching those two scripts and this repository's
+client. Dependency-light (stdlib plus `pydantic`, this repository's own
+pinned CLI-arg validation dependency), matching those two scripts and this repository's
 `.github/scripts/*.py` independence convention (see
 `gitapex_gate_skill_rename_lifecycle.py`'s own docstring rationale, and
 `_gitapex_github_http.py`'s own docstring for why the generic HTTP client is a
@@ -42,7 +43,12 @@ silently reporting an empty/zero series as if it were a real all-clear.
 
 Usage::
 
-    python3 .github/scripts/gitapex_compute_gprr.py --owner tvna --repo gitapex
+    uv run --frozen python3 .github/scripts/gitapex_compute_gprr.py --owner tvna --repo gitapex
+
+Run via `uv run` (needed for the pydantic import -- a bare `python3`
+invocation without pydantic installed now fails at import time, before
+argparse even runs), matching retrospective-gate-drift.yml's own
+invocation.
 
 Environment variables:
     GITHUB_TOKEN  GitHub token with read access to issues and pull
@@ -70,6 +76,7 @@ from typing import Any, TypedDict
 
 import _gitapex_github_http
 import gitapex_scan_retrospective_gate_drift as gate_drift
+from pydantic import BaseModel, Field, ValidationError
 
 _API_ROOT = "https://api.github.com"
 _PER_PAGE = 100
@@ -275,20 +282,15 @@ def list_merged_pull_requests(
 # ---------------------------------------------------------------------------
 
 
-def _validate_cli_args(owner: str, repo: str, label: str) -> str | None:
-    """Return a pydantic-``ValidationError``-style detail string (one
-    ``<field>: <message>`` clause per violated constraint, joined with
-    ``"; "``, in field-declaration order) if any of ``owner``/``repo``/
-    ``label`` is blank, else None. Mirrors
-    `gitapex_scan_retrospective_gate_drift._validate_cli_args`'s own shape."""
-    errors: list[str] = []
-    if not owner:
-        errors.append("owner: String should have at least 1 character")
-    if not repo:
-        errors.append("repo: String should have at least 1 character")
-    if not label:
-        errors.append("label: String should have at least 1 character")
-    return "; ".join(errors) if errors else None
+class ComputeGprrArgs(BaseModel):
+    """Typed view of `main`'s parsed CLI namespace. Each field rejects a
+    blank value: argparse's own ``required=True`` only guarantees the flag
+    was passed, not that its value is non-empty, and a blank owner/repo/
+    label was never a meaningful input to the GitHub queries below."""
+
+    owner: str = Field(min_length=1)
+    repo: str = Field(min_length=1)
+    label: str = Field(min_length=1)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -303,9 +305,14 @@ def main(argv: list[str] | None = None) -> int:
         help=f"Issue label to search (default: {gate_drift.DEFAULT_LABEL})",
     )
     args = parser.parse_args(argv)
-    detail = _validate_cli_args(args.owner, args.repo, args.label)
-    if detail is not None:
-        print(f"error: invalid arguments: {detail}", file=sys.stderr)
+    try:
+        ComputeGprrArgs(owner=args.owner, repo=args.repo, label=args.label)
+    except ValidationError as error:
+        # Only the offending flag names are echoed: pydantic's own message
+        # text is not part of this CLI's contract, and the rejected value
+        # itself is never printed.
+        invalid = ", ".join(f"--{str(item['loc'][0]).replace('_', '-')}" for item in error.errors())
+        print(f"error: invalid arguments: {invalid}", file=sys.stderr)
         return 1
 
     token = os.environ.get("GITHUB_TOKEN", "")

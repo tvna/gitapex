@@ -14,7 +14,9 @@ Design: docs/superpowers/specs/2026-07-22-retrospective-gate-drift-design.md
 
 Split into pure logic (fixture-testable, no I/O) and I/O glue (GitHub REST
 API over `urllib`, a local `git log`, plus a `.gitapex/ssot.json` read).
-Deliberately stdlib-only and does not import `gitapex_sync_pr_publish.py` -- this
+Deliberately dependency-light (stdlib plus `pydantic`, this repository's own
+pinned CLI-arg validation dependency) and does not import
+`gitapex_sync_pr_publish.py` -- this
 repository keeps `.github/scripts/*.py` files independently self-contained
 (see `gitapex_gate_skill_rename_lifecycle.py`'s own docstring for the same
 rationale) even though the retry-with-backoff shape below mirrors
@@ -29,8 +31,13 @@ report only when a citing commit AND a corroborating
 
 Usage::
 
-    python3 .github/scripts/gitapex_scan_retrospective_gate_drift.py \\
+    uv run --frozen python3 .github/scripts/gitapex_scan_retrospective_gate_drift.py \\
         --owner tvna --repo gitapex --ref HEAD --threshold 20
+
+Run via `uv run` (needed for the pydantic import -- a bare `python3`
+invocation without pydantic installed now fails at import time, before
+argparse even runs), matching retrospective-gate-drift.yml's own
+invocation.
 
 Environment variables:
     GITHUB_TOKEN  GitHub token with read access to issues (the default
@@ -59,6 +66,7 @@ from typing import Any
 
 import _gitapex_github_http
 from _gitapex_github_http import GitHubApiError
+from pydantic import BaseModel, Field, ValidationError
 
 DEFAULT_THRESHOLD = 20
 DEFAULT_LABEL = "retrospective"
@@ -285,36 +293,22 @@ def load_gate_tracking_issues(path: str) -> set[int]:
 # ---------------------------------------------------------------------------
 
 
-def _validate_cli_args(owner: str, repo: str, ref: str, cwd: str, label: str, ssot_path: str) -> str | None:
-    """Return a pydantic-``ValidationError``-style detail string (one
-    ``<field>: <message>`` clause per violated constraint, joined with
-    ``"; "``, in field-declaration order) if any of ``owner``/``repo``/
-    ``ref``/``cwd``/``label``/``ssot_path`` is blank (argparse's own
-    ``required=True`` only guarantees the flag was passed, not that its
-    value is non-empty; ``ref``/``cwd``/``label``/``ssot_path`` reject
-    blank the same way since each is used as a real path/ref/query
-    fragment downstream and an empty value there was never a meaningful
-    input), else None. ``threshold`` keeps its bare ``int`` type with no
-    floor -- a caller intentionally passing a negative threshold to force
-    a hard fail is not a malformed input, just an unusual one -- so it is
-    never checked here. Message text is a byte-for-byte match of the
-    pydantic ``Field(min_length=1)`` errors this replaces (verified
-    directly against the installed pydantic version), so this plain-Python
-    check is a drop-in replacement, not merely an equivalent-intent one."""
-    errors: list[str] = []
-    if not owner:
-        errors.append("owner: String should have at least 1 character")
-    if not repo:
-        errors.append("repo: String should have at least 1 character")
-    if not ref:
-        errors.append("ref: String should have at least 1 character")
-    if not cwd:
-        errors.append("cwd: String should have at least 1 character")
-    if not label:
-        errors.append("label: String should have at least 1 character")
-    if not ssot_path:
-        errors.append("ssot_path: String should have at least 1 character")
-    return "; ".join(errors) if errors else None
+class ScanRetrospectiveGateDriftArgs(BaseModel):
+    """Typed view of `main`'s parsed CLI namespace. Every field rejects a
+    blank value: argparse's own ``required=True`` only guarantees the flag
+    was passed, not that its value is non-empty, and ``ref``/``cwd``/
+    ``label``/``ssot_path`` each become a real ref/path/query fragment
+    downstream where an empty value was never a meaningful input.
+    ``threshold`` is deliberately absent from this model -- it keeps its
+    bare ``int`` type with no floor, since a caller intentionally passing
+    a negative threshold to force a hard fail is unusual, not malformed."""
+
+    owner: str = Field(min_length=1)
+    repo: str = Field(min_length=1)
+    ref: str = Field(min_length=1)
+    cwd: str = Field(min_length=1)
+    label: str = Field(min_length=1)
+    ssot_path: str = Field(min_length=1)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -339,9 +333,21 @@ def main(argv: list[str] | None = None) -> int:
         help=f"Fail if the no-citation count exceeds this value (default: {DEFAULT_THRESHOLD})",
     )
     args = parser.parse_args(argv)
-    detail = _validate_cli_args(args.owner, args.repo, args.ref, args.cwd, args.label, args.ssot_path)
-    if detail is not None:
-        print(f"error: invalid arguments: {detail}", file=sys.stderr)
+    try:
+        ScanRetrospectiveGateDriftArgs(
+            owner=args.owner,
+            repo=args.repo,
+            ref=args.ref,
+            cwd=args.cwd,
+            label=args.label,
+            ssot_path=args.ssot_path,
+        )
+    except ValidationError as error:
+        # Only the offending flag names are echoed: pydantic's own message
+        # text is not part of this CLI's contract, and the rejected value
+        # itself is never printed.
+        invalid = ", ".join(f"--{str(item['loc'][0]).replace('_', '-')}" for item in error.errors())
+        print(f"error: invalid arguments: {invalid}", file=sys.stderr)
         return 1
 
     token = os.environ.get("GITHUB_TOKEN", "")
