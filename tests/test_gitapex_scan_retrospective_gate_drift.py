@@ -544,7 +544,7 @@ def test_main_renders_underscored_field_as_its_hyphenated_flag(monkeypatch, caps
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
     assert gate.main(["--owner", "tvna", "--repo", "gitapex", "--ssot-path", ""]) == 1
     stderr = capsys.readouterr().err
-    assert "error: invalid arguments: --ssot-path" in stderr
+    assert "error: invalid arguments: --ssot-path (must not be blank)" in stderr
     assert "ssot_path" not in stderr
     assert "String should have at least 1 character" not in stderr
 
@@ -556,4 +556,8 @@ def test_main_names_every_offending_flag_in_declaration_order(monkeypatch, capsy
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
     argv = ["--owner", "", "--repo", "", "--ref", "", "--cwd", "", "--label", "", "--ssot-path", ""]
     assert gate.main(argv) == 1
-    assert "error: invalid arguments: --owner, --repo, --ref, --cwd, --label, --ssot-path" in capsys.readouterr().err
+    blank = "(must not be blank)"
+    assert (
+        f"error: invalid arguments: --owner {blank}, --repo {blank}, --ref {blank}, "
+        f"--cwd {blank}, --label {blank}, --ssot-path {blank}" in capsys.readouterr().err
+    )

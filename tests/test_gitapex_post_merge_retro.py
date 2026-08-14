@@ -302,7 +302,11 @@ def test_main_renders_underscored_field_as_its_hyphenated_flag(monkeypatch, caps
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
     assert pmr.main(["--owner", "tvna", "--repo", "gitapex", "--pr-number", "-7"]) == 1
     stderr = capsys.readouterr().err
-    assert "error: invalid arguments: --pr-number" in stderr
+    # The constraint wording, not just the flag name: naming only
+    # `--pr-number` would tell an operator which flag was rejected but not
+    # what it needed, which is the actionability the replaced hand-rolled
+    # message carried and this handler must not drop.
+    assert "error: invalid arguments: --pr-number (must be a positive integer)" in stderr
     assert "pr_number" not in stderr
     assert "-7" not in stderr
     assert "Input should be greater than 0" not in stderr

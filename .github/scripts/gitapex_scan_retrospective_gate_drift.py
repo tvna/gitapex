@@ -293,6 +293,16 @@ def load_gate_tracking_issues(path: str) -> set[int]:
 # ---------------------------------------------------------------------------
 
 
+# This CLI's own wording for each constraint the model below imposes, keyed
+# by pydantic's own error type. pydantic's message text is deliberately not
+# echoed -- it is not part of this CLI's contract, so a version bump must
+# not change what an operator reads -- but naming only the offending flag
+# and nothing else leaves the operator without the reason. An unmapped type
+# falls back to a generic label rather than raising, so a future constraint
+# kind can never turn a rejected argument into a traceback.
+_CONSTRAINT_HINTS = {"string_too_short": "must not be blank"}
+
+
 class ScanRetrospectiveGateDriftArgs(BaseModel):
     """Typed view of `main`'s parsed CLI namespace. Every field rejects a
     blank value: argparse's own ``required=True`` only guarantees the flag
@@ -343,10 +353,13 @@ def main(argv: list[str] | None = None) -> int:
             ssot_path=args.ssot_path,
         )
     except ValidationError as error:
-        # Only the offending flag names are echoed: pydantic's own message
-        # text is not part of this CLI's contract, and the rejected value
-        # itself is never printed.
-        invalid = ", ".join(f"--{str(item['loc'][0]).replace('_', '-')}" for item in error.errors())
+        # Only the offending flag names and this CLI's own constraint
+        # wording are echoed -- never pydantic's own message text, and
+        # never the rejected value itself.
+        invalid = ", ".join(
+            f"--{str(item['loc'][0]).replace('_', '-')} ({_CONSTRAINT_HINTS.get(item['type'], 'invalid value')})"
+            for item in error.errors()
+        )
         print(f"error: invalid arguments: {invalid}", file=sys.stderr)
         return 1
 

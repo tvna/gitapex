@@ -273,6 +273,6 @@ def test_main_renders_underscored_fields_as_their_hyphenated_flags(capsys):
     field-declaration order, and never pydantic's own message text."""
     assert sdd.main(["--base-rev", "", "--head-rev", "HEAD", "--base-path", "", "--head-path", "b"]) == 1
     stderr = capsys.readouterr().err
-    assert "error: invalid arguments: --base-rev, --base-path" in stderr
+    assert "error: invalid arguments: --base-rev (must not be blank), --base-path (must not be blank)" in stderr
     assert "base_rev" not in stderr
     assert "String should have at least 1 character" not in stderr

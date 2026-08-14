@@ -28,11 +28,24 @@ this script only ever needs the one `description` field, not the full
 frontmatter shape gitapex_check_skill_shape.py validates.
 
 Run via `uv run` (needed for the pydantic import -- a bare `python3`
-invocation without pydantic installed now fails at import time, before
-argparse even runs). Its real production path is an in-process
-`import gitapex_skill_description_diff` from
-gitapex_compute_skill_audit_flags.py, itself `uv run`-invoked from
-skill-audit-gate.yml.
+invocation without pydantic installed fails at import time, before argparse
+even runs). Two callers reach this module, and only one of them satisfies
+that:
+
+- skill-audit-gate.yml's CI path, via an in-process `import
+  gitapex_skill_description_diff` from gitapex_compute_skill_audit_flags.py,
+  itself `uv run`-invoked. This is the authoritative path.
+- hooks/check-pr-skill-audit-disclosure.sh's tier-1 local pre-check, which
+  invokes gitapex_gate_skill_audit_disclosure.py under a bare `python3`.
+  That path already could not import pydantic before this module needed it
+  (gitapex_detect_changed_gate_scripts.py, reached through the same import
+  chain, has imported pydantic at module scope since issue #1040 wave 1),
+  so the hook's own `except ImportError` handler catches it and falls
+  through to its narrower tier-2 check with a warning -- the documented
+  degradation, not a hard failure. This module joining that class does not
+  change the hook's behavior, but the fall-through is silent enough that
+  no deterministic gate currently covers it: bare-python3-invocation-gate.yml
+  scans workflow `run:` steps only, not hooks/*.sh.
 """
 
 from __future__ import annotations
@@ -121,6 +134,16 @@ def _read_at_revision(rev, path):
     return result.stdout
 
 
+# This CLI's own wording for each constraint the model below imposes, keyed
+# by pydantic's own error type. pydantic's message text is deliberately not
+# echoed -- it is not part of this CLI's contract, so a version bump must
+# not change what an operator reads -- but naming only the offending flag
+# and nothing else leaves the operator without the reason. An unmapped type
+# falls back to a generic label rather than raising, so a future constraint
+# kind can never turn a rejected argument into a traceback.
+_CONSTRAINT_HINTS = {"string_too_short": "must not be blank"}
+
+
 class SkillDescriptionDiffArgs(BaseModel):
     """Typed view of `main`'s parsed CLI namespace. All four fields reject
     a blank value -- argparse's own ``required=True`` only guarantees the
@@ -161,10 +184,13 @@ def main(argv: list[str] | None = None) -> int:
             head_path=args.head_path,
         )
     except ValidationError as error:
-        # Only the offending flag names are echoed: pydantic's own message
-        # text is not part of this CLI's contract, and the rejected value
-        # itself is never printed.
-        invalid = ", ".join(f"--{str(item['loc'][0]).replace('_', '-')}" for item in error.errors())
+        # Only the offending flag names and this CLI's own constraint
+        # wording are echoed -- never pydantic's own message text, and
+        # never the rejected value itself.
+        invalid = ", ".join(
+            f"--{str(item['loc'][0]).replace('_', '-')} ({_CONSTRAINT_HINTS.get(item['type'], 'invalid value')})"
+            for item in error.errors()
+        )
         print(f"error: invalid arguments: {invalid}", file=sys.stderr)
         return 1
 

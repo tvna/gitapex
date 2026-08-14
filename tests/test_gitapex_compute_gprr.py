@@ -341,7 +341,10 @@ def test_main_names_offending_flags_and_leaks_no_pydantic_text(
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
     assert gprr.main(["--owner", "", "--repo", "", "--label", ""]) == 1
     stderr = capsys.readouterr().err
-    assert "error: invalid arguments: --owner, --repo, --label" in stderr
+    assert (
+        "error: invalid arguments: --owner (must not be blank), --repo (must not be blank), "
+        "--label (must not be blank)" in stderr
+    )
     assert "String should have at least 1 character" not in stderr
 
 

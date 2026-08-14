@@ -444,7 +444,9 @@ def test_main_renders_underscored_field_as_its_hyphenated_flag(monkeypatch, caps
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
     assert sra.main(["--owner", "tvna", "--repo", "gitapex", "--stale-hours", "-3"]) == 1
     stderr = capsys.readouterr().err
-    assert "error: invalid arguments: --stale-hours" in stderr
+    # The constraint wording, not just the flag name -- see
+    # test_gitapex_post_merge_retro.py's own sibling assertion for why.
+    assert "error: invalid arguments: --stale-hours (must be a positive integer)" in stderr
     assert "stale_hours" not in stderr
     assert "Input should be greater than 0" not in stderr
 
