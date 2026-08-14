@@ -190,7 +190,8 @@ gitapex_scan_skill_metadata_schema.py's own small versions.
 Run standalone against one skill directory --
 ``python3 skills/evaluating-skill-quality/scripts/
 gitapex_scan_execution_requirements_drift.py <skill-dir>`` (exit 0 clean or
-warnings-only, 1 on any error-severity finding or a read error) -- or via
+warnings-only, 1 on any error-severity finding or a read error, 2 if a
+required dependency -- PyYAML -- is missing from the import path) -- or via
 the pytest gate in skills/evaluating-skill-quality/scripts/
 test_gitapex_scan_execution_requirements_drift.py.
 """
@@ -205,7 +206,34 @@ import sys
 import urllib.parse
 from typing import Any, NamedTuple
 
-import yaml
+try:
+    import yaml
+except ModuleNotFoundError as error:
+    # why-not(#1076): only convert to SystemExit when run as a script.
+    # A bare SystemExit raised while this module is merely *imported* (e.g.
+    # pytest collecting test_gitapex_scan_execution_requirements_drift.py's
+    # own `import ... as scanner`) is not a plain Exception, so pytest's
+    # collection handler can't catch it cleanly -- live-verified: it surfaces
+    # as INTERNALERROR (exit 3) instead of a normal, clean collection error
+    # (exit 2), swallowing this guard's own message under a crash dump. The
+    # __name__ check keeps every import path exactly as graceful as the
+    # pre-#1076 unguarded `import yaml` was; only the documented CLI entry
+    # point (`python3 gitapex_scan_execution_requirements_drift.py
+    # <skill-dir>`) gets the friendly message. error.name narrows further to
+    # "PyYAML itself is absent": a broken/partial install raises this same
+    # exception type with error.name == "yaml.<submodule>", not "yaml", and
+    # this guard's remediation ("uv sync --group dev") would not fix a
+    # corrupted install, so that case re-raises unmodified rather than being
+    # misdiagnosed.
+    if error.name != "yaml" or __name__ != "__main__":
+        raise
+    print(
+        f"error: {error}. This script requires PyYAML, which is not on "
+        "the import path -- install the dev dependency group first: "
+        "uv sync --group dev",
+        file=sys.stderr,
+    )
+    raise SystemExit(2) from error
 
 # This file lives at skills/evaluating-skill-quality/scripts/<name>.py, so
 # parents[2] is skills/ itself -- one level deeper than a .github/scripts/
