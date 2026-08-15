@@ -1531,6 +1531,45 @@ def test_dependency_policy_declared_fails_when_spec_is_not_a_mapping(tmp_path):
     assert "not a mapping" in by["dependency-policy-declared"].evidence
 
 
+def test_dependency_policy_written_as_a_list_fails_not_treated_as_absent(tmp_path):
+    # Found live by an adversarial review (issue #1124): a present-but-
+    # block-shaped "dependencyPolicy:" (list items on following lines,
+    # instead of an inline scalar) used to parse to Python None -- the
+    # exact same value real absence produces -- so this check silently
+    # PASSed a present-and-malformed declaration as "not declared". A
+    # present dependencyPolicy that fails to name a real level must FAIL,
+    # the same way an inline garbage string already does above, not be
+    # indistinguishable from the field never having been written at all.
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\nkind: SkillMetadata\nmetadata:\n  name: skill\n"
+        "spec:\n  portability: Portable\n  capabilityAssumption: Broad\n"
+        "  dependencyPolicy:\n    - StdlibOnly\n    - Declared\n",
+        encoding="utf-8",
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["dependency-policy-declared"].passed is False
+    assert by["dependency-policy-declared"].evidence != "not declared (optional, treated as StdlibOnly-equivalent)"
+    assert css.main([str(d)]) == 1
+
+
+def test_dependency_policy_bare_colon_fails_not_treated_as_absent(tmp_path):
+    # Same underlying gap as the list-shaped case above, narrower trigger:
+    # a "dependencyPolicy:" header with literally nothing after it and no
+    # following block content either -- still present, still malformed
+    # (no real level named), still must not read as absent.
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\nkind: SkillMetadata\nmetadata:\n  name: skill\n"
+        "spec:\n  portability: Portable\n  capabilityAssumption: Broad\n  dependencyPolicy:\n",
+        encoding="utf-8",
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["dependency-policy-declared"].passed is False
+    assert by["dependency-policy-declared"].evidence != "not declared (optional, treated as StdlibOnly-equivalent)"
+    assert css.main([str(d)]) == 1
+
+
 def test_quoted_portability_value_passes(tmp_path):
     # A double-quoted scalar ("Portable") must be unquoted before matching
     # PORTABILITY_LEVELS -- exercises _unquote via _parse_manifest.
@@ -3439,6 +3478,36 @@ def test_manifest_parser_still_ignores_eval_status():
     )
     parsed = css._parse_manifest(text)
     assert "evalStatus" not in parsed.root["spec"]
+    assert parsed.malformed_lines == []
+
+
+def test_manifest_parser_registers_block_shaped_dependency_policy_as_present():
+    # Contrast with test_manifest_parser_still_ignores_eval_status above:
+    # dependencyPolicy is NOT reserved-and-ignored like evalStatus -- it is
+    # a real, optional, closed-vocabulary field whose own check
+    # (dependency-policy-declared) treats a parsed value of None as
+    # "genuinely absent, therefore fine". A block-shaped (or bare-colon)
+    # "dependencyPolicy:" must therefore register as present with an
+    # empty-string value -- distinct from real absence -- rather than
+    # silently vanishing from spec the way an unrecognized/reserved key
+    # does, or dependency-policy-declared could never tell "never written"
+    # apart from "written but malformed" (issue #1124, found live by an
+    # adversarial review).
+    text = (
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  dependencyPolicy:\n"
+        "    - StdlibOnly\n"
+        "    - Declared\n"
+    )
+    parsed = css._parse_manifest(text)
+    assert "dependencyPolicy" in parsed.root["spec"]
+    assert parsed.root["spec"]["dependencyPolicy"] == ""
     assert parsed.malformed_lines == []
 
 

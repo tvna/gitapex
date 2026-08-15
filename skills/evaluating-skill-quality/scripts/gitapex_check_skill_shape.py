@@ -2693,6 +2693,34 @@ def _parse_manifest(text: str) -> ManifestParse:
                 elif key == "executionRequirements" and current is root.get("spec") and not value:
                     in_execution_requirements = True
                     execution_requirements = {}
+                elif key == "dependencyPolicy" and current is root.get("spec") and not value:
+                    # dependencyPolicy is a closed-vocabulary scalar, not a
+                    # block key like the four above -- but it still needs
+                    # its own explicit branch here (rather than silently
+                    # falling out of this elif chain the way an arbitrary
+                    # unrecognized key like the reserved spec.evalStatus
+                    # deliberately still does, see
+                    # test_manifest_parser_still_ignores_eval_status) for a
+                    # narrower reason: dependency-policy-declared is the
+                    # first check in this file to treat "spec.get(key) is
+                    # None" as "absent, therefore fine" for an *optional*
+                    # field. Falling through would leave a bare
+                    # "dependencyPolicy:" (or one followed by list/mapping
+                    # content this parser does not interpret at this key's
+                    # own indent) completely unregistered, indistinguishable
+                    # from the key never having been written at all -- so
+                    # dependency-policy-declared would silently PASS a
+                    # present-and-malformed declaration as if it were
+                    # absent. Registering it as an empty string instead
+                    # keeps it correctly distinct from real absence while
+                    # still failing dependency-policy-declared's own
+                    # DEPENDENCY_POLICY_LEVELS membership check (empty
+                    # string is not StdlibOnly/Declared). Found live: an
+                    # adversarial review of issue #1124 confirmed
+                    # "dependencyPolicy:" followed by list items (or a bare
+                    # "dependencyPolicy:" alone) passed as "not declared"
+                    # before this branch existed.
+                    current[key] = ""
                 elif value:
                     current[key] = _unquote(value)
             continue
