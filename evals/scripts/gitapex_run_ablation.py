@@ -57,7 +57,8 @@ needs `ANTHROPIC_API_KEY` (or an `apiKeyHelper`) explicitly configured,
 since bare mode skips OAuth/keychain reads entirely (same docs page).
 
 Standard library plus PyYAML (already a dev dependency used by this
-repository's other fixture tooling) and this repository's own
+repository's other fixture tooling), pydantic (`_RunAblationArgs`'
+CLI-argument validation), and this repository's own
 `gitapex_score_contract.score` (`skills/scorer-gated-skill-edits/scripts/
 gitapex_score_contract.py`). That module is imported by bare name below; the
 `sys.path` bootstrap right before the import exists because

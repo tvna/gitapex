@@ -1,0 +1,42 @@
+id: evaluating-skill-quality-shared-bundled-script-undeclared-reach-train
+name: Bundled Script Reaches Into a Sibling Skill's Directory, Undeclared
+description: Bundled-script train fixture motivating a new dimension-7 check -- the target's own bundled script imports a helper module by a hardcoded relative path into a different skill's scripts/ directory, and neither skill's metadata declares the dependency. Motivates the Single ownership and boundary fit check.
+tags:
+  - quality
+  - bundled-scripts
+  - shared-bundled-script
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "invoice-line-item-matcher". Is this a good skill?
+
+    ---
+    name: invoice-line-item-matcher
+    description: Match invoice line items against purchase-order line items and flag amount mismatches. Use when the user asks to reconcile an invoice against a PO.
+    ---
+
+    # Invoice Line Item Matcher
+
+    ## Procedure
+
+    1. Run `scripts/match_line_items.py <invoice.csv> <po.csv>`.
+
+    `scripts/match_line_items.py` (top of file):
+    ```python
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "currency-conversion-helper" / "scripts"))
+    from normalize_currency import normalize_amount
+    ```
+
+    No `spec.skillDependencies` or equivalent section appears anywhere in
+    this skill's metadata, and `currency-conversion-helper`'s own SKILL.md
+    does not mention `invoice-line-item-matcher` either.
+expected:
+  output_contains:
+    - "Single ownership and boundary fit"
+    - "undeclared"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"
