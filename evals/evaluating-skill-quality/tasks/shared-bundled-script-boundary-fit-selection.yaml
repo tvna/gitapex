@@ -1,0 +1,48 @@
+id: evaluating-skill-quality-shared-bundled-script-boundary-fit-selection
+name: Anomaly-Flagger Script Imports an Unlicensed Third-Party Package on a No-Install Surface
+description: A different domain (log-anomaly detection, not invoice reconciliation) and a different sub-failure (boundary fit -- an unlicensed third-party import on a no-install-step deployment surface) from the train fixture's undeclared cross-skill reach. The gate measures whether the Single ownership and boundary fit check generalizes across both named sub-failures rather than memorizing the train fixture's shape.
+tags:
+  - quality
+  - bundled-scripts
+  - shared-bundled-script
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "log-anomaly-flagger". This repository's own layout doc
+    states plainly: "skills/ ships to a plugin consumer with no
+    dependency-install step; only the Python standard library is
+    guaranteed available to a bundled script at run time." No architecture
+    decision record in this repository licenses any third-party package
+    for skills/*/scripts/. Is this a good skill?
+
+    ---
+    name: log-anomaly-flagger
+    description: Flag anomalous request-rate spikes in a log file. Use when the user asks to scan a log file for anomalies.
+    ---
+
+    # Log Anomaly Flagger
+
+    ## Procedure
+
+    1. Run `scripts/flag_anomalies.py <logfile>`.
+
+    `scripts/flag_anomalies.py` (top of file):
+    ```python
+    import sys
+    import numpy as np
+
+    def flag_spikes(rates: list[float]) -> list[int]:
+        arr = np.array(rates)
+        mean, std = arr.mean(), arr.std()
+        return [i for i, r in enumerate(rates) if r > mean + 3 * std]
+    ```
+
+    `scripts/flag_anomalies.py` bundles no other skill's code, and no other
+    skill references it.
+expected:
+  output_contains:
+    - "Single ownership and boundary fit"
+    - "numpy"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

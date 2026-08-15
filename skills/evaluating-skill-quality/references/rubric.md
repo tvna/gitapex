@@ -1299,26 +1299,41 @@ Three independent, optional sub-blocks plus one plain scalar under
 
 ## Execution requirements
 
-Like Lifecycle, this field has no per-dimension grading effect. It is
-structured bookkeeping -- `spec.executionRequirements.tools`
-(`read`/`write`/`shell` capability-tag lists) and
+Like Lifecycle, this field has no per-dimension grading effect on its
+own. It is structured bookkeeping -- `spec.executionRequirements.tools`
+(`read`/`write`/`shell` capability-tag lists),
 `spec.executionRequirements.network` (`mode`, a
 `disabled`/`allowlist`/`unrestricted` enum, plus `domains`, an exact-host
-list non-empty iff `mode: allowlist`) so far -- gated by the same
-shape-check rigor and unknown-key fail-closed treatment as every other
-sidecar field, and behavior-neutral like the rest of this sidecar. Once
-declared, `tools`' own subkeys are each a complete, closed allowlist for
-that category: non-empty means required/exclusively-permitted, an
-explicit empty list means prohibited, and an absent subkey means not yet
-declared (not the same as either). `network` carries its own,
-different rule instead: it is a single declaration (`mode` required once
-`network` is present at all), not a per-subkey allowlist -- `disabled`
-means no network access, `allowlist` means only the listed exact hosts,
-and `unrestricted` means no restriction from this declaration, schema-
-permitted but requiring the declaring PR's own explicit written
-justification for why the skill's real behavior needs unrestricted
-network access, checked against whatever security policy the calling
-repository has adopted, before first real use.
+list non-empty iff `mode: allowlist`), and
+`spec.executionRequirements.packages` (free-form ecosystem keys, e.g.
+`pip`, each a list of package names the skill's own bundled scripts
+depend on) so far -- gated by the same shape-check rigor and unknown-key
+fail-closed treatment as every other sidecar field, and behavior-neutral
+like the rest of this sidecar. Once declared, `tools`' own subkeys are
+each a complete, closed allowlist for that category: non-empty means
+required/exclusively-permitted, an explicit empty list means prohibited,
+and an absent subkey means not yet declared (not the same as either).
+`network` carries its own, different rule instead: it is a single
+declaration (`mode` required once `network` is present at all), not a
+per-subkey allowlist -- `disabled` means no network access, `allowlist`
+means only the listed exact hosts, and `unrestricted` means no
+restriction from this declaration, schema-permitted but requiring the
+declaring PR's own explicit written justification for why the skill's
+real behavior needs unrestricted network access, checked against
+whatever security policy the calling repository has adopted, before
+first real use. `packages` carries a third rule: each declared
+ecosystem/package-name pair is additionally resolved against an
+external, repository-root allowlist config
+(`.gitapex/dependency-allowlist.json`, deliberately outside the skill's
+own directory so the check mechanism stays portable while the specific
+allowed-package list stays repo-local policy) by the
+`execution-requirements-packages-allowlisted` check -- packages declared
+with no allowlist config present is a fail-loud FAIL (an unconfigured
+allowlist constrains nothing, so a silent PASS would defeat the whole
+point), no packages declared is not-applicable (PASS), and a declared
+pair absent from its ecosystem's allowlisted list is a FAIL naming the
+exact offending pair(s). Dimension 7 (Bundled scripts) below is where a
+declared package's real consequences are graded.
 
 ## 1. Discovery -- name and description
 
@@ -1700,14 +1715,24 @@ reading the source.
   from source.
 - **Verifiable intermediate outputs** for high-stakes batch work -- a
   plan -> validate -> execute pattern with a machine-checkable plan file.
+- **Single ownership and boundary fit** -- when the script is shared
+  with, or reachable from, another skill, exactly one skill bundles it
+  and every other consumer declares the dependency rather than reaching
+  for it undeclared; the script's own imports resolve on the target's
+  deployment surface with no install step, unless the target
+  repository's own recorded decision (an ADR or equivalent) licenses
+  the specific package.
 
 - **Fail:** a script that throws on a missing file and leaves the model to
-  cope, or a magic constant with no comment explaining why that value was
-  chosen.
+  cope, a magic constant with no comment explaining why that value was
+  chosen, or a script two skills both bundle copies of (or one reaches
+  into the other's directory for) with neither side declaring the
+  dependency.
 - **Pass:** the script handles its own error conditions, every
-  configuration value is justified inline, and its documentation states
+  configuration value is justified inline, its documentation states
   what it does, its inputs/outputs, and whether the model should run it or
-  read it as reference.
+  read it as reference, and -- when shared -- exactly one skill owns it
+  with every other consumer's dependency declared.
 
 **Comment categorization (Interface vs. Implementation).** Grounded in
 John Ousterhout's Stanford CS190 "Writing Comments" lecture ([ouster]):
@@ -1751,6 +1776,44 @@ judgment: no shape-checker mechanization is planned for this axis: which
 comment lines earn their token cost is a per-comment value judgment, not
 a mechanically checkable rule the way an unjustified constant or a
 missing execution-intent phrase is.
+
+**Single ownership and boundary fit, in depth.** Applies only when the
+script is reachable from more than one skill -- imported by name, its
+directory referenced by a sibling skill's own default path constant, or
+documented as shared infrastructure. Four checks, run against the target
+repository's own deployment model (which tree ships to a consumer with no
+install step is repository-specific; read that repository's own layout
+doc or equivalent before grading this):
+
+1. **One owner.** Exactly one skill's `scripts/` bundles the file. Every
+   other consumer -- a sibling skill's SKILL.md, a reference doc, an
+   `import`, a hardcoded default path -- declares the dependency in its
+   own sidecar metadata (where the target repository has one, e.g. a
+   `spec.skillDependencies.requires` entry) rather than reaching for it
+   silently.
+2. **Boundary fit.** The script's own imports resolve on the deployment
+   surface its bundling skill ships to, with no install step. A
+   third-party import inside a bundled script is a finding unless the
+   target repository's own recorded architectural decision licenses that
+   specific package for that surface.
+3. **No undeclared reach-out.** Unless the reach is declared -- the
+   script's own bundling skill names the target skill as a dependency in
+   its sidecar metadata, per check 1 above -- the script does not default
+   to, or read from, a path outside its own bundling skill's directory --
+   watch a `parents[N]`-style default path constant as closely as prose,
+   since the reach hides there at least as often as in a docstring.
+4. **Duplication has a drift gate.** If the same functionality is copied
+   into more than one skill instead of shared, a deterministic drift gate
+   keeps the copies from silently diverging.
+
+**Fail:** a script one skill's own default path constant reaches into a
+sibling skill's `scripts/` directory for, with no declared dependency
+either side; or a bundled script whose own top-level import requires a
+package the bundling skill's shipped surface never installs.
+**Pass:** a script with no third-party import at all inside a skill
+shipped with no install step, or one whose single third-party import is
+named and licensed by the target repository's own recorded decision, with
+every cross-skill consumer declared.
 
 **Test methodology and test code structure, when the script ships its own
 test suite.** The five bullets above grade the script's code quality; a

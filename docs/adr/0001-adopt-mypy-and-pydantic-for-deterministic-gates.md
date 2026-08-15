@@ -130,19 +130,21 @@ constraints or demanding an all-at-once fix of every pre-existing typing
 gap before the gate can go live.
 
 Separately (https://github.com/tvna/gitapex/issues/1115):
-`skills/*/scripts/*.py` may depend on exactly `pyyaml`, `jsonschema`,
-and `pydantic` (pip), and only when the script uses the PEP 723
-self-contained-script pattern (a `# /// script` metadata block declaring
-`dependencies = [...]`) executed via `uv run`, with the dependency
-stated in both the skill's `compatibility` frontmatter field and its
-`metadata/gitapex.yaml` sidecar's `spec.executionRequirements.packages.pip`
-list. This is narrower than, and does not reverse, the
-unrestricted-pydantic-everywhere rejection above: a self-contained
-script never assumes a pre-installed site-package, so it does not
-reintroduce the silent-breakage risk that rejection exists to avoid.
-`hooks/*.py` is unaffected by this narrowing -- it is not yet a deployed
-runtime primitive (`docs/repository-layout.md`), and extending this
-allowance there is left to a separate, later decision.
+`skills/*/scripts/*.py` may depend, as direct dependencies (their own
+transitive dependencies are not separately gated by this decision), on
+exactly `pyyaml`, `jsonschema`, and `pydantic` (pip), and only when the
+script uses the PEP 723 self-contained-script pattern (a `# /// script`
+metadata block declaring `dependencies = [...]`) executed via `uv run`,
+with the dependency stated in both the skill's `compatibility`
+frontmatter field and its `metadata/gitapex.yaml` sidecar's
+`spec.executionRequirements.packages.pip` list. This is narrower than,
+and does not reverse, the unrestricted-pydantic-everywhere rejection
+above: a self-contained script never assumes a pre-installed
+site-package, so it does not reintroduce the silent-breakage risk that
+rejection exists to avoid. `hooks/*.py` is unaffected by this narrowing
+-- it is not yet a deployed runtime primitive
+(`docs/repository-layout.md`), and extending this allowance there is
+left to a separate, later decision.
 
 ## Consequences
 
@@ -169,10 +171,13 @@ Good, because `skills/*/scripts/` authors get a real, checkable path to
 a small set of common dependencies (YAML parsing, JSON Schema
 validation, data models) without this repository silently assuming a
 site-package install its own deployment boundary cannot guarantee.
-Bad, because a consumer without `uv` available cannot run an affected
-script at all -- the `compatibility` disclosure this decision requires
-makes that limitation visible before invocation, but does not remove
-it.
+Bad, because a consumer without `uv` (or another PEP 723-compatible
+runner, e.g. `pipx`) available cannot use the zero-setup `uv run` path
+this decision relies on -- they could still run an affected script by
+separately installing its declared dependencies themselves, but that
+manual step is exactly what the self-contained-script mechanism exists
+to avoid needing. The `compatibility` disclosure this decision requires
+makes the limitation visible before invocation, but does not remove it.
 Bad, because the same fact -- which packages a given skill actually
 depends on -- must now stay consistent across three places (this ADR's
 own closed list, the skill's `compatibility` prose, and its
@@ -206,3 +211,15 @@ declared-dependency claim on its own merits, and a repository-local
 closed-list configuration plus a CI gate enforcing it against every
 skill. Until all four land, this decision relies on review, not a
 required check.
+
+A related, pre-existing gap this decision surfaced rather than caused:
+`skills/evaluating-skill-quality/scripts/gitapex_scan_execution_requirements_drift.py`
+already imports PyYAML today, guarded only by a friendly error message
+pointing at `uv sync --group dev` (a whole-repository dev-dependency-
+group install), not the PEP 723 + `uv run` pattern this decision
+establishes -- and that dependency is declared in neither
+`compatibility` nor `metadata/gitapex.yaml` on `evaluating-skill-quality`
+itself. It predates this decision and is not yet reconciled with it;
+deciding whether to migrate it to the new pattern or document it as a
+standing development-tool exception is tracked separately
+(https://github.com/tvna/gitapex/issues/1117).

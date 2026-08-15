@@ -1038,6 +1038,24 @@ Deterministic verification for this round: fixture YAML parse 70/70;
 (4 warnings, the same four pinned tuples); full `pytest` 3247 passed; the
 Assignment section's unique train count (28) minus the one stated exclusion
 equals the declared train figure (27), and selection/test match exactly.
+
+**Issue #1111 (Single ownership and boundary fit):** `references/rubric.md`
+gained a new dimension-7 check for a bundled script shared with, or reachable
+from, another skill -- single ownership, no third-party import without a
+licensing ADR, no undeclared cross-skill reach, and a drift gate on
+duplication. A step-level addition inside the existing Bundled scripts
+dimension, not a tenth dimension (`references/output-schema.json` still pins
+nine). Went through `scorer-gated-skill-edits`' own held-out gate: 3 new
+fixtures added to `split.json`'s split (73 total, 28:31:13). One fresh
+dispatch per side against the new selection fixture (the 30 pre-existing
+selection fixtures reused unchanged, confirmed assertion-surface disjoint by
+reading every one of their `expected` blocks): selection mean strictly
+improves, 0.750000 -> 1.000000, **KEEP**. The restraint fixture (test split,
+read once) scored 1.000000, correctly withholding the check on a properly
+declared, sole-owned, boundary-safe dependency. Full record, per-fixture
+scores, and one fixture-authoring bug found and fixed mid-run (a confound
+between the new check and the pre-existing "Solve, don't punt" bullet):
+`evals/evaluating-skill-quality/split.md`'s Kept-edit log. Refs #1111.
 Refs #907.
 
 ## Dependency policy precondition axis (issue #1124)

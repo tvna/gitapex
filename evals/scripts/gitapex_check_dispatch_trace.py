@@ -55,8 +55,10 @@ this module's design:
    the isolated copy has no `.claude-plugin/marketplace.json`, rather than
    silently letting the dispatch proceed in degraded mode.
 
-Standard library only, matching this repository's other `evals/scripts/*.py`
-tooling.
+Standard library plus pydantic (`ToolUseBlock`/`MessageEnvelope`/`StreamEvent`
+below narrow transcript-line structure; see each model's own docstring for
+why -- they reproduce the pre-pydantic `isinstance` checks field for field,
+including exact error-message parity).
 """
 
 from __future__ import annotations
