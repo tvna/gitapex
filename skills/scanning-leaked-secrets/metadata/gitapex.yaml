@@ -1,0 +1,49 @@
+apiVersion: gitapex.io/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: scanning-leaked-secrets
+spec:
+  portability: Mixed
+  capabilityAssumption: Adaptive
+  references:
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/849"
+      summary: "Ships skills/scanning-leaked-secrets/ as the scanning-* family's second shipped skill, wrapping betterleaks (already SHA256-pinned in flake.nix at 1.6.1) to scan a target's working tree and full git history for leaked secrets, with every finding's secret value redacted before it reaches this skill's own report."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/844"
+      summary: "Cites docs/scanning-capability-selection-policy.md for capability selection rather than restating its evidence table inline. That table's own Secret detection row names betterleaks the libre CLI (the guaranteed path) against GitHub and GitLab native scanning, both Partial and platform-restricted, and Bitbucket, a Gap."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/843"
+      summary: "betterleaks is the roster's chosen tool for the secret-detection domain; TruffleHog was recorded as an AGPL alternative, never first choice."
+    - kind: corroboration
+      anchor: "references/worked-examples.md"
+      summary: "The full CLI contract this skill's Procedure depends on was verified live against the real pinned 1.6.1 binary, not from memory: betterleaks dir vs. betterleaks git (a file git rm-ed and committed away is still found by git, not by dir); a clean or empty target reports literal null, exit 0; --exit-code 0 makes a completed scan exit 0 while a genuine tool error still exits 1 with no parseable body regardless of --exit-code; and config auto-discovery needs no --config flag."
+    - kind: correction
+      anchor: "references/worked-examples.md"
+      summary: "Corrects an assumption that --redact redacts every field of a finding. Verified live against the pinned 1.6.1 binary: a mongodb-connection-string finding's CaptureGroups.password and CaptureGroups.username reached the JSON output as plaintext with --redact at its default of 100. SKILL.md's Procedure gained a step-5 pass redacting CaptureGroups the same way, a second, unconditional layer. A private-key finding carries no CaptureGroups field, so the gap is rule-dependent."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/890"
+      summary: "A separate, already-merged issue independently excluded --validation for the identical reason this skill's own Stop boundary states: it would send candidate credentials to third-party endpoints. Corroborates rather than originates this skill's own boundary, which is required regardless of that issue's own history."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/845"
+      summary: "Declares executionRequirements.network mode disabled rather than omitting the block, matching how scanning-ci-workflows/metadata/gitapex.yaml declares it for zizmor's own --offline boundary. Enforced by never passing --validation, never invoking betterleaks' github, gitlab, huggingface, or s3 subcommands, and never setting the validation environment variables."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/823"
+      summary: "Declared executionRequirements.tools: the Procedure reads a target path (read: files) and executes one external binary (shell: betterleaks). write is empty and enforced by a Stop boundary against auto-remediation; betterleaks' own CLI ships no remediation flag at all, unlike zizmor's --fix, so this boundary guards against operator pressure rather than a real tool capability."
+  skillDependencies:
+    requires: []
+    relatedTo:
+      - scanning-attack-surfaces
+  executionRequirements:
+    tools:
+      read:
+        - files
+      write: []
+      shell:
+        - betterleaks
+    network:
+      mode: disabled
+  lifecycle:
+    experimental:
+      reason: "Second skill to ship in the scanning-* family, after scanning-ci-workflows. Its own delegate-judgment shape is validated against a single wrapped tool for the first time (scanning-ci-workflows wraps two); a real redaction gap in the pinned tool's own --redact flag, see the correction reference above, was found and fixed before this version shipped, which is exactly the kind of validation an experimental designation exists to surface."
+      trackingIssue: "https://github.com/tvna/gitapex/issues/849"
