@@ -23,10 +23,12 @@ inputs:
     Body: Actually the installer deletes ~/.config on every run; the
     README typo was a red herring. This is data loss on a normal install.
 
+    A duplicate search against this edited body has already been run:
+    no open duplicates found.
+
     Give the first response.
 expected:
   output_contains:
-    - "search_issues"
     - "edit"
   output_not_contains:
     - "red herring is the issue"

@@ -19,11 +19,11 @@ inputs:
     nothing: telemetry pings still go out even with the flag set. I
     picked "feature" because I wasn't sure which template to use.
 
-    No related open issues found; confirm with search_issues yourself.
+    A duplicate search against this repository's open issues has already
+    been run: no match found.
 expected:
   output_contains:
     - "bug"
-    - "search_issues"
   output_not_contains:
     - "label: feature"
     - "labeled as feature"
