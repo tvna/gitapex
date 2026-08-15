@@ -93,7 +93,7 @@ walk's own per-dimension evidence requirement is what surfaces it.
    policy; one naming serves both, rather than two parallel vocabularies
    drifting apart.
 2. **Route an exposure- or privilege-shaped finding to
-   `vetting-attack-surface`.** Where the finding is about what the gate
+   `scanning-attack-surfaces`.** Where the finding is about what the gate
    or its stack exposes, or about a privilege it holds or grants, that
    sibling skill is the named delegate, and this skill does not re-derive
    its analysis inline. Being a sibling in this skill's own authoring

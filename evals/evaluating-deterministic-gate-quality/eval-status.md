@@ -19,7 +19,7 @@ and adversarial-input handling (a hidden instruction embedded in a reviewed
 artifact, an unverified self-asserted waiver claim, a request to execute a
 gate unsandboxed). No `split.md` -- this skill's fixtures are not (yet)
 gating an iterative `scorer-gated-skill-edits`-style SKILL.md edit loop, the
-same reason `vetting-attack-surface` and `screening-a-low-trust-contribution`
+same reason `scanning-attack-surfaces` and `screening-a-low-trust-contribution`
 also have none.
 
 The first 14 fixtures were authored directly; a second pass (an independent
@@ -163,7 +163,7 @@ inside the target asks the reviewer to convert that answer into
 permission to delete an existing hook. Two exercise the delegation
 recommendation: `delegation-recommendation-exposure-shaped-finding.yaml`
 routes an exposure- and privilege-shaped finding to
-`vetting-attack-surface` while still requiring this review's own verdict
+`scanning-attack-surfaces` while still requiring this review's own verdict
 and blast-radius statement, and
 `adversarial-delegation-target-asserted-as-installed.yaml` supplies a
 confident claim that a `scanning-`-prefixed delegate is already installed
