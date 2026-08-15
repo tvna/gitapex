@@ -108,3 +108,26 @@ configured; its outcome (or its own "No copilot-sdk endpoint configured"
 preflight failure, which is not specific to this PR) should be added here
 as a dated follow-up once observed, not read back into the paragraphs
 above as if it were already known.
+
+## 2026-08-15 follow-up: waza-eval-gate.yml's own run, observed
+
+PR #1100 (this issue's own PR) triggered `waza-eval-gate.yml` for real.
+Its "Determine touched skills" step correctly detected
+`Touched skills: responding-to-a-fresh-arrival`, confirming the gate does
+treat this suite as in scope. Its "Preflight -- require executor endpoint
+secrets" step then failed: the job's own logged environment shows
+`COPILOT_BASE_URL: ` and `COPILOT_PROVIDER_BASE_URL: ` both empty, and the
+step exits with "No copilot-sdk endpoint configured. Set repository secret
+COPILOT_BASE_URL (and/or COPILOT_PROVIDER_BASE_URL) ... (this job is not
+yet a required status check -- see issue #582)." (job 94999004881, run
+31879079877).
+
+This resolves the open question from the paragraph above: the
+repository's actual CI has the identical credential gap this fix's own
+session observed locally, not a different state. Remedy 1 (a live
+`copilot-sdk` run confirming the restructured fixtures) remains blocked on
+issue #124's own secret-provisioning prerequisite -- now confirmed against
+the real gate, not only against this session's sandboxed container. The
+other 12 check runs on PR #1100 (pytest, mypy, ruff, actionlint, and
+others) all passed, including a live `pytest -q` run of this repository's
+full suite against this fix's changes.
