@@ -1708,10 +1708,12 @@ doc or equivalent before grading this):
    third-party import inside a bundled script is a finding unless the
    target repository's own recorded architectural decision licenses that
    specific package for that surface.
-3. **No undeclared reach-out.** The script does not default to, or read
-   from, a path outside its own bundling skill's directory -- watch a
-   `parents[N]`-style default path constant as closely as prose, since the
-   reach hides there at least as often as in a docstring.
+3. **No undeclared reach-out.** Unless the reach is declared -- the
+   script's own bundling skill names the target skill as a dependency in
+   its sidecar metadata, per check 1 above -- the script does not default
+   to, or read from, a path outside its own bundling skill's directory --
+   watch a `parents[N]`-style default path constant as closely as prose,
+   since the reach hides there at least as often as in a docstring.
 4. **Duplication has a drift gate.** If the same functionality is copied
    into more than one skill instead of shared, a deterministic drift gate
    keeps the copies from silently diverging.
