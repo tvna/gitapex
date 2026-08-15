@@ -1,6 +1,6 @@
 id: evaluating-skill-quality-shared-bundled-script-declared-dependency-restraint
 name: Cross-Skill Script Reference With a Properly Declared Dependency Must Not Be Flagged
-description: Restraint check for the new Single ownership and boundary fit check (test split, read once) -- the target's bundled script does reach into a sibling skill's scripts/ directory, but the dependency is declared in this skill's own sidecar metadata (spec.skillDependencies.requires), the sibling skill is the sole owner, and the imported module is itself standard-library only. Must not be false-positively flagged merely for referencing another skill's code.
+description: Restraint check for the new Single ownership and boundary fit check (test split, read once) -- the target's bundled script does reach into a sibling skill's scripts/ directory, but the dependency is declared in this skill's own sidecar metadata (spec.skillDependencies.requires, in metadata/gitapex.yaml, not SKILL.md frontmatter), the sibling skill is the sole owner, the imported module is itself standard-library only, and the import is guarded so a missing sibling fails loud with a clear message instead of an unhandled traceback (isolating the ownership/declaration question from the separate Solve-don't-punt error-handling bullet). Must not be false-positively flagged merely for referencing another skill's code.
 tags:
   - quality
   - bundled-scripts
@@ -13,10 +13,6 @@ inputs:
     ---
     name: expense-report-currency-checker
     description: Flag an expense report line item whose currency conversion looks wrong. Use when the user asks to check an expense report's currency math.
-    spec:
-      skillDependencies:
-        requires:
-          - currency-conversion-helper
     ---
 
     # Expense Report Currency Checker
@@ -30,10 +26,22 @@ inputs:
     import sys
     from pathlib import Path
 
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "currency-conversion-helper" / "scripts"))
-    from normalize_currency import normalize_amount
+    _HELPER_SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "currency-conversion-helper" / "scripts"
+    sys.path.insert(0, str(_HELPER_SCRIPTS_DIR))
+    try:
+        from normalize_currency import normalize_amount
+    except ModuleNotFoundError as error:
+        print(
+            f"error: {error}. This skill requires the currency-conversion-helper "
+            "skill installed alongside it -- normalize_currency.py was not found "
+            f"at {_HELPER_SCRIPTS_DIR}.",
+            file=sys.stderr,
+        )
+        raise SystemExit(2) from error
     ```
 
+    This skill's own `metadata/gitapex.yaml` sidecar declares
+    `spec.skillDependencies.requires: [currency-conversion-helper]`.
     `currency-conversion-helper` is the sole owner of `normalize_currency.py`
     and no other skill bundles a copy of it; `normalize_currency.py` itself
     imports only the Python standard library.
