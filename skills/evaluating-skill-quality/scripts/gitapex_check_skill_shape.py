@@ -104,10 +104,10 @@ Checks (the canonical list -- the manual fallback is to apply these):
     exists. No skill's runtime procedure may read or branch on any part
     of spec.lifecycle (the sidecar's behavior-neutrality invariant).
     spec.executionRequirements, if present, is a mapping with only the
-    tools and network keys so far (further categories -- filesystem/mcp/
-    credentials/browser/externalServices/context -- are deferred; until
-    they land, any key other than tools/network here is an unknown key,
-    not reserved space);
+    tools, packages, and network keys so far (further categories --
+    filesystem/mcp/credentials/browser/externalServices/context -- are
+    deferred; until they land, any key other than tools/packages/network
+    here is an unknown key, not reserved space);
     tools, if present, is itself a mapping -- like spec.executionRequirements
     itself, never real YAML null -- with only the keys
     read/write/shell, each -- if present -- a list of non-empty scalar
@@ -129,11 +129,29 @@ Checks (the canonical list -- the manual fallback is to apply these):
     sidecar sub-block mixing a scalar field with a list field in the same
     block -- see EXEC_REQ_NETWORK_SUBKEYS' own comment above for why the
     parser treats that as no different from tools' all-list shape.
+    packages, if present, is itself a mapping -- never real YAML null,
+    same rule -- but unlike tools/network its own subkeys are not a fixed
+    tuple: each is a free-form ecosystem identifier (e.g. "pip", "npm")
+    matching EXEC_REQ_PACKAGES_KEY_RE (skill-metadata.schema.json's own
+    executionRequirementsPackages.propertyNames pattern), so unknown-
+    subkey detection here is a regex mismatch rather than a
+    tuple-membership check. Each matching ecosystem key's own value is,
+    like tools' read/write/shell, a list of non-empty scalar strings with
+    the same per-item shape rules (execution-requirements-well-formed). An
+    absent executionRequirements block, an absent packages block, or an
+    absent specific-ecosystem key each mean "not yet declared"; an
+    explicit empty list (e.g. pip: []) means "declared, zero packages
+    needed from that ecosystem" -- a deliberate statement, not the same as
+    absence. A declared package is additionally checked against the
+    repository-root .gitapex/dependency-allowlist.json config, a second,
+    independent check (execution-requirements-packages-allowlisted) --
+    see that check's own docstring for its not-applicable/fail/pass rules.
 
     Three-way absent/null/empty-mapping distinction, shared by every gated *mapping*-valued block above
     (spec.skillDependencies, spec.lifecycle and each of its
     experimental/deprecated/stable sub-blocks, spec.executionRequirements,
-    and spec.executionRequirements.tools): the key never appearing at all
+    spec.executionRequirements.tools, and
+    spec.executionRequirements.packages): the key never appearing at all
     means "not declared" (optional, passes); the key appearing with a
     blank value and no child key ever following at the next indent level
     is real YAML null -- a real YAML parser never reads a bare block
@@ -148,7 +166,8 @@ Checks (the canonical list -- the manual fallback is to apply these):
     *list* (read: []) does for list-valued fields. This distinction does
     NOT extend to list-valued keys (spec.references;
     spec.skillDependencies.requires/relatedTo;
-    spec.executionRequirements.tools.read/write/shell) -- a blank list
+    spec.executionRequirements.tools.read/write/shell;
+    spec.executionRequirements.packages.<ecosystem>) -- a blank list
     header is still read as an empty list, unchanged, matching each
     field's own already-established "explicit empty list is a deliberate
     statement" semantics documented above. Other
@@ -679,7 +698,8 @@ REFERENCES_MAPPING_LIKE_RE = re.compile(r"^[A-Za-z0-9_.-]+:(\s|$)")
 # OTHER than a string -- null, boolean, or numeric -- rather than the
 # string every list-of-scalar-strings field (spec.references,
 # spec.skillDependencies.requires/relatedTo,
-# spec.executionRequirements.tools.read/write/shell) assumes each of its
+# spec.executionRequirements.tools.read/write/shell,
+# spec.executionRequirements.packages.<ecosystem>) assumes each of its
 # items is. Deliberately the common, uncontroversial
 # subset -- not YAML 1.1's yes/no/on/off, which are also ordinary English
 # words a legitimate capability-tag or reference string could contain --
@@ -715,7 +735,8 @@ def _is_non_string_plain_scalar(raw_text: str) -> bool:
     way a real YAML parser would before resolving the item's type.
     Shared by every gated list-of-scalar-strings site (spec.references;
     spec.skillDependencies.requires/relatedTo;
-    spec.executionRequirements.tools.read/write/shell)."""
+    spec.executionRequirements.tools.read/write/shell;
+    spec.executionRequirements.packages.<ecosystem>)."""
     stripped = _INLINE_COMMENT_RE.sub("", raw_text).strip()
     return bool(YAML_NON_STRING_SCALAR_RE.match(stripped))
 
@@ -872,6 +893,65 @@ EXEC_REQ_TOOLS_LIST_ITEM_RE = re.compile(r"^[ ]{6,}-\s*(.*)$")
 # rather than silently claiming a generalization that was not attempted.
 EXEC_REQ_NETWORK_SUBKEYS = ("mode", "domains")
 EXEC_REQ_NETWORK_MODES = ("disabled", "allowlist", "unrestricted")  # closed vocabulary for network.mode
+
+# spec.executionRequirements' third recognized block sub-key: "packages" --
+# the first whose own subkeys are NOT a fixed, closed tuple the way tools'
+# read/write/shell (EXEC_REQ_TOOLS_SUBKEYS) and network's mode/domains
+# (EXEC_REQ_NETWORK_SUBKEYS) are. A package ecosystem (pip, npm, cargo, ...)
+# is an open-ended set by design -- skill-metadata.schema.json's own
+# executionRequirementsPackages deliberately declares no closed enum of
+# supported ecosystems, via propertyNames rather than a fixed properties
+# list -- so unknown-subkey detection here must be a REGEX match against
+# that same pattern, not a tuple-membership check: a future ecosystem
+# becomes usable with no parser change, matching the schema's own design
+# intent. Kept as a separate, hand-duplicated regex here rather than
+# imported from the schema (the same precedent EXTERNAL_CITATION_PATH_RE
+# already established for a schema constraint that also needs enforcing in
+# this dependency-free, no-YAML-library parser).
+EXEC_REQ_PACKAGES_KEY_RE = re.compile(r"^[a-z][a-z0-9-]*$")
+# Detects a line that LOOKS like an attempted "- <value>" packages list item
+# (a "-" as its first non-whitespace character, tabs included) but whose
+# leading whitespace fails EXEC_REQ_TOOLS_LIST_ITEM_RE's own strict "6 or
+# more literal SPACE characters" requirement -- a tab anywhere in the
+# indent, or fewer than 6 spaces. Used only to distinguish that case from a
+# packages ecosystem list genuinely ending (a real dedent, or a new sibling
+# ecosystem key) while collecting_exec_packages_list is open: without it, a
+# line like "\t- some-package" (or "  - some-package", 2 spaces) silently
+# finalizes the list as empty -- indistinguishable from the package truly
+# never having been declared -- instead of being recorded into
+# malformed_execution_requirement_packages_items the way an item
+# EXEC_REQ_TOOLS_LIST_ITEM_RE itself rejects (mapping-shaped, wrong type)
+# already is. Cannot collide with a legitimate new KEY_LINE_RE_6 sibling
+# key: whenever this matches AND the strict item regex already failed, the
+# leading whitespace run is provably not "exactly 6 literal spaces" (either
+# shorter, or tab-containing), which KEY_LINE_RE_6 requires verbatim -- so
+# the two can never both match the same line. Scoped to packages only, per
+# this fix's own issue: tools' and network's own sibling list-item blocks
+# (collecting_exec_tools_list/collecting_exec_network_list below) share this
+# exact latent gap -- no equivalent fail-closed check exists at their own
+# list-item level either, only at the surrounding key level -- and are
+# deliberately left as-is here rather than silently duplicating the fix
+# beyond this issue's own scope.
+EXEC_REQ_PACKAGES_MISINDENTED_ITEM_RE = re.compile(r"^[ \t]*-\s*(.*)$")
+# .gitapex/dependency-allowlist.json's own repo-root-relative path (see
+# _execution_requirements_packages_allowlist_check's own docstring for the
+# check this feeds). Resolved from the TARGET skill directory being
+# checked (_dependency_allowlist_repo_root's own resolve-then-walk-for-
+# ".git" logic -- see its docstring), never from this script's own
+# __file__ location: unlike .github/scripts/*.py's own fixed
+# Path(__file__).resolve().parents[N] convention (see e.g.
+# gitapex_scan_ssot_schema.py's REPO_ROOT), which is safe only because
+# those scripts are pinned to this one repository and never move, this
+# checker is itself Portable (spec.portability: Portable, per this
+# skill's own SKILL.md) and travels with the skill directory to any
+# consuming repository -- its own __file__ location cannot be trusted to
+# sit inside the repository actually under test, so only a path derived
+# from the target being checked travels correctly with vendoring. The
+# final path is also walked component-by-component for symlinks before
+# ever being read (_reject_symlinked_allowlist_path) -- it is not scoped
+# by --allowed-root the way the skill directory itself is, since it
+# deliberately lives outside the skill directory being checked.
+DEPENDENCY_ALLOWLIST_RELATIVE_PATH = ".gitapex/dependency-allowlist.json"
 
 TAG_RE = re.compile(r"</?[A-Za-z][^>]*>")
 # A YAML plain (unquoted) scalar cannot safely contain ": " (colon followed
@@ -1444,11 +1524,12 @@ class ManifestParse:
     ``unknown_execution_requirement_keys``, ``unknown_execution_requirement_tools_keys``,
     and ``malformed_execution_requirement_tools_items`` are
     spec.executionRequirements' equivalents: the first holds each key found directly under
-    spec.executionRequirements that is not ``tools`` or ``network`` (only
-    two recognized keys exist so far -- further categories are deferred to
-    sibling child issues, and any other key here is unknown, not reserved
-    space); the second holds each key found directly under ``tools`` that
-    is not ``read``, ``write``, or ``shell``; the third holds each
+    spec.executionRequirements that is not ``tools``, ``packages``, or
+    ``network`` (only three recognized keys exist so far -- further
+    categories are deferred to sibling child issues, and any other key
+    here is unknown, not reserved space); the second holds each key found
+    directly under ``tools`` that is not ``read``, ``write``, or
+    ``shell``; the third holds each
     read/write/shell list item that is mapping-shaped or inconsistently
     indented, the same rule ``malformed_reference_items``/
     ``malformed_skill_dependency_items`` use one nesting level shallower.
@@ -1462,6 +1543,29 @@ class ManifestParse:
     ``domains``; the second holds each ``domains`` list item that is
     mapping-shaped or inconsistently indented. Both empty when the field
     is absent or parsed cleanly.
+
+    ``unknown_execution_requirement_packages_keys`` and
+    ``malformed_execution_requirement_packages_items`` are ``packages``'s
+    own equivalents, differing from ``tools``'/``network``'s in HOW both
+    are populated: since ``packages``' own subkeys are free-form
+    ecosystem identifiers rather than a fixed tuple (see
+    EXEC_REQ_PACKAGES_KEY_RE), the first holds each key found directly
+    under ``packages`` that does NOT match EXEC_REQ_PACKAGES_KEY_RE's own
+    pattern (a regex mismatch, not a tuple-membership miss); the second
+    holds each per-ecosystem list item that is mapping-shaped or
+    inconsistently indented, the same rule every other malformed-item
+    channel above uses, PLUS one packages-only addition
+    (EXEC_REQ_PACKAGES_MISINDENTED_ITEM_RE, see its own comment): a line
+    that looks like an attempted "- <value>" item (a "-" as its first
+    non-whitespace character) but whose leading whitespace fails the
+    strict list-item regex's own "6 or more literal spaces" requirement
+    -- a tab, or fewer than 6 spaces -- is ALSO recorded here rather than
+    silently finalizing the list as empty, indistinguishable from the
+    package never having been declared at all. tools'/network's own
+    sibling list-item blocks do not have this addition; see
+    EXEC_REQ_PACKAGES_MISINDENTED_ITEM_RE's own comment for why that gap
+    is deliberately left as-is there. Both empty when the field is absent
+    or parsed cleanly.
 
     ``malformed_external_citation_items`` and
     ``unknown_external_citation_item_keys`` are spec.externalCitations'
@@ -1487,6 +1591,8 @@ class ManifestParse:
     unknown_execution_requirement_keys: list[str]
     unknown_execution_requirement_tools_keys: list[str]
     malformed_execution_requirement_tools_items: list[str]
+    unknown_execution_requirement_packages_keys: list[str]
+    malformed_execution_requirement_packages_items: list[str]
     unknown_execution_requirement_network_keys: list[str]
     malformed_execution_requirement_network_items: list[str]
     malformed_external_citation_items: list[str]
@@ -1618,6 +1724,31 @@ def _parse_manifest(text: str) -> ManifestParse:
       ``ManifestParse.unknown_execution_requirement_network_keys``; a
       malformed ``domains`` list item is collected into
       ``ManifestParse.malformed_execution_requirement_network_items``.
+    - spec.executionRequirements' third recognized block sub-key:
+      ``packages``, also an empty value opening a nested block at 6-space
+      indent, also finalizing to real YAML null when its own header sees
+      zero child key lines -- but unlike ``tools``' fixed
+      read/write/shell and ``network``'s fixed mode/domains, ``packages``'
+      own subkeys are free-form ecosystem identifiers (``pip``, ``npm``,
+      ...) matching ``EXEC_REQ_PACKAGES_KEY_RE``, not a closed tuple,
+      mirroring skill-metadata.schema.json's own
+      executionRequirementsPackages.propertyNames pattern (no closed enum
+      of supported ecosystems, so a future ecosystem needs no parser
+      change to become recognized). Each ecosystem key matching that
+      pattern is captured the same way tools' own read/write/shell are:
+      an inline non-blank value is stored as a raw scalar (the wrong
+      shape for a package list, caught downstream by
+      ``_execution_requirements_checks``); a blank value opens a list of
+      "- <value>" items at 6-or-more-space indent, reusing
+      ``EXEC_REQ_TOOLS_LIST_ITEM_RE`` verbatim (the same depth-reuse
+      ``domains`` above already established -- an ecosystem key sits at
+      the identical 6-space depth tools' own read/write/shell and
+      network's mode/domains do). A key under ``packages`` NOT matching
+      ``EXEC_REQ_PACKAGES_KEY_RE`` is collected into
+      ``ManifestParse.unknown_execution_requirement_packages_keys``
+      instead of being silently skipped; a malformed per-ecosystem list
+      item is collected into
+      ``ManifestParse.malformed_execution_requirement_packages_items``.
 
     Every other nested map or list (e.g. spec.evalStatus) is still
     deliberately skipped, exactly as before: skipping keeps this
@@ -1770,6 +1901,22 @@ def _parse_manifest(text: str) -> ManifestParse:
     malformed_exec_tools_items: list[str] = []
     unknown_exec_req_keys: list[str] = []
     unknown_exec_tools_keys: list[str] = []
+    # packages' own state, structurally parallel to exec_tools' above (see
+    # EXEC_REQ_NETWORK_SUBKEYS' own comment for why this is a hand-
+    # duplicated analog rather than a shared helper -- a third parallel
+    # block here rather than an extraction, same precedent, same
+    # regression-risk-vs-scope tradeoff). Unlike exec_tools/exec_network,
+    # unknown_exec_packages_keys is populated by a REGEX mismatch
+    # (EXEC_REQ_PACKAGES_KEY_RE), not a tuple-membership miss -- see the
+    # parsing loop below.
+    in_exec_packages = False
+    exec_packages: dict[str, object] = {}
+    exec_packages_has_content = False
+    collecting_exec_packages_list: list[str] | None = None
+    collecting_exec_packages_key: str | None = None
+    exec_packages_list_indent: int | None = None
+    malformed_exec_packages_items: list[str] = []
+    unknown_exec_packages_keys: list[str] = []
     # network's own state, structurally parallel to exec_tools' above (see
     # EXEC_REQ_NETWORK_SUBKEYS' own comment for why this is a hand-
     # duplicated analog rather than a shared helper).
@@ -1884,6 +2031,23 @@ def _parse_manifest(text: str) -> ManifestParse:
         exec_tools = {}
         exec_tools_has_content = False
 
+    def _finalize_exec_packages_list() -> None:
+        nonlocal collecting_exec_packages_list, collecting_exec_packages_key, exec_packages_list_indent
+        if collecting_exec_packages_list is not None and collecting_exec_packages_key is not None:
+            exec_packages[collecting_exec_packages_key] = collecting_exec_packages_list
+        collecting_exec_packages_list = None
+        collecting_exec_packages_key = None
+        exec_packages_list_indent = None
+
+    def _finalize_exec_packages() -> None:
+        nonlocal in_exec_packages, exec_packages, exec_packages_has_content
+        _finalize_exec_packages_list()
+        if in_exec_packages:
+            execution_requirements["packages"] = exec_packages if exec_packages_has_content else None
+        in_exec_packages = False
+        exec_packages = {}
+        exec_packages_has_content = False
+
     def _finalize_exec_network_list() -> None:
         nonlocal collecting_exec_network_list, collecting_exec_network_key, exec_network_list_indent
         if collecting_exec_network_list is not None and collecting_exec_network_key is not None:
@@ -1904,6 +2068,7 @@ def _parse_manifest(text: str) -> ManifestParse:
     def _finalize_execution_requirements() -> None:
         nonlocal in_execution_requirements, execution_requirements, exec_req_has_content
         _finalize_exec_tools()
+        _finalize_exec_packages()
         _finalize_exec_network()
         if in_execution_requirements and current is not None:
             current["executionRequirements"] = execution_requirements if exec_req_has_content else None
@@ -2250,6 +2415,149 @@ def _parse_manifest(text: str) -> ManifestParse:
             # Finalize it and fall through to process this line normally
             # below.
             _finalize_exec_tools()
+        if collecting_exec_packages_list is not None:
+            item = EXEC_REQ_TOOLS_LIST_ITEM_RE.match(line)
+            if item:
+                item_indent = len(line) - len(line.lstrip(" "))
+                if exec_packages_list_indent is None:
+                    exec_packages_list_indent = item_indent
+                if item_indent != exec_packages_list_indent:
+                    # Same list, different indent than its own first item --
+                    # real YAML would reject this outright.
+                    malformed_exec_packages_items.append(line.strip())
+                    continue
+                raw_text = item.group(1).strip()
+                is_quoted = len(raw_text) >= 2 and raw_text[0] == raw_text[-1] and raw_text[0] in "\"'"
+                if not is_quoted:
+                    # A trailing "# comment" on an otherwise-valid item
+                    # (e.g. "- requests  # transitively needed") must not
+                    # become part of the stored package name. Real YAML's
+                    # own comment rule -- an unquoted "#" preceded by
+                    # start-of-string or whitespace -- is exactly what
+                    # _INLINE_COMMENT_RE already encodes for
+                    # _is_non_string_plain_scalar's own type-classification
+                    # use below; that stripped copy was never fed back into
+                    # the STORED value before this fix, so a trailing
+                    # comment silently became part of the parsed package
+                    # name and then failed the allowlist check with
+                    # nothing pointing at the comment as the actual
+                    # problem. Gated on is_quoted the same way
+                    # REFERENCES_MAPPING_LIKE_RE/_is_non_string_plain_scalar
+                    # below already are -- a quoted item's own "#" is never
+                    # a real comment marker, so stripping must not touch
+                    # it. Scoped to packages only, per this fix's own
+                    # issue: tools'/network's own sibling item-storage
+                    # sites below share this same "stored value keeps a
+                    # trailing comment" gap and are deliberately left as-is
+                    # here.
+                    raw_text = _INLINE_COMMENT_RE.sub("", raw_text).strip()
+                if (not is_quoted and REFERENCES_MAPPING_LIKE_RE.match(raw_text)) or (
+                    not is_quoted and _is_non_string_plain_scalar(raw_text)
+                ):
+                    malformed_exec_packages_items.append(line.strip())
+                else:
+                    collecting_exec_packages_list.append(_unquote(raw_text))
+                continue
+            if (
+                line[:1] in (" ", "\t")
+                and line.strip() not in ("---", "...")
+                and EXEC_REQ_PACKAGES_MISINDENTED_ITEM_RE.match(line)
+            ):
+                # Looks like an attempted list item that the strict regex
+                # above rejected on indentation alone (a tab, or fewer
+                # than 6 spaces) -- see
+                # EXEC_REQ_PACKAGES_MISINDENTED_ITEM_RE's own comment. A
+                # real YAML parser (and a human reading the file) would
+                # still see a declared package here, so this must fail
+                # loudly as a malformed item like any other malformed
+                # packages entry, rather than silently finalizing the list
+                # as empty -- indistinguishable from the package never
+                # having been declared at all.
+                #
+                # The line[:1] guard (found live by an independent
+                # adversarial review) is required because
+                # EXEC_REQ_PACKAGES_MISINDENTED_ITEM_RE's own leading
+                # "[ \t]*" is zero-or-more, deliberately looser than
+                # EXEC_REQ_TOOLS_LIST_ITEM_RE's own "{6,}" -- exactly the
+                # width this branch needs to catch an under-indented item
+                # (the bug the comment above already describes), but that
+                # same width also matches a column-0 "---"/"..." YAML
+                # document marker (both start with "-") and a bare
+                # column-0 "- stray" line, neither of which is an
+                # attempted list item at all. Excluding both here lets
+                # them fall through to their own correct handling instead
+                # (the document-marker skip below, or the generic
+                # top-level malformed-line catch-all) rather than being
+                # misreported as a malformed *packages* item and spuriously
+                # failing a sidecar whose packages list is actually
+                # well-formed. A real, indented-but-under-6-spaces item
+                # (the tab/two-space regression fixtures this branch
+                # already has) always starts with a space or tab, so this
+                # guard does not narrow the original fix's own coverage.
+                malformed_exec_packages_items.append(line.strip())
+                continue
+            # Not a list item: this per-ecosystem package-name list ends here.
+            _finalize_exec_packages_list()
+        if in_exec_packages:
+            matched = _match_key_line(KEY_LINE_RE_6, line)
+            if matched:
+                exec_packages_has_content = True
+                key, value = matched
+                # Same comment-only-value fix as tools'/network's own
+                # equivalent branches above (e.g. "pip:  # comment").
+                value = _strip_bare_comment(value)
+                # REGEX match, not tuple membership -- packages' own
+                # subkeys are free-form ecosystem identifiers
+                # (EXEC_REQ_PACKAGES_KEY_RE), unlike tools'/network's own
+                # fixed EXEC_REQ_TOOLS_SUBKEYS/EXEC_REQ_NETWORK_SUBKEYS
+                # tuples (see EXEC_REQ_PACKAGES_KEY_RE's own comment).
+                # fullmatch(), not match(): Python's trailing "$" (unlike
+                # JSON Schema's own ECMA-262 "$", which EXEC_REQ_PACKAGES_KEY_RE
+                # is hand-duplicated from -- see its own comment) also
+                # matches immediately before a trailing "\n", which
+                # match() would silently accept. key can never actually
+                # carry a "\n" here (every line is rstrip()-ped before
+                # this point in the parsing loop), so this is defense in
+                # depth against unintended reuse of this pattern with
+                # unstripped input, not a reachable bug today. Deliberately
+                # NOT rewritten to "\Z" in the regex source itself: that
+                # would desync EXEC_REQ_PACKAGES_KEY_RE.pattern from
+                # skill-metadata.schema.json's own propertyNames.pattern,
+                # which test_execution_requirement_packages_key_pattern_matches_schema
+                # asserts stay byte-identical -- and "\Z" is not a valid
+                # ECMA-262 escape, so mirroring it into the JSON Schema
+                # file would break every real downstream JSON-Schema
+                # validator that consumes it. fullmatch() gets the same
+                # exact-end semantics without touching the shared pattern
+                # text.
+                if not EXEC_REQ_PACKAGES_KEY_RE.fullmatch(key):
+                    unknown_exec_packages_keys.append(line.strip())
+                elif value == "[]":
+                    exec_packages[key] = []
+                elif not value:
+                    collecting_exec_packages_list = []
+                    collecting_exec_packages_key = key
+                    exec_packages_list_indent = None
+                else:
+                    # Not an empty list and not "[]" -- no flow-sequence
+                    # support; store the raw scalar so the shape gate can
+                    # fail it as the wrong type rather than silently
+                    # dropping it, exactly as tools'/network's own
+                    # equivalent branches do.
+                    exec_packages[key] = value
+                continue
+            indent = len(line) - len(line.lstrip(" "))
+            if line[:1] in (" ", "\t") and indent >= 6:
+                # Same fail-closed reasoning as tools'/network's own
+                # equivalent branches -- an unmatched line at this indent
+                # is flagged, not silently tolerated.
+                exec_packages_has_content = True
+                unknown_exec_packages_keys.append(line.strip())
+                continue
+            # Dedented below packages' own indent: the block ends here.
+            # Finalize it and fall through to process this line normally
+            # below.
+            _finalize_exec_packages()
         if collecting_exec_network_list is not None:
             item = EXEC_REQ_TOOLS_LIST_ITEM_RE.match(line)
             if item:
@@ -2321,7 +2629,7 @@ def _parse_manifest(text: str) -> ManifestParse:
                 # Same comment-only-value fix as spec.skillDependencies'
                 # equivalent branch above (e.g. "tools:  # comment").
                 value = _strip_bare_comment(value)
-                if key not in ("tools", "network"):
+                if key not in ("tools", "packages", "network"):
                     unknown_exec_req_keys.append(line.strip())
                 elif value:
                     # Not opening a block -- a bare scalar written where a
@@ -2332,6 +2640,9 @@ def _parse_manifest(text: str) -> ManifestParse:
                 elif key == "tools":
                     in_exec_tools = True
                     exec_tools = {}
+                elif key == "packages":
+                    in_exec_packages = True
+                    exec_packages = {}
                 else:
                     in_exec_network = True
                     exec_network = {}
@@ -2415,6 +2726,8 @@ def _parse_manifest(text: str) -> ManifestParse:
         unknown_execution_requirement_keys=unknown_exec_req_keys,
         unknown_execution_requirement_tools_keys=unknown_exec_tools_keys,
         malformed_execution_requirement_tools_items=malformed_exec_tools_items,
+        unknown_execution_requirement_packages_keys=unknown_exec_packages_keys,
+        malformed_execution_requirement_packages_items=malformed_exec_packages_items,
         unknown_execution_requirement_network_keys=unknown_exec_network_keys,
         malformed_execution_requirement_network_items=malformed_exec_network_items,
         malformed_external_citation_items=malformed_ext_citations,
@@ -3438,7 +3751,15 @@ def _invocation_mode_check(fields: dict[str, str]) -> CheckResult:
     )
 
 
-def check_shape(target: Path) -> list[CheckResult]:
+def check_shape(target: Path, allowed_root: Path | None = None) -> list[CheckResult]:
+    """``allowed_root``, when given, is threaded through to
+    ``_execution_requirements_packages_allowlist_check`` so its own
+    repository-root resolution stays bounded by the same caller-approved
+    scope ``main()`` already validated the target against via
+    ``_validate_read_scope`` -- see ``_dependency_allowlist_repo_root``'s
+    own docstring for why. ``None`` (the default) preserves this
+    function's own prior, unbounded behavior for every existing caller
+    that never passed ``--allowed-root`` to begin with."""
     skill_md = _resolve_skill_md(target)
     skill_dir = skill_md.parent
     results: list[CheckResult] = []
@@ -3579,6 +3900,8 @@ def check_shape(target: Path) -> list[CheckResult]:
             unknown_execution_requirement_keys = parsed.unknown_execution_requirement_keys
             unknown_execution_requirement_tools_keys = parsed.unknown_execution_requirement_tools_keys
             malformed_execution_requirement_tools_items = parsed.malformed_execution_requirement_tools_items
+            unknown_execution_requirement_packages_keys = parsed.unknown_execution_requirement_packages_keys
+            malformed_execution_requirement_packages_items = parsed.malformed_execution_requirement_packages_items
             unknown_execution_requirement_network_keys = parsed.unknown_execution_requirement_network_keys
             malformed_execution_requirement_network_items = parsed.malformed_execution_requirement_network_items
             malformed_external_citation_items = parsed.malformed_external_citation_items
@@ -3596,6 +3919,8 @@ def check_shape(target: Path) -> list[CheckResult]:
             unknown_execution_requirement_keys = []
             unknown_execution_requirement_tools_keys = []
             malformed_execution_requirement_tools_items = []
+            unknown_execution_requirement_packages_keys = []
+            malformed_execution_requirement_packages_items = []
             unknown_execution_requirement_network_keys = []
             malformed_external_citation_items = []
             unknown_external_citation_item_keys = []
@@ -3734,13 +4059,23 @@ def check_shape(target: Path) -> list[CheckResult]:
                     "execution-requirements-well-formed",
                     False,
                     "spec.executionRequirements, if present, is a mapping with "
-                    "only the tools/network keys; tools, if present, is a "
-                    "mapping with only read/write/shell keys, each -- if "
-                    "present -- a list of non-empty strings; network, if "
-                    "present, is a mapping with only mode (a "
-                    "disabled/allowlist/unrestricted enum) and domains (a "
-                    "list of non-empty strings, non-empty only when mode is "
-                    "allowlist)",
+                    "only the tools/packages/network keys; tools, if present, "
+                    "is a mapping with only read/write/shell keys, each -- if "
+                    "present -- a list of non-empty strings; packages, if "
+                    "present, is a mapping keyed by free-form ecosystem "
+                    "identifiers, each value -- if present -- a list of "
+                    "non-empty strings; network, if present, is a mapping "
+                    "with only mode (a disabled/allowlist/unrestricted enum) "
+                    "and domains (a list of non-empty strings, non-empty "
+                    "only when mode is allowlist)",
+                    evidence,
+                )
+            )
+            results.append(
+                CheckResult(
+                    "execution-requirements-packages-allowlisted",
+                    False,
+                    EXECUTION_REQUIREMENTS_PACKAGES_ALLOWLISTED_RULE,
                     evidence,
                 )
             )
@@ -4023,9 +4358,14 @@ def check_shape(target: Path) -> list[CheckResult]:
                     unknown_execution_requirement_keys,
                     unknown_execution_requirement_tools_keys,
                     malformed_execution_requirement_tools_items,
+                    unknown_execution_requirement_packages_keys,
+                    malformed_execution_requirement_packages_items,
                     unknown_execution_requirement_network_keys,
                     malformed_execution_requirement_network_items,
                 )
+            )
+            results.append(
+                _execution_requirements_packages_allowlist_check(spec_is_mapping, spec, skill_dir, allowed_root)
             )
             if portability in PORTABILITY_LEVELS:
                 sidecar_portability = SidecarPortability(state="usable", level=portability)
@@ -5551,6 +5891,8 @@ def _execution_requirements_checks(
     unknown_keys: list[str],
     unknown_tools_keys: list[str],
     malformed_tools_items: list[str],
+    unknown_packages_keys: list[str],
+    malformed_packages_items: list[str],
     unknown_network_keys: list[str],
     malformed_network_items: list[str],
 ) -> list[CheckResult]:
@@ -5560,12 +5902,13 @@ def _execution_requirements_checks(
     Mirrors ``_skill_dependency_checks``'s early-return ladder (spec not a
     mapping / not declared / not a mapping) before real validation, and its
     problem-accumulation-then-single-CheckResult pattern. Unlike
-    spec.skillDependencies or spec.lifecycle, this field has only two
-    recognized top-level subkeys so far, ``tools`` and ``network`` (issue
-    #845) -- the remaining categories (filesystem, mcp, credentials,
-    browser, externalServices, context) are deferred; any key here other
-    than ``tools``/``network`` fails closed via ``unknown_keys`` rather
-    than being silently accepted as reserved space. There is no
+    spec.skillDependencies or spec.lifecycle, this field has only three
+    recognized top-level subkeys so far, ``tools``, ``packages``, and
+    ``network`` (issue #845; #1115's own ADR follow-up added ``packages``)
+    -- the remaining categories (filesystem, mcp, credentials, browser,
+    externalServices, context) are deferred; any key here other than
+    ``tools``/``packages``/``network`` fails closed via ``unknown_keys``
+    rather than being silently accepted as reserved space. There is no
     dangling-reference or cross-field check the way
     spec.skillDependencies/spec.lifecycle have one each -- tools'
     read/write/shell entries are free-form capability tags, not names that
@@ -5576,18 +5919,30 @@ def _execution_requirements_checks(
     compatible is checked elsewhere in this file, just folded into this
     same well-formed check rather than earning its own separate
     CheckResult -- tools has no analogous cross-subkey rule to justify the
-    same split.
+    same split. packages DOES have a real, separate cross-file check of its
+    own (every declared package must resolve against a repository-root
+    allowlist config) -- but that one earns its own CheckResult id,
+    ``execution-requirements-packages-allowlisted``
+    (``_execution_requirements_packages_allowlist_check`` below), rather
+    than folding into this one, since it is a genuinely different KIND of
+    rule (an external-file resolve, not an internal shape/cross-field
+    constraint) -- the same well-formed-vs-resolve split
+    ``_skill_dependency_checks`` already draws between its own
+    ``skill-dependencies-well-formed`` and ``skill-dependencies-resolve``.
     """
     well_formed_rule = (
         "spec.executionRequirements, if present, is a "
-        "mapping with only the tools/network keys; tools, "
-        "if present, is a mapping with only read/write/shell "
-        "keys, each -- if present -- a list of non-empty "
-        "strings; network, if present, is a mapping with "
-        "only mode (a disabled/allowlist/unrestricted enum, "
-        "required when network is declared) and domains (a "
-        "list of non-empty strings, non-empty iff mode is "
-        "allowlist)"
+        "mapping with only the tools/packages/network keys; "
+        "tools, if present, is a mapping with only "
+        "read/write/shell keys, each -- if present -- a list "
+        "of non-empty strings; packages, if present, is a "
+        "mapping keyed by free-form ecosystem identifiers "
+        "(matching ^[a-z][a-z0-9-]*$), each value -- if "
+        "present -- a list of non-empty strings; network, if "
+        "present, is a mapping with only mode (a "
+        "disabled/allowlist/unrestricted enum, required when "
+        "network is declared) and domains (a list of "
+        "non-empty strings, non-empty iff mode is allowlist)"
     )
 
     if not spec_is_mapping:
@@ -5637,6 +5992,48 @@ def _execution_requirements_checks(
             if key in tools and not _valid_execution_requirements_tools_list(tools[key]):
                 problems.append(f"tools.{key} is not a list of non-empty strings: {tools[key]!r}")
 
+    packages_present = "packages" in execution_requirements
+    packages = execution_requirements.get("packages")
+    # Same present-but-null-vs-absent distinction tools' own branch above
+    # already draws.
+    if packages_present and not isinstance(packages, dict):
+        problems.append(f"packages is not a mapping: {packages!r}")
+    elif isinstance(packages, dict):
+        if unknown_packages_keys:
+            count = len(unknown_packages_keys)
+            problems.append(f"{count} unknown packages key{'' if count == 1 else 's'}: {unknown_packages_keys[0]!r}")
+        if malformed_packages_items:
+            count = len(malformed_packages_items)
+            problems.append(
+                f"{count} malformed packages entr{'y' if count == 1 else 'ies'}: {malformed_packages_items[0]!r}"
+            )
+        # packages' own subkeys are free-form ecosystem identifiers, not a
+        # fixed tuple like EXEC_REQ_TOOLS_SUBKEYS -- iterate the parsed
+        # mapping's own keys (already guaranteed to match
+        # EXEC_REQ_PACKAGES_KEY_RE by the parser; a non-matching key never
+        # reaches this dict at all, landing in unknown_packages_keys
+        # instead, per _parse_manifest) rather than a fixed vocabulary, so
+        # only each key's own VALUE shape remains to check here.
+        for key in packages:
+            if not _valid_execution_requirements_tools_list(packages[key]):
+                problems.append(f"packages.{key} is not a list of non-empty strings: {packages[key]!r}")
+        # KNOWN, DISCLOSED GAP (not fixed here): $defs.packageList in
+        # skill-metadata.schema.json declares "uniqueItems": true, but
+        # this checker does not enforce it -- a package name repeated
+        # twice under the same ecosystem (e.g. "pip: [pyyaml, pyyaml]")
+        # currently still passes execution-requirements-well-formed.
+        # Fail-open only in the sense of "does not additionally flag a
+        # redundant duplicate as its own defect"; it is not a security or
+        # allowlist-bypass gap (execution-requirements-packages-allowlisted
+        # already dedupes its own requested_packages before resolving
+        # against the allowlist, so a duplicate cannot inflate or hide an
+        # offender there). Left unimplemented rather than folded into
+        # _valid_execution_requirements_tools_list, which tools.read/
+        # write/shell and network.domains also share -- enforcing
+        # uniqueItems there too is a broader, separate change this
+        # finding did not ask for and risks failing existing skills that
+        # currently rely on tolerated duplicates in those other lists.
+
     network_present = "network" in execution_requirements
     network = execution_requirements.get("network")
     # Same present-but-null-vs-absent distinction tools' own branch above
@@ -5674,9 +6071,354 @@ def _execution_requirements_checks(
         return [CheckResult("execution-requirements-well-formed", False, well_formed_rule, "; ".join(problems))]
 
     declared = [f"tools.{k}" for k in EXEC_REQ_TOOLS_SUBKEYS if k in tools] if isinstance(tools, dict) else []
+    # packages has no fixed subkey tuple to iterate (see the loop above) --
+    # walk the parsed mapping's own keys instead, in file order (Python
+    # dict iteration order is insertion order, which here is parse order).
+    declared += [f"packages.{k}" for k in packages] if isinstance(packages, dict) else []
     declared += [f"network.{k}" for k in EXEC_REQ_NETWORK_SUBKEYS if k in network] if isinstance(network, dict) else []
     evidence = ", ".join(declared) + " declared" if declared else "no keys declared"
     return [CheckResult("execution-requirements-well-formed", True, well_formed_rule, evidence)]
+
+
+# Shared verbatim by the hard-coded "sidecar unreadable" branch in
+# check_shape() and _execution_requirements_packages_allowlist_check below
+# -- unlike execution-requirements-well-formed's own well_formed_rule
+# (duplicated as two independently-worded literals across those same two
+# sites, an existing, tolerated drift this change does not touch), this
+# string is new with this check, so there is no reason to introduce fresh
+# drift between its two call sites when a single source avoids it for
+# free.
+EXECUTION_REQUIREMENTS_PACKAGES_ALLOWLISTED_RULE = (
+    "when spec.executionRequirements.packages declares at least one "
+    "package, .gitapex/dependency-allowlist.json (repository-root-"
+    "relative) must exist and be well-formed JSON matching "
+    '{"packages": {"<ecosystem>": ["<package-name>", ...]}}, listing '
+    "every declared <ecosystem>/<package-name> pair; not applicable when "
+    "packages is absent or declares zero packages. Package-name matching "
+    "is an exact, case- and separator-sensitive string comparison (e.g. "
+    '"PyYAML" does not match an allowlisted "pyyaml", even though PyPI '
+    "itself treats those as the same distribution per PEP 503) -- "
+    "populate the allowlist using the exact spelling declared in the "
+    "sidecar."
+)
+
+
+def _valid_dependency_allowlist_config(config: object) -> bool:
+    """Whether a parsed .gitapex/dependency-allowlist.json document matches
+    its own ``{"packages": {"<ecosystem>": ["<package-name>", ...]}}``
+    shape -- deliberately the simplest possible mirror of skill-metadata.
+    schema.json's own executionRequirementsPackages/packageList shape (see
+    DEPENDENCY_ALLOWLIST_RELATIVE_PATH's own comment): a top-level mapping
+    with a "packages" key whose own value is itself a mapping of ecosystem
+    name to a list of non-empty strings. Deliberately NOT also gating the
+    config's own ecosystem-key shape against EXEC_REQ_PACKAGES_KEY_RE --
+    this file is gitapex's own repo-local infrastructure config, not
+    adversarial sidecar input, and the task this config exists for names
+    only "missing 'packages' key" / "'packages' not a mapping" as the
+    wrong-shape failure modes to catch; a malformed ecosystem-list value
+    anywhere still fails this check as a whole (see the ``all(...)`` below
+    -- one bad entry invalidates the entire config rather than silently
+    validating only the well-formed remainder), matching this check's own
+    fail-loud design (an admin's typo should be obvious, not silently
+    partial). Reuses _valid_execution_requirements_tools_list for the same
+    "list of non-empty strings" shape every other packageList-shaped list
+    in this module already validates."""
+    if not (isinstance(config, dict) and isinstance(config.get("packages"), dict)):
+        return False
+    return all(_valid_execution_requirements_tools_list(v) for v in config["packages"].values())
+
+
+def _dependency_allowlist_repo_root(skill_dir: Path, allowed_root: Path | None = None) -> Path:
+    """Locate the repository root DEPENDENCY_ALLOWLIST_RELATIVE_PATH is
+    resolved against, given the skill directory under check.
+
+    Resolves ``skill_dir`` to an absolute, symlink-resolved real path
+    first (``Path.resolve()``) -- the raw, unresolved CLI target path a
+    fixed "two parents up" hop count previously used silently mis-located
+    the repository root whenever the caller's own working directory, or
+    the exact spelling of the target path on the command line, changed
+    how many hops actually reached it. E.g. running from inside
+    ``<repo>/skills/`` with a relative target ``"t"`` computes
+    ``Path("t").parent.parent == Path(".")``, landing on
+    ``<repo>/skills/.gitapex/...`` instead of ``<repo>/.gitapex/...`` --
+    a false FAIL for a perfectly valid skill, purely from how the path
+    was spelled on the command line.
+
+    Then walks upward from the resolved skill directory for the nearest
+    ancestor containing a ``.git`` entry -- a directory (a normal clone)
+    or a file (a worktree/submodule checkout's own gitdir pointer) --
+    real git's own repository-root convention, and the same marker
+    this module's own test suite's ``_write_skill_at_repo_root`` fixture
+    plants for this exact purpose. Falls back to the historical
+    ``skill_dir.parent.parent`` hop count (two levels up from
+    ``<repo-root>/skills/<name>/``) only when no ``.git`` marker exists
+    anywhere above the resolved skill directory, so a skill checked
+    outside any git repository still gets a deterministic guess rather
+    than an exception -- the allowlist-file-existence branch right after
+    this call already fails closed on a wrong guess, exactly as it always
+    has.
+
+    ``allowed_root``, when given (the CLI's own ``--allowed-root``,
+    already used to bound the skill directory itself via
+    ``_validate_read_scope``), bounds this upward search too -- found
+    live by an independent adversarial review: a caller-approved root
+    that is not itself git-root-aligned (a snapshot nested inside a
+    larger, less-trusted checkout that has its own ``.git`` further up)
+    let the previously-unbounded search escape ``--allowed-root``
+    entirely and resolve a DIFFERENT, unapproved checkout's own
+    ``.gitapex/dependency-allowlist.json`` -- the same class of
+    scope-bypass ``_reject_symlinked_allowlist_path`` already exists to
+    prevent for a symlinked path component, now closed for this second,
+    non-symlink route as well. The search still walks upward from
+    ``skill_dir`` looking for ``.git`` exactly as before, but never
+    past ``allowed_root`` itself; reaching ``allowed_root`` with no
+    ``.git`` found falls back to ``allowed_root`` itself (the most
+    defensible guess once an explicit boundary exists, and still subject
+    to the same "a wrong guess fails closed at the allowlist-file-
+    existence check right after this call" property the unbounded
+    fallback below always had). ``None`` (the default, and every call
+    site that never received ``--allowed-root`` to begin with) preserves
+    the prior, unbounded behavior exactly.
+    """
+    resolved = skill_dir.resolve()
+    allowed_root_resolved = allowed_root.resolve() if allowed_root is not None else None
+    current = resolved
+    while True:
+        if (current / ".git").exists():
+            return current
+        if allowed_root_resolved is not None and current == allowed_root_resolved:
+            return allowed_root_resolved
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
+    return allowed_root_resolved if allowed_root_resolved is not None else resolved.parent.parent
+
+
+def _reject_symlinked_allowlist_path(repo_root: Path) -> Path | None:
+    """Resolve DEPENDENCY_ALLOWLIST_RELATIVE_PATH under ``repo_root``,
+    returning ``None`` if any path component along the way is itself a
+    symlink, instead of silently following it.
+
+    The same per-component symlink-walk technique ``_validate_read_scope``
+    already uses to stop a caller-approved root from being escaped via a
+    symlinked path component (see its own docstring and loop), adapted
+    here for one fixed relative path rather than an entire skill
+    directory tree -- ``_validate_read_scope``'s own
+    ``os.walk(..., followlinks=False)`` pass is skill-directory-shaped
+    and not applicable to a single config file, so it is not reused
+    verbatim. A symlinked ``.gitapex/`` directory, or a symlinked
+    ``dependency-allowlist.json`` itself, pointed outside the repository
+    actually under test could otherwise silently drive this check's own
+    verdict from content the caller never approved reading -- not scoped
+    by ``--allowed-root`` the way the skill directory itself is.
+    """
+    current = repo_root
+    for part in Path(DEPENDENCY_ALLOWLIST_RELATIVE_PATH).parts:
+        current = current / part
+        if current.is_symlink():
+            return None
+    return current
+
+
+# CLAUDE.md section 4: every output sink is an attack surface. A malformed
+# .gitapex/dependency-allowlist.json could be arbitrarily large (or, in
+# principle, carry text a repo owner never intended echoed to stdout/CI
+# logs); repr()-ing it whole into a CheckResult's evidence string --
+# printed verbatim by format_report() -- would make this check itself an
+# unbounded-output-sink / accidental-content-echo vector. Bounded to a
+# few hundred characters: enough for an admin to see roughly what shape
+# the file actually has, without ever emitting the full parsed content.
+_ALLOWLIST_CONFIG_EVIDENCE_REPR_LIMIT = 200
+
+
+def _bounded_repr(value: object, limit: int = _ALLOWLIST_CONFIG_EVIDENCE_REPR_LIMIT) -> str:
+    text = repr(value)
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit]}...<{len(text) - limit} more chars truncated>"
+
+
+def _execution_requirements_packages_allowlist_check(
+    spec_is_mapping: bool,
+    spec: dict[str, object],
+    skill_dir: Path,
+    allowed_root: Path | None = None,
+) -> CheckResult:
+    """``execution-requirements-packages-allowlisted`` (issue #1115's own
+    ADR follow-up: package-shape recognition) -- a genuinely new KIND of
+    check for this sidecar, with no tools/network precedent: every other
+    executionRequirements check validates the sidecar's own internal
+    shape; this one resolves a declared package name against an EXTERNAL,
+    repository-root config file (.gitapex/dependency-allowlist.json, see
+    DEPENDENCY_ALLOWLIST_RELATIVE_PATH), the same "declare in the sidecar,
+    resolve against real state elsewhere" shape
+    skill-dependencies-resolve already established for sibling skill
+    names -- so this function mirrors that check's own early-return-ladder
+    style (each early branch reports "nothing to check"/"not declared
+    (optional)" as a PASS, matching this file's one established
+    not-applicable convention: there is no third CheckResult state here,
+    only ``passed`` plus a distinguishing evidence string) rather than
+    ``_execution_requirements_checks``'s own "spec not a mapping fails
+    closed" well-formed-check style, since a downstream/resolve check has
+    nothing of its own to add once the shape it depends on already failed
+    elsewhere under a different check id.
+
+    Only individually shape-valid ecosystem/package-list pairs are
+    resolved here -- a malformed packages entry (an ecosystem key
+    EXEC_REQ_PACKAGES_KEY_RE rejects, a non-list value, a non-string/
+    empty-string item) is already reported by execution-requirements-
+    well-formed under its own id; treating it as contributing zero
+    packages to check here (rather than double-failing the same defect
+    under a second id) mirrors _skill_dependency_checks's own
+    requires/relatedTo handling, where an individually invalid list is
+    silently treated as empty for skill-dependencies-resolve's own
+    downstream purposes.
+
+    Precisely, in order:
+    - spec not a mapping, executionRequirements absent/not a mapping, or
+      packages absent/not a mapping: PASS, "not declared (optional)" (the
+      field itself was never declared) or "nothing to check (... is not a
+      mapping)" (declared but the wrong shape, already failing elsewhere)
+      -- the same absent-vs-wrong-shape split
+      _skill_dependency_checks draws.
+    - packages a real mapping but zero individually-valid
+      <ecosystem>/<package-name> pairs survive (every ecosystem entry
+      absent, empty, or itself malformed): PASS, "no packages declared" --
+      vacuously nothing to allowlist-check, distinguished in evidence text
+      from the field being entirely absent for debugging clarity, though
+      both are PASS.
+    - at least one valid pair, but the repository root (see
+      _dependency_allowlist_repo_root) has a symlink anywhere along
+      DEPENDENCY_ALLOWLIST_RELATIVE_PATH: FAIL, treated the same as a
+      malformed config -- see _reject_symlinked_allowlist_path. Checked
+      before existence, so a symlinked path never reaches is_file()/
+      read_text() at all.
+    - at least one valid pair, but DEPENDENCY_ALLOWLIST_RELATIVE_PATH does
+      not exist: FAIL. Deliberate fail-loud choice (CLAUDE.md section 4):
+      an unconfigured allowlist constrains nothing, so silently passing
+      would defeat the whole point of this check.
+    - the config file exists but is unreadable, not valid JSON (including
+      JSON nested deep enough to raise RecursionError, not just a
+      ValueError-shaped parse failure), or does not match
+      _valid_dependency_allowlist_config's shape: FAIL with a clear
+      message. Never raises -- matches this module's own established
+      "malformed input fails the check, never crashes the process"
+      contract (e.g. the sidecar's own read/parse try/except above). A
+      wrong-shape config's own evidence text repr()s it through
+      _bounded_repr, never the full parsed value unbounded (CLAUDE.md
+      section 4: every output sink is an attack surface).
+    - the config file is well-formed and every declared pair resolves:
+      PASS, naming every checked pair. Declared pairs are deduplicated
+      (dict.fromkeys, order-preserving) before being counted, named, or
+      resolved, so a package declared twice in the sidecar is reported
+      once, not double-counted or double-listed.
+    - the config file is well-formed but at least one declared pair does
+      not resolve (its ecosystem missing from the config entirely, or
+      present but not listing that package name): FAIL, naming exactly
+      which pair(s), each named once even if declared twice. Resolution
+      is an exact, case- and separator-sensitive string comparison (see
+      EXECUTION_REQUIREMENTS_PACKAGES_ALLOWLISTED_RULE's own text) --
+      never a false PASS from a near-miss, only a possibly-surprising
+      FAIL an admin must match exactly.
+    """
+    rule = EXECUTION_REQUIREMENTS_PACKAGES_ALLOWLISTED_RULE
+    check_name = "execution-requirements-packages-allowlisted"
+
+    if not spec_is_mapping:
+        return CheckResult(check_name, True, rule, "nothing to check (spec is not a mapping)")
+
+    if "executionRequirements" not in spec:
+        return CheckResult(check_name, True, rule, "not declared (optional)")
+
+    execution_requirements = spec.get("executionRequirements")
+    if not isinstance(execution_requirements, dict):
+        return CheckResult(check_name, True, rule, "nothing to check (executionRequirements is not a mapping)")
+
+    if "packages" not in execution_requirements:
+        return CheckResult(check_name, True, rule, "not declared (optional)")
+
+    packages = execution_requirements.get("packages")
+    if not isinstance(packages, dict):
+        return CheckResult(check_name, True, rule, "nothing to check (packages is not a mapping)")
+
+    # dict.fromkeys (not a set): order-preserving dedup, so pairs_text and
+    # the offenders list below stay in file order and never repeat a pair
+    # declared twice in the sidecar (e.g. "pip: [requests, requests]").
+    requested_packages = list(
+        dict.fromkeys(
+            (ecosystem, name)
+            for ecosystem, names in packages.items()
+            if _valid_execution_requirements_tools_list(names)
+            for name in names
+        )
+    )
+    if not requested_packages:
+        return CheckResult(check_name, True, rule, "no packages declared")
+
+    pairs_text = ", ".join(f"{ecosystem}/{name}" for ecosystem, name in requested_packages)
+    repo_root = _dependency_allowlist_repo_root(skill_dir, allowed_root)
+    allowlist_path = _reject_symlinked_allowlist_path(repo_root)
+    if allowlist_path is None:
+        return CheckResult(
+            check_name,
+            False,
+            rule,
+            f"{len(requested_packages)} package(s) declared ({pairs_text}) but "
+            f"{DEPENDENCY_ALLOWLIST_RELATIVE_PATH} (or a parent directory of it) is a symlink -- "
+            "refusing to follow it; treated the same as a malformed config",
+        )
+
+    if not allowlist_path.is_file():
+        return CheckResult(
+            check_name,
+            False,
+            rule,
+            f"{len(requested_packages)} package(s) declared ({pairs_text}) but "
+            f"{DEPENDENCY_ALLOWLIST_RELATIVE_PATH} does not exist -- nothing constrains this declaration",
+        )
+
+    try:
+        raw_config = allowlist_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        return CheckResult(
+            check_name, False, rule, f"{DEPENDENCY_ALLOWLIST_RELATIVE_PATH} could not be read: {type(exc).__name__}"
+        )
+
+    try:
+        config = json.loads(raw_config)
+    except (ValueError, RecursionError) as exc:
+        # RecursionError (deeply nested JSON) is not a ValueError subclass
+        # -- this docstring promises "never raises", so it must be caught
+        # here alongside json.JSONDecodeError's own ValueError base,
+        # exactly like any other malformed-config input.
+        return CheckResult(
+            check_name,
+            False,
+            rule,
+            f"{DEPENDENCY_ALLOWLIST_RELATIVE_PATH} is not valid JSON: {type(exc).__name__}: {exc}",
+        )
+
+    if not _valid_dependency_allowlist_config(config):
+        return CheckResult(
+            check_name,
+            False,
+            rule,
+            f"{DEPENDENCY_ALLOWLIST_RELATIVE_PATH} does not match the expected "
+            '{"packages": {"<ecosystem>": ["<package-name>", ...]}} shape: '
+            f"{_bounded_repr(config)}",
+        )
+
+    allowlisted = config["packages"]
+    offenders = [
+        f"{ecosystem}/{name}" for ecosystem, name in requested_packages if name not in allowlisted.get(ecosystem, [])
+    ]
+    if offenders:
+        return CheckResult(
+            check_name, False, rule, f"not allowlisted in {DEPENDENCY_ALLOWLIST_RELATIVE_PATH}: {', '.join(offenders)}"
+        )
+
+    return CheckResult(check_name, True, rule, f"{len(requested_packages)} package(s) allowlisted: {pairs_text}")
 
 
 def format_report(results: list[CheckResult]) -> str:
@@ -5701,9 +6443,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("target", help="Path to a skill directory or a SKILL.md file.")
     args = parser.parse_args(argv)
     target = Path(args.target)
-    if args.allowed_root:
+    allowed_root = Path(args.allowed_root) if args.allowed_root else None
+    if allowed_root is not None:
         try:
-            _validate_read_scope(target, Path(args.allowed_root))
+            _validate_read_scope(target, allowed_root)
         except (OSError, ValueError) as exc:
             print(f"error: unsafe target path: {exc}", file=sys.stderr)
             return 2
@@ -5712,7 +6455,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: no SKILL.md found at: {target}", file=sys.stderr)
         return 2
     try:
-        results = check_shape(target)
+        results = check_shape(target, allowed_root)
     except (OSError, UnicodeDecodeError) as exc:
         print(f"error: could not read skill files: {exc}", file=sys.stderr)
         return 2

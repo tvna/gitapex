@@ -228,7 +228,7 @@
     "executionRequirements": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Three recognized subkeys so far (tools, packages, network); further categories (filesystem/mcp/credentials/browser/externalServices/context) are deferred -- until they land, any key other than these here is a real unknown key, not reserved space, matching this skill's own bundled shape checker's current behavior for tools and network (packages is schema-only for now and is not yet recognized by that hand-rolled parser).",
+      "description": "Three recognized subkeys so far (tools, packages, network); further categories (filesystem/mcp/credentials/browser/externalServices/context) are deferred -- until they land, any key other than these here is a real unknown key, not reserved space, matching this skill's own bundled shape checker's current behavior for all three (packages is recognized by that hand-rolled parser too, including a second, independent execution-requirements-packages-allowlisted check against a repository-root allowlist config).",
       "properties": {
         "tools": { "$ref": "#/$defs/executionRequirementsTools" },
         "packages": { "$ref": "#/$defs/executionRequirementsPackages" },
