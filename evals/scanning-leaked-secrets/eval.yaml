@@ -15,10 +15,15 @@ metrics:
     description: 'Runs both betterleaks invocations (dir, git) and reports each
       run''s findings per-file, per-finding, in the tool''s own vocabulary, never
       merged into one undifferentiated list or a minted verdict; classifies each
-      run''s outcome from its JSON body rather than exit code alone, so a genuine
-      tool error is never reported as a clean scan; redacts every finding through
-      both layers -- betterleaks'' own --redact flag plus this skill''s own
-      CaptureGroups post-processing pass -- before any value reaches the report;
+      run''s outcome from its exit code and its JSON body together, never from
+      either one alone, so a genuine tool error is never reported as a clean
+      scan; redacts every finding through all three layers -- betterleaks'' own
+      --redact flag, this skill''s own CaptureGroups post-processing pass, and
+      the step-6 re-scan of the assembled report that catches a value in a field
+      neither of the first two reaches, Message above all -- before any value
+      reaches the report; names the suppression surface behind any clean result
+      (the target''s own auto-discovered config, its ignore file, and the inline
+      allow comments that stay honored) rather than reporting a bare clean;
       states the History-scan coverage boundary explicitly for a shallow clone or
       a non-git target rather than silently dropping the gap; treats a trivial or
       empty target as a valid clean result rather than inventing a not-applicable

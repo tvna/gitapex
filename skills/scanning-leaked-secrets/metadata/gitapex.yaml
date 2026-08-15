@@ -21,6 +21,12 @@ spec:
     - kind: correction
       anchor: "references/worked-examples.md"
       summary: "Corrects an assumption that --redact redacts every field of a finding. Verified live against the pinned 1.6.1 binary: a mongodb-connection-string finding's CaptureGroups.password and CaptureGroups.username reached the JSON output as plaintext with --redact at its default of 100. SKILL.md's Procedure gained a step-5 pass redacting CaptureGroups the same way, a second, unconditional layer. A private-key finding carries no CaptureGroups field, so the gap is rule-dependent."
+    - kind: correction
+      anchor: "references/worked-examples.md"
+      summary: "Corrects an assumption that --redact plus step 5's CaptureGroups pass redact every carrier of a finding's secret value. Verified live at 1.6.1: a betterleaks git finding's Message and Attributes.git.message reproduced a commit-message credential in full while Match, Secret, and CaptureGroups were already correctly redacted. SKILL.md's Procedure gained a step-6 re-scan of the assembled report via betterleaks stdin --redact, a third, unconditional layer."
+    - kind: correction
+      anchor: "references/worked-examples.md"
+      summary: "Corrects step 6's own first draft, which required the literal null back from betterleaks stdin's re-scan -- dir/git's own clean shape. Verified live at 1.6.1: stdin's own clean-result body is the empty array [], never null. Taken literally, the original wording would read every genuinely clean re-scan as a surviving credential. Found while independently reproducing the step-6 finding above before trusting it."
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/890"
       summary: "A separate, already-merged issue independently excluded --validation for the identical reason this skill's own Stop boundary states: it would send candidate credentials to third-party endpoints. Corroborates rather than originates this skill's own boundary, which is required regardless of that issue's own history."
@@ -45,5 +51,5 @@ spec:
       mode: disabled
   lifecycle:
     experimental:
-      reason: "Second skill to ship in the scanning-* family, after scanning-ci-workflows. Its own delegate-judgment shape is validated against a single wrapped tool for the first time (scanning-ci-workflows wraps two); a real redaction gap in the pinned tool's own --redact flag, see the correction reference above, was found and fixed before this version shipped, which is exactly the kind of validation an experimental designation exists to surface."
+      reason: "Second skill to ship in the scanning-* family, after scanning-ci-workflows. Its own delegate-judgment shape is validated against a single wrapped tool for the first time; three real gaps in the pinned tool's own output shape (see the correction references above) were found and fixed before this version shipped -- one in --redact's own field coverage, two more in the mechanism added to close it -- exactly the validation an experimental designation exists to surface."
       trackingIssue: "https://github.com/tvna/gitapex/issues/849"

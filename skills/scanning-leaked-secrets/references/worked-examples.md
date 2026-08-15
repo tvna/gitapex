@@ -12,7 +12,7 @@ database password), matching this authoring repository's own
 established practice for eval fixtures that plant fake credentials to
 prove a redaction mechanism works.
 
-**Read this as evidence that the Procedure executes and that both
+**Read this as evidence that the Procedure executes and that all three
 redaction layers hold, never as a pattern to expect in another
 target.** A different target will produce entirely different findings
 (or none), and a finding shape seen here is not a reason to expect or
@@ -24,9 +24,10 @@ conclusion over by analogy applies to this file specifically.
 1. [Step 1 -- tool version](#step-1----tool-version)
 2. [Step 2 -- a planted private key in the working tree](#step-2----a-planted-private-key-in-the-working-tree)
 3. [Step 5 -- the CaptureGroups redaction gap, and this skill's own fix](#step-5----the-capturegroups-redaction-gap-and-this-skills-own-fix)
-4. [Steps 2-3 -- a secret reachable only through history](#steps-2-3----a-secret-reachable-only-through-history)
-5. [What the run demonstrates](#what-the-run-demonstrates)
-6. [What the run did not do](#what-the-run-did-not-do)
+4. [Step 6 -- a commit message carries the credential past both other layers](#step-6----a-commit-message-carries-the-credential-past-both-other-layers)
+5. [Steps 2-3 -- a secret reachable only through history](#steps-2-3----a-secret-reachable-only-through-history)
+6. [What the run demonstrates](#what-the-run-demonstrates)
+7. [What the run did not do](#what-the-run-did-not-do)
 
 ## Step 1 -- tool version
 
@@ -187,6 +188,159 @@ Every `CaptureGroups` value now reads `REDACTED`, matching `Match` and
 before and after step 5 -- not a separate illustrative example -- so this
 is direct evidence the fix holds, not merely that it was written down.
 
+## Step 6 -- a commit message carries the credential past both other layers
+
+A third scratch fixture: a throwaway git repository whose first commit
+added `app.conf` holding an invented MongoDB connection string, then
+documented rotating that credential in the *commit message itself* --
+pasting the old connection string in full, a realistic mistake a
+developer makes when writing a terse changelog-style commit rather than
+a contrived one -- before a second commit removed the file. Procedure
+step 2 against the resulting working tree:
+
+    $ betterleaks dir --redact --exit-code 0 --report-format json --report-path - --no-color --no-banner /tmp/.../betterleaks-commitmsg-fixture
+    12:23PM INF scanned ~0 bytes (0) in 37.4ms
+    12:23PM INF no leaks found
+    null
+    EXIT=0
+
+The file is gone from the working tree, so `dir` genuinely has nothing
+to find. Procedure step 3 against the same repository's full history:
+
+    $ betterleaks git --redact --exit-code 0 --report-format json --report-path - --no-color --no-banner /tmp/.../betterleaks-commitmsg-fixture
+    12:23PM WRN leaks found: 1
+    [
+     {
+      "RuleID": "mongodb-connection-string",
+      "Description": "Detected a MongoDB connection string with embedded credentials, potentially exposing direct database access and sensitive application data.",
+      "StartLine": 1,
+      "EndLine": 1,
+      "StartColumn": 11,
+      "EndColumn": 71,
+      "Match": "REDACTED",
+      "Secret": "REDACTED",
+      "CaptureGroups": {
+       "authdb": "appdb",
+       "host": "db.internal.example:27017",
+       "password": "S3cr3tPassw",
+       "username": "svcuser"
+      },
+      "Attributes": {
+       "git.author_email": "dev@example.invalid",
+       "git.author_name": "Fixture Dev",
+       "git.date": "2026-08-15T12:23:32Z",
+       "git.message": "chore: rotate db creds (old uri was mongodb://svcuser:S3cr3tPassw@db.internal.example:27017/appdb)",
+       "git.sha": "28473cd4b1e5fed9b441467452af64716eaa1e92",
+       "path": "app.conf",
+       "resource": "git.patch_content"
+      },
+      "Tags": [],
+      "Fingerprint": "28473cd4b1e5fed9b441467452af64716eaa1e92:app.conf:mongodb-connection-string:1",
+      "File": "app.conf",
+      "SymlinkFile": "",
+      "Commit": "28473cd4b1e5fed9b441467452af64716eaa1e92",
+      "Entropy": 4.729357,
+      "Author": "Fixture Dev",
+      "Email": "dev@example.invalid",
+      "Date": "2026-08-15T12:23:32Z",
+      "Message": "chore: rotate db creds (old uri was mongodb://svcuser:S3cr3tPassw@db.internal.example:27017/appdb)"
+     }
+    ]
+    EXIT=0
+
+`Match` and `Secret` both read `REDACTED`. Applying step 5 -- this
+finding's `CaptureGroups` all replaced with `REDACTED` -- produces a
+finding that looks fully redacted at a glance. It is not: `Message` and
+`Attributes.git.message` still carry the connection string in full,
+verbatim, in the exact same JSON. Assembling this step-5-redacted
+finding into a report and piping it through step 6's own check:
+
+    $ betterleaks stdin --redact --exit-code 0 --report-format json --report-path - --no-color --no-banner < assembled-report.json
+    12:23PM WRN leaks found: 2
+    [
+     {
+      "RuleID": "mongodb-connection-string",
+      "Description": "Detected a MongoDB connection string with embedded credentials, potentially exposing direct database access and sensitive application data.",
+      "StartLine": 21,
+      "EndLine": 21,
+      "StartColumn": 57,
+      "EndColumn": 117,
+      "Match": "REDACTED",
+      "Secret": "REDACTED",
+      "CaptureGroups": {
+       "authdb": "appdb",
+       "host": "db.internal.example:27017",
+       "password": "S3cr3tPassw",
+       "username": "svcuser"
+      },
+      "Attributes": {
+       "path": "",
+       "resource": "fs.content"
+      },
+      "Tags": [],
+      "Fingerprint": ":mongodb-connection-string:21",
+      "File": "",
+      "SymlinkFile": "",
+      "Commit": "",
+      "Entropy": 4.729357,
+      "Author": "",
+      "Email": "",
+      "Date": "",
+      "Message": ""
+     },
+     {
+      "RuleID": "mongodb-connection-string",
+      "Description": "Detected a MongoDB connection string with embedded credentials, potentially exposing direct database access and sensitive application data.",
+      "StartLine": 35,
+      "EndLine": 35,
+      "StartColumn": 52,
+      "EndColumn": 112,
+      "Match": "REDACTED",
+      "Secret": "REDACTED",
+      "CaptureGroups": {
+       "authdb": "appdb",
+       "host": "db.internal.example:27017",
+       "password": "S3cr3tPassw",
+       "username": "svcuser"
+      },
+      "Attributes": {
+       "path": "",
+       "resource": "fs.content"
+      },
+      "Tags": [],
+      "Fingerprint": ":mongodb-connection-string:35",
+      "File": "",
+      "SymlinkFile": "",
+      "Commit": "",
+      "Entropy": 4.729357,
+      "Author": "",
+      "Email": "",
+      "Date": "",
+      "Message": ""
+     }
+    ]
+    EXIT=0
+
+Two hits, not `[]` -- one for `Attributes.git.message`, one for the
+top-level `Message`, the report's own two copies of the same commit
+message. Neither step 5 nor `--redact` itself ever looked at either
+field, so both still held the connection string in full going into this
+check. Redacting both fields' values to `REDACTED` and re-running the
+identical check:
+
+    $ betterleaks stdin --redact --exit-code 0 --report-format json --report-path - --no-color --no-banner < assembled-report-redacted.json
+    12:23PM INF scanned ~1177 bytes (1.18 KB) in 50.5ms
+    12:23PM INF no leaks found
+    []
+    EXIT=0
+
+`[]`, not `null` -- `betterleaks stdin`'s own clean-result shape, a
+different literal than `dir`/`git`'s `null` seen everywhere else in this
+file. Reading `[]` as "still not clean" here would loop forever against
+a report that is, at this point, actually clean; reading `dir`/`git`'s
+own `null` as "not yet clean" would make the opposite mistake there.
+Both literals were captured directly from this run, not asserted.
+
 ## Steps 2-3 -- a secret reachable only through history
 
 A throwaway git repository (its own local config only, never this
@@ -256,7 +410,7 @@ longer holds. `Match` and `Secret` are redacted, and there is no
 
 ## What the run demonstrates
 
-Three real facts, each shown rather than asserted:
+Four real facts, each shown rather than asserted:
 
 - The same fixture (`id_rsa_fake`) produces the same `private-key`
   finding whether scanned in a plain working tree (Step 2) or reached
@@ -273,6 +427,14 @@ Three real facts, each shown rather than asserted:
   pinned 1.6.1 binary, not assumptions -- the second one corrects an
   assumption this skill's own drafting started with, caught before
   shipping rather than after.
+- Step 5's own fix is not the end of the story: `Message` and
+  `Attributes.git.message` carry a credential past both `--redact` and
+  step 5 untouched, step 6's re-scan genuinely catches both occurrences
+  in Step 6's finding above, and that same re-scan's own clean-result
+  shape (`[]`) is a different literal than `dir`/`git`'s `null` -- a
+  distinction this skill's own first draft of step 6 conflated, caught
+  the same way the `CaptureGroups` gap was: by running the real binary
+  rather than assuming its output shape.
 
 ## What the run did not do
 

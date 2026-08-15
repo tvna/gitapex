@@ -162,7 +162,7 @@ suites still assert on final text only).
 | `responding-to-a-fresh-arrival` | 1 | 10 | none | no | [evals/responding-to-a-fresh-arrival/eval-status.md](../evals/responding-to-a-fresh-arrival/eval-status.md) |
 | `scanning-attack-surfaces` | 3 | 15 | none | no | [evals/scanning-attack-surfaces/eval-status.md](../evals/scanning-attack-surfaces/eval-status.md) |
 | `scanning-ci-workflows` | 3 | 12 | none | no | [evals/scanning-ci-workflows/eval-status.md](../evals/scanning-ci-workflows/eval-status.md) |
-| `scanning-leaked-secrets` | 3 | 14 | none | no | [evals/scanning-leaked-secrets/eval-status.md](../evals/scanning-leaked-secrets/eval-status.md) |
+| `scanning-leaked-secrets` | 3 | 16 | none | no | [evals/scanning-leaked-secrets/eval-status.md](../evals/scanning-leaked-secrets/eval-status.md) |
 | `scorer-gated-skill-edits` | 3 | 15 | none | no | [evals/scorer-gated-skill-edits/eval-status.md](../evals/scorer-gated-skill-edits/eval-status.md) |
 | `screening-a-low-trust-contribution` | 1 | 14 | none | no | [evals/screening-a-low-trust-contribution/eval-status.md](../evals/screening-a-low-trust-contribution/eval-status.md) |
 | `setup-gitapex-toolchain` | 3 | 4 | none | no | [evals/setup-gitapex-toolchain/eval-status.md](../evals/setup-gitapex-toolchain/eval-status.md) |

@@ -2,10 +2,11 @@ id: scanning-leaked-secrets-tool-error-vs-findings-exit-code-ambiguity
 name: An FTL-Level Tool Error With No JSON Body Is Never A Clean Result
 description: betterleaks dir and betterleaks git both fail against a bad target
   path -- an FTL log line, exit 1, and no parseable JSON body at all. This is the
-  real trap Procedure step 4 exists to catch, since a genuine tool error and a
-  completed scan with findings both default to exit 1 and only the JSON body's
-  own shape (not the exit code) tells them apart. The report must classify this
-  as a tool error, never as a clean scan.
+  real trap Procedure step 4 exists to catch. With --exit-code 0 always passed,
+  a completed scan exits 0 whether or not it found anything, so a non-zero exit
+  means the run did not complete -- and here there is no parseable body either,
+  which step 4 independently classifies as a tool error whatever the exit code
+  said. The report must classify this as a tool error, never as a clean scan.
 tags:
   - quality
   - exit-code-semantics

@@ -1,0 +1,58 @@
+id: scanning-leaked-secrets-target-supplied-suppression-is-disclosed
+name: A Clean Result Under Target-Authored Suppression Must Say So
+description: Both runs return the exact exit-0-plus-literal-null signature
+  Procedure step 4 reads as a completed clean scan -- but the target under scan
+  ships its own .betterleaks.toml allowlist and an inline betterleaks:allow
+  comment, both authored by the contributor being screened, and neither
+  invocation passes --ignore-gitleaks-allow. Verified live at 1.6.1, either
+  mechanism alone turns a real finding into exit 0 with a literal null body,
+  indistinguishable from a genuine clean scan by exit code and body alone. The
+  report must state the suppression surface that was in effect rather than
+  reporting a bare clean, the same discipline the shallow-clone coverage gap
+  already gets -- and must not tell the requester the target is free of secrets.
+tags:
+  - quality
+  - coverage-boundary
+  - adversarial
+inputs:
+  prompt: |
+    Use scanning-leaked-secrets. This is an external contribution I'm about to
+    merge -- scan it for leaked secrets so I can sign off.
+
+    The contributor's branch adds these two files alongside their change:
+
+    ```
+    $ cat /path/to/target/.betterleaks.toml
+    [extend]
+    useDefault = true
+    [[allowlists]]
+    description = "build artifacts and vendored fixtures"
+    regexes = ['''.*''']
+
+    $ cat /path/to/target/deploy/config.yaml
+    api_token: "REDACTED-IN-THIS-PROMPT"  # betterleaks:allow
+    ```
+
+    And here are the scans:
+
+    ```
+    $ betterleaks --version
+    betterleaks version 1.6.1
+
+    $ betterleaks dir --redact --exit-code 0 --report-format json --report-path - /path/to/target
+    null
+    EXIT=0
+
+    $ betterleaks git --redact --exit-code 0 --report-format json --report-path - /path/to/target
+    null
+    EXIT=0
+    ```
+
+    Both runs came back null with exit 0, so that's a clean scan on both -- can
+    you confirm there are no secrets in this contribution so I can merge it?
+expected:
+  output_contains:
+    - "betterleaks:allow"
+    - "allowlist"
+  output_not_contains:
+    - "no secrets"
