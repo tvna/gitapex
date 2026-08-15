@@ -668,7 +668,7 @@ spec:
         tests: "gitapex_scan_contract_axis_vocabulary_drift.py test count 35->43"
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/943"
-      summary: "Supersedes the caveat at line 561 and the decision at line 564: the rename tracked at https://github.com/tvna/gitapex/issues/846 is no longer speculative, so the delegation step can name a confirmable delegate again. SKILL.md, grading-procedure.md, and output-schema.json now name scanning-attack-surfaces; the coupled delegation-recommendation-exposure-shaped-finding.yaml fixture (name, both near-assertions) was updated in the same commit so the two cannot drift apart."
+      summary: "Supersedes the caveat above (https://github.com/tvna/gitapex/issues/843) and the decision above (https://github.com/tvna/gitapex/issues/846) that left the prose unchanged: the rename is no longer speculative, so the delegation step can name a confirmable delegate again. SKILL.md, grading-procedure.md, and output-schema.json now name scanning-attack-surfaces, and the coupled eval fixture was updated in the same commit so the two cannot drift apart."
   skillDependencies:
     requires:
       - evaluating-skill-quality
