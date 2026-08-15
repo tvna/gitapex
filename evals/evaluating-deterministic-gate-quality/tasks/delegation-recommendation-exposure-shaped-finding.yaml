@@ -1,5 +1,5 @@
 id: evaluating-deterministic-gate-quality-delegation-recommendation-exposure-shaped-finding
-name: An exposure- and privilege-shaped finding is delegated to vetting-attack-surface without the review itself being replaced
+name: An exposure- and privilege-shaped finding is delegated to scanning-attack-surfaces without the review itself being replaced
 description: The delegation recommendation folded into the two-lane walk
   routes an exposure- or privilege-shaped finding to the existing sibling
   skill rather than re-deriving that analysis inline. The recommendation is
@@ -49,10 +49,10 @@ expected:
   output_contains_near:
     - all:
         - "Delegate"
-        - "vetting-attack-surface"
+        - "scanning-attack-surfaces"
       window: 60
   output_not_contains_near:
     - all:
         - "Delegate"
-        - "not vetting-attack-surface"
+        - "not scanning-attack-surfaces"
       window: 60
