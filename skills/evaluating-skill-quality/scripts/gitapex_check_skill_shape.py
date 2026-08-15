@@ -2458,7 +2458,11 @@ def _parse_manifest(text: str) -> ManifestParse:
                 else:
                     collecting_exec_packages_list.append(_unquote(raw_text))
                 continue
-            if EXEC_REQ_PACKAGES_MISINDENTED_ITEM_RE.match(line):
+            if (
+                line[:1] in (" ", "\t")
+                and line.strip() not in ("---", "...")
+                and EXEC_REQ_PACKAGES_MISINDENTED_ITEM_RE.match(line)
+            ):
                 # Looks like an attempted list item that the strict regex
                 # above rejected on indentation alone (a tab, or fewer
                 # than 6 spaces) -- see
@@ -2469,6 +2473,27 @@ def _parse_manifest(text: str) -> ManifestParse:
                 # packages entry, rather than silently finalizing the list
                 # as empty -- indistinguishable from the package never
                 # having been declared at all.
+                #
+                # The line[:1] guard (found live by an independent
+                # adversarial review) is required because
+                # EXEC_REQ_PACKAGES_MISINDENTED_ITEM_RE's own leading
+                # "[ \t]*" is zero-or-more, deliberately looser than
+                # EXEC_REQ_TOOLS_LIST_ITEM_RE's own "{6,}" -- exactly the
+                # width this branch needs to catch an under-indented item
+                # (the bug the comment above already describes), but that
+                # same width also matches a column-0 "---"/"..." YAML
+                # document marker (both start with "-") and a bare
+                # column-0 "- stray" line, neither of which is an
+                # attempted list item at all. Excluding both here lets
+                # them fall through to their own correct handling instead
+                # (the document-marker skip below, or the generic
+                # top-level malformed-line catch-all) rather than being
+                # misreported as a malformed *packages* item and spuriously
+                # failing a sidecar whose packages list is actually
+                # well-formed. A real, indented-but-under-6-spaces item
+                # (the tab/two-space regression fixtures this branch
+                # already has) always starts with a space or tab, so this
+                # guard does not narrow the original fix's own coverage.
                 malformed_exec_packages_items.append(line.strip())
                 continue
             # Not a list item: this per-ecosystem package-name list ends here.
@@ -3726,7 +3751,15 @@ def _invocation_mode_check(fields: dict[str, str]) -> CheckResult:
     )
 
 
-def check_shape(target: Path) -> list[CheckResult]:
+def check_shape(target: Path, allowed_root: Path | None = None) -> list[CheckResult]:
+    """``allowed_root``, when given, is threaded through to
+    ``_execution_requirements_packages_allowlist_check`` so its own
+    repository-root resolution stays bounded by the same caller-approved
+    scope ``main()`` already validated the target against via
+    ``_validate_read_scope`` -- see ``_dependency_allowlist_repo_root``'s
+    own docstring for why. ``None`` (the default) preserves this
+    function's own prior, unbounded behavior for every existing caller
+    that never passed ``--allowed-root`` to begin with."""
     skill_md = _resolve_skill_md(target)
     skill_dir = skill_md.parent
     results: list[CheckResult] = []
@@ -4331,7 +4364,9 @@ def check_shape(target: Path) -> list[CheckResult]:
                     malformed_execution_requirement_network_items,
                 )
             )
-            results.append(_execution_requirements_packages_allowlist_check(spec_is_mapping, spec, skill_dir))
+            results.append(
+                _execution_requirements_packages_allowlist_check(spec_is_mapping, spec, skill_dir, allowed_root)
+            )
             if portability in PORTABILITY_LEVELS:
                 sidecar_portability = SidecarPortability(state="usable", level=portability)
             else:
@@ -6093,7 +6128,7 @@ def _valid_dependency_allowlist_config(config: object) -> bool:
     return all(_valid_execution_requirements_tools_list(v) for v in config["packages"].values())
 
 
-def _dependency_allowlist_repo_root(skill_dir: Path) -> Path:
+def _dependency_allowlist_repo_root(skill_dir: Path, allowed_root: Path | None = None) -> Path:
     """Locate the repository root DEPENDENCY_ALLOWLIST_RELATIVE_PATH is
     resolved against, given the skill directory under check.
 
@@ -6122,17 +6157,42 @@ def _dependency_allowlist_repo_root(skill_dir: Path) -> Path:
     than an exception -- the allowlist-file-existence branch right after
     this call already fails closed on a wrong guess, exactly as it always
     has.
+
+    ``allowed_root``, when given (the CLI's own ``--allowed-root``,
+    already used to bound the skill directory itself via
+    ``_validate_read_scope``), bounds this upward search too -- found
+    live by an independent adversarial review: a caller-approved root
+    that is not itself git-root-aligned (a snapshot nested inside a
+    larger, less-trusted checkout that has its own ``.git`` further up)
+    let the previously-unbounded search escape ``--allowed-root``
+    entirely and resolve a DIFFERENT, unapproved checkout's own
+    ``.gitapex/dependency-allowlist.json`` -- the same class of
+    scope-bypass ``_reject_symlinked_allowlist_path`` already exists to
+    prevent for a symlinked path component, now closed for this second,
+    non-symlink route as well. The search still walks upward from
+    ``skill_dir`` looking for ``.git`` exactly as before, but never
+    past ``allowed_root`` itself; reaching ``allowed_root`` with no
+    ``.git`` found falls back to ``allowed_root`` itself (the most
+    defensible guess once an explicit boundary exists, and still subject
+    to the same "a wrong guess fails closed at the allowlist-file-
+    existence check right after this call" property the unbounded
+    fallback below always had). ``None`` (the default, and every call
+    site that never received ``--allowed-root`` to begin with) preserves
+    the prior, unbounded behavior exactly.
     """
     resolved = skill_dir.resolve()
+    allowed_root_resolved = allowed_root.resolve() if allowed_root is not None else None
     current = resolved
     while True:
         if (current / ".git").exists():
             return current
+        if allowed_root_resolved is not None and current == allowed_root_resolved:
+            return allowed_root_resolved
         parent = current.parent
         if parent == current:
             break
         current = parent
-    return resolved.parent.parent
+    return allowed_root_resolved if allowed_root_resolved is not None else resolved.parent.parent
 
 
 def _reject_symlinked_allowlist_path(repo_root: Path) -> Path | None:
@@ -6183,6 +6243,7 @@ def _execution_requirements_packages_allowlist_check(
     spec_is_mapping: bool,
     spec: dict[str, object],
     skill_dir: Path,
+    allowed_root: Path | None = None,
 ) -> CheckResult:
     """``execution-requirements-packages-allowlisted`` (issue #1115's own
     ADR follow-up: package-shape recognition) -- a genuinely new KIND of
@@ -6296,7 +6357,7 @@ def _execution_requirements_packages_allowlist_check(
         return CheckResult(check_name, True, rule, "no packages declared")
 
     pairs_text = ", ".join(f"{ecosystem}/{name}" for ecosystem, name in requested_packages)
-    repo_root = _dependency_allowlist_repo_root(skill_dir)
+    repo_root = _dependency_allowlist_repo_root(skill_dir, allowed_root)
     allowlist_path = _reject_symlinked_allowlist_path(repo_root)
     if allowlist_path is None:
         return CheckResult(
@@ -6382,9 +6443,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("target", help="Path to a skill directory or a SKILL.md file.")
     args = parser.parse_args(argv)
     target = Path(args.target)
-    if args.allowed_root:
+    allowed_root = Path(args.allowed_root) if args.allowed_root else None
+    if allowed_root is not None:
         try:
-            _validate_read_scope(target, Path(args.allowed_root))
+            _validate_read_scope(target, allowed_root)
         except (OSError, ValueError) as exc:
             print(f"error: unsafe target path: {exc}", file=sys.stderr)
             return 2
@@ -6393,7 +6455,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: no SKILL.md found at: {target}", file=sys.stderr)
         return 2
     try:
-        results = check_shape(target)
+        results = check_shape(target, allowed_root)
     except (OSError, UnicodeDecodeError) as exc:
         print(f"error: could not read skill files: {exc}", file=sys.stderr)
         return 2

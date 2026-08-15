@@ -29,8 +29,10 @@ follow-up), a 0:1:0 trade-secret/competitive-harm broadening (gitapex#537
 follow-up), and a 3:3:0 addition for the three new evaluation criteria
 issue #614's own retrospective motivated (gitapex#619:
 declaration-vs-structure fit, correction-narration sediment, repeated-
-restatement duplication), and a 1:0:0 multi-turn-relaxation addition
-(gitapex#332's own ACM-7 audit round), for a resulting 27:30:12 partition. This is
+restatement duplication), a 1:0:0 multi-turn-relaxation addition
+(gitapex#332's own ACM-7 audit round), and a 1:1:1 addition for the new
+Single ownership and boundary fit dimension-7 check (gitapex#1111), for a
+resulting 28:31:13 partition. This is
 named explicitly as a deviation from the 2:1:7 default. The
 honest minimal groundwork, per that same worked example, is a larger
 fixture corpus over time, not a smaller gate.
@@ -39,9 +41,9 @@ Exclusion rule for this arithmetic, stated once so the figures above can be
 checked against the Assignment section below (gitapex#907): every listed
 fixture, in every split, is counted in exactly one of the additions above,
 except the one named on the declaration line below. Verified per split, not
-only for train: the Assignment section lists 28 unique train fixtures against
-the declared 27 (the single exclusion), and 30 selection and 12 test fixtures
-against the declared 30 and 12 exactly.
+only for train: the Assignment section lists 29 unique train fixtures against
+the declared 28 (the single exclusion), and 31 selection and 13 test fixtures
+against the declared 31 and 13 exactly.
 
 Split-arithmetic exclusions: `dispatch-required-negative-control.yaml` -- listed
 in train for split-listing consistency with `normal.yaml` rather than as a
@@ -3854,3 +3856,175 @@ does not work.
 Not run this cycle, for the same reason as the two waivers above --
 no completed dispatch to transfer-check. Carried forward as an open
 item alongside the `checkerRef` gap and the not-run self-audits.
+
+## Iteration: issue #1111, Single ownership and boundary fit (dimension-7 check)
+
+Candidate edit: add a new check, "Single ownership and boundary fit," to
+`references/rubric.md`'s existing Dimension 7 ("Bundled scripts") -- one
+bullet in the main checklist, an extended Fail/Pass clause, and a fuller
+"in depth" subsection with four sub-checks (one owner, boundary fit, no
+undeclared reach-out, duplication drift gate). Not a tenth dimension:
+`references/output-schema.json` pins exactly nine dimensions. Full text:
+this PR's diff. Motivated by a decision-brief analysis of relocating
+`evals/scripts/` tooling into owning skills (gitapex#1105 follow-up),
+which found an already-shipped instance of the exact failure this check
+targets inside this repository's own `skills/evaluating-skill-quality/
+scripts/gitapex_scan_execution_requirements_drift.py` (a disclosed,
+gracefully-guarded PyYAML import, tracked separately, not fixed by this
+edit).
+
+Precondition and splits: satisfied. `waza --version` reports `0.38.0`
+(runner confirmed). No fixture in the pre-existing 70-fixture corpus
+probes bundled-script ownership or boundary fit at all (verified by
+grepping every `tasks/*.yaml` file for the relevant vocabulary before
+authoring new fixtures) -- this motivated three new fixtures rather than
+reusing existing coverage: `shared-bundled-script-undeclared-reach-
+train.yaml` (train -- an invoice-reconciliation skill's script reaches,
+undeclared, into a sibling skill's `scripts/` directory), `shared-
+bundled-script-boundary-fit-selection.yaml` (selection -- a distinct
+domain, log-anomaly detection, and a distinct sub-failure, an unlicensed
+third-party import on a stated no-install-step surface, so the gate
+measures generalization across both named sub-failures rather than
+memorizing the train fixture's cross-skill-reach shape), and `shared-
+bundled-script-declared-dependency-restraint.yaml` (test, read once --
+a properly declared, sole-owned, stdlib-safe cross-skill dependency,
+with the import additionally guarded against a missing sibling, so the
+restraint check isolates the ownership/declaration question from the
+separate, pre-existing "Solve, don't punt" error-handling bullet). Split
+updated: 27:30:12 -> 28:31:13 (partition arithmetic re-verified by
+`.github/scripts/gitapex_gate_split_fixture_coverage.py`, which passes).
+
+**Fixture-authoring bug found and fixed before any score was banked,
+disclosed per this file's own recurring practice:** the restraint
+fixture's first draft placed `spec.skillDependencies.requires` directly
+inside the target's `SKILL.md` frontmatter fence. A live after-dispatch
+against that draft correctly flagged the resulting top-level `spec` key
+as an undocumented frontmatter extension (`Compatibility awareness:
+PROPOSE_COMPATIBILITY`) and, independently, correctly flagged the
+script's unhandled `ModuleNotFoundError` on a missing sibling as a
+"Solve, don't punt" failure under the pre-existing dimension-7 bullet --
+both real, and both outside what this fixture intended to isolate. Fixed
+by (a) moving the dependency declaration into descriptive prose about
+the skill's `metadata/gitapex.yaml` sidecar, matching this repository's
+own real `spec.skillDependencies.requires` schema location (`skills/
+evaluating-skill-quality/references/skill-metadata.schema.json:134-143`,
+confirmed by reading it directly, not assumed), and (b) guarding the
+import with the same `try/except ModuleNotFoundError` shape this
+repository's own `gitapex_scan_execution_requirements_drift.py` uses for
+its real PyYAML guard, so the restraint case cleanly isolates "is this
+cross-skill dependency legitimately owned and declared" from "does the
+script handle its own absence gracefully."
+
+Blind spot pass: the corpus covers an undeclared cross-skill reach
+(train) and an unlicensed third-party import (selection), two distinct
+sub-failure shapes for the same check. It does not prove the check
+generalizes to a *different* target repository's own deployment model
+(one with a real install step, a vendored-dependency directory, or an
+npm-style lockfile convention) -- every fixture here states the same
+"no install step, stdlib-only guaranteed" constraint, matching this
+repository's own. A future addition targeting that gap should add a
+fixture against a stated different deployment model and confirm the
+check's own "read that repository's own layout doc... before grading
+this" instruction actually changes the verdict rather than defaulting to
+this corpus's own assumption.
+
+### Gate result
+
+Methodology: one fresh, isolated dispatch per side, against only
+`shared-bundled-script-boundary-fit-selection.yaml` -- the "before" side
+grounded against a `git show HEAD`-pinned
+snapshot of the pre-edit `references/rubric.md` (temp file, not the
+working tree, per this file's own Stop-boundary discipline against
+reading a working tree mid-edit), the "after" side against the real
+post-edit file. Each dispatch read `SKILL.md` and the given `rubric.md`
+content fresh and applied the full Procedure blind (not told what
+property was being measured). All 30 pre-existing selection fixtures are
+reused unchanged, per **assertion-surface disjointness, verified by
+reading every one of their own `expected` blocks and target-skill
+content in this merged tree** (the same methodology the issue #406 entry
+above established): my edit is purely additive to Dimension 7's text,
+and grepping all 30 files for the relevant vocabulary (bundled script,
+single ownership, boundary fit, shared script, sibling skill,
+third-party, no install step, deployment boundary, skillDependencies,
+sys.path.insert) surfaced only two incidental matches on the bare word
+"third-party" -- `third-party-not-authoritative.yaml` (a third-party
+*blog post* cited as platform-behavior evidence, a grounding-in-primary-
+sources fixture) and `confidentiality-awareness-selection.yaml` (PII
+forwarded to a third-party *analytics webhook*) -- both confirmed
+unrelated by reading their full `expected` blocks directly: neither
+references "Single ownership and boundary fit," "numpy," or any
+bundled-script vocabulary at all.
+
+| Fixture | Before | After |
+|---|---|---|
+| `shared-bundled-script-boundary-fit-selection.yaml` | 0.750000 (fresh) | 1.000000 (fresh) |
+| 30 pre-existing selection fixtures | unchanged (assertion-surface disjoint, confirmed by inspection) | unchanged (same) |
+
+`gitapex_score_contract.py --compare-to 0.750000` on the single fresh
+pair: `1.000000 KEEP`. Concluded analytically for the full 31-fixture
+selection mean, the same construction the issue #406 entry above used
+for its own tie: since the other 30 fixtures' scores are identical on
+both sides, `after_mean - before_mean = (1.000000 - 0.750000) / 31 ~=
++0.008065`, strictly positive regardless of the (unreconstructed) exact
+value of the other 30 fixtures' contribution -- the strict
+improve-or-reject rule is satisfied by construction, not by re-running
+30 fixtures whose scores cannot move.
+
+The before-dispatch is itself worth recording as a finding, not just a
+number: against the *pre-edit* rubric, the reviewer already caught the
+selection fixture's `numpy`-on-a-no-install-surface defect in full,
+citing `docs/repository-layout.md` and ADR 0001 directly under the
+pre-existing Dimension 6 ("Durability") bullet -- the 0.75 score reflects
+that the *new check's own name* ("Single ownership and boundary fit")
+could not appear in a review of a rubric that does not yet contain it,
+not that the underlying problem went undetected. The edit's own,
+disclosed value on this specific fixture is narrower than "detects a
+previously-undetectable defect": it gives the *same, already-detectable*
+defect a named, citable home inside Dimension 7 specifically (where a
+reviewer would otherwise have to reconstruct the finding under
+Durability each time), which is exactly the discrimination the selection
+fixture's own two required substrings were designed to measure together.
+
+Classification: **ordinary** (adds new rubric prose, a new bullet, and
+three new fixture files -- not deletion-only, so the pruning-only
+lexicographic exception does not apply; the strict improve-or-reject
+gate applies in full).
+
+### Restraint check (test split, read once)
+
+`shared-bundled-script-declared-dependency-restraint.yaml`, one fresh
+dispatch against the post-edit rubric: **1.000000.** The dispatch applied
+the "Single ownership and boundary fit, in depth" four sub-checks
+directly and marked all four satisfied ("with the dependency declared,
+not reached for silently," "no third-party/install-step risk," "this
+reach is declared, not silent, so it does not match the rubric's own
+worked Fail example," duplication check moot) -- correctly withholding a
+Fail on this check specifically, matching the restraint the fixture was
+built to test. The dispatch separately, correctly flagged two unrelated
+defects the fixture never intended to guard against (an undisclosed
+required Portability level, and the excerpt describing a sidecar it
+doesn't ship) -- real findings under different dimensions, not evidence
+against this check's own restraint.
+
+The fixture's own first draft needed one repair mid-run, disclosed
+above rather than silently absorbed: v1's script had no guard on the
+missing-sibling import, so a v1 after-dispatch correctly flagged an
+unhandled `ModuleNotFoundError` under the pre-existing "Solve, don't
+punt" bullet -- a real defect, just not the one this fixture exists to
+isolate. v2 (scored above) adds the same `try/except
+ModuleNotFoundError` shape this repository's own
+`gitapex_scan_execution_requirements_drift.py` already uses for its own
+PyYAML guard, cleanly separating the two questions.
+
+### Transfer check
+
+Not run this iteration, the same disclosed, still-open gap issue #200's
+own entry first named and every iteration in this log since has
+carried forward undischarged -- not silently assumed clear for this
+edit specifically.
+
+### Verdict
+
+**KEEP.** Selection-split score strictly improves (analytically, by
+construction, per the Gate result section above); ordinary-gate rule
+satisfied. Applied to `references/rubric.md` in this PR.
