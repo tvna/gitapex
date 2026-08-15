@@ -12,6 +12,6 @@ metrics:
   - name: outward_artifact_preflight_quality
     weight: 1.0
     threshold: 0.8
-    description: Flags undisclosed provenance markers and non-ASCII content before push/post, and never clears a flagged artifact without a fix or explicit owner sign-off.
+    description: Flags undisclosed provenance markers, non-ASCII content, and a citation-shaped sentence that could trip a git host's closing-keyword scan, before push/post, and never clears a flagged artifact without a fix or explicit owner sign-off.
 tasks:
   - "tasks/*.yaml"

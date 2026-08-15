@@ -266,8 +266,8 @@ Finalizing a commit or PR message can trigger both this skill and the
 explaining-the-work skill at once, where both are installed -- that is
 expected, not a conflict. explaining-the-work routes what the text
 should say (How/What/Why); this skill checks whether the text, once
-written, is safe to publish (provenance, ASCII). Apply both; neither
-substitutes for the other.
+written, is safe to publish (provenance, ASCII, closing-keyword
+citations). Apply both; neither substitutes for the other.
 
 ## Stop boundary
 
