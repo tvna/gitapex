@@ -666,6 +666,9 @@ spec:
       summary: "Test coverage grew from 35 to 43 cases: SKILL.md's own extract_section absent/duplicate/empty failure paths (previously only cross-cutting-axes.md's side was exercised) plus check 12's pass/stale/malformed-word/missing-phrase/recomputation cases. The gate script itself stays at 100% line coverage."
       outcome:
         tests: "gitapex_scan_contract_axis_vocabulary_drift.py test count 35->43"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/943"
+      summary: "Supersedes the caveat at line 561 and the decision at line 564: the rename tracked at https://github.com/tvna/gitapex/issues/846 is no longer speculative, so the delegation step can name a confirmable delegate again. SKILL.md, grading-procedure.md, and output-schema.json now name scanning-attack-surfaces; the coupled delegation-recommendation-exposure-shaped-finding.yaml fixture (name, both near-assertions) was updated in the same commit so the two cannot drift apart."
   skillDependencies:
     requires:
       - evaluating-skill-quality

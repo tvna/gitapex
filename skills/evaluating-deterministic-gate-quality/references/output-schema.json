@@ -179,7 +179,7 @@
               },
               "recommendedTarget": {
                 "type": "string",
-                "description": "The delegate this review recommends: an existing sibling skill (vetting-attack-surface for an exposure- or privilege-shaped finding), a named real diagnostic tool for that stack, or the scanning-prefixed skill that would own it if built. Free-form text carrying the same no-target-authored-text discipline persistenceRecommendation.rationale states: this field names a candidate, it never dispatches one."
+                "description": "The delegate this review recommends: an existing sibling skill (scanning-attack-surfaces for an exposure- or privilege-shaped finding), a named real diagnostic tool for that stack, or the scanning-prefixed skill that would own it if built. Free-form text carrying the same no-target-authored-text discipline persistenceRecommendation.rationale states: this field names a candidate, it never dispatches one."
               },
               "confirmation": {
                 "type": "string",
