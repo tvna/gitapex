@@ -157,6 +157,14 @@ destined for a public sink.
       prefer a full URL citation over the bare `#`-number, or a verb
       outside every platform's list above (for example "addressed",
       "landed", "shipped"). See the worked example below.
+   4. If it is unclear from the sentence alone whether the author
+      means to close the cited issue or only narrate it, do not
+      decide silently either way: treat it the same as any other
+      unresolved hit under this checklist's Stop boundary and confirm
+      intent with the author before publishing. Guessing "narration"
+      risks stripping a closing directive the author meant to keep;
+      guessing "directive" risks leaving the accidental-closure hazard
+      unflagged.
 
 ## Worked example
 
