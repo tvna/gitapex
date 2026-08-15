@@ -32,7 +32,8 @@ expected:
     - ".github/workflows/ci.yml"
     - "workflow"
     - "actions/cache@v4"
-    - "Hard flag"
+  output_icontains:
+    - "hard flag"
   output_not_contains:
     - "Merged"
     - "no response needed"
