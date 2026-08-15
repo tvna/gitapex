@@ -8,10 +8,10 @@ way, against one target skill directory at a time, as part of that
 skill's "Deterministic shape" lane (see SKILL.md's Two lanes section).
 skills/evaluating-skill-quality/references/skill-metadata.schema.json
 validates executionRequirements' SHAPE only; this scanner cross-checks
-one skill's own declared network mode/domains and tools write/shell tags
-against what its own content actually does.
+one skill's own declared network mode/domains, tools write/shell tags,
+and packages.pip dependencies against what its own content actually does.
 
-Two independent checks, one per executionRequirements sub-block, that
+Three independent checks, one per executionRequirements sub-block, that
 differ in kind, not just in what they check -- a distinction worth
 stating explicitly rather than lumping both under one "best-effort"
 label (a distinction a live design discussion on issue #1022 surfaced,
@@ -67,11 +67,39 @@ must never itself run a skill's bundled scripts):
   ...), so anchoring on one would blind the scanner on most of them.
   tools.read is not checked -- only write/shell are the safety-relevant
   under-declaration direction.
+- find_packages_drift: declared executionRequirements.packages.pip vs.
+  two evidence sources of its own (issue #1121, following packages.pip's
+  own shape-recognition in PR2 of the same 5-PR sequence, issue #1118/PR
+  #1120, which shipped 8 real defects -- including one CRITICAL fail-open
+  -- found only by an independent adversarial review, direct precedent
+  for this check's own review requirement) -- non-stdlib imports actually
+  found in skill_dir/scripts/*.py (DETERMINISTIC, via the same AST-based
+  root-module-extraction technique .github/scripts/gitapex_gate_stdlib_
+  only_claim_drift.py's own _imported_root_modules/_is_stdlib already use
+  for an analogous stale-claim check, resolved against declared
+  packages.pip directly or via a small, disclosed, non-exhaustive
+  import-name-to-distribution-name alias table -- pyyaml/yaml is the
+  load-bearing entry, see _IMPORT_NAME_TO_DISTRIBUTION), and SKILL.md's
+  own `compatibility` frontmatter field prose (BEST-EFFORT, exact-string
+  match only, kind="heuristic" -- the same irreducibly-prose-based tier
+  find_tools_drift's own "-vs-skill-md" lane already established, applied
+  here to a different frontmatter field rather than the document body).
+  Python-only by design (issue #1121's own Non-goals): a sidecar
+  declaring packages under any OTHER ecosystem key (e.g. "npm") is real
+  but simply not this function's concern, matching the originating ADR's
+  own packages.pip scope (issue #1115/PR #1116, {pyyaml, jsonschema,
+  pydantic}).
 
 Each finding carries a severity: "error" for under-declaration (declared
 narrower than actual) or "warning" for over-declaration (declared broader
 than actual content ever exercises -- a hygiene finding, never failing a
-run on its own).
+run on its own). find_packages_drift's own compatibility-mention check is
+graded "warning" under this same non-blocking-hygiene framing even though
+it is not literally an over-declaration in the usage-evidence sense --
+both sides of that specific check are human/metadata-authored
+declarations, not independent proof of runtime behavior, so grading a
+mismatch there at "error" would overstate what the check actually proves
+(see find_packages_drift's own docstring).
 
 Residual limitations, even in find_network_drift's deterministic half:
 determinism means "the same input always parses to the same finding,"
@@ -85,7 +113,14 @@ a defect in using ast over regex (see
 test_dynamically_constructed_host_evades_allowlist_check for one
 deliberately-constructed example). find_tools_drift's own natural-
 language matching carries the same class of gap for the same reason
-prose has no parser.
+prose has no parser. find_packages_drift's own deterministic half shares
+the same AST-visibility class of gap (a dynamic
+`importlib.import_module("yaml")` call is invisible to it, the same way
+a runtime-constructed network host is to find_network_drift), and its
+own alias table is necessarily incomplete by design (see
+_IMPORT_NAME_TO_DISTRIBUTION's own comment) while its compatibility-
+mention heuristic carries the same class of gap prose-matching always
+does; see find_packages_drift's own docstring for the specifics.
 
 Language scope: find_network_drift's AST-based half only reads
 skill_dir/scripts/*.py. A bundled non-Python script (a .sh file, for
@@ -720,16 +755,47 @@ def _read_text_best_effort(path: pathlib.Path) -> str:
 
 
 def _bundled_script_trees(skill_dir: pathlib.Path) -> tuple[list[ast.AST], list[str]]:
-    """Every skill_dir/scripts/*.py file that is not the skill's own test
-    suite, parsed. Test files (pytest's own "test_*.py" discovery
-    convention, the one this repository's own scripts actually use) are
-    excluded -- a script's unit tests legitimately construct test-double
-    URLs, mocked subprocess calls, and similar test-only content that is
-    not the skill's own shipped capability; including them misattributes
-    that content as real drift (found live against this repository's own
-    skills/setup-gitapex-toolchain and skills/drafting-an-adr, each
-    reporting a finding whose only real source was its own test file, not
-    its implementation script).
+    """Every .py file anywhere under skill_dir/scripts/ (RECURSIVELY, see
+    below) that is not the skill's own test suite, parsed. Test files
+    (pytest's own "test_*.py" discovery convention, the one this
+    repository's own scripts actually use, matched on the file's own
+    basename regardless of depth) are excluded -- a script's unit tests
+    legitimately construct test-double URLs, mocked subprocess calls, and
+    similar test-only content that is not the skill's own shipped
+    capability; including them misattributes that content as real drift
+    (found live against this repository's own skills/setup-gitapex-toolchain
+    and skills/drafting-an-adr, each reporting a finding whose only real
+    source was its own test file, not its implementation script).
+
+    RECURSIVE (scripts_dir.rglob), not scripts_dir.glob("*.py") as an
+    earlier version had it: a top-level-only glob never looks inside a
+    recognized local sibling subpackage directory
+    (_is_local_sibling_module's own scripts/<name>/ or
+    scripts/<name>/__init__.py shape) at all, so that subpackage's own
+    real content -- and any import it makes -- was silently invisible to
+    every check built on this function's result, not merely unattributed.
+    Found live (packages.pip's own drift check, issue #1121, an
+    independent adversarial review, a CRITICAL-equivalent total fail-open):
+    scripts/helperpkg/__init__.py importing "requests", with
+    scripts/main.py doing a bare "import helperpkg" and an empty declared
+    packages.pip, produced ZERO findings -- not because "requests" was
+    correctly recognized as satisfied, but because helperpkg's own file was
+    never even a candidate for parsing, the same "content nobody ever
+    looked at gets scored as if it were clean" failure mode this function's
+    own "an inability to verify is a deny, not an assume-clean" rule
+    (below) already refuses to allow for a file it DOES attempt to read.
+    Safe to widen this way: the one existing test that puts a .py file in
+    a scripts/ subdirectory
+    (test_local_sibling_subpackage_import_is_not_flagged) uses an EMPTY
+    __init__.py, contributing zero imports/signals either way, and a live
+    scan of this repository's own skills/ tree (none of which bundle a
+    real scripts/ subpackage as of this writing) confirms no behavior
+    change against real content. find_network_drift's and
+    find_tools_drift's own script-content signals benefit symmetrically
+    (a subpackage's own network/write/shell usage is just as much the
+    skill's real shipped capability as a top-level script's), not just
+    find_packages_drift, since all three share this same function's
+    result via find_skill_drift.
 
     Returns (trees, unreadable_or_unparseable_names): a file that cannot
     even be read (a permission error, or content that is not valid UTF-8)
@@ -742,24 +808,30 @@ def _bundled_script_trees(skill_dir: pathlib.Path) -> tuple[list[ast.AST], list[
     ast.parse("") accepts as a valid, empty module -- silently scoring an
     unreadable script as having no network/write/shell signal at all,
     exactly the assume-clean outcome this function's own docstring says it
-    refuses to produce; reading directly here closes that gap."""
+    refuses to produce; reading directly here closes that gap. Each
+    unparseable/unreadable name is recorded as its path RELATIVE TO
+    scripts_dir (e.g. "helperpkg/broken.py"), not a bare basename, now that
+    a name collision across two different subdirectories is possible and a
+    caller's finding message (f"scripts/{name}") must still point at the
+    real file, not a misleading top-level guess."""
     scripts_dir = skill_dir / "scripts"
     if not scripts_dir.is_dir():
         return [], []
     trees: list[ast.AST] = []
     unparseable: list[str] = []
-    for path in sorted(scripts_dir.glob("*.py")):
+    for path in sorted(scripts_dir.rglob("*.py")):
         if path.name.startswith("test_"):
             continue
+        relative_name = path.relative_to(scripts_dir).as_posix()
         try:
             text = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
-            unparseable.append(path.name)
+            unparseable.append(relative_name)
             continue
         try:
             trees.append(ast.parse(text, filename=str(path)))
         except SyntaxError:
-            unparseable.append(path.name)
+            unparseable.append(relative_name)
     return trees, unparseable
 
 
@@ -1096,6 +1168,624 @@ def find_tools_drift(
     return [finding for finding in candidates if finding is not None]
 
 
+# ---- find_packages_drift helpers ----
+
+# Import-name -> canonical PyPI distribution name (values already
+# PEP-503-normalized-shaped -- lowercase with '-' separators, though
+# always re-normalized via _pep503_normalize before comparison rather
+# than trusted as pre-normalized, see declared_pip_normalized's own
+# construction in find_packages_drift for why). Exists for the well-known
+# cases where a
+# package's real IMPORTABLE module name differs from the DISTRIBUTION
+# name PyPI (and this repository's own packages.pip declarations) use.
+# pyyaml/yaml is the load-bearing entry this whole table exists for --
+# this scanner's own top-of-file `import yaml` is exactly that case (a
+# real runtime dependency on the pyyaml distribution), and the
+# originating ADR's own allowlist (issue #1115/PR #1116: {pyyaml,
+# jsonschema, pydantic}) names pyyaml specifically. Deliberately
+# NON-EXHAUSTIVE (issue #1121's own Non-goals explicitly excludes
+# "Exhaustively solving the general Python import-name-to-distribution-
+# name mapping problem") and kept genuinely small -- a dozen-odd
+# well-known cases, not a generated mirror of PyPI's own namespace. THE
+# SPECIFIC FAILURE MODE an unlisted alias produces: a real package whose
+# import name differs from its distribution name, and is not one of the
+# entries below, is invisible to this table -- find_packages_drift falls
+# back to comparing the import name directly against the declared set,
+# which will not match a genuinely different distribution name, producing
+# a FALSE "under-declared" (error-severity) positive even though the
+# package really is correctly declared under its real distribution name
+# (see test_unlisted_alias_produces_documented_false_positive, proven
+# concretely against python-dotenv/dotenv -- a real, well-known pair
+# deliberately left off this table). Keys are exact-case: Python import
+# names are real, case-sensitive language identifiers ("PIL" is
+# Pillow's own actual shipped top-level package name, not a stylistic
+# choice this table makes -- "import pil" would be a ModuleNotFoundError
+# against the real distribution), so a lookup against this table always
+# uses the import name's own real case, never lower-cased first (unlike
+# the declared-name side of every comparison below -- see
+# _pip_declared_for_import).
+_IMPORT_NAME_TO_DISTRIBUTION: dict[str, str] = {
+    "yaml": "pyyaml",
+    "PIL": "pillow",
+    "cv2": "opencv-python",
+    "bs4": "beautifulsoup4",
+    "sklearn": "scikit-learn",
+    "dateutil": "python-dateutil",
+    "attr": "attrs",
+    "attrs": "attrs",
+    "jwt": "pyjwt",
+}
+
+# SKILL.md's leading YAML frontmatter block (---...---), captured as one
+# group -- deliberately anchored to the very start of the file (no
+# re.MULTILINE; "^"/"$" mean start/end of the WHOLE string here), the
+# same "---" as the first line, real closing "---" required" contract as
+# gitapex_check_skill_shape.py's own _parse_frontmatter already uses.
+_FRONTMATTER_BLOCK_RE = re.compile(r"^---[ \t]*\n(.*?)\n---[ \t]*(?:\n|$)", re.DOTALL)
+# Only searched within the frontmatter block's own captured interior (see
+# _extract_compatibility_field), so re.MULTILINE here means "any line
+# inside that block," not "anywhere in the whole SKILL.md file." THE
+# ACTUAL, NARROWER GUARANTEE (corrected -- an earlier version of this
+# comment overclaimed "a body heading or prose sentence that happens to
+# start a line with 'compatibility:' can never match," which is FALSE,
+# found live by an independent adversarial review):
+# _FRONTMATTER_BLOCK_RE's own captured group is bounded by the FIRST
+# "---"-only line and the very NEXT "---"-only line after it (the same
+# delimiter-pairing contract gitapex_check_skill_shape.py's own
+# _parse_frontmatter already uses, and verified live to behave
+# identically to it on the adversarial input below -- this module does
+# not diverge from that shared, established convention), but -- exactly
+# like that sibling parser -- it does NOT validate that every intervening
+# line is itself a well-formed "key: value" pair before accepting the
+# span as real frontmatter. A line that is merely SHAPED like a
+# frontmatter field (matches "^compatibility:[ \t]*(.*)$") still matches
+# even when OTHER, clearly non-YAML prose shares that same span -- e.g.
+# _extract_compatibility_field("---\n\nSome body\n\ncompatibility: pyyaml
+# is needed\n\n---\n") returns "pyyaml is needed", because there is no
+# EARLIER "---"-only line to close the block first, so lines 1-5
+# (including the "compatibility:" one) are, by this shared boundary
+# rule, genuinely the captured interior -- not a body line slipping past
+# a correctly-drawn boundary. What IS still guaranteed: a real,
+# tightly-closed frontmatter block (an early second "---"-only line)
+# correctly excludes any LATER "compatibility:" mention in the body, even
+# one followed by its own further stray "---" (see
+# test_extract_compatibility_field_body_mention_outside_frontmatter_is_ignored
+# and test_extract_compatibility_field_body_mention_after_a_real_frontmatter_
+# close_with_a_later_stray_delimiter_is_ignored). A full fix would mean
+# validating every captured-interior line as real YAML before trusting the
+# boundary at all -- a larger scope change that would also make this
+# module's own boundary-finding diverge from the sibling parser above,
+# not converge with it; disclosed here instead, matching this module's
+# own established precedent for a proportionate, explicitly-disclosed
+# residual limitation (see e.g. _NETWORK_COMMAND_PATTERN's own comment)
+# over an unproportionate full parser rewrite for a warning-only,
+# non-blocking heuristic check (see find_packages_drift's own docstring:
+# compatibility-mention findings are graded "warning", never "error").
+_COMPATIBILITY_FIELD_RE = re.compile(r"^compatibility:[ \t]*(.*)$", re.MULTILINE)
+
+
+def _extract_compatibility_field(skill_md_text: str) -> str:
+    """SKILL.md's own top-level frontmatter ``compatibility:`` field
+    value, or "" if the file has no frontmatter, no closing "---", or no
+    ``compatibility`` key at all -- never raises.
+
+    A small, targeted, SINGLE-field extraction, not a second
+    general-purpose frontmatter parser: gitapex_check_skill_shape.py's
+    own _parse_frontmatter already fully handles quoted/plain/block-scalar
+    SKILL.md frontmatter for that checker's own broader needs, and this
+    module's own docstring commits to no cross-import from a sibling
+    checker script (duplicate small helpers instead, the same convention
+    SIDECAR_RELATIVE_PATH and discover_skill_dirs above already follow) --
+    reimplementing that whole parser here for one substring-presence
+    heuristic would be exactly the disproportionate complexity
+    _NETWORK_COMMAND_PATTERN's own comment already argues against
+    elsewhere ("a full shell/string-literal parser disproportionate to a
+    best-effort tier check").
+
+    Handles the plain, single-, and double-quoted scalar forms real
+    SKILL.md files use (see skills/setup-gitapex-toolchain/SKILL.md, the
+    only real ``compatibility:`` field in this repository as of this
+    writing -- a double-quoted plain string). Does NOT join a YAML block
+    scalar's (">"/"|") own indented continuation lines -- a disclosed gap,
+    not a crash risk: a block-scalar compatibility value reads as a
+    near-empty string, which only makes find_packages_drift's own
+    compatibility-mention heuristic over-fire (a package genuinely
+    mentioned, just inside an unsupported continuation line, reads as
+    "not mentioned") -- a false positive on a warning-only, non-blocking
+    finding, never a fail-open gap in the opposite (error-severity)
+    direction.
+
+    CRLF is normalized to LF before matching -- found live by this
+    function's own required independent adversarial review (issue
+    #1121): without it, a trailing "\\r" stays attached to the "---"
+    frontmatter delimiter's own line, so _FRONTMATTER_BLOCK_RE's literal
+    "\\n" immediately after "---[ \\t]*" never matches at all (the real
+    next character is "\\r", not "\\n") -- the whole frontmatter block
+    silently fails to match, and every declared package reads as "not
+    mentioned" (a heuristic false positive, not a crash). The same
+    normalization fixes the same class of bug this repository's own
+    .github/scripts/gitapex_gate_stdlib_only_claim_drift.py already found
+    and fixed once (its own parse_diff_added_third_party_imports: "a
+    trailing '\\r' stays attached to a '+++ b/<path>' header's path...
+    found by adversarial review") -- git's own local-plane invocation, or
+    a file re-saved by a Windows-default editor, can carry CRLF even
+    though this repository's own real, checked-in SKILL.md files are
+    LF-only."""
+    skill_md_text = skill_md_text.replace("\r\n", "\n")
+    match = _FRONTMATTER_BLOCK_RE.match(skill_md_text.lstrip("\ufeff"))
+    if not match:
+        return ""
+    field_match = _COMPATIBILITY_FIELD_RE.search(match.group(1))
+    if not field_match:
+        return ""
+    value = field_match.group(1).strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        value = value[1:-1]
+    return value
+
+
+def _tree_imported_root_modules(tree: ast.AST) -> set[str]:
+    """Every root module name ``tree`` imports anywhere -- "import X" and
+    "import X.Y" both contribute "X" (Python itself binds the top-level
+    package name, not the submodule, for an unaliased dotted import --
+    the same rule _module_aliases' own docstring already states for
+    call-target resolution); "from X import Y" (absolute only, node.level
+    == 0 -- a relative "from . import Y"/"from .sibling import Y" names no
+    real external package at all) contributes "X", regardless of what Y
+    itself is (a star import "from X import *" contributes "X" the same
+    way, since only the module path -- never the imported names -- decides
+    what package is actually required).
+
+    Walks the FULL tree (ast.walk), not just top-level statements --
+    unlike .github/scripts/gitapex_gate_stdlib_only_claim_drift.py's own
+    _imported_root_modules, which parses one git-diff-added LINE at a
+    time and is therefore already effectively top-level by construction.
+    This function instead receives a whole parsed module (the same
+    _bundled_script_trees(skill_dir) result find_network_drift/
+    find_tools_drift already share), where a real import can legitimately
+    sit inside a function body, a class body, or a try/except (the common
+    "optional dependency" pattern) -- ast.walk finds all of these, the
+    same way _tree_has_network_import/_module_aliases above already do
+    for their own target modules, matching this file's own established
+    convention over the diff-scanning gate's narrower one, which suits a
+    different input shape, not a different design philosophy. Conditional
+    gating (an "if False:"-guarded import, a TYPE_CHECKING-only import)
+    does not suppress detection here either, for the same reason the
+    module docstring already documents for find_network_drift: a real
+    parse tree node exists regardless of whether the guarding condition
+    could ever be true at runtime, and this scanner does not evaluate
+    conditions, only structure."""
+    roots: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            roots.update(alias.name.split(".", 1)[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            roots.add(node.module.split(".", 1)[0])
+    return roots
+
+
+def _is_stdlib_module(module_name: str) -> bool:
+    """Exact membership in sys.stdlib_module_names -- mirrors
+    .github/scripts/gitapex_gate_stdlib_only_claim_drift.py's own
+    _is_stdlib exactly (duplicated per this module's own no-cross-import
+    convention, not imported). EXACT membership, not a prefix/substring
+    check, is load-bearing: a real third-party package whose name merely
+    starts with a stdlib module's own name (e.g. "osgeo", GDAL's own
+    Python bindings, which is not itself in sys.stdlib_module_names even
+    though it starts with the real stdlib module "os") must still be
+    treated as non-stdlib -- a prefix-based check would silently and
+    incorrectly exempt it from every check below, letting a genuinely
+    undeclared package slip through undetected (see
+    test_non_stdlib_module_sharing_stdlib_prefix_is_still_flagged)."""
+    return module_name in sys.stdlib_module_names
+
+
+# Real, syntactically ordinary import roots that are neither in
+# sys.stdlib_module_names NOR ever a real PyPI-installable package --
+# flagging either as "under-declared" would be an UNFIXABLE false
+# positive (no packages.pip entry could ever satisfy it, since no such
+# distribution exists to declare). A small, explicitly-commented,
+# CLOSED set for these two confirmed cases only -- deliberately not an
+# attempt to solve the general "which import names are real installable
+# packages" problem (that would need a live PyPI query this offline,
+# read-only checker must never perform; see _IMPORT_NAME_TO_DISTRIBUTION's
+# own docstring for the same non-goal stated for the alias-table side).
+#   - "_typeshed": typeshed's own stub-only, type-checker-internal module
+#     (see https://github.com/python/typeshed/blob/main/stdlib/_typeshed/README.md,
+#     "the _typeshed module... is not available at runtime"). It ships no
+#     real runtime code and has no PyPI distribution of its own; the only
+#     realistic way to see it imported at all is inside an
+#     "if TYPE_CHECKING:" guard (e.g. "from _typeshed import StrPath" for
+#     a type annotation), which _tree_imported_root_modules already
+#     deliberately still detects as an import (by design -- a
+#     TYPE_CHECKING-guarded import of a REAL third-party package must
+#     still require a declaration). The bug this set closes is narrower
+#     than that: _typeshed specifically can never be satisfied by any
+#     real packages.pip entry, so flagging it is not a signal to declare
+#     something, only a dead-end false positive.
+#   - "__main__": the real, always-importable module every running
+#     Python process has for its own entry-point namespace (see
+#     https://docs.python.org/3/library/__main__.html) -- legitimate,
+#     working code ("import __main__"), not in sys.stdlib_module_names
+#     (it is not a library module the stdlib ships as content, just a
+#     live runtime binding), and not a PyPI-installable package either.
+_NON_STDLIB_NON_INSTALLABLE_MODULES = frozenset({"_typeshed", "__main__"})
+
+
+def _non_stdlib_root_imports(trees: list[ast.AST]) -> set[str]:
+    """Every root module name imported anywhere across ``trees`` that is
+    NOT a standard-library module -- the "this script needs a real PyPI
+    package for this" signal find_packages_drift's own under/over-declared
+    checks are built from. A tree that failed to parse in the first place
+    is already absent from ``trees`` (see _bundled_script_trees) and so
+    contributes nothing here, by construction -- not a separate case this
+    function has to handle.
+
+    Also excludes _NON_STDLIB_NON_INSTALLABLE_MODULES's own two entries
+    (see its own comment): found live (an independent adversarial review)
+    that a TYPE_CHECKING-only "from _typeshed import StrPath" or "import
+    __main__" was reported as an "under-declared" packages.pip gap with
+    no way to ever satisfy it -- neither name is stdlib-per-
+    sys.stdlib_module_names, but neither is a real installable
+    third-party package either, so there is no real dependency to
+    declare in the first place."""
+    imports: set[str] = set()
+    for tree in trees:
+        imports.update(_tree_imported_root_modules(tree))
+    return {name for name in imports if not _is_stdlib_module(name) and name not in _NON_STDLIB_NON_INSTALLABLE_MODULES}
+
+
+def _is_local_sibling_module(skill_dir: pathlib.Path, import_name: str) -> bool:
+    """Whether ``import_name`` resolves to a real Python file or
+    subpackage sitting alongside the bundled scripts in
+    skill_dir/scripts/ itself -- a bare "from _local_helper import x" (or
+    "import local_helper") sibling import within that SAME directory
+    names no real external PyPI dependency at all, whatever its own root
+    name looks like. This is not a hypothetical: found live during this
+    function's own real-repository self-check (issue #1121) against this
+    repository's own skills/executing-a-branch-plan/scripts/
+    gitapex_check_canonical_governance_paths.py and gitapex_check_file_
+    ownership_conflicts.py, both of which do
+    "from _gitapex_path_normalize import normalize" -- a real sibling
+    file, skills/executing-a-branch-plan/scripts/_gitapex_path_
+    normalize.py, made importable at runtime by pytest's own
+    [tool.pytest.ini_options] pythonpath entry for that exact directory
+    (pyproject.toml), the same resolution a direct
+    ``python3 gitapex_check_canonical_governance_paths.py`` invocation
+    gets for free via Python's own sys.path[0] convention (the invoked
+    script's own directory). Without this check, completely ordinary,
+    already-working code in a real skill would be misreported as an
+    "under-declared" (error-severity) PyPI dependency gap -- exactly the
+    "does this crash or misbehave against real, non-synthetic code" bar
+    issue #1121's own required self-check step exists to catch, not a
+    synthetic edge case reasoned about only in the abstract.
+
+    Checked against skill_dir/scripts/ specifically -- not skill_dir as a
+    whole -- because scripts/ is the one directory a real bare import like
+    this ever resolves against at runtime (Python's own sys.path[0]
+    convention for a directly-invoked script, or pytest's own
+    [tool.pytest.ini_options] pythonpath entry for that exact directory);
+    _bundled_script_trees itself now recurses INTO a recognized sibling
+    subpackage's own further content once found here (see its own
+    docstring), but the import NAME ITSELF always resolves exactly one
+    level under scripts/, never deeper, matching Python's own resolution
+    rule for a top-level bare import. A single-file module (scripts/foo.py),
+    a proper regular subpackage (scripts/foo/__init__.py), AND a PEP 420
+    namespace package (scripts/foo/ with no __init__.py at all, containing
+    at least one real .py file somewhere under it) are all three
+    recognized, matching every import shape Python's own import system
+    actually resolves without any package-management step involved --
+    corrected from an earlier version of this function, which recognized
+    only the first two and claimed (in this same docstring) that
+    recognizing a namespace package too "would be guessing, not
+    observing." That claim was factually wrong, found live by an
+    independent adversarial review: Python 3.3+ (PEP 420) resolves a
+    directory with no __init__.py as a real, importable namespace package
+    via the interpreter's own standard import machinery -- verified live,
+    `python3 -c "import nspkg.mod"` succeeds from a directory containing
+    nspkg/mod.py with no nspkg/__init__.py at all, resolving through
+    CPython's own _NamespacePath, not a hypothetical or a lenient
+    reading of the spec (see
+    https://peps.python.org/pep-0420/#specification). Before this fix, a
+    skill bundling a real (if today still rare in this repository)
+    namespace-package-shaped subpackage under scripts/ would have every
+    bare "import <that package>" misreported as an "under-declared"
+    (error-severity) external PyPI dependency, the exact same class of
+    live false positive this function's own docstring already documents
+    fixing once for the ordinary-subpackage case above. An EMPTY
+    same-named subdirectory (no .py file anywhere under it) is still NOT
+    recognized -- that really would be guessing: nothing under it could
+    actually satisfy the import at runtime, namespace package or not."""
+    scripts_dir = skill_dir / "scripts"
+    if (scripts_dir / f"{import_name}.py").is_file():
+        return True
+    subpackage_dir = scripts_dir / import_name
+    return subpackage_dir.is_dir() and any(subpackage_dir.rglob("*.py"))
+
+
+def _pep503_normalize(distribution_name: str) -> str:
+    """The REAL PEP 503 "normalized name" comparison PyPI/pip themselves
+    use to decide two distribution-name SPELLINGS name the same project --
+    collapse any run of '-', '_', or '.' into a single '-', then
+    lowercase -- not lowercasing alone (see
+    https://peps.python.org/pep-0503/#normalized-names, which gives this
+    exact expression: ``re.sub(r"[-_.]+", "-", name).lower()``). "scikit-
+    learn", "scikit_learn", and "scikit.learn" all normalize to the same
+    "scikit-learn" string under this rule -- lowercasing alone would
+    still treat "scikit_learn" and "scikit-learn" as two different
+    strings, which was found live (an independent adversarial review) to
+    produce a false "under-declared" error for the real import alongside
+    a spurious "over-declared" warning for the (actually-matching)
+    declared entry, simultaneously, in opposite directions, for the exact
+    same underlying package.
+
+    Applied ONLY to DISTRIBUTION-name-shaped strings -- a declared
+    packages.pip entry, or an _IMPORT_NAME_TO_DISTRIBUTION alias VALUE
+    (itself a distribution name, e.g. "scikit-learn") -- never to a real
+    Python IMPORT name used as an _IMPORT_NAME_TO_DISTRIBUTION table KEY
+    lookup, which must stay exact-case and exact-separator (see
+    _pip_declared_for_import's own docstring for why)."""
+    return re.sub(r"[-_.]+", "-", distribution_name).lower()
+
+
+def _pip_declared_for_import(import_name: str, declared_pip_normalized: set[str]) -> bool:
+    """Whether ``import_name`` (a real, exact-case root module name found
+    in a bundled script's own AST) counts as declared under
+    executionRequirements.packages.pip -- either DIRECTLY (matched against
+    ``declared_pip_normalized`` via full PEP 503 normalization, see
+    _pep503_normalize -- PyPI distribution names are conventionally
+    case- AND separator-insensitive, the same real-world reason
+    find_network_drift's own declared_domains lower-cases hostnames, RFC
+    4343, but going further than bare lower-casing the way that RFC-driven
+    precedent does not need to) or via _IMPORT_NAME_TO_DISTRIBUTION's own
+    alias, for the well-known cases where a package's real distribution
+    name differs from its own importable module name.
+
+    ``import_name`` is treated DIFFERENTLY by the two branches below,
+    deliberately, not by oversight -- each branch compares it against a
+    different KIND of string:
+
+    - The DIRECT-match branch compares it against real DISTRIBUTION-name
+      strings (``declared_pip_normalized`` -- a declared packages.pip
+      entry may legitimately equal the import name itself, e.g. "requests"
+      == "requests", or differ only by PEP 503 spelling convention, e.g.
+      "my_pkg" imported vs. "my-pkg" declared), so ``import_name`` IS
+      normalized here (_pep503_normalize -- both case AND separators) for
+      that comparison, symmetrically with the declared side.
+    - The ALIAS-table lookup uses ``import_name`` as a literal Python
+      import IDENTIFIER -- a dict KEY into _IMPORT_NAME_TO_DISTRIBUTION,
+      whose own keys are real, case-sensitive, syntactically-exact import
+      names (see that table's own comment: "PIL" is Pillow's real shipped
+      top-level module name, "import pil" would ModuleNotFoundError).
+      ``import_name`` is used EXACTLY as-is for this lookup, never
+      case-folded or separator-collapsed first -- confirmed by this
+      module's own existing regression test,
+      test_import_name_case_sensitivity_is_preserved_for_alias_lookup: a
+      script spelling an import "Yaml" must NOT be silently treated as
+      the real "yaml" module just because a sidecar happens to declare
+      "pyyaml". Once a real alias VALUE is found this way, THAT value
+      (itself a distribution-name string, e.g. "scikit-learn") is
+      normalized before the final comparison, same as the direct-match
+      branch.
+
+    Found live by an independent adversarial review: an earlier version
+    of the direct-match branch alone lower-cased ``import_name`` (but not
+    fully PEP-503-normalized it) while the alias branch left it exact --
+    an inconsistent, ad hoc split with no stated rationale, not the
+    principled "which KIND of string is this being compared against"
+    split above. Verified live before settling on this direction: making
+    the alias branch case-fold ``import_name`` too (the OTHER way to
+    remove the inconsistency) silently un-flags the exact "Yaml"-vs-"yaml"
+    case that regression test exists to catch, trading a real,
+    live-verified correctness property for a merely internally-consistent
+    but wrong result.
+
+    Reused for BOTH the under-declared check (called with the real
+    declared_pip_normalized set) and the over-declared check (called with
+    a ONE-element {declared_name_normalized} set, once per real import) --
+    funneling both directions through this single predicate is
+    deliberate, not merely convenient: it makes it structurally
+    impossible for the alias table to be consulted in one direction for
+    under-declared and a silently different, inconsistent direction for
+    over-declared -- the exact class of bug an adversarial review hunts
+    for in a checker like this one (direct, recent precedent: PR2 of this
+    same 5-PR sequence, issue #1121's own motivating context, shipped 8
+    real defects, including one CRITICAL fail-open, that only such a
+    review caught)."""
+    if _pep503_normalize(import_name) in declared_pip_normalized:
+        return True
+    alias = _IMPORT_NAME_TO_DISTRIBUTION.get(import_name)
+    return alias is not None and _pep503_normalize(alias) in declared_pip_normalized
+
+
+def find_packages_drift(
+    packages: Any,
+    skill_dir: pathlib.Path,
+    _scripts: tuple[list[ast.AST], list[str]] | None = None,
+) -> list[Finding]:
+    """packages-pip-vs-script-content / packages-pip-over-declared /
+    packages-pip-vs-compatibility: declared
+    executionRequirements.packages.pip vs. two independent evidence
+    sources (see module docstring's own "Three independent checks"
+    intro) -- non-stdlib imports actually found in
+    skill_dir/scripts/*.py (DETERMINISTIC, via AST -- see
+    _non_stdlib_root_imports), and SKILL.md's own ``compatibility``
+    frontmatter field prose (BEST-EFFORT, exact-string match only -- see
+    _extract_compatibility_field).
+
+    Only the "pip" ecosystem key under ``packages`` is checked (Python
+    scripts import from PyPI packages); a sidecar declaring packages
+    under a different ecosystem key (e.g. "npm") is real but simply not
+    this function's concern -- issue #1121's own Non-goals scopes this
+    module's whole packages-dependency premise to skills/*/scripts/*.py
+    only, matching the originating ADR's own packages.pip focus (issue
+    #1115/PR #1116).
+
+    Deterministic half (under/over-declared): every non-stdlib root
+    module name imported anywhere in the bundled Python scripts, OTHER
+    THAN a local sibling module (a bare "from _helper import x" resolving
+    to a real skill_dir/scripts/_helper.py sitting right alongside it --
+    see _is_local_sibling_module, found live during this function's own
+    required real-repository self-check against this repository's own
+    skills/executing-a-branch-plan/scripts/_gitapex_path_normalize.py),
+    is checked against declared packages.pip, directly or via
+    _IMPORT_NAME_TO_DISTRIBUTION's own small alias table (see
+    _pip_declared_for_import) -- an import with no declared (or aliased)
+    backing is under-declared (error, the safety-relevant direction: a
+    consumer trusting the sidecar alone would not know to provision this
+    dependency); a declared entry with no matching import anywhere is
+    over-declared (warning, hygiene only). Unlike find_tools_drift's own
+    _over_declared_or_none, packages has only ONE evidence source (real
+    imports -- no prose-based second signal the way tools.write/
+    tools.shell each have their own "-vs-skill-md" lane), so over-declared
+    here is graded on that one source alone, not jointly across two.
+
+    A script that fails to parse is silently excluded from the
+    script-content signal here, exactly like find_tools_drift's own
+    treatment: find_network_drift already surfaces it as its own
+    network-script-unparseable finding when all three checks run
+    together via find_skill_drift, so this function does not
+    double-report it. It DOES, however, suppress every over-declared
+    warning while any bundled Python script is unparseable (mirroring
+    find_network_drift's own unrestricted-mode suppression): an unparsed
+    script's real imports are genuinely unknown, so asserting a declared
+    package has "no matching import anywhere" would be an unproven claim,
+    not a verified fact -- the same "undetermined is not the same claim
+    as verified clean" principle find_network_drift's own
+    content_fully_undetermined already established. This suppression does
+    NOT extend to under-declared findings (built only from scripts this
+    function could actually parse) nor to the compatibility-mention
+    heuristic below (which never depends on script content signals at
+    all, only on the sidecar's own declared strings and SKILL.md's own
+    prose).
+
+    Heuristic half (compatibility-mention): for each declared
+    packages.pip name (in its own originally-declared case -- unlike the
+    deterministic half above, deliberately NOT lower-cased first; see
+    _extract_compatibility_field's own docstring and issue #1121's own
+    Acceptance Criteria Map, which specifies exact-string matching here
+    and explicitly accepts a casing/spacing mismatch as a disclosed
+    limitation, not something to normalize away), an exact-string
+    substring check against SKILL.md's own ``compatibility`` frontmatter
+    field value; absent -> warning, kind="heuristic". Deliberately NOT
+    graded "error": unlike an AST-parsed import or call, BOTH sides of
+    this specific check are themselves human/metadata-authored
+    declarations (a sidecar YAML string and a SKILL.md prose string), not
+    independent proof of real runtime behavior -- grading a mismatch here
+    at the same "error" tier as a genuine declared-vs-actual-behavior gap
+    would overstate what this check actually proves. Structurally, this
+    is the same "declared but unsupported by a second, independent
+    source" shape find_network_drift's/find_tools_drift's own
+    over-declared warnings already use (warning, non-blocking), not the
+    safety-relevant under-declared direction.
+
+    Absent packages/pip block and an explicit empty ``packages.pip: []``
+    are treated identically here (both yield an empty declared set) --
+    deliberately, unlike gitapex_check_skill_shape.py's own shape
+    checker, which cares about that presence/absence distinction for
+    SCHEMA validity; this drift-detection function only cares whether
+    real content backs a real declared string, and an absent block backs
+    nothing exactly as much as an explicitly empty one does.
+
+    ``_scripts`` mirrors find_network_drift's/find_tools_drift's own
+    internal parameter of the same name -- a pre-computed
+    ``_bundled_script_trees(skill_dir)`` result, not part of the stable
+    two-argument contract (every existing caller and test keeps working
+    unchanged)."""
+    pip_declared = packages.get("pip") if isinstance(packages, dict) else None
+    # isinstance(..., list) guards against a classic footgun a careless
+    # `set(pip_declared)`/`{p.lower() for p in pip_declared}` on a bare
+    # STRING would not: a malformed sidecar declaring packages.pip as
+    # "pyyaml" instead of ["pyyaml"] would otherwise iterate CHARACTER BY
+    # CHARACTER ({'p', 'y', 'a', 'm', 'l'}), not raise and not no-op --
+    # see test_pip_key_a_bare_string_does_not_iterate_characters. Mirrors
+    # find_network_drift's own declared_domains construction exactly
+    # (same guard, same shape, same reasoning).
+    raw_declared_names = (
+        [name for name in pip_declared if isinstance(name, str)] if isinstance(pip_declared, list) else []
+    )
+    # Full PEP 503 normalization (_pep503_normalize: separator-collapse
+    # AND lowercase), not lower-casing alone -- found live (an independent
+    # adversarial review) that bare .lower() let a real, PEP-503-equal
+    # spelling variant (e.g. declared "scikit_learn" vs. the real
+    # distribution "scikit-learn") read as a DIFFERENT string, producing a
+    # false under-declared error for the real import and a spurious
+    # over-declared warning for the declared entry at once. See
+    # _pep503_normalize's own docstring.
+    declared_pip_normalized = {_pep503_normalize(name) for name in raw_declared_names}
+
+    trees, unparseable = _scripts if _scripts is not None else _bundled_script_trees(skill_dir)
+    # A local sibling-module import (see _is_local_sibling_module's own
+    # docstring for the real, live example this was found against) is
+    # excluded here, before either the under- or over-declared check ever
+    # sees it -- it is not merely "aliased" or "satisfied," it is not a
+    # PyPI dependency in the first place, so it must never appear in
+    # either direction's findings, not just be suppressed from one.
+    non_stdlib_imports = {
+        name for name in _non_stdlib_root_imports(trees) if not _is_local_sibling_module(skill_dir, name)
+    }
+
+    findings: list[Finding] = []
+
+    for import_name in sorted(non_stdlib_imports):
+        if not _pip_declared_for_import(import_name, declared_pip_normalized):
+            findings.append(
+                Finding(
+                    "error",
+                    "deterministic",
+                    "packages-pip-vs-script-content: bundled scripts import "
+                    f"{import_name!r} (a non-stdlib module) but declared "
+                    "executionRequirements.packages.pip does not include it, "
+                    f"directly or via the {import_name!r}->distribution alias "
+                    "table (under-declared)",
+                )
+            )
+
+    # See this function's own docstring: an unparsed script's real
+    # imports are genuinely unknown, so an over-declared claim cannot be
+    # proven true while any bundled Python script could not be parsed.
+    # Iterates the RAW (non-normalized) declared spellings, not
+    # declared_pip_normalized, and normalizes only per-entry for the
+    # actual comparison -- found live (an independent adversarial review)
+    # that reporting the already-normalized/lower-cased form here (e.g.
+    # 'pyyaml' for a sidecar that actually wrote 'PyYAML') produces a
+    # finding message naming a string that does not appear anywhere in
+    # the real sidecar a human would grep for; using the original
+    # spelling in the message keeps it searchable against the real file.
+    if not unparseable:
+        for declared_name in sorted(set(raw_declared_names)):
+            declared_name_normalized = _pep503_normalize(declared_name)
+            if not any(_pip_declared_for_import(imp, {declared_name_normalized}) for imp in non_stdlib_imports):
+                findings.append(
+                    Finding(
+                        "warning",
+                        "deterministic",
+                        "packages-pip-over-declared: declared "
+                        f"executionRequirements.packages.pip includes {declared_name!r} "
+                        "but no bundled script imports it, directly or via the "
+                        "alias table (over-declared)",
+                    )
+                )
+
+    skill_md = skill_dir / "SKILL.md"
+    compatibility_text = _extract_compatibility_field(_read_text_best_effort(skill_md)) if skill_md.is_file() else ""
+    for declared_name in sorted(set(raw_declared_names)):
+        if declared_name not in compatibility_text:
+            findings.append(
+                Finding(
+                    "warning",
+                    "heuristic",
+                    "packages-pip-vs-compatibility: declared "
+                    f"executionRequirements.packages.pip includes {declared_name!r} "
+                    "but SKILL.md's compatibility field does not mention it -- "
+                    "exact-string, case-sensitive match only (a disclosed "
+                    "heuristic limitation, see module docstring)",
+                )
+            )
+
+    return findings
+
+
 def _spec_of(instance: Any) -> dict[str, Any]:
     if not isinstance(instance, dict):
         return {}
@@ -1105,10 +1795,11 @@ def _spec_of(instance: Any) -> dict[str, Any]:
 
 def find_skill_drift(skill_dir: pathlib.Path) -> list[Finding]:
     """Every drift finding for exactly one skill directory: reads its own
-    metadata/gitapex.yaml sidecar and runs find_network_drift/find_tools_drift
-    against it. Messages carry no skill-name prefix (single-target use, the
-    same convention gitapex_check_skill_shape.py's own single-target CLI
-    follows) -- find_drift() below adds one when aggregating across many."""
+    metadata/gitapex.yaml sidecar and runs find_network_drift/find_tools_drift/
+    find_packages_drift against it. Messages carry no skill-name prefix
+    (single-target use, the same convention gitapex_check_skill_shape.py's
+    own single-target CLI follows) -- find_drift() below adds one when
+    aggregating across many."""
     sidecar = skill_dir / SIDECAR_RELATIVE_PATH
     if not sidecar.is_file():
         return [Finding("error", "deterministic", f"metadata-file-present: missing {sidecar}")]
@@ -1125,6 +1816,7 @@ def find_skill_drift(skill_dir: pathlib.Path) -> list[Finding]:
     findings: list[Finding] = []
     findings.extend(find_network_drift(execution_requirements.get("network"), skill_dir, scripts))
     findings.extend(find_tools_drift(execution_requirements.get("tools"), skill_dir, scripts))
+    findings.extend(find_packages_drift(execution_requirements.get("packages"), skill_dir, scripts))
     return findings
 
 
