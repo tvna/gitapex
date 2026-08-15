@@ -1193,19 +1193,29 @@ calibrates dimensions 2/3/5/9.
 **StdlibOnly.** **Pass**: no non-stdlib import anywhere in the skill's
 `scripts/*.py`. Mechanical backing: the execution-requirements drift
 scanner's `find_packages_drift` already produces its
-`packages-pip-vs-script-content` under-declared
-finding for ANY non-stdlib import once `executionRequirements.packages.pip`
-is absent or empty -- exactly this branch's contradiction signal, with no
-new scanner logic needed. **Fail**: a real non-stdlib import contradicts
-the declaration -- a correctness defect in the declaration itself, not
-merely an undisclosed one.
+`packages-pip-vs-script-content` under-declared finding for every
+AST-visible non-stdlib import (a literal `import`/`from ... import`
+statement) once `executionRequirements.packages.pip` is absent or empty
+-- exactly this branch's contradiction signal for that visible subset,
+with no new scanner logic needed. Not a completeness guarantee: a
+dynamically-constructed import (`importlib.import_module(...)`,
+`__import__(...)`) is invisible to this AST-based check, the same
+disclosed class of gap `find_packages_drift`'s own module docstring
+already names for `find_network_drift`/`find_tools_drift` -- grade a
+suspected dynamic import by direct reading when the mechanical check
+alone cannot settle it. **Fail**: a real non-stdlib import (mechanically
+found, or found by direct reading per the limitation just named)
+contradicts the declaration -- a correctness defect in the declaration
+itself, not merely an undisclosed one.
 
 **Declared.** **Pass** requires ALL FOUR of:
 
 - (a) every non-stdlib import is declared in
   `executionRequirements.packages.pip`, directly or via alias
   (`find_packages_drift`'s `packages-pip-vs-script-content` under-declared
-  check clean);
+  check clean for every AST-visible import -- the same dynamic-import
+  visibility limit as StdlibOnly's own Pass criterion above, not a
+  completeness guarantee);
 - (b) every declared package name also appears in the skill's
   `compatibility` field (`find_packages_drift`'s
   `packages-pip-vs-compatibility` heuristic finding clean);

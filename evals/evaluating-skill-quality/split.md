@@ -4201,3 +4201,24 @@ established as what a genuine, non-tied improvement looks like for a new
 precondition axis. Two disclosed gaps (the Undeclared-but-clean and
 scriptless-skill restraint cases; no repeat-trial variance data; no
 transfer check) are named above rather than silently assumed clear.
+
+**Post-verdict correction (before merge, found by a `battle-testing-a-skill`
+audit run after the Gate result above was recorded).** The StdlibOnly and
+Declared(a) "Mechanical backing" prose overclaimed `find_packages_drift`'s
+own coverage: "for ANY non-stdlib import... no new scanner logic needed"
+contradicts that scanner's own module docstring, which already discloses
+a dynamic-import blind spot (`importlib.import_module(...)`/
+`__import__(...)` calls are invisible to its AST-based check) -- the same
+disclosed limitation `find_network_drift`/`find_tools_drift` already
+carry, just left unhedged here. Confirmed live (`git diff origin/main` on
+both files) before fixing. Corrected both spots to name the AST-visible
+subset explicitly, mirroring sub-criterion (c)'s own existing "no existing
+mechanical check covers this" disclosure pattern rather than silently
+implying full coverage. Not re-gated with a fresh dispatch: the correction
+only adds a hedge to the mechanical-backing explanation, changing no
+Pass/Fail rule any existing fixture exercises (none of the five new
+fixtures involve a dynamically-constructed import), so the recorded
+0.800000 -> 1.000000 scores above remain the correct evidence for the
+rule itself. Re-verified after the edit: 68/68 self-dogfood PASS, full
+suite 4828/4828 (one pre-existing unrelated failure), contract-precondition-
+sync 22/22 passed, ruff/mypy clean.

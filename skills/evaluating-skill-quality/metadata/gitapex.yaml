@@ -492,6 +492,9 @@ spec:
     - kind: audit
       anchor: "https://github.com/tvna/gitapex/issues/1124"
       summary: "Re-verified live after the fix: full pytest suite 4828/4828 passed (one pre-existing unrelated environment failure), self-dogfood 68/68 PASS, ruff/mypy clean. Held-out gate: both fixtures moved 0.800000 -> 1.000000, KEEP. Drift-scanning this skill itself surfaces two pre-existing, already-tracked findings (an undeclared PyYAML import; a network-drift false positive on a validation regex) -- neither introduced or fixed here."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1124"
+      summary: "A battle-testing-a-skill audit (after the entries above) found dimension 5 FAIL: the new Dependency policy prose claimed find_packages_drift catches 'ANY non-stdlib import,' contradicting that scanner's own docstring disclosing a dynamic-import blind spot. Fixed by naming the AST-visible-only subset explicitly in the StdlibOnly and Declared(a) criteria, mirroring sub-criterion (c)'s own disclosure pattern. Re-verified: 68/68 self-dogfood, full suite green."
   skillDependencies:
     requires: []
     relatedTo:
