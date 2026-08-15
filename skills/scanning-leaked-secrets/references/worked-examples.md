@@ -44,7 +44,8 @@ A scratch directory outside this repository's tracked tree (not staged,
 not committed, never part of this change) held one file,
 `id_rsa_fake`, containing an obviously-invented RSA private key block
 (garbage base64 between real `BEGIN`/`END RSA PRIVATE KEY` markers, not
-a real key). Procedure step 2's exact invocation, real output:
+a real key). Procedure step 2's invocation, plus the two presentation-only
+flags noted below, real output:
 
     $ betterleaks dir --redact --exit-code 0 --report-format json --report-path - --no-color --no-banner /tmp/.../betterleaks-dir-fixture
     10:19AM INF scanned ~639 bytes (639 bytes) in 52.8ms
@@ -77,12 +78,20 @@ a real key). Procedure step 2's exact invocation, real output:
     ]
     EXIT=0
 
-(The scratch path's own session-specific prefix is abbreviated to
-`/tmp/...` above and throughout this file -- the abbreviation touches
-only that prefix, never a field the Procedure or Reporting contract
-requires; every field name, value, and the full fixture-relative path
-segment are exactly as captured.) `--redact` did its job here: `Match`
-and `Secret` both read `REDACTED`. This finding carries no
+(Two notes on the transcripts, both applying throughout this file. First,
+every command above and below carries `--no-color --no-banner` in addition
+to Procedure step 2's and step 3's own flags. Both are presentation-only
+and affect stderr alone -- `--no-banner` suppresses the startup banner,
+`--no-color` drops ANSI codes from the log lines -- and were added so a
+captured transcript reads cleanly here. Verified rather than assumed: the
+stdout each command produces is byte-identical with and without them, so
+the Procedure has no reason to carry either flag and deliberately does not.
+Second, the scratch path's own session-specific prefix is abbreviated to
+`/tmp/...` -- the abbreviation touches only that prefix, never a field the
+Procedure or Reporting contract requires; every field name, value, and the
+full fixture-relative path segment are exactly as captured.) `--redact`
+did its job here: `Match` and `Secret` both read `REDACTED`. This
+finding carries no
 `CaptureGroups` field at all -- `private-key` is a structureless rule,
 unlike the connection-string rule in the next section -- so Procedure
 step 5 has nothing to do for this particular finding, a real
@@ -93,7 +102,7 @@ illustration of "not every rule produces this field."
 A second scratch fixture, `db.env`, held one invented line:
 `MONGODB_URI=mongodb+srv://dbuser:MyM0ngoP@ssw0rd@cluster0.mongodb.net/mydb`
 -- an invented username and password, not a real credential. Procedure
-step 2's exact invocation, real output, **before** step 5's
+step 2's invocation again, real output, **before** step 5's
 post-processing:
 
     $ betterleaks dir --redact --exit-code 0 --report-format json --report-path - --no-color --no-banner /tmp/.../betterleaks-captgroups-fixture

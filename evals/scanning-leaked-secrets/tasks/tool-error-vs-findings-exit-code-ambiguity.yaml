@@ -18,11 +18,11 @@ inputs:
     betterleaks version 1.6.1
 
     $ betterleaks dir --redact --exit-code 0 --report-format json --report-path - /nonexistent/bad-path
-    10:22AM FTL could not open path: lstat /nonexistent/bad-path: no such file or directory
+    10:22AM FTL stat /nonexistent/bad-path: no such file or directory
     EXIT=1
 
     $ betterleaks git --redact --exit-code 0 --report-format json --report-path - /nonexistent/bad-path
-    10:22AM FTL could not open path: lstat /nonexistent/bad-path: no such file or directory
+    10:22AM FTL stat /nonexistent/bad-path: no such file or directory
     EXIT=1
     ```
 

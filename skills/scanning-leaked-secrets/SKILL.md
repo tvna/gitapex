@@ -55,7 +55,10 @@ its own report language:
 - **A non-git directory.** `betterleaks git` fails outright (not a clean
   result) -- report it as the tool error it is, per Procedure step 4,
   naming that the target has no `.git` directory for `betterleaks git`
-  to read. `betterleaks dir` is unaffected and still runs.
+  to read. The trap, verified live at 1.6.1: this failure still prints
+  literal `null` on stdout while exiting `1`, so the body on its own
+  reads exactly like a clean scan and only the non-zero exit tells them
+  apart. `betterleaks dir` is unaffected and still runs.
 - **An empty repository** (`.git` present, zero commits). `betterleaks
   git` completes and reports clean -- there is genuinely no history to
   find anything in, and this is indistinguishable from, and as valid as,
@@ -105,25 +108,33 @@ explicit.
    later one is still found here even though step 2 cannot see it (see
    the worked example). Record the exit code alongside the captured
    stdout.
-4. **Classify each run's outcome from its JSON body, never from the
-   exit code alone.** `--exit-code 0` (always passed, per steps 2-3)
-   makes any *completed* scan -- clean or with findings -- exit `0`; a
-   genuine tool error (a nonexistent target path, an unreadable target,
-   a config parse failure) still exits `1`, with no parseable body,
-   regardless of `--exit-code`. Without `--exit-code 0`, betterleaks'
-   own default (`--exit-code 1`) makes a genuine tool error and a
-   completed scan that found something exit identically --
-   indistinguishable by exit code alone -- and a tool error additionally
-   logs at `FTL` level with no parseable JSON on stdout. So: parse the
-   captured stdout as JSON and classify by what it actually contains,
-   not by the exit code:
-   - literal `null` (not an empty array `[]`) -- a completed, clean
-     scan. Report clean for that run.
-   - a JSON array (even of one item) -- a completed scan with findings.
-     Continue to step 5.
-   - anything else -- unparseable, empty, or absent -- is a tool error,
-     whatever the exit code says. Report it as a tool error, naming
-     what was attempted and what came back, never as a clean result.
+4. **Classify each run's outcome from its exit code and its JSON body
+   together, never from either one alone.** `--exit-code 0` (always
+   passed, per steps 2-3) is what makes the pair readable: it decouples
+   findings from exit status, so any *completed* scan -- clean or with
+   findings -- exits `0`, and a non-zero exit reliably means the run did
+   not complete. Without it, betterleaks' own default (`--exit-code 1`)
+   makes a genuine tool error and a completed scan that found something
+   exit identically, indistinguishable by exit code alone. The body on
+   its own is no more sufficient: a failed run can still print a
+   parseable body. Verified live at 1.6.1, `betterleaks git` against a
+   directory with no `.git` logs `failed to scan Git repository` and
+   `no leaks found in partial scan` on stderr, prints literal `null` on
+   stdout, and exits `1` -- a clean-looking body from a run that scanned
+   nothing. Other errors (a nonexistent target path, a config parse
+   failure) log at `FTL` level and print no body at all. So parse the
+   captured stdout as JSON and read it against the recorded exit code:
+   - exit `0` and literal `null` (not an empty array `[]`) -- a
+     completed, clean scan. Report clean for that run.
+   - exit `0` and a JSON array (even of one item) -- a completed scan
+     with findings. Continue to step 5.
+   - any non-zero exit, whatever the body holds -- a tool error. With
+     `--exit-code 0` passed no completed scan exits non-zero, so a
+     `null` body here is a scan that did not run, never a clean result.
+   - any unparseable, empty, or absent body, whatever the exit code
+     says -- a tool error.
+   Report a tool error as a tool error, naming what was attempted and
+   what came back, never as a clean result.
 5. **Redact every finding's `CaptureGroups` values.** betterleaks'
    `--redact` flag redacts the `Match` and `Secret` fields but does not
    reach a finding's `CaptureGroups` map, when the matched rule
@@ -212,9 +223,11 @@ explicit.
 - Never pass `--config` or hardcode a config path in either invocation
   (see Config auto-discovery above for why).
 - Never report a clean result for a run that did not complete. An
-  unparseable or absent JSON body, or a non-zero exit with no
-  parseable body, is a tool error, not a clean scan, regardless of what
-  `--exit-code` was passed (see Procedure step 4).
+  unparseable or absent JSON body, or any non-zero exit -- including
+  one that still printed a parseable `null` body, which a non-git
+  target's own `betterleaks git` run really does -- is a tool error,
+  not a clean scan, regardless of what `--exit-code` was passed (see
+  Procedure step 4).
 - Never report a `betterleaks git` clean result without naming whether
   the checkout scanned is a full clone or a shallow/partial one (see
   History-scan coverage boundary above). A shallow clone's own clean

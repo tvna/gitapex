@@ -1,11 +1,19 @@
 id: scanning-leaked-secrets-empty-target-is-a-valid-clean-result
 name: An Empty Target With An Initialized But Commit-Less Repo Is A Valid Clean Result
-description: The target is a brand-new directory with .git initialized but zero
+description: >-
+  The target is a brand-new directory with .git initialized but zero
   commits, and nothing else in it. Both betterleaks dir and betterleaks git
   complete and report null. Unlike scanning-ci-workflows' own Applicability gate,
   this skill declares none of its own -- a trivial or empty target is a valid
   clean result, not a not-applicable case, and an empty repository's own clean
-  git result is as valid as any other clean result.
+  git result is as valid as any other clean result. That verdict is asserted
+  positively (the report must reach SKILL.md's own word, clean) rather than by
+  banning "not applicable": defending the very distinction this fixture rewards
+  requires writing the phrase in order to deny it ("this is not a not applicable
+  case"), and the skill's own Stop boundary on naming the full-vs-shallow
+  checkout status invites a second legitimate use ("the shallow-clone gap is not
+  applicable -- this repository has no commits"), so the ban would score a
+  correct report as a failure.
 tags:
   - quality
   - applicability
@@ -37,5 +45,4 @@ inputs:
 expected:
   output_contains:
     - "null"
-  output_not_contains:
-    - "not applicable"
+    - "clean"
