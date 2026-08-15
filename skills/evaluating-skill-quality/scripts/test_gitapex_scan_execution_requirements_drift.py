@@ -428,6 +428,33 @@ def test_unparseable_script_is_flagged_not_silently_skipped(tmp_path: pathlib.Pa
     assert "broken.py" in findings[0].message
 
 
+def test_ast_parse_value_error_is_flagged_not_crashed(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """ast.parse raises SyntaxError, not ValueError, for NUL-byte source on
+    this repository's own pinned Python (verified directly against 3.11 and
+    3.12: `ast.parse("x = 1\\x00\\n")` raises SyntaxError in both, never
+    ValueError) -- the natural trigger a review once suggested does not
+    reproduce here. Exercised via monkeypatch instead of a real NUL-byte
+    file for the same reason test_looks_like_bundled_script_treats_unopenable_file_as_not_a_script
+    above simulates its own OSError: defense-in-depth for "an inability to
+    verify is a deny, not an assume-clean" should hold regardless of which
+    Python version/implementation a caller runs, not only the one this
+    exact test process happens to be running on."""
+    skill_dir = _make_skill(tmp_path, scripts={"weird.py": "x = 1\n"})
+
+    real_parse = ast.parse
+
+    def _raise_value_error(source: str, filename: str = "<unknown>") -> ast.AST:
+        if filename.endswith("weird.py"):
+            raise ValueError("simulated: source code string cannot contain null bytes")
+        return real_parse(source, filename=filename)
+
+    monkeypatch.setattr(ast, "parse", _raise_value_error)
+
+    trees, unparseable = scanner._bundled_script_trees(skill_dir)
+    assert trees == []
+    assert unparseable == ["weird.py"]
+
+
 def test_commented_out_url_does_not_count_as_network_usage(tmp_path: pathlib.Path) -> None:
     """_URL_HOST_PATTERN previously scanned raw script text including
     comment lines, so a doc reference like "# see https://docs.python.org/"
