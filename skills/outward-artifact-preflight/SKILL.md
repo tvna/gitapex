@@ -253,12 +253,22 @@ recognized `closed` keyword immediately before a number -- the same
 literal pattern a real closing directive would use, with nothing in
 the sentence's own text to tell the two apart.
 
-Rewritten to avoid the trigger while keeping the same issue/PR-number
-citation: "PR `#911` addressed the defect from issue `#907`"
-(https://github.com/OWNER/REPO/pull/911). "addressed" is outside
-every checked platform's keyword list, and the full URL removes the
-bare `#`-number entirely -- either change alone is enough; using both
-is not required.
+Either rewrite strategy from item 3 clears the trigger on its own,
+shown separately here since combining both in one sentence would not
+demonstrate that each works alone.
+
+Replacing the bare issue/PR-number citation with a full URL, keyword
+unchanged: "PR `#911` closed the defect described at
+https://github.com/OWNER/REPO/issues/907." No bare `#`-number sits
+next to "closed" anymore.
+
+Keeping the same issue/PR-number citation but choosing a verb outside
+every checked platform's list, from item 1: "PR `#911` addressed the
+defect from issue `#907`." "addressed" is outside every checked
+platform's keyword list.
+
+Either rewrite alone removes the trigger; using both together is not
+required.
 
 ## Relationship to other skills
 
