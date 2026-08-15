@@ -68,6 +68,7 @@ import os
 import re
 import sys
 import time
+import unicodedata
 import urllib.request
 from collections import Counter
 from collections.abc import Callable
@@ -301,6 +302,16 @@ def list_merged_pull_requests(
 _CONSTRAINT_HINTS = {"string_too_short": "must not be blank", "value_error": "must not be blank"}
 
 
+def _is_blank(value: str) -> bool:
+    """True iff every character in `value` is ordinary whitespace or a
+    Unicode Format-category (Cf) mark -- invisible either way. Cf covers
+    U+200B ZERO WIDTH SPACE, U+FEFF ZERO WIDTH NO-BREAK SPACE, and U+180E
+    MONGOLIAN VOWEL SEPARATOR, none of which str.strip() removes -- so a
+    value made solely of Cf marks passed the old `.strip()`-only check
+    unrejected (issue #1094)."""
+    return all(char.isspace() or unicodedata.category(char) == "Cf" for char in value)
+
+
 class ComputeGprrArgs(BaseModel):
     """Typed view of `main`'s parsed CLI namespace. Each field rejects a
     blank value: argparse's own ``required=True`` only guarantees the flag
@@ -317,10 +328,12 @@ class ComputeGprrArgs(BaseModel):
         # min_length=1 alone passes a whitespace-only string (issue #1087):
         # a value that is non-blank in length but blank in content was never
         # a meaningful input to the GitHub queries below either. Checked via
-        # .strip() without storing the stripped result -- this validates,
+        # _is_blank() without storing a stripped result -- this validates,
         # it does not trim, so a padded-but-meaningful value keeps reaching
-        # the HTTP layer unchanged.
-        if not value.strip():
+        # the HTTP layer unchanged. _is_blank() also rejects a value made
+        # solely of Unicode Format-category (Cf) characters, which plain
+        # .strip() leaves in place (issue #1094).
+        if _is_blank(value):
             raise ValueError("must not be blank")
         return value
 

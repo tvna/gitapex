@@ -47,6 +47,7 @@ import json
 import os
 import sys
 import time
+import unicodedata
 import urllib.error
 import urllib.request
 from collections.abc import Callable
@@ -459,6 +460,16 @@ def _collect_additions(paths: list[str]) -> list[tuple[str, bytes]]:
     return additions
 
 
+def _is_blank(value: str) -> bool:
+    """True iff every character in `value` is ordinary whitespace or a
+    Unicode Format-category (Cf) mark -- invisible either way. Cf covers
+    U+200B ZERO WIDTH SPACE, U+FEFF ZERO WIDTH NO-BREAK SPACE, and U+180E
+    MONGOLIAN VOWEL SEPARATOR, none of which str.strip() removes -- so a
+    value made solely of Cf marks passed the old `.strip()`-only check
+    unrejected (issue #1094)."""
+    return all(char.isspace() or unicodedata.category(char) == "Cf" for char in value)
+
+
 class _CliArgs(BaseModel):
     """Parsed-and-validated view of this script's own argparse namespace.
     Required string fields reject blank (argparse's own ``required=True``
@@ -486,10 +497,12 @@ class _CliArgs(BaseModel):
     @classmethod
     def _reject_whitespace_only(cls, value: str) -> str:
         # min_length=1 alone accepts a whitespace-only string (issue #1087).
-        # Checked via .strip() without storing the stripped result -- this
+        # Checked via _is_blank() without storing a stripped result -- this
         # validates, it does not trim, so a padded-but-meaningful value
-        # keeps reaching publish_files_pr() unchanged.
-        if not value.strip():
+        # keeps reaching publish_files_pr() unchanged. _is_blank() also
+        # rejects a value made solely of Unicode Format-category (Cf)
+        # characters, which plain .strip() leaves in place (issue #1094).
+        if _is_blank(value):
             raise ValueError("must not be blank")
         return value
 
@@ -498,15 +511,20 @@ class _CliArgs(BaseModel):
     def _body_file_must_exist(cls, value: str) -> str:
         # A whitespace-only path is rejected up front (issue #1087) rather
         # than left to the is_file() check below: relying on no file ever
-        # being named e.g. " " is incidental, not a guarantee. The message
-        # is deliberately its own self-describing "body file ..." text, not
-        # the generic "must not be blank" the other fields below share --
-        # main()'s ValidationError handler strips the "body_file: " prefix
-        # for this field's own value_error type (see its own comment), so a
-        # shared, non-field-named message here would render as an
-        # unattributable duplicate when another field is also blank in the
-        # same run.
-        if not value.strip():
+        # being named e.g. " " is incidental, not a guarantee. Same
+        # reasoning extends to a value made solely of Unicode Format-
+        # category (Cf) characters (e.g. U+200B ZERO WIDTH SPACE, left in
+        # place by plain .strip()): relying on no file ever being named
+        # that is equally incidental, so _is_blank() (issue #1094) is
+        # checked here too, not left to is_file() below to happen to catch.
+        # The message is deliberately its own self-describing "body file
+        # ..." text, not the generic "must not be blank" the other fields
+        # below share -- main()'s ValidationError handler strips the
+        # "body_file: " prefix for this field's own value_error type (see
+        # its own comment), so a shared, non-field-named message here would
+        # render as an unattributable duplicate when another field is also
+        # blank in the same run.
+        if _is_blank(value):
             raise ValueError("body file path must not be blank")
         # is_file(), not exists(): a directory passes exists() but is not
         # readable as a file, so main()'s later body_path.read_text() would
