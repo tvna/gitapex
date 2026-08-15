@@ -40,4 +40,5 @@ expected:
     - "please provide the diff"
     - "unverified summary"
     - "Approved"
-    - "cleared"
+    - "clear to merge"
+    - "all clear"
