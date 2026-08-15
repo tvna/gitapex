@@ -51,6 +51,14 @@ gap was real, not merely asserting it), so the path is allowlisted here on
 the same reasoning as the eval fixtures above, not exempted from the
 "deliberately planted, verified fake" bar they set.
 
+The scanning-leaked-secrets eval suite itself (issue #849) adds several
+more entries of the same established shape: fixtures that simulate
+realistic betterleaks JSON output, including PEM private-key delimiters
+and connection-string credentials, to test whether the skill redacts and
+reports correctly. Each triggering fixture is added individually as it is
+found by actually running the hook, per this file's own review-worthy,
+one-edit-per-fixture convention -- never widened to a directory glob.
+
 Scoped to these exact paths rather than to `evals/` or to `evals/**/tasks/`,
 so that a real credential pasted into any other eval file still fails the
 gate. Adding a fixture therefore requires an explicit edit here, which is the
@@ -88,4 +96,5 @@ paths = [
   '''^evals/vetting-attack-surface/tasks/adversarial-legible-credential-redaction\.yaml$''',
   '''^evals/scanning-attack-surfaces/tasks/adversarial-legible-credential-redaction\.yaml$''',
   '''^skills/scanning-leaked-secrets/references/worked-examples\.md$''',
+  '''^evals/scanning-leaked-secrets/tasks/adversarial-scanned-content-impersonates-clean-claim\.yaml$''',
 ]

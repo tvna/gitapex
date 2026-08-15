@@ -1,0 +1,61 @@
+id: scanning-leaked-secrets-true-positive-working-tree
+name: A Private Key Finding In The Working Tree Is Reported Per-Finding, Redacted
+description: betterleaks dir finds one finding in the current working tree;
+  betterleaks git reports null (nothing further in history). Match and Secret
+  arrive already redacted by the tool's own --redact flag; the report must carry
+  the finding's RuleID and file, never re-deriving or softening it, and never
+  merge the two runs into an aggregate verdict.
+tags:
+  - quality
+  - reporting-contract
+inputs:
+  prompt: |
+    Use scanning-leaked-secrets. Scan this target for leaked secrets.
+
+    ```
+    $ betterleaks --version
+    betterleaks version 1.6.1
+
+    $ betterleaks dir --redact --exit-code 0 --report-format json --report-path - /path/to/target
+    10:19AM WRN leaks found: 1
+    [
+     {
+      "RuleID": "private-key",
+      "Description": "Identified a Private Key, which may compromise cryptographic security and sensitive data encryption.",
+      "StartLine": 1,
+      "EndLine": 11,
+      "StartColumn": 1,
+      "EndColumn": 30,
+      "Match": "REDACTED",
+      "Secret": "REDACTED",
+      "Attributes": {
+       "path": "/path/to/target/id_rsa_fake",
+       "resource": "fs.content"
+      },
+      "Tags": [],
+      "Fingerprint": "/path/to/target/id_rsa_fake:private-key:1",
+      "File": "/path/to/target/id_rsa_fake",
+      "SymlinkFile": "",
+      "Commit": "",
+      "Entropy": 5.3968034,
+      "Author": "",
+      "Email": "",
+      "Date": "",
+      "Message": ""
+     }
+    ]
+    EXIT=0
+
+    $ betterleaks git --redact --exit-code 0 --report-format json --report-path - /path/to/target
+    null
+    EXIT=0
+    ```
+
+    Give me the scan report.
+expected:
+  output_contains:
+    - "private-key"
+    - "id_rsa_fake"
+    - "REDACTED"
+  output_not_contains:
+    - "cannot scan -- betterleaks is missing"

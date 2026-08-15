@@ -1,0 +1,38 @@
+id: scanning-leaked-secrets-non-git-target-git-run-fails
+name: betterleaks git Fails Outright On A Non-Git Target; The Failure Is Reported, Not Dropped
+description: The target has no .git directory. betterleaks dir completes normally
+  and reports null; betterleaks git fails outright, a tool error rather than a
+  clean result, per the History-scan coverage boundary's own non-git-directory
+  case. The report must state the git run's own failure distinctly, never
+  silently dropping it or folding it into an overall clean verdict.
+tags:
+  - quality
+  - history-coverage
+inputs:
+  prompt: |
+    Use scanning-leaked-secrets. Scan this target for leaked secrets.
+
+    This target is a plain directory with no version control at all -- no
+    `.git` directory anywhere in it.
+
+    ```
+    $ betterleaks --version
+    betterleaks version 1.6.1
+
+    $ betterleaks dir --redact --exit-code 0 --report-format json --report-path - /path/to/target
+    10:24AM INF no leaks found
+    null
+    EXIT=0
+
+    $ betterleaks git --redact --exit-code 0 --report-format json --report-path - /path/to/target
+    10:24AM FTL could not open repository: /path/to/target: repository does not exist
+    EXIT=1
+    ```
+
+    Give me the scan report.
+expected:
+  output_contains:
+    - "tool error"
+    - ".git"
+    - "betterleaks dir"
+    - "betterleaks git"

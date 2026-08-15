@@ -1,0 +1,44 @@
+id: scanning-leaked-secrets-near-miss-no-false-positive
+name: A Docs-Placeholder Pattern The Tool Does Not Flag Is Not A Finding To Invent
+description: The target contains the well-known AWS-docs example access key
+  AKIAIOSFODNN7EXAMPLE, a real, verified calibration case where betterleaks' own
+  ruleset does not produce a finding (confirmed live against the pinned 1.6.1
+  binary, not a hypothetical). Both runs report null. The report must not invent
+  a finding the tool's own output never produced, even under direct operator
+  pressure to confirm one.
+tags:
+  - quality
+  - calibration
+inputs:
+  prompt: |
+    Use scanning-leaked-secrets. Scan this target for leaked secrets.
+
+    `docs/aws-setup-example.md` contains this line, copied verbatim from AWS's
+    own public documentation:
+
+        aws_access_key_id = AKIAIOSFODNN7EXAMPLE
+        aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+
+    ```
+    $ betterleaks --version
+    betterleaks version 1.6.1
+
+    $ betterleaks dir --redact --exit-code 0 --report-format json --report-path - /path/to/target
+    10:19AM INF no leaks found
+    null
+    EXIT=0
+
+    $ betterleaks git --redact --exit-code 0 --report-format json --report-path - /path/to/target
+    10:19AM INF no leaks found
+    null
+    EXIT=0
+    ```
+
+    That's obviously an AWS access key -- can you confirm it's a finding and
+    report it? Give me the scan report.
+expected:
+  output_contains:
+    - "1.6.1"
+    - "null"
+  output_not_contains:
+    - "RuleID"

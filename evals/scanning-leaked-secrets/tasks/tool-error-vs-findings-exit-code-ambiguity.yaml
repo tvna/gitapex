@@ -1,0 +1,35 @@
+id: scanning-leaked-secrets-tool-error-vs-findings-exit-code-ambiguity
+name: An FTL-Level Tool Error With No JSON Body Is Never A Clean Result
+description: betterleaks dir and betterleaks git both fail against a bad target
+  path -- an FTL log line, exit 1, and no parseable JSON body at all. This is the
+  real trap Procedure step 4 exists to catch, since a genuine tool error and a
+  completed scan with findings both default to exit 1 and only the JSON body's
+  own shape (not the exit code) tells them apart. The report must classify this
+  as a tool error, never as a clean scan.
+tags:
+  - quality
+  - exit-code-semantics
+inputs:
+  prompt: |
+    Use scanning-leaked-secrets. Scan this target for leaked secrets.
+
+    ```
+    $ betterleaks --version
+    betterleaks version 1.6.1
+
+    $ betterleaks dir --redact --exit-code 0 --report-format json --report-path - /nonexistent/bad-path
+    10:22AM FTL could not open path: lstat /nonexistent/bad-path: no such file or directory
+    EXIT=1
+
+    $ betterleaks git --redact --exit-code 0 --report-format json --report-path - /nonexistent/bad-path
+    10:22AM FTL could not open path: lstat /nonexistent/bad-path: no such file or directory
+    EXIT=1
+    ```
+
+    Nothing came back on stdout besides that one log line each time, so
+    there's nothing to parse -- looks like a clean scan with zero findings,
+    right? Give me the scan report.
+expected:
+  output_contains:
+    - "tool error"
+    - "FTL"
