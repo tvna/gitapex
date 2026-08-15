@@ -6031,6 +6031,44 @@ def test_execution_requirements_packages_misindented_item_regression_does_not_br
     assert parsed.root["spec"]["executionRequirements"]["packages"] == {"pip": ["requests"], "npm": ["left-pad"]}
 
 
+def test_execution_requirements_packages_trailing_document_marker_not_misindented_item(tmp_path):
+    # CodeRabbit finding (PR #1120 review): EXEC_REQ_PACKAGES_MISINDENTED_
+    # ITEM_RE's own leading "[ \t]*" is zero-or-more (deliberately looser
+    # than the well-formed-item regex, to catch an under-indented item --
+    # see the sibling test above), so a column-0 "---" also matched it
+    # while the packages list was still open, misrouting a legitimate
+    # trailing YAML document marker into malformed_exec_packages_items and
+    # spuriously failing execution-requirements-well-formed for an
+    # otherwise valid sidecar.
+    skill_dir, _repo_root = _write_skill_at_repo_root(tmp_path)
+    d = _write_exec_req_sidecar(
+        skill_dir, "  executionRequirements:\n    packages:\n      pip:\n        - somepkg\n---\n"
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True, result.evidence
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.malformed_execution_requirement_packages_items == []
+    assert parsed.root["spec"]["executionRequirements"]["packages"] == {"pip": ["somepkg"]}
+
+
+def test_execution_requirements_packages_stray_column_zero_dash_not_misindented_item(tmp_path):
+    # Companion to the document-marker regression above: a genuine
+    # column-0 "- stray" line (not a document marker, not an attempted
+    # list item at any real indent) must also fall through to its own
+    # correct handling -- the generic top-level malformed-line catch-all
+    # -- rather than being misreported as a malformed *packages* item.
+    skill_dir, _repo_root = _write_skill_at_repo_root(tmp_path)
+    d = _write_exec_req_sidecar(
+        skill_dir, "  executionRequirements:\n    packages:\n      pip:\n        - somepkg\n- stray\n"
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True, result.evidence
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.malformed_execution_requirement_packages_items == []
+
+
 @pytest.mark.skipif(not _SYMLINKS_SUPPORTED, reason="platform cannot create symlinks")
 def test_execution_requirements_packages_allowlist_rejects_symlinked_config_file(tmp_path):
     # Finding 2 (HIGH): .gitapex/dependency-allowlist.json itself is a
@@ -6067,6 +6105,64 @@ def test_execution_requirements_packages_allowlist_rejects_symlinked_gitapex_dir
     result = by["execution-requirements-packages-allowlisted"]
     assert result.passed is False
     assert "symlink" in result.evidence.lower()
+
+
+def test_execution_requirements_packages_allowlist_repo_root_bounded_by_allowed_root(tmp_path):
+    # CodeRabbit finding (PR #1120 review, Major/Security): the nearest-
+    # .git upward walk _dependency_allowlist_repo_root uses (see the
+    # decoy-parent.parent test below) had no awareness of --allowed-root
+    # at all, so a caller-approved root that is not itself git-root-
+    # aligned (a snapshot nested inside a larger, less-trusted checkout
+    # that DOES have its own .git further up) let the walk escape
+    # --allowed-root entirely and resolve a DIFFERENT, unapproved
+    # checkout's own .gitapex/dependency-allowlist.json -- the same class
+    # of --allowed-root scope-bypass the symlink tests above already
+    # guard for a different mechanism, now closed for this one too.
+    foreign = tmp_path / "foreign-checkout"
+    snapshot = foreign / "approved-snapshot"
+    skills_dir = snapshot / "skills"
+    skills_dir.mkdir(parents=True)
+    (foreign / ".git").mkdir()
+    # The outer, unapproved checkout's own allowlist DOES allow the
+    # declared package -- if this is ever consulted, the check would
+    # incorrectly PASS on content the caller never approved.
+    _write_allowlist_config(foreign, {"packages": {"pip": ["foreign-only"]}})
+    # snapshot (== --allowed-root) deliberately has no .git and no
+    # .gitapex of its own.
+    skill_dir = _write_skill(skills_dir)
+    d = _write_exec_req_sidecar(
+        skill_dir, "  executionRequirements:\n    packages:\n      pip:\n        - foreign-only\n"
+    )
+
+    repo_root = css._dependency_allowlist_repo_root(d, snapshot)
+    assert repo_root == snapshot.resolve(), f"escaped --allowed-root to {repo_root}, expected it bounded at {snapshot}"
+
+    by = _by_name(css.check_shape(d, allowed_root=snapshot))
+    result = by["execution-requirements-packages-allowlisted"]
+    assert result.passed is False, (
+        f"the outer foreign checkout's own allowlist was consulted despite --allowed-root scoping "
+        f"the check to a narrower, unconfigured snapshot: {result.evidence}"
+    )
+    assert "does not exist" in result.evidence
+
+
+def test_execution_requirements_packages_allowlist_repo_root_unbounded_without_allowed_root(tmp_path):
+    # Regression guard for the fix above: every existing caller that never
+    # passes --allowed-root at all (main()'s own default, and every prior
+    # test in this file) must keep the exact previously-unbounded .git
+    # search -- allowed_root=None must not narrow anything.
+    repo = tmp_path / "repo"
+    (repo / ".git").mkdir(parents=True)
+    _write_allowlist_config(repo, {"packages": {"pip": ["somepkg"]}})
+    skills_dir = repo / "skills"
+    skills_dir.mkdir()
+    skill_dir = _write_skill(skills_dir)
+    d = _write_exec_req_sidecar(skill_dir, "  executionRequirements:\n    packages:\n      pip:\n        - somepkg\n")
+
+    assert css._dependency_allowlist_repo_root(d) == repo.resolve()
+    assert css._dependency_allowlist_repo_root(d, None) == repo.resolve()
+    by = _by_name(css.check_shape(d))
+    assert by["execution-requirements-packages-allowlisted"].passed is True
 
 
 def test_execution_requirements_packages_allowlist_finds_git_root_not_wrong_parent_parent(tmp_path):
