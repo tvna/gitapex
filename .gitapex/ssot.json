@@ -902,6 +902,24 @@
       "tracking_issue": 1058,
       "status": "active",
       "supersedes": null
+    },
+    {
+      "id": "copilot-endpoint-preflight",
+      "kind": "script",
+      "script": [
+        ".github/scripts/gitapex_check_copilot_endpoint_configured.py",
+        ".github/workflows/waza-eval-matrix.yml",
+        ".github/workflows/waza-eval-gate.yml"
+      ],
+      "rule": "Fails loudly unless COPILOT_BASE_URL or COPILOT_PROVIDER_BASE_URL resolves (waza's own envFirst() precedence) to a well-formed absolute URL (scheme + host, matching waza's own providerHost()) before either workflow attempts a copilot-sdk-executor run; never prints the resolved value.",
+      "planes": ["ci"],
+      "local_exclusion": "Grades GitHub Actions repository secrets (COPILOT_BASE_URL / COPILOT_PROVIDER_BASE_URL); a local working tree has no equivalent secret to check, and failing every unrelated local pre-push on their absence would be a false-alarm regression.",
+      "trigger": ".github/workflows/waza-eval-matrix.yml's eval-matrix job (workflow_dispatch) and .github/workflows/waza-eval-gate.yml (pull_request / workflow_dispatch), plus tests/test_gitapex_check_copilot_endpoint_configured.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "skill-lifecycle",
+      "tracking_issue": 124,
+      "status": "active",
+      "supersedes": null
     }
   ],
   "clusters": {
