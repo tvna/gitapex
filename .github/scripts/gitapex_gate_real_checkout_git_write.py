@@ -33,7 +33,17 @@ here: this gate does not catch `os.path.join(REPO_ROOT, ".git", ...)`,
 an expression chained across multiple physical lines, or a repository
 root bound to a name other than the literal `REPO_ROOT` -- this
 repository's own consistent convention across `tests/*.py`, confirmed at
-plan time across dozens of files.
+plan time across dozens of files. Nor does it catch a `.git` path
+segment built through an intermediate variable, a pre-built `Path`, or
+string concatenation (e.g. `GIT_DIRNAME = ".git"; pre_commit_hook =
+REPO_ROOT / GIT_DIRNAME / ...`): keeping the literal quoted `.git` token
+off the same physical line as `REPO_ROOT` evades `_HAZARD_RE` entirely,
+and this is more likely to occur organically than the three limits
+above -- found via this gate's own mandatory adversarial defeat-case
+construction (issue #991 step 8), not a hypothetical. A minor variant
+of the same gap, a triple-quoted `.git` segment, also evades the same
+regex, for an unrelated reason: the `['"]` character class cannot bind
+to a quote character buried inside a run of three.
 
 **Waiver.** An inline `# real-checkout-git-write: WAIVED: <reason>`
 comment on the *same physical line* as the flagged pattern, with a
@@ -54,12 +64,13 @@ read live from `--root`'s own `pyproject.toml` rather than a second
 hardcoded copy, so the two cannot silently drift out of sync (mirrors
 `gitapex_gate_evals_scripts_coverage.py`'s own
 `read_coverage_sources()`). `conftest.py` is not itself a test file by
-this naming convention and is not scanned, the same distinction pytest's
-own collection draws. This gate does not invoke pytest's own collection
-directly; a future change to `python_files`, a collection plugin, or
-`testpaths` without a matching update here could silently narrow what
-this gate actually scans relative to what pytest actually collects --
-disclosed, not solved.
+this naming convention, but is scanned anyway, since pytest's own
+collection imports and executes `conftest.py` regardless of whether it
+matches the test-file naming pattern. This gate does not invoke pytest's
+own collection directly; a future change to `python_files`, a collection
+plugin, or `testpaths` without a matching update here could silently
+narrow what this gate actually scans relative to what pytest actually
+collects -- disclosed, not solved.
 
 Exit codes: 0 clean, 1 one or more (non-waived) findings, 2 the scan
 could not be trusted (`--root` not a directory, none of its `testpaths`
@@ -160,9 +171,10 @@ def discover(root: Path, testpaths: list[str]) -> list[Path]:
     """Return every pytest-discovered test file under `root`: `test_*.py`
     and `*_test.py`, recursively, under each of `testpaths` -- pytest's
     own default `python_files` pattern (`pyproject.toml` carries no
-    override, confirmed at plan time). `conftest.py` is not itself a test
-    file by this naming convention and is excluded, the same distinction
-    pytest's own collection draws.
+    override, confirmed at plan time) -- plus every `conftest.py`, which
+    is not itself a test file by that naming convention but is scanned
+    anyway, since pytest's own collection imports and executes
+    `conftest.py` regardless of whether it matches `python_files`.
 
     Raises `ScanError` when every `testpaths` directory is missing --
     most plausibly the wrong `--root`, not a repository with zero scan
@@ -177,6 +189,7 @@ def discover(root: Path, testpaths: list[str]) -> list[Path]:
             continue
         found.update(directory.rglob("test_*.py"))
         found.update(directory.rglob("*_test.py"))
+        found.update(directory.rglob("conftest.py"))
     if missing == len(testpaths):
         raise ScanError(
             f"{root}: none of pyproject.toml's testpaths directories exist {testpaths!r} "

@@ -59,7 +59,22 @@ def test_exits_zero_even_when_python3_reports_failure(tmp_path: Path) -> None:
     assert "not a gitapex checkout" in result.stderr
 
 
-def test_installs_the_prek_hook_for_a_real_checkout(tmp_path: Path) -> None:
+@pytest.fixture
+def real_checkout(tmp_path: Path) -> Path:
+    """A throwaway --depth 1 local clone of REPO_ROOT under tmp_path --
+    carries this commit's real apm.yml/.pre-commit-config.yaml (both
+    tracked files) without ever writing through this repository's own
+    real .git/ (issue #991)."""
+    checkout = tmp_path / "checkout"
+    subprocess.run(
+        ["git", "clone", "-q", "--depth", "1", "--no-tags", f"file://{REPO_ROOT}", str(checkout)],
+        check=True,
+        timeout=30,
+    )
+    return checkout
+
+
+def test_installs_the_prek_hook_for_a_real_checkout(real_checkout: Path) -> None:
     # Issue #749: this ephemeral-web session-start path is the third
     # place (alongside CONTRIBUTING.md's manual step and flake.nix's
     # devShell shellHook) prek's hook install must reach -- exercised
@@ -77,31 +92,21 @@ def test_installs_the_prek_hook_for_a_real_checkout(tmp_path: Path) -> None:
     # genuine git repository with genuine config -- the exact distinction
     # this test exists to draw against a `tmp_path` fake, unaffected by
     # which git repository supplies that genuine config.
-    checkout = tmp_path / "checkout"
-    subprocess.run(
-        ["git", "clone", "-q", "--depth", "1", "--no-tags", f"file://{REPO_ROOT}", str(checkout)],
-        check=True,
-    )
-    result = _run({"CLAUDE_CODE_REMOTE": "true", "CLAUDE_PROJECT_DIR": str(checkout)})
+    result = _run({"CLAUDE_CODE_REMOTE": "true", "CLAUDE_PROJECT_DIR": str(real_checkout)})
     assert result.returncode == 0
-    pre_commit_hook = checkout / ".git" / "hooks" / "pre-commit"
+    pre_commit_hook = real_checkout / ".git" / "hooks" / "pre-commit"
     assert pre_commit_hook.exists()
     assert "prek" in pre_commit_hook.read_text(encoding="utf-8")
 
 
-def test_does_not_dirty_the_real_checkouts_settings_json(tmp_path: Path) -> None:
+def test_does_not_dirty_the_real_checkouts_settings_json(real_checkout: Path) -> None:
     # Issue #991 follow-up: discovered while fixing the sibling prek-hook
     # test above. CLAUDE_PROJECT_DIR pointing somewhere other than
     # REPO_ROOT must never leave REPO_ROOT's own tracked
     # .claude/settings.json touched, regardless of what session-start.sh's
     # self-plugin-registration block does internally.
     before = (REPO_ROOT / ".claude" / "settings.json").read_bytes()
-    checkout = tmp_path / "checkout"
-    subprocess.run(
-        ["git", "clone", "-q", "--depth", "1", "--no-tags", f"file://{REPO_ROOT}", str(checkout)],
-        check=True,
-    )
-    result = _run({"CLAUDE_CODE_REMOTE": "true", "CLAUDE_PROJECT_DIR": str(checkout)})
+    result = _run({"CLAUDE_CODE_REMOTE": "true", "CLAUDE_PROJECT_DIR": str(real_checkout)})
     assert result.returncode == 0
     after = (REPO_ROOT / ".claude" / "settings.json").read_bytes()
     assert before == after

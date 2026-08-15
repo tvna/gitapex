@@ -78,12 +78,13 @@ reasons.
   (issue #890), which closes the "configured here but never actually
   installed" half; nothing closes the ``--no-verify`` half. CI remains the
   authoritative merge gate for every gate carrying a ``ci`` plane -- true
-  for 29 of the 31 wired gates. ``behind-base`` (issue #985) is the one
-  exception: it carries only ``local``, so for that gate specifically this
+  for 29 of the 31 wired gates. ``behind-base`` (issue #985) and
+  ``real-checkout-git-write`` (issue #991) are the two exceptions: each
+  carries only ``local``, so for those two gates specifically this
   pre-push hook -- bypassable the same way as any other -- is the *only*
-  enforcement, with no CI-side backstop. Named as a real gap in that
-  gate's own docstring and issue #985's Acceptance Criteria Map, not
-  papered over here.
+  enforcement, with no CI-side backstop. Named as a real gap in
+  ``behind-base``'s own docstring and issue #985's Acceptance Criteria
+  Map; the same gap now applies to ``real-checkout-git-write`` too.
 - **Every wired gate runs through ``uv``.** CONTRIBUTING.md invokes this
   file with plain ``python3``, and so does the pre-push hook, because the
   runner itself needs no dependencies -- but all 31 wired argvs begin with

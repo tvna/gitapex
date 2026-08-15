@@ -157,9 +157,10 @@ scripts, it is not a place to put commands.
 
 CI remains the authoritative merge gate for every gate that also carries a
 `ci` plane; this is a fast first pass, the same relationship the prek hook
-has to `lint.yml`. One gate, `behind-base` (issue #985), carries `local`
-only -- for that one, this pre-push hook is the sole enforcement, with no
-CI-side backstop if it's bypassed.
+has to `lint.yml`. Two gates, `behind-base` (issue #985) and
+`real-checkout-git-write` (issue #991), carry `local` only -- for those
+two, this pre-push hook is the sole enforcement, with no CI-side backstop
+if it's bypassed.
 
 ## Issue citation convention
 
