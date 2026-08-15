@@ -1,6 +1,6 @@
 ---
 name: outward-artifact-preflight
-description: Use when about to push, post, or publish any outward-facing artifact -- a commit, PR/issue body, release, or generated file. Interim manual checklist for undisclosed provenance markers and non-ASCII content, pending a real deterministic preflight/CI gate.
+description: Use when about to push, post, or publish any outward-facing artifact -- a commit, PR/issue body, release, or generated file. Interim manual checklist for undisclosed provenance markers, non-ASCII content, and a citation-shaped sentence that could trip a git host's closing-keyword scan, pending a real deterministic preflight/CI gate.
 ---
 
 # Outward Artifact Preflight
