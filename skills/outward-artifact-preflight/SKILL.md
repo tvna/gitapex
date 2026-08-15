@@ -21,7 +21,7 @@ substitute for one, and never present it as the permanent solution.
 
 ## Checklist
 
-Run all three checks on the exact text about to be pushed or posted: a
+Run all four checks on the exact text about to be pushed or posted: a
 commit message, PR/issue body, release notes, or any generated file
 destined for a public sink.
 
@@ -124,6 +124,39 @@ destined for a public sink.
    ```
 
    No output means the file is ASCII-only.
+4. **Closing-keyword narration hazard.** A sentence that only narrates
+   history -- citing a past PR or issue by number -- can still trip a
+   git host's closing-keyword scan if a recognized keyword happens to
+   land immediately before the `#`-number, even when the author's
+   intent is not to close anything. Confirmed against each of GitHub,
+   GitLab, Forgejo, and Gitea's own current documentation: all four
+   match a literal keyword-plus-number pattern with no stated
+   grammatical, semantic, or tense analysis of the surrounding
+   sentence. This is not a blanket claim about every git-hosting
+   platform -- a host not checked here (for example Bitbucket or
+   sourcehut) could behave differently in either direction.
+
+   1. GitHub and Forgejo recognize close/closes/closed,
+      fix/fixes/fixed, and resolve/resolves/resolved (Forgejo's list
+      is admin-customizable but ships with this same set). GitLab
+      recognizes the same three families plus an
+      implement/implements/implemented family, and adds an "-ing"
+      form to all four (closing, fixing, resolving, implementing) --
+      the widest of the four. Gitea's list is identical to Forgejo's.
+   2. Forgejo and Gitea additionally require, for a reference placed
+      in a PR description specifically, that the merger hold
+      close/reopen permission at merge time (a commit-message
+      reference, or a commenter who already holds that permission, is
+      sufficient without it). GitHub and GitLab's own documentation
+      states no such permission gate.
+   3. Before publishing a sentence that cites a past PR or issue by
+      number in prose, check whether a recognized keyword lands
+      immediately before the `#`-number. If it does, and the sentence
+      narrates something that already happened rather than directing
+      this artifact to resolve it, rewrite to avoid the trigger:
+      prefer a full URL citation over the bare `#`-number, or a verb
+      outside every platform's list above (for example "addressed",
+      "landed", "shipped"). See the worked example below.
 
 ## Worked example
 
@@ -199,6 +232,28 @@ convention, so all must be removed. Fix via `update_pull_request` with the
 trailer stripped, then re-fetch and re-run the scan once more -- a clean
 second re-scan confirms the trailer was a one-time injection, not
 force-reinjected.
+
+## Worked example: a citation sentence that reads as a directive
+
+This is the shape of the hazard check 4 exists to catch -- a sentence
+narrating history, not directing this artifact to close anything:
+
+> PR #911 closed #907.
+
+Read by a keyword scanner rather than a human, "closed #907" is
+GitHub, Forgejo, and Gitea's own recognized `closed` keyword
+immediately before a `#`-number -- the same literal pattern a real
+closing directive would use, with nothing in the sentence's own text
+to tell the two apart.
+
+Rewritten to avoid the trigger while keeping the same citation:
+
+> PR #911 addressed the defect from issue #907
+> (https://github.com/OWNER/REPO/pull/911).
+
+"addressed" is outside every checked platform's keyword list, and the
+full URL removes the bare `#`-number entirely -- either change alone
+is enough; using both is not required.
 
 ## Relationship to other skills
 
