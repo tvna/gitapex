@@ -55,7 +55,7 @@ import re
 import subprocess
 import sys
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 _BLOCK_SCALAR_INDICATORS = frozenset({">", ">-", ">+", "|", "|-", "|+"})
 _DESCRIPTION_KEY_RE = re.compile(r"^description:[ \t]*(.*)$")
@@ -141,7 +141,19 @@ def _read_at_revision(rev, path):
 # and nothing else leaves the operator without the reason. An unmapped type
 # falls back to a generic label rather than raising, so a future constraint
 # kind can never turn a rejected argument into a traceback.
-_CONSTRAINT_HINTS = {"string_too_short": "must not be blank"}
+_CONSTRAINT_HINTS = {
+    "string_too_short": "must not be blank",
+    # Issue #1087: min_length=1 alone accepts a whitespace-only string; the
+    # validator below closes that with a plain ValueError, which pydantic
+    # reports as this generic type. Reuses "must not be blank" since an
+    # operator would never need to distinguish it from a truly empty value.
+    # Keyed on pydantic's error *type* alone, not on which validator raised
+    # it: a future field_validator added to this model that raises a plain
+    # ValueError for an unrelated reason would also render here as "must
+    # not be blank" -- give it a distinct error type or extend this dict
+    # deliberately rather than letting it fall through this entry.
+    "value_error": "must not be blank",
+}
 
 
 class SkillDescriptionDiffArgs(BaseModel):
@@ -154,6 +166,15 @@ class SkillDescriptionDiffArgs(BaseModel):
     head_rev: str = Field(min_length=1)
     base_path: str = Field(min_length=1)
     head_path: str = Field(min_length=1)
+
+    @field_validator("base_rev", "head_rev", "base_path", "head_path")
+    @classmethod
+    def _reject_whitespace_only(cls, value: str) -> str:
+        # Checked via .strip() without storing the stripped result -- this
+        # validates, it does not trim (issue #1087).
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value
 
 
 def main(argv: list[str] | None = None) -> int:

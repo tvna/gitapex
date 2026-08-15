@@ -87,7 +87,7 @@ import urllib.request
 from collections.abc import Callable
 from typing import Any
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 _API_ROOT = "https://api.github.com"
 _API_VERSION = "2022-11-28"
@@ -261,7 +261,20 @@ def open_retro_issue(
 # unmapped type falls back to a generic label rather than raising, so a
 # future constraint kind can never turn a rejected argument into a
 # traceback.
-_CONSTRAINT_HINTS = {"string_too_short": "must not be blank", "greater_than": "must be a positive integer"}
+_CONSTRAINT_HINTS = {
+    "string_too_short": "must not be blank",
+    "greater_than": "must be a positive integer",
+    # Issue #1087: min_length=1 alone accepts a whitespace-only string; the
+    # validator below closes that with a plain ValueError, which pydantic
+    # reports as this generic type. Reuses "must not be blank" since an
+    # operator would never need to distinguish it from a truly empty value.
+    # Keyed on pydantic's error *type* alone, not on which validator raised
+    # it: a future field_validator added to this model that raises a plain
+    # ValueError for an unrelated reason would also render here as "must
+    # not be blank" -- give it a distinct error type or extend this dict
+    # deliberately rather than letting it fall through this entry.
+    "value_error": "must not be blank",
+}
 
 
 class PostMergeRetroArgs(BaseModel):
@@ -277,6 +290,15 @@ class PostMergeRetroArgs(BaseModel):
     owner: str = Field(min_length=1)
     repo: str = Field(min_length=1)
     pr_number: int = Field(gt=0)
+
+    @field_validator("owner", "repo")
+    @classmethod
+    def _reject_whitespace_only(cls, value: str) -> str:
+        # Checked via .strip() without storing the stripped result -- this
+        # validates, it does not trim (issue #1087).
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value
 
 
 def main(argv: list[str] | None = None) -> int:

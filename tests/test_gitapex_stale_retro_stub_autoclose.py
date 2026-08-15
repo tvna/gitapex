@@ -436,6 +436,40 @@ def test_main_rejects_non_positive_stale_hours(monkeypatch, capsys):
     assert "invalid arguments" in capsys.readouterr().err
 
 
+def test_main_rejects_whitespace_only_owner(monkeypatch, capsys):
+    """Issue #1087: min_length=1 alone accepts a whitespace-only value;
+    the field must reject it the same as a truly blank one."""
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    exit_code = sra.main(["--owner", " ", "--repo", "gitapex"])
+    assert exit_code == 1
+    assert "error: invalid arguments: --owner (must not be blank)" in capsys.readouterr().err
+
+
+def test_main_rejects_whitespace_only_repo(monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    exit_code = sra.main(["--owner", "tvna", "--repo", "\t"])
+    assert exit_code == 1
+    assert "error: invalid arguments: --repo (must not be blank)" in capsys.readouterr().err
+
+
+def test_main_keeps_padded_but_meaningful_owner_unmutated(monkeypatch, capsys):
+    """Issue #1087: validation must not silently trim -- a value with real
+    content plus surrounding whitespace reaches the downstream call exactly
+    as typed."""
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    received = {}
+
+    def fake_list_open_retro_issues(owner, repo, token):
+        received["owner"] = owner
+        received["repo"] = repo
+        return []
+
+    monkeypatch.setattr(sra, "list_open_retro_issues", fake_list_open_retro_issues)
+    exit_code = sra.main(["--owner", " tvna ", "--repo", " gitapex "])
+    assert exit_code == 0
+    assert received == {"owner": " tvna ", "repo": " gitapex "}
+
+
 def test_main_renders_underscored_field_as_its_hyphenated_flag(monkeypatch, capsys):
     """Issue #822: `stale_hours` is the model's field name but
     `--stale-hours` is the flag an operator actually typed, so the

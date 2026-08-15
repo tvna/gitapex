@@ -266,6 +266,48 @@ def test_main_rejects_blank_base_path(capsys):
     assert "invalid arguments" in capsys.readouterr().err
 
 
+def test_main_rejects_whitespace_only_base_rev(capsys):
+    """Issue #1087: min_length=1 alone accepts a whitespace-only value;
+    the field must reject it the same as a truly blank one."""
+    exit_code = sdd.main(["--base-rev", " ", "--head-rev", "HEAD", "--base-path", "a", "--head-path", "b"])
+    assert exit_code == 1
+    assert "error: invalid arguments: --base-rev (must not be blank)" in capsys.readouterr().err
+
+
+def test_main_rejects_whitespace_only_head_rev(capsys):
+    exit_code = sdd.main(["--base-rev", "HEAD", "--head-rev", "\t", "--base-path", "a", "--head-path", "b"])
+    assert exit_code == 1
+    assert "error: invalid arguments: --head-rev (must not be blank)" in capsys.readouterr().err
+
+
+def test_main_rejects_whitespace_only_base_path(capsys):
+    exit_code = sdd.main(["--base-rev", "HEAD", "--head-rev", "HEAD", "--base-path", "  ", "--head-path", "b"])
+    assert exit_code == 1
+    assert "error: invalid arguments: --base-path (must not be blank)" in capsys.readouterr().err
+
+
+def test_main_rejects_whitespace_only_head_path(capsys):
+    exit_code = sdd.main(["--base-rev", "HEAD", "--head-rev", "HEAD", "--base-path", "a", "--head-path", " "])
+    assert exit_code == 1
+    assert "error: invalid arguments: --head-path (must not be blank)" in capsys.readouterr().err
+
+
+def test_main_keeps_padded_but_meaningful_values_unmutated(monkeypatch, capsys):
+    """Issue #1087: validation must not silently trim -- a value with real
+    content plus surrounding whitespace reaches `_read_at_revision` exactly
+    as typed."""
+    received = []
+
+    def fake_read_at_revision(rev, path):
+        received.append((rev, path))
+        return "same text"
+
+    monkeypatch.setattr(sdd, "_read_at_revision", fake_read_at_revision)
+    exit_code = sdd.main(["--base-rev", " HEAD ", "--head-rev", " HEAD ", "--base-path", " a ", "--head-path", " b "])
+    assert exit_code == 0
+    assert received == [(" HEAD ", " a "), (" HEAD ", " b ")]
+
+
 def test_main_renders_underscored_fields_as_their_hyphenated_flags(capsys):
     """Issue #822: `base_rev`/`base_path` are the model's field names but
     `--base-rev`/`--base-path` are the flags an operator actually typed, so
