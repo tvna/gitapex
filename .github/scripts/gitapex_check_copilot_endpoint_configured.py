@@ -86,9 +86,18 @@ today (``main()`` never prints a raw traceback), but exactly the kind of
 latent leak a future caller that does print one (e.g. an added debug log)
 would surface with nothing to catch the regression, the same accidental-
 safety shape already rejected once for the bare ``ValueError`` case above.
-``raise ... from None`` below is deliberate, not an oversight: it discards
-pydantic's own exception object -- and the secret it carries -- rather than
-merely declining to print it this one time.
+``raise ... from None`` discards ``__cause__`` and stops default traceback
+rendering from showing pydantic's own exception object -- but, verified
+live, does *not* by itself clear ``__context__``: CPython auto-populates a
+new exception's ``__context__`` with whatever was just caught, at the
+moment ``raise`` executes inside an active ``except`` suite, regardless of
+the ``from`` clause -- so the secret stayed fully recoverable via
+``exc.__context__`` even after this fix (caught by an independent
+adversarial review, not the test suite that existed at the time).
+``validate_base_url`` below builds ``EndpointMalformed`` inside ``except``
+but raises it only after control has left that block, so no exception is
+being handled at the point of ``raise`` and ``__context__`` is never
+populated at all.
 
 Usage::
 
@@ -224,14 +233,30 @@ def validate_base_url(var_name: str, value: str) -> None:
     that does (e.g. an added debug log) would surface with nothing to
     catch the regression, the same accidental-safety shape already
     rejected once for the bare ``ValueError``-from-``urlsplit`` case this
-    module fixed earlier. ``from None`` discards pydantic's own exception
-    object -- and the secret it carries -- rather than merely declining to
-    print it this one time.
+    module fixed earlier.
+
+    ``from None`` alone is not enough, verified live: it clears
+    ``__cause__`` and sets ``__suppress_context__`` (so default traceback
+    rendering and ``logging.exception`` both stay clean, which is why the
+    existing test suite passed), but CPython still auto-populates
+    ``__context__`` with the just-caught ``ValidationError`` at the moment
+    ``raise`` executes *inside* an active ``except`` suite -- the ``from``
+    clause has no say over that. Anything that explicitly walks
+    ``exc.__cause__ or exc.__context__`` (a standard pattern, e.g. in
+    structured-logging integrations) would still recover the secret. So
+    the exception is built here, inside ``except``, but not raised until
+    control has left that block -- at that point nothing is being handled
+    in this frame, so ``__context__`` is never populated in the first
+    place, verified live by asserting ``__context__ is None`` on the
+    raised exception.
     """
+    malformed: EndpointMalformed | None = None
     try:
         _CopilotEndpointURL(value=value)
     except ValidationError:
-        raise EndpointMalformed(var_name) from None
+        malformed = EndpointMalformed(var_name)
+    if malformed is not None:
+        raise malformed from None
 
 
 def check(env: dict[str, str]) -> str:

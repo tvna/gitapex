@@ -83,6 +83,13 @@ def test_malformed_exception_does_not_chain_the_pydantic_validation_error() -> N
         preflight.validate_base_url("COPILOT_BASE_URL", SENTINEL_URL.replace("https://", ""))
     assert exc_info.value.__cause__ is None
     assert exc_info.value.__suppress_context__ is True
+    # __context__ specifically, not just __cause__: an independent
+    # adversarial review found that `from None` alone leaves __context__
+    # auto-populated with the caught ValidationError when raised inside the
+    # `except` suite, `from` clause notwithstanding -- verified live before
+    # this assertion was added, not assumed from `__suppress_context__`
+    # alone (that flag only controls default traceback rendering).
+    assert exc_info.value.__context__ is None
     # Belt-and-suspenders: even a full traceback render of the raised
     # exception (what an uncaught propagation or a future `logging.exception`
     # call would produce) must not surface the sentinel.
@@ -90,6 +97,18 @@ def test_malformed_exception_does_not_chain_the_pydantic_validation_error() -> N
 
     rendered = "".join(traceback.format_exception(type(exc_info.value), exc_info.value, exc_info.tb))
     assert "sentinel-value-must-never-leak" not in rendered
+
+
+def test_malformed_exception_context_walk_does_not_recover_the_secret() -> None:
+    # The concrete exploit shape the review above named: code that does not
+    # trust __suppress_context__ and instead explicitly falls back to
+    # __context__ when __cause__ is absent (a real pattern in structured-
+    # logging/error-reporting integrations). Confirms the fix closes that
+    # path, not just the default-rendering path already covered above.
+    with pytest.raises(preflight.EndpointMalformed) as exc_info:
+        preflight.validate_base_url("COPILOT_BASE_URL", SENTINEL_URL.replace("https://", ""))
+    walked = exc_info.value.__cause__ or exc_info.value.__context__
+    assert walked is None
 
 
 # Defeat tests (issue #124's own disclosure convention): each of these was
