@@ -97,6 +97,7 @@ import pathlib
 import re
 import subprocess
 import sys
+import unicodedata
 
 import gitapex_detect_changed_gate_scripts as detect_gates
 import gitapex_skill_description_diff as description_diff
@@ -407,6 +408,20 @@ def _skill_signals(
     return description_changed, needs_eval_coverage, security_relevant
 
 
+def _is_blank(value: str) -> bool:
+    """True iff every character in `value` is ordinary whitespace or a
+    Unicode Format-category (Cf) mark -- invisible either way. Cf covers
+    U+200B ZERO WIDTH SPACE, U+FEFF ZERO WIDTH NO-BREAK SPACE, and U+180E
+    MONGOLIAN VOWEL SEPARATOR, none of which str.strip() removes. A
+    Cf-only `--base-ref`/`--head-ref` used to pass this function's own
+    blank check and fail downstream instead, as a raw `git` error rather
+    than this function's own self-describing one -- reproduced live
+    (issue #1094): a ZWSP-only ref reached `git diff ...` and failed with
+    ``fatal: bad revision '\u200b...HEAD'`` instead of the clean
+    ``FlagComputationError`` below."""
+    return all(char.isspace() or unicodedata.category(char) == "Cf" for char in value)
+
+
 def compute_flags(
     base_ref: str,
     head_ref: str,
@@ -429,7 +444,7 @@ def compute_flags(
     variable is unset but quoted, so it is a fail-open in the mode built
     to close one.
     """
-    blank = [name for name, value in (("--base-ref", base_ref), ("--head-ref", head_ref)) if not value.strip()]
+    blank = [name for name, value in (("--base-ref", base_ref), ("--head-ref", head_ref)) if _is_blank(value)]
     if blank:
         raise FlagComputationError(
             "blank " + " and ".join(blank) + "; refusing to compute a flag set from an unresolved ref"
