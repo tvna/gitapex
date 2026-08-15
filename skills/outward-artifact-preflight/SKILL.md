@@ -129,12 +129,15 @@ destined for a public sink.
    git host's closing-keyword scan if a recognized keyword happens to
    land immediately before the `#`-number, even when the author's
    intent is not to close anything. Confirmed against each of GitHub,
-   GitLab, Forgejo, and Gitea's own current documentation: all four
-   match a literal keyword-plus-number pattern with no stated
-   grammatical, semantic, or tense analysis of the surrounding
-   sentence. This is not a blanket claim about every git-hosting
-   platform -- a host not checked here (for example Bitbucket or
-   sourcehut) could behave differently in either direction.
+   GitLab, Forgejo, and Gitea's own documentation as it stood on
+   2026-08-15: all four match a literal keyword-plus-number pattern
+   with no stated grammatical, semantic, or tense analysis of the
+   surrounding sentence. This is not a blanket claim about every
+   git-hosting platform -- a host not checked here (for example
+   Bitbucket or sourcehut) could behave differently in either
+   direction, and any of the four platforms' own lists could change
+   after the date above -- re-verify against the live documentation
+   if this guidance is being relied on long after that date.
 
    1. GitHub and Forgejo recognize close/closes/closed,
       fix/fixes/fixed, and resolve/resolves/resolved (Forgejo's list
