@@ -595,6 +595,134 @@ def test_main_names_every_whitespace_only_flag_in_declaration_order(monkeypatch,
     )
 
 
+# ---------------------------------------------------------------------------
+# Issue #1094: str.strip() alone leaves Unicode Format-category (Cf)
+# characters in place (confirmed for U+200B ZERO WIDTH SPACE, U+FEFF
+# ZERO WIDTH NO-BREAK SPACE, and U+180E MONGOLIAN VOWEL SEPARATOR), so a
+# value composed solely of Cf marks passed issue #1087's whitespace-only
+# guard unrejected.
+# ---------------------------------------------------------------------------
+
+
+def test_main_rejects_invisible_only_owner(monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    exit_code = gate.main(["--owner", "\u200b", "--repo", "gitapex"])
+    assert exit_code == 1
+    assert "error: invalid arguments: --owner (must not be blank)" in capsys.readouterr().err
+
+
+def test_main_rejects_invisible_only_repo(monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    exit_code = gate.main(["--owner", "tvna", "--repo", "\ufeff"])
+    assert exit_code == 1
+    assert "error: invalid arguments: --repo (must not be blank)" in capsys.readouterr().err
+
+
+def test_main_rejects_invisible_only_ref(monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", "--ref", "\u180e"])
+    assert exit_code == 1
+    assert "error: invalid arguments: --ref (must not be blank)" in capsys.readouterr().err
+
+
+def test_main_rejects_invisible_only_cwd(monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", "--cwd", "\u200b"])
+    assert exit_code == 1
+    assert "error: invalid arguments: --cwd (must not be blank)" in capsys.readouterr().err
+
+
+def test_main_rejects_invisible_only_label(monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", "--label", "\ufeff"])
+    assert exit_code == 1
+    assert "error: invalid arguments: --label (must not be blank)" in capsys.readouterr().err
+
+
+def test_main_rejects_invisible_only_ssot_path(monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", "--ssot-path", "\u180e"])
+    assert exit_code == 1
+    assert "error: invalid arguments: --ssot-path (must not be blank)" in capsys.readouterr().err
+
+
+def test_main_names_every_invisible_only_flag_in_declaration_order(monkeypatch, capsys):
+    """Issue #1094: mirrors the pre-existing all-whitespace defeat test
+    above -- all six Cf-only flags are reported at once, in the model's
+    own field-declaration order."""
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    argv = [
+        "--owner",
+        "\u200b",
+        "--repo",
+        "\u200b",
+        "--ref",
+        "\u200b",
+        "--cwd",
+        "\u200b",
+        "--label",
+        "\u200b",
+        "--ssot-path",
+        "\u200b",
+    ]
+    assert gate.main(argv) == 1
+    blank = "(must not be blank)"
+    assert (
+        f"error: invalid arguments: --owner {blank}, --repo {blank}, --ref {blank}, "
+        f"--cwd {blank}, --label {blank}, --ssot-path {blank}" in capsys.readouterr().err
+    )
+
+
+def test_main_keeps_invisible_padded_but_meaningful_values_unmutated(monkeypatch, capsys):
+    """A value padded with a Cf mark rather than ASCII whitespace must
+    keep working, unmutated -- only an entirely invisible/non-printing
+    value changes verdict (issue #1094)."""
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    received = {}
+
+    def fake_list_labelled_issues(owner, repo, label, token):
+        received["owner"] = owner
+        received["repo"] = repo
+        received["label"] = label
+        return []
+
+    def fake_git_commit_messages(ref, cwd):
+        received["ref"] = ref
+        received["cwd"] = cwd
+        return []
+
+    def fake_load_gate_tracking_issues(path):
+        received["ssot_path_joined"] = path
+        return set()
+
+    monkeypatch.setattr(gate, "list_labelled_issues", fake_list_labelled_issues)
+    monkeypatch.setattr(gate, "git_commit_messages", fake_git_commit_messages)
+    monkeypatch.setattr(gate, "load_gate_tracking_issues", fake_load_gate_tracking_issues)
+    exit_code = gate.main(
+        [
+            "--owner",
+            "\u200btvna\u200b",
+            "--repo",
+            "\ufeffgitapex\ufeff",
+            "--ref",
+            "\u200bHEAD\u200b",
+            "--cwd",
+            "\ufeff.\ufeff",
+            "--label",
+            "\u200bretrospective-gate\u200b",
+            "--ssot-path",
+            "\ufeff.gitapex/ssot.json\ufeff",
+        ]
+    )
+    assert exit_code == 0
+    assert received["owner"] == "\u200btvna\u200b"
+    assert received["repo"] == "\ufeffgitapex\ufeff"
+    assert received["ref"] == "\u200bHEAD\u200b"
+    assert received["cwd"] == "\ufeff.\ufeff"
+    assert received["label"] == "\u200bretrospective-gate\u200b"
+    assert received["ssot_path_joined"] == str(pathlib.Path("\ufeff.\ufeff") / "\ufeff.gitapex/ssot.json\ufeff")
+
+
 def test_main_keeps_padded_but_meaningful_values_unmutated(monkeypatch, capsys):
     """Issue #1087: validation must not silently trim -- a value with real
     content plus surrounding whitespace reaches every downstream call

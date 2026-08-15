@@ -452,6 +452,47 @@ def test_main_rejects_whitespace_only_repo(monkeypatch, capsys):
     assert "error: invalid arguments: --repo (must not be blank)" in capsys.readouterr().err
 
 
+# ---------------------------------------------------------------------------
+# Issue #1094: str.strip() alone leaves Unicode Format-category (Cf)
+# characters in place (confirmed for U+200B ZERO WIDTH SPACE, U+FEFF
+# ZERO WIDTH NO-BREAK SPACE, and U+180E MONGOLIAN VOWEL SEPARATOR), so a
+# value composed solely of Cf marks passed issue #1087's whitespace-only
+# guard unrejected.
+# ---------------------------------------------------------------------------
+
+
+def test_main_rejects_invisible_only_owner(monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    exit_code = sra.main(["--owner", "\u200b", "--repo", "gitapex"])
+    assert exit_code == 1
+    assert "error: invalid arguments: --owner (must not be blank)" in capsys.readouterr().err
+
+
+def test_main_rejects_invisible_only_repo(monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    exit_code = sra.main(["--owner", "tvna", "--repo", "\ufeff"])
+    assert exit_code == 1
+    assert "error: invalid arguments: --repo (must not be blank)" in capsys.readouterr().err
+
+
+def test_main_keeps_invisible_padded_but_meaningful_owner_unmutated(monkeypatch, capsys):
+    """A value padded with a Cf mark rather than ASCII whitespace must
+    keep working, unmutated -- only an entirely invisible/non-printing
+    value changes verdict (issue #1094)."""
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    received = {}
+
+    def fake_list_open_retro_issues(owner, repo, token):
+        received["owner"] = owner
+        received["repo"] = repo
+        return []
+
+    monkeypatch.setattr(sra, "list_open_retro_issues", fake_list_open_retro_issues)
+    exit_code = sra.main(["--owner", "\u200btvna\u200b", "--repo", "\ufeffgitapex\ufeff"])
+    assert exit_code == 0
+    assert received == {"owner": "\u200btvna\u200b", "repo": "\ufeffgitapex\ufeff"}
+
+
 def test_main_keeps_padded_but_meaningful_owner_unmutated(monkeypatch, capsys):
     """Issue #1087: validation must not silently trim -- a value with real
     content plus surrounding whitespace reaches the downstream call exactly
