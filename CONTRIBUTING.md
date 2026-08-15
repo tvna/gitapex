@@ -255,3 +255,8 @@ To enable this:
    via `workflow_dispatch` (Actions tab -> "Weekly ranking-the-open-queue
    digest" -> Run workflow) and confirm the job succeeds with the
    ranked digest table in the job log.
+
+This same key is also consumed by
+`.github/workflows/merge-retrospective-autofill.yml` (issue #769; see
+`docs/superpowers/specs/2026-08-05-merge-retrospective-autofill-routine.md`)
+-- no separate issuance or secret needed for that second workflow.
