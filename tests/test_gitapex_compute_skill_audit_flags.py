@@ -325,8 +325,24 @@ def test_reading_a_head_file_that_does_not_exist_is_an_error(
 
 @pytest.mark.parametrize(
     ("base", "head"),
-    [("", "HEAD"), ("   ", "HEAD"), ("HEAD~1", ""), ("", "")],
-    ids=["blank-base", "whitespace-base", "blank-head", "both-blank"],
+    [
+        ("", "HEAD"),
+        ("   ", "HEAD"),
+        ("HEAD~1", ""),
+        ("", ""),
+        ("\u200b", "HEAD"),
+        ("HEAD~1", "\ufeff"),
+        ("\u180e", "\u200b"),
+    ],
+    ids=[
+        "blank-base",
+        "whitespace-base",
+        "blank-head",
+        "both-blank",
+        "invisible-base",
+        "invisible-head",
+        "both-invisible",
+    ],
 )
 def test_a_blank_ref_is_rejected_by_the_api_not_only_the_cli(repo: pathlib.Path, base: str, head: str) -> None:
     """`git diff "...HEAD"` is a *valid* empty diff, so a blank ref silently
@@ -334,6 +350,13 @@ def test_a_blank_ref_is_rejected_by_the_api_not_only_the_cli(repo: pathlib.Path,
     requirement for a diff that owed several. The guard has to live in
     `compute_flags`, because `--check-diff` calls it without going through
     this module's own CLI, where the only guard used to be.
+
+    The invisible-* cases are issue #1094: str.strip() alone leaves Unicode
+    Format-category (Cf) characters in place (U+200B ZERO WIDTH SPACE,
+    U+FEFF ZERO WIDTH NO-BREAK SPACE, U+180E MONGOLIAN VOWEL SEPARATOR), so
+    a Cf-only ref used to reach `git diff` unrejected and fail downstream
+    with a raw `fatal: bad revision` error instead of this function's own
+    `FlagComputationError` -- confirmed live before this fix.
     """
     _write(repo, ".github/scripts/gitapex_gate_new.py")
     _commit(repo)
@@ -420,11 +443,16 @@ def test_cli_rejects_a_repo_root_that_is_not_a_directory(
     assert "must be an existing directory" in err
 
 
-@pytest.mark.parametrize("blank", ["", "   "], ids=["empty", "whitespace"])
+@pytest.mark.parametrize(
+    "blank", ["", "   ", "\u200b", "\ufeff", "\u180e"], ids=["empty", "whitespace", "zwsp", "bom", "mvs"]
+)
 def test_cli_rejects_a_blank_ref(repo: pathlib.Path, capsys: pytest.CaptureFixture[str], blank: str) -> None:
     """Still rejected at the CLI, but now by `compute_flags`' own guard
     rather than a CLI-only one -- which is the point of the fix: the
-    other caller (`--check-diff`) never passes through here."""
+    other caller (`--check-diff`) never passes through here.
+
+    zwsp/bom/mvs are issue #1094: each is a distinct Unicode Format-
+    category (Cf) character that plain .strip() leaves in place."""
     code, _, err = _run_cli(["--base-ref", blank, "--head-ref", "HEAD", "--repo-root", str(repo)], capsys)
     assert code == 1
     assert "blank --base-ref" in err

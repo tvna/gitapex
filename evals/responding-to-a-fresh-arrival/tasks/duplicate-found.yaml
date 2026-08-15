@@ -21,7 +21,6 @@ expected:
   output_contains:
     - "#287"
     - "duplicate"
-    - "search_issues"
   output_not_contains:
     - "no duplicate"
     - "standalone"

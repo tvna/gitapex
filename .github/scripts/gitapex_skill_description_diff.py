@@ -54,6 +54,7 @@ import argparse
 import re
 import subprocess
 import sys
+import unicodedata
 
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
@@ -156,6 +157,16 @@ _CONSTRAINT_HINTS = {
 }
 
 
+def _is_blank(value: str) -> bool:
+    """True iff every character in `value` is ordinary whitespace or a
+    Unicode Format-category (Cf) mark -- invisible either way. Cf covers
+    U+200B ZERO WIDTH SPACE, U+FEFF ZERO WIDTH NO-BREAK SPACE, and U+180E
+    MONGOLIAN VOWEL SEPARATOR, none of which str.strip() removes -- so a
+    value made solely of Cf marks passed the old `.strip()`-only check
+    unrejected (issue #1094)."""
+    return all(char.isspace() or unicodedata.category(char) == "Cf" for char in value)
+
+
 class SkillDescriptionDiffArgs(BaseModel):
     """Typed view of `main`'s parsed CLI namespace. All four fields reject
     a blank value -- argparse's own ``required=True`` only guarantees the
@@ -170,9 +181,11 @@ class SkillDescriptionDiffArgs(BaseModel):
     @field_validator("base_rev", "head_rev", "base_path", "head_path")
     @classmethod
     def _reject_whitespace_only(cls, value: str) -> str:
-        # Checked via .strip() without storing the stripped result -- this
-        # validates, it does not trim (issue #1087).
-        if not value.strip():
+        # Checked via _is_blank() without storing a stripped result -- this
+        # validates, it does not trim (issue #1087). _is_blank() also
+        # rejects a value made solely of Unicode Format-category (Cf)
+        # characters, which plain .strip() leaves in place (issue #1094).
+        if _is_blank(value):
             raise ValueError("must not be blank")
         return value
 

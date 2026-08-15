@@ -1060,6 +1060,169 @@ def test_main_whitespace_only_title_and_body_file_both_labeled(monkeypatch: pyte
     assert capsys.readouterr().err == "Error: title: must not be blank; body file path must not be blank\n"
 
 
+# ---------------------------------------------------------------------------
+# Issue #1094: str.strip() alone leaves Unicode Format-category (Cf)
+# characters in place (confirmed for U+200B ZERO WIDTH SPACE, U+FEFF
+# ZERO WIDTH NO-BREAK SPACE, and U+180E MONGOLIAN VOWEL SEPARATOR), so a
+# value composed solely of Cf marks passed issue #1087's whitespace-only
+# guard unrejected. body_file in particular used to fall through to the
+# is_file() check below and fail as "body file not found: <U+200B>"
+# instead of its own self-describing blank message -- confirmed live.
+# ---------------------------------------------------------------------------
+
+
+def test_main_rejects_invisible_only_base(monkeypatch: pytest.MonkeyPatch, capsys, tmp_path) -> None:
+    monkeypatch.setenv("GH_TOKEN", "tok")
+    monkeypatch.setenv("REPO", "o/r")
+    body_file = tmp_path / "body.md"
+    body_file.write_text("body")
+    rc = spp.main(
+        [
+            "--base",
+            "\u200b",
+            "--branch",
+            "chore",
+            "--title",
+            "t",
+            "--body-file",
+            str(body_file),
+            "--commit-subject",
+            "s",
+        ]
+    )
+    assert rc == 1
+    assert capsys.readouterr().err == "Error: base: must not be blank\n"
+
+
+def test_main_rejects_invisible_only_branch(monkeypatch: pytest.MonkeyPatch, capsys, tmp_path) -> None:
+    monkeypatch.setenv("GH_TOKEN", "tok")
+    monkeypatch.setenv("REPO", "o/r")
+    body_file = tmp_path / "body.md"
+    body_file.write_text("body")
+    rc = spp.main(
+        ["--base", "main", "--branch", "\ufeff", "--title", "t", "--body-file", str(body_file), "--commit-subject", "s"]
+    )
+    assert rc == 1
+    assert capsys.readouterr().err == "Error: branch: must not be blank\n"
+
+
+def test_main_rejects_invisible_only_title(monkeypatch: pytest.MonkeyPatch, capsys, tmp_path) -> None:
+    monkeypatch.setenv("GH_TOKEN", "tok")
+    monkeypatch.setenv("REPO", "o/r")
+    body_file = tmp_path / "body.md"
+    body_file.write_text("body")
+    rc = spp.main(
+        [
+            "--base",
+            "main",
+            "--branch",
+            "chore",
+            "--title",
+            "\u180e",
+            "--body-file",
+            str(body_file),
+            "--commit-subject",
+            "s",
+        ]
+    )
+    assert rc == 1
+    assert capsys.readouterr().err == "Error: title: must not be blank\n"
+
+
+def test_main_rejects_invisible_only_commit_subject(monkeypatch: pytest.MonkeyPatch, capsys, tmp_path) -> None:
+    monkeypatch.setenv("GH_TOKEN", "tok")
+    monkeypatch.setenv("REPO", "o/r")
+    body_file = tmp_path / "body.md"
+    body_file.write_text("body")
+    rc = spp.main(
+        [
+            "--base",
+            "main",
+            "--branch",
+            "chore",
+            "--title",
+            "t",
+            "--body-file",
+            str(body_file),
+            "--commit-subject",
+            "\u200b",
+        ]
+    )
+    assert rc == 1
+    assert capsys.readouterr().err == "Error: commit_subject: must not be blank\n"
+
+
+def test_main_rejects_invisible_only_body_file(monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    monkeypatch.setenv("GH_TOKEN", "tok")
+    monkeypatch.setenv("REPO", "o/r")
+    rc = spp.main(
+        ["--base", "main", "--branch", "chore", "--title", "t", "--body-file", "\ufeff", "--commit-subject", "s"]
+    )
+    assert rc == 1
+    # Must be body_file's own self-describing blank message, not a
+    # downstream "body file not found: <U+200B>" from is_file() -- that
+    # was the live bug this fix closes (issue #1094).
+    assert capsys.readouterr().err == "Error: body file path must not be blank\n"
+
+
+def test_main_invisible_only_title_and_body_file_both_labeled(monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    """Mirrors test_main_whitespace_only_title_and_body_file_both_labeled
+    for the Cf-only case (issue #1094): two fields failing the same
+    invisible-only check in the same run must not collapse into one
+    unattributable, seemingly-duplicated line."""
+    monkeypatch.setenv("GH_TOKEN", "tok")
+    monkeypatch.setenv("REPO", "o/r")
+    rc = spp.main(
+        ["--base", "main", "--branch", "chore", "--title", "\u200b", "--body-file", "\ufeff", "--commit-subject", "s"]
+    )
+    assert rc == 1
+    assert capsys.readouterr().err == "Error: title: must not be blank; body file path must not be blank\n"
+
+
+def test_main_keeps_invisible_padded_but_meaningful_values_unmutated(
+    monkeypatch: pytest.MonkeyPatch, capsys, tmp_path
+) -> None:
+    """A value padded with a Cf mark rather than ASCII whitespace must
+    keep working, unmutated -- only an entirely invisible/non-printing
+    value changes verdict (issue #1094). body_file is proven at the
+    filesystem level too, matching
+    test_main_keeps_padded_but_meaningful_values_unmutated's own rationale:
+    the padding is on the filename itself, so a validator that silently
+    normalized it would look up a different, non-existent file."""
+    monkeypatch.setenv("GH_TOKEN", "tok")
+    monkeypatch.setenv("REPO", "o/r")
+    monkeypatch.chdir(tmp_path)
+    padded_name = "\u200bbody.md\u200b"
+    (tmp_path / padded_name).write_text("body")
+    received = {}
+
+    def fake_publish_files_pr(**kwargs: object) -> str:
+        received.update(kwargs)
+        return "up-to-date"
+
+    monkeypatch.setattr(spp, "publish_files_pr", fake_publish_files_pr)
+    rc = spp.main(
+        [
+            "--base",
+            "\u200bmain\u200b",
+            "--branch",
+            "\ufeffchore\ufeff",
+            "--title",
+            "\u200bt\u200b",
+            "--body-file",
+            padded_name,
+            "--commit-subject",
+            "\ufeffs\ufeff",
+        ]
+    )
+    assert rc == 0
+    assert received["base"] == "\u200bmain\u200b"
+    assert received["branch"] == "\ufeffchore\ufeff"
+    assert received["title"] == "\u200bt\u200b"
+    assert received["commit_subject"] == "\ufeffs\ufeff"
+    assert received["body"] == "body"
+
+
 def test_main_keeps_padded_but_meaningful_values_unmutated(monkeypatch: pytest.MonkeyPatch, capsys, tmp_path) -> None:
     """Issue #1087: validation must not silently trim -- a value with real
     content plus surrounding whitespace reaches publish_files_pr() exactly

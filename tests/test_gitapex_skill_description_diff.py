@@ -292,6 +292,66 @@ def test_main_rejects_whitespace_only_head_path(capsys):
     assert "error: invalid arguments: --head-path (must not be blank)" in capsys.readouterr().err
 
 
+# ---------------------------------------------------------------------------
+# Issue #1094: str.strip() alone leaves Unicode Format-category (Cf)
+# characters in place (confirmed for U+200B ZERO WIDTH SPACE, U+FEFF
+# ZERO WIDTH NO-BREAK SPACE, and U+180E MONGOLIAN VOWEL SEPARATOR), so a
+# value composed solely of Cf marks passed issue #1087's whitespace-only
+# guard unrejected.
+# ---------------------------------------------------------------------------
+
+
+def test_main_rejects_invisible_only_base_rev(capsys):
+    exit_code = sdd.main(["--base-rev", "\u200b", "--head-rev", "HEAD", "--base-path", "a", "--head-path", "b"])
+    assert exit_code == 1
+    assert "error: invalid arguments: --base-rev (must not be blank)" in capsys.readouterr().err
+
+
+def test_main_rejects_invisible_only_head_rev(capsys):
+    exit_code = sdd.main(["--base-rev", "HEAD", "--head-rev", "\ufeff", "--base-path", "a", "--head-path", "b"])
+    assert exit_code == 1
+    assert "error: invalid arguments: --head-rev (must not be blank)" in capsys.readouterr().err
+
+
+def test_main_rejects_invisible_only_base_path(capsys):
+    exit_code = sdd.main(["--base-rev", "HEAD", "--head-rev", "HEAD", "--base-path", "\u180e", "--head-path", "b"])
+    assert exit_code == 1
+    assert "error: invalid arguments: --base-path (must not be blank)" in capsys.readouterr().err
+
+
+def test_main_rejects_invisible_only_head_path(capsys):
+    exit_code = sdd.main(["--base-rev", "HEAD", "--head-rev", "HEAD", "--base-path", "a", "--head-path", "\u200b"])
+    assert exit_code == 1
+    assert "error: invalid arguments: --head-path (must not be blank)" in capsys.readouterr().err
+
+
+def test_main_keeps_invisible_padded_but_meaningful_values_unmutated(monkeypatch, capsys):
+    """A value padded with a Cf mark rather than ASCII whitespace must
+    keep working, unmutated -- only an entirely invisible/non-printing
+    value changes verdict (issue #1094)."""
+    received = []
+
+    def fake_read_at_revision(rev, path):
+        received.append((rev, path))
+        return "same text"
+
+    monkeypatch.setattr(sdd, "_read_at_revision", fake_read_at_revision)
+    exit_code = sdd.main(
+        [
+            "--base-rev",
+            "\u200bHEAD\u200b",
+            "--head-rev",
+            "\ufeffHEAD\ufeff",
+            "--base-path",
+            "\u200ba\u200b",
+            "--head-path",
+            "\ufeffb\ufeff",
+        ]
+    )
+    assert exit_code == 0
+    assert received == [("\u200bHEAD\u200b", "\u200ba\u200b"), ("\ufeffHEAD\ufeff", "\ufeffb\ufeff")]
+
+
 def test_main_keeps_padded_but_meaningful_values_unmutated(monkeypatch, capsys):
     """Issue #1087: validation must not silently trim -- a value with real
     content plus surrounding whitespace reaches `_read_at_revision` exactly
