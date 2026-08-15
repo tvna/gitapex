@@ -235,25 +235,19 @@ force-reinjected.
 
 ## Worked example: a citation sentence that reads as a directive
 
-This is the shape of the hazard check 4 exists to catch -- a sentence
-narrating history, not directing this artifact to close anything:
+The hazard check 4 exists to catch is a bare issue/PR-number citation
+used only to narrate history: "PR `#911` closed `#907`." A keyword
+scanner reads that same text as GitHub, Forgejo, and Gitea's own
+recognized `closed` keyword immediately before a number -- the same
+literal pattern a real closing directive would use, with nothing in
+the sentence's own text to tell the two apart.
 
-> PR #911 closed #907.
-
-Read by a keyword scanner rather than a human, "closed #907" is
-GitHub, Forgejo, and Gitea's own recognized `closed` keyword
-immediately before a `#`-number -- the same literal pattern a real
-closing directive would use, with nothing in the sentence's own text
-to tell the two apart.
-
-Rewritten to avoid the trigger while keeping the same citation:
-
-> PR #911 addressed the defect from issue #907
-> (https://github.com/OWNER/REPO/pull/911).
-
-"addressed" is outside every checked platform's keyword list, and the
-full URL removes the bare `#`-number entirely -- either change alone
-is enough; using both is not required.
+Rewritten to avoid the trigger while keeping the same issue/PR-number
+citation: "PR `#911` addressed the defect from issue `#907`"
+(https://github.com/OWNER/REPO/pull/911). "addressed" is outside
+every checked platform's keyword list, and the full URL removes the
+bare `#`-number entirely -- either change alone is enough; using both
+is not required.
 
 ## Relationship to other skills
 
