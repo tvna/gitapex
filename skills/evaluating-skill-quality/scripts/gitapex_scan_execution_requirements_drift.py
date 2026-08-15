@@ -799,11 +799,19 @@ def _bundled_script_trees(skill_dir: pathlib.Path) -> tuple[list[ast.AST], list[
 
     Returns (trees, unreadable_or_unparseable_names): a file that cannot
     even be read (a permission error, or content that is not valid UTF-8)
-    or that is not valid Python (SyntaxError) is excluded from trees and
-    its name collected separately, rather than either crashing the scan or
-    silently treating it as clean -- the caller turns that list into its
-    own finding (dimension 15: an inability to verify is a deny, not an
-    assume-clean). A prior version routed the read through a helper that
+    or that is not valid Python (SyntaxError, or ValueError for a source
+    string ast.parse refuses outright, e.g. an embedded NUL byte -- not
+    reproducible on this repository's own pinned Python (3.12: verified
+    directly, `ast.parse` raises SyntaxError there, not ValueError, for
+    NUL-byte content), caught anyway as defense-in-depth for the same
+    "deny on inability to verify" reason the OSError/UnicodeDecodeError
+    branch above already exists, since nothing pins that exact exception
+    type as part of ast.parse's own documented contract) is excluded from
+    trees and its name collected separately, rather than either crashing
+    the scan or silently treating it as clean -- the caller turns that
+    list into its own finding (dimension 15: an inability to verify is a
+    deny, not an assume-clean). A prior version routed the read through a
+    helper that
     swallowed OSError/UnicodeDecodeError into an empty string, which
     ast.parse("") accepts as a valid, empty module -- silently scoring an
     unreadable script as having no network/write/shell signal at all,
@@ -830,7 +838,7 @@ def _bundled_script_trees(skill_dir: pathlib.Path) -> tuple[list[ast.AST], list[
             continue
         try:
             trees.append(ast.parse(text, filename=str(path)))
-        except SyntaxError:
+        except (SyntaxError, ValueError):
             unparseable.append(relative_name)
     return trees, unparseable
 
