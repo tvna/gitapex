@@ -248,3 +248,23 @@ samples.
   this corpus nor `waza-eval-gate.yml` (blocked, see above) has run them
   against a live model yet -- open until a live run executes, the same
   disclosed limitation as the rest of this corpus.
+- **Step 6's re-scan is blind to a credential shape only a target-defined
+  custom rule recognizes.** Raised by a `battle-testing-a-skill`-style
+  reviewer pass and not yet resolved. Steps 2-3 auto-discover and honor
+  the target's own `.betterleaks.toml`, so a genuine credential a
+  target's custom `[[rules]]` entry flags -- one the default 325-rule
+  set alone would miss -- is correctly found there. Step 6 deliberately
+  does *not* load that config (Procedure step 6's own text): running
+  from a directory with no config is what makes the re-scan immune to a
+  hostile target's own suppression, the property
+  `target-supplied-suppression-is-disclosed.yaml` pins. The same
+  no-config choice means step 6 cannot recognize that custom-rule-shaped
+  value if it also leaks into a carrier `--redact`/step 5 do not
+  touch (`Message`, `File`, `Fingerprint`). Loading the target's config
+  into step 6 as well would close this gap but reopen the suppression
+  one it exists to close -- the two are in direct tension under a
+  single-pass design, not independently fixable. Left open rather than
+  forced: a second, target-configured re-scan pass (accepting that
+  *that* pass alone would tolerate target-authored suppression) is a
+  real option, but is new Procedure surface this document is not
+  deciding unilaterally.
