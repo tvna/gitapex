@@ -385,6 +385,16 @@ explicit.
   release, a trusted install path -- this skill's authoring repository
   SHA256-pins the binary in `flake.nix`), and where a consumer cannot,
   name that as an open gap rather than assuming it away.
+- This skill declares no execution timeout of its own, matching
+  `scanning-ci-workflows`' identical silence -- neither wraps its own
+  invocations in a deadline. A directly-invoked run inherits whatever
+  bound the calling agent's own tool-execution layer imposes; only the
+  pre-push hook path (`.github/scripts/gitapex_run_betterleaks.py`) adds
+  one explicitly, at 300 seconds, and that wrapper is not reachable from
+  a direct invocation of this Procedure. A `betterleaks git` full-history
+  scan against a very large repository is the realistic case this would
+  matter for; naming the gap here is this skill's own honest accounting
+  of it, not a claim that the gap is closed.
 
 ## Relationship to other skills
 
