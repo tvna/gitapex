@@ -920,6 +920,20 @@
       "tracking_issue": 124,
       "status": "active",
       "supersedes": null
+    },
+    {
+      "id": "real-checkout-git-write",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_gate_real_checkout_git_write.py",
+      "rule": "No pytest-discovered test file may construct a REPO_ROOT-rooted path expression that continues into a literal \".git\" path segment, unless the flagged line carries an inline \"# real-checkout-git-write: WAIVED: <reason>\" comment with a non-empty reason. Catches a test writing into this repository's own real checkout's .git directory (issue #991) without needing to distinguish a read from a write -- the waiver is the escape hatch for a genuine read-only need.",
+      "planes": ["local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_real_checkout_git_write.py"],
+      "trigger": "tests/test_gitapex_gate_real_checkout_git_write.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "repo-hygiene",
+      "tracking_issue": 991,
+      "status": "active",
+      "supersedes": null
     }
   ],
   "clusters": {

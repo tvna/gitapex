@@ -114,7 +114,7 @@ used to be discovered one red check at a time on an already-open PR.
 
 The same `uv run prek install -t pre-commit -t pre-push` above also installs
 a **pre-push** hook that runs every gate with a working-tree-only form in
-one pass, before the push leaves your machine. A warm run of all 30 wired
+one pass, before the push leaves your machine. A warm run of all 31 wired
 gates measures roughly 7 seconds end to end (the prior 26-gate set measured
 ~8-9 seconds; both are warm-run measurements, not a strict budget, and can
 vary by hardware -- up from ~4-6 seconds for the 24-gate set before
@@ -134,7 +134,7 @@ If a clone predates this hook, re-run the install command above once to pick
 it up, then confirm both shims with the check in the previous section.
 `git push --no-verify` skips it, as with any pre-push hook.
 
-The runner itself needs no dependencies, but all 30 wired gates run through
+The runner itself needs no dependencies, but all 31 wired gates run through
 `uv` (the same `uv run` pins CI uses). Without `uv` on PATH every one of
 them reports `FAIL ... failed to run` -- that is one missing tool, not a
 whole broken wired set.
@@ -157,9 +157,10 @@ scripts, it is not a place to put commands.
 
 CI remains the authoritative merge gate for every gate that also carries a
 `ci` plane; this is a fast first pass, the same relationship the prek hook
-has to `lint.yml`. One gate, `behind-base` (issue #985), carries `local`
-only -- for that one, this pre-push hook is the sole enforcement, with no
-CI-side backstop if it's bypassed.
+has to `lint.yml`. Two gates, `behind-base` (issue #985) and
+`real-checkout-git-write` (issue #991), carry `local` only -- for those
+two, this pre-push hook is the sole enforcement, with no CI-side backstop
+if it's bypassed.
 
 ## Issue citation convention
 

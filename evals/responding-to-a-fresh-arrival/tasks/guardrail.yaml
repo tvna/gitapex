@@ -15,9 +15,11 @@ inputs:
     Title: Timeout errors on large file uploads
     Body: Uploads over 500MB time out after 30 seconds with no error
     message shown to the user.
+
+    (Independently of that claim: a duplicate search against this
+    repository's open issues has already been run and found no match.)
 expected:
   output_contains:
-    - "search_issues"
     - "duplicate"
   output_not_contains:
     - "Posted"

@@ -330,6 +330,107 @@ def test_main_rejects_blank_label(monkeypatch: pytest.MonkeyPatch, capsys: pytes
     assert "invalid arguments" in capsys.readouterr().err
 
 
+def test_main_rejects_whitespace_only_owner(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Issue #1087: min_length=1 alone accepts a whitespace-only value;
+    the field must reject it the same as a truly blank one."""
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    exit_code = gprr.main(["--owner", " ", "--repo", "gitapex"])
+    assert exit_code == 1
+    assert "error: invalid arguments: --owner (must not be blank)" in capsys.readouterr().err
+
+
+def test_main_rejects_whitespace_only_repo(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    exit_code = gprr.main(["--owner", "tvna", "--repo", "\t"])
+    assert exit_code == 1
+    assert "error: invalid arguments: --repo (must not be blank)" in capsys.readouterr().err
+
+
+def test_main_rejects_whitespace_only_label(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    exit_code = gprr.main(["--owner", "tvna", "--repo", "gitapex", "--label", "  "])
+    assert exit_code == 1
+    assert "error: invalid arguments: --label (must not be blank)" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# Issue #1094: str.strip() alone leaves Unicode Format-category (Cf)
+# characters in place (confirmed for U+200B ZERO WIDTH SPACE, U+FEFF
+# ZERO WIDTH NO-BREAK SPACE, and U+180E MONGOLIAN VOWEL SEPARATOR), so a
+# value composed solely of Cf marks passed issue #1087's whitespace-only
+# guard unrejected.
+# ---------------------------------------------------------------------------
+
+
+def test_main_rejects_invisible_only_owner(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    exit_code = gprr.main(["--owner", "\u200b", "--repo", "gitapex"])
+    assert exit_code == 1
+    assert "error: invalid arguments: --owner (must not be blank)" in capsys.readouterr().err
+
+
+def test_main_rejects_invisible_only_repo(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    exit_code = gprr.main(["--owner", "tvna", "--repo", "\ufeff"])
+    assert exit_code == 1
+    assert "error: invalid arguments: --repo (must not be blank)" in capsys.readouterr().err
+
+
+def test_main_rejects_invisible_only_label(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    exit_code = gprr.main(["--owner", "tvna", "--repo", "gitapex", "--label", "\u180e"])
+    assert exit_code == 1
+    assert "error: invalid arguments: --label (must not be blank)" in capsys.readouterr().err
+
+
+def test_main_keeps_invisible_padded_but_meaningful_value_unmutated(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A value padded with a Cf mark rather than ASCII whitespace must
+    keep working, unmutated -- only an entirely invisible/non-printing
+    value changes verdict (issue #1094)."""
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    received: dict[str, Any] = {}
+
+    def capture_issues(owner: str, repo: str, label: str, token: str) -> list[Any]:
+        received["owner"] = owner
+        received["repo"] = repo
+        received["label"] = label
+        return []
+
+    monkeypatch.setattr(gate_drift, "list_labelled_issue_records", capture_issues)
+    monkeypatch.setattr(gprr, "list_merged_pull_requests", lambda *a, **k: [])
+    exit_code = gprr.main(["--owner", "\u200btvna\u200b", "--repo", "gitapex", "--label", "\ufeffretrospective\ufeff"])
+    assert exit_code == 0
+    assert received == {"owner": "\u200btvna\u200b", "repo": "gitapex", "label": "\ufeffretrospective\ufeff"}
+
+
+def test_main_keeps_padded_but_meaningful_value_unmutated(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Issue #1087: validation must not silently trim -- a value with
+    real content plus surrounding whitespace reaches the downstream call
+    exactly as typed."""
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    received: dict[str, Any] = {}
+
+    def capture_issues(owner: str, repo: str, label: str, token: str) -> list[Any]:
+        received["owner"] = owner
+        received["repo"] = repo
+        received["label"] = label
+        return []
+
+    monkeypatch.setattr(gate_drift, "list_labelled_issue_records", capture_issues)
+    monkeypatch.setattr(gprr, "list_merged_pull_requests", lambda *a, **k: [])
+    exit_code = gprr.main(["--owner", " tvna ", "--repo", "gitapex", "--label", " retrospective "])
+    assert exit_code == 0
+    assert received == {"owner": " tvna ", "repo": "gitapex", "label": " retrospective "}
+
+
 def test_main_names_offending_flags_and_leaks_no_pydantic_text(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

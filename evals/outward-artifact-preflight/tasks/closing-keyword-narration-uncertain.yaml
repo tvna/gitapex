@@ -1,0 +1,29 @@
+id: outward-artifact-preflight-closing-keyword-narration-uncertain
+name: Ambiguous Closing-Keyword Sentence Gets Confirmed, Not Guessed
+description: A PR body's closing-keyword sentence could be read either as a
+  real directive for this PR or as continuing to narrate a different,
+  previously-cited PR; check 4 flags it for the author to confirm instead of
+  silently deciding either way.
+tags:
+  - quality
+  - edge-case
+inputs:
+  prompt: |
+    Use outward-artifact-preflight. Here's the PR body I'm about to post,
+    can you check it before I publish?
+
+    PR body:
+    ## Summary
+    Extends the retry queue described in #630. Resolves #640.
+
+    ## Test plan
+    - Ran the job locally against a flaky mock endpoint and confirmed it
+      recovers after two retries.
+expected:
+  output_contains:
+    - "confirm intent"
+    - "#640"
+  output_not_contains:
+    - "safe to post"
+    - "no issue found"
+    - "nothing to flag"

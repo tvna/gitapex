@@ -20,9 +20,15 @@ def _run(env_overrides: dict[str, str]) -> subprocess.CompletedProcess[str]:
     env.pop("CLAUDE_CODE_REMOTE", None)
     env.pop("CLAUDE_ENV_FILE", None)
     env.update(env_overrides)
-    return subprocess.run(
-        ["bash", str(SCRIPT)], capture_output=True, text=True, timeout=15, env=env, cwd=str(REPO_ROOT)
-    )
+    # Issue #991 follow-up: cwd must track CLAUDE_PROJECT_DIR, not stay
+    # hardcoded at REPO_ROOT -- session-start.sh's own self-plugin-
+    # registration block resolves the `claude` CLI's settings-file target
+    # from process cwd, independent of the CLAUDE_PROJECT_DIR argument it
+    # is also given, so a mismatch between the two dirties REPO_ROOT's
+    # real, tracked .claude/settings.json whenever a test's
+    # CLAUDE_PROJECT_DIR points somewhere else.
+    cwd = env_overrides.get("CLAUDE_PROJECT_DIR", str(REPO_ROOT))
+    return subprocess.run(["bash", str(SCRIPT)], capture_output=True, text=True, timeout=15, env=env, cwd=cwd)
 
 
 def test_script_exists_and_is_executable() -> None:
@@ -53,18 +59,57 @@ def test_exits_zero_even_when_python3_reports_failure(tmp_path: Path) -> None:
     assert "not a gitapex checkout" in result.stderr
 
 
-def test_installs_the_prek_hook_for_a_real_checkout() -> None:
+@pytest.fixture
+def real_checkout(tmp_path: Path) -> Path:
+    """A throwaway --depth 1 local clone of REPO_ROOT under tmp_path --
+    carries this commit's real apm.yml/.pre-commit-config.yaml (both
+    tracked files) without ever writing through this repository's own
+    real .git/ (issue #991)."""
+    checkout = tmp_path / "checkout"
+    subprocess.run(
+        ["git", "clone", "-q", "--depth", "1", "--no-tags", f"file://{REPO_ROOT}", str(checkout)],
+        check=True,
+        timeout=30,
+    )
+    return checkout
+
+
+def test_installs_the_prek_hook_for_a_real_checkout(real_checkout: Path) -> None:
     # Issue #749: this ephemeral-web session-start path is the third
     # place (alongside CONTRIBUTING.md's manual step and flake.nix's
     # devShell shellHook) prek's hook install must reach -- exercised
-    # here against this repository's own real checkout (REPO_ROOT has a
-    # real .git/ and, by the time this test runs, a real
-    # .pre-commit-config.yaml), not a fake project dir.
-    result = _run({"CLAUDE_CODE_REMOTE": "true", "CLAUDE_PROJECT_DIR": str(REPO_ROOT)})
+    # here against a real checkout (a real .git/ and, by the time this
+    # test runs, a real .pre-commit-config.yaml), not a fake project dir.
+    #
+    # Issue #991: the real checkout in question is a throwaway local
+    # clone of REPO_ROOT, not REPO_ROOT itself. REPO_ROOT's own
+    # .git/hooks/pre-commit is not owned by any single pytest-xdist
+    # worker, and `prek install` rewrites it unconditionally -- verified
+    # directly: its mtime changes even when its content stays
+    # byte-identical. A `--depth 1` local clone still carries this
+    # commit's real apm.yml and .pre-commit-config.yaml (both tracked
+    # files), so the prek-install step below still runs against a
+    # genuine git repository with genuine config -- the exact distinction
+    # this test exists to draw against a `tmp_path` fake, unaffected by
+    # which git repository supplies that genuine config.
+    result = _run({"CLAUDE_CODE_REMOTE": "true", "CLAUDE_PROJECT_DIR": str(real_checkout)})
     assert result.returncode == 0
-    pre_commit_hook = REPO_ROOT / ".git" / "hooks" / "pre-commit"
+    pre_commit_hook = real_checkout / ".git" / "hooks" / "pre-commit"
     assert pre_commit_hook.exists()
     assert "prek" in pre_commit_hook.read_text(encoding="utf-8")
+
+
+def test_does_not_dirty_the_real_checkouts_settings_json(real_checkout: Path) -> None:
+    # Issue #991 follow-up: discovered while fixing the sibling prek-hook
+    # test above. CLAUDE_PROJECT_DIR pointing somewhere other than
+    # REPO_ROOT must never leave REPO_ROOT's own tracked
+    # .claude/settings.json touched, regardless of what session-start.sh's
+    # self-plugin-registration block does internally.
+    before = (REPO_ROOT / ".claude" / "settings.json").read_bytes()
+    result = _run({"CLAUDE_CODE_REMOTE": "true", "CLAUDE_PROJECT_DIR": str(real_checkout)})
+    assert result.returncode == 0
+    after = (REPO_ROOT / ".claude" / "settings.json").read_bytes()
+    assert before == after
 
 
 def test_skips_prek_install_without_apm_yml_even_with_a_real_git_repo(tmp_path: Path) -> None:

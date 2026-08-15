@@ -294,6 +294,91 @@ def test_main_rejects_non_positive_pr_number(monkeypatch, capsys):
     assert "invalid arguments" in capsys.readouterr().err
 
 
+def test_main_rejects_whitespace_only_owner(monkeypatch, capsys):
+    """Issue #1087: min_length=1 alone accepts a whitespace-only value;
+    the field must reject it the same as a truly blank one."""
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    exit_code = pmr.main(["--owner", " ", "--repo", "gitapex", "--pr-number", "314"])
+    assert exit_code == 1
+    assert "error: invalid arguments: --owner (must not be blank)" in capsys.readouterr().err
+
+
+def test_main_rejects_whitespace_only_repo(monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    exit_code = pmr.main(["--owner", "tvna", "--repo", "\t", "--pr-number", "314"])
+    assert exit_code == 1
+    assert "error: invalid arguments: --repo (must not be blank)" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# Issue #1094: str.strip() alone leaves Unicode Format-category (Cf)
+# characters in place (confirmed for U+200B ZERO WIDTH SPACE, U+FEFF
+# ZERO WIDTH NO-BREAK SPACE, and U+180E MONGOLIAN VOWEL SEPARATOR), so a
+# value composed solely of Cf marks passed issue #1087's whitespace-only
+# guard unrejected.
+# ---------------------------------------------------------------------------
+
+
+def test_main_rejects_invisible_only_owner(monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    exit_code = pmr.main(["--owner", "\u200b", "--repo", "gitapex", "--pr-number", "314"])
+    assert exit_code == 1
+    assert "error: invalid arguments: --owner (must not be blank)" in capsys.readouterr().err
+
+
+def test_main_rejects_invisible_only_repo(monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    exit_code = pmr.main(["--owner", "tvna", "--repo", "\ufeff", "--pr-number", "314"])
+    assert exit_code == 1
+    assert "error: invalid arguments: --repo (must not be blank)" in capsys.readouterr().err
+
+
+def test_main_keeps_invisible_padded_but_meaningful_owner_unmutated(monkeypatch, capsys):
+    """A value padded with a Cf mark rather than ASCII whitespace must
+    keep working, unmutated -- only an entirely invisible/non-printing
+    value changes verdict (issue #1094)."""
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    received = {}
+
+    def fake_find(owner, repo, pr_number, token):
+        received["owner"] = owner
+        received["repo"] = repo
+        return
+
+    def fake_open(owner, repo, pr_number, pr_title, pr_url, token):
+        received["owner"] = owner
+        return 999
+
+    monkeypatch.setattr(pmr, "find_existing_retro_issue", fake_find)
+    monkeypatch.setattr(pmr, "open_retro_issue", fake_open)
+    exit_code = pmr.main(["--owner", "\u200btvna\u200b", "--repo", "gitapex", "--pr-number", "314"])
+    assert exit_code == 0
+    assert received["owner"] == "\u200btvna\u200b"
+
+
+def test_main_keeps_padded_but_meaningful_owner_unmutated(monkeypatch, capsys):
+    """Issue #1087: validation must not silently trim -- a value with real
+    content plus surrounding whitespace reaches the downstream call exactly
+    as typed."""
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    received = {}
+
+    def fake_find(owner, repo, pr_number, token):
+        received["owner"] = owner
+        received["repo"] = repo
+        return
+
+    def fake_open(owner, repo, pr_number, pr_title, pr_url, token):
+        received["owner"] = owner
+        return 999
+
+    monkeypatch.setattr(pmr, "find_existing_retro_issue", fake_find)
+    monkeypatch.setattr(pmr, "open_retro_issue", fake_open)
+    exit_code = pmr.main(["--owner", " tvna ", "--repo", "gitapex", "--pr-number", "314"])
+    assert exit_code == 0
+    assert received["owner"] == " tvna "
+
+
 def test_main_renders_underscored_field_as_its_hyphenated_flag(monkeypatch, capsys):
     """Issue #822: `pr_number` is the model's field name but `--pr-number`
     is the flag an operator actually typed, so the `ValidationError`

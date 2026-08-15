@@ -1,6 +1,6 @@
 ---
 name: outward-artifact-preflight
-description: Use when about to push, post, or publish any outward-facing artifact -- a commit, PR/issue body, release, or generated file. Interim manual checklist for undisclosed provenance markers and non-ASCII content, pending a real deterministic preflight/CI gate.
+description: Use when about to push, post, or publish any outward-facing artifact -- a commit, PR/issue body, release, or generated file. Interim manual checklist for undisclosed provenance markers, non-ASCII content, and a citation-shaped sentence that could trip a git host's closing-keyword scan, pending a real deterministic preflight/CI gate.
 ---
 
 # Outward Artifact Preflight
@@ -21,7 +21,7 @@ substitute for one, and never present it as the permanent solution.
 
 ## Checklist
 
-Run all three checks on the exact text about to be pushed or posted: a
+Run all four checks on the exact text about to be pushed or posted: a
 commit message, PR/issue body, release notes, or any generated file
 destined for a public sink.
 
@@ -124,6 +124,50 @@ destined for a public sink.
    ```
 
    No output means the file is ASCII-only.
+4. **Closing-keyword narration hazard.** A sentence that only narrates
+   history -- citing a past PR or issue by number -- can still trip a
+   git host's closing-keyword scan if a recognized keyword happens to
+   land immediately before the `#`-number, even when the author's
+   intent is not to close anything. Confirmed against each of GitHub,
+   GitLab, Forgejo, and Gitea's own documentation as it stood on
+   2026-08-15: all four match a literal keyword-plus-number pattern
+   with no stated grammatical, semantic, or tense analysis of the
+   surrounding sentence. This is not a blanket claim about every
+   git-hosting platform -- a host not checked here (for example
+   Bitbucket or sourcehut) could behave differently in either
+   direction, and any of the four platforms' own lists could change
+   after the date above -- re-verify against the live documentation
+   if this guidance is being relied on long after that date.
+
+   1. GitHub and Forgejo recognize close/closes/closed,
+      fix/fixes/fixed, and resolve/resolves/resolved (Forgejo's list
+      is admin-customizable but ships with this same set). GitLab
+      recognizes the same three families plus an
+      implement/implements/implemented family, and adds an "-ing"
+      form to all four (closing, fixing, resolving, implementing) --
+      the widest of the four. Gitea's list is identical to Forgejo's.
+   2. Forgejo and Gitea additionally require, for a reference placed
+      in a PR description specifically, that the merger hold
+      close/reopen permission at merge time (a commit-message
+      reference, or a commenter who already holds that permission, is
+      sufficient without it). GitHub and GitLab's own documentation
+      states no such permission gate.
+   3. Before publishing a sentence that cites a past PR or issue by
+      number in prose, check whether a recognized keyword lands
+      immediately before the `#`-number. If it does, and the sentence
+      narrates something that already happened rather than directing
+      this artifact to resolve it, rewrite to avoid the trigger:
+      prefer a full URL citation over the bare `#`-number, or a verb
+      outside every platform's list above (for example "addressed",
+      "landed", "shipped"). See the worked example below.
+   4. If it is unclear from the sentence alone whether the author
+      means to close the cited issue or only narrate it, do not
+      decide silently either way: treat it the same as any other
+      unresolved hit under this checklist's Stop boundary and confirm
+      intent with the author before publishing. Guessing "narration"
+      risks stripping a closing directive the author meant to keep;
+      guessing "directive" risks leaving the accidental-closure hazard
+      unflagged.
 
 ## Worked example
 
@@ -200,14 +244,40 @@ trailer stripped, then re-fetch and re-run the scan once more -- a clean
 second re-scan confirms the trailer was a one-time injection, not
 force-reinjected.
 
+## Worked example: a citation sentence that reads as a directive
+
+The hazard check 4 exists to catch is a bare issue/PR-number citation
+used only to narrate history: "PR `#911` closed `#907`." A keyword
+scanner reads that same text as GitHub, Forgejo, and Gitea's own
+recognized `closed` keyword immediately before a number -- the same
+literal pattern a real closing directive would use, with nothing in
+the sentence's own text to tell the two apart.
+
+Either rewrite strategy from item 3 clears the trigger on its own,
+shown separately here since combining both in one sentence would not
+demonstrate that each works alone.
+
+Replacing the bare issue/PR-number citation with a full URL, keyword
+unchanged: "PR `#911` closed the defect described at
+https://github.com/OWNER/REPO/issues/907." No bare `#`-number sits
+next to "closed" anymore.
+
+Keeping the same issue/PR-number citation but choosing a verb outside
+every checked platform's list, from item 1: "PR `#911` addressed the
+defect from issue `#907`." "addressed" is outside every checked
+platform's keyword list.
+
+Either rewrite alone removes the trigger; using both together is not
+required.
+
 ## Relationship to other skills
 
 Finalizing a commit or PR message can trigger both this skill and the
 explaining-the-work skill at once, where both are installed -- that is
 expected, not a conflict. explaining-the-work routes what the text
 should say (How/What/Why); this skill checks whether the text, once
-written, is safe to publish (provenance, ASCII). Apply both; neither
-substitutes for the other.
+written, is safe to publish (provenance, ASCII, closing-keyword
+citations). Apply both; neither substitutes for the other.
 
 ## Stop boundary
 
