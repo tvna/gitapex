@@ -29,8 +29,10 @@ follow-up), a 0:1:0 trade-secret/competitive-harm broadening (gitapex#537
 follow-up), and a 3:3:0 addition for the three new evaluation criteria
 issue #614's own retrospective motivated (gitapex#619:
 declaration-vs-structure fit, correction-narration sediment, repeated-
-restatement duplication), and a 1:0:0 multi-turn-relaxation addition
-(gitapex#332's own ACM-7 audit round), for a resulting 27:30:12 partition. This is
+restatement duplication), a 1:0:0 multi-turn-relaxation addition
+(gitapex#332's own ACM-7 audit round), and a 2:2:1 dependency-policy addition
+(gitapex#1124: the new `spec.dependencyPolicy` precondition axis), for a
+resulting 29:32:13 partition. This is
 named explicitly as a deviation from the 2:1:7 default. The
 honest minimal groundwork, per that same worked example, is a larger
 fixture corpus over time, not a smaller gate.
@@ -39,9 +41,9 @@ Exclusion rule for this arithmetic, stated once so the figures above can be
 checked against the Assignment section below (gitapex#907): every listed
 fixture, in every split, is counted in exactly one of the additions above,
 except the one named on the declaration line below. Verified per split, not
-only for train: the Assignment section lists 28 unique train fixtures against
-the declared 27 (the single exclusion), and 30 selection and 12 test fixtures
-against the declared 30 and 12 exactly.
+only for train: the Assignment section lists 30 unique train fixtures against
+the declared 29 (the single exclusion), and 32 selection and 13 test fixtures
+against the declared 32 and 13 exactly.
 
 Split-arithmetic exclusions: `dispatch-required-negative-control.yaml` -- listed
 in train for split-listing consistency with `normal.yaml` rather than as a
@@ -3854,3 +3856,171 @@ does not work.
 Not run this cycle, for the same reason as the two waivers above --
 no completed dispatch to transfer-check. Carried forward as an open
 item alongside the `checkerRef` gap and the not-run self-audits.
+
+## Iteration: issue #1124, Dependency policy precondition axis
+
+Candidate edit, ordinary class (adds new capability -- a whole new
+precondition axis, `spec.dependencyPolicy`, plus its `references/rubric.md`
+section, `SKILL.md` section, `dependency-policy-declared` shape check, and
+schema property; not pruning-only): `skill-metadata.schema.json` gains
+`spec.properties.dependencyPolicy` (`StdlibOnly`/`Declared`, optional,
+`properties` not `required`, a deliberate divergence from
+`portability`/`capabilityAssumption` disclosed in issue #1124's own Facts);
+`gitapex_check_skill_shape.py` gains `DEPENDENCY_POLICY_LEVELS` and a new
+`dependency-policy-declared` `CheckResult`, mirroring `references-well-
+formed`'s absent/valid/invalid three-way pattern (PASS on absence, unlike
+`portability-declared`'s FAIL-on-absence); `references/rubric.md` gains a
+new `## Dependency policy` section (between Capability assumption and
+Lifecycle) plus a rewritten dimension-7 "Dependencies listed; execution
+intent stated" bullet; `SKILL.md` gains a matching `## Dependency policy`
+section and an extended Procedure step 4 (both fit inside the existing
+500-line ceiling via the same long-unwrapped-line technique PR2's own
+`execution-requirements.packages` addition used, net zero line growth); the
+Contract discipline Precondition bullet and
+`test_gitapex_contract_precondition_sync.py`'s own `_CHECKPOINT_PHRASES`
+registry were updated in the same change, per that test's own docstring
+instruction ("Extend `_CHECKPOINT_PHRASES` in the same change that adds a
+new step-1-4 checkpoint"). No new deterministic scanner logic: both
+branches reuse PR3's `find_packages_drift`
+(`packages-pip-vs-script-content` / `packages-pip-vs-compatibility`) and
+PR2's `execution-requirements-packages-allowlisted` as their mechanical
+backing; the PEP 723/`uv run` sub-criterion is disclosed in the rubric text
+itself as judged, not mechanically gated.
+
+Precondition and splits: satisfied. Scorer:
+`skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py`. Held-out
+split: this file's own corpus, now 75 fixtures, 29:32:13 (see Corpus size
+caveat above) -- 5 new fixtures added under
+`evals/evaluating-skill-quality/tasks/`:
+`dependency-policy-stdlib-only-pass-train.yaml` (train, motivates),
+`dependency-policy-declared-pass-train.yaml` (train, motivates),
+`dependency-policy-stdlib-only-fail-selection.yaml` (selection, gates),
+`dependency-policy-declared-fail-selection.yaml` (selection, gates),
+`dependency-policy-undeclared-real-import-fail-test.yaml` (test, read once).
+
+**Blind spot pass for this addition.** The five fixtures cover: StdlibOnly
+Pass and Fail; Declared Pass (all four sub-criteria satisfied) and Fail
+(sub-criterion (a), under-declared, the clearest single violation); and
+Undeclared with a real import (Fail, plus the disclosure-consistency note).
+Two gaps are named explicitly, not silently left uncovered: (1) an
+Undeclared-but-clean skill (no `dependencyPolicy` declared, no non-stdlib
+import) has no dedicated fixture -- the rubric text itself grades this
+identically to the StdlibOnly Pass case ("Grade against the same criteria
+as StdlibOnly above"), so `dependency-policy-stdlib-only-pass-train.yaml`
+is treated as covering that reasoning path by construction, not by a
+separate fixture; (2) the Applicability gate itself (a skill with no
+`scripts/` directory at all needs no declaration and this whole
+precondition is not-applicable) has no fixture exercising the restraint
+side -- left as a disclosed, open gap for a future addition, the same
+disposition this file's own confidentiality-awareness entry used for its
+own analogous gap.
+
+### Gate result
+
+Isolated `claude -p` dispatches (no `--dangerously-skip-permissions` --
+this session's own permission classifier blocks that flag outright for a
+nested `claude` invocation; a plain `claude -p` was not blocked and needed
+no tool use, since every dispatch's prompt is fully self-contained), per
+`references/adversarial-self-audit.md`'s Isolation verification section:
+this platform (`CLAUDE_CODE_REMOTE=true`,
+`CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=cloud_default`) matches the existing
+registry entries' identifying signal, but at CLI `2.1.233`, newer than any
+entry recorded there (`2.1.226`, 2026-08-08) -- the two-control Verification
+procedure was re-run fresh (synthetic-sentinel positive control correctly
+quoted; negative control from a `CLAUDE.md`-free isolated cwd correctly
+reported none loaded) and a new Same-run entry recorded in that section
+rather than trusting the stale one. `waza` was attempted first per Procedure
+step 1 (`waza --version` confirmed `0.38.0`), but `eval.yaml`'s
+`executor: copilot-sdk` requires GitHub Copilot CLI authentication, and
+every invocation, including the credential-independent `waza models`,
+failed with `not authenticated -- run "copilot login" first` -- the same
+disclosed constraint the issue #1014 entry above already recorded;
+provisioning Copilot credentials solely for this gate was judged outside
+this task's authorization and not pursued. Every dispatch's prompt embeds
+the relevant `references/rubric.md` excerpt directly (this isolated cwd has
+no access to this repository's own `skills/` directory by design, and no
+plugin/marketplace registration was set up for it), not a bare "Use
+evaluating-skill-quality" instruction relying on Skill auto-discovery.
+
+**`dependency-policy-stdlib-only-fail-selection.yaml`, one fresh dispatch
+per side against only `dependency-policy-stdlib-only-fail-selection.yaml`:**
+
+| Fixture | Before | After |
+|---|---|---|
+| `dependency-policy-stdlib-only-fail-selection.yaml` | 0.800000 (fresh) | 1.000000 (fresh) |
+
+Both sides correctly identified the contradicting `requests` import and
+reached `FAIL`; the pre-edit dispatch, applying only dimension 7's old
+generic "required packages named" bullet, had no way to ground that verdict
+in a branch-specific rule, and the fixture's own question text was reworded
+mid-run (before either score was banked) to stop pre-supplying the branch
+vocabulary after a first pass produced a false 1.0/1.0 tie -- see Known gaps
+below.
+
+**`dependency-policy-declared-fail-selection.yaml`, one fresh dispatch per
+side against only `dependency-policy-declared-fail-selection.yaml`:**
+
+| Fixture | Before | After |
+|---|---|---|
+| `dependency-policy-declared-fail-selection.yaml` | 0.800000 (fresh) | 1.000000 (fresh) |
+
+`gitapex_score_contract.py --compare-to 0.800000`, scores `1.000000` /
+`1.000000`: **`1.000000 KEEP`** -- selection mean 0.800000 -> 1.000000,
+strict improvement across both gated fixtures.
+
+Three further dispatches were run informationally (not gating, per this
+skill's own train-motivates/test-read-once rules):
+`dependency-policy-stdlib-only-pass-train.yaml` (train, after-only) scored
+`1.000000`; `dependency-policy-declared-pass-train.yaml` (train, after-only)
+scored `1.000000`, correctly walking all four Declared-branch sub-criteria
+one by one; `dependency-policy-undeclared-real-import-fail-test.yaml` (test,
+read once) scored `1.000000`, correctly grading the absent field as
+StdlibOnly-equivalent plus naming the extra disclosure-consistency note.
+
+**Fixture-assertion repair, before any score was banked.** A first pass at
+both selection fixtures' question text read "Given the declared
+spec.dependencyPolicy: StdlibOnly, ... Name which of the three
+dependency-policy branches (StdlibOnly, Declared, or Undeclared) applies
+here" -- pre-supplying the branch vocabulary directly, which let the
+pre-edit dispatch echo it back from the sidecar YAML shown in the prompt
+without ever citing the new rubric section, producing a false 1.000000 /
+1.000000 tie on both fixtures. Reworded to an open Pass/Fail question with
+no branch-name pre-supply ("Is dimension 7's ... criterion a clean Pass or
+Fail here? Cite the specific rubric wording you are applying..."), matching
+this corpus's own established convention (e.g.
+`capability-assumption-frontier-flags-explanation.yaml`'s phrasing). One
+assertion per fixture was also tightened from a bare enum-name string
+(`"Declared"`, which coincidentally matched an unrelated "Declared
+dependencies:" prose heading in one before-transcript) to a rubric-specific
+technical phrase, confirmed present in the post-edit transcript and absent
+from the pre-edit one by direct substring check before banking:
+`"contradicts the declaration"` (stdlib-only-fail) and
+`"packages-pip-vs-script-content"` (declared-fail).
+
+Full structured run record, per-fixture scores, and every artifact
+transcript:
+[results/2026-08-15-issue-1124-dependency-policy/](results/2026-08-15-issue-1124-dependency-policy/manifest.json)
+-- the first record in that directory written as a genuine
+`record_contract: "gate-run"` rather than migrated as `pre-contract`.
+
+### Transfer check
+
+Not run this iteration -- the same pre-existing, still-open gap named
+across nearly every entry in this file's own Kept-edit log, not newly
+introduced here.
+
+### Verdict
+
+**KEEP.** Selection mean strictly improved (0.800000 -> 1.000000) across
+both gated fixtures, satisfying the ordinary class's strict improve-or-
+reject rule. The axis genuinely did not exist before this PR -- the
+pre-edit dispatches could still reach the correct surface verdict (PASS/
+FAIL, the right offending import) through generic reasoning applied to
+dimension 7's old undifferentiated bullet, but could not ground it in the
+new rubric's own explicit, citable branch rule -- the same
+axis-did-not-exist-yet improvement shape this file's own
+confidentiality-awareness axis-addition entry (issue #537, above)
+established as what a genuine, non-tied improvement looks like for a new
+precondition axis. Two disclosed gaps (the Undeclared-but-clean and
+scriptless-skill restraint cases; no repeat-trial variance data; no
+transfer check) are named above rather than silently assumed clear.

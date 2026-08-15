@@ -679,6 +679,7 @@ EXPECTED_API_VERSION = "gitapex.io/v1alpha1"
 EXPECTED_KIND = "SkillMetadata"  # the sidecar's fixed manifest kind, alongside EXPECTED_API_VERSION above
 PORTABILITY_LEVELS = ("Portable", "Repository-scoped", "Mixed")  # closed vocabulary for spec.portability
 CAPABILITY_ASSUMPTIONS = ("Broad", "Frontier", "Adaptive")  # closed vocabulary for spec.capabilityAssumption
+DEPENDENCY_POLICY_LEVELS = ("StdlibOnly", "Declared")  # closed vocabulary for spec.dependencyPolicy
 # A plain "- <value>" list item, indented 2 or more spaces -- real YAML
 # accepts a block sequence indented level with its mapping key (2 spaces,
 # same as spec.references' own key) or further indented (4 spaces, this
@@ -3928,6 +3929,14 @@ def check_shape(target: Path) -> list[CheckResult]:
             )
             results.append(
                 CheckResult(
+                    "dependency-policy-declared",
+                    False,
+                    f"spec.dependencyPolicy, if present, is one of {DEPENDENCY_POLICY_LEVELS}",
+                    evidence,
+                )
+            )
+            results.append(
+                CheckResult(
                     "references-well-formed",
                     False,
                     "spec.references, if present, is a non-empty list of non-empty strings",
@@ -4113,6 +4122,40 @@ def check_shape(target: Path) -> list[CheckResult]:
                     repr(capability),
                 )
             )
+            dependency_policy_declared_rule = f"spec.dependencyPolicy, if present, is one of {DEPENDENCY_POLICY_LEVELS}"
+            dependency_policy = spec.get("dependencyPolicy")
+            if not spec_is_mapping:
+                # Same precondition failure portability-declared/
+                # capability-assumption-declared already report above --
+                # "not declared (optional)" would misreport a non-mapping
+                # spec as the ordinary optional-and-absent case, mirroring
+                # references-well-formed's own guard below.
+                results.append(
+                    CheckResult(
+                        "dependency-policy-declared",
+                        False,
+                        dependency_policy_declared_rule,
+                        f"spec is not a mapping: {spec_raw!r}",
+                    )
+                )
+            elif dependency_policy is None:
+                results.append(
+                    CheckResult(
+                        "dependency-policy-declared",
+                        True,
+                        dependency_policy_declared_rule,
+                        "not declared (optional, treated as StdlibOnly-equivalent)",
+                    )
+                )
+            else:
+                results.append(
+                    CheckResult(
+                        "dependency-policy-declared",
+                        dependency_policy in DEPENDENCY_POLICY_LEVELS,
+                        dependency_policy_declared_rule,
+                        repr(dependency_policy),
+                    )
+                )
             references = spec.get("references")
             references_well_formed_rule = (
                 "spec.references, if present, is a non-empty list of "

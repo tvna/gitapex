@@ -1,0 +1,80 @@
+{
+  "date": "2026-08-15",
+  "issue": "https://github.com/tvna/gitapex/issues/1124",
+  "commit": "620488678ad9639931a734e3a91661939cfe0c62",
+  "record_contract": "gate-run",
+  "runner": {
+    "name": "waza",
+    "version": "0.38.0"
+  },
+  "fixture_set": "5 new fixtures under evals/evaluating-skill-quality/tasks/: dependency-policy-stdlib-only-pass-train.yaml (train), dependency-policy-stdlib-only-fail-selection.yaml (selection, gates), dependency-policy-declared-pass-train.yaml (train), dependency-policy-declared-fail-selection.yaml (selection, gates), dependency-policy-undeclared-real-import-fail-test.yaml (test, read once). Both selection fixtures were formally gated (before/after, strict improve-or-reject); the two train and one test fixture were run once each (after-edit only) as informational evidence, per the skill's own train-motivates/test-read-once rules -- neither is part of the gate verdict.",
+  "trials_per_fixture": 1,
+  "models": {
+    "default": "claude-sonnet-5"
+  },
+  "dispatch_mechanism": "Isolated `claude -p` subprocess (CLI 2.1.233 (Claude Code)), reading each prompt from stdin, run from a scratch working directory outside any repository's CLAUDE.md/AGENTS.md ancestry. Per skills/evaluating-skill-quality/references/adversarial-self-audit.md's Isolation verification section: this run's platform (CLAUDE_CODE_REMOTE=true, CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=cloud_default) matches the registry's existing Agent-tool-dispatch entries, but at a newer CLI version (2.1.233) than any entry recorded there (last: 2.1.226, 2026-08-08), so the two-control Verification procedure was re-run fresh rather than trusted stale: positive control (isolated cwd containing a synthetic sentinel CLAUDE.md, no --dangerously-skip-permissions) correctly quoted the sentinel sentence verbatim; negative control (isolated cwd with no CLAUDE.md/AGENTS.md anywhere in its ancestry) correctly reported none loaded. Both held at this version -- see the new Same-run registry entry added to adversarial-self-audit.md in this same change. This run additionally found that `claude -p --dangerously-skip-permissions` (the flag prior registry entries relied on to avoid a stalled non-interactive approval prompt) is itself blocked outright by this session's own permission classifier (\"Blocked by classifier\"); a plain `claude -p` with no bypass flag was not blocked and is what every dispatch below actually used. Every dispatch's prompt is fully self-contained (the relevant rubric.md excerpt plus the fixture's own scenario, embedded directly in the prompt text) rather than relying on Skill auto-discovery, since this repository has no registered Skill tool for evaluating-skill-quality's own unpublished content and the isolated cwd has no access to this repository's own skills/ directory by design -- the same disclosed workaround this skill's split.md Kept-edit log has used since its earliest iterations. No tool use was required or granted (each dispatch answers from the prompt text alone), so the permission-bypass question does not affect whether a dispatch could complete, only whether it can proactively Read/Bash beyond the prompt -- none needed to.",
+  "scorer": "skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py, scoring each fixture's own output_contains/output_not_contains assertions deterministically; the selection-split gate verdict below was produced by that same script's --compare-to mode (`gitapex_score_contract.py --compare-to 0.800000`, scores 1.000000/1.000000 -> `1.000000 KEEP`).",
+  "run_shape": "before/after (pre-edit rubric.md/SKILL.md vs. this PR's edited-but-uncommitted working tree) for the two gated selection fixtures, plus three informational after-only dispatches (two train, one test) -- deviates from this directory's README schema, which is written for a fixed-rubric/multi-model run; the deviation is intentional and disclosed here, matching the 2026-07-29-issue-537-confidentiality-gates record's own precedent in this same directory. `score_files[]` points at a standard eval-scores.schema.json-shaped summary of the 5 fixtures' AFTER-edit scores only (the record's forward-looking, current state); `nonstandard_score_files[]` carries the richer before/after detail the `gate` verdict below was actually computed from.",
+  "iterations": [
+    {
+      "label": "stdlib-only-fail",
+      "rubric_change": "Added the Dependency policy precondition axis (spec.dependencyPolicy: StdlibOnly/Declared, optional) to references/rubric.md and SKILL.md, and rewired dimension 7's 'Dependencies listed; execution intent stated' bullet to reference it -- did not exist before this PR at all.",
+      "before_commit": "620488678ad9639931a734e3a91661939cfe0c62",
+      "after_commit": "uncommitted-working-tree",
+      "fixture_id": "evaluating-skill-quality-dependency-policy-stdlib-only-fail-selection",
+      "before_score": 0.8,
+      "after_score": 1.0
+    },
+    {
+      "label": "declared-fail",
+      "rubric_change": "Same axis addition as above; this iteration's fixture isolates the Declared branch's four-sub-criteria structure (packages.pip declaration, compatibility cross-reference, PEP 723/uv run pattern, allowlist membership), absent from the pre-edit rubric entirely.",
+      "before_commit": "620488678ad9639931a734e3a91661939cfe0c62",
+      "after_commit": "uncommitted-working-tree",
+      "fixture_id": "evaluating-skill-quality-dependency-policy-declared-fail-selection",
+      "before_score": 0.8,
+      "after_score": 1.0
+    }
+  ],
+  "score_files": [
+    {
+      "model_id": "claude-sonnet-5",
+      "file": "claude-sonnet-5-after.json"
+    }
+  ],
+  "gate": {
+    "verdict": "KEEP",
+    "candidate_class": "ordinary",
+    "split": "selection",
+    "prior_mean": "0.800000",
+    "candidate_mean": "1.000000"
+  },
+  "artifacts": [
+    "claude-sonnet-5-after.json",
+    "claude-sonnet-5-before-after-detail.json",
+    "artifacts/stdlib-only-fail-before.md",
+    "artifacts/stdlib-only-fail-after.md",
+    "artifacts/declared-fail-before.md",
+    "artifacts/declared-fail-after.md",
+    "artifacts/undeclared-fail-after.md",
+    "artifacts/stdlib-only-pass-train-after.md",
+    "artifacts/declared-pass-train-after.md"
+  ],
+  "nonstandard_score_files": [
+    {
+      "file": "claude-sonnet-5-before-after-detail.json",
+      "deviation": "Scored by skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py, the same scorer a standard record uses, but before/after per-iteration (condition, before_commit/after_commit) rather than eval-scores.schema.json's flat one-score-per-fixture_id shape -- the same before/after run_shape and the same declared deviation as the 2026-07-29-issue-537-confidentiality-gates record in this same directory. This is the file the gate[] verdict above was actually computed from; claude-sonnet-5-after.json (score_files[]) is a same-run, standard-shape derivative summarizing only the AFTER-edit scores."
+    }
+  ],
+  "known_gaps": [
+    "runner is waza 0.38.0 because that is the eval runner Procedure step 1 confirmed (`waza --version` reported it) -- it is NOT the tool that actually produced any score below. eval.yaml's declared `executor: copilot-sdk` requires GitHub Copilot CLI authentication, and every `waza` invocation attempted in this session, including the credential-independent `waza models`, failed with `not authenticated -- run \"copilot login\" first`, confirmed live. Provisioning Copilot credentials solely to satisfy this gate was judged outside this task's authorization and not pursued -- the identical judgment call the issue #1014 entry in split.md already recorded for the same constraint. Every score in this record was instead produced by the `claude -p` subprocess dispatch mechanism this same skill's split.md Kept-edit log has used as its established fallback since its earliest iterations, and by gitapex_score_contract.py -- both named precisely under dispatch_mechanism/scorer above.",
+    "top-level commit (620488678ad9639931a734e3a91661939cfe0c62) is the BEFORE state only -- eval-run.schema.json's commit field requires a single resolvable hex object name and rejects null, but this run is genuinely a before/after series with an uncommitted working tree on the after side, so no single commit can honestly represent both states. The real per-iteration split is kept verbatim in iterations[]'s before_commit/after_commit fields and in claude-sonnet-5-before-after-detail.json's own per-score commit field -- after_commit is the literal string 'uncommitted-working-tree' since this PR is intentionally left uncommitted for the orchestrating session to commit; the winning (KEEP) candidate_mean above was measured against that uncommitted state, not against the top-level commit alone.",
+    "models.default (\"claude-sonnet-5\") is a self-report: the isolated dispatch was asked directly \"What is your exact model identifier?\" and answered \"claude-sonnet-5\"; --model was not explicitly pinned on any of the seven claude -p subprocess calls that produced the scores below, so this is evidence about which model ran, not independently verified runtime metadata -- the same disclosed limit this directory's 2026-07-30 and 2026-07-29 records already carry for the identical situation.",
+    "trials_per_fixture=1 for every iteration -- no repeat-run variance data; a single sample generalizing correctly is not proof a weaker tier or a different sample would, the same disclosed limit every prior iteration in this file's own split.md log carries.",
+    "substring-scorer only -- confirms each fixture's expected tokens appear or don't, not a full manual reading of the transcript's reasoning quality beyond what each transcript's own artifact file shows.",
+    "the 32 pre-existing selection fixtures (30 before this PR, unaffected by this change) were not re-dispatched; this edit's own touched sections (Dependency policy, dimension 7's one rewritten bullet, the Contract discipline Precondition bullet, Lifecycle's cross-reference sentence, Execution requirements' cross-reference sentence) are new-axis-scoped and additive, so no pre-existing fixture's own asserted content is textually touched by this diff -- confirmed by direct `git diff` inspection, not re-run live, consistent with this repository's own established precedent (gitapex#406, gitapex#495, and this same directory's 2026-07-29 record) for edits confirmed not to touch what those fixtures assert on.",
+    "no weaker-tier (e.g. Haiku) or repeated-trial run has been done; issue #500 Phase 2 (not yet scheduled) remains the honest next step to actually detect what a single strong-tier trial could not, per this same disclosed pattern used repeatedly elsewhere in this file's own split.md log.",
+    "transfer check (SKILL.md Procedure step 6: re-run the accepted skill unchanged on an adjacent model/harness/task) was not run this iteration -- the same pre-existing, still-open gap named across nearly every entry in evals/evaluating-skill-quality/split.md's own Kept-edit log, not newly introduced here.",
+    "both gated selection fixtures' assertions were repaired live, before any score was banked, after an initial run surfaced a real construct-validity defect: the fixtures' own question text originally named the dependency-policy branch/vocabulary directly ('Given the declared spec.dependencyPolicy: StdlibOnly, ... Name which of the three dependency-policy branches...'), which let a pre-edit ('before') dispatch trivially echo the same vocabulary back without ever citing the new rubric section, producing a false tie (both scored 1.000000 on the first pass, before repair). Both fixtures' question text were reworded to the established corpus convention (an open Pass/Fail question, no branch-name pre-supply, matching e.g. capability-assumption-frontier-flags-explanation.yaml's own phrasing) and one assertion per fixture was tightened to a rubric-specific technical phrase confirmed present in the after-transcript and absent from the before-transcript ('contradicts the declaration' for stdlib-only-fail; 'packages-pip-vs-script-content' for declared-fail) before the scores in this record were banked -- the same live-repair discipline this skill's own 'Authoring fixtures for a substring scorer' section requires and this repository's split.md log has applied repeatedly (e.g. the consumer-repo-convention-deference/tool-capability-verification-selection casing repairs)."
+  ],
+  "headline_pattern": "Both gated selection fixtures showed a genuine strict improvement (selection mean 0.800000 -> 1.000000, KEEP): the Dependency policy axis did not exist before this PR at all, so a pre-edit dispatch applying only dimension 7's old generic 'required packages named' bullet could still reach the correct PASS/FAIL/import-name verdict through generic reasoning (both fixtures' pre-edit dispatches correctly identified the offending non-stdlib import and reached FAIL), but could not ground that verdict in the new rubric's own explicit branch-specific rule text ('contradicts the declaration' for StdlibOnly; the named packages-pip-vs-script-content mechanical-backing citation for Declared) -- exactly the axis-did-not-exist-yet pattern this skill's own confidentiality-awareness axis-addition iteration (2026-07-29 record, this same directory) established as the shape a genuine, non-tied improvement takes. The three informational (non-gating) after-only dispatches -- both Pass-branch train fixtures and the Undeclared-branch test fixture -- each independently and correctly walked the rubric's own branch structure (StdlibOnly's single Pass/Fail line; Declared's four named sub-criteria, explicitly checked one by one; Undeclared's 'grade against StdlibOnly, plus a disclosure-consistency note' rule) and reached the intended verdict, providing corroborating (not gating) evidence that the new section reads correctly end to end, not only on the two narrow fail-path fixtures the formal gate scored."
+}

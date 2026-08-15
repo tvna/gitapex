@@ -483,6 +483,73 @@ mechanism, not only the ones already recorded below.
 - **Dated**: 2026-07-31, same version pin as the two entries above; re-run
   the Verification procedure if this entry looks stale.
 
+#### Plain `claude -p` (no permission-bypass flag) with cwd isolation only
+
+- **Same-run, unreviewed** (per Trust class above -- this entry was
+  appended by the run that tested it and has passed no review gate yet; a
+  later reader must not treat it as established without re-running the
+  Verification procedure itself, or confirming it has since merged).
+- **Identifying signal**: same platform as the entries above
+  (`CLAUDE_CODE_REMOTE=true`, `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=
+  cloud_default`), but `claude --version` now reports `2.1.233 (Claude
+  Code)`, newer than any entry above (last: `2.1.226`, 2026-08-08) -- a
+  fresh run of the Verification procedure at a version none of those
+  entries covered, not a restatement of them.
+- **Mechanism tested**: `claude -p` reading its prompt from stdin, invoked
+  from an isolated scratch cwd (no `CLAUDE.md`/`AGENTS.md` anywhere in its
+  full parent-directory ancestry, directly confirmed), with **no**
+  `--dangerously-skip-permissions` and no other permission-mode flag --
+  every earlier entry in this section relied on some form of permission
+  bypass (`--dangerously-skip-permissions`, or `--permission-mode
+  acceptEdits`/`dontAsk` plus `--allowedTools`) to avoid a non-interactive
+  dispatch stalling on an approval prompt it can never answer.
+- **Result: `--dangerously-skip-permissions` is itself blocked outright on
+  this session, a new finding distinct from the isolation question.**
+  Invoking `claude -p` with a review prompt and this flag added returned
+  immediately with `Permission for this action was denied by the Claude
+  Code auto mode classifier. Reason: Blocked by classifier` -- no dispatch
+  occurred at all. Retrying the identical prompt with the bypass flag
+  dropped entirely was **not** blocked and completed normally. The
+  two-control isolation test was therefore run with the plain (no-bypass)
+  invocation:
+  - **Positive control** (isolated cwd containing a synthetic sentinel
+    `CLAUDE.md`, the Default recipe in the Verification procedure above,
+    never the real file): asked "Do you currently have a project-level
+    instruction file... loaded? If so, quote its exact content verbatim."
+    -- correctly quoted the sentinel sentence verbatim.
+  - **Negative control** (isolated cwd, same prompt, no `CLAUDE.md`/
+    `AGENTS.md` anywhere in its ancestry): correctly answered "none
+    loaded."
+  - Both held at this version. The verified alternative from the first
+    entry in this section (plain `claude -p` from an isolated cwd) still
+    isolates `CLAUDE.md`/`AGENTS.md` correctly with no permission-bypass
+    flag at all, at least on this session -- it was never the flag that
+    provided the isolation guarantee, only a workaround for a stalled
+    approval prompt some other entries needed for their own dispatches'
+    tool use. A dispatch whose entire prompt is self-contained (no Read/
+    Bash/Write needed -- e.g. the target content is embedded directly in
+    the prompt text rather than left for the dispatch to fetch) completes
+    correctly with no permission flag at all and needs no bypass in the
+    first place.
+- **Caveat**: whether `--dangerously-skip-permissions` is blocked is a
+  property of this specific session's own auto-mode classifier
+  configuration, not confirmed here as a property of `claude` `2.1.233`
+  generally -- a different session on the same CLI version may allow it.
+  Do not extend "blocked" to a platform/session this was not actually
+  tested on, the same caution every entry above already states for its own
+  finding.
+- **Scope**: this entry did not re-test the `$HOME`-copy task-list-leak
+  mitigation the first entry's own "Second leak vector" subsection
+  documents -- the dispatches this entry's own run performed were short,
+  single-question content reviews with no tool use, so that leak's own
+  trigger condition ("enough tool calls without its own `TaskCreate`/
+  `TaskUpdate` call") was never approached; a dispatch making many tool
+  calls under this exact recipe should still apply that mitigation rather
+  than assume it is unnecessary because this entry omitted it.
+- **Dated**: 2026-08-15, same run as a `scorer-gated-skill-edits` held-out
+  gate cycle for this skill's own `references/rubric.md`; re-run the
+  Verification procedure if this entry looks stale.
+
 ### Unlisted platform
 
 If the current platform is not represented above, do not assume either

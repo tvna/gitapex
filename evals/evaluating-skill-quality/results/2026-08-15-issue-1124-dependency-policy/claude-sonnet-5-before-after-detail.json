@@ -1,0 +1,69 @@
+{
+  "model_id": "claude-sonnet-5",
+  "n_runs": 7,
+  "scores": [
+    {
+      "iteration": "stdlib-only-fail",
+      "fixture_id": "evaluating-skill-quality-dependency-policy-stdlib-only-fail-selection",
+      "split": "selection",
+      "condition": "before",
+      "commit": "620488678ad9639931a734e3a91661939cfe0c62",
+      "score": 0.8,
+      "artifact": "artifacts/stdlib-only-fail-before.md"
+    },
+    {
+      "iteration": "stdlib-only-fail",
+      "fixture_id": "evaluating-skill-quality-dependency-policy-stdlib-only-fail-selection",
+      "split": "selection",
+      "condition": "after",
+      "commit": "uncommitted-working-tree",
+      "score": 1.0,
+      "artifact": "artifacts/stdlib-only-fail-after.md"
+    },
+    {
+      "iteration": "declared-fail",
+      "fixture_id": "evaluating-skill-quality-dependency-policy-declared-fail-selection",
+      "split": "selection",
+      "condition": "before",
+      "commit": "620488678ad9639931a734e3a91661939cfe0c62",
+      "score": 0.8,
+      "artifact": "artifacts/declared-fail-before.md"
+    },
+    {
+      "iteration": "declared-fail",
+      "fixture_id": "evaluating-skill-quality-dependency-policy-declared-fail-selection",
+      "split": "selection",
+      "condition": "after",
+      "commit": "uncommitted-working-tree",
+      "score": 1.0,
+      "artifact": "artifacts/declared-fail-after.md"
+    },
+    {
+      "iteration": "undeclared-fail (informational, test split, read once)",
+      "fixture_id": "evaluating-skill-quality-dependency-policy-undeclared-real-import-fail-test",
+      "split": "test",
+      "condition": "after",
+      "commit": "uncommitted-working-tree",
+      "score": 1.0,
+      "artifact": "artifacts/undeclared-fail-after.md"
+    },
+    {
+      "iteration": "stdlib-only-pass (informational, train split, motivates only, never gated)",
+      "fixture_id": "evaluating-skill-quality-dependency-policy-stdlib-only-pass-train",
+      "split": "train",
+      "condition": "after",
+      "commit": "uncommitted-working-tree",
+      "score": 1.0,
+      "artifact": "artifacts/stdlib-only-pass-train-after.md"
+    },
+    {
+      "iteration": "declared-pass (informational, train split, motivates only, never gated)",
+      "fixture_id": "evaluating-skill-quality-dependency-policy-declared-pass-train",
+      "split": "train",
+      "condition": "after",
+      "commit": "uncommitted-working-tree",
+      "score": 1.0,
+      "artifact": "artifacts/declared-pass-train-after.md"
+    }
+  ]
+}

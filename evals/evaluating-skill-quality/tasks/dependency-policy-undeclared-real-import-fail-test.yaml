@@ -1,0 +1,70 @@
+id: evaluating-skill-quality-dependency-policy-undeclared-real-import-fail-test
+name: Undeclared Field, Real Non-Stdlib Import -- Fail Plus Disclosure Note
+description: The reviewed skill's sidecar declares no spec.dependencyPolicy at all (only portability and capabilityAssumption), and its bundled script imports the third-party `pdfplumber` package -- graded against the same criteria as StdlibOnly (absence is StdlibOnly-equivalent), so this is a Fail, plus the extra disclosure-consistency note the Undeclared branch adds distinct from the underlying contradiction. Restraint/generalization check on the held-out test split, read once -- confirms the new Undeclared branch's own extra disclosure note fires, not merely a generic Fail, and that this does not get graded as not-applicable or silently passed merely because the field is absent.
+tags:
+  - quality
+  - bundled-scripts
+  - dependency-policy
+  - test
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft skill called
+    "summarizing-pdf-invoices". Its metadata/gitapex.yaml sidecar declares:
+
+    spec:
+      portability: Portable
+      capabilityAssumption: Broad
+
+    ---
+    name: summarizing-pdf-invoices
+    description: Extract line-item totals from a scanned PDF invoice. Use when a vendor invoice PDF needs its totals pulled into a spreadsheet.
+    ---
+
+    # Summarizing PDF Invoices
+
+    ## Procedure
+
+    1. Run `scripts/extract_totals.py <path>` to print each line item and
+       the invoice total.
+
+    `scripts/extract_totals.py`'s full content:
+
+    ```python
+    #!/usr/bin/env python3
+    """Extract invoice totals from a PDF."""
+    import argparse
+
+    import pdfplumber
+
+
+    def main() -> int:
+        parser = argparse.ArgumentParser()
+        parser.add_argument("path")
+        args = parser.parse_args()
+        with pdfplumber.open(args.path) as pdf:
+            for page in pdf.pages:
+                for table in page.extract_tables():
+                    for row in table:
+                        print(row)
+        return 0
+
+
+    if __name__ == "__main__":
+        raise SystemExit(main())
+    ```
+
+    This sidecar declares no `dependencyPolicy` field at all. How should
+    that absence be graded here, and is dimension 7's "Dependencies
+    listed; execution intent stated" criterion a clean Pass or Fail? Cite
+    the specific rubric wording you are applying, name any
+    disclosure-consistency note that applies beyond the underlying import
+    contradiction itself, and state literally the word PASS or FAIL as
+    your verdict.
+expected:
+  output_contains:
+    - "StdlibOnly-equivalent"
+    - "FAIL"
+    - "pdfplumber"
+  output_not_contains:
+    - "LGTM"
+    - "is a clean pass"

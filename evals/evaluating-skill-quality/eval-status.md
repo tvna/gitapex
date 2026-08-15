@@ -1039,3 +1039,66 @@ Deterministic verification for this round: fixture YAML parse 70/70;
 Assignment section's unique train count (28) minus the one stated exclusion
 equals the declared train figure (27), and selection/test match exactly.
 Refs #907.
+
+## Dependency policy precondition axis (issue #1124)
+
+`spec.dependencyPolicy` (`StdlibOnly`/`Declared`) added as a new precondition
+axis calibrating dimension 7's "Dependencies listed; execution intent stated"
+criterion only -- structurally parallel to Portability level/Capability
+assumption, but, unlike those two, OPTIONAL (schema `properties`, not
+`required`; the `dependency-policy-declared` shape check mirrors
+`references-well-formed`'s absent/valid/invalid three-way pattern, not
+`portability-declared`'s required-field FAIL-on-absence pattern). An absent
+declaration is treated as StdlibOnly-equivalent. `references/rubric.md` and
+`SKILL.md` both gained a new "Dependency policy" section; `SKILL.md`'s
+Procedure step 4 and the Contract discipline Precondition bullet were updated
+to establish it, and `test_gitapex_contract_precondition_sync.py`'s own
+`_CHECKPOINT_PHRASES` registry was extended to keep that mirror gated per its
+own docstring's instruction. No new deterministic scanner: both branches
+reuse PR3's `find_packages_drift` (`packages-pip-vs-script-content` /
+`packages-pip-vs-compatibility`) and PR2's
+`execution-requirements-packages-allowlisted` as their mechanical backing;
+the PEP 723/`uv run` usage sub-criterion is disclosed as judged-only, with no
+mechanical check.
+
+Went through `scorer-gated-skill-edits`' own held-out gate: 5 new fixtures
+added to `split.md`'s split (75 total, 29:32:13). Both new selection
+fixtures were freshly paired-scored via isolated `claude -p` dispatches
+(this session's own re-verified isolation recipe, reconfirmed at a newer CLI
+version than any prior registry entry -- see
+`references/adversarial-self-audit.md`'s newest Isolation-verification
+entry): selection mean **0.800000 -> 1.000000, KEEP**
+(`gitapex_score_contract.py --compare-to 0.800000`). The axis did not exist
+before this PR at all, so both pre-edit dispatches could still reach the
+correct PASS/FAIL/import-name verdict through generic reasoning applied to
+dimension 7's old generic bullet, but neither could ground that verdict in
+the new rubric's own branch-specific rule text -- the same axis-did-not-
+exist-yet improvement shape the confidentiality-awareness axis-addition
+entry above established. Two train and one test fixture were each run once
+(after-edit only, informational, non-gating) and independently reached the
+intended verdict, corroborating that the Declared branch's four-sub-criteria
+walk and the Undeclared branch's disclosure-consistency note both read
+correctly end to end.
+
+Two selection-fixture assertion defects were found and repaired live, before
+any score was banked: the fixtures' own question text originally pre-named
+the branch vocabulary ("Name which of the three dependency-policy branches
+... applies here"), letting a pre-edit dispatch trivially echo it back
+without citing the new rubric section at all (a false tie, both sides
+1.000000 on the first pass) -- reworded to an open Pass/Fail question,
+matching the established corpus convention, and one assertion per fixture
+tightened to a rubric-specific phrase confirmed present only in the
+post-edit transcript ("contradicts the declaration"; "packages-pip-vs-
+script-content"). `waza`'s `copilot-sdk` executor was unauthenticated in
+this session (confirmed live, the same disclosed constraint the issue #1014
+entry in `split.md` already recorded) -- `waza --version` (`0.38.0`) is
+recorded as the confirmed runner per Procedure step 1's own letter, but
+every actual trial was produced by the `claude -p` fallback this skill's own
+`split.md` log has used repeatedly, disclosed precisely under
+`dispatch_mechanism` rather than overstated. Full record, per-fixture
+scores, and both fixture-assertion repairs:
+`evals/evaluating-skill-quality/split.md`'s Kept-edit log. Structured,
+machine-readable run data (the first `record_contract: "gate-run"` record in
+this directory):
+[results/2026-08-15-issue-1124-dependency-policy/](results/2026-08-15-issue-1124-dependency-policy/manifest.json).
+Refs #1124.

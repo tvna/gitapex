@@ -1,0 +1,83 @@
+id: evaluating-skill-quality-dependency-policy-declared-fail-selection
+name: Declared Branch -- Under-Declared Import Violates One Sub-Criterion
+description: A distinct domain from the train fixture (an OpenAPI spec validator, not a YAML config converter) -- the reviewed skill's sidecar declares spec.dependencyPolicy Declared and executionRequirements.packages.pip lists only jsonschema, but the script also imports the third-party `requests` package to resolve a remote $ref, an import find_packages_drift's own packages-pip-vs-script-content check would flag as under-declared. The clearest of the four Declared sub-criteria to violate in isolation, with the other three left intact, so the gate measures whether the check isolates the one real violation rather than a compound failure.
+tags:
+  - quality
+  - bundled-scripts
+  - dependency-policy
+  - selection
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft skill called
+    "validating-openapi-specs". Its metadata/gitapex.yaml sidecar declares:
+
+    spec:
+      portability: Portable
+      capabilityAssumption: Broad
+      dependencyPolicy: Declared
+      executionRequirements:
+        packages:
+          pip:
+            - jsonschema
+
+    ---
+    name: validating-openapi-specs
+    description: Validate an OpenAPI spec file, resolving remote $ref pointers. Use when an OpenAPI YAML file needs schema validation before merge.
+    compatibility: "Requires jsonschema for OpenAPI schema validation."
+    ---
+
+    # Validating OpenAPI Specs
+
+    ## Procedure
+
+    1. Run `uv run scripts/validate_spec.py <path>` to validate the spec,
+       fetching any remote `$ref` targets it references.
+
+    `scripts/validate_spec.py`'s full content:
+
+    ```python
+    #!/usr/bin/env python3
+    # /// script
+    # dependencies = ["jsonschema"]
+    # ///
+    """Validate an OpenAPI spec, resolving remote $ref pointers."""
+    import sys
+
+    import jsonschema
+    import requests
+
+
+    def _fetch_remote_ref(url: str) -> dict:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        return response.json()
+
+
+    def main() -> int:
+        path = sys.argv[1]
+        with open(path) as f:
+            spec = jsonschema.Draft202012Validator.check_schema(f.read())
+        return 0
+
+
+    if __name__ == "__main__":
+        raise SystemExit(main())
+    ```
+
+    For this review, treat `jsonschema` as present in this repository's own
+    `.gitapex/dependency-allowlist.json` allowlist under the `pip` ecosystem
+    -- a stipulated fact for this exercise, not something you need to
+    independently verify.
+
+    Is dimension 7's "Dependencies listed; execution intent stated"
+    criterion a clean Pass or Fail here? If it fails, name specifically
+    which requirement is violated and cite the specific rubric wording you
+    are applying. State literally the word PASS or FAIL as your verdict.
+expected:
+  output_contains:
+    - "FAIL"
+    - "requests"
+    - "packages-pip-vs-script-content"
+  output_not_contains:
+    - "LGTM"
+    - "is a clean pass"
