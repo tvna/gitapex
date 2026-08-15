@@ -55,6 +55,41 @@ way Go's ``url.Parse`` occasionally can on malformed percent-encoding or
 control characters; this module only replicates upstream's scheme+host
 presence check, not full parser-parity with Go's ``net/url``.
 
+**Why validation runs through a pydantic ``field_validator``, not
+pydantic's own ``AnyUrl``/``HttpUrl``.** This repository's other
+``.github/scripts/*.py`` gates commonly validate CLI input through a
+``pydantic.BaseModel`` (e.g. ``gitapex_gate_behind_base.py``, safe here for
+the same reason: this module's own production invocation already runs
+under ``uv run``, never bare ``python3`` -- issue #1040/#1035). Using
+pydantic's *built-in* URL type here was tried and rejected: verified live
+(pydantic 2.13.4, ``TypeAdapter(AnyUrl)``) that it silently normalizes away
+exactly the inputs this module exists to reject -- a trailing-whitespace
+host (``"https://example.com   "``) and an embedded control character
+(``"https://example.invalid/\\npath"``, a raw NUL) both came back
+*accepted*, offending bytes silently stripped, per pydantic-core's own
+WHATWG-URL-based parser -- the same class of gap CodeRabbit found in (and
+this module was fixed to close against) Python's ``urlsplit``. Go's own
+``url.Parse`` -- what ``providerHost()`` actually calls -- rejects both
+outright. Adopting ``AnyUrl`` would have reintroduced a bug this module
+already fixed once; the ``field_validator`` below keeps the same
+Go-verified checks, now run through pydantic's own validation/error
+machinery instead of a bespoke one.
+
+**A second, independently found secret-hygiene gap, before it ever shipped:
+pydantic's own ``ValidationError`` embeds the raw invalid value** in its
+``str()``, ``repr()``, and structured ``.errors()`` output alike (verified
+live: a deliberately malformed URL containing a sentinel string was fully
+recoverable from ``e.errors()[0]["input"]``, and partially visible even in
+``str(e)``). Chaining it onto ``EndpointMalformed`` with an ordinary
+``raise ... from exc`` would retain that value on ``__cause__`` -- inert
+today (``main()`` never prints a raw traceback), but exactly the kind of
+latent leak a future caller that does print one (e.g. an added debug log)
+would surface with nothing to catch the regression, the same accidental-
+safety shape already rejected once for the bare ``ValueError`` case above.
+``raise ... from None`` below is deliberate, not an oversight: it discards
+pydantic's own exception object -- and the secret it carries -- rather than
+merely declining to print it this one time.
+
 Usage::
 
     python3 .github/scripts/gitapex_check_copilot_endpoint_configured.py
@@ -72,6 +107,8 @@ import argparse
 import os
 import sys
 from urllib.parse import urlsplit
+
+from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 
 #: Short canonical name first, long COPILOT_PROVIDER_* alias second -- the
 #: short name wins when both are set, matching waza's own envFirst() order.
@@ -110,76 +147,85 @@ def resolve_base_url_var(env: dict[str, str]) -> str:
     raise EndpointNotConfigured(f"neither {BASE_URL_VARS[0]} nor {BASE_URL_VARS[1]} is set")
 
 
-def validate_base_url(var_name: str, value: str) -> None:
-    """Raise EndpointMalformed unless ``value`` has both a scheme and a host.
+class _CopilotEndpointURL(BaseModel):
+    """Pydantic wrapper around the scheme/host/control-character checks
+    ``validate_base_url`` runs, each verified live against waza's own
+    ``providerHost()`` and a throwaway Go ``net/url`` program (see the
+    module docstring) rather than assumed:
 
-    Mirrors waza's own ``providerHost()`` (``internal/execution/copilot.go``):
-    the parsed URL must carry a non-empty scheme and a non-empty host.
+    - Scheme and host (``.hostname``, not ``.netloc`` -- ``netloc`` folds
+      userinfo into the same string as the host, so
+      ``"https://user:pass@"`` reads non-empty even with no real host;
+      Go's own ``Host`` field is empty for that input) must both be
+      present.
+    - The host must not contain whitespace: Go's own ``url.Parse`` refuses
+      to parse one with an embedded space at all, stricter than Python's
+      ``urlsplit``, which accepts it as part of the host string.
+    - No raw C0 control character or DEL (ordinal < 0x20, or 0x7f)
+      anywhere in the value, checked before ``urlsplit`` ever runs --
+      ``urlsplit`` silently drops an embedded tab/newline/CR/NUL from
+      anywhere in the string rather than erroring or preserving it, so a
+      hostname-only check downstream never sees one; Go's own
+      ``url.Parse`` rejects the identical input outright, before
+      component parsing even starts. Found by an automated reviewer on
+      this PR, independently reproduced against both Python's ``urlsplit``
+      and a live Go program before fixing, not fixed on the report alone.
 
-    Deliberately checks ``.hostname``, not ``.netloc``: ``netloc`` folds
-    userinfo into the same string as the host (``urlsplit("https://user:pass@").netloc
-    == "user:pass@"``, non-empty even though there is no host at all), while
-    Go's ``net/url.URL.Host`` -- what ``providerHost()`` actually reads -- is
-    empty for that same input (verified live with a throwaway Go program
-    against the local toolchain: ``url.Parse("https://user:pass@").Host ==
-    ""``). A netloc-only check would have silently accepted a value with
-    credentials and no endpoint to send them to.
+    Deliberately typed as plain ``str``, not pydantic's own ``AnyUrl``:
+    verified live (pydantic 2.13.4) that ``AnyUrl`` itself silently
+    normalizes away a trailing-whitespace host and an embedded control
+    character -- the exact two gaps this model exists to close -- so using
+    it here would reintroduce them; see the module docstring.
 
-    Also rejects a hostname containing whitespace. Go's own ``url.Parse``
-    refuses to parse a host with an embedded space at all (confirmed by the
-    same throwaway program: ``url.Parse("https://example.com   ")`` returns
-    the error ``invalid character " " in host name``) -- stricter than
-    Python's ``urlsplit``, which silently accepts the space as part of the
-    host string.
-
-    Also rejects any raw C0 control character or DEL (ordinal < 0x20, or
-    0x7f) anywhere in ``value``, checked before ``urlsplit`` ever runs.
-    ``urlsplit`` silently drops an embedded tab/newline/CR from anywhere in
-    the string rather than erroring or preserving it (confirmed live:
-    ``urlsplit("https://example.invalid/\\npath").path == "/path"``, the
-    ``\\n`` simply gone) -- so a hostname-only whitespace check downstream
-    never sees it. Go's own ``url.Parse`` rejects the same input outright,
-    for the same range, before component parsing even starts (confirmed
-    live: every one of ``\\n``, ``\\r``, ``\\t``, ``\\x00``, ``\\x1e``,
-    ``\\x1f``, ``\\x7f`` anywhere in the string -- host or path alike --
-    fails with ``invalid control character in URL``; a literal space,
-    0x20, is explicitly fine and left alone). Found by an automated
-    reviewer on this PR, independently reproduced against both Python's
-    ``urlsplit`` and a live Go program before this fix, not fixed on the
-    reviewer's say-so alone.
-
-    ``urlsplit``/``.hostname`` can also raise ``ValueError`` on other
-    malformed input (confirmed live: an unterminated IPv6 literal like
-    ``https://[::1``), caught here and folded into the same
-    ``EndpointMalformed`` outcome. An uncaught exception here would still
-    exit this script non-zero -- Python's default handling for an
-    unhandled exception -- so letting it escape was never a fail-*open*
-    risk on its own. The reason to catch it explicitly: an uncaught
-    exception was an *accidental* deny (whatever CPython's default
-    happened to do that day, unverified by any test), not a *designed*
-    one -- dimension 15 of
-    skills/evaluating-deterministic-gate-quality/references/dimensions.md
-    is explicit that a bundled test covering only well-formed input does
-    not by itself earn credit here, and an accidental deny path is exactly
-    the kind of thing a later refactor (e.g. wrapping main()'s body in a
-    broader except-and-continue for an unrelated reason) could silently
-    flip to fail-open with nothing to catch the regression. Routing it
-    through the same explicit, tested path as every other malformed-input
-    case closes that risk and gives a consistent, actionable ``::error::``
-    message instead of a raw traceback either way.
+    No explicit ``try``/``except ValueError`` around ``urlsplit`` inside
+    the validator below (unlike an earlier revision): pydantic's own
+    ``field_validator`` already catches any ``ValueError`` raised inside
+    it (confirmed live, including one bubbling up from ``urlsplit``'s own
+    lazy ``.hostname`` property for a malformed IPv6 literal) and folds it
+    into a clean ``ValidationError`` -- a second, redundant catch here
+    would just be dead code.
     """
-    if any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in value):
-        raise EndpointMalformed(var_name)
-    try:
+
+    model_config = ConfigDict(frozen=True)
+
+    value: str
+
+    @field_validator("value")
+    @classmethod
+    def _must_be_a_well_formed_endpoint(cls, value: str) -> str:
+        if any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in value):
+            raise ValueError("contains a raw C0 control character or DEL")
         parts = urlsplit(value)
         hostname = parts.hostname
-    except ValueError as exc:
-        # e.g. an unterminated IPv6 literal ("https://[::1") -- urlsplit or
-        # the lazy .hostname property can raise instead of returning a
-        # falsy value; both must land here, not escape as a bare traceback.
-        raise EndpointMalformed(var_name) from exc
-    if not parts.scheme or not hostname or any(ch.isspace() for ch in hostname):
-        raise EndpointMalformed(var_name)
+        if not parts.scheme or not hostname:
+            raise ValueError("missing a scheme or a host")
+        if any(ch.isspace() for ch in hostname):
+            raise ValueError("host contains whitespace")
+        return value
+
+
+def validate_base_url(var_name: str, value: str) -> None:
+    """Raise EndpointMalformed unless ``value`` passes ``_CopilotEndpointURL``.
+
+    ``from None``, not ``from exc``, is deliberate: pydantic's own
+    ``ValidationError`` embeds the raw invalid *value* in its ``str()``,
+    ``repr()``, and structured ``.errors()`` alike (verified live -- a
+    sentinel planted in a deliberately malformed URL was fully recoverable
+    from ``e.errors()[0]["input"]``, and partially visible even in
+    ``str(e)``). Chaining it onto ``EndpointMalformed`` would retain that
+    value on ``__cause__`` -- inert today (``main()`` below never prints a
+    raw traceback) but exactly the kind of latent leak a future caller
+    that does (e.g. an added debug log) would surface with nothing to
+    catch the regression, the same accidental-safety shape already
+    rejected once for the bare ``ValueError``-from-``urlsplit`` case this
+    module fixed earlier. ``from None`` discards pydantic's own exception
+    object -- and the secret it carries -- rather than merely declining to
+    print it this one time.
+    """
+    try:
+        _CopilotEndpointURL(value=value)
+    except ValidationError:
+        raise EndpointMalformed(var_name) from None
 
 
 def check(env: dict[str, str]) -> str:

@@ -71,6 +71,27 @@ def test_malformed_names_the_long_alias_when_that_is_the_one_set() -> None:
     assert exc_info.value.var_name == "COPILOT_PROVIDER_BASE_URL"
 
 
+def test_malformed_exception_does_not_chain_the_pydantic_validation_error() -> None:
+    # pydantic's own ValidationError embeds the raw invalid value in its
+    # str()/repr()/errors() alike. validate_base_url uses `raise ... from
+    # None` specifically so that value never survives on __cause__ -- a
+    # plain `from exc` would still pass every other test here (nothing
+    # else prints a traceback today) while leaving a live secret-leak
+    # trap for whatever caller adds one next. Assert the suppression
+    # directly rather than relying on no test ever printing a traceback.
+    with pytest.raises(preflight.EndpointMalformed) as exc_info:
+        preflight.validate_base_url("COPILOT_BASE_URL", SENTINEL_URL.replace("https://", ""))
+    assert exc_info.value.__cause__ is None
+    assert exc_info.value.__suppress_context__ is True
+    # Belt-and-suspenders: even a full traceback render of the raised
+    # exception (what an uncaught propagation or a future `logging.exception`
+    # call would produce) must not surface the sentinel.
+    import traceback
+
+    rendered = "".join(traceback.format_exception(type(exc_info.value), exc_info.value, exc_info.tb))
+    assert "sentinel-value-must-never-leak" not in rendered
+
+
 # Defeat tests (issue #124's own disclosure convention): each of these was
 # constructed to defeat an earlier, naive revision of validate_base_url that
 # checked ``urlsplit(value).netloc`` for non-emptiness instead of
