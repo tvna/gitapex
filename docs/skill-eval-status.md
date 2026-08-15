@@ -156,7 +156,7 @@ suites still assert on final text only).
 | `fixing-a-reported-issue` | 1 | 6 | none | no | [evals/fixing-a-reported-issue/eval-status.md](../evals/fixing-a-reported-issue/eval-status.md) |
 | `grounding-in-primary-sources` | 3 | 23 | none | no | [evals/grounding-in-primary-sources/eval-status.md](../evals/grounding-in-primary-sources/eval-status.md) |
 | `merge-retrospective` | 3 | 18 | none | no | [evals/merge-retrospective/eval-status.md](../evals/merge-retrospective/eval-status.md) |
-| `outward-artifact-preflight` | 3 | 5 | none | no | [evals/outward-artifact-preflight/eval-status.md](../evals/outward-artifact-preflight/eval-status.md) |
+| `outward-artifact-preflight` | 3 | 7 | none | no | [evals/outward-artifact-preflight/eval-status.md](../evals/outward-artifact-preflight/eval-status.md) |
 | `planning-a-branch-from-an-issue` | 3 | 6 | none | no | [evals/planning-a-branch-from-an-issue/eval-status.md](../evals/planning-a-branch-from-an-issue/eval-status.md) |
 | `ranking-the-open-queue` | 1 | 3 | none | no | [evals/ranking-the-open-queue/eval-status.md](../evals/ranking-the-open-queue/eval-status.md) |
 | `responding-to-a-fresh-arrival` | 1 | 10 | none | no | [evals/responding-to-a-fresh-arrival/eval-status.md](../evals/responding-to-a-fresh-arrival/eval-status.md) |

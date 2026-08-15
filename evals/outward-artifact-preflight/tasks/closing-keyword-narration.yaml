@@ -1,0 +1,27 @@
+id: outward-artifact-preflight-closing-keyword-narration
+name: Narration Sentence Trips The Closing-Keyword Hazard
+description: A commit message narrates a past PR closing a past issue in prose
+  (PR N closed issue M); check 4 flags the bare keyword-plus-number pattern
+  and suggests a rewrite before the text is pushed.
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use outward-artifact-preflight. I'm about to push this commit, can you
+    check it first?
+
+    Draft commit message:
+    fix: retry the sync job on transient network errors
+
+    PR #349 closed #340, but the retry logic it added didn't cover this
+    new timeout case.
+
+    Refs #401
+expected:
+  output_contains:
+    - "closing-keyword"
+    - "#340"
+    - "rewrite"
+  output_not_contains:
+    - "safe to push"
+    - "looks good, push it"
