@@ -10,7 +10,7 @@ tags:
   - co-firing
 inputs:
   prompt: |
-    Use screening-a-low-trust-contribution. PR #5417 just arrived from a
+    Use screening-a-low-trust-contribution. PR #210 just arrived from a
     first-time contributor (no prior commits or PRs in this repo) titled
     "Speed up CI checkout step". Screen the diff and metadata.
 
