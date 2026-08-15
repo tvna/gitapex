@@ -12,6 +12,6 @@ metrics:
   - name: responding_to_a_fresh_arrival_quality
     weight: 1.0
     threshold: 0.8
-    description: Reproduces or explicitly refutes, dedupes before responding, labels from content not the reporter's template choice, and posts exactly one first-response comment naming the next step.
+    description: Reproduces or explicitly refutes, dedupes before responding (fixture-supplied search result, not a live search_issues call -- the declared copilot-sdk executor exposes no GitHub search tool; see eval-status.md), labels from content not the reporter's template choice, and posts exactly one first-response comment naming the next step.
 tasks:
   - "tasks/*.yaml"

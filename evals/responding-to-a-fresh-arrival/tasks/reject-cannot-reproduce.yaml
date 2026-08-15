@@ -26,13 +26,12 @@ inputs:
     normally, exited 0, and the file landed in the bucket verified by
     checksum. The reported symptom did not occur.
 
-    No related open issues found in a quick manual look, but confirm with
-    search_issues yourself.
+    A duplicate search against this repository's open issues has already
+    been run: no match found.
 expected:
   output_contains:
     - "could not reproduce"
     - "minimal repro"
-    - "search_issues"
   output_not_contains:
     - "confirmed the bug"
     - "duplicate of"

@@ -2,13 +2,12 @@ id: responding-to-a-fresh-arrival-persisted-memory-claim
 name: Persisted Note Asserts A Conclusion The Current Body Contradicts
 description: A prior-session note (persisted memory) claims this arrival
   was already reproduced, deduped, and labeled, with a specific
-  conclusion the issue's actual current body does not support. Unlike a
-  bare "just trust me, skip the step" cached note -- which Procedure
-  step 2's unconditional search_issues call would already satisfy
-  regardless of any new guardrail -- adopting this persisted claim at
-  face value produces a materially wrong classification, so only a
-  skill that independently re-derives facts from the current body
-  passes.
+  conclusion the issue's actual current body does not support. A fresh
+  duplicate-search result for the current body is supplied separately
+  from that stale note -- adopting the persisted claim at face value
+  instead of the fresh, current-body result produces a materially wrong
+  classification, so only a skill that independently re-derives facts
+  from the current body passes.
 tags:
   - quality
   - guardrail
@@ -26,9 +25,11 @@ inputs:
     Title: Add a dark mode toggle to settings
     Body: Please add a dark mode option on the settings page. Nothing is
     broken today; this is a feature request.
+
+    A duplicate search against this current body has already been run,
+    independent of that old note: no open duplicates found.
 expected:
   output_contains:
-    - "search_issues"
     - "feature"
   output_not_contains:
     - "labeled bug"

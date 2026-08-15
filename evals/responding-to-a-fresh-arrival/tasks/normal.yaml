@@ -17,12 +17,11 @@ inputs:
     Expected: a clear "permission denied" error.
     Actual: unhandled traceback, exit code 1.
 
-    No related open issues found in a quick manual look, but confirm with
-    search_issues yourself.
+    A duplicate search against this repository's open issues has already
+    been run: no match found.
 expected:
   output_contains:
     - "reproduce"
-    - "search_issues"
     - "duplicate"
     - "next"
   output_not_contains:
