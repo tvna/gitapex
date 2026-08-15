@@ -881,13 +881,13 @@ def test_main_body_file_oserror_reports_as_clean_body_file_error(monkeypatch: py
 def test_main_body_file_directory_reports_as_clean_error_not_traceback(
     monkeypatch: pytest.MonkeyPatch, capsys, tmp_path
 ) -> None:
-    # CodeRabbit review on this PR (issue #1087): Path.exists() accepts a
-    # directory, so the pre-existing exists()-based check let a directory
-    # path through to main()'s body_path.read_text(), which raises an
-    # uncaught IsADirectoryError -- the exact class of raw-traceback
-    # failure this issue exists to eliminate. is_file() rejects it in the
-    # validator instead, before read_text() is ever reached. Confirmed by
-    # direct execution before this test was written.
+    # Issue #1087: Path.exists() accepts a directory, so the pre-existing
+    # exists()-based check let a directory path through to main()'s
+    # body_path.read_text(), which raises an uncaught IsADirectoryError --
+    # the exact class of raw-traceback failure this issue exists to
+    # eliminate. is_file() rejects it in the validator instead, before
+    # read_text() is ever reached. Confirmed by direct execution before
+    # this test was written.
     monkeypatch.setenv("GH_TOKEN", "tok")
     monkeypatch.setenv("REPO", "o/r")
     body_dir = tmp_path / "body-as-a-directory"
@@ -1068,10 +1068,9 @@ def test_main_keeps_padded_but_meaningful_values_unmutated(monkeypatch: pytest.M
     body_file is proven the same way at the filesystem level, not just by
     string equality: the padding is on the *filename itself* (via a chdir
     plus a relative name), so a future validator that stripped-and-stored
-    the value would look up a different, non-existent file and fail --
-    a prior version of this test padded only the directory component,
-    which Path.is_file() does not care about either way, so it would not
-    actually have caught that regression (CodeRabbit review on this PR)."""
+    the value would look up a different, non-existent file and fail.
+    Padding only the directory component would not catch that regression,
+    since Path.is_file() does not care about a directory's own name."""
     monkeypatch.setenv("GH_TOKEN", "tok")
     monkeypatch.setenv("REPO", "o/r")
     monkeypatch.chdir(tmp_path)

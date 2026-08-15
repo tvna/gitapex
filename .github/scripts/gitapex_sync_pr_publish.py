@@ -511,9 +511,9 @@ class _CliArgs(BaseModel):
         # is_file(), not exists(): a directory passes exists() but is not
         # readable as a file, so main()'s later body_path.read_text() would
         # raise an uncaught IsADirectoryError -- confirmed live, the same
-        # class of raw-traceback failure issue #1087 exists to eliminate,
-        # caught by CodeRabbit review on this PR. is_file() itself can still
-        # raise OSError (e.g. ENAMETOOLONG for an over-long path component)
+        # class of raw-traceback failure issue #1087 exists to eliminate.
+        # is_file() itself can still raise OSError (e.g. ENAMETOOLONG for an
+        # over-long path component)
         # rather than returning False -- found by adversarial review to
         # propagate straight through pydantic uncaught, since pydantic only
         # converts a validator's own ValueError/TypeError/AssertionError
