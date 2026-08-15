@@ -88,21 +88,27 @@ jobs:
         with:
           extra-conf: "experimental-features = nix-command flakes"
 
+      # Needed only to run the preflight script below via `uv run` --
+      # bare-python3-invocation-gate.yml requires every `.github/scripts/*.py`
+      # workflow call site to go through `uv run`, never plain `python3`.
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
       # Fail loudly if the credentials the copilot-sdk executor needs are not
       # configured, before any run is attempted. Presence is checked; values
-      # are never printed (CLAUDE.md section 4 -- secrets must not reach a log).
+      # are never printed (CLAUDE.md section 4 -- secrets must not reach a
+      # log). Shared with waza-eval-gate.yml's own identical preflight step
+      # via gitapex_check_copilot_endpoint_configured.py (issue #124) rather
+      # than each workflow keeping its own copy of the bash check -- see that
+      # script's docstring for the primary-source verification of exactly
+      # what it does and does not enforce.
       - name: Preflight -- require executor endpoint secrets
         env:
           COPILOT_BASE_URL: ${{ secrets.COPILOT_BASE_URL }}
           COPILOT_PROVIDER_BASE_URL: ${{ secrets.COPILOT_PROVIDER_BASE_URL }}
-        run: |
-          if [ -z "$COPILOT_BASE_URL" ] && [ -z "$COPILOT_PROVIDER_BASE_URL" ]; then
-            echo "::error::No copilot-sdk endpoint configured. Set repository" \
-              "secret COPILOT_BASE_URL (and/or COPILOT_PROVIDER_BASE_URL) under" \
-              "Settings -> Secrets and variables -> Actions before dispatching." \
-              "See issue #106 for the issuance path."
-            exit 1
-          fi
+        run: uv run --frozen python3 .github/scripts/gitapex_check_copilot_endpoint_configured.py
 
       # For each committed suite: rewrite its config.model to this matrix tier
       # (waza 0.38.0 has no --model flag; model is an eval.yaml field), then run
@@ -110,9 +116,7 @@ jobs:
       # stay pinned to their default. `waza run <skill>` follows the documented
       # CLI form (waza run [skill-name]); each suite's directory name is its
       # skill name. Results land under results/<model>/ and are summarized to
-      # the job summary. Retaining the raw JSON as an uploaded artifact is a
-      # deliberate follow-up (it needs a pinned upload-artifact action this
-      # change does not add).
+      # the job summary, and retained as an uploaded artifact by the step below.
       - name: Run suites for model ${{ matrix.model }}
         env:
           MODEL: ${{ matrix.model }}
@@ -148,6 +152,26 @@ jobs:
             fi
           done
           exit "$failed"
+
+      # Result artifact retention (issue #124, carried forward from PR #120:
+      # deferred there "to avoid committing an unverified action pin" after
+      # the pin lookup 403'd in that authoring environment). SHA verified
+      # live against actions/upload-artifact's own tags
+      # (`git ls-remote --tags`): v7 and v7.0.1 resolve to the same commit.
+      # `if: always()` so a run that fails partway through the suite loop
+      # above still uploads whatever results/<model>/*.json completed before
+      # the failure, rather than losing them because the step exited
+      # non-zero. One artifact per matrix instance: upload-artifact requires
+      # unique names within a workflow run and explicitly documents the
+      # matrix case (a bare `results` name here would collide across
+      # `matrix.model` instances and fail every run past the first to finish).
+      - name: Upload results for model ${{ matrix.model }}
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: eval-matrix-results-${{ matrix.model }}
+          path: results/${{ matrix.model }}/
+          if-no-files-found: warn
 
   # Additive cross-vendor portability lane (issue #317, sub-task of #310).
   # Answers a different question than eval-matrix above (Claude-tier
@@ -262,3 +286,16 @@ jobs:
             fi
           done
           exit "$failed"
+
+      # Result artifact retention (issue #124), same rationale and SHA as
+      # eval-matrix's own upload step above. No matrix here (this job runs
+      # once, against the one HF_GEMMA4_MODEL), so a static name is safe --
+      # unlike eval-matrix, there is no `matrix.model` collision risk to
+      # suffix against.
+      - name: Upload HF Gemma 4 results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: eval-matrix-hf-gemma4-results
+          path: results/
+          if-no-files-found: warn

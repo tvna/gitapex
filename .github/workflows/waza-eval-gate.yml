@@ -184,6 +184,11 @@ jobs:
       # need. Presence is checked; values are never printed (CLAUDE.md
       # section 4 -- secrets must not reach a log). This job is not yet a
       # required status check (see issue #582 and #124 for the sequencing).
+      # Shared with waza-eval-matrix.yml's own identical preflight step via
+      # gitapex_check_copilot_endpoint_configured.py (issue #124) rather than
+      # each workflow keeping its own copy of the bash check -- see that
+      # script's docstring for the primary-source verification of exactly
+      # what it does and does not enforce.
       #
       # Known, accepted limitation (not a bug): this workflow triggers on
       # `pull_request`, and GitHub never exposes repository secrets to a
@@ -205,15 +210,7 @@ jobs:
         env:
           COPILOT_BASE_URL: ${{ secrets.COPILOT_BASE_URL }}
           COPILOT_PROVIDER_BASE_URL: ${{ secrets.COPILOT_PROVIDER_BASE_URL }}
-        run: |
-          if [ -z "$COPILOT_BASE_URL" ] && [ -z "$COPILOT_PROVIDER_BASE_URL" ]; then
-            echo "::error::No copilot-sdk endpoint configured. Set repository" \
-              "secret COPILOT_BASE_URL (and/or COPILOT_PROVIDER_BASE_URL) under" \
-              "Settings -> Secrets and variables -> Actions before this check" \
-              "can run for real. See issue #124 for the issuance path (this" \
-              "job is not yet a required status check -- see issue #582)."
-            exit 1
-          fi
+        run: uv run --frozen python3 .github/scripts/gitapex_check_copilot_endpoint_configured.py
 
       # Run each touched skill's suite at its own committed default model --
       # unlike waza-eval-matrix.yml, there is deliberately no
