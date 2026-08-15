@@ -71,6 +71,63 @@ def test_malformed_names_the_long_alias_when_that_is_the_one_set() -> None:
     assert exc_info.value.var_name == "COPILOT_PROVIDER_BASE_URL"
 
 
+# Defeat tests (issue #124's own disclosure convention): each of these was
+# constructed to defeat an earlier, naive revision of validate_base_url that
+# checked ``urlsplit(value).netloc`` for non-emptiness instead of
+# ``.hostname``, and did not catch ``urlsplit``'s own ValueError. Confirmed
+# against a throwaway Go program using net/url (the same package waza's own
+# providerHost() uses) before fixing the implementation, not just asserted:
+# see the module docstring's own citations of the exact Go outputs.
+
+
+def test_userinfo_with_no_host_is_rejected() -> None:
+    # netloc for this value is "user:pass@" -- non-empty, so a netloc-only
+    # check would have wrongly accepted it. Go's own url.Parse gives this an
+    # empty Host, which is what providerHost() actually checks.
+    with pytest.raises(preflight.EndpointMalformed):
+        preflight.check({"COPILOT_BASE_URL": "https://user:pass@"})
+
+
+def test_bare_at_sign_with_no_host_is_rejected() -> None:
+    with pytest.raises(preflight.EndpointMalformed):
+        preflight.check({"COPILOT_BASE_URL": "https://@"})
+
+
+def test_userinfo_with_a_real_host_is_still_accepted() -> None:
+    # The userinfo-stripping fix above must not overcorrect into rejecting a
+    # legitimate host just because credentials are also present in the URL.
+    assert preflight.check({"COPILOT_BASE_URL": "https://user:pass@example.com"}) == "COPILOT_BASE_URL"
+
+
+def test_whitespace_only_host_is_rejected() -> None:
+    # urlsplit("https://   /path").netloc == "   " -- non-empty and would
+    # have passed a naive truthiness check. Go's own url.Parse refuses to
+    # parse this at all ("invalid character \" \" in host name").
+    with pytest.raises(preflight.EndpointMalformed):
+        preflight.check({"COPILOT_BASE_URL": "https://   /path"})
+
+
+def test_trailing_whitespace_in_host_is_rejected() -> None:
+    with pytest.raises(preflight.EndpointMalformed):
+        preflight.check({"COPILOT_BASE_URL": "https://example.com   "})
+
+
+def test_unterminated_ipv6_literal_fails_closed_not_a_crash() -> None:
+    # urlsplit / .hostname raises ValueError for this input rather than
+    # returning a falsy value -- an earlier revision let that escape as an
+    # unhandled traceback instead of a clean EndpointMalformed, which is a
+    # worse failure mode than a wrong verdict (a crash gives no actionable
+    # message and can look like an infrastructure fault, not a config one).
+    with pytest.raises(preflight.EndpointMalformed):
+        preflight.check({"COPILOT_BASE_URL": "https://[::1"})
+
+
+def test_ipv6_literal_with_port_is_accepted() -> None:
+    # Sanity check in the other direction: the stricter host validation
+    # above must not overcorrect into rejecting a legitimate IPv6 endpoint.
+    assert preflight.check({"COPILOT_BASE_URL": "https://[::1]:8443"}) == "COPILOT_BASE_URL"
+
+
 def test_valid_url_with_port_and_path_passes() -> None:
     # A realistic self-hosted endpoint shape: scheme + host + port + path.
     assert preflight.check({"COPILOT_BASE_URL": "https://gateway.internal:8443/v1"}) == "COPILOT_BASE_URL"

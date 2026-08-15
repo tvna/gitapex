@@ -113,12 +113,54 @@ def resolve_base_url_var(env: dict[str, str]) -> str:
 def validate_base_url(var_name: str, value: str) -> None:
     """Raise EndpointMalformed unless ``value`` has both a scheme and a host.
 
-    Mirrors waza's own ``providerHost()``
-    (``internal/execution/copilot.go``): the parsed URL must carry a
-    non-empty scheme and a non-empty host.
+    Mirrors waza's own ``providerHost()`` (``internal/execution/copilot.go``):
+    the parsed URL must carry a non-empty scheme and a non-empty host.
+
+    Deliberately checks ``.hostname``, not ``.netloc``: ``netloc`` folds
+    userinfo into the same string as the host (``urlsplit("https://user:pass@").netloc
+    == "user:pass@"``, non-empty even though there is no host at all), while
+    Go's ``net/url.URL.Host`` -- what ``providerHost()`` actually reads -- is
+    empty for that same input (verified live with a throwaway Go program
+    against the local toolchain: ``url.Parse("https://user:pass@").Host ==
+    ""``). A netloc-only check would have silently accepted a value with
+    credentials and no endpoint to send them to.
+
+    Also rejects a hostname containing whitespace. Go's own ``url.Parse``
+    refuses to parse a host with an embedded space at all (confirmed by the
+    same throwaway program: ``url.Parse("https://example.com   ")`` returns
+    the error ``invalid character " " in host name``) -- stricter than
+    Python's ``urlsplit``, which silently accepts the space as part of the
+    host string.
+
+    ``urlsplit``/``.hostname`` can also raise ``ValueError`` on other
+    malformed input (confirmed live: an unterminated IPv6 literal like
+    ``https://[::1``), caught here and folded into the same
+    ``EndpointMalformed`` outcome. An uncaught exception here would still
+    exit this script non-zero -- Python's default handling for an
+    unhandled exception -- so letting it escape was never a fail-*open*
+    risk on its own. The reason to catch it explicitly: an uncaught
+    exception was an *accidental* deny (whatever CPython's default
+    happened to do that day, unverified by any test), not a *designed*
+    one -- dimension 15 of
+    skills/evaluating-deterministic-gate-quality/references/dimensions.md
+    is explicit that a bundled test covering only well-formed input does
+    not by itself earn credit here, and an accidental deny path is exactly
+    the kind of thing a later refactor (e.g. wrapping main()'s body in a
+    broader except-and-continue for an unrelated reason) could silently
+    flip to fail-open with nothing to catch the regression. Routing it
+    through the same explicit, tested path as every other malformed-input
+    case closes that risk and gives a consistent, actionable ``::error::``
+    message instead of a raw traceback either way.
     """
-    parts = urlsplit(value)
-    if not parts.scheme or not parts.netloc:
+    try:
+        parts = urlsplit(value)
+        hostname = parts.hostname
+    except ValueError as exc:
+        # e.g. an unterminated IPv6 literal ("https://[::1") -- urlsplit or
+        # the lazy .hostname property can raise instead of returning a
+        # falsy value; both must land here, not escape as a bare traceback.
+        raise EndpointMalformed(var_name) from exc
+    if not parts.scheme or not hostname or any(ch.isspace() for ch in hostname):
         raise EndpointMalformed(var_name)
 
 
