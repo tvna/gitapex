@@ -53,16 +53,32 @@ def test_exits_zero_even_when_python3_reports_failure(tmp_path: Path) -> None:
     assert "not a gitapex checkout" in result.stderr
 
 
-def test_installs_the_prek_hook_for_a_real_checkout() -> None:
+def test_installs_the_prek_hook_for_a_real_checkout(tmp_path: Path) -> None:
     # Issue #749: this ephemeral-web session-start path is the third
     # place (alongside CONTRIBUTING.md's manual step and flake.nix's
     # devShell shellHook) prek's hook install must reach -- exercised
-    # here against this repository's own real checkout (REPO_ROOT has a
-    # real .git/ and, by the time this test runs, a real
-    # .pre-commit-config.yaml), not a fake project dir.
-    result = _run({"CLAUDE_CODE_REMOTE": "true", "CLAUDE_PROJECT_DIR": str(REPO_ROOT)})
+    # here against a real checkout (a real .git/ and, by the time this
+    # test runs, a real .pre-commit-config.yaml), not a fake project dir.
+    #
+    # Issue #991: the real checkout in question is a throwaway local
+    # clone of REPO_ROOT, not REPO_ROOT itself. REPO_ROOT's own
+    # .git/hooks/pre-commit is not owned by any single pytest-xdist
+    # worker, and `prek install` rewrites it unconditionally -- verified
+    # directly: its mtime changes even when its content stays
+    # byte-identical. A `--depth 1` local clone still carries this
+    # commit's real apm.yml and .pre-commit-config.yaml (both tracked
+    # files), so the prek-install step below still runs against a
+    # genuine git repository with genuine config -- the exact distinction
+    # this test exists to draw against a `tmp_path` fake, unaffected by
+    # which git repository supplies that genuine config.
+    checkout = tmp_path / "checkout"
+    subprocess.run(
+        ["git", "clone", "-q", "--depth", "1", "--no-tags", f"file://{REPO_ROOT}", str(checkout)],
+        check=True,
+    )
+    result = _run({"CLAUDE_CODE_REMOTE": "true", "CLAUDE_PROJECT_DIR": str(checkout)})
     assert result.returncode == 0
-    pre_commit_hook = REPO_ROOT / ".git" / "hooks" / "pre-commit"
+    pre_commit_hook = checkout / ".git" / "hooks" / "pre-commit"
     assert pre_commit_hook.exists()
     assert "prek" in pre_commit_hook.read_text(encoding="utf-8")
 
