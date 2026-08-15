@@ -132,6 +132,22 @@ def validate_base_url(var_name: str, value: str) -> None:
     Python's ``urlsplit``, which silently accepts the space as part of the
     host string.
 
+    Also rejects any raw C0 control character or DEL (ordinal < 0x20, or
+    0x7f) anywhere in ``value``, checked before ``urlsplit`` ever runs.
+    ``urlsplit`` silently drops an embedded tab/newline/CR from anywhere in
+    the string rather than erroring or preserving it (confirmed live:
+    ``urlsplit("https://example.invalid/\\npath").path == "/path"``, the
+    ``\\n`` simply gone) -- so a hostname-only whitespace check downstream
+    never sees it. Go's own ``url.Parse`` rejects the same input outright,
+    for the same range, before component parsing even starts (confirmed
+    live: every one of ``\\n``, ``\\r``, ``\\t``, ``\\x00``, ``\\x1e``,
+    ``\\x1f``, ``\\x7f`` anywhere in the string -- host or path alike --
+    fails with ``invalid control character in URL``; a literal space,
+    0x20, is explicitly fine and left alone). Found by an automated
+    reviewer on this PR, independently reproduced against both Python's
+    ``urlsplit`` and a live Go program before this fix, not fixed on the
+    reviewer's say-so alone.
+
     ``urlsplit``/``.hostname`` can also raise ``ValueError`` on other
     malformed input (confirmed live: an unterminated IPv6 literal like
     ``https://[::1``), caught here and folded into the same
@@ -152,6 +168,8 @@ def validate_base_url(var_name: str, value: str) -> None:
     case closes that risk and gives a consistent, actionable ``::error::``
     message instead of a raw traceback either way.
     """
+    if any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in value):
+        raise EndpointMalformed(var_name)
     try:
         parts = urlsplit(value)
         hostname = parts.hostname

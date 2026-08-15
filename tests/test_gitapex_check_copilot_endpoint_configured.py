@@ -128,6 +128,36 @@ def test_ipv6_literal_with_port_is_accepted() -> None:
     assert preflight.check({"COPILOT_BASE_URL": "https://[::1]:8443"}) == "COPILOT_BASE_URL"
 
 
+# Found by an automated PR reviewer, independently reproduced (against both
+# urlsplit and a live Go net/url program) before fixing rather than trusting
+# the report: urlsplit silently drops a raw C0 control character or DEL from
+# anywhere in the string instead of erroring or preserving it, so a
+# hostname-only whitespace check never sees one. Go's own url.Parse rejects
+# the same input outright, before component parsing starts at all.
+@pytest.mark.parametrize(
+    "value",
+    [
+        "https://example.invalid/\npath",  # newline
+        "https://example.invalid/\rpath",  # carriage return
+        "https://example.invalid/\tpath",  # tab
+        "https://example.invalid/\x00path",  # NUL
+        "https://example.invalid/\x1fpath",  # highest C0 control
+        "https://example.invalid/\x7fpath",  # DEL
+        "https://exam\nple.invalid/path",  # control char inside the host itself
+    ],
+)
+def test_control_character_anywhere_in_value_is_rejected(value: str) -> None:
+    with pytest.raises(preflight.EndpointMalformed):
+        preflight.check({"COPILOT_BASE_URL": value})
+
+
+def test_plain_space_in_path_is_still_accepted() -> None:
+    # Go's own url.Parse does not reject an ordinary space (0x20) outside
+    # the host -- only C0 controls and DEL. The fix above must not
+    # overcorrect into rejecting a character Go itself tolerates.
+    assert preflight.check({"COPILOT_BASE_URL": "https://example.invalid/a path"}) == "COPILOT_BASE_URL"
+
+
 def test_valid_url_with_port_and_path_passes() -> None:
     # A realistic self-hosted endpoint shape: scheme + host + port + path.
     assert preflight.check({"COPILOT_BASE_URL": "https://gateway.internal:8443/v1"}) == "COPILOT_BASE_URL"
