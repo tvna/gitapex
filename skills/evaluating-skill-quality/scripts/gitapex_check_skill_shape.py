@@ -909,21 +909,48 @@ EXEC_REQ_NETWORK_MODES = ("disabled", "allowlist", "unrestricted")  # closed voc
 # already established for a schema constraint that also needs enforcing in
 # this dependency-free, no-YAML-library parser).
 EXEC_REQ_PACKAGES_KEY_RE = re.compile(r"^[a-z][a-z0-9-]*$")
+# Detects a line that LOOKS like an attempted "- <value>" packages list item
+# (a "-" as its first non-whitespace character, tabs included) but whose
+# leading whitespace fails EXEC_REQ_TOOLS_LIST_ITEM_RE's own strict "6 or
+# more literal SPACE characters" requirement -- a tab anywhere in the
+# indent, or fewer than 6 spaces. Used only to distinguish that case from a
+# packages ecosystem list genuinely ending (a real dedent, or a new sibling
+# ecosystem key) while collecting_exec_packages_list is open: without it, a
+# line like "\t- some-package" (or "  - some-package", 2 spaces) silently
+# finalizes the list as empty -- indistinguishable from the package truly
+# never having been declared -- instead of being recorded into
+# malformed_execution_requirement_packages_items the way an item
+# EXEC_REQ_TOOLS_LIST_ITEM_RE itself rejects (mapping-shaped, wrong type)
+# already is. Cannot collide with a legitimate new KEY_LINE_RE_6 sibling
+# key: whenever this matches AND the strict item regex already failed, the
+# leading whitespace run is provably not "exactly 6 literal spaces" (either
+# shorter, or tab-containing), which KEY_LINE_RE_6 requires verbatim -- so
+# the two can never both match the same line. Scoped to packages only, per
+# this fix's own issue: tools' and network's own sibling list-item blocks
+# (collecting_exec_tools_list/collecting_exec_network_list below) share this
+# exact latent gap -- no equivalent fail-closed check exists at their own
+# list-item level either, only at the surrounding key level -- and are
+# deliberately left as-is here rather than silently duplicating the fix
+# beyond this issue's own scope.
+EXEC_REQ_PACKAGES_MISINDENTED_ITEM_RE = re.compile(r"^[ \t]*-\s*(.*)$")
 # .gitapex/dependency-allowlist.json's own repo-root-relative path (see
 # _execution_requirements_packages_allowlist_check's own docstring for the
 # check this feeds). Resolved from the TARGET skill directory being
-# checked (skill_dir.parent.parent -- two parents up from
-# <repo-root>/skills/<name>/, the same skills/-directory layout
-# _resolves_to_sibling_skill's own skill_dir.parent callers already
-# assume), never from this script's own __file__ location: unlike
-# .github/scripts/*.py's own fixed Path(__file__).resolve().parents[N]
-# convention (see e.g. gitapex_scan_ssot_schema.py's REPO_ROOT), which is
-# safe only because those scripts are pinned to this one repository and
-# never move, this checker is itself Portable (spec.portability: Portable,
-# per this skill's own SKILL.md) and travels with the skill directory to
-# any consuming repository -- its own __file__ location cannot be trusted
-# to sit inside the repository actually under test, so only a path derived
-# from the target being checked travels correctly with vendoring.
+# checked (_dependency_allowlist_repo_root's own resolve-then-walk-for-
+# ".git" logic -- see its docstring), never from this script's own
+# __file__ location: unlike .github/scripts/*.py's own fixed
+# Path(__file__).resolve().parents[N] convention (see e.g.
+# gitapex_scan_ssot_schema.py's REPO_ROOT), which is safe only because
+# those scripts are pinned to this one repository and never move, this
+# checker is itself Portable (spec.portability: Portable, per this
+# skill's own SKILL.md) and travels with the skill directory to any
+# consuming repository -- its own __file__ location cannot be trusted to
+# sit inside the repository actually under test, so only a path derived
+# from the target being checked travels correctly with vendoring. The
+# final path is also walked component-by-component for symlinks before
+# ever being read (_reject_symlinked_allowlist_path) -- it is not scoped
+# by --allowed-root the way the skill directory itself is, since it
+# deliberately lives outside the skill directory being checked.
 DEPENDENCY_ALLOWLIST_RELATIVE_PATH = ".gitapex/dependency-allowlist.json"
 
 TAG_RE = re.compile(r"</?[A-Za-z][^>]*>")
@@ -1519,16 +1546,26 @@ class ManifestParse:
 
     ``unknown_execution_requirement_packages_keys`` and
     ``malformed_execution_requirement_packages_items`` are ``packages``'s
-    own equivalents, differing from ``tools``'/``network``'s in HOW the
-    first is populated: since ``packages``' own subkeys are free-form
+    own equivalents, differing from ``tools``'/``network``'s in HOW both
+    are populated: since ``packages``' own subkeys are free-form
     ecosystem identifiers rather than a fixed tuple (see
     EXEC_REQ_PACKAGES_KEY_RE), the first holds each key found directly
     under ``packages`` that does NOT match EXEC_REQ_PACKAGES_KEY_RE's own
     pattern (a regex mismatch, not a tuple-membership miss); the second
     holds each per-ecosystem list item that is mapping-shaped or
     inconsistently indented, the same rule every other malformed-item
-    channel above uses. Both empty when the field is absent or parsed
-    cleanly.
+    channel above uses, PLUS one packages-only addition
+    (EXEC_REQ_PACKAGES_MISINDENTED_ITEM_RE, see its own comment): a line
+    that looks like an attempted "- <value>" item (a "-" as its first
+    non-whitespace character) but whose leading whitespace fails the
+    strict list-item regex's own "6 or more literal spaces" requirement
+    -- a tab, or fewer than 6 spaces -- is ALSO recorded here rather than
+    silently finalizing the list as empty, indistinguishable from the
+    package never having been declared at all. tools'/network's own
+    sibling list-item blocks do not have this addition; see
+    EXEC_REQ_PACKAGES_MISINDENTED_ITEM_RE's own comment for why that gap
+    is deliberately left as-is there. Both empty when the field is absent
+    or parsed cleanly.
 
     ``malformed_external_citation_items`` and
     ``unknown_external_citation_item_keys`` are spec.externalCitations'
@@ -2391,12 +2428,48 @@ def _parse_manifest(text: str) -> ManifestParse:
                     continue
                 raw_text = item.group(1).strip()
                 is_quoted = len(raw_text) >= 2 and raw_text[0] == raw_text[-1] and raw_text[0] in "\"'"
+                if not is_quoted:
+                    # A trailing "# comment" on an otherwise-valid item
+                    # (e.g. "- requests  # transitively needed") must not
+                    # become part of the stored package name. Real YAML's
+                    # own comment rule -- an unquoted "#" preceded by
+                    # start-of-string or whitespace -- is exactly what
+                    # _INLINE_COMMENT_RE already encodes for
+                    # _is_non_string_plain_scalar's own type-classification
+                    # use below; that stripped copy was never fed back into
+                    # the STORED value before this fix, so a trailing
+                    # comment silently became part of the parsed package
+                    # name and then failed the allowlist check with
+                    # nothing pointing at the comment as the actual
+                    # problem. Gated on is_quoted the same way
+                    # REFERENCES_MAPPING_LIKE_RE/_is_non_string_plain_scalar
+                    # below already are -- a quoted item's own "#" is never
+                    # a real comment marker, so stripping must not touch
+                    # it. Scoped to packages only, per this fix's own
+                    # issue: tools'/network's own sibling item-storage
+                    # sites below share this same "stored value keeps a
+                    # trailing comment" gap and are deliberately left as-is
+                    # here.
+                    raw_text = _INLINE_COMMENT_RE.sub("", raw_text).strip()
                 if (not is_quoted and REFERENCES_MAPPING_LIKE_RE.match(raw_text)) or (
                     not is_quoted and _is_non_string_plain_scalar(raw_text)
                 ):
                     malformed_exec_packages_items.append(line.strip())
                 else:
                     collecting_exec_packages_list.append(_unquote(raw_text))
+                continue
+            if EXEC_REQ_PACKAGES_MISINDENTED_ITEM_RE.match(line):
+                # Looks like an attempted list item that the strict regex
+                # above rejected on indentation alone (a tab, or fewer
+                # than 6 spaces) -- see
+                # EXEC_REQ_PACKAGES_MISINDENTED_ITEM_RE's own comment. A
+                # real YAML parser (and a human reading the file) would
+                # still see a declared package here, so this must fail
+                # loudly as a malformed item like any other malformed
+                # packages entry, rather than silently finalizing the list
+                # as empty -- indistinguishable from the package never
+                # having been declared at all.
+                malformed_exec_packages_items.append(line.strip())
                 continue
             # Not a list item: this per-ecosystem package-name list ends here.
             _finalize_exec_packages_list()
@@ -2413,7 +2486,26 @@ def _parse_manifest(text: str) -> ManifestParse:
                 # (EXEC_REQ_PACKAGES_KEY_RE), unlike tools'/network's own
                 # fixed EXEC_REQ_TOOLS_SUBKEYS/EXEC_REQ_NETWORK_SUBKEYS
                 # tuples (see EXEC_REQ_PACKAGES_KEY_RE's own comment).
-                if not EXEC_REQ_PACKAGES_KEY_RE.match(key):
+                # fullmatch(), not match(): Python's trailing "$" (unlike
+                # JSON Schema's own ECMA-262 "$", which EXEC_REQ_PACKAGES_KEY_RE
+                # is hand-duplicated from -- see its own comment) also
+                # matches immediately before a trailing "\n", which
+                # match() would silently accept. key can never actually
+                # carry a "\n" here (every line is rstrip()-ped before
+                # this point in the parsing loop), so this is defense in
+                # depth against unintended reuse of this pattern with
+                # unstripped input, not a reachable bug today. Deliberately
+                # NOT rewritten to "\Z" in the regex source itself: that
+                # would desync EXEC_REQ_PACKAGES_KEY_RE.pattern from
+                # skill-metadata.schema.json's own propertyNames.pattern,
+                # which test_execution_requirement_packages_key_pattern_matches_schema
+                # asserts stay byte-identical -- and "\Z" is not a valid
+                # ECMA-262 escape, so mirroring it into the JSON Schema
+                # file would break every real downstream JSON-Schema
+                # validator that consumes it. fullmatch() gets the same
+                # exact-end semantics without touching the shared pattern
+                # text.
+                if not EXEC_REQ_PACKAGES_KEY_RE.fullmatch(key):
                     unknown_exec_packages_keys.append(line.strip())
                 elif value == "[]":
                     exec_packages[key] = []
@@ -5890,6 +5982,22 @@ def _execution_requirements_checks(
         for key in packages:
             if not _valid_execution_requirements_tools_list(packages[key]):
                 problems.append(f"packages.{key} is not a list of non-empty strings: {packages[key]!r}")
+        # KNOWN, DISCLOSED GAP (not fixed here): $defs.packageList in
+        # skill-metadata.schema.json declares "uniqueItems": true, but
+        # this checker does not enforce it -- a package name repeated
+        # twice under the same ecosystem (e.g. "pip: [pyyaml, pyyaml]")
+        # currently still passes execution-requirements-well-formed.
+        # Fail-open only in the sense of "does not additionally flag a
+        # redundant duplicate as its own defect"; it is not a security or
+        # allowlist-bypass gap (execution-requirements-packages-allowlisted
+        # already dedupes its own requested_packages before resolving
+        # against the allowlist, so a duplicate cannot inflate or hide an
+        # offender there). Left unimplemented rather than folded into
+        # _valid_execution_requirements_tools_list, which tools.read/
+        # write/shell and network.domains also share -- enforcing
+        # uniqueItems there too is a broader, separate change this
+        # finding did not ask for and risks failing existing skills that
+        # currently rely on tolerated duplicates in those other lists.
 
     network_present = "network" in execution_requirements
     network = execution_requirements.get("network")
@@ -5951,7 +6059,12 @@ EXECUTION_REQUIREMENTS_PACKAGES_ALLOWLISTED_RULE = (
     "relative) must exist and be well-formed JSON matching "
     '{"packages": {"<ecosystem>": ["<package-name>", ...]}}, listing '
     "every declared <ecosystem>/<package-name> pair; not applicable when "
-    "packages is absent or declares zero packages"
+    "packages is absent or declares zero packages. Package-name matching "
+    "is an exact, case- and separator-sensitive string comparison (e.g. "
+    '"PyYAML" does not match an allowlisted "pyyaml", even though PyPI '
+    "itself treats those as the same distribution per PEP 503) -- "
+    "populate the allowlist using the exact spelling declared in the "
+    "sidecar."
 )
 
 
@@ -5978,6 +6091,92 @@ def _valid_dependency_allowlist_config(config: object) -> bool:
     if not (isinstance(config, dict) and isinstance(config.get("packages"), dict)):
         return False
     return all(_valid_execution_requirements_tools_list(v) for v in config["packages"].values())
+
+
+def _dependency_allowlist_repo_root(skill_dir: Path) -> Path:
+    """Locate the repository root DEPENDENCY_ALLOWLIST_RELATIVE_PATH is
+    resolved against, given the skill directory under check.
+
+    Resolves ``skill_dir`` to an absolute, symlink-resolved real path
+    first (``Path.resolve()``) -- the raw, unresolved CLI target path a
+    fixed "two parents up" hop count previously used silently mis-located
+    the repository root whenever the caller's own working directory, or
+    the exact spelling of the target path on the command line, changed
+    how many hops actually reached it. E.g. running from inside
+    ``<repo>/skills/`` with a relative target ``"t"`` computes
+    ``Path("t").parent.parent == Path(".")``, landing on
+    ``<repo>/skills/.gitapex/...`` instead of ``<repo>/.gitapex/...`` --
+    a false FAIL for a perfectly valid skill, purely from how the path
+    was spelled on the command line.
+
+    Then walks upward from the resolved skill directory for the nearest
+    ancestor containing a ``.git`` entry -- a directory (a normal clone)
+    or a file (a worktree/submodule checkout's own gitdir pointer) --
+    real git's own repository-root convention, and the same marker
+    this module's own test suite's ``_write_skill_at_repo_root`` fixture
+    plants for this exact purpose. Falls back to the historical
+    ``skill_dir.parent.parent`` hop count (two levels up from
+    ``<repo-root>/skills/<name>/``) only when no ``.git`` marker exists
+    anywhere above the resolved skill directory, so a skill checked
+    outside any git repository still gets a deterministic guess rather
+    than an exception -- the allowlist-file-existence branch right after
+    this call already fails closed on a wrong guess, exactly as it always
+    has.
+    """
+    resolved = skill_dir.resolve()
+    current = resolved
+    while True:
+        if (current / ".git").exists():
+            return current
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
+    return resolved.parent.parent
+
+
+def _reject_symlinked_allowlist_path(repo_root: Path) -> Path | None:
+    """Resolve DEPENDENCY_ALLOWLIST_RELATIVE_PATH under ``repo_root``,
+    returning ``None`` if any path component along the way is itself a
+    symlink, instead of silently following it.
+
+    The same per-component symlink-walk technique ``_validate_read_scope``
+    already uses to stop a caller-approved root from being escaped via a
+    symlinked path component (see its own docstring and loop), adapted
+    here for one fixed relative path rather than an entire skill
+    directory tree -- ``_validate_read_scope``'s own
+    ``os.walk(..., followlinks=False)`` pass is skill-directory-shaped
+    and not applicable to a single config file, so it is not reused
+    verbatim. A symlinked ``.gitapex/`` directory, or a symlinked
+    ``dependency-allowlist.json`` itself, pointed outside the repository
+    actually under test could otherwise silently drive this check's own
+    verdict from content the caller never approved reading -- not scoped
+    by ``--allowed-root`` the way the skill directory itself is.
+    """
+    current = repo_root
+    for part in Path(DEPENDENCY_ALLOWLIST_RELATIVE_PATH).parts:
+        current = current / part
+        if current.is_symlink():
+            return None
+    return current
+
+
+# CLAUDE.md section 4: every output sink is an attack surface. A malformed
+# .gitapex/dependency-allowlist.json could be arbitrarily large (or, in
+# principle, carry text a repo owner never intended echoed to stdout/CI
+# logs); repr()-ing it whole into a CheckResult's evidence string --
+# printed verbatim by format_report() -- would make this check itself an
+# unbounded-output-sink / accidental-content-echo vector. Bounded to a
+# few hundred characters: enough for an admin to see roughly what shape
+# the file actually has, without ever emitting the full parsed content.
+_ALLOWLIST_CONFIG_EVIDENCE_REPR_LIMIT = 200
+
+
+def _bounded_repr(value: object, limit: int = _ALLOWLIST_CONFIG_EVIDENCE_REPR_LIMIT) -> str:
+    text = repr(value)
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit]}...<{len(text) - limit} more chars truncated>"
 
 
 def _execution_requirements_packages_allowlist_check(
@@ -6028,21 +6227,39 @@ def _execution_requirements_packages_allowlist_check(
       vacuously nothing to allowlist-check, distinguished in evidence text
       from the field being entirely absent for debugging clarity, though
       both are PASS.
+    - at least one valid pair, but the repository root (see
+      _dependency_allowlist_repo_root) has a symlink anywhere along
+      DEPENDENCY_ALLOWLIST_RELATIVE_PATH: FAIL, treated the same as a
+      malformed config -- see _reject_symlinked_allowlist_path. Checked
+      before existence, so a symlinked path never reaches is_file()/
+      read_text() at all.
     - at least one valid pair, but DEPENDENCY_ALLOWLIST_RELATIVE_PATH does
       not exist: FAIL. Deliberate fail-loud choice (CLAUDE.md section 4):
       an unconfigured allowlist constrains nothing, so silently passing
       would defeat the whole point of this check.
-    - the config file exists but is unreadable, not valid JSON, or does
-      not match _valid_dependency_allowlist_config's shape: FAIL with a
-      clear message. Never raises -- matches this module's own established
+    - the config file exists but is unreadable, not valid JSON (including
+      JSON nested deep enough to raise RecursionError, not just a
+      ValueError-shaped parse failure), or does not match
+      _valid_dependency_allowlist_config's shape: FAIL with a clear
+      message. Never raises -- matches this module's own established
       "malformed input fails the check, never crashes the process"
-      contract (e.g. the sidecar's own read/parse try/except above).
+      contract (e.g. the sidecar's own read/parse try/except above). A
+      wrong-shape config's own evidence text repr()s it through
+      _bounded_repr, never the full parsed value unbounded (CLAUDE.md
+      section 4: every output sink is an attack surface).
     - the config file is well-formed and every declared pair resolves:
-      PASS, naming every checked pair.
+      PASS, naming every checked pair. Declared pairs are deduplicated
+      (dict.fromkeys, order-preserving) before being counted, named, or
+      resolved, so a package declared twice in the sidecar is reported
+      once, not double-counted or double-listed.
     - the config file is well-formed but at least one declared pair does
       not resolve (its ecosystem missing from the config entirely, or
       present but not listing that package name): FAIL, naming exactly
-      which pair(s).
+      which pair(s), each named once even if declared twice. Resolution
+      is an exact, case- and separator-sensitive string comparison (see
+      EXECUTION_REQUIREMENTS_PACKAGES_ALLOWLISTED_RULE's own text) --
+      never a false PASS from a near-miss, only a possibly-surprising
+      FAIL an admin must match exactly.
     """
     rule = EXECUTION_REQUIREMENTS_PACKAGES_ALLOWLISTED_RULE
     check_name = "execution-requirements-packages-allowlisted"
@@ -6064,17 +6281,33 @@ def _execution_requirements_packages_allowlist_check(
     if not isinstance(packages, dict):
         return CheckResult(check_name, True, rule, "nothing to check (packages is not a mapping)")
 
-    requested_packages = [
-        (ecosystem, name)
-        for ecosystem, names in packages.items()
-        if _valid_execution_requirements_tools_list(names)
-        for name in names
-    ]
+    # dict.fromkeys (not a set): order-preserving dedup, so pairs_text and
+    # the offenders list below stay in file order and never repeat a pair
+    # declared twice in the sidecar (e.g. "pip: [requests, requests]").
+    requested_packages = list(
+        dict.fromkeys(
+            (ecosystem, name)
+            for ecosystem, names in packages.items()
+            if _valid_execution_requirements_tools_list(names)
+            for name in names
+        )
+    )
     if not requested_packages:
         return CheckResult(check_name, True, rule, "no packages declared")
 
     pairs_text = ", ".join(f"{ecosystem}/{name}" for ecosystem, name in requested_packages)
-    allowlist_path = skill_dir.parent.parent / DEPENDENCY_ALLOWLIST_RELATIVE_PATH
+    repo_root = _dependency_allowlist_repo_root(skill_dir)
+    allowlist_path = _reject_symlinked_allowlist_path(repo_root)
+    if allowlist_path is None:
+        return CheckResult(
+            check_name,
+            False,
+            rule,
+            f"{len(requested_packages)} package(s) declared ({pairs_text}) but "
+            f"{DEPENDENCY_ALLOWLIST_RELATIVE_PATH} (or a parent directory of it) is a symlink -- "
+            "refusing to follow it; treated the same as a malformed config",
+        )
+
     if not allowlist_path.is_file():
         return CheckResult(
             check_name,
@@ -6093,8 +6326,17 @@ def _execution_requirements_packages_allowlist_check(
 
     try:
         config = json.loads(raw_config)
-    except ValueError as exc:
-        return CheckResult(check_name, False, rule, f"{DEPENDENCY_ALLOWLIST_RELATIVE_PATH} is not valid JSON: {exc}")
+    except (ValueError, RecursionError) as exc:
+        # RecursionError (deeply nested JSON) is not a ValueError subclass
+        # -- this docstring promises "never raises", so it must be caught
+        # here alongside json.JSONDecodeError's own ValueError base,
+        # exactly like any other malformed-config input.
+        return CheckResult(
+            check_name,
+            False,
+            rule,
+            f"{DEPENDENCY_ALLOWLIST_RELATIVE_PATH} is not valid JSON: {type(exc).__name__}: {exc}",
+        )
 
     if not _valid_dependency_allowlist_config(config):
         return CheckResult(
@@ -6103,7 +6345,7 @@ def _execution_requirements_packages_allowlist_check(
             rule,
             f"{DEPENDENCY_ALLOWLIST_RELATIVE_PATH} does not match the expected "
             '{"packages": {"<ecosystem>": ["<package-name>", ...]}} shape: '
-            f"{config!r}",
+            f"{_bounded_repr(config)}",
         )
 
     allowlisted = config["packages"]
