@@ -29,8 +29,10 @@ follow-up), a 0:1:0 trade-secret/competitive-harm broadening (gitapex#537
 follow-up), and a 3:3:0 addition for the three new evaluation criteria
 issue #614's own retrospective motivated (gitapex#619:
 declaration-vs-structure fit, correction-narration sediment, repeated-
-restatement duplication), and a 1:0:0 multi-turn-relaxation addition
-(gitapex#332's own ACM-7 audit round), for a resulting 27:30:12 partition. This is
+restatement duplication), a 1:0:0 multi-turn-relaxation addition
+(gitapex#332's own ACM-7 audit round), and a 1:1:1 addition for the new
+Single ownership and boundary fit dimension-7 check (gitapex#1111), for a
+resulting 28:31:13 partition. This is
 named explicitly as a deviation from the 2:1:7 default. The
 honest minimal groundwork, per that same worked example, is a larger
 fixture corpus over time, not a smaller gate.
@@ -39,9 +41,9 @@ Exclusion rule for this arithmetic, stated once so the figures above can be
 checked against the Assignment section below (gitapex#907): every listed
 fixture, in every split, is counted in exactly one of the additions above,
 except the one named on the declaration line below. Verified per split, not
-only for train: the Assignment section lists 28 unique train fixtures against
-the declared 27 (the single exclusion), and 30 selection and 12 test fixtures
-against the declared 30 and 12 exactly.
+only for train: the Assignment section lists 29 unique train fixtures against
+the declared 28 (the single exclusion), and 31 selection and 13 test fixtures
+against the declared 31 and 13 exactly.
 
 Split-arithmetic exclusions: `dispatch-required-negative-control.yaml` -- listed
 in train for split-listing consistency with `normal.yaml` rather than as a

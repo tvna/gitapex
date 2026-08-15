@@ -1,0 +1,45 @@
+id: evaluating-skill-quality-shared-bundled-script-declared-dependency-restraint
+name: Cross-Skill Script Reference With a Properly Declared Dependency Must Not Be Flagged
+description: Restraint check for the new Single ownership and boundary fit check (test split, read once) -- the target's bundled script does reach into a sibling skill's scripts/ directory, but the dependency is declared in this skill's own sidecar metadata (spec.skillDependencies.requires), the sibling skill is the sole owner, and the imported module is itself standard-library only. Must not be false-positively flagged merely for referencing another skill's code.
+tags:
+  - quality
+  - bundled-scripts
+  - shared-bundled-script
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "expense-report-currency-checker". Is this a good skill?
+
+    ---
+    name: expense-report-currency-checker
+    description: Flag an expense report line item whose currency conversion looks wrong. Use when the user asks to check an expense report's currency math.
+    spec:
+      skillDependencies:
+        requires:
+          - currency-conversion-helper
+    ---
+
+    # Expense Report Currency Checker
+
+    ## Procedure
+
+    1. Run `scripts/check_currency_math.py <expenses.csv>`.
+
+    `scripts/check_currency_math.py` (top of file):
+    ```python
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "currency-conversion-helper" / "scripts"))
+    from normalize_currency import normalize_amount
+    ```
+
+    `currency-conversion-helper` is the sole owner of `normalize_currency.py`
+    and no other skill bundles a copy of it; `normalize_currency.py` itself
+    imports only the Python standard library.
+expected:
+  output_contains:
+    - "dependency declared"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

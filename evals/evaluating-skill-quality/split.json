@@ -28,7 +28,8 @@
       "declaration-structure-fit-train.yaml",
       "sediment-correction-narration-train.yaml",
       "duplication-repeated-restatement-train.yaml",
-      "multi-turn-settled-dimension-relaxation-train.yaml"
+      "multi-turn-settled-dimension-relaxation-train.yaml",
+      "shared-bundled-script-undeclared-reach-train.yaml"
     ],
     "selection": [
       "edge.yaml",
@@ -60,7 +61,8 @@
       "confidentiality-awareness-trade-secret-selection.yaml",
       "declaration-structure-fit-selection.yaml",
       "sediment-correction-narration-selection.yaml",
-      "duplication-repeated-restatement-selection.yaml"
+      "duplication-repeated-restatement-selection.yaml",
+      "shared-bundled-script-boundary-fit-selection.yaml"
     ],
     "test": [
       "guardrail.yaml",
@@ -74,10 +76,11 @@
       "compatibility-declared-hermes-test.yaml",
       "compatibility-portable-standard-test.yaml",
       "cohesion-sequential-orchestrator-restraint.yaml",
-      "opus5-restraint-domain-verification-and-bounded-subagent.yaml"
+      "opus5-restraint-domain-verification-and-bounded-subagent.yaml",
+      "shared-bundled-script-declared-dependency-restraint.yaml"
     ]
   },
-  "partition": "27:30:12",
+  "partition": "28:31:13",
   "split_arithmetic_exclusions": [
     "dispatch-required-negative-control.yaml"
   ]
