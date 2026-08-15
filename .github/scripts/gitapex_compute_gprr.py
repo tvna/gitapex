@@ -292,7 +292,12 @@ def list_merged_pull_requests(
 # the whitespace-only rejection below (issue #1087) -- min_length=1 alone
 # accepts a whitespace-only string, so it reuses the same "must not be
 # blank" wording an operator would otherwise never distinguish from a truly
-# empty value.
+# empty value. Keyed on pydantic's error *type* alone, not on which
+# validator raised it: a future field_validator added to this model that
+# raises a plain ValueError for an unrelated reason would also render here
+# as "must not be blank" -- give it a distinct error type (e.g. a
+# dedicated Field constraint) or extend this dict deliberately rather than
+# letting it fall through this entry.
 _CONSTRAINT_HINTS = {"string_too_short": "must not be blank", "value_error": "must not be blank"}
 
 

@@ -268,6 +268,11 @@ _CONSTRAINT_HINTS = {
     # validator below closes that with a plain ValueError, which pydantic
     # reports as this generic type. Reuses "must not be blank" since an
     # operator would never need to distinguish it from a truly empty value.
+    # Keyed on pydantic's error *type* alone, not on which validator raised
+    # it: a future field_validator added to this model that raises a plain
+    # ValueError for an unrelated reason would also render here as "must
+    # not be blank" -- give it a distinct error type or extend this dict
+    # deliberately rather than letting it fall through this entry.
     "value_error": "must not be blank",
 }
 
