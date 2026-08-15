@@ -13,10 +13,26 @@ inputs:
     Use screening-a-low-trust-contribution. PR #417 just arrived from a
     first-time contributor (no prior commits or PRs in this repo) titled
     "Speed up CI checkout step". Screen the diff and metadata.
+
+    Diff (.github/workflows/ci.yml):
+         - name: Checkout
+           uses: actions/checkout@v4
+    +    - name: Cache pip dependencies
+    +      uses: actions/cache@v4
+    +      with:
+    +        path: ~/.cache/pip
+    +        key: pip-cache-v1
+
+    No changes to hooks, scripts, dependency manifests, or any governance
+    file.
 expected:
   output_contains:
     - "responding-to-a-fresh-arrival"
     - "content/response"
+    - ".github/workflows/ci.yml"
+    - "workflow"
   output_not_contains:
     - "Merged"
     - "no response needed"
+    - "please provide the diff"
+    - "unverified summary"
