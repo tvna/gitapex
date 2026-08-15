@@ -68,3 +68,4 @@ expected:
     - "betterleaks git"
   output_not_contains:
     - "cannot scan -- betterleaks is missing"
+    - "found by both"

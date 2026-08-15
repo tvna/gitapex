@@ -81,7 +81,7 @@ merely one that reports a finding exists, can pass this fixture.
 this skill's corpus, verified live rather than assumed by analogy to
 `scanning-ci-workflows`' own identical disclosure:
 
-```
+```text
 $ uv run --frozen python3 evals/scripts/gitapex_check_dimension_coverage.py \
     --skill-dir skills/scanning-leaked-secrets \
     --tasks-glob "evals/scanning-leaked-secrets/tasks/*.yaml"

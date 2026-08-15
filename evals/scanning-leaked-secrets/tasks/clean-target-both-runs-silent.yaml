@@ -35,5 +35,6 @@ expected:
     - "1.6.1"
     - "betterleaks dir"
     - "betterleaks git"
+    - "clean"
   output_not_contains:
     - "cannot scan -- betterleaks is missing"

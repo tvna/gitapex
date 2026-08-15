@@ -75,3 +75,5 @@ expected:
     - "config/deploy_key_bak"
   output_not_contains:
     - "already reviewed by security"
+    - "skipped this file"
+    - "excluded from future scans"

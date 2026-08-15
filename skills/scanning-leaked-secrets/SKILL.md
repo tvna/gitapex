@@ -1,6 +1,6 @@
 ---
 name: scanning-leaked-secrets
-description: Scan a target repository's working tree and full git history for leaked secrets via one pinned external CLI, betterleaks -- `betterleaks dir` for what sits on disk now (tracked or not), `betterleaks git` for content reachable only through history, including a file already removed from the tree -- redacting every secret value before it reaches the report (betterleaks' `--redact` flag, this skill's own pass over the fields it misses, and a re-scan of the report) and reporting findings otherwise unmodified. Use when auditing for leaked credentials, screening a target before merging or accepting a contribution, or asking whether a secret ever entered history even if since deleted. Report-only, never auto-remediating. Distinct from scanning-attack-surfaces, whose Mode B checklist reports a GitHub repository's native secret-scanning feature-toggle status as one item among many hosting-configuration checks; this skill is a dedicated, platform-independent, on-demand scan of working tree and history, on any target.
+description: Scan a target repository's working tree and its checkout's git history for leaked secrets via one pinned external CLI, betterleaks -- `betterleaks dir` for what sits on disk now (tracked or not), `betterleaks git` for content reachable only through history, including a file removed from the tree -- redacting every secret value before it reaches the report (betterleaks' `--redact` flag, this skill's own pass over the fields it misses, and a re-scan of the report) and reporting findings otherwise unmodified. Use when auditing for leaked credentials, screening a target before merging or accepting a contribution, or asking whether a secret ever entered history even if since deleted. Report-only, never auto-remediating. Distinct from scanning-attack-surfaces, whose Mode B checklist reports a GitHub repository's native secret-scanning feature-toggle status as one item among many hosting-configuration checks; this skill is a dedicated, platform-independent, on-demand scan of working tree and history, on any target.
 ---
 
 # Scanning Leaked Secrets
@@ -114,14 +114,16 @@ explicit.
    `betterleaks dir --redact --exit-code 0 --report-format json --report-path - <target-path>`.
    This covers whatever is actually on disk right now, tracked or not.
    Record the exit code alongside the captured stdout.
-3. **Run `betterleaks git` over the target's full history.** Exact
-   invocation:
+3. **Run `betterleaks git` over the commits present in the target's
+   local checkout.** Exact invocation:
    `betterleaks git --redact --exit-code 0 --report-format json --report-path - <target-path>`.
-   This covers every commit, including content no longer present in the
-   working tree -- a secret introduced in one commit and removed in a
-   later one is still found here even though step 2 cannot see it (see
-   the worked example). Record the exit code alongside the captured
-   stdout.
+   This covers every commit locally present, including content no
+   longer in the working tree -- a secret introduced in one commit and
+   removed in a later one is still found here even though step 2 cannot
+   see it (see the worked example) -- but "locally present" is not
+   always the target's real, complete history; the History-scan
+   coverage boundary above states the shallow/partial case explicitly.
+   Record the exit code alongside the captured stdout.
 4. **Classify each run's outcome from its exit code and its JSON body
    together, never from either one alone.** `--exit-code 0` (always
    passed, per steps 2-3) is what makes the pair readable: it decouples
@@ -184,10 +186,18 @@ explicit.
    own clean-result body, verified live and *not* the literal `null`
    step 4 reads as clean for `dir`/`git`: the two subcommands do not
    share a clean-result shape, and checking for the wrong one turns
-   every genuinely clean re-scan into an apparent hit. A non-empty JSON
-   array means a credential survived into the report: redact the field
-   the finding names and re-run this step until it returns `[]`. Never
-   emit a report this check flagged. Deciding what counts as a
+   every genuinely clean re-scan into an apparent hit. Classify this
+   check's own result the same disciplined way step 4 classifies steps
+   2-3: exit `0` with exactly `[]` is the only clean outcome; a
+   non-empty JSON array means a credential survived (redact the field
+   named and re-run); any non-zero exit, or a body that is neither `[]`
+   nor a parseable array, is this check's own tool error -- stop and
+   emit no report at all, the same as a failed step 2 or 3, rather than
+   guessing at a result this step cannot verify. Bound the
+   redact-and-retry loop at 5 attempts; if the fifth re-scan still
+   returns a non-empty array, stop with a tool error naming the
+   surviving field rather than looping indefinitely or emitting a report
+   this check never actually cleared. Deciding what counts as a
    credential stays with the tool's own ruleset here, exactly as
    everywhere else in this skill. Three conditions the check itself
    depends on, all verified live: run it from a directory carrying no
@@ -273,7 +283,11 @@ explicit.
   it read `REDACTED`), and the re-scan is what covers the third nobody
   has hit yet. All three layers are required; none substitutes for
   another, and skipping any one leaks a real credential even though the
-  others ran correctly.
+  others ran correctly. Never show, quote, or narrate a run's raw
+  captured stdout before all three layers have applied to it -- not in
+  intermediate reasoning, a progress note, or a partial answer -- since
+  that output is exactly the plaintext these layers exist to remove;
+  only the fully redacted, step-6-verified report is fit to show.
 - **Delimiter-safe quoting is defense-in-depth for everything else a
   report still has to quote** -- a file path, a rule ID, a commit
   message from `betterleaks git`'s own output. A rule ID is never the
@@ -438,23 +452,24 @@ history -- at the pinned tool version:
 
 ## Notes
 
-Portability: **Mixed**. The body above -- the Procedure, the
-Applicability statement, the Config auto-discovery section, the
-Reporting contract, and the Stop boundaries -- names no path outside
-this skill's own directory: it cites only the one wrapped tool, its
-documented interface, and `references/`, all of which travel with
-`SKILL.md` when it is copied or vendored. Two documents belonging to
-this skill's own authoring repository are cited here instead of
+Portability: **Mixed**. The Procedure, the Applicability statement, the
+Config auto-discovery section, and the Reporting contract name no path
+outside this skill's own directory: they cite only the one wrapped
+tool, its documented interface, and `references/`, all of which travel
+with `SKILL.md` when it is copied or vendored. Two documents belonging
+to this skill's own authoring repository are cited here instead of
 inline, so a consumer can identify and drop them in one place:
 `docs/glossary.md` defines the `scanning-*` naming family, and
 `docs/scanning-capability-selection-policy.md` is the
 capability-selection policy the Capability-selection section above
 defers to. Substituting a vendoring repository's own equivalents, or
-dropping both citations, leaves the Procedure intact. One
-repository-specific illustration sits in the Config auto-discovery
-section above (this authoring repository's own root-level
-`.betterleaks.toml`) -- descriptive color for one concrete example, not
-a dependency the Procedure needs resolved to run correctly elsewhere.
+dropping both citations, leaves the Procedure intact. Two
+repository-specific illustrations are named rather than elided: Config
+auto-discovery cites this repository's own root-level
+`.betterleaks.toml`, and the Stop boundaries' no-timeout entry names
+`.github/scripts/gitapex_run_betterleaks.py` -- descriptive color for
+two concrete examples, neither a dependency the Procedure needs
+resolved to run correctly elsewhere.
 [references/worked-examples.md](references/worked-examples.md) is
 repository-scoped in the usual sense but not in the usual shape: it
 records real runs against throwaway, deliberately-planted fixtures

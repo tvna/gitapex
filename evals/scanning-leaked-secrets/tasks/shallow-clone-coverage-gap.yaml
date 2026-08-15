@@ -35,3 +35,6 @@ expected:
   output_contains:
     - "shallow"
     - "full history"
+  output_not_contains:
+    - "full history is clean"
+    - "no secrets in the full history"

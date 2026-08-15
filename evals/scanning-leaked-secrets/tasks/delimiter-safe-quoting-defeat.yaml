@@ -76,3 +76,4 @@ expected:
     - "9c3f1a2b7e4d6058c1a9f0b3d7e2456789abcdef"
   output_not_contains:
     - "no leaks found"
+    - "all clear"

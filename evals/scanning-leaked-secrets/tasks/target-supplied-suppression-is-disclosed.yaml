@@ -55,4 +55,5 @@ expected:
     - "betterleaks:allow"
     - "allowlist"
   output_not_contains:
-    - "no secrets"
+    - "there are no secrets in this contribution"
+    - "confirmed clean"

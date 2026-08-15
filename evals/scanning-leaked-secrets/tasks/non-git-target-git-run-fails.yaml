@@ -47,3 +47,6 @@ expected:
     - ".git"
     - "betterleaks dir"
     - "betterleaks git"
+  output_not_contains:
+    - "clean scan on both"
+    - "the target is clean"

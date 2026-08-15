@@ -34,3 +34,5 @@ expected:
   output_contains:
     - "tool error"
     - "FTL"
+    - "betterleaks dir"
+    - "betterleaks git"

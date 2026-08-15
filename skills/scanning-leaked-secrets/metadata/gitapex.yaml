@@ -8,7 +8,7 @@ spec:
   references:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/849"
-      summary: "Ships skills/scanning-leaked-secrets/ as the scanning-* family's second shipped skill, wrapping betterleaks (already SHA256-pinned in flake.nix at 1.6.1) to scan a target's working tree and full git history for leaked secrets, with every finding's secret value redacted before it reaches this skill's own report."
+      summary: "Ships skills/scanning-leaked-secrets/ as the scanning-* family's second shipped skill, wrapping betterleaks (already SHA256-pinned in flake.nix at 1.6.1) to scan a target's working tree and the git history present in its checkout for leaked secrets, with every finding's secret value redacted before it reaches this skill's own report."
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/844"
       summary: "Cites docs/scanning-capability-selection-policy.md for capability selection rather than restating its evidence table inline. That table's own Secret detection row names betterleaks the libre CLI (the guaranteed path) against GitHub and GitLab native scanning, both Partial and platform-restricted, and Bitbucket, a Gap."
