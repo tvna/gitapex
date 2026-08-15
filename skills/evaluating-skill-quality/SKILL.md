@@ -332,10 +332,10 @@ section.
 
 Optional. `spec.executionRequirements` in the skill's
 `metadata/gitapex.yaml` sidecar records what a skill's own procedure
-touches at runtime: `tools` (`read`/`write`/`shell` capability-tag lists)
-and `network` (a `mode` enum plus an exact-host `domains` list, non-empty
-iff `mode: allowlist`); the `execution-requirements-well-formed` shape
-check enforces both and fails closed on any unrecognized key. No behavior
+touches at runtime: `tools` (`read`/`write`/`shell` capability-tag lists),
+`packages` (non-stdlib package names by ecosystem, e.g. `pip`), and
+`network` (a `mode` enum plus an exact-host `domains` list, non-empty iff
+`mode: allowlist`); the `execution-requirements-well-formed` shape check enforces all three and fails closed on any unrecognized key. `execution-requirements-packages-allowlisted` separately resolves each declared package against a repository-root allowlist config: not-applicable when packages is undeclared, FAIL when the config is missing, malformed, or does not list the package, PASS only once every declared package is listed. No behavior
 change: no skill's own runtime procedure may read or branch on it, same as
 Portability level, Capability assumption, and Lifecycle. Full schema,
 semantics, and rationale: [references/rubric.md](references/rubric.md)'s

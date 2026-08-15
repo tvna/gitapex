@@ -4,6 +4,7 @@ Fixtures are synthesized in tmp_path so the test is self-contained and
 travels with the skill on vendoring.
 """
 
+import json
 import os
 import re
 import subprocess
@@ -5353,6 +5354,320 @@ def test_execution_requirements_tools_and_network_both_declared_is_well_formed(t
     assert css.main([str(d)]) == 0
 
 
+# ---- execution-requirements-well-formed: packages category (issue #1115's
+# own ADR follow-up: package-shape recognition) ----
+
+
+def test_execution_requirements_packages_declared_is_well_formed(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path), "  executionRequirements:\n    packages:\n      pip:\n        - pyyaml\n"
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True
+    assert result.evidence == "packages.pip declared"
+    # Deliberately NOT css.main([str(d)]) == 0 here, unlike tools'/network's
+    # own analogous tests: a real declared package also fires the separate
+    # execution-requirements-packages-allowlisted check (see its own test
+    # group below), which legitimately FAILs against this bare _write_skill
+    # fixture (no .gitapex/dependency-allowlist.json anywhere on its path) --
+    # an orthogonal, expected failure this test does not exist to cover.
+    assert by["execution-requirements-packages-allowlisted"].passed is False
+
+
+def test_execution_requirements_packages_multiple_ecosystems_declared(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n"
+        "    packages:\n"
+        "      pip:\n"
+        "        - pyyaml\n"
+        "        - jsonschema\n"
+        "      npm:\n"
+        "        - left-pad\n",
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True
+    assert result.evidence == "packages.pip, packages.npm declared"
+    # See test_execution_requirements_packages_declared_is_well_formed's own
+    # comment: real declared packages against a bare _write_skill fixture
+    # (no allowlist config anywhere on its path) legitimately fail the
+    # separate execution-requirements-packages-allowlisted check.
+    assert by["execution-requirements-packages-allowlisted"].passed is False
+
+
+def test_execution_requirements_packages_absent_with_tools_present_is_well_formed(tmp_path):
+    # packages' own absence must not affect a sibling subkey's own
+    # evidence or well-formedness -- mirrors
+    # test_execution_requirements_declared_with_no_tools_is_well_formed's
+    # own "each subkey is independently optional" contract, one level up.
+    d = _write_exec_req_sidecar(_write_skill(tmp_path), "  executionRequirements:\n    tools:\n      read: []\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True
+    assert result.evidence == "tools.read declared"
+    assert css.main([str(d)]) == 0
+
+
+def test_execution_requirements_blank_packages_is_null_fails_well_formed(tmp_path):
+    # Same null-vs-empty-mapping rule tools'/network's own blank-header
+    # tests cover, applied to packages.
+    d = _write_exec_req_sidecar(_write_skill(tmp_path), "  executionRequirements:\n    packages:\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "packages is not a mapping: None" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_execution_requirements_packages_not_a_mapping_fails(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path), "  executionRequirements:\n    packages: not-a-mapping-scalar\n"
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "packages is not a mapping" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_execution_requirements_packages_malformed_ecosystem_key_fails(tmp_path):
+    # REGEX mismatch (EXEC_REQ_PACKAGES_KEY_RE), not tuple membership --
+    # the structural difference from tools'/network's own fixed-tuple
+    # unknown-key detection.
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path), "  executionRequirements:\n    packages:\n      PIP:\n        - pyyaml\n"
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "unknown packages key" in result.evidence
+    assert "PIP" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_execution_requirements_packages_quoted_invalid_ecosystem_key_fails(tmp_path):
+    # Regression guard mirroring
+    # test_execution_requirements_quoted_unknown_top_level_key_fails: a
+    # quoted invalid ecosystem key must not bypass the regex check --
+    # _match_key_line already strips the quote before
+    # EXEC_REQ_PACKAGES_KEY_RE ever sees the key text.
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path), '  executionRequirements:\n    packages:\n      "PIP":\n        - pyyaml\n'
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "unknown packages key" in result.evidence
+    assert "PIP" in result.evidence
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    # Both the unrecognized key line AND its own child list-item line are
+    # flagged -- the same fail-closed behavior
+    # test_execution_requirements_unknown_tools_key_fails' own sibling
+    # fixture already exhibits for tools (an unrecognized key does not
+    # open a list, so its own "- <value>" children fall through to the
+    # generic "unmatched line at this indent" gate one line at a time,
+    # not just the key line itself).
+    assert parsed.unknown_execution_requirement_packages_keys == ['"PIP":', "- pyyaml"]
+    assert parsed.root["spec"]["executionRequirements"]["packages"] == {}
+
+
+def test_execution_requirements_packages_ecosystem_list_inline_scalar_fails(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path), "  executionRequirements:\n    packages:\n      pip: not-a-list\n"
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "packages.pip is not a list of non-empty strings" in result.evidence
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.root["spec"]["executionRequirements"]["packages"]["pip"] == "not-a-list"
+
+
+def test_execution_requirements_packages_mapping_shaped_list_item_fails(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path), "  executionRequirements:\n    packages:\n      pip:\n        - path: sneaky\n"
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "malformed packages entry" in result.evidence
+    assert "path: sneaky" in result.evidence
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.malformed_execution_requirement_packages_items == ["- path: sneaky"]
+    assert parsed.root["spec"]["executionRequirements"]["packages"]["pip"] == []
+
+
+def test_execution_requirements_packages_non_string_scalar_item_fails(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path), "  executionRequirements:\n    packages:\n      pip:\n        - null\n"
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "malformed packages entry" in result.evidence
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.malformed_execution_requirement_packages_items == ["- null"]
+
+
+def test_execution_requirements_packages_empty_string_item_fails(tmp_path):
+    # Explicit empty-string coverage, distinct from the null/mapping-shaped
+    # cases above: "" is a syntactically valid quoted scalar, not a
+    # mapping-like or non-string-plain-scalar item, so it survives both
+    # malformed-item gates in the parser and must instead be caught by
+    # _valid_execution_requirements_tools_list's own non-empty check
+    # downstream, in the checker layer.
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path), '  executionRequirements:\n    packages:\n      pip:\n        - ""\n'
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "packages.pip is not a list of non-empty strings" in result.evidence
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.root["spec"]["executionRequirements"]["packages"]["pip"] == [""]
+
+
+def test_execution_requirements_packages_inconsistent_indent_item_fails(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        '  executionRequirements:\n    packages:\n      pip:\n        - "a"\n      - "b"\n',
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.root["spec"]["executionRequirements"]["packages"]["pip"] == ["a"]
+    assert parsed.malformed_execution_requirement_packages_items == ['- "b"']
+
+
+def test_execution_requirements_packages_empty_list_distinguished_from_absent(tmp_path):
+    d = _write_exec_req_sidecar(_write_skill(tmp_path), "  executionRequirements:\n    packages:\n      pip: []\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True
+    assert result.evidence == "packages.pip declared"
+    assert result.evidence != "no keys declared"
+    assert css.main([str(d)]) == 0
+
+
+def test_execution_requirements_packages_unmatched_key_line_fails_closed(tmp_path):
+    # Regression guard mirroring tools'/network's own
+    # test_execution_requirements_unmatched_key_line_fails_closed: a line
+    # KEY_LINE_RE_6 cannot parse (whitespace before a quoted key's colon)
+    # must still fail closed via the unknown-key fallback, not be
+    # silently skipped.
+    d = _write_exec_req_sidecar(_write_skill(tmp_path), '  executionRequirements:\n    packages:\n      "pip" : []\n')
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "unknown packages key" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_execution_requirements_packages_trailing_comment_still_opens(tmp_path):
+    # Same trailing-bare-comment fix tools'/network's own equivalent tests
+    # cover, applied to packages' own block header and ecosystem key.
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n    packages:  # not yet fully specified\n      pip:  # comment\n        - pyyaml\n",
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True
+    assert result.evidence == "packages.pip declared"
+    # See test_execution_requirements_packages_declared_is_well_formed's own
+    # comment: a real declared package legitimately fails the separate
+    # allowlist check against a bare _write_skill fixture.
+    assert by["execution-requirements-packages-allowlisted"].passed is False
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.root["spec"]["executionRequirements"]["packages"]["pip"] == ["pyyaml"]
+
+
+def test_execution_requirements_packages_dedent_to_sibling_key_falls_through(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n    packages:\n      pip:\n        - pyyaml\n"
+        "  skillDependencies:\n    requires: []\n    relatedTo: []\n",
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["execution-requirements-well-formed"].passed is True
+    assert by["skill-dependencies-well-formed"].passed is True
+    # See test_execution_requirements_packages_declared_is_well_formed's own
+    # comment: a real declared package legitimately fails the separate
+    # allowlist check against a bare _write_skill fixture.
+    assert by["execution-requirements-packages-allowlisted"].passed is False
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.root["spec"]["executionRequirements"]["packages"] == {"pip": ["pyyaml"]}
+    assert parsed.root["spec"]["skillDependencies"] == {"requires": [], "relatedTo": []}
+
+
+def test_execution_requirements_tools_packages_network_all_declared_is_well_formed(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        "  executionRequirements:\n"
+        "    tools:\n"
+        "      read:\n"
+        "        - files\n"
+        "    packages:\n"
+        "      pip:\n"
+        "        - pyyaml\n"
+        "    network:\n"
+        "      mode: disabled\n",
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True
+    assert result.evidence == "tools.read, packages.pip, network.mode declared"
+    # See test_execution_requirements_packages_declared_is_well_formed's own
+    # comment: a real declared package legitimately fails the separate
+    # allowlist check against a bare _write_skill fixture.
+    assert by["execution-requirements-packages-allowlisted"].passed is False
+
+
+def test_docstring_execution_requirement_packages_key_pattern_names_constant():
+    docstring = css._parse_manifest.__doc__
+    m = re.search(r"matching\s+``(\w+)``,\s*not a closed tuple", docstring)
+    assert m is not None, (
+        "_parse_manifest's docstring no longer names its packages "
+        "ecosystem-key-pattern constant in the expected "
+        "'matching ``X``, not a closed tuple' shape -- update this test's "
+        "extraction logic."
+    )
+    assert m.group(1) == "EXEC_REQ_PACKAGES_KEY_RE", (
+        f"_parse_manifest's docstring names the packages key-pattern "
+        f"constant as {m.group(1)!r}, not EXEC_REQ_PACKAGES_KEY_RE -- a "
+        "rename landed in one but not the other."
+    )
+
+
+def test_execution_requirement_packages_key_pattern_matches_schema():
+    # Cross-file drift guard (this module's OWN established precedent:
+    # EXEC_REQ_PACKAGES_KEY_RE is deliberately hand-duplicated from
+    # skill-metadata.schema.json's own executionRequirementsPackages.
+    # propertyNames pattern, not imported, per EXEC_REQ_NETWORK_SUBKEYS'
+    # own comment precedent for why a schema constraint is re-expressed
+    # here rather than shared) -- a hand-duplicated pair can silently
+    # drift with no test watching it, so assert the two literal pattern
+    # strings stay equal.
+    schema_path = _SCRIPT_PATH.parent.parent / "references" / "skill-metadata.schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    schema_pattern = schema["$defs"]["executionRequirementsPackages"]["propertyNames"]["pattern"]
+    assert schema_pattern == css.EXEC_REQ_PACKAGES_KEY_RE.pattern, (
+        f"skill-metadata.schema.json's executionRequirementsPackages."
+        f"propertyNames.pattern is {schema_pattern!r}, but "
+        f"EXEC_REQ_PACKAGES_KEY_RE is {css.EXEC_REQ_PACKAGES_KEY_RE.pattern!r} "
+        "-- the schema and the hand-rolled parser have drifted."
+    )
+
+
 def test_docstring_execution_requirement_network_subkeys_match_constant():
     docstring = css._parse_manifest.__doc__
     m = re.search(r"own two subkeys, ``(\w+)``/``(\w+)``", docstring)
@@ -5377,6 +5692,15 @@ def test_execution_requirements_checks_fail_when_sidecar_unreadable(tmp_path):
     by = _by_name(css.check_shape(d))
     assert by["execution-requirements-well-formed"].passed is False
     assert "UnicodeDecodeError" in by["execution-requirements-well-formed"].evidence
+    # execution-requirements-packages-allowlisted is hard-coded FAIL in
+    # check_shape()'s own "sidecar unreadable" branch too, the same
+    # uniform "cannot certify anything, fail everything" treatment every
+    # other resolve-style check (e.g. skill-dependencies-resolve) already
+    # gets there -- distinct from this check's own early-return-ladder
+    # PASS/"nothing to check" behavior when the sidecar parses fine but
+    # some upstream field individually turns out the wrong shape.
+    assert by["execution-requirements-packages-allowlisted"].passed is False
+    assert "UnicodeDecodeError" in by["execution-requirements-packages-allowlisted"].evidence
 
 
 def test_execution_requirements_well_formed_fails_when_spec_is_not_a_mapping(tmp_path):
@@ -5418,6 +5742,195 @@ def test_execution_requirements_nesting_never_flagged_as_malformed_top_level(tmp
     assert by["experimental-stable-compatible"].passed is True
 
 
+# ---- execution-requirements-packages-allowlisted (issue #1115's own ADR
+# follow-up: package-shape recognition, closed-allowlist half) ----
+
+
+def _write_skill_at_repo_root(tmp_path, **kwargs):
+    """Build a synthetic skill directory nested two levels under a fresh
+    repo-root (``tmp_path/repo/skills/<name>``), matching the real
+    ``<repo-root>/skills/<name>/`` layout
+    ``_execution_requirements_packages_allowlist_check``'s own
+    ``skill_dir.parent.parent`` resolution assumes. Returns
+    ``(skill_dir, repo_root)`` so a test can also write
+    ``repo_root/.gitapex/dependency-allowlist.json``.
+
+    Deliberately nested fully inside ``tmp_path`` -- unlike
+    ``_write_skill``'s own bare ``tmp_path/skill`` layout, whose
+    ``skill_dir.parent.parent`` would resolve to ``tmp_path``'s own
+    parent, OUTSIDE this test's assigned tmp_path. This repo's pytest
+    config runs with ``-n auto`` (pytest-xdist, parallel workers): writing
+    a repo-root config file outside tmp_path would land in a directory
+    shared across many tests/workers, risking cross-test contention or a
+    stray file another test observes.
+    """
+    skills_dir = tmp_path / "repo" / "skills"
+    skills_dir.mkdir(parents=True)
+    skill_dir = _write_skill(skills_dir, **kwargs)
+    return skill_dir, skills_dir.parent
+
+
+def _write_allowlist_config(repo_root, config_obj):
+    gitapex_dir = repo_root / ".gitapex"
+    gitapex_dir.mkdir(parents=True, exist_ok=True)
+    (gitapex_dir / "dependency-allowlist.json").write_text(json.dumps(config_obj), encoding="utf-8")
+
+
+def test_execution_requirements_packages_allowlist_not_applicable_when_packages_undeclared(tmp_path):
+    skill_dir, _repo_root = _write_skill_at_repo_root(tmp_path)
+    by = _by_name(css.check_shape(skill_dir))
+    result = by["execution-requirements-packages-allowlisted"]
+    assert result.passed is True
+    assert result.evidence == "not declared (optional)"
+    assert css.main([str(skill_dir)]) == 0
+
+
+def test_execution_requirements_packages_allowlist_fails_when_config_absent(tmp_path):
+    skill_dir, repo_root = _write_skill_at_repo_root(tmp_path)
+    _write_exec_req_sidecar(skill_dir, "  executionRequirements:\n    packages:\n      pip:\n        - pyyaml\n")
+    assert not (repo_root / ".gitapex" / "dependency-allowlist.json").exists()
+    by = _by_name(css.check_shape(skill_dir))
+    result = by["execution-requirements-packages-allowlisted"]
+    assert result.passed is False
+    assert ".gitapex/dependency-allowlist.json does not exist" in result.evidence
+    assert "pip/pyyaml" in result.evidence
+    assert css.main([str(skill_dir)]) == 1
+
+
+def test_execution_requirements_packages_allowlist_passes_when_all_allowlisted(tmp_path):
+    skill_dir, repo_root = _write_skill_at_repo_root(tmp_path)
+    _write_exec_req_sidecar(
+        skill_dir,
+        "  executionRequirements:\n    packages:\n      pip:\n        - pyyaml\n        - jsonschema\n",
+    )
+    _write_allowlist_config(repo_root, {"packages": {"pip": ["pyyaml", "jsonschema", "pydantic"]}})
+    by = _by_name(css.check_shape(skill_dir))
+    result = by["execution-requirements-packages-allowlisted"]
+    assert result.passed is True
+    assert "pip/pyyaml" in result.evidence
+    assert "pip/jsonschema" in result.evidence
+    assert css.main([str(skill_dir)]) == 0
+
+
+def test_execution_requirements_packages_allowlist_fails_naming_one_offender(tmp_path):
+    skill_dir, repo_root = _write_skill_at_repo_root(tmp_path)
+    _write_exec_req_sidecar(
+        skill_dir,
+        "  executionRequirements:\n    packages:\n      pip:\n        - pyyaml\n        - not-allowed\n",
+    )
+    _write_allowlist_config(repo_root, {"packages": {"pip": ["pyyaml"]}})
+    by = _by_name(css.check_shape(skill_dir))
+    result = by["execution-requirements-packages-allowlisted"]
+    assert result.passed is False
+    assert "not allowlisted" in result.evidence
+    assert "pip/not-allowed" in result.evidence
+    # pyyaml IS allowlisted -- only the real offender is named, matching
+    # the task's own "naming exactly which package(s)" requirement (not
+    # every declared package, allowlisted or not).
+    assert "pip/pyyaml" not in result.evidence
+    assert css.main([str(skill_dir)]) == 1
+
+
+def test_execution_requirements_packages_allowlist_fails_when_ecosystem_missing_from_config(tmp_path):
+    skill_dir, repo_root = _write_skill_at_repo_root(tmp_path)
+    _write_exec_req_sidecar(skill_dir, "  executionRequirements:\n    packages:\n      pip:\n        - pyyaml\n")
+    _write_allowlist_config(repo_root, {"packages": {"npm": ["left-pad"]}})
+    by = _by_name(css.check_shape(skill_dir))
+    result = by["execution-requirements-packages-allowlisted"]
+    assert result.passed is False
+    assert "pip/pyyaml" in result.evidence
+    assert css.main([str(skill_dir)]) == 1
+
+
+def test_execution_requirements_packages_allowlist_malformed_json_fails_not_crashes(tmp_path):
+    skill_dir, repo_root = _write_skill_at_repo_root(tmp_path)
+    _write_exec_req_sidecar(skill_dir, "  executionRequirements:\n    packages:\n      pip:\n        - pyyaml\n")
+    (repo_root / ".gitapex").mkdir(parents=True)
+    (repo_root / ".gitapex" / "dependency-allowlist.json").write_text("{not valid json", encoding="utf-8")
+    by = _by_name(css.check_shape(skill_dir))
+    result = by["execution-requirements-packages-allowlisted"]
+    assert result.passed is False
+    assert "not valid JSON" in result.evidence
+    assert css.main([str(skill_dir)]) == 1
+
+
+def test_execution_requirements_packages_allowlist_unreadable_config_fails_not_crashes(tmp_path):
+    # Distinct failure point from the malformed-JSON test above: the
+    # config file itself cannot even be decoded as UTF-8 (the same
+    # OSError/UnicodeDecodeError guard this module already holds for the
+    # sidecar's own read, mirrored here for a second file this checker
+    # reads).
+    skill_dir, repo_root = _write_skill_at_repo_root(tmp_path)
+    _write_exec_req_sidecar(skill_dir, "  executionRequirements:\n    packages:\n      pip:\n        - pyyaml\n")
+    (repo_root / ".gitapex").mkdir(parents=True)
+    (repo_root / ".gitapex" / "dependency-allowlist.json").write_bytes(b"\xff\xfe\x00\x01invalid")
+    by = _by_name(css.check_shape(skill_dir))
+    result = by["execution-requirements-packages-allowlisted"]
+    assert result.passed is False
+    assert "could not be read" in result.evidence
+    assert "UnicodeDecodeError" in result.evidence
+    assert css.main([str(skill_dir)]) == 1
+
+
+def test_execution_requirements_packages_allowlist_missing_packages_key_fails_not_crashes(tmp_path):
+    skill_dir, repo_root = _write_skill_at_repo_root(tmp_path)
+    _write_exec_req_sidecar(skill_dir, "  executionRequirements:\n    packages:\n      pip:\n        - pyyaml\n")
+    _write_allowlist_config(repo_root, {"unrelated": "value"})
+    by = _by_name(css.check_shape(skill_dir))
+    result = by["execution-requirements-packages-allowlisted"]
+    assert result.passed is False
+    assert "does not match the expected" in result.evidence
+    assert css.main([str(skill_dir)]) == 1
+
+
+def test_execution_requirements_packages_allowlist_packages_not_a_mapping_fails_not_crashes(tmp_path):
+    skill_dir, repo_root = _write_skill_at_repo_root(tmp_path)
+    _write_exec_req_sidecar(skill_dir, "  executionRequirements:\n    packages:\n      pip:\n        - pyyaml\n")
+    _write_allowlist_config(repo_root, {"packages": "not-a-mapping"})
+    by = _by_name(css.check_shape(skill_dir))
+    result = by["execution-requirements-packages-allowlisted"]
+    assert result.passed is False
+    assert "does not match the expected" in result.evidence
+    assert css.main([str(skill_dir)]) == 1
+
+
+def test_execution_requirements_packages_allowlist_zero_valid_packages_is_not_applicable(tmp_path):
+    # packages a real mapping, but every ecosystem list is empty -- zero
+    # actual package names to check. Distinguished in evidence text from
+    # the field being entirely absent (for debugging clarity), but still
+    # not-applicable (PASS): vacuously nothing to allowlist-check.
+    skill_dir, repo_root = _write_skill_at_repo_root(tmp_path)
+    _write_exec_req_sidecar(skill_dir, "  executionRequirements:\n    packages:\n      pip: []\n")
+    by = _by_name(css.check_shape(skill_dir))
+    result = by["execution-requirements-packages-allowlisted"]
+    assert result.passed is True
+    assert result.evidence == "no packages declared"
+    # No allowlist config exists at all -- confirms this really is the
+    # "nothing to check" branch, not a lucky pass against a real config
+    # that happens to exist.
+    assert not (repo_root / ".gitapex" / "dependency-allowlist.json").exists()
+    assert css.main([str(skill_dir)]) == 0
+
+
+def test_execution_requirements_packages_allowlist_ignores_malformed_ecosystem_entry(tmp_path):
+    # A malformed ecosystem entry (npm's own value here is a scalar, not a
+    # list) is already reported by execution-requirements-well-formed
+    # under its own check id; this check must not double-fail the same
+    # defect -- it treats the malformed ecosystem as contributing zero
+    # packages and still resolves pip's own valid entry normally.
+    skill_dir, repo_root = _write_skill_at_repo_root(tmp_path)
+    _write_exec_req_sidecar(
+        skill_dir,
+        "  executionRequirements:\n    packages:\n      pip:\n        - pyyaml\n      npm: not-a-list\n",
+    )
+    _write_allowlist_config(repo_root, {"packages": {"pip": ["pyyaml"]}})
+    by = _by_name(css.check_shape(skill_dir))
+    assert by["execution-requirements-well-formed"].passed is False
+    result = by["execution-requirements-packages-allowlisted"]
+    assert result.passed is True
+    assert "pip/pyyaml" in result.evidence
+
+
 def test_null_vs_empty_mapping_matches_real_yaml_semantics():
     # Differential test against a real YAML parser (issue #356, ACM row
     # 2's own proof method), across every gated mapping-valued block: a
@@ -5447,6 +5960,7 @@ def test_null_vs_empty_mapping_matches_real_yaml_semantics():
         ("lifecycle", "  lifecycle:\n    renamedFrom: old-name\n"),
         ("executionRequirements", "  executionRequirements:\n"),
         ("executionRequirements", "  executionRequirements:\n    tools:\n      read: []\n"),
+        ("executionRequirements", "  executionRequirements:\n    packages:\n      pip: []\n"),
     ]
     for key, body in cases:
         text = manifest_prefix + body
