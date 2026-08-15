@@ -31,8 +31,12 @@ expected:
     - "content/response"
     - ".github/workflows/ci.yml"
     - "workflow"
+    - "actions/cache@v4"
+    - "Hard flag"
   output_not_contains:
     - "Merged"
     - "no response needed"
     - "please provide the diff"
     - "unverified summary"
+    - "Approved"
+    - "cleared"
