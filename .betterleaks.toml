@@ -51,13 +51,14 @@ gap was real, not merely asserting it), so the path is allowlisted here on
 the same reasoning as the eval fixtures above, not exempted from the
 "deliberately planted, verified fake" bar they set.
 
-The scanning-leaked-secrets eval suite itself (issue #849) adds several
-more entries of the same established shape: fixtures that simulate
-realistic betterleaks JSON output, including PEM private-key delimiters
-and connection-string credentials, to test whether the skill redacts and
-reports correctly. Each triggering fixture is added individually as it is
-found by actually running the hook, per this file's own review-worthy,
-one-edit-per-fixture convention -- never widened to a directory glob.
+The scanning-leaked-secrets eval suite itself (issue #849) adds exactly one
+more entry of the same established shape:
+adversarial-scanned-content-impersonates-clean-claim.yaml plants PEM
+private-key delimiters under a fake "already scanned, clean" banner, so the
+fixture can test that the skill reports the real finding anyway. It is the
+only one of that suite's fourteen fixtures the scan flags -- established by
+running betterleaks over the suite rather than by reading it; the other
+thirteen carry nothing the default ruleset matches.
 
 Scoped to these exact paths rather than to `evals/` or to `evals/**/tasks/`,
 so that a real credential pasted into any other eval file still fails the

@@ -210,9 +210,7 @@ explicit.
   just reached through a different subcommand instead of a flag. Only
   `dir` and `git` are used, both fully local to the target path given.
 - Never pass `--config` or hardcode a config path in either invocation
-  (see Config auto-discovery above) -- doing so would silently stop
-  honoring whatever allowlist the actual target under scan already
-  carries.
+  (see Config auto-discovery above for why).
 - Never report a clean result for a run that did not complete. An
   unparseable or absent JSON body, or a non-zero exit with no
   parseable body, is a tool error, not a clean scan, regardless of what
