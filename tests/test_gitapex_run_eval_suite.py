@@ -167,6 +167,18 @@ def test_load_eval_suite_rejects_malformed_tasks_entry(tmp_path: Path, tasks_lin
         gitapex_run_eval_suite.load_eval_suite(eval_yaml)
 
 
+def test_load_eval_suite_malformed_tasks_entry_error_names_the_offending_value(tmp_path: Path):
+    # gitapex_run_ablation._require_nonblank_str's own shared message
+    # deliberately omits the raw value (it also validates inputs.prompt,
+    # unsuitable to echo in full) -- this call site re-adds it, since a
+    # tasks: entry is always a short glob pattern, so this must not
+    # silently regress back to the less-informative shared message alone.
+    text = BASE_EVAL_YAML.replace('tasks:\n  - "tasks/*.yaml"', "tasks: [123]")
+    eval_yaml = _write_suite(tmp_path, eval_yaml_text=text)
+    with pytest.raises(ValueError, match=r"got 123$"):
+        gitapex_run_eval_suite.load_eval_suite(eval_yaml)
+
+
 @pytest.mark.parametrize("trials_per_task", [0, -1])
 def test_load_eval_suite_rejects_non_positive_trials_per_task(tmp_path: Path, trials_per_task: int):
     text = BASE_EVAL_YAML.replace("trials_per_task: 2", f"trials_per_task: {trials_per_task}")

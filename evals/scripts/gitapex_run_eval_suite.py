@@ -178,7 +178,16 @@ def load_eval_suite(path: Path) -> dict[str, Any]:
     if not isinstance(tasks, list) or not tasks:
         raise ValueError(f"eval suite {path}: 'tasks' must be a non-empty list")
     for entry in tasks:
-        gitapex_run_ablation._require_nonblank_str(entry, "each 'tasks' entry")
+        try:
+            gitapex_run_ablation._require_nonblank_str(entry, "each 'tasks' entry")
+        except ValueError as exc:
+            # The shared validator's own message deliberately omits the raw
+            # value (it also validates inputs.prompt, which can be long
+            # multi-line text unsuitable for an error message) -- a `tasks:`
+            # entry is always a short glob pattern, so echo it back here,
+            # at this one call site, without changing the shared function's
+            # own convention for its other callers.
+            raise ValueError(f"{exc}, got {entry!r}") from exc
 
     mcp_mocks = data.get("mcp_mocks")
     # Shape first, then emptiness -- gating the rejection on `isinstance(...,
