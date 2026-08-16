@@ -47,14 +47,32 @@ a discoverable tool (the Skill tool never appears in bare mode's tool
 list at all, per the same docs page). `_FIXED_FLAGS` below is therefore
 not CLI-overridable -- see that constant's own comment.
 
-Undecided, disclosed residual risk for whoever runs this live: what
-`--permission-mode`/`--allowedTools` a real run should pass is not yet
-determined -- headless mode's tool-approval behavior with no attached
-terminal was not verified against a live run while building this script,
-and guessing a specific value here would be an unverified claim of
-exactly the kind this repository's own reviewers flag. A live run also
-needs `ANTHROPIC_API_KEY` (or an `apiKeyHelper`) explicitly configured,
-since bare mode skips OAuth/keychain reads entirely (same docs page).
+Hermetic-by-default execution (issue #1132, resolving this section's
+former "Undecided" status): `_FIXED_FLAGS` includes `--tools ""`, which
+this environment's own installed `claude --help` documents as disabling
+every tool ("Use \"\" to disable all tools"). `--bare` alone is not
+enough -- the same `--help` output states bare mode still leaves Bash and
+file read/edit available -- which is exactly the hole PR #1099's
+live-proxy trials hit: an executed agent with tool access cross-checked a
+fixture's fictional PR number against real repo state instead of staying
+inside the fixture's own scope (issue #1132's own tracking comment).
+`subprocess_executor` additionally passes an explicit, allowlisted
+environment (`_HERMETIC_ENV_ALLOWLIST`) rather than inheriting the
+calling process's full environment, so an ambient CI credential (e.g.
+`GITHUB_TOKEN`) set in the parent process is never visible to the
+invoked model CLI even if a future change reintroduced tool access by
+mistake -- defense in depth, not a substitute for `--tools ""`. A live
+run still needs `ANTHROPIC_API_KEY` (or an `apiKeyHelper`) explicitly
+configured and allowlisted, since bare mode skips OAuth/keychain reads
+entirely (same docs page). This is the same repository-level secret
+`CONTRIBUTING.md`'s "ranking-the-open-queue weekly digest API key"
+section already documents end to end (issuance at
+console.anthropic.com, storage as a repository secret, minimum
+permissions, rotation cadence, and a verification procedure) -- not a
+new credential this script introduces, so its lifecycle is not
+re-documented a second time here. The vendored eval schema's `mcp_mocks` field
+(`.gitapex/waza-eval.schema.json`) stays declarable but unimplemented
+here: with zero tools ever granted, there is nothing for it to mock.
 
 Standard library plus PyYAML (already a dev dependency used by this
 repository's other fixture tooling), pydantic (`_RunAblationArgs`'
@@ -87,11 +105,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import yaml
 from pydantic import BaseModel, ValidationError, field_validator
@@ -118,8 +138,26 @@ DEFAULT_MODEL_CLI = "claude"
 DEFAULT_TIMEOUT_SECONDS = 300
 
 # Always applied, not CLI-exposed -- see the module docstring's "Skill
-# toggle mechanism" section for why --bare must stay non-overridable.
-_FIXED_FLAGS = ["--bare"]
+# toggle mechanism" section for why --bare must stay non-overridable, and
+# its "Hermetic-by-default execution" section for why --tools "" is here
+# too: --bare alone still leaves Bash and file read/edit available.
+_FIXED_FLAGS = ["--bare", "--tools", ""]
+
+# Only these variables are ever passed through to the invoked model-CLI
+# subprocess -- see module docstring's "Hermetic-by-default execution"
+# section. An allowlist, not a denylist of known-bad names: a denylist
+# would miss any ambient CI credential not already anticipated.
+_HERMETIC_ENV_ALLOWLIST = ("PATH", "HOME", "ANTHROPIC_API_KEY", "TMPDIR", "TMP", "TEMP")
+
+
+def _hermetic_env() -> dict[str, str]:
+    """The minimal environment a model-CLI subprocess actually needs,
+    filtered from the calling process's own environment -- never the full
+    inherited environment, so an ambient CI credential (``GITHUB_TOKEN``,
+    a ``gh``-related variable, ...) set in the parent process is never
+    visible to the invoked subprocess."""
+    return {key: value for key, value in os.environ.items() if key in _HERMETIC_ENV_ALLOWLIST}
+
 
 # (argv, timeout_seconds) -> captured stdout text. Swappable so this script's
 # plumbing is unit-testable without a live model CLI or credentials.
@@ -155,33 +193,53 @@ def _require_unpadded_str(value: object, field: str) -> str:
     return value
 
 
+def load_yaml_mapping(path: Path, label: str) -> Mapping[str, Any]:
+    """Read ``path`` as YAML and return its top-level mapping.
+
+    ``label`` names the artifact being read ("task fixture", "eval suite",
+    ...) in every error message, so this module's own ``load_task_fixture``
+    and ``gitapex_run_eval_suite.load_eval_suite`` raise identically worded
+    read/parse/not-a-mapping failures from one place rather than each
+    re-spelling the same three messages. Every failure -- unreadable file,
+    non-UTF-8 bytes, invalid YAML, a non-mapping document -- surfaces as
+    ``ValueError``, so callers only ever catch one exception type.
+    """
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ValueError(f"cannot read {label} {path}: {exc}") from exc
+    except yaml.YAMLError as exc:
+        raise ValueError(f"invalid YAML in {label} {path}: {exc}") from exc
+
+    if not isinstance(data, Mapping):
+        raise ValueError(f"{label} {path} must be a YAML mapping")
+    return data
+
+
 def load_task_fixture(path: Path) -> dict:
     """Load and minimally validate a committed task fixture (``evals/*/tasks/
-    *.yaml`` shape: a top-level ``id``, ``inputs.prompt``, and ``expected``).
+    *.yaml`` shape: a top-level ``id``, ``inputs.prompt``, ``expected``, and
+    optional ``graders``).
 
-    Only the three fields this script actually consumes are validated --
+    Only the four fields this script (and ``gitapex_run_eval_suite.py``, which
+    reuses this loader) actually consume are validated --
     ``name``/``description``/``tags`` are not, since checking fields this
     script never reads would make it a second, unrequested fixture-shape
     linter duplicating ``gitapex_lint_fixture_assertions.py``'s own job. ``expected``
     is checked only for being a mapping here; the deeper per-assertion-list
     shape validation (e.g. ``output_contains`` must be a list) happens in
     ``gitapex_run_ablation()`` via a cheap dry run against ``gitapex_score_contract.score``,
-    before any live model call -- not duplicated in this loader.
+    before any live model call -- not duplicated in this loader. ``graders``
+    (per ``.gitapex/waza-task.schema.json``'s own optional top-level array)
+    is returned as-is when present, ``[]`` when absent -- its own per-entry
+    shape validation happens in ``gitapex_run_eval_suite.py``, the only
+    consumer that dispatches on it.
 
     Raises ``ValueError`` on any malformed shape, including invalid or
     non-UTF-8 file content, so callers only ever need to catch one
     exception type from this function.
     """
-    try:
-        text = path.read_text(encoding="utf-8")
-        data = yaml.safe_load(text)
-    except (OSError, UnicodeDecodeError) as exc:
-        raise ValueError(f"cannot read task fixture {path}: {exc}") from exc
-    except yaml.YAMLError as exc:
-        raise ValueError(f"invalid YAML in task fixture {path}: {exc}") from exc
-
-    if not isinstance(data, Mapping):
-        raise ValueError(f"task fixture {path} must be a YAML mapping")
+    data = load_yaml_mapping(path, "task fixture")
 
     task_id = _require_unpadded_str(data.get("id"), "id")
 
@@ -194,20 +252,34 @@ def load_task_fixture(path: Path) -> dict:
     if not isinstance(expected, Mapping):
         raise ValueError(f"task fixture {path}: 'expected' must be a mapping")
 
-    return {"id": task_id, "prompt": prompt, "expected": expected}
+    graders = data.get("graders")
+    if graders is None:
+        graders = []
+    elif not isinstance(graders, list):
+        raise ValueError(f"task fixture {path}: 'graders' must be a list")
+
+    return {"id": task_id, "prompt": prompt, "expected": expected, "graders": graders}
 
 
-def build_command(model_cli: str, prompt: str, skill_md: Path | None) -> list[str]:
+def build_command(model_cli: str, prompt: str, skill_md: Path | None, *, model: str | None = None) -> list[str]:
     """Build the argv for one model-CLI invocation.
 
     ``skill_md`` given appends ``--append-system-prompt-file <skill_md>``
     (the "skill available" arm); ``None`` omits it entirely (the "skill
-    withheld" arm). ``--bare`` is always included -- see module docstring.
+    withheld" arm). ``--bare``/``--tools ""`` are always included -- see
+    module docstring's "Hermetic-by-default execution" section. ``model``
+    given appends ``--model <model>`` (verified live against this
+    environment's own ``claude --help``: accepts a full model id, e.g.
+    ``claude-sonnet-5``); ``None`` (the default) omits it entirely,
+    preserving every existing caller's behavior unchanged --
+    ``gitapex_run_ablation()``'s own two call sites stay ``model=None``.
     """
     model_cli = _require_unpadded_str(model_cli, "model_cli")
     argv = [model_cli, "-p", prompt, *_FIXED_FLAGS]
     if skill_md is not None:
         argv += ["--append-system-prompt-file", str(skill_md)]
+    if model is not None:
+        argv += ["--model", model]
     return argv
 
 
@@ -235,6 +307,7 @@ def subprocess_executor(argv: Sequence[str], timeout: int) -> str:
         errors="replace",
         timeout=timeout,
         check=False,
+        env=_hermetic_env(),
     )
     if result.returncode != 0:
         raise RuntimeError(f"model CLI exited {result.returncode}: {result.stderr.strip()}")
@@ -265,13 +338,16 @@ def _validate_expected_shape(expected: Mapping) -> None:
     exercises exactly the same shape checks (assertion set non-empty, each
     list correctly typed) ``gitapex_score_contract.score`` would otherwise only
     raise partway through scoring a real, already-obtained model output.
-    Converts a plain ``TypeError`` (e.g. a non-string entry in an
-    ``output_contains`` list) into ``ValueError`` so this function, like
-    ``load_task_fixture``, raises only one exception type.
+    Converts a plain ``TypeError`` (a non-string entry in an
+    ``output_contains`` list, which ``in`` rejects) or ``AttributeError``
+    (the same entry in the case-insensitive ``output_icontains`` /
+    ``output_not_icontains`` lists, which reach ``str.casefold()`` instead)
+    into ``ValueError`` so this function, like ``load_task_fixture``, raises
+    only one exception type.
     """
     try:
         gitapex_score_contract.score("", expected)
-    except TypeError as exc:
+    except (TypeError, AttributeError) as exc:
         raise ValueError(f"'expected' assertions are malformed: {exc}") from exc
 
 
