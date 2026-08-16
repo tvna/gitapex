@@ -344,10 +344,29 @@ def test_run_text_grader_rejects_unsupported_type():
         gitapex_run_eval_suite.run_text_grader("x", {"name": "g", "type": "program", "config": {"command": "x"}})
 
 
+def test_run_text_grader_rejects_missing_type_rather_than_defaulting_to_text():
+    # An absent `type` key is not a declared "text" -- waza-task.schema.json's
+    # own validatorInline requires only `name`, not `type`, so a fixture that
+    # omits it entirely must fail loudly, the same as any other unsupported
+    # or unrecognized type, not be silently treated as "text".
+    with pytest.raises(ValueError, match="unsupported grader type None"):
+        gitapex_run_eval_suite.run_text_grader("x", {"name": "g", "config": {"contains": ["x"]}})
+
+
 @pytest.mark.parametrize("key", ["contains_cs", "not_contains_cs", "regex_match", "regex_not_match"])
 def test_run_text_grader_rejects_unsupported_config_key(key: str):
     with pytest.raises(ValueError, match="unsupported text grader config key"):
         gitapex_run_eval_suite.run_text_grader("x", _text_grader({key: ["x"]}))
+
+
+def test_run_text_grader_rejects_unsupported_config_keys_of_incomparable_types():
+    # Defeat case for a real crash: an unquoted YAML integer key (e.g. a bare
+    # `1:`) parses as a non-str, and sorting a list mixing str and non-str
+    # keys with Python's default comparison raises TypeError, not ValueError
+    # -- bypassing this module's single-exception-type contract with a raw
+    # traceback instead of the documented, catchable error.
+    with pytest.raises(ValueError, match="unsupported text grader config key"):
+        gitapex_run_eval_suite.run_text_grader("x", _text_grader({1: ["x"], "regex_match": ["y"]}))
 
 
 def test_run_text_grader_rejects_non_mapping_entry():

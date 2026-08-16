@@ -141,14 +141,12 @@ _SUPPORTED_TEXT_CONFIG_KEYS = ("contains", "not_contains")
 
 
 def _require_positive_int(value: object, field: str) -> int:
+    """Reject anything that isn't a plain ``int >= 1`` -- ``bool`` is
+    excluded explicitly since it is a subclass of ``int`` in Python (a
+    stray ``true``/``false`` in YAML would otherwise silently pass as
+    ``1``/``0``)."""
     if isinstance(value, bool) or not isinstance(value, int) or value < 1:
         raise ValueError(f"{field} must be a positive integer, got {value!r}")
-    return value
-
-
-def _require_nonblank_str(value: object, field: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"{field} must be a non-empty string, got {value!r}")
     return value
 
 
@@ -180,7 +178,7 @@ def load_eval_suite(path: Path) -> dict[str, Any]:
     if not isinstance(tasks, list) or not tasks:
         raise ValueError(f"eval suite {path}: 'tasks' must be a non-empty list")
     for entry in tasks:
-        _require_nonblank_str(entry, "each 'tasks' entry")
+        gitapex_run_ablation._require_nonblank_str(entry, "each 'tasks' entry")
 
     mcp_mocks = data.get("mcp_mocks")
     # Shape first, then emptiness -- gating the rejection on `isinstance(...,
@@ -290,7 +288,13 @@ def run_text_grader(output: str, grader_entry: object) -> GraderResult:
     name = grader_entry.get("name")
     if not isinstance(name, str) or not name.strip():
         raise ValueError(f"grader entry missing 'name': {grader_entry!r}")
-    grader_type = grader_entry.get("type", "text")
+    # No default: an absent `type` is not a declared "text", and this
+    # module's own schema (.gitapex/waza-task.schema.json's validatorInline)
+    # requires only `name`, not `type` -- silently assuming "text" would be
+    # an unverified guess about a real committed fixture's intent, the same
+    # invisible-pass class this function already rejects for an unsupported
+    # config key or a no-assertion config.
+    grader_type = grader_entry.get("type")
     if grader_type != "text":
         raise ValueError(f"grader {name!r}: unsupported grader type {grader_type!r} (only 'text' is implemented)")
     config = grader_entry.get("config")
@@ -298,8 +302,12 @@ def run_text_grader(output: str, grader_entry: object) -> GraderResult:
         raise ValueError(f"grader {name!r}: grader 'config' must be a mapping, got {type(config).__name__}")
     unsupported = [key for key in config if key not in _SUPPORTED_TEXT_CONFIG_KEYS]
     if unsupported:
+        # key=repr, not a bare sort: an unquoted YAML key (e.g. a bare `1:`)
+        # parses as a non-str, and a mixed str/non-str key set is not
+        # orderable by Python's default comparison -- sorting by each key's
+        # own repr() is always comparable, since repr() always returns a str.
         raise ValueError(
-            f"grader {name!r}: unsupported text grader config key(s) {sorted(unsupported)!r} "
+            f"grader {name!r}: unsupported text grader config key(s) {sorted(unsupported, key=repr)!r} "
             f"(only {_SUPPORTED_TEXT_CONFIG_KEYS} are implemented)"
         )
 
@@ -420,11 +428,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("-o", "--output", type=Path, help="Write the aggregate JSON here; stdout when omitted.")
     args = parser.parse_args(argv)
 
-    if not args.skill_md.is_file():
-        print(f"error: skill file not found: {args.skill_md}", file=sys.stderr)
-        return 2
-
     try:
+        if not args.skill_md.is_file():
+            raise ValueError(f"skill file not found: {args.skill_md}")
         result = run_eval_suite(
             args.eval_yaml,
             args.skill_md,
