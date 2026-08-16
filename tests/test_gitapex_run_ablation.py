@@ -415,6 +415,17 @@ def test_validate_expected_shape_converts_type_error_to_value_error():
         gitapex_run_ablation._validate_expected_shape({"output_contains": [123]})
 
 
+@pytest.mark.parametrize("key", ["output_icontains", "output_not_icontains"])
+def test_validate_expected_shape_converts_attribute_error_to_value_error(key: str):
+    # Regression: the case-INSENSITIVE keys reach the same malformed entry
+    # through str.casefold() instead of `in`, so a non-string substring (an
+    # unquoted YAML year/version/issue number) raises AttributeError, not
+    # TypeError -- which escaped this function's single-ValueError contract
+    # and surfaced as an uncaught traceback in both runners' main().
+    with pytest.raises(ValueError, match="'expected' assertions are malformed"):
+        gitapex_run_ablation._validate_expected_shape({key: [2024]})
+
+
 def test_run_ablation_rejects_empty_expected_without_calling_executor(tmp_path: Path):
     # This is the concrete fix for the cross-verified finding: a malformed
     # `expected` block must fail before either live model call, not after

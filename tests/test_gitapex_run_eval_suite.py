@@ -138,6 +138,14 @@ def test_load_eval_suite_rejects_empty_tasks_list(tmp_path: Path):
         gitapex_run_eval_suite.load_eval_suite(eval_yaml)
 
 
+@pytest.mark.parametrize("tasks_line", ["tasks: [123]", "tasks: ['']"])
+def test_load_eval_suite_rejects_malformed_tasks_entry(tmp_path: Path, tasks_line: str):
+    text = BASE_EVAL_YAML.replace('tasks:\n  - "tasks/*.yaml"', tasks_line)
+    eval_yaml = _write_suite(tmp_path, eval_yaml_text=text)
+    with pytest.raises(ValueError, match="each 'tasks' entry must be a non-empty string"):
+        gitapex_run_eval_suite.load_eval_suite(eval_yaml)
+
+
 @pytest.mark.parametrize("trials_per_task", [0, -1])
 def test_load_eval_suite_rejects_non_positive_trials_per_task(tmp_path: Path, trials_per_task: int):
     text = BASE_EVAL_YAML.replace("trials_per_task: 2", f"trials_per_task: {trials_per_task}")
@@ -162,6 +170,17 @@ def test_load_eval_suite_rejects_blank_model(tmp_path: Path, model_line: str):
         gitapex_run_eval_suite.load_eval_suite(eval_yaml)
 
 
+def test_load_eval_suite_rejects_padded_model(tmp_path: Path):
+    # A padded model id is always an authoring mistake (the same rule
+    # gitapex_run_ablation.py's own `id`/model-cli fields already enforce via
+    # _require_unpadded_str) -- silently accepting it would forward a
+    # padded string to both --model and the permanent model_id record.
+    text = BASE_EVAL_YAML.replace("model: claude-sonnet-5", "model: ' claude-sonnet-5 '")
+    eval_yaml = _write_suite(tmp_path, eval_yaml_text=text)
+    with pytest.raises(ValueError, match="model must be unpadded"):
+        gitapex_run_eval_suite.load_eval_suite(eval_yaml)
+
+
 def test_load_eval_suite_rejects_non_empty_mcp_mocks(tmp_path: Path):
     # mcp_mocks declares a mocked MCP server for a run to use -- but this
     # runner grants zero tools (--tools "" in gitapex_run_ablation.py), so
@@ -179,6 +198,26 @@ def test_load_eval_suite_accepts_empty_mcp_mocks(tmp_path: Path):
     text = BASE_EVAL_YAML + "mcp_mocks: []\n"
     eval_yaml = _write_suite(tmp_path, eval_yaml_text=text)
     gitapex_run_eval_suite.load_eval_suite(eval_yaml)  # no raise
+
+
+@pytest.mark.parametrize(
+    "mcp_mocks_block",
+    [
+        # A YAML mapping instead of waza-eval.schema.json's own array -- the
+        # exact shape a hand-authored suite drifts into.
+        "mcp_mocks:\n  github:\n    tools:\n      search:\n        responses:\n          - return: 1\n",
+        "mcp_mocks: github-mock\n",  # a bare scalar
+    ],
+)
+def test_load_eval_suite_rejects_non_list_mcp_mocks(tmp_path: Path, mcp_mocks_block: str):
+    # Regression: the rejection guard must not be reachable only through a
+    # `list` type test. A non-list, non-empty mcp_mocks declares mocked MCP
+    # servers just as loudly as a list does, and this runner grants zero
+    # tools -- letting it through would score a fixture as though its mocked
+    # condition held when it never ran.
+    eval_yaml = _write_suite(tmp_path, eval_yaml_text=BASE_EVAL_YAML + mcp_mocks_block)
+    with pytest.raises(ValueError, match="mcp_mocks"):
+        gitapex_run_eval_suite.load_eval_suite(eval_yaml)
 
 
 def test_load_eval_suite_records_executor_field_without_enforcing_it(tmp_path: Path):
@@ -213,6 +252,33 @@ def test_discover_task_fixtures_dedupes_overlapping_globs(tmp_path: Path):
     eval_yaml = _write_suite(tmp_path, tasks={"a.yaml": TASK_A_TEXT})
     fixtures = gitapex_run_eval_suite.discover_task_fixtures(eval_yaml, ["tasks/*.yaml", "tasks/a.*"])
     assert [p.name for p in fixtures] == ["a.yaml"]
+
+
+@pytest.mark.parametrize(
+    ("pattern", "raw_exception"),
+    [
+        # Path.glob raises three *different*, non-ValueError types for a
+        # pattern it cannot expand (verified against this interpreter's own
+        # pathlib source): NotImplementedError for a non-relative pattern,
+        # IndexError for one that parses to zero path components, ValueError
+        # for a misplaced '**'. Only the last already satisfies this
+        # function's own documented "raises ValueError" contract, so the
+        # other two escaped it -- and IndexError escaped main()'s handlers
+        # entirely, crashing with a traceback instead of an exit code.
+        ("/abs/path/*.yaml", "NotImplementedError"),
+        (".", "IndexError"),
+        ("tasks/**.yaml", "ValueError"),
+    ],
+)
+def test_discover_task_fixtures_wraps_unexpandable_glob_as_value_error(
+    tmp_path: Path, pattern: str, raw_exception: str
+):
+    eval_yaml = _write_suite(tmp_path)
+    with pytest.raises(ValueError, match="tasks: glob") as excinfo:
+        gitapex_run_eval_suite.discover_task_fixtures(eval_yaml, [pattern])
+    # The wrap is real, not a coincidental ValueError from somewhere else:
+    # each case must chain from the raw pathlib exception it started as.
+    assert type(excinfo.value.__cause__).__name__ == raw_exception
 
 
 # ---------------------------------------------------------------------------
@@ -276,6 +342,39 @@ def test_run_text_grader_rejects_missing_name():
 def test_run_text_grader_rejects_non_mapping_config():
     with pytest.raises(ValueError, match="grader 'config' must be a mapping"):
         gitapex_run_eval_suite.run_text_grader("x", {"name": "g", "type": "text", "config": "nope"})
+
+
+def test_run_text_grader_rejects_config_declaring_no_assertion():
+    # Regression: a config with no contains/not_contains asserts nothing, so
+    # it cannot distinguish any output from any other. Scoring it 1.0 would
+    # make it an invisible free pass -- exactly the opposite of this
+    # module's own "loud, visible gap rather than an invisible pass" rule.
+    with pytest.raises(ValueError, match="declares no assertion"):
+        gitapex_run_eval_suite.run_text_grader("literally any output at all", _text_grader({}))
+
+
+def test_run_text_grader_rejects_non_string_substring():
+    # Regression: an unquoted YAML scalar (a year, a version, an issue
+    # number) lands in the config as an int, and the case-insensitive
+    # matcher then calls .casefold() on it -- an AttributeError that escapes
+    # this module's own single-ValueError contract entirely.
+    with pytest.raises(ValueError, match="malformed text grader config"):
+        gitapex_run_eval_suite.run_text_grader("x", _text_grader({"contains": [2024]}))
+
+
+def test_run_eval_suite_rejects_vacuous_grader_before_dispatching(tmp_path: Path):
+    # The pre-flight dry run must catch an assert-nothing grader before any
+    # trial spends a real executor call on the fixture that declares it.
+    eval_yaml = _write_suite(
+        tmp_path,
+        tasks={"a.yaml": TASK_A_TEXT + "graders:\n  - name: vacuous\n    type: text\n    config: {}\n"},
+    )
+    executor = _RecordingExecutor([])
+
+    with pytest.raises(ValueError, match="declares no assertion"):
+        gitapex_run_eval_suite.run_eval_suite(eval_yaml, _skill_md(tmp_path), executor=executor, model_cli="claude")
+
+    assert executor.calls == []
 
 
 # ---------------------------------------------------------------------------
@@ -641,6 +740,56 @@ def test_main_zero_matched_fixtures_returns_2(tmp_path: Path, capsys):
     rc = gitapex_run_eval_suite.main(["--eval-yaml", str(eval_yaml), "--skill-md", str(skill_md)])
     assert rc == 2
     assert "error:" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("pattern", ["/abs/path/*.yaml", "."])
+def test_main_unexpandable_tasks_glob_returns_2_not_1_or_a_traceback(tmp_path: Path, capsys, pattern: str):
+    # Exit-code contract regression: a bad tasks: glob is malformed INPUT
+    # (exit 2), never an execution failure (exit 1) and never an uncaught
+    # traceback. An absolute pattern raised NotImplementedError, which is a
+    # RuntimeError subclass and so was silently absorbed by main()'s own
+    # execution-failure handler; "." raised IndexError, which no handler
+    # caught at all.
+    eval_yaml = _write_suite(tmp_path, eval_yaml_text=BASE_EVAL_YAML.replace('"tasks/*.yaml"', f'"{pattern}"'))
+    skill_md = _skill_md(tmp_path)
+
+    rc = gitapex_run_eval_suite.main(["--eval-yaml", str(eval_yaml), "--skill-md", str(skill_md)])
+
+    assert rc == 2
+    assert "tasks: glob" in capsys.readouterr().err
+
+
+def test_main_non_string_grader_substring_returns_2(tmp_path: Path, capsys):
+    # Exit-code contract regression: the AttributeError from .casefold() on
+    # a non-string substring escaped every handler main() declares.
+    eval_yaml = _write_suite(
+        tmp_path,
+        tasks={
+            "a.yaml": TASK_A_TEXT
+            + "graders:\n  - name: g\n    type: text\n    config:\n      contains:\n        - 2024\n"
+        },
+    )
+    skill_md = _skill_md(tmp_path)
+
+    rc = gitapex_run_eval_suite.main(["--eval-yaml", str(eval_yaml), "--skill-md", str(skill_md)])
+
+    assert rc == 2
+    assert "malformed text grader config" in capsys.readouterr().err
+
+
+def test_main_non_string_expected_substring_returns_2(tmp_path: Path, capsys):
+    # The same non-string-substring defect on the parallel expected: path
+    # this runner validates through gitapex_run_ablation._validate_expected_shape.
+    eval_yaml = _write_suite(
+        tmp_path,
+        tasks={"a.yaml": "id: a\ninputs:\n  prompt: hi\nexpected:\n  output_icontains:\n    - 2024\n"},
+    )
+    skill_md = _skill_md(tmp_path)
+
+    rc = gitapex_run_eval_suite.main(["--eval-yaml", str(eval_yaml), "--skill-md", str(skill_md)])
+
+    assert rc == 2
+    assert "assertions are malformed" in capsys.readouterr().err
 
 
 def test_main_executor_runtime_error_returns_1(tmp_path: Path, monkeypatch, capsys):

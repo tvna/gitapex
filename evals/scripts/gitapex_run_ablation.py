@@ -332,13 +332,16 @@ def _validate_expected_shape(expected: Mapping) -> None:
     exercises exactly the same shape checks (assertion set non-empty, each
     list correctly typed) ``gitapex_score_contract.score`` would otherwise only
     raise partway through scoring a real, already-obtained model output.
-    Converts a plain ``TypeError`` (e.g. a non-string entry in an
-    ``output_contains`` list) into ``ValueError`` so this function, like
-    ``load_task_fixture``, raises only one exception type.
+    Converts a plain ``TypeError`` (a non-string entry in an
+    ``output_contains`` list, which ``in`` rejects) or ``AttributeError``
+    (the same entry in the case-insensitive ``output_icontains`` /
+    ``output_not_icontains`` lists, which reach ``str.casefold()`` instead)
+    into ``ValueError`` so this function, like ``load_task_fixture``, raises
+    only one exception type.
     """
     try:
         gitapex_score_contract.score("", expected)
-    except TypeError as exc:
+    except (TypeError, AttributeError) as exc:
         raise ValueError(f"'expected' assertions are malformed: {exc}") from exc
 
 

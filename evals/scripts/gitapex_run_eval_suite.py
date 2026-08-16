@@ -173,7 +173,7 @@ def load_eval_suite(path: Path) -> dict[str, Any]:
 
     trials_per_task = _require_positive_int(config.get("trials_per_task"), "trials_per_task")
     timeout_seconds = _require_positive_int(config.get("timeout_seconds"), "timeout_seconds")
-    model = _require_nonblank_str(config.get("model"), "model")
+    model = gitapex_run_ablation._require_unpadded_str(config.get("model"), "model")
     executor = config.get("executor")  # read through, never enforced -- see module docstring
 
     tasks = data.get("tasks")
@@ -183,7 +183,13 @@ def load_eval_suite(path: Path) -> dict[str, Any]:
         _require_nonblank_str(entry, "each 'tasks' entry")
 
     mcp_mocks = data.get("mcp_mocks")
-    if isinstance(mcp_mocks, list) and mcp_mocks:
+    # Shape first, then emptiness -- gating the rejection on `isinstance(...,
+    # list)` would let a non-list, non-empty value (a YAML mapping, a bare
+    # scalar) through unrejected, which is the silently-ignored mock this
+    # guard exists to prevent, not a reason to skip it.
+    if mcp_mocks is not None and not isinstance(mcp_mocks, list):
+        raise ValueError(f"eval suite {path}: 'mcp_mocks' must be a list, got {type(mcp_mocks).__name__}")
+    if mcp_mocks:
         raise ValueError(
             f"eval suite {path}: mcp_mocks is not supported -- this runner grants zero tools "
             '(--tools "" in gitapex_run_ablation.py), so a declared mock has nothing to attach to'
@@ -209,12 +215,30 @@ def discover_task_fixtures(eval_yaml_path: Path, task_globs: list[str]) -> list[
     Raises ``ValueError`` if the combined match set across every glob is
     empty -- a suite whose ``tasks:`` glob matches zero files must fail
     loudly, never silently report an empty pass (issue #1132's own ACM row 2
-    residual-risk column).
+    residual-risk column) -- and equally if any single pattern cannot be
+    expanded at all (see the wrapping in the loop below), so a malformed
+    ``tasks:`` entry stays one exception type for callers, like every other
+    malformed input this module reports.
     """
     base_dir = eval_yaml_path.parent
     matched: set[Path] = set()
     for pattern in task_globs:
-        matched.update(base_dir.glob(pattern))
+        try:
+            matched.update(base_dir.glob(pattern))
+        except (NotImplementedError, IndexError, ValueError) as exc:
+            # ``Path.glob`` rejects a pattern it cannot expand with three
+            # different types, only one of which is already the ``ValueError``
+            # this function documents (verified against this interpreter's own
+            # pathlib source): ``NotImplementedError`` for a non-relative
+            # pattern, ``IndexError`` for one parsing to zero path components
+            # (``"."``), ``ValueError`` for a misplaced ``**``. Left unwrapped,
+            # the first is a ``RuntimeError`` subclass that ``main()`` would
+            # misreport as an execution failure (exit 1) rather than the
+            # malformed input it is, and the second escapes ``main()``'s
+            # handlers entirely as a traceback with no exit code at all.
+            raise ValueError(
+                f"eval suite {eval_yaml_path}: tasks: glob {pattern!r} cannot be expanded relative to {base_dir}: {exc}"
+            ) from exc
     if not matched:
         raise ValueError(f"eval suite {eval_yaml_path}: tasks: glob {task_globs!r} matched zero files under {base_dir}")
     return sorted(matched)
@@ -279,12 +303,30 @@ def run_text_grader(output: str, grader_entry: object) -> GraderResult:
             f"(only {_SUPPORTED_TEXT_CONFIG_KEYS} are implemented)"
         )
 
-    assertions = {}
+    assertions: dict[str, Any] = {}
     if "contains" in config:
         assertions["output_icontains"] = config["contains"]
     if "not_contains" in config:
         assertions["output_not_icontains"] = config["not_contains"]
-    score = gitapex_score_contract.score(output, assertions) if assertions else 1.0
+    if not assertions:
+        # A config declaring neither key asserts nothing, so it cannot tell
+        # any output apart from any other. Defaulting it to 1.0 would make it
+        # an invisible free pass that silently lifts the fixture's own score
+        # (each grader is an equally weighted vote) -- the same
+        # invisible-pass failure this module rejects an unsupported type for.
+        raise ValueError(
+            f"grader {name!r}: text grader 'config' declares no assertion "
+            f"(expected at least one of {_SUPPORTED_TEXT_CONFIG_KEYS})"
+        )
+    try:
+        score = gitapex_score_contract.score(output, assertions)
+    except (TypeError, AttributeError) as exc:
+        # A non-string substring (an unquoted YAML year/version/issue number)
+        # reaches ``str.casefold()`` as an int and raises ``AttributeError``,
+        # which escapes this module's single-``ValueError`` contract --
+        # the same conversion ``gitapex_run_ablation._validate_expected_shape``
+        # already applies to its own ``TypeError`` case.
+        raise ValueError(f"grader {name!r}: malformed text grader config: {exc}") from exc
     passed = score >= 1.0
     return GraderResult(name=name, passed=passed, detail=f"score={score:.6f}")
 
