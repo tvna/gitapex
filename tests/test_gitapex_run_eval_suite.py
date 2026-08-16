@@ -53,6 +53,27 @@ graders:
       contains: ["OK"]
 """
 
+TASK_C_TEXT = """\
+id: task-c
+inputs:
+  prompt: Say ok.
+expected:
+  output_contains: ["ok"]
+graders:
+  - name: has-ok
+    type: text
+    config:
+      contains: ["ok"]
+  - name: has-confirmed
+    type: text
+    config:
+      contains: ["confirmed"]
+  - name: has-nope
+    type: text
+    config:
+      contains: ["nope"]
+"""
+
 
 def _write_suite(tmp_path: Path, *, eval_yaml_text: str = BASE_EVAL_YAML, tasks: dict[str, str] | None = None) -> Path:
     eval_yaml = tmp_path / "eval.yaml"
@@ -532,6 +553,29 @@ def test_run_eval_suite_score_reflects_a_failing_grader(tmp_path: Path):
     )
 
     assert result.scores[0]["score"] == pytest.approx(0.5)
+
+
+def test_run_eval_suite_score_with_three_graders_weighs_each_equally(tmp_path: Path):
+    # TASK_C_TEXT: expected.output_contains: ["ok"] (satisfied, 1.0) plus 3
+    # graders: has-ok (contains "ok", satisfied, 1.0), has-confirmed (contains
+    # "confirmed", satisfied, 1.0), has-nope (contains "nope", NOT satisfied,
+    # 0.0) -- trial_score = mean([1.0, 1.0, 1.0, 0.0]) = 0.75, confirming every
+    # grader result carries equal weight alongside the substring score, not
+    # just the single-grader case the other score tests already cover.
+    eval_yaml = _write_suite(
+        tmp_path,
+        eval_yaml_text=BASE_EVAL_YAML.replace("trials_per_task: 2", "trials_per_task: 1"),
+        tasks={"c.yaml": TASK_C_TEXT},
+    )
+    executor = _RecordingExecutor(["ok, confirmed"])
+
+    result = gitapex_run_eval_suite.run_eval_suite(
+        eval_yaml, _skill_md(tmp_path), executor=executor, model_cli="claude"
+    )
+
+    assert result.scores[0]["score"] == pytest.approx(0.75)
+    passed = [gr["passed"] for gr in result.scores[0]["trials"][0]["grader_results"]]
+    assert passed == [True, True, False]
 
 
 def test_run_eval_suite_fixture_score_is_mean_across_trials(tmp_path: Path):
