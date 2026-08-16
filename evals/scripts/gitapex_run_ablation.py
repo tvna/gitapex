@@ -64,7 +64,13 @@ invoked model CLI even if a future change reintroduced tool access by
 mistake -- defense in depth, not a substitute for `--tools ""`. A live
 run still needs `ANTHROPIC_API_KEY` (or an `apiKeyHelper`) explicitly
 configured and allowlisted, since bare mode skips OAuth/keychain reads
-entirely (same docs page). The vendored eval schema's `mcp_mocks` field
+entirely (same docs page). This is the same repository-level secret
+`CONTRIBUTING.md`'s "ranking-the-open-queue weekly digest API key"
+section already documents end to end (issuance at
+console.anthropic.com, storage as a repository secret, minimum
+permissions, rotation cadence, and a verification procedure) -- not a
+new credential this script introduces, so its lifecycle is not
+re-documented a second time here. The vendored eval schema's `mcp_mocks` field
 (`.gitapex/waza-eval.schema.json`) stays declarable but unimplemented
 here: with zero tools ever granted, there is nothing for it to mock.
 
