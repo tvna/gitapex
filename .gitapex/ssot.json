@@ -945,7 +945,7 @@
       "rule": "Every skills/*/metadata/gitapex.yaml's spec.executionRequirements.packages.<ecosystem> entries, PEP-503-normalized, must be in this gate's own hardcoded ALLOWED_PACKAGES allowlist (currently pip: pyyaml/jsonschema/pydantic, matching ADR 0001/issue #1115). A skill declaring no packages is a no-op.",
       "planes": ["ci", "local"],
       "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_dependency_allowlist.py"],
-      "trigger": ".github/workflows/dependency-allowlist-gate.yml on pull_request, paths: skills/**/metadata/gitapex.yaml; also re-checked unconditionally by tests/test_gitapex_gate_dependency_allowlist.py's own real-repository test inside the required pytest step of .github/workflows/test.yml",
+      "trigger": ".github/workflows/dependency-allowlist-gate.yml on pull_request, paths: skills/**/metadata/gitapex.yaml, .github/scripts/gitapex_gate_dependency_allowlist.py, .github/workflows/dependency-allowlist-gate.yml; also re-checked unconditionally by tests/test_gitapex_gate_dependency_allowlist.py's own real-repository test inside the required pytest step of .github/workflows/test.yml",
       "policy_refs": ["skill-metadata-sidecar"],
       "cluster": "skill-lifecycle",
       "tracking_issue": 1141,

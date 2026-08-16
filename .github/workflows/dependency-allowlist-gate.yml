@@ -5,6 +5,8 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - "skills/**/metadata/gitapex.yaml"
+      - ".github/scripts/gitapex_gate_dependency_allowlist.py"
+      - ".github/workflows/dependency-allowlist-gate.yml"
 
 permissions:
   contents: read

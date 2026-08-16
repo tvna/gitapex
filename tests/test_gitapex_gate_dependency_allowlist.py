@@ -447,5 +447,17 @@ def test_broken_yaml_installation_in_script_mode_propagates_unmodified(
 # ---- the real gate ----
 
 
+def test_allowed_packages_matches_adr_0001_exactly() -> None:
+    """Locks ALLOWED_PACKAGES' literal content, not just its effect on the
+    real skills/ tree. None of this repository's real skills currently
+    declares any package (test_real_repository_skills_have_no_dependency_
+    allowlist_violations below is a no-op against every value of
+    ALLOWED_PACKAGES for that reason), so that test alone would not catch a
+    silent broadening or shrinking of this constant. ADR 0001 / issue #1115
+    is the single source of truth for what belongs here.
+    """
+    assert gate.ALLOWED_PACKAGES == {"pip": ("pyyaml", "jsonschema", "pydantic")}
+
+
 def test_real_repository_skills_have_no_dependency_allowlist_violations() -> None:
     assert gate.find_violations() == []
