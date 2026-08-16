@@ -65,9 +65,9 @@ inputs:
     ```
 
     For this review, treat `jsonschema` as present in this repository's own
-    `.gitapex/dependency-allowlist.json` allowlist under the `pip` ecosystem
-    -- a stipulated fact for this exercise, not something you need to
-    independently verify.
+    dependency allowlist (enforced by a repository-owned CI gate) under the
+    `pip` ecosystem -- a stipulated fact for this exercise, not something
+    you need to independently verify.
 
     Is dimension 7's "Dependencies listed; execution intent stated"
     criterion a clean Pass or Fail here? If it fails, name specifically

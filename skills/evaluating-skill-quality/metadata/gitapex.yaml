@@ -495,6 +495,18 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1124"
       summary: "A battle-testing-a-skill audit (after the entries above) found dimension 5 FAIL: the new Dependency policy prose claimed find_packages_drift catches 'ANY non-stdlib import,' contradicting that scanner's own docstring disclosing a dynamic-import blind spot. Fixed by naming the AST-visible-only subset explicitly in the StdlibOnly and Declared(a) criteria, mirroring sub-criterion (c)'s own disclosure pattern. Re-verified: 68/68 self-dogfood, full suite green."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1141"
+      summary: "Redesigned package-allowlist enforcement: removed execution-requirements-packages-allowlisted and its supporting functions from gitapex_check_skill_shape.py -- a portable skill script should not need gitapex's package policy, and the shared allowlist config it read (never committed) coupled otherwise-independent skills. Supersedes that clause in the issues/1124 entry above (append-only). Replaced with a repository-owned CI gate validating packages against a hardcoded allowlist matching ADR 0001."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/1141"
+      summary: "Independent adversarial code review (this issue's own required round) found 3 issues, all fixed: two live eval task fixtures still referenced the removed .gitapex/dependency-allowlist.json path; one kept test's leading comment described the removed mechanism's now-stale rationale; rubric.md's Execution requirements paragraph did not disclose PEP-503 normalization is looser than the removed check's exact/case-sensitive matching. Full suite 4846 passed, self-dogfood 67/67, ruff/mypy clean."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/1141"
+      summary: "battle-testing-a-skill: PASS (all 22 applicable dimensions plus one added, quoted evidence verified against primary source). evaluating-skill-quality self-review: WELL-FORMED-NOT-MATURE (67/67 shape checks; two standing pre-existing gaps, dimensions 5 and 7, neither introduced here). Both dispatched as isolated fresh agents per this skill's own Subagent dispatch requirement."
+      outcome:
+        verdict: WELL-FORMED-NOT-MATURE
+        reason: pre-existing-dimension-5-and-7-findings
   skillDependencies:
     requires: []
     relatedTo:

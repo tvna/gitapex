@@ -4057,7 +4057,7 @@ instruction ("Extend `_CHECKPOINT_PHRASES` in the same change that adds a
 new step-1-4 checkpoint"). No new deterministic scanner logic: both
 branches reuse PR3's `find_packages_drift`
 (`packages-pip-vs-script-content` / `packages-pip-vs-compatibility`) and
-PR2's `execution-requirements-packages-allowlisted` as their mechanical
+the repository's dependency-allowlist CI gate as their mechanical
 backing; the PEP 723/`uv run` sub-criterion is disclosed in the rubric text
 itself as judged, not mechanically gated.
 

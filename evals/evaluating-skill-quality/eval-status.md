@@ -1074,10 +1074,9 @@ to establish it, and `test_gitapex_contract_precondition_sync.py`'s own
 `_CHECKPOINT_PHRASES` registry was extended to keep that mirror gated per its
 own docstring's instruction. No new deterministic scanner: both branches
 reuse PR3's `find_packages_drift` (`packages-pip-vs-script-content` /
-`packages-pip-vs-compatibility`) and PR2's
-`execution-requirements-packages-allowlisted` as their mechanical backing;
-the PEP 723/`uv run` usage sub-criterion is disclosed as judged-only, with no
-mechanical check.
+`packages-pip-vs-compatibility`) and the repository's dependency-allowlist CI
+gate as their mechanical backing; the PEP 723/`uv run` usage sub-criterion is
+disclosed as judged-only, with no mechanical check.
 
 Went through `scorer-gated-skill-edits`' own held-out gate: 5 new fixtures
 added to `split.md`'s split (75 total, 29:32:13). Both new selection
