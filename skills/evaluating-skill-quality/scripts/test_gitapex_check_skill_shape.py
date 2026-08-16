@@ -59,6 +59,7 @@ def _write_skill(
     meta_name="skill",
     portability="Portable",
     capability_assumption="Broad",
+    dependency_policy=None,
 ):
     d = tmp_path / "skill"
     d.mkdir()
@@ -84,6 +85,8 @@ def _write_skill(
             lines.append(f"  portability: {portability}")
         if capability_assumption is not None:
             lines.append(f"  capabilityAssumption: {capability_assumption}")
+        if dependency_policy is not None:
+            lines.append(f"  dependencyPolicy: {dependency_policy}")
         (d / "metadata").mkdir(parents=True, exist_ok=True)
         (d / "metadata/gitapex.yaml").write_text("\n".join(lines) + "\n", encoding="utf-8")
     if references:
@@ -1396,6 +1399,7 @@ def test_sidecar_checks_pass_on_good_skill(tmp_path):
         "metadata-name-matches-dir",
         "portability-declared",
         "capability-assumption-declared",
+        "dependency-policy-declared",
         "references-well-formed",
     ):
         assert by[check].passed is True, check
@@ -1473,6 +1477,97 @@ def test_invalid_capability_assumption_value_fails(tmp_path):
     assert _by_name(css.check_shape(d))["capability-assumption-declared"].passed is False
 
 
+# ---- dependency-policy-declared (OPTIONAL, unlike portability/
+#      capability-assumption -- mirrors the references-well-formed pattern) ----
+
+
+def test_dependency_policy_absent_is_well_formed(tmp_path):
+    d = _write_skill(tmp_path)
+    by = _by_name(css.check_shape(d))
+    assert by["dependency-policy-declared"].passed is True
+    assert by["dependency-policy-declared"].evidence == "not declared (optional, treated as StdlibOnly-equivalent)"
+    assert css.main([str(d)]) == 0
+
+
+def test_dependency_policy_stdlib_only_passes(tmp_path):
+    d = _write_skill(tmp_path, dependency_policy="StdlibOnly")
+    by = _by_name(css.check_shape(d))
+    assert by["dependency-policy-declared"].passed is True
+    assert by["dependency-policy-declared"].evidence == "'StdlibOnly'"
+    assert css.main([str(d)]) == 0
+
+
+def test_dependency_policy_declared_passes(tmp_path):
+    d = _write_skill(tmp_path, dependency_policy="Declared")
+    by = _by_name(css.check_shape(d))
+    assert by["dependency-policy-declared"].passed is True
+    assert by["dependency-policy-declared"].evidence == "'Declared'"
+    assert css.main([str(d)]) == 0
+
+
+def test_invalid_dependency_policy_value_fails(tmp_path):
+    d = _write_skill(tmp_path, dependency_policy="OnlyGoodVibes")
+    by = _by_name(css.check_shape(d))
+    assert by["dependency-policy-declared"].passed is False
+    assert by["dependency-policy-declared"].evidence == "'OnlyGoodVibes'"
+    assert css.main([str(d)]) == 1
+
+
+def test_dependency_policy_declared_fails_when_spec_is_not_a_mapping(tmp_path):
+    # Regression guard, same shape as
+    # test_references_well_formed_fails_when_spec_is_not_a_mapping below:
+    # "spec: some-scalar" is the same precondition failure portability-
+    # declared/capability-assumption-declared already report --
+    # dependency-policy-declared must not misreport it as the ordinary
+    # optional-and-absent case.
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\nkind: SkillMetadata\nmetadata:\n  name: skill\nspec: not-a-mapping-scalar\n",
+        encoding="utf-8",
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["portability-declared"].passed is False
+    assert by["dependency-policy-declared"].passed is False
+    assert "not a mapping" in by["dependency-policy-declared"].evidence
+
+
+def test_dependency_policy_written_as_a_list_fails_not_treated_as_absent(tmp_path):
+    # A present-but-block-shaped "dependencyPolicy:" (list items on
+    # following lines, instead of an inline scalar) parses to Python None
+    # -- the same value real absence produces. A present dependencyPolicy
+    # that fails to name a real level must FAIL, the same way an inline
+    # garbage string already does above, not be indistinguishable from
+    # the field never having been written at all.
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\nkind: SkillMetadata\nmetadata:\n  name: skill\n"
+        "spec:\n  portability: Portable\n  capabilityAssumption: Broad\n"
+        "  dependencyPolicy:\n    - StdlibOnly\n    - Declared\n",
+        encoding="utf-8",
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["dependency-policy-declared"].passed is False
+    assert by["dependency-policy-declared"].evidence != "not declared (optional, treated as StdlibOnly-equivalent)"
+    assert css.main([str(d)]) == 1
+
+
+def test_dependency_policy_bare_colon_fails_not_treated_as_absent(tmp_path):
+    # Same underlying gap as the list-shaped case above, narrower trigger:
+    # a "dependencyPolicy:" header with literally nothing after it and no
+    # following block content either -- still present, still malformed
+    # (no real level named), still must not read as absent.
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\nkind: SkillMetadata\nmetadata:\n  name: skill\n"
+        "spec:\n  portability: Portable\n  capabilityAssumption: Broad\n  dependencyPolicy:\n",
+        encoding="utf-8",
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["dependency-policy-declared"].passed is False
+    assert by["dependency-policy-declared"].evidence != "not declared (optional, treated as StdlibOnly-equivalent)"
+    assert css.main([str(d)]) == 1
+
+
 def test_quoted_portability_value_passes(tmp_path):
     # A double-quoted scalar ("Portable") must be unquoted before matching
     # PORTABILITY_LEVELS -- exercises _unquote via _parse_manifest.
@@ -1501,6 +1596,7 @@ def test_non_utf8_sidecar_fails_checks_not_exit_2(tmp_path):
         "metadata-name-matches-dir",
         "portability-declared",
         "capability-assumption-declared",
+        "dependency-policy-declared",
         "references-well-formed",
     ):
         assert by[check].passed is False, check
@@ -3380,6 +3476,35 @@ def test_manifest_parser_still_ignores_eval_status():
     )
     parsed = css._parse_manifest(text)
     assert "evalStatus" not in parsed.root["spec"]
+    assert parsed.malformed_lines == []
+
+
+def test_manifest_parser_registers_block_shaped_dependency_policy_as_present():
+    # Contrast with test_manifest_parser_still_ignores_eval_status above:
+    # dependencyPolicy is NOT reserved-and-ignored like evalStatus -- it is
+    # a real, optional, closed-vocabulary field whose own check
+    # (dependency-policy-declared) treats a parsed value of None as
+    # "genuinely absent, therefore fine". A block-shaped (or bare-colon)
+    # "dependencyPolicy:" must therefore register as present with an
+    # empty-string value -- distinct from real absence -- rather than
+    # silently vanishing from spec the way an unrecognized/reserved key
+    # does, or dependency-policy-declared could never tell "never written"
+    # apart from "written but malformed".
+    text = (
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  dependencyPolicy:\n"
+        "    - StdlibOnly\n"
+        "    - Declared\n"
+    )
+    parsed = css._parse_manifest(text)
+    assert "dependencyPolicy" in parsed.root["spec"]
+    assert parsed.root["spec"]["dependencyPolicy"] == ""
     assert parsed.malformed_lines == []
 
 

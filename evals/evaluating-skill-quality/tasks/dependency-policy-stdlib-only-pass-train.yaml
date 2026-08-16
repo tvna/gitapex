@@ -1,0 +1,86 @@
+id: evaluating-skill-quality-dependency-policy-stdlib-only-pass-train
+name: StdlibOnly Declaration Holds -- Clean Pass, No Contradicting Import
+description: The reviewed skill's sidecar declares spec.dependencyPolicy StdlibOnly and its bundled script imports nothing outside the standard library; under the new Dependency policy precondition this must be a clean dimension-7 Pass, backed by find_packages_drift's own under-declared signal finding nothing to flag. Motivates the Dependency policy StdlibOnly-Pass branch.
+tags:
+  - quality
+  - bundled-scripts
+  - dependency-policy
+  - train
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft skill called
+    "archiving-stale-branches". Its metadata/gitapex.yaml sidecar declares:
+
+    spec:
+      portability: Portable
+      capabilityAssumption: Broad
+      dependencyPolicy: StdlibOnly
+
+    ---
+    name: archiving-stale-branches
+    description: Archive local git branches with no commits in the last 90 days. Use when cleaning up a stale local branch list.
+    ---
+
+    # Archiving Stale Branches
+
+    ## Procedure
+
+    1. Run `scripts/archive_branches.py --dry-run` first to preview which
+       branches would be archived.
+    2. Review the preview output, then re-run without `--dry-run` to move
+       each stale branch's ref under `refs/archive/`.
+
+    `scripts/archive_branches.py`'s full content:
+
+    ```python
+    #!/usr/bin/env python3
+    """Archive local branches with no commits in the last 90 days."""
+    import argparse
+    import datetime
+    import subprocess
+    import sys
+
+
+    def _stale_branches(days: int) -> list[str]:
+        cutoff = datetime.datetime.now(tz=datetime.timezone.utc) - datetime.timedelta(days=days)
+        out = subprocess.run(
+            ["git", "for-each-ref", "--format=%(refname:short) %(committerdate:iso-strict)", "refs/heads"],
+            capture_output=True, text=True, check=True,
+        ).stdout
+        stale = []
+        for line in out.splitlines():
+            name, _, date_str = line.partition(" ")
+            if datetime.datetime.fromisoformat(date_str) < cutoff:
+                stale.append(name)
+        return stale
+
+
+    def main() -> int:
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--dry-run", action="store_true")
+        parser.add_argument("--days", type=int, default=90)
+        args = parser.parse_args()
+        for branch in _stale_branches(args.days):
+            print(f"archive: {branch}")
+            if not args.dry_run:
+                subprocess.run(["git", "update-ref", f"refs/archive/{branch}", f"refs/heads/{branch}"], check=True)
+                subprocess.run(["git", "branch", "-D", branch], check=True)
+        return 0
+
+
+    if __name__ == "__main__":
+        raise SystemExit(main())
+    ```
+
+    Is dimension 7's "Dependencies listed; execution intent stated"
+    criterion a clean Pass or Fail for this script? Cite the specific
+    rubric wording you are applying, and state literally the word PASS or
+    FAIL as your verdict for this one criterion.
+expected:
+  output_contains:
+    - "StdlibOnly"
+    - "PASS"
+    - "no non-stdlib import"
+  output_not_contains:
+    - "is a FAIL"
+    - "LGTM"

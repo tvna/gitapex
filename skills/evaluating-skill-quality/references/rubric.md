@@ -38,6 +38,7 @@ skill's own folder.
 - [Compatibility awareness](#compatibility-awareness)
 - [Confidentiality awareness](#confidentiality-awareness)
 - [Capability assumption](#capability-assumption)
+- [Dependency policy](#dependency-policy)
 - [Lifecycle](#lifecycle)
 - [Execution requirements](#execution-requirements)
 - [1. Discovery -- name and description](#1-discovery----name-and-description)
@@ -130,11 +131,12 @@ fixes where a fault actually lives when a review goes wrong.
   before dimension grading starts: the target has actually been read
   (step 1), its mechanism fit is checked and the Blind spot pass is run
   (step 2, see below and the Unknowns framework section above), its
-  deterministic shape is checked (step 3), and its portability level and
-  capability assumption are established, including the declaration-vs-pin
-  consistency check (step 4, see below and the Capability assumption
-  section above). Per Meyer: "the precondition expresses requirements that
-  any call must satisfy if it is to be correct."
+  deterministic shape is checked (step 3), and its portability level,
+  capability assumption, and dependency policy are established, including
+  the declaration-vs-pin consistency check (step 4, see below and the
+  Capability assumption and Dependency policy sections above). Per Meyer:
+  "the precondition expresses requirements that any call must satisfy if
+  it is to be correct."
 - **Postcondition** -- what step 6 delivers *if the precondition held*: a
   verdict with cited evidence per dimension, every quoted span matched
   against the file it is attributed to under the one Citation fidelity rule
@@ -1156,10 +1158,88 @@ Procedure checkpoint.
     keeps its own question (2: is the body concise; 5: is the split real
     and reachable).
 
+## Dependency policy
+
+A precondition the review establishes before grading (see [Contract
+discipline](#contract-discipline)), read from the skill's
+`metadata/gitapex.yaml` sidecar as `spec.dependencyPolicy`. The two levels
+are defined in `SKILL.md`, checkable without opening this file. Unlike
+[Portability level](#portability-level) and [Capability
+assumption](#capability-assumption), this field is OPTIONAL -- the
+`dependency-policy-declared` shape check PASSes on an absent declaration
+rather than FAILing (the sidecar's own optional-field pattern, matching
+`spec.references`' own `references-well-formed`, not the required-field
+pattern `portability`/`capabilityAssumption` use). An absent declaration is
+not "no policy": it is treated as **StdlibOnly-equivalent** -- see the
+Undeclared branch below.
+
+**Applicability.** This precondition, and the dimension 7 criterion it
+calibrates, apply only to a skill that actually bundles scripts -- the same
+"only if the skill ships code" gate dimension 7's own heading already
+states. A skill with no `scripts/` directory needs no `dependencyPolicy`
+declaration at all, StdlibOnly included, and this whole precondition is
+not-applicable for it: do not grade a scriptless skill against either
+branch below, and do not treat a scriptless skill's silence on this field
+as a finding of any kind.
+
+Unlike [Compatibility awareness](#compatibility-awareness) and
+[Confidentiality awareness](#confidentiality-awareness) -- warning-only
+axes that never change the verdict -- this precondition's two branches
+directly gate dimension 7's own Pass/Fail on its "Dependencies listed;
+execution intent stated" criterion. It calibrates that one criterion of
+that one dimension, not several dimensions the way Capability assumption
+calibrates dimensions 2/3/5/9.
+
+**StdlibOnly.** **Pass**: no non-stdlib import anywhere in the skill's
+`scripts/*.py`. Mechanical backing: the execution-requirements drift
+scanner's `find_packages_drift` already produces its
+`packages-pip-vs-script-content` under-declared finding for every
+AST-visible non-stdlib import (a literal `import`/`from ... import`
+statement) once `executionRequirements.packages.pip` is absent or empty
+-- exactly this branch's contradiction signal for that visible subset,
+with no new scanner logic needed. Not a completeness guarantee: a
+dynamically-constructed import (`importlib.import_module(...)`,
+`__import__(...)`) is invisible to this AST-based check, the same
+disclosed class of gap `find_packages_drift`'s own module docstring
+already names for `find_network_drift`/`find_tools_drift` -- grade a
+suspected dynamic import by direct reading when the mechanical check
+alone cannot settle it. **Fail**: a real non-stdlib import (mechanically
+found, or found by direct reading per the limitation just named)
+contradicts the declaration -- a correctness defect in the declaration
+itself, not merely an undisclosed one.
+
+**Declared.** **Pass** requires ALL FOUR of:
+
+- (a) every non-stdlib import is declared in
+  `executionRequirements.packages.pip`, directly or via alias
+  (`find_packages_drift`'s `packages-pip-vs-script-content` under-declared
+  check clean for every AST-visible import -- the same dynamic-import
+  visibility limit as StdlibOnly's own Pass criterion above, not a
+  completeness guarantee);
+- (b) every declared package name also appears in the skill's
+  `compatibility` field (`find_packages_drift`'s
+  `packages-pip-vs-compatibility` heuristic finding clean);
+- (c) the script(s) actually use the PEP 723 self-contained-script pattern
+  (a `# /// script` metadata block, invoked via `uv run`) -- **no existing
+  mechanical check covers this sub-criterion**; grade it by direct
+  reading/judgment, the same way dimension 7's other prose-judged bullets
+  already work, and say so explicitly rather than silently implying it is
+  mechanically gated;
+- (d) every declared package is within gitapex's own allowlist
+  (`execution-requirements-packages-allowlisted`'s own PASS).
+
+**Fail**: any one of the four is violated -- name which sub-criterion.
+
+**Undeclared (the field is absent).** Grade against the same criteria as
+StdlibOnly above, plus one additional disclosure-consistency note if a
+non-stdlib import is found anyway: the declaration gap itself is worth
+naming, distinct from the underlying contradiction the StdlibOnly branch
+already flags on its own.
+
 ## Lifecycle
 
-Unlike Portability level and Capability assumption, this field has no
-per-dimension grading effect -- declaring `spec.lifecycle` does not
+Unlike Portability level, Capability assumption, and Dependency policy,
+this field has no per-dimension grading effect -- declaring `spec.lifecycle` does not
 change how any of the nine dimensions grade. It exists as structured,
 checkable bookkeeping for a skill not yet proven, or superseded by
 another, gated with the same rigor as the two grading-affecting
@@ -1632,11 +1712,14 @@ reading the source.
   model to cope.
 - **No voodoo constants** -- every configuration value is justified in a
   comment. A constant the author cannot justify, the model cannot either.
-- **Dependencies listed; execution intent stated** -- required packages
-  named and verified available on the target surface (see dimension 6),
-  and it is explicit whether the model should execute the script ("Run
-  `analyze_form.py`") or read it as reference ("See `analyze_form.py` for
-  the algorithm").
+- **Dependencies listed; execution intent stated** -- calibrated by the
+  [Dependency policy](#dependency-policy) precondition's StdlibOnly/
+  Declared/Undeclared branches above: required packages named and verified
+  available on the target surface (see dimension 6) per whichever branch
+  the skill's `spec.dependencyPolicy` declares (or, if undeclared,
+  StdlibOnly-equivalent), and it is explicit whether the model should
+  execute the script ("Run `analyze_form.py`") or read it as reference
+  ("See `analyze_form.py` for the algorithm").
 - **Scripts have clear documentation** -- what the script does, its
   inputs/outputs, and how to invoke it, not left for the model to infer
   from source.

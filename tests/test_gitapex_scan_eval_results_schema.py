@@ -926,7 +926,10 @@ def test_real_repository_nonstandard_score_files_are_all_declared() -> None:
         )
         and m["nonstandard_score_files"]
     }
-    assert declaring == {"evaluating-skill-quality/2026-07-29-issue-537-confidentiality-gates"}
+    assert declaring == {
+        "evaluating-skill-quality/2026-07-29-issue-537-confidentiality-gates",
+        "evaluating-skill-quality/2026-08-15-issue-1124-dependency-policy",
+    }
 
 
 # ---- layer 1: no-symlinks ----
@@ -1050,13 +1053,17 @@ def test_discover_run_dirs_on_a_missing_directory_is_empty(tmp_path: pathlib.Pat
 def test_real_repository_discovers_every_committed_run_directory() -> None:
     discovered = {f"{p.parent.parent.name}/{p.name}" for p in scanner.discover_run_dirs()}
     # The eight run directories issue #926 measured -- seven with a manifest
-    # and the one committed without. Pinned by name so a silently dropped
-    # directory fails here rather than reading as a smaller clean corpus.
+    # and the one committed without -- plus evaluating-skill-quality's own
+    # new gate-run record (the first record under this contract written as
+    # a genuine gate-run rather than migrated as pre-contract).
+    # Pinned by name so a silently dropped directory fails here rather than
+    # reading as a smaller clean corpus.
     assert discovered == {
         "battle-testing-a-skill/2026-07-30-issue-584-dispatch-trace",
         "evaluating-skill-quality/2026-07-28-issue-500-phase1",
         "evaluating-skill-quality/2026-07-29-issue-537-confidentiality-gates",
         "evaluating-skill-quality/2026-07-30-issue-584-dispatch-trace",
+        "evaluating-skill-quality/2026-08-15-issue-1124-dependency-policy",
         "untrusted-input-triage/2026-08-01-issue-645-battle-test",
         "untrusted-input-triage/2026-08-01-issue-645-behavioral-eval",
         "untrusted-input-triage/2026-08-01-issue-646-behavioral-gate2",

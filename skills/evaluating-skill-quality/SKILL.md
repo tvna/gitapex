@@ -271,6 +271,15 @@ Authors still declare one of these three levels correctly now -- the
 detail: [references/rubric.md](references/rubric.md)'s Capability
 assumption section.
 
+## Dependency policy
+
+Declared alongside portability/capability assumption in the sidecar, as `spec.dependencyPolicy` -- unlike those two, OPTIONAL: absence means **StdlibOnly-equivalent**, not "no policy." Calibrates only dimension 7's (Bundled scripts) "Dependencies listed; execution intent stated" criterion, gated to skills that actually bundle scripts.
+
+- **StdlibOnly** -- no non-stdlib import anywhere in `scripts/*.py`.
+- **Declared** -- every non-stdlib import is declared in `executionRequirements.packages.pip`, also named in `compatibility`, uses the PEP 723 `uv run` pattern, and is allowlisted.
+
+The `dependency-policy-declared` shape check PASSes on absence (matching `spec.references`, not the required-field pattern portability/capabilityAssumption use). Full detail: [references/rubric.md](references/rubric.md)'s Dependency policy section.
+
 ## Lifecycle
 
 Optional. Three independent sub-blocks plus one plain scalar under
@@ -337,7 +346,7 @@ touches at runtime: `tools` (`read`/`write`/`shell` capability-tag lists),
 `network` (a `mode` enum plus an exact-host `domains` list, non-empty iff
 `mode: allowlist`); the `execution-requirements-well-formed` shape check enforces all three and fails closed on any unrecognized key. `execution-requirements-packages-allowlisted` separately resolves each declared package against a repository-root allowlist config: not-applicable when packages is undeclared, FAIL when the config is missing, malformed, or does not list the package, PASS only once every declared package is listed. No behavior
 change: no skill's own runtime procedure may read or branch on it, same as
-Portability level, Capability assumption, and Lifecycle. Full schema,
+Portability level, Capability assumption, Dependency policy, and Lifecycle. Full schema,
 semantics, and rationale: [references/rubric.md](references/rubric.md)'s
 Execution requirements section.
 
@@ -377,16 +386,7 @@ binary gate-warranted question.
    (see this section's preamble above); carry it into the dispatch as an established
    fact (Subagent dispatch's "never both" handoff), reported alongside the dimension
    verdicts, not in place of them.
-4. *(runs 4th)* Read the skill's `metadata/gitapex.yaml` sidecar and establish both its
-   portability level and its capability assumption per the sections above. Check the
-   declared capability assumption against any model/effort pin step 2 already found
-   (a `Frontier` declaration paired with a weak-tier pin is a contradiction) -- this
-   is the declaration-vs-pin check's one owner. When the target has no sidecar (e.g.
-   vendored from a repository that has not adopted this convention), establish both
-   by reading the target's content instead -- the same way an undeclared level is
-   read today -- and note the sidecar's absence as context, not as a finding. Run
-   Compatibility and Confidentiality awareness from their baselines, keeping both
-   separate from the verdict.
+4. *(runs 4th)* Read the skill's `metadata/gitapex.yaml` sidecar and establish its portability level, capability assumption, and dependency policy per the sections above. Check the declared capability assumption against any model/effort pin step 2 already found (a `Frontier` declaration paired with a weak-tier pin is a contradiction) -- this is the declaration-vs-pin check's one owner. When the target has no sidecar (e.g. vendored from a repository that has not adopted this convention), establish portability and capability assumption by reading the target's content instead -- the same way an undeclared level is read today -- and note the sidecar's absence as context, not as a finding; `dependencyPolicy`'s own absence is different, even when the rest of the sidecar is present and valid -- treat it as **StdlibOnly-equivalent** per the Dependency policy section above, not as a finding either way, distinct from the fully-missing-sidecar fallback just described. Run Compatibility and Confidentiality awareness from their baselines, keeping both separate from the verdict.
 5. *(runs 5th)* Walk all nine dimensions in `references/rubric.md`, in order (including
    8-9), quoting the specific text that earns each verdict; assume steps 1-4 hold
    rather than re-deriving them. No cited evidence means no review happened. Before

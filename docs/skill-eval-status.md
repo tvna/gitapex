@@ -150,7 +150,7 @@ suites still assert on final text only).
 | `establishing-ubiquitous-language` | 3 | 5 | none | no | [evals/establishing-ubiquitous-language/eval-status.md](../evals/establishing-ubiquitous-language/eval-status.md) |
 | `evaluating-context-channel-maturity` | 3 | 13 | none | no | [evals/evaluating-context-channel-maturity/eval-status.md](../evals/evaluating-context-channel-maturity/eval-status.md) |
 | `evaluating-deterministic-gate-quality` | 3 | 40 | none | no | [evals/evaluating-deterministic-gate-quality/eval-status.md](../evals/evaluating-deterministic-gate-quality/eval-status.md) |
-| `evaluating-skill-quality` | 3 | 73 | `claude-haiku-4-5-20251001`, `claude-opus-5`, `claude-sonnet-5` | yes | [evals/evaluating-skill-quality/eval-status.md](../evals/evaluating-skill-quality/eval-status.md) |
+| `evaluating-skill-quality` | 3 | 78 | `claude-haiku-4-5-20251001`, `claude-opus-5`, `claude-sonnet-5` | yes | [evals/evaluating-skill-quality/eval-status.md](../evals/evaluating-skill-quality/eval-status.md) |
 | `executing-a-branch-plan` | 3 | 9 | none | no | [evals/executing-a-branch-plan/eval-status.md](../evals/executing-a-branch-plan/eval-status.md) |
 | `explaining-the-work` | 3 | 14 | none | no | [evals/explaining-the-work/eval-status.md](../evals/explaining-the-work/eval-status.md) |
 | `fixing-a-reported-issue` | 1 | 6 | none | no | [evals/fixing-a-reported-issue/eval-status.md](../evals/fixing-a-reported-issue/eval-status.md) |

@@ -483,6 +483,18 @@ spec:
     - kind: deferral
       anchor: "https://github.com/tvna/gitapex/issues/364"
       summary: "The behavioral half (feed this skill a degraded copy of itself, confirm its own procedure catches the gap generically) was not built: no waza/model-CLI toolchain or live-dispatch budget was available this session to measure it, and an unverified fixture would be exactly the kind of unearned confidence this skill's own Stop boundaries warn against for a reviewed target. Recorded per this issue's own explicit escape hatch rather than silently dropped; full rationale in evals/README.md."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1124"
+      summary: "Added spec.dependencyPolicy (StdlibOnly/Declared), a new optional precondition axis mirroring portability/capabilityAssumption, not warning-only like Compatibility/Confidentiality awareness -- it calibrates dimension 7's grading directly. New rubric.md Dependency policy section, SKILL.md section, dependency-policy-declared shape check (PASS on absence), schema property. No new scanner logic: reuses PR3's find_packages_drift and PR2's execution-requirements-packages-allowlisted."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1124"
+      summary: "Adversarial review found: a block-shaped or bare-colon 'dependencyPolicy:' sidecar value parsed to None, identical to true absence, so the check silently PASSed a malformed declaration as 'not declared'. Traced to _parse_manifest's generic scalar handling dropping any non-block key with no inline value. Fixed narrowly for dependencyPolicy only (a blanket fix broke test_manifest_parser_still_ignores_eval_status) with 4 new regression tests."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/1124"
+      summary: "Re-verified live after the fix: full pytest suite 4828/4828 passed (one pre-existing unrelated environment failure), self-dogfood 68/68 PASS, ruff/mypy clean. Held-out gate: both fixtures moved 0.800000 -> 1.000000, KEEP. Drift-scanning this skill itself surfaces two pre-existing, already-tracked findings (an undeclared PyYAML import; a network-drift false positive on a validation regex) -- neither introduced or fixed here."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1124"
+      summary: "A battle-testing-a-skill audit (after the entries above) found dimension 5 FAIL: the new Dependency policy prose claimed find_packages_drift catches 'ANY non-stdlib import,' contradicting that scanner's own docstring disclosing a dynamic-import blind spot. Fixed by naming the AST-visible-only subset explicitly in the StdlibOnly and Declared(a) criteria, mirroring sub-criterion (c)'s own disclosure pattern. Re-verified: 68/68 self-dogfood, full suite green."
   skillDependencies:
     requires: []
     relatedTo:
