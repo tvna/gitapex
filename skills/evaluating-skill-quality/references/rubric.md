@@ -1339,8 +1339,8 @@ first real use. `packages` carries a third rule, enforced differently
 from `tools`/`network`: each declared ecosystem/package-name pair is
 resolved against gitapex's own closed allowlist, but that resolution
 happens entirely outside this skill's own bundled shape checker -- a
-repository-owned CI gate, triggered on `skills/*/metadata/gitapex.yaml`
-changes, that checks each declared name against a hardcoded allowlist
+repository-owned CI gate, triggered whenever any skill's own
+`metadata/gitapex.yaml` changes, that checks each declared name against a hardcoded allowlist
 constant living in the gate itself, PEP 503 normalized on both sides (so
 "PyYAML" and "pyyaml" match the same allowlist entry -- looser than the
 prior mechanism's exact, case-sensitive comparison). No packages declared
