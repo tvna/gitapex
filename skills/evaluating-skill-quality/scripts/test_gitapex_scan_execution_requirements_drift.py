@@ -745,8 +745,7 @@ def test_no_scripts_directory_with_declared_packages_is_over_declared(tmp_path: 
 
 
 def test_pyyaml_alias_declared_pyyaml_import_yaml_is_clean(tmp_path: pathlib.Path) -> None:
-    """The dedicated test issue #1121's own Acceptance Criteria Map calls
-    for by name: the whole reason _IMPORT_NAME_TO_DISTRIBUTION exists."""
+    """The load-bearing case _IMPORT_NAME_TO_DISTRIBUTION exists for."""
     skill_dir = _make_skill(
         tmp_path,
         skill_md=_compat_skill_md("pyyaml"),
@@ -896,19 +895,16 @@ def test_alias_table_direction_declared_import_spelling_does_not_cover_the_real_
 
 
 # ---- find_packages_drift: full PEP 503 normalization, not lower-casing
-# alone (issue #1121, Finding 2 -- an independent adversarial review
-# found live that a bare .lower() left '-'/'_'/'.' separators untouched,
-# producing a false under-declared error and a spurious over-declared
-# warning simultaneously for the same real package) ----
+# alone ----
 
 
 def test_scikit_learn_underscore_spelling_satisfies_sklearn_alias_pep503(tmp_path: pathlib.Path) -> None:
     """ "scikit_learn" (underscore) is a valid alternate spelling of the
     real distribution "scikit-learn" -- pip/PyPI treat '-'/'_'/'.' as
-    equivalent separators per PEP 503. Before the fix, bare .lower() left
-    the underscore untouched, so "scikit_learn" != "scikit-learn" as
-    strings -- producing BOTH a false under-declared error for "sklearn"
-    AND a spurious over-declared warning for "scikit_learn" at once."""
+    equivalent separators per PEP 503. Bare .lower() alone leaves the
+    underscore untouched, producing both a false under-declared error
+    for "sklearn" and a spurious over-declared warning for
+    "scikit_learn" at once."""
     skill_dir = _make_skill(
         tmp_path,
         skill_md=_compat_skill_md("scikit_learn"),
@@ -1043,10 +1039,8 @@ def test_import_os_path_submodule_form_is_recognized_as_stdlib(tmp_path: pathlib
     assert scanner.find_packages_drift(None, skill_dir) == []
 
 
-# ---- find_packages_drift: non-installable non-stdlib modules (issue
-# #1121, Finding 4 -- an independent adversarial review found live that
-# _typeshed/__main__ were flagged as "under-declared" with no way to ever
-# satisfy the check, since neither has a real PyPI distribution) ----
+# ---- find_packages_drift: non-installable non-stdlib modules
+# (_typeshed/__main__ have no real PyPI distribution to ever declare) ----
 
 
 def test_type_checking_only_typeshed_import_is_not_flagged(tmp_path: pathlib.Path) -> None:
@@ -1090,18 +1084,13 @@ def test_type_checking_guarded_real_package_import_is_still_flagged(tmp_path: pa
     assert any(f.severity == "error" and "'requests'" in f.message for f in findings)
 
 
-# ---- find_packages_drift: local sibling-module imports (found live against
-# this repository's own skills/executing-a-branch-plan during the required
-# real-repository self-check -- see _is_local_sibling_module's own docstring) ----
+# ---- find_packages_drift: local sibling-module imports ----
 
 
 def test_local_sibling_module_from_import_is_not_flagged(tmp_path: pathlib.Path) -> None:
-    """The exact real shape found live: "from _helper import x" where
-    _helper.py is a real sibling file in the SAME scripts/ directory
-    (this repository's own skills/executing-a-branch-plan/scripts/
-    gitapex_check_canonical_governance_paths.py imports
-    _gitapex_path_normalize.py this same way) -- names no real external
-    PyPI dependency at all, whatever its own root name looks like."""
+    """ "from _helper import x" where _helper.py is a real sibling file
+    in the same scripts/ directory names no real external PyPI
+    dependency at all, whatever its own root name looks like."""
     skill_dir = _make_skill(
         tmp_path,
         scripts={
@@ -1166,21 +1155,15 @@ def test_is_local_sibling_module_direct_unit_no_scripts_dir(tmp_path: pathlib.Pa
     assert scanner._is_local_sibling_module(skill_dir, "anything") is False
 
 
-# ---- find_packages_drift: PEP 420 namespace-package siblings (issue
-# #1121, Finding 3 -- a false under-declared error an independent
-# adversarial review found live, on a factually wrong "guessing, not
-# observing" rationale for why namespace packages were excluded) ----
+# ---- find_packages_drift: PEP 420 namespace-package siblings ----
 
 
 def test_namespace_package_sibling_without_init_py_is_recognized(tmp_path: pathlib.Path) -> None:
-    """PEP 420 (Python 3.3+): a directory with NO __init__.py at all is
+    """PEP 420 (Python 3.3+): a directory with no __init__.py at all is
     still a real, importable package via Python's own standard import
-    machinery -- verified live, `python3 -c "import nspkg.mod"` succeeds
-    from a directory containing nspkg/mod.py with no nspkg/__init__.py,
-    resolving through CPython's own _NamespacePath. Before the fix, "import
-    nspkg" here produced a false "under-declared" error, because a
-    namespace-package-shaped sibling directory looked identical to an
-    external package to the prior version of _is_local_sibling_module."""
+    machinery -- `python3 -c "import nspkg.mod"` succeeds from a
+    directory containing nspkg/mod.py with no nspkg/__init__.py,
+    resolving through CPython's own _NamespacePath."""
     skill_dir = _make_skill(tmp_path, scripts={"main.py": "import nspkg\n"})
     subpkg_dir = skill_dir / "scripts" / "nspkg"
     subpkg_dir.mkdir()
@@ -1199,12 +1182,10 @@ def test_is_local_sibling_module_recognizes_namespace_package_directly(tmp_path:
 
 
 def test_is_local_sibling_module_empty_subdirectory_is_still_not_recognized(tmp_path: pathlib.Path) -> None:
-    """The namespace-package fix is narrowly scoped to a subdirectory
-    containing at least one real .py file -- an EMPTY same-named
-    subdirectory (nothing that could actually satisfy the import at
-    runtime, namespace package or not) must still read as False, matching
-    this function's own "guessing vs. observing" principle for the case it
-    genuinely applies to."""
+    """An empty same-named subdirectory (nothing that could actually
+    satisfy the import at runtime, namespace package or not) must still
+    read as False -- namespace-package recognition is scoped to a
+    subdirectory containing at least one real .py file."""
     skill_dir = _make_skill(tmp_path)
     empty_dir = skill_dir / "scripts" / "emptypkg"
     empty_dir.mkdir(parents=True)
@@ -1212,21 +1193,16 @@ def test_is_local_sibling_module_empty_subdirectory_is_still_not_recognized(tmp_
 
 
 # ---- find_packages_drift: recursive scanning of a local sibling
-# subpackage's own content (issue #1121, Finding 1 -- a HIGH-severity
-# total fail-open an independent adversarial review found live) ----
+# subpackage's own content ----
 
 
 def test_sibling_subpackage_content_is_recursively_scanned_for_its_own_imports(tmp_path: pathlib.Path) -> None:
-    """The exact fail-open reproduced live: a top-level script does a bare
-    "import helperpkg" (correctly excluded from under-declared via
-    _is_local_sibling_module), but helperpkg's own __init__.py does
-    "import requests" -- a REAL external dependency that must still
-    surface as under-declared. Before the fix this returned []:
-    helperpkg's own file was never even a candidate for AST parsing
-    (scripts/*.py was a non-recursive glob), so its "requests" import was
-    silently invisible to every check built on _bundled_script_trees, not
-    merely excluded -- defeating the entire check for any script organized
-    as a local subpackage."""
+    """A top-level script does a bare "import helperpkg" (correctly
+    excluded from under-declared via _is_local_sibling_module), but
+    helperpkg's own __init__.py does "import requests" -- a real external
+    dependency that must still surface as under-declared. Requires
+    _bundled_script_trees to recurse into the subpackage's own files, not
+    just glob scripts/*.py at the top level."""
     skill_dir = _make_skill(tmp_path, scripts={"main.py": "import helperpkg\n"})
     subpkg_dir = skill_dir / "scripts" / "helperpkg"
     subpkg_dir.mkdir()
@@ -1311,32 +1287,26 @@ def test_declared_package_name_case_insensitive_alias_match(tmp_path: pathlib.Pa
 
 
 def test_import_name_case_sensitivity_is_preserved_for_alias_lookup(tmp_path: pathlib.Path) -> None:
-    """Unlike the declared-name side, the IMPORT name side of the alias
+    """Unlike the declared-name side, the import name side of the alias
     lookup is exact-case, matching real Python import semantics (a
     module spelled "Yaml" is not the same real importable name as
-    "yaml", whatever the sidecar declares). Deliberately KEPT exact-case
-    even after issue #1121's own Finding 6 (a case-handling-inconsistency
-    review comment): a live check confirmed the OTHER direction of fix
-    (case-folding this alias lookup too) would silently un-flag this
-    exact scenario, trading this real, already-tested correctness
-    property for merely-consistent-but-wrong behavior -- see
-    _pip_declared_for_import's own docstring."""
+    "yaml", whatever the sidecar declares). Deliberately kept exact-case:
+    case-folding this alias lookup too would silently un-flag this exact
+    scenario -- see _pip_declared_for_import's own docstring."""
     skill_dir = _make_skill(tmp_path, scripts={"fetch.py": "import Yaml\n"})
     findings = scanner.find_packages_drift({"pip": ["pyyaml"]}, skill_dir)
     assert any(f.severity == "error" and "'Yaml'" in f.message for f in findings)
 
 
 # ---- find_packages_drift: case-handling consistency + message
-# readability (issue #1121, Finding 6) ----
+# readability ----
 
 
 def test_over_declared_message_preserves_original_declared_casing(tmp_path: pathlib.Path) -> None:
-    """Readability fix: the over-declared finding message must use the
-    ORIGINAL declared spelling ("PyYAML"), not the normalized/lower-cased
-    form ("pyyaml") -- a sidecar author grepping their own file for the
-    string in the finding message must be able to find it verbatim.
-    Before the fix, a sidecar declaring "PyYAML" produced a warning
-    naming 'pyyaml', which matches nothing in the real sidecar."""
+    """The over-declared finding message must use the original declared
+    spelling ("PyYAML"), not the normalized/lower-cased form ("pyyaml")
+    -- a sidecar author grepping their own file for the string in the
+    finding message must be able to find it verbatim."""
     skill_dir = _make_skill(tmp_path, scripts={"helper.py": "import pathlib\n"})
     findings = scanner.find_packages_drift({"pip": ["PyYAML"]}, skill_dir)
     deterministic = [f for f in findings if f.kind == "deterministic"]
@@ -1345,16 +1315,12 @@ def test_over_declared_message_preserves_original_declared_casing(tmp_path: path
 
 
 def test_direct_match_applies_full_pep503_normalization_to_the_import_side_too(tmp_path: pathlib.Path) -> None:
-    """Case-handling-consistency fix: the direct-match branch (comparing
-    import_name itself against a declared distribution name, with no
-    alias table involved at all) now applies the SAME full PEP 503
-    normalization to import_name that the declared side already gets --
-    resolving the internal inconsistency an earlier version had (that
-    branch alone lower-cased import_name, but did not collapse
-    separators, and did so inconsistently with the alias branch). "my_pkg"
-    (a real, legal import identifier with an underscore) matches a
-    declared "my-pkg" (hyphen) directly, with no alias table entry needed
-    for either spelling."""
+    """The direct-match branch (comparing import_name itself against a
+    declared distribution name, with no alias table involved) applies
+    the same full PEP 503 normalization to import_name that the declared
+    side already gets. "my_pkg" (a real, legal import identifier with an
+    underscore) matches a declared "my-pkg" (hyphen) directly, with no
+    alias table entry needed for either spelling."""
     skill_dir = _make_skill(tmp_path, scripts={"helper.py": "import my_pkg\n"})
     findings = scanner.find_packages_drift({"pip": ["my-pkg"]}, skill_dir)
     assert not any(f.kind == "deterministic" for f in findings)
@@ -1469,10 +1435,9 @@ def test_compatibility_frontmatter_present_but_key_absent_is_warning(tmp_path: p
 
 
 def test_compatibility_case_sensitive_mismatch_still_flags(tmp_path: pathlib.Path) -> None:
-    """Disclosed residual limitation (issue #1121's own Acceptance
-    Criteria Map: "a package mentioned with different casing/spacing in
-    compatibility would still flag"), proven concretely rather than only
-    asserted in the docstring."""
+    """Disclosed residual limitation, proven concretely rather than only
+    asserted in the docstring: a package mentioned with different
+    casing/spacing in compatibility still flags."""
     skill_dir = _make_skill(
         tmp_path,
         skill_md='---\nname: example-skill\ndescription: x\ncompatibility: "Requires PyYAML."\n---\n\n# Example\n',
@@ -1577,18 +1542,12 @@ def test_extract_compatibility_field_leading_bom_is_stripped() -> None:
 
 
 def test_extract_compatibility_field_crlf_line_endings_still_extracts(tmp_path: pathlib.Path) -> None:
-    """Regression pin for a bug found live by this function's own required
-    independent adversarial review (issue #1121): without CRLF
-    normalization, a trailing "\\r" stays attached to the "---"
-    frontmatter delimiter's own line, so _FRONTMATTER_BLOCK_RE's literal
-    "\\n" immediately after "---[ \\t]*" never matches at all -- the whole
-    frontmatter block silently failed to match, and _extract_
-    compatibility_field returned "" for a CRLF-saved SKILL.md exactly as
-    if it had no frontmatter at all. Before the fix, this test's own
-    assertion failed (got "" instead of the real value). Same class of
-    bug this repository's own .github/scripts/
-    gitapex_gate_stdlib_only_claim_drift.py already fixed once, for a
-    different file (a trailing "\\r" on a `+++ b/<path>` diff header)."""
+    """Regression pin: without CRLF normalization, a trailing "\\r" stays
+    attached to the "---" frontmatter delimiter's own line, so
+    _FRONTMATTER_BLOCK_RE's literal "\\n" immediately after "---[ \\t]*"
+    never matches at all -- the whole frontmatter block silently fails
+    to match, and _extract_compatibility_field returns "" for a
+    CRLF-saved SKILL.md exactly as if it had no frontmatter at all."""
     text = '---\r\nname: x\r\ncompatibility: "Requires pyyaml."\r\n---\r\n\r\nBody.\r\n'
     assert scanner._extract_compatibility_field(text) == "Requires pyyaml."
 
@@ -1618,20 +1577,15 @@ def test_extract_compatibility_field_body_mention_outside_frontmatter_is_ignored
 
 
 def test_extract_compatibility_field_body_containing_its_own_thematic_break_before_close() -> None:
-    """Documents the DISCLOSED, narrower guarantee this regex actually
-    provides (see _COMPATIBILITY_FIELD_RE's own corrected comment): the
-    frontmatter boundary is the FIRST "---"-only line paired with the
-    very NEXT "---"-only line -- the same delimiter-pairing contract
-    gitapex_check_skill_shape.py's own _parse_frontmatter already uses
-    (live-verified to behave identically to it on this exact input), but
-    neither parser validates that every intervening line is itself a
-    well-formed "key: value" pair. A body containing its own bare "---"
-    thematic break (legal Markdown/CommonMark) with no EARLIER closing
-    delimiter is, by this shared boundary rule, genuinely captured as
-    "frontmatter interior," so a "compatibility:"-shaped line inside it
-    still matches -- an earlier version of this comment overclaimed a
-    body-level compatibility line "can never match," which was false, and
-    is the current, still-accurate, disclosed behavior this test pins."""
+    """Documents the disclosed, narrower guarantee _FRONTMATTER_BLOCK_RE
+    actually provides: the frontmatter boundary is the first "---"-only
+    line paired with the very next "---"-only line, but it does not
+    validate that every intervening line is itself a well-formed
+    "key: value" pair. A body containing its own bare "---" thematic
+    break (legal Markdown/CommonMark) with no earlier closing delimiter
+    is, by this boundary rule, genuinely captured as "frontmatter
+    interior," so a "compatibility:"-shaped line inside it still
+    matches -- this test pins that disclosed behavior."""
     text = "---\n\nSome body\n\ncompatibility: pyyaml is needed\n\n---\n"
     assert scanner._extract_compatibility_field(text) == "pyyaml is needed"
 
