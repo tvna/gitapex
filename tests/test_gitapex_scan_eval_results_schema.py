@@ -1054,8 +1054,8 @@ def test_real_repository_discovers_every_committed_run_directory() -> None:
     discovered = {f"{p.parent.parent.name}/{p.name}" for p in scanner.discover_run_dirs()}
     # The eight run directories issue #926 measured -- seven with a manifest
     # and the one committed without -- plus evaluating-skill-quality's own
-    # issue #1124 gate-run record (the first record under this contract
-    # written as a genuine gate-run rather than migrated as pre-contract).
+    # new gate-run record (the first record under this contract written as
+    # a genuine gate-run rather than migrated as pre-contract).
     # Pinned by name so a silently dropped directory fails here rather than
     # reading as a smaller clean corpus.
     assert discovered == {

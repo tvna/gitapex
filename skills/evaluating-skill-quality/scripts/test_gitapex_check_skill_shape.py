@@ -1477,7 +1477,7 @@ def test_invalid_capability_assumption_value_fails(tmp_path):
     assert _by_name(css.check_shape(d))["capability-assumption-declared"].passed is False
 
 
-# ---- dependency-policy-declared (issue #1124: OPTIONAL, unlike portability/
+# ---- dependency-policy-declared (OPTIONAL, unlike portability/
 #      capability-assumption -- mirrors the references-well-formed pattern) ----
 
 
@@ -1532,14 +1532,12 @@ def test_dependency_policy_declared_fails_when_spec_is_not_a_mapping(tmp_path):
 
 
 def test_dependency_policy_written_as_a_list_fails_not_treated_as_absent(tmp_path):
-    # Found live by an adversarial review (issue #1124): a present-but-
-    # block-shaped "dependencyPolicy:" (list items on following lines,
-    # instead of an inline scalar) used to parse to Python None -- the
-    # exact same value real absence produces -- so this check silently
-    # PASSed a present-and-malformed declaration as "not declared". A
-    # present dependencyPolicy that fails to name a real level must FAIL,
-    # the same way an inline garbage string already does above, not be
-    # indistinguishable from the field never having been written at all.
+    # A present-but-block-shaped "dependencyPolicy:" (list items on
+    # following lines, instead of an inline scalar) parses to Python None
+    # -- the same value real absence produces. A present dependencyPolicy
+    # that fails to name a real level must FAIL, the same way an inline
+    # garbage string already does above, not be indistinguishable from
+    # the field never having been written at all.
     d = _write_skill(tmp_path)
     (d / "metadata/gitapex.yaml").write_text(
         "apiVersion: gitapex.io/v1alpha1\nkind: SkillMetadata\nmetadata:\n  name: skill\n"
@@ -3491,8 +3489,7 @@ def test_manifest_parser_registers_block_shaped_dependency_policy_as_present():
     # empty-string value -- distinct from real absence -- rather than
     # silently vanishing from spec the way an unrecognized/reserved key
     # does, or dependency-policy-declared could never tell "never written"
-    # apart from "written but malformed" (issue #1124, found live by an
-    # adversarial review).
+    # apart from "written but malformed".
     text = (
         "apiVersion: gitapex.io/v1alpha1\n"
         "kind: SkillMetadata\n"
