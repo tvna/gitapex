@@ -428,6 +428,33 @@ def test_unparseable_script_is_flagged_not_silently_skipped(tmp_path: pathlib.Pa
     assert "broken.py" in findings[0].message
 
 
+def test_ast_parse_value_error_is_flagged_not_crashed(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """ast.parse raises SyntaxError, not ValueError, for NUL-byte source on
+    this repository's own pinned Python (verified directly against 3.11 and
+    3.12: `ast.parse("x = 1\\x00\\n")` raises SyntaxError in both, never
+    ValueError) -- the natural trigger a review once suggested does not
+    reproduce here. Exercised via monkeypatch instead of a real NUL-byte
+    file for the same reason test_looks_like_bundled_script_treats_unopenable_file_as_not_a_script
+    above simulates its own OSError: defense-in-depth for "an inability to
+    verify is a deny, not an assume-clean" should hold regardless of which
+    Python version/implementation a caller runs, not only the one this
+    exact test process happens to be running on."""
+    skill_dir = _make_skill(tmp_path, scripts={"weird.py": "x = 1\n"})
+
+    real_parse = ast.parse
+
+    def _raise_value_error(source: str, filename: str = "<unknown>") -> ast.AST:
+        if filename.endswith("weird.py"):
+            raise ValueError("simulated: source code string cannot contain null bytes")
+        return real_parse(source, filename=filename)
+
+    monkeypatch.setattr(ast, "parse", _raise_value_error)
+
+    trees, unparseable = scanner._bundled_script_trees(skill_dir)
+    assert trees == []
+    assert unparseable == ["weird.py"]
+
+
 def test_commented_out_url_does_not_count_as_network_usage(tmp_path: pathlib.Path) -> None:
     """_URL_HOST_PATTERN previously scanned raw script text including
     comment lines, so a doc reference like "# see https://docs.python.org/"
@@ -639,12 +666,971 @@ def test_find_skill_drift_parses_bundled_scripts_only_once(
     assert call_count == 1
 
 
+# ---- find_packages_drift ----
+
+
+def _compat_skill_md(*package_names: str) -> str:
+    """A minimal SKILL.md whose frontmatter `compatibility:` field
+    mentions every name in ``package_names`` (verbatim, same case) --
+    keeps a find_packages_drift test that is NOT itself about the
+    compatibility-mention heuristic free of that heuristic's own
+    independent warning as unrelated noise (every declared packages.pip
+    name is checked against `compatibility` regardless of whether the
+    deterministic half's own under/over-declared checks pass, and the
+    default `_make_skill` skill_md carries no frontmatter at all -- see
+    the compatibility-mention heuristic's own dedicated test section
+    below for what happens when this helper is deliberately NOT used)."""
+    mentions = " ".join(package_names)
+    return (
+        "---\nname: example-skill\ndescription: x\n"
+        f'compatibility: "Requires {mentions}."\n---\n\n'
+        "# Example\n\n## Steps\n\n1. Read the input.\n"
+    )
+
+
+def test_packages_under_declared_absent_block_is_error(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": "import requests\n"})
+    findings = scanner.find_packages_drift(None, skill_dir)
+    assert _severities(findings) == ["error"]
+    assert "packages-pip-vs-script-content" in findings[0].message
+    assert "'requests'" in findings[0].message
+
+
+def test_packages_declared_direct_match_is_clean(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md=_compat_skill_md("requests"),
+        scripts={"fetch.py": "import requests\n"},
+    )
+    assert scanner.find_packages_drift({"pip": ["requests"]}, skill_dir) == []
+
+
+def test_packages_empty_pip_list_but_import_is_error(tmp_path: pathlib.Path) -> None:
+    """An explicit `pip: []` and an absent packages block must behave
+    identically for under-declared purposes -- both yield an empty
+    declared set (see find_packages_drift's own docstring)."""
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": "import requests\n"})
+    findings = scanner.find_packages_drift({"pip": []}, skill_dir)
+    assert _severities(findings) == ["error"]
+
+
+def test_stdlib_import_does_not_trigger_under_declared(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, scripts={"helper.py": "import os\nimport pathlib\nimport json\n"})
+    assert scanner.find_packages_drift(None, skill_dir) == []
+
+
+def test_multiple_non_stdlib_imports_all_flagged_when_none_declared(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": "import requests\nimport numpy\n"})
+    findings = scanner.find_packages_drift(None, skill_dir)
+    assert _severities(findings) == ["error", "error"]
+    messages = " ".join(f.message for f in findings)
+    assert "'numpy'" in messages
+    assert "'requests'" in messages
+
+
+def test_packages_no_scripts_directory_does_not_crash(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path)
+    assert scanner.find_packages_drift(None, skill_dir) == []
+
+
+def test_no_scripts_directory_with_declared_packages_is_over_declared(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, skill_md=_compat_skill_md("requests"))
+    findings = scanner.find_packages_drift({"pip": ["requests"]}, skill_dir)
+    assert _severities(findings) == ["warning"]
+    assert findings[0].kind == "deterministic"
+    assert "over-declared" in findings[0].message
+
+
+# ---- find_packages_drift: alias table (pyyaml/yaml is the load-bearing case) ----
+
+
+def test_pyyaml_alias_declared_pyyaml_import_yaml_is_clean(tmp_path: pathlib.Path) -> None:
+    """The load-bearing case _IMPORT_NAME_TO_DISTRIBUTION exists for."""
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md=_compat_skill_md("pyyaml"),
+        scripts={"fetch.py": "import yaml\n"},
+    )
+    assert scanner.find_packages_drift({"pip": ["pyyaml"]}, skill_dir) == []
+
+
+def test_pyyaml_alias_absent_declaration_import_yaml_is_error(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": "import yaml\n"})
+    findings = scanner.find_packages_drift(None, skill_dir)
+    assert _severities(findings) == ["error"]
+    assert "'yaml'" in findings[0].message
+
+
+def test_pillow_alias_declared_pillow_import_pil_is_clean(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md=_compat_skill_md("pillow"),
+        scripts={"resize.py": "import PIL\n"},
+    )
+    assert scanner.find_packages_drift({"pip": ["pillow"]}, skill_dir) == []
+
+
+def test_opencv_alias_declared_opencv_python_import_cv2_is_clean(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md=_compat_skill_md("opencv-python"),
+        scripts={"vision.py": "import cv2\n"},
+    )
+    assert scanner.find_packages_drift({"pip": ["opencv-python"]}, skill_dir) == []
+
+
+def test_beautifulsoup_alias_declared_beautifulsoup4_import_bs4_is_clean(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md=_compat_skill_md("beautifulsoup4"),
+        scripts={"scrape.py": "import bs4\n"},
+    )
+    assert scanner.find_packages_drift({"pip": ["beautifulsoup4"]}, skill_dir) == []
+
+
+def test_sklearn_alias_declared_scikit_learn_import_sklearn_is_clean(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md=_compat_skill_md("scikit-learn"),
+        scripts={"ml.py": "import sklearn\n"},
+    )
+    assert scanner.find_packages_drift({"pip": ["scikit-learn"]}, skill_dir) == []
+
+
+def test_dateutil_alias_declared_python_dateutil_import_dateutil_is_clean(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md=_compat_skill_md("python-dateutil"),
+        scripts={"dates.py": "import dateutil\n"},
+    )
+    assert scanner.find_packages_drift({"pip": ["python-dateutil"]}, skill_dir) == []
+
+
+def test_attrs_alias_import_attr_spelling_resolves(tmp_path: pathlib.Path) -> None:
+    """attrs ships "attr" as one of its two real top-level import names
+    for the same distribution."""
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md=_compat_skill_md("attrs"),
+        scripts={"model.py": "import attr\n"},
+    )
+    assert scanner.find_packages_drift({"pip": ["attrs"]}, skill_dir) == []
+
+
+def test_attrs_alias_import_attrs_spelling_resolves(tmp_path: pathlib.Path) -> None:
+    """attrs ships "attrs" as its OTHER real top-level import name for
+    the same distribution -- both keys in _IMPORT_NAME_TO_DISTRIBUTION
+    map to the same declared "attrs" value."""
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md=_compat_skill_md("attrs"),
+        scripts={"model.py": "import attrs\n"},
+    )
+    assert scanner.find_packages_drift({"pip": ["attrs"]}, skill_dir) == []
+
+
+def test_pyjwt_alias_declared_pyjwt_import_jwt_is_clean(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md=_compat_skill_md("pyjwt"),
+        scripts={"auth.py": "import jwt\n"},
+    )
+    assert scanner.find_packages_drift({"pip": ["pyjwt"]}, skill_dir) == []
+
+
+def test_unlisted_alias_produces_documented_false_positive(tmp_path: pathlib.Path) -> None:
+    """Disclosed residual limitation (see _IMPORT_NAME_TO_DISTRIBUTION's
+    own comment), proven concretely rather than only asserted:
+    python-dotenv/dotenv is a real, well-known import-name/distribution-
+    name mismatch pair deliberately left OFF this table. A script
+    correctly declaring the real distribution name still produces a
+    false "under-declared" positive for the import name, because this
+    function has no way to know "dotenv" and "python-dotenv" name the
+    same package without the table saying so -- AND, symmetrically, a
+    spurious "over-declared" warning for the declared name, since from
+    this checker's own limited perspective the two strings look entirely
+    unrelated in BOTH directions at once. If a future change adds this
+    pair to the table, this test's own assertions must be updated
+    deliberately, not silently."""
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md=_compat_skill_md("python-dotenv"),
+        scripts={"config.py": "import dotenv\n"},
+    )
+    findings = scanner.find_packages_drift({"pip": ["python-dotenv"]}, skill_dir)
+    errors = [f for f in findings if f.severity == "error"]
+    warnings = [f for f in findings if f.severity == "warning"]
+    assert len(errors) == 1
+    assert "'dotenv'" in errors[0].message
+    assert any("'python-dotenv'" in f.message for f in warnings)
+
+
+def test_alias_table_direction_declared_import_spelling_does_not_cover_the_real_distribution_name(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Adversarial probe of the alias table's own DIRECTION: declaring
+    the IMPORT name itself ("yaml", not "pyyaml") satisfies a script that
+    actually imports "yaml" via the DIRECT match alone (no aliasing
+    needed) -- but must NOT be treated as if "yaml" were somehow the
+    distribution name backing a DIFFERENT import literally spelled
+    "pyyaml". Synthetic ("import pyyaml" is not real importable code --
+    the real module is always "yaml"), but probes the predicate's own
+    directionality, not real-world plausibility: proves
+    _IMPORT_NAME_TO_DISTRIBUTION is consulted as import-name -> dist-name
+    only, never the reverse."""
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md=_compat_skill_md("yaml"),
+        scripts={"a.py": "import yaml\n", "b.py": "import pyyaml\n"},
+    )
+    findings = scanner.find_packages_drift({"pip": ["yaml"]}, skill_dir)
+    # "yaml" (the real import) is satisfied by the direct match against
+    # declared "yaml" -- both for under-declared AND over-declared.
+    # "pyyaml" (the synthetic import) is NOT satisfied: it isn't declared
+    # directly, and _IMPORT_NAME_TO_DISTRIBUTION has no "pyyaml" KEY
+    # (only "yaml" is a key, mapping TO "pyyaml", never the reverse), so
+    # no alias resolves it either.
+    assert _severities(findings) == ["error"]
+    assert "'pyyaml'" in findings[0].message
+
+
+# ---- find_packages_drift: full PEP 503 normalization, not lower-casing
+# alone ----
+
+
+def test_scikit_learn_underscore_spelling_satisfies_sklearn_alias_pep503(tmp_path: pathlib.Path) -> None:
+    """ "scikit_learn" (underscore) is a valid alternate spelling of the
+    real distribution "scikit-learn" -- pip/PyPI treat '-'/'_'/'.' as
+    equivalent separators per PEP 503. Bare .lower() alone leaves the
+    underscore untouched, producing both a false under-declared error
+    for "sklearn" and a spurious over-declared warning for
+    "scikit_learn" at once."""
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md=_compat_skill_md("scikit_learn"),
+        scripts={"ml.py": "import sklearn\n"},
+    )
+    findings = scanner.find_packages_drift({"pip": ["scikit_learn"]}, skill_dir)
+    assert not any(f.kind == "deterministic" for f in findings)
+
+
+def test_python_dot_dateutil_spelling_satisfies_dateutil_alias_pep503(tmp_path: pathlib.Path) -> None:
+    """A second separator-normalization case (dots, not just underscores):
+    "python.dateutil" normalizes to the same "python-dateutil" as the
+    real distribution name under PEP 503 (re.sub(r"[-_.]+", "-",
+    name).lower())."""
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md=_compat_skill_md("python.dateutil"),
+        scripts={"dates.py": "import dateutil\n"},
+    )
+    findings = scanner.find_packages_drift({"pip": ["python.dateutil"]}, skill_dir)
+    assert not any(f.kind == "deterministic" for f in findings)
+
+
+# ---- find_packages_drift: over-declared (deterministic, single evidence source) ----
+
+
+def test_over_declared_no_matching_import_is_warning(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md=_compat_skill_md("pyyaml"),
+        scripts={"helper.py": "import pathlib\n"},
+    )
+    findings = scanner.find_packages_drift({"pip": ["pyyaml"]}, skill_dir)
+    assert _severities(findings) == ["warning"]
+    assert findings[0].kind == "deterministic"
+    assert "packages-pip-over-declared" in findings[0].message
+    assert "'pyyaml'" in findings[0].message
+
+
+def test_declaring_a_stdlib_name_as_a_pip_package_is_over_declared(tmp_path: pathlib.Path) -> None:
+    """A nonsensical-but-possible declaration (a stdlib module name under
+    packages.pip, which never needs a PyPI declaration): the stdlib name
+    is filtered out of non_stdlib_imports entirely, so it can never
+    satisfy the over-declared check via a real import -- an emergent,
+    not specially-coded, consequence of this function's own design."""
+    skill_dir = _make_skill(tmp_path, scripts={"helper.py": "import os\n"})
+    findings = scanner.find_packages_drift({"pip": ["os"]}, skill_dir)
+    assert any(f.severity == "warning" and "'os'" in f.message for f in findings)
+
+
+def test_unparseable_script_suppresses_over_declared_warning(tmp_path: pathlib.Path) -> None:
+    """Mirrors find_network_drift's own unrestricted-mode suppression:
+    an unparsed script's real imports are genuinely unknown, so an
+    over-declared claim cannot be proven true while any bundled Python
+    script could not be parsed at all."""
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md=_compat_skill_md("pyyaml"),
+        scripts={"broken.py": "def f(:\n    pass\n"},
+    )
+    findings = scanner.find_packages_drift({"pip": ["pyyaml"]}, skill_dir)
+    assert findings == []
+
+
+def test_unparseable_script_does_not_suppress_under_declared_for_parseable_scripts(tmp_path: pathlib.Path) -> None:
+    """Suppression is scoped to over-declared only -- a real, undeclared
+    import in a DIFFERENT, successfully-parsed script must still be
+    flagged even while a sibling script fails to parse."""
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={"broken.py": "def f(:\n    pass\n", "fetch.py": "import requests\n"},
+    )
+    findings = scanner.find_packages_drift(None, skill_dir)
+    assert any(f.severity == "error" and "'requests'" in f.message for f in findings)
+
+
+# ---- find_packages_drift: non-stdlib detection precision ----
+
+
+def test_non_stdlib_module_sharing_stdlib_prefix_is_still_flagged(tmp_path: pathlib.Path) -> None:
+    """osgeo (GDAL's real Python bindings) is NOT itself in
+    sys.stdlib_module_names, even though it shares a leading substring
+    with the real stdlib module "os" -- a prefix/substring-based stdlib
+    check would incorrectly exempt it, letting a genuinely undeclared
+    package slip through undetected. Exact set membership must not."""
+    assert "osgeo" not in sys.stdlib_module_names
+    skill_dir = _make_skill(tmp_path, scripts={"gis.py": "import osgeo\n"})
+    findings = scanner.find_packages_drift(None, skill_dir)
+    assert any("'osgeo'" in f.message for f in findings)
+
+
+def test_stdlib_easter_egg_modules_are_not_flagged(tmp_path: pathlib.Path) -> None:
+    """ "this" and "antigravity" are real, if obscure, stdlib modules --
+    proves exact sys.stdlib_module_names membership recognizes them too,
+    not just the common cases (os/sys/json)."""
+    assert {"this", "antigravity"} <= set(sys.stdlib_module_names)
+    skill_dir = _make_skill(tmp_path, scripts={"easter_egg.py": "import this\nimport antigravity\n"})
+    assert scanner.find_packages_drift(None, skill_dir) == []
+
+
+def test_import_nested_inside_function_is_still_detected(tmp_path: pathlib.Path) -> None:
+    """Unlike .github/scripts/gitapex_gate_stdlib_only_claim_drift.py's
+    own tree.body-only _imported_root_modules (appropriate there for a
+    single diff-added line), this function walks the FULL tree -- a real
+    import inside a function body must still be found."""
+    skill_dir = _make_skill(
+        tmp_path, scripts={"helper.py": "def fetch():\n    import requests\n    return requests.get\n"}
+    )
+    findings = scanner.find_packages_drift(None, skill_dir)
+    assert any("'requests'" in f.message for f in findings)
+
+
+def test_import_inside_try_except_optional_dependency_pattern_is_detected(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={"helper.py": "try:\n    import yaml\nexcept ImportError:\n    yaml = None\n"},
+    )
+    findings = scanner.find_packages_drift(None, skill_dir)
+    assert any("'yaml'" in f.message for f in findings)
+
+
+def test_relative_import_is_not_treated_as_an_external_package(tmp_path: pathlib.Path) -> None:
+    """ "from . import helper" names no real external package at all
+    (node.level > 0) -- must not be misattributed as a non-stdlib import
+    requiring a packages.pip declaration."""
+    skill_dir = _make_skill(tmp_path, scripts={"main.py": "from . import helper\n"})
+    assert scanner.find_packages_drift(None, skill_dir) == []
+
+
+def test_import_os_path_submodule_form_is_recognized_as_stdlib(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, scripts={"helper.py": "import os.path\n"})
+    assert scanner.find_packages_drift(None, skill_dir) == []
+
+
+# ---- find_packages_drift: non-installable non-stdlib modules
+# (_typeshed/__main__ have no real PyPI distribution to ever declare) ----
+
+
+def test_type_checking_only_typeshed_import_is_not_flagged(tmp_path: pathlib.Path) -> None:
+    """_typeshed is typeshed's own stub-only, type-checker-internal
+    module (see
+    https://github.com/python/typeshed/blob/main/stdlib/_typeshed/README.md)
+    -- it ships no runtime code and has no PyPI distribution at all, so
+    flagging it as "under-declared" would be an unfixable false positive:
+    there is no real package to ever declare."""
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={
+            "helper.py": "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    from _typeshed import StrPath\n"
+        },
+    )
+    findings = scanner.find_packages_drift(None, skill_dir)
+    assert not any("_typeshed" in f.message for f in findings)
+
+
+def test_main_module_import_is_not_flagged(tmp_path: pathlib.Path) -> None:
+    """__main__ is a real, always-importable module every Python process
+    has for its own entry-point namespace -- not in
+    sys.stdlib_module_names, but also not a PyPI-installable package, so
+    it can never be satisfied by any real packages.pip declaration."""
+    skill_dir = _make_skill(tmp_path, scripts={"helper.py": "import __main__\n"})
+    findings = scanner.find_packages_drift(None, skill_dir)
+    assert not any("__main__" in f.message for f in findings)
+
+
+def test_type_checking_guarded_real_package_import_is_still_flagged(tmp_path: pathlib.Path) -> None:
+    """The _typeshed/__main__ exclusion is narrowly scoped to those two
+    confirmed non-installable names -- a TYPE_CHECKING-guarded import of a
+    REAL third-party package must still require a declaration (by design:
+    conditional gating does not suppress detection, see
+    _tree_imported_root_modules's own docstring)."""
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={"helper.py": "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    import requests\n"},
+    )
+    findings = scanner.find_packages_drift(None, skill_dir)
+    assert any(f.severity == "error" and "'requests'" in f.message for f in findings)
+
+
+# ---- find_packages_drift: local sibling-module imports ----
+
+
+def test_local_sibling_module_from_import_is_not_flagged(tmp_path: pathlib.Path) -> None:
+    """ "from _helper import x" where _helper.py is a real sibling file
+    in the same scripts/ directory names no real external PyPI
+    dependency at all, whatever its own root name looks like."""
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={
+            "_helper.py": "def normalize(x: str) -> str:\n    return x\n",
+            "main.py": "from _helper import normalize\n",
+        },
+    )
+    assert scanner.find_packages_drift(None, skill_dir) == []
+
+
+def test_local_sibling_module_bare_import_is_not_flagged(tmp_path: pathlib.Path) -> None:
+    """The same exclusion applies to a bare "import helper" (not just
+    "from helper import x")."""
+    skill_dir = _make_skill(
+        tmp_path,
+        scripts={
+            "helper.py": "def f() -> None:\n    pass\n",
+            "main.py": "import helper\n",
+        },
+    )
+    assert scanner.find_packages_drift(None, skill_dir) == []
+
+
+def test_local_sibling_subpackage_import_is_not_flagged(tmp_path: pathlib.Path) -> None:
+    """A proper subpackage (scripts/helperpkg/__init__.py), not just a
+    single-file sibling module, is also recognized."""
+    skill_dir = _make_skill(tmp_path, scripts={"main.py": "import helperpkg\n"})
+    subpkg_dir = skill_dir / "scripts" / "helperpkg"
+    subpkg_dir.mkdir()
+    (subpkg_dir / "__init__.py").write_text("", encoding="utf-8")
+    assert scanner.find_packages_drift(None, skill_dir) == []
+
+
+def test_import_with_no_matching_sibling_file_is_still_flagged(tmp_path: pathlib.Path) -> None:
+    """The exclusion is narrowly scoped to a REAL sibling file/subpackage
+    that actually exists -- it must not become a blanket exemption for
+    every underscore-prefixed or short import name. A genuinely
+    undeclared external package with no matching sibling file present
+    must still be flagged."""
+    skill_dir = _make_skill(tmp_path, scripts={"main.py": "import _totally_unrelated_thing\n"})
+    findings = scanner.find_packages_drift(None, skill_dir)
+    assert _severities(findings) == ["error"]
+    assert "'_totally_unrelated_thing'" in findings[0].message
+
+
+def test_real_repository_executing_a_branch_plan_sibling_import_is_clean(tmp_path: pathlib.Path) -> None:
+    """Direct regression pin for the live false positive this exclusion
+    was added to fix, run against the real repository tree itself (not a
+    synthetic fixture) -- proves the fix against the exact skill and
+    import name that originally produced it."""
+    real_skill_dir = pathlib.Path("skills/executing-a-branch-plan")
+    if not real_skill_dir.is_dir():
+        pytest.skip("skills/executing-a-branch-plan not present in this checkout")
+    findings = scanner.find_packages_drift(None, real_skill_dir)
+    assert not any("_gitapex_path_normalize" in f.message for f in findings)
+
+
+def test_is_local_sibling_module_direct_unit_no_scripts_dir(tmp_path: pathlib.Path) -> None:
+    """Direct unit test of the helper itself: a skill with no scripts/
+    directory at all must not crash and must report False, not True."""
+    skill_dir = _make_skill(tmp_path)
+    assert scanner._is_local_sibling_module(skill_dir, "anything") is False
+
+
+# ---- find_packages_drift: PEP 420 namespace-package siblings ----
+
+
+def test_namespace_package_sibling_without_init_py_is_recognized(tmp_path: pathlib.Path) -> None:
+    """PEP 420 (Python 3.3+): a directory with no __init__.py at all is
+    still a real, importable package via Python's own standard import
+    machinery -- `python3 -c "import nspkg.mod"` succeeds from a
+    directory containing nspkg/mod.py with no nspkg/__init__.py,
+    resolving through CPython's own _NamespacePath."""
+    skill_dir = _make_skill(tmp_path, scripts={"main.py": "import nspkg\n"})
+    subpkg_dir = skill_dir / "scripts" / "nspkg"
+    subpkg_dir.mkdir()
+    (subpkg_dir / "mod.py").write_text("X = 1\n", encoding="utf-8")
+    assert scanner.find_packages_drift(None, skill_dir) == []
+
+
+def test_is_local_sibling_module_recognizes_namespace_package_directly(tmp_path: pathlib.Path) -> None:
+    """Direct unit test of the helper: True for a namespace-package-shaped
+    directory (no __init__.py, but a real .py file inside it)."""
+    skill_dir = _make_skill(tmp_path)
+    subpkg_dir = skill_dir / "scripts" / "nspkg"
+    subpkg_dir.mkdir(parents=True)
+    (subpkg_dir / "mod.py").write_text("X = 1\n", encoding="utf-8")
+    assert scanner._is_local_sibling_module(skill_dir, "nspkg") is True
+
+
+def test_is_local_sibling_module_empty_subdirectory_is_still_not_recognized(tmp_path: pathlib.Path) -> None:
+    """An empty same-named subdirectory (nothing that could actually
+    satisfy the import at runtime, namespace package or not) must still
+    read as False -- namespace-package recognition is scoped to a
+    subdirectory containing at least one real .py file."""
+    skill_dir = _make_skill(tmp_path)
+    empty_dir = skill_dir / "scripts" / "emptypkg"
+    empty_dir.mkdir(parents=True)
+    assert scanner._is_local_sibling_module(skill_dir, "emptypkg") is False
+
+
+# ---- find_packages_drift: recursive scanning of a local sibling
+# subpackage's own content ----
+
+
+def test_sibling_subpackage_content_is_recursively_scanned_for_its_own_imports(tmp_path: pathlib.Path) -> None:
+    """A top-level script does a bare "import helperpkg" (correctly
+    excluded from under-declared via _is_local_sibling_module), but
+    helperpkg's own __init__.py does "import requests" -- a real external
+    dependency that must still surface as under-declared. Requires
+    _bundled_script_trees to recurse into the subpackage's own files, not
+    just glob scripts/*.py at the top level."""
+    skill_dir = _make_skill(tmp_path, scripts={"main.py": "import helperpkg\n"})
+    subpkg_dir = skill_dir / "scripts" / "helperpkg"
+    subpkg_dir.mkdir()
+    (subpkg_dir / "__init__.py").write_text("import requests\n", encoding="utf-8")
+    findings = scanner.find_packages_drift({"pip": []}, skill_dir)
+    assert any(f.severity == "error" and "'requests'" in f.message for f in findings)
+    # helperpkg itself must still be correctly excluded (it IS a real
+    # local sibling subpackage, not an external dependency) -- only its
+    # OWN content's own further import ("requests") is the real gap.
+    assert not any("'helperpkg'" in f.message for f in findings)
+
+
+def test_bundled_script_trees_recurses_into_subpackage_directories(tmp_path: pathlib.Path) -> None:
+    """Direct unit test of the helper itself: a .py file nested inside a
+    scripts/ subdirectory (not directly under scripts/) is discovered and
+    parsed, not silently skipped."""
+    skill_dir = _make_skill(tmp_path, scripts={"main.py": "import helperpkg\n"})
+    subpkg_dir = skill_dir / "scripts" / "helperpkg"
+    subpkg_dir.mkdir()
+    (subpkg_dir / "__init__.py").write_text("import requests\n", encoding="utf-8")
+    trees, unparseable = scanner._bundled_script_trees(skill_dir)
+    assert unparseable == []
+    all_imports: set[str] = set()
+    for tree in trees:
+        all_imports |= scanner._tree_imported_root_modules(tree)
+    assert {"helperpkg", "requests"} <= all_imports
+
+
+def test_bundled_script_trees_test_file_exclusion_applies_recursively(tmp_path: pathlib.Path) -> None:
+    """The "test_*" pytest-discovery exclusion (see this function's own
+    docstring) must still apply to a file nested inside a subpackage, not
+    just a top-level scripts/*.py file -- a test file's own imports are
+    not the skill's real shipped capability regardless of depth."""
+    skill_dir = _make_skill(tmp_path, scripts={"main.py": "import helperpkg\n"})
+    subpkg_dir = skill_dir / "scripts" / "helperpkg"
+    subpkg_dir.mkdir()
+    (subpkg_dir / "__init__.py").write_text("", encoding="utf-8")
+    (subpkg_dir / "test_helperpkg.py").write_text("import some_test_only_dependency\n", encoding="utf-8")
+    findings = scanner.find_packages_drift({"pip": []}, skill_dir)
+    assert not any("some_test_only_dependency" in f.message for f in findings)
+
+
+def test_unparseable_file_inside_subpackage_is_reported_with_its_real_relative_path(tmp_path: pathlib.Path) -> None:
+    """An unparseable/unreadable name is now recorded relative to
+    scripts_dir (e.g. "helperpkg/broken.py"), not a bare basename -- a
+    name collision across two different subdirectories is possible now
+    that scanning is recursive, and the finding message
+    (f"scripts/{name}") must still point at the real file, not a
+    misleading top-level guess."""
+    skill_dir = _make_skill(tmp_path, scripts={"main.py": "import helperpkg\n"})
+    subpkg_dir = skill_dir / "scripts" / "helperpkg"
+    subpkg_dir.mkdir()
+    (subpkg_dir / "__init__.py").write_text("", encoding="utf-8")
+    (subpkg_dir / "broken.py").write_text("def f(:\n    pass\n", encoding="utf-8")
+    findings = scanner.find_network_drift({"mode": "disabled"}, skill_dir)
+    assert any(f.severity == "error" and "scripts/helperpkg/broken.py" in f.message for f in findings)
+
+
+# ---- find_packages_drift: case sensitivity ----
+
+
+def test_declared_package_name_case_insensitive_direct_match(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md=_compat_skill_md("Requests"),
+        scripts={"fetch.py": "import requests\n"},
+    )
+    assert scanner.find_packages_drift({"pip": ["Requests"]}, skill_dir) == []
+
+
+def test_declared_package_name_case_insensitive_alias_match(tmp_path: pathlib.Path) -> None:
+    """PyYAML is commonly written mixed-case in the real world (e.g.
+    requirements.txt files); the declared-name side of the alias
+    comparison must be case-insensitive (PEP 503), same as
+    declared_domains' own hostname handling (RFC 4343)."""
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md=_compat_skill_md("PyYAML"),
+        scripts={"fetch.py": "import yaml\n"},
+    )
+    assert scanner.find_packages_drift({"pip": ["PyYAML"]}, skill_dir) == []
+
+
+def test_import_name_case_sensitivity_is_preserved_for_alias_lookup(tmp_path: pathlib.Path) -> None:
+    """Unlike the declared-name side, the import name side of the alias
+    lookup is exact-case, matching real Python import semantics (a
+    module spelled "Yaml" is not the same real importable name as
+    "yaml", whatever the sidecar declares). Deliberately kept exact-case:
+    case-folding this alias lookup too would silently un-flag this exact
+    scenario -- see _pip_declared_for_import's own docstring."""
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": "import Yaml\n"})
+    findings = scanner.find_packages_drift({"pip": ["pyyaml"]}, skill_dir)
+    assert any(f.severity == "error" and "'Yaml'" in f.message for f in findings)
+
+
+# ---- find_packages_drift: case-handling consistency + message
+# readability ----
+
+
+def test_over_declared_message_preserves_original_declared_casing(tmp_path: pathlib.Path) -> None:
+    """The over-declared finding message must use the original declared
+    spelling ("PyYAML"), not the normalized/lower-cased form ("pyyaml")
+    -- a sidecar author grepping their own file for the string in the
+    finding message must be able to find it verbatim."""
+    skill_dir = _make_skill(tmp_path, scripts={"helper.py": "import pathlib\n"})
+    findings = scanner.find_packages_drift({"pip": ["PyYAML"]}, skill_dir)
+    deterministic = [f for f in findings if f.kind == "deterministic"]
+    assert any("'PyYAML'" in f.message for f in deterministic)
+    assert not any("'pyyaml'" in f.message for f in deterministic)
+
+
+def test_direct_match_applies_full_pep503_normalization_to_the_import_side_too(tmp_path: pathlib.Path) -> None:
+    """The direct-match branch (comparing import_name itself against a
+    declared distribution name, with no alias table involved) applies
+    the same full PEP 503 normalization to import_name that the declared
+    side already gets. "my_pkg" (a real, legal import identifier with an
+    underscore) matches a declared "my-pkg" (hyphen) directly, with no
+    alias table entry needed for either spelling."""
+    skill_dir = _make_skill(tmp_path, scripts={"helper.py": "import my_pkg\n"})
+    findings = scanner.find_packages_drift({"pip": ["my-pkg"]}, skill_dir)
+    assert not any(f.kind == "deterministic" for f in findings)
+
+
+# ---- find_packages_drift: malformed/adversarial input (fail-closed proofs) ----
+
+
+def test_packages_param_not_a_dict_is_tolerated(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": "import requests\n"})
+    findings = scanner.find_packages_drift("garbage-not-a-dict", skill_dir)
+    assert _severities(findings) == ["error"]
+
+
+def test_pip_key_a_bare_string_does_not_iterate_characters(tmp_path: pathlib.Path) -> None:
+    """Classic Python footgun: a malformed sidecar declaring packages.pip
+    as a bare STRING ("pyyaml") instead of a list (["pyyaml"]) must not
+    be silently iterated CHARACTER BY CHARACTER ({'p','y','a','m','l'}).
+    Treated as "nothing declared" (fails closed: a real import is still
+    flagged), never as an accidental per-character allowlist."""
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": "import yaml\n"})
+    findings = scanner.find_packages_drift({"pip": "pyyaml"}, skill_dir)
+    assert _severities(findings) == ["error"]
+    assert "'yaml'" in findings[0].message
+
+
+def test_pip_list_with_non_string_items_is_tolerated(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md=_compat_skill_md("pyyaml"),
+        scripts={"fetch.py": "import yaml\n"},
+    )
+    findings = scanner.find_packages_drift({"pip": [123, None, "pyyaml", {"nested": True}]}, skill_dir)
+    assert findings == []
+
+
+def test_packages_with_only_non_pip_ecosystem_is_ignored(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": "import requests\n"})
+    findings = scanner.find_packages_drift({"npm": ["left-pad"]}, skill_dir)
+    assert _severities(findings) == ["error"]
+    assert not any("left-pad" in f.message or "npm" in f.message for f in findings)
+
+
+def test_multiple_ecosystems_only_pip_is_checked(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md=_compat_skill_md("requests"),
+        scripts={"fetch.py": "import requests\n"},
+    )
+    findings = scanner.find_packages_drift({"pip": ["requests"], "npm": ["left-pad"], "cargo": ["serde"]}, skill_dir)
+    assert findings == []
+
+
+def test_missing_skill_md_compatibility_check_does_not_crash(tmp_path: pathlib.Path) -> None:
+    skill_dir = tmp_path / "no-skill-md"
+    skill_dir.mkdir()
+    findings = scanner.find_packages_drift({"pip": ["pyyaml"]}, skill_dir)
+    # No scripts dir either -> over-declared warning + compatibility
+    # warning, no crash.
+    assert _severities(findings) == ["warning", "warning"]
+
+
+# ---- find_packages_drift: compatibility-mention heuristic ----
+
+
+def test_compatibility_missing_package_mention_is_warning(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md='---\nname: example-skill\ndescription: x\ncompatibility: "Runs anywhere."\n---\n\n# Example\n',
+        scripts={"fetch.py": "import yaml\n"},
+    )
+    findings = scanner.find_packages_drift({"pip": ["pyyaml"]}, skill_dir)
+    assert len(findings) == 1
+    assert findings[0].kind == "heuristic"
+    assert findings[0].severity == "warning"
+    assert "packages-pip-vs-compatibility" in findings[0].message
+    assert "'pyyaml'" in findings[0].message
+
+
+def test_compatibility_mentions_package_is_fully_clean(tmp_path: pathlib.Path) -> None:
+    """Comprehensive positive case: script imports yaml (satisfies
+    deterministic-under), sidecar declares pyyaml (satisfies
+    deterministic-over via alias), compatibility mentions pyyaml
+    (satisfies heuristic) -- all three checks pass at once, zero
+    findings total."""
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md=_compat_skill_md("pyyaml"),
+        scripts={"fetch.py": "import yaml\n"},
+    )
+    assert scanner.find_packages_drift({"pip": ["pyyaml"]}, skill_dir) == []
+
+
+def test_compatibility_field_absent_entirely_is_warning(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md="# Example Skill\n\n## Steps\n\n1. Read the input.\n",
+        scripts={"fetch.py": "import yaml\n"},
+    )
+    findings = scanner.find_packages_drift({"pip": ["pyyaml"]}, skill_dir)
+    assert any(f.kind == "heuristic" for f in findings)
+
+
+def test_compatibility_frontmatter_present_but_key_absent_is_warning(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md="---\nname: example-skill\ndescription: x\n---\n\n# Example\n",
+        scripts={"fetch.py": "import yaml\n"},
+    )
+    findings = scanner.find_packages_drift({"pip": ["pyyaml"]}, skill_dir)
+    assert any(f.kind == "heuristic" for f in findings)
+
+
+def test_compatibility_case_sensitive_mismatch_still_flags(tmp_path: pathlib.Path) -> None:
+    """Disclosed residual limitation, proven concretely rather than only
+    asserted in the docstring: a package mentioned with different
+    casing/spacing in compatibility still flags."""
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md='---\nname: example-skill\ndescription: x\ncompatibility: "Requires PyYAML."\n---\n\n# Example\n',
+        scripts={"fetch.py": "import yaml\n"},
+    )
+    findings = scanner.find_packages_drift({"pip": ["pyyaml"]}, skill_dir)
+    assert any(f.kind == "heuristic" and "'pyyaml'" in f.message for f in findings)
+
+
+def test_compatibility_multiple_packages_checked_independently(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md=(
+            '---\nname: example-skill\ndescription: x\ncompatibility: "Requires pyyaml only."\n---\n\n# Example\n'
+        ),
+        scripts={"fetch.py": "import yaml\nimport requests\n"},
+    )
+    findings = scanner.find_packages_drift({"pip": ["pyyaml", "requests"]}, skill_dir)
+    heuristic = [f for f in findings if f.kind == "heuristic"]
+    assert len(heuristic) == 1
+    assert "'requests'" in heuristic[0].message
+
+
+def test_compatibility_check_does_not_depend_on_unparseable_scripts(tmp_path: pathlib.Path) -> None:
+    """Unlike the over-declared warning, the compatibility-mention check
+    never depends on script content at all -- an unparseable script must
+    not suppress it, even though it DOES suppress the sibling
+    deterministic over-declared warning (see
+    test_unparseable_script_suppresses_over_declared_warning)."""
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md="# Example Skill\n\n## Steps\n\n1. Read the input.\n",
+        scripts={"broken.py": "def f(:\n    pass\n"},
+    )
+    findings = scanner.find_packages_drift({"pip": ["pyyaml"]}, skill_dir)
+    assert not any(f.kind == "deterministic" for f in findings)
+    assert any(f.kind == "heuristic" for f in findings)
+
+
+# ---- find_packages_drift: kind/severity tagging ----
+
+
+def test_packages_under_declared_finding_carries_deterministic_kind(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": "import requests\n"})
+    findings = scanner.find_packages_drift(None, skill_dir)
+    assert findings and all(f.kind == "deterministic" for f in findings)
+
+
+def test_packages_over_declared_finding_carries_deterministic_kind(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, skill_md=_compat_skill_md("requests"))
+    findings = scanner.find_packages_drift({"pip": ["requests"]}, skill_dir)
+    assert findings and all(f.kind == "deterministic" for f in findings)
+
+
+def test_packages_compatibility_finding_carries_heuristic_kind(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(tmp_path, scripts={"fetch.py": "import yaml\n"})
+    findings = scanner.find_packages_drift({"pip": ["pyyaml"]}, skill_dir)
+    heuristic = [f for f in findings if f.kind == "heuristic"]
+    assert heuristic and all(f.severity == "warning" for f in heuristic)
+
+
+# ---- _extract_compatibility_field (direct unit tests) ----
+
+
+def test_extract_compatibility_field_double_quoted() -> None:
+    text = '---\nname: x\ncompatibility: "Requires pyyaml."\n---\n\nBody.\n'
+    assert scanner._extract_compatibility_field(text) == "Requires pyyaml."
+
+
+def test_extract_compatibility_field_single_quoted() -> None:
+    text = "---\nname: x\ncompatibility: 'Requires pyyaml.'\n---\n\nBody.\n"
+    assert scanner._extract_compatibility_field(text) == "Requires pyyaml."
+
+
+def test_extract_compatibility_field_plain_unquoted() -> None:
+    text = "---\nname: x\ncompatibility: Requires pyyaml.\n---\n\nBody.\n"
+    assert scanner._extract_compatibility_field(text) == "Requires pyyaml."
+
+
+def test_extract_compatibility_field_absent_key_returns_empty() -> None:
+    text = "---\nname: x\ndescription: y\n---\n\nBody.\n"
+    assert scanner._extract_compatibility_field(text) == ""
+
+
+def test_extract_compatibility_field_no_frontmatter_returns_empty() -> None:
+    assert scanner._extract_compatibility_field("# Just a heading\n\nNo frontmatter here.\n") == ""
+
+
+def test_extract_compatibility_field_unclosed_frontmatter_returns_empty() -> None:
+    text = "---\nname: x\ncompatibility: pyyaml\n\n# No closing delimiter\n"
+    assert scanner._extract_compatibility_field(text) == ""
+
+
+def test_extract_compatibility_field_empty_text_returns_empty() -> None:
+    assert scanner._extract_compatibility_field("") == ""
+
+
+def test_extract_compatibility_field_leading_bom_is_stripped() -> None:
+    bom = chr(65279)  # U+FEFF -- avoids a literal backslash-u escape in this source file
+    text = bom + '---\nname: x\ncompatibility: "Requires pyyaml."\n---\n\nBody.\n'
+    assert scanner._extract_compatibility_field(text) == "Requires pyyaml."
+
+
+def test_extract_compatibility_field_crlf_line_endings_still_extracts(tmp_path: pathlib.Path) -> None:
+    """Regression pin: without CRLF normalization, a trailing "\\r" stays
+    attached to the "---" frontmatter delimiter's own line, so
+    _FRONTMATTER_BLOCK_RE's literal "\\n" immediately after "---[ \\t]*"
+    never matches at all -- the whole frontmatter block silently fails
+    to match, and _extract_compatibility_field returns "" for a
+    CRLF-saved SKILL.md exactly as if it had no frontmatter at all."""
+    text = '---\r\nname: x\r\ncompatibility: "Requires pyyaml."\r\n---\r\n\r\nBody.\r\n'
+    assert scanner._extract_compatibility_field(text) == "Requires pyyaml."
+
+
+def test_compatibility_check_tolerates_crlf_skill_md_end_to_end(tmp_path: pathlib.Path) -> None:
+    """End-to-end proof (not just the direct helper unit test above): a
+    real CRLF-saved SKILL.md correctly satisfies the compatibility-mention
+    check through find_packages_drift's own full call path."""
+    skill_dir = tmp_path / "crlf-skill"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_bytes(
+        b'---\r\nname: crlf-skill\r\ndescription: x\r\ncompatibility: "Requires pyyaml."\r\n---\r\n\r\nBody.\r\n'
+    )
+    scripts_dir = skill_dir / "scripts"
+    scripts_dir.mkdir()
+    (scripts_dir / "fetch.py").write_text("import yaml\n", encoding="utf-8")
+    assert scanner.find_packages_drift({"pip": ["pyyaml"]}, skill_dir) == []
+
+
+def test_extract_compatibility_field_body_mention_outside_frontmatter_is_ignored() -> None:
+    """A body heading or prose sentence starting a line with
+    "compatibility:" must never be mistaken for the real frontmatter
+    field -- proves _COMPATIBILITY_FIELD_RE is applied only to the
+    captured frontmatter interior, not the whole file."""
+    text = "---\nname: x\ndescription: y\n---\n\n## compatibility: not the real field\n"
+    assert scanner._extract_compatibility_field(text) == ""
+
+
+def test_extract_compatibility_field_body_containing_its_own_thematic_break_before_close() -> None:
+    """Documents the disclosed, narrower guarantee _FRONTMATTER_BLOCK_RE
+    actually provides: the frontmatter boundary is the first "---"-only
+    line paired with the very next "---"-only line, but it does not
+    validate that every intervening line is itself a well-formed
+    "key: value" pair. A body containing its own bare "---" thematic
+    break (legal Markdown/CommonMark) with no earlier closing delimiter
+    is, by this boundary rule, genuinely captured as "frontmatter
+    interior," so a "compatibility:"-shaped line inside it still
+    matches -- this test pins that disclosed behavior."""
+    text = "---\n\nSome body\n\ncompatibility: pyyaml is needed\n\n---\n"
+    assert scanner._extract_compatibility_field(text) == "pyyaml is needed"
+
+
+def test_extract_compatibility_field_body_mention_after_a_real_frontmatter_close_with_a_later_stray_delimiter_is_ignored() -> (
+    None
+):
+    """What IS still guaranteed, proven concretely alongside the disclosed
+    limitation above: a real, TIGHTLY-CLOSED frontmatter block (an early
+    second "---"-only line) correctly excludes a LATER "compatibility:"
+    mention in the body, even one followed by its own further stray
+    "---" -- the non-greedy match closes at the FIRST "---", not a later
+    one, so this is not a case of the two regexes "getting confused" by
+    multiple delimiters in general."""
+    text = "---\nname: x\n---\n\nBody prose.\n\ncompatibility: should-not-match-body\n\n---\nmore body\n"
+    assert scanner._extract_compatibility_field(text) == ""
+
+
 # ---- find_drift (integration) ----
 
 
-def _write_sidecar(skill_dir: pathlib.Path, execution_requirements: dict[str, object]) -> None:
+def _write_sidecar(
+    skill_dir: pathlib.Path,
+    execution_requirements: dict[str, object],
+    *,
+    packages: dict[str, list[str]] | None = None,
+) -> None:
     metadata_dir = skill_dir / "metadata"
     metadata_dir.mkdir()
+    # packages is a SEPARATE keyword-only param, not folded into the
+    # existing execution_requirements mini-DSL dict: every existing
+    # caller keeps working with zero changes (backward compatible), and
+    # a real packages.pip value is itself a nested ecosystem->list
+    # mapping, not a scalar/single-list like network_mode/write_tags/
+    # shell_tags -- str(package_list) below relies on the same
+    # already-established trick execution_requirements' own write_tags/
+    # shell_tags rendering uses: a Python list-of-strings' own str()
+    # happens to be valid YAML flow-sequence syntax (single-quoted
+    # scalars), so no real YAML serializer is needed for this test-only
+    # fixture writer.
+    packages_yaml = ""
+    if packages is not None:
+        packages_yaml = "    packages:\n" + "".join(
+            f"      {ecosystem}: {package_list}\n" for ecosystem, package_list in packages.items()
+        )
     (metadata_dir / "gitapex.yaml").write_text(
         "apiVersion: gitapex.io/v1alpha1\n"
         "kind: SkillMetadata\n"
@@ -654,7 +1640,8 @@ def _write_sidecar(skill_dir: pathlib.Path, execution_requirements: dict[str, ob
         f"    network:\n      mode: {execution_requirements.get('network_mode', 'disabled')}\n"
         f"    tools:\n"
         f"      write: {execution_requirements.get('write_tags', [])}\n"
-        f"      shell: {execution_requirements.get('shell_tags', [])}\n",
+        f"      shell: {execution_requirements.get('shell_tags', [])}\n"
+        f"{packages_yaml}",
         encoding="utf-8",
     )
 
@@ -672,6 +1659,24 @@ def test_find_drift_wires_network_and_tools_checks_end_to_end(tmp_path: pathlib.
     messages = [f.message for f in findings]
     assert any("network-mode-vs-script-content" in m and m.startswith("example-skill:") for m in messages)
     assert any("tools-write-vs-skill-md" in m and m.startswith("example-skill:") for m in messages)
+
+
+def test_find_drift_wires_packages_check_end_to_end(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md="# Example\n\n## Steps\n\n1. Read the input.\n",
+        scripts={"fetch.py": "import yaml\n"},
+    )
+    _write_sidecar(
+        skill_dir,
+        {"network_mode": "disabled", "write_tags": [], "shell_tags": []},
+        packages={"pip": []},
+    )
+
+    findings = scanner.find_drift(skills_dir=tmp_path, min_expected_skill_dirs=1)
+
+    messages = [f.message for f in findings]
+    assert any("packages-pip-vs-script-content" in m and m.startswith("example-skill:") for m in messages)
 
 
 def test_find_drift_below_floor_is_error(tmp_path: pathlib.Path) -> None:
@@ -705,6 +1710,24 @@ def test_find_skill_drift_wires_network_and_tools_checks(tmp_path: pathlib.Path)
     assert any("tools-write-vs-skill-md" in m for m in messages)
     # Unlike find_drift(), messages carry no skill-name prefix -- single-target use.
     assert not any(m.startswith("example-skill:") for m in messages)
+
+
+def test_find_skill_drift_wires_packages_check(tmp_path: pathlib.Path) -> None:
+    skill_dir = _make_skill(
+        tmp_path,
+        skill_md="# Example\n\n## Steps\n\n1. Read the input.\n",
+        scripts={"fetch.py": "import yaml\n"},
+    )
+    _write_sidecar(
+        skill_dir,
+        {"network_mode": "disabled", "write_tags": [], "shell_tags": []},
+        packages={"pip": []},
+    )
+
+    findings = scanner.find_skill_drift(skill_dir)
+
+    messages = [f.message for f in findings]
+    assert any("packages-pip-vs-script-content" in m for m in messages)
 
 
 def test_find_skill_drift_missing_sidecar_is_error(tmp_path: pathlib.Path) -> None:
