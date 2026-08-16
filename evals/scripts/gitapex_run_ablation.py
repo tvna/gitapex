@@ -105,6 +105,7 @@ import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import yaml
 from pydantic import BaseModel, ValidationError, field_validator
@@ -186,6 +187,29 @@ def _require_unpadded_str(value: object, field: str) -> str:
     return value
 
 
+def load_yaml_mapping(path: Path, label: str) -> Mapping[str, Any]:
+    """Read ``path`` as YAML and return its top-level mapping.
+
+    ``label`` names the artifact being read ("task fixture", "eval suite",
+    ...) in every error message, so this module's own ``load_task_fixture``
+    and ``gitapex_run_eval_suite.load_eval_suite`` raise identically worded
+    read/parse/not-a-mapping failures from one place rather than each
+    re-spelling the same three messages. Every failure -- unreadable file,
+    non-UTF-8 bytes, invalid YAML, a non-mapping document -- surfaces as
+    ``ValueError``, so callers only ever catch one exception type.
+    """
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ValueError(f"cannot read {label} {path}: {exc}") from exc
+    except yaml.YAMLError as exc:
+        raise ValueError(f"invalid YAML in {label} {path}: {exc}") from exc
+
+    if not isinstance(data, Mapping):
+        raise ValueError(f"{label} {path} must be a YAML mapping")
+    return data
+
+
 def load_task_fixture(path: Path) -> dict:
     """Load and minimally validate a committed task fixture (``evals/*/tasks/
     *.yaml`` shape: a top-level ``id``, ``inputs.prompt``, ``expected``, and
@@ -209,16 +233,7 @@ def load_task_fixture(path: Path) -> dict:
     non-UTF-8 file content, so callers only ever need to catch one
     exception type from this function.
     """
-    try:
-        text = path.read_text(encoding="utf-8")
-        data = yaml.safe_load(text)
-    except (OSError, UnicodeDecodeError) as exc:
-        raise ValueError(f"cannot read task fixture {path}: {exc}") from exc
-    except yaml.YAMLError as exc:
-        raise ValueError(f"invalid YAML in task fixture {path}: {exc}") from exc
-
-    if not isinstance(data, Mapping):
-        raise ValueError(f"task fixture {path} must be a YAML mapping")
+    data = load_yaml_mapping(path, "task fixture")
 
     task_id = _require_unpadded_str(data.get("id"), "id")
 

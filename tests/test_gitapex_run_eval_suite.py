@@ -65,6 +65,30 @@ def _write_suite(tmp_path: Path, *, eval_yaml_text: str = BASE_EVAL_YAML, tasks:
 
 
 # ---------------------------------------------------------------------------
+# _ensure_importable
+# ---------------------------------------------------------------------------
+
+
+def test_ensure_importable_inserts_directory_not_already_on_path(tmp_path: Path, monkeypatch):
+    directory = tmp_path / "not-on-path-yet"
+    monkeypatch.setattr(sys, "path", [p for p in sys.path if p != str(directory)])
+    assert str(directory) not in sys.path
+
+    gitapex_run_eval_suite._ensure_importable(directory)
+
+    assert sys.path[0] == str(directory)
+
+
+def test_ensure_importable_is_a_noop_when_already_on_path(monkeypatch):
+    already_present = sys.path[len(sys.path) // 2]  # any real, already-present entry
+    before = list(sys.path)
+
+    gitapex_run_eval_suite._ensure_importable(Path(already_present))
+
+    assert sys.path == before  # unchanged -- not re-inserted or duplicated
+
+
+# ---------------------------------------------------------------------------
 # load_eval_suite
 # ---------------------------------------------------------------------------
 
@@ -287,8 +311,12 @@ def test_validate_graders_shape_rejects_malformed_entry_without_calling_executor
 
 
 class _RecordingExecutor:
-    """Same shape as test_gitapex_run_ablation.py's own _RecordingExecutor:
-    returns pre-canned output per call, records every (argv, timeout)."""
+    """Stand-in for a live model CLI, same interface as
+    test_gitapex_run_ablation.py's own _RecordingExecutor: records every
+    (argv, timeout) and returns the pre-canned outputs in order. Unlike that
+    one, it cycles once the list runs out -- so a single canned output covers
+    every trial of a multi-trial, multi-fixture suite -- and returns "" when
+    no outputs were given at all (the "must not dispatch" tests)."""
 
     def __init__(self, outputs: list[str]) -> None:
         self._outputs = list(outputs)
@@ -408,11 +436,7 @@ def test_run_eval_suite_score_reflects_a_failing_grader(tmp_path: Path):
 
 
 def test_run_eval_suite_fixture_score_is_mean_across_trials(tmp_path: Path):
-    eval_yaml = _write_suite(
-        tmp_path,
-        eval_yaml_text=BASE_EVAL_YAML.replace("trials_per_task: 2", "trials_per_task: 2"),
-        tasks={"a.yaml": TASK_A_TEXT},
-    )
+    eval_yaml = _write_suite(tmp_path, tasks={"a.yaml": TASK_A_TEXT})  # BASE_EVAL_YAML's trials_per_task: 2
     executor = _RecordingExecutor(["ok output", "no match at all"])  # trial 1: 1.0, trial 2: 0.0
 
     result = gitapex_run_eval_suite.run_eval_suite(
@@ -568,7 +592,7 @@ def test_direct_invocation_does_not_crash_on_imports():
 # ---------------------------------------------------------------------------
 
 
-def test_main_success_writes_json_to_output_file(tmp_path: Path, monkeypatch, capsys):
+def test_main_success_writes_json_to_output_file(tmp_path: Path, monkeypatch):
     eval_yaml = _write_suite(tmp_path, tasks={"a.yaml": TASK_A_TEXT})
     skill_md = _skill_md(tmp_path)
     output = tmp_path / "results.json"

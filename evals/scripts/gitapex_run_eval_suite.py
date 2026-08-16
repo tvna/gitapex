@@ -7,11 +7,11 @@ Before this script, ``gitapex_run_ablation.py`` ran exactly one task fixture,
 exactly once per arm, comparing a skill present against a skill withheld.
 This script is a different, single-arm capability layered on top of that
 file's own low-level primitives (``build_command``, ``subprocess_executor``,
-``load_task_fixture``, the ``Executor`` type): the skill is always injected,
-matching what ``waza run <skill>`` did in this repository's own CI before
-this script existed (a single command, no with/without split) -- not
-``gitapex_run_ablation()``'s own separate two-arm comparison, which this
-script does not modify and does not call.
+``load_task_fixture``, ``load_yaml_mapping``, the ``Executor`` type): the
+skill is always injected, matching what ``waza run <skill>`` did in this
+repository's own CI before this script existed (a single command, no
+with/without split) -- not ``gitapex_run_ablation()``'s own separate two-arm
+comparison, which this script does not modify and does not call.
 
 Hermetic-by-default execution, ``--model`` support, and the fixture-level
 ``graders`` key are all provided by ``gitapex_run_ablation.py`` itself (its
@@ -77,9 +77,10 @@ script does not attempt to detect or exclude one -- ``trials_per_task``
 variance data can be corrupted by an unnoticed retry, a known limitation, not
 solved by this script.
 
-Usage (``uv run``, not bare ``python3`` -- this file has a real third-party
-dependency, PyYAML, so a bare ``python3`` invocation outside this repository's
-``uv``-managed virtualenv fails with ``ModuleNotFoundError``)::
+Usage (``uv run``, not bare ``python3`` -- this file reaches a real third-party
+dependency, PyYAML, through ``gitapex_run_ablation``, so a bare ``python3``
+invocation outside this repository's ``uv``-managed virtualenv fails with
+``ModuleNotFoundError``)::
 
     uv run python3 evals/scripts/gitapex_run_eval_suite.py --eval-yaml EVAL.yaml \\
         --skill-md SKILL.md [--model-cli claude] [-o results.json]
@@ -97,8 +98,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 # gitapex_run_ablation.py lives in this same directory, resolved without a
 # bootstrap under both invocation styles (pytest's own pythonpath entry, and
 # the sys.path[0]-is-the-script's-own-directory behavior a direct
@@ -108,8 +107,21 @@ import yaml
 # identical bootstrap gitapex_run_ablation.py's own module docstring already
 # explains.
 _SCORE_CONTRACT_DIR = Path(__file__).resolve().parents[2] / "skills" / "scorer-gated-skill-edits" / "scripts"
-if str(_SCORE_CONTRACT_DIR) not in sys.path:
-    sys.path.insert(0, str(_SCORE_CONTRACT_DIR))
+
+
+def _ensure_importable(directory: Path) -> None:
+    """Insert ``directory`` at the front of ``sys.path`` if not already
+    present. A plain module-level ``if``/``insert`` pair only ever executes
+    its guard once per process (the first import caches the module), which
+    left this branch structurally uncoverable by a normal test run; wrapping
+    it in a function makes both the already-present and not-yet-present
+    branches directly, non-fragilely testable without relying on import
+    order or module-cache tricks."""
+    if str(directory) not in sys.path:
+        sys.path.insert(0, str(directory))
+
+
+_ensure_importable(_SCORE_CONTRACT_DIR)
 
 import gitapex_run_ablation  # noqa: E402 -- path bootstrap above must run first
 import gitapex_score_contract  # noqa: E402 -- path bootstrap above must run first
@@ -153,16 +165,7 @@ def load_eval_suite(path: Path) -> dict[str, Any]:
     or non-UTF-8 file content, so callers only ever need to catch one
     exception type.
     """
-    try:
-        text = path.read_text(encoding="utf-8")
-        data = yaml.safe_load(text)
-    except (OSError, UnicodeDecodeError) as exc:
-        raise ValueError(f"cannot read eval suite {path}: {exc}") from exc
-    except yaml.YAMLError as exc:
-        raise ValueError(f"invalid YAML in eval suite {path}: {exc}") from exc
-
-    if not isinstance(data, Mapping):
-        raise ValueError(f"eval suite {path} must be a YAML mapping")
+    data = gitapex_run_ablation.load_yaml_mapping(path, "eval suite")
 
     config = data.get("config")
     if not isinstance(config, Mapping):
