@@ -102,11 +102,11 @@ import yaml
 # gitapex_run_ablation.py lives in this same directory, resolved without a
 # bootstrap under both invocation styles (pytest's own pythonpath entry, and
 # the sys.path[0]-is-the-script's-own-directory behavior a direct
-# `python3 evals/scripts/gitapex_run_eval_suite.py ...` invocation already
-# gets for free). gitapex_score_contract.py does not get that same free
-# resolution -- it lives in a sibling skill's own scripts/ directory -- so it
-# needs the identical bootstrap gitapex_run_ablation.py's own module docstring
-# already explains.
+# `uv run python3` invocation of this file already gets for free).
+# gitapex_score_contract.py does not get that same free resolution -- it
+# lives in a sibling skill's own scripts/ directory -- so it needs the
+# identical bootstrap gitapex_run_ablation.py's own module docstring already
+# explains.
 _SCORE_CONTRACT_DIR = Path(__file__).resolve().parents[2] / "skills" / "scorer-gated-skill-edits" / "scripts"
 if str(_SCORE_CONTRACT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCORE_CONTRACT_DIR))
