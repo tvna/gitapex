@@ -1,0 +1,35 @@
+name: Dependency allowlist gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "skills/**/metadata/gitapex.yaml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-allowlist:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      # Deliberate full-tree rescan, not diff-scoped: a sidecar untouched
+      # by this diff could newly violate the allowlist if this same diff
+      # also edits ALLOWED_PACKAGES itself inside the gate script below.
+      - name: Check dependency allowlist
+        run: uv run --frozen python3 .github/scripts/gitapex_gate_dependency_allowlist.py --skills-root skills

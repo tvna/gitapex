@@ -1225,8 +1225,12 @@ itself, not merely an undisclosed one.
   reading/judgment, the same way dimension 7's other prose-judged bullets
   already work, and say so explicitly rather than silently implying it is
   mechanically gated;
-- (d) every declared package is within gitapex's own allowlist
-  (`execution-requirements-packages-allowlisted`'s own PASS).
+- (d) every declared package is within gitapex's own allowlist --
+  enforced by a repository-owned CI gate outside this skill's own bundled
+  shape checker, via a hardcoded allowlist constant that gate defines;
+  grading this sub-criterion outside a live CI/PR context means reading
+  that constant directly, the same disclosed-not-mechanically-visible
+  situation sub-criterion (c) above already states explicitly.
 
 **Fail**: any one of the four is violated -- name which sub-criterion.
 
@@ -1331,19 +1335,20 @@ restriction from this declaration, schema-permitted but requiring the
 declaring PR's own explicit written justification for why the skill's
 real behavior needs unrestricted network access, checked against
 whatever security policy the calling repository has adopted, before
-first real use. `packages` carries a third rule: each declared
-ecosystem/package-name pair is additionally resolved against an
-external, repository-root allowlist config
-(`.gitapex/dependency-allowlist.json`, deliberately outside the skill's
-own directory so the check mechanism stays portable while the specific
-allowed-package list stays repo-local policy) by the
-`execution-requirements-packages-allowlisted` check -- packages declared
-with no allowlist config present is a fail-loud FAIL (an unconfigured
-allowlist constrains nothing, so a silent PASS would defeat the whole
-point), no packages declared is not-applicable (PASS), and a declared
-pair absent from its ecosystem's allowlisted list is a FAIL naming the
-exact offending pair(s). Dimension 7 (Bundled scripts) below is where a
-declared package's real consequences are graded.
+first real use. `packages` carries a third rule, enforced differently
+from `tools`/`network`: each declared ecosystem/package-name pair is
+resolved against gitapex's own closed allowlist, but that resolution
+happens entirely outside this skill's own bundled shape checker -- a
+repository-owned CI gate, triggered on `skills/*/metadata/gitapex.yaml`
+changes, that checks each declared name against a hardcoded allowlist
+constant living in the gate itself. No packages declared is a no-op; a declared pair outside
+the allowlist fails that CI gate's own run, naming the offending
+skill/ecosystem/package -- it never produces a
+`gitapex_check_skill_shape.py` `CheckResult` at all. This portable
+script's own `execution-requirements-well-formed` check still validates
+`packages`' SHAPE (a well-formed ecosystem/package-name-list mapping),
+never its allowlist membership. Dimension 7 (Bundled scripts) below is
+where a declared package's real consequences are graded.
 
 ## 1. Discovery -- name and description
 

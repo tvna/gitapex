@@ -233,7 +233,7 @@
     "executionRequirements": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Three recognized subkeys so far (tools, packages, network); further categories (filesystem/mcp/credentials/browser/externalServices/context) are deferred -- until they land, any key other than these here is a real unknown key, not reserved space, matching this skill's own bundled shape checker's current behavior for all three (packages is recognized by that hand-rolled parser too, including a second, independent execution-requirements-packages-allowlisted check against a repository-root allowlist config).",
+      "description": "Three recognized subkeys so far (tools, packages, network); further categories (filesystem/mcp/credentials/browser/externalServices/context) are deferred -- until they land, any key other than these here is a real unknown key, not reserved space, matching this skill's own bundled shape checker's current behavior for all three (packages is recognized by that hand-rolled parser too, for SHAPE only -- allowlist resolution against gitapex's own closed package list is enforced separately, by a repository-owned CI gate outside this schema and that parser).",
       "properties": {
         "tools": { "$ref": "#/$defs/executionRequirementsTools" },
         "packages": { "$ref": "#/$defs/executionRequirementsPackages" },

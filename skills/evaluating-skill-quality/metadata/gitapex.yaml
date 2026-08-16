@@ -495,6 +495,9 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1124"
       summary: "A battle-testing-a-skill audit (after the entries above) found dimension 5 FAIL: the new Dependency policy prose claimed find_packages_drift catches 'ANY non-stdlib import,' contradicting that scanner's own docstring disclosing a dynamic-import blind spot. Fixed by naming the AST-visible-only subset explicitly in the StdlibOnly and Declared(a) criteria, mirroring sub-criterion (c)'s own disclosure pattern. Re-verified: 68/68 self-dogfood, full suite green."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1141"
+      summary: "Redesigned package-allowlist enforcement: removed execution-requirements-packages-allowlisted and its supporting functions from gitapex_check_skill_shape.py -- a portable skill script should not need gitapex's package policy, and the shared allowlist config it read (never committed) coupled otherwise-independent skills. Supersedes that clause in the issues/1124 entry above (append-only). Replaced with a repository-owned CI gate validating packages against a hardcoded allowlist matching ADR 0001."
   skillDependencies:
     requires: []
     relatedTo:

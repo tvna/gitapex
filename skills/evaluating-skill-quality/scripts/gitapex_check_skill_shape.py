@@ -142,10 +142,10 @@ Checks (the canonical list -- the manual fallback is to apply these):
     absent specific-ecosystem key each mean "not yet declared"; an
     explicit empty list (e.g. pip: []) means "declared, zero packages
     needed from that ecosystem" -- a deliberate statement, not the same as
-    absence. A declared package is additionally checked against the
-    repository-root .gitapex/dependency-allowlist.json config, a second,
-    independent check (execution-requirements-packages-allowlisted) --
-    see that check's own docstring for its not-applicable/fail/pass rules.
+    absence. Whether a declared package is one gitapex permits at all is
+    not checked here: that allowlist-membership question is enforced
+    entirely outside this portable script, by a repository-owned CI gate
+    (.github/scripts/gitapex_gate_dependency_allowlist.py).
 
     Three-way absent/null/empty-mapping distinction, shared by every gated *mapping*-valued block above
     (spec.skillDependencies, spec.lifecycle and each of its
@@ -934,25 +934,6 @@ EXEC_REQ_PACKAGES_KEY_RE = re.compile(r"^[a-z][a-z0-9-]*$")
 # deliberately left as-is here rather than silently duplicating the fix
 # beyond this issue's own scope.
 EXEC_REQ_PACKAGES_MISINDENTED_ITEM_RE = re.compile(r"^[ \t]*-\s*(.*)$")
-# .gitapex/dependency-allowlist.json's own repo-root-relative path (see
-# _execution_requirements_packages_allowlist_check's own docstring for the
-# check this feeds). Resolved from the TARGET skill directory being
-# checked (_dependency_allowlist_repo_root's own resolve-then-walk-for-
-# ".git" logic -- see its docstring), never from this script's own
-# __file__ location: unlike .github/scripts/*.py's own fixed
-# Path(__file__).resolve().parents[N] convention (see e.g.
-# gitapex_scan_ssot_schema.py's REPO_ROOT), which is safe only because
-# those scripts are pinned to this one repository and never move, this
-# checker is itself Portable (spec.portability: Portable, per this
-# skill's own SKILL.md) and travels with the skill directory to any
-# consuming repository -- its own __file__ location cannot be trusted to
-# sit inside the repository actually under test, so only a path derived
-# from the target being checked travels correctly with vendoring. The
-# final path is also walked component-by-component for symlinks before
-# ever being read (_reject_symlinked_allowlist_path) -- it is not scoped
-# by --allowed-root the way the skill directory itself is, since it
-# deliberately lives outside the skill directory being checked.
-DEPENDENCY_ALLOWLIST_RELATIVE_PATH = ".gitapex/dependency-allowlist.json"
 
 TAG_RE = re.compile(r"</?[A-Za-z][^>]*>")
 # A YAML plain (unquoted) scalar cannot safely contain ": " (colon followed
@@ -3773,15 +3754,7 @@ def _invocation_mode_check(fields: dict[str, str]) -> CheckResult:
     )
 
 
-def check_shape(target: Path, allowed_root: Path | None = None) -> list[CheckResult]:
-    """``allowed_root``, when given, is threaded through to
-    ``_execution_requirements_packages_allowlist_check`` so its own
-    repository-root resolution stays bounded by the same caller-approved
-    scope ``main()`` already validated the target against via
-    ``_validate_read_scope`` -- see ``_dependency_allowlist_repo_root``'s
-    own docstring for why. ``None`` (the default) preserves this
-    function's own prior, unbounded behavior for every existing caller
-    that never passed ``--allowed-root`` to begin with."""
+def check_shape(target: Path) -> list[CheckResult]:
     skill_md = _resolve_skill_md(target)
     skill_dir = skill_md.parent
     results: list[CheckResult] = []
@@ -4098,14 +4071,6 @@ def check_shape(target: Path, allowed_root: Path | None = None) -> list[CheckRes
                     "with only mode (a disabled/allowlist/unrestricted enum) "
                     "and domains (a list of non-empty strings, non-empty "
                     "only when mode is allowlist)",
-                    evidence,
-                )
-            )
-            results.append(
-                CheckResult(
-                    "execution-requirements-packages-allowlisted",
-                    False,
-                    EXECUTION_REQUIREMENTS_PACKAGES_ALLOWLISTED_RULE,
                     evidence,
                 )
             )
@@ -4427,9 +4392,6 @@ def check_shape(target: Path, allowed_root: Path | None = None) -> list[CheckRes
                     unknown_execution_requirement_network_keys,
                     malformed_execution_requirement_network_items,
                 )
-            )
-            results.append(
-                _execution_requirements_packages_allowlist_check(spec_is_mapping, spec, skill_dir, allowed_root)
             )
             if portability in PORTABILITY_LEVELS:
                 sidecar_portability = SidecarPortability(state="usable", level=portability)
@@ -5983,16 +5945,13 @@ def _execution_requirements_checks(
     compatible is checked elsewhere in this file, just folded into this
     same well-formed check rather than earning its own separate
     CheckResult -- tools has no analogous cross-subkey rule to justify the
-    same split. packages DOES have a real, separate cross-file check of its
-    own (every declared package must resolve against a repository-root
-    allowlist config) -- but that one earns its own CheckResult id,
-    ``execution-requirements-packages-allowlisted``
-    (``_execution_requirements_packages_allowlist_check`` below), rather
-    than folding into this one, since it is a genuinely different KIND of
-    rule (an external-file resolve, not an internal shape/cross-field
-    constraint) -- the same well-formed-vs-resolve split
-    ``_skill_dependency_checks`` already draws between its own
-    ``skill-dependencies-well-formed`` and ``skill-dependencies-resolve``.
+    same split. packages' own allowlist-membership resolution (whether a
+    declared package name is one gitapex permits at all) is not part of
+    this check: it is enforced entirely outside this portable script, by
+    a repository-owned CI gate
+    (``.github/scripts/gitapex_gate_dependency_allowlist.py``) that never
+    produces a CheckResult here. This function validates only packages'
+    own internal SHAPE, the same as tools and network.
     """
     well_formed_rule = (
         "spec.executionRequirements, if present, is a "
@@ -6087,11 +6046,11 @@ def _execution_requirements_checks(
         # twice under the same ecosystem (e.g. "pip: [pyyaml, pyyaml]")
         # currently still passes execution-requirements-well-formed.
         # Fail-open only in the sense of "does not additionally flag a
-        # redundant duplicate as its own defect"; it is not a security or
-        # allowlist-bypass gap (execution-requirements-packages-allowlisted
-        # already dedupes its own requested_packages before resolving
-        # against the allowlist, so a duplicate cannot inflate or hide an
-        # offender there). Left unimplemented rather than folded into
+        # redundant duplicate as its own defect"; it is not an
+        # allowlist-bypass gap (the CI gate that resolves allowlist
+        # membership dedupes by normalized name before checking, so a
+        # duplicate cannot inflate or hide an offender there). Left
+        # unimplemented rather than folded into
         # _valid_execution_requirements_tools_list, which tools.read/
         # write/shell and network.domains also share -- enforcing
         # uniqueItems there too is a broader, separate change this
@@ -6144,347 +6103,6 @@ def _execution_requirements_checks(
     return [CheckResult("execution-requirements-well-formed", True, well_formed_rule, evidence)]
 
 
-# Shared verbatim by the hard-coded "sidecar unreadable" branch in
-# check_shape() and _execution_requirements_packages_allowlist_check below
-# -- unlike execution-requirements-well-formed's own well_formed_rule
-# (duplicated as two independently-worded literals across those same two
-# sites, an existing, tolerated drift this change does not touch), this
-# string is new with this check, so there is no reason to introduce fresh
-# drift between its two call sites when a single source avoids it for
-# free.
-EXECUTION_REQUIREMENTS_PACKAGES_ALLOWLISTED_RULE = (
-    "when spec.executionRequirements.packages declares at least one "
-    "package, .gitapex/dependency-allowlist.json (repository-root-"
-    "relative) must exist and be well-formed JSON matching "
-    '{"packages": {"<ecosystem>": ["<package-name>", ...]}}, listing '
-    "every declared <ecosystem>/<package-name> pair; not applicable when "
-    "packages is absent or declares zero packages. Package-name matching "
-    "is an exact, case- and separator-sensitive string comparison (e.g. "
-    '"PyYAML" does not match an allowlisted "pyyaml", even though PyPI '
-    "itself treats those as the same distribution per PEP 503) -- "
-    "populate the allowlist using the exact spelling declared in the "
-    "sidecar."
-)
-
-
-def _valid_dependency_allowlist_config(config: object) -> bool:
-    """Whether a parsed .gitapex/dependency-allowlist.json document matches
-    its own ``{"packages": {"<ecosystem>": ["<package-name>", ...]}}``
-    shape -- deliberately the simplest possible mirror of skill-metadata.
-    schema.json's own executionRequirementsPackages/packageList shape (see
-    DEPENDENCY_ALLOWLIST_RELATIVE_PATH's own comment): a top-level mapping
-    with a "packages" key whose own value is itself a mapping of ecosystem
-    name to a list of non-empty strings. Deliberately NOT also gating the
-    config's own ecosystem-key shape against EXEC_REQ_PACKAGES_KEY_RE --
-    this file is gitapex's own repo-local infrastructure config, not
-    adversarial sidecar input, and the task this config exists for names
-    only "missing 'packages' key" / "'packages' not a mapping" as the
-    wrong-shape failure modes to catch; a malformed ecosystem-list value
-    anywhere still fails this check as a whole (see the ``all(...)`` below
-    -- one bad entry invalidates the entire config rather than silently
-    validating only the well-formed remainder), matching this check's own
-    fail-loud design (an admin's typo should be obvious, not silently
-    partial). Reuses _valid_execution_requirements_tools_list for the same
-    "list of non-empty strings" shape every other packageList-shaped list
-    in this module already validates."""
-    if not (isinstance(config, dict) and isinstance(config.get("packages"), dict)):
-        return False
-    return all(_valid_execution_requirements_tools_list(v) for v in config["packages"].values())
-
-
-def _dependency_allowlist_repo_root(skill_dir: Path, allowed_root: Path | None = None) -> Path:
-    """Locate the repository root DEPENDENCY_ALLOWLIST_RELATIVE_PATH is
-    resolved against, given the skill directory under check.
-
-    Resolves ``skill_dir`` to an absolute, symlink-resolved real path
-    first (``Path.resolve()``) -- the raw, unresolved CLI target path a
-    fixed "two parents up" hop count previously used silently mis-located
-    the repository root whenever the caller's own working directory, or
-    the exact spelling of the target path on the command line, changed
-    how many hops actually reached it. E.g. running from inside
-    ``<repo>/skills/`` with a relative target ``"t"`` computes
-    ``Path("t").parent.parent == Path(".")``, landing on
-    ``<repo>/skills/.gitapex/...`` instead of ``<repo>/.gitapex/...`` --
-    a false FAIL for a perfectly valid skill, purely from how the path
-    was spelled on the command line.
-
-    Then walks upward from the resolved skill directory for the nearest
-    ancestor containing a ``.git`` entry -- a directory (a normal clone)
-    or a file (a worktree/submodule checkout's own gitdir pointer) --
-    real git's own repository-root convention, and the same marker
-    this module's own test suite's ``_write_skill_at_repo_root`` fixture
-    plants for this exact purpose. Falls back to the historical
-    ``skill_dir.parent.parent`` hop count (two levels up from
-    ``<repo-root>/skills/<name>/``) only when no ``.git`` marker exists
-    anywhere above the resolved skill directory, so a skill checked
-    outside any git repository still gets a deterministic guess rather
-    than an exception -- the allowlist-file-existence branch right after
-    this call already fails closed on a wrong guess, exactly as it always
-    has.
-
-    ``allowed_root``, when given (the CLI's own ``--allowed-root``,
-    already used to bound the skill directory itself via
-    ``_validate_read_scope``), bounds this upward search too -- found
-    live by an independent adversarial review: a caller-approved root
-    that is not itself git-root-aligned (a snapshot nested inside a
-    larger, less-trusted checkout that has its own ``.git`` further up)
-    let the previously-unbounded search escape ``--allowed-root``
-    entirely and resolve a DIFFERENT, unapproved checkout's own
-    ``.gitapex/dependency-allowlist.json`` -- the same class of
-    scope-bypass ``_reject_symlinked_allowlist_path`` already exists to
-    prevent for a symlinked path component, now closed for this second,
-    non-symlink route as well. The search still walks upward from
-    ``skill_dir`` looking for ``.git`` exactly as before, but never
-    past ``allowed_root`` itself; reaching ``allowed_root`` with no
-    ``.git`` found falls back to ``allowed_root`` itself (the most
-    defensible guess once an explicit boundary exists, and still subject
-    to the same "a wrong guess fails closed at the allowlist-file-
-    existence check right after this call" property the unbounded
-    fallback below always had). ``None`` (the default, and every call
-    site that never received ``--allowed-root`` to begin with) preserves
-    the prior, unbounded behavior exactly.
-    """
-    resolved = skill_dir.resolve()
-    allowed_root_resolved = allowed_root.resolve() if allowed_root is not None else None
-    current = resolved
-    while True:
-        if (current / ".git").exists():
-            return current
-        if allowed_root_resolved is not None and current == allowed_root_resolved:
-            return allowed_root_resolved
-        parent = current.parent
-        if parent == current:
-            break
-        current = parent
-    return allowed_root_resolved if allowed_root_resolved is not None else resolved.parent.parent
-
-
-def _reject_symlinked_allowlist_path(repo_root: Path) -> Path | None:
-    """Resolve DEPENDENCY_ALLOWLIST_RELATIVE_PATH under ``repo_root``,
-    returning ``None`` if any path component along the way is itself a
-    symlink, instead of silently following it.
-
-    The same per-component symlink-walk technique ``_validate_read_scope``
-    already uses to stop a caller-approved root from being escaped via a
-    symlinked path component (see its own docstring and loop), adapted
-    here for one fixed relative path rather than an entire skill
-    directory tree -- ``_validate_read_scope``'s own
-    ``os.walk(..., followlinks=False)`` pass is skill-directory-shaped
-    and not applicable to a single config file, so it is not reused
-    verbatim. A symlinked ``.gitapex/`` directory, or a symlinked
-    ``dependency-allowlist.json`` itself, pointed outside the repository
-    actually under test could otherwise silently drive this check's own
-    verdict from content the caller never approved reading -- not scoped
-    by ``--allowed-root`` the way the skill directory itself is.
-    """
-    current = repo_root
-    for part in Path(DEPENDENCY_ALLOWLIST_RELATIVE_PATH).parts:
-        current = current / part
-        if current.is_symlink():
-            return None
-    return current
-
-
-# CLAUDE.md section 4: every output sink is an attack surface. A malformed
-# .gitapex/dependency-allowlist.json could be arbitrarily large (or, in
-# principle, carry text a repo owner never intended echoed to stdout/CI
-# logs); repr()-ing it whole into a CheckResult's evidence string --
-# printed verbatim by format_report() -- would make this check itself an
-# unbounded-output-sink / accidental-content-echo vector. Bounded to a
-# few hundred characters: enough for an admin to see roughly what shape
-# the file actually has, without ever emitting the full parsed content.
-_ALLOWLIST_CONFIG_EVIDENCE_REPR_LIMIT = 200
-
-
-def _bounded_repr(value: object, limit: int = _ALLOWLIST_CONFIG_EVIDENCE_REPR_LIMIT) -> str:
-    text = repr(value)
-    if len(text) <= limit:
-        return text
-    return f"{text[:limit]}...<{len(text) - limit} more chars truncated>"
-
-
-def _execution_requirements_packages_allowlist_check(
-    spec_is_mapping: bool,
-    spec: dict[str, object],
-    skill_dir: Path,
-    allowed_root: Path | None = None,
-) -> CheckResult:
-    """``execution-requirements-packages-allowlisted`` (issue #1115's own
-    ADR follow-up: package-shape recognition) -- a genuinely new KIND of
-    check for this sidecar, with no tools/network precedent: every other
-    executionRequirements check validates the sidecar's own internal
-    shape; this one resolves a declared package name against an EXTERNAL,
-    repository-root config file (.gitapex/dependency-allowlist.json, see
-    DEPENDENCY_ALLOWLIST_RELATIVE_PATH), the same "declare in the sidecar,
-    resolve against real state elsewhere" shape
-    skill-dependencies-resolve already established for sibling skill
-    names -- so this function mirrors that check's own early-return-ladder
-    style (each early branch reports "nothing to check"/"not declared
-    (optional)" as a PASS, matching this file's one established
-    not-applicable convention: there is no third CheckResult state here,
-    only ``passed`` plus a distinguishing evidence string) rather than
-    ``_execution_requirements_checks``'s own "spec not a mapping fails
-    closed" well-formed-check style, since a downstream/resolve check has
-    nothing of its own to add once the shape it depends on already failed
-    elsewhere under a different check id.
-
-    Only individually shape-valid ecosystem/package-list pairs are
-    resolved here -- a malformed packages entry (an ecosystem key
-    EXEC_REQ_PACKAGES_KEY_RE rejects, a non-list value, a non-string/
-    empty-string item) is already reported by execution-requirements-
-    well-formed under its own id; treating it as contributing zero
-    packages to check here (rather than double-failing the same defect
-    under a second id) mirrors _skill_dependency_checks's own
-    requires/relatedTo handling, where an individually invalid list is
-    silently treated as empty for skill-dependencies-resolve's own
-    downstream purposes.
-
-    Precisely, in order:
-    - spec not a mapping, executionRequirements absent/not a mapping, or
-      packages absent/not a mapping: PASS, "not declared (optional)" (the
-      field itself was never declared) or "nothing to check (... is not a
-      mapping)" (declared but the wrong shape, already failing elsewhere)
-      -- the same absent-vs-wrong-shape split
-      _skill_dependency_checks draws.
-    - packages a real mapping but zero individually-valid
-      <ecosystem>/<package-name> pairs survive (every ecosystem entry
-      absent, empty, or itself malformed): PASS, "no packages declared" --
-      vacuously nothing to allowlist-check, distinguished in evidence text
-      from the field being entirely absent for debugging clarity, though
-      both are PASS.
-    - at least one valid pair, but the repository root (see
-      _dependency_allowlist_repo_root) has a symlink anywhere along
-      DEPENDENCY_ALLOWLIST_RELATIVE_PATH: FAIL, treated the same as a
-      malformed config -- see _reject_symlinked_allowlist_path. Checked
-      before existence, so a symlinked path never reaches is_file()/
-      read_text() at all.
-    - at least one valid pair, but DEPENDENCY_ALLOWLIST_RELATIVE_PATH does
-      not exist: FAIL. Deliberate fail-loud choice (CLAUDE.md section 4):
-      an unconfigured allowlist constrains nothing, so silently passing
-      would defeat the whole point of this check.
-    - the config file exists but is unreadable, not valid JSON (including
-      JSON nested deep enough to raise RecursionError, not just a
-      ValueError-shaped parse failure), or does not match
-      _valid_dependency_allowlist_config's shape: FAIL with a clear
-      message. Never raises -- matches this module's own established
-      "malformed input fails the check, never crashes the process"
-      contract (e.g. the sidecar's own read/parse try/except above). A
-      wrong-shape config's own evidence text repr()s it through
-      _bounded_repr, never the full parsed value unbounded (CLAUDE.md
-      section 4: every output sink is an attack surface).
-    - the config file is well-formed and every declared pair resolves:
-      PASS, naming every checked pair. Declared pairs are deduplicated
-      (dict.fromkeys, order-preserving) before being counted, named, or
-      resolved, so a package declared twice in the sidecar is reported
-      once, not double-counted or double-listed.
-    - the config file is well-formed but at least one declared pair does
-      not resolve (its ecosystem missing from the config entirely, or
-      present but not listing that package name): FAIL, naming exactly
-      which pair(s), each named once even if declared twice. Resolution
-      is an exact, case- and separator-sensitive string comparison (see
-      EXECUTION_REQUIREMENTS_PACKAGES_ALLOWLISTED_RULE's own text) --
-      never a false PASS from a near-miss, only a possibly-surprising
-      FAIL an admin must match exactly.
-    """
-    rule = EXECUTION_REQUIREMENTS_PACKAGES_ALLOWLISTED_RULE
-    check_name = "execution-requirements-packages-allowlisted"
-
-    if not spec_is_mapping:
-        return CheckResult(check_name, True, rule, "nothing to check (spec is not a mapping)")
-
-    if "executionRequirements" not in spec:
-        return CheckResult(check_name, True, rule, "not declared (optional)")
-
-    execution_requirements = spec.get("executionRequirements")
-    if not isinstance(execution_requirements, dict):
-        return CheckResult(check_name, True, rule, "nothing to check (executionRequirements is not a mapping)")
-
-    if "packages" not in execution_requirements:
-        return CheckResult(check_name, True, rule, "not declared (optional)")
-
-    packages = execution_requirements.get("packages")
-    if not isinstance(packages, dict):
-        return CheckResult(check_name, True, rule, "nothing to check (packages is not a mapping)")
-
-    # dict.fromkeys (not a set): order-preserving dedup, so pairs_text and
-    # the offenders list below stay in file order and never repeat a pair
-    # declared twice in the sidecar (e.g. "pip: [requests, requests]").
-    requested_packages = list(
-        dict.fromkeys(
-            (ecosystem, name)
-            for ecosystem, names in packages.items()
-            if _valid_execution_requirements_tools_list(names)
-            for name in names
-        )
-    )
-    if not requested_packages:
-        return CheckResult(check_name, True, rule, "no packages declared")
-
-    pairs_text = ", ".join(f"{ecosystem}/{name}" for ecosystem, name in requested_packages)
-    repo_root = _dependency_allowlist_repo_root(skill_dir, allowed_root)
-    allowlist_path = _reject_symlinked_allowlist_path(repo_root)
-    if allowlist_path is None:
-        return CheckResult(
-            check_name,
-            False,
-            rule,
-            f"{len(requested_packages)} package(s) declared ({pairs_text}) but "
-            f"{DEPENDENCY_ALLOWLIST_RELATIVE_PATH} (or a parent directory of it) is a symlink -- "
-            "refusing to follow it; treated the same as a malformed config",
-        )
-
-    if not allowlist_path.is_file():
-        return CheckResult(
-            check_name,
-            False,
-            rule,
-            f"{len(requested_packages)} package(s) declared ({pairs_text}) but "
-            f"{DEPENDENCY_ALLOWLIST_RELATIVE_PATH} does not exist -- nothing constrains this declaration",
-        )
-
-    try:
-        raw_config = allowlist_path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as exc:
-        return CheckResult(
-            check_name, False, rule, f"{DEPENDENCY_ALLOWLIST_RELATIVE_PATH} could not be read: {type(exc).__name__}"
-        )
-
-    try:
-        config = json.loads(raw_config)
-    except (ValueError, RecursionError) as exc:
-        # RecursionError (deeply nested JSON) is not a ValueError subclass
-        # -- this docstring promises "never raises", so it must be caught
-        # here alongside json.JSONDecodeError's own ValueError base,
-        # exactly like any other malformed-config input.
-        return CheckResult(
-            check_name,
-            False,
-            rule,
-            f"{DEPENDENCY_ALLOWLIST_RELATIVE_PATH} is not valid JSON: {type(exc).__name__}: {exc}",
-        )
-
-    if not _valid_dependency_allowlist_config(config):
-        return CheckResult(
-            check_name,
-            False,
-            rule,
-            f"{DEPENDENCY_ALLOWLIST_RELATIVE_PATH} does not match the expected "
-            '{"packages": {"<ecosystem>": ["<package-name>", ...]}} shape: '
-            f"{_bounded_repr(config)}",
-        )
-
-    allowlisted = config["packages"]
-    offenders = [
-        f"{ecosystem}/{name}" for ecosystem, name in requested_packages if name not in allowlisted.get(ecosystem, [])
-    ]
-    if offenders:
-        return CheckResult(
-            check_name, False, rule, f"not allowlisted in {DEPENDENCY_ALLOWLIST_RELATIVE_PATH}: {', '.join(offenders)}"
-        )
-
-    return CheckResult(check_name, True, rule, f"{len(requested_packages)} package(s) allowlisted: {pairs_text}")
-
-
 def format_report(results: list[CheckResult]) -> str:
     width = max((len(r.name) for r in results), default=5)
     lines = [f"{'CHECK'.ljust(width)}  RESULT  EVIDENCE (rule)"]
@@ -6519,7 +6137,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: no SKILL.md found at: {target}", file=sys.stderr)
         return 2
     try:
-        results = check_shape(target, allowed_root)
+        results = check_shape(target)
     except (OSError, UnicodeDecodeError) as exc:
         print(f"error: could not read skill files: {exc}", file=sys.stderr)
         return 2
