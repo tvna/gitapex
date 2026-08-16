@@ -77,9 +77,11 @@ script does not attempt to detect or exclude one -- ``trials_per_task``
 variance data can be corrupted by an unnoticed retry, a known limitation, not
 solved by this script.
 
-Usage::
+Usage (``uv run``, not bare ``python3`` -- this file has a real third-party
+dependency, PyYAML, so a bare ``python3`` invocation outside this repository's
+``uv``-managed virtualenv fails with ``ModuleNotFoundError``)::
 
-    python3 evals/scripts/gitapex_run_eval_suite.py --eval-yaml EVAL.yaml \\
+    uv run python3 evals/scripts/gitapex_run_eval_suite.py --eval-yaml EVAL.yaml \\
         --skill-md SKILL.md [--model-cli claude] [-o results.json]
 """
 
