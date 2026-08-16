@@ -65,6 +65,7 @@ expected:
     - "StdlibOnly-equivalent"
     - "FAIL"
     - "pdfplumber"
+    - "dependencyPolicy"
   output_not_contains:
     - "LGTM"
     - "is a clean pass"

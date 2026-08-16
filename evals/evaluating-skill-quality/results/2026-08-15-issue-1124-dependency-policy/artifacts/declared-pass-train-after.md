@@ -2,7 +2,7 @@
 
 ## Prompt
 
-```
+```text
 You are applying a fixed skill-quality rubric to review a draft Claude Code
 skill. Below is the exact rubric text for "dimension 7" (Bundled scripts) of
 a nine-dimension quality rubric, plus a new 'Dependency policy' precondition section that calibrates one of dimension 7's criteria. Apply ONLY this rubric text (do

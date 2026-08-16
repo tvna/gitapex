@@ -78,6 +78,8 @@ inputs:
 expected:
   output_contains:
     - "PASS"
+    - "packages-pip-vs-script-content"
+    - "packages-pip-vs-compatibility"
     - "PEP 723"
     - "allowlist"
   output_not_contains:
