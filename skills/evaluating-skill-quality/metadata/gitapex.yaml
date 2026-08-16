@@ -498,6 +498,9 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1141"
       summary: "Redesigned package-allowlist enforcement: removed execution-requirements-packages-allowlisted and its supporting functions from gitapex_check_skill_shape.py -- a portable skill script should not need gitapex's package policy, and the shared allowlist config it read (never committed) coupled otherwise-independent skills. Supersedes that clause in the issues/1124 entry above (append-only). Replaced with a repository-owned CI gate validating packages against a hardcoded allowlist matching ADR 0001."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/1141"
+      summary: "Independent adversarial code review (this issue's own required round) found 3 issues, all fixed: two live eval task fixtures still referenced the removed .gitapex/dependency-allowlist.json path; one kept test's leading comment described the removed mechanism's now-stale rationale; rubric.md's Execution requirements paragraph did not disclose PEP-503 normalization is looser than the removed check's exact/case-sensitive matching. Full suite 4846 passed, self-dogfood 67/67, ruff/mypy clean."
   skillDependencies:
     requires: []
     relatedTo:

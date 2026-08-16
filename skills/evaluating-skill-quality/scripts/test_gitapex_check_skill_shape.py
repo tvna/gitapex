@@ -5484,13 +5484,6 @@ def test_execution_requirements_tools_and_network_both_declared_is_well_formed(t
 
 
 def test_execution_requirements_packages_declared_is_well_formed(tmp_path):
-    # _write_skill_at_repo_root, not bare _write_skill: this test relies on
-    # NO .gitapex/dependency-allowlist.json existing anywhere on the
-    # resolved repo root's path (see the assert below) -- bare _write_skill's
-    # resolved repo root is tmp_path's own parent, the SHARED pytest-xdist
-    # session root, where a stray config planted by some other test/worker
-    # would silently flip this test's asserted FAIL to a PASS (issue: this
-    # exact fixture-safety gap was live for this test until fixed).
     skill_dir, _repo_root = _write_skill_at_repo_root(tmp_path)
     d = _write_exec_req_sidecar(skill_dir, "  executionRequirements:\n    packages:\n      pip:\n        - pyyaml\n")
     by = _by_name(css.check_shape(d))
