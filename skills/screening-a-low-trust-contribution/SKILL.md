@@ -110,10 +110,13 @@ automatically.
    only this repository's manifest diff -- a malicious `postinstall`
    payload lives in the dependency's package, not in the incoming diff,
    and must be checked via the registry/package metadata (e.g.
-   `npm view <pkg> scripts`) whenever that lookup is available. This
-   sub-check
-   applies only when a dependency entry is new or its version changed in
-   the diff -- a diff touching no dependency manifest never triggers it.
+   `npm view <pkg> scripts`) whenever that lookup is available. If that
+   lookup is not available in this session, report the verdict as based
+   on an unverified summary, not a clean screen, and name exactly which
+   dependency or dependencies could not be checked (mirrors check 1's own
+   fetch-unavailable fallback above). This sub-check applies only when a
+   dependency entry is new or its version changed in the diff -- a diff
+   touching no dependency manifest never triggers it.
    Within that scope, do not skip the lookup for an apparently low-risk
    change (a patch bump, a well-known package name): a judgment-based
    exemption is itself the kind of shortcut a supply-chain attacker would
