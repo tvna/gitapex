@@ -97,25 +97,43 @@ def test_percentile_exact_position_no_interpolation() -> None:
 
 
 def test_bootstrap_ci_perfect_correlation_is_a_point() -> None:
-    # Every resample of a perfectly-correlated series is itself perfectly
-    # correlated (resampling preserves the elementwise x_i == y_i pairing),
-    # so the CI collapses to exactly [1.0, 1.0] -- no interpolation needed.
+    # Every NON-degenerate resample of a perfectly-correlated series is
+    # itself perfectly correlated (resampling preserves the elementwise
+    # x_i == y_i pairing), so every estimate that does form is exactly
+    # 1.0 and the CI collapses to exactly [1.0, 1.0] -- no interpolation
+    # needed. A resample can still be degenerate (every one of its n draws
+    # landing on the same original index, making both resampled series
+    # constant) -- that is a fact about a single-valued series, not a
+    # violation of the x_i == y_i invariant, so n_estimates is allowed to
+    # land below n_resamples here too (some, not all, of 2000 resamples of
+    # this 5-point series are expected to be degenerate).
     rng = random.Random(0)  # noqa: S311 -- statistical resampling, not a security/cryptographic use
-    low, high = m.bootstrap_ci([1, 2, 3, 4, 5], [1, 2, 3, 4, 5], rng=rng)
-    assert low == 1.0
-    assert high == 1.0
+    result = m.bootstrap_ci([1, 2, 3, 4, 5], [1, 2, 3, 4, 5], rng=rng)
+    assert result.ci_low == 1.0
+    assert result.ci_high == 1.0
+    assert 0 < result.n_estimates <= 2000
 
 
 def test_bootstrap_ci_bounds_ordered_and_contain_point_estimate() -> None:
     xs = [1, 2, 3, 4, 5, 6, 7, 8]
     ys = [2, 1, 4, 3, 6, 5, 8, 9]
     rho = m.spearman_rho(xs, ys)
-    low, high = m.bootstrap_ci(xs, ys, rng=random.Random(0))  # noqa: S311 -- statistical resampling
-    assert -1.0 <= low <= high <= 1.0
+    result = m.bootstrap_ci(xs, ys, rng=random.Random(0))  # noqa: S311 -- statistical resampling
+    assert -1.0 <= result.ci_low <= result.ci_high <= 1.0
     # A percentile bootstrap CI is not guaranteed to contain the point
     # estimate in general, but for a reasonably-sized, non-degenerate
     # sample like this one it should -- a sanity bound, not a law.
-    assert low <= rho <= high
+    assert result.ci_low <= rho <= result.ci_high
+
+
+def test_bootstrap_ci_reports_n_estimates_below_n_resamples_when_some_resamples_are_degenerate() -> None:
+    # A defeat test for BootstrapResult.n_estimates specifically (issue
+    # #1143 adversarial review): a tie-heavy, small input produces some
+    # degenerate resamples, so n_estimates must come in strictly below
+    # n_resamples -- not silently report the full count regardless of how
+    # many resamples were actually thrown away.
+    result = m.bootstrap_ci([1, 1, 2], [1, 2, 2], n_resamples=500, rng=random.Random(0))  # noqa: S311
+    assert 0 < result.n_estimates < 500
 
 
 def test_bootstrap_ci_deterministic_given_same_seed() -> None:

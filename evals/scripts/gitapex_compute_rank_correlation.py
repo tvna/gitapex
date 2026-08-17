@@ -177,6 +177,27 @@ def _percentile(sorted_values: Sequence[float], q: float) -> float:
     return sorted_values[lower] * (1 - frac) + sorted_values[upper] * frac
 
 
+@dataclass(frozen=True)
+class BootstrapResult:
+    """A percentile bootstrap run's own CI plus how many of its resamples
+    actually produced an estimate. Returning ``n_estimates`` alongside the
+    interval (rather than only the two bounds) is what lets a caller learn
+    the degenerate-resample rate from the one resampling pass that already
+    computed it, instead of a second, separately-seeded pass recomputing
+    the same draws just to count them -- see ``compute_correlation``,
+    which relied on exactly that fragile re-derivation before an
+    adversarial review round flagged it (issue #1143): a future change to
+    this function's own internal draw order would have silently desynced
+    a second, independently-seeded replay loop from the real resampling,
+    misreporting the degenerate fraction with no test catching it, since
+    both loops would still run to completion without error.
+    """
+
+    ci_low: float
+    ci_high: float
+    n_estimates: int
+
+
 def bootstrap_ci(
     xs: Sequence[float],
     ys: Sequence[float],
@@ -184,7 +205,7 @@ def bootstrap_ci(
     confidence: float = DEFAULT_CONFIDENCE,
     n_resamples: int = DEFAULT_N_RESAMPLES,
     rng: random.Random,
-) -> tuple[float, float]:
+) -> BootstrapResult:
     """Percentile bootstrap confidence interval for ``spearman_rho(xs, ys)``.
 
     Resamples paired indices with replacement ``n_resamples`` times,
@@ -211,7 +232,11 @@ def bootstrap_ci(
         )
     estimates.sort()
     alpha = (1 - confidence) / 2
-    return _percentile(estimates, alpha), _percentile(estimates, 1 - alpha)
+    return BootstrapResult(
+        ci_low=_percentile(estimates, alpha),
+        ci_high=_percentile(estimates, 1 - alpha),
+        n_estimates=len(estimates),
+    )
 
 
 def _power_caveat(n: int, n_resamples: int, n_bootstrap_estimates: int) -> str:
@@ -284,31 +309,16 @@ def compute_correlation(
     rho = spearman_rho(xs, ys)
     rng = random.Random(seed)  # noqa: S311 -- statistical resampling, not a security/cryptographic use
     n = len(xs)
-    # Re-derive how many resamples actually produced an estimate (for the
-    # caveat's own degenerate-fraction note) without computing the
-    # bootstrap twice: bootstrap_ci's own internal count is not returned,
-    # so recompute the same resampling with the same seeded rng -- a fresh
-    # Random instance with the identical seed reproduces the identical
-    # draw sequence, matching this module's own determinism guarantee.
-    ci_low, ci_high = bootstrap_ci(xs, ys, confidence=confidence, n_resamples=n_resamples, rng=rng)
-    replay_rng = random.Random(seed)  # noqa: S311 -- same reproducible-resampling use as rng above
-    n_estimates = 0
-    for _ in range(n_resamples):
-        idx = [replay_rng.randrange(n) for _ in range(n)]
-        try:
-            spearman_rho([xs[i] for i in idx], [ys[i] for i in idx])
-            n_estimates += 1
-        except ValueError:
-            continue
+    bootstrap = bootstrap_ci(xs, ys, confidence=confidence, n_resamples=n_resamples, rng=rng)
     return CorrelationResult(
         n=n,
         rho=rho,
-        ci_low=ci_low,
-        ci_high=ci_high,
+        ci_low=bootstrap.ci_low,
+        ci_high=bootstrap.ci_high,
         confidence=confidence,
         n_resamples=n_resamples,
         seed=seed,
-        power_caveat=_power_caveat(n, n_resamples, n_estimates),
+        power_caveat=_power_caveat(n, n_resamples, bootstrap.n_estimates),
     )
 
 
