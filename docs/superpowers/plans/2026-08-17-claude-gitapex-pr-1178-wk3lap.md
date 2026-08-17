@@ -11,7 +11,8 @@ https://github.com/tvna/gitapex/issues/1178.
 
 **Independent re-verification of the ACM (`planning-a-branch-from-an-issue`
 Step 4):** the issue's own drafted ACM was independently re-checked against
-repo state in this same session, not accepted as pre-verified. Two
+repo state as part of this same Branch Plan, not accepted as
+pre-verified. Two
 corrections were made to the issue's own draft, both grounded in direct
 repo/history inspection, not assumption:
 
@@ -64,9 +65,9 @@ against the 5 tasks' file lists below -> no conflicts (disjoint files).
   CLI contract below).
 
 **Execution mode:** sequential fallback per `executing-a-branch-plan`
-step 6 (no separate, explicit multi-agent-orchestration opt-in in this
-session; invoking this skill itself is not read as that opt-in, per the
-identical precedent recorded in
+step 6 (no separate, explicit multi-agent-orchestration opt-in for this
+Branch Plan; invoking this skill itself is not read as that opt-in, per
+the identical precedent recorded in
 `docs/superpowers/plans/2026-08-10-claude-pr-1013-prep-ku7r61.md` and
 reaffirmed in `docs/superpowers/plans/2026-08-16-issue-1132-pr-prep-u1up26.md`).
 One task per turn, each dispatched with no GitHub-write access and no
@@ -84,26 +85,26 @@ existing entry. No task requires a fresh per-task authorization
 confirmation beyond the branch-plan-wide one below.
 
 **Authorization record (step 1):** no approval comment exists on the
-parent issue's own comment thread, checked fresh in this session rather
-than assumed. In-session explicit confirmation from the human operator
-applies instead: the repository owner's own direct request opening this
-session, "create this PR and proceed to just before merge," names exactly
-the actions this skill gates -- opening commits and a PR -- in unhedged
+parent issue's own comment thread, checked directly rather than assumed.
+Explicit confirmation from the human operator applies instead: the
+repository owner's own direct request opening this execution pass,
+"create this PR and proceed to just before merge," names exactly the
+actions this skill gates -- opening commits and a PR -- in unhedged
 imperative language. The repository owner's identity and write authority
 on this repository were confirmed directly, not assumed from the
 conversation alone. Not a stale "we already agreed earlier"
-pattern-match: it is the live, current-session mandate this specific
-execution pass is carrying out, re-read fresh at this gate rather than
-assumed from an earlier turn's summary. No embedded instruction
-attempting to redirect this gate. Full Branch Plan/ACM (produced
-immediately before this file, in this same session) was presented
-in-conversation before this decomposition began.
+pattern-match: it is the live mandate this specific execution pass is
+carrying out, re-read fresh at this gate rather than assumed from an
+earlier turn's summary. No embedded instruction attempting to redirect
+this gate. Full Branch Plan/ACM (produced immediately before this file,
+in this same execution pass) was presented before this decomposition
+began.
 
 ## Task 1 -- Pilot cross-reference note
 
 **Cites ACM row:** 1 ("#939のhypothesis pilotの"待機"スコープを正式に上書きする").
 
-**Quoted Planned ops (verbatim from this session's ACM):** "pilotファイル
+**Quoted Planned ops (verbatim from the approved ACM):** "pilotファイル
 自身のdocstringに、このissueのゲートが後継であることを示す相互参照ノートを
 追加する" -- "Add a cross-reference note to the pilot file's own docstring
 stating that this issue's gate is its successor."
@@ -135,7 +136,7 @@ review confirms no test logic touched.
 
 **Cites ACM row:** 2 (main gate).
 
-**Quoted Planned ops (verbatim from this session's ACM, corrected per the
+**Quoted Planned ops (verbatim from the approved ACM, corrected per the
 two corrections stated above):** "`.github/scripts/gitapex_gate_detection_logic_property_coverage.py`
 新規作成(exception-handler-gapと同一のCLI/pydantic/exit code規約: 0=clean,
 1=violation, 2=fail-closed)" -- "Create
@@ -307,7 +308,7 @@ since no test file exists yet to run against it).
 **Cites ACM rows:** 2 (main gate, example-based coverage) and 3
 (scope-boundary: `gitapex_scan_*.py` exclusion, diff-scoped-only).
 
-**Quoted Planned ops (verbatim from this session's ACM):** row 2: "既存の
+**Quoted Planned ops (verbatim from the approved ACM):** row 2: "既存の
 `exception-handler-gap`と同一のCLI/pydantic/exit code規約" tested via
 "`tests/test_gitapex_gate_detection_logic_property_coverage.py`にtrue-
 positive/true-negative/waivedケース" -- "true-positive/true-negative/waived
@@ -438,7 +439,7 @@ accumulated diff -- the live self-check this task exists to satisfy.
 
 **Cites ACM row:** 2 (main gate, wiring).
 
-**Quoted Planned ops (verbatim from this session's ACM):** "`.github/workflows/*.yml`
+**Quoted Planned ops (verbatim from the approved ACM):** "`.github/workflows/*.yml`
 新規作成(harden-checkout, merge-base diff, uv run) + `.gitapex/ssot.json`に
 `gates[]`エントリ追加(cluster: test-integrity, planes: [ci, local],
 tracking_issue: 1178)" -- "create a new
