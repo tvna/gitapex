@@ -63,17 +63,17 @@ against the 5 tasks' file lists below -> no conflicts (disjoint files).
   "workflow+registry entry" -- each depends only on Task 2's already-fixed
   CLI contract below).
 
-**Execution mode:** sequential main-thread fallback (Workflow tool not
-invoked -- no separate, explicit user opt-in for multi-agent orchestration
-in this session; invoking this skill itself is not read as that opt-in,
-per the identical precedent recorded in
+**Execution mode:** sequential fallback per `executing-a-branch-plan`
+step 6 (no separate, explicit multi-agent-orchestration opt-in in this
+session; invoking this skill itself is not read as that opt-in, per the
+identical precedent recorded in
 `docs/superpowers/plans/2026-08-10-claude-pr-1013-prep-ku7r61.md` and
 reaffirmed in `docs/superpowers/plans/2026-08-16-issue-1132-pr-prep-u1up26.md`).
-One task per turn, dispatched via the `Agent` tool with
-`subagent_type: "branch-plan-task"` (preserves the Decision-17 backstop --
-no `mcp__github__*` tools, Bash-safety hook -- even though the Workflow-tool
-path is not used), no worktree isolation (tasks run sequentially against
-the shared checkout directly, so no concurrent merge-back race exists to
+One task per turn, each dispatched with no GitHub-write access and no
+package-install capability (the Decision-17 backstop
+`references/threat-model-and-authorization.md` defines for task-level
+dispatch), no worktree isolation (tasks run sequentially against the
+shared checkout directly, so no concurrent merge-back race exists to
 isolate against).
 
 **Irreversibility classification:** no task is irreversible -- all five are
@@ -83,21 +83,21 @@ pure addition (one new `gates[]` entry), not a modification of any
 existing entry. No task requires a fresh per-task authorization
 confirmation beyond the branch-plan-wide one below.
 
-**Authorization record (step 1):** no approval comment exists on the parent
-issue (confirmed via `github:issue_read get_comments` -> `[]`, checked
-fresh in this session). In-session explicit confirmation from the human
-operator instead: the operator's own direct request opening this session,
-"こちらのPRを作りマージ直前まで進める" ("create this PR and proceed to
-just before merge"), naming exactly the actions this skill gates --
-opening commits and a PR -- in unhedged imperative language, from the
-verified session principal (GitHub `get_me` confirms `tvna`,
-`author_association: OWNER` on the parent repository). Not a stale
-"we already agreed earlier" pattern-match: it is the live, current-session
-mandate this specific execution pass is carrying out, re-read fresh at
-this gate rather than assumed from an earlier turn's summary. No embedded
-instruction attempting to redirect this gate. Full Branch Plan/ACM
-(produced immediately before this file, in this same session) was
-presented in-conversation before this decomposition began.
+**Authorization record (step 1):** no approval comment exists on the
+parent issue's own comment thread, checked fresh in this session rather
+than assumed. In-session explicit confirmation from the human operator
+applies instead: the repository owner's own direct request opening this
+session, "create this PR and proceed to just before merge," names exactly
+the actions this skill gates -- opening commits and a PR -- in unhedged
+imperative language. The repository owner's identity and write authority
+on this repository were confirmed directly, not assumed from the
+conversation alone. Not a stale "we already agreed earlier"
+pattern-match: it is the live, current-session mandate this specific
+execution pass is carrying out, re-read fresh at this gate rather than
+assumed from an earlier turn's summary. No embedded instruction
+attempting to redirect this gate. Full Branch Plan/ACM (produced
+immediately before this file, in this same session) was presented
+in-conversation before this decomposition began.
 
 ## Task 1 -- Pilot cross-reference note
 
