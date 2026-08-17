@@ -214,27 +214,32 @@ such taxonomy applies only `retrospective`, unchanged from before.
      arrays, e.g. `{"unresolved": [1109, 1093], "resolved": [1107]}`.
      - **If the script exits non-zero** (its own documented failure mode --
        a one-line cause on stderr, stdout stays empty): do not guess, and
-       do not silently treat every candidate as either resolved or
-       still-open either way. This includes the case where
-       `.gitapex/ssot.json` is missing or unreadable -- the expected shape
-       when this Portable skill is vendored into a repository that ships
-       the script (it travels inside the skill's own directory) but has no
-       such registry of its own, not only the case where gitapex's own
-       registry is somehow broken. Fall back to the weaker citation-only
-       check this step used to run in full: `mcp__github__search_commits`
-       (or `search_issues` scoped to merged PRs) for a citing commit,
-       treating any hit as resolved. Note in Step 5's carried-forward
-       entries that the stronger two-signal check could not run this cycle
-       and why, so a future session can retry it once the gap (a missing
-       registry, a broken local checkout, etc.) is fixed, instead of that
-       degraded mode going unnoticed.
+       never fall back to treating a citing commit alone as proof of
+       resolution -- that is precisely the weaker, one-signal check this
+       fix retires, and a candidate a degraded fallback marked resolved
+       would never reach Step 5 below to be seen again (only the script's
+       own `unresolved` array does), so a wrong "resolved" guess here
+       would vanish with no trace for any future cycle to catch. This
+       includes the case where `.gitapex/ssot.json` is missing or
+       unreadable -- the expected shape when this Portable skill is
+       vendored into a repository that ships the script (it travels
+       inside the skill's own directory) but has no such registry of its
+       own, not only the case where gitapex's own registry is somehow
+       broken. Instead, treat every issue number the previous bullet
+       found as still open for this cycle, same as if each one had come
+       back in the script's own `unresolved` array.
    - **Report, don't implement:** every issue number the script's
-     `unresolved` array names is still open; hand each one to Step 5 below
-     as a **"Carried-forward gate"** entry, kept in its own subsection
-     separate from this cycle's own Repairs (do not merge the two lists --
-     a carried-forward gate was not a repair in *this* cycle). Never post
-     it as a comment on the old issue, which would fragment visibility
-     instead of concentrating it.
+     `unresolved` array names -- or, on a script failure, every issue
+     number the first bullet found -- is still open; hand each one to
+     Step 5 below as a **"Carried-forward gate"** entry, kept in its own
+     subsection separate from this cycle's own Repairs (do not merge the
+     two lists -- a carried-forward gate was not a repair in *this*
+     cycle). On a script failure, add one line noting the two-signal
+     check could not run this cycle and why, so a future session retries
+     it once the gap (a missing registry, a broken local checkout, etc.)
+     is fixed, instead of the degraded state going unnoticed. Never post
+     any of this as a comment on the old issue, which would fragment
+     visibility instead of concentrating it.
 2. **Enumerate every repair** between PR open and merge. Use
    `mcp__github__pull_request_read` (`get_commits`, `get_reviews`,
    `get_review_comments`, `get_check_runs`) to reconstruct the history.
@@ -442,13 +447,16 @@ Three repairs occurred between PR open and merge.
 ## Carried-forward gate
 
 - Issue #31 ("Merge retrospective: PR #29") proposed a pre-commit hook
-  enforcing conventional-commit message format. Running
-  `gitapex_check_retro_gate_resolved.py` against #31 reports it in the
-  `unresolved` array -- no commit cites #31, and no `.gitapex/ssot.json`
-  gate is registered with `tracking_issue: 31` either -- so the gate is
-  still unimplemented one cycle later. Escalating visibility here rather
-  than letting it rot silently; implementing it remains separate
-  follow-on work, same as any gate proposed in this cycle's own Repairs
+  enforcing conventional-commit message format. A later commit's message
+  happened to mention "#31" in passing while fixing something unrelated,
+  but running `gitapex_check_retro_gate_resolved.py` against #31 still
+  reports it in the `unresolved` array: no `.gitapex/ssot.json` gate is
+  registered with `tracking_issue: 31`, so the bare citation alone does
+  not clear it -- exactly the false-positive shape the two-signal AND
+  rule exists to catch. The gate is still unimplemented one cycle later.
+  Escalating visibility here rather than letting it rot silently;
+  implementing it remains separate follow-on work, same as any gate
+  proposed in this cycle's own Repairs
   section above.
   Status: `carried-forward`
   Proposed gate: a pre-commit hook enforcing conventional-commit message
