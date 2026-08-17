@@ -83,8 +83,8 @@ pure addition (one new `gates[]` entry), not a modification of any
 existing entry. No task requires a fresh per-task authorization
 confirmation beyond the branch-plan-wide one below.
 
-**Authorization record (step 1):** no approval comment exists on issue
-#1178 (confirmed via `github:issue_read get_comments` -> `[]`, checked
+**Authorization record (step 1):** no approval comment exists on the parent
+issue (confirmed via `github:issue_read get_comments` -> `[]`, checked
 fresh in this session). In-session explicit confirmation from the human
 operator instead: the operator's own direct request opening this session,
 "こちらのPRを作りマージ直前まで進める" ("create this PR and proceed to
@@ -161,7 +161,7 @@ stable interface -- implement exactly this, do not redesign:**
 
 - **In-scope path regex** (mirror `_IN_SCOPE_RE`'s own `[^/]+` /
   `re.fullmatch` style exactly):
-  ```
+  ```python
   r"skills/[^/]+/scripts/gitapex_check_[^/]+\.py"
   r"|\.github/scripts/gitapex_gate_[^/]+\.py"
   r"|hooks/gitapex_check_[^/]+\.py"
@@ -175,8 +175,18 @@ stable interface -- implement exactly this, do not redesign:**
   construction -- no separate exclusion needed for it, but add one explicit
   test proving it (Task 3).
 
-- **Trigger call categories** (an AST `Call` node reached by an added diff
-  line, inside an in-scope file):
+- **Trigger call categories** (an AST `Call` node "reached by an added diff
+  line" means: the diff's added-line-number set intersects the call's own
+  full span, `node.lineno` through `node.end_lineno` inclusive -- not
+  `node.lineno` alone. Mirror `gitapex_gate_exception_handler_gaps.py`'s own
+  `_span()`/`_Candidate.trigger` design exactly: a multi-line call whose
+  opening line (`SOME_RE.fullmatch(`) is untouched but whose argument on a
+  later line was added or changed must still be graded, the same way that
+  file's own reformatting-one-argument case is. Checking `node.lineno` only
+  would miss this -- confirmed live: `ast.parse("def f():\n    SOME_RE.fullmatch(\n        x,\n    )\n").body[0]`'s
+  own `Call` node has `lineno=2, end_lineno=4`, so an added line 4 (`x,`)
+  falls inside the call's span but not on its opening line. Task 3 adds a
+  regression for exactly this shape.):
   1. **Regex.** EITHER an attribute call `re.compile(...)` / `re.match(...)`
      / `re.search(...)` / `re.fullmatch(...)` (receiver is `Name(id="re")`)
      OR a receiver-agnostic bound-method call `.match(...)` / `.search(...)`
@@ -379,12 +389,30 @@ this repo's one existing hypothesis-pilot precedent for structure
 plainly whether it does or does not detect a specific motivating defect).
 
 **Steps:**
-1. Pick at least one real function from Task 2's own implementation per
-   trigger category (e.g. the in-scope-path matcher, the trigger-call
-   classifier, the waiver-line detector) as the property target(s) -- not
-   every function, matching the pilot's own "one motivating defect per
-   property, not exhaustive coverage" scope discipline.
-2. Write at least one `@given`-decorated property test per chosen function,
+1. **Coverage must match Task 2's own existing-coverage contract exactly,
+   not a representative sample of it.** Task 2's design requires a
+   `@given`-decorated test, in this properties file, whose own body
+   references each trigger-bearing function's own name (or, for a bare
+   `<module>`-level trigger, any `@given` test at all) -- see Task 2's
+   Design section, "Existing-coverage check." Once Task 2's implementation
+   exists, enumerate every function in
+   `.github/scripts/gitapex_gate_detection_logic_property_coverage.py`
+   that itself contains a trigger-category call (the in-scope-path
+   matcher, the regex/path/string-comparison trigger classifiers, the
+   scope/function-attribution walker, the existing-coverage checker, the
+   waiver-line detector -- whichever of these, concretely, Task 2 actually
+   implemented as separate functions containing a `.match(`/`.search(`/
+   `.resolve(`/`.startswith(`/membership-`in`-style call of its own) and
+   write one property per function on that real list -- not a
+   fixed-in-advance subset of "one per category." This task's own
+   properties file is simultaneously real test coverage AND the exact
+   fixture Task 2's own gate, once wired into CI (Task 5), checks against
+   itself -- an incomplete list here means the gate fails against its own
+   PR the first time its workflow runs. The pilot's own "one motivating
+   defect per property, not exhaustive input-space coverage" discipline
+   governs how thorough each individual property's own generator is, not
+   which functions get a property at all.
+2. Write one `@given`-decorated property test per enumerated function,
    each applying the same `settings(derandomize=True, max_examples=<N>,
    deadline=None)` convention as the pilot (module-scoped `settings`
    object, not a global profile -- matching the pilot's own stated reason:
@@ -475,9 +503,17 @@ new gate's own name/id/paths require, changing nothing structural.
 
 **Proof method:** `gitapex_scan_ssot_schema.py`'s own gate (CLI or pytest
 wrapper) passes clean against the edited `.gitapex/ssot.json`; the new
-workflow YAML parses (a quick `yaml.safe_load` sanity check is sufficient
-here -- `scanning-ci-workflows`'s actionlint/zizmor pass happens later, at
-PR-review time, not inside this task).
+workflow YAML parses (`yaml.safe_load` sanity check) AND passes the
+`scanning-ci-workflows` skill's own actionlint (schema/expression/embedded-
+shell validity) and zizmor (template injection, permissions, unpinned
+`uses:`, dangerous triggers) pass -- run inside this task, not deferred,
+since both are static checks that need only the file to exist, not a live
+CI run. Once this task's commit is pushed (main-thread step 6), the
+main thread additionally confirms via `pull_request_read get_check_runs`
+that the new workflow's own job actually fired and reported on this PR's
+real `pull_request` event -- a live-execution confirmation, not only a
+static-analysis one, closing the gap a syntax-only check leaves (a
+schema-valid workflow can still never fire, e.g. a typo'd `on:` key).
 
 ## Post-task gate (Decision 12, mandatory)
 
