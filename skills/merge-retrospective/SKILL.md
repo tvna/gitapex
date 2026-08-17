@@ -184,7 +184,7 @@ such taxonomy applies only `retrospective`, unchanged from before.
      `mcp__github__search_issues`, whose own tool description states it
      performs natural-language semantic matching, not an exact filter, and
      is itself a source of cross-session divergence upstream of the
-     citation-check weakness below (issue #1176). Omit the `state` filter
+     citation-check weakness below. Omit the `state` filter
      -- `list_issues` returns both open and closed issues by default when
      it is not passed. Closing an issue is not proof its proposed gate was
      implemented (a retrospective can be closed as stale, deduplicated, or
@@ -197,29 +197,37 @@ such taxonomy applies only `retrospective`, unchanged from before.
      title convention, if it has one), also unfiltered by state -- the one
      remaining legitimate use of `search_issues` in this step, since there
      is no label to list by for a pre-label issue.
-   - **For each hit, check whether its proposed gate was implemented:** run
-     `python3 scripts/gitapex_check_retro_gate_resolved.py <N1> <N2> ...`
+   - **For each hit, check whether its proposed gate was implemented:** Run
+     `gitapex_check_retro_gate_resolved.py` -- from the repository root:
+     `python3 skills/merge-retrospective/scripts/gitapex_check_retro_gate_resolved.py N1 N2 N3 ...`
      -- one batched invocation over every issue number the previous bullet
      found, never one invocation per issue. This reuses the same
      two-signal check
      `.github/scripts/gitapex_scan_retrospective_gate_drift.py` already
-     implements for CI (issue #297, hardened by issue #709) instead of a
-     citation-only approximation: an issue number counts as resolved only
-     when *both* a commit reachable from `HEAD` cites it (any of
-     `Refs #N`, `Closes #N`, `Fixes #N`, or a bare `#N`) **and** a
-     `.gitapex/ssot.json` `gates[].tracking_issue` entry matches it -- a
-     citing commit alone is not proof the proposed gate was actually built
-     (issue #709). The script prints one JSON object to stdout
-     partitioning every input issue number into exactly one of two arrays,
-     e.g. `{"unresolved": [1109, 1093], "resolved": [1107]}`. (Where the
-     calling repository is not gitapex itself and carries neither this
-     bundled script nor an equivalent `tracking_issue`-bearing gate
-     registry, this step has only the weaker citation signal to fall back
-     to: `mcp__github__search_commits`, or `search_issues` scoped to
-     merged PRs, for a citing commit -- the same portability limit already
-     applies as the no-citation-convention case above, and this step
-     cannot tell "no gate registry exists here" apart from "the registry
-     says this was never built".)
+     implements for CI instead of a citation-only approximation: an issue
+     number counts as resolved only when *both* a commit reachable from
+     `HEAD` cites it (any of `Refs #N`, `Closes #N`, `Fixes #N`, or a bare
+     `#N`) **and** a `.gitapex/ssot.json` `gates[].tracking_issue` entry
+     matches it -- a citing commit alone is not proof the proposed gate
+     was actually built. The script prints one JSON object to stdout
+     partitioning every input issue number into exactly one of two
+     arrays, e.g. `{"unresolved": [1109, 1093], "resolved": [1107]}`.
+     - **If the script exits non-zero** (its own documented failure mode --
+       a one-line cause on stderr, stdout stays empty): do not guess, and
+       do not silently treat every candidate as either resolved or
+       still-open either way. This includes the case where
+       `.gitapex/ssot.json` is missing or unreadable -- the expected shape
+       when this Portable skill is vendored into a repository that ships
+       the script (it travels inside the skill's own directory) but has no
+       such registry of its own, not only the case where gitapex's own
+       registry is somehow broken. Fall back to the weaker citation-only
+       check this step used to run in full: `mcp__github__search_commits`
+       (or `search_issues` scoped to merged PRs) for a citing commit,
+       treating any hit as resolved. Note in Step 5's carried-forward
+       entries that the stronger two-signal check could not run this cycle
+       and why, so a future session can retry it once the gap (a missing
+       registry, a broken local checkout, etc.) is fixed, instead of that
+       degraded mode going unnoticed.
    - **Report, don't implement:** every issue number the script's
      `unresolved` array names is still open; hand each one to Step 5 below
      as a **"Carried-forward gate"** entry, kept in its own subsection
@@ -434,11 +442,14 @@ Three repairs occurred between PR open and merge.
 ## Carried-forward gate
 
 - Issue #31 ("Merge retrospective: PR #29") proposed a pre-commit hook
-  enforcing conventional-commit message format, but no merged PR or
-  commit citing #31 exists yet -- the gate is still unimplemented one
-  cycle later. Escalating visibility here rather than letting it rot
-  silently; implementing it remains separate follow-on work, same as any
-  gate proposed in this cycle's own Repairs section above.
+  enforcing conventional-commit message format. Running
+  `gitapex_check_retro_gate_resolved.py` against #31 reports it in the
+  `unresolved` array -- no commit cites #31, and no `.gitapex/ssot.json`
+  gate is registered with `tracking_issue: 31` either -- so the gate is
+  still unimplemented one cycle later. Escalating visibility here rather
+  than letting it rot silently; implementing it remains separate
+  follow-on work, same as any gate proposed in this cycle's own Repairs
+  section above.
   Status: `carried-forward`
   Proposed gate: a pre-commit hook enforcing conventional-commit message
   format.

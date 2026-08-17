@@ -118,6 +118,17 @@ def test_partition_every_input_number_appears_in_exactly_one_output_array():
     assert unresolved == [2, 3, 4]
 
 
+def test_partition_repeated_issue_number_lands_in_resolved_every_time():
+    # Defeat test for a "consume the matched tracking_issues entry" mutation
+    # bug: a stateful implementation that discards a number from a local
+    # copy of tracking_issues once matched would wrongly flip the second
+    # occurrence of a repeated issue number to unresolved. Every occurrence
+    # must independently land in resolved.
+    resolved, unresolved = checker.partition_by_resolution([650, 650, 650], ["Refs #650"], {650})
+    assert resolved == [650, 650, 650]
+    assert unresolved == []
+
+
 def test_partition_preserves_input_order_within_each_bucket():
     messages = ["Refs #3", "Refs #1"]
     tracking_issues = {3, 1}
