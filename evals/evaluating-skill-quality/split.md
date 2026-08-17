@@ -4367,9 +4367,11 @@ introduced here.
 
 ### Verdict
 
-**KEEP.** Selection mean strictly improved (0.500000 -> 1.000000) on the
-one gated, purpose-built fixture, satisfying the ordinary class's strict
-improve-or-reject rule; the 33 pre-existing selection fixtures are
+**KEEP.** Selection mean strictly improved (0.777778 -> 1.000000, after
+the post-review assertion strengthening below moved the original
+0.500000 baseline) on the one gated, purpose-built fixture, satisfying
+the ordinary class's strict improve-or-reject rule; the 33 pre-existing
+selection fixtures are
 confirmed unaffected by direct inspection rather than re-scored, per the
 disclosed methodology above. Full structured run record, per-fixture
 scores, and every artifact transcript:

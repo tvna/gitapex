@@ -1143,8 +1143,10 @@ Went through `scorer-gated-skill-edits`' own held-out gate, ordinary class
 from a same-PR wording correction): 2 new fixtures added to `split.md`'s
 split (80 total, 31:34:14). One fresh isolated `claude -p` dispatch pair
 against the new selection fixture
-(`description-conciseness-trigger-selection.yaml`) moved **0.500000 ->
-1.000000**; the 33 pre-existing selection fixtures were confirmed
+(`description-conciseness-trigger-selection.yaml`) moved **0.777778 ->
+1.000000** (originally 0.500000 -> 1.000000; a post-review assertion
+strengthening, see below, raised the before-score without changing the
+verdict); the 33 pre-existing selection fixtures were confirmed
 content-disjoint from the edit by direct inspection (a pure insertion with
 no shared vocabulary in any pre-existing fixture's own `expected` block)
 rather than re-dispatched. **KEEP**. Both the pre- and post-edit dispatches
