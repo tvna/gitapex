@@ -109,18 +109,26 @@ automatically.
    the *newly added or version-bumped dependency's own* manifest, not
    only this repository's manifest diff -- a malicious `postinstall`
    payload lives in the dependency's package, not in the incoming diff,
-   and must be checked via the registry/package metadata (e.g.
-   `npm view <pkg> scripts`) whenever that lookup is available. "Not
-   available" means a session/tool limitation (no registry access in
-   this environment, the lookup command itself is missing) -- never a
+   and must be checked via the registry/package metadata for the exact
+   version pinned in the diff --
+   `npm view <pkg>@<resolved-version> scripts`, not an unqualified
+   `npm view <pkg> scripts` (which silently resolves to the registry's
+   `latest` tag instead, possibly a different version than the one
+   pinned) -- whenever that lookup is available. "Not available"
+   means a session/tool limitation (no registry access in this
+   environment, the lookup command itself is missing) -- never a
    judgment call about the package's apparent risk, which the no-skip
    rule below already forecloses. When the lookup is not available on
    that basis, report the verdict as based on an unverified summary, not
    a clean screen, and name exactly which dependency or dependencies
    could not be checked (mirrors check 1's own fetch-unavailable
-   fallback above). This sub-check applies only when a dependency entry
-   is new or its version changed in the diff -- a diff touching no
-   dependency manifest never triggers it.
+   fallback above). This registry-lookup sub-check -- not the
+   install-time-script check above, which still fires on a new or
+   changed script in this repository's own manifest diff regardless of
+   whether any dependency entry itself is new or version-bumped --
+   applies only when a dependency entry is new or its version changed in
+   the diff; a diff touching no dependency manifest never triggers this
+   narrower sub-check.
    Within that scope, do not skip the lookup for an apparently low-risk
    change (a patch bump, a well-known package name): a judgment-based
    exemption is itself the kind of shortcut a supply-chain attacker would
