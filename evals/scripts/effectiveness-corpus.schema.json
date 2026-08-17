@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/tvna/gitapex/blob/main/evals/scripts/effectiveness-corpus.schema.json",
+  "title": "gitapex effectiveness-corpus.json (issue #1143)",
+  "description": "Schema for effectiveness-corpus.json: the held-out corpus naming which skills participate in a future effectiveness study (issue #1137 sub-task 3, contingent on this issue's own result), which real files supply each skill's independently-measured quality outcome, and which held-out split (selection/test, see effectiveness-corpus-methodology.md) each belongs to. This file pins shape only, the same split this repository's other schemas already draw between shape (here) and procedure (effectiveness-corpus-methodology.md, the same way eval-run.schema.json defers to scorer-gated-skill-edits/SKILL.md's own Procedure step 7 for what a run record must capture).",
+  "type": "object",
+  "required": ["methodology_doc", "entries"],
+  "additionalProperties": false,
+  "properties": {
+    "methodology_doc": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Repository-relative path to the methodology document this corpus is governed by."
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "description": "One entry per skill in the corpus, sorted by skill name for a stable diff across edits (the same convention eval-scores.schema.json's own scores[] states for fixture_id).",
+      "items": { "$ref": "#/$defs/entry" }
+    }
+  },
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "required": ["skill", "skill_md", "eval_yaml", "split"],
+      "additionalProperties": false,
+      "properties": {
+        "skill": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "description": "The skill's directory name under skills/, matching its evals/<skill>/ directory name 1:1 (verified repository convention: gitapex_detect_touched_eval_skills.py's own docstring, confirmed empirically against this repository's current skills/ and evals/ listings)."
+        },
+        "skill_md": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Repository-relative path to this skill's SKILL.md."
+        },
+        "eval_yaml": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Repository-relative path to this skill's own evals/<skill>/eval.yaml, the suite gitapex_run_eval_suite.py runs to obtain this entry's real quality-outcome label."
+        },
+        "split": {
+          "enum": ["selection", "test"],
+          "description": "Which held-out split this skill belongs to (see effectiveness-corpus-methodology.md's own 'Held-out split' section for the deterministic assignment rule). Only these two values -- no train split, since this corpus does not gate an edit the way scorer-gated-skill-edits' own three-way split does."
+        },
+        "known_prior_result": {
+          "$ref": "#/$defs/knownPriorResult"
+        }
+      }
+    },
+    "knownPriorResult": {
+      "type": "object",
+      "required": ["source_file", "mean_score", "n_fixtures", "date", "caveat"],
+      "additionalProperties": false,
+      "description": "Optional. A real, already-committed eval-scores.schema.json-conformant result file for this skill's own suite, cited for provenance and cross-reference only -- gitapex_run_effectiveness_correlation.py always computes its own fresh y value (see methodology doc's 'End-to-end wiring' section) rather than reading this field as input, so a stale citation here can never silently skew a live correlation run.",
+      "properties": {
+        "source_file": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Repository-relative path to the cited eval-scores.schema.json-conformant file."
+        },
+        "mean_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "That file's own mean_score, copied verbatim for a reader who will not open it."
+        },
+        "n_fixtures": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "That file's own n_fixtures, copied verbatim."
+        },
+        "date": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "The run's own real calendar date, as recorded in its results/<date>-issue-<N>-<label>/ directory name."
+        },
+        "caveat": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Any disclosed scope limit on treating this citation as representative (e.g. a partial-subset gate-check run, not the skill's full committed corpus). Required, non-empty -- a citation with nothing to disclose still states that explicitly rather than omitting the field."
+        }
+      }
+    }
+  }
+}
