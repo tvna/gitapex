@@ -1139,7 +1139,8 @@ the trigger stays subject to dimension 1's adequacy/specificity floor and
 dimension 2's own ordinary judgment regardless.
 
 Went through `scorer-gated-skill-edits`' own held-out gate, ordinary class
-(pure 19-line insertion, no deletion): 2 new fixtures added to `split.md`'s
+(pure 22-line insertion as landed, no deletion -- 19 lines at gate time, +3
+from a same-PR wording correction): 2 new fixtures added to `split.md`'s
 split (80 total, 31:34:14). One fresh isolated `claude -p` dispatch pair
 against the new selection fixture
 (`description-conciseness-trigger-selection.yaml`) moved **0.500000 ->

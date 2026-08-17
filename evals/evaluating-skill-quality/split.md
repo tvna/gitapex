@@ -4228,8 +4228,10 @@ sync 22/22 passed, ruff/mypy clean.
 ## Iteration: issue #1142, Dimension 2 Description-length trigger
 
 Candidate edit, ordinary class (pure insertion, no deletion or reword of
-existing text -- confirmed via `git diff --stat`: 19 insertions, 0
-deletions in `references/rubric.md`, so pruning-only's eligibility rule
+existing text -- confirmed via `git diff --stat`: 22 insertions, 0
+deletions in `references/rubric.md` as landed (19 at this gate's own
+before/after dispatch time; +3 from a same-PR wording correction below,
+which added no deletion of its own either), so pruning-only's eligibility rule
 does not apply): `references/rubric.md`'s `## 2. Conciseness` section
 gains one new bullet, **Description-length trigger**, naming the
 frontmatter `description` field explicitly in scope for Dimension 2's
@@ -4347,7 +4349,8 @@ trigger bullet by name.
 
 **Pre-existing selection fixtures: confirmed content-disjoint by direct
 inspection, not re-dispatched.** `git diff --stat` on `references/rubric.md`
-shows a pure 19-line insertion with zero deletions; `grep -l
+shows a pure 22-line insertion with zero deletions (19 at this gate's own
+dispatch time, +3 from the wording correction below); `grep -l
 "Description-length trigger\|DESCRIPTION_MAX_CHARS"` across every file
 under `evals/evaluating-skill-quality/tasks/` other than this iteration's
 own two new fixtures returns no matches, so no pre-existing selection

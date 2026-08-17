@@ -18,7 +18,7 @@
   "iterations": [
     {
       "label": "description-conciseness-trigger-selection",
-      "rubric_change": "Added the Description-length trigger bullet to references/rubric.md's ## 2. Conciseness section (pure 19-line insertion, no deletion or reword of existing text) -- did not exist before this PR at all.",
+      "rubric_change": "Added the Description-length trigger bullet to references/rubric.md's ## 2. Conciseness section (pure 22-line insertion as landed, no deletion or reword of existing text -- 19 lines at this gate's own before/after dispatch time, +3 from a same-PR pre-merge wording correction, see split.md) -- did not exist before this PR at all.",
       "before_commit": "eab6722d87e6a19cf5fbd8d5479940cbd8069d6d",
       "after_commit": "uncommitted-working-tree",
       "fixture_id": "evaluating-skill-quality-description-conciseness-trigger-selection",
