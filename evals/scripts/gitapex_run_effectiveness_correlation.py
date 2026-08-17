@@ -92,12 +92,6 @@ X_METRIC_CAVEAT = (
     "not-yet-built scope. Do not read this run's correlation as a measurement of that question."
 )
 
-# What run_eval_suite's own main() already treats as "this suite's own
-# failure," not a bug in the caller -- see module docstring's "Per-entry
-# failure handling" section for why the same set is reused here rather
-# than a bare `except Exception`.
-_PER_ENTRY_FAILURE_TYPES = (ValueError, RuntimeError, OSError, subprocess.TimeoutExpired)
-
 
 def _dry_run_executor(argv: Sequence[str], timeout: int) -> str:
     """A fixed, clearly-labeled stand-in for a live model call. Never
@@ -172,9 +166,20 @@ def compute_pairs(
     """For each entry, resolve its real repo-relative paths and compute a
     fresh ``(x, y)`` pair (see module docstring for what each measures).
     Returns ``(pairs, skipped)`` -- an entry whose own suite run fails
-    (see ``_PER_ENTRY_FAILURE_TYPES``) lands in ``skipped`` with its
-    reason, never silently dropped and never aborting the remaining
-    entries.
+    (``ValueError``, ``RuntimeError``, ``OSError``, or
+    ``subprocess.TimeoutExpired`` -- see module docstring's "Per-entry
+    failure handling" section) lands in ``skipped`` with its reason, never
+    silently dropped and never aborting the remaining entries.
+
+    The four types are named directly in the ``except`` clause below,
+    not read from a shared module-level tuple: this repository's own
+    ``gitapex_gate_exception_handler_gaps.py`` CI gate statically matches an
+    ``except`` clause's own type names against a fixed table (covering
+    ``read_text``'s ``UnicodeDecodeError``) and, by its own documented
+    design, does not expand a named constant to see what it resolves to --
+    an indirect ``except _SOME_TUPLE:`` would read as uncovered even though
+    ``ValueError`` (``UnicodeDecodeError``'s own ancestor) is genuinely
+    among the caught types.
     """
     pairs: list[CorpusEntryResult] = []
     skipped: list[SkippedEntry] = []
@@ -192,7 +197,7 @@ def compute_pairs(
                 executor=executor,
                 model_cli=model_cli,
             )
-        except _PER_ENTRY_FAILURE_TYPES as exc:
+        except (ValueError, RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
             skipped.append(SkippedEntry(skill=skill, reason=str(exc)))
             continue
         pairs.append(CorpusEntryResult(skill=skill, x=float(body_line_count), y=suite_result.mean_score))
