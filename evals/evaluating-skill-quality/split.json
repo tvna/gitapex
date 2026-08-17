@@ -31,7 +31,8 @@
       "multi-turn-settled-dimension-relaxation-train.yaml",
       "shared-bundled-script-undeclared-reach-train.yaml",
       "dependency-policy-stdlib-only-pass-train.yaml",
-      "dependency-policy-declared-pass-train.yaml"
+      "dependency-policy-declared-pass-train.yaml",
+      "description-conciseness-trigger-train.yaml"
     ],
     "selection": [
       "edge.yaml",
@@ -66,7 +67,8 @@
       "duplication-repeated-restatement-selection.yaml",
       "shared-bundled-script-boundary-fit-selection.yaml",
       "dependency-policy-stdlib-only-fail-selection.yaml",
-      "dependency-policy-declared-fail-selection.yaml"
+      "dependency-policy-declared-fail-selection.yaml",
+      "description-conciseness-trigger-selection.yaml"
     ],
     "test": [
       "guardrail.yaml",
@@ -85,7 +87,7 @@
       "dependency-policy-undeclared-real-import-fail-test.yaml"
     ]
   },
-  "partition": "30:33:14",
+  "partition": "31:34:14",
   "split_arithmetic_exclusions": [
     "dispatch-required-negative-control.yaml"
   ]

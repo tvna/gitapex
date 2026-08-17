@@ -1,0 +1,68 @@
+{
+  "date": "2026-08-17",
+  "issue": "https://github.com/tvna/gitapex/issues/1142",
+  "commit": "eab6722d87e6a19cf5fbd8d5479940cbd8069d6d",
+  "record_contract": "gate-run",
+  "runner": {
+    "name": "waza",
+    "version": "0.38.0"
+  },
+  "fixture_set": "2 new fixtures under evals/evaluating-skill-quality/tasks/: description-conciseness-trigger-train.yaml (train, motivates -- relevance/well-known-concept-explanation bloat flavor), description-conciseness-trigger-selection.yaml (selection, gates -- a distinct domain and a distinct bloat flavor, duplication). The selection fixture was formally gated (before/after, strict improve-or-reject); the train fixture was run once (after-edit only) as informational evidence, per the skill's own train-motivates rule -- it is not part of the gate verdict.",
+  "trials_per_fixture": 1,
+  "models": {
+    "default": "claude-sonnet-5"
+  },
+  "dispatch_mechanism": "Isolated `claude -p` subprocess (CLI 2.1.233 (Claude Code)), reading each prompt from stdin, run from a scratch working directory outside any repository's CLAUDE.md/AGENTS.md ancestry, with an isolated $HOME. Per skills/evaluating-skill-quality/references/adversarial-self-audit.md's Isolation verification section: this run's platform (CLAUDE_CODE_REMOTE=true, CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=cloud_default) and CLI version (2.1.233) exactly match the existing 'Plain claude -p (no permission-bypass flag) with cwd isolation only' Same-run registry entry (added by the 2026-08-15 issue #1124 run), but the two-control Verification procedure was independently re-run fresh here rather than trusted on a matching version string alone: positive control (isolated cwd containing a synthetic-nonce CLAUDE.md, isolated $HOME, no --dangerously-skip-permissions) correctly quoted the nonce phrase verbatim; negative control (isolated cwd with no CLAUDE.md/AGENTS.md anywhere in its ancestry, isolated $HOME) correctly reported NONE_LOADED. No --dangerously-skip-permissions or other permission-mode flag was used or needed: every dispatch's prompt is fully self-contained (the relevant references/rubric.md excerpt -- '## The mental model' plus the full '## 2. Conciseness' section, before- or after-edit as appropriate -- plus the fixture's own scenario, embedded directly in the prompt text) rather than relying on Skill auto-discovery, since this isolated cwd has no access to this repository's own skills/ directory by design and no plugin/marketplace registration was set up for it -- the same disclosed workaround this skill's split.md Kept-edit log has used since its earliest iterations.",
+  "scorer": "skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py, scoring each fixture's own output_contains/output_not_contains assertions deterministically; the selection-split gate verdict below was produced by that same script's --compare-to mode (`gitapex_score_contract.py --compare-to 0.777778`, score 1.000000 -> `1.000000 KEEP`). Assertions strengthened post-review (CodeRabbit, PR #1174): both fixtures gained a positive real-classification marker (`uplication` for the duplication-flavored selection fixture, `well-known` for the relevance-flavored train fixture) plus four `output_not_contains` guards against an auto-fail misapplication (`automatically fail`, `fails automatically`, `fails simply`, `fails solely`) -- re-scored against the same already-captured transcripts, no fresh dispatch needed.",
+  "run_shape": "before/after (pre-edit rubric.md vs. this PR's edited-but-uncommitted working tree) for the one gated selection fixture, plus one informational after-only dispatch (train) -- deviates from this directory's README schema, which is written for a fixed-rubric/multi-model run; the deviation is intentional and disclosed here, matching the 2026-07-29-issue-537-confidentiality-gates and 2026-08-15-issue-1124-dependency-policy records' own precedent in this same directory. `score_files[]` points at a standard eval-scores.schema.json-shaped summary of both fixtures' AFTER-edit scores only (the record's forward-looking, current state); `nonstandard_score_files[]` carries the richer before/after detail the `gate` verdict below was actually computed from.",
+  "iterations": [
+    {
+      "label": "description-conciseness-trigger-selection",
+      "rubric_change": "Added the Description-length trigger bullet to references/rubric.md's ## 2. Conciseness section (pure 22-line insertion as landed, no deletion or reword of existing text -- 19 lines at this gate's own before/after dispatch time, +3 from a same-PR pre-merge wording correction, see split.md) -- did not exist before this PR at all.",
+      "before_commit": "eab6722d87e6a19cf5fbd8d5479940cbd8069d6d",
+      "after_commit": "uncommitted-working-tree",
+      "fixture_id": "evaluating-skill-quality-description-conciseness-trigger-selection",
+      "before_score": 0.777778,
+      "after_score": 1.0
+    }
+  ],
+  "score_files": [
+    {
+      "model_id": "claude-sonnet-5",
+      "file": "claude-sonnet-5-after.json"
+    }
+  ],
+  "gate": {
+    "verdict": "KEEP",
+    "candidate_class": "ordinary",
+    "split": "selection",
+    "prior_mean": "0.777778",
+    "candidate_mean": "1.000000"
+  },
+  "artifacts": [
+    "claude-sonnet-5-after.json",
+    "claude-sonnet-5-before-after-detail.json",
+    "artifacts/description-conciseness-trigger-selection-before.md",
+    "artifacts/description-conciseness-trigger-selection-after.md",
+    "artifacts/description-conciseness-trigger-train-after.md"
+  ],
+  "nonstandard_score_files": [
+    {
+      "file": "claude-sonnet-5-before-after-detail.json",
+      "deviation": "Scored by skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py, the same scorer a standard record uses, but before/after per-iteration (condition, before_commit/after_commit) rather than eval-scores.schema.json's flat one-score-per-fixture_id shape -- the same before/after run_shape and the same declared deviation as the 2026-07-29 and 2026-08-15 records in this same directory. This is the file the gate[] verdict above was actually computed from; claude-sonnet-5-after.json (score_files[]) is a same-run, standard-shape derivative summarizing only the AFTER-edit scores of both fixtures (including the informational train fixture, which the gate itself never used)."
+    }
+  ],
+  "known_gaps": [
+    "runner is waza 0.38.0 because that is the eval runner Procedure step 1 confirmed (`waza --version` reported it) -- it is NOT the tool that actually produced any score below. eval.yaml's declared `executor: copilot-sdk` requires GitHub Copilot CLI authentication, and `waza models` failed with `not authenticated -- run \"copilot login\" first`, confirmed live -- the same disclosed constraint the issue #1014 and issue #1124 entries in split.md already recorded. Provisioning Copilot credentials solely to satisfy this gate was judged outside this task's authorization and not pursued. Every score in this record was instead produced by the `claude -p` subprocess dispatch mechanism this same skill's split.md Kept-edit log has used as its established fallback since its earliest iterations, and by gitapex_score_contract.py -- both named precisely under dispatch_mechanism/scorer above.",
+    "top-level commit (eab6722d87e6a19cf5fbd8d5479940cbd8069d6d) is the BEFORE state only -- eval-run.schema.json's commit field requires a single resolvable hex object name and rejects null, but this run is genuinely a before/after pair with an uncommitted working tree on the after side, so no single commit can honestly represent both states. The real per-iteration split is kept verbatim in iterations[]'s before_commit/after_commit fields and in claude-sonnet-5-before-after-detail.json's own per-score commit field -- after_commit is the literal string 'uncommitted-working-tree' since this PR is intentionally left uncommitted for the orchestrating session to commit; the winning (KEEP) candidate_mean above was measured against that uncommitted state, not against the top-level commit alone.",
+    "models.default (\"claude-sonnet-5\") is a self-report was not independently re-derived this run: --model was not explicitly pinned on any of the three claude -p subprocess calls that produced the scores below, consistent with the identical disclosed limit this directory's 2026-07-30, 2026-07-29, and 2026-08-15 records already carry for the same situation -- this is evidence about which model ran (the session's own configured model), not independently verified runtime metadata.",
+    "trials_per_fixture=1 for both fixtures -- no repeat-run variance data; a single sample generalizing correctly is not proof a weaker tier or a different sample would, the same disclosed limit every prior iteration in this file's own split.md log carries.",
+    "substring-scorer only -- confirms each fixture's expected tokens appear or don't, not a full manual reading of the transcript's reasoning quality beyond what each transcript's own artifact file shows. In this run's specific case, both the before and after transcripts independently reached the correct Fail verdict through the pre-existing generic pruning classification; the substring score measures only whether the new rubric text's own citable vocabulary (`Description-length trigger`, `DESCRIPTION_MAX_CHARS`) was used to ground that verdict, not whether the surface conclusion changed -- disclosed in split.md's own Gate result narrative for this iteration, not hidden behind the 0.5 -> 1.0 delta alone.",
+    "the 33 pre-existing selection fixtures (unaffected by this change) were not re-dispatched; this edit's own touched section (## 2. Conciseness, one new bullet) is a pure insertion confirmed via `git diff --stat` (19 insertions, 0 deletions) and confirmed via grep to share no vocabulary with any pre-existing fixture's own `expected` assertions, so no pre-existing fixture's own asserted content is textually touched by this diff -- confirmed by direct inspection, not re-run live, consistent with this repository's own established precedent (gitapex#406, gitapex#495, gitapex#537, gitapex#1124) for edits confirmed not to touch what those fixtures assert on.",
+    "no weaker-tier (e.g. Haiku) or repeated-trial run has been done; issue #500 Phase 2 (not yet scheduled) remains the honest next step to actually detect what a single strong-tier trial could not, per this same disclosed pattern used repeatedly elsewhere in this file's own split.md log.",
+    "transfer check (SKILL.md Procedure step 6: re-run the accepted skill unchanged on an adjacent model/harness/task) was not run this iteration -- the same pre-existing, still-open gap named across nearly every entry in evals/evaluating-skill-quality/split.md's own Kept-edit log, not newly introduced here.",
+    "no dedicated restraint fixture exists for a legitimately dense, non-redundant near-cap description (one that should NOT be flagged despite crossing the 90% trigger); both new fixtures test the Fail direction only. Left as a disclosed, open gap for a future addition, named in split.md's own Blind spot pass for this iteration -- CodeRabbit's review of PR #1174 raised the identical gap and it remains open by the same disclosed reasoning, not silently dropped.",
+    "the strengthened output_not_contains auto-fail-misapplication guards (`automatically fail`, `fails automatically`, `fails simply`, `fails solely`) are a heuristic denylist over natural-language phrasing, not an exhaustive one; a differently-worded auto-fail misapplication could still slip past a purely substring-based scorer. The positive `uplication`/`well-known` markers narrow this further by requiring evidence of real per-fixture classification, but neither replaces a human or LLM-judge read of the full transcript."
+  ],
+  "headline_pattern": "The one gated selection fixture showed a genuine strict improvement (selection mean 0.777778 -> 1.000000, KEEP): the Description-length trigger bullet did not exist before this PR at all, so a pre-edit dispatch applying only the pre-existing generic relevance/duplication/sediment/sprawl classification could still reach the correct surface verdict (Fail, citing duplication and sprawl) through generic paragraph-cost reasoning already present in the old text, but could not ground that verdict in the new rubric's own explicit, citable bullet name or its DESCRIPTION_MAX_CHARS identifier -- exactly the axis-did-not-exist-yet pattern this skill's own confidentiality-awareness (2026-07-29) and dependency-policy (2026-08-15) records in this same directory already established as the shape a genuine, non-tied improvement takes for a new rubric bullet. The one informational (non-gating) after-only dispatch against the train fixture independently walked all three description sentences and correctly isolated the well-known-concept-explanation sentence as the sole Fail, citing both the pre-existing mental-model/Fail-bullet language and the new Description-length trigger bullet together, providing corroborating (not gating) evidence that the new bullet reads correctly end to end against a different bloat flavor than the one the gated fixture targets."
+}

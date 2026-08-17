@@ -1,0 +1,17 @@
+{
+  "model_id": "claude-sonnet-5",
+  "n_fixtures": 2,
+  "mean_score": 1.0,
+  "scores": [
+    {
+      "fixture_id": "evaluating-skill-quality-description-conciseness-trigger-selection",
+      "score": 1.0,
+      "split": "selection"
+    },
+    {
+      "fixture_id": "evaluating-skill-quality-description-conciseness-trigger-train",
+      "score": 1.0,
+      "split": "train"
+    }
+  ]
+}

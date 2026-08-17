@@ -507,6 +507,31 @@ spec:
       outcome:
         verdict: WELL-FORMED-NOT-MATURE
         reason: pre-existing-dimension-5-and-7-findings
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1142"
+      summary: "Added a Description-length trigger bullet to references/rubric.md's Dimension 2 (Conciseness): the frontmatter description field is explicitly in scope for the existing paragraph-cost challenge, triggered at or above 90% of DESCRIPTION_MAX_CHARS -- the same deterministic-threshold-as-trigger shape Declaration-vs-structure fit already uses for BODY_MAX_LINES. No soft word/character ceiling advisory introduced, per parent issue 1137's own rejection of that framing."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/1142"
+      summary: "scorer-gated-skill-edits held-out gate, ordinary class: 2 new fixtures added (80 total, 31:34:14). One fresh isolated claude -p dispatch pair against the new selection fixture moved to 1.000000, KEEP; 33 pre-existing selection fixtures confirmed content-disjoint by inspection. Both dispatches independently reached the same surface Fail verdict; only the after dispatch could cite the new bullet by name. Full record: evals/evaluating-skill-quality/split.md."
+      outcome:
+        verdict: KEEP
+        before: 0.777778
+        after: 1.0
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/1142"
+      summary: "Pre-merge dogfood, diff-scoped self-review and battle-testing-a-skill, both isolated. Self-review: WELL-FORMED-NOT-MATURE, one Dimension 4 ambiguity found. Battle-testing-a-skill: FAIL, one citation-accuracy misattribution on the same clause, plus a disclosed discriminating-power finding. Ambiguity/misattribution fixed same PR without re-gating; discriminating-power finding kept-and-disclosed per the confidentiality-awareness follow-up precedent above."
+      outcome:
+        verdict: WELL-FORMED-NOT-MATURE/FAIL
+        found: 2
+        fixed: 1
+        disclosed_not_fixed: 1
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/pull/1174"
+      summary: "CodeRabbit review found both new fixtures' assertions did not exclude an auto-fail misapplication of the new trigger. Added a real-classification marker per fixture (uplication/well-known) plus four output_not_contains auto-fail-phrasing guards, re-scored against the same transcripts (before 0.5->0.777778, KEEP preserved). Its separate restraint-fixture suggestion stays a disclosed, deferred gap, unchanged from this iteration's own prior Blind spot pass."
+      outcome:
+        verdict: fixed
+        before: 0.777778
+        after: 1.0
   skillDependencies:
     requires: []
     relatedTo:
