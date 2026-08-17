@@ -31,11 +31,9 @@ Step 2's history reconstruction, and to whatever write path the repo
 already uses for filing issues in Step 5. Step 1's gate-implementation
 check additionally needs a local shell (to run `python3`) and local
 `git`/filesystem access, for its own bundled script and the gate
-registry it reads. Where the environment lacks either -- no shell tool
-at all, or a checkout the script cannot run against -- Step 1's own "if
-the script exits non-zero" handling applies exactly the same way it does
-to a script that ran and failed: never guess, carry every candidate
-forward as still-open, and disclose why.
+registry it reads. Where the environment lacks either, Step 1's own "if
+the script exits non-zero, or cannot be run at all" handling applies --
+never guess, carry every candidate forward, disclose why.
 
 ## Classification taxonomy (fixed -- never invent a fourth category)
 
@@ -304,7 +302,9 @@ such taxonomy applies only `retrospective`, unchanged from before.
      them here as their own **"Carried-forward gate"** subsection, in
      the same record format (`Status` set to `carried-forward`), distinct
      from this cycle's Repairs section -- omit the subsection entirely
-     when Step 1 found nothing to carry forward.
+     when Step 1 found nothing to carry forward. On a Step 1 script
+     failure this subsection is required, not optional: every candidate
+     still gets an entry, each carrying Step 1's own required "why" note.
    - **Zero-repair fast-close.** When Step 2 finds no repairs at all
      **and** Step 1 found nothing to carry forward, file a single-line
      issue body instead of the full Repairs shape above -- state the PR
