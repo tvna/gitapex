@@ -1,0 +1,32 @@
+id: evaluating-skill-quality-description-conciseness-trigger-train
+name: Near-Cap Description Padded With a Well-Known-Concept Explanation
+description: Motivates the new Dimension 2 Description-length trigger -- the target's frontmatter description sits at 953 of the 1024-character hard cap (93.1%), padded with a paragraph explaining what meeting minutes are and how they get taken, a well-known concept the challenge already flags when it appears in a SKILL.md body. The review must apply the same challenge to the description itself, not treat it as exempt because dimension 1 already covers descriptions.
+tags:
+  - quality
+  - conciseness
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "meeting-minutes-summarizer". Its frontmatter `description`
+    is currently 953 characters, 93.1% of the 1024-character Skills API cap
+    (confirmed via gitapex_check_skill_shape.py's description-length check).
+
+    ---
+    name: meeting-minutes-summarizer
+    description: Summarize a meeting's raw transcript or rough notes into structured, concise meeting minutes with attendees, decisions, and action items. Meeting minutes are a written record that organizations keep after a meeting so that people who did not attend can later learn what was discussed, which decisions were reached, and which tasks were assigned to which person, since without a written record like this, important decisions and commitments are easily forgotten, disputed, or misremembered by different attendees days or weeks later; minutes are typically taken by a designated note-taker during the meeting itself and then cleaned up and distributed afterward, usually by email, so that everyone -- including people who could not attend at all -- ends up with the same shared, agreed-upon account of what actually happened. Use when the user pastes a transcript, rough notes, or a recording summary and asks for minutes, a recap, or an action-item list.
+    ---
+
+    # Meeting Minutes Summarizer
+
+    ## Procedure
+
+    1. Read the transcript or notes provided.
+    2. Extract attendees, key decisions, and action items with owners.
+    3. Emit structured minutes in the standard four-section format.
+expected:
+  output_contains:
+    - "Description-length trigger"
+    - "DESCRIPTION_MAX_CHARS"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

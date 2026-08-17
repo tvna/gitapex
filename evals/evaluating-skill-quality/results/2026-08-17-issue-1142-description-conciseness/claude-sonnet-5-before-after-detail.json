@@ -1,0 +1,33 @@
+{
+  "model_id": "claude-sonnet-5",
+  "n_runs": 3,
+  "scores": [
+    {
+      "iteration": "description-conciseness-trigger-selection",
+      "fixture_id": "evaluating-skill-quality-description-conciseness-trigger-selection",
+      "split": "selection",
+      "condition": "before",
+      "commit": "eab6722d87e6a19cf5fbd8d5479940cbd8069d6d",
+      "score": 0.5,
+      "artifact": "artifacts/description-conciseness-trigger-selection-before.md"
+    },
+    {
+      "iteration": "description-conciseness-trigger-selection",
+      "fixture_id": "evaluating-skill-quality-description-conciseness-trigger-selection",
+      "split": "selection",
+      "condition": "after",
+      "commit": "uncommitted-working-tree",
+      "score": 1.0,
+      "artifact": "artifacts/description-conciseness-trigger-selection-after.md"
+    },
+    {
+      "iteration": "description-conciseness-trigger-train (informational, train split, motivates only, never gated)",
+      "fixture_id": "evaluating-skill-quality-description-conciseness-trigger-train",
+      "split": "train",
+      "condition": "after",
+      "commit": "uncommitted-working-tree",
+      "score": 1.0,
+      "artifact": "artifacts/description-conciseness-trigger-train-after.md"
+    }
+  ]
+}

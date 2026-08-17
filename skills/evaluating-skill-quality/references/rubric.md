@@ -1430,6 +1430,28 @@ Adaptive) exactly this Fail example for the identical sentence; that section
 is authoritative for a declared target, not this one -- read it first, and
 apply the plain examples below only when no declaration exists or applies.
 
+- **Description-length trigger.** The mental model's cost pricing (`name`
+  + `description` always resident, every skill, every turn) puts the
+  frontmatter `description` field in scope for this same paragraph-cost
+  challenge, not only the `SKILL.md` body it prices separately. A
+  description at or above 90% of `scripts/gitapex_check_skill_shape.py`'s
+  own `DESCRIPTION_MAX_CHARS` cap (that script's `description-length`
+  check already reports the exact character count as evidence on every
+  run; a vendored target with an equivalent hard description-length limit
+  qualifies the same way) triggers this dimension's ordinary
+  relevance/duplication/sediment/sprawl classification below, applied to
+  the description's own sentences. The 90% threshold itself is only ever
+  a trigger for that judgment, never a pass/fail rule on its own -- the
+  same structural role a deterministic threshold plays in the Capability
+  assumption section's own Declaration-vs-structure fit check, which
+  fires the same way at 90% of `BODY_MAX_LINES` before its own separate
+  disclosure-adequacy judgment runs. A description below the trigger is
+  not thereby exempt: dimension
+  1's adequacy/specificity floor and this dimension's own judgment both
+  still apply regardless of length. No description may be failed for
+  length alone -- the cap is only ever a cue for when this challenge is
+  worth applying deliberately, never a soft word/character ceiling
+  advisory in its own right.
 - Prune sentence by sentence and classify the reason: **relevance**
   (irrelevant to this skill's task), **duplication** (the same rule has another
   owner), **sediment** (historical rationale that no longer controls

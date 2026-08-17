@@ -33,7 +33,9 @@ restatement duplication), a 1:0:0 multi-turn-relaxation addition
 (gitapex#332's own ACM-7 audit round), a 1:1:1 addition for the new
 Single ownership and boundary fit dimension-7 check (gitapex#1111), and a
 2:2:1 dependency-policy addition (gitapex#1124: the new
-`spec.dependencyPolicy` precondition axis), for a resulting 30:33:14
+`spec.dependencyPolicy` precondition axis), and a 1:1:0
+description-conciseness addition (gitapex#1142: the new Dimension 2
+Description-length trigger), for a resulting 31:34:14
 partition. This is
 named explicitly as a deviation from the 2:1:7 default. The
 honest minimal groundwork, per that same worked example, is a larger
@@ -43,9 +45,9 @@ Exclusion rule for this arithmetic, stated once so the figures above can be
 checked against the Assignment section below (gitapex#907): every listed
 fixture, in every split, is counted in exactly one of the additions above,
 except the one named on the declaration line below. Verified per split, not
-only for train: the Assignment section lists 31 unique train fixtures against
-the declared 30 (the single exclusion), and 33 selection and 14 test fixtures
-against the declared 33 and 14 exactly.
+only for train: the Assignment section lists 32 unique train fixtures against
+the declared 31 (the single exclusion), and 34 selection and 14 test fixtures
+against the declared 34 and 14 exactly.
 
 Split-arithmetic exclusions: `dispatch-required-negative-control.yaml` -- listed
 in train for split-listing consistency with `normal.yaml` rather than as a
@@ -4222,3 +4224,214 @@ fixtures involve a dynamically-constructed import), so the recorded
 rule itself. Re-verified after the edit: 68/68 self-dogfood PASS, full
 suite 4828/4828 (one pre-existing unrelated failure), contract-precondition-
 sync 22/22 passed, ruff/mypy clean.
+
+## Iteration: issue #1142, Dimension 2 Description-length trigger
+
+Candidate edit, ordinary class (pure insertion, no deletion or reword of
+existing text -- confirmed via `git diff --stat`: 19 insertions, 0
+deletions in `references/rubric.md`, so pruning-only's eligibility rule
+does not apply): `references/rubric.md`'s `## 2. Conciseness` section
+gains one new bullet, **Description-length trigger**, naming the
+frontmatter `description` field explicitly in scope for Dimension 2's
+existing paragraph-cost challenge, triggered at or above 90% of
+`scripts/gitapex_check_skill_shape.py`'s own `DESCRIPTION_MAX_CHARS` cap
+-- the same trigger-for-judgment shape (a deterministic threshold cueing a
+judgment check, not a pass/fail rule of its own) the Capability
+assumption section's pre-existing Declaration-vs-structure fit check
+already uses for `BODY_MAX_LINES`. Explicitly does not introduce a soft
+word/character ceiling advisory below the hard cap (the rejected
+waza-style framing issue #1137's own parent tracking issue names), and
+explicitly states a description below the trigger stays subject to
+dimension 1's adequacy/specificity floor and dimension 2's own ordinary
+judgment. No companion `SKILL.md` edit: it does not restate per-dimension
+rubric content, only pointing to `references/rubric.md` generically (same
+precedent as the issue #185 entry above). Refs #1142, parent #1137.
+
+Precondition and splits: satisfied. Scorer:
+`skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py`.
+Held-out split: this file's own corpus, now 80 fixtures, 30:33:14 ->
+31:34:14 (see Corpus size caveat above) -- 2 new fixtures added under
+`evals/evaluating-skill-quality/tasks/`:
+`description-conciseness-trigger-train.yaml` (train, motivates --
+relevance/well-known-concept-explanation bloat flavor, a
+`meeting-minutes-summarizer` target whose description explains what
+meeting minutes are), `description-conciseness-trigger-selection.yaml`
+(selection, gates -- a distinct domain and a distinct bloat flavor,
+duplication, not relevance: a `parking-ticket-appeal-drafter` target
+whose description restates the same rule twice in immediate succession).
+
+**Blind spot pass for this addition.** The two fixtures cover two of the
+four pruning classifications (relevance/well-known-concept and
+duplication) applied specifically to a near-cap description; sediment and
+sprawl are not separately isolated for the description field (sprawl
+happens to also appear as a secondary finding in both live transcripts
+below, riding along with the primary classification each fixture targets,
+but no fixture isolates it as the sole bloat flavor). A dedicated
+restraint fixture (a description that is long but not bloated -- e.g. a
+skill with a legitimately dense, non-redundant trigger vocabulary sitting
+near the cap on real content) is not included -- left as a disclosed, open
+gap for a future addition, the same disposition this file's own
+confidentiality-awareness and dependency-policy entries used for their
+own analogous gaps.
+
+### Gate result
+
+Isolated `claude -p` dispatches (no `--dangerously-skip-permissions`,
+needed none since every dispatch's prompt is fully self-contained), per
+`references/adversarial-self-audit.md`'s Isolation verification section.
+`waza --version` confirmed `0.38.0` (Procedure step 1), but `waza models`
+failed `not authenticated -- run "copilot login" first` -- the same
+disclosed `executor: copilot-sdk` constraint every prior iteration in this
+log has recorded; not pursued for the same reason (provisioning Copilot
+credentials solely for this gate is outside this task's authorization).
+This platform (`CLAUDE_CODE_REMOTE=true`,
+`CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=cloud_default`) matches the existing
+`2.1.233` Same-run registry entry exactly (no newer CLI version to
+re-verify against), but that entry was still independently re-run fresh
+here rather than trusted on the strength of a matching version string
+alone: synthetic-sentinel positive control (isolated cwd + isolated
+`$HOME`, a `CLAUDE.md` containing a nonce phrase) correctly quoted the
+nonce verbatim; negative control (isolated cwd with no `CLAUDE.md`/
+`AGENTS.md` anywhere in its ancestry, isolated `$HOME`) correctly reported
+`NONE_LOADED`. Every dispatch's prompt embeds the relevant
+`references/rubric.md` excerpt directly (`## The mental model` plus the
+full `## 2. Conciseness` section, before- or after-edit as appropriate) --
+this isolated cwd has no access to this repository's own `skills/`
+directory by design, and no plugin/marketplace registration was set up
+for it.
+
+**`description-conciseness-trigger-selection.yaml`, one fresh dispatch per
+side against only `description-conciseness-trigger-selection.yaml`:**
+
+| Fixture | Before | After |
+|---|---|---|
+| `description-conciseness-trigger-selection.yaml` | 0.500000 (fresh) | 1.000000 (fresh) |
+
+`gitapex_score_contract.py --compare-to 0.500000`, score `1.000000`:
+**`1.000000 KEEP`** -- selection mean 0.500000 -> 1.000000, strict
+improvement.
+
+Both dispatches correctly identified the description's duplicated rule and
+its trailing sprawl clause and reached **Fail** through the shared,
+pre-existing relevance/duplication/sediment/sprawl classification
+language -- the before dispatch reasoned to the same surface verdict
+through generic paragraph-cost reasoning already present in the
+pre-edit text (it explicitly invoked "The mental model" and the
+pre-existing "same extended rule ... restated in full" duplication
+bullet), but had no way to ground that verdict in a citable
+description-specific rule: it never produced the literal `Description-
+length trigger` heading or the `DESCRIPTION_MAX_CHARS` identifier, both
+of which do not exist anywhere in the pre-edit excerpt. The after
+dispatch opened by naming the trigger explicitly ("The description is
+934/1024 chars = 91.2%, which is >=90% of `DESCRIPTION_MAX_CHARS`. Per the
+**Description-length trigger** bullet...") before applying the identical
+classification. This is the same axis-did-not-exist-yet improvement shape
+the issue #537 and issue #1124 entries above both establish as what a
+genuine, non-tied improvement looks like for a new rubric bullet whose
+underlying judgment a strong tier can partially reach by generic
+reasoning alone, but cannot cite without the new text.
+
+One further dispatch was run informationally (not gating, per this
+skill's own train-motivates rule): `description-conciseness-trigger-
+train.yaml` (train, after-only) scored `1.000000`, correctly walking all
+three description sentences one by one, naming sentence 2 (the
+well-known-concept explanation of what meeting minutes are) as the sole
+Fail, citing both "The mental model" ("Content that re-teaches general
+concepts ... is waste") and the Conciseness Fail bullet ("explaining what
+a well-known format or tool is") together with the new Description-length
+trigger bullet by name.
+
+**Pre-existing selection fixtures: confirmed content-disjoint by direct
+inspection, not re-dispatched.** `git diff --stat` on `references/rubric.md`
+shows a pure 19-line insertion with zero deletions; `grep -l
+"Description-length trigger\|DESCRIPTION_MAX_CHARS"` across every file
+under `evals/evaluating-skill-quality/tasks/` other than this iteration's
+own two new fixtures returns no matches, so no pre-existing selection
+fixture's own `expected` assertions reference this edit's vocabulary and
+none can move on account of it -- the same "confirmed by inspection" basis
+the issue #406, #495, #537, and #1124 entries above all use for their own
+unaffected fixtures.
+
+### Transfer check
+
+Not run this iteration -- the same pre-existing, still-open gap named
+across nearly every entry in this file's own Kept-edit log, not newly
+introduced here.
+
+### Verdict
+
+**KEEP.** Selection mean strictly improved (0.500000 -> 1.000000) on the
+one gated, purpose-built fixture, satisfying the ordinary class's strict
+improve-or-reject rule; the 33 pre-existing selection fixtures are
+confirmed unaffected by direct inspection rather than re-scored, per the
+disclosed methodology above. Full structured run record, per-fixture
+scores, and every artifact transcript:
+[results/2026-08-17-issue-1142-description-conciseness/](results/2026-08-17-issue-1142-description-conciseness/manifest.json).
+Two disclosed gaps (no dedicated restraint fixture for a legitimately
+dense non-redundant near-cap description; no sediment- or
+pure-sprawl-only isolated fixture; no repeat-trial variance data; no
+transfer check) are named above rather than silently assumed clear.
+
+**Post-verdict correction (before merge, found by a diff-scoped
+self-review and battle-testing-a-skill audit run after the Gate result
+above was recorded), both isolated `claude -p` dispatches under the same
+mechanism as the gate itself.** Self-review returned
+**WELL-FORMED-NOT-MATURE**, naming one genuine Dimension 4 defect: the
+clause "the same trigger-for-judgment shape ... already uses for
+`BODY_MAX_LINES`, not a new pass/fail rule of its own" has an ambiguous
+modifier attachment -- read the more locally-attached way, "not a new
+pass/fail rule of its own" describes Declaration-vs-structure fit itself,
+which is factually wrong (that check has its own dedicated Check/Fail/Pass
+triad). Battle-testing-a-skill independently converged on the identical
+sentence from a different angle and returned **FAIL** on citation
+accuracy: the bullet's "same trigger-for-judgment shape" claim implied
+Declaration-vs-structure fit routes to this dimension's own
+relevance/duplication/sediment/sprawl classification, when that check
+actually routes to its own separate disclosure-of-Adaptive-consideration
+judgment -- a real misattribution, not a defensible paraphrase. Both
+findings target the same clause and corroborate each other. Fixed in the
+same PR: the sentence now names its subject explicitly ("The 90%
+threshold itself is only ever a trigger for that judgment, never a
+pass/fail rule on its own") and narrows the cited parallel to the
+structural role only (a deterministic threshold serving as a trigger,
+not a verdict), stating plainly that Declaration-vs-structure fit's own
+downstream judgment is separate ("its own separate disclosure-adequacy
+judgment") rather than implying it shares this dimension's
+relevance/duplication/sediment/sprawl classification. Not re-gated with a
+fresh dispatch: the correction only tightens a cross-reference sentence's
+wording, changing neither of the two literal strings
+(`Description-length trigger`, `DESCRIPTION_MAX_CHARS`) the selection
+fixture's assertions test -- both confirmed still present exactly once
+each by direct `grep -c` after the edit -- so the recorded 0.500000 ->
+1.000000 score above remains the correct evidence for the rule itself,
+the same disclosed-not-re-gated disposition the issue #1124 entry above
+used for an analogous post-verdict prose correction. Re-verified after the
+edit: `gitapex_check_skill_shape.py` 67/67, full pytest suite green (one
+pre-existing, confirmed-unrelated environment failure -- a shallow-clone
+git-history artifact in `test_gitapex_scan_harden_checkout_pin_drift.py`,
+reproduced identically on a clean, unmodified `HEAD` via `git stash`).
+
+Battle-testing-a-skill's remaining Angle 4 finding is disclosed, not
+fixed: by the bullet's own admission ("this dimension's own judgment ...
+still apply[ies] regardless of length"), a competent reviewer applying
+only the pre-existing generic relevance/duplication/sediment/sprawl
+bullet could already reach the identical verdict on both new fixtures --
+borne out directly by this iteration's own gate transcripts, where the
+pre-edit dispatch reasoned to the same Fail/duplication/sprawl conclusion
+through generic reasoning alone. This is the identical shape this file's
+own three confidentiality-awareness follow-up entries above (`## Compatibility-awareness
+branch coverage`, payment-data/MNPI/trade-secret) already named and kept
+anyway: a strong tier (Sonnet, high effort) generalizing correctly on a
+single live sample is evidence about this specific trial, not proof the
+addition adds nothing. The same independent, freestanding rationale
+applies here without depending on this corpus detecting a substance
+change: explicit citability (a reviewer or a weaker tier can now ground
+the same verdict in a named rule rather than open-ended paragraph-cost
+reasoning, the same "Correctness and consistency" argument
+`SKILL.md`'s own Skill-step-vs-bundled-script section makes for
+deterministic rules over in-head judgment), direct scope coverage of a
+gap the issue's own parent tracking issue (#1137) had already decided was
+worth closing, and near-zero cost (one bullet,
+`gitapex_check_skill_shape.py` unaffected throughout). Kept per this same
+drift-correction precedent, not reclassified to force a cleaner-looking
+result.

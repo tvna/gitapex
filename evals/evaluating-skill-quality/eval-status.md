@@ -1119,3 +1119,89 @@ machine-readable run data (the first `record_contract: "gate-run"` record in
 this directory):
 [results/2026-08-15-issue-1124-dependency-policy/](results/2026-08-15-issue-1124-dependency-policy/manifest.json).
 Refs #1124.
+
+## Description-length trigger, Dimension 2 (issue #1142)
+
+`references/rubric.md`'s `## 2. Conciseness` section gained one new
+bullet, **Description-length trigger**, naming the frontmatter
+`description` field explicitly in scope for Dimension 2's existing
+paragraph-cost challenge -- previously body/paragraph-flavored prose that
+never named `description` by name, even though the mental model already
+prices `name` + `description` as always resident (every skill, every
+turn), a broader cost basis than the challenge's own text reached. The new
+bullet triggers at or above 90% of `gitapex_check_skill_shape.py`'s own
+`DESCRIPTION_MAX_CHARS` cap -- the same deterministic-threshold-as-trigger
+shape the pre-existing Declaration-vs-structure fit check already uses for
+`BODY_MAX_LINES` -- and explicitly does not introduce a soft word/character
+ceiling advisory below the hard cap, the waza-style framing this issue's
+own parent tracking issue (#1137) named as rejected. A description below
+the trigger stays subject to dimension 1's adequacy/specificity floor and
+dimension 2's own ordinary judgment regardless.
+
+Went through `scorer-gated-skill-edits`' own held-out gate, ordinary class
+(pure 19-line insertion, no deletion): 2 new fixtures added to `split.md`'s
+split (80 total, 31:34:14). One fresh isolated `claude -p` dispatch pair
+against the new selection fixture
+(`description-conciseness-trigger-selection.yaml`) moved **0.500000 ->
+1.000000**; the 33 pre-existing selection fixtures were confirmed
+content-disjoint from the edit by direct inspection (a pure insertion with
+no shared vocabulary in any pre-existing fixture's own `expected` block)
+rather than re-dispatched. **KEEP**. Both the pre- and post-edit dispatches
+independently reached the correct **Fail** verdict on the selection
+fixture's duplicated, near-cap description, through the pre-existing
+generic relevance/duplication/sediment/sprawl classification language
+already present before this edit -- the pre-edit dispatch could not,
+however, ground that verdict in the new bullet's own citable name or its
+`DESCRIPTION_MAX_CHARS` identifier, neither of which existed in the text it
+read, which is what the selection fixture's assertions actually test (the
+same axis-did-not-exist-yet improvement shape the confidentiality-awareness
+and dependency-policy entries above both establish). One further dispatch
+was run informationally against the train fixture (a well-known-concept
+bloat flavor, distinct from the selection fixture's duplication flavor) and
+independently reached the intended verdict, citing the new bullet by name
+alongside the pre-existing mental-model/Fail-bullet language.
+
+Isolation used the verified `claude -p` subprocess mechanism from
+`references/adversarial-self-audit.md`'s registry (the exact `2.1.233`
+platform/version already had a confirmed Same-run entry from the #1124
+gate above; independently re-verified fresh here rather than trusted on a
+matching version string alone), with an isolated `$HOME` copy. `waza
+--version` confirmed `0.38.0` per Procedure step 1's own letter; `waza
+models` failed the same `copilot-sdk`-authentication constraint every
+prior iteration in this file has already recorded, so every actual score
+came from the `claude -p` fallback, disclosed precisely under
+`dispatch_mechanism` rather than overstated. A repository-wide
+`gitapex_lint_fixture_assertions.py` run showed the identical 4-warning
+baseline before and after this change (confirmed via `git stash`), and
+`.github/scripts/gitapex_gate_split_fixture_coverage.py` / `
+gitapex_scan_split_schema.py` both pass against the updated `split.json`.
+One pre-existing test, `test_real_split_json_partition_declarations_are_
+pinned_exactly`, pins this skill's declared partition literally and was
+updated in the same change from `(30, 33, 14)` to `(31, 34, 14)`, the same
+anti-vacuity discipline every prior partition change in this log has
+required. `gitapex_check_skill_shape.py`: 67/67. No dedicated restraint
+fixture exists yet for a legitimately dense, non-redundant near-cap
+description that should NOT be flagged -- named as a disclosed, open gap
+in `split.md`'s own Blind spot pass for this iteration, the same
+disposition prior entries in this file use for their own analogous gaps.
+Full record, per-fixture scores, and both live transcripts: `evals/
+evaluating-skill-quality/split.md`'s Kept-edit log. Structured,
+machine-readable run data:
+[results/2026-08-17-issue-1142-description-conciseness/](results/2026-08-17-issue-1142-description-conciseness/manifest.json).
+
+Pre-merge dogfood (diff-scoped self-review plus battle-testing-a-skill,
+both isolated): self-review returned WELL-FORMED-NOT-MATURE and
+battle-testing-a-skill returned FAIL, converging independently on the
+same clause -- an ambiguous modifier that, on one reading, misattributed
+Declaration-vs-structure fit's own downstream judgment. Fixed in the same
+PR by naming the trigger's subject explicitly and narrowing the cited
+parallel to the structural role only; not re-gated, since the fix changes
+neither literal string the selection fixture's assertions test (confirmed
+by direct `grep -c`). Battle-testing-a-skill's remaining discriminating-
+power finding (a strong tier can already reach the same verdict without
+the new bullet) is disclosed and kept anyway, the same drift-correction
+disposition this file's own confidentiality-awareness follow-up entries
+above already established for an identical single-strong-tier-tie
+pattern. Full writeup: `split.md`'s own Post-verdict correction
+subsection for this iteration.
+Refs #1142, parent #1137.
