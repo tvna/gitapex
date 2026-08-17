@@ -17,6 +17,7 @@ itself on every future change.
 from __future__ import annotations
 
 import json
+import subprocess
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -77,6 +78,47 @@ def _write_corpus(root: Path, entries: list[dict[str, Any]]) -> Path:
         encoding="utf-8",
     )
     return corpus_path
+
+
+# ---------------------------------------------------------------------------
+# _skip_reason
+# ---------------------------------------------------------------------------
+
+
+def test_skip_reason_redacts_runtime_error_with_embedded_stderr() -> None:
+    # Defeat test (issue #1143 adversarial review, CodeRabbit finding): a
+    # live model CLI's raw stderr, exactly as subprocess_executor embeds it
+    # in its own RuntimeError message, must never survive into the
+    # returned reason.
+    exc = RuntimeError("model CLI exited 1: ACME_SECRET_TOKEN=sk-live-deadbeef leaked in stderr")
+    reason = m._skip_reason(exc)
+    assert "ACME_SECRET_TOKEN" not in reason
+    assert "sk-live-deadbeef" not in reason
+    assert "RuntimeError" in reason
+
+
+def test_skip_reason_redacts_timeout_expired_with_embedded_prompt() -> None:
+    # TimeoutExpired's own str() includes the full argv it ran, which
+    # includes the fixture's prompt text (build_command's own -p PROMPT
+    # positional) -- must not survive into the returned reason either.
+    exc = subprocess.TimeoutExpired(cmd=["claude", "-p", "the fixture's own private prompt text"], timeout=300)
+    reason = m._skip_reason(exc)
+    assert "private prompt text" not in reason
+    assert "TimeoutExpired" in reason
+
+
+def test_skip_reason_keeps_value_error_verbatim() -> None:
+    # ValueError is always this module's or gitapex_run_eval_suite's own
+    # deterministic, code-controlled text -- never live external output --
+    # so it stays verbatim, genuinely useful for diagnosing which corpus
+    # entry or fixture was malformed.
+    reason = m._skip_reason(ValueError("skill_md not found: skills/ghost/SKILL.md"))
+    assert reason == "skill_md not found: skills/ghost/SKILL.md"
+
+
+def test_skip_reason_keeps_os_error_verbatim() -> None:
+    reason = m._skip_reason(OSError("[Errno 2] No such file or directory: 'x.yaml'"))
+    assert "No such file or directory" in reason
 
 
 # ---------------------------------------------------------------------------
@@ -473,7 +515,13 @@ def test_dry_run_against_real_committed_corpus_produces_correlation_without_erro
     assert exit_code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["skipped"] == []  # every one of this repository's real 25 skills is runnable today
-    assert payload["correlation"]["n"] >= 2
+    # The exact, known-stable contract (effectiveness-corpus-methodology.md's
+    # deterministic 20/80 selection/test split over 25 total skills), not
+    # just ">= 2" -- a corpus that quietly shrank to 2 entries would still
+    # pass a bare lower-bound check (issue #1143 adversarial review round).
+    expected_n = {"selection": 20, "test": 5, "all": 25}[split]
+    assert len(payload["pairs"]) == expected_n
+    assert payload["correlation"]["n"] == expected_n
     correlation = payload["correlation"]
     assert -1.0 <= correlation["rho"] <= 1.0
     assert correlation["ci_low"] <= correlation["ci_high"]

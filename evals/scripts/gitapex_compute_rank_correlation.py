@@ -216,7 +216,24 @@ def bootstrap_ci(
     resample more likely, not rarer. Raises ``ValueError`` if every single
     resample was degenerate (no estimate could be formed at all), which a
     silently empty-but-successful CI would misreport as "computed."
+
+    ``confidence``/``n_resamples`` are validated here, not only by the CLI
+    (``_ComputeRankCorrelationArgs``) -- this function, and
+    ``compute_correlation`` above it, are a directly importable API this
+    module's own tests already call without going through ``main()``
+    (issue #1143 adversarial review round: confirmed live that an
+    out-of-range ``confidence`` silently reverses ``ci_low``/``ci_high``
+    via ``_percentile``'s own negative-index wraparound, e.g.
+    ``confidence=-0.5`` returned ``ci_low > ci_high``; a non-positive
+    ``n_resamples`` produced the misleading "every one of 0 ... was
+    degenerate" message instead of a clear input-validation error). Raises
+    ``ValueError`` -- the same exception type every other malformed-input
+    rejection in this module already raises.
     """
+    if not (0 < confidence < 1):
+        raise ValueError(f"confidence must be strictly between 0 and 1, got {confidence}")
+    if n_resamples <= 0:
+        raise ValueError(f"n_resamples must be a positive integer, got {n_resamples}")
     n = len(xs)
     estimates: list[float] = []
     for _ in range(n_resamples):

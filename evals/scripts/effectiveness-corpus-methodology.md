@@ -145,7 +145,7 @@ described in prose:
 
 Example (dry run, no credentials needed):
 
-```
+```shell
 uv run --frozen python3 evals/scripts/gitapex_run_effectiveness_correlation.py \
     --corpus evals/scripts/effectiveness-corpus.json --split selection --dry-run
 ```

@@ -47,7 +47,11 @@ output, never silently dropped. Only `ValueError`/`RuntimeError`/`OSError`/
 `gitapex_run_eval_suite.py`'s own `main()` already treats as "this
 suite's own failure," not a bug in this script) -- anything else
 propagates and crashes loudly, per this repository's own "an inability to
-verify is a deny, not an assume-clean" convention.
+verify is a deny, not an assume-clean" convention. The recorded `reason`
+is never a `RuntimeError`'s or `subprocess.TimeoutExpired`'s own raw text
+-- see `_skip_reason`'s own docstring for why those two specifically can
+carry a live model CLI's own stderr or full invoked command line, and
+must not be republished verbatim into this tool's own output.
 
 Exit code contract: 2 means the input was malformed (corpus file missing
 or fails schema validation, `--split` matched zero entries, a corpus path
@@ -113,6 +117,30 @@ class CorpusEntryResult(BaseModel):
 class SkippedEntry(BaseModel):
     skill: str
     reason: str
+
+
+def _skip_reason(exc: Exception) -> str:
+    """A safe, disclosed reason for a ``SkippedEntry`` -- never the raw
+    text of a ``RuntimeError`` or ``subprocess.TimeoutExpired``, both of
+    which can embed live, externally-produced content this tool's own
+    JSON output must not republish verbatim: ``subprocess_executor``'s own
+    ``RuntimeError`` message includes the invoked model CLI's raw stderr
+    (issue #1143 adversarial review round), and ``TimeoutExpired``'s own
+    string form includes the full argv it ran, which itself carries the
+    fixture's prompt text (``gitapex_run_ablation.build_command``). Neither
+    is safe to echo into a result blob this tool's own docstring calls
+    "loud and visible in the tool's own output" -- CLAUDE.md's own rule
+    against echoing untrusted/external content into a generated artifact.
+    A ``ValueError``/``OSError``, in contrast, is always this module's or
+    the standard library's own deterministic, code-controlled text (a
+    missing-file path, a malformed-YAML complaint) -- never a live
+    model's own output -- so those stay verbatim, genuinely useful and
+    genuinely safe. The split is by exception type, not a per-instance
+    guess.
+    """
+    if isinstance(exc, (RuntimeError, subprocess.TimeoutExpired)):
+        return f"{type(exc).__name__}: model CLI invocation failed or timed out (detail intentionally not republished here)"
+    return str(exc)
 
 
 def load_corpus(corpus_path: Path, schema_path: Path) -> dict[str, Any]:
@@ -198,7 +226,7 @@ def compute_pairs(
                 model_cli=model_cli,
             )
         except (ValueError, RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
-            skipped.append(SkippedEntry(skill=skill, reason=str(exc)))
+            skipped.append(SkippedEntry(skill=skill, reason=_skip_reason(exc)))
             continue
         pairs.append(CorpusEntryResult(skill=skill, x=float(body_line_count), y=suite_result.mean_score))
     return pairs, skipped

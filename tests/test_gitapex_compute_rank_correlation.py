@@ -114,6 +114,34 @@ def test_bootstrap_ci_perfect_correlation_is_a_point() -> None:
     assert 0 < result.n_estimates <= 2000
 
 
+@pytest.mark.parametrize("bad_confidence", [-0.5, 0.0, 1.0, 1.5])
+def test_bootstrap_ci_rejects_out_of_range_confidence(bad_confidence: float) -> None:
+    # Defeat test (issue #1143 adversarial review): confidence=-0.5 used to
+    # silently reverse ci_low/ci_high via _percentile's own negative-index
+    # wraparound instead of raising -- verified live before this guard
+    # existed.
+    with pytest.raises(ValueError, match="confidence must be strictly between 0 and 1"):
+        m.bootstrap_ci([1, 2, 3, 4], [4, 3, 2, 1], confidence=bad_confidence, rng=random.Random(0))  # noqa: S311
+
+
+@pytest.mark.parametrize("bad_n_resamples", [0, -1])
+def test_bootstrap_ci_rejects_non_positive_n_resamples(bad_n_resamples: int) -> None:
+    # Defeat test: n_resamples=0 used to report the misleading "every one
+    # of 0 bootstrap resamples was degenerate" instead of a clear
+    # input-validation error -- verified live before this guard existed.
+    with pytest.raises(ValueError, match="n_resamples must be a positive integer"):
+        m.bootstrap_ci([1, 2, 3, 4], [4, 3, 2, 1], n_resamples=bad_n_resamples, rng=random.Random(0))  # noqa: S311
+
+
+def test_compute_correlation_rejects_out_of_range_confidence_via_bootstrap_ci() -> None:
+    # compute_correlation doesn't re-validate independently -- it calls
+    # bootstrap_ci unconditionally, which does. This test proves the
+    # validation actually reaches a compute_correlation() caller, not just
+    # bootstrap_ci() called directly.
+    with pytest.raises(ValueError, match="confidence must be strictly between 0 and 1"):
+        m.compute_correlation([1, 2, 3, 4], [4, 3, 2, 1], confidence=-0.5, seed=0)
+
+
 def test_bootstrap_ci_bounds_ordered_and_contain_point_estimate() -> None:
     xs = [1, 2, 3, 4, 5, 6, 7, 8]
     ys = [2, 1, 4, 3, 6, 5, 8, 9]
