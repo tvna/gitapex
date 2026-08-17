@@ -9,8 +9,8 @@ invocation.
 
 Per this repository's defeat-test-disclosure process, at least one test
 below is specifically constructed to defeat -- not merely exercise the
-happy path of -- the new detection logic; see the "defeat" tests near the
-end of this file.
+happy path of -- the new detection logic; see the `test_defeat_*` tests
+below.
 """
 
 from __future__ import annotations
@@ -25,6 +25,14 @@ from conftest import FakeStdin as _FakeStdin
 # `hooks/gitapex_check_[^/]+\.py` alternative -- used as the default fixture
 # location across most tests below.
 _FIXTURE_PATH = "hooks/gitapex_check_fixture.py"
+
+# The co-located properties file the gate's own `_properties_path` computes
+# from `_FIXTURE_PATH`'s stem. Named once rather than spelled out at each
+# `_write` call site below, so the two stay in lockstep: a change to
+# `_FIXTURE_PATH` that missed one literal would silently write the fixture's
+# coverage to a path the gate never looks at, and every "a covering
+# properties file clears it" test would pass for the wrong reason.
+_FIXTURE_PROPERTIES_PATH = "tests/test_gitapex_check_fixture_properties.py"
 
 # SOME_RE = re.compile(...) sits on line 3, pre-existing; check_value (lines
 # 6-7) is the "new function" a diff adds. This reconstructs issue #1129's own
@@ -63,6 +71,12 @@ _CHECK_VALUE_WITH_OTHER_FUNCTION_SOURCE = (
     "    return 1\n"
 )
 
+# A trigger call at true module level (line 4), outside any function. The
+# `re.compile(...)` on line 3 is a trigger too, so every diff built from this
+# fixture adds only line 4 -- otherwise the compile call contributes a second
+# finding and the module-level attribution under test is no longer isolated.
+_MODULE_LEVEL_TRIGGER_SOURCE = 'import re\n\nSOME_RE = re.compile(r"^[a-z]+$")\nSOME_RE.fullmatch("literal")\n'
+
 # The trigger call itself reformatted across three lines (7-9): the call's
 # own opening line (7) and closing line (9) are never touched by the
 # regression test's diff -- only the argument on line 8 is.
@@ -77,6 +91,11 @@ _MULTILINE_CALL_SOURCE = (
     "        x,\n"
     "    )\n"
 )
+
+# A diff whose hunk header cannot be parsed -- the ScanError contract's own
+# malformed-input fixture, asserted once directly against `parse_added_lines`
+# and once through `main()`'s catch-and-exit-2 wrapper.
+_UNPARSEABLE_HUNK_DIFF = f"diff --git a/x.py b/{_FIXTURE_PATH}\n+++ b/{_FIXTURE_PATH}\n@@ garbage @@\n+x = 1\n"
 
 # A properties file that genuinely covers check_value: imports the fixture
 # module and has one @given function whose own body calls check_value by name.
@@ -144,6 +163,24 @@ def _grade(tmp_path: pathlib.Path, source: str, *, relative: str = _FIXTURE_PATH
     return violations
 
 
+def _grade_added(
+    tmp_path: pathlib.Path, source: str, added: list[int], *, relative: str = _FIXTURE_PATH
+) -> tuple[list[gate.Finding], list[gate.Finding]]:
+    """Write `source` at `relative`, grade it with only the 1-based line
+    numbers in `added` present in the diff, return ``(violations, waivers)``.
+
+    The diff-scoped counterpart of `_grade` above, and its `graded == 1`
+    assertion is load-bearing for the same reason: without it, a gate that
+    read nothing at all would satisfy every "must not fire" assertion below
+    at once. Any co-located properties file a test needs must be written
+    before this call, since it grades immediately.
+    """
+    _write(tmp_path, relative, source)
+    violations, waived, graded = gate.find_violations(_partial_diff(relative, source, added), tmp_path)
+    assert graded == 1, f"{relative} was not graded at all"
+    return violations, waived
+
+
 def _rules(findings: list[gate.Finding]) -> list[str]:
     return [finding.rule for finding in findings]
 
@@ -192,11 +229,7 @@ def test_true_positive_regex_bound_method_fullmatch_with_no_properties_file(
     `re.compile(...)` that built `SOME_RE` sits on an earlier, untouched
     line -- and no co-located tests/test_gitapex_check_fixture_properties.py
     exists at all. Exactly one violation, correctly attributed."""
-    _write(tmp_path, _FIXTURE_PATH, _CHECK_VALUE_SOURCE)
-    violations, waived, graded = gate.find_violations(
-        _partial_diff(_FIXTURE_PATH, _CHECK_VALUE_SOURCE, [6, 7]), tmp_path
-    )
-    assert graded == 1
+    violations, waived = _grade_added(tmp_path, _CHECK_VALUE_SOURCE, [6, 7])
     assert waived == []
     assert len(violations) == 1
     finding = violations[0]
@@ -213,12 +246,8 @@ def test_true_negative_a_covering_given_test_clears_the_violation(
     time tests/test_gitapex_check_fixture_properties.py exists, imports the
     fixture module, and has one @given-decorated function whose own body
     calls `check_value` by name -- so the existing-coverage check clears it."""
-    _write(tmp_path, _FIXTURE_PATH, _CHECK_VALUE_SOURCE)
-    _write(tmp_path, "tests/test_gitapex_check_fixture_properties.py", _PROPERTIES_COVERING_CHECK_VALUE)
-    violations, waived, graded = gate.find_violations(
-        _partial_diff(_FIXTURE_PATH, _CHECK_VALUE_SOURCE, [6, 7]), tmp_path
-    )
-    assert graded == 1
+    _write(tmp_path, _FIXTURE_PROPERTIES_PATH, _PROPERTIES_COVERING_CHECK_VALUE)
+    violations, waived = _grade_added(tmp_path, _CHECK_VALUE_SOURCE, [6, 7])
     assert violations == []
     assert waived == []
 
@@ -230,11 +259,7 @@ def test_waived_case_the_trigger_line_carries_an_honoured_inline_waiver(
     `# detection-logic-property-coverage: WAIVED: <reason>` trailing
     comment: zero violations, and the finding surfaces in find_violations's
     own second (waived) return element instead."""
-    _write(tmp_path, _FIXTURE_PATH, _CHECK_VALUE_WAIVED_SOURCE)
-    violations, waived, graded = gate.find_violations(
-        _partial_diff(_FIXTURE_PATH, _CHECK_VALUE_WAIVED_SOURCE, [6, 7]), tmp_path
-    )
-    assert graded == 1
+    violations, waived = _grade_added(tmp_path, _CHECK_VALUE_WAIVED_SOURCE, [6, 7])
     assert violations == []
     assert _at(waived) == [("regex-property-gap", 7)]
 
@@ -259,11 +284,7 @@ def test_scope_boundary_b_an_untouched_pre_existing_trigger_is_not_flagged(
     (pre-existing, not part of the constructed diff) the same uncovered
     `SOME_RE.fullmatch(x)` gap at lines 6-7, which this diff never touches --
     only an unrelated line inside `other_function` (line 11) is added."""
-    _write(tmp_path, _FIXTURE_PATH, _CHECK_VALUE_WITH_OTHER_FUNCTION_SOURCE)
-    violations, waived, graded = gate.find_violations(
-        _partial_diff(_FIXTURE_PATH, _CHECK_VALUE_WITH_OTHER_FUNCTION_SOURCE, [11]), tmp_path
-    )
-    assert graded == 1
+    violations, waived = _grade_added(tmp_path, _CHECK_VALUE_WITH_OTHER_FUNCTION_SOURCE, [11])
     assert violations == []
     assert waived == []
 
@@ -321,11 +342,7 @@ def test_multiline_call_span_regression_touching_only_the_argument_line_still_fl
     alone would miss this. `_span` covers `node.lineno..end_lineno`
     inclusive (here 7..9), so the added line 8 still brings the finding at
     line 7 into scope."""
-    _write(tmp_path, _FIXTURE_PATH, _MULTILINE_CALL_SOURCE)
-    violations, waived, graded = gate.find_violations(
-        _partial_diff(_FIXTURE_PATH, _MULTILINE_CALL_SOURCE, [8]), tmp_path
-    )
-    assert graded == 1
+    violations, waived = _grade_added(tmp_path, _MULTILINE_CALL_SOURCE, [8])
     assert _at(violations) == [("regex-property-gap", 7)]
     assert waived == []
 
@@ -334,9 +351,8 @@ def test_multiline_call_span_regression_touching_only_the_argument_line_still_fl
 
 
 def test_an_unparseable_hunk_header_raises_scanerror() -> None:
-    diff = f"diff --git a/x.py b/{_FIXTURE_PATH}\n+++ b/{_FIXTURE_PATH}\n@@ garbage @@\n+x = 1\n"
     with pytest.raises(gate.ScanError, match="unparseable hunk header"):
-        gate.parse_added_lines(diff)
+        gate.parse_added_lines(_UNPARSEABLE_HUNK_DIFF)
 
 
 def test_a_post_image_path_without_the_b_prefix_raises_scanerror() -> None:
@@ -410,12 +426,8 @@ def test_defeat_a_same_file_given_test_for_the_wrong_function_does_not_false_cle
     searching that specific function's own body for the scope's name, this
     would wrongly clear the violation. It must not: `check_value` stays
     uncovered."""
-    _write(tmp_path, _FIXTURE_PATH, _CHECK_VALUE_SOURCE)
-    _write(tmp_path, "tests/test_gitapex_check_fixture_properties.py", _PROPERTIES_COVERING_WRONG_FUNCTION)
-    violations, waived, graded = gate.find_violations(
-        _partial_diff(_FIXTURE_PATH, _CHECK_VALUE_SOURCE, [6, 7]), tmp_path
-    )
-    assert graded == 1
+    _write(tmp_path, _FIXTURE_PROPERTIES_PATH, _PROPERTIES_COVERING_WRONG_FUNCTION)
+    violations, waived = _grade_added(tmp_path, _CHECK_VALUE_SOURCE, [6, 7])
     assert _at(violations) == [("regex-property-gap", 7)]
     assert waived == []
 
@@ -482,10 +494,7 @@ def test_module_level_trigger_with_no_properties_file_reports_module_scope(
     deliberately left untouched by the diff (only line 4 is added) so it
     does not itself contribute a second finding -- this test isolates the
     bound-method call's own module-level attribution."""
-    source = 'import re\n\nSOME_RE = re.compile(r"^[a-z]+$")\nSOME_RE.fullmatch("literal")\n'
-    _write(tmp_path, _FIXTURE_PATH, source)
-    violations, waived, graded = gate.find_violations(_partial_diff(_FIXTURE_PATH, source, [4]), tmp_path)
-    assert graded == 1
+    violations, waived = _grade_added(tmp_path, _MODULE_LEVEL_TRIGGER_SOURCE, [4])
     assert waived == []
     assert len(violations) == 1
     assert violations[0].rule == "regex-property-gap"
@@ -499,7 +508,6 @@ def test_true_negative_hypothesis_given_attribute_form_also_counts(
     """`@hypothesis.given(...)` -- the attribute form, not the bare `given`
     name form `from hypothesis import given` gives -- must be recognised
     too. `_is_given_decorator`'s own docstring states both forms count."""
-    _write(tmp_path, _FIXTURE_PATH, _CHECK_VALUE_SOURCE)
     properties_source = (
         "import gitapex_check_fixture\n"
         "import hypothesis\n"
@@ -508,11 +516,8 @@ def test_true_negative_hypothesis_given_attribute_form_also_counts(
         "def test_check_value_matches(x):\n"
         "    gitapex_check_fixture.check_value(x)\n"
     )
-    _write(tmp_path, "tests/test_gitapex_check_fixture_properties.py", properties_source)
-    violations, waived, graded = gate.find_violations(
-        _partial_diff(_FIXTURE_PATH, _CHECK_VALUE_SOURCE, [6, 7]), tmp_path
-    )
-    assert graded == 1
+    _write(tmp_path, _FIXTURE_PROPERTIES_PATH, properties_source)
+    violations, waived = _grade_added(tmp_path, _CHECK_VALUE_SOURCE, [6, 7])
     assert violations == []
     assert waived == []
 
@@ -525,12 +530,8 @@ def test_a_properties_file_with_invalid_syntax_is_treated_as_uncovered_not_a_sca
     file's own triggers stay fully enumerable without it; only the
     coverage verdict for scopes in that file degrades to conservative
     (uncovered), never a `ScanError`."""
-    _write(tmp_path, _FIXTURE_PATH, _CHECK_VALUE_SOURCE)
-    _write(tmp_path, "tests/test_gitapex_check_fixture_properties.py", "def broken(:\n")
-    violations, waived, graded = gate.find_violations(
-        _partial_diff(_FIXTURE_PATH, _CHECK_VALUE_SOURCE, [6, 7]), tmp_path
-    )
-    assert graded == 1
+    _write(tmp_path, _FIXTURE_PROPERTIES_PATH, "def broken(:\n")
+    violations, waived = _grade_added(tmp_path, _CHECK_VALUE_SOURCE, [6, 7])
     assert len(violations) == 1
     assert waived == []
 
@@ -545,11 +546,8 @@ def test_module_level_trigger_is_cleared_by_any_given_test_in_a_covering_propert
     identity to search a body for. Not exercised by the module-level
     true-positive test above, which deliberately has no properties file at
     all."""
-    source = 'import re\n\nSOME_RE = re.compile(r"^[a-z]+$")\nSOME_RE.fullmatch("literal")\n'
-    _write(tmp_path, _FIXTURE_PATH, source)
-    _write(tmp_path, "tests/test_gitapex_check_fixture_properties.py", _PROPERTIES_COVERING_CHECK_VALUE)
-    violations, waived, graded = gate.find_violations(_partial_diff(_FIXTURE_PATH, source, [4]), tmp_path)
-    assert graded == 1
+    _write(tmp_path, _FIXTURE_PROPERTIES_PATH, _PROPERTIES_COVERING_CHECK_VALUE)
+    violations, waived = _grade_added(tmp_path, _MODULE_LEVEL_TRIGGER_SOURCE, [4])
     assert violations == []
     assert waived == []
 
@@ -563,7 +561,6 @@ def test_given_decorator_recognition_rejects_a_bare_given_and_a_non_name_non_att
     `func` is neither a plain name nor an attribute access (e.g. a
     call-returning-a-callable pattern) must both be rejected -- neither
     counts as coverage, so the finding must stay a violation."""
-    _write(tmp_path, _FIXTURE_PATH, _CHECK_VALUE_SOURCE)
     properties_source = (
         "import gitapex_check_fixture\n"
         "from hypothesis import given\n"
@@ -579,11 +576,8 @@ def test_given_decorator_recognition_rejects_a_bare_given_and_a_non_name_non_att
         "def test_weird_callee(x):\n"
         "    gitapex_check_fixture.check_value(x)\n"
     )
-    _write(tmp_path, "tests/test_gitapex_check_fixture_properties.py", properties_source)
-    violations, waived, graded = gate.find_violations(
-        _partial_diff(_FIXTURE_PATH, _CHECK_VALUE_SOURCE, [6, 7]), tmp_path
-    )
-    assert graded == 1
+    _write(tmp_path, _FIXTURE_PROPERTIES_PATH, properties_source)
+    violations, waived = _grade_added(tmp_path, _CHECK_VALUE_SOURCE, [6, 7])
     assert len(violations) == 1
     assert waived == []
 
@@ -596,16 +590,12 @@ def test_a_properties_file_that_imports_the_module_but_has_no_given_test_does_no
     an ordinary example-based test, not a property test -- `_covered` must
     not clear the finding on the strength of the import and name-mention
     alone."""
-    _write(tmp_path, _FIXTURE_PATH, _CHECK_VALUE_SOURCE)
     _write(
         tmp_path,
-        "tests/test_gitapex_check_fixture_properties.py",
+        _FIXTURE_PROPERTIES_PATH,
         "import gitapex_check_fixture\n\n\ndef test_plain_example():\n    gitapex_check_fixture.check_value('a')\n",
     )
-    violations, waived, graded = gate.find_violations(
-        _partial_diff(_FIXTURE_PATH, _CHECK_VALUE_SOURCE, [6, 7]), tmp_path
-    )
-    assert graded == 1
+    violations, waived = _grade_added(tmp_path, _CHECK_VALUE_SOURCE, [6, 7])
     assert len(violations) == 1
     assert waived == []
 
@@ -652,8 +642,7 @@ def test_main_exits_2_when_find_violations_itself_raises_scanerror(
     call `find_violations`/`parse_added_lines` directly, never through
     `main()` itself, so `main()`'s own catch-and-exit-2 wrapper around it
     was otherwise unexercised."""
-    diff = f"diff --git a/x.py b/{_FIXTURE_PATH}\n+++ b/{_FIXTURE_PATH}\n@@ garbage @@\n+x = 1\n"
-    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(diff.encode("utf-8")))
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(_UNPARSEABLE_HUNK_DIFF.encode("utf-8")))
     assert gate.main(["--root", str(tmp_path)]) == 2
     assert "unparseable hunk header" in capsys.readouterr().err
 

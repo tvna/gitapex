@@ -57,8 +57,8 @@ here:
   collection" miss the module docstring's own "Trigger categories" section
   discloses for category (c).
 
-This matches a prior session's own starting trace unchanged; no addition or
-correction was needed.
+This matches the earlier trace it was checked against, unchanged; no addition
+or correction was needed.
 
 Module-scope triggers need no dedicated property
 --------------------------------------------------

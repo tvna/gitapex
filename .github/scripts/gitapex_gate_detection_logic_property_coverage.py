@@ -229,10 +229,10 @@ dimensions.md``, "Fail-closed default on incomplete or malformed input."
 
 Invocation shape
 -----------------
-A ``.gitapex/ssot.json`` registration for this gate (added by a separate
-task, not this one) is expected to give it a ``local_invocation``/
-``local_stdin`` pair matching ``gitapex_gate_exception_handler_gaps.py``'s own
-entry exactly: ``local_stdin`` is
+This gate's own ``.gitapex/ssot.json`` registration gives it a
+``local_invocation``/``local_stdin`` pair matching
+``gitapex_gate_exception_handler_gaps.py``'s own entry exactly:
+``local_stdin`` is
 ``["git", "-c", "core.quotePath=false", "diff", "-U0", "--no-renames",
 "--merge-base", "origin/main", "HEAD", "--", "*.py"]``. This script therefore
 accepts the identical ``--root``/stdin-diff CLI shape that gate accepts, so
