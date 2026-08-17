@@ -8,7 +8,7 @@
       "split": "selection",
       "condition": "before",
       "commit": "eab6722d87e6a19cf5fbd8d5479940cbd8069d6d",
-      "score": 0.5,
+      "score": 0.777778,
       "artifact": "artifacts/description-conciseness-trigger-selection-before.md"
     },
     {

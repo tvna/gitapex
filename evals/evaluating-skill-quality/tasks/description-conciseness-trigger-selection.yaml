@@ -28,6 +28,11 @@ expected:
   output_contains:
     - "Description-length trigger"
     - "DESCRIPTION_MAX_CHARS"
+    - "uplication"
   output_not_contains:
     - "LGTM"
     - "no concerns"
+    - "automatically fail"
+    - "fails automatically"
+    - "fails simply"
+    - "fails solely"

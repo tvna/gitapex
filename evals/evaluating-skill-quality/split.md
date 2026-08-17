@@ -4305,11 +4305,15 @@ side against only `description-conciseness-trigger-selection.yaml`:**
 
 | Fixture | Before | After |
 |---|---|---|
-| `description-conciseness-trigger-selection.yaml` | 0.500000 (fresh) | 1.000000 (fresh) |
+| `description-conciseness-trigger-selection.yaml` | 0.777778 (fresh) | 1.000000 (fresh) |
 
-`gitapex_score_contract.py --compare-to 0.500000`, score `1.000000`:
-**`1.000000 KEEP`** -- selection mean 0.500000 -> 1.000000, strict
-improvement.
+`gitapex_score_contract.py --compare-to 0.777778`, score `1.000000`:
+**`1.000000 KEEP`** -- selection mean 0.777778 -> 1.000000, strict
+improvement. (Scores shown here already reflect the assertion
+strengthening in the second Post-verdict correction below, re-scored
+against the same transcripts -- see that subsection for why the
+original 0.500000 baseline changed to 0.777778 without a fresh
+dispatch.)
 
 Both dispatches correctly identified the description's duplicated rule and
 its trailing sprawl clause and reached **Fail** through the shared,
@@ -4402,14 +4406,14 @@ fresh dispatch: the correction only tightens a cross-reference sentence's
 wording, changing neither of the two literal strings
 (`Description-length trigger`, `DESCRIPTION_MAX_CHARS`) the selection
 fixture's assertions test -- both confirmed still present exactly once
-each by direct `grep -c` after the edit -- so the recorded 0.500000 ->
-1.000000 score above remains the correct evidence for the rule itself,
-the same disclosed-not-re-gated disposition the issue #1124 entry above
-used for an analogous post-verdict prose correction. Re-verified after the
-edit: `gitapex_check_skill_shape.py` 67/67, full pytest suite green (one
-pre-existing, confirmed-unrelated environment failure -- a shallow-clone
-git-history artifact in `test_gitapex_scan_harden_checkout_pin_drift.py`,
-reproduced identically on a clean, unmodified `HEAD` via `git stash`).
+each by direct `grep -c` after the edit -- so the recorded before/after
+score pair above remains the correct evidence for the rule itself, the
+same disclosed-not-re-gated disposition the issue #1124 entry above used
+for an analogous post-verdict prose correction. Re-verified after the
+edit: `gitapex_check_skill_shape.py` 67/67; full `pytest` suite 4935
+passed, 1 pre-existing unrelated failure (a shallow-clone git-history
+artifact in `test_gitapex_scan_harden_checkout_pin_drift.py`, reproduced
+identically on a clean, unmodified `HEAD` via `git stash`).
 
 Battle-testing-a-skill's remaining Angle 4 finding is disclosed, not
 fixed: by the bullet's own admission ("this dimension's own judgment ...
@@ -4435,3 +4439,59 @@ worth closing, and near-zero cost (one bullet,
 `gitapex_check_skill_shape.py` unaffected throughout). Kept per this same
 drift-correction precedent, not reclassified to force a cleaner-looking
 result.
+
+**Second post-verdict correction (before merge, found by an independent
+GitHub-native reviewer, CodeRabbit, on PR #1174).** A real construct-
+validity gap in both new fixtures' assertions, independently validated
+against the actual scorer and the actual transcripts before treating it
+as something to fix (per `drafting-a-pr-to-merge`'s own untrusted-review
+discipline): `description-conciseness-trigger-selection.yaml`'s original
+`expected` block required only `Description-length trigger` and
+`DESCRIPTION_MAX_CHARS` -- both satisfied by a response that misapplies
+the new bullet as an unconditional length-based auto-fail rather than a
+trigger for judgment, since neither string is unique to a *correct*
+application. Confirmed directly: `gitapex_score_contract.py` scored a
+hand-constructed reading of the assertions against that failure mode as
+indistinguishable from a correct pass. Fixed by adding one positive
+real-classification marker per fixture (`uplication`, case-agnostic for
+"duplication"/"Duplication", to the selection fixture; `well-known` to
+the train fixture, matching each fixture's own distinct bloat flavor) and
+four shared `output_not_contains` guards against the specific
+misapplication phrasing (`automatically fail`, `fails automatically`,
+`fails simply`, `fails solely`) -- each candidate string checked against
+all three already-captured transcripts before adoption, confirmed absent
+from the correct before/after/train transcripts (so the guards cost
+nothing against real behavior) and confirmed the two new positive markers
+are actually present in the relevant transcripts. Not re-dispatched: the
+existing transcripts are static text, re-scorable as-is.
+`gitapex_score_contract.py --assertions` against the strengthened
+contracts moved the selection fixture's before-score from 0.500000 to
+0.777778 (the added `output_not_contains` guards are trivially satisfied
+by both before and after, raising the shared denominator; the two
+original discriminating assertions are unchanged) and left the after-score
+at 1.000000 -- selection mean **0.777778 -> 1.000000, KEEP** still holds,
+strict improvement preserved. `results/2026-08-17-issue-1142-description-
+conciseness/manifest.json` and `claude-sonnet-5-before-after-detail.json`
+updated to the new scores in the same commit.
+
+CodeRabbit's separate, lower-severity ("Trivial"/"Nitpick") suggestion --
+add a dedicated held-out restraint fixture (a legitimately dense,
+non-redundant near-cap description that should Pass) -- is not fixed
+here. This gap was already named explicitly in this iteration's own Blind
+spot pass above, before CodeRabbit's review ran, as "left as a disclosed,
+open gap for a future addition, the same disposition this file's own
+confidentiality-awareness and dependency-policy entries used for their
+own analogous gaps" -- CodeRabbit's own review independently reached the
+identical conclusion. Declining to build it in this iteration is a
+scope call, not an oversight: the two Applicability-direction fixtures
+already in this iteration exercise the Fail path fully, a restraint
+fixture requires its own fresh live dispatch pair (CodeRabbit's own
+"Heavy lift" effort tag), and this repository's own established
+precedent (the `tool-capability-verification`, `consumer-repo-
+convention-deference`, and `confidentiality-awareness` entries above)
+repeatedly accepts "the existing generic restraint fixtures
+(`guardrail.yaml`/`no-fabricated-violation.yaml`) already probe
+generic false-positive restraint across the whole rubric" as sufficient
+coverage for a first landing, with a dedicated restraint fixture left to
+a follow-up. Disclosed in the run record's own `known_gaps`, not
+silently dropped.
