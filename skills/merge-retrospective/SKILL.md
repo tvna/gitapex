@@ -5,8 +5,9 @@ description: Use when a pull request has just merged, before closing the turn --
 
 # Merge Retrospective
 
-This is a self-contained procedure; it depends only on a connected GitHub
-MCP server for the issue-filing step.
+This is a self-contained procedure; it depends on a connected GitHub MCP
+server, and Step 1's two-signal check also needs local shell and git
+access to run its own bundled script (see the Prerequisite note below).
 
 A merged PR is not the end of the cycle. Before closing the turn, look
 back at everything that had to be repaired between opening the PR and
@@ -27,7 +28,14 @@ connected GitHub MCP server (`mcp__github__*` tools). Where the
 environment lacks one, fall back to the repo's own approved read-only
 REST API wrapper for Step 0's dedup search, Step 1's issue search, and
 Step 2's history reconstruction, and to whatever write path the repo
-already uses for filing issues in Step 5.
+already uses for filing issues in Step 5. Step 1's gate-implementation
+check additionally needs a local shell (to run `python3`) and local
+`git`/filesystem access, for its own bundled script and the gate
+registry it reads. Where the environment lacks either -- no shell tool
+at all, or a checkout the script cannot run against -- Step 1's own "if
+the script exits non-zero" handling applies exactly the same way it does
+to a script that ran and failed: never guess, carry every candidate
+forward as still-open, and disclose why.
 
 ## Classification taxonomy (fixed -- never invent a fourth category)
 
@@ -201,8 +209,8 @@ such taxonomy applies only `retrospective`, unchanged from before.
      `gitapex_check_retro_gate_resolved.py` -- from the repository root:
      `python3 skills/merge-retrospective/scripts/gitapex_check_retro_gate_resolved.py N1 N2 N3 ...`
      -- one batched invocation over every issue number the previous bullet
-     found, never one invocation per issue. This reuses the same
-     two-signal check
+     found, never one invocation per issue. This mirrors the same
+     two-signal check gitapex's own
      `.github/scripts/gitapex_scan_retrospective_gate_drift.py` already
      implements for CI instead of a citation-only approximation: an issue
      number counts as resolved only when *both* a commit reachable from
@@ -212,8 +220,9 @@ such taxonomy applies only `retrospective`, unchanged from before.
      was actually built. The script prints one JSON object to stdout
      partitioning every input issue number into exactly one of two
      arrays, e.g. `{"unresolved": [1109, 1093], "resolved": [1107]}`.
-     - **If the script exits non-zero** (its own documented failure mode --
-       a one-line cause on stderr, stdout stays empty): do not guess, and
+     - **If the script exits non-zero, or cannot be run at all** (no local
+       shell tool, no working checkout -- see the Prerequisite note
+       above): do not guess, and
        never fall back to treating a citing commit alone as proof of
        resolution -- that is precisely the weaker, one-signal check this
        fix retires, and a candidate a degraded fallback marked resolved

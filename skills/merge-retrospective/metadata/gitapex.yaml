@@ -23,3 +23,6 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1176"
       summary: "Supersedes the tools declaration in the entry above (not deleted, append-only discipline): Step 1's carry-forward check now names a local shell/filesystem action. read: [files] and shell: [python3, git] -- Step 1 runs the newly bundled scripts/gitapex_check_retro_gate_resolved.py via `python3`, which itself shells out to a local `git log` and reads `.gitapex/ssot.json`. write stays empty: nothing in this skill's procedure or its bundled scripts performs a file-write operation."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1176"
+      summary: "SKILL.md body is near the line ceiling (483/500). Adaptive was considered and rejected: the Worked example (a full issue body plus the Repair record format's field-by-field schema) drives the length, and capabilityAssumption is Broad -- the weak-model/constrained-harness audience most likely to misapply that schema without a complete inline instance. Moving it to references/ trades real Broad-target comprehension for length; this content is exercised every cycle, not Adaptive's rare-path case."
