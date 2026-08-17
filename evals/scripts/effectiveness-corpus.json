@@ -1,0 +1,162 @@
+{
+  "methodology_doc": "evals/scripts/effectiveness-corpus-methodology.md",
+  "entries": [
+    {
+      "skill": "auditing-agent-product-scope",
+      "skill_md": "skills/auditing-agent-product-scope/SKILL.md",
+      "eval_yaml": "evals/auditing-agent-product-scope/eval.yaml",
+      "split": "test"
+    },
+    {
+      "skill": "battle-testing-a-skill",
+      "skill_md": "skills/battle-testing-a-skill/SKILL.md",
+      "eval_yaml": "evals/battle-testing-a-skill/eval.yaml",
+      "split": "selection"
+    },
+    {
+      "skill": "drafting-a-pr-to-merge",
+      "skill_md": "skills/drafting-a-pr-to-merge/SKILL.md",
+      "eval_yaml": "evals/drafting-a-pr-to-merge/eval.yaml",
+      "split": "selection"
+    },
+    {
+      "skill": "drafting-an-acm-issue",
+      "skill_md": "skills/drafting-an-acm-issue/SKILL.md",
+      "eval_yaml": "evals/drafting-an-acm-issue/eval.yaml",
+      "split": "selection"
+    },
+    {
+      "skill": "drafting-an-adr",
+      "skill_md": "skills/drafting-an-adr/SKILL.md",
+      "eval_yaml": "evals/drafting-an-adr/eval.yaml",
+      "split": "selection"
+    },
+    {
+      "skill": "establishing-ubiquitous-language",
+      "skill_md": "skills/establishing-ubiquitous-language/SKILL.md",
+      "eval_yaml": "evals/establishing-ubiquitous-language/eval.yaml",
+      "split": "test"
+    },
+    {
+      "skill": "evaluating-context-channel-maturity",
+      "skill_md": "skills/evaluating-context-channel-maturity/SKILL.md",
+      "eval_yaml": "evals/evaluating-context-channel-maturity/eval.yaml",
+      "split": "selection"
+    },
+    {
+      "skill": "evaluating-deterministic-gate-quality",
+      "skill_md": "skills/evaluating-deterministic-gate-quality/SKILL.md",
+      "eval_yaml": "evals/evaluating-deterministic-gate-quality/eval.yaml",
+      "split": "selection"
+    },
+    {
+      "skill": "evaluating-skill-quality",
+      "skill_md": "skills/evaluating-skill-quality/SKILL.md",
+      "eval_yaml": "evals/evaluating-skill-quality/eval.yaml",
+      "split": "selection",
+      "known_prior_result": {
+        "source_file": "evals/evaluating-skill-quality/results/2026-08-17-issue-1142-description-conciseness/claude-sonnet-5-after.json",
+        "mean_score": 1.0,
+        "n_fixtures": 2,
+        "date": "2026-08-17",
+        "caveat": "Partial-subset gate-check run (2 fixtures: the train and selection fixtures for issue #1142 own edit), not this skill's full committed 23+-fixture corpus -- see evals/evaluating-skill-quality/results/README.md for the run-directory convention this file follows."
+      }
+    },
+    {
+      "skill": "executing-a-branch-plan",
+      "skill_md": "skills/executing-a-branch-plan/SKILL.md",
+      "eval_yaml": "evals/executing-a-branch-plan/eval.yaml",
+      "split": "selection"
+    },
+    {
+      "skill": "explaining-the-work",
+      "skill_md": "skills/explaining-the-work/SKILL.md",
+      "eval_yaml": "evals/explaining-the-work/eval.yaml",
+      "split": "test"
+    },
+    {
+      "skill": "fixing-a-reported-issue",
+      "skill_md": "skills/fixing-a-reported-issue/SKILL.md",
+      "eval_yaml": "evals/fixing-a-reported-issue/eval.yaml",
+      "split": "selection"
+    },
+    {
+      "skill": "grounding-in-primary-sources",
+      "skill_md": "skills/grounding-in-primary-sources/SKILL.md",
+      "eval_yaml": "evals/grounding-in-primary-sources/eval.yaml",
+      "split": "selection"
+    },
+    {
+      "skill": "merge-retrospective",
+      "skill_md": "skills/merge-retrospective/SKILL.md",
+      "eval_yaml": "evals/merge-retrospective/eval.yaml",
+      "split": "selection"
+    },
+    {
+      "skill": "outward-artifact-preflight",
+      "skill_md": "skills/outward-artifact-preflight/SKILL.md",
+      "eval_yaml": "evals/outward-artifact-preflight/eval.yaml",
+      "split": "selection"
+    },
+    {
+      "skill": "planning-a-branch-from-an-issue",
+      "skill_md": "skills/planning-a-branch-from-an-issue/SKILL.md",
+      "eval_yaml": "evals/planning-a-branch-from-an-issue/eval.yaml",
+      "split": "test"
+    },
+    {
+      "skill": "ranking-the-open-queue",
+      "skill_md": "skills/ranking-the-open-queue/SKILL.md",
+      "eval_yaml": "evals/ranking-the-open-queue/eval.yaml",
+      "split": "selection"
+    },
+    {
+      "skill": "responding-to-a-fresh-arrival",
+      "skill_md": "skills/responding-to-a-fresh-arrival/SKILL.md",
+      "eval_yaml": "evals/responding-to-a-fresh-arrival/eval.yaml",
+      "split": "selection"
+    },
+    {
+      "skill": "scanning-attack-surfaces",
+      "skill_md": "skills/scanning-attack-surfaces/SKILL.md",
+      "eval_yaml": "evals/scanning-attack-surfaces/eval.yaml",
+      "split": "selection"
+    },
+    {
+      "skill": "scanning-ci-workflows",
+      "skill_md": "skills/scanning-ci-workflows/SKILL.md",
+      "eval_yaml": "evals/scanning-ci-workflows/eval.yaml",
+      "split": "selection"
+    },
+    {
+      "skill": "scorer-gated-skill-edits",
+      "skill_md": "skills/scorer-gated-skill-edits/SKILL.md",
+      "eval_yaml": "evals/scorer-gated-skill-edits/eval.yaml",
+      "split": "test"
+    },
+    {
+      "skill": "screening-a-low-trust-contribution",
+      "skill_md": "skills/screening-a-low-trust-contribution/SKILL.md",
+      "eval_yaml": "evals/screening-a-low-trust-contribution/eval.yaml",
+      "split": "selection"
+    },
+    {
+      "skill": "setup-gitapex-toolchain",
+      "skill_md": "skills/setup-gitapex-toolchain/SKILL.md",
+      "eval_yaml": "evals/setup-gitapex-toolchain/eval.yaml",
+      "split": "selection"
+    },
+    {
+      "skill": "stop-and-replan",
+      "skill_md": "skills/stop-and-replan/SKILL.md",
+      "eval_yaml": "evals/stop-and-replan/eval.yaml",
+      "split": "selection"
+    },
+    {
+      "skill": "untrusted-input-triage",
+      "skill_md": "skills/untrusted-input-triage/SKILL.md",
+      "eval_yaml": "evals/untrusted-input-triage/eval.yaml",
+      "split": "selection"
+    }
+  ]
+}
