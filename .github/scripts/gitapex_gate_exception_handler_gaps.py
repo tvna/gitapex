@@ -458,6 +458,32 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
     declared counts outran its real body -- raised as `ScanError` rather
     than left to keep misattributing.
 
+    Two independent adversarial reviews found a bypass of the three
+    boundary checks above: an over-declared hunk whose excess is small
+    enough that a genuinely-following file's own real `--- `/`+++ ` pair
+    gets fully absorbed as fake removal/addition content, draining both
+    counters to exactly zero *before* either boundary check ever runs --
+    `in_hunk` clears itself one line early, silently. Caught by tracking
+    whether the immediately preceding processed line looked like a
+    `--- ` source header: if a hunk's counters drain to exactly zero on a
+    line that also looks like a `+++ ` post-image header, that specific
+    two-line shape is the same ambiguity the boundary checks exist to
+    resolve. But raising unconditionally on that shape alone regressed a
+    real, CI-reachable case (found independently by CodeRabbit and by a
+    second adversarial review dispatched against the first fix): an
+    accurately-declared, well-formed hunk whose own real content simply
+    happens to modify a line starting `-- ` into one starting `++ ` (a
+    changelog marker, a divider comment, this file's own docstrings full
+    of literal `--- `/`+++ ` examples) hits the identical two-line shape
+    with nothing wrong at all. A lookahead resolves it: the ambiguous
+    shape is only actually raised on when the *next* line also looks like
+    a new hunk (`@@`) or file (`diff --git `) header -- the same
+    confirming signal issue #1200's own docstring paragraph below named
+    as the shape a real fix would need. This does not close #1200 itself
+    (that gap is about honestly-consumed counts followed by disguised
+    content, not a counter-draining coincidence mid-hunk), only the
+    narrower ambiguity this specific two-line shape creates.
+
     Known gap, tracked separately rather than fixed here: issue #1200. The
     boundary checks above only catch an *over*-declared count. A header
     whose declared counts are honestly, exactly consumed by a real,
@@ -496,7 +522,8 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
                 "leak this hunk's state into whatever follows it."
             )
 
-    for line in diff_text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+    lines = diff_text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    for index, line in enumerate(lines):
         if line.startswith("diff --git "):
             _reject_if_hunk_incomplete(f"the next `diff --git ` line: {line!r}")
             path = None
@@ -551,15 +578,16 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
         # now bounded.
         if old_remaining <= 0 and new_remaining <= 0:
             if prev_line_looked_like_source_header and line.startswith("+++ "):
-                raise ScanError(
-                    f"hunk for {path!r} closes exactly on a line shaped like a new file's own "
-                    f"post-image header ({line!r}), immediately after one shaped like a source "
-                    f"header -- ambiguous between coincidental hunk-closing content and a real "
-                    "file transition missing its `diff --git ` separator. A hunk's declared "
-                    "counts draining to exactly zero on this exact two-line shape cannot be "
-                    "told apart from a genuine `--- `/`+++ ` pair; failing closed here rather "
-                    "than silently misattributing whatever follows."
-                )
+                next_line = lines[index + 1] if index + 1 < len(lines) else ""
+                if next_line.startswith("@@") or next_line.startswith("diff --git "):
+                    raise ScanError(
+                        f"hunk for {path!r} closes exactly on a line shaped like a new file's "
+                        f"own post-image header ({line!r}), immediately after one shaped like a "
+                        f"source header, immediately before what looks like a new hunk or file "
+                        f"header ({next_line!r}) -- ambiguous between coincidental hunk-closing "
+                        "content and a real file transition missing its `diff --git ` separator. "
+                        "Failing closed here rather than silently misattributing whatever follows."
+                    )
             in_hunk = False
         prev_line_looked_like_source_header = line.startswith("--- ")
     _reject_if_hunk_incomplete("the diff ended")

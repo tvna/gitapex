@@ -679,6 +679,41 @@ def test_an_over_declared_hunk_that_exactly_drains_into_a_real_header_pair_raise
         gate.parse_added_lines(diff)
 
 
+def test_an_accurately_declared_hunk_ending_in_dash_plus_shaped_content_is_not_an_error() -> None:
+    """Ported from this file's own architectural mirror
+    `gitapex_gate_detection_logic_property_coverage.py`. The false
+    positive the fix above regressed, found independently by CodeRabbit
+    and by a second adversarial review dispatched against the first
+    version of that fix -- confirmed live against this exact file's own
+    real CLI, not just the bare function, since the regression review
+    flagged this as reachable through this gate's real wired `-U0`
+    invocation, not only its `--diff` flag. A single, accurately-declared,
+    well-formed hunk whose own real content simply edits a line starting
+    `-- ` into one starting `++ ` -- exactly the shape the check above
+    raises on, except this hunk's declared count genuinely matches its
+    real body and nothing else follows. `@@ -6 +6 @@` (bare, one line
+    each side) is honestly satisfied by exactly the one real removal and
+    one real addition -- no missing `diff --git `, no disguised file
+    transition, just an ordinary edit to a changelog-marker-shaped line
+    (this repository's own docstrings are full of such literal
+    `--- `/`+++ ` examples). Confirmed live against `origin/main` (before
+    issue #1193's own fix existed): this exact diff already returns
+    `{'hooks/gitapex_check_dashplus.py': {6}}` cleanly -- a fix for a
+    different gap must not regress an already-working case. Resolved by
+    requiring a lookahead: the ambiguous shape only actually raises when
+    the line *after* it also looks like a new hunk or file header, which
+    is not true here (nothing follows)."""
+    diff = (
+        "diff --git a/hooks/gitapex_check_dashplus.py b/hooks/gitapex_check_dashplus.py\n"
+        "--- a/hooks/gitapex_check_dashplus.py\n"
+        "+++ b/hooks/gitapex_check_dashplus.py\n"
+        '@@ -6 +6 @@ DIVIDER = """\n'
+        "--- old changelog marker\n"
+        "+++ new changelog marker\n"
+    )
+    assert gate.parse_added_lines(diff) == {"hooks/gitapex_check_dashplus.py": {6}}
+
+
 def test_an_over_declared_hunk_length_before_a_diff_git_header_raises_scanerror() -> None:
     """Same over-declaration as directly above, but with a `diff --git `
     separator before the second file -- the shape a real `git diff` always
