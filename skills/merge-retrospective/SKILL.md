@@ -5,8 +5,10 @@ description: Use when a pull request has just merged, before closing the turn --
 
 # Merge Retrospective
 
-This is a self-contained procedure; it depends only on a connected GitHub
-MCP server for the issue-filing step.
+This is a self-contained procedure; it depends on a connected GitHub MCP
+server for the issue-filing step, plus local shell access (a `git log`
+subprocess and a `.gitapex/ssot.json` read) for Step 1's own bundled
+gate-resolution script.
 
 A merged PR is not the end of the cycle. Before closing the turn, look
 back at everything that had to be repaired between opening the PR and
@@ -27,7 +29,11 @@ connected GitHub MCP server (`mcp__github__*` tools). Where the
 environment lacks one, fall back to the repo's own approved read-only
 REST API wrapper for Step 0's dedup search, Step 1's issue search, and
 Step 2's history reconstruction, and to whatever write path the repo
-already uses for filing issues in Step 5.
+already uses for filing issues in Step 5. Step 1's own bundled
+gate-resolution script additionally needs local shell access to the
+checked-out repository (a `git log` subprocess and a `.gitapex/ssot.json`
+read) -- a separate, non-MCP prerequisite from the GitHub-connector one
+this paragraph otherwise covers.
 
 ## Classification taxonomy (fixed -- never invent a fourth category)
 

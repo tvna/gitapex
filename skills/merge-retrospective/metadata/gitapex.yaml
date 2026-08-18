@@ -10,10 +10,15 @@ spec:
     relatedTo: []
   executionRequirements:
     tools:
-      read: []
+      read:
+        - files
       write: []
-      shell: []
+      shell:
+        - subprocess
   references:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/823"
       summary: "Declared spec.executionRequirements.tools (W3 third slice, https://github.com/tvna/gitapex/issues/307): all three categories empty -- this skill's own prerequisite states it depends only on a connected GitHub MCP server; no local filesystem or shell action is named anywhere in its procedure."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1176"
+      summary: "Supersedes the decision entry above (not deleted, append-only discipline): Step 1's carry-forward check now shells out to skills/merge-retrospective/scripts/gitapex_check_retro_gate_resolved.py (uv run --frozen python3), which itself reads .gitapex/ssot.json and runs git log as a subprocess -- read: [files] and shell: [subprocess] declared to match. write stays empty: the script never writes any file."

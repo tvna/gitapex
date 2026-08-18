@@ -1,6 +1,6 @@
 id: merge-retrospective-carried-forward-gate-implemented
-name: Restraint Check -- Step 0 Finds a Prior Gate Already Implemented
-description: Restraint counterpart to the carried-forward train fixture -- Step 0's search finds a citing commit for the prior retrospective issue's proposed gate, so no "Carried-forward gate" subsection should be produced for it (closing that issue was not itself proof; the citing commit is).
+name: Restraint Check -- Step 1 Finds a Prior Gate Already Implemented
+description: Restraint counterpart to the carried-forward train fixture -- Step 1's two-signal check finds both a citing commit AND a corroborating .gitapex/ssot.json entry for the prior retrospective issue's proposed gate, so no "Carried-forward gate" subsection should be produced for it (a citing commit alone, or a registry entry alone, would not be enough; both signals agreeing is).
 tags:
   - quality
   - carried-forward
@@ -10,13 +10,17 @@ inputs:
     Use merge-retrospective. PR #261 ("fix: correct rounding error in the
     invoice-total calculator") just merged into main.
 
-    Step 0 carry-forward search results (already run for you): searching
-    `label:retrospective` (unfiltered by state) returns one issue, #175
-    ("Merge retrospective: PR #160"), which proposed a `pre-commit` hook
-    running `black --check` before every commit. A search for a merged PR
-    or commit citing "#175" finds commit `a1b2c3d`, message
-    "style(tooling): add black --check pre-commit hook (Refs #175)",
-    merged in PR #179 three weeks ago -- the gate was implemented.
+    Step 1 carry-forward check results (already run for you):
+    `mcp__github__list_issues` with `labels: ["retrospective"]`
+    (unfiltered by state) returns one issue, #175 ("Merge retrospective:
+    PR #160"), which proposed a `pre-commit` hook running `black --check`
+    before every commit. Running `gitapex_check_retro_gate_resolved.py 175`
+    returns `{"unresolved": [], "resolved": [175]}` -- commit `a1b2c3d`
+    ("style(tooling): add black --check pre-commit hook (Refs #175)",
+    merged in PR #179 three weeks ago) cites "#175", and
+    `.gitapex/ssot.json`'s `gates[]` also registers a
+    `tracking_issue: 175` entry -- both signals agree, so the gate was
+    implemented.
 
     Here is the one repair that happened between open and merge for PR
     #261 itself: CI run #1 failed because the invoice-total calculator
