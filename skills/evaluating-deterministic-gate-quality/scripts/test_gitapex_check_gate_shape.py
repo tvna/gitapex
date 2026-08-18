@@ -11,7 +11,7 @@ coverage that isn't real).
 
 Each dimension gets at least one pass case and one fail (or
 not_applicable/indeterminate, where a hard fail is deliberately never
-asserted -- dimension 3) case, per issue #587's own acceptance criterion
+asserted -- shape check 3) case, per issue #587's own acceptance criterion
 ("New checker correctly grades a constructed pass-case and fail-case
 target for at least one of dimensions 1-6").
 """
@@ -31,7 +31,7 @@ def _result(results: list[cgs.CheckResult], dimension: str) -> cgs.CheckResult:
     return matches[0]
 
 
-# --- dimension 1 / 2: deny mechanism + dual signal -----------------------
+# --- shape check 1 / 2: deny mechanism + dual signal -----------------------
 
 _SH_GOOD_DENY = """\
 #!/bin/bash
@@ -265,7 +265,7 @@ def test_dimension2_shell_echo_stderr_scan_is_not_quadratic():
     assert result is False
 
 
-# --- dimension 3: self-revalidation (heuristic) --------------------------
+# --- shape check 3: self-revalidation (heuristic) --------------------------
 
 
 def test_dimension3_passes_on_tool_name_read_and_compare():
@@ -303,7 +303,7 @@ def test_dimension3_bare_identifier_used_elsewhere_stays_indeterminate():
     assert d3.verdict == cgs.VERDICT_INDETERMINATE
 
 
-# --- dimension 4: bundled test exists ------------------------------------
+# --- shape check 4: bundled test exists ------------------------------------
 
 
 def test_dimension4_passes_when_sibling_test_exists(tmp_path):
@@ -385,7 +385,7 @@ def test_dimension4_unrelated_sibling_script_never_blocks_a_real_match(tmp_path)
 def test_dimension4_unreadable_directory_fails_closed_instead_of_crashing(tmp_path, monkeypatch):
     # An adversarial review round found directory.iterdir() had no
     # try/except anywhere in _find_sibling_test, unlike the read_text()
-    # call sites main()/dimension 6a already guard -- a permission-denied
+    # call sites main()/shape check 6a already guard -- a permission-denied
     # or racily-deleted directory crashed the whole tool uncaught.
     script = tmp_path / "hook.py"
     script.write_text("x = 1\n", encoding="utf-8")
@@ -424,7 +424,7 @@ def test_dimension4_missing_parent_directory():
     assert d4.verdict == cgs.VERDICT_FAILED
 
 
-# --- dimension 5: unsafe shell/command interpolation ---------------------
+# --- shape check 5: unsafe shell/command interpolation ---------------------
 
 _PY_SHELL_TRUE_FSTRING = """\
 import subprocess
@@ -664,7 +664,7 @@ def test_dimension5_shell_dash_c_with_variable_fails():
     assert d5.verdict == cgs.VERDICT_FAILED
 
 
-# --- dimension 6b: internal subprocess/network timeout -------------------
+# --- shape check 6b: internal subprocess/network timeout -------------------
 
 _PY_SUBPROCESS_NO_TIMEOUT = """\
 import subprocess
@@ -768,7 +768,7 @@ def test_dimension6b_python_fallback_passes_with_timeout():
     assert result.verdict == cgs.VERDICT_PASSED
 
 
-# --- dimension 6a: invocation-level timeout (hooks.json wiring) ---------
+# --- shape check 6a: invocation-level timeout (hooks.json wiring) ---------
 
 
 def test_dimension6a_not_applicable_without_hooks_json():
@@ -905,7 +905,7 @@ def test_dimension6a_tolerates_non_dict_hook_entry(tmp_path):
 def test_shebang_python_detected_without_py_suffix():
     text = "#!/usr/bin/env python3\nimport sys\nsys.exit(0)\n"
     results = cgs.gitapex_check_gate_shape(Path("hook"), text)
-    # Python-only dimension 6b check ran (not the shell curl/wget one):
+    # Python-only shape check 6b ran (not the shell curl/wget one):
     d6b = _result(results, "6b")
     assert d6b.verdict == cgs.VERDICT_NOT_APPLICABLE
 
@@ -923,7 +923,7 @@ def test_format_report_includes_every_dimension_marker():
     results = cgs.gitapex_check_gate_shape(Path("hook.sh"), _SH_GOOD_DENY)
     report = cgs.format_report(results)
     for dimension in ("1", "2", "3", "4", "5", "6a", "6b"):
-        assert f"dimension {dimension}" in report
+        assert f"shape check {dimension}" in report
 
 
 def test_main_returns_zero_on_all_pass_or_na(tmp_path, capsys):
@@ -933,7 +933,7 @@ def test_main_returns_zero_on_all_pass_or_na(tmp_path, capsys):
     exit_code = cgs.main([str(script)])
     assert exit_code == 0
     out = capsys.readouterr().out
-    assert "dimension 1" in out
+    assert "shape check 1" in out
 
 
 def test_main_returns_one_on_any_fail(tmp_path):

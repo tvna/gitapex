@@ -258,7 +258,7 @@ category table tags Foundation-tier input validation as schema/enum/size
 validation everywhere input enters, its `configure`-class (an enforced,
 not merely documented, obligation). The ACM-disclosure hook is exactly
 this pattern -- a schema-shaped presence/waiver check on a tool call's
-own body field, deterministically enforced (dimension 1: PASS, the
+own body field, deterministically enforced (shape check 1: PASS, the
 correct Domain-2 exit-2 deny signal is used) -- so Foundation-tier
 input-validation coverage for this specific policy is honestly claimable
 in principle.
@@ -299,7 +299,7 @@ its own follow-up issue (`[elided]`).
 **Verdict:** This control does **not** honestly clear Foundation today.
 The ACM-disclosure category itself is tier-scalable and, once the
 fail-open defect above is fixed, Foundation-tier coverage for it would be
-honestly reachable (dimension 1 already passes: the correct Domain-2
+honestly reachable (shape check 1 already passes: the correct Domain-2
 exit-2 deny signal is used on the well-formed path) -- but a live-tested
 floor violation disqualifies a gate from any tier, it does not cap it at
 one. No Enterprise/Advanced-tier escalation exists or is claimed either
@@ -380,7 +380,7 @@ than rounding up to "identical."
 **Verdict: PASS against the registered budget, with a named minor gap
 against this dimension's own bar.** Measured cost (~38-66ms wall across
 five runs, including the slower first invocation) is roughly 150-260x
-under the registered 10s budget (dimension 6's own concern, not restated
+under the registered 10s budget (shape check 6's own concern, not restated
 here) -- comfortably PASS on that axis. But this dimension asks a stricter
 question than "is it fast enough," and a strict read finds a real, if
 minor, instance of avoidable overhead: the three sequential `jq -r` calls
@@ -452,7 +452,7 @@ load-bearing one on this task distribution. `baggage_allowance` fires
 almost as often (42 times) but is 5% precision -- 40 of its 42 rejections
 block a write the ground truth actually performs, and removing it *raises*
 pass1 by 3pp. A review that stopped at "the gate fires and denies
-correctly per its own deterministic-shape checks" (dimensions 1-6) would
+correctly per its own deterministic-shape checks" (shape checks 1-6) would
 credit both gates equally; only the real-firing precision audit this
 dimension requires distinguishes a gate that is helping the target policy
 from one that is silently over-blocking legitimate actions while looking,

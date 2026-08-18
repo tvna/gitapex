@@ -1,11 +1,11 @@
-# Deterministic-gate quality dimensions
+# Deterministic-gate quality: shape checks and dimensions
 
 Two lanes, mirroring `evaluating-skill-quality`'s own split:
 
 - **Deterministic-shape checks** (1-6) -- fixed rules; a script could
   grade these mechanically if one existed for the target's own tooling.
-  `scripts/gitapex_check_gate_shape.py` now mechanically grades dimensions 1, 2,
-  4, 5, and 6 (dimension 3 as a disclosed heuristic only, never a hard
+  `scripts/gitapex_check_gate_shape.py` now mechanically grades shape checks 1, 2,
+  4, 5, and 6 (shape check 3 as a disclosed heuristic only, never a hard
   fail) for Domain 2 (agent-harness hook subprocess) targets -- see that
   script's own module docstring for exactly which sub-checks it runs and
   why it is scoped to that one domain. Domains 1, 3, and 4 (git hook, CI
@@ -78,7 +78,7 @@ dimension (trust/blast-radius classification) was promoted into its own
 Zero-Trust maturity classification) was added later still, directly in
 `SKILL.md` rather than as a numbered dimension here. See `SKILL.md`'s own
 axis section and `references/security-level.md` for the full test and its
-differentiation from dimensions 1 and 15 below.
+differentiation from shape check 1 and dimension 15 below.
 
 ## Deterministic-shape checks
 
@@ -276,8 +276,8 @@ differentiation from dimensions 1 and 15 below.
     an agent-harness hook's own stderr message, and an MCP server's own
     error response are all readable by someone or something with less
     trust than the credential itself carries.
-19. **Runtime-cost optimization, distinct from dimension 6's
-    budget-proportionality check.** Dimension 6 asks only whether a
+19. **Runtime-cost optimization, distinct from shape check 6's
+    budget-proportionality check.** Shape check 6 asks only whether a
     timeout/budget is set explicitly and matches the check's stated cost;
     this dimension asks whether that cost itself has been minimized within
     what the policy genuinely requires -- does the gate's own implementation
@@ -287,7 +287,7 @@ differentiation from dimensions 1 and 15 below.
     interpreter/toolchain cold-start on every invocation where a warm or
     incremental path exists, an unbounded quadratic pattern over input that
     could be linear)? A finding here must never come at the cost of
-    dimensions 1, 3, or 15 -- narrowing scope, skipping self-revalidation, or
+    shape check 1, shape check 3, or dimension 15 -- narrowing scope, skipping self-revalidation, or
     defaulting to allow on a fast path are not optimizations, they are
     correctness regressions wearing an optimization's name; grade only a
     change that holds the gate's own deny / self-revalidation / fail-closed
@@ -317,7 +317,7 @@ differentiation from dimensions 1 and 15 below.
     -- rather than only one? A gate that checks only one direction can
     still name itself "correspondence" or "sync" while missing a rename,
     removal, or drift-toward-stale-disclosure that only the reverse
-    direction would catch; a bundled test (dimension 4) covering only the
+    direction would catch; a bundled test (shape check 4) covering only the
     forward direction does not itself satisfy this dimension.
     *Domains:* generalizes directly -- the same one-directional gap can
     occur in a git hook script, a CI job step, an agent-harness hook, or
@@ -330,7 +330,7 @@ differentiation from dimensions 1 and 15 below.
     correctness signal (a ground-truth trajectory, a human-reviewed
     sample, a replay corpus) to compute a true-block vs. false-block
     rate, rather than crediting the gate as effective merely because it
-    fires and denies? A gate can be dimension-1-through-6 clean --
+    fires and denies? A gate can be shape-check-1-through-6 clean --
     correctly wired, fail-closed, self-revalidating -- while its own
     policy predicate is wrong most of the time it actually fires,
     silently over-blocking legitimate actions. "Reason Less, Verify
@@ -429,10 +429,10 @@ differentiation from dimensions 1 and 15 below.
     not treat every artifact as equally sufficient evidence for every
     sub-question: sub-question (b)'s "actually-required" claim needs the
     platform's own branch-protection/required-status-check configuration
-    confirmed directly, the same way dimension 1's own CI-domain note
+    confirmed directly, the same way shape check 1's own CI-domain note
     already requires -- a CI workflow file alone shows the check *exists*,
     never that it is *required*, and citing the workflow file for (b) is
-    exactly the workflow-YAML-only conflation dimension 1 forbids, applied
+    exactly the workflow-YAML-only conflation shape check 1 forbids, applied
     reflexively here. Sub-questions (a) and (d) can be confirmed from a
     registry file or an inventory of actual artifacts across domains
     respectively; (c) needs the platform's own branch-protection state,

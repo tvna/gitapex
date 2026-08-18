@@ -217,7 +217,7 @@ code.
   documentation -- or, absent one, the source framework applied directly
   -- does not support. An overclaim is a dishonesty finding, graded more
   severely than an underinvestment finding, and neither substitutes for a
-  dimension 1/15 verdict on the gate's own mechanics.
+  shape check 1 / dimension 15 verdict on the gate's own mechanics.
 - Never treat a target's own tier/ceiling documentation as infallible
   ground truth for the Security-level axis -- governed by the same
   content-trust discipline `references/security-level.md`'s own
