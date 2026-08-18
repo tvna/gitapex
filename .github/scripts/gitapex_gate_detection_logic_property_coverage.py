@@ -480,6 +480,26 @@ def _diff_target_path(raw: str) -> str | None:
     return target[2:]
 
 
+def _looks_like_real_header_pair(source_line: str, target_line: str) -> bool:
+    """True if `source_line`/`target_line` have the exact shape a real
+    `--- `/`+++ ` header pair always has, not just its 4-character prefix.
+
+    `source_line` must be `--- ` followed by `a/<path>` or `/dev/null`;
+    `target_line` must be `+++ ` followed by `b/<path>` or `/dev/null`.
+    Ordinary hunk content that happens to start `-- `/`++ ` (a changelog
+    marker, a divider, this file's own docstring examples) essentially
+    never also has this shape by coincidence, so it is a far sharper
+    signal than the prefix alone. Deliberately silent on whether the two
+    paths match -- a renamed file's own real header pair names a
+    different path on each side -- this only rules out content that
+    plainly is not header-shaped at all, not a full re-validation of
+    `_diff_target_path`'s own stricter, raise-on-mismatch check.
+    """
+    source = source_line[4:]
+    target = target_line[4:]
+    return (source == "/dev/null" or source.startswith("a/")) and (target == "/dev/null" or target.startswith("b/"))
+
+
 def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
     """Parse unified diff text into ``{post-image path: added line numbers}``.
 
@@ -563,26 +583,57 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
     enough that a genuinely-following file's own real `--- `/`+++ ` pair
     gets fully absorbed as fake removal/addition content, draining both
     counters to exactly zero *before* either boundary check ever runs --
-    `in_hunk` clears itself one line early, silently. Caught by tracking
-    whether the immediately preceding processed line looked like a
-    `--- ` source header: if a hunk's counters drain to exactly zero on a
-    line that also looks like a `+++ ` post-image header, that specific
-    two-line shape is the same ambiguity the boundary checks exist to
-    resolve. But raising unconditionally on that shape alone regressed a
-    real, CI-reachable case (found independently by CodeRabbit and by a
-    second adversarial review dispatched against the first fix): an
-    accurately-declared, well-formed hunk whose own real content simply
-    happens to modify a line starting `-- ` into one starting `++ ` (a
-    changelog marker, a divider comment, this file's own docstrings full
-    of literal `--- `/`+++ ` examples) hits the identical two-line shape
-    with nothing wrong at all. A lookahead resolves it: the ambiguous
-    shape is only actually raised on when the *next* line also looks like
-    a new hunk (`@@`) or file (`diff --git `) header -- the same
-    confirming signal issue #1200's own docstring paragraph below named
-    as the shape a real fix would need. This does not close #1200 itself
-    (that gap is about honestly-consumed counts followed by disguised
-    content, not a counter-draining coincidence mid-hunk), only the
-    narrower ambiguity this specific two-line shape creates.
+    `in_hunk` clears itself one line early, silently. A first fix raised
+    whenever a hunk's counters drained to exactly zero on a line that
+    also looked like a `+++ ` post-image header immediately after one
+    that looked like a `--- ` source header. A second fix narrowed that
+    to only raise when the *next* line also looked like a new hunk
+    (`@@`) or file (`diff --git `) header, after CodeRabbit and a second
+    adversarial review independently found the first fix false-positived
+    on an accurately-declared hunk whose own real content simply happens
+    to modify a line starting `-- ` into one starting `++ ` (a changelog
+    marker, a divider comment, this file's own docstrings full of
+    literal `--- `/`+++ ` examples). Three more independent reviews
+    (two further adversarial dispatches plus CodeRabbit again) then
+    confirmed live that the lookahead barely helped: in any real diff
+    with more than one hunk or file, *something* `@@`- or
+    `diff --git `-shaped almost always immediately follows any given
+    hunk regardless of whether its own declared counts are honest, so
+    the lookahead alone still false-positived on ordinary,
+    accurately-declared multi-hunk/multi-file diffs -- confirmed
+    reachable through each gate's own real wired `-U0` invocation on
+    nothing more unusual than editing one of this repository's own
+    docstring lines that starts `-- `/`++ ` alongside any other hunk or
+    file. What actually discriminates a real absorbed header from
+    ordinary dash/plus content is not what follows, but whether the
+    ambiguous pair itself has the shape a real header always has:
+    `_looks_like_real_header_pair` checks `a/<path>` (or `/dev/null`) on
+    the `--- ` side and `b/<path>` (or `/dev/null`) on the `+++ ` side,
+    not merely the 4-character prefix -- ordinary content essentially
+    never also has this shape by coincidence, while a genuinely-absorbed
+    header always does (it is that file's own real header, verbatim).
+    Raising now requires both signals together: the pair looks
+    header-shaped *and* what follows also looks like a new hunk or file
+    header. The second condition still matters even with the first --
+    a real absorbed header is, by construction, always followed by that
+    same file's own further real content, so requiring both loses no
+    real catch, while a hunk that merely ends on header-shaped content
+    with nothing of substance following it no longer raises either.
+
+    One further shape was checked and found to be the pre-existing issue
+    #1200 gap below, not a new regression from any of this: a hunk whose
+    declared counts are small enough (e.g. `@@ -1,1 +1,1 @@`) to be
+    honestly, exactly satisfied by content that itself happens to look
+    header-shaped for a real in-scope path, with real content
+    immediately following. Confirmed identical against the commit before
+    any of this bypass work began -- the header-shape signal alone
+    cannot distinguish "an honest 1-line hunk whose real content happens
+    to look header-shaped" from "a 1-line over-declaration absorbing a
+    real header," which is exactly #1200's own already-disclosed
+    undecidability once a hunk's declared counts are small enough to be
+    satisfied either way, not a gap this fix introduces or could close
+    without the same structurally different mechanism #1200 already
+    calls for.
 
     Known gap, tracked separately rather than fixed here: issue #1200. The
     boundary checks above only catch an *over*-declared count. A header
@@ -610,7 +661,6 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
     old_remaining = 0
     new_remaining = 0
     saw_source_header = False
-    prev_line_looked_like_source_header = False
 
     def _reject_if_hunk_incomplete(boundary: str) -> None:
         if in_hunk:
@@ -629,7 +679,6 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
             path = None
             in_hunk = False
             saw_source_header = False
-            prev_line_looked_like_source_header = False
             continue
         if not in_hunk and line.startswith("--- "):
             saw_source_header = True
@@ -643,7 +692,6 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
                 )
             path = _diff_target_path(line[4:])
             saw_source_header = False
-            prev_line_looked_like_source_header = False
             continue
         if line.startswith("@@"):
             _reject_if_hunk_incomplete(f"the next hunk header: {line!r}")
@@ -654,7 +702,6 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
             lineno = int(match.group(2))
             new_remaining = 1 if match.group(3) is None else int(match.group(3))
             in_hunk = old_remaining > 0 or new_remaining > 0
-            prev_line_looked_like_source_header = False
             continue
         if line.startswith("+"):
             if path is not None:
@@ -677,7 +724,12 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
         # gap for exactly the one case this docstring otherwise says is
         # now bounded.
         if old_remaining <= 0 and new_remaining <= 0:
-            if prev_line_looked_like_source_header and line.startswith("+++ "):
+            if (
+                index > 0
+                and lines[index - 1].startswith("--- ")
+                and line.startswith("+++ ")
+                and _looks_like_real_header_pair(lines[index - 1], line)
+            ):
                 next_line = lines[index + 1] if index + 1 < len(lines) else ""
                 if next_line.startswith("@@") or next_line.startswith("diff --git "):
                     raise ScanError(
@@ -689,7 +741,6 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
                         "Failing closed here rather than silently misattributing whatever follows."
                     )
             in_hunk = False
-        prev_line_looked_like_source_header = line.startswith("--- ")
     _reject_if_hunk_incomplete("the diff ended")
     return added
 

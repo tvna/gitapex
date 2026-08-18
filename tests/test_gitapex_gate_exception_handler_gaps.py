@@ -631,8 +631,6 @@ def test_an_over_declared_hunk_length_before_a_new_hunk_header_raises_scanerror(
         "--- a/hooks/gitapex_check_file2.py\n"
         "+++ b/hooks/gitapex_check_file2.py\n"
         "@@ -1,1 +1,2 @@\n"
-        " def g():\n"
-        "+    pass\n"
     )
     with pytest.raises(gate.ScanError, match=r"2 post-image line\(s\) still unconsumed"):
         gate.parse_added_lines(diff)
@@ -672,8 +670,6 @@ def test_an_over_declared_hunk_that_exactly_drains_into_a_real_header_pair_raise
         "--- a/hooks/gitapex_check_file2.py\n"
         "+++ b/hooks/gitapex_check_file2.py\n"
         "@@ -1,1 +1,2 @@\n"
-        " unchanged\n"
-        "+added\n"
     )
     with pytest.raises(gate.ScanError, match="closes exactly on a line shaped like"):
         gate.parse_added_lines(diff)
@@ -714,6 +710,77 @@ def test_an_accurately_declared_hunk_ending_in_dash_plus_shaped_content_is_not_a
     assert gate.parse_added_lines(diff) == {"hooks/gitapex_check_dashplus.py": {6}}
 
 
+def test_a_dash_plus_shaped_hunk_followed_by_a_real_second_file_is_not_an_error() -> None:
+    """Ported from this file's own architectural mirror
+    `gitapex_gate_detection_logic_property_coverage.py`. The lookahead-only
+    fix's own false positive, found live by three independent reviews
+    dispatched against it (two adversarial passes plus a
+    convention-adherence pass): the test directly above only covers the
+    case where *nothing* follows the dash/plus-shaped hunk, so the
+    lookahead trivially saw no confirming `@@`/`diff --git ` and never
+    raised. But in any real diff with more than one hunk or file, *some*
+    `@@`- or `diff --git `-shaped line almost always immediately follows
+    any given hunk regardless of whether its own declared count is
+    honest -- so the lookahead alone still raised here, on a completely
+    ordinary two-file diff with no ambiguity at all. Confirmed live
+    against the lookahead-only fix (commit 0372217d): this exact diff
+    raised `ScanError`, incorrectly, purely because a second real file
+    happens to follow the first file's own dash/plus-shaped last line.
+    Resolved by requiring the ambiguous pair to also look header-shaped
+    (`_looks_like_real_header_pair`: `a/<path>`/`b/<path>`, not just the
+    4-character prefix) before the lookahead is even consulted -- ordinary
+    content like `old changelog marker` never has that shape, so this
+    hunk no longer reaches the lookahead at all, regardless of what
+    follows it."""
+    diff = (
+        "diff --git a/hooks/gitapex_check_dashplus.py b/hooks/gitapex_check_dashplus.py\n"
+        "--- a/hooks/gitapex_check_dashplus.py\n"
+        "+++ b/hooks/gitapex_check_dashplus.py\n"
+        '@@ -6 +6 @@ DIVIDER = """\n'
+        "--- old changelog marker\n"
+        "+++ new changelog marker\n"
+        "diff --git a/hooks/gitapex_check_other.py b/hooks/gitapex_check_other.py\n"
+        "--- a/hooks/gitapex_check_other.py\n"
+        "+++ b/hooks/gitapex_check_other.py\n"
+        "@@ -2,0 +3,2 @@ def g():\n"
+        "+\n"
+        "+    return 1\n"
+    )
+    assert gate.parse_added_lines(diff) == {
+        "hooks/gitapex_check_dashplus.py": {6},
+        "hooks/gitapex_check_other.py": {3, 4},
+    }
+
+
+def test_a_header_shaped_pair_with_nothing_confirming_it_after_is_not_an_error() -> None:
+    """Ported from this file's own architectural mirror
+    `gitapex_gate_detection_logic_property_coverage.py`. Pins the one case
+    `_looks_like_real_header_pair` alone cannot resolve, found by a fourth
+    adversarial review dispatched against the fix above: a hunk whose
+    declared count is small enough (`@@ -1,1 +1,1 @@`) to be honestly,
+    exactly satisfied by content that itself happens to be
+    `a/<path>`/`b/<path>`-shaped, with nothing `@@`- or `diff --git
+    `-shaped confirming it afterward. Confirmed identical against the
+    commit before any of this bypass work began (issue #1200's own
+    already-disclosed gap, not a new regression): the header-shape signal
+    alone cannot tell "an honest 1-line hunk whose real content happens
+    to look header-shaped" from "a 1-line over-declaration absorbing a
+    real header" -- that is exactly what the lookahead's second,
+    independent condition still guards, which is why raising requires
+    both signals together rather than the header-shape check alone. Left
+    unchanged by this fix, deliberately: closing it needs #1200's own
+    structurally different mechanism, not an incremental extension of
+    this one."""
+    diff = (
+        "--- a/hooks/gitapex_check_file1.py\n"
+        "+++ b/hooks/gitapex_check_file1.py\n"
+        "@@ -1,1 +1,1 @@\n"
+        "--- a/hooks/gitapex_check_file2.py\n"
+        "+++ b/hooks/gitapex_check_file2.py\n"
+    )
+    assert gate.parse_added_lines(diff) == {"hooks/gitapex_check_file1.py": {1}}
+
+
 def test_an_over_declared_hunk_length_before_a_diff_git_header_raises_scanerror() -> None:
     """Same over-declaration as directly above, but with a `diff --git `
     separator before the second file -- the shape a real `git diff` always
@@ -730,11 +797,6 @@ def test_an_over_declared_hunk_length_before_a_diff_git_header_raises_scanerror(
         "+def f():\n"
         "+    pass\n"
         "diff --git a/hooks/gitapex_check_file2.py b/hooks/gitapex_check_file2.py\n"
-        "--- a/hooks/gitapex_check_file2.py\n"
-        "+++ b/hooks/gitapex_check_file2.py\n"
-        "@@ -1,1 +1,2 @@\n"
-        " def g():\n"
-        "+    pass\n"
     )
     with pytest.raises(gate.ScanError, match=r"3 post-image line\(s\) still unconsumed"):
         gate.parse_added_lines(diff)
