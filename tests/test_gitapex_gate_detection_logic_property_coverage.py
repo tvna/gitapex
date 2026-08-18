@@ -871,3 +871,51 @@ def test_main_reports_violations_and_waivers_with_exit_1(
     assert "regex-property-gap" in err
     assert "waived inline" in err
     assert "issue #1178" in err
+
+
+# --- the real repository ------------------------------------------------
+
+
+def test_the_workflow_passes_the_two_flags_the_gate_depends_on() -> None:
+    """Drift gate for an invariant this gate depends on, per
+    tests/test_gitapex_gate_exception_handler_gaps.py's own precedent for
+    the identical two flags on the identical kind of producer command --
+    this gate correlates diff-derived line numbers with tree content the
+    same way that one does, for the same two reasons.
+
+    `--no-renames`: a file promoted into a graded directory otherwise
+    arrives as a 100%-similarity rename with zero added lines and enters
+    scope ungraded -- the same rename-shaped fail-open
+    `gitapex_detect_changed_gate_scripts.py`'s own docstring records having
+    had to close. `core.quotePath=false`: a non-ASCII path anywhere in the
+    diff otherwise arrives C-quoted, which `_diff_target_path` refuses to
+    resolve (exit 2) -- failing the job over a file that need not even be
+    in scope."""
+    workflow = (gate.REPO_ROOT / ".github/workflows/detection-logic-property-coverage-gate.yml").read_text(
+        encoding="utf-8"
+    )
+    invocation = next(line for line in workflow.split("\n") if "git" in line and "diff -U0" in line)
+    assert "--no-renames" in invocation, invocation
+    assert "core.quotePath=false" in invocation, invocation
+
+
+def test_the_workflow_checks_out_the_head_sha_with_full_history() -> None:
+    """The third caller-side invariant this gate depends on, alongside the
+    two flags above -- an invariant's own drift gate ships with the
+    invariant, not after it.
+
+    `ref: <head sha>` is what makes the working tree the diff's post-image:
+    `find_violations` reads each in-scope file's post-image content
+    straight off the working tree and grades it against `parse_added_lines`'
+    own post-image line numbers, so the checked-out tree has to *be* that
+    post-image. Dropping this pin silently mis-grades every file the base
+    branch also touched -- there is no exit code and no message when that
+    happens, so nothing else in this suite would notice. `fetch-depth: '0'`
+    is load-bearing *for* that pin, not decoration: the workflow's own
+    `git merge-base` step needs `origin/main` reachable in the fetched
+    history, which a shallow checkout does not guarantee."""
+    workflow = (gate.REPO_ROOT / ".github/workflows/detection-logic-property-coverage-gate.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "ref: ${{ github.event.pull_request.head.sha }}" in workflow, workflow
+    assert "fetch-depth: '0'" in workflow, workflow
