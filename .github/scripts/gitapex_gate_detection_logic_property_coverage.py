@@ -490,23 +490,40 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
     since every hunk line carries its own one-character prefix.
 
     A `+++ ` post-image header reached outside a hunk with no `--- ` source
-    header before it raises ``ScanError``. This is one of two places this
-    function deliberately diverges from
+    header before it raises ``ScanError``. This was one of two places this
+    function deliberately diverged from
     `gitapex_gate_exception_handler_gaps.py`'s own otherwise-identical
-    `parse_added_lines`, which silently ignores such a header instead:
-    ignoring it leaves `path` at None, so every added line in every hunk
-    that follows is dropped and the run reports `OK: 0 in-scope file(s)
-    graded` and exits 0 -- a silent pass on an input this gate could not
-    grade, which is exactly what the module docstring's own "Exit codes"
-    section promises never happens. Real `git diff` output always emits
-    `--- ` before `+++ `, so no wired invocation reaches this; `--diff
-    <file>` accepts a patch from anywhere, and a fail-closed gate does not
-    get to assume its input came from the wiring.
+    `parse_added_lines`, which used to silently ignore such a header
+    instead: ignoring it leaves `path` at None, so every added line in
+    every hunk that follows is dropped and the run reports `OK: 0 in-scope
+    file(s) graded` and exits 0 -- a silent pass on an input this gate
+    could not grade, which is exactly what the module docstring's own
+    "Exit codes" section promises never happens. Issue #1184 ported this
+    same raise into that file's own `parse_added_lines`, so the two are
+    no longer divergent here -- both fail closed identically. Real `git
+    diff` output always emits `--- ` before `+++ `, so no wired invocation
+    reaches this; `--diff <file>` accepts a patch from anywhere, and a
+    fail-closed gate does not get to assume its input came from the
+    wiring.
 
     `in_hunk` is bounded by the hunk's own declared post-image length (the
     optional `,<count>` `_HUNK_RE` captures, defaulting to 1 when omitted --
     a bare `@@ -N +M @@` means exactly one post-image line), not only by the
-    next `diff --git ` line. Without that bound, a patch carrying no
+    next `diff --git ` line. Issue #1184 first ported this same
+    post-image-only bound into `gitapex_gate_exception_handler_gaps.py`'s
+    own `parse_added_lines`, then found and fixed a regression it
+    introduced there (a pure-deletion hunk, `@@ -a,b +c,0 @@`, sets its own
+    post-image count to zero and is reachable via this gate's real `-U0`
+    wired invocation) by tracking the pre-image count too and clearing
+    `in_hunk` only once both reach zero. **That improved, two-sided bound
+    was not ported back to this file** -- this parser still tracks the
+    post-image count alone and carries the same pure-deletion-hunk
+    regression, live but unexercised until this gate's own real `-U0`
+    invocation happens to produce one; tracked as part of issue #1193's own
+    updated scope rather than fixed here, alongside that issue's original,
+    lower-severity over-declared-count finding.
+
+    Without the post-image bound this file does carry, a patch carrying no
     `diff --git ` header at all between files (real `git diff` output
     always has one; a hand-fed or foreign patch, the same `--diff <file>`
     exposure as the header case above, need not) would leave `in_hunk` True
