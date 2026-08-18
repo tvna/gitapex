@@ -88,6 +88,16 @@ def assert_path_is_gitignored(path: pathlib.Path, description: str) -> None:
     )
 
 
+def _parse_workflow(workflow_name: str) -> Any:
+    """`.github/workflows/<workflow_name>` parsed as YAML."""
+    return yaml.safe_load((REPO_ROOT / ".github" / "workflows" / workflow_name).read_text(encoding="utf-8"))
+
+
+def _workflow_steps(workflow_name: str) -> list[Any]:
+    """Every `jobs.*.steps[]` entry of `.github/workflows/<workflow_name>`."""
+    return [step for job in _parse_workflow(workflow_name)["jobs"].values() for step in job.get("steps", [])]
+
+
 def assert_workflow_has_no_trigger_path_filter(workflow_name: str) -> None:
     """Assert `.github/workflows/<workflow_name>`'s trigger carries neither a
     `paths:` nor a `paths-ignore:` filter, in any YAML style.
@@ -231,16 +241,6 @@ def assert_workflow_feeds_merge_base_to(workflow_name: str, *producer_commands: 
 # The one `ref:` value that makes a checked-out tree *be* the diff's
 # post-image, which is what the two line-number-correlating gates need.
 _HEAD_SHA_REF = "${{ github.event.pull_request.head.sha }}"
-
-
-def _parse_workflow(workflow_name: str) -> Any:
-    """`.github/workflows/<workflow_name>` parsed as YAML."""
-    return yaml.safe_load((REPO_ROOT / ".github" / "workflows" / workflow_name).read_text(encoding="utf-8"))
-
-
-def _workflow_steps(workflow_name: str) -> list[Any]:
-    """Every `jobs.*.steps[]` entry of `.github/workflows/<workflow_name>`."""
-    return [step for job in _parse_workflow(workflow_name)["jobs"].values() for step in job.get("steps", [])]
 
 
 def assert_workflow_checkout_pins_head_sha_with_full_history(workflow_name: str) -> None:
