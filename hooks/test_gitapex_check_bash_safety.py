@@ -247,12 +247,20 @@ def test_denied_on_malformed_json_stdin() -> None:
     assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
 
 
-def test_denied_when_tool_input_is_not_an_object() -> None:
+@pytest.mark.parametrize(
+    "tool_input", [["not", "an", "object"], False, True, 0], ids=["array", "false", "true", "zero"]
+)
+def test_denied_when_tool_input_is_not_an_object(tool_input: object) -> None:
     """A well-formed top-level payload whose tool_input is itself a
-    non-object (array/string/number/bool) would otherwise crash the
-    `.tool_input.command` access with jq's own "Cannot index" error. Must
-    deny."""
-    payload = json.dumps({"tool_name": "Bash", "tool_input": ["not", "an", "object"]})
+    non-object would otherwise crash the `.tool_input.command` access with
+    jq's own "Cannot index" error. Must deny.
+
+    `false` is the case that actually escaped the original guard: found by
+    code review (PR #1213) after the array/string cases above already
+    passed -- jq's `//` operator treats JSON `false` the same as `null`
+    (both are falsy), so `(.tool_input // {}) | type == "object"` wrongly
+    accepted it, and the crash happened one line later, past deny()."""
+    payload = json.dumps({"tool_name": "Bash", "tool_input": tool_input})
     env = dict(os.environ)
     env.pop("CLAUDE_PROJECT_DIR", None)
     result = subprocess.run(
@@ -264,9 +272,29 @@ def test_denied_when_tool_input_is_not_an_object() -> None:
         env=env,
         cwd=str(REPO_ROOT),
     )
-    assert result.returncode == 2
+    assert result.returncode == 2, f"expected deny (exit 2) for tool_input={tool_input!r}, got {result.returncode}"
     parsed = json.loads(result.stderr)
     assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_denied_on_valid_json_non_object_stdin() -> None:
+    """Valid JSON that isn't an object at the top level (e.g. a bare array)
+    would otherwise crash the first field-extraction jq call the same way.
+    Must deny."""
+    env = dict(os.environ)
+    env.pop("CLAUDE_PROJECT_DIR", None)
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        input="[]",
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env=env,
+        cwd=str(REPO_ROOT),
+    )
+    assert result.returncode == 2, f"expected deny (exit 2), got {result.returncode}: stderr={result.stderr!r}"
+    payload = json.loads(result.stderr)
+    assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
 
 
 # ---------------------------------------------------------------------------

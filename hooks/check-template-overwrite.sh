@@ -57,8 +57,15 @@ fi
 # in an otherwise well-formed payload, which would crash the
 # `.tool_input.file_path` access below with jq's own "Cannot index X with
 # string" runtime error -- same fail-open class as the top-level check
-# above.
-if ! printf '%s' "$input" | jq -e '(.tool_input // {}) | type == "object"' >/dev/null 2>&1; then
+# above. `(.tool_input // {})` alone is not enough: jq's `//` treats JSON
+# `false` the same as `null` (both are falsy), so a `tool_input: false`
+# payload slipped past that form and crashed the extraction below anyway
+# -- found by code review (PR #1213), live-confirmed with
+# `jq -e '(.tool_input // {}) | type == "object"' <<< '{"tool_input":false}'`,
+# which wrongly reports true. Checking `.tool_input == null` directly
+# (true for both absent and explicit null, never for `false`) closes
+# that gap.
+if ! printf '%s' "$input" | jq -e '(.tool_input == null) or (.tool_input | type == "object")' >/dev/null 2>&1; then
   deny "Blocked by hooks/check-template-overwrite.sh: tool_input in the payload is not a JSON object. Failing closed."
 fi
 
