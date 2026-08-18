@@ -1731,11 +1731,16 @@ def test_the_workflow_uses_merge_base_not_base_sha() -> None:
     a defeat-case worth guarding against explicitly, not only asserting
     the computation exists. The second assertion confirms the computed
     variable is the one actually fed to the `git diff` invocation this
-    gate depends on.
+    gate depends on. Both checks strip comment lines first: a CodeRabbit
+    review on this same PR found that without stripping, a YAML comment
+    mentioning both substrings would satisfy either assertion with no
+    executable line actually computing or using `$merge_base`.
     """
     workflow = (REPO_ROOT / ".github/workflows/exception-handler-gap-gate.yml").read_text(encoding="utf-8")
-    assert "merge_base=$(git merge-base" in workflow, workflow
-    producer_lines = [line for line in workflow.split("\n") if "diff" in line and '"$merge_base"' in line]
+    code_lines = [line for line in workflow.split("\n") if not line.strip().startswith("#")]
+    code_text = "\n".join(code_lines)
+    assert "merge_base=$(git merge-base" in code_text, workflow
+    producer_lines = [line for line in code_lines if "diff" in line and '"$merge_base"' in line]
     assert producer_lines, workflow
 
 
