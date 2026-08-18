@@ -20,6 +20,7 @@ from pathlib import Path
 
 import gitapex_compute_waza_advisory_metrics as m
 import pytest
+from pydantic import ValidationError
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -295,6 +296,28 @@ def test_main_non_utf8_skill_md_exits_2(tmp_path: Path, capsys: pytest.CaptureFi
     exit_code = m.main(["--skill-md", str(skill_md)])
     assert exit_code == 2
     assert "cannot read" in capsys.readouterr().err
+
+
+def test_validation_error_message_native_pydantic_error_not_wrapped() -> None:
+    # _skill_md_must_exist is the only custom field_validator this args
+    # model declares; skill_md's own base type check (coercing the input to
+    # a Path at all) is pydantic's native validation, run before the custom
+    # validator ever sees the value. Constructing the model directly
+    # (bypassing argparse, which would normally pre-coerce --skill-md to a
+    # real Path) with a value pydantic's own path parser rejects outright
+    # exercises the native-error branch _validation_error_message falls
+    # back to when ctx carries no wrapped exception -- distinct from
+    # test_main_missing_skill_md_exits_2 above, which routes through the
+    # custom validator's own raised ValueError. The bad type is deliberate
+    # (testing runtime validation of a value static typing would normally
+    # rule out), matching this repository's own established
+    # `# type: ignore[arg-type]` precedent for the same situation (see
+    # test_gitapex_run_effectiveness_correlation.py's own sibling test of
+    # the same name).
+    with pytest.raises(ValidationError) as exc_info:
+        m._ComputeWazaAdvisoryMetricsArgs(skill_md=None)  # type: ignore[arg-type]
+    message = m._validation_error_message(exc_info.value)
+    assert "valid path" in message
 
 
 def test_direct_invocation_does_not_crash_on_imports() -> None:
