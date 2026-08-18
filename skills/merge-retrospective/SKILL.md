@@ -147,10 +147,20 @@ such taxonomy applies only `retrospective`, unchanged from before.
      title convention (a single source-of-truth function like this
      repository's own `_retro_title`/`dedup_query` in
      `gitapex_post_merge_retro.py`, producing
-     `chore(retrospective): merge retrospective for PR #N`), search that
-     exact phrase plus `label:retrospective`; a repository with neither
-     an opener nor its own convention has nothing to dedup against here,
-     so this check is a no-op and filing proceeds as normal.
+     `chore(retrospective): merge retrospective for PR #N`), fetch
+     candidates via `mcp__github__list_issues(labels: ["retrospective"])` --
+     an exact, deterministic label filter -- never
+     `mcp__github__search_issues`, which performs natural-language
+     semantic matching rather than an exact filter; then compare each
+     candidate's title against that exact phrase with a plain
+     client-side string match. A compound "phrase plus label" query
+     handed to a search tool is exactly the shape that has silently
+     missed a real, already-filed duplicate before -- the deterministic
+     list-then-compare sequence above forecloses that failure mode by
+     construction, not by relying on a search index to rank the right
+     result highly enough. A repository with neither an opener nor its
+     own convention has nothing to dedup against here, so this check is
+     a no-op and filing proceeds as normal.
      - **Match found, body still carries the opener's own stub marker
        text** (this repository's marker: `"Automated stub opened by the
        post-merge-auto-retro gate"`, from `gitapex_post_merge_retro.py`'s own
