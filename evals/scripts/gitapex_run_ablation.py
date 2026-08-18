@@ -326,11 +326,24 @@ def redact_executor_failure_reason(exc: Exception) -> str:
     Neither is safe to echo into a result a caller's own docstring calls
     "loud and visible" -- CLAUDE.md's own rule against echoing untrusted/
     external content into a generated artifact. A ``ValueError``/
-    ``OSError``, in contrast, is always this module's or the standard
-    library's own deterministic, code-controlled text (a missing-file
-    path, a malformed-YAML complaint) -- never a live model's own output
-    -- so those stay verbatim, genuinely useful and genuinely safe. The
-    split is by exception type, not a per-instance guess.
+    ``OSError``, in contrast, is always raised by this module's or the
+    standard library's own code in response to malformed LOCAL,
+    repo-committed input (a missing file path, a YAML/JSON parse or
+    jsonschema-validation complaint about a committed fixture/corpus
+    file) -- never in response to a live model's own generated output.
+    Some of that text does interpolate a value straight out of the
+    parsed file (a grader name, a ``tasks:`` glob pattern) rather than
+    being purely hardcoded in this module's own source (code-review
+    finding on issue #1144's own PR, correcting an earlier, imprecise
+    "always code-controlled" framing here) -- but that value still comes
+    from a file reviewed and merged through this repository's own normal
+    PR process, not from anything live, external, or attacker-supplied
+    at run time, so it stays verbatim: genuinely useful for diagnosing a
+    malformed local corpus/fixture file, and not the live-model-output
+    leak this function exists to prevent. The split is by exception
+    type, not a per-instance guess, precisely because that type reliably
+    tracks which side of the local-input/live-output line a message's
+    content came from.
 
     Hoisted here (issue #1144) rather than duplicated across callers:
     every ``evals/scripts/*.py`` module that records a skipped entry's or

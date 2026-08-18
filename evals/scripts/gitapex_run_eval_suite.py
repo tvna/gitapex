@@ -515,9 +515,17 @@ def run_eval_suite(
         scores.append(score_entry)
 
     if not scores:
+        # Embed each skipped fixture's own (already-redacted) id/reason in
+        # the message itself (code-review finding): run_eval_suite raises
+        # here before ever constructing a SuiteResult, so this is the only
+        # path fixture-level detail can reach a caller that only catches
+        # ValueError and keeps its text verbatim (compute_pairs' own
+        # per-entry failure handling) -- without it, an all-skipped suite
+        # loses every fixture id/reason down to a single generic count.
+        detail = "; ".join(f"{sf['fixture_id']}: {sf['reason']}" for sf in skipped_fixtures)
         raise ValueError(
             f"eval suite {eval_yaml_path}: all {len(fixtures)} fixture(s) were skipped "
-            "(content-policy rejection); cannot compute mean_score"
+            f"(content-policy rejection) -- {detail}; cannot compute mean_score"
         )
 
     scores.sort(key=lambda entry: entry["fixture_id"])

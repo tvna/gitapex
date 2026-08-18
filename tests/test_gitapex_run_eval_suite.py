@@ -846,8 +846,34 @@ def test_run_eval_suite_all_fixtures_rejected_raises_value_error(tmp_path: Path)
     )
     executor = _ContentPolicyRejectingExecutor(trigger="TRIGGER_REJECT", output="ok output")
 
-    with pytest.raises(ValueError, match=r"all 1 fixture.*skipped"):
+    with pytest.raises(ValueError, match=r"all 1 fixture.*skipped") as excinfo:
         gitapex_run_eval_suite.run_eval_suite(eval_yaml, _skill_md(tmp_path), executor=executor, model_cli="claude")
+
+    # Regression (code review finding): run_eval_suite raises before ever
+    # constructing a SuiteResult, so this ValueError's own text is the
+    # only place fixture-level detail can reach a caller that only
+    # catches ValueError and keeps it verbatim -- it must name the actual
+    # skipped fixture, not just a bare count.
+    assert "reject-task" in str(excinfo.value)
+    assert "RuntimeError" in str(excinfo.value)
+
+
+def test_run_eval_suite_all_fixtures_rejected_names_every_fixture(tmp_path: Path):
+    eval_yaml = _write_suite(
+        tmp_path,
+        eval_yaml_text=BASE_EVAL_YAML.replace("trials_per_task: 2", "trials_per_task: 1"),
+        tasks={
+            "a.yaml": _REJECTED_TASK_TEXT,
+            "b.yaml": _REJECTED_TASK_TEXT.replace("reject-task", "reject-task-2"),
+        },
+    )
+    executor = _ContentPolicyRejectingExecutor(trigger="TRIGGER_REJECT", output="ok output")
+
+    with pytest.raises(ValueError) as excinfo:
+        gitapex_run_eval_suite.run_eval_suite(eval_yaml, _skill_md(tmp_path), executor=executor, model_cli="claude")
+
+    assert "reject-task" in str(excinfo.value)
+    assert "reject-task-2" in str(excinfo.value)
 
 
 def test_run_eval_suite_non_content_policy_runtime_error_still_aborts_whole_suite(tmp_path: Path):
