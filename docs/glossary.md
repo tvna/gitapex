@@ -178,8 +178,8 @@ criterion a script can grade mechanically by fixed rule. In
 `evaluating-skill-quality` all nine criteria are dimensions
 (`references/rubric.md`). In `evaluating-deterministic-gate-quality`, only
 criteria 7-23 (the probabilistic-maturity lane, `references/dimensions.md`)
-are dimensions; criteria 1-6 (the deterministic-shape lane) are `Shape
-check`s, a distinct term.
+are dimensions; criteria 1-6 (the deterministic-shape lane) are shape
+checks, a distinct term.
 
 Superseded terms: `evaluating-deterministic-gate-quality`'s own prior usage
 of "dimension 1" through "dimension 6" for its deterministic-shape lane --

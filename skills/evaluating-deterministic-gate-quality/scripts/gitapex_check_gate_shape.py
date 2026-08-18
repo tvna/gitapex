@@ -920,7 +920,7 @@ def gitapex_check_gate_shape(script_path: Path, text: str, hooks_json_path: Path
     against ``text`` (the already-read contents of ``script_path``,
     ``script_path`` itself only used for its suffix/name and for locating a
     sibling test file). Returns one ``CheckResult`` per sub-check, in
-    dimension order; never raises on the *content* of ``text`` -- a
+    shape-check order; never raises on the *content* of ``text`` -- a
     hostile or malformed script is data to scan, not a reason to except.
     """
     is_python = _is_python(script_path, text)
