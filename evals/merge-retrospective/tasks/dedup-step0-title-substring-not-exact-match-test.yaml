@@ -1,0 +1,32 @@
+id: merge-retrospective-dedup-step0-title-substring-not-exact-match
+name: Step 0 Dedup -- Near-Miss Title Is Not a Duplicate
+description: Step 0's dedup search for PR #942 returns an existing retrospective issue titled for PR #94 -- a literal prefix/substring of the PR #942 phrase, not an exact match -- so exact-string-equality comparison must reject it and the retrospective for PR #942 still gets filed, never silently skipped as if already covered.
+tags:
+  - quality
+  - dedup
+  - restraint
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #942 ("fix: correct the pagination
+    cursor reset in the billing export job") just merged into main.
+
+    Step 0 dedup search results (already run for you, paginated to
+    exhaustion): searching `label:retrospective` returns exactly one
+    issue, #310, titled "chore(retrospective): merge retrospective for
+    PR #94" -- filed months ago when an unrelated PR #94 merged. Its
+    body no longer carries the post-merge-auto-retro stub marker (a
+    prior session already enriched it with PR #94's own repair content).
+
+    Here is the one repair that happened between open and merge for PR
+    #942 itself: CI run #1 failed because the billing export job's
+    pagination cursor was reset to the wrong offset after a retry,
+    causing duplicate rows in the export. The author pushed a follow-up
+    commit fixing the cursor-reset logic, and CI run #2 passed clean.
+
+    Run the retrospective now that PR #942 has merged.
+expected:
+  output_contains:
+    - "missing deterministic gate"
+    - "Refs #942"
+  output_not_contains:
+    - "already retrospected"

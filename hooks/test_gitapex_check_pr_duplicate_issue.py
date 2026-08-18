@@ -86,6 +86,35 @@ def test_waiver_line_inside_a_fence_does_not_count() -> None:
     assert not checker.has_duplicate_waiver(body)
 
 
+def test_waiver_line_inside_an_unterminated_fence_does_not_count() -> None:
+    """Regression test (deterministic-gate-quality audit, PR #1215): an
+    opening ``` with no matching close anywhere in the rest of the body is
+    rendered by GitHub as code through to the end of the body, the same as
+    a terminated fence -- `_strip_fences` must treat it the same way, not
+    leave it as literal text a real `Duplicate-PR-waiver:` line could hide
+    inside unnoticed."""
+    body = "Example usage:\n```\nDuplicate-PR-waiver: example only\n"
+    assert not checker.has_duplicate_waiver(body)
+
+
+def test_waiver_line_before_an_unterminated_fence_still_counts() -> None:
+    # `_UNTERMINATED_FENCE_RE` strips only from its own match position (the
+    # fence-open marker) onward -- a real waiver line appearing *before*
+    # that marker must survive, the same guard against over-stripping that
+    # test_waiver_line_before_a_terminated_fence_still_counts checks for the
+    # terminated case.
+    body = "Duplicate-PR-waiver: real one\n```\nDuplicate-PR-waiver: also inside, but unreachable\n"
+    assert checker.has_duplicate_waiver(body)
+
+
+def test_waiver_line_before_a_terminated_fence_still_counts() -> None:
+    # Guards against the unterminated-fence fix over-stripping: a real
+    # waiver line that appears *before* a well-paired, terminated fence
+    # must still be detected.
+    body = "Duplicate-PR-waiver: real reason\n```\nexample text\n```\n"
+    assert checker.has_duplicate_waiver(body)
+
+
 def test_waiver_line_case_insensitive_and_bulleted() -> None:
     assert checker.has_duplicate_waiver("- duplicate-pr-waiver: intentional second PR, see #99")
 

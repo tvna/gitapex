@@ -1027,7 +1027,7 @@ def test_real_split_json_partition_declarations_are_pinned_exactly():
         "battle-testing-a-skill": None,
         "evaluating-skill-quality": (31, 34, 14),
         "explaining-the-work": (3, 2, 9),
-        "merge-retrospective": (9, 6, 3),
+        "merge-retrospective": (10, 6, 4),
         "scorer-gated-skill-edits": None,
     }
 

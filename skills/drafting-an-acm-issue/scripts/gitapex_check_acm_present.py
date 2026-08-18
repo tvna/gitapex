@@ -48,7 +48,8 @@ _HEADER_RE = re.compile(
 # ACM-waiver line convention already uses (hooks/gitapex_check_acm_present_or_waiver.py's
 # `_ACM_WAIVER_RE`), applied here to a distinct field name.
 _DEDUP_RE = re.compile(
-    r"^[ \t]*[-*]?[ \t]*Dedup[ \t]*:[ \t]*\S.*$",
+    r"^[ \t]*(?:[-*+]|\d+\.|>|\#{1,6})?[ \t]*[*_`]{0,2}Dedup[*_`]{0,2}"
+    r"[ \t]*:[ \t]*[*_`]{0,2}[ \t]*[^\s\u00ad\u200b-\u200f\u2060-\u2064\ufeff\u3164].*$",
     re.IGNORECASE | re.MULTILINE,
 )
 

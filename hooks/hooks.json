@@ -58,7 +58,7 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/check-pr-duplicate-issue.sh\"",
-            "timeout": 45
+            "timeout": 130
           }
         ]
       },

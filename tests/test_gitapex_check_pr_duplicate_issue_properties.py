@@ -24,8 +24,15 @@ _PROPERTIES = settings(derandomize=True, max_examples=200, deadline=None)
 # a non-whitespace character by construction (`filter` on the first char) --
 # exactly what `_WAIVER_RE`'s own `\S.*$` requires after the colon. No
 # newline/carriage-return so this stays one line the `re.MULTILINE` anchors
-# treat as such.
-_REASON_ALPHABET = st.characters(blacklist_categories=("Cc", "Cs"), blacklist_characters="\n\r")
+# treat as such. Backtick is excluded too: `_strip_fences` runs body-wide
+# before `_WAIVER_RE` ever sees the text, and `_INLINE_CODE_RE` treats any
+# backtick-delimited span -- including one that is, by construction, the
+# entire generated reason (e.g. a bare "`x`") -- as inline code to strip,
+# which can leave nothing non-whitespace behind for a reason that would
+# otherwise be perfectly valid content. Confirmed live: without this
+# exclusion, hypothesis finds the reason "``" (two backticks, an empty
+# inline-code span) as a counterexample to this property.
+_REASON_ALPHABET = st.characters(blacklist_categories=("Cc", "Cs"), blacklist_characters="\n\r`")
 _NON_EMPTY_REASON = st.text(alphabet=_REASON_ALPHABET, min_size=1).filter(lambda s: not s[0].isspace())
 
 _WHITESPACE_ONLY = st.text(alphabet=st.sampled_from([" ", "\t"]), max_size=10)

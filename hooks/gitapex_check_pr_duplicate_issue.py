@@ -62,6 +62,18 @@ another PR's own title or body text, which is attacker-influenced text on
 a public repository (mirrors gitapex_check_pr_issue_acm_disclosure.py's own
 identical rule and rationale).
 
+Residual risk, named rather than left implicit (deterministic-gate-quality
+audit, PR #1215): this only guards `create_pull_request`, so editing an
+existing PR's body afterward to add a resolving citation is not re-checked
+by this hook, and any PR opened outside this agent-mediated path at all
+(the GitHub web UI, `gh`, or a direct API call) is never checked -- no
+CI-side backstop exists for this gate yet. A hook-runner timeout also does
+not block the tool call under Claude Code's own hook contract, so an API
+outage severe enough to exceed hooks.json's own timeout for this entry
+still fails this gate open despite the fail-closed design below; see
+`hooks/check-pr-duplicate-issue.sh`'s own comment for the worst-case
+latency arithmetic that timeout is sized against.
+
 Standard library only.
 
 Usage (matches the JSON the .sh wrapper pipes in)::
@@ -97,13 +109,40 @@ import gitapex_check_pr_issue_acm_disclosure as citation_extractor
 
 _API_ROOT = "https://api.github.com"
 _API_VERSION = "2022-11-28"
-_HTTP_TIMEOUT_SECONDS = 20
+# 10s, not gitapex_check_pr_issue_acm_disclosure.py's 20s: that sibling fetches
+# one issue; this module can fetch up to _MAX_PAGES pages in the same run, so
+# its own per-request budget must be smaller for the worst case below to fit
+# hooks.json's own timeout for this entry (deterministic-gate-quality audit,
+# PR #1215 -- the prior 20s value made the worst case below exceed even a
+# since-widened hooks.json timeout, and Claude Code's own hook contract does
+# not block the tool call on a timed-out hook, so that overrun was a silent
+# fail-OPEN on the exact GitHub-API-degraded case this fail-closed design
+# exists for).
+_HTTP_TIMEOUT_SECONDS = 10
 _MAX_ATTEMPTS = 2
 _PER_PAGE = 100
 # Named, disclosed bound (module docstring) -- not a silent truncation.
+# Worst-case latency this implies, with _HTTP_TIMEOUT_SECONDS=10 and the
+# attempt*5 retry backoff below: (_MAX_PAGES - 1) successful pages at 10s
+# each, plus one final page exhausting both attempts (2*10 + 5), so
+# 9*10 + 25 = 115s -- hooks.json's own timeout for this hook's entry must
+# stay comfortably above that figure, or this bound degrades from "fails
+# closed" to "fails open on hook-runner cancellation" again.
 _MAX_PAGES = 10
 
 _FENCE_RE = re.compile(r"```.*?```|~~~.*?~~~", re.DOTALL)
+# An *unterminated* fence opener (no matching close anywhere in the rest of
+# the body) is not covered by `_FENCE_RE` above, which requires a matching
+# close to match at all -- deterministic-gate-quality audit, PR #1215,
+# live-verified: GitHub renders an unterminated ``` to the end of the
+# rendered body as code, but this checker previously left that text
+# completely unstripped, so a `Duplicate-PR-waiver:` line a human reader
+# sees as an illustrative code example was matched as a real waiver. Runs
+# after `_FENCE_RE` (so a well-paired fence is stripped as such, not
+# double-counted here) and before `_INLINE_CODE_RE` below (a bare "```" is
+# itself two single backticks; running inline-code stripping first would
+# eat into it before this pattern ever saw it).
+_UNTERMINATED_FENCE_RE = re.compile(r"```.*\Z|~~~.*\Z", re.DOTALL)
 _INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
 
 _WAIVER_RE = re.compile(
@@ -118,6 +157,7 @@ class GitHubApiError(RuntimeError):
 
 def _strip_fences(text: str | None) -> str:
     without_fences = _FENCE_RE.sub("", text or "")
+    without_fences = _UNTERMINATED_FENCE_RE.sub("", without_fences)
     return _INLINE_CODE_RE.sub("", without_fences)
 
 

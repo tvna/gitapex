@@ -151,16 +151,38 @@ such taxonomy applies only `retrospective`, unchanged from before.
      candidates via `mcp__github__list_issues(labels: ["retrospective"])` --
      an exact, deterministic label filter -- never
      `mcp__github__search_issues`, which performs natural-language
-     semantic matching rather than an exact filter; then compare each
-     candidate's title against that exact phrase with a plain
-     client-side string match. A compound "phrase plus label" query
-     handed to a search tool is exactly the shape that has silently
-     missed a real, already-filed duplicate before -- the deterministic
-     list-then-compare sequence above forecloses that failure mode by
-     construction, not by relying on a search index to rank the right
-     result highly enough. A repository with neither an opener nor its
-     own convention has nothing to dedup against here, so this check is
-     a no-op and filing proceeds as normal.
+     semantic matching rather than an exact filter. (Step 1 below also
+     calls `search_issues` -- that is a different, broader task, auditing
+     *every* prior retrospective issue's gate status repository-wide,
+     not checking one exact title against one specific PR's identity, so
+     it is not a license to widen this step's own tool choice; each
+     step's choice is scoped to what that step is actually checking, not
+     a repo-wide policy either way.) Page through every result before
+     concluding "no match": follow `pageInfo.endCursor` via the `after`
+     parameter until `pageInfo` reports no further page remains, the same
+     fail-closed-on-incomplete-pagination discipline this repository's
+     own `hooks/gitapex_check_pr_duplicate_issue.py` applies to its own
+     paginated GitHub listing -- stopping at the first page only checks
+     the most-recently-labeled issues, which silently misses an older
+     match once enough retrospectives have been filed. Then compare each
+     candidate's title against that exact phrase with **exact string
+     equality**, never `in`/substring containment: a substring check is
+     its own duplicate-work hazard here, since the rendered title for any
+     PR number is always a literal prefix of the rendered title for a
+     longer PR number sharing the same leading digits (a one-digit PR
+     number's title is a literal prefix of a two-digit PR number's title
+     starting with that same digit) -- so a substring match run while
+     filing the shorter number's retrospective would wrongly treat the
+     longer number's own already-filed issue as if it were the shorter
+     number's own. A compound
+     "phrase plus label" query handed to a search tool is exactly the
+     shape that has silently missed a real, already-filed duplicate
+     before -- the deterministic list-then-compare sequence above
+     forecloses that failure mode by construction, not by relying on a
+     search index to rank the right result highly enough. A repository
+     with neither an opener nor its own convention has nothing to dedup
+     against here, so this check is a no-op and filing proceeds as
+     normal.
      - **Match found, body still carries the opener's own stub marker
        text** (this repository's marker: `"Automated stub opened by the
        post-merge-auto-retro gate"`, from `gitapex_post_merge_retro.py`'s own

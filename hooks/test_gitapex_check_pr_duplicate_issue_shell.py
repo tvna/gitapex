@@ -176,7 +176,7 @@ def test_denied_when_stdin_is_not_valid_json() -> None:
     assert result.returncode == 2, f"expected deny (exit 2), got {result.returncode}: stderr={result.stderr!r}"
     payload = json.loads(result.stderr)
     assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
-    assert "not a JSON object" in payload["systemMessage"]
+    assert "not exactly one JSON object" in payload["systemMessage"]
 
 
 def test_denied_when_stdin_is_valid_json_but_not_an_object() -> None:
@@ -185,12 +185,36 @@ def test_denied_when_stdin_is_valid_json_but_not_an_object() -> None:
         assert result.returncode == 2, f"input {raw!r}: expected deny (exit 2), got {result.returncode}"
         payload = json.loads(result.stderr)
         assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
-        assert "not a JSON object" in payload["systemMessage"]
+        assert "not exactly one JSON object" in payload["systemMessage"]
 
 
 def test_denied_when_stdin_is_empty() -> None:
     result = _run_raw("")
     assert result.returncode == 2
+    payload = json.loads(result.stderr)
+    assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_denied_when_stdin_carries_a_json_stream_rather_than_one_object() -> None:
+    # Regression test for a fail-open the deterministic-gate-quality audit
+    # (PR #1215) found live: the shape check used to validate a JSON
+    # *stream* one value at a time via `jq -e 'if type == "object" ...'`,
+    # exiting on the LAST value -- so two concatenated JSON objects on
+    # stdin passed it, `tool_name` then became a multi-line string matching
+    # no matcher, and the script took its `exit 0` allow path with the
+    # duplicate-check never run. Fixed by slurping (`-s`) into a
+    # one-element array first, so "exactly one value, and it's an object"
+    # is checkable directly. Ordering matters here: the real
+    # create_pull_request payload comes FIRST and carries a resolving
+    # citation, so an appended second JSON value is all it takes to
+    # exercise the old defeat.
+    raw = (
+        '{"tool_name":"mcp__github__create_pull_request",'
+        '"tool_input":{"owner":"tvna","repo":"gitapex","title":"x","body":"Closes #1"}}'
+        '{"tool_name":"Bash"}'
+    )
+    result = _run_raw(raw)
+    assert result.returncode == 2, f"expected deny (exit 2), got {result.returncode}: stdout={result.stdout!r}"
     payload = json.loads(result.stderr)
     assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
 

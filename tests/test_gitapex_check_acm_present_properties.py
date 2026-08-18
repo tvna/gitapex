@@ -23,7 +23,8 @@ from hypothesis import strategies as st
 
 _PROPERTIES = settings(derandomize=True, max_examples=200, deadline=None)
 
-_REASON_ALPHABET = st.characters(blacklist_categories=("Cc", "Cs"), blacklist_characters="\n\r")
+_HANGUL_FILLER = chr(0x3164)  # category Lo (not Cf), so the blacklist below misses it without this
+_REASON_ALPHABET = st.characters(blacklist_categories=("Cc", "Cs", "Cf"), blacklist_characters="\n\r" + _HANGUL_FILLER)
 _NON_EMPTY_REASON = st.text(alphabet=_REASON_ALPHABET, min_size=1).filter(lambda s: not s[0].isspace())
 
 _WHITESPACE_ONLY = st.text(alphabet=st.sampled_from([" ", "\t"]), max_size=10)

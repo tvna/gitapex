@@ -28,12 +28,28 @@
 # trade-off (this blocks all PR creation carrying a resolving citation
 # during a transient GitHub API outage).
 #
-# Denies via the PreToolUse hookSpecificOutput JSON on stdout AND exit 2 /
-# stderr (both conventions, defense in depth), same as
-# hooks/check-pr-issue-acm-disclosure.sh -- this script is adapted directly
-# from that one; see its own comments for the full hardening rationale
-# (jq-missing guard, malformed-JSON guard, non-object tool_input guard,
-# stdin-only payload construction to avoid ARG_MAX).
+# Denies via exit 2 with the hookSpecificOutput JSON on stderr (verified
+# live: a deny writes 0 bytes to stdout) -- single-signal, not the
+# dual-stdout-and-stderr scheme an earlier version of this comment claimed;
+# hooks/check-pr-issue-acm-disclosure.sh's own identical claim is the same
+# inaccuracy, inherited when this script was adapted directly from that one.
+# See that script's own comments for the rest of the hardening rationale
+# this one shares (jq-missing guard, malformed-JSON guard, non-object
+# tool_input guard, stdin-only payload construction to avoid ARG_MAX).
+#
+# Residual risk, named rather than left implicit (deterministic-gate-quality
+# audit, PR #1215): (1) wired only on create_pull_request, not
+# update_pull_request -- a PR opened with no resolving citation, then
+# edited afterward to add one, is not re-checked; (2) a PR opened outside
+# this agent-mediated path entirely (GitHub web UI, `gh`, or a direct API
+# call) is never checked at all -- no CI-side backstop exists for this gate
+# yet, unlike hooks/check-pr-title-convention.sh's
+# .github/workflows/pr-title-convention-gate.yml; (3) a hook-runner timeout
+# (see the timeout-arithmetic comment on the check-pr-duplicate-issue.sh
+# entry in hooks.json) does not block the tool call per Claude Code's own
+# hook contract -- an API outage severe enough to exceed even that budget
+# fails this gate open, not closed, despite the fail-closed design intent
+# below.
 
 set -euo pipefail
 
@@ -51,8 +67,18 @@ deny() {
 
 input=$(cat)
 
-if ! printf '%s' "$input" | jq -e 'if type == "object" then . else empty end' >/dev/null 2>&1; then
-  deny "Blocked by hooks/check-pr-duplicate-issue.sh: the tool-call payload on stdin is not a JSON object. Failing closed."
+# Slurped (`-s`) into a one-element array, not `jq -e 'if type == "object"
+# ...'` against the bare stream: the bare-stream form validates each
+# whitespace-adjacent JSON value independently and exits on the LAST one,
+# so two concatenated JSON objects on stdin (a real payload followed by
+# anything else) pass this check -- confirmed live (deterministic-gate-
+# quality audit, PR #1215) to walk `tool_name` below into a multi-line
+# string that matches no matcher, taking the `exit 0` allow path with the
+# duplicate-check never run at all. Slurping first collapses the whole
+# input to one JSON value (an array of however many top-level values were
+# present) so "exactly one, and it's an object" is checkable directly.
+if ! printf '%s' "$input" | jq -e -s 'length == 1 and (.[0] | type == "object")' >/dev/null 2>&1; then
+  deny "Blocked by hooks/check-pr-duplicate-issue.sh: the tool-call payload on stdin is not exactly one JSON object. Failing closed."
 fi
 
 tool_name=$(printf '%s' "$input" | jq -r '.tool_name // empty')

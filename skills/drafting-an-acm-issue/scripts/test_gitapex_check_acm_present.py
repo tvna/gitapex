@@ -59,6 +59,57 @@ def test_has_dedup_disclosure_case_insensitive_and_bulleted() -> None:
     assert checker.has_dedup_disclosure("- dedup: none found")
 
 
+def test_has_dedup_disclosure_stays_anchored_to_the_start_of_a_line() -> None:
+    """Guard rail on `_DEDUP_RE`'s `^...[-*]?` prefix.
+
+    `_DEDUP_RE` currently rejects several decorated-but-genuine renderings of
+    the field label (`**Dedup:**`, `` `Dedup`: ``, `## Dedup:`) because
+    `[-*]?` admits exactly one optional bullet character. The obvious way to
+    widen that -- dropping the `^` anchor, or letting arbitrary characters
+    precede the field name -- would silently turn prose that merely *mentions*
+    the field into a passing disclosure. These are the cases any such widening
+    must keep rejecting, pinned here so the trade-off stays visible rather
+    than being discovered after the gate has already let a body through.
+    """
+    # Mid-line mention inside an ordinary sentence: not a disclosure line.
+    assert not checker.has_dedup_disclosure("I ran a Dedup: none found\n")
+    # Field name glued to a longer identifier: not this field.
+    assert not checker.has_dedup_disclosure("PreDedup: none found\n")
+    # A longer field name that merely starts with the same letters.
+    assert not checker.has_dedup_disclosure("Deduplication: none found\n")
+    # The genuine bulleted form still matches, so the anchor is not overtight.
+    assert checker.has_dedup_disclosure("  - Dedup: none found\n")
+
+
+def test_has_dedup_disclosure_accepts_the_skill_s_own_documented_output_line() -> None:
+    """Round-trip guard (battle-testing-a-skill audit, PR #1215 Finding E):
+    SKILL.md's own Output section (line 123) documents this field as
+    "- **Dedup:** the search query run and result count, or `none found`"
+    -- bold decoration wrapping the field name *and* its colon together, not
+    just the bare label. An agent that follows the skill's own template
+    verbatim must not be blocked by the gate the same skill bundles; pinned
+    here as its own case rather than left to be covered only incidentally by
+    the other decorated-form tests above.
+    """
+    assert checker.has_dedup_disclosure("- **Dedup:** the search query run and result count, or `none found`")
+    assert checker.has_dedup_disclosure("**Dedup:** none found")
+
+
+def test_has_dedup_disclosure_handles_crlf_line_endings() -> None:
+    """`has_dedup_disclosure` does no CR/CRLF normalization of its own, unlike
+    the sibling `hooks/gitapex_check_acm_present_or_waiver.py`, which rewrites
+    `\\r\\n`/`\\r` to `\\n` before matching. CRLF bodies happen to work anyway
+    (`.` consumes the `\\r`; MULTILINE `$` sits before the `\\n`), and the
+    non-empty-reason requirement survives CRLF too (`\\r` is `\\s`, so it
+    cannot satisfy `\\S`). Both behaviors are incidental to the current
+    pattern rather than stated intent, so pin them: if normalization is ever
+    added, this test says what must not change.
+    """
+    assert checker.has_dedup_disclosure("Some drafted issue body.\r\nDedup: none found\r\n")
+    assert not checker.has_dedup_disclosure("Dedup:\r\n")
+    assert not checker.has_dedup_disclosure("Dedup:  \r\n")
+
+
 # --- main(): the combined CLI gate ---------------------------------------
 
 
