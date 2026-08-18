@@ -650,6 +650,9 @@ def test_a_second_file_with_no_diff_git_header_between_files_is_not_misattribute
     }
 
 
+# --- parse_added_lines: over-declared hunk length (issue #1193) ------------
+
+
 def test_an_over_declared_hunk_length_before_a_new_hunk_header_raises_scanerror() -> None:
     """Issue #1193, found adversarially against the dual-counter fix
     directly above: that fix bounds `in_hunk` by each side's own *declared*
@@ -683,6 +686,45 @@ def test_an_over_declared_hunk_length_before_a_new_hunk_header_raises_scanerror(
         "+    pass\n"
     )
     with pytest.raises(gate.ScanError, match=r"2 post-image line\(s\) still unconsumed"):
+        gate.parse_added_lines(diff)
+
+
+def test_an_over_declared_hunk_that_exactly_drains_into_a_real_header_pair_raises_scanerror() -> None:
+    """The gap the three tests around this one all miss, found by two
+    independent adversarial reviews dispatched against the fix above: each
+    of them uses an excess (2-5 lines) larger than what the next file's own
+    `--- `/`+++ ` pair can absorb, so the `@@`-boundary check still catches
+    it. Here file1's hunk declares exactly 1 pre-image and 1 post-image
+    line but its real body has none at all -- the very next lines are
+    file2's own real `--- `/`+++ ` headers. Because `--- `/`+++ ` content
+    is read unconditionally while `in_hunk` is still (wrongly) true, `---
+    a/file2.py` is silently absorbed as a removal (decrementing
+    `old_remaining` to exactly 0) and `+++ b/file2.py` as an addition
+    (decrementing `new_remaining` to exactly 0 too) -- draining both
+    counters to exactly zero one line early, so `in_hunk` clears itself
+    *before* the `@@`-boundary check ever runs. Neither of the other two
+    boundary checks fires either: `diff --git ` never appears in this
+    diff, and end-of-input is still two real content lines away.
+
+    Verified live against the fix without this test's own guard: returns
+    `{'hooks/gitapex_check_file1.py': {1, 2}}` -- file2 never appears at
+    all, and file1 gains a phantom line 1 (the misread `+++
+    b/hooks/gitapex_check_file2.py` text) plus file2's own real added line
+    2, both misattributed. Must now raise instead, caught by recognising
+    that a hunk closing exactly on a `+++ `-shaped line immediately after
+    a `--- `-shaped one is inherently ambiguous with a real file
+    transition missing its `diff --git ` separator."""
+    diff = (
+        "--- a/hooks/gitapex_check_file1.py\n"
+        "+++ b/hooks/gitapex_check_file1.py\n"
+        "@@ -1,1 +1,1 @@\n"
+        "--- a/hooks/gitapex_check_file2.py\n"
+        "+++ b/hooks/gitapex_check_file2.py\n"
+        "@@ -1,1 +1,2 @@\n"
+        " unchanged\n"
+        "+added\n"
+    )
+    with pytest.raises(gate.ScanError, match="closes exactly on a line shaped like"):
         gate.parse_added_lines(diff)
 
 

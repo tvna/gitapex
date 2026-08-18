@@ -309,10 +309,11 @@ not an existing directory. Never a silent pass on an ungradable input: this
 is dimension 15 of ``skills/evaluating-deterministic-gate-quality/references/
 dimensions.md``, "Fail-closed default on incomplete or malformed input." A
 malformed diff includes an unparseable ``@@`` hunk header, a post-image path
-that is neither ``/dev/null`` nor ``b/``-prefixed, and a ``+++ `` post-image
-header reached outside a hunk with no ``--- `` source header before it --
-see ``parse_added_lines`` for why that last one has to raise rather than be
-tolerated.
+that is neither ``/dev/null`` nor ``b/``-prefixed, a ``+++ `` post-image
+header reached outside a hunk with no ``--- `` source header before it, and
+a hunk whose declared pre-/post-image counts do not match its own real
+body (issue #1193) -- see ``parse_added_lines`` for why each of those has
+to raise rather than be tolerated.
 
 Invocation shape
 -----------------
@@ -583,6 +584,7 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
     old_remaining = 0
     new_remaining = 0
     saw_source_header = False
+    prev_line_looked_like_source_header = False
 
     def _reject_if_hunk_incomplete(boundary: str) -> None:
         if in_hunk:
@@ -600,6 +602,7 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
             path = None
             in_hunk = False
             saw_source_header = False
+            prev_line_looked_like_source_header = False
             continue
         if not in_hunk and line.startswith("--- "):
             saw_source_header = True
@@ -613,6 +616,7 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
                 )
             path = _diff_target_path(line[4:])
             saw_source_header = False
+            prev_line_looked_like_source_header = False
             continue
         if line.startswith("@@"):
             _reject_if_hunk_incomplete(f"the next hunk header: {line!r}")
@@ -623,6 +627,7 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
             lineno = int(match.group(2))
             new_remaining = 1 if match.group(3) is None else int(match.group(3))
             in_hunk = old_remaining > 0 or new_remaining > 0
+            prev_line_looked_like_source_header = False
             continue
         if line.startswith("+"):
             if path is not None:
@@ -645,7 +650,18 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
         # gap for exactly the one case this docstring otherwise says is
         # now bounded.
         if old_remaining <= 0 and new_remaining <= 0:
+            if prev_line_looked_like_source_header and line.startswith("+++ "):
+                raise ScanError(
+                    f"hunk for {path!r} closes exactly on a line shaped like a new file's own "
+                    f"post-image header ({line!r}), immediately after one shaped like a source "
+                    f"header -- ambiguous between coincidental hunk-closing content and a real "
+                    "file transition missing its `diff --git ` separator. A hunk's declared "
+                    "counts draining to exactly zero on this exact two-line shape cannot be "
+                    "told apart from a genuine `--- `/`+++ ` pair; failing closed here rather "
+                    "than silently misattributing whatever follows."
+                )
             in_hunk = False
+        prev_line_looked_like_source_header = line.startswith("--- ")
     _reject_if_hunk_incomplete("the diff ended")
     return added
 
