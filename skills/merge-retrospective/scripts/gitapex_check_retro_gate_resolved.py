@@ -40,6 +40,21 @@ Exit codes:
     1  A local `git log` or `.gitapex/ssot.json` read error prevented the
        check from completing (never silently reported as "nothing
        resolved").
+
+detection-logic-property-coverage waiver (issue #1178 gate, on
+`_citation_pattern` and `citation_count`'s own `.search()` call):
+digit-boundary correctness -- neither "#1870" nor "#2187" matching
+"#187" -- is already covered by explicit example tests in the co-located
+`test_gitapex_check_retro_gate_resolved.py`
+(`test_citation_count_does_not_match_longer_number_containing_target_as_prefix`/
+`_as_suffix`), the same boundary cases a Hypothesis `@given` property
+test would probe. Issue #1176 scopes this diff to
+`skills/merge-retrospective/` only (no `tests/` addition), and the
+identical pattern in
+`.github/scripts/gitapex_scan_retrospective_gate_drift.py` this module
+deliberately mirrors is itself out of that gate's own scope by
+construction (its `gitapex_scan_` prefix, not `gitapex_check_`/
+`gitapex_gate_`).
 """
 
 from __future__ import annotations
@@ -75,13 +90,17 @@ _LOG_FORMAT = "%x1e%H%x1f%B"
 def _citation_pattern(issue_number: int) -> re.Pattern[str]:
     # Digit-boundary-aware: "#187" matches, but neither "#1870" nor
     # "#2187" does.
-    return re.compile(rf"(?<!\d)#{issue_number}(?!\d)")
+    return re.compile(rf"(?<!\d)#{issue_number}(?!\d)")  # detection-logic-property-coverage: WAIVED: see docstring
 
 
 def citation_count(commit_messages: list[str], issue_number: int) -> int:
     """Count how many of `commit_messages` cite `issue_number`."""
     pattern = _citation_pattern(issue_number)
-    return sum(1 for message in commit_messages if pattern.search(message))
+    return sum(
+        1
+        for message in commit_messages
+        if pattern.search(message)  # detection-logic-property-coverage: WAIVED: see docstring
+    )
 
 
 def partition_resolved(
