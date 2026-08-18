@@ -958,3 +958,56 @@ def test_the_workflow_checks_out_the_head_sha_with_full_history() -> None:
     )
     assert "ref: ${{ github.event.pull_request.head.sha }}" in workflow, workflow
     assert "fetch-depth: '0'" in workflow, workflow
+
+
+def test_the_workflow_has_no_paths_filter() -> None:
+    """Drift gate for an invariant this change establishes, per CLAUDE.md
+    section 3, mirroring `tests/test_gitapex_gate_exception_handler_gaps.py`'s
+    own identical reasoning and defeat-case: a `paths:` filter under
+    `pull_request:` is deliberately never added, following the same
+    rationale `lint.yml`, `plugin-root-brace-notation-gate.yml` and
+    `exception-handler-gap-gate.yml` each state for themselves. GitHub
+    distinguishes a job that runs and reports `skipped` (harmless to a
+    required check) from a workflow that never fires for a given PR at all
+    (which leaves a required check `Pending` forever, with no in-repo fix).
+    This gate is a candidate for later promotion to a required status
+    check, so a `paths:` filter here would recreate that exact
+    stuck-Pending failure mode for any PR that happens not to touch an
+    in-scope file.
+
+    The trigger block is isolated between the `on:` and `permissions:`
+    markers with comment lines stripped, rather than checked against the
+    whole leading file text -- this file's own pointer comment for this
+    very invariant contains the literal substring `` `paths:` `` in prose.
+    The check also rejects `paths-ignore:`, not only `paths:`, since
+    GitHub's own trigger filter accepts either key to the same
+    stuck-Pending effect.
+    """
+    workflow = (gate.REPO_ROOT / ".github/workflows/detection-logic-property-coverage-gate.yml").read_text(
+        encoding="utf-8"
+    )
+    trigger_block = workflow.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
+    trigger_lines = [line for line in trigger_block.split("\n") if not line.strip().startswith("#")]
+    assert not any(line.strip().startswith("paths") for line in trigger_lines), trigger_block
+
+
+def test_the_workflow_uses_merge_base_not_base_sha() -> None:
+    """Drift gate for an invariant this change establishes, per CLAUDE.md
+    section 3, mirroring `exception-handler-gap-gate.yml`'s,
+    `gitignore-pattern-coverage-gate.yml`'s and
+    `skill-rename-lifecycle-gate.yml`'s own identical reasoning: `git
+    merge-base` is resolved between `BASE_SHA` and `HEAD_SHA` rather than
+    diffing against `base.sha` directly, so a change that landed on the
+    base branch after this PR forked is never misattributed to this PR.
+
+    Checking only for the literal substring `git merge-base` would still
+    pass a workflow that computes `$merge_base` and never actually uses
+    it; the second assertion confirms the computed variable is the one
+    actually fed to the `git diff` invocation this gate depends on.
+    """
+    workflow = (gate.REPO_ROOT / ".github/workflows/detection-logic-property-coverage-gate.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "merge_base=$(git merge-base" in workflow, workflow
+    producer_lines = [line for line in workflow.split("\n") if "diff" in line and '"$merge_base"' in line]
+    assert producer_lines, workflow

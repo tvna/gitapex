@@ -8,18 +8,10 @@
 # that scan against exactly the in-scope files a diff actually adds
 # trigger-shaped lines to.
 #
-# Deliberately no `paths:` filter, for the same reason lint.yml,
-# plugin-root-brace-notation-gate.yml and exception-handler-gap-gate.yml each
-# give for themselves: GitHub tells apart a job that runs and reports
-# `skipped` (harmless to a required check) from a workflow that never fires
-# for a given PR at all (which leaves a required check Pending forever, with
-# no in-repo fix). This gate is a candidate for later promotion to a required
-# status check the same way exception-handler-gap shipped non-required first
-# and was promoted separately, so a `paths:` filter here would recreate that
-# exact stuck-Pending failure mode for any PR that happens not to touch an
-# in-scope file. The scan itself still only grades files an in-scope diff
-# actually adds lines to, so running the job unconditionally costs a few
-# seconds, not a full-repo sweep.
+# Deliberately no `paths:` filter -- drift gate:
+# tests/test_gitapex_gate_detection_logic_property_coverage.py's own
+# test_the_workflow_has_no_paths_filter. See that test's docstring for why
+# (GitHub's own skipped-vs-never-ran distinction for a required check).
 name: Detection-logic property-coverage gate
 
 on:
@@ -40,29 +32,21 @@ jobs:
     permissions:
       contents: read
     steps:
-      # `ref:` is pinned to the PR head, which every gate workflow here that
-      # does not correlate diff line numbers against tree content leaves at
-      # the default `refs/pull/N/merge`. This gate is not one of those: its
-      # own `find_violations` reads each in-scope file's post-image content
-      # straight off the working tree (`(root / path).read_text(...)`),
-      # parses that content's AST, and grades the trigger call sites it
-      # finds against added-line numbers taken from `git diff`'s own
-      # post-image numbering -- so the checked-out tree has to *be* that
-      # post-image, exactly the requirement exception-handler-gap-gate.yml
-      # states for itself and for the identical reason. Under the default
-      # merge-ref checkout the two diverge for any file the base branch also
-      # changed. No other gate here besides exception-handler-gap correlates
-      # diff-derived line numbers with tree content this way; several other
-      # gates do read the tree but locate what they grade by text rather
-      # than by line number, so they do not need this pin.
+      # `ref:`/`fetch-depth: '0'` below is this gate's own diff-post-image
+      # checkout pin -- drift gate: tests/test_gitapex_gate_detection_logic_property_coverage.py's
+      # own test_the_workflow_checks_out_the_head_sha_with_full_history. See
+      # that test's docstring for why (this gate correlates diff-derived
+      # line numbers with tree content, the same requirement
+      # exception-handler-gap-gate.yml states for itself and for the
+      # identical reason -- most other gates here read the tree too but
+      # locate what they grade by text rather than by line number, so they
+      # do not need this pin).
       #
       # The accepted cost, stated rather than discovered later: this runs
       # the PR branch's own copy of the gate, so a branch that forked before
       # a hardening of the gate landed on main is graded by the older rules.
       # Branch protection's "Require branches to be up to date" closes that,
       # and it is a GitHub-side setting no in-repo file can record.
-      #
-      # fetch-depth: 0 so the merge-base below resolves.
       - name: Harden runner + checkout
         uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
         with:
@@ -74,29 +58,15 @@ jobs:
         with:
           enable-cache: true
 
-      # git merge-base (not base.sha directly), same reasoning as
-      # exception-handler-gap-gate.yml, gitignore-pattern-coverage-gate.yml
-      # and skill-rename-lifecycle-gate.yml: a change that landed on the
-      # base branch after this PR forked must never be misattributed to
-      # this PR.
+      # git merge-base below -- drift gate:
+      # tests/test_gitapex_gate_detection_logic_property_coverage.py's own
+      # test_the_workflow_uses_merge_base_not_base_sha.
       #
-      # Two `git diff` flags carry weight and are not defaults:
-      #
-      #   --no-renames, because rename detection is on by default and a file
-      #   moved into one of the graded directories arrives as a "similarity
-      #   index 100%" header with zero added lines -- entering scope
-      #   ungraded, the same rename-shaped fail-open
-      #   gitapex_detect_changed_gate_scripts.py's own docstring records
-      #   having had to close.
-      #
-      #   -c core.quotePath=false, because quoting is on by default and a
-      #   non-ASCII path anywhere in the diff is then emitted as an escaped,
-      #   quoted string the gate refuses to resolve (exit 2). That would
-      #   fail the whole job over a file which may not even be in scope, and
-      #   a contributor could not fix it except by renaming their file. Git
-      #   still quotes a path containing a double quote, a backslash, or a
-      #   control character whatever this is set to, and such a path still
-      #   exits 2 -- fail-closed on a name this gate cannot resolve.
+      # The two `git diff` flags below (--no-renames, -c
+      # core.quotePath=false) -- drift gate:
+      # tests/test_gitapex_gate_detection_logic_property_coverage.py's own
+      # test_the_workflow_passes_the_two_flags_the_gate_depends_on. See that
+      # test's docstring for why each matters.
       #
       # Issue #1035: every `.github/scripts/*.py` invocation goes through
       # `uv run` regardless of whether the script needs a third-party
