@@ -16,7 +16,7 @@ inputs:
     enforcing conventional-commit message format. Running
     `gitapex_check_retro_gate_resolved.py 201` returns
     `{"unresolved": [201], "resolved": []}` -- no commit on `HEAD` cites
-    "#201", so its proposed gate was never implemented.
+    "#201", so the two-signal check reports it unresolved.
 
     Here is the one repair that happened between open and merge for PR
     #254 itself: CI run #1 failed -- `pytest -k batch_import` timed out

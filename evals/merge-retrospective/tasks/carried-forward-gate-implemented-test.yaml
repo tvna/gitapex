@@ -1,6 +1,6 @@
 id: merge-retrospective-carried-forward-gate-implemented
 name: Restraint Check -- Step 1 Finds a Prior Gate Already Implemented
-description: Restraint counterpart to the carried-forward train fixture -- Step 1's two-signal check finds both a citing commit AND a corroborating .gitapex/ssot.json entry for the prior retrospective issue's proposed gate, so no "Carried-forward gate" subsection should be produced for it (a citing commit alone, or a registry entry alone, would not be enough; both signals agreeing is).
+description: Restraint counterpart to the carried-forward train fixture -- Step 1's two-signal check finds both a citing commit AND a corroborating .gitapex/ssot.json entry for the prior retrospective issue's proposed gate, so no "Carried-forward gate" subsection should be produced for it (a citing commit alone, or a registry entry alone, would not be enough; both signals must agree).
 tags:
   - quality
   - carried-forward

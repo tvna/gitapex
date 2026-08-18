@@ -3,7 +3,7 @@ kind: SkillMetadata
 metadata:
   name: merge-retrospective
 spec:
-  portability: Portable
+  portability: Repository-scoped
   capabilityAssumption: Broad
   skillDependencies:
     requires: []
@@ -22,3 +22,6 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1176"
       summary: "Supersedes the decision entry above (not deleted, append-only discipline): Step 1's carry-forward check now shells out to skills/merge-retrospective/scripts/gitapex_check_retro_gate_resolved.py (uv run --frozen python3), which itself reads .gitapex/ssot.json and runs git log as a subprocess -- read: [files] and shell: [subprocess] declared to match. write stays empty: the script never writes any file."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1196"
+      summary: "spec.portability corrected from Portable to Repository-scoped: Step 1's own prose already discloses gitapex_check_retro_gate_resolved.py's .gitapex/ssot.json dependency has no repository-agnostic fallback yet -- a repository without that registry cannot run Step 1 as written, contradicting Portable's own 'vendorable as-is' definition."

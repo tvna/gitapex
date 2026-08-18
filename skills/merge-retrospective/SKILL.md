@@ -6,9 +6,9 @@ description: Use when a pull request has just merged, before closing the turn --
 # Merge Retrospective
 
 This is a self-contained procedure; it depends on a connected GitHub MCP
-server for the issue-filing step, plus local shell access (a `git log`
-subprocess and a `.gitapex/ssot.json` read) for Step 1's own bundled
-gate-resolution script.
+server for Step 1's issue discovery and the issue-filing step, plus local
+shell access (a `git log` subprocess and a `.gitapex/ssot.json` read) for
+Step 1's own bundled gate-resolution script.
 
 A merged PR is not the end of the cycle. Before closing the turn, look
 back at everything that had to be repaired between opening the PR and
@@ -188,24 +188,36 @@ such taxonomy applies only `retrospective`, unchanged from before.
    - **Find prior retrospective issues:** `mcp__github__list_issues`
      with `labels: ["retrospective"]` -- deliberately unfiltered by
      state (omit the `state` parameter; it returns both open and closed
-     issues when omitted). Never `mcp__github__search_issues` for this
-     step: that tool performs natural-language semantic matching, not an
-     exact label filter, and is itself a source of cross-session
-     divergence, upstream of the citation-only weakness the next bullet
-     below replaces. Closing an issue is not proof its proposed gate was
-     implemented (a retrospective can be closed as stale, deduplicated,
-     or superseded while its gate is still unbuilt), so an open-only
-     search would silently drop exactly the issues this check exists to
-     catch. This is the reliable, non-text-matching anchor Step 5 below
-     now creates. Issues filed before the label existed carry no label;
-     for those, fall back to `mcp__github__search_issues` for
-     `"Merge retrospective:" in:title` (or the repo's own retrospective
-     title convention, if it has one), also unfiltered by state -- title
-     text has no exact-filter tool equivalent, so this fallback keeps
-     `search_issues` deliberately, unlike the labelled case above.
+     issues when omitted). Do not use `mcp__github__search_issues` for
+     the labeled query: that tool performs natural-language semantic
+     matching, not an exact label filter, and is itself a source of
+     cross-session divergence, upstream of the citation-only weakness
+     the next bullet below replaces. Closing an issue is not proof its
+     proposed gate was implemented (a retrospective can be closed as
+     stale, deduplicated, or superseded while its gate is still
+     unbuilt), so an open-only search would silently drop exactly the
+     issues this check exists to catch. This is the reliable,
+     non-text-matching anchor Step 5 below now creates. Issues filed
+     before the label existed carry no label; for those, fall back to
+     `mcp__github__search_issues` for `"Merge retrospective:" in:title`
+     (or the repo's own retrospective title convention, if it has one),
+     also unfiltered by state -- title text has no exact-filter tool
+     equivalent, so this fallback keeps `search_issues` deliberately,
+     unlike the labelled case above. `search_issues` is semantic, not an
+     exact filter, so validate each returned title against the exact
+     expected convention before adding its issue number -- a
+     semantically-similar but non-matching title (for example, an issue
+     merely discussing retrospectives rather than being one) must not
+     enter the candidate batch.
    - **Check whether each hit's proposed gate was implemented:** collect
-     every candidate issue number found above into one list, then run a
-     single batch invocation of `uv run --frozen python3
+     every candidate issue number found above into one list. If that
+     list is empty (no retrospective-labelled issues and no legacy-title
+     match either), there is nothing to carry forward -- skip the script
+     invocation entirely rather than calling it with zero arguments (its
+     `issue_numbers` CLI argument requires at least one, per its own
+     `nargs="+"`, and rejects a zero-argument call before the script's
+     own logic ever runs). Otherwise, run a single batch invocation of
+     `uv run --frozen python3
      skills/merge-retrospective/scripts/gitapex_check_retro_gate_resolved.py
      <every candidate issue number>` (never `mcp__github__search_commits`
      or a bare citation check directly -- a citing commit alone is not
