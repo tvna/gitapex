@@ -20,12 +20,24 @@ which only enforces this file's own `_HEADER_RE`, not the Dedup-line
 check below -- that check is unique to this file, disclosure-only, and
 has no sibling copy to stay in sync with).
 
-The Dedup check does not strip fenced code blocks the way the hooks/
-family's own waiver checkers do -- this script validates the agent's own
-just-drafted body immediately before issue creation, not a remotely
-fetched, potentially attacker-influenced body (contrast
-hooks/gitapex_check_acm_present_or_waiver.py's own fence-stripping, added
-specifically because that module grades someone *else's* issue body).
+The Dedup check strips fenced code blocks before matching, the same as
+the hooks/ family's own waiver checkers (hooks/gitapex_check_acm_present_or_waiver.py's
+`_ACM_WAIVER_RE`, hooks/gitapex_check_pr_duplicate_issue.py's own
+`_WAIVER_RE`) -- an earlier version of this module skipped that on the
+premise that this script only grades the agent's own just-drafted body,
+never attacker-influenced text. Findings from a `battle-testing-a-skill`
+audit and an independent CodeRabbit review of this same PR (#1215) showed
+that premise does not hold for this specific skill: Step 3 requires
+quoting the requester's own words *verbatim* into Facts, and those words
+end up in the same body this script grades -- an illustrative
+`Dedup: none found` example inside a fenced block, quoted from the
+requester rather than authored by the agent, must not satisfy Step 7's
+gate. Deliberately does NOT also strip single-backtick inline code spans
+the way those hooks/ checkers do: `_DEDUP_RE` itself treats a lone
+backtick immediately touching the field name (e.g. `` `Dedup`: none
+found ``) as accepted decoration, and stripping that span first would
+delete the literal "Dedup" text before the regex ever runs, silently
+un-accepting a form this same review round confirmed must pass.
 """
 
 from __future__ import annotations
@@ -69,6 +81,26 @@ _DEDUP_RE = re.compile(
     re.IGNORECASE | re.MULTILINE,
 )
 
+# A well-paired fenced code block (``` or ~~~, opened and closed with the
+# same marker) -- mirrors hooks/gitapex_check_pr_duplicate_issue.py's own
+# `_FENCE_RE` exactly, not re-derived, so the two stay the same shape.
+_FENCE_RE = re.compile(r"```.*?```|~~~.*?~~~", re.DOTALL)
+# An *unterminated* fence opener (no matching close anywhere in the rest
+# of the body): GitHub renders this as code through to the end of the
+# body, so it must be stripped the same as a terminated fence, not left
+# as live text a `Dedup:` line could hide inside. Runs after `_FENCE_RE`
+# above (so a well-paired fence is stripped as such, not double-counted
+# here) and this module deliberately stops there -- unlike
+# hooks/gitapex_check_pr_duplicate_issue.py's own `_strip_fences`, it does
+# not also strip single-backtick inline code spans; see the module
+# docstring for why that would break an accepted decorated form here.
+_UNTERMINATED_FENCE_RE = re.compile(r"```.*\Z|~~~.*\Z", re.DOTALL)
+
+
+def _strip_fenced_blocks(text: str) -> str:
+    without_fences = _FENCE_RE.sub("", text)
+    return _UNTERMINATED_FENCE_RE.sub("", without_fences)
+
 
 def has_acm_table(body_text: str | None) -> bool:
     """Return ``True`` iff ``body_text`` contains the ACM header row."""
@@ -78,8 +110,8 @@ def has_acm_table(body_text: str | None) -> bool:
 def has_dedup_disclosure(body_text: str | None) -> bool:
     """Return ``True`` iff ``body_text`` carries a non-empty ``Dedup:``
     disclosure line (a search query plus result count, or an explicit
-    ``Dedup: none found``)."""
-    return bool(_DEDUP_RE.search(body_text or ""))
+    ``Dedup: none found``) outside any fenced code block."""
+    return bool(_DEDUP_RE.search(_strip_fenced_blocks(body_text or "")))
 
 
 def main(argv: list[str] | None = None) -> int:

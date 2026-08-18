@@ -65,6 +65,25 @@ def test_whitespace_only_reason_is_never_detected(whitespace: str, casing: str) 
 
 
 @_PROPERTIES
+@given(reason=_NON_EMPTY_REASON, casing=st.sampled_from(_CASINGS))
+def test_a_dedup_line_inside_a_fenced_code_block_is_never_detected(reason: str, casing: str) -> None:
+    """Containment: a syntactically valid Dedup line, wrapped in a fenced
+    code block (an illustrative example of the field's own syntax, the
+    same false-positive class this module's own docstring names as
+    already found live -- CodeRabbit review, PR #1215), is never
+    misdetected as a real disclosure -- across generated reason text, not
+    only a hand-picked example.
+
+    Confirmed to have teeth: removing `_strip_fenced_blocks`'s call from
+    `has_dedup_disclosure` makes this property FAIL on every generated
+    example, since the unstripped fenced line still matches `_DEDUP_RE`
+    directly.
+    """
+    body = f"Example usage:\n```\n{casing}: {reason}\n```\n"
+    assert not checker.has_dedup_disclosure(body)
+
+
+@_PROPERTIES
 @given(text=st.text(max_size=300))
 def test_arbitrary_text_never_raises_and_is_deterministic(text: str) -> None:
     """Robustness: arbitrary text produces a result rather than an

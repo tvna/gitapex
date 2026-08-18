@@ -81,6 +81,27 @@ def test_has_dedup_disclosure_stays_anchored_to_the_start_of_a_line() -> None:
     assert checker.has_dedup_disclosure("  - Dedup: none found\n")
 
 
+def test_has_dedup_disclosure_rejects_a_line_inside_a_fenced_code_block() -> None:
+    """Regression test (CodeRabbit review, PR #1215): a `Dedup:` line
+    inside a fenced code block -- illustrating the field's own syntax, the
+    same false-positive class this module's docstring names as already
+    found live against a sibling hook's PR body -- must not be detected.
+    Also covers an *unterminated* fence: GitHub renders that as code
+    through to the end of the body too, so it must be stripped the same
+    way (mirrors hooks/gitapex_check_pr_duplicate_issue.py's own
+    regression coverage for the identical bug class)."""
+    assert not checker.has_dedup_disclosure("```text\nDedup: none found\n```\n")
+    assert not checker.has_dedup_disclosure("```\nDedup: 'x' search, 0 results reviewed\n```\n")
+    assert not checker.has_dedup_disclosure("```text\nDedup: none found\n")
+
+
+def test_has_dedup_disclosure_before_an_unrelated_fence_still_counts() -> None:
+    """Guards against the fence-stripping fix over-stripping: a genuine
+    disclosure line appearing *before* an unrelated fenced block elsewhere
+    in the body must still be detected."""
+    assert checker.has_dedup_disclosure("Dedup: real reason\n```\nexample text\n```\n")
+
+
 def test_has_dedup_disclosure_rejects_a_blockquoted_line() -> None:
     """Regression test (battle-testing-a-skill audit, PR #1215 Finding A/B):
     Step 3 requires quoting the requester's own words verbatim into Facts,
