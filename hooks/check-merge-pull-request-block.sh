@@ -67,6 +67,25 @@ if ! printf '%s' "$input" | jq -e 'if type == "object" then . else empty end' >/
   deny "Blocked by hooks/check-merge-pull-request-block.sh: the tool-call payload on stdin is not a JSON object, and mcp__github__merge_pull_request is never a valid agent action in this repository regardless. Failing closed."
 fi
 
+# Found by code review (PR #1213): jq -r never errors on a non-string
+# `.tool_name` (e.g. `["mcp__github__merge_pull_request"]`) -- it
+# pretty-prints the JSON form across multiple lines instead, which then
+# never equals the plain string the check below compares against. That
+# silently falls through as "not our tool" (exit 0) rather than failing
+# closed on a malformed field this hook's own "no override" categorical
+# deny structurally depends on -- live-confirmed: an array-wrapped
+# tool_name let a merge_pull_request call straight through this hook, the
+# exact bypass class this file exists to close. Same
+# fail-closed-on-INDETERMINATE reasoning as the payload-shape check
+# above: this hook cannot tell whether a malformed tool_name is a
+# disguised merge_pull_request call, so it denies rather than assumes
+# not. `.tool_name == null` covers both absent and explicit null (an
+# absent key indexes as null in jq); only a present non-string, non-null
+# value denies.
+if ! printf '%s' "$input" | jq -e '(.tool_name == null) or (.tool_name | type == "string")' >/dev/null 2>&1; then
+  deny "Blocked by hooks/check-merge-pull-request-block.sh: tool_name in the payload is not a string, and mcp__github__merge_pull_request is never a valid agent action in this repository regardless. Failing closed."
+fi
+
 tool_name=$(printf '%s' "$input" | jq -r '.tool_name // empty')
 
 # Defense in depth: the hooks.json matcher already restricts this hook to

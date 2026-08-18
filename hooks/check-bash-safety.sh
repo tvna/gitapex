@@ -46,10 +46,19 @@ deny() {
 # tool call to proceed (exit 0). Used where the underlying check is
 # documented as advisory (surfaces candidates, does not decide) rather than
 # a deterministic write/read classifier -- see the git-push handling below.
+# Found by code review (PR #1213): its only call site interpolates
+# $scan_output, the provenance scan's own report over the *entire* outgoing
+# push's commit messages and patches -- large enough on a big branch to
+# blow the OS's ARG_MAX the same way `deny()`'s own pre-hardening form did
+# (live-confirmed: `jq -n --arg msg "$BIG"` on a 3MB string exits 126,
+# "Argument list too long"). Under `set -euo pipefail` that crash aborts
+# the whole script before `exit 0`, past this function's own advisory
+# intent -- the push still proceeds either way (any non-2 exit is
+# non-blocking), but the warning itself is silently lost instead of
+# reaching the operator. Same `jq -Rs` piped-stdin fix as deny() above.
 warn() {
   local reason="$1"
-  jq -n --arg msg "$reason" \
-    '{"systemMessage": $msg}'
+  printf '%s' "$reason" | jq -Rs '{"systemMessage": .}'
   exit 0
 }
 
@@ -63,6 +72,20 @@ input=$(cat)
 # found and fixed. Validate the shape up front instead.
 if ! printf '%s' "$input" | jq -e 'if type == "object" then . else empty end' >/dev/null 2>&1; then
   deny "Blocked by hooks/check-bash-safety.sh: the tool-call payload on stdin is not a JSON object. Failing closed."
+fi
+
+# Found by code review (PR #1213): jq -r never errors on a non-string
+# `.tool_name` (e.g. `["Bash"]`) -- it pretty-prints the JSON form across
+# multiple lines instead, which then never equals the plain "Bash" string
+# the check below compares against. That silently falls through as "not
+# our tool" (exit 0) rather than failing closed on a malformed field this
+# gate structurally depends on -- live-confirmed: an array-wrapped
+# tool_name let a `gh pr merge` command straight through this hook.
+# `.tool_name == null` covers both absent and explicit null (an absent
+# key indexes as null in jq); only a present non-string, non-null value
+# denies.
+if ! printf '%s' "$input" | jq -e '(.tool_name == null) or (.tool_name | type == "string")' >/dev/null 2>&1; then
+  deny "Blocked by hooks/check-bash-safety.sh: tool_name in the payload is not a string. Failing closed."
 fi
 
 tool_name=$(printf '%s' "$input" | jq -r '.tool_name // empty')

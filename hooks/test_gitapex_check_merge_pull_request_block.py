@@ -23,6 +23,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import pytest
+
 SCRIPT = Path(__file__).parent / "check-merge-pull-request-block.sh"
 REPO_ROOT = Path(__file__).parent.parent
 
@@ -188,5 +190,35 @@ def test_denied_on_valid_json_non_object_stdin() -> None:
         cwd=str(REPO_ROOT),
     )
     assert result.returncode == 2, f"expected deny (exit 2), got {result.returncode}: stderr={result.stderr!r}"
+    parsed = json.loads(result.stderr)
+    assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+@pytest.mark.parametrize(
+    "tool_name", [["mcp__github__merge_pull_request"], {"x": 1}, 5, True], ids=["array", "object", "number", "bool"]
+)
+def test_denied_when_tool_name_is_not_a_string(tool_name: object) -> None:
+    """Found by code review (PR #1213): jq -r never errors on a non-string
+    `.tool_name` -- it pretty-prints the JSON form across multiple lines
+    instead, which then never equals the plain string this hook's own
+    "no override" categorical deny compares against, silently falling
+    through as "not our tool" (exit 0) instead of failing closed.
+    Live-confirmed before this guard existed: an array-wrapped tool_name
+    let a merge_pull_request call straight through this hook -- the exact
+    bypass class this file exists to close. Must now deny."""
+    env = dict(os.environ)
+    env.pop("CLAUDE_PROJECT_DIR", None)
+    env.pop("CLAUDE_PLUGIN_ROOT", None)
+    payload = json.dumps({"tool_name": tool_name, "tool_input": {"owner": "tvna", "repo": "gitapex", "pullNumber": 1}})
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        input=payload,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env=env,
+        cwd=str(REPO_ROOT),
+    )
+    assert result.returncode == 2, f"expected deny (exit 2) for tool_name={tool_name!r}, got {result.returncode}"
     parsed = json.loads(result.stderr)
     assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"

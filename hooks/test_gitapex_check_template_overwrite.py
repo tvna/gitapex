@@ -186,7 +186,9 @@ def test_denied_on_valid_json_non_object_stdin() -> None:
 
 
 @pytest.mark.parametrize(
-    "tool_input", [["not", "an", "object"], False, True, 0], ids=["array", "false", "true", "zero"]
+    "tool_input",
+    [["not", "an", "object"], "text", False, True, 0],
+    ids=["array", "string", "false", "true", "zero"],
 )
 def test_denied_when_tool_input_is_not_an_object(tool_input: object) -> None:
     """A well-formed top-level payload whose tool_input is itself a
@@ -208,5 +210,50 @@ def test_denied_when_tool_input_is_not_an_object(tool_input: object) -> None:
         cwd=str(REPO_ROOT),
     )
     assert result.returncode == 2, f"expected deny (exit 2) for tool_input={tool_input!r}, got {result.returncode}"
+    parsed = json.loads(result.stderr)
+    assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_allowed_when_tool_input_is_absent_or_null() -> None:
+    """jq indexes `null`/a missing key as `null`, not a runtime error, so
+    these fall through the shape guard to the hook's own downstream logic
+    (an empty `file_path` here, which is itself allowed) rather than being
+    wrongly caught by it -- unlike the non-object shapes above."""
+    for payload in (
+        json.dumps({"tool_name": "Write"}),
+        json.dumps({"tool_name": "Write", "tool_input": None}),
+    ):
+        result = subprocess.run(
+            ["bash", str(SCRIPT)],
+            input=payload,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            cwd=str(REPO_ROOT),
+        )
+        assert result.returncode == 0, f"payload={payload!r}: expected allow, got {result.returncode}"
+        assert result.stdout == ""
+        assert result.stderr == ""
+
+
+@pytest.mark.parametrize("tool_name", [["Write"], {"x": 1}, 5, True], ids=["array", "object", "number", "bool"])
+def test_denied_when_tool_name_is_not_a_string(tool_name: object, existing_template_file: str) -> None:
+    """Found by code review (PR #1213): jq -r never errors on a non-string
+    `.tool_name` -- it pretty-prints the JSON form across multiple lines
+    instead, which then never equals the plain "Write" string the matcher
+    re-check compares against, silently falling through as "not our tool"
+    (exit 0) instead of failing closed. Live-confirmed before this guard
+    existed: an array-wrapped tool_name let an overwrite of the real PR
+    template straight through. Must now deny."""
+    payload = json.dumps({"tool_name": tool_name, "tool_input": {"file_path": existing_template_file}})
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        input=payload,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        cwd=str(REPO_ROOT),
+    )
+    assert result.returncode == 2, f"expected deny (exit 2) for tool_name={tool_name!r}, got {result.returncode}"
     parsed = json.loads(result.stderr)
     assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"

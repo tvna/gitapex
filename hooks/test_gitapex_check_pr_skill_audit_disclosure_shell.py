@@ -404,7 +404,9 @@ def test_denied_on_malformed_json_stdin() -> None:
 
 
 @pytest.mark.parametrize(
-    "tool_input", [["not", "an", "object"], False, True, 0], ids=["array", "false", "true", "zero"]
+    "tool_input",
+    [["not", "an", "object"], "text", False, True, 0],
+    ids=["array", "string", "false", "true", "zero"],
 )
 def test_denied_when_tool_input_is_not_an_object(tool_input: object) -> None:
     """A well-formed top-level payload whose tool_input is itself a
@@ -431,6 +433,31 @@ def test_denied_when_tool_input_is_not_an_object(tool_input: object) -> None:
     assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"
 
 
+def test_an_update_call_with_absent_or_null_tool_input_is_ignored(repo: Path) -> None:
+    """jq indexes `null`/a missing key as `null`, not a runtime error, so
+    absent/explicit-null tool_input falls through the shape guard to the
+    same empty-body bypass test_an_update_call_with_no_body_is_ignored
+    exercises for `{}`, rather than being wrongly caught by the guard
+    itself."""
+    payloads = (
+        {"tool_name": "mcp__github__update_pull_request"},
+        {"tool_name": "mcp__github__update_pull_request", "tool_input": None},
+    )
+    for payload_dict in payloads:
+        result = subprocess.run(
+            ["bash", str(repo / "hooks" / "check-pr-skill-audit-disclosure.sh")],
+            input=json.dumps(payload_dict),
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env=_hook_env(),
+            cwd=str(repo),
+        )
+        assert result.returncode == 0, (
+            f"payload={payload_dict!r}: expected allow, got {result.returncode}: {result.stderr!r}"
+        )
+
+
 def test_denied_on_valid_json_non_object_stdin() -> None:
     """Valid JSON that isn't an object at the top level (e.g. a bare array)
     would otherwise crash the first field-extraction jq call the same way.
@@ -447,6 +474,67 @@ def test_denied_on_valid_json_non_object_stdin() -> None:
     assert result.returncode == 2, f"expected deny (exit 2), got {result.returncode}: stderr={result.stderr!r}"
     parsed = json.loads(result.stderr)
     assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+@pytest.mark.parametrize(
+    "tool_name",
+    [["mcp__github__create_pull_request"], {"x": 1}, 5, True],
+    ids=["array", "object", "number", "bool"],
+)
+def test_denied_when_tool_name_is_not_a_string(tool_name: object) -> None:
+    """Found by code review (PR #1213): jq -r never errors on a non-string
+    `.tool_name` -- it pretty-prints the JSON form across multiple lines
+    instead, which then never matches the `case` pattern below, silently
+    falling through as "not our tool" (exit 0) instead of failing closed.
+    Live-confirmed before this guard existed: an array-wrapped tool_name
+    let a PR-creation call straight through this hook. Must now deny."""
+    payload = json.dumps({"tool_name": tool_name, "tool_input": {"base": "main", "body": "no evidence"}})
+    result = subprocess.run(
+        ["bash", str(REPO_ROOT / "hooks" / "check-pr-skill-audit-disclosure.sh")],
+        input=payload,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        env=_hook_env(),
+        cwd=str(REPO_ROOT),
+    )
+    assert result.returncode == 2, f"expected deny (exit 2) for tool_name={tool_name!r}, got {result.returncode}"
+    parsed = json.loads(result.stderr)
+    assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_falls_through_to_exit_0_when_mktemp_is_broken(repo: Path, tmp_path: Path) -> None:
+    """Found by code review (PR #1213): both mktemp call sites (tier-1's
+    body_file, tier-2's diff_error) were unguarded, so an unwritable/full
+    TMPDIR crashed the whole script under `set -e` with mktemp's own exit
+    code instead of the intended degrade-to-tier-2-then-CI fallback every
+    OTHER tier-1-incomplete path in this hook already takes. Live-
+    confirmed before this guard existed:
+    `TMPDIR=/nonexistent-dir bash check-pr-skill-audit-disclosure.sh`
+    crashed with mktemp's own exit 1, not falling through. Must now warn
+    and fall all the way through to exit 0 (CI remains authoritative),
+    the same outcome a broken TMPDIR should have regardless of what the
+    PR body discloses -- the local check simply cannot run at all."""
+    _with_tier1(repo)
+    _write(repo, ".github/scripts/gitapex_gate_new.py")
+    _commit(repo, "new gate")
+    broken_tmpdir = tmp_path / "does-not-exist"
+    payload = json.dumps(
+        {"tool_name": "mcp__github__create_pull_request", "tool_input": {"base": "main", "body": "no evidence"}}
+    )
+    result = subprocess.run(
+        ["bash", str(repo / "hooks" / "check-pr-skill-audit-disclosure.sh")],
+        input=payload,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        env=_hook_env(TMPDIR=str(broken_tmpdir)),
+        cwd=str(repo),
+    )
+    assert result.returncode == 0, (
+        f"expected fall-through to allow (exit 0), got {result.returncode}: {result.stderr!r}"
+    )
+    assert "could not create a temp file" in result.stderr
 
 
 def test_outside_a_git_work_tree_the_hook_stays_out_of_the_way(tmp_path: Path) -> None:

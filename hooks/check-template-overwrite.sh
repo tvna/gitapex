@@ -45,6 +45,20 @@ if ! printf '%s' "$input" | jq -e 'if type == "object" then . else empty end' >/
   deny "Blocked by hooks/check-template-overwrite.sh: the tool-call payload on stdin is not a JSON object. Failing closed."
 fi
 
+# Found by code review (PR #1213): jq -r never errors on a non-string
+# `.tool_name` (e.g. `["Write"]`) -- it pretty-prints the JSON form across
+# multiple lines instead, which then never equals the plain "Write" string
+# the check below compares against. That silently falls through as "not
+# our tool" (exit 0) rather than failing closed on a malformed field this
+# gate structurally depends on -- live-confirmed: an array-wrapped
+# tool_name let an overwrite of the real .github/PULL_REQUEST_TEMPLATE.md
+# straight through this hook. `.tool_name == null` covers both absent and
+# explicit null (an absent key indexes as null in jq); only a present
+# non-string, non-null value denies.
+if ! printf '%s' "$input" | jq -e '(.tool_name == null) or (.tool_name | type == "string")' >/dev/null 2>&1; then
+  deny "Blocked by hooks/check-template-overwrite.sh: tool_name in the payload is not a string. Failing closed."
+fi
+
 tool_name=$(printf '%s' "$input" | jq -r '.tool_name // empty')
 
 # Defense in depth: the hooks.json matcher already restricts this hook to

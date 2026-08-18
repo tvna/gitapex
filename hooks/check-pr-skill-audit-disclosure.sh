@@ -93,6 +93,20 @@ if ! printf '%s' "$input" | jq -e 'if type == "object" then . else empty end' >/
   deny "Blocked by hooks/check-pr-skill-audit-disclosure.sh: the tool-call payload on stdin is not a JSON object. Failing closed."
 fi
 
+# Found by code review (PR #1213): jq -r never errors on a non-string
+# `.tool_name` (e.g. `["mcp__github__create_pull_request"]`) -- it
+# pretty-prints the JSON form across multiple lines instead, which then
+# never matches the `case` pattern below. That silently falls through as
+# "not our tool" (exit 0) rather than failing closed on a malformed field
+# this gate structurally depends on -- live-confirmed: an array-wrapped
+# tool_name let a PR-creation call straight through this hook.
+# `.tool_name == null` covers both absent and explicit null (an absent
+# key indexes as null in jq); only a present non-string, non-null value
+# denies.
+if ! printf '%s' "$input" | jq -e '(.tool_name == null) or (.tool_name | type == "string")' >/dev/null 2>&1; then
+  deny "Blocked by hooks/check-pr-skill-audit-disclosure.sh: tool_name in the payload is not a string. Failing closed."
+fi
+
 tool_name=$(printf '%s' "$input" | jq -r '.tool_name // empty')
 
 # Defense in depth: the hooks.json matchers already restrict this hook to
@@ -192,50 +206,70 @@ if [ "$base_is_explicit" = "no" ]; then
 fi
 
 if [ "$base_is_explicit" = "yes" ] && [ -n "$repo_root" ] && [ -f "$full_gate" ] && [ -f "$flag_module" ]; then
-  body_file=$(mktemp)
-  printf '%s' "$body" >"$body_file"
-  if full_output=$(cd "$repo_root" && python3 "$full_gate" \
-      --check-diff "$merge_base" HEAD --body-file "$body_file" 2>&1); then
-    full_exit=0
-  else
-    full_exit=$?
-  fi
-  rm -f "$body_file"
+  # Found by code review (PR #1213): an unguarded `body_file=$(mktemp)`
+  # crashes the whole script under `set -e` (e.g. an unwritable/full
+  # /tmp), past every deny() and past this block's own fall-through-to-
+  # tier-2 design, with mktemp's own exit code -- an exit Claude Code's
+  # PreToolUse contract treats as non-blocking, i.e. an ungated pass
+  # through the local pre-check instead of the intended degrade-to-tier-2
+  # path every OTHER tier-1 failure in this block already takes.
+  # Live-confirmed: `TMPDIR=/nonexistent-dir bash check-pr-skill-audit-
+  # disclosure.sh` crashed with mktemp's own exit 1, not falling through.
+  if body_file=$(mktemp 2>/dev/null); then
+    printf '%s' "$body" >"$body_file"
+    if full_output=$(cd "$repo_root" && python3 "$full_gate" \
+        --check-diff "$merge_base" HEAD --body-file "$body_file" 2>&1); then
+      full_exit=0
+    else
+      full_exit=$?
+    fi
+    rm -f "$body_file"
 
-  if [ "$full_exit" -eq 0 ]; then
-    exit 0
-  fi
+    if [ "$full_exit" -eq 0 ]; then
+      exit 0
+    fi
 
-  # `grep -q` closes stdin on first match, which can SIGPIPE a still-writing
-  # upstream; under `set -o pipefail` (set above) that upstream's nonzero
-  # status outranks grep's own zero exit and turns a real match into a false
-  # "not found" -- i.e. a genuine deny silently downgraded to the warning
-  # fall-through below. This repository banned the pattern in
-  # https://github.com/tvna/gitapex/pull/428#discussion_r3654041066 and
-  # skill-audit-gate.yml's own history records the same fix; `-q` is dropped
-  # and the output redirected instead, so grep always reads to completion.
-  if printf '%s' "$full_output" | grep '^FAIL:' >/dev/null; then
-    # The exact command is in the message on purpose (dimension 17): the
-    # whole point of issue #874 is that an agent can now iterate on the
-    # disclosure locally instead of pushing and reading a failed check, and
-    # a deny that does not say how to re-run the verdict leaves it doing
-    # the latter anyway.
-    deny "Blocked by hooks/check-pr-skill-audit-disclosure.sh: this PR's diff requires skill-audit disclosure evidence its body does not carry. This is the same verdict .github/workflows/skill-audit-gate.yml will report, computed locally before the push. Fix the '## Skill audit evidence' section, then re-check with:
+    # `grep -q` closes stdin on first match, which can SIGPIPE a still-writing
+    # upstream; under `set -o pipefail` (set above) that upstream's nonzero
+    # status outranks grep's own zero exit and turns a real match into a false
+    # "not found" -- i.e. a genuine deny silently downgraded to the warning
+    # fall-through below. This repository banned the pattern in
+    # https://github.com/tvna/gitapex/pull/428#discussion_r3654041066 and
+    # skill-audit-gate.yml's own history records the same fix; `-q` is dropped
+    # and the output redirected instead, so grep always reads to completion.
+    if printf '%s' "$full_output" | grep '^FAIL:' >/dev/null; then
+      # The exact command is in the message on purpose (dimension 17): the
+      # whole point of issue #874 is that an agent can now iterate on the
+      # disclosure locally instead of pushing and reading a failed check, and
+      # a deny that does not say how to re-run the verdict leaves it doing
+      # the latter anyway.
+      deny "Blocked by hooks/check-pr-skill-audit-disclosure.sh: this PR's diff requires skill-audit disclosure evidence its body does not carry. This is the same verdict .github/workflows/skill-audit-gate.yml will report, computed locally before the push. Fix the '## Skill audit evidence' section, then re-check with:
 
   python3 .github/scripts/gitapex_gate_skill_audit_disclosure.py --check-diff ${merge_base} HEAD --body-file <path>
 
 $full_output"
-  fi
+    fi
 
-  # Not a verdict on the body: the local flag computation itself could not
-  # complete (unreadable gate registry, a ref this checkout cannot resolve,
-  # a bug in the wrapper). Fall through to the bundled partial check rather
-  # than denying on an answer that was never computed.
-  echo "Warning: hooks/check-pr-skill-audit-disclosure.sh could not complete the full local pre-check (exit $full_exit); falling back to the bundled base two-audit check (CI's skill-audit-gate.yml remains authoritative). Output: $full_output" >&2
+    # Not a verdict on the body: the local flag computation itself could not
+    # complete (unreadable gate registry, a ref this checkout cannot resolve,
+    # a bug in the wrapper). Fall through to the bundled partial check rather
+    # than denying on an answer that was never computed.
+    echo "Warning: hooks/check-pr-skill-audit-disclosure.sh could not complete the full local pre-check (exit $full_exit); falling back to the bundled base two-audit check (CI's skill-audit-gate.yml remains authoritative). Output: $full_output" >&2
+  else
+    echo "Warning: hooks/check-pr-skill-audit-disclosure.sh could not create a temp file for the tier-1 body check (mktemp failed); falling back to the bundled base two-audit check (CI's skill-audit-gate.yml remains authoritative)." >&2
+  fi
 fi
 
 # --- tier 2: the bundled, SKILL.md-only base check ---
-diff_error=$(mktemp)
+# Found by code review (PR #1213): same unguarded-mktemp-crashes-under-
+# set-e class as the tier-1 body_file above -- an unwritable/full /tmp
+# would otherwise crash past this hook's own "skip the local pre-check,
+# CI remains authoritative" fallback with mktemp's own exit code, an
+# exit Claude Code's PreToolUse contract treats as non-blocking.
+if ! diff_error=$(mktemp 2>/dev/null); then
+  echo "Warning: hooks/check-pr-skill-audit-disclosure.sh could not create a temp file for git-diff error capture (mktemp failed); skipping the local pre-check (CI's skill-audit-gate.yml will still catch this)." >&2
+  exit 0
+fi
 if ! diff_output=$(git diff --name-status "${merge_base}...HEAD" -- 'skills/*/SKILL.md' 2>"$diff_error"); then
   echo "Warning: hooks/check-pr-skill-audit-disclosure.sh's local git diff failed; skipping the local pre-check (CI's skill-audit-gate.yml will still catch this). $(cat "$diff_error")" >&2
   rm -f "$diff_error"
