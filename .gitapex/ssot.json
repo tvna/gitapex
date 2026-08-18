@@ -951,6 +951,24 @@
       "tracking_issue": 1141,
       "status": "active",
       "supersedes": null
+    },
+    {
+      "id": "detection-logic-property-coverage",
+      "kind": "script",
+      "script": [
+        ".github/scripts/gitapex_gate_detection_logic_property_coverage.py",
+        ".github/workflows/detection-logic-property-coverage-gate.yml"
+      ],
+      "rule": "A regex call (a .compile() on a bare name the graded file's own imports bind to the re module, including an 'import re as <alias>' alias, or a receiver-agnostic .match()/.search()/.fullmatch()), a path-resolution call (receiver-agnostic .resolve()/.is_symlink()/.relative_to(), or os.path.realpath()/os.path.abspath() matched on the call's final two attribute segments), or a string-comparison allowlist/denylist construct (receiver-agnostic .startswith()/.endswith(), an in/not in comparison against an inline list/tuple/set literal, or a frozenset()/set() call over one), newly added by a PR diff inside skills/*/scripts/gitapex_check_*.py, .github/scripts/gitapex_gate_*.py or hooks/gitapex_check_*.py (test_*.py and conftest.py excluded) must be covered by a co-located tests/test_<source-stem>_properties.py that imports the source module and defines an @given(...) property test whose own body references the trigger's enclosing function name, or any @given test in the file for a module-level trigger. Scope is the diff, not the repository. An inline '# detection-logic-property-coverage: WAIVED: <reason>' comment waives findings on that exact line. Exits 2 rather than pass silently on a malformed diff (an unparseable @@ hunk header, a post-image path that is neither /dev/null nor b/-prefixed, or a '+++ ' post-image header outside a hunk with no '--- ' source header before it) or an in-scope file that cannot be read or parsed. See the script's own module docstring for the disclosed known misses and over-reports.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_detection_logic_property_coverage.py"],
+      "local_stdin": ["git", "-c", "core.quotePath=false", "diff", "-U0", "--no-renames", "--merge-base", "origin/main", "HEAD", "--", "*.py"],
+      "trigger": ".github/workflows/detection-logic-property-coverage-gate.yml on pull_request, plus tests/test_gitapex_gate_detection_logic_property_coverage.py and tests/test_gitapex_gate_detection_logic_property_coverage_properties.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "test-integrity",
+      "tracking_issue": 1178,
+      "status": "active",
+      "supersedes": null
     }
   ],
   "clusters": {
