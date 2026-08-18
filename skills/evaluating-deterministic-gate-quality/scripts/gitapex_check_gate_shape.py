@@ -22,7 +22,7 @@ Domain 1 (git hook), Domain 3 (CI job step), and Domain 4 (MCP server
 subprocess) are explicitly OUT OF SCOPE for this checker -- named here
 rather than silently assumed covered. Each would need its own mechanical
 rule grounded in that domain's own primary source (branch-protection API
-semantics for Domain 3's dimension 1, for instance) before this checker
+semantics for Domain 3's shape check 1, for instance) before this checker
 could honestly claim it; see `references/dimensions.md`'s own per-domain
 notes under each dimension for what a future extension would need.
 
@@ -38,11 +38,11 @@ dimensions.md`):
      per the primary source above. A script with no apparent error/deny
      path at all is graded not_applicable (nothing here suggests this
      script means to ever deny).
-  2. Dual-signal deny -- whichever mechanism dimension 1 found, does the
+  2. Dual-signal deny -- whichever mechanism shape check 1 found, does the
      deny path also carry a non-empty human-readable reason (non-empty
      text written to stderr on the ``exit-2`` path; a non-empty
      ``permissionDecisionReason`` on the ``deny-json`` path)? Only graded
-     when dimension 1 found a mechanism to check -- not_applicable
+     when shape check 1 found a mechanism to check -- not_applicable
      otherwise (there is no deny path to make dual-signal). Python:
      ``sys.stderr.write(...)``/``print(..., file=sys.stderr)`` calls are
      located with a real AST parse when the script parses as valid
@@ -99,7 +99,7 @@ dimensions.md`):
            surrounding invocation, not the hook script" note.
        6b. internal bound: any subprocess/network call *inside* the
            script (Python: ``subprocess.*``, ``urlopen``, ``requests.*``,
-           located via the same AST-with-fallback approach as dimension 5,
+           located via the same AST-with-fallback approach as shape check 5,
            checking for an actual ``timeout=`` keyword argument rather
            than the substring "timeout" anywhere in the call; shell:
            ``curl``/``wget``) carries its own explicit timeout
@@ -137,17 +137,17 @@ adversarial review of this checker itself found these):
     opposite direction, a human or a documentation string describing
     behavior the surrounding real code does not actually implement, which
     no static analysis of this shape can fully close.
-  - The shell-script half of every dimension here (1, 2, 3, 5, 6b) has no
+  - The shell-script half of every shape check here (1, 2, 3, 5, 6b) has no
     equivalent free parser to reach for and stays a text/regex scan,
     comment/string-blind as before: a shell comment stating "we
-    intentionally do not call exit 2" can still flip dimension 1 to PASS
+    intentionally do not call exit 2" can still flip shape check 1 to PASS
     with no real deny path. Treat a PASS/FAIL this checker reports for
     shell-script input as a strong hint to verify by direct inspection,
-    not a proof, the same discipline dimension 3's own heuristic already
+    not a proof, the same discipline shape check 3's own heuristic already
     states explicitly for itself.
   - When Python-target text does not parse as valid Python at all (a
     genuinely malformed or deliberately truncated/adversarial script),
-    dimensions 2/5/6b fall back to the same text-scan heuristic this
+    shape checks 2/5/6b fall back to the same text-scan heuristic this
     checker used before the AST-based rewrite -- lower confidence,
     disclosed via that fallback path's own more conservative behavior,
     not a silent skip.
@@ -236,7 +236,7 @@ def _keyword_value(call_node: ast.Call, name: str) -> ast.expr | None:
     return None
 
 
-# --- dimension 1 / 2: deny-path mechanism and dual-signal ---------------
+# --- shape check 1 / 2: deny-path mechanism and dual-signal ---------------
 
 _PY_EXIT_2_RE = re.compile(r"\b(?:sys\.exit|exit|raise\s+SystemExit)\s*\(\s*2\s*\)")
 # -?\d+ so a literal `sys.exit(-1)` (still non-blocking to Claude Code,
@@ -375,7 +375,7 @@ def _check_dual_signal(text: str, is_python: bool, mechanism_result: CheckResult
             "2",
             "Dual-signal deny",
             VERDICT_NOT_APPLICABLE,
-            "dimension 1 found no recognized deny mechanism to grade for a human-readable companion message",
+            "shape check 1 found no recognized deny mechanism to grade for a human-readable companion message",
         )
     reason_match = _DENY_REASON_RE.search(text)
     has_reason = bool(reason_match and reason_match.group(1).strip())
@@ -391,7 +391,7 @@ def _check_dual_signal(text: str, is_python: bool, mechanism_result: CheckResult
     )
 
 
-# --- dimension 3: self-revalidation (heuristic) -------------------------
+# --- shape check 3: self-revalidation (heuristic) -------------------------
 
 # Three ways a script might legitimately reference the tool_name field:
 # shell variable interpolation ($tool_name, typically inside quotes:
@@ -432,7 +432,7 @@ def _check_self_revalidation(text: str) -> CheckResult:
     )
 
 
-# --- dimension 4: bundled test exists ------------------------------------
+# --- shape check 4: bundled test exists ------------------------------------
 
 _TEST_NAME_RE = re.compile(r"^test[-_].+|.+_test\.(py|sh)$")
 
@@ -521,7 +521,7 @@ def _check_bundled_test(script_path: Path) -> CheckResult:
     )
 
 
-# --- dimension 5: unsafe shell/command interpolation ---------------------
+# --- shape check 5: unsafe shell/command interpolation ---------------------
 
 _PY_SHELL_CALLABLE_NAMES = frozenset(
     {
@@ -580,7 +580,7 @@ def _check_unsafe_interpolation_python_ast(calls: list[tuple[str, ast.Call]]) ->
         # could equally be `cmd = f"git checkout {branch_name}"` assigned
         # one line earlier. Rather than silently crediting an
         # unverifiable dynamic command fed to a shell as safe, this is
-        # graded FAIL: the same fail-closed choice dimensions 1/15 make
+        # graded FAIL: the same fail-closed choice shape check 1 / dimension 15 make
         # elsewhere in this repository ("an inability to verify is a
         # deny, not an assume-clean"), applied here to a
         # security-relevant static check. The known cost: a script that
@@ -717,7 +717,7 @@ def _check_unsafe_interpolation_shell(text: str) -> CheckResult:
     )
 
 
-# --- dimension 6b: internal subprocess/network timeout -------------------
+# --- shape check 6b: internal subprocess/network timeout -------------------
 
 _PY_TIMEOUT_CALLABLE_NAMES = frozenset(
     {
@@ -847,7 +847,7 @@ def _check_timeout_internal_shell(text: str) -> CheckResult:
     )
 
 
-# --- dimension 6a: invocation-level timeout (hooks.json wiring) ----------
+# --- shape check 6a: invocation-level timeout (hooks.json wiring) ----------
 
 
 def _is_valid_timeout_value(value: object) -> bool:
@@ -916,11 +916,11 @@ def _check_timeout_wiring(script_path: Path, hooks_json_path: Path | None) -> Ch
 
 
 def gitapex_check_gate_shape(script_path: Path, text: str, hooks_json_path: Path | None = None) -> list[CheckResult]:
-    """Run every mechanical dimension-1-6 check this checker implements
+    """Run every mechanical shape-check-1-6 check this checker implements
     against ``text`` (the already-read contents of ``script_path``,
     ``script_path`` itself only used for its suffix/name and for locating a
     sibling test file). Returns one ``CheckResult`` per sub-check, in
-    dimension order; never raises on the *content* of ``text`` -- a
+    shape-check order; never raises on the *content* of ``text`` -- a
     hostile or malformed script is data to scan, not a reason to except.
     """
     is_python = _is_python(script_path, text)
@@ -950,7 +950,7 @@ def format_report(results: list[CheckResult]) -> str:
             VERDICT_NOT_APPLICABLE: "N/A ",
             VERDICT_INDETERMINATE: "IND ",
         }[result.verdict]
-        lines.append(f"[{marker}] dimension {result.dimension} ({result.name}): {result.evidence}")
+        lines.append(f"[{marker}] shape check {result.dimension} ({result.name}): {result.evidence}")
     return "\n".join(lines)
 
 
@@ -958,7 +958,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Mechanically check an agent-harness hook script "
         "against evaluating-deterministic-gate-quality's own "
-        "deterministic-shape checks (dimensions 1, 2, 4, 5, 6; dimension "
+        "deterministic-shape checks (shape checks 1, 2, 4, 5, 6; shape check "
         "3 as a disclosed heuristic only). Domain-2 (agent-harness hook) "
         "scoped -- see this module's own docstring for what is out of "
         "scope."
@@ -967,7 +967,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--hooks-json",
         help="Optional path to the hooks.json wiring this script is "
-        "registered in, to grade dimension 6a (invocation-level timeout).",
+        "registered in, to grade shape check 6a (invocation-level timeout).",
     )
     args = parser.parse_args(argv)
     script_path = Path(args.script)

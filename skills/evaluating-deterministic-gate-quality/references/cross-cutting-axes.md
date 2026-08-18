@@ -223,7 +223,7 @@ a dimension-15 pass stand in for the design question this axis asks.
 Three further neighbours, fenced the same way, so sub-judgment 1 is no
 less bounded than sub-judgment 2:
 
-- **Dimension 2** asks whether a deny reaches every *channel* the caller
+- **Shape check 2** asks whether a deny reaches every *channel* the caller
   actually sees; sub-judgment 1 asks who the message names as at fault.
   A gate can dual-signal perfectly on both channels and still blame the
   wrong party.

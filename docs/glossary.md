@@ -169,3 +169,41 @@ resolution `Vetting-*` got above. The two consumers blocked on this
 entry, the `vetting-attack-surface` -> `scanning-attack-surfaces` rename
 and the first roster skill (`scanning-ci-workflows`), are tracked
 separately under #843.
+
+## `Dimension`
+
+Within `evaluating-skill-quality` and `evaluating-deterministic-gate-quality`,
+a criterion that requires a model's own judgment to grade -- never a
+criterion a script can grade mechanically by fixed rule. In
+`evaluating-skill-quality` all nine criteria are dimensions
+(`references/rubric.md`). In `evaluating-deterministic-gate-quality`, only
+criteria 7-23 (the probabilistic-maturity lane, `references/dimensions.md`)
+are dimensions; criteria 1-6 (the deterministic-shape lane) are shape
+checks, a distinct term.
+
+Superseded terms: `evaluating-deterministic-gate-quality`'s own prior usage
+of "dimension 1" through "dimension 6" for its deterministic-shape lane --
+surfaced as a terminology conflict with `evaluating-skill-quality`'s
+judgment-only sense while considering an `evaluating-skill-quality` overhaul
+via `drafting-a-skill`, per `establishing-ubiquitous-language`'s
+Elicit/Detect/Resolve procedure. Resolved by the repository owner,
+directly: "dimension" narrows to the judgment-only sense everywhere in this
+skill pair; the retired numbering (1-6) is renamed `Shape check` in
+`evaluating-deterministic-gate-quality`'s own docs and shipped code (#1187).
+Dimensions 7-23 keep their existing numbering and label unchanged, and
+`evaluating-skill-quality` is untouched by that rename.
+
+## `Shape check`
+
+Within `evaluating-deterministic-gate-quality` only, one of the six
+deterministic-shape-lane criteria (numbered 1 through 6, with 6 further
+split into sub-checks 6a and 6b) that a fixed rule -- in practice,
+`scripts/gitapex_check_gate_shape.py` for Domain-2 targets -- can grade
+mechanically, without a model's own judgment. Distinct from `Dimension`,
+which is reserved for the judgment-only criteria (7-23) in the same skill,
+and for all nine criteria in `evaluating-skill-quality`.
+
+Adopted via #1187, replacing this skill's own prior "dimension 1" through
+"dimension 6" usage for the same six criteria, to resolve the terminology
+conflict with `evaluating-skill-quality`'s narrower, judgment-only sense of
+`Dimension`. See that entry for the full resolution.
