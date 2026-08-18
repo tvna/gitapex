@@ -1701,12 +1701,17 @@ def test_the_workflow_has_no_paths_filter() -> None:
     whole leading file text -- this file's own pointer comment for this
     very invariant contains the literal substring `` `paths:` `` in prose,
     which a naive whole-text check would misread as the trigger itself
-    carrying a filter.
+    carrying a filter. The check also rejects `paths-ignore:`, not only
+    `paths:` -- GitHub's own trigger filter accepts either key to the same
+    stuck-Pending effect this invariant guards against, so a future edit
+    that reached for the inverse form would defeat a `paths:`-only check
+    while still recreating the exact failure mode this test exists to
+    catch.
     """
     workflow = (REPO_ROOT / ".github/workflows/exception-handler-gap-gate.yml").read_text(encoding="utf-8")
     trigger_block = workflow.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
     trigger_lines = [line for line in trigger_block.split("\n") if not line.strip().startswith("#")]
-    assert "paths:" not in "\n".join(trigger_lines), trigger_block
+    assert not any(line.strip().startswith("paths") for line in trigger_lines), trigger_block
 
 
 def test_the_workflow_uses_merge_base_not_base_sha() -> None:
@@ -1719,9 +1724,19 @@ def test_the_workflow_uses_merge_base_not_base_sha() -> None:
     Diffing against `base.sha` directly instead would silently re-attribute
     someone else's already-merged change to this PR's own diff, with no
     exit code or message when that happens.
+
+    Checking only for the literal substring `git merge-base` would still
+    pass a workflow that computes `$merge_base` and then never actually
+    uses it (falling back to `$BASE_SHA` in the producer command below) --
+    a defeat-case worth guarding against explicitly, not only asserting
+    the computation exists. The second assertion confirms the computed
+    variable is the one actually fed to the `git diff` invocation this
+    gate depends on.
     """
     workflow = (REPO_ROOT / ".github/workflows/exception-handler-gap-gate.yml").read_text(encoding="utf-8")
-    assert "git merge-base" in workflow, workflow
+    assert "merge_base=$(git merge-base" in workflow, workflow
+    producer_lines = [line for line in workflow.split("\n") if "diff" in line and '"$merge_base"' in line]
+    assert producer_lines, workflow
 
 
 def test_this_gate_grades_itself_clean() -> None:
