@@ -17,11 +17,11 @@ itself on every future change.
 from __future__ import annotations
 
 import json
-import subprocess
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+import gitapex_run_ablation
 import gitapex_run_effectiveness_correlation as m
 import pytest
 from pydantic import ValidationError
@@ -85,40 +85,14 @@ def _write_corpus(root: Path, entries: list[dict[str, Any]]) -> Path:
 # ---------------------------------------------------------------------------
 
 
-def test_skip_reason_redacts_runtime_error_with_embedded_stderr() -> None:
-    # Defeat test (issue #1143 adversarial review, CodeRabbit finding): a
-    # live model CLI's raw stderr, exactly as subprocess_executor embeds it
-    # in its own RuntimeError message, must never survive into the
-    # returned reason.
-    exc = RuntimeError("model CLI exited 1: ACME_SECRET_TOKEN=sk-live-deadbeef leaked in stderr")
-    reason = m._skip_reason(exc)
-    assert "ACME_SECRET_TOKEN" not in reason
-    assert "sk-live-deadbeef" not in reason
-    assert "RuntimeError" in reason
-
-
-def test_skip_reason_redacts_timeout_expired_with_embedded_prompt() -> None:
-    # TimeoutExpired's own str() includes the full argv it ran, which
-    # includes the fixture's prompt text (build_command's own -p PROMPT
-    # positional) -- must not survive into the returned reason either.
-    exc = subprocess.TimeoutExpired(cmd=["claude", "-p", "the fixture's own private prompt text"], timeout=300)
-    reason = m._skip_reason(exc)
-    assert "private prompt text" not in reason
-    assert "TimeoutExpired" in reason
-
-
-def test_skip_reason_keeps_value_error_verbatim() -> None:
-    # ValueError is always this module's or gitapex_run_eval_suite's own
-    # deterministic, code-controlled text -- never live external output --
-    # so it stays verbatim, genuinely useful for diagnosing which corpus
-    # entry or fixture was malformed.
-    reason = m._skip_reason(ValueError("skill_md not found: skills/ghost/SKILL.md"))
-    assert reason == "skill_md not found: skills/ghost/SKILL.md"
-
-
-def test_skip_reason_keeps_os_error_verbatim() -> None:
-    reason = m._skip_reason(OSError("[Errno 2] No such file or directory: 'x.yaml'"))
-    assert "No such file or directory" in reason
+def test_skip_reason_is_the_hoisted_ablation_redaction_function() -> None:
+    # _skip_reason is a module-level alias (issue #1144), not a
+    # reimplementation -- its own redaction behavior (RuntimeError/
+    # TimeoutExpired redacted, ValueError/OSError kept verbatim) is
+    # covered directly against the real definition in
+    # test_gitapex_run_ablation.py, not duplicated here a second time
+    # against what is, post-hoist, literally the same function object.
+    assert m._skip_reason is gitapex_run_ablation.redact_executor_failure_reason
 
 
 # ---------------------------------------------------------------------------

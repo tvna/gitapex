@@ -68,16 +68,24 @@ _CONSTRAINT_SIGNAL_PATTERN = re.compile(r"(^\s*|[.!?]\s+)(?:[-*]\s+|\d+\.\s+)?(M
 
 # A '## Worked example' or '## Examples' heading (singular or plural, any
 # heading depth >= 2, case-insensitive) -- this repository's own real
-# convention, not a literal, undisclosed "Examples" match.
-_WORKED_EXAMPLE_HEADING_PATTERN = re.compile(r"^#{2,}\s+(worked\s+)?examples?\b", re.MULTILINE | re.IGNORECASE)
+# convention, not a literal, undisclosed "Examples" match. The trailing
+# `(?!-)` rejects a directly-hyphenated compound word ("## Example-Based
+# Testing Notes") that is not actually a worked-example section but would
+# otherwise still satisfy `\b` (a plain word-boundary sits between "e" and
+# "-" too) -- confirmed this exclusion does not drop any real corpus hit
+# at calibration time (every real match is followed by end-of-line,
+# whitespace, or a colon, never a hyphen).
+_WORKED_EXAMPLE_HEADING_PATTERN = re.compile(r"^#{2,}\s+(worked\s+)?examples?\b(?!-)", re.MULTILINE | re.IGNORECASE)
 
 # A '## Error handling' or '## Troubleshooting' heading. Confirmed
 # near-zero across the real corpus at calibration time (no established
 # heading convention for this yet) -- left as-is rather than papered over
 # with an invented synonym list to manufacture variance that is not
-# really there. See module docstring.
+# really there. See module docstring. Same `(?!-)` exclusion as the
+# worked-example pattern above, for the same reason (e.g. "## Error
+# Handling-Adjacent Notes" is not really an error-handling section).
 _ERROR_HANDLING_HEADING_PATTERN = re.compile(
-    r"^#{2,}\s+(error\s+handling|troubleshooting)\b", re.MULTILINE | re.IGNORECASE
+    r"^#{2,}\s+(error\s+handling|troubleshooting)\b(?!-)", re.MULTILINE | re.IGNORECASE
 )
 
 
@@ -95,13 +103,18 @@ def strip_frontmatter(text: str) -> str:
     already frontmatter-shaped (a separate, already-enforced repository
     invariant this module does not re-check), so this is a safe fallback
     for a malformed input, not the contract this function exists to
-    enforce.
+    enforce. ``rstrip("\\r\\n")`` (not just ``"\\n"``): ``splitlines``
+    keeps a CRLF line ending attached to its line, and stripping only
+    ``"\\n"`` would leave a trailing ``"\\r"`` that never equals ``"---"``
+    -- silently failing to strip a CRLF-authored file's frontmatter at
+    all, letting a ``description:`` field's own prose (which can itself
+    contain "Never"/"Must"/"Always") leak into the counts below.
     """
     lines = text.splitlines(keepends=True)
-    if not lines or lines[0].rstrip("\n") != "---":
+    if not lines or lines[0].rstrip("\r\n") != "---":
         return text
     for index in range(1, len(lines)):
-        if lines[index].rstrip("\n") == "---":
+        if lines[index].rstrip("\r\n") == "---":
             return "".join(lines[index + 1 :])
     return text
 

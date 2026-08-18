@@ -771,6 +771,54 @@ def test_run_eval_suite_content_policy_rejection_on_first_trial_does_not_crash(t
     assert len(rejected_calls) == 1
 
 
+class _RejectsAfterNCallsExecutor:
+    """Succeeds for the first ``n_successes`` calls, then raises the
+    content-policy rejection for every call after that -- simulates a
+    LATER trial of the SAME fixture being rejected after one or more
+    earlier trials of that fixture already succeeded (distinct from
+    ``_ContentPolicyRejectingExecutor``, whose trigger-substring match
+    makes every trial of a given fixture behave identically, unable to
+    exercise a within-fixture partial-success scenario)."""
+
+    def __init__(self, n_successes: int, output: str) -> None:
+        self._n_successes = n_successes
+        self._output = output
+        self.calls: list[tuple[list[str], int]] = []
+
+    def __call__(self, argv, timeout) -> str:
+        self.calls.append((list(argv), timeout))
+        if len(self.calls) > self._n_successes:
+            raise RuntimeError(_REAL_REJECTION_TEXT)
+        return self._output
+
+
+def test_run_eval_suite_partial_success_then_rejection_scores_successful_subset(tmp_path: Path) -> None:
+    # Regression (code review finding): a rejection on a LATER trial of a
+    # fixture must not discard EARLIER trials of that same fixture that
+    # already succeeded -- those are real, already-paid-for live-call
+    # results. The fixture still scores, on the successful subset, with
+    # the rejection disclosed rather than the whole fixture vanishing into
+    # skipped_fixtures as if nothing had been learned about it at all.
+    eval_yaml = _write_suite(
+        tmp_path,
+        eval_yaml_text=BASE_EVAL_YAML.replace("trials_per_task: 2", "trials_per_task: 3"),
+        tasks={"a.yaml": TASK_A_TEXT},
+    )
+    executor = _RejectsAfterNCallsExecutor(n_successes=2, output="ok output")
+
+    result = gitapex_run_eval_suite.run_eval_suite(
+        eval_yaml, _skill_md(tmp_path), executor=executor, model_cli="claude"
+    )
+
+    assert result.n_fixtures == 1
+    assert result.skipped_fixtures == []  # not a full skip -- some trials succeeded
+    assert len(result.scores[0]["trials"]) == 2  # only the 2 successful trials, not 3
+    assert result.scores[0]["score"] == pytest.approx(1.0)
+    assert "content_policy_partial_rejection" in result.scores[0]
+    assert "RuntimeError" in result.scores[0]["content_policy_partial_rejection"]
+    assert "can't help" not in result.scores[0]["content_policy_partial_rejection"]  # redacted
+
+
 def test_run_eval_suite_all_fixtures_rejected_raises_value_error(tmp_path: Path):
     eval_yaml = _write_suite(
         tmp_path,
@@ -850,6 +898,26 @@ def test_to_eval_scores_json_with_populated_skipped_fixtures_validates_against_t
     assert payload["skipped_fixtures"] == [
         {"fixture_id": "reject-task", "reason": payload["skipped_fixtures"][0]["reason"]}
     ]
+    schema = json.loads(EVAL_SCORES_SCHEMA_PATH.read_text(encoding="utf-8"))
+    jsonschema.validate(payload, schema)  # no raise
+
+
+def test_to_eval_scores_json_with_partial_rejection_validates_against_the_real_schema(tmp_path: Path):
+    # Same additive-field regression as the skipped_fixtures test above,
+    # for the sibling content_policy_partial_rejection key on a scores[]
+    # entry (a fixture with some, not all, trials rejected).
+    eval_yaml = _write_suite(
+        tmp_path,
+        eval_yaml_text=BASE_EVAL_YAML.replace("trials_per_task: 2", "trials_per_task: 3"),
+        tasks={"a.yaml": TASK_A_TEXT},
+    )
+    executor = _RejectsAfterNCallsExecutor(n_successes=2, output="ok output")
+    result = gitapex_run_eval_suite.run_eval_suite(
+        eval_yaml, _skill_md(tmp_path), executor=executor, model_cli="claude"
+    )
+
+    payload = gitapex_run_eval_suite.to_eval_scores_json(result)
+    assert "content_policy_partial_rejection" in payload["scores"][0]
     schema = json.loads(EVAL_SCORES_SCHEMA_PATH.read_text(encoding="utf-8"))
     jsonschema.validate(payload, schema)  # no raise
 

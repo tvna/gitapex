@@ -43,12 +43,16 @@ sorted by ``fixture_id`` (not filesystem/glob discovery order) because the
 schema's own field description states this explicitly: "sorted by
 fixture_id so two runs of the same corpus produce a stable diff." The same
 additional-properties permissiveness carries a second additive field,
-``skipped_fixtures[]`` (issue #1144): a fixture skipped for a
-content-policy rejection (see ``_is_content_policy_rejection`` below)
-lands there with its reason instead of in ``scores[]`` -- excluded from
-``n_fixtures``/``mean_score``, loud and visible rather than silently
+``skipped_fixtures[]`` (issue #1144): a fixture with a content-policy
+rejection (see ``_is_content_policy_rejection`` below) on every one of its
+trials lands there with its reason instead of in ``scores[]`` -- excluded
+from ``n_fixtures``/``mean_score``, loud and visible rather than silently
 dropped, the same convention ``gitapex_run_effectiveness_correlation.py``'s
-own corpus-level ``skipped`` list already established.
+own corpus-level ``skipped`` list already established. A fixture with a
+rejection on only SOME of its trials still lands in ``scores[]`` (scored
+on whichever trials succeeded, so already-obtained live-call results are
+never discarded), with the rejection disclosed via a
+``content_policy_partial_rejection`` key on that one entry instead.
 
 ``config.executor`` (every real committed ``eval.yaml`` declares
 ``copilot-sdk``, waza's own executor concept) is read through
@@ -417,18 +421,25 @@ def run_eval_suite(
     let the first two already spend real executor calls.
 
     A fixture whose ``executor`` call raises a content-policy-shaped
-    ``RuntimeError`` (see ``_is_content_policy_rejection``) is skipped,
-    not treated as a whole-suite failure: it lands in the returned
-    ``SuiteResult.skipped_fixtures`` with its (redacted) reason, and the
-    remaining trials for that one fixture are not attempted -- a live
-    pilot (issue #1183) found this rejection deterministic per identical
-    prompt, so retrying would only spend further live calls on a fixture
-    already known to fail the same way. Any other ``RuntimeError``
-    re-raises unchanged: that means the run's own validity is compromised
-    (auth, network, ...), not just one fixture's content, and must still
-    abort the whole suite exactly as before this behavior existed.
-    Raises ``ValueError`` if every fixture in the suite ends up skipped
-    (nothing left to average into ``mean_score``).
+    ``RuntimeError`` (see ``_is_content_policy_rejection``) is skipped
+    rather than treated as a whole-suite failure, and the remaining trials
+    for that one fixture are not attempted -- a live pilot (issue #1183)
+    found this rejection deterministic per identical prompt, so retrying
+    would only spend further live calls on a fixture already known to
+    fail the same way. If NO trial of that fixture succeeded, it lands in
+    the returned ``SuiteResult.skipped_fixtures`` with its (redacted)
+    reason and contributes nothing to ``mean_score``. If one or more
+    earlier trials of that SAME fixture already succeeded before a later
+    one was rejected, those already-obtained (and already-paid-for) trial
+    results are not discarded: the fixture still lands in ``scores``,
+    scored on the successful subset, with the rejection disclosed via a
+    ``content_policy_partial_rejection`` key on its own entry rather than
+    silently dropped. Any other ``RuntimeError`` re-raises unchanged: that
+    means the run's own validity is compromised (auth, network, ...), not
+    just one fixture's content, and must still abort the whole suite
+    exactly as before this behavior existed. Raises ``ValueError`` if
+    every fixture in the suite ends up fully skipped (nothing left to
+    average into ``mean_score``).
     """
     suite = load_eval_suite(eval_yaml_path)
     fixture_paths = discover_task_fixtures(eval_yaml_path, suite["tasks"])
@@ -467,7 +478,7 @@ def run_eval_suite(
                     ],
                 }
             )
-        if skip_reason is not None:
+        if skip_reason is not None and not trials:
             # Explicit flag-and-continue, not a bare inner `break`: a
             # rejection on the very first trial leaves `trials` empty, and
             # falling through to `statistics.mean(trial["score"] for trial
@@ -478,7 +489,17 @@ def run_eval_suite(
             skipped_fixtures.append({"fixture_id": fixture["id"], "reason": skip_reason})
             continue
         fixture_score = statistics.mean(trial["score"] for trial in trials)
-        scores.append({"fixture_id": fixture["id"], "score": fixture_score, "trials": trials})
+        score_entry: dict[str, Any] = {"fixture_id": fixture["id"], "score": fixture_score, "trials": trials}
+        if skip_reason is not None:
+            # A later trial of this SAME fixture was rejected after one or
+            # more earlier trials of it already succeeded (a real, already
+            # -paid-for live call each) -- score on the successful subset
+            # rather than discard that data outright (the determinism this
+            # break's own docstring assumes is based on a single pilot
+            # observation, not a guarantee), but still disclose the
+            # rejection loudly rather than silently drop it.
+            score_entry["content_policy_partial_rejection"] = skip_reason
+        scores.append(score_entry)
 
     if not scores:
         raise ValueError(

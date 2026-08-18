@@ -59,6 +59,18 @@ def test_strip_frontmatter_returns_unchanged_on_empty_text() -> None:
     assert m.strip_frontmatter("") == ""
 
 
+def test_strip_frontmatter_strips_crlf_terminated_block() -> None:
+    # Regression (code review finding): a CRLF-authored file's first line
+    # is "---\r\n", not "---\n" -- rstrip("\n") alone leaves a trailing
+    # "\r" that never equals "---", silently failing to strip frontmatter
+    # at all and leaking a description field's own prose (which can
+    # itself contain "Never"/"Must"/"Always") into the body.
+    text = "---\r\ndescription: Never mentioned here.\r\n---\r\nBody starts here.\r\n"
+    body = m.strip_frontmatter(text)
+    assert "Never mentioned here" not in body
+    assert "Body starts here" in body
+
+
 # ---------------------------------------------------------------------------
 # count_constraint_signals
 # ---------------------------------------------------------------------------
@@ -169,6 +181,23 @@ def test_count_body_structure_signals_ignores_level_one_title() -> None:
     # as a body-structure section heading (real convention confirmed: '#'
     # for the title, '##' for every section including 'Worked example').
     assert m.count_body_structure_signals("# Examples\ncontent\n") == 0
+
+
+def test_count_body_structure_signals_rejects_hyphenated_compound_word() -> None:
+    # Regression (code review finding): a heading merely STARTING with
+    # "Example"/"Error handling" is not the same as a genuine worked
+    # -example or error-handling section -- a directly-hyphenated compound
+    # word ("Example-Based Testing", a real, unrelated testing-methodology
+    # term) would otherwise still satisfy a bare `\b` word boundary.
+    assert m.count_body_structure_signals("## Example-Based Testing Notes\ncontent\n") == 0
+    assert m.count_body_structure_signals("## Error Handling-First Design\ncontent\n") == 0
+
+
+def test_count_body_structure_signals_still_counts_heading_with_trailing_detail() -> None:
+    # The hyphen exclusion above must not overreach: a heading followed by
+    # a space, colon, or end of line is still a genuine match.
+    assert m.count_body_structure_signals("## Worked example: renaming a variable\ncontent\n") == 1
+    assert m.count_body_structure_signals("## Examples of failure modes\ncontent\n") == 1
 
 
 # ---------------------------------------------------------------------------
