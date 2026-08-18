@@ -1,0 +1,93 @@
+#!/bin/bash
+# PreToolUse hook (matcher: mcp__github__create_pull_request): blocks
+# opening a PR whose target issue (the issue it would Close/Fix/Resolve)
+# is already cited by another currently-open PR -- unless the new PR's
+# own body carries an explicit Duplicate-PR-waiver line.
+#
+# Issue #1197: issues #1069/#1070 (two retrospective issues for the same
+# PR #1066) and, inside #1069's own repair 1, two independent sessions
+# producing duplicate PRs #1066/#1067 for the same source issue #1064 --
+# neither session detecting the other in flight. Nothing in
+# planning-a-branch-from-an-issue/SKILL.md checked for an existing open PR before
+# creating a new one. This hook closes that gap.
+#
+# Checks via hooks/gitapex_check_pr_duplicate_issue.py, a self-contained
+# sibling script bundled beside this hook (not .github/scripts/ -- per
+# docs/repository-layout.md, only skills/ and hooks/ are deployed with the
+# plugin). That script reuses hooks/gitapex_check_pr_issue_acm_disclosure.py's
+# own extract_citations directly (same directory, plain Python import)
+# rather than a third copy of that regex logic. Resolved relative to this
+# script's own location so it travels with the hook regardless of
+# CLAUDE_PROJECT_DIR/CLAUDE_PLUGIN_ROOT.
+#
+# Fails CLOSED (deny) when it cannot verify another open PR's own
+# citations -- no GH_TOKEN/GITHUB_TOKEN in the environment, or the GitHub
+# API call fails after retries -- matching this repository's general "fail
+# closed, including on INDETERMINATE" posture and
+# hooks/check-pr-issue-acm-disclosure.sh's own identical, already-accepted
+# trade-off (this blocks all PR creation carrying a resolving citation
+# during a transient GitHub API outage).
+#
+# Denies via the PreToolUse hookSpecificOutput JSON on stdout AND exit 2 /
+# stderr (both conventions, defense in depth), same as
+# hooks/check-pr-issue-acm-disclosure.sh -- this script is adapted directly
+# from that one; see its own comments for the full hardening rationale
+# (jq-missing guard, malformed-JSON guard, non-object tool_input guard,
+# stdin-only payload construction to avoid ARG_MAX).
+
+set -euo pipefail
+
+if ! command -v jq >/dev/null 2>&1; then
+  printf '%s\n' "{\"hookSpecificOutput\": {\"permissionDecision\": \"deny\"}, \"systemMessage\": \"Blocked by hooks/check-pr-duplicate-issue.sh: jq is not available on PATH -- cannot verify whether another open PR already cites the same issue. Failing closed.\"}" >&2
+  exit 2
+fi
+
+deny() {
+  local reason="$1"
+  printf '%s' "$reason" | jq -Rs \
+    '{"hookSpecificOutput": {"permissionDecision": "deny"}, "systemMessage": .}' >&2
+  exit 2
+}
+
+input=$(cat)
+
+if ! printf '%s' "$input" | jq -e 'if type == "object" then . else empty end' >/dev/null 2>&1; then
+  deny "Blocked by hooks/check-pr-duplicate-issue.sh: the tool-call payload on stdin is not a JSON object. Failing closed."
+fi
+
+tool_name=$(printf '%s' "$input" | jq -r '.tool_name // empty')
+
+if [ "$tool_name" != "mcp__github__create_pull_request" ]; then
+  exit 0
+fi
+
+if ! printf '%s' "$input" | jq -e '(.tool_input // {}) | type == "object"' >/dev/null 2>&1; then
+  deny "Blocked by hooks/check-pr-duplicate-issue.sh: tool_input in the payload is not a JSON object. Failing closed."
+fi
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+check_script="$script_dir/gitapex_check_pr_duplicate_issue.py"
+
+if [ ! -f "$check_script" ]; then
+  deny "Blocked by hooks/check-pr-duplicate-issue.sh: cannot verify duplicate-PR status -- gitapex_check_pr_duplicate_issue.py was not found at $check_script (corrupted or incomplete plugin bundle). Failing closed."
+fi
+
+payload=$(printf '%s' "$input" | jq -c \
+  '{owner: (.tool_input.owner // ""), repo: (.tool_input.repo // ""), title: (.tool_input.title // ""), body: (.tool_input.body // "")}')
+
+if check_output=$(printf '%s' "$payload" | python3 "$check_script" 2>&1); then
+  check_exit=0
+else
+  check_exit=$?
+fi
+
+if [ "$check_exit" -eq 0 ]; then
+  exit 0
+fi
+
+if printf '%s' "$check_output" | grep -q '^FAIL:'; then
+  reason=$(printf '%s' "$check_output" | sed -n 's/^FAIL: //p')
+  deny "Blocked by hooks/check-pr-duplicate-issue.sh (issue #1197): $reason"
+fi
+
+deny "Blocked by hooks/check-pr-duplicate-issue.sh: gitapex_check_pr_duplicate_issue.py exited $check_exit without a recognized FAIL message -- this looks like a bug in the check script itself, not a genuine duplicate-PR finding. Failing closed. Output: $check_output"
