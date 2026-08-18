@@ -207,3 +207,69 @@ Adopted via #1187, replacing this skill's own prior "dimension 1" through
 "dimension 6" usage for the same six criteria, to resolve the terminology
 conflict with `evaluating-skill-quality`'s narrower, judgment-only sense of
 `Dimension`. See that entry for the full resolution.
+
+## `Isolation-for-neutrality`
+
+The property of a subagent dispatch being independent of the calling
+conversation's own history, framing, prior discussion, or opinion of the
+specific artifact under review -- achieved by handing the dispatch only
+the target artifact's path (or content) and the reviewing skill's own
+files, never the calling conversation's context. Distinct from
+`CLAUDE.md-free` (below): a dispatch can hold this property while still
+inheriting the calling repository's own project-instruction file, since a
+fresh dispatch with no conversation history is not automatically free of
+that file -- this repository's own harness has been observed to grant one
+without the other (see that entry).
+
+Adopted from `skills/evaluating-skill-quality/references/adversarial-self-audit.md`'s
+own "Contaminated-dispatch disclosure" section, where the phrase already
+named this concept precisely: "a contaminated grader is exactly the bias
+risk isolation-for-neutrality exists to prevent."
+
+Superseded terms: bare "isolated"/"isolation", and "contaminated" /
+"contaminated context" as used for this specific concept in
+`skills/evaluating-skill-quality/SKILL.md` lines 119 and 145 ("still
+grading from a contaminated context," describing a main thread that has
+itself seen or discussed the target) -- both retire as names for this
+concept, since that same skill's own `adversarial-self-audit.md` uses
+"contaminated" for the unrelated `CLAUDE.md-free` concept instead (see
+below), and mixing the two under one word is exactly the conflict this
+entry resolves. Resolved by the repository owner, directly, per the
+Resolve step, choosing to formalize this repository's own existing phrase
+over two invented alternatives (#1203). `SKILL.md` lines 119/145's own
+wording is not renamed by that issue -- a separate, later rename issue
+would be needed to make that file's own prose match this entry.
+
+## `CLAUDE.md-free`
+
+The property of a subagent dispatch (or any other agent-tool invocation)
+being verifiably free of the calling repository's own project-instruction
+file -- `CLAUDE.md`, `AGENTS.md`, or an equivalent auto-loaded mechanism
+-- regardless of whether that dispatch is otherwise fresh or carries the
+calling conversation's own history. Distinct from `Isolation-for-neutrality`
+(above): the two properties are independent, and this repository's own
+harness has been observed to grant the former without the latter -- issue
+#475 found this for an ordinary dispatch, and a later session's live test
+(recorded in issue #1199's own Facts) found it held even when the dispatch
+was given a different backing model (`fable`), so a dispatch with no
+conversation history can still inherit the repository's own `CLAUDE.md` in
+full.
+
+Already this repository's own organic usage in four places before this
+entry: `skills/evaluating-skill-quality/metadata/gitapex.yaml` ("same
+CLAUDE.md-free scratch dir"), `skills/scanning-attack-surfaces/metadata/gitapex.yaml`
+("a genuinely isolated CLAUDE.md-free re-run"), and
+`skills/battle-testing-a-skill/references/provenance-and-caveats.md`
+(twice: "that CLAUDE.md-free clean-copy practice", "CLAUDE.md-free
+clean-copy run").
+
+Superseded terms: "contaminated"/"contamination" as used for this concept
+in `skills/evaluating-skill-quality/references/adversarial-self-audit.md`'s
+"Contaminated-dispatch disclosure" section, and bare "isolated"/
+"isolation" as used in `evaluating-deterministic-gate-quality`'s and
+`evaluating-skill-quality`'s own Subagent dispatch sections for the
+project-instruction-file exclusion requirement specifically -- both
+retained as accurate description of the mechanism or the failure mode,
+but "CLAUDE.md-free" is now this repository's preferred name for the
+property itself. Resolved by the repository owner, directly, per the
+Resolve step (#1203).
