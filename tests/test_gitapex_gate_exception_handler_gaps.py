@@ -604,11 +604,18 @@ def test_a_second_file_with_no_diff_git_header_between_files_is_not_misattribute
     `{'hooks/gitapex_check_file1.py': {2, 3, 4}}` -- file2's own line
     silently missing, and a bogus line 4 (the misread `+++ ` header)
     attributed to file1 instead. Both files must now be graded separately,
-    each at its own correct line numbers, with nothing bogus added."""
+    each at its own correct line numbers, with nothing bogus added.
+
+    `@@ -1,1 +1,3 @@`, not `-1,2`: the hunk's own body has one context line
+    (old+new) and two additions (new only), so the accurate pre-image count
+    is 1 -- an inflated pre-image count here would leave `old_remaining`
+    permanently above zero (nothing in this body ever decrements it to 0)
+    and reopen this exact gap under the fixed dual-counter accounting,
+    despite being an inaccuracy `git diff` itself never produces."""
     diff = (
         "--- a/hooks/gitapex_check_file1.py\n"
         "+++ b/hooks/gitapex_check_file1.py\n"
-        "@@ -1,2 +1,3 @@\n"
+        "@@ -1,1 +1,3 @@\n"
         " def f():\n"
         "+    try:\n"
         "+        pass\n"
@@ -622,6 +629,64 @@ def test_a_second_file_with_no_diff_git_header_between_files_is_not_misattribute
         "hooks/gitapex_check_file1.py": {2, 3},
         "hooks/gitapex_check_file2.py": {2},
     }
+
+
+def test_a_zero_post_image_hunk_still_protects_its_own_removal_lines() -> None:
+    """Regression on the first fix for issue #1184's own gap 2 (post-image
+    count alone), found during this PR's own adversarial review. `git diff
+    -U0` -- this gate's real wired invocation -- emits a pure-deletion hunk
+    as `@@ -a,b +c,0 @@`: zero post-image lines. Bounding `in_hunk` by the
+    post-image count alone reads `remaining` as already exhausted on the
+    `@@` line itself, before the hunk's own `b` removal lines are consumed,
+    so the very next line -- itself this hunk's own removal content -- is
+    read as a real header instead.
+
+    Verified live against the first (post-image-count-only) fix: this exact
+    diff returned `{'hooks/gitapex_check_payload.py': {1}}` -- the real
+    added line on `gitapex_check_target.py` silently vanished, reattributed
+    to a same-shaped but unrelated file entirely, exactly the "silent pass
+    on a file this gate cannot grade" class issue #682 exists to catch.
+    Tracking the pre-image count too (a removal decrements it) protects
+    this hunk's own removal line via that side even though the post-image
+    side is already at zero, so the added line below is now correctly kept
+    on `gitapex_check_target.py`."""
+    diff = (
+        "diff --git a/hooks/gitapex_check_target.py b/hooks/gitapex_check_target.py\n"
+        "--- a/hooks/gitapex_check_target.py\n"
+        "+++ b/hooks/gitapex_check_target.py\n"
+        "@@ -1,1 +1,0 @@\n"
+        "--- a disguised removal line, not a real source header\n"
+        "+++ b/hooks/gitapex_check_payload.py\n"
+        '+text = p.read_text(encoding="utf-8")\n'
+    )
+    with pytest.raises(gate.ScanError, match="no `--- ` source header before it"):
+        gate.parse_added_lines(diff)
+
+
+def test_a_pure_deletion_hunk_contributes_nothing_and_does_not_disrupt_the_next_file() -> None:
+    """The realistic shape behind the regression above, with no adversarial
+    disguise: `git diff -U0` -- this gate's own real wired invocation --
+    emits a pure-deletion hunk exactly as `@@ -a,b +c,0 @@` whenever a diff
+    removes lines with nothing added in their place, which is ordinary,
+    everyday output, not a contrived input. The deleted file contributes no
+    added lines (a pure removal has none to grade), and the next file's own
+    real headers -- reached via a normal `diff --git ` separator, matching
+    every real multi-file `git diff` -- must still be read correctly and
+    graded on its own merits."""
+    diff = (
+        "diff --git a/hooks/gitapex_check_a.py b/hooks/gitapex_check_a.py\n"
+        "--- a/hooks/gitapex_check_a.py\n"
+        "+++ b/hooks/gitapex_check_a.py\n"
+        "@@ -3,1 +2,0 @@\n"
+        "-old_line_being_removed = 1\n"
+        "diff --git a/hooks/gitapex_check_b.py b/hooks/gitapex_check_b.py\n"
+        "--- a/hooks/gitapex_check_b.py\n"
+        "+++ b/hooks/gitapex_check_b.py\n"
+        "@@ -1,1 +1,2 @@\n"
+        " def g():\n"
+        "+    pass\n"
+    )
+    assert gate.parse_added_lines(diff) == {"hooks/gitapex_check_b.py": {2}}
 
 
 def test_the_minus_header_line_is_not_counted_as_a_removal(tmp_path: pathlib.Path) -> None:
