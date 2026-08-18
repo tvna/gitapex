@@ -365,6 +365,42 @@ def test_subprocess_executor_replaces_invalid_utf8_instead_of_raising():
 
 
 # ---------------------------------------------------------------------------
+# redact_executor_failure_reason (issue #1144 -- hoisted from
+# gitapex_run_effectiveness_correlation.py's own former _skip_reason, same
+# defeat-test discipline as that module's own test suite)
+# ---------------------------------------------------------------------------
+
+
+def test_redact_executor_failure_reason_redacts_runtime_error_with_embedded_stderr():
+    exc = RuntimeError("model CLI exited 1: ACME_SECRET_TOKEN=sk-live-deadbeef leaked in stderr")
+    reason = gitapex_run_ablation.redact_executor_failure_reason(exc)
+    assert "ACME_SECRET_TOKEN" not in reason
+    assert "sk-live-deadbeef" not in reason
+    assert "RuntimeError" in reason
+
+
+def test_redact_executor_failure_reason_redacts_timeout_expired_with_embedded_prompt():
+    exc = subprocess.TimeoutExpired(cmd=["claude", "-p", "the fixture's own private prompt text"], timeout=300)
+    reason = gitapex_run_ablation.redact_executor_failure_reason(exc)
+    assert "private prompt text" not in reason
+    assert "TimeoutExpired" in reason
+
+
+def test_redact_executor_failure_reason_keeps_value_error_verbatim():
+    reason = gitapex_run_ablation.redact_executor_failure_reason(
+        ValueError("skill_md not found: skills/ghost/SKILL.md")
+    )
+    assert reason == "skill_md not found: skills/ghost/SKILL.md"
+
+
+def test_redact_executor_failure_reason_keeps_os_error_verbatim():
+    reason = gitapex_run_ablation.redact_executor_failure_reason(
+        OSError("[Errno 2] No such file or directory: 'x.yaml'")
+    )
+    assert "No such file or directory" in reason
+
+
+# ---------------------------------------------------------------------------
 # direct invocation (regression: `import gitapex_score_contract` must resolve even
 # outside pytest's own pythonpath configuration)
 # ---------------------------------------------------------------------------

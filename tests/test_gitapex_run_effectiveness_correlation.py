@@ -225,7 +225,10 @@ def test_compute_pairs_happy_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     assert skipped == []
     assert len(pairs) == 1
     assert pairs[0].skill == "demo-a"
-    assert pairs[0].x == 2.0  # "one\ntwo\n" is 2 lines
+    # "one\ntwo\n" has no frontmatter, no sentence/bullet-initial Must/Never/Always,
+    # and no Worked example/Examples or Error handling/Troubleshooting heading.
+    assert pairs[0].x_negative_delta_risk == 0.0
+    assert pairs[0].x_body_structure == 0.0
     assert pairs[0].y == 1.0  # stub always returns "ok", matching expected.output_contains: ["ok"]
 
 
@@ -308,12 +311,18 @@ def test_main_dry_run_happy_path(
     # identical-scoring entries would make y constant and correlation
     # undefined by construction (spearman_rho correctly rejects that) --
     # not this test's own concern, which is proving the happy path wires
-    # end to end when a real correlation *can* be computed.
+    # end to end when a real correlation *can* be computed. demo-a's and
+    # demo-b's SKILL.md bodies are likewise chosen so BOTH x metrics vary
+    # across the two entries (demo-a has neither signal; demo-b has one
+    # sentence-initial "Never" and one "## Worked example" heading) -- a
+    # constant series in either metric would make that metric's own
+    # correlation undefined too, and this test's job is proving both
+    # succeed end to end.
     _write_demo_skill(tmp_path, "demo-a", body="one\ntwo\nthree\n")
     _write_demo_skill(
         tmp_path,
         "demo-b",
-        body="one\ntwo\n",
+        body="Never skip this step.\n\n## Worked example\n\nSample text.\n",
         tasks={
             "a.yaml": 'id: demo-task\ninputs:\n  prompt: Say ok.\nexpected:\n  output_contains: ["never-produced-by-stub"]\n'
         },
@@ -354,8 +363,9 @@ def test_main_dry_run_happy_path(
     assert payload["split"] == "selection"
     assert len(payload["pairs"]) == 2
     assert payload["skipped"] == []
-    assert "PLACEHOLDER" in payload["x_metric_caveat"]
-    assert payload["correlation"]["n"] == 2
+    assert "waza-independent" in payload["x_metric_caveat"]
+    assert [c["metric"] for c in payload["correlations"]] == ["negative_delta_risk", "body_structure"]
+    assert all(c["n"] == 2 for c in payload["correlations"])
 
 
 def test_main_missing_corpus_exits_2(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -436,11 +446,16 @@ def test_main_too_few_usable_pairs_exits_1(
 def test_main_constant_x_series_exits_1(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # Two skills with identical SKILL.md line counts (x) but different task
-    # outcomes (y varies) -- enough usable pairs to attempt a correlation,
-    # but x itself is constant, so compute_correlation must reject it
-    # (correlation is undefined against a constant series) rather than the
-    # earlier "too few pairs" guard catching it first.
+    # Two skills whose SKILL.md bodies contain neither a sentence/bullet-
+    # initial Must/Never/Always nor a Worked example/Examples/Error
+    # handling/Troubleshooting heading -- both x metrics are constant
+    # (0.0, 0.0) even though the task outcomes (y) differ -- enough usable
+    # pairs to attempt a correlation, but negative_delta_risk's own series
+    # is constant, so compute_correlation must reject it (correlation is
+    # undefined against a constant series) rather than the earlier "too
+    # few pairs" guard catching it first. negative_delta_risk is computed
+    # (and therefore fails) before body_structure in main(), so this is
+    # the one whose own error message actually surfaces here.
     monkeypatch.setattr(m, "REPO_ROOT", tmp_path)
     _write_demo_skill(tmp_path, "demo-a", body="one\ntwo\n")
     _write_demo_skill(
@@ -472,7 +487,52 @@ def test_main_constant_x_series_exits_1(
         ["--corpus", str(corpus_path), "--schema", str(DEMO_SCHEMA_PATH), "--split", "selection", "--dry-run"]
     )
     assert exit_code == 1
-    assert "constant" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "negative_delta_risk correlation" in err
+    assert "constant" in err
+
+
+def test_main_body_structure_constant_but_negative_delta_risk_varies_exits_1(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Regression: the two correlations are independent -- a constant
+    # body_structure series must be caught even when negative_delta_risk
+    # itself varies (proving main() does not stop checking after the
+    # first metric happens to succeed).
+    monkeypatch.setattr(m, "REPO_ROOT", tmp_path)
+    _write_demo_skill(tmp_path, "demo-a", body="one\ntwo\n")
+    _write_demo_skill(
+        tmp_path,
+        "demo-b",
+        body="Never skip this step.\n",
+        tasks={
+            "a.yaml": 'id: demo-task\ninputs:\n  prompt: Say ok.\nexpected:\n  output_contains: ["never-produced-by-stub"]\n'
+        },
+    )
+    corpus_path = _write_corpus(
+        tmp_path,
+        [
+            {
+                "skill": "demo-a",
+                "skill_md": "skills/demo-a/SKILL.md",
+                "eval_yaml": "evals/demo-a/eval.yaml",
+                "split": "selection",
+            },
+            {
+                "skill": "demo-b",
+                "skill_md": "skills/demo-b/SKILL.md",
+                "eval_yaml": "evals/demo-b/eval.yaml",
+                "split": "selection",
+            },
+        ],
+    )
+    exit_code = m.main(
+        ["--corpus", str(corpus_path), "--schema", str(DEMO_SCHEMA_PATH), "--split", "selection", "--dry-run"]
+    )
+    assert exit_code == 1
+    err = capsys.readouterr().err
+    assert "body_structure correlation" in err
+    assert "constant" in err
 
 
 def test_validation_error_message_native_pydantic_error_not_wrapped() -> None:
@@ -521,8 +581,9 @@ def test_dry_run_against_real_committed_corpus_produces_correlation_without_erro
     # pass a bare lower-bound check (issue #1143 adversarial review round).
     expected_n = {"selection": 20, "test": 5, "all": 25}[split]
     assert len(payload["pairs"]) == expected_n
-    assert payload["correlation"]["n"] == expected_n
-    correlation = payload["correlation"]
-    assert -1.0 <= correlation["rho"] <= 1.0
-    assert correlation["ci_low"] <= correlation["ci_high"]
-    assert correlation["power_caveat"]
+    assert [c["metric"] for c in payload["correlations"]] == ["negative_delta_risk", "body_structure"]
+    for correlation in payload["correlations"]:
+        assert correlation["n"] == expected_n
+        assert -1.0 <= correlation["rho"] <= 1.0
+        assert correlation["ci_low"] <= correlation["ci_high"]
+        assert correlation["power_caveat"]

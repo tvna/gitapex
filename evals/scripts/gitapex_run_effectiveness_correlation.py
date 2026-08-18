@@ -1,13 +1,12 @@
 """Wire the effectiveness corpus, `gitapex_run_eval_suite.py` (the real
 measurement mechanism), and `gitapex_compute_rank_correlation.py` together
 end to end (issue #1143, Acceptance Criteria Map row 3: "The methodology
-is usable end to end").
+is usable end to end"; issue #1144 replaced the original placeholder
+x-metric with the two real, native metrics below).
 
 See `effectiveness-corpus-methodology.md` for the full design: what
-"independently labeled" means here, the held-out selection/test split, and
-why this script's own `x` value is a disclosed *placeholder*, not waza's
-real body-structure/negative-delta-risk metric (that native implementation
-is issue #1137 sub-task 3's own contingent, not-yet-built scope).
+"independently labeled" means here, and the held-out selection/test
+split.
 
 **What this script actually measures.** For each corpus entry in the
 chosen split: `y` is a fresh `mean_score` from running that skill's own
@@ -15,11 +14,18 @@ committed `evals/<skill>/eval.yaml` suite through
 `gitapex_run_eval_suite.run_eval_suite` (never a stale value read back out
 of a historical `results/` file -- a corpus entry's own optional
 `known_prior_result` is provenance/cross-reference only, see the
-methodology doc); `x` is that skill's own `SKILL.md` body line count. Both
-are real, computed values -- `x` is simply not the metric #1137 sub-task 3
-will eventually need, and every JSON result this script prints says so
-explicitly via `x_metric_caveat`, so a `--dry-run` cannot be mistaken for a
-real correlation verdict by a reader who only sees the output.
+methodology doc). Two `x` metrics are computed per entry, both via
+`gitapex_compute_waza_advisory_metrics.py` against that skill's own
+`SKILL.md` body (frontmatter stripped): `x_negative_delta_risk`
+(`count_constraint_signals`) and `x_body_structure`
+(`count_body_structure_signals`) -- this repository's own fresh,
+corpus-calibrated, waza-independent operational definitions of waza's own
+advisory concepts, not a reverse-engineered copy of waza's own
+undisclosed counting algorithm (see that module's own docstring). A
+correlation is computed separately for each metric against the same `y`
+series -- two independent questions, never averaged into one score, since
+issue #1144's own resolved scope treats a possible rubric port for each
+as independent, never a package deal.
 
 **`--dry-run` vs. a live run.** `run_eval_suite`'s own `executor` parameter
 is dependency-injected (the same `Executor` type
@@ -56,10 +62,13 @@ must not be republished verbatim into this tool's own output.
 Exit code contract: 2 means the input was malformed (corpus file missing
 or fails schema validation, `--split` matched zero entries, a corpus path
 that does not exist as a real file); 1 means the corpus and its paths were
-valid but every entry's own measurement failed, or fewer than 2 usable
-pairs remained after skipping (a correlation cannot be computed from
-fewer than 2 points); 0 means success (regardless of some entries being
-skipped, which is disclosed in the output, not a failure).
+valid but every entry's own measurement failed, fewer than 2 usable pairs
+remained after skipping (a correlation cannot be computed from fewer than
+2 points), or either metric's own series was degenerate (e.g. constant --
+`gitapex_compute_rank_correlation.compute_correlation` rejects that
+outright, reported by name so a reader knows which of the two metrics
+failed); 0 means success (regardless of some entries being skipped, which
+is disclosed in the output, not a failure).
 
 Usage (``uv run`` -- reaches PyYAML/jsonschema/pydantic transitively
 through ``gitapex_run_eval_suite``/``gitapex_compute_rank_correlation``,
@@ -80,6 +89,7 @@ from pathlib import Path
 from typing import Any
 
 import gitapex_compute_rank_correlation as rank_correlation
+import gitapex_compute_waza_advisory_metrics as advisory_metrics
 import gitapex_run_ablation
 import gitapex_run_eval_suite
 import jsonschema
@@ -90,10 +100,12 @@ DEFAULT_CORPUS_PATH = Path(__file__).resolve().parent / "effectiveness-corpus.js
 DEFAULT_SCHEMA_PATH = Path(__file__).resolve().parent / "effectiveness-corpus.schema.json"
 
 X_METRIC_CAVEAT = (
-    "x is SKILL.md body line count -- a real, mechanically computed value, but an illustrative "
-    "PLACEHOLDER only. It is NOT waza's real body-structure/negative-delta-risk metric; a native, "
-    "waza-independent implementation of that metric is issue #1137 sub-task 3's own contingent, "
-    "not-yet-built scope. Do not read this run's correlation as a measurement of that question."
+    "x_negative_delta_risk and x_body_structure are real, waza-independent metrics computed by "
+    "gitapex_compute_waza_advisory_metrics.py (count_constraint_signals / count_body_structure_signals) "
+    "against each skill's own SKILL.md body. They are this repository's own fresh, corpus-calibrated "
+    "operational definitions of waza's advisory concepts -- NOT a reverse-engineered copy of waza's own "
+    "undisclosed counting algorithm, so a given skill's exact count here is not expected to match what "
+    "waza itself would report. See that module's own docstring for the calibration rationale."
 )
 
 
@@ -110,7 +122,8 @@ def _dry_run_executor(argv: Sequence[str], timeout: int) -> str:
 
 class CorpusEntryResult(BaseModel):
     skill: str
-    x: float
+    x_negative_delta_risk: float
+    x_body_structure: float
     y: float
 
 
@@ -119,28 +132,16 @@ class SkippedEntry(BaseModel):
     reason: str
 
 
-def _skip_reason(exc: Exception) -> str:
-    """A safe, disclosed reason for a ``SkippedEntry`` -- never the raw
-    text of a ``RuntimeError`` or ``subprocess.TimeoutExpired``, both of
-    which can embed live, externally-produced content this tool's own
-    JSON output must not republish verbatim: ``subprocess_executor``'s own
-    ``RuntimeError`` message includes the invoked model CLI's raw stderr
-    (issue #1143 adversarial review round), and ``TimeoutExpired``'s own
-    string form includes the full argv it ran, which itself carries the
-    fixture's prompt text (``gitapex_run_ablation.build_command``). Neither
-    is safe to echo into a result blob this tool's own docstring calls
-    "loud and visible in the tool's own output" -- CLAUDE.md's own rule
-    against echoing untrusted/external content into a generated artifact.
-    A ``ValueError``/``OSError``, in contrast, is always this module's or
-    the standard library's own deterministic, code-controlled text (a
-    missing-file path, a malformed-YAML complaint) -- never a live
-    model's own output -- so those stay verbatim, genuinely useful and
-    genuinely safe. The split is by exception type, not a per-instance
-    guess.
-    """
-    if isinstance(exc, (RuntimeError, subprocess.TimeoutExpired)):
-        return f"{type(exc).__name__}: model CLI invocation failed or timed out (detail intentionally not republished here)"
-    return str(exc)
+# A safe, disclosed reason for a SkippedEntry -- never a RuntimeError's or
+# TimeoutExpired's own raw text, both of which can embed live,
+# externally-produced content (a model CLI's stderr, a fixture's prompt
+# text) this tool's own "loud and visible" JSON output must not republish
+# verbatim. Hoisted into gitapex_run_ablation.py (issue #1144, both
+# gitapex_run_eval_suite.py and this module already import it) rather than
+# duplicated -- kept as a module-level alias here so existing call sites
+# and tests (`m._skip_reason`) keep working unchanged. See that function's
+# own docstring for the full redaction rationale.
+_skip_reason = gitapex_run_ablation.redact_executor_failure_reason
 
 
 def load_corpus(corpus_path: Path, schema_path: Path) -> dict[str, Any]:
@@ -218,7 +219,9 @@ def compute_pairs(
         try:
             if not skill_md.is_file():
                 raise ValueError(f"skill_md not found: {skill_md}")
-            body_line_count = len(skill_md.read_text(encoding="utf-8").splitlines())
+            body = advisory_metrics.strip_frontmatter(skill_md.read_text(encoding="utf-8"))
+            negative_delta_risk = advisory_metrics.count_constraint_signals(body)
+            body_structure = advisory_metrics.count_body_structure_signals(body)
             suite_result = gitapex_run_eval_suite.run_eval_suite(
                 eval_yaml,
                 skill_md,
@@ -228,7 +231,14 @@ def compute_pairs(
         except (ValueError, RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
             skipped.append(SkippedEntry(skill=skill, reason=_skip_reason(exc)))
             continue
-        pairs.append(CorpusEntryResult(skill=skill, x=float(body_line_count), y=suite_result.mean_score))
+        pairs.append(
+            CorpusEntryResult(
+                skill=skill,
+                x_negative_delta_risk=float(negative_delta_risk),
+                x_body_structure=float(body_structure),
+                y=suite_result.mean_score,
+            )
+        )
     return pairs, skipped
 
 
@@ -313,16 +323,35 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
+    # Both metrics are computed against the same pairs (one run_eval_suite
+    # call per skill already covers both -- see compute_pairs -- so this
+    # never doubles live-model cost). Each is its own independent
+    # correlation question, never averaged into one score: issue #1144's
+    # own resolved scope treats a possible rubric port for each metric as
+    # independent, never a package deal, and that independence carries
+    # through to how each is measured here.
     try:
-        correlation = rank_correlation.compute_correlation(
-            [p.x for p in pairs],
+        negative_delta_risk_correlation = rank_correlation.compute_correlation(
+            [p.x_negative_delta_risk for p in pairs],
             [p.y for p in pairs],
             confidence=validated_args.confidence,
             n_resamples=validated_args.n_resamples,
             seed=validated_args.seed,
         )
     except ValueError as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        print(f"error: negative_delta_risk correlation: {exc}", file=sys.stderr)
+        return 1
+
+    try:
+        body_structure_correlation = rank_correlation.compute_correlation(
+            [p.x_body_structure for p in pairs],
+            [p.y for p in pairs],
+            confidence=validated_args.confidence,
+            n_resamples=validated_args.n_resamples,
+            seed=validated_args.seed,
+        )
+    except ValueError as exc:
+        print(f"error: body_structure correlation: {exc}", file=sys.stderr)
         return 1
 
     print(
@@ -334,7 +363,10 @@ def main(argv: list[str] | None = None) -> int:
                 "x_metric_caveat": X_METRIC_CAVEAT,
                 "pairs": [p.model_dump() for p in pairs],
                 "skipped": [s.model_dump() for s in skipped],
-                "correlation": correlation.to_json_dict(),
+                "correlations": [
+                    {"metric": "negative_delta_risk", **negative_delta_risk_correlation.to_json_dict()},
+                    {"metric": "body_structure", **body_structure_correlation.to_json_dict()},
+                ],
             },
             sort_keys=True,
             indent=2,

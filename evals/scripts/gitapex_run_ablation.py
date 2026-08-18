@@ -314,6 +314,36 @@ def subprocess_executor(argv: Sequence[str], timeout: int) -> str:
     return result.stdout
 
 
+def redact_executor_failure_reason(exc: Exception) -> str:
+    """A safe, disclosed reason string for ``exc`` -- never the raw text of
+    a ``RuntimeError`` or ``subprocess.TimeoutExpired``, both of which can
+    embed live, externally-produced content a caller's own result blob
+    must not republish verbatim: ``subprocess_executor``'s own
+    ``RuntimeError`` message above includes the invoked model CLI's raw
+    stderr (issue #1143 adversarial review round), and
+    ``TimeoutExpired``'s own string form includes the full argv it ran,
+    which itself carries a fixture's prompt text (``build_command``).
+    Neither is safe to echo into a result a caller's own docstring calls
+    "loud and visible" -- CLAUDE.md's own rule against echoing untrusted/
+    external content into a generated artifact. A ``ValueError``/
+    ``OSError``, in contrast, is always this module's or the standard
+    library's own deterministic, code-controlled text (a missing-file
+    path, a malformed-YAML complaint) -- never a live model's own output
+    -- so those stay verbatim, genuinely useful and genuinely safe. The
+    split is by exception type, not a per-instance guess.
+
+    Hoisted here (issue #1144) rather than duplicated across callers:
+    every ``evals/scripts/*.py`` module that records a skipped entry's or
+    fixture's own reason (``gitapex_run_effectiveness_correlation.py``,
+    ``gitapex_run_eval_suite.py``) already imports this module, so this
+    is zero new import edges and one single definition of the redaction
+    rule.
+    """
+    if isinstance(exc, (RuntimeError, subprocess.TimeoutExpired)):
+        return f"{type(exc).__name__}: model CLI invocation failed or timed out (detail intentionally not republished here)"
+    return str(exc)
+
+
 @dataclass(frozen=True)
 class AblationResult:
     """Both arms of one task's comparison: raw outputs and their scores."""

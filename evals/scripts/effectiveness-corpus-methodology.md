@@ -27,18 +27,22 @@ only:
 
 It deliberately does **not**:
 
-- Compute or ship a real, native implementation of waza's body-structure or
-  negative-delta-risk advisories. Per `rubric.md`'s own worked example
-  (`references/worked-example-explaining-the-work.md`), those are a
-  constraint-keyword count and a section-presence check over a skill's
-  body text -- concrete and mechanically implementable, but building a
-  waza-independent version of them is #1137 sub-task 3's own contingent
-  scope, gated on this issue's result. Nothing here claims to measure them.
 - Reach a real correlation verdict. That needs a live, credentialed model
   run (`gitapex_run_eval_suite.py`'s `subprocess_executor`, real
   `ANTHROPIC_API_KEY`), which is not available in the environment that
   built this tooling -- the same disclosed precondition every other
   `evals/scripts/*.py` module in this repository already names for itself.
+  This remains true even with the real x-metrics wired in (issue #1144):
+  a `--dry-run` proves the plumbing, never a real verdict.
+- Port body-structure or negative-delta-risk into `evaluating-skill-quality`'s
+  rubric. That is #1137 sub-task 3's (issue #1144's) own contingent,
+  correlation-gated decision -- this document and its corpus only build
+  and describe the measurement tooling that decision depends on.
+
+Issue #1144 closed the one gap this document's own first revision left
+open: computing a real, native, waza-independent x-metric (previously a
+disclosed placeholder, `SKILL.md` body line count). See "End-to-end
+wiring" below for what is measured now.
 
 ## What "independently labeled" means here
 
@@ -129,19 +133,30 @@ described in prose:
    call) proves the plumbing without the credentialed-execution
    precondition; the real `subprocess_executor` is what a future live run
    would pass instead, with no code change.
-4. Compute a disclosed **placeholder** `x`: the skill's own `SKILL.md`
-   body line count. This is real, mechanically computed data, not a
-   fabricated number -- but it is explicitly *not* waza's real
-   body-structure/negative-delta-risk metric (that native implementation
-   is #1137 sub-task 3's own contingent, not-yet-built scope, see Scope
-   above). Every result this script prints carries an explicit
-   `x_metric_caveat` string saying so, so a reader of the JSON output
-   cannot mistake a dry-run plumbing check for a real waza-advisory
-   measurement.
-5. Feed the resulting `(x, y)` pairs into
-   `gitapex_compute_rank_correlation.compute_correlation`, and print the
-   full result (rho, CI, power caveat, per-entry pairs, and any skipped
-   entries with their reason -- see "Failure handling" below).
+4. Compute two real, native, waza-independent `x` metrics via
+   [`gitapex_compute_waza_advisory_metrics.py`](gitapex_compute_waza_advisory_metrics.py)
+   against the skill's own `SKILL.md` body (frontmatter stripped):
+   `x_negative_delta_risk` (`count_constraint_signals` -- sentence/bullet/
+   numbered-list-initial `Must`/`Never`/`Always` occurrences) and
+   `x_body_structure` (`count_body_structure_signals` -- 0/1/2, a
+   `## Worked example`/`## Examples` heading and/or a `## Error handling`/
+   `## Troubleshooting` heading). Both are this repository's own fresh,
+   corpus-calibrated operational definitions of waza's advisory concepts,
+   not a reverse-engineered copy of waza's own undisclosed counting
+   algorithm -- see that module's own docstring for the calibration
+   rationale (a literal shouting-case/literal-"Examples" reading is a
+   constant zero across the real corpus, which would make a correlation
+   mathematically undefined). Every result this script prints carries an
+   explicit `x_metric_caveat` string disclosing this, so a reader of the
+   JSON output does not mistake either metric for a reproduction of
+   waza's own (undisclosed) algorithm.
+5. Feed the resulting `(x_negative_delta_risk, y)` and `(x_body_structure,
+   y)` pairs into `gitapex_compute_rank_correlation.compute_correlation`
+   -- separately, once per metric, since a possible rubric port for each
+   is an independent decision, never a package deal (this session's own
+   resolved scope) -- and print the full result for each (rho, CI, power
+   caveat) alongside the shared per-entry pairs and any skipped entries
+   with their reason (see "Failure handling" below).
 
 Example (dry run, no credentials needed):
 
@@ -167,12 +182,17 @@ input for that run; it is never silently dropped.
 ## Adding a real measurement later
 
 Nothing about a future, real, credentialed run requires touching this
-corpus's shape: point `gitapex_run_effectiveness_correlation.py` at a real
-executor (the default, when `--dry-run` is omitted) with `ANTHROPIC_API_KEY`
-allowlisted the same way `gitapex_run_ablation.py`'s own hermetic
-environment already does, and optionally replace the placeholder x-metric
-step with #1137 sub-task 3's own native implementation once it exists.
+corpus's shape or its x-metrics: point `gitapex_run_effectiveness_correlation.py`
+at a real executor (the default, when `--dry-run` is omitted) with
+`ANTHROPIC_API_KEY` allowlisted the same way `gitapex_run_ablation.py`'s
+own hermetic environment already does. Both x-metrics are already real
+and native (issue #1144) -- a live run changes only `y` (from a dry-run
+stub score to a real `mean_score`), nothing about how `x` is computed.
 Recording that run as a `scorer-gated-skill-edits`-style run record
 (`eval-run.schema.json`) at that point is a natural fit, but is that
 future change's own responsibility, not retrofitted here for a run that
-never happened.
+never happened. Whether the resulting correlation is strong enough to
+port either metric into `evaluating-skill-quality`'s rubric (Dimension 3
+for negative-delta-risk, Dimension 4 for body-structure, per this
+session's own resolved scope -- never a new dimension) is issue #1144's
+own next, still-open decision.

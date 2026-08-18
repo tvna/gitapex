@@ -48,6 +48,26 @@
           }
         }
       }
+    },
+    "skipped_fixtures": {
+      "type": "array",
+      "description": "Optional. Fixtures skipped outright rather than scored -- today, a fixture whose model-CLI invocation deterministically tripped Anthropic's own content-policy classifier (gitapex_run_eval_suite.py's own _is_content_policy_rejection). Excluded from `n_fixtures`/`mean_score`/`scores` entirely, recorded here so a skip is loud and visible rather than silently absent. Always present (possibly empty) in output produced by gitapex_run_eval_suite.py; absent in a file written before this field existed, which this schema's own additional-properties permissiveness already tolerated before this field was named explicitly.",
+      "items": {
+        "type": "object",
+        "required": ["fixture_id", "reason"],
+        "properties": {
+          "fixture_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The skipped fixture's own declared identifier, same convention as `scores[].fixture_id`."
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "description": "A safe, redacted reason -- never a RuntimeError's or TimeoutExpired's own raw text, which can embed a live model CLI's stderr or a fixture's prompt (see gitapex_run_ablation.redact_executor_failure_reason)."
+          }
+        }
+      }
     }
   }
 }
