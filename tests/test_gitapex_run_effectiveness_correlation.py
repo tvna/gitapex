@@ -204,6 +204,7 @@ def test_compute_pairs_happy_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     assert pairs[0].x_negative_delta_risk == 0.0
     assert pairs[0].x_body_structure == 0.0
     assert pairs[0].y == 1.0  # stub always returns "ok", matching expected.output_contains: ["ok"]
+    assert pairs[0].skipped_fixtures == []
 
 
 def test_compute_pairs_skips_missing_skill_md(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -268,6 +269,57 @@ def test_compute_pairs_one_bad_entry_does_not_block_others(tmp_path: Path, monke
     assert pairs[0].skill == "good-skill"
     assert len(skipped) == 1
     assert skipped[0].skill == "ghost"
+
+
+_REAL_REJECTION_TEXT = (
+    "model CLI exited 1: [bio] I can't help with this request. See "
+    "https://www.anthropic.com/legal/aup for more information."
+)
+
+
+def _executor_rejects_reject_me_prompt(argv: Sequence[str], timeout: int) -> str:
+    if "REJECT_ME" in " ".join(argv):
+        raise RuntimeError(_REAL_REJECTION_TEXT)
+    return "ok"
+
+
+def test_compute_pairs_preserves_partial_skipped_fixtures_on_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Regression (code review finding): an entry whose suite SUCCEEDS
+    # overall (one fixture scored, one fully content-policy-skipped) must
+    # not have that skip silently dropped -- compute_pairs' own
+    # try/except never fires here (only an ALL-skipped suite raises
+    # ValueError and lands in the corpus-level `skipped` list), so this
+    # detail is only visible via CorpusEntryResult.skipped_fixtures.
+    monkeypatch.setattr(m, "REPO_ROOT", tmp_path)
+    _write_demo_skill(
+        tmp_path,
+        "demo-a",
+        tasks={
+            "a.yaml": DEMO_TASK_YAML,
+            "b.yaml": 'id: reject-task\ninputs:\n  prompt: REJECT_ME\nexpected:\n  output_contains: ["ok"]\n',
+        },
+    )
+    entries = [
+        {
+            "skill": "demo-a",
+            "skill_md": "skills/demo-a/SKILL.md",
+            "eval_yaml": "evals/demo-a/eval.yaml",
+            "split": "selection",
+        }
+    ]
+
+    pairs, skipped = m.compute_pairs(entries, executor=_executor_rejects_reject_me_prompt, model_cli="claude")
+
+    assert skipped == []  # the suite overall succeeded -- not a corpus-level skip
+    assert len(pairs) == 1
+    assert pairs[0].y == 1.0  # mean_score over demo-task alone -- reject-task excluded
+    assert pairs[0].skipped_fixtures == [
+        {"fixture_id": "reject-task", "reason": pairs[0].skipped_fixtures[0]["reason"]}
+    ]
+    assert "RuntimeError" in pairs[0].skipped_fixtures[0]["reason"]
+    assert "can't help" not in pairs[0].skipped_fixtures[0]["reason"]  # redacted, not raw
 
 
 # ---------------------------------------------------------------------------

@@ -200,6 +200,18 @@ def test_count_body_structure_signals_still_counts_heading_with_trailing_detail(
     assert m.count_body_structure_signals("## Examples of failure modes\ncontent\n") == 1
 
 
+def test_count_body_structure_signals_does_not_span_an_empty_heading_into_the_next_line() -> None:
+    # Regression (code review finding): `\s` also matches a newline, so an
+    # earlier `\s+` separator let a heading marker on its OWN line ("##",
+    # empty per real CommonMark) span into unrelated text on the next line
+    # ("Examples") and still match, even though that text is a separate
+    # paragraph, not part of any heading. `[ \t]+` (horizontal whitespace
+    # only) must not cross the line boundary.
+    assert m.count_body_structure_signals("##\nExamples\n") == 0
+    assert m.count_body_structure_signals("## Error\nhandling\n") == 0
+    assert m.count_body_structure_signals("##\nWorked\n") == 0
+
+
 # ---------------------------------------------------------------------------
 # Real-corpus sanity checks (not an exact reverse-engineered number, see
 # module docstring's "NOT a reverse-engineered copy" section)

@@ -93,7 +93,7 @@ import gitapex_compute_waza_advisory_metrics as advisory_metrics
 import gitapex_run_ablation
 import gitapex_run_eval_suite
 import jsonschema
-from pydantic import BaseModel, ValidationError, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CORPUS_PATH = Path(__file__).resolve().parent / "effectiveness-corpus.json"
@@ -125,6 +125,14 @@ class CorpusEntryResult(BaseModel):
     x_negative_delta_risk: float
     x_body_structure: float
     y: float
+    # Default-empty, present even for a fully-clean entry (code-review
+    # finding): a suite with SOME, not all, fixtures rejected still
+    # succeeds here (compute_pairs' own try/except never fires -- only an
+    # ALL-skipped suite raises ValueError and lands in `skipped` below),
+    # so without this field that entry's own SuiteResult.skipped_fixtures
+    # would be silently dropped even though `y` was computed from fewer
+    # fixtures than the suite actually declares.
+    skipped_fixtures: list[dict[str, str]] = Field(default_factory=list)
 
 
 class SkippedEntry(BaseModel):
@@ -198,7 +206,13 @@ def compute_pairs(
     (``ValueError``, ``RuntimeError``, ``OSError``, or
     ``subprocess.TimeoutExpired`` -- see module docstring's "Per-entry
     failure handling" section) lands in ``skipped`` with its reason, never
-    silently dropped and never aborting the remaining entries.
+    silently dropped and never aborting the remaining entries. An entry
+    whose suite *succeeds* but had some (not all) of its own fixtures
+    content-policy-skipped carries that detail forward too, on its own
+    ``CorpusEntryResult.skipped_fixtures`` -- ``y`` for that entry is still
+    a real ``mean_score``, just computed from fewer fixtures than the
+    suite declares, and that fact must stay visible rather than silently
+    read as a clean, complete run.
 
     The four types are named directly in the ``except`` clause below,
     not read from a shared module-level tuple: this repository's own
@@ -237,6 +251,7 @@ def compute_pairs(
                 x_negative_delta_risk=float(negative_delta_risk),
                 x_body_structure=float(body_structure),
                 y=suite_result.mean_score,
+                skipped_fixtures=suite_result.skipped_fixtures,
             )
         )
     return pairs, skipped

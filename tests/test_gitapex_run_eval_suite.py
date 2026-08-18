@@ -702,6 +702,25 @@ def test_is_content_policy_rejection_ignores_the_varying_bracketed_reason_tag():
     assert gitapex_run_eval_suite._is_content_policy_rejection(RuntimeError(differently_tagged)) is True
 
 
+def test_is_content_policy_rejection_matches_typographic_apostrophe():
+    # Regression (code review finding): the classifier's own rejection text
+    # is natural-language prose, not a fixed machine-generated string -- a
+    # typographic apostrophe (U+2019) must still match the marker written
+    # with a plain ASCII apostrophe, or a live rejection rendered this way
+    # re-raises and aborts the whole suite instead of being gracefully
+    # skipped.
+    text = _REAL_REJECTION_TEXT.replace("can't", "can" + chr(0x2019) + "t")
+    assert "can't" not in text  # confirm the substitution actually happened
+    assert gitapex_run_eval_suite._is_content_policy_rejection(RuntimeError(text)) is True
+
+
+def test_is_content_policy_rejection_matches_differently_cased_sentence():
+    # A sentence-initial "Can't" (capitalized) must still match the
+    # lowercase marker.
+    text = _REAL_REJECTION_TEXT.replace("can't", "Can't")
+    assert gitapex_run_eval_suite._is_content_policy_rejection(RuntimeError(text)) is True
+
+
 # ---------------------------------------------------------------------------
 # Content-policy rejection handling in run_eval_suite (issue #1144)
 # ---------------------------------------------------------------------------
@@ -753,7 +772,7 @@ def test_run_eval_suite_content_policy_rejection_on_first_trial_does_not_crash(t
     # 0 (the very first attempt) leaves `trials` empty for that fixture --
     # a naive bare `break` would then crash `statistics.mean(trial["score"]
     # for trial in trials)` with StatisticsError on that empty sequence.
-    # trials_per_task: 3 (BASE_EVAL_YAML's default) with a rejection on
+    # trials_per_task: 2 (BASE_EVAL_YAML's default) with a rejection on
     # every call is the sharpest form of this: the first trial itself
     # already sets skip_reason and breaks, so trials never fills at all.
     eval_yaml = _write_suite(tmp_path, tasks={"a.yaml": TASK_A_TEXT, "b.yaml": _REJECTED_TASK_TEXT})

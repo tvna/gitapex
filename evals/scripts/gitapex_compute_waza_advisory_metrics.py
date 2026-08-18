@@ -68,24 +68,30 @@ _CONSTRAINT_SIGNAL_PATTERN = re.compile(r"(^\s*|[.!?]\s+)(?:[-*]\s+|\d+\.\s+)?(M
 
 # A '## Worked example' or '## Examples' heading (singular or plural, any
 # heading depth >= 2, case-insensitive) -- this repository's own real
-# convention, not a literal, undisclosed "Examples" match. The trailing
+# convention, not a literal, undisclosed "Examples" match. Every separator
+# is `[ \t]+`, not `\s+` (code-review finding): `\s` also matches a
+# newline, so `\s+` would let a heading marker on its own line ("##") span
+# into unrelated text on the NEXT line ("Examples") and still match --
+# real CommonMark treats "##" alone as an empty heading, with the
+# following line an unrelated paragraph, not part of it. The trailing
 # `(?!-)` rejects a directly-hyphenated compound word ("## Example-Based
 # Testing Notes") that is not actually a worked-example section but would
 # otherwise still satisfy `\b` (a plain word-boundary sits between "e" and
 # "-" too) -- confirmed this exclusion does not drop any real corpus hit
 # at calibration time (every real match is followed by end-of-line,
 # whitespace, or a colon, never a hyphen).
-_WORKED_EXAMPLE_HEADING_PATTERN = re.compile(r"^#{2,}\s+(worked\s+)?examples?\b(?!-)", re.MULTILINE | re.IGNORECASE)
+_WORKED_EXAMPLE_HEADING_PATTERN = re.compile(
+    r"^#{2,}[ \t]+(worked[ \t]+)?examples?\b(?!-)", re.MULTILINE | re.IGNORECASE
+)
 
 # A '## Error handling' or '## Troubleshooting' heading. Confirmed
 # near-zero across the real corpus at calibration time (no established
 # heading convention for this yet) -- left as-is rather than papered over
 # with an invented synonym list to manufacture variance that is not
-# really there. See module docstring. Same `(?!-)` exclusion as the
-# worked-example pattern above, for the same reason (e.g. "## Error
-# Handling-Adjacent Notes" is not really an error-handling section).
+# really there. See module docstring. Same `[ \t]+`-not-`\s+` and `(?!-)`
+# treatment as the worked-example pattern above, for the same reasons.
 _ERROR_HANDLING_HEADING_PATTERN = re.compile(
-    r"^#{2,}\s+(error\s+handling|troubleshooting)\b(?!-)", re.MULTILINE | re.IGNORECASE
+    r"^#{2,}[ \t]+(error[ \t]+handling|troubleshooting)\b(?!-)", re.MULTILINE | re.IGNORECASE
 )
 
 

@@ -383,7 +383,11 @@ class SuiteResult:
 # structural signature confirmed empirically against a real live
 # rejection (issue #1183's own pilot): a bracketed reason tag (e.g.
 # "[bio]") varies between rejections and is deliberately not matched on,
-# only these two fixed strings are.
+# only these two fixed strings are. Lowercase, ASCII apostrophe: matched
+# against normalized text (see _is_content_policy_rejection) so a
+# differently-cased or typographic-apostrophe rendering of the same
+# sentence still matches -- the natural-language wording is not the
+# stable part of the signature, only these two substrings are.
 _CONTENT_POLICY_MARKERS = ("can't help with this", "anthropic.com/legal/aup")
 
 
@@ -397,8 +401,17 @@ def _is_content_policy_rejection(exc: RuntimeError) -> bool:
     deterministically trips it when actually executed live). Requires
     BOTH markers present, not just one, so an unrelated failure that
     happens to mention only one of the two strings is not misclassified.
+
+    ``exc``'s text is casefolded and its apostrophe normalized (``'``,
+    U+2019, to the plain ASCII ``'`` ``_CONTENT_POLICY_MARKERS`` uses)
+    before matching (code-review finding): the classifier's own rejection
+    text is natural-language prose, not a fixed machine-generated string,
+    so its exact capitalization and apostrophe glyph are not guaranteed --
+    only the two marker substrings are the stable part of the signature.
+    Missing this rejection re-raises the ``RuntimeError`` and aborts the
+    whole suite, exactly the failure mode this function exists to avoid.
     """
-    text = str(exc)
+    text = str(exc).replace(chr(0x2019), "'").casefold()  # typographic right single quote -> ASCII
     return all(marker in text for marker in _CONTENT_POLICY_MARKERS)
 
 
