@@ -26,7 +26,7 @@ REPO_ROOT = Path(__file__).parent.parent
 
 
 def run(
-    file_path: str, tool_name: str = "Write", extra_env: dict[str, str] | None = None
+    file_path: str, tool_name: object = "Write", extra_env: dict[str, str] | None = None
 ) -> subprocess.CompletedProcess[str]:
     payload = json.dumps({"tool_name": tool_name, "tool_input": {"file_path": file_path}})
     env = dict(os.environ)
@@ -245,15 +245,7 @@ def test_denied_when_tool_name_is_not_a_string(tool_name: object, existing_templ
     (exit 0) instead of failing closed. Live-confirmed before this guard
     existed: an array-wrapped tool_name let an overwrite of the real PR
     template straight through. Must now deny."""
-    payload = json.dumps({"tool_name": tool_name, "tool_input": {"file_path": existing_template_file}})
-    result = subprocess.run(
-        ["bash", str(SCRIPT)],
-        input=payload,
-        capture_output=True,
-        text=True,
-        timeout=10,
-        cwd=str(REPO_ROOT),
-    )
+    result = run(existing_template_file, tool_name=tool_name)
     assert result.returncode == 2, f"expected deny (exit 2) for tool_name={tool_name!r}, got {result.returncode}"
     parsed = json.loads(result.stderr)
     assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"

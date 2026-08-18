@@ -31,7 +31,7 @@ SCAN_SCRIPT_RELATIVE = "skills/outward-artifact-preflight/scripts/gitapex_scan_p
 
 
 def run(
-    command: str, tool_name: str = "Bash", extra_env: dict[str, str] | None = None
+    command: str, tool_name: object = "Bash", extra_env: dict[str, str] | None = None
 ) -> subprocess.CompletedProcess[str]:
     payload = json.dumps({"tool_name": tool_name, "tool_input": {"command": command}})
     env = dict(os.environ)
@@ -313,18 +313,7 @@ def test_denied_when_tool_name_is_not_a_string(tool_name: object) -> None:
     (exit 0) instead of failing closed. Live-confirmed before this guard
     existed: an array-wrapped tool_name let a `gh pr merge` command
     straight through. Must now deny."""
-    payload = json.dumps({"tool_name": tool_name, "tool_input": {"command": "gh pr merge 1"}})
-    env = dict(os.environ)
-    env.pop("CLAUDE_PROJECT_DIR", None)
-    result = subprocess.run(
-        ["bash", str(SCRIPT)],
-        input=payload,
-        capture_output=True,
-        text=True,
-        timeout=10,
-        env=env,
-        cwd=str(REPO_ROOT),
-    )
+    result = run("gh pr merge 1", tool_name=tool_name)
     assert result.returncode == 2, f"expected deny (exit 2) for tool_name={tool_name!r}, got {result.returncode}"
     parsed = json.loads(result.stderr)
     assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"

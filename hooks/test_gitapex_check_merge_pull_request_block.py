@@ -31,7 +31,7 @@ REPO_ROOT = Path(__file__).parent.parent
 
 def run(
     *,
-    tool_name: str = "mcp__github__merge_pull_request",
+    tool_name: object = "mcp__github__merge_pull_request",
     tool_input: dict[str, object] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     payload = json.dumps(
@@ -206,19 +206,7 @@ def test_denied_when_tool_name_is_not_a_string(tool_name: object) -> None:
     Live-confirmed before this guard existed: an array-wrapped tool_name
     let a merge_pull_request call straight through this hook -- the exact
     bypass class this file exists to close. Must now deny."""
-    env = dict(os.environ)
-    env.pop("CLAUDE_PROJECT_DIR", None)
-    env.pop("CLAUDE_PLUGIN_ROOT", None)
-    payload = json.dumps({"tool_name": tool_name, "tool_input": {"owner": "tvna", "repo": "gitapex", "pullNumber": 1}})
-    result = subprocess.run(
-        ["bash", str(SCRIPT)],
-        input=payload,
-        capture_output=True,
-        text=True,
-        timeout=10,
-        env=env,
-        cwd=str(REPO_ROOT),
-    )
+    result = run(tool_name=tool_name)
     assert result.returncode == 2, f"expected deny (exit 2) for tool_name={tool_name!r}, got {result.returncode}"
     parsed = json.loads(result.stderr)
     assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"
