@@ -107,6 +107,28 @@ def test_partition_resolved_handles_empty_issue_numbers() -> None:
     assert resolved == []
 
 
+def test_partition_resolved_deduplicates_repeated_resolved_issue_number() -> None:
+    # Defeat case: merge-retrospective/SKILL.md's own Step 1 builds the CLI
+    # candidate list from two separate searches (a label search plus a
+    # title-text fallback for pre-label issues) concatenated together --
+    # an issue matching both would otherwise appear twice in "resolved".
+    unresolved, resolved = checker.partition_resolved([650, 650], ["Refs #650"], {650})
+    assert unresolved == []
+    assert resolved == [650]
+
+
+def test_partition_resolved_deduplicates_repeated_unresolved_issue_number() -> None:
+    unresolved, resolved = checker.partition_resolved([999, 999], ["chore: unrelated"], set())
+    assert unresolved == [999]
+    assert resolved == []
+
+
+def test_partition_resolved_deduplicates_while_preserving_first_occurrence_order() -> None:
+    unresolved, resolved = checker.partition_resolved([650, 999, 650, 999], ["Refs #650"], {650})
+    assert unresolved == [999]
+    assert resolved == [650]
+
+
 # ---------------------------------------------------------------------------
 # git_commit_messages
 # ---------------------------------------------------------------------------

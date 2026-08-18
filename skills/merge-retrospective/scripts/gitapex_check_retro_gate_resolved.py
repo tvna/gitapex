@@ -108,16 +108,25 @@ def partition_resolved(
     commit_messages: list[str],
     tracking_issues: set[int],
 ) -> tuple[list[int], list[int]]:
-    """Partition every entry in `issue_numbers` into `(unresolved,
+    """Partition every distinct entry in `issue_numbers` into `(unresolved,
     resolved)`. An issue number resolves only when both signals agree: at
     least one commit cites it AND `tracking_issues` contains it (issue
     #709's corroborating-signal rationale) -- mirrors
     gitapex_scan_retrospective_gate_drift.py's own
     `find_no_citation_issues`, restated as a two-way partition rather
-    than a single no-citation list."""
-    resolved = [n for n in issue_numbers if citation_count(commit_messages, n) > 0 and n in tracking_issues]
+    than a single no-citation list.
+
+    Deduplicates `issue_numbers` first (first-occurrence order preserved):
+    unlike the CI sibling's own `issue_numbers` (always a single label
+    search's worth of distinct numbers), this script's own candidate list
+    is CLI-supplied and `merge-retrospective/SKILL.md`'s own Step 1 builds
+    it from two separate searches (a label search plus a title-text
+    fallback for pre-label issues) concatenated together -- an issue
+    matching both would otherwise appear twice in the same output array."""
+    deduped_issue_numbers = list(dict.fromkeys(issue_numbers))
+    resolved = [n for n in deduped_issue_numbers if citation_count(commit_messages, n) > 0 and n in tracking_issues]
     resolved_set = set(resolved)
-    unresolved = [n for n in issue_numbers if n not in resolved_set]
+    unresolved = [n for n in deduped_issue_numbers if n not in resolved_set]
     return unresolved, resolved
 
 
