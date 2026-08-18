@@ -509,13 +509,24 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
     `in_hunk` is bounded by the hunk's own declared post-image length (the
     optional `,<count>` `_HUNK_RE` captures, defaulting to 1 when omitted --
     a bare `@@ -N +M @@` means exactly one post-image line), not only by the
-    next `diff --git ` line -- the second of the two places above, also
-    ported into `gitapex_gate_exception_handler_gaps.py`'s own
-    `parse_added_lines` by issue #1184. Without that bound, a patch
-    carrying no `diff --git ` header at all between files (real `git diff`
-    output always has one; a hand-fed or foreign patch, the same `--diff
-    <file>` exposure as the header case above, need not) would leave
-    `in_hunk` True
+    next `diff --git ` line. Issue #1184 first ported this same
+    post-image-only bound into `gitapex_gate_exception_handler_gaps.py`'s
+    own `parse_added_lines`, then found and fixed a regression it
+    introduced there (a pure-deletion hunk, `@@ -a,b +c,0 @@`, sets its own
+    post-image count to zero and is reachable via this gate's real `-U0`
+    wired invocation) by tracking the pre-image count too and clearing
+    `in_hunk` only once both reach zero. **That improved, two-sided bound
+    was not ported back to this file** -- this parser still tracks the
+    post-image count alone and carries the same pure-deletion-hunk
+    regression, live but unexercised until this gate's own real `-U0`
+    invocation happens to produce one; tracked as part of issue #1193's own
+    updated scope rather than fixed here, alongside that issue's original,
+    lower-severity over-declared-count finding.
+
+    Without the post-image bound this file does carry, a patch carrying no
+    `diff --git ` header at all between files (real `git diff` output
+    always has one; a hand-fed or foreign patch, the same `--diff <file>`
+    exposure as the header case above, need not) would leave `in_hunk` True
     straight through a second file's own `--- `/`+++ ` lines: `--- ` reads
     as a harmless removal-shaped no-op, but `+++ ` then reads as *content*
     (its own leading `+`) and gets added to the *first* file's `path` at a

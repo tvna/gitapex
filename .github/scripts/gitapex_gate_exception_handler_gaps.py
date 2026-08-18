@@ -483,10 +483,9 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
             new_remaining = 1 if match.group(3) is None else int(match.group(3))
             in_hunk = old_remaining > 0 or new_remaining > 0
             continue
-        if path is None:
-            continue
         if line.startswith("+"):
-            added.setdefault(path, set()).add(lineno)
+            if path is not None:
+                added.setdefault(path, set()).add(lineno)
             lineno += 1
             new_remaining -= 1
         elif line.startswith(" "):
@@ -496,7 +495,13 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
         elif line.startswith("-"):
             old_remaining -= 1
         # `\ No newline at end of file` is a marker, not content, and
-        # advances neither counter.
+        # advances neither counter. `path` is None for a deleted file
+        # (`+++ /dev/null`, see `_diff_target_path`) -- the counters and
+        # `in_hunk` still have to be bounded there too, only the recording
+        # into `added` is skipped, or a deletion hunk's own removal lines
+        # would never be consumed and `in_hunk` would stay True straight
+        # through whatever follows, reopening gap 2 for exactly the one
+        # case this docstring otherwise says is now bounded.
         if old_remaining <= 0 and new_remaining <= 0:
             in_hunk = False
     return added

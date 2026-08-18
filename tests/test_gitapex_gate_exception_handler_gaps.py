@@ -503,6 +503,39 @@ def test_a_deleted_file_adds_nothing_to_grade(tmp_path: pathlib.Path) -> None:
     assert gate.find_violations(diff, tmp_path) == ([], [], 0)
 
 
+def test_a_deleted_files_own_removal_lines_still_bound_in_hunk() -> None:
+    """CodeRabbit review finding on this PR. `path` is None for the whole
+    of a deleted file's hunk (`+++ /dev/null` maps to None), and the old
+    code's `if path is None: continue` skipped the counter decrements and
+    the `in_hunk` exhaustion check for every line of it -- not just the
+    `added` recording. `old_remaining`/`new_remaining` stayed frozen at
+    their post-header values and `in_hunk` stayed True indefinitely, so a
+    patch with no `diff --git ` header between a deleted file and the next
+    one left that next file's own real `--- `/`+++ ` headers unrecognised.
+
+    Verified live against the pre-fix code: this exact diff returned `{}`
+    -- the second file's own real added line dropped entirely, with no
+    trace anywhere (not even misattributed to the wrong file, the way gap
+    2's own original shape was). The counters and the exhaustion check now
+    run regardless of `path`; only recording into `added` is still guarded
+    on it, so a deleted file's own declared removal count correctly bounds
+    its hunk and the next file is read normally afterward."""
+    diff = (
+        "--- a/hooks/gitapex_check_deleted.py\n"
+        "+++ /dev/null\n"
+        "@@ -1,3 +0,0 @@\n"
+        "-line1\n"
+        "-line2\n"
+        "-line3\n"
+        "--- a/hooks/gitapex_check_next.py\n"
+        "+++ b/hooks/gitapex_check_next.py\n"
+        "@@ -1,1 +1,2 @@\n"
+        " def g():\n"
+        "+    pass\n"
+    )
+    assert gate.parse_added_lines(diff) == {"hooks/gitapex_check_next.py": {2}}
+
+
 def test_an_added_line_whose_content_starts_with_two_plusses_is_not_a_header(
     tmp_path: pathlib.Path,
 ) -> None:
