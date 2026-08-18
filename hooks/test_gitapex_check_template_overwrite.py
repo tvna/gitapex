@@ -62,24 +62,21 @@ def assert_allowed(file_path: str) -> None:
     assert result.stderr == ""
 
 
-def _find_existing_template() -> str:
-    """A real, tracked template path in this checkout, so the deny path is
-    exercised against an actual `-f` hit rather than a synthesized fixture
-    file this test would need to create and clean up."""
-    for candidate in (
-        ".github/pull_request_template.md",
-        ".github/PULL_REQUEST_TEMPLATE.md",
-        "PULL_REQUEST_TEMPLATE.md",
-        "docs/PULL_REQUEST_TEMPLATE.md",
-        "pull_request_template.md",
-    ):
-        if (REPO_ROOT / candidate).is_file():
-            return candidate
-    pytest.skip("no existing PR template file found in this checkout to test the overwrite-deny path against")
+@pytest.fixture
+def existing_template_file(tmp_path: Path) -> str:
+    """An absolute, on-disk path matching the single-file PR template
+    basename rule. A tmp_path fixture rather than a scan over this
+    checkout's own template file(s): `[ -f "$file_path" ]` in the hook
+    works the same for an absolute path regardless of cwd, so the deny
+    path is exercised against a real `-f` hit without the test depending
+    on which template file(s) happen to exist in this repository."""
+    template = tmp_path / "pull_request_template.md"
+    template.write_text("existing template body\n")
+    return str(template)
 
 
-def test_denied_overwriting_the_real_pr_template() -> None:
-    assert_denied(_find_existing_template())
+def test_denied_overwriting_an_existing_template_file(existing_template_file: str) -> None:
+    assert_denied(existing_template_file)
 
 
 @pytest.mark.parametrize(
@@ -117,8 +114,8 @@ def test_allowed_when_no_file_path() -> None:
     assert_allowed("")
 
 
-def test_non_write_tool_name_is_ignored() -> None:
-    result = run(_find_existing_template(), tool_name="Edit")
+def test_non_write_tool_name_is_ignored(existing_template_file: str) -> None:
+    result = run(existing_template_file, tool_name="Edit")
     assert result.returncode == 0
     assert result.stdout == ""
     assert result.stderr == ""
@@ -143,12 +140,12 @@ def _no_jq_path(tmp_path: Path) -> str:
     return str(bin_dir)
 
 
-def test_denied_when_jq_missing(tmp_path: Path) -> None:
+def test_denied_when_jq_missing(tmp_path: Path, existing_template_file: str) -> None:
     """Live-reproduced before this fix: with jq absent, every jq call under
     `set -e` crashed with exit 127 ("command not found") -- non-blocking
     per Claude Code's PreToolUse contract, so the overwrite proceeded
     unchecked. Must now deny (exit 2) instead."""
-    result = run(_find_existing_template(), extra_env={"PATH": _no_jq_path(tmp_path)})
+    result = run(existing_template_file, extra_env={"PATH": _no_jq_path(tmp_path)})
     assert result.returncode == 2, f"expected deny (exit 2), got {result.returncode}: stderr={result.stderr!r}"
     payload = json.loads(result.stderr)
     assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
