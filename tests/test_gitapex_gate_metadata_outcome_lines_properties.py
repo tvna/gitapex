@@ -86,20 +86,25 @@ assumption that ``-n auto`` would trip it, and removing the suppression was
 measured to leave all four properties passing -- so the suppression was
 protecting against nothing and is gone.
 
-Scope superseded by issue #1178
--------------------------------
+Scope superseded by issue #1178, for the paths that gate actually covers
+--------------------------------------------------------------------------
 This module's opening paragraph states that no other parser-shaped script under
 ``.github/scripts/`` or ``evals/scripts/`` is in scope until this layer has
-demonstrated it catches a real defect here. That sentence is now formally
-superseded by issue #1178's own ``detection-logic-property-coverage`` gate
+demonstrated it catches a real defect here. For ``.github/scripts/`` that
+sentence is now formally superseded by issue #1178's own
+``detection-logic-property-coverage`` gate
 (``.github/scripts/gitapex_gate_detection_logic_property_coverage.py``), which
 requires Hypothesis property coverage for new or materially changed detection
-logic across a wider file set -- ``skills/*/scripts/gitapex_check_*.py``,
+logic across ``skills/*/scripts/gitapex_check_*.py``,
 ``.github/scripts/gitapex_gate_*.py``, and ``hooks/gitapex_check_*.py`` --
-regardless of whether this specific pilot has yet demonstrated its own catch. A
-reader should not treat the opening paragraph's "no other script in scope yet"
-sentence as still current in isolation; the current, superseding scope boundary
-lives in issue #1178's gate, not here.
+regardless of whether this specific pilot has yet demonstrated its own catch.
+``evals/scripts/`` is not one of those three patterns and stays outside issue
+#1178's gate entirely; the opening paragraph's "no other script in scope yet"
+sentence is still current for it, not superseded. A reader should not treat
+the opening paragraph's sentence as still current for ``.github/scripts/``,
+nor assume it is superseded for ``evals/scripts/`` -- the two halves now have
+different answers, and the current, superseding scope boundary for the first
+half lives in issue #1178's gate, not here.
 """
 
 from __future__ import annotations

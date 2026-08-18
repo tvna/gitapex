@@ -451,6 +451,45 @@ def test_a_deleted_file_contributes_no_added_lines_and_is_not_an_error(
     assert gate.parse_added_lines(diff) == {_FIXTURE_PATH: {1}}
 
 
+def test_a_second_file_with_no_diff_git_header_between_files_is_not_misattributed(
+    tmp_path: pathlib.Path,
+) -> None:
+    """CodeRabbit's own finding against this PR: `in_hunk` used to be reset
+    only by a `diff --git ` line, never by a hunk's own declared post-image
+    length running out. A patch with no `diff --git ` header between two
+    files (real `git diff` output always has one; `--diff <file>` accepts a
+    patch from anywhere, the same exposure the header-pair fix above
+    closes) left `in_hunk` True straight through the second file's own
+    `--- `/`+++ ` lines: `--- ` read as a harmless no-op removal, but
+    `+++ ` -- never recognised as a header -- read as *content* (its own
+    leading `+`) and was added to the *first* file's path at a stale
+    `lineno`, and because `path` never advanced, the second file's own real
+    added line misattributed to the first file too.
+
+    Verified live against the pre-fix gate: this exact diff returned
+    `{'hooks/gitapex_check_file1.py': {2, 3, 4}}` -- file2's own line
+    silently missing, and a bogus line 4 (the misread `+++ ` header)
+    attributed to file1 instead. Both files must now be graded separately,
+    each at its own correct line numbers, with nothing bogus added."""
+    diff = (
+        "--- a/hooks/gitapex_check_file1.py\n"
+        "+++ b/hooks/gitapex_check_file1.py\n"
+        "@@ -1,2 +1,3 @@\n"
+        " import re\n"
+        '+SOME_RE = re.compile(r"a")\n'
+        '+SOME_RE.fullmatch("x")\n'
+        "--- a/hooks/gitapex_check_file2.py\n"
+        "+++ b/hooks/gitapex_check_file2.py\n"
+        "@@ -1,1 +1,2 @@\n"
+        " import re\n"
+        '+OTHER_RE = re.compile(r"b")\n'
+    )
+    assert gate.parse_added_lines(diff) == {
+        "hooks/gitapex_check_file1.py": {2, 3},
+        "hooks/gitapex_check_file2.py": {2},
+    }
+
+
 def test_a_post_image_path_without_the_b_prefix_raises_scanerror() -> None:
     """--no-prefix output and a git-quoted path both land here. Guessing at
     either would silently drop a file from grading."""

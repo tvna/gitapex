@@ -256,6 +256,23 @@ report at all, listed so a reader is never surprised by one later.
   reported at it, so a contributor waiving the trigger they meant also
   waives one they may not have looked at; put the waiver where the error
   points, and only after reading the whole line.
+* **Two in-scope source files sharing a basename share one properties
+  file too.** ``_stem`` and ``_properties_path`` key on the file's own
+  basename alone, not its full path, so
+  ``skills/drafting-an-acm-issue/scripts/gitapex_check_acm_present.py``
+  and ``skills/planning-a-branch-from-an-issue/scripts/gitapex_check_acm_present.py``
+  -- a real, already-present basename collision in this repository's own
+  in-scope set, confirmed live rather than hypothesised -- both resolve to
+  the identical ``tests/test_gitapex_check_acm_present_properties.py``.
+  Neither file has one yet, so this is latent, not currently
+  false-clearing anything; the day one does, a single ``@given`` test
+  there clears coverage findings for both files' triggers, whichever one
+  the test's own author was actually thinking about. Scoping the
+  properties-file name to the source's full diff-relative path (not just
+  its basename) would close this, at the cost of a longer, directory-
+  shaped test filename -- left as a design trade-off for whoever adds the
+  first properties file under either of these two directories, not solved
+  here.
 
 **Known over-reports**, each a direct, disclosed consequence of a
 receiver-agnostic trigger rather than a bug to fix quietly:
@@ -396,7 +413,7 @@ _TRIGGER_LABEL: dict[str, str] = {
 # marker with no reason is not a waiver and is not honoured.
 _WAIVER_RE = re.compile(r"#\s*detection-logic-property-coverage\s*:\s*WAIVED\s*:\s*\S.*", re.IGNORECASE)
 
-_HUNK_RE = re.compile(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
+_HUNK_RE = re.compile(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
 
 
 class ScanError(Exception):
@@ -473,7 +490,7 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
     since every hunk line carries its own one-character prefix.
 
     A `+++ ` post-image header reached outside a hunk with no `--- ` source
-    header before it raises ``ScanError``. This is the one place this
+    header before it raises ``ScanError``. This is one of two places this
     function deliberately diverges from
     `gitapex_gate_exception_handler_gaps.py`'s own otherwise-identical
     `parse_added_lines`, which silently ignores such a header instead:
@@ -485,11 +502,29 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
     `--- ` before `+++ `, so no wired invocation reaches this; `--diff
     <file>` accepts a patch from anywhere, and a fail-closed gate does not
     get to assume its input came from the wiring.
+
+    `in_hunk` is bounded by the hunk's own declared post-image length (the
+    optional `,<count>` `_HUNK_RE` captures, defaulting to 1 when omitted --
+    a bare `@@ -N +M @@` means exactly one post-image line), not only by the
+    next `diff --git ` line. Without that bound, a patch carrying no
+    `diff --git ` header at all between files (real `git diff` output
+    always has one; a hand-fed or foreign patch, the same `--diff <file>`
+    exposure as the header case above, need not) would leave `in_hunk` True
+    straight through a second file's own `--- `/`+++ ` lines: `--- ` reads
+    as a harmless removal-shaped no-op, but `+++ ` then reads as *content*
+    (its own leading `+`) and gets added to the *first* file's `path` at a
+    stale `lineno` -- and because that `+++ ` line was never recognised as
+    a header, `path` never advances to the second file at all, so its own
+    real added lines misattribute to the first file's path too. Bounding
+    `remaining` to the declared length closes both misreadings the same
+    way: a hunk's own line-content region ends when its own declared count
+    is consumed, not only when another file's header announces itself.
     """
     added: dict[str, set[int]] = {}
     path: str | None = None
     lineno = 0
     in_hunk = False
+    remaining = 0
     saw_source_header = False
     for line in diff_text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
         if line.startswith("diff --git "):
@@ -515,17 +550,24 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
             if not match:
                 raise ScanError(f"unparseable hunk header: {line!r}")
             lineno = int(match.group(1))
-            in_hunk = True
+            remaining = 1 if match.group(2) is None else int(match.group(2))
+            in_hunk = remaining > 0
             continue
         if path is None:
             continue
         if line.startswith("+"):
             added.setdefault(path, set()).add(lineno)
             lineno += 1
+            remaining -= 1
         elif line.startswith(" "):
             lineno += 1
+            remaining -= 1
         # A `-` removal consumes no post-image line, and `\ No newline at
-        # end of file` is a marker, not content. Both advance nothing.
+        # end of file` is a marker, not content. Both advance nothing --
+        # including `remaining`, which only the post-image lines above count
+        # down.
+        if remaining <= 0:
+            in_hunk = False
     return added
 
 
