@@ -49,11 +49,31 @@ dominant convention for stating a constraint (confirmed directly against
 every real ``skills/*/SKILL.md`` file while building this module) -- not
 a rare edge case worth a passing mention. ``_CONSTRAINT_SIGNAL_PATTERN``
 below matches both forms.
+
+This module is not otherwise dependency-free, though: like every other
+CLI in this directory (``gitapex_run_ablation.py``,
+``gitapex_compute_rank_correlation.py``), it uses ``pydantic`` for post-
+``argparse`` CLI-argument validation -- run it with ``uv run``, not a
+bare ``python3`` (see Usage:: below). The two counting functions
+themselves stay dependency-free (stdlib ``re`` only), matching how
+``gitapex_run_effectiveness_correlation.py`` already imports and calls
+them directly without ever going through this module's own CLI.
+
+Usage (``uv run`` -- see the dependency note above)::
+
+    uv run python3 evals/scripts/gitapex_compute_waza_advisory_metrics.py \\
+        --skill-md skills/some-skill/SKILL.md
 """
 
 from __future__ import annotations
 
+import argparse
+import json
 import re
+import sys
+from pathlib import Path
+
+from pydantic import BaseModel, ValidationError, field_validator
 
 # Sentence-, bullet-, or numbered-list-initial "Must"/"Never"/"Always" --
 # i.e. immediately after a sentence boundary (line start, optionally
@@ -153,3 +173,71 @@ def count_body_structure_signals(body: str) -> int:
     if _ERROR_HANDLING_HEADING_PATTERN.search(body):
         count += 1
     return count
+
+
+class _ComputeWazaAdvisoryMetricsArgs(BaseModel):
+    """Validates the parsed CLI namespace immediately after
+    ``parser.parse_args()``, the same pattern every other CLI in this
+    directory already establishes (``gitapex_run_ablation.py``'s own
+    ``_RunAblationArgs``, ``gitapex_compute_rank_correlation.py``'s own
+    ``_ComputeRankCorrelationArgs``)."""
+
+    skill_md: Path
+
+    @field_validator("skill_md")
+    @classmethod
+    def _skill_md_must_exist(cls, value: Path) -> Path:
+        if not value.is_file():
+            raise ValueError(f"skill file not found: {value}")
+        return value
+
+
+def _validation_error_message(exc: ValidationError) -> str:
+    """The first error's original message, unwrapped from pydantic's own
+    "Value error, " prefix -- matches every other CLI in this directory's
+    own established error-text convention."""
+    error = exc.errors()[0]
+    ctx = error.get("ctx") or {}
+    original = ctx.get("error")
+    if isinstance(original, Exception):
+        return str(original)
+    return str(error["msg"])
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Compute this repository's own native, waza-independent "
+        "negative-delta-risk and body-structure advisory metrics for one SKILL.md."
+    )
+    parser.add_argument("--skill-md", required=True, type=Path, help="Path to a skill's SKILL.md.")
+    args = parser.parse_args(argv)
+
+    try:
+        validated_args = _ComputeWazaAdvisoryMetricsArgs(skill_md=args.skill_md)
+    except ValidationError as exc:
+        print(f"error: {_validation_error_message(exc)}", file=sys.stderr)
+        return 2
+
+    try:
+        text = validated_args.skill_md.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"error: cannot read {validated_args.skill_md}: {exc}", file=sys.stderr)
+        return 2
+
+    body = strip_frontmatter(text)
+    print(
+        json.dumps(
+            {
+                "skill_md": str(validated_args.skill_md),
+                "negative_delta_risk": count_constraint_signals(body),
+                "body_structure": count_body_structure_signals(body),
+            },
+            sort_keys=True,
+            indent=2,
+        )
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

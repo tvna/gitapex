@@ -13,6 +13,9 @@ module's own docstring discloses discovering and calibrating against.
 
 from __future__ import annotations
 
+import json
+import subprocess
+import sys
 from pathlib import Path
 
 import gitapex_compute_waza_advisory_metrics as m
@@ -247,3 +250,65 @@ def test_metrics_are_non_constant_across_the_real_corpus() -> None:
         body_structure_counts.add(m.count_body_structure_signals(body))
     assert len(constraint_counts) > 1, "negative-delta-risk metric is constant across the real corpus"
     assert len(body_structure_counts) > 1, "body-structure metric is constant across the real corpus"
+
+
+# ---------------------------------------------------------------------------
+# main() -- CLI, pydantic-validated args (same shape as this directory's
+# other CLIs, e.g. gitapex_compute_rank_correlation.py's own main() tests)
+# ---------------------------------------------------------------------------
+
+
+def test_main_happy_path_exits_zero_and_prints_json(capsys: pytest.CaptureFixture[str]) -> None:
+    exit_code = m.main(["--skill-md", str(REAL_SKILL_MD_WITH_KNOWN_HITS)])
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["skill_md"] == str(REAL_SKILL_MD_WITH_KNOWN_HITS)
+    assert payload["negative_delta_risk"] > 0
+    assert payload["body_structure"] > 0
+
+
+def test_main_json_values_match_calling_the_functions_directly(capsys: pytest.CaptureFixture[str]) -> None:
+    # Regression: main() must be a thin CLI wrapper, never a second,
+    # divergent implementation of the counting logic -- its own JSON
+    # output has to match count_constraint_signals/count_body_structure_
+    # signals exactly, not just both being positive.
+    exit_code = m.main(["--skill-md", str(REAL_SKILL_MD_WITH_KNOWN_HITS)])
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+
+    text = REAL_SKILL_MD_WITH_KNOWN_HITS.read_text(encoding="utf-8")
+    body = m.strip_frontmatter(text)
+    assert payload["negative_delta_risk"] == m.count_constraint_signals(body)
+    assert payload["body_structure"] == m.count_body_structure_signals(body)
+
+
+def test_main_missing_skill_md_exits_2(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    missing = tmp_path / "no-such-SKILL.md"
+    exit_code = m.main(["--skill-md", str(missing)])
+    assert exit_code == 2
+    assert "skill file not found" in capsys.readouterr().err
+
+
+def test_main_non_utf8_skill_md_exits_2(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    skill_md = tmp_path / "SKILL.md"
+    skill_md.write_bytes(b"---\nname: demo\n---\n\xff\xfe bad bytes\n")
+    exit_code = m.main(["--skill-md", str(skill_md)])
+    assert exit_code == 2
+    assert "cannot read" in capsys.readouterr().err
+
+
+def test_direct_invocation_does_not_crash_on_imports() -> None:
+    # Regression: this module's own CLI must resolve `import pydantic`
+    # (a real third-party dependency) outside pytest's own pythonpath
+    # configuration too, the same way gitapex_run_ablation.py's own
+    # test_direct_invocation_does_not_crash_on_score_contract_import
+    # guards its own bare-`python3`-vs-`uv run` import resolution.
+    result = subprocess.run(
+        [sys.executable, str(REPO_ROOT / "evals" / "scripts" / "gitapex_compute_waza_advisory_metrics.py"), "--help"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == 0
+    assert "ModuleNotFoundError" not in result.stderr
+    assert "usage:" in result.stdout.lower()
