@@ -6,6 +6,7 @@ import io
 import pathlib
 import re
 import subprocess
+from typing import Any
 
 import yaml
 from pydantic import BaseModel, ValidationError
@@ -159,3 +160,53 @@ def assert_workflow_feeds_merge_base_to(workflow_name: str, *producer_commands: 
     )
     producer_lines = [line for line in run_text.split("\n") if producer_re.search(line) and '"$merge_base"' in line]
     assert producer_lines, run_text
+
+
+# The one `ref:` value that makes a checked-out tree *be* the diff's
+# post-image, which is what the two line-number-correlating gates need.
+_HEAD_SHA_REF = "${{ github.event.pull_request.head.sha }}"
+
+
+def _workflow_steps(workflow_name: str) -> list[Any]:
+    """Every `jobs.*.steps[]` entry of `.github/workflows/<workflow_name>`."""
+    parsed = yaml.safe_load((REPO_ROOT / ".github" / "workflows" / workflow_name).read_text(encoding="utf-8"))
+    return [step for job in parsed["jobs"].values() for step in job.get("steps", [])]
+
+
+def assert_workflow_checkout_pins_head_sha_with_full_history(workflow_name: str) -> None:
+    """Assert every `harden-checkout` step in
+    `.github/workflows/<workflow_name>` passes `ref: <head sha>` and
+    `fetch-depth: 0`.
+
+    Shared by the two gate workflows that correlate diff-derived line numbers
+    against tree content (same rationale as `assert_path_is_gitignored`
+    above), so this check cannot silently diverge between them. Each caller's
+    own docstring states why its gate needs the pin.
+
+    Scoped to the parsed `jobs.*.steps[].with` mapping rather than checked
+    against the whole file as text, for the reason the merge-base assertions
+    below were already scoped to parsed `run:` content: both workflows' own
+    pointer comment for this very invariant contains the literal substring
+    `fetch-depth: '0'` in prose, so a whole-file text check passes off the
+    comment alone with the real input deleted -- verified live, and the exact
+    defect class this repository had already had to close once.
+
+    Asserted over *every* `harden-checkout` step, not merely one of them: an
+    `any()` would let a second, unpinned checkout be added beside the pinned
+    one, which is precisely the state that breaks the post-image
+    correlation. The non-empty guard is what keeps that `for` from passing
+    vacuously if the checkout step is renamed or dropped outright.
+
+    `fetch-depth` is compared as text (`'0'` and `0` both parse to the same
+    single input value) because the composite action declares it as an
+    action input and interpolates it into `actions/checkout`'s own
+    `fetch-depth` -- see `.github/actions/harden-checkout/action.yml`. The
+    YAML quoting therefore carries no meaning of its own to assert.
+    """
+    checkouts = [
+        step.get("with") or {} for step in _workflow_steps(workflow_name) if "harden-checkout" in str(step.get("uses"))
+    ]
+    assert checkouts, f"{workflow_name} has no harden-checkout step"
+    for inputs in checkouts:
+        assert inputs.get("ref") == _HEAD_SHA_REF, inputs
+        assert str(inputs.get("fetch-depth")) == "0", inputs

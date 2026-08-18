@@ -35,7 +35,11 @@ import subprocess
 
 import gitapex_gate_exception_handler_gaps as gate
 import pytest
-from conftest import assert_workflow_feeds_merge_base_to, assert_workflow_has_no_trigger_path_filter
+from conftest import (
+    assert_workflow_checkout_pins_head_sha_with_full_history,
+    assert_workflow_feeds_merge_base_to,
+    assert_workflow_has_no_trigger_path_filter,
+)
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
@@ -1668,18 +1672,16 @@ def test_the_workflow_checks_out_the_head_sha_with_full_history() -> None:
     the `git merge-base` step failing. The two settings are therefore one
     invariant and are asserted together.
 
-    The quoted-string assertion below (not the bare `fetch-depth: 0` this
-    test asserted before this change) is deliberate, not cosmetic: the
-    workflow's own YAML always quoted the value (`fetch-depth: '0'`) --
-    the previous bare-`0` assertion only ever passed because a since-removed
-    comment line happened to contain that exact unquoted substring in prose
-    ("fetch-depth: 0 so the merge-base below resolves"), never because the
-    real config value matched. Shrinking that comment away (this same PR)
-    surfaced the gap; fixed here rather than carried forward.
+    Both settings have now been read off this workflow's parsed `with:`
+    mapping twice over, because a whole-file text check for either kept
+    matching prose instead of config: first the bare `fetch-depth: 0` form,
+    which only ever passed off a comment line reading "fetch-depth: 0 so the
+    merge-base below resolves"; then the quoted `fetch-depth: '0'` form that
+    replaced it, which only ever passed off the shrunk pointer comment this
+    same PR introduced above the step. `conftest`'s own docstring carries
+    the defeat case that closed the second one.
     """
-    workflow = (REPO_ROOT / ".github/workflows/exception-handler-gap-gate.yml").read_text(encoding="utf-8")
-    assert "ref: ${{ github.event.pull_request.head.sha }}" in workflow, workflow
-    assert "fetch-depth: '0'" in workflow, workflow
+    assert_workflow_checkout_pins_head_sha_with_full_history("exception-handler-gap-gate.yml")
 
 
 def test_the_workflow_has_no_paths_filter() -> None:

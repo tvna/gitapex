@@ -20,7 +20,11 @@ import pathlib
 import gitapex_gate_detection_logic_property_coverage as gate
 import pytest
 from conftest import FakeStdin as _FakeStdin
-from conftest import assert_workflow_feeds_merge_base_to, assert_workflow_has_no_trigger_path_filter
+from conftest import (
+    assert_workflow_checkout_pins_head_sha_with_full_history,
+    assert_workflow_feeds_merge_base_to,
+    assert_workflow_has_no_trigger_path_filter,
+)
 
 # A plain hooks/gitapex_check_*.py path -- in scope by _IN_SCOPE_RE's own
 # `hooks/gitapex_check_[^/]+\.py` alternative -- used as the default fixture
@@ -950,15 +954,17 @@ def test_the_workflow_checks_out_the_head_sha_with_full_history() -> None:
     own post-image line numbers, so the checked-out tree has to *be* that
     post-image. Dropping this pin silently mis-grades every file the base
     branch also touched -- there is no exit code and no message when that
-    happens, so nothing else in this suite would notice. `fetch-depth: '0'`
+    happens, so nothing else in this suite would notice. `fetch-depth: 0`
     is load-bearing *for* that pin, not decoration: the workflow's own
     `git merge-base` step needs `origin/main` reachable in the fetched
-    history, which a shallow checkout does not guarantee."""
-    workflow = (gate.REPO_ROOT / ".github/workflows/detection-logic-property-coverage-gate.yml").read_text(
-        encoding="utf-8"
-    )
-    assert "ref: ${{ github.event.pull_request.head.sha }}" in workflow, workflow
-    assert "fetch-depth: '0'" in workflow, workflow
+    history, which a shallow checkout does not guarantee.
+
+    Both settings are read off this workflow's parsed `with:` mapping
+    rather than matched against the whole file as text, because the shrunk
+    pointer comment this same PR introduced above the step contains the
+    literal substring `fetch-depth: '0'` and a text check passed off it
+    alone. `conftest`'s own docstring carries that defeat case."""
+    assert_workflow_checkout_pins_head_sha_with_full_history("detection-logic-property-coverage-gate.yml")
 
 
 def test_the_workflow_has_no_paths_filter() -> None:
