@@ -19,28 +19,26 @@
 
 set -euo pipefail
 
-input=$(cat)
-
-tool_name=$(printf '%s' "$input" | jq -r '.tool_name // empty')
-
-# Defense in depth: the hooks.json matcher already restricts this hook to
-# Bash, but never trust that alone.
-if [ "$tool_name" != "Bash" ]; then
-  exit 0
+# Issue #1208: this deny path must not itself depend on jq -- if jq is
+# missing from PATH entirely (a broken environment, not a malformed
+# payload), every jq call below would crash under `set -e` with exit 127
+# ("command not found"), an exit code Claude Code's PreToolUse contract
+# treats as non-blocking (the tool call proceeds unchecked). Checked first,
+# via a fixed, statically-escaped JSON literal (no interpolation, so no
+# JSON-escaping risk), same pattern as
+# hooks/check-pr-issue-acm-disclosure.sh's own jq-missing guard.
+if ! command -v jq >/dev/null 2>&1; then
+  printf '%s\n' "{\"hookSpecificOutput\": {\"permissionDecision\": \"deny\"}, \"systemMessage\": \"Blocked by hooks/check-bash-safety.sh: jq is not available on PATH -- cannot verify the Bash command. Failing closed.\"}" >&2
+  exit 2
 fi
-
-command=$(printf '%s' "$input" | jq -r '.tool_input.command // empty')
-
-if [ -z "$command" ]; then
-  exit 0
-fi
-
-lc_command=$(printf '%s' "$command" | tr '[:upper:]' '[:lower:]')
 
 deny() {
   local reason="$1"
-  jq -n --arg msg "$reason" \
-    '{"hookSpecificOutput": {"permissionDecision": "deny"}, "systemMessage": $msg}' >&2
+  # Piped via stdin (jq -Rs: raw input, slurped to one string), not
+  # `--arg` -- same ARG_MAX-avoidance reason as
+  # hooks/check-pr-issue-acm-disclosure.sh's own deny().
+  printf '%s' "$reason" | jq -Rs \
+    '{"hookSpecificOutput": {"permissionDecision": "deny"}, "systemMessage": .}' >&2
   exit 2
 }
 
@@ -54,6 +52,43 @@ warn() {
     '{"systemMessage": $msg}'
   exit 0
 }
+
+input=$(cat)
+
+# Issue #1208: a malformed payload (invalid JSON, or valid JSON that isn't
+# an object) would otherwise make every field-extraction jq call below exit
+# non-zero, crashing past deny() under `set -e` with an exit code Claude
+# Code's PreToolUse contract treats as non-blocking -- the same fail-open
+# class hooks/check-pr-issue-acm-disclosure.sh's own adversarial review
+# found and fixed. Validate the shape up front instead.
+if ! printf '%s' "$input" | jq -e 'if type == "object" then . else empty end' >/dev/null 2>&1; then
+  deny "Blocked by hooks/check-bash-safety.sh: the tool-call payload on stdin is not a JSON object. Failing closed."
+fi
+
+tool_name=$(printf '%s' "$input" | jq -r '.tool_name // empty')
+
+# Defense in depth: the hooks.json matcher already restricts this hook to
+# Bash, but never trust that alone.
+if [ "$tool_name" != "Bash" ]; then
+  exit 0
+fi
+
+# Issue #1208: tool_input could be a non-object (array/string/number/bool)
+# in an otherwise well-formed payload, which would crash the
+# `.tool_input.command` access below with jq's own "Cannot index X with
+# string" runtime error -- same fail-open class as the top-level check
+# above.
+if ! printf '%s' "$input" | jq -e '(.tool_input // {}) | type == "object"' >/dev/null 2>&1; then
+  deny "Blocked by hooks/check-bash-safety.sh: tool_input in the payload is not a JSON object. Failing closed."
+fi
+
+command=$(printf '%s' "$input" | jq -r '.tool_input.command // empty')
+
+if [ -z "$command" ]; then
+  exit 0
+fi
+
+lc_command=$(printf '%s' "$command" | tr '[:upper:]' '[:lower:]')
 
 # --- Shared boundary: pre-command anchor that also swallows an absolute or
 # relative path prefix -----------------------------------------------------

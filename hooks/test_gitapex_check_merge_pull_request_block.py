@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -91,3 +92,79 @@ def test_bash_gh_pr_merge_is_ignored_by_this_hook() -> None:
     assert result.returncode == 0
     assert result.stdout == ""
     assert result.stderr == ""
+
+
+# ---------------------------------------------------------------------------
+# Issue #1208: fail closed, not open, when jq is missing or the payload is
+# malformed -- highest priority in that issue, since this hook backs the
+# repository's single most categorical "no override" deny.
+# ---------------------------------------------------------------------------
+
+
+def _no_jq_path(tmp_path: Path) -> str:
+    """A PATH directory holding every tool this script needs except jq, so
+    `command -v jq` genuinely fails the way it would in an environment
+    without jq installed -- rather than mocking that condition."""
+    bin_dir = tmp_path / "no-jq-path"
+    bin_dir.mkdir()
+    for tool in ("bash", "cat"):
+        real = shutil.which(tool)
+        if real:
+            (bin_dir / tool).symlink_to(real)
+    return str(bin_dir)
+
+
+def test_denied_when_jq_missing(tmp_path: Path) -> None:
+    """Live-reproduced before this fix: with jq absent, the very first jq
+    call (extracting tool_name) crashed under `set -e` with exit 127
+    ("command not found") -- before deny() was even defined, and non-
+    blocking per Claude Code's PreToolUse contract, so
+    mcp__github__merge_pull_request would have proceeded unchecked: the
+    repository's own "no override" categorical deny did not fire. Must now
+    deny (exit 2) instead."""
+    env = dict(os.environ)
+    env.pop("CLAUDE_PROJECT_DIR", None)
+    env.pop("CLAUDE_PLUGIN_ROOT", None)
+    env["PATH"] = _no_jq_path(tmp_path)
+    payload = json.dumps(
+        {
+            "tool_name": "mcp__github__merge_pull_request",
+            "tool_input": {"owner": "tvna", "repo": "gitapex", "pullNumber": 1},
+        }
+    )
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        input=payload,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env=env,
+        cwd=str(REPO_ROOT),
+    )
+    assert result.returncode == 2, f"expected deny (exit 2), got {result.returncode}: stderr={result.stderr!r}"
+    parsed = json.loads(result.stderr)
+    assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "jq is not available" in parsed["systemMessage"]
+
+
+def test_denied_on_malformed_json_stdin() -> None:
+    """Live-reproduced before this fix: jq's own parse-error exit (5)
+    propagated past deny() under `set -e` -- non-blocking per Claude Code's
+    PreToolUse contract. This hook cannot then tell whether the malformed
+    payload was a disguised merge_pull_request call, so it must deny
+    (exit 2) rather than fall through on an indeterminate tool_name."""
+    env = dict(os.environ)
+    env.pop("CLAUDE_PROJECT_DIR", None)
+    env.pop("CLAUDE_PLUGIN_ROOT", None)
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        input="not valid json{{{",
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env=env,
+        cwd=str(REPO_ROOT),
+    )
+    assert result.returncode == 2, f"expected deny (exit 2), got {result.returncode}: stderr={result.stderr!r}"
+    parsed = json.loads(result.stderr)
+    assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -190,6 +191,82 @@ def test_non_bash_tool_name_is_ignored() -> None:
 
 def test_empty_command_is_allowed() -> None:
     assert_allowed("")
+
+
+# ---------------------------------------------------------------------------
+# Issue #1208: fail closed, not open, when jq is missing or the payload is
+# malformed. Ported guard prologue, same one hooks/check-pr-issue-acm-
+# disclosure.sh and hooks/check-pr-title-convention.sh already carried.
+# ---------------------------------------------------------------------------
+
+
+def _no_jq_path(tmp_path: Path) -> str:
+    """A PATH directory holding every tool this script needs except jq, so
+    `command -v jq` genuinely fails the way it would in an environment
+    without jq installed -- rather than mocking that condition."""
+    bin_dir = tmp_path / "no-jq-path"
+    bin_dir.mkdir()
+    for tool in ("bash", "cat", "tr", "grep", "sed", "git", "python3", "dirname"):
+        real = shutil.which(tool)
+        if real:
+            (bin_dir / tool).symlink_to(real)
+    return str(bin_dir)
+
+
+def test_denied_when_jq_missing(tmp_path: Path) -> None:
+    """Live-reproduced before this fix: with jq absent, the very first jq
+    call (extracting tool_name) crashed under `set -e` with exit 127
+    ("command not found") -- before deny() was even defined, and non-
+    blocking per Claude Code's PreToolUse contract, so an arbitrary Bash
+    command (including `gh pr merge`) would have proceeded unchecked. Must
+    now deny (exit 2) instead."""
+    result = run("gh pr merge 1", extra_env={"PATH": _no_jq_path(tmp_path)})
+    assert result.returncode == 2, f"expected deny (exit 2), got {result.returncode}: stderr={result.stderr!r}"
+    payload = json.loads(result.stderr)
+    assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "jq is not available" in payload["systemMessage"]
+
+
+def test_denied_on_malformed_json_stdin() -> None:
+    """Live-reproduced before this fix: jq's own parse-error exit (5)
+    propagated past deny() under `set -e` -- non-blocking per Claude Code's
+    PreToolUse contract. Must now deny (exit 2) instead."""
+    env = dict(os.environ)
+    env.pop("CLAUDE_PROJECT_DIR", None)
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        input="not valid json{{{",
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env=env,
+        cwd=str(REPO_ROOT),
+    )
+    assert result.returncode == 2, f"expected deny (exit 2), got {result.returncode}: stderr={result.stderr!r}"
+    payload = json.loads(result.stderr)
+    assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_denied_when_tool_input_is_not_an_object() -> None:
+    """A well-formed top-level payload whose tool_input is itself a
+    non-object (array/string/number/bool) would otherwise crash the
+    `.tool_input.command` access with jq's own "Cannot index" error. Must
+    deny."""
+    payload = json.dumps({"tool_name": "Bash", "tool_input": ["not", "an", "object"]})
+    env = dict(os.environ)
+    env.pop("CLAUDE_PROJECT_DIR", None)
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        input=payload,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env=env,
+        cwd=str(REPO_ROOT),
+    )
+    assert result.returncode == 2
+    parsed = json.loads(result.stderr)
+    assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"
 
 
 # ---------------------------------------------------------------------------

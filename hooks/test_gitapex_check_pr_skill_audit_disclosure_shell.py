@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -338,6 +339,87 @@ def test_an_update_call_with_no_body_is_ignored(repo: Path) -> None:
         cwd=str(repo),
     )
     assert result.returncode == 0
+
+
+# ---------------------------------------------------------------------------
+# Issue #1208: fail closed, not open, when jq is missing or the payload is
+# malformed.
+# ---------------------------------------------------------------------------
+
+
+def _no_jq_path(tmp_path: Path) -> str:
+    """A PATH directory holding every tool this script needs except jq, so
+    `command -v jq` genuinely fails the way it would in an environment
+    without jq installed -- rather than mocking that condition."""
+    bin_dir = tmp_path / "no-jq-path"
+    bin_dir.mkdir()
+    for tool in ("bash", "cat", "git", "python3", "dirname", "mktemp"):
+        real = shutil.which(tool)
+        if real:
+            (bin_dir / tool).symlink_to(real)
+    return str(bin_dir)
+
+
+def test_denied_when_jq_missing(tmp_path: Path) -> None:
+    """Live-reproduced before this fix: with jq absent, the very first jq
+    call (extracting tool_name) crashed under `set -e` with exit 127
+    ("command not found") -- before deny() was even defined, and
+    non-blocking per Claude Code's PreToolUse contract, so a PR carrying no
+    skill-audit disclosure would have been created unchecked. Must now deny
+    (exit 2) instead."""
+    payload = json.dumps(
+        {"tool_name": "mcp__github__create_pull_request", "tool_input": {"base": "main", "body": "no evidence"}}
+    )
+    result = subprocess.run(
+        ["bash", str(REPO_ROOT / "hooks" / "check-pr-skill-audit-disclosure.sh")],
+        input=payload,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        env=_hook_env(PATH=_no_jq_path(tmp_path)),
+        cwd=str(REPO_ROOT),
+    )
+    assert result.returncode == 2, f"expected deny (exit 2), got {result.returncode}: stderr={result.stderr!r}"
+    parsed = json.loads(result.stderr)
+    assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "jq is not available" in parsed["systemMessage"]
+
+
+def test_denied_on_malformed_json_stdin() -> None:
+    """Live-reproduced before this fix: jq's own parse-error exit (5)
+    propagated past deny() under `set -e` -- non-blocking per Claude Code's
+    PreToolUse contract. Must now deny (exit 2) instead."""
+    result = subprocess.run(
+        ["bash", str(REPO_ROOT / "hooks" / "check-pr-skill-audit-disclosure.sh")],
+        input="not valid json{{{",
+        capture_output=True,
+        text=True,
+        timeout=60,
+        env=_hook_env(),
+        cwd=str(REPO_ROOT),
+    )
+    assert result.returncode == 2, f"expected deny (exit 2), got {result.returncode}: stderr={result.stderr!r}"
+    parsed = json.loads(result.stderr)
+    assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_denied_when_tool_input_is_not_an_object() -> None:
+    """A well-formed top-level payload whose tool_input is itself a
+    non-object would otherwise crash the `.tool_input.body`/`.tool_input.base`
+    accesses with jq's own "Cannot index" error. Must deny."""
+    payload = json.dumps({"tool_name": "mcp__github__create_pull_request", "tool_input": ["not", "an", "object"]})
+    result = subprocess.run(
+        ["bash", str(REPO_ROOT / "hooks" / "check-pr-skill-audit-disclosure.sh")],
+        input=payload,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        env=_hook_env(),
+        cwd=str(REPO_ROOT),
+    )
+    assert result.returncode == 2
+    parsed = json.loads(result.stderr)
+    assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"
 
 
 def test_outside_a_git_work_tree_the_hook_stays_out_of_the_way(tmp_path: Path) -> None:
