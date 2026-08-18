@@ -224,7 +224,12 @@ without the other (see that entry).
 Adopted from `skills/evaluating-skill-quality/references/adversarial-self-audit.md`'s
 own "Contaminated-dispatch disclosure" section, where the phrase already
 named this concept precisely: "a contaminated grader is exactly the bias
-risk isolation-for-neutrality exists to prevent."
+risk isolation-for-neutrality exists to prevent." That file is not merely
+historical color: `SKILL.md`'s own Subagent dispatch section directs every
+dispatch to "Apply [it] ... throughout steps 1-6," so this phrase comes
+from a document the operative Procedure actually incorporates by
+reference -- stronger footing than `CLAUDE.md-free`'s own precedent (see
+that entry's own note on this asymmetry).
 
 Superseded terms: bare "isolated"/"isolation", and "contaminated" /
 "contaminated context" as used for this specific concept in
@@ -236,9 +241,13 @@ concept, since that same skill's own `adversarial-self-audit.md` uses
 below), and mixing the two under one word is exactly the conflict this
 entry resolves. Resolved by the repository owner, directly, per the
 Resolve step, choosing to formalize this repository's own existing phrase
-over two invented alternatives (#1203). `SKILL.md` lines 119/145's own
-wording is not renamed by that issue -- a separate, later rename issue
-would be needed to make that file's own prose match this entry.
+over two invented alternatives (#1203). Stated precisely so this entry is
+not read as claiming more than it does: `SKILL.md` lines 119/145's own
+wording, and its Subagent dispatch section and Stop boundary (lines
+130-132, 452) that still say "isolated"/"exclude that file," are not
+renamed by that issue -- this term is resolved and recorded here, not yet
+propagated into any skill's own operative text. A separate, later rename
+issue would be needed for that.
 
 ## `CLAUDE.md-free`
 
@@ -255,13 +264,32 @@ was given a different backing model (`fable`), so a dispatch with no
 conversation history can still inherit the repository's own `CLAUDE.md` in
 full.
 
-Already this repository's own organic usage in four places before this
-entry: `skills/evaluating-skill-quality/metadata/gitapex.yaml` ("same
-CLAUDE.md-free scratch dir"), `skills/scanning-attack-surfaces/metadata/gitapex.yaml`
-("a genuinely isolated CLAUDE.md-free re-run"), and
-`skills/battle-testing-a-skill/references/provenance-and-caveats.md`
-(twice: "that CLAUDE.md-free clean-copy practice", "CLAUDE.md-free
-clean-copy run").
+This exact string already appears in four places before this entry, but
+precision matters about what kind of usage that is: all four are
+retrospective audit narration, not any skill's own operative Procedure or
+Subagent dispatch prose. Two are `kind: audit` entries' own `summary:`
+field in a `metadata/gitapex.yaml` sidecar --
+`skills/evaluating-skill-quality/metadata/gitapex.yaml` ("same
+CLAUDE.md-free scratch dir") and
+`skills/scanning-attack-surfaces/metadata/gitapex.yaml` ("a genuinely
+isolated CLAUDE.md-free re-run") -- both maintainer-facing audit-round
+records, not auto-loaded instruction text a dispatch reads. The other two
+are in `skills/battle-testing-a-skill/references/provenance-and-caveats.md`
+("that CLAUDE.md-free clean-copy practice", "CLAUDE.md-free clean-copy
+run"), a file that names itself descriptive precedent, not a requirement:
+"that CLAUDE.md-free clean-copy practice existed only as descriptive
+precedent in this file... not a requirement `SKILL.md`'s own Procedure
+enforced." As of this entry, no skill's own operative `SKILL.md` text --
+Procedure, Subagent dispatch section, or Stop boundary -- uses
+`CLAUDE.md-free` anywhere; `evaluating-skill-quality/SKILL.md` itself
+still reads "project-instruction file" / "exclude that file" (lines
+131-132, 452) and bare "isolat-" elsewhere (lines 40, 46, 171, 186). This
+gives `CLAUDE.md-free` weaker operative footing than
+`Isolation-for-neutrality` (above), whose own source document `SKILL.md`
+directly incorporates by reference; here the precedent is retrospective
+narration only, and the choice of this term still rests on the Resolve
+step below, not on that narration outweighing the alternatives on its
+own.
 
 Superseded terms: "contaminated"/"contamination" as used for this concept
 in `skills/evaluating-skill-quality/references/adversarial-self-audit.md`'s
@@ -270,8 +298,11 @@ in `skills/evaluating-skill-quality/references/adversarial-self-audit.md`'s
 section for the project-instruction-file exclusion requirement
 specifically -- both retained as accurate description of the mechanism or
 the failure mode, but "CLAUDE.md-free" is now this repository's preferred
-name for the property itself. `evaluating-deterministic-gate-quality`'s
-own equivalent wording is intentionally not cited here: a separate,
-concurrently open issue governs that skill's own exclusion-requirement
+name for the property itself, resolved and recorded here, not yet
+propagated into any skill's own operative text -- see this entry's own
+note above and `Isolation-for-neutrality`'s matching disclosure.
+`evaluating-deterministic-gate-quality`'s own equivalent wording is
+intentionally not cited here: a separate, concurrently open issue governs
+that skill's own exclusion-requirement
 text, and this entry does not assume or depend on that issue's outcome.
 Resolved by the repository owner, directly, per the Resolve step (#1203).
