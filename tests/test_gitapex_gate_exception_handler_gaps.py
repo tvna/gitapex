@@ -564,6 +564,66 @@ def test_a_post_image_path_without_the_b_prefix_fails_closed() -> None:
         gate.parse_added_lines(diff)
 
 
+def test_a_post_image_header_with_no_source_header_before_it_raises_scanerror() -> None:
+    """Fail-closed regression (issue #1184, gap 1). `parse_added_lines` only
+    bound the current path from a `+++ ` header that a `--- ` header
+    preceded; reaching one with no preceding `--- ` fell through both
+    branches silently, leaving `path` at None -- so every added line in
+    every hunk that follows was dropped and the run reported `OK: 0
+    in-scope file(s) graded`, exit 0, instead of raising. Real `git diff`
+    output always emits `--- ` before `+++ `, so no wired invocation
+    reaches this; `--diff <file>` accepts a patch from anywhere, and a
+    fail-closed gate does not get to assume its input came from the
+    wiring."""
+    diff = (
+        "diff --git a/hooks/gitapex_check_example.py b/hooks/gitapex_check_example.py\n"
+        "+++ b/hooks/gitapex_check_example.py\n"
+        "@@ -0,0 +1,2 @@\n"
+        "+try:\n"
+        "+    pass\n"
+    )
+    with pytest.raises(gate.ScanError, match="no `--- ` source header before it"):
+        gate.parse_added_lines(diff)
+
+
+def test_a_second_file_with_no_diff_git_header_between_files_is_not_misattributed() -> None:
+    """Issue #1184, gap 2. `in_hunk` used to be reset only by a `diff --git `
+    line, never by a hunk's own declared post-image length running out. A
+    patch with no `diff --git ` header between two files (real `git diff`
+    output always has one; `--diff <file>` accepts a patch from anywhere)
+    left `in_hunk` True straight through the second file's own `--- `/`+++ `
+    lines: `--- ` read as a harmless no-op removal, but `+++ ` -- never
+    recognised as a header, since `in_hunk` blocked that check -- read as
+    *content* (its own leading `+`) and was added to the *first* file's
+    `path` at a stale `lineno`. Because that `+++ ` line was never
+    recognised as a header, `path` never advanced to the second file
+    either, so the second file's own real added lines misattributed to the
+    first file too.
+
+    Verified live against the pre-fix gate: this exact diff returned
+    `{'hooks/gitapex_check_file1.py': {2, 3, 4}}` -- file2's own line
+    silently missing, and a bogus line 4 (the misread `+++ ` header)
+    attributed to file1 instead. Both files must now be graded separately,
+    each at its own correct line numbers, with nothing bogus added."""
+    diff = (
+        "--- a/hooks/gitapex_check_file1.py\n"
+        "+++ b/hooks/gitapex_check_file1.py\n"
+        "@@ -1,2 +1,3 @@\n"
+        " def f():\n"
+        "+    try:\n"
+        "+        pass\n"
+        "--- a/hooks/gitapex_check_file2.py\n"
+        "+++ b/hooks/gitapex_check_file2.py\n"
+        "@@ -1,1 +1,2 @@\n"
+        " def g():\n"
+        "+    pass\n"
+    )
+    assert gate.parse_added_lines(diff) == {
+        "hooks/gitapex_check_file1.py": {2, 3},
+        "hooks/gitapex_check_file2.py": {2},
+    }
+
+
 def test_the_minus_header_line_is_not_counted_as_a_removal(tmp_path: pathlib.Path) -> None:
     """Regression guard on the parser itself: `--- a/<path>` arrives while
     the previous file's path could still be current, and must not be read as
@@ -1283,7 +1343,10 @@ def test_a_waiver_must_sit_on_the_line_the_gate_reports(
 
 
 def test_an_unparseable_hunk_header_fails_closed(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
-    diff = "diff --git a/x.py b/x.py\n+++ b/.github/scripts/gate_x.py\n@@ garbage @@\n+text = 1\n"
+    """The `--- ` line here is load-bearing, not decoration: without it this
+    fixture would exercise the missing-source-header ScanError (issue #1184,
+    gap 1) instead of the unparseable-hunk-header one this test names."""
+    diff = "diff --git a/x.py b/x.py\n--- a/x.py\n+++ b/.github/scripts/gate_x.py\n@@ garbage @@\n+text = 1\n"
     _write(tmp_path, "diff.txt", diff)
     assert gate.main(["--root", str(tmp_path), "--diff", str(tmp_path / "diff.txt")]) == 2
     assert "unparseable hunk header" in capsys.readouterr().err

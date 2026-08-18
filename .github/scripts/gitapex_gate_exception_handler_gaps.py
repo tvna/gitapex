@@ -319,7 +319,7 @@ _MAPPING_TYPES = frozenset({"dict", "Mapping", "MutableMapping"})
 # one. A bare marker is not a waiver and is not honoured.
 _WAIVER_RE = re.compile(r"#\s*exception-handler-gap\s*:\s*WAIVED\s*:\s*\S.*", re.IGNORECASE)
 
-_HUNK_RE = re.compile(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
+_HUNK_RE = re.compile(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
 
 _DECODE_GAP = "decode-gap"
 _JSON_SHAPE_GAP = "json-shape-gap"
@@ -397,11 +397,30 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
     hunk from grading, which is a fail-open in the same family this gate
     exists to catch. `@@`, `diff --git ` and `index ` need no such guard:
     a hunk line always has its prefix, so none of them can begin a hunk line.
+
+    A `+++ ` post-image header reached outside a hunk with no `--- ` source
+    header before it raises ``ScanError`` (issue #1184) rather than being
+    silently ignored: ignoring it leaves `path` at None, so every added line
+    in every hunk that follows is dropped and the run reports `OK: 0
+    in-scope file(s) graded` and exits 0 -- a silent pass on an input this
+    gate could not grade. Real `git diff` output always emits `--- ` before
+    `+++ `, so no wired invocation reaches this; `--diff <file>` accepts a
+    patch from anywhere, and a fail-closed gate does not get to assume its
+    input came from the wiring.
+
+    `in_hunk` is bounded by the hunk's own declared post-image length (the
+    optional `,<count>` `_HUNK_RE` captures, defaulting to 1 when omitted),
+    not only by the next `diff --git ` line (issue #1184). Without that
+    bound, a patch carrying no `diff --git ` header between two files' own
+    hunks would leave `in_hunk` True straight through the second file's
+    `--- `/`+++ ` lines, misattributing its added lines to the first file's
+    `path` at a stale `lineno`.
     """
     added: dict[str, set[int]] = {}
     path: str | None = None
     lineno = 0
     in_hunk = False
+    remaining = 0
     saw_source_header = False
     for line in diff_text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
         if line.startswith("diff --git "):
@@ -412,7 +431,13 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
         if not in_hunk and line.startswith("--- "):
             saw_source_header = True
             continue
-        if not in_hunk and saw_source_header and line.startswith("+++ "):
+        if not in_hunk and line.startswith("+++ "):
+            if not saw_source_header:
+                raise ScanError(
+                    f"unified diff post-image header with no `--- ` source header before it: {line!r}. "
+                    "This gate reads default `git diff` output, which always emits both; ignoring the "
+                    "header instead would drop every added line that follows it from grading."
+                )
             path = _diff_target_path(line[4:])
             saw_source_header = False
             continue
@@ -421,17 +446,24 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
             if not match:
                 raise ScanError(f"unparseable hunk header: {line!r}")
             lineno = int(match.group(1))
-            in_hunk = True
+            remaining = 1 if match.group(2) is None else int(match.group(2))
+            in_hunk = remaining > 0
             continue
         if path is None:
             continue
         if line.startswith("+"):
             added.setdefault(path, set()).add(lineno)
             lineno += 1
+            remaining -= 1
         elif line.startswith(" "):
             lineno += 1
+            remaining -= 1
         # A `-` removal consumes no post-image line, and `\ No newline at
-        # end of file` is a marker, not content. Both advance nothing.
+        # end of file` is a marker, not content. Both advance nothing --
+        # including `remaining`, which only the post-image lines above count
+        # down.
+        if remaining <= 0:
+            in_hunk = False
     return added
 
 
