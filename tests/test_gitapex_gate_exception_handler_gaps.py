@@ -559,12 +559,19 @@ def test_a_removed_line_whose_content_starts_with_two_dashes_is_not_a_header(
     tmp_path: pathlib.Path,
 ) -> None:
     """The mirror case: removed content beginning `-- ` is emitted as
-    `--- ...`, and must not arm the post-image-header state machine."""
+    `--- ...`, and must not arm the post-image-header state machine.
+
+    `@@ -1,1 +1,1 @@`, not `-1,2`: the body has exactly one `-`-prefixed
+    line (consumes the pre-image side only) and one `+`-prefixed line
+    (consumes the post-image side only), so the accurate pre-image count
+    is 1 -- an inflated pre-image count here would leave `old_remaining`
+    permanently above zero and incorrectly trip issue #1193's own
+    declared-vs-actual validation."""
     diff = (
         "diff --git a/.github/scripts/gate_x.py b/.github/scripts/gate_x.py\n"
         "--- a/.github/scripts/gate_x.py\n"
         "+++ b/.github/scripts/gate_x.py\n"
-        "@@ -1,2 +1,1 @@\n"
+        "@@ -1,1 +1,1 @@\n"
         "--- a signature dash line\n"
         "+text = p.read_text()\n"
     )
@@ -576,17 +583,259 @@ def test_both_in_hunk_header_lookalikes_in_one_hunk_are_content(
 ) -> None:
     """The killing case for the hunk-state machine: a removed `-- ` line arms
     nothing, and the `++ ` line after it is content. Testing either half alone
-    left both guards passing individually while jointly broken."""
+    left both guards passing individually while jointly broken.
+
+    `@@ -1,1 +1,2 @@`, not `-1,2`: the body has exactly one `-`-prefixed
+    line (consumes the pre-image side only) and two `+`-prefixed lines
+    (each consumes the post-image side only), so the accurate pre-image
+    count is 1 -- an inflated pre-image count here would leave
+    `old_remaining` permanently above zero and incorrectly trip issue
+    #1193's own declared-vs-actual validation."""
     diff = (
         "diff --git a/.github/scripts/gate_x.py b/.github/scripts/gate_x.py\n"
         "--- a/.github/scripts/gate_x.py\n"
         "+++ b/.github/scripts/gate_x.py\n"
-        "@@ -1,2 +1,2 @@\n"
+        "@@ -1,1 +1,2 @@\n"
         "--- an added list marker line\n"
         "++ a list marker, not a diff header\n"
         "+text = p.read_text()\n"
     )
     assert gate.parse_added_lines(diff) == {".github/scripts/gate_x.py": {1, 2}}
+
+
+# --- parse_added_lines: over-declared hunk length (issue #1193) ------------
+
+
+def test_an_over_declared_hunk_length_before_a_new_hunk_header_raises_scanerror() -> None:
+    """Issue #1193, ported from this file's own architectural mirror
+    `gitapex_gate_detection_logic_property_coverage.py`. The dual-counter
+    bound (issue #1184) never checks either declared count against how many
+    pre-/post-image lines the hunk body actually has. `@@ -0,0 +1,5 @@`
+    declares a pure-addition hunk (0 pre-image lines, matched by its body:
+    no context, no removal) claiming 5 post-image lines; only 2 real added
+    lines follow before the next file's own `--- `/`+++ ` headers begin.
+    With no `diff --git ` separator between the two files, `new_remaining`
+    stays above zero once the real body is exhausted, so `in_hunk` stays
+    True straight through those headers, reopening the exact misattribution
+    the dual-counter bound closes for the missing-separator case. Must now
+    raise instead, caught here at the second file's own `@@` line -- the
+    next unambiguous boundary -- before any of its real content is
+    consumed. `new_remaining` is 2 at that point: 5 declared, minus the 2
+    real added lines already consumed."""
+    diff = (
+        "--- a/hooks/gitapex_check_file1.py\n"
+        "+++ b/hooks/gitapex_check_file1.py\n"
+        "@@ -0,0 +1,5 @@\n"
+        "+def f():\n"
+        "+    pass\n"
+        "--- a/hooks/gitapex_check_file2.py\n"
+        "+++ b/hooks/gitapex_check_file2.py\n"
+        "@@ -1,1 +1,2 @@\n"
+    )
+    with pytest.raises(gate.ScanError, match=r"2 post-image line\(s\) still unconsumed"):
+        gate.parse_added_lines(diff)
+
+
+def test_an_over_declared_hunk_that_exactly_drains_into_a_real_header_pair_raises_scanerror() -> None:
+    """Ported from this file's own architectural mirror
+    `gitapex_gate_detection_logic_property_coverage.py`. The gap the three
+    tests around this one all miss, found by two independent adversarial
+    reviews dispatched against the fix above: each of them uses an excess
+    (2-5 lines) larger than what the next file's own `--- `/`+++ ` pair can
+    absorb, so the `@@`-boundary check still catches it. Here file1's hunk
+    declares exactly 1 pre-image and 1 post-image line but its real body
+    has none at all -- the very next lines are file2's own real
+    `--- `/`+++ ` headers. Because `--- `/`+++ ` content is read
+    unconditionally while `in_hunk` is still (wrongly) true, `--- a/file2.py`
+    is silently absorbed as a removal (decrementing `old_remaining` to
+    exactly 0) and `+++ b/file2.py` as an addition (decrementing
+    `new_remaining` to exactly 0 too) -- draining both counters to exactly
+    zero one line early, so `in_hunk` clears itself *before* the
+    `@@`-boundary check ever runs. Neither of the other two boundary
+    checks fires either: `diff --git ` never appears in this diff, and
+    end-of-input is still two real content lines away.
+
+    Verified live against the fix without this test's own guard: returns
+    `{'hooks/gitapex_check_file1.py': {1, 2}}` -- file2 never appears at
+    all, and file1 gains a phantom line 1 (the misread `+++
+    b/hooks/gitapex_check_file2.py` text) plus file2's own real added line
+    2, both misattributed. Must now raise instead, caught by recognising
+    that a hunk closing exactly on a `+++ `-shaped line immediately after
+    a `--- `-shaped one is inherently ambiguous with a real file
+    transition missing its `diff --git ` separator."""
+    diff = (
+        "--- a/hooks/gitapex_check_file1.py\n"
+        "+++ b/hooks/gitapex_check_file1.py\n"
+        "@@ -1,1 +1,1 @@\n"
+        "--- a/hooks/gitapex_check_file2.py\n"
+        "+++ b/hooks/gitapex_check_file2.py\n"
+        "@@ -1,1 +1,2 @@\n"
+    )
+    with pytest.raises(gate.ScanError, match="closes exactly on a line shaped like"):
+        gate.parse_added_lines(diff)
+
+
+def test_an_accurately_declared_hunk_ending_in_dash_plus_shaped_content_is_not_an_error() -> None:
+    """Ported from this file's own architectural mirror
+    `gitapex_gate_detection_logic_property_coverage.py`. The false
+    positive the fix above regressed, found independently by CodeRabbit
+    and by a second adversarial review dispatched against the first
+    version of that fix -- confirmed live against this exact file's own
+    real CLI, not just the bare function, since the regression review
+    flagged this as reachable through this gate's real wired `-U0`
+    invocation, not only its `--diff` flag. A single, accurately-declared,
+    well-formed hunk whose own real content simply edits a line starting
+    `-- ` into one starting `++ ` -- exactly the shape the check above
+    raises on, except this hunk's declared count genuinely matches its
+    real body and nothing else follows. `@@ -6 +6 @@` (bare, one line
+    each side) is honestly satisfied by exactly the one real removal and
+    one real addition -- no missing `diff --git `, no disguised file
+    transition, just an ordinary edit to a changelog-marker-shaped line
+    (this repository's own docstrings are full of such literal
+    `--- `/`+++ ` examples). Confirmed live against `origin/main` (before
+    issue #1193's own fix existed): this exact diff already returns
+    `{'hooks/gitapex_check_dashplus.py': {6}}` cleanly -- a fix for a
+    different gap must not regress an already-working case. Resolved by
+    requiring a lookahead: the ambiguous shape only actually raises when
+    the line *after* it also looks like a new hunk or file header, which
+    is not true here (nothing follows)."""
+    diff = (
+        "diff --git a/hooks/gitapex_check_dashplus.py b/hooks/gitapex_check_dashplus.py\n"
+        "--- a/hooks/gitapex_check_dashplus.py\n"
+        "+++ b/hooks/gitapex_check_dashplus.py\n"
+        '@@ -6 +6 @@ DIVIDER = """\n'
+        "--- old changelog marker\n"
+        "+++ new changelog marker\n"
+    )
+    assert gate.parse_added_lines(diff) == {"hooks/gitapex_check_dashplus.py": {6}}
+
+
+def test_a_dash_plus_shaped_hunk_followed_by_a_real_second_file_is_not_an_error() -> None:
+    """Ported from this file's own architectural mirror
+    `gitapex_gate_detection_logic_property_coverage.py`. The lookahead-only
+    fix's own false positive, found live by three independent reviews
+    dispatched against it (two adversarial passes plus a
+    convention-adherence pass): the test directly above only covers the
+    case where *nothing* follows the dash/plus-shaped hunk, so the
+    lookahead trivially saw no confirming `@@`/`diff --git ` and never
+    raised. But in any real diff with more than one hunk or file, *some*
+    `@@`- or `diff --git `-shaped line almost always immediately follows
+    any given hunk regardless of whether its own declared count is
+    honest -- so the lookahead alone still raised here, on a completely
+    ordinary two-file diff with no ambiguity at all. Confirmed live
+    against the lookahead-only fix (commit 0372217d): this exact diff
+    raised `ScanError`, incorrectly, purely because a second real file
+    happens to follow the first file's own dash/plus-shaped last line.
+    Resolved by requiring the ambiguous pair to also look header-shaped
+    (`_looks_like_real_header_pair`: `a/<path>`/`b/<path>`, not just the
+    4-character prefix) before the lookahead is even consulted -- ordinary
+    content like `old changelog marker` never has that shape, so this
+    hunk no longer reaches the lookahead at all, regardless of what
+    follows it."""
+    diff = (
+        "diff --git a/hooks/gitapex_check_dashplus.py b/hooks/gitapex_check_dashplus.py\n"
+        "--- a/hooks/gitapex_check_dashplus.py\n"
+        "+++ b/hooks/gitapex_check_dashplus.py\n"
+        '@@ -6 +6 @@ DIVIDER = """\n'
+        "--- old changelog marker\n"
+        "+++ new changelog marker\n"
+        "diff --git a/hooks/gitapex_check_other.py b/hooks/gitapex_check_other.py\n"
+        "--- a/hooks/gitapex_check_other.py\n"
+        "+++ b/hooks/gitapex_check_other.py\n"
+        "@@ -2,0 +3,2 @@ def g():\n"
+        "+\n"
+        "+    return 1\n"
+    )
+    assert gate.parse_added_lines(diff) == {
+        "hooks/gitapex_check_dashplus.py": {6},
+        "hooks/gitapex_check_other.py": {3, 4},
+    }
+
+
+def test_a_header_shaped_pair_with_nothing_confirming_it_after_is_not_an_error() -> None:
+    """Ported from this file's own architectural mirror
+    `gitapex_gate_detection_logic_property_coverage.py`. Pins the one case
+    `_looks_like_real_header_pair` alone cannot resolve, found by a fourth
+    adversarial review dispatched against the fix above: a hunk whose
+    declared count is small enough (`@@ -1,1 +1,1 @@`) to be honestly,
+    exactly satisfied by content that itself happens to be
+    `a/<path>`/`b/<path>`-shaped, with nothing `@@`- or `diff --git
+    `-shaped confirming it afterward. Confirmed identical against the
+    commit before any of this bypass work began (issue #1200's own
+    already-disclosed gap, not a new regression): the header-shape signal
+    alone cannot tell "an honest 1-line hunk whose real content happens
+    to look header-shaped" from "a 1-line over-declaration absorbing a
+    real header" -- that is exactly what the lookahead's second,
+    independent condition still guards, which is why raising requires
+    both signals together rather than the header-shape check alone. Left
+    unchanged by this fix, deliberately: closing it needs #1200's own
+    structurally different mechanism, not an incremental extension of
+    this one."""
+    diff = (
+        "--- a/hooks/gitapex_check_file1.py\n"
+        "+++ b/hooks/gitapex_check_file1.py\n"
+        "@@ -1,1 +1,1 @@\n"
+        "--- a/hooks/gitapex_check_file2.py\n"
+        "+++ b/hooks/gitapex_check_file2.py\n"
+    )
+    assert gate.parse_added_lines(diff) == {"hooks/gitapex_check_file1.py": {1}}
+
+
+def test_an_over_declared_hunk_length_before_a_diff_git_header_raises_scanerror() -> None:
+    """Same over-declaration as directly above, but with a `diff --git `
+    separator before the second file -- the shape a real `git diff` always
+    emits. `diff --git ` is recognised unconditionally (no `not in_hunk`
+    guard), so it is a second, independent place the same declared/actual
+    mismatch must be caught -- reached one line earlier than the `@@` case
+    above, before either of file2's own `--- `/`+++ ` lines is consumed, so
+    `new_remaining` is still 3 (not yet decremented by a misread `+++ `
+    line): 5 declared, minus only the 2 real added lines."""
+    diff = (
+        "--- a/hooks/gitapex_check_file1.py\n"
+        "+++ b/hooks/gitapex_check_file1.py\n"
+        "@@ -0,0 +1,5 @@\n"
+        "+def f():\n"
+        "+    pass\n"
+        "diff --git a/hooks/gitapex_check_file2.py b/hooks/gitapex_check_file2.py\n"
+    )
+    with pytest.raises(gate.ScanError, match=r"3 post-image line\(s\) still unconsumed"):
+        gate.parse_added_lines(diff)
+
+
+def test_an_over_declared_hunk_length_at_end_of_input_raises_scanerror() -> None:
+    """Same over-declaration as the two tests above, but with nothing at all
+    following the short body -- no second file, no further hunk. Neither
+    the `diff --git ` nor the `@@` boundary check ever fires, so this is a
+    third, independent place the same declared/actual mismatch must be
+    caught: end of input reached with `in_hunk` still true, `new_remaining`
+    still 3."""
+    diff = "--- a/hooks/gitapex_check_file1.py\n+++ b/hooks/gitapex_check_file1.py\n@@ -0,0 +1,5 @@\n+def f():\n+    pass\n"
+    with pytest.raises(gate.ScanError, match=r"3 post-image line\(s\) still unconsumed"):
+        gate.parse_added_lines(diff)
+
+
+def test_an_added_line_under_a_deleted_files_hunk_advances_counters_but_is_not_recorded() -> None:
+    """A real `+++ /dev/null` hunk is never declared with post-image lines
+    -- a deletion has nothing left to add -- but a hand-fed or foreign
+    patch (the same `--diff` exposure every malformed-input test in this
+    module guards against) could claim one anyway. `path` is None for the
+    whole of a deleted file's hunk, so the `+` branch's own
+    `if path is not None: added.setdefault(...)` guard must skip recording
+    -- there is no real path to attribute it to -- while still advancing
+    `lineno` and `new_remaining` exactly as a real addition would, so the
+    hunk's own declared count is still correctly consumed and does not
+    leak into whatever follows."""
+    diff = (
+        "--- a/hooks/gitapex_check_gone.py\n"
+        "+++ /dev/null\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+phantom added line under a deletion\n"
+        "--- a/.github/scripts/gate_x.py\n"
+        "+++ b/.github/scripts/gate_x.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+x = 1\n"
+    )
+    assert gate.parse_added_lines(diff) == {".github/scripts/gate_x.py": {1}}
 
 
 def test_a_post_image_path_without_the_b_prefix_fails_closed() -> None:
