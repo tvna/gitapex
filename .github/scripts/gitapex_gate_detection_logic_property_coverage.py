@@ -78,12 +78,31 @@ file. A trigger is either an ``ast.Call`` or (only for the ``in``/``not in``
 shape below) an ``ast.Compare``.
 
 **(a) regex.** Either an attribute call ``re.compile(...)`` / ``re.match(...)``
-/ ``re.search(...)`` / ``re.fullmatch(...)`` whose receiver is literally
-``ast.Name(id="re")``, OR a receiver-agnostic bound-method call ``.match(...)``
-/ ``.search(...)`` / ``.fullmatch(...)`` on *any* receiver, matched by the
-call's own final attribute name alone. ``.compile(...)`` is deliberately not
-in the receiver-agnostic set -- compiling is always spelled ``re.compile``
-in this repository, so only the module-qualified form is graded there.
+/ ``re.search(...)`` / ``re.fullmatch(...)`` whose receiver is a bare name
+*this file's own imports bind to the* ``re`` *module*, OR a
+receiver-agnostic bound-method call ``.match(...)`` / ``.search(...)`` /
+``.fullmatch(...)`` on *any* receiver, matched by the call's own final
+attribute name alone. ``.compile(...)`` is deliberately not in the
+receiver-agnostic set: an unrelated object's ``.compile(...)`` (a template,
+a schema, a query builder) is not detection logic, and reporting it would be
+a pure over-report with no defect class behind it.
+
+*Why the compile receiver is resolved through this file's imports rather
+than hard-coded to the literal name* ``re``. ``_re_module_names`` below
+collects every name an ``import re`` in the graded file binds to the ``re``
+module -- ``re`` itself, plus any ``import re as <alias>`` alias -- so
+``import re as _re`` followed by ``_re.compile(r"...")`` is graded exactly
+as ``re.compile(r"...")`` is. Matching the literal name alone left a
+one-word evasion of category (a)'s whole compile half: a diff that adds
+only a pattern *definition* (the shape a materially changed allowlist regex
+takes, and the half of issue #1129's own defect that sat away from the call
+site) graded clean purely because the module was imported under another
+name. This mirrors what trigger (b) below already does for ``os`` -- an
+aliased ``import os as o; o.path.realpath(...)`` matches there too -- and
+what ``_imports_module`` already does when matching the properties file's
+own import of the module under test. The name set is only ever *widened*
+past the bare ``re``, never narrowed, so no call site graded before this
+resolution existed stops being graded because of it.
 
 *Why the regex trigger is receiver-agnostic.* This repository's own regex
 usage overwhelmingly compiles a pattern once as a module-level constant and
@@ -192,6 +211,52 @@ analysis:
   same name-resolution machinery already measured and reverted three times
   in ``gitapex_gate_exception_handler_gaps.py``.
 
+**Known misses in the trigger table itself.** Separate from the coverage
+heuristic above: these are shapes the three trigger categories do not
+report at all, listed so a reader is never surprised by one later.
+
+* **Only four regex verbs are graded.** ``compile``/``match``/``search``/
+  ``fullmatch``, and nothing else. ``re.sub(...)``, ``re.split(...)``,
+  ``re.findall(...)``, ``re.finditer(...)`` and their bound-method forms
+  are not triggers, in either the module-qualified or the
+  receiver-agnostic spelling, even though all four run a pattern against
+  untrusted text. This is a trade, not an oversight: the receiver-agnostic
+  half of category (a) matches on the final attribute name alone, and
+  ``.split(...)`` is one of the most common plain-``str`` method calls in
+  this repository, so adding it would report a large body of code that
+  touches no regex at all. Widening the verb set is a measurement to run
+  and triage first, exactly as this gate's own ``_IN_SCOPE_RE`` paragraph
+  says about widening to ``gitapex_scan_*.py``.
+* **A member imported out of its module is not graded.**
+  ``from re import compile`` then a bare ``compile(...)``, or
+  ``from os.path import realpath`` then a bare ``realpath(...)``, reaches
+  neither category (a) nor (b): both match an ``ast.Attribute`` callee, and
+  these spell an ``ast.Name`` one. ``_re_module_names`` resolves an aliased
+  *module* import, which is a fixed one-name lookup; resolving an aliased
+  *member* import is the same trade
+  ``gitapex_gate_exception_handler_gaps.py`` records making for
+  ``from json import loads``, with the extra hazard that ``compile`` is
+  also a builtin, so a bare ``compile(...)`` cannot be graded on its name
+  alone. Neither spelling occurs in the graded directories today: all 203
+  compile call sites there are written ``re.compile(``, and no graded file
+  carries a ``from re import ...`` at all. That is a measurement of current
+  state, though, not a property anything enforces -- which is exactly why
+  the *module*-alias half above is resolved rather than left to the same
+  assumption.
+* **Two findings of the same rule on one physical line report once.**
+  ``x in ["a", y.startswith("b")]`` is a single ``string-comparison-
+  property-gap``, because findings are deduplicated by
+  ``(path, line, rule, message)`` and all four are identical for two
+  category-(c) triggers in one scope on one line -- the same dedup
+  ``gitapex_gate_exception_handler_gaps.py`` documents for its own rules,
+  and for the same reason: printing one line twice with identical text
+  tells a contributor nothing about which trigger is meant. Two triggers of
+  *different* categories on one line do still report twice, since the rule
+  and message differ. One waiver on that line likewise covers every finding
+  reported at it, so a contributor waiving the trigger they meant also
+  waives one they may not have looked at; put the waiver where the error
+  points, and only after reading the whole line.
+
 **Known over-reports**, each a direct, disclosed consequence of a
 receiver-agnostic trigger rather than a bug to fix quietly:
 
@@ -225,7 +290,12 @@ Exit codes
 diff, an in-scope file that cannot be read or parsed, or a ``--root`` that is
 not an existing directory. Never a silent pass on an ungradable input: this
 is dimension 15 of ``skills/evaluating-deterministic-gate-quality/references/
-dimensions.md``, "Fail-closed default on incomplete or malformed input."
+dimensions.md``, "Fail-closed default on incomplete or malformed input." A
+malformed diff includes an unparseable ``@@`` hunk header, a post-image path
+that is neither ``/dev/null`` nor ``b/``-prefixed, and a ``+++ `` post-image
+header reached outside a hunk with no ``--- `` source header before it --
+see ``parse_added_lines`` for why that last one has to raise rather than be
+tolerated.
 
 Invocation shape
 -----------------
@@ -289,9 +359,11 @@ _IN_SCOPE_RE = re.compile(
 
 _MODULE_SCOPE = "<module>"
 
-# Category (a): the module-qualified form is receiver-specific (only
-# ast.Name(id="re")); these three are additionally receiver-agnostic, per
-# the module docstring's "Why the regex trigger is receiver-agnostic".
+# Category (a): `.compile(...)` is receiver-specific -- graded only on a bare
+# name the graded file's own imports bind to this module (see
+# `_re_module_names`) -- while these three are receiver-agnostic, per the
+# module docstring's "Why the regex trigger is receiver-agnostic".
+_RE_MODULE = "re"
 _REGEX_RECEIVER_AGNOSTIC_ATTRS = frozenset({"match", "search", "fullmatch"})
 
 # Category (b): resolve/is_symlink/relative_to are receiver-agnostic on any
@@ -395,11 +467,24 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
 
     Only added lines are recorded -- a removal has no code left at it to
     grade, and an unchanged context line is pre-existing content another PR
-    already owns. Identical in shape to `gitapex_gate_exception_handler_gaps.py`'s
-    own `parse_added_lines`: file headers are recognised only *outside* a
-    hunk (so an added/removed line whose own content begins `++ `/`-- ` is
-    never misread as a header), and `@@`, `diff --git ` and `index ` need no
-    such guard since every hunk line carries its own one-character prefix.
+    already owns. File headers are recognised only *outside* a hunk (so an
+    added/removed line whose own content begins `++ `/`-- ` is never misread
+    as a header), and `@@`, `diff --git ` and `index ` need no such guard
+    since every hunk line carries its own one-character prefix.
+
+    A `+++ ` post-image header reached outside a hunk with no `--- ` source
+    header before it raises ``ScanError``. This is the one place this
+    function deliberately diverges from
+    `gitapex_gate_exception_handler_gaps.py`'s own otherwise-identical
+    `parse_added_lines`, which silently ignores such a header instead:
+    ignoring it leaves `path` at None, so every added line in every hunk
+    that follows is dropped and the run reports `OK: 0 in-scope file(s)
+    graded` and exits 0 -- a silent pass on an input this gate could not
+    grade, which is exactly what the module docstring's own "Exit codes"
+    section promises never happens. Real `git diff` output always emits
+    `--- ` before `+++ `, so no wired invocation reaches this; `--diff
+    <file>` accepts a patch from anywhere, and a fail-closed gate does not
+    get to assume its input came from the wiring.
     """
     added: dict[str, set[int]] = {}
     path: str | None = None
@@ -415,7 +500,13 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
         if not in_hunk and line.startswith("--- "):
             saw_source_header = True
             continue
-        if not in_hunk and saw_source_header and line.startswith("+++ "):
+        if not in_hunk and line.startswith("+++ "):
+            if not saw_source_header:
+                raise ScanError(
+                    f"unified diff post-image header with no `--- ` source header before it: {line!r}. "
+                    "This gate reads default `git diff` output, which always emits both; ignoring the "
+                    "header instead would drop every added line that follows it from grading."
+                )
             path = _diff_target_path(line[4:])
             saw_source_header = False
             continue
@@ -438,14 +529,40 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
     return added
 
 
-def _regex_trigger(node: ast.Call) -> bool:
+def _re_module_names(tree: ast.Module) -> frozenset[str]:
+    """Every bare name an `import re` in `tree` binds to the `re` module.
+
+    Always contains `"re"` itself, plus every `import re as <alias>` alias
+    the graded file declares. Widening-only by construction: the returned
+    set is a superset of `{"re"}`, so resolving aliases can only ever add
+    graded call sites, never remove one -- the safe direction for a gate.
+
+    Deliberately not a general name resolver: only `ast.Import` is read (an
+    `import re` statement anywhere in the file, at any nesting depth), no
+    rebinding, shadowing or scope is tracked, and `from re import compile`
+    is not recognised at all. See the module docstring's own "Known misses
+    in the trigger table itself" for why the member-import spelling is left
+    out rather than guessed at.
+    """
+    names = {_RE_MODULE}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == _RE_MODULE:
+                    names.add(alias.asname or alias.name)
+    return frozenset(names)
+
+
+def _regex_trigger(node: ast.Call, re_module_names: frozenset[str]) -> bool:
     """Category (a): see the module docstring's own trigger-categories
-    section for the receiver-specific vs. receiver-agnostic split."""
+    section for the receiver-specific vs. receiver-agnostic split.
+    `re_module_names` comes from `_re_module_names` on the same tree, so an
+    aliased `import re as _re` grades its `.compile(...)` calls too."""
     func = node.func
     if not isinstance(func, ast.Attribute):
         return False
     if func.attr == "compile":
-        return isinstance(func.value, ast.Name) and func.value.id == "re"
+        return isinstance(func.value, ast.Name) and func.value.id in re_module_names
     return func.attr in _REGEX_RECEIVER_AGNOSTIC_ATTRS
 
 
@@ -515,9 +632,10 @@ def _triggers(tree: ast.Module) -> Iterator[_Trigger]:
     """Yield every trigger call/compare site in `tree`, tagged by category.
     The three categories are mutually exclusive by construction (disjoint
     attribute-name sets), so a `Call` node yields at most one trigger."""
+    re_module_names = _re_module_names(tree)
     for node in ast.walk(tree):
         if isinstance(node, ast.Call):
-            if _regex_trigger(node):
+            if _regex_trigger(node, re_module_names):
                 yield _Trigger(node, _REGEX_GAP)
             elif _path_resolution_trigger(node):
                 yield _Trigger(node, _PATH_RESOLUTION_GAP)

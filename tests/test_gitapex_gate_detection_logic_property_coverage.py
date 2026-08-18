@@ -94,8 +94,40 @@ _MULTILINE_CALL_SOURCE = (
 
 # A diff whose hunk header cannot be parsed -- the ScanError contract's own
 # malformed-input fixture, asserted once directly against `parse_added_lines`
-# and once through `main()`'s catch-and-exit-2 wrapper.
-_UNPARSEABLE_HUNK_DIFF = f"diff --git a/x.py b/{_FIXTURE_PATH}\n+++ b/{_FIXTURE_PATH}\n@@ garbage @@\n+x = 1\n"
+# and once through `main()`'s catch-and-exit-2 wrapper. The `--- ` line is
+# load-bearing, not decoration: without it this fixture is malformed in two
+# independent ways at once and raises on the *missing source header* before
+# ever reaching the hunk header it is named for, so the two tests below would
+# pass while asserting nothing about `_HUNK_RE`.
+_UNPARSEABLE_HUNK_DIFF = (
+    f"diff --git a/x.py b/{_FIXTURE_PATH}\n--- a/x.py\n+++ b/{_FIXTURE_PATH}\n@@ garbage @@\n+x = 1\n"
+)
+
+# A diff whose `+++ ` post-image header is reached outside a hunk with no
+# `--- ` source header before it. Real `git diff` always emits both, so this
+# is a hand-fed or foreign patch -- the shape `--diff <file>` accepts from
+# anywhere. Used by the fail-closed regression below.
+_POST_IMAGE_WITHOUT_SOURCE_HEADER_DIFF = (
+    f"diff --git a/{_FIXTURE_PATH} b/{_FIXTURE_PATH}\n"
+    f"+++ b/{_FIXTURE_PATH}\n"
+    "@@ -0,0 +1,2 @@\n"
+    "+import re\n"
+    '+SOME_RE = re.compile(r"^[a-z]+$")\n'
+)
+
+# Issue #1129's own defect shape, spelled through an aliased `re` import:
+# identical detection logic to _CHECK_VALUE_SOURCE's own compile call, with
+# the module bound to `_re` instead of `re`. Used by the defeat test below.
+_ALIASED_RE_IMPORT_SOURCE = (
+    'import re as _re\n\n_KEY_RE = _re.compile(r"^[a-z][a-z0-9-]*$")\n\n\ndef check_key(key):\n    return 1\n'
+)
+
+# The same file with the module imported plainly. Byte-for-byte the same
+# compile call otherwise, so the defeat test's own control differs from it in
+# exactly one thing: the name the `re` module is bound to.
+_PLAIN_RE_IMPORT_SOURCE = (
+    'import re\n\n_KEY_RE = re.compile(r"^[a-z][a-z0-9-]*$")\n\n\ndef check_key(key):\n    return 1\n'
+)
 
 # A properties file that genuinely covers check_value: imports the fixture
 # module and has one @given function whose own body calls check_value by name.
@@ -355,6 +387,70 @@ def test_an_unparseable_hunk_header_raises_scanerror() -> None:
         gate.parse_added_lines(_UNPARSEABLE_HUNK_DIFF)
 
 
+def test_a_post_image_header_with_no_source_header_before_it_raises_scanerror() -> None:
+    """Fail-closed regression. `parse_added_lines` only binds the current
+    path from a `+++ ` header that a `--- ` header preceded. Ignoring an
+    unpaired `+++ ` (the behaviour this gate started with, inherited from
+    `gitapex_gate_exception_handler_gaps.py`) leaves `path` at None, so every
+    added line after it is silently dropped and the whole run reports
+    `OK: 0 in-scope file(s) graded` and exits 0 -- a silent pass on an
+    ungradable input, which the module docstring's own "Exit codes" section
+    says never happens. It must raise instead."""
+    with pytest.raises(gate.ScanError, match="no `--- ` source header before it"):
+        gate.parse_added_lines(_POST_IMAGE_WITHOUT_SOURCE_HEADER_DIFF)
+
+
+def test_an_added_line_whose_own_content_begins_with_a_plus_header_is_not_a_header(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The guard the fail-closed check above must not break: *inside* a hunk
+    every line carries a one-character prefix, so an added line whose own
+    content begins `++ ` is emitted as `+++ ...` and must still be read as
+    content. It is neither a header nor a `ScanError` -- the diff below adds
+    two lines and both are graded as post-image lines 1 and 2."""
+    diff = (
+        f"diff --git a/{_FIXTURE_PATH} b/{_FIXTURE_PATH}\n"
+        f"--- a/{_FIXTURE_PATH}\n"
+        f"+++ b/{_FIXTURE_PATH}\n"
+        "@@ -0,0 +1,2 @@\n"
+        "+++ not a header\n"
+        "+x = 1\n"
+    )
+    assert gate.parse_added_lines(diff) == {_FIXTURE_PATH: {1, 2}}
+
+
+def test_a_deleted_file_contributes_no_added_lines_and_is_not_an_error(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A deletion is the one legitimate way a hunk body is read with no
+    current path bound: `_diff_target_path` maps `+++ /dev/null` to None, so
+    `parse_added_lines` skips every line of that file's hunk rather than
+    attributing it to whichever file came before.
+
+    Pinned here explicitly because it was previously covered only by
+    accident. The `_UNPARSEABLE_HUNK_DIFF` fixture above used to omit its
+    `--- ` line, which left `path` at None for an entirely different and
+    malformed reason, and that accident -- not any test of the deletion
+    contract -- was what exercised this branch. Both halves of the diff below
+    are asserted: the deleted file contributes nothing at all (no key, not
+    even an empty one), and a second, real file in the same diff is still
+    graded normally afterwards."""
+    diff = (
+        "diff --git a/hooks/gitapex_check_gone.py b/hooks/gitapex_check_gone.py\n"
+        "--- a/hooks/gitapex_check_gone.py\n"
+        "+++ /dev/null\n"
+        "@@ -1,2 +0,0 @@\n"
+        "-import re\n"
+        '-SOME_RE = re.compile(r"^[a-z]+$")\n'
+        f"diff --git a/{_FIXTURE_PATH} b/{_FIXTURE_PATH}\n"
+        f"--- a/{_FIXTURE_PATH}\n"
+        f"+++ b/{_FIXTURE_PATH}\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+x = 1\n"
+    )
+    assert gate.parse_added_lines(diff) == {_FIXTURE_PATH: {1}}
+
+
 def test_a_post_image_path_without_the_b_prefix_raises_scanerror() -> None:
     """--no-prefix output and a git-quoted path both land here. Guessing at
     either would silently drop a file from grading."""
@@ -432,6 +528,58 @@ def test_defeat_a_same_file_given_test_for_the_wrong_function_does_not_false_cle
     assert waived == []
 
 
+def test_defeat_an_aliased_re_import_does_not_hide_a_new_compile_call(
+    tmp_path: pathlib.Path,
+) -> None:
+    """DEFEAT-oriented, and the shape that actually defeated this gate as
+    first written: category (a)'s `.compile(...)` half is receiver-*specific*
+    on purpose (an unrelated object's `.compile()` is not detection logic),
+    and the receiver check originally demanded the literal name `re`. So a
+    file that binds the very same stdlib module under another name --
+    `import re as _re` -- and then adds `_re.compile(r"...")` graded clean,
+    exit 0, while the byte-for-byte identical `re.compile(r"...")` graded as
+    a violation.
+
+    Grounded in what this gate exists to catch, not in what is convenient to
+    construct. The diff here adds *only* the compile line: that is the shape
+    a materially changed allowlist pattern takes, and it is the half of
+    issue #1129's own defect that sat away from the call site --
+    `EXEC_REQ_PACKAGES_KEY_RE = re.compile(...)` on one line, the
+    `.match(key)` that misused it far below. The receiver-agnostic
+    `.match`/`.search`/`.fullmatch` half of category (a) does not rescue
+    this: no call site is touched by this diff at all, so with the compile
+    call unrecognised there is nothing left to grade and the pattern change
+    ships with no property test and no finding.
+
+    Both halves are asserted together so the fix cannot be mistaken for
+    "report every `.compile()`": the aliased spelling must now be flagged,
+    and `_re_module_names` must reach that verdict only because this file's
+    own `import re as _re` binds the name -- which the sibling
+    over-report test below pins from the other side."""
+    aliased = _grade(tmp_path, _ALIASED_RE_IMPORT_SOURCE, relative=_FIXTURE_PATH)
+    plain = _grade(tmp_path, _PLAIN_RE_IMPORT_SOURCE, relative="hooks/gitapex_check_plain.py")
+    assert _at(aliased) == [("regex-property-gap", 3)]
+    assert _at(plain) == [("regex-property-gap", 3)]
+
+
+def test_a_compile_call_on_a_receiver_no_import_binds_to_re_is_not_a_trigger(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The over-report boundary of the alias fix above, from the other side.
+    `_re_module_names` widens the accepted `.compile(...)` receiver only to
+    names an `import re` in *this file* actually binds, so a `.compile()` on
+    an unrelated object, and a same-named third-party module this file
+    imports instead of the stdlib one, must both stay unreported -- the
+    module docstring's own reason for keeping `.compile` out of the
+    receiver-agnostic set at all. Without this pin the alias fix could be
+    "corrected" into a blanket receiver-agnostic `.compile` match and every
+    test above would stay green."""
+    source = (
+        "import regex\n\n\ndef build(template, pattern):\n    template.compile()\n    return regex.compile(pattern)\n"
+    )
+    assert _grade(tmp_path, source) == []
+
+
 def test_defeat_a_subscript_receiver_still_triggers_the_receiver_agnostic_match(
     tmp_path: pathlib.Path,
 ) -> None:
@@ -457,6 +605,62 @@ def test_path_resolution_true_positive_os_path_realpath_call(tmp_path: pathlib.P
     source = "import os\n\n\ndef check_real(p):\n    return os.path.realpath(p)\n"
     violations = _grade(tmp_path, source)
     assert _at(violations) == [("path-resolution-property-gap", 5)]
+
+
+@pytest.mark.parametrize(
+    ("expression", "rule"),
+    [
+        ("PAT.match(x)", "regex-property-gap"),
+        ("PAT.search(x)", "regex-property-gap"),
+        ("x.endswith('a')", "string-comparison-property-gap"),
+        ("x not in ['a', 'b']", "string-comparison-property-gap"),
+        ("set(['a', 'b'])", "string-comparison-property-gap"),
+        ("PATH.is_symlink()", "path-resolution-property-gap"),
+        ("PATH.relative_to('/a')", "path-resolution-property-gap"),
+        ("os.path.abspath(x)", "path-resolution-property-gap"),
+    ],
+)
+def test_every_trigger_table_member_fires_under_its_own_documented_category(
+    tmp_path: pathlib.Path, expression: str, rule: str
+) -> None:
+    """One case per trigger-table member the tests above never reach.
+
+    Each of these shares its code path with a sibling that *is* exercised
+    elsewhere -- `.endswith` with `.startswith`, `.is_symlink`/`.relative_to`
+    with `.resolve`, `abspath` with `realpath`, `not in` with `in`, `set([
+    ...])` with `frozenset([...])`, `.match`/`.search` with `.fullmatch` --
+    so branch coverage stays green whether or not the member string itself is
+    right. A typo in one (`"endswith"` written `"endwith"`, an entry dropped
+    from `_OS_PATH_ATTRS`) silently turns that member off and no other test
+    in this file notices. These pin each member by name, one assertion per
+    member, against the category the module docstring assigns it."""
+    source = f"import os\n\nPAT = None\nPATH = None\n\n\ndef check(x):\n    return {expression}\n"
+    violations = _grade(tmp_path, source)
+    assert _at(violations) == [(rule, 8)]
+
+
+def test_two_triggers_of_one_category_on_one_physical_line_report_once(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Pins the same-line deduplication the module docstring's own "Known
+    misses in the trigger table itself" section discloses, so it cannot
+    change without a reader noticing.
+
+    `x in ["a", y.startswith("b")]` is two separate category-(c) triggers --
+    an `in`-literal comparison and a `.startswith()` call -- landing on one
+    line in one scope, so all four `Finding` fields match and
+    `sorted(set(...))` collapses them to one. Two triggers of *different*
+    categories on one line still report twice, since `rule` and `message`
+    differ; the second half asserts that, so the dedup can never quietly
+    widen into "one finding per line" full stop."""
+    same_category = "def check(x, y):\n    return x in ['a', y.startswith('b')]\n"
+    assert _at(_grade(tmp_path, same_category)) == [("string-comparison-property-gap", 2)]
+
+    both_categories = "def check(p):\n    return p.resolve().startswith('a')\n"
+    assert _at(_grade(tmp_path, both_categories, relative="hooks/gitapex_check_two.py")) == [
+        ("path-resolution-property-gap", 2),
+        ("string-comparison-property-gap", 2),
+    ]
 
 
 def test_calls_and_comparisons_matching_no_trigger_category_produce_no_finding(
