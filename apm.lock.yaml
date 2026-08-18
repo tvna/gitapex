@@ -1,7 +1,16 @@
 lockfile_version: '1'
-generated_at: '2026-08-03T05:34:49.908709+00:00'
+generated_at: '2026-08-17T22:52:19.938504+00:00'
 apm_version: 0.25.0
 dependencies:
+- repo_url: cathrynlavery/diagram-design
+  name: diagram-design
+  host: github.com
+  resolved_commit: e48df3fb1e0008f14d792afa6a8a1cb7421b785f
+  version: 2.4.3
+  package_type: marketplace_plugin
+  content_hash: sha256:fc6e640d9258f2bb7ade5995d36052b1e9bc5128aa84a4a76cd66951ca95dac2
+  is_dev: true
+  declared_license: MIT
 - repo_url: obra/superpowers
   name: superpowers
   host: github.com
