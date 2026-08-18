@@ -22,6 +22,7 @@ import pytest
 from conftest import FakeStdin as _FakeStdin
 from conftest import (
     assert_workflow_checkout_pins_head_sha_with_full_history,
+    assert_workflow_diff_carries_flags,
     assert_workflow_feeds_merge_base_to,
     assert_workflow_has_no_trigger_path_filter,
 )
@@ -935,12 +936,9 @@ def test_the_workflow_passes_the_two_flags_the_gate_depends_on() -> None:
     diff otherwise arrives C-quoted, which `_diff_target_path` refuses to
     resolve (exit 2) -- failing the job over a file that need not even be
     in scope."""
-    workflow = (gate.REPO_ROOT / ".github/workflows/detection-logic-property-coverage-gate.yml").read_text(
-        encoding="utf-8"
+    assert_workflow_diff_carries_flags(
+        "detection-logic-property-coverage-gate.yml", "--no-renames", "core.quotePath=false"
     )
-    invocation = next(line for line in workflow.split("\n") if "git" in line and "diff -U0" in line)
-    assert "--no-renames" in invocation, invocation
-    assert "core.quotePath=false" in invocation, invocation
 
 
 def test_the_workflow_checks_out_the_head_sha_with_full_history() -> None:
@@ -983,7 +981,7 @@ def test_the_workflow_has_no_paths_filter() -> None:
     in-scope file.
 
     `conftest.assert_workflow_has_no_trigger_path_filter`'s own docstring
-    carries how the trigger block is isolated and why `paths-ignore:` is
+    carries how the trigger keys are read and why `paths-ignore:` is
     rejected too.
     """
     assert_workflow_has_no_trigger_path_filter("detection-logic-property-coverage-gate.yml")
@@ -999,8 +997,8 @@ def test_the_workflow_uses_merge_base_not_base_sha() -> None:
     base branch after this PR forked is never misattributed to this PR.
 
     `conftest.assert_workflow_feeds_merge_base_to`'s own docstring carries
-    the defeat cases it closes -- a `$merge_base` computed and never used,
-    a swapped argument pair, a match found outside the parsed `run:`
-    content, and a producer line naming the command without `git`. `"diff"` is the producer command this gate depends on.
+    the defeat cases it closes, kept there rather than re-enumerated here
+    so this comment cannot go stale the next time that list grows.
+    `"diff"` is the producer command this gate depends on.
     """
     assert_workflow_feeds_merge_base_to("detection-logic-property-coverage-gate.yml", "diff")

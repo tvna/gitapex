@@ -37,6 +37,7 @@ import gitapex_gate_exception_handler_gaps as gate
 import pytest
 from conftest import (
     assert_workflow_checkout_pins_head_sha_with_full_history,
+    assert_workflow_diff_carries_flags,
     assert_workflow_feeds_merge_base_to,
     assert_workflow_has_no_trigger_path_filter,
 )
@@ -1645,10 +1646,7 @@ def test_the_workflow_passes_the_two_flags_the_gate_depends_on() -> None:
     otherwise arrives C-quoted, which the gate refuses to resolve (exit 2) --
     failing the job over a file that need not even be in scope.
     """
-    workflow = (REPO_ROOT / ".github/workflows/exception-handler-gap-gate.yml").read_text(encoding="utf-8")
-    invocation = next(line for line in workflow.split("\n") if "git" in line and "diff -U0" in line)
-    assert "--no-renames" in invocation, invocation
-    assert "core.quotePath=false" in invocation, invocation
+    assert_workflow_diff_carries_flags("exception-handler-gap-gate.yml", "--no-renames", "core.quotePath=false")
 
 
 def test_the_workflow_checks_out_the_head_sha_with_full_history() -> None:
@@ -1700,7 +1698,7 @@ def test_the_workflow_has_no_paths_filter() -> None:
     not a full-repo sweep.
 
     `conftest.assert_workflow_has_no_trigger_path_filter`'s own docstring
-    carries how the trigger block is isolated and why `paths-ignore:` is
+    carries how the trigger keys are read and why `paths-ignore:` is
     rejected too.
     """
     assert_workflow_has_no_trigger_path_filter("exception-handler-gap-gate.yml")
@@ -1718,9 +1716,9 @@ def test_the_workflow_uses_merge_base_not_base_sha() -> None:
     exit code or message when that happens.
 
     `conftest.assert_workflow_feeds_merge_base_to`'s own docstring carries
-    the defeat cases it closes -- a `$merge_base` computed and never used,
-    a swapped argument pair, a match found outside the parsed `run:`
-    content, and a producer line naming the command without `git`. `"diff"` is the producer command this gate depends on.
+    the defeat cases it closes, kept there rather than re-enumerated here
+    so this comment cannot go stale the next time that list grows.
+    `"diff"` is the producer command this gate depends on.
     """
     assert_workflow_feeds_merge_base_to("exception-handler-gap-gate.yml", "diff")
 

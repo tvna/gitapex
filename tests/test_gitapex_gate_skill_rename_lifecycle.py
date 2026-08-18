@@ -269,11 +269,10 @@ def test_the_workflow_uses_merge_base_not_base_sha() -> None:
     misattributed to this PR.
 
     `conftest.assert_workflow_feeds_merge_base_to`'s own docstring carries
-    the defeat cases it closes -- a `$merge_base` computed and never used,
-    a swapped argument pair, a match found outside the parsed `run:`
-    content, and a producer line naming the command without `git`. `"ls-tree"` is passed alongside `"diff"` because this
-    workflow's own producer command is `git ls-tree`, unlike the sibling
-    `git diff`-based gates asserted through the same helper elsewhere in
-    this repository.
+    the defeat cases it closes, kept there rather than re-enumerated here
+    so this comment cannot go stale the next time that list grows.
+    `"ls-tree"` is passed alongside `"diff"` because this workflow's own
+    producer command is `git ls-tree`, unlike the sibling `git diff`-based
+    gates asserted through the same helper elsewhere in this repository.
     """
     assert_workflow_feeds_merge_base_to("skill-rename-lifecycle-gate.yml", "diff", "ls-tree")

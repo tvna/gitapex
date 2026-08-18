@@ -103,39 +103,24 @@ def assert_workflow_has_no_trigger_path_filter(workflow_name: str) -> None:
     `paths:` nor a `paths-ignore:` filter, in any YAML style.
 
     Shared by every gate workflow's own no-paths-filter drift test (same
-    rationale as `assert_path_is_gitignored` above), so the two things that
-    make the check trustworthy only land once. `paths-ignore:` is rejected
-    too, not only `paths:`: GitHub's own trigger filter accepts either key to
-    the same stuck-Pending effect, so a future edit reaching for the inverse
-    form would defeat a `paths:`-only check while recreating the exact
-    failure mode these tests exist to catch.
+    rationale as `assert_path_is_gitignored` above). `paths-ignore:` is
+    rejected too, not only `paths:`: GitHub's own trigger filter accepts
+    either key to the same stuck-Pending effect.
 
-    The trigger keys are read off the parsed YAML rather than matched
-    line-by-line against the text between the `on:` and `permissions:`
-    markers, which is how this started. That text scan carried two defects,
-    the first of them fail-open:
-
-    * a line-prefix scan only ever sees a filter written in block style on a
-      line of its own. Rewriting the trigger in flow style --
-      `pull_request: {paths: ["hooks/**"]}`, which is the very style
-      `plugin-root-brace-notation-gate.yml` already writes its own trigger
-      in -- left a real, parser-visible filter passing the check. Verified
-      live. A quoted `"paths":` key defeats the prefix scan the same way;
-    * isolating the block by splitting on a `permissions:` marker assumed a
-      top-level `permissions:` always follows `on:`. That is positional
-      rather than structural: it holds in all three callers today and
-      silently widens the scanned region to the rest of the file the moment
-      one of them reorders.
-
-    Parsing costs one lookup to work around PyYAML's default YAML-1.1
-    resolver reading the bare `on` key as boolean `True` rather than the
-    string `"on"` -- the well-known GitHub Actions gotcha the text scan
-    existed to sidestep, and a far cheaper thing to handle than the
-    fail-open above. Comments stop needing to be stripped at all, since the
-    parser never offers them: each caller's own pointer comment for this
-    very invariant contains the literal substring `` `paths:` `` in prose.
-    Each caller's own docstring states why its workflow must stay
-    unfiltered.
+    The trigger keys are read off the parsed YAML rather than matched as
+    text: a line-prefix scan only ever sees a filter written in block style
+    on a line of its own, so a flow-style trigger --
+    `pull_request: {paths: ["hooks/**"]}`, the style
+    `plugin-root-brace-notation-gate.yml` already writes its own trigger in
+    -- or a quoted `"paths":` key would defeat it while a real,
+    parser-visible filter still applied. Parsing costs one lookup to work
+    around PyYAML's default YAML-1.1 resolver reading the bare `on` key as
+    boolean `True` rather than the string `"on"`. Each caller's own pointer
+    comment for this very invariant contains the literal substring
+    `` `paths:` `` in prose, which a whole-file text check would misread as
+    the trigger itself carrying a filter -- parsing sidesteps this too,
+    since the parser never offers comments at all. Each caller's own
+    docstring states why its workflow must stay unfiltered.
     """
     parsed = _parse_workflow(workflow_name)
     trigger = parsed[True] if True in parsed else parsed["on"]
@@ -156,73 +141,89 @@ _MERGE_BASE_CALL = 'merge_base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")'
 def _strip_shell_comments(script: str) -> str:
     """`script` with its `#` comments removed.
 
-    A `#` opens a comment only at the start of a word and only outside
-    quotes. That is POSIX's own rule rather than a simplification of it, and
-    the distinction is load-bearing here: one of the real producer lines
-    this is run over is `git ls-tree ... | sed -E 's#^skills/##' | sort`,
-    whose three `#` characters are all data.
+    A `#` opens a comment only at the start of a word (POSIX's own rule,
+    not a simplification of it): the first character of the line, or any
+    character preceded by whitespace or a control operator (`;`, `&`,
+    `|`, `(`, `)`, `<`, `>`). One of the real producer lines this runs
+    over is `git ls-tree ... | sed -E 's#^skills/##' | sort`, whose three
+    `#` characters are all data (each is preceded by a non-blank, non-
+    operator character) -- and a decoy comment attached directly after an
+    operator with no space, e.g. `cmd;# fake`, is still a real comment a
+    shell would honor, so treating only whitespace as a word boundary
+    understated the rule and let such a decoy hide as ordinary script
+    text. A backslash also escapes the character right after it (a
+    literal, not a quote-toggle or comment-opener), including inside a
+    double-quoted string -- a `#` following an escaped `\\"` is still
+    inside that string, not a fresh word.
     """
     stripped = []
     for line in script.split("\n"):
         quote = ""
+        escape = False
+        word_start = True
         cut = len(line)
         for index, char in enumerate(line):
+            if escape:
+                escape = False
+                word_start = False
+                continue
             if quote:
-                quote = "" if char == quote else quote
+                if char == "\\" and quote == '"':
+                    escape = True
+                elif char == quote:
+                    quote = ""
+                word_start = False
+                continue
+            if char == "\\":
+                escape = True
+                word_start = False
             elif char in "\"'":
                 quote = char
-            elif char == "#" and (index == 0 or line[index - 1].isspace()):
+                word_start = False
+            elif char == "#" and word_start:
                 cut = index
                 break
+            elif char in " \t;&|()<>":
+                word_start = True
+            else:
+                word_start = False
         stripped.append(line[:cut])
     return "\n".join(stripped)
 
 
+# Any spelling of a direct base.sha reference: the quoted/braced/bare forms
+# of the $BASE_SHA shell variable, and the raw Actions expression it is
+# itself assigned from (see each caller's own `env:` block) -- a producer
+# line naming either bypasses "merge-base, not base.sha" independently of
+# the $BASE_SHA indirection.
+_BASE_SHA_RE = re.compile(r"\$\{?\bBASE_SHA\b\}?|github\.event\.pull_request\.base\.sha")
+
+
 def assert_workflow_feeds_merge_base_to(workflow_name: str, *producer_commands: str) -> None:
-    """Assert `.github/workflows/<workflow_name>` both computes `$merge_base`
-    from the exact `"$BASE_SHA" "$HEAD_SHA"` pair and feeds it to a line
-    running one of `producer_commands` (`"diff"`, `"ls-tree"`).
+    """Assert `.github/workflows/<workflow_name>` computes `$merge_base` from
+    the exact `"$BASE_SHA" "$HEAD_SHA"` pair, in that same step feeds it to a
+    line running one of `producer_commands` (`"diff"`, `"ls-tree"`), and
+    never diffs `base.sha` directly in any spelling.
 
-    Shared by every gate workflow's own merge-base drift test (same rationale
-    as `assert_path_is_gitignored` above), so the hardening steps these
-    assertions took only land once rather than four times over:
-
-    * the producer line is asserted, not only the `git merge-base` call --
-      otherwise a workflow that computes `$merge_base` and then never uses it
-      (falling back to `$BASE_SHA` in the producer command) still passes;
-    * the exact `"$BASE_SHA" "$HEAD_SHA"` argument pair is required, so a
-      swapped or substituted variable no longer matches;
-    * both assertions are scoped to the parsed `jobs.*.steps[].run` content
-      rather than the whole file as text, so no YAML comment and no
-      non-comment YAML value outside a `run:` block (a step `name:`, for
-      one) can satisfy them while the real invariant is gone from the
-      executable content;
-    * the producer line must carry the word `git` followed later by one of
-      `producer_commands` as a word, not merely that command as a bare
-      substring -- an unrelated executable line (`echo 'diff "$merge_base"'`)
-      would otherwise satisfy the check. The two words are matched with `.*`
-      between them rather than contiguously, because the real invocations
-      read `git -c core.quotePath=false diff ...`, with a flag in between;
-    * that `run:` content then has its *shell* comments stripped, which
-      scoping to parsed `run:` blocks does not do: a `#` comment written
-      inside a step's own script survives parsing as ordinary script text.
-      Restating the removed logic in one -- a "this used to read ..." note
-      left above the replacement -- satisfied both assertions while the
-      executable command diffed `"$BASE_SHA"` directly. Verified live;
-    * no producer line may name `"$BASE_SHA"` at all, which is the half of
-      "merge-base, not base.sha" that went unasserted while only the
-      positive half was checked. This holds independently of how any
-      comment is written.
-
-    Both assertions must also be satisfied by one and the same step, not by
-    two different ones: `$merge_base` is a plain shell variable, so a
-    producer in some later step could never have read it anyway.
+    Shared by every gate workflow's own merge-base drift test (same
+    rationale as `assert_path_is_gitignored` above). Both assertions are
+    scoped to the parsed `jobs.*.steps[].run` content with shell comments
+    stripped first, not the whole file as text: a YAML comment, a
+    non-comment YAML value outside any `run:` block (a step `name:`, for
+    one), or a shell `#` comment restating the removed logic can otherwise
+    satisfy either check while the real invariant is gone from the
+    executable content. The producer line must carry the word `git`
+    followed later by one of `producer_commands` as a word, not the bare
+    substring, matched with `.*` rather than contiguously since the real
+    invocations read `git -c core.quotePath=false diff ...`, a flag in
+    between. `$merge_base` is a plain shell variable, so both halves must
+    be satisfied by the same step -- a producer in some later step could
+    never have read it.
 
     `on:` is deliberately never parsed here -- PyYAML's default YAML-1.1
     resolver reads the bare `on` key as boolean `True`, not the string
-    `"on"`, a well-known GitHub Actions YAML gotcha this sidesteps by never
-    needing that key. Each caller's own docstring states why its workflow
-    must not diff against `base.sha` directly.
+    `"on"`. Each caller's own docstring states why its workflow must not
+    diff against `base.sha` directly.
     """
     producer_re = re.compile(
         r"\bgit\b.*(" + "|".join(rf"\b{re.escape(command)}\b" for command in producer_commands) + ")"
@@ -231,11 +232,12 @@ def assert_workflow_feeds_merge_base_to(workflow_name: str, *producer_commands: 
     fed_merge_base = False
     for script in scripts:
         producers = [line for line in script.split("\n") if producer_re.search(line)]
-        assert not [line for line in producers if '"$BASE_SHA"' in line], producers
+        offenders = [line for line in producers if _BASE_SHA_RE.search(line)]
+        assert not offenders, f"{workflow_name} diffs base.sha directly: {offenders}"
         fed_merge_base = fed_merge_base or (
             _MERGE_BASE_CALL in script and any('"$merge_base"' in line for line in producers)
         )
-    assert fed_merge_base, scripts
+    assert fed_merge_base, f"{workflow_name} never feeds $merge_base to a {producer_commands} producer: {scripts}"
 
 
 # The one `ref:` value that makes a checked-out tree *be* the diff's
@@ -244,9 +246,9 @@ _HEAD_SHA_REF = "${{ github.event.pull_request.head.sha }}"
 
 
 def assert_workflow_checkout_pins_head_sha_with_full_history(workflow_name: str) -> None:
-    """Assert every `harden-checkout` step in
-    `.github/workflows/<workflow_name>` passes `ref: <head sha>` and
-    `fetch-depth: 0`.
+    """Assert every checkout-shaped step in
+    `.github/workflows/<workflow_name>` is the pinned `harden-checkout`
+    action, passing `ref: <head sha>` and `fetch-depth: 0`.
 
     Shared by the two gate workflows that correlate diff-derived line numbers
     against tree content (same rationale as `assert_path_is_gitignored`
@@ -254,18 +256,18 @@ def assert_workflow_checkout_pins_head_sha_with_full_history(workflow_name: str)
     own docstring states why its gate needs the pin.
 
     Scoped to the parsed `jobs.*.steps[].with` mapping rather than checked
-    against the whole file as text, for the reason the merge-base assertions
-    below were already scoped to parsed `run:` content: both workflows' own
-    pointer comment for this very invariant contains the literal substring
-    `fetch-depth: '0'` in prose, so a whole-file text check passes off the
-    comment alone with the real input deleted -- verified live, and the exact
-    defect class this repository had already had to close once.
+    against the whole file as text: both workflows' own pointer comment for
+    this very invariant contains the literal substring `fetch-depth: '0'` in
+    prose, so a whole-file text check passes off the comment alone with the
+    real input deleted -- verified live, and the exact defect class this
+    repository had already had to close once.
 
-    Asserted over *every* `harden-checkout` step, not merely one of them: an
-    `any()` would let a second, unpinned checkout be added beside the pinned
-    one, which is precisely the state that breaks the post-image
-    correlation. The non-empty guard is what keeps that `for` from passing
-    vacuously if the checkout step is renamed or dropped outright.
+    Every step whose `uses:` mentions `checkout` is inspected, not only ones
+    already named `harden-checkout`: an *added*, unpinned `actions/checkout`
+    step breaks the post-image correlation exactly as a second, unpinned
+    harden-checkout step would, and neither must go unnoticed. The non-empty
+    guard is what keeps the loop from passing vacuously if the checkout step
+    is renamed or dropped outright.
 
     `fetch-depth` is compared as text (`'0'` and `0` both parse to the same
     single input value) because the composite action declares it as an
@@ -273,10 +275,31 @@ def assert_workflow_checkout_pins_head_sha_with_full_history(workflow_name: str)
     `fetch-depth` -- see `.github/actions/harden-checkout/action.yml`. The
     YAML quoting therefore carries no meaning of its own to assert.
     """
-    checkouts = [
-        step.get("with") or {} for step in _workflow_steps(workflow_name) if "harden-checkout" in str(step.get("uses"))
+    checkout_steps = [
+        step for step in _workflow_steps(workflow_name) if "checkout" in str(step.get("uses", "")).lower()
     ]
-    assert checkouts, f"{workflow_name} has no harden-checkout step"
-    for inputs in checkouts:
-        assert inputs.get("ref") == _HEAD_SHA_REF, inputs
-        assert str(inputs.get("fetch-depth")) == "0", inputs
+    assert checkout_steps, f"{workflow_name} has no checkout step"
+    for step in checkout_steps:
+        uses = str(step.get("uses", ""))
+        assert "harden-checkout" in uses, f"{workflow_name} has a non-harden-checkout checkout step: {uses}"
+        inputs = step.get("with") or {}
+        assert inputs.get("ref") == _HEAD_SHA_REF, f"{workflow_name}: {inputs}"
+        assert str(inputs.get("fetch-depth")) == "0", f"{workflow_name}: {inputs}"
+
+
+def assert_workflow_diff_carries_flags(workflow_name: str, *flags: str) -> None:
+    """Assert `.github/workflows/<workflow_name>`'s `git diff -U0` invocation
+    carries every one of `flags`.
+
+    Shared by the two gate workflows whose own line-number-correlating
+    scripts depend on these flags (same rationale as
+    `assert_path_is_gitignored` above). Each caller's own docstring states
+    why its gate needs each flag. Reads the raw text rather than parsing
+    `run:` content the way the merge-base assertions above do -- this is a
+    plain deduplication of two already-identical per-file checks, not a
+    hardening pass; behavior is unchanged from before the move.
+    """
+    workflow = (REPO_ROOT / ".github" / "workflows" / workflow_name).read_text(encoding="utf-8")
+    invocation = next(line for line in workflow.split("\n") if "git" in line and "diff -U0" in line)
+    for flag in flags:
+        assert flag in invocation, invocation

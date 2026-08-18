@@ -214,8 +214,8 @@ def test_the_workflow_uses_merge_base_not_base_sha() -> None:
     forked is never misattributed to this PR.
 
     `conftest.assert_workflow_feeds_merge_base_to`'s own docstring carries
-    the defeat cases it closes -- a `$merge_base` computed and never used,
-    a swapped argument pair, a match found outside the parsed `run:`
-    content, and a producer line naming the command without `git`. `"diff"` is the producer command this gate depends on.
+    the defeat cases it closes, kept there rather than re-enumerated here
+    so this comment cannot go stale the next time that list grows.
+    `"diff"` is the producer command this gate depends on.
     """
     assert_workflow_feeds_merge_base_to("gitignore-pattern-coverage-gate.yml", "diff")

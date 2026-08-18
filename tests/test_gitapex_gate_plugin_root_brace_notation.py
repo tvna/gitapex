@@ -284,20 +284,11 @@ def test_main_exits_2_on_a_root_that_is_a_file(tmp_path, capsys):
 
 
 def test_the_workflow_has_no_paths_filter() -> None:
-    """Drift gate for an invariant this change establishes, per CLAUDE.md
-    section 3, mirroring `tests/test_gitapex_gate_exception_handler_gaps.py`'s
-    own identical reasoning and defeat-case: a `paths:` filter under
-    `pull_request:` is deliberately never added, following the rationale
-    `waza-eval-gate.yml` states: a workflow that never fires for a given PR
-    leaves a required status check `Pending` forever, whereas a job that
-    runs and passes is safe to promote to required later. This gate has no
-    diff/merge-base logic at all (it scans the whole tracked-file set via
-    `git ls-files`), so a `paths:` filter here would recreate that exact
-    stuck-Pending failure mode for any PR that happens not to touch one of
-    the three small files this gate scans.
-
+    """Drift gate for this workflow's own no-`paths:`-filter invariant, per
+    CLAUDE.md section 3 and the same `waza-eval-gate.yml` rationale: a
+    filter here would leave a required check stuck `Pending` for any PR
+    that doesn't touch one of the three small files this gate scans.
     `conftest.assert_workflow_has_no_trigger_path_filter`'s own docstring
-    carries how the trigger block is isolated and why `paths-ignore:` is
-    rejected too.
+    carries the mechanics.
     """
     assert_workflow_has_no_trigger_path_filter("plugin-root-brace-notation-gate.yml")
