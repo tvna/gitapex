@@ -1,6 +1,6 @@
 id: merge-retrospective-carried-forward-gate-unimplemented
 name: Step 1 Finds an Unimplemented Prior Retrospective Gate
-description: Step 1's carry-forward check finds a prior retrospective issue whose proposed gate has neither a citing merged PR/commit nor a corroborating .gitapex/ssot.json entry, and reports it as its own "Carried-forward gate" subsection, separate from this cycle's own repair.
+description: Step 1's carry-forward check finds a prior retrospective issue whose proposed gate lacks at least one of the two required signals (the scenario below only establishes the citation signal is missing, not the .gitapex/ssot.json one), and reports it as its own "Carried-forward gate" subsection, separate from this cycle's own repair.
 tags:
   - quality
   - carried-forward

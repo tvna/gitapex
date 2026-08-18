@@ -33,7 +33,11 @@ already uses for filing issues in Step 5. Step 1's own bundled
 gate-resolution script additionally needs local shell access to the
 checked-out repository (a `git log` subprocess and a `.gitapex/ssot.json`
 read) -- a separate, non-MCP prerequisite from the GitHub-connector one
-this paragraph otherwise covers.
+this paragraph otherwise covers. That `git log` only sees history the
+checkout actually has: a shallow clone would undercount citing commits,
+misreporting an already-resolved gate as unresolved (the CI sibling
+script's own workflow sets `fetch-depth: '0'` for this reason) -- run
+`git fetch --unshallow` first if the checkout might be shallow.
 
 ## Classification taxonomy (fixed -- never invent a fourth category)
 
@@ -227,8 +231,9 @@ such taxonomy applies only `retrospective`, unchanged from before.
      already runs in CI: an issue number only clears as resolved when
      both a commit on `HEAD` cites it AND `.gitapex/ssot.json`
      `gates[].tracking_issue` names it. It prints one JSON object to
-     stdout partitioning every input issue number into exactly one of
-     two arrays: `{"unresolved": [...], "resolved": [...]}`. This
+     stdout partitioning every *distinct* input issue number (the script
+     deduplicates first) into exactly one of two arrays:
+     `{"unresolved": [...], "resolved": [...]}`. This
      script's `.gitapex/ssot.json` dependency is a gitapex-specific gate
      registry, not a portable convention every calling repository has --
      unlike the CI-opener check above, this step has no repository-
@@ -455,8 +460,9 @@ Three repairs occurred between PR open and merge.
 ## Carried-forward gate
 
 - Issue #31 ("Merge retrospective: PR #29") proposed a pre-commit hook
-  enforcing conventional-commit message format, but no merged PR or
-  commit citing #31 exists yet -- the gate is still unimplemented one
+  enforcing conventional-commit message format, but the two-signal check
+  found neither a merged PR or commit citing #31 nor a corroborating
+  `.gitapex/ssot.json` entry -- the gate is still unimplemented one
   cycle later. Escalating visibility here rather than letting it rot
   silently; implementing it remains separate follow-on work, same as any
   gate proposed in this cycle's own Repairs section above.
