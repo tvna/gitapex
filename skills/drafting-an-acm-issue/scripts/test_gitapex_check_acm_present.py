@@ -196,3 +196,43 @@ def test_main_fails_and_reports_both_when_neither_present(monkeypatch: object, c
     assert exit_code == 1
     assert "Acceptance Criteria Map" in captured.err
     assert "Dedup" in captured.err
+
+
+# --- main(): the --body <file> CLI path (evaluating-skill-quality audit, ---
+# --- PR #1215, dimension 7 -- every test above exercises stdin only, ---
+# --- leaving the file-argument branch and both its error handlers ---
+# --- (lines 133-139) completely uncovered) --------------------------------
+
+
+def test_main_reads_body_from_a_file_argument(tmp_path: object, capsys: object) -> None:
+    body = (
+        "| Criterion | Interpretation | Planned ops | Proof method | Residual risk |\n"
+        "|---|---|---|---|---|\n"
+        "| a | b | c | d | e |\n\n"
+        "Dedup: none found\n"
+    )
+    body_file = tmp_path / "draft-body.md"  # type: ignore[operator]
+    body_file.write_text(body, encoding="utf-8")
+    exit_code = checker.main(["--body", str(body_file)])
+    captured = capsys.readouterr()  # type: ignore[attr-defined]
+    assert exit_code == 0
+    assert "PASS" in captured.out
+
+
+def test_main_reports_file_not_found_for_a_missing_body_file(tmp_path: object, capsys: object) -> None:
+    missing = tmp_path / "does-not-exist.md"  # type: ignore[operator]
+    exit_code = checker.main(["--body", str(missing)])
+    captured = capsys.readouterr()  # type: ignore[attr-defined]
+    assert exit_code == 1
+    assert "error: body file not found" in captured.err
+    assert str(missing) in captured.err
+
+
+def test_main_reports_invalid_utf8_for_a_body_file(tmp_path: object, capsys: object) -> None:
+    body_file = tmp_path / "not-utf8.md"  # type: ignore[operator]
+    body_file.write_bytes(b"\xff\xfe not valid utf-8")
+    exit_code = checker.main(["--body", str(body_file)])
+    captured = capsys.readouterr()  # type: ignore[attr-defined]
+    assert exit_code == 1
+    assert "is not valid UTF-8" in captured.err
+    assert str(body_file) in captured.err
