@@ -266,10 +266,12 @@ clean-copy run").
 Superseded terms: "contaminated"/"contamination" as used for this concept
 in `skills/evaluating-skill-quality/references/adversarial-self-audit.md`'s
 "Contaminated-dispatch disclosure" section, and bare "isolated"/
-"isolation" as used in `evaluating-deterministic-gate-quality`'s and
-`evaluating-skill-quality`'s own Subagent dispatch sections for the
-project-instruction-file exclusion requirement specifically -- both
-retained as accurate description of the mechanism or the failure mode,
-but "CLAUDE.md-free" is now this repository's preferred name for the
-property itself. Resolved by the repository owner, directly, per the
-Resolve step (#1203).
+"isolation" as used in `evaluating-skill-quality`'s own Subagent dispatch
+section for the project-instruction-file exclusion requirement
+specifically -- both retained as accurate description of the mechanism or
+the failure mode, but "CLAUDE.md-free" is now this repository's preferred
+name for the property itself. `evaluating-deterministic-gate-quality`'s
+own equivalent wording is intentionally not cited here: a separate,
+concurrently open issue governs that skill's own exclusion-requirement
+text, and this entry does not assume or depend on that issue's outcome.
+Resolved by the repository owner, directly, per the Resolve step (#1203).
