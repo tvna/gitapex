@@ -41,7 +41,7 @@ def _page_number(url: str) -> int:
     return int(match.group(1)) if match else 1
 
 
-def _opener_for(pages: dict[int, list[dict[str, Any]] | int]) -> Callable[[Any], Any]:
+def _opener_for(pages: dict[int, list[Any] | int]) -> Callable[[Any], Any]:
     """`pages` maps a 1-indexed page number to either the JSON array to
     return (200 OK) or an int HTTP status code to raise as an HTTPError.
     A page number absent from `pages` returns an empty array (end of
@@ -265,3 +265,144 @@ def test_main_reads_payload_and_exits_appropriately(monkeypatch: Any, capsys: An
     captured = capsys.readouterr()
     assert exit_code == 0
     assert "PASS" in captured.out
+
+
+def test_main_fail_path_via_stdin(monkeypatch: Any, capsys: Any) -> None:
+    import io as _io
+    import sys
+
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    payload = json.dumps({"owner": "tvna", "repo": "gitapex", "title": "x", "body": "Closes #1"})
+    monkeypatch.setattr(sys, "stdin", _io.StringIO(payload))
+    exit_code = checker.main([])
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert "FAIL" in captured.err
+
+
+def test_main_payload_file_not_found(capsys: Any, tmp_path: Any) -> None:
+    missing = tmp_path / "does-not-exist.json"
+    exit_code = checker.main(["--payload", str(missing)])
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert "not found" in captured.err
+
+
+def test_main_payload_file_not_valid_utf8(capsys: Any, tmp_path: Any) -> None:
+    bad = tmp_path / "bad.json"
+    bad.write_bytes(b"\xff\xfe\x00invalid")
+    exit_code = checker.main(["--payload", str(bad)])
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert "not valid UTF-8" in captured.err
+
+
+def test_main_payload_not_valid_json(monkeypatch: Any, capsys: Any) -> None:
+    import io as _io
+    import sys
+
+    monkeypatch.setattr(sys, "stdin", _io.StringIO("not json at all"))
+    exit_code = checker.main([])
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert "not valid JSON" in captured.err
+
+
+def test_main_payload_not_a_json_object(monkeypatch: Any, capsys: Any) -> None:
+    import io as _io
+    import sys
+
+    monkeypatch.setattr(sys, "stdin", _io.StringIO("[1, 2, 3]"))
+    exit_code = checker.main([])
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert "must be a JSON object" in captured.err
+
+
+def test_main_payload_field_not_a_string(monkeypatch: Any, capsys: Any) -> None:
+    import io as _io
+    import sys
+
+    monkeypatch.setattr(sys, "stdin", _io.StringIO(json.dumps({"owner": 5, "repo": "gitapex"})))
+    exit_code = checker.main([])
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert "must be a string" in captured.err
+
+
+def test_default_opener_calls_urlopen_with_the_configured_timeout(monkeypatch: Any) -> None:
+    import urllib.request
+
+    calls: list[tuple[Any, int]] = []
+
+    def fake_urlopen(request: Any, timeout: int) -> str:
+        calls.append((request, timeout))
+        return "sentinel-response"
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    request = urllib.request.Request("https://api.github.com/x")
+    result = checker._default_opener(request)
+    assert result == "sentinel-response"
+    assert calls == [(request, checker._HTTP_TIMEOUT_SECONDS)]
+
+
+def test_call_retries_on_os_error_then_succeeds() -> None:
+    attempts: list[int] = []
+
+    def flaky_opener(_request: Any) -> Any:
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise OSError("connection reset")
+        return _FakeResponse(b"[]")
+
+    result = checker._call("https://api.github.com/x", "tok", flaky_opener, _no_sleep, max_attempts=2)
+    assert result == []
+    assert len(attempts) == 2
+
+
+def test_call_does_not_retry_a_definitive_4xx() -> None:
+    opener = _opener_for({1: 404})
+    calls: list[float] = []
+    try:
+        checker._call("https://api.github.com/x", "tok", opener, calls.append, max_attempts=3)
+        raise AssertionError("expected GitHubApiError")
+    except checker.GitHubApiError:
+        pass
+    assert calls == []  # never slept -- a 4xx breaks out of the retry loop immediately
+
+
+def test_fetch_open_pull_requests_fails_closed_when_the_last_allowed_page_is_still_full() -> None:
+    # Two full 100-item pages, max_pages=2 -- the loop exhausts max_pages
+    # without either break condition ever firing (never an empty page,
+    # never a short page), so completeness of the open-PR list cannot be
+    # confirmed: a duplicate on page 3 would otherwise silently bypass
+    # this hook. Regression for a defeat found by an adversarial review of
+    # this hook's own PR: the original version returned the 200 collected
+    # results here instead of raising, silently truncating rather than
+    # failing closed.
+    page1 = [_pr(n) for n in range(1, 101)]
+    page2 = [_pr(n) for n in range(101, 201)]
+    opener = _opener_for({1: page1, 2: page2})
+    try:
+        checker.fetch_open_pull_requests("tvna", "gitapex", "tok", opener=opener, sleeper=_no_sleep, max_pages=2)
+        raise AssertionError("expected GitHubApiError")
+    except checker.GitHubApiError as error:
+        assert "pagination-bound-reached" in str(error)
+
+
+def test_fetch_open_pull_requests_succeeds_when_the_final_page_is_short() -> None:
+    # A short (not full) final page is proof of completeness even when it
+    # lands exactly on max_pages -- distinguishing this from the
+    # fail-closed case above.
+    page1 = [_pr(n) for n in range(1, 101)]
+    page2 = [_pr(n) for n in range(101, 150)]  # 49 items, short
+    opener = _opener_for({1: page1, 2: page2})
+    result = checker.fetch_open_pull_requests("tvna", "gitapex", "tok", opener=opener, sleeper=_no_sleep, max_pages=2)
+    assert len(result) == 149
+
+
+def test_fetch_open_pull_requests_skips_a_non_dict_item() -> None:
+    opener = _opener_for({1: ["not a dict", _pr(9)]})
+    result = checker.fetch_open_pull_requests("tvna", "gitapex", "tok", opener=opener, sleeper=_no_sleep)
+    assert [pr["number"] for pr in result] == [9]

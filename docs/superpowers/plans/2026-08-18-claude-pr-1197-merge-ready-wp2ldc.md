@@ -90,8 +90,8 @@ migration. `.gitapex/ssot.json`'s edit is a pure addition (one new
 requires a fresh per-task authorization confirmation beyond the
 branch-plan-wide one below.
 
-**Authorization record (step 1):** no approval comment exists on issue
-#1197's own comment thread (checked directly via `issue_read
+**Authorization record (step 1):** no approval comment exists on the
+issue #1197 comment thread (checked directly via `issue_read
 get_comments` -- empty). Explicit confirmation from the human operator
 applies instead: the repository owner's own direct request opening this
 execution pass, "こちらのPRを作りマージ直前まで進める" ("create this PR and

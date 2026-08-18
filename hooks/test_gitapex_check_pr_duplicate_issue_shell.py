@@ -195,8 +195,16 @@ def test_denied_when_stdin_is_empty() -> None:
     assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
 
 
-@pytest.mark.parametrize("tool_input", ["[1,2,3]", '"oops"', "5", "true"])
+@pytest.mark.parametrize("tool_input", ["[1,2,3]", '"oops"', "5", "true", "false"])
 def test_denied_when_tool_input_is_not_an_object(tool_input: str) -> None:
+    # "false" is not a redundant case alongside "true": jq's `//` operator
+    # treats `false` (like `null`) as falsy, so a naive
+    # `(.tool_input // {}) | type == "object"` check silently substitutes
+    # `{}` and passes this shape through -- verified live against a real
+    # jq invocation before this fix landed, then crashing the downstream
+    # payload-extraction jq call with "Cannot index boolean with string"
+    # under `set -e`, past deny(). This case is the regression test for
+    # that specific defeat.
     raw = '{"tool_name":"mcp__github__create_pull_request","tool_input":' + tool_input + "}"
     result = _run_raw(raw)
     assert result.returncode == 2, f"tool_input={tool_input}: expected deny (exit 2), got {result.returncode}"

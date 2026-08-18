@@ -61,7 +61,16 @@ if [ "$tool_name" != "mcp__github__create_pull_request" ]; then
   exit 0
 fi
 
-if ! printf '%s' "$input" | jq -e '(.tool_input // {}) | type == "object"' >/dev/null 2>&1; then
+# NOT `(.tool_input // {}) | type == "object"`: jq's `//` treats `false`
+# (like `null`) as falsy and substitutes `{}`, so that shape would pass
+# this check for `tool_input: false` -- confirmed live
+# (`echo '{"tool_input": false}' | jq -c '(.tool_input // {}) | type == "object"'`
+# prints `true`) -- then crash the payload-extraction jq call below with
+# "Cannot index boolean with string" under `set -e`, past deny(), the
+# exact fail-open class this hook's own comments elsewhere already guard
+# against for every other non-object shape. An explicit `== null` check
+# treats `false` and `null` as distinct, matching jq's own type() output.
+if ! printf '%s' "$input" | jq -e '(.tool_input == null) or (.tool_input | type == "object")' >/dev/null 2>&1; then
   deny "Blocked by hooks/check-pr-duplicate-issue.sh: tool_input in the payload is not a JSON object. Failing closed."
 fi
 

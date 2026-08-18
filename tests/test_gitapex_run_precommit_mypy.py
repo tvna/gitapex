@@ -119,7 +119,15 @@ def test_mypy_groups_cover_the_pythonpath_linked_roots_together() -> None:
 
 
 def test_mypy_groups_check_every_skill_scripts_directory_named_in_ci() -> None:
-    labels = {label for label, _dirs in runner.MYPY_GROUPS}
+    # Checked against every directory actually covered by some group, not
+    # just top-level labels: a directory that bare-imports (or is
+    # bare-imported by) something in the pythonpath-linked combined group
+    # -- skills/drafting-an-acm-issue/scripts, since issue #1197 added its
+    # own tests/test_gitapex_check_acm_present_properties.py importing it --
+    # is correctly covered as a *member* of that group rather than its own
+    # standalone label, and a label-only check would wrongly report it
+    # missing.
+    all_dirs = {directory for _label, dirs in runner.MYPY_GROUPS for directory in dirs}
     for expected in (
         "skills/executing-a-branch-plan/scripts",
         "skills/drafting-an-adr/scripts",
@@ -129,4 +137,4 @@ def test_mypy_groups_check_every_skill_scripts_directory_named_in_ci() -> None:
         "skills/planning-a-branch-from-an-issue/scripts",
         "skills/setup-gitapex-toolchain/scripts",
     ):
-        assert expected in labels
+        assert expected in all_dirs

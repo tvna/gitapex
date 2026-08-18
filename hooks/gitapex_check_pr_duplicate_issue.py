@@ -33,10 +33,15 @@ never the semantic Search API. Same reasoning issue #1197's own row 2
 applies to `list_issues` vs. `search_issues`: an exact, deterministic
 listing is the correct primitive for "does X exist," not a
 natural-language-ranked search. Paginated up to `_MAX_PAGES` pages (1000
-PRs at 100/page) as a named, disclosed bound, not a silent truncation --
-a repository with more open PRs than that at once is expected to use the
-`Duplicate-PR-waiver` escape hatch below for any collision past the
-boundary this hook does not reach.
+PRs at 100/page) as a named, disclosed bound -- fail-closed at the bound,
+not a silent truncation: an empty or short final page is the only proof
+pagination is actually complete, so `fetch_open_pull_requests` raises
+(denying the PR, per the fail-closed posture below) when `_MAX_PAGES` is
+exhausted and the last page fetched was still full, rather than silently
+returning a possibly-incomplete list a duplicate on the next page could
+slip past. A repository with more than `_MAX_PAGES * _PER_PAGE` open PRs
+at once is expected to use the `Duplicate-PR-waiver` escape hatch below
+to get a PR past this hook until that count drops.
 
 Escape hatch (issue #1197's own Constraint: "must include an escape
 hatch, not an unconditional hard block"): a `Duplicate-PR-waiver: <reason>`
@@ -177,8 +182,12 @@ def fetch_open_pull_requests(
     """Return [{'number': int, 'title': str, 'body': str}, ...] for every
     open PR, via the deterministic REST List Pull Requests endpoint,
     paginated up to `max_pages` (see module docstring). Raises
-    GitHubApiError on a non-recoverable fetch failure or a non-array
-    response body."""
+    GitHubApiError on a non-recoverable fetch failure, a non-array
+    response body, or -- fail-closed, not a silent truncation -- when
+    `max_pages` is exhausted and the last fetched page was still full
+    (`_PER_PAGE` items), meaning completeness cannot be confirmed: an
+    empty or short page is the only proof there is no further page to
+    check, and neither occurred."""
     sleeper = sleeper if sleeper is not None else time.sleep
     results: list[dict[str, Any]] = []
     for page in range(1, max_pages + 1):
@@ -205,6 +214,19 @@ def fetch_open_pull_requests(
             )
         if len(data) < _PER_PAGE:
             break
+    else:
+        # The loop ran to completion (`max_pages` full pages, `range`
+        # exhausted) without ever taking either `break` above -- the last
+        # page fetched was still full, so a further page may exist.
+        # Silently returning `results` here would let a duplicate on page
+        # `max_pages + 1` bypass this hook entirely; this repository's own
+        # "fail closed, including on INDETERMINATE" posture applies to
+        # exactly this case.
+        raise GitHubApiError(
+            f"pagination-bound-reached: fetched {max_pages} page(s) "
+            f"(up to {max_pages * _PER_PAGE} open PRs) and the last page was still full -- "
+            "cannot confirm every open PR was checked"
+        )
     return results
 
 

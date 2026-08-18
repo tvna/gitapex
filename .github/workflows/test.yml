@@ -120,7 +120,8 @@ jobs:
             skills/scorer-gated-skill-edits/scripts \
             skills/evaluating-skill-quality/scripts \
             skills/auditing-agent-product-scope/scripts \
-            skills/evaluating-deterministic-gate-quality/scripts
+            skills/evaluating-deterministic-gate-quality/scripts \
+            skills/drafting-an-acm-issue/scripts
 
       - name: mypy (skills/executing-a-branch-plan/scripts)
         run: uv run --frozen mypy --config-file pyproject.toml skills/executing-a-branch-plan/scripts
@@ -133,9 +134,6 @@ jobs:
 
       - name: mypy (skills/outward-artifact-preflight/scripts)
         run: uv run --frozen mypy --config-file pyproject.toml skills/outward-artifact-preflight/scripts
-
-      - name: mypy (skills/drafting-an-acm-issue/scripts)
-        run: uv run --frozen mypy --config-file pyproject.toml skills/drafting-an-acm-issue/scripts
 
       - name: mypy (skills/planning-a-branch-from-an-issue/scripts)
         run: uv run --frozen mypy --config-file pyproject.toml skills/planning-a-branch-from-an-issue/scripts
