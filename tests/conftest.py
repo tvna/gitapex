@@ -89,33 +89,55 @@ def assert_path_is_gitignored(path: pathlib.Path, description: str) -> None:
 
 
 def assert_workflow_has_no_trigger_path_filter(workflow_name: str) -> None:
-    """Assert `.github/workflows/<workflow_name>`'s trigger block carries
-    neither a `paths:` nor a `paths-ignore:` filter.
+    """Assert `.github/workflows/<workflow_name>`'s trigger carries neither a
+    `paths:` nor a `paths-ignore:` filter, in any YAML style.
 
     Shared by every gate workflow's own no-paths-filter drift test (same
     rationale as `assert_path_is_gitignored` above), so the two things that
-    make the check trustworthy only land once. The trigger block is isolated
-    between the `on:` and `permissions:` markers with comment lines stripped,
-    rather than checked against the whole leading file text -- each of these
-    workflows' own pointer comment for this very invariant contains the
-    literal substring `` `paths:` `` in prose, which a whole-text check would
-    misread as the trigger itself carrying a filter. And `paths-ignore:` is
-    rejected too, not only `paths:`: GitHub's own trigger filter accepts
-    either key to the same stuck-Pending effect, so a future edit reaching
-    for the inverse form would defeat a `paths:`-only check while recreating
-    the exact failure mode these tests exist to catch.
+    make the check trustworthy only land once. `paths-ignore:` is rejected
+    too, not only `paths:`: GitHub's own trigger filter accepts either key to
+    the same stuck-Pending effect, so a future edit reaching for the inverse
+    form would defeat a `paths:`-only check while recreating the exact
+    failure mode these tests exist to catch.
 
-    This one reads the raw text rather than parsing the YAML the way
-    `assert_workflow_feeds_merge_base_to` below does, and deliberately so:
-    PyYAML's default YAML-1.1 resolver reads the bare `on` key as boolean
-    `True`, not the string `"on"`, a well-known GitHub Actions gotcha that a
-    parsed lookup of the trigger block would have to work around. Each
-    caller's own docstring states why its workflow must stay unfiltered.
+    The trigger keys are read off the parsed YAML rather than matched
+    line-by-line against the text between the `on:` and `permissions:`
+    markers, which is how this started. That text scan carried two defects,
+    the first of them fail-open:
+
+    * a line-prefix scan only ever sees a filter written in block style on a
+      line of its own. Rewriting the trigger in flow style --
+      `pull_request: {paths: ["hooks/**"]}`, which is the very style
+      `plugin-root-brace-notation-gate.yml` already writes its own trigger
+      in -- left a real, parser-visible filter passing the check. Verified
+      live. A quoted `"paths":` key defeats the prefix scan the same way;
+    * isolating the block by splitting on a `permissions:` marker assumed a
+      top-level `permissions:` always follows `on:`. That is positional
+      rather than structural: it holds in all three callers today and
+      silently widens the scanned region to the rest of the file the moment
+      one of them reorders.
+
+    Parsing costs one lookup to work around PyYAML's default YAML-1.1
+    resolver reading the bare `on` key as boolean `True` rather than the
+    string `"on"` -- the well-known GitHub Actions gotcha the text scan
+    existed to sidestep, and a far cheaper thing to handle than the
+    fail-open above. Comments stop needing to be stripped at all, since the
+    parser never offers them: each caller's own pointer comment for this
+    very invariant contains the literal substring `` `paths:` `` in prose.
+    Each caller's own docstring states why its workflow must stay
+    unfiltered.
     """
-    workflow = (REPO_ROOT / ".github" / "workflows" / workflow_name).read_text(encoding="utf-8")
-    trigger_block = workflow.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
-    trigger_lines = [line for line in trigger_block.split("\n") if not line.strip().startswith("#")]
-    assert not any(line.strip().startswith("paths") for line in trigger_lines), trigger_block
+    parsed = _parse_workflow(workflow_name)
+    trigger = parsed[True] if True in parsed else parsed["on"]
+    # `on: push` and `on: [push, pull_request]` leave nowhere to hang a
+    # filter; only the mapping form does, at either of its two levels.
+    blocks = (
+        [trigger, *(event for event in trigger.values() if isinstance(event, dict))]
+        if isinstance(trigger, dict)
+        else []
+    )
+    filters = sorted(str(key) for block in blocks for key in block if str(key).startswith("paths"))
+    assert not filters, f"{workflow_name}'s trigger carries {filters}: {trigger}"
 
 
 def assert_workflow_feeds_merge_base_to(workflow_name: str, *producer_commands: str) -> None:
@@ -167,10 +189,14 @@ def assert_workflow_feeds_merge_base_to(workflow_name: str, *producer_commands: 
 _HEAD_SHA_REF = "${{ github.event.pull_request.head.sha }}"
 
 
+def _parse_workflow(workflow_name: str) -> Any:
+    """`.github/workflows/<workflow_name>` parsed as YAML."""
+    return yaml.safe_load((REPO_ROOT / ".github" / "workflows" / workflow_name).read_text(encoding="utf-8"))
+
+
 def _workflow_steps(workflow_name: str) -> list[Any]:
     """Every `jobs.*.steps[]` entry of `.github/workflows/<workflow_name>`."""
-    parsed = yaml.safe_load((REPO_ROOT / ".github" / "workflows" / workflow_name).read_text(encoding="utf-8"))
-    return [step for job in parsed["jobs"].values() for step in job.get("steps", [])]
+    return [step for job in _parse_workflow(workflow_name)["jobs"].values() for step in job.get("steps", [])]
 
 
 def assert_workflow_checkout_pins_head_sha_with_full_history(workflow_name: str) -> None:
