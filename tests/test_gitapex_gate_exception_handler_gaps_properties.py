@@ -1,31 +1,38 @@
 """Hypothesis property-based layer for
-``.github/scripts/gitapex_gate_exception_handler_gaps.py`` (issue #1184).
+``.github/scripts/gitapex_gate_exception_handler_gaps.py`` (issue #1184,
+extended by issue #1193).
 
-Scoped narrowly to the one function issue #1184's own fix touched --
-:func:`parse_added_lines` -- rather than the file's full trigger surface.
-That fix ported two behavior changes from this file's own architectural
-mirror, `gitapex_gate_detection_logic_property_coverage.py` (issue #1178):
-raising ``ScanError`` on a `+++ ` post-image header with no preceding
-`--- ` source header, and bounding `in_hunk` by a hunk's own declared
-post-image length rather than only by the next `diff --git ` line. Both
-changes touch `.startswith(...)` call sites inside `parse_added_lines`
-(a string-comparison detection-logic trigger under
+Scoped narrowly to the functions each fix actually touched, not the file's
+full trigger surface -- the gate this file answers to is diff-scoped by
+design, not a repository-wide backfill requirement (see that gate's own
+module docstring, "Scope is the diff, not the repository"). Issue #1184's
+own fix touched :func:`parse_added_lines`, porting two behavior changes
+from this file's own architectural mirror,
+`gitapex_gate_detection_logic_property_coverage.py` (issue #1178): raising
+``ScanError`` on a `+++ ` post-image header with no preceding `--- ` source
+header, and bounding `in_hunk` by a hunk's own declared post-image length
+rather than only by the next `diff --git ` line. Both changes touch
+`.startswith(...)` call sites inside `parse_added_lines` (a
+string-comparison detection-logic trigger under
 `gitapex_gate_detection_logic_property_coverage.py`'s own rules) and the
-module-level `_HUNK_RE = re.compile(...)` constant (a regex trigger), so
-this diff is graded by that gate too -- this file is what clears both
-findings.
+module-level `_HUNK_RE = re.compile(...)` constant (a regex trigger).
 
-The property below is ported near-verbatim from
+Issue #1193 later added a second function to this file's own scope:
+:func:`_looks_like_real_header_pair`, ported from the same architectural
+mirror, with its own two `.startswith(...)` call sites (string-comparison).
+
+The first property below is ported near-verbatim from
 `tests/test_gitapex_gate_detection_logic_property_coverage_properties.py`'s
 own `test_parse_added_lines_matches_an_independently_computed_line_count`:
-once issue #1184's fix lands, both files' `parse_added_lines` share the
-identical post-image-counting contract, so the same model-based property
-applies unchanged. The other three trigger-bearing functions in this file
-(`in_scope`, `_diff_target_path`, `_waived_lines`) are untouched by issue
-#1184's diff and carry no new or materially changed detection logic, so
-they are out of this file's own scope -- the gate they answer to is
-diff-scoped by design, not a repository-wide backfill requirement (see
-that gate's own module docstring, "Scope is the diff, not the repository").
+both files' `parse_added_lines` share the identical post-image-counting
+contract, so the same model-based property applies unchanged. The second
+is ported near-verbatim from that same file's own
+`test_looks_like_real_header_pair_recognises_every_real_shape_and_rejects_the_rest`,
+for the identical reason -- both files' `_looks_like_real_header_pair` are
+byte-identical. The other two trigger-bearing functions in this file
+(`in_scope`, `_waived_lines`) remain untouched by either issue's diff and
+carry no new or materially changed detection logic, so they stay out of
+this file's own scope.
 
 ``derandomize=True`` with an explicit ``max_examples`` and ``deadline=None``,
 applied per property rather than as a registered global profile --
@@ -141,3 +148,66 @@ def test_parse_added_lines_matches_an_independently_computed_line_count(
     }
     expected = {path: lines for path, lines in expected.items() if lines}
     assert added == expected
+
+
+# ---------------------------------------------------------------------------
+# _looks_like_real_header_pair -- string-comparison (startswith, x2) trigger
+# ---------------------------------------------------------------------------
+
+_HEADER_PATH_TEXT = st.text(max_size=60)
+_NOT_A_PREFIXED_TEXT = st.text(max_size=80).filter(lambda s: s != "/dev/null" and not s.startswith("a/"))
+_NOT_B_PREFIXED_TEXT = st.text(max_size=80).filter(lambda s: s != "/dev/null" and not s.startswith("b/"))
+
+
+@_PROPERTIES
+@given(
+    matching_path=_HEADER_PATH_TEXT,
+    rename_source_path=_HEADER_PATH_TEXT,
+    rename_target_path=_HEADER_PATH_TEXT,
+    not_a_prefixed=_NOT_A_PREFIXED_TEXT,
+    not_b_prefixed=_NOT_B_PREFIXED_TEXT,
+)
+def test_looks_like_real_header_pair_recognises_every_real_shape_and_rejects_the_rest(
+    matching_path: str,
+    rename_source_path: str,
+    rename_target_path: str,
+    not_a_prefixed: str,
+    not_b_prefixed: str,
+) -> None:
+    """Ported from this file's own architectural mirror
+    `gitapex_gate_detection_logic_property_coverage.py`. Model-based for
+    every case. Each input pair is built to have a known answer by
+    construction, not by recomputing `_looks_like_real_header_pair`'s own
+    `a/`/`b/`/`/dev/null` formula:
+
+    * A same-stem `a/<path>`/`b/<path>` pair is exactly the shape a real,
+      unrenamed file's own header pair always has -- True.
+    * `/dev/null` on either side alone (source for a new file, target for a
+      deleted one) is a real header shape too -- True, independent of what
+      the other side names.
+    * A *different*-stem `a/<path1>`/`b/<path2>` pair is still real-shaped --
+      a renamed file's own header pair never has matching stems, and the
+      function's own docstring states plainly it is "deliberately silent on
+      whether the two paths match." True.
+    * `not_a_prefixed`/`not_b_prefixed` are built to structurally avoid both
+      the `/dev/null` and `a/`/`b/`-prefixed shapes on their own side, so
+      pairing either with anything real-shaped on the other side still makes
+      the whole pair False -- ordinary hunk content (a changelog marker, a
+      divider) never has this shape by construction, which is the exact
+      property this function exists to tell apart from a real absorbed
+      header.
+
+    Real defect class this would catch: the `a/`/`b/`-prefix check or the
+    `/dev/null` special case on either side being loosened or dropped -- e.g.
+    a future change that starts requiring matching stems, which would
+    silently stop catching a renamed file's own absorbed header pair, or one
+    that drops the `/dev/null` case, which would silently stop catching an
+    absorbed new-file or deleted-file header.
+    """
+    assert gate._looks_like_real_header_pair(f"--- a/{matching_path}", f"+++ b/{matching_path}") is True
+    assert gate._looks_like_real_header_pair("--- /dev/null", f"+++ b/{matching_path}") is True
+    assert gate._looks_like_real_header_pair(f"--- a/{matching_path}", "+++ /dev/null") is True
+    assert gate._looks_like_real_header_pair(f"--- a/{rename_source_path}", f"+++ b/{rename_target_path}") is True
+    assert gate._looks_like_real_header_pair(f"--- {not_a_prefixed}", f"+++ b/{matching_path}") is False
+    assert gate._looks_like_real_header_pair(f"--- a/{matching_path}", f"+++ {not_b_prefixed}") is False
+    assert gate._looks_like_real_header_pair(f"--- {not_a_prefixed}", f"+++ {not_b_prefixed}") is False

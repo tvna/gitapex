@@ -1,10 +1,11 @@
 """Hypothesis property-based layer for
 ``.github/scripts/gitapex_gate_detection_logic_property_coverage.py`` (issue
-#1178). Covers the four functions in that file which, per its own AST-shape
+#1178). Covers the five functions in that file which, per its own AST-shape
 trigger rules (that module's own "Trigger categories" docstring section),
 actually contain a regex-, path-resolution-, or string-comparison-shaped call
 reached by this diff: :func:`in_scope`, :func:`_diff_target_path`,
-:func:`parse_added_lines`, and :func:`_waived_lines`.
+:func:`_looks_like_real_header_pair`, :func:`parse_added_lines`, and
+:func:`_waived_lines`.
 
 Self-referential by design: the gate's own source file matches its own
 in-scope pattern (``.github/scripts/gitapex_gate_*.py``), so once its CI
@@ -27,6 +28,12 @@ assumed from a prior trace:
 * :func:`in_scope` -- ``_IN_SCOPE_RE.fullmatch(path)`` (regex) and
   ``name.startswith("test_")`` (string-comparison).
 * :func:`_diff_target_path` -- ``target.startswith("b/")`` (string-comparison).
+* :func:`_looks_like_real_header_pair` -- two ``.startswith(...)`` call sites
+  (string-comparison): ``source.startswith("a/")``, ``target.startswith("b/")``.
+  Its two ``== "/dev/null"`` equality checks are not triggers at all under
+  the gate's own strict rules -- ``_string_comparison_compare_trigger``
+  matches only an ``in``/``not in`` comparator against an inline collection
+  literal, never a bare ``==``.
 * :func:`parse_added_lines` -- six ``.startswith(...)`` call sites
   (string-comparison) plus ``_HUNK_RE.match(line)`` (regex).
 * :func:`_waived_lines` -- ``_WAIVER_RE.search(token.string)`` (regex).
@@ -233,6 +240,67 @@ def test_diff_target_path_strips_b_prefix_and_rejects_everything_else(suffix: st
     assert gate._diff_target_path("/dev/null") is None
     with pytest.raises(gate.ScanError):
         gate._diff_target_path(other)
+
+
+# ---------------------------------------------------------------------------
+# _looks_like_real_header_pair -- string-comparison (startswith, x2) trigger
+# ---------------------------------------------------------------------------
+
+_HEADER_PATH_TEXT = st.text(max_size=60)
+_NOT_A_PREFIXED_TEXT = st.text(max_size=80).filter(lambda s: s != "/dev/null" and not s.startswith("a/"))
+_NOT_B_PREFIXED_TEXT = st.text(max_size=80).filter(lambda s: s != "/dev/null" and not s.startswith("b/"))
+
+
+@_PROPERTIES
+@given(
+    matching_path=_HEADER_PATH_TEXT,
+    rename_source_path=_HEADER_PATH_TEXT,
+    rename_target_path=_HEADER_PATH_TEXT,
+    not_a_prefixed=_NOT_A_PREFIXED_TEXT,
+    not_b_prefixed=_NOT_B_PREFIXED_TEXT,
+)
+def test_looks_like_real_header_pair_recognises_every_real_shape_and_rejects_the_rest(
+    matching_path: str,
+    rename_source_path: str,
+    rename_target_path: str,
+    not_a_prefixed: str,
+    not_b_prefixed: str,
+) -> None:
+    """Model-based for every case. Each input pair is built to have a known
+    answer by construction, not by recomputing `_looks_like_real_header_pair`'s
+    own `a/`/`b/`/`/dev/null` formula:
+
+    * A same-stem `a/<path>`/`b/<path>` pair is exactly the shape a real,
+      unrenamed file's own header pair always has -- True.
+    * `/dev/null` on either side alone (source for a new file, target for a
+      deleted one) is a real header shape too -- True, independent of what
+      the other side names.
+    * A *different*-stem `a/<path1>`/`b/<path2>` pair is still real-shaped --
+      a renamed file's own header pair never has matching stems, and the
+      function's own docstring states plainly it is "deliberately silent on
+      whether the two paths match." True.
+    * `not_a_prefixed`/`not_b_prefixed` are built to structurally avoid both
+      the `/dev/null` and `a/`/`b/`-prefixed shapes on their own side, so
+      pairing either with anything real-shaped on the other side still makes
+      the whole pair False -- ordinary hunk content (a changelog marker, a
+      divider) never has this shape by construction, which is the exact
+      property this function exists to tell apart from a real absorbed
+      header.
+
+    Real defect class this would catch: the `a/`/`b/`-prefix check or the
+    `/dev/null` special case on either side being loosened or dropped -- e.g.
+    a future change that starts requiring matching stems, which would
+    silently stop catching a renamed file's own absorbed header pair, or one
+    that drops the `/dev/null` case, which would silently stop catching an
+    absorbed new-file or deleted-file header.
+    """
+    assert gate._looks_like_real_header_pair(f"--- a/{matching_path}", f"+++ b/{matching_path}") is True
+    assert gate._looks_like_real_header_pair("--- /dev/null", f"+++ b/{matching_path}") is True
+    assert gate._looks_like_real_header_pair(f"--- a/{matching_path}", "+++ /dev/null") is True
+    assert gate._looks_like_real_header_pair(f"--- a/{rename_source_path}", f"+++ b/{rename_target_path}") is True
+    assert gate._looks_like_real_header_pair(f"--- {not_a_prefixed}", f"+++ b/{matching_path}") is False
+    assert gate._looks_like_real_header_pair(f"--- a/{matching_path}", f"+++ {not_b_prefixed}") is False
+    assert gate._looks_like_real_header_pair(f"--- {not_a_prefixed}", f"+++ {not_b_prefixed}") is False
 
 
 # ---------------------------------------------------------------------------
