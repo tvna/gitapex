@@ -676,13 +676,19 @@ def test_a_zero_post_image_hunk_still_protects_its_own_removal_lines() -> None:
 
     Verified live against the first (post-image-count-only) fix: this exact
     diff returned `{'hooks/gitapex_check_payload.py': {1}}` -- the real
-    added line on `gitapex_check_target.py` silently vanished, reattributed
-    to a same-shaped but unrelated file entirely, exactly the "silent pass
-    on a file this gate cannot grade" class issue #682 exists to catch.
-    Tracking the pre-image count too (a removal decrements it) protects
-    this hunk's own removal line via that side even though the post-image
-    side is already at zero, so the added line below is now correctly kept
-    on `gitapex_check_target.py`."""
+    exception-handler gap this diff's own added line represents silently
+    vanished from `gitapex_check_target.py`, reattributed to a same-shaped
+    but unrelated file entirely, exactly the "silent pass on a file this
+    gate cannot grade" class issue #682 exists to catch. Tracking the
+    pre-image count too (a removal decrements it) protects this hunk's own
+    removal line via that side even though the post-image side is already
+    at zero, so the disguised `+++ ` line below is now correctly read as
+    content of that still-open hunk rather than a header -- which leaves it
+    reached with no real `--- ` predecessor once the hunk genuinely does
+    end, so `parse_added_lines` raises `ScanError` (fail-closed) instead of
+    silently misattributing anything. This diff has no real added line to
+    keep at all -- it is a pure-deletion hunk -- so the fix's own visible
+    effect here is the raise, not a correctly-kept line."""
     diff = (
         "diff --git a/hooks/gitapex_check_target.py b/hooks/gitapex_check_target.py\n"
         "--- a/hooks/gitapex_check_target.py\n"
