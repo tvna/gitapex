@@ -216,7 +216,19 @@ such taxonomy applies only `retrospective`, unchanged from before.
      both a commit on `HEAD` cites it AND `.gitapex/ssot.json`
      `gates[].tracking_issue` names it. It prints one JSON object to
      stdout partitioning every input issue number into exactly one of
-     two arrays: `{"unresolved": [...], "resolved": [...]}`.
+     two arrays: `{"unresolved": [...], "resolved": [...]}`. This
+     script's `.gitapex/ssot.json` dependency is a gitapex-specific gate
+     registry, not a portable convention every calling repository has --
+     unlike the CI-opener check above, this step has no repository-
+     agnostic fallback yet: a repository with no such registry (or an
+     equivalent one pointed at via `--ssot-path`) cannot run the
+     two-signal check as written, a known limitation, not silently
+     papered over. The script fails loudly (exit 1, on stderr) rather
+     than silently reporting an empty result when the registry or
+     `git log` itself is unreadable -- treat that exit code as "the
+     check could not run," never as "nothing is unresolved," and
+     escalate rather than silently falling back to a citation-only read
+     of the same repair.
    - **Report, don't implement:** for each issue number in the script's
      own `unresolved` array, hand it to Step 5 below as a
      **"Carried-forward gate"** entry, kept in its own subsection
