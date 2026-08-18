@@ -9,9 +9,13 @@ by tests/test_gitapex_gitignore_worktrees.py covering only one hardcoded pattern
 
 from __future__ import annotations
 
+import pathlib
+
 import gitapex_gate_gitignore_pattern_coverage as gate
 from conftest import FakeStdin as _FakeStdin
 from conftest import make_validation_error
+
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
 def _write_test_file(tmp_path, name, content):
@@ -200,3 +204,25 @@ def test_main_exits_two_when_args_fail_validation(monkeypatch, capsys):
     monkeypatch.setattr(gate, "GitignorePatternCoverageArgs", _raise)
     assert gate.main([]) == 2
     assert "invalid CLI arguments" in capsys.readouterr().err
+
+
+# --- the real repository's own CI workflow -------------------------------
+
+
+def test_the_workflow_uses_merge_base_not_base_sha() -> None:
+    """Drift gate for an invariant this change establishes, per CLAUDE.md
+    section 3, mirroring `skill-rename-lifecycle-gate.yml`'s own identical
+    reasoning: `git merge-base` is resolved between `BASE_SHA` and
+    `HEAD_SHA` rather than diffing against `base.sha` directly, so a
+    `.gitignore` change that landed on the base branch after this PR
+    forked is never misattributed to this PR.
+
+    Checking only for the literal substring `git merge-base` would still
+    pass a workflow that computes `$merge_base` and never actually uses
+    it; the second assertion confirms the computed variable is the one
+    actually fed to the `git diff` invocation this gate depends on.
+    """
+    workflow = (REPO_ROOT / ".github/workflows/gitignore-pattern-coverage-gate.yml").read_text(encoding="utf-8")
+    assert "merge_base=$(git merge-base" in workflow, workflow
+    producer_lines = [line for line in workflow.split("\n") if "diff" in line and '"$merge_base"' in line]
+    assert producer_lines, workflow

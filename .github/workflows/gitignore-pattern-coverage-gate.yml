@@ -30,10 +30,9 @@ jobs:
         with:
           enable-cache: true
 
-      # git merge-base (not base.sha directly), same reasoning as
-      # skill-rename-lifecycle-gate.yml: a .gitignore change that landed on
-      # the base branch after this PR forked must never be misattributed to
-      # this PR.
+      # git merge-base below -- drift gate:
+      # tests/test_gitapex_gate_gitignore_pattern_coverage.py's own
+      # test_the_workflow_uses_merge_base_not_base_sha.
       - name: Determine added .gitignore patterns
         id: diff
         env:
