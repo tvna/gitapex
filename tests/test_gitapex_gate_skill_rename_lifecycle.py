@@ -15,6 +15,7 @@ directory listings, which is unaffected by how much content changed.
 from __future__ import annotations
 
 import pathlib
+import re
 
 import gitapex_gate_skill_rename_lifecycle as gate
 import pytest
@@ -294,7 +295,17 @@ def test_the_workflow_uses_merge_base_not_base_sha() -> None:
     also now requires the exact `"$BASE_SHA" "$HEAD_SHA"` argument pair,
     not just the `merge_base=$(git merge-base` prefix, closing a narrower
     gap the previous version left: a swapped or substituted variable would
-    still have matched.
+    still have matched. The producer-line scan requires the word `git`
+    followed later by the word `diff` or `ls-tree` (a regex, not the bare
+    substrings `diff`/`ls-tree`) -- kept consistent with the sibling
+    `git diff`-based gates in this same PR, whose own real invocation
+    (`git -c core.quotePath=false diff ...`) has a flag between `git` and
+    `diff` that a contiguous-substring requirement would fail to match
+    (caught by running those sibling tests, not just reasoned about). A
+    fourth CodeRabbit round found that the prior bare substring
+    `diff`/`ls-tree` let an unrelated executable line (its own example:
+    `echo 'diff "$merge_base"'`) satisfy the check; that decoy carries no
+    `git` token at all, so the word-pair regex excludes it correctly.
     """
     workflow_path = REPO_ROOT / ".github/workflows/skill-rename-lifecycle-gate.yml"
     parsed = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
@@ -303,6 +314,8 @@ def test_the_workflow_uses_merge_base_not_base_sha() -> None:
     )
     assert 'merge_base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")' in run_text, run_text
     producer_lines = [
-        line for line in run_text.split("\n") if ("diff" in line or "ls-tree" in line) and '"$merge_base"' in line
+        line
+        for line in run_text.split("\n")
+        if re.search(r"\bgit\b.*(\bdiff\b|\bls-tree\b)", line) and '"$merge_base"' in line
     ]
     assert producer_lines, run_text

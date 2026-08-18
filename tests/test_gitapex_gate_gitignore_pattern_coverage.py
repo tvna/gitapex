@@ -10,6 +10,7 @@ by tests/test_gitapex_gitignore_worktrees.py covering only one hardcoded pattern
 from __future__ import annotations
 
 import pathlib
+import re
 
 import gitapex_gate_gitignore_pattern_coverage as gate
 import yaml
@@ -236,7 +237,18 @@ def test_the_workflow_uses_merge_base_not_base_sha() -> None:
     also now requires the exact `"$BASE_SHA" "$HEAD_SHA"` argument pair,
     not just the `merge_base=$(git merge-base` prefix, closing a narrower
     gap the previous version left: a swapped or substituted variable would
-    still have matched.
+    still have matched. The producer-line scan requires the word `git`
+    followed later by the word `diff` (a regex, not the contiguous
+    substring `git diff`) -- the sibling gate-invoking workflows in this
+    same PR use `git -c core.quotePath=false diff ...`, with a flag
+    between the two words, which a contiguous-substring requirement would
+    fail to match (caught by running the sibling tests, not just reasoned
+    about; kept consistent here even though this file's own invocation
+    has no such flag). A fourth CodeRabbit round found that the prior
+    bare substring `diff` let an unrelated executable line (its own
+    example: `echo 'diff "$merge_base"'`) satisfy the check; that decoy
+    carries no `git` token at all, so the word-pair regex excludes it
+    correctly.
     """
     workflow_path = REPO_ROOT / ".github/workflows/gitignore-pattern-coverage-gate.yml"
     parsed = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
@@ -244,5 +256,7 @@ def test_the_workflow_uses_merge_base_not_base_sha() -> None:
         step["run"] for job in parsed["jobs"].values() for step in job.get("steps", []) if "run" in step
     )
     assert 'merge_base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")' in run_text, run_text
-    producer_lines = [line for line in run_text.split("\n") if "diff" in line and '"$merge_base"' in line]
+    producer_lines = [
+        line for line in run_text.split("\n") if re.search(r"\bgit\b.*\bdiff\b", line) and '"$merge_base"' in line
+    ]
     assert producer_lines, run_text
