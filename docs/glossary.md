@@ -257,12 +257,12 @@ file -- `CLAUDE.md`, `AGENTS.md`, or an equivalent auto-loaded mechanism
 -- regardless of whether that dispatch is otherwise fresh or carries the
 calling conversation's own history. Distinct from `Isolation-for-neutrality`
 (above): the two properties are independent, and this repository's own
-harness has been observed to grant the former without the latter -- issue
-#475 found this for an ordinary dispatch, and a later session's live test
-(recorded in issue #1199's own Facts) found it held even when the dispatch
-was given a different backing model (`fable`), so a dispatch with no
-conversation history can still inherit the repository's own `CLAUDE.md` in
-full.
+harness has been observed to grant the former without the latter --
+issue #475 found this for an ordinary dispatch, and a later session's
+live test (recorded in issue #1199's own Facts) found it held even when
+the dispatch was given a different backing model (`fable`), so a
+dispatch with no conversation history can still inherit the repository's
+own `CLAUDE.md` in full.
 
 This exact string already appears in four places before this entry, but
 precision matters about what kind of usage that is: all four are
