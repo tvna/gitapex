@@ -553,6 +553,25 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
     one while `in_hunk` is still true can only mean the previous hunk's
     declared counts outran its real body -- raised as `ScanError` rather
     than left to keep misattributing.
+
+    Known gap, tracked separately rather than fixed here: issue #1200. The
+    boundary checks above only catch an *over*-declared count. A header
+    whose declared counts are honestly, exactly consumed by a real,
+    legitimate body -- not over- or under-declared relative to what its
+    own author intended -- correctly clears `in_hunk`, so content that
+    follows is read as a new file transition. If a hand-fed or foreign
+    patch (the same `--diff` exposure every other gap here requires)
+    disguises that following content as a `--- `/`+++ ` header pair
+    naming a real, existing in-scope path, a genuinely-added line later
+    in the diff is silently attributed to that path instead of its own.
+    This is the mirror image of the over-declared case, and the boundary-
+    check technique above cannot close it: once a hunk's declared counts
+    are honestly satisfied, there is no further structural signal left to
+    tell a genuine file transition apart from disguised content an
+    under-declared header failed to account for. Closing it needs a
+    structurally different mechanism (e.g. a lookahead confirming a
+    candidate `+++ ` header is genuinely followed by a `@@` line, or a
+    two-pass parse), not an incremental extension of this one.
     """
     added: dict[str, set[int]] = {}
     path: str | None = None
