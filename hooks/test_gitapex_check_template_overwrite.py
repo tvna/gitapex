@@ -257,3 +257,33 @@ def test_denied_when_tool_name_is_not_a_string(tool_name: object, existing_templ
     assert result.returncode == 2, f"expected deny (exit 2) for tool_name={tool_name!r}, got {result.returncode}"
     parsed = json.loads(result.stderr)
     assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+@pytest.mark.parametrize(
+    "file_path_value",
+    [[".github/PULL_REQUEST_TEMPLATE.md"], {"path": ".github/PULL_REQUEST_TEMPLATE.md"}, 5, True],
+    ids=["array", "object", "number", "bool"],
+)
+def test_denied_when_tool_input_file_path_is_not_a_string(file_path_value: object) -> None:
+    """Found by code review (PR #1213, round 4): jq -r never errors on a
+    non-string `.tool_input.file_path` -- for an array/object it pretty-
+    prints the JSON form across multiple lines, which breaks both
+    `is_template_path()`'s basename matching and `[ -f "$file_path" ]`,
+    silently letting an overwrite of a real, existing template file
+    through (exit 0) instead of failing closed. Live-confirmed before
+    this guard existed: an array-wrapped file_path (wrapping the real
+    `.github/PULL_REQUEST_TEMPLATE.md`) let that overwrite straight
+    through. The guard denies on type alone, before any path-matching
+    logic runs, so no on-disk fixture is needed to exercise it here."""
+    payload = json.dumps({"tool_name": "Write", "tool_input": {"file_path": file_path_value}})
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        input=payload,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        cwd=str(REPO_ROOT),
+    )
+    assert result.returncode == 2, f"expected deny (exit 2) for file_path={file_path_value!r}, got {result.returncode}"
+    parsed = json.loads(result.stderr)
+    assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"

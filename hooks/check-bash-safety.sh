@@ -112,6 +112,20 @@ if ! printf '%s' "$input" | jq -e '(.tool_input == null) or (.tool_input | type 
   deny "Blocked by hooks/check-bash-safety.sh: tool_input in the payload is not a JSON object. Failing closed."
 fi
 
+# Issue #1208 (round 4): a well-formed, object-shaped tool_input can still
+# carry `.tool_input.command` as a JSON array or object (e.g.
+# `["gh","pr","merge","1"]`) instead of a string. `jq -r` never errors on
+# this -- it pretty-prints the value across multiple lines, which splits
+# the dangerous substring across JSON punctuation (quotes, commas,
+# brackets) and breaks every `[[:space:]]`-anchored danger-pattern regex
+# below, silently letting a genuinely dangerous command through with
+# exit 0 instead of exit 2 -- found by code review (PR #1213),
+# live-confirmed against `gh pr merge`, `pip install`, and `gh api -X
+# POST` payloads wrapped as arrays. Must deny before extraction.
+if ! printf '%s' "$input" | jq -e '(.tool_input.command == null) or (.tool_input.command | type == "string")' >/dev/null 2>&1; then
+  deny "Blocked by hooks/check-bash-safety.sh: tool_input.command in the payload is not a string. Failing closed."
+fi
+
 command=$(printf '%s' "$input" | jq -r '.tool_input.command // empty')
 
 if [ -z "$command" ]; then

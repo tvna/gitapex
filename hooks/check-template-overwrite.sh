@@ -83,6 +83,20 @@ if ! printf '%s' "$input" | jq -e '(.tool_input == null) or (.tool_input | type 
   deny "Blocked by hooks/check-template-overwrite.sh: tool_input in the payload is not a JSON object. Failing closed."
 fi
 
+# Issue #1208 (round 4): a well-formed, object-shaped tool_input can still
+# carry `.tool_input.file_path` as a JSON array (e.g.
+# `[".github/PULL_REQUEST_TEMPLATE.md"]`) instead of a string. `jq -r`
+# never errors on this -- it pretty-prints the value across multiple
+# lines, which breaks both `is_template_path()`'s basename matching and
+# `[ -f "$file_path" ]`, silently letting an overwrite of a real,
+# existing template file through with exit 0 instead of exit 2 -- found
+# by code review (PR #1213), live-confirmed against the actual
+# `.github/PULL_REQUEST_TEMPLATE.md` in this repository. Must deny
+# before extraction.
+if ! printf '%s' "$input" | jq -e '(.tool_input.file_path == null) or (.tool_input.file_path | type == "string")' >/dev/null 2>&1; then
+  deny "Blocked by hooks/check-template-overwrite.sh: tool_input.file_path in the payload is not a string. Failing closed."
+fi
+
 file_path=$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty')
 
 if [ -z "$file_path" ]; then

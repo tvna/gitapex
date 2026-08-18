@@ -330,6 +330,38 @@ def test_denied_when_tool_name_is_not_a_string(tool_name: object) -> None:
     assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"
 
 
+@pytest.mark.parametrize(
+    "command",
+    [["gh", "pr", "merge", "1"], {"argv": ["gh", "pr", "merge", "1"]}, 5, True],
+    ids=["array", "object", "number", "bool"],
+)
+def test_denied_when_tool_input_command_is_not_a_string(command: object) -> None:
+    """Found by code review (PR #1213, round 4): jq -r never errors on a
+    non-string `.tool_input.command` -- for an array/object it pretty-
+    prints the JSON form across multiple lines, which splits a dangerous
+    substring across JSON punctuation (quotes, commas, brackets) and
+    breaks every `[[:space:]]`-anchored danger-pattern regex below,
+    silently letting a genuinely dangerous command through (exit 0)
+    instead of failing closed. Live-confirmed before this guard existed:
+    an array-wrapped `["gh","pr","merge","1"]` command let a real merge
+    call straight through. Must now deny."""
+    payload = json.dumps({"tool_name": "Bash", "tool_input": {"command": command}})
+    env = dict(os.environ)
+    env.pop("CLAUDE_PROJECT_DIR", None)
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        input=payload,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env=env,
+        cwd=str(REPO_ROOT),
+    )
+    assert result.returncode == 2, f"expected deny (exit 2) for command={command!r}, got {result.returncode}"
+    parsed = json.loads(result.stderr)
+    assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
 def test_denied_on_valid_json_non_object_stdin() -> None:
     """Valid JSON that isn't an object at the top level (e.g. a bare array)
     would otherwise crash the first field-extraction jq call the same way.
