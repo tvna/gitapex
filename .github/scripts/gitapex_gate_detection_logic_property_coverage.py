@@ -413,7 +413,7 @@ _TRIGGER_LABEL: dict[str, str] = {
 # marker with no reason is not a waiver and is not honoured.
 _WAIVER_RE = re.compile(r"#\s*detection-logic-property-coverage\s*:\s*WAIVED\s*:\s*\S.*", re.IGNORECASE)
 
-_HUNK_RE = re.compile(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
+_HUNK_RE = re.compile(r"@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 
 
 class ScanError(Exception):
@@ -503,31 +503,78 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
     <file>` accepts a patch from anywhere, and a fail-closed gate does not
     get to assume its input came from the wiring.
 
-    `in_hunk` is bounded by the hunk's own declared post-image length (the
-    optional `,<count>` `_HUNK_RE` captures, defaulting to 1 when omitted --
-    a bare `@@ -N +M @@` means exactly one post-image line), not only by the
-    next `diff --git ` line. Without that bound, a patch carrying no
-    `diff --git ` header at all between files (real `git diff` output
-    always has one; a hand-fed or foreign patch, the same `--diff <file>`
-    exposure as the header case above, need not) would leave `in_hunk` True
-    straight through a second file's own `--- `/`+++ ` lines: `--- ` reads
-    as a harmless removal-shaped no-op, but `+++ ` then reads as *content*
-    (its own leading `+`) and gets added to the *first* file's `path` at a
-    stale `lineno` -- and because that `+++ ` line was never recognised as
-    a header, `path` never advances to the second file at all, so its own
-    real added lines misattribute to the first file's path too. Bounding
-    `remaining` to the declared length closes both misreadings the same
-    way: a hunk's own line-content region ends when its own declared count
-    is consumed, not only when another file's header announces itself.
+    `in_hunk` is bounded by the hunk's own declared line counts, not only by
+    the next `diff --git ` line. Without that bound, a patch carrying no
+    `diff --git ` header between two files' own hunks would leave `in_hunk`
+    True straight through the second file's `--- `/`+++ ` lines: `--- `
+    reads as a harmless removal-shaped no-op, but `+++ ` then reads as
+    *content* (its own leading `+`) and gets added to the *first* file's
+    `path` at a stale `lineno` -- and because that `+++ ` line was never
+    recognised as a header, `path` never advances to the second file at
+    all, so its own real added lines misattribute to the first file's path
+    too.
+
+    Both the pre-image and post-image counts are tracked (`old_remaining`,
+    `new_remaining`; each `,<count>` `_HUNK_RE` captures, defaulting to 1
+    when omitted, per unified-diff shorthand), not the post-image count
+    alone -- issue #1184's fix for this same gap in
+    `gitapex_gate_exception_handler_gaps.py`'s own copy of this function
+    used post-image count alone at first, which regressed a real,
+    CI-reachable case ported here directly rather than rediscovered: `git
+    diff -U0` (this gate's own wired invocation) emits a pure-deletion hunk
+    as `@@ -a,b +c,0 @@` (zero post-image lines), and a post-image-only
+    bound reads `remaining` as already exhausted on the `@@` line itself --
+    before the hunk's own `b` removal lines are consumed -- so the very
+    next line, itself the hunk's own removal content, is read as a real
+    header instead. `old_remaining` and `new_remaining` are each
+    decremented only by the line kind that consumes that side (a context
+    line consumes both; a removal consumes only the pre-image side; an
+    addition consumes only the post-image side), and `in_hunk` clears only
+    once *both* reach zero -- so a zero-post-image hunk still correctly
+    protects its own removal lines via the pre-image side.
+
+    Issue #1193: the declared counts above are trusted, not verified -- the
+    mirror-image case of the regression just described. A hunk header that
+    *over-declares* either count -- claims more pre- or post-image lines
+    than its own body actually has -- leaves that side's own counter
+    (`old_remaining` or `new_remaining`) above zero once the real body is
+    exhausted, so `in_hunk` stays True straight through the next boundary
+    anyway, reproducing the identical misattribution the dual-counter bound
+    closes for the missing-`diff --git `-header case, just triggered by an
+    inaccurate count instead of a missing separator. There is no way to
+    tell, from a line's own prefix alone, whether it is real hunk content
+    or a misplaced header once `in_hunk` is wrongly still true -- that
+    ambiguity is exactly what the bound is for -- so this is instead caught
+    at the three points a hunk's content region unambiguously ends
+    regardless of `in_hunk`'s own state: a new `diff --git ` line, a new
+    `@@` line, and end of input. Each already carries no `not in_hunk`
+    guard (a real content line can never begin with either literally,
+    since it always carries its own `+`/`-`/` ` prefix first), so reaching
+    one while `in_hunk` is still true can only mean the previous hunk's
+    declared counts outran its real body -- raised as `ScanError` rather
+    than left to keep misattributing.
     """
     added: dict[str, set[int]] = {}
     path: str | None = None
     lineno = 0
     in_hunk = False
-    remaining = 0
+    old_remaining = 0
+    new_remaining = 0
     saw_source_header = False
+
+    def _reject_if_hunk_incomplete(boundary: str) -> None:
+        if in_hunk:
+            raise ScanError(
+                f"hunk header for {path!r} declared more pre-/post-image line(s) than its body "
+                f"actually had ({old_remaining} pre-image, {new_remaining} post-image line(s) "
+                f"still unconsumed) before {boundary}. Real `git diff` output always emits "
+                "accurate counts; a hand-fed or foreign patch's inaccurate ones would otherwise "
+                "leak this hunk's state into whatever follows it."
+            )
+
     for line in diff_text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
         if line.startswith("diff --git "):
+            _reject_if_hunk_incomplete(f"the next `diff --git ` line: {line!r}")
             path = None
             in_hunk = False
             saw_source_header = False
@@ -546,28 +593,38 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
             saw_source_header = False
             continue
         if line.startswith("@@"):
+            _reject_if_hunk_incomplete(f"the next hunk header: {line!r}")
             match = _HUNK_RE.match(line)
             if not match:
                 raise ScanError(f"unparseable hunk header: {line!r}")
-            lineno = int(match.group(1))
-            remaining = 1 if match.group(2) is None else int(match.group(2))
-            in_hunk = remaining > 0
-            continue
-        if path is None:
+            old_remaining = 1 if match.group(1) is None else int(match.group(1))
+            lineno = int(match.group(2))
+            new_remaining = 1 if match.group(3) is None else int(match.group(3))
+            in_hunk = old_remaining > 0 or new_remaining > 0
             continue
         if line.startswith("+"):
-            added.setdefault(path, set()).add(lineno)
+            if path is not None:
+                added.setdefault(path, set()).add(lineno)
             lineno += 1
-            remaining -= 1
+            new_remaining -= 1
         elif line.startswith(" "):
             lineno += 1
-            remaining -= 1
-        # A `-` removal consumes no post-image line, and `\ No newline at
-        # end of file` is a marker, not content. Both advance nothing --
-        # including `remaining`, which only the post-image lines above count
-        # down.
-        if remaining <= 0:
+            old_remaining -= 1
+            new_remaining -= 1
+        elif line.startswith("-"):
+            old_remaining -= 1
+        # `\ No newline at end of file` is a marker, not content, and
+        # advances neither counter. `path` is None for a deleted file
+        # (`+++ /dev/null`, see `_diff_target_path`) -- the counters and
+        # `in_hunk` still have to be bounded there too, only the recording
+        # into `added` is skipped, or a deletion hunk's own removal lines
+        # would never be consumed and `in_hunk` would stay True straight
+        # through whatever follows, reopening the missing-`diff --git `
+        # gap for exactly the one case this docstring otherwise says is
+        # now bounded.
+        if old_remaining <= 0 and new_remaining <= 0:
             in_hunk = False
+    _reject_if_hunk_incomplete("the diff ended")
     return added
 
 

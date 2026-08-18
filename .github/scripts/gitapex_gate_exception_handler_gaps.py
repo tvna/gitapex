@@ -397,6 +397,23 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
     hunk from grading, which is a fail-open in the same family this gate
     exists to catch. `@@`, `diff --git ` and `index ` need no such guard:
     a hunk line always has its prefix, so none of them can begin a hunk line.
+
+    Known gap, tracked separately rather than fixed here: `in_hunk` above is
+    a plain flag, reset only by a `diff --git ` line, never bounded by a
+    hunk's own declared post-image length the way
+    `gitapex_gate_detection_logic_property_coverage.py`'s own otherwise-
+    identical `parse_added_lines` now is. A patch missing a `diff --git `
+    separator between files (issue #1184's own gap 2) or carrying a hunk
+    header that over-declares its post-image length (issue #1193, found
+    against the sibling's own already-bounded copy) both leave `in_hunk`
+    True straight through the next file's own `--- `/`+++ ` lines here,
+    reproducing the sibling's pre-fix misattribution -- confirmed live,
+    identically, against this file's own `parse_added_lines`. #1193's own
+    declared-vs-actual validation cannot be ported here in isolation: it
+    is built directly on top of the declared-length bound itself, which
+    this copy does not yet have (that port is #1184's own still-open gap
+    2, not this file's #1193 fix). Both gaps stay open here until #1184's
+    own port lands.
     """
     added: dict[str, set[int]] = {}
     path: str | None = None

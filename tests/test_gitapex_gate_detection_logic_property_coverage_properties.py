@@ -264,11 +264,24 @@ def _expected_added_for_hunk(start: int, kinds: list[str]) -> set[int]:
 
 
 def _file_diff_text(path: str, start: int, kinds: list[str]) -> str:
+    # Explicit, accurate pre- and post-image counts -- not the bare/
+    # implicit-1 shorthand this helper used before issue #1193 -- since
+    # `kinds` can contain any mix of "+"/" "/"-" lines, or none at all.
+    # `parse_added_lines` now tracks both sides (issue #1193, porting
+    # issue #1184's own dual-counter fix) and rejects a hunk whose header's
+    # declared count on either side does not match its own real body, so a
+    # still-bare or post-image-only-accurate header here would make this
+    # generator produce a malformed diff whenever `kinds` doesn't happen to
+    # carry exactly one pre-image (" "/"-") or post-image ("+"/" ") line,
+    # which `parse_added_lines` would then correctly raise `ScanError` on --
+    # not the counting behavior this property means to exercise.
+    pre_image_count = sum(1 for kind in kinds if kind != "+")
+    post_image_count = sum(1 for kind in kinds if kind != "-")
     lines = [
         f"diff --git a/{path} b/{path}",
         f"--- a/{path}",
         f"+++ b/{path}",
-        f"@@ -1 +{start} @@",
+        f"@@ -1,{pre_image_count} +{start},{post_image_count} @@",
         *kinds,
     ]
     return "\n".join(lines)
