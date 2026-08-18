@@ -140,6 +140,34 @@ def assert_workflow_has_no_trigger_path_filter(workflow_name: str) -> None:
     assert not filters, f"{workflow_name}'s trigger carries {filters}: {trigger}"
 
 
+_MERGE_BASE_CALL = 'merge_base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")'
+
+
+def _strip_shell_comments(script: str) -> str:
+    """`script` with its `#` comments removed.
+
+    A `#` opens a comment only at the start of a word and only outside
+    quotes. That is POSIX's own rule rather than a simplification of it, and
+    the distinction is load-bearing here: one of the real producer lines
+    this is run over is `git ls-tree ... | sed -E 's#^skills/##' | sort`,
+    whose three `#` characters are all data.
+    """
+    stripped = []
+    for line in script.split("\n"):
+        quote = ""
+        cut = len(line)
+        for index, char in enumerate(line):
+            if quote:
+                quote = "" if char == quote else quote
+            elif char in "\"'":
+                quote = char
+            elif char == "#" and (index == 0 or line[index - 1].isspace()):
+                cut = index
+                break
+        stripped.append(line[:cut])
+    return "\n".join(stripped)
+
+
 def assert_workflow_feeds_merge_base_to(workflow_name: str, *producer_commands: str) -> None:
     """Assert `.github/workflows/<workflow_name>` both computes `$merge_base`
     from the exact `"$BASE_SHA" "$HEAD_SHA"` pair and feeds it to a line
@@ -155,15 +183,30 @@ def assert_workflow_feeds_merge_base_to(workflow_name: str, *producer_commands: 
     * the exact `"$BASE_SHA" "$HEAD_SHA"` argument pair is required, so a
       swapped or substituted variable no longer matches;
     * both assertions are scoped to the parsed `jobs.*.steps[].run` content
-      rather than the whole file as text, so no comment and no non-comment
-      YAML value outside a `run:` block (a step `name:`, for one) can satisfy
-      them while the real invariant is gone from the executable content;
+      rather than the whole file as text, so no YAML comment and no
+      non-comment YAML value outside a `run:` block (a step `name:`, for
+      one) can satisfy them while the real invariant is gone from the
+      executable content;
     * the producer line must carry the word `git` followed later by one of
       `producer_commands` as a word, not merely that command as a bare
       substring -- an unrelated executable line (`echo 'diff "$merge_base"'`)
       would otherwise satisfy the check. The two words are matched with `.*`
       between them rather than contiguously, because the real invocations
-      read `git -c core.quotePath=false diff ...`, with a flag in between.
+      read `git -c core.quotePath=false diff ...`, with a flag in between;
+    * that `run:` content then has its *shell* comments stripped, which
+      scoping to parsed `run:` blocks does not do: a `#` comment written
+      inside a step's own script survives parsing as ordinary script text.
+      Restating the removed logic in one -- a "this used to read ..." note
+      left above the replacement -- satisfied both assertions while the
+      executable command diffed `"$BASE_SHA"` directly. Verified live;
+    * no producer line may name `"$BASE_SHA"` at all, which is the half of
+      "merge-base, not base.sha" that went unasserted while only the
+      positive half was checked. This holds independently of how any
+      comment is written.
+
+    Both assertions must also be satisfied by one and the same step, not by
+    two different ones: `$merge_base` is a plain shell variable, so a
+    producer in some later step could never have read it anyway.
 
     `on:` is deliberately never parsed here -- PyYAML's default YAML-1.1
     resolver reads the bare `on` key as boolean `True`, not the string
@@ -171,17 +214,18 @@ def assert_workflow_feeds_merge_base_to(workflow_name: str, *producer_commands: 
     needing that key. Each caller's own docstring states why its workflow
     must not diff against `base.sha` directly.
     """
-    workflow_path = REPO_ROOT / ".github" / "workflows" / workflow_name
-    parsed = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
-    run_text = "\n".join(
-        step["run"] for job in parsed["jobs"].values() for step in job.get("steps", []) if "run" in step
-    )
-    assert 'merge_base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")' in run_text, run_text
     producer_re = re.compile(
         r"\bgit\b.*(" + "|".join(rf"\b{re.escape(command)}\b" for command in producer_commands) + ")"
     )
-    producer_lines = [line for line in run_text.split("\n") if producer_re.search(line) and '"$merge_base"' in line]
-    assert producer_lines, run_text
+    scripts = [_strip_shell_comments(step["run"]) for step in _workflow_steps(workflow_name) if "run" in step]
+    fed_merge_base = False
+    for script in scripts:
+        producers = [line for line in script.split("\n") if producer_re.search(line)]
+        assert not [line for line in producers if '"$BASE_SHA"' in line], producers
+        fed_merge_base = fed_merge_base or (
+            _MERGE_BASE_CALL in script and any('"$merge_base"' in line for line in producers)
+        )
+    assert fed_merge_base, scripts
 
 
 # The one `ref:` value that makes a checked-out tree *be* the diff's
