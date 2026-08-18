@@ -1658,18 +1658,70 @@ def test_the_workflow_checks_out_the_head_sha_with_full_history() -> None:
     such a file grades clean. There is no exit code and no message when that
     happens, so nothing else in this suite would notice.
 
-    `fetch-depth: 0` is load-bearing *for* that pin, not decoration. A 40-hex
-    `ref` becomes `settings.commit` with `settings.ref` empty
+    `fetch-depth: '0'` is load-bearing *for* that pin, not decoration. A
+    40-hex `ref` becomes `settings.commit` with `settings.ref` empty
     (actions/checkout `input-helper.ts`), and only the `fetchDepth <= 0`
     branch of `git-source-provider.ts` fetches
     `+refs/heads/*:refs/remotes/origin/*`; the shallow branch would fetch the
     bare commit alone, leaving `$BASE_SHA` absent from the object store and
     the `git merge-base` step failing. The two settings are therefore one
     invariant and are asserted together.
+
+    The quoted-string assertion below (not the bare `fetch-depth: 0` this
+    test asserted before this change) is deliberate, not cosmetic: the
+    workflow's own YAML always quoted the value (`fetch-depth: '0'`) --
+    the previous bare-`0` assertion only ever passed because a since-removed
+    comment line happened to contain that exact unquoted substring in prose
+    ("fetch-depth: 0 so the merge-base below resolves"), never because the
+    real config value matched. Shrinking that comment away (this same PR)
+    surfaced the gap; fixed here rather than carried forward.
     """
     workflow = (REPO_ROOT / ".github/workflows/exception-handler-gap-gate.yml").read_text(encoding="utf-8")
     assert "ref: ${{ github.event.pull_request.head.sha }}" in workflow, workflow
-    assert "fetch-depth: 0" in workflow, workflow
+    assert "fetch-depth: '0'" in workflow, workflow
+
+
+def test_the_workflow_has_no_paths_filter() -> None:
+    """Drift gate for an invariant this change establishes, per CLAUDE.md
+    section 3: a `paths:` filter under `pull_request:` is not merely absent
+    by omission here -- it is deliberately never added, following the same
+    rationale `lint.yml` and `plugin-root-brace-notation-gate.yml` state for
+    themselves. GitHub distinguishes a job that runs and reports `skipped`
+    (which does not block a required check) from a workflow that never
+    fires for a given PR at all (which leaves a required check `Pending`
+    forever, with no in-repo fix). This gate is intended for promotion to a
+    required status check, so a `paths:` filter would recreate that exact
+    stuck-Pending failure mode for any PR that happens not to touch a
+    matched path. The scan itself still only grades files a diff actually
+    adds lines to, so running the job unconditionally costs a few seconds,
+    not a full-repo sweep.
+
+    The trigger block is isolated between the `on:` and `permissions:`
+    markers with comment lines stripped, rather than checked against the
+    whole leading file text -- this file's own pointer comment for this
+    very invariant contains the literal substring `` `paths:` `` in prose,
+    which a naive whole-text check would misread as the trigger itself
+    carrying a filter.
+    """
+    workflow = (REPO_ROOT / ".github/workflows/exception-handler-gap-gate.yml").read_text(encoding="utf-8")
+    trigger_block = workflow.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
+    trigger_lines = [line for line in trigger_block.split("\n") if not line.strip().startswith("#")]
+    assert "paths:" not in "\n".join(trigger_lines), trigger_block
+
+
+def test_the_workflow_uses_merge_base_not_base_sha() -> None:
+    """Drift gate for an invariant this change establishes, per CLAUDE.md
+    section 3, mirroring `gitignore-pattern-coverage-gate.yml`'s and
+    `skill-rename-lifecycle-gate.yml`'s own identical reasoning: `git
+    merge-base` is resolved between `BASE_SHA` and `HEAD_SHA` rather than
+    diffing against `base.sha` directly, so a change that landed on the
+    base branch after this PR forked is never misattributed to this PR.
+    Diffing against `base.sha` directly instead would silently re-attribute
+    someone else's already-merged change to this PR's own diff, with no
+    exit code or message when that happens.
+    """
+    workflow = (REPO_ROOT / ".github/workflows/exception-handler-gap-gate.yml").read_text(encoding="utf-8")
+    assert "git merge-base" in workflow, workflow
 
 
 def test_this_gate_grades_itself_clean() -> None:
