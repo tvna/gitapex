@@ -35,6 +35,12 @@ import subprocess
 
 import gitapex_gate_exception_handler_gaps as gate
 import pytest
+from conftest import (
+    assert_workflow_checkout_pins_head_sha_with_full_history,
+    assert_workflow_diff_carries_flags,
+    assert_workflow_feeds_merge_base_to,
+    assert_workflow_has_no_trigger_path_filter,
+)
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
@@ -1640,10 +1646,7 @@ def test_the_workflow_passes_the_two_flags_the_gate_depends_on() -> None:
     otherwise arrives C-quoted, which the gate refuses to resolve (exit 2) --
     failing the job over a file that need not even be in scope.
     """
-    workflow = (REPO_ROOT / ".github/workflows/exception-handler-gap-gate.yml").read_text(encoding="utf-8")
-    invocation = next(line for line in workflow.split("\n") if "git" in line and "diff -U0" in line)
-    assert "--no-renames" in invocation, invocation
-    assert "core.quotePath=false" in invocation, invocation
+    assert_workflow_diff_carries_flags("exception-handler-gap-gate.yml", "--no-renames", "core.quotePath=false")
 
 
 def test_the_workflow_checks_out_the_head_sha_with_full_history() -> None:
@@ -1658,18 +1661,66 @@ def test_the_workflow_checks_out_the_head_sha_with_full_history() -> None:
     such a file grades clean. There is no exit code and no message when that
     happens, so nothing else in this suite would notice.
 
-    `fetch-depth: 0` is load-bearing *for* that pin, not decoration. A 40-hex
-    `ref` becomes `settings.commit` with `settings.ref` empty
+    `fetch-depth: '0'` is load-bearing *for* that pin, not decoration. A
+    40-hex `ref` becomes `settings.commit` with `settings.ref` empty
     (actions/checkout `input-helper.ts`), and only the `fetchDepth <= 0`
     branch of `git-source-provider.ts` fetches
     `+refs/heads/*:refs/remotes/origin/*`; the shallow branch would fetch the
     bare commit alone, leaving `$BASE_SHA` absent from the object store and
     the `git merge-base` step failing. The two settings are therefore one
     invariant and are asserted together.
+
+    Both settings have now been read off this workflow's parsed `with:`
+    mapping twice over, because a whole-file text check for either kept
+    matching prose instead of config: first the bare `fetch-depth: 0` form,
+    which only ever passed off a comment line reading "fetch-depth: 0 so the
+    merge-base below resolves"; then the quoted `fetch-depth: '0'` form that
+    replaced it, which only ever passed off the shrunk pointer comment this
+    same PR introduced above the step. `conftest`'s own docstring carries
+    the defeat case that closed the second one.
     """
-    workflow = (REPO_ROOT / ".github/workflows/exception-handler-gap-gate.yml").read_text(encoding="utf-8")
-    assert "ref: ${{ github.event.pull_request.head.sha }}" in workflow, workflow
-    assert "fetch-depth: 0" in workflow, workflow
+    assert_workflow_checkout_pins_head_sha_with_full_history("exception-handler-gap-gate.yml")
+
+
+def test_the_workflow_has_no_paths_filter() -> None:
+    """Drift gate for an invariant this change establishes, per CLAUDE.md
+    section 3: a `paths:` filter under `pull_request:` is not merely absent
+    by omission here -- it is deliberately never added, following the same
+    rationale `lint.yml` and `plugin-root-brace-notation-gate.yml` state for
+    themselves. GitHub distinguishes a job that runs and reports `skipped`
+    (which does not block a required check) from a workflow that never
+    fires for a given PR at all (which leaves a required check `Pending`
+    forever, with no in-repo fix). This gate is intended for promotion to a
+    required status check, so a `paths:` filter would recreate that exact
+    stuck-Pending failure mode for any PR that happens not to touch a
+    matched path. The scan itself still only grades files a diff actually
+    adds lines to, so running the job unconditionally costs a few seconds,
+    not a full-repo sweep.
+
+    `conftest.assert_workflow_has_no_trigger_path_filter`'s own docstring
+    carries how the trigger keys are read and why `paths-ignore:` is
+    rejected too.
+    """
+    assert_workflow_has_no_trigger_path_filter("exception-handler-gap-gate.yml")
+
+
+def test_the_workflow_uses_merge_base_not_base_sha() -> None:
+    """Drift gate for an invariant this change establishes, per CLAUDE.md
+    section 3, mirroring `gitignore-pattern-coverage-gate.yml`'s and
+    `skill-rename-lifecycle-gate.yml`'s own identical reasoning: `git
+    merge-base` is resolved between `BASE_SHA` and `HEAD_SHA` rather than
+    diffing against `base.sha` directly, so a change that landed on the
+    base branch after this PR forked is never misattributed to this PR.
+    Diffing against `base.sha` directly instead would silently re-attribute
+    someone else's already-merged change to this PR's own diff, with no
+    exit code or message when that happens.
+
+    `conftest.assert_workflow_feeds_merge_base_to`'s own docstring carries
+    the defeat cases it closes, kept there rather than re-enumerated here
+    so this comment cannot go stale the next time that list grows.
+    `"diff"` is the producer command this gate depends on.
+    """
+    assert_workflow_feeds_merge_base_to("exception-handler-gap-gate.yml", "diff")
 
 
 def test_this_gate_grades_itself_clean() -> None:

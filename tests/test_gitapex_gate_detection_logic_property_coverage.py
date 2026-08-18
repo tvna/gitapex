@@ -20,6 +20,12 @@ import pathlib
 import gitapex_gate_detection_logic_property_coverage as gate
 import pytest
 from conftest import FakeStdin as _FakeStdin
+from conftest import (
+    assert_workflow_checkout_pins_head_sha_with_full_history,
+    assert_workflow_diff_carries_flags,
+    assert_workflow_feeds_merge_base_to,
+    assert_workflow_has_no_trigger_path_filter,
+)
 
 # A plain hooks/gitapex_check_*.py path -- in scope by _IN_SCOPE_RE's own
 # `hooks/gitapex_check_[^/]+\.py` alternative -- used as the default fixture
@@ -930,12 +936,9 @@ def test_the_workflow_passes_the_two_flags_the_gate_depends_on() -> None:
     diff otherwise arrives C-quoted, which `_diff_target_path` refuses to
     resolve (exit 2) -- failing the job over a file that need not even be
     in scope."""
-    workflow = (gate.REPO_ROOT / ".github/workflows/detection-logic-property-coverage-gate.yml").read_text(
-        encoding="utf-8"
+    assert_workflow_diff_carries_flags(
+        "detection-logic-property-coverage-gate.yml", "--no-renames", "core.quotePath=false"
     )
-    invocation = next(line for line in workflow.split("\n") if "git" in line and "diff -U0" in line)
-    assert "--no-renames" in invocation, invocation
-    assert "core.quotePath=false" in invocation, invocation
 
 
 def test_the_workflow_checks_out_the_head_sha_with_full_history() -> None:
@@ -949,12 +952,53 @@ def test_the_workflow_checks_out_the_head_sha_with_full_history() -> None:
     own post-image line numbers, so the checked-out tree has to *be* that
     post-image. Dropping this pin silently mis-grades every file the base
     branch also touched -- there is no exit code and no message when that
-    happens, so nothing else in this suite would notice. `fetch-depth: '0'`
+    happens, so nothing else in this suite would notice. `fetch-depth: 0`
     is load-bearing *for* that pin, not decoration: the workflow's own
     `git merge-base` step needs `origin/main` reachable in the fetched
-    history, which a shallow checkout does not guarantee."""
-    workflow = (gate.REPO_ROOT / ".github/workflows/detection-logic-property-coverage-gate.yml").read_text(
-        encoding="utf-8"
-    )
-    assert "ref: ${{ github.event.pull_request.head.sha }}" in workflow, workflow
-    assert "fetch-depth: '0'" in workflow, workflow
+    history, which a shallow checkout does not guarantee.
+
+    Both settings are read off this workflow's parsed `with:` mapping
+    rather than matched against the whole file as text, because the shrunk
+    pointer comment this same PR introduced above the step contains the
+    literal substring `fetch-depth: '0'` and a text check passed off it
+    alone. `conftest`'s own docstring carries that defeat case."""
+    assert_workflow_checkout_pins_head_sha_with_full_history("detection-logic-property-coverage-gate.yml")
+
+
+def test_the_workflow_has_no_paths_filter() -> None:
+    """Drift gate for an invariant this change establishes, per CLAUDE.md
+    section 3, mirroring `tests/test_gitapex_gate_exception_handler_gaps.py`'s
+    own identical reasoning and defeat-case: a `paths:` filter under
+    `pull_request:` is deliberately never added, following the same
+    rationale `lint.yml`, `plugin-root-brace-notation-gate.yml` and
+    `exception-handler-gap-gate.yml` each state for themselves. GitHub
+    distinguishes a job that runs and reports `skipped` (harmless to a
+    required check) from a workflow that never fires for a given PR at all
+    (which leaves a required check `Pending` forever, with no in-repo fix).
+    This gate is a candidate for later promotion to a required status
+    check, so a `paths:` filter here would recreate that exact
+    stuck-Pending failure mode for any PR that happens not to touch an
+    in-scope file.
+
+    `conftest.assert_workflow_has_no_trigger_path_filter`'s own docstring
+    carries how the trigger keys are read and why `paths-ignore:` is
+    rejected too.
+    """
+    assert_workflow_has_no_trigger_path_filter("detection-logic-property-coverage-gate.yml")
+
+
+def test_the_workflow_uses_merge_base_not_base_sha() -> None:
+    """Drift gate for an invariant this change establishes, per CLAUDE.md
+    section 3, mirroring `exception-handler-gap-gate.yml`'s,
+    `gitignore-pattern-coverage-gate.yml`'s and
+    `skill-rename-lifecycle-gate.yml`'s own identical reasoning: `git
+    merge-base` is resolved between `BASE_SHA` and `HEAD_SHA` rather than
+    diffing against `base.sha` directly, so a change that landed on the
+    base branch after this PR forked is never misattributed to this PR.
+
+    `conftest.assert_workflow_feeds_merge_base_to`'s own docstring carries
+    the defeat cases it closes, kept there rather than re-enumerated here
+    so this comment cannot go stale the next time that list grows.
+    `"diff"` is the producer command this gate depends on.
+    """
+    assert_workflow_feeds_merge_base_to("detection-logic-property-coverage-gate.yml", "diff")

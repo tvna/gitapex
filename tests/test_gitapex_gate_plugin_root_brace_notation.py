@@ -22,6 +22,7 @@ import pathlib
 import subprocess
 
 import gitapex_gate_plugin_root_brace_notation as gate
+from conftest import assert_workflow_has_no_trigger_path_filter
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
@@ -277,3 +278,17 @@ def test_main_exits_2_on_a_root_that_is_a_file(tmp_path, capsys):
     a_file.write_text("x", encoding="utf-8")
     assert gate.main(["--root", str(a_file)]) == 2
     assert "must be an existing directory" in capsys.readouterr().err
+
+
+# --- the real repository's own CI workflow -------------------------------
+
+
+def test_the_workflow_has_no_paths_filter() -> None:
+    """Drift gate for this workflow's own no-`paths:`-filter invariant, per
+    CLAUDE.md section 3 and the same `waza-eval-gate.yml` rationale: a
+    filter here would leave a required check stuck `Pending` for any PR
+    that doesn't touch one of the three small files this gate scans.
+    `conftest.assert_workflow_has_no_trigger_path_filter`'s own docstring
+    carries the mechanics.
+    """
+    assert_workflow_has_no_trigger_path_filter("plugin-root-brace-notation-gate.yml")

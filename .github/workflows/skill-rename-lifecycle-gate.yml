@@ -39,13 +39,15 @@ jobs:
       # so the gate silently skipped exactly the renames most likely to
       # need this check. Comparing directory *names* present at the merge
       # base vs. head is unaffected by how much file content changed.
-      # git merge-base (not base.sha directly) is used for the same reason
-      # skill-audit-gate.yml's three-dot diff is: a rename that landed on
-      # the base branch after this PR forked must never be misattributed
-      # to this PR. Only removed names paired with at least one added
-      # skill in the same diff trigger the check -- a pure removal with
-      # nothing added back is a deliberate retirement, not a rename, and
-      # is out of this gate's scope.
+      #
+      # git merge-base below -- drift gate:
+      # tests/test_gitapex_gate_skill_rename_lifecycle.py's own
+      # test_the_workflow_uses_merge_base_not_base_sha.
+      #
+      # Only removed names paired with at least one added skill in the
+      # same diff trigger the check -- a pure removal with nothing added
+      # back is a deliberate retirement, not a rename, and is out of this
+      # gate's scope.
       - name: Determine removed skill directories
         id: diff
         env:
