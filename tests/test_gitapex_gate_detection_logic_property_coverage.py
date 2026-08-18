@@ -16,12 +16,11 @@ below.
 from __future__ import annotations
 
 import pathlib
-import re
 
 import gitapex_gate_detection_logic_property_coverage as gate
 import pytest
-import yaml
 from conftest import FakeStdin as _FakeStdin
+from conftest import assert_workflow_feeds_merge_base_to, assert_workflow_has_no_trigger_path_filter
 
 # A plain hooks/gitapex_check_*.py path -- in scope by _IN_SCOPE_RE's own
 # `hooks/gitapex_check_[^/]+\.py` alternative -- used as the default fixture
@@ -977,20 +976,11 @@ def test_the_workflow_has_no_paths_filter() -> None:
     stuck-Pending failure mode for any PR that happens not to touch an
     in-scope file.
 
-    The trigger block is isolated between the `on:` and `permissions:`
-    markers with comment lines stripped, rather than checked against the
-    whole leading file text -- this file's own pointer comment for this
-    very invariant contains the literal substring `` `paths:` `` in prose.
-    The check also rejects `paths-ignore:`, not only `paths:`, since
-    GitHub's own trigger filter accepts either key to the same
-    stuck-Pending effect.
+    `conftest.assert_workflow_has_no_trigger_path_filter`'s own docstring
+    carries how the trigger block is isolated and why `paths-ignore:` is
+    rejected too.
     """
-    workflow = (gate.REPO_ROOT / ".github/workflows/detection-logic-property-coverage-gate.yml").read_text(
-        encoding="utf-8"
-    )
-    trigger_block = workflow.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
-    trigger_lines = [line for line in trigger_block.split("\n") if not line.strip().startswith("#")]
-    assert not any(line.strip().startswith("paths") for line in trigger_lines), trigger_block
+    assert_workflow_has_no_trigger_path_filter("detection-logic-property-coverage-gate.yml")
 
 
 def test_the_workflow_uses_merge_base_not_base_sha() -> None:
@@ -1002,42 +992,9 @@ def test_the_workflow_uses_merge_base_not_base_sha() -> None:
     diffing against `base.sha` directly, so a change that landed on the
     base branch after this PR forked is never misattributed to this PR.
 
-    Checking only for the literal substring `git merge-base` would still
-    pass a workflow that computes `$merge_base` and never actually uses
-    it; the second assertion confirms the computed variable is the one
-    actually fed to the `git diff` invocation this gate depends on.
-
-    Scoped to the parsed `jobs.*.steps[].run` content, not the whole file
-    as text: a CodeRabbit review on this same PR found that even a
-    comment-stripped, whole-file substring scan could still be satisfied
-    by a non-comment YAML value living outside any `run:` block. `PyYAML`
-    is already a dependency of this repository, so this parses the
-    workflow properly rather than layering another line-based heuristic
-    on top of the previous one. `on:` is deliberately never parsed here --
-    PyYAML's default YAML-1.1 resolver reads the bare `on` key as boolean
-    `True`, not the string `"on"`, a well-known GitHub Actions YAML gotcha
-    this test sidesteps by never needing that key. The first assertion
-    also now requires the exact `"$BASE_SHA" "$HEAD_SHA"` argument pair,
-    not just the `merge_base=$(git merge-base` prefix, closing a narrower
-    gap the previous version left: a swapped or substituted variable would
-    still have matched. The producer-line scan requires the word `git`
-    followed later by the word `diff` (a regex, not the contiguous
-    substring `git diff`) -- this file's own real invocation is
-    `git -c core.quotePath=false diff ...`, with a flag between the two
-    words, which a contiguous-substring requirement would itself have
-    failed to match (caught by running this test, not just reasoned
-    about). A fourth CodeRabbit round found that the prior bare substring
-    `diff` let an unrelated executable line (its own example: `echo
-    'diff "$merge_base"'`) satisfy the check; that decoy carries no `git`
-    token at all, so the word-pair regex excludes it correctly.
+    `conftest.assert_workflow_feeds_merge_base_to`'s own docstring carries
+    the defeat cases it closes -- a `$merge_base` computed and never used,
+    a swapped argument pair, a match found outside the parsed `run:`
+    content, and a producer line naming the command without `git`. `"diff"` is the producer command this gate depends on.
     """
-    workflow_path = gate.REPO_ROOT / ".github/workflows/detection-logic-property-coverage-gate.yml"
-    parsed = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
-    run_text = "\n".join(
-        step["run"] for job in parsed["jobs"].values() for step in job.get("steps", []) if "run" in step
-    )
-    assert 'merge_base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")' in run_text, run_text
-    producer_lines = [
-        line for line in run_text.split("\n") if re.search(r"\bgit\b.*\bdiff\b", line) and '"$merge_base"' in line
-    ]
-    assert producer_lines, run_text
+    assert_workflow_feeds_merge_base_to("detection-logic-property-coverage-gate.yml", "diff")

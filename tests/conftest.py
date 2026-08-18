@@ -7,6 +7,7 @@ import pathlib
 import re
 import subprocess
 
+import yaml
 from pydantic import BaseModel, ValidationError
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -84,3 +85,77 @@ def assert_path_is_gitignored(path: pathlib.Path, description: str) -> None:
         "(global core.excludesFile, $GIT_DIR/info/exclude) is masking a "
         "possibly-removed repository rule."
     )
+
+
+def assert_workflow_has_no_trigger_path_filter(workflow_name: str) -> None:
+    """Assert `.github/workflows/<workflow_name>`'s trigger block carries
+    neither a `paths:` nor a `paths-ignore:` filter.
+
+    Shared by every gate workflow's own no-paths-filter drift test (same
+    rationale as `assert_path_is_gitignored` above), so the two things that
+    make the check trustworthy only land once. The trigger block is isolated
+    between the `on:` and `permissions:` markers with comment lines stripped,
+    rather than checked against the whole leading file text -- each of these
+    workflows' own pointer comment for this very invariant contains the
+    literal substring `` `paths:` `` in prose, which a whole-text check would
+    misread as the trigger itself carrying a filter. And `paths-ignore:` is
+    rejected too, not only `paths:`: GitHub's own trigger filter accepts
+    either key to the same stuck-Pending effect, so a future edit reaching
+    for the inverse form would defeat a `paths:`-only check while recreating
+    the exact failure mode these tests exist to catch.
+
+    This one reads the raw text rather than parsing the YAML the way
+    `assert_workflow_feeds_merge_base_to` below does, and deliberately so:
+    PyYAML's default YAML-1.1 resolver reads the bare `on` key as boolean
+    `True`, not the string `"on"`, a well-known GitHub Actions gotcha that a
+    parsed lookup of the trigger block would have to work around. Each
+    caller's own docstring states why its workflow must stay unfiltered.
+    """
+    workflow = (REPO_ROOT / ".github" / "workflows" / workflow_name).read_text(encoding="utf-8")
+    trigger_block = workflow.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
+    trigger_lines = [line for line in trigger_block.split("\n") if not line.strip().startswith("#")]
+    assert not any(line.strip().startswith("paths") for line in trigger_lines), trigger_block
+
+
+def assert_workflow_feeds_merge_base_to(workflow_name: str, *producer_commands: str) -> None:
+    """Assert `.github/workflows/<workflow_name>` both computes `$merge_base`
+    from the exact `"$BASE_SHA" "$HEAD_SHA"` pair and feeds it to a line
+    running one of `producer_commands` (`"diff"`, `"ls-tree"`).
+
+    Shared by every gate workflow's own merge-base drift test (same rationale
+    as `assert_path_is_gitignored` above), so the hardening steps these
+    assertions took only land once rather than four times over:
+
+    * the producer line is asserted, not only the `git merge-base` call --
+      otherwise a workflow that computes `$merge_base` and then never uses it
+      (falling back to `$BASE_SHA` in the producer command) still passes;
+    * the exact `"$BASE_SHA" "$HEAD_SHA"` argument pair is required, so a
+      swapped or substituted variable no longer matches;
+    * both assertions are scoped to the parsed `jobs.*.steps[].run` content
+      rather than the whole file as text, so no comment and no non-comment
+      YAML value outside a `run:` block (a step `name:`, for one) can satisfy
+      them while the real invariant is gone from the executable content;
+    * the producer line must carry the word `git` followed later by one of
+      `producer_commands` as a word, not merely that command as a bare
+      substring -- an unrelated executable line (`echo 'diff "$merge_base"'`)
+      would otherwise satisfy the check. The two words are matched with `.*`
+      between them rather than contiguously, because the real invocations
+      read `git -c core.quotePath=false diff ...`, with a flag in between.
+
+    `on:` is deliberately never parsed here -- PyYAML's default YAML-1.1
+    resolver reads the bare `on` key as boolean `True`, not the string
+    `"on"`, a well-known GitHub Actions YAML gotcha this sidesteps by never
+    needing that key. Each caller's own docstring states why its workflow
+    must not diff against `base.sha` directly.
+    """
+    workflow_path = REPO_ROOT / ".github" / "workflows" / workflow_name
+    parsed = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+    run_text = "\n".join(
+        step["run"] for job in parsed["jobs"].values() for step in job.get("steps", []) if "run" in step
+    )
+    assert 'merge_base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")' in run_text, run_text
+    producer_re = re.compile(
+        r"\bgit\b.*(" + "|".join(rf"\b{re.escape(command)}\b" for command in producer_commands) + ")"
+    )
+    producer_lines = [line for line in run_text.split("\n") if producer_re.search(line) and '"$merge_base"' in line]
+    assert producer_lines, run_text
