@@ -254,6 +254,36 @@ def test_success_message_shows_the_braced_form(capsys):
     assert "brace $CLAUDE_PLUGIN_ROOT." not in out
 
 
+# --- the real repository's own CI workflow -------------------------------
+
+
+def test_the_workflow_has_no_paths_filter() -> None:
+    """Drift gate for an invariant this change establishes, per CLAUDE.md
+    section 3, mirroring `tests/test_gitapex_gate_exception_handler_gaps.py`'s
+    own identical reasoning and defeat-case: a `paths:` filter under
+    `pull_request:` is deliberately never added, following the rationale
+    `waza-eval-gate.yml` states: a workflow that never fires for a given PR
+    leaves a required status check `Pending` forever, whereas a job that
+    runs and passes is safe to promote to required later. This gate has no
+    diff/merge-base logic at all (it scans the whole tracked-file set via
+    `git ls-files`), so a `paths:` filter here would recreate that exact
+    stuck-Pending failure mode for any PR that happens not to touch one of
+    the three small files this gate scans.
+
+    The trigger block is isolated between the `on:` and `permissions:`
+    markers with comment lines stripped, rather than checked against the
+    whole leading file text -- this file's own pointer comment for this
+    very invariant contains the literal substring `` `paths:` `` in prose.
+    The check also rejects `paths-ignore:`, not only `paths:`, since
+    GitHub's own trigger filter accepts either key to the same
+    stuck-Pending effect.
+    """
+    workflow = (REPO_ROOT / ".github/workflows/plugin-root-brace-notation-gate.yml").read_text(encoding="utf-8")
+    trigger_block = workflow.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
+    trigger_lines = [line for line in trigger_block.split("\n") if not line.strip().startswith("#")]
+    assert not any(line.strip().startswith("paths") for line in trigger_lines), trigger_block
+
+
 def test_main_returns_one_and_explains_the_failure(tmp_path, capsys):
     root = _repo(tmp_path)
     _write(root, "hooks/hooks.json", _manifest(_UNBRACED))

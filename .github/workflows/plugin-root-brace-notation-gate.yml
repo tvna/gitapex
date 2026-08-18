@@ -5,12 +5,13 @@
 # still reports the hook as integrated. A silent loss of every PreToolUse
 # gate is exactly the failure class a deterministic gate has to catch.
 #
-# Deliberately no `paths:` filter, following waza-eval-gate.yml's own
-# rationale: a workflow that never fires for a given PR leaves a required
-# status check Pending forever, whereas a job that runs and passes is safe
-# to promote to required later. The scan itself is a fast Python pass over
-# three small files (issue #1040 added a real `pydantic` import, so it is
-# no longer stdlib-only, but still runs unconditionally in a few seconds).
+# Deliberately no `paths:` filter -- drift gate:
+# tests/test_gitapex_gate_plugin_root_brace_notation.py's own
+# test_the_workflow_has_no_paths_filter. See that test's docstring for why
+# (following waza-eval-gate.yml's own required-check-stuck-Pending
+# rationale). The scan itself is a fast Python pass over three small files
+# (issue #1040 added a real `pydantic` import, so it is no longer
+# stdlib-only, but still runs unconditionally in a few seconds).
 name: Plugin-root brace notation gate
 
 on:
