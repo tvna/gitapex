@@ -81,6 +81,20 @@ def test_has_dedup_disclosure_stays_anchored_to_the_start_of_a_line() -> None:
     assert checker.has_dedup_disclosure("  - Dedup: none found\n")
 
 
+def test_has_dedup_disclosure_rejects_a_blockquoted_line() -> None:
+    """Regression test (battle-testing-a-skill audit, PR #1215 Finding A/B):
+    Step 3 requires quoting the requester's own words verbatim into Facts,
+    and a blockquote (`>`) is the natural markdown rendering for that. A
+    requester's own message containing text shaped like "Dedup: none
+    found" must not satisfy this gate merely because it got quoted -- no
+    real Step 6 search happened just because the requester happened to
+    type that phrase. `>` was deliberately dropped from the accepted
+    bullet/heading prefixes for this reason; pinned here so a future
+    "widen the decoration" change does not silently reintroduce it."""
+    assert not checker.has_dedup_disclosure("> Dedup: none found\n")
+    assert not checker.has_dedup_disclosure("> **Dedup:** none found\n")
+
+
 def test_has_dedup_disclosure_accepts_the_skill_s_own_documented_output_line() -> None:
     """Round-trip guard (battle-testing-a-skill audit, PR #1215 Finding E):
     SKILL.md's own Output section (line 123) documents this field as

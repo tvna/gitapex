@@ -43,12 +43,28 @@ _HEADER_RE = re.compile(
     re.IGNORECASE,
 )
 
-# A `Dedup: <non-empty reason>` line, optionally bulleted -- matches the
-# `- `/`* ` optional-bullet, non-empty-reason shape this repository's own
-# ACM-waiver line convention already uses (hooks/gitapex_check_acm_present_or_waiver.py's
-# `_ACM_WAIVER_RE`), applied here to a distinct field name.
+# A `Dedup: <non-empty reason>` line, optionally bulleted/headed and
+# optionally wrapped in markdown emphasis around the field name and colon
+# together -- matches the `- `/`* ` optional-bullet, non-empty-reason shape
+# this repository's own ACM-waiver line convention already uses
+# (hooks/gitapex_check_acm_present_or_waiver.py's `_ACM_WAIVER_RE`), applied
+# here to a distinct field name, widened for markdown decoration and
+# invisible-character rejection by a dedicated adversarial review (PR #1215).
+#
+# Deliberately does NOT accept `>` (blockquote) as a prefix, unlike that
+# review's own first draft: battle-testing-a-skill on this same PR found
+# that Step 3 requires quoting the requester's own words verbatim into
+# Facts, and a requester's message containing literal text shaped like
+# "Dedup: none found" -- rendered as a blockquote, the natural markdown
+# form for "quoting someone else's words" -- would satisfy this gate
+# without any real Step 6 search ever happening. Dropping `>` closes that
+# specific, most-likely rendering; it does not close the underlying gap
+# for the same text quoted without blockquote markup, which remains the
+# same accepted-and-named residual risk issue #1197's own ACM already
+# states for this row: "a disclosure-only requirement cannot stop a
+# fabricated Dedup: line."
 _DEDUP_RE = re.compile(
-    r"^[ \t]*(?:[-*+]|\d+\.|>|\#{1,6})?[ \t]*[*_`]{0,2}Dedup[*_`]{0,2}"
+    r"^[ \t]*(?:[-*+]|\d+\.|\#{1,6})?[ \t]*[*_`]{0,2}Dedup[*_`]{0,2}"
     r"[ \t]*:[ \t]*[*_`]{0,2}[ \t]*[^\s\u00ad\u200b-\u200f\u2060-\u2064\ufeff\u3164].*$",
     re.IGNORECASE | re.MULTILINE,
 )
