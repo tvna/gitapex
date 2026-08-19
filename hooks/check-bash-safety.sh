@@ -19,7 +19,74 @@
 
 set -euo pipefail
 
+# Issue #1208: this deny path must not itself depend on jq -- if jq is
+# missing from PATH entirely (a broken environment, not a malformed
+# payload), every jq call below would crash under `set -e` with exit 127
+# ("command not found"), an exit code Claude Code's PreToolUse contract
+# treats as non-blocking (the tool call proceeds unchecked). Checked first,
+# via a fixed, statically-escaped JSON literal (no interpolation, so no
+# JSON-escaping risk), same pattern as
+# hooks/check-pr-issue-acm-disclosure.sh's own jq-missing guard.
+if ! command -v jq >/dev/null 2>&1; then
+  printf '%s\n' "{\"hookSpecificOutput\": {\"permissionDecision\": \"deny\"}, \"systemMessage\": \"Blocked by hooks/check-bash-safety.sh: jq is not available on PATH -- cannot verify the Bash command. Failing closed.\"}" >&2
+  exit 2
+fi
+
+deny() {
+  local reason="$1"
+  # Piped via stdin (jq -Rs: raw input, slurped to one string), not
+  # `--arg` -- same ARG_MAX-avoidance reason as
+  # hooks/check-pr-issue-acm-disclosure.sh's own deny().
+  printf '%s' "$reason" | jq -Rs \
+    '{"hookSpecificOutput": {"permissionDecision": "deny"}, "systemMessage": .}' >&2
+  exit 2
+}
+
+# Non-blocking counterpart to deny(): surfaces a systemMessage but allows the
+# tool call to proceed (exit 0). Used where the underlying check is
+# documented as advisory (surfaces candidates, does not decide) rather than
+# a deterministic write/read classifier -- see the git-push handling below.
+# Found by code review (PR #1213): its only call site interpolates
+# $scan_output, the provenance scan's own report over the *entire* outgoing
+# push's commit messages and patches -- large enough on a big branch to
+# blow the OS's ARG_MAX the same way `deny()`'s own pre-hardening form did
+# (live-confirmed: `jq -n --arg msg "$BIG"` on a 3MB string exits 126,
+# "Argument list too long"). Under `set -euo pipefail` that crash aborts
+# the whole script before `exit 0`, past this function's own advisory
+# intent -- the push still proceeds either way (any non-2 exit is
+# non-blocking), but the warning itself is silently lost instead of
+# reaching the operator. Same `jq -Rs` piped-stdin fix as deny() above.
+warn() {
+  local reason="$1"
+  printf '%s' "$reason" | jq -Rs '{"systemMessage": .}'
+  exit 0
+}
+
 input=$(cat)
+
+# Issue #1208: a malformed payload (invalid JSON, or valid JSON that isn't
+# an object) would otherwise make every field-extraction jq call below exit
+# non-zero, crashing past deny() under `set -e` with an exit code Claude
+# Code's PreToolUse contract treats as non-blocking -- the same fail-open
+# class hooks/check-pr-issue-acm-disclosure.sh's own adversarial review
+# found and fixed. Validate the shape up front instead.
+if ! printf '%s' "$input" | jq -e 'if type == "object" then . else empty end' >/dev/null 2>&1; then
+  deny "Blocked by hooks/check-bash-safety.sh: the tool-call payload on stdin is not a JSON object. Failing closed."
+fi
+
+# Found by code review (PR #1213): jq -r never errors on a non-string
+# `.tool_name` (e.g. `["Bash"]`) -- it pretty-prints the JSON form across
+# multiple lines instead, which then never equals the plain "Bash" string
+# the check below compares against. That silently falls through as "not
+# our tool" (exit 0) rather than failing closed on a malformed field this
+# gate structurally depends on -- live-confirmed: an array-wrapped
+# tool_name let a `gh pr merge` command straight through this hook.
+# `.tool_name == null` covers both absent and explicit null (an absent
+# key indexes as null in jq); only a present non-string, non-null value
+# denies.
+if ! printf '%s' "$input" | jq -e '(.tool_name == null) or (.tool_name | type == "string")' >/dev/null 2>&1; then
+  deny "Blocked by hooks/check-bash-safety.sh: tool_name in the payload is not a string. Failing closed."
+fi
 
 tool_name=$(printf '%s' "$input" | jq -r '.tool_name // empty')
 
@@ -29,6 +96,36 @@ if [ "$tool_name" != "Bash" ]; then
   exit 0
 fi
 
+# Issue #1208: tool_input could be a non-object (array/string/number/bool)
+# in an otherwise well-formed payload, which would crash the
+# `.tool_input.command` access below with jq's own "Cannot index X with
+# string" runtime error -- same fail-open class as the top-level check
+# above. `(.tool_input // {})` alone is not enough: jq's `//` treats JSON
+# `false` the same as `null` (both are falsy), so a `tool_input: false`
+# payload slipped past that form and crashed the extraction below anyway
+# -- found by code review (PR #1213), live-confirmed with
+# `jq -e '(.tool_input // {}) | type == "object"' <<< '{"tool_input":false}'`,
+# which wrongly reports true. Checking `.tool_input == null` directly
+# (true for both absent and explicit null, never for `false`) closes
+# that gap.
+if ! printf '%s' "$input" | jq -e '(.tool_input == null) or (.tool_input | type == "object")' >/dev/null 2>&1; then
+  deny "Blocked by hooks/check-bash-safety.sh: tool_input in the payload is not a JSON object. Failing closed."
+fi
+
+# Issue #1208 (round 4): a well-formed, object-shaped tool_input can still
+# carry `.tool_input.command` as a JSON array or object (e.g.
+# `["gh","pr","merge","1"]`) instead of a string. `jq -r` never errors on
+# this -- it pretty-prints the value across multiple lines, which splits
+# the dangerous substring across JSON punctuation (quotes, commas,
+# brackets) and breaks every `[[:space:]]`-anchored danger-pattern regex
+# below, silently letting a genuinely dangerous command through with
+# exit 0 instead of exit 2 -- found by code review (PR #1213),
+# live-confirmed against `gh pr merge`, `pip install`, and `gh api -X
+# POST` payloads wrapped as arrays. Must deny before extraction.
+if ! printf '%s' "$input" | jq -e '(.tool_input.command == null) or (.tool_input.command | type == "string")' >/dev/null 2>&1; then
+  deny "Blocked by hooks/check-bash-safety.sh: tool_input.command in the payload is not a string. Failing closed."
+fi
+
 command=$(printf '%s' "$input" | jq -r '.tool_input.command // empty')
 
 if [ -z "$command" ]; then
@@ -36,24 +133,6 @@ if [ -z "$command" ]; then
 fi
 
 lc_command=$(printf '%s' "$command" | tr '[:upper:]' '[:lower:]')
-
-deny() {
-  local reason="$1"
-  jq -n --arg msg "$reason" \
-    '{"hookSpecificOutput": {"permissionDecision": "deny"}, "systemMessage": $msg}' >&2
-  exit 2
-}
-
-# Non-blocking counterpart to deny(): surfaces a systemMessage but allows the
-# tool call to proceed (exit 0). Used where the underlying check is
-# documented as advisory (surfaces candidates, does not decide) rather than
-# a deterministic write/read classifier -- see the git-push handling below.
-warn() {
-  local reason="$1"
-  jq -n --arg msg "$reason" \
-    '{"systemMessage": $msg}'
-  exit 0
-}
 
 # --- Shared boundary: pre-command anchor that also swallows an absolute or
 # relative path prefix -----------------------------------------------------

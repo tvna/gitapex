@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -30,7 +31,7 @@ SCAN_SCRIPT_RELATIVE = "skills/outward-artifact-preflight/scripts/gitapex_scan_p
 
 
 def run(
-    command: str, tool_name: str = "Bash", extra_env: dict[str, str] | None = None
+    command: str, tool_name: object = "Bash", extra_env: dict[str, str] | None = None
 ) -> subprocess.CompletedProcess[str]:
     payload = json.dumps({"tool_name": tool_name, "tool_input": {"command": command}})
     env = dict(os.environ)
@@ -193,6 +194,184 @@ def test_empty_command_is_allowed() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Issue #1208: fail closed, not open, when jq is missing or the payload is
+# malformed. Ported guard prologue, same one hooks/check-pr-issue-acm-
+# disclosure.sh and hooks/check-pr-title-convention.sh already carried.
+# ---------------------------------------------------------------------------
+
+
+def _no_jq_path(tmp_path: Path) -> str:
+    """A PATH directory holding every tool this script needs except jq, so
+    `command -v jq` genuinely fails the way it would in an environment
+    without jq installed -- rather than mocking that condition."""
+    bin_dir = tmp_path / "no-jq-path"
+    bin_dir.mkdir()
+    for tool in ("bash", "cat", "tr", "grep", "sed", "git", "python3", "dirname"):
+        real = shutil.which(tool)
+        if real:
+            (bin_dir / tool).symlink_to(real)
+    return str(bin_dir)
+
+
+def test_denied_when_jq_missing(tmp_path: Path) -> None:
+    """Live-reproduced before this fix: with jq absent, the very first jq
+    call (extracting tool_name) crashed under `set -e` with exit 127
+    ("command not found") -- before deny() was even defined, and non-
+    blocking per Claude Code's PreToolUse contract, so an arbitrary Bash
+    command (including `gh pr merge`) would have proceeded unchecked. Must
+    now deny (exit 2) instead."""
+    result = run("gh pr merge 1", extra_env={"PATH": _no_jq_path(tmp_path)})
+    assert result.returncode == 2, f"expected deny (exit 2), got {result.returncode}: stderr={result.stderr!r}"
+    payload = json.loads(result.stderr)
+    assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "jq is not available" in payload["systemMessage"]
+
+
+def test_denied_on_malformed_json_stdin() -> None:
+    """Live-reproduced before this fix: jq's own parse-error exit (5)
+    propagated past deny() under `set -e` -- non-blocking per Claude Code's
+    PreToolUse contract. Must now deny (exit 2) instead."""
+    env = dict(os.environ)
+    env.pop("CLAUDE_PROJECT_DIR", None)
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        input="not valid json{{{",
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env=env,
+        cwd=str(REPO_ROOT),
+    )
+    assert result.returncode == 2, f"expected deny (exit 2), got {result.returncode}: stderr={result.stderr!r}"
+    payload = json.loads(result.stderr)
+    assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+@pytest.mark.parametrize(
+    "tool_input",
+    [["not", "an", "object"], "text", False, True, 0],
+    ids=["array", "string", "false", "true", "zero"],
+)
+def test_denied_when_tool_input_is_not_an_object(tool_input: object) -> None:
+    """A well-formed top-level payload whose tool_input is itself a
+    non-object would otherwise crash the `.tool_input.command` access with
+    jq's own "Cannot index" error. Must deny.
+
+    `false` is the case that actually escaped the original guard: found by
+    code review (PR #1213) after the array/string cases above already
+    passed -- jq's `//` operator treats JSON `false` the same as `null`
+    (both are falsy), so `(.tool_input // {}) | type == "object"` wrongly
+    accepted it, and the crash happened one line later, past deny()."""
+    payload = json.dumps({"tool_name": "Bash", "tool_input": tool_input})
+    env = dict(os.environ)
+    env.pop("CLAUDE_PROJECT_DIR", None)
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        input=payload,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env=env,
+        cwd=str(REPO_ROOT),
+    )
+    assert result.returncode == 2, f"expected deny (exit 2) for tool_input={tool_input!r}, got {result.returncode}"
+    parsed = json.loads(result.stderr)
+    assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_allowed_when_tool_input_is_absent_or_null() -> None:
+    """jq indexes `null`/a missing key as `null`, not a runtime error, so
+    these fall through the shape guard to the hook's own downstream logic
+    (an empty `command` here, which is itself allowed) rather than being
+    wrongly caught by it -- unlike the non-object shapes above."""
+    env = dict(os.environ)
+    env.pop("CLAUDE_PROJECT_DIR", None)
+    for payload in (
+        json.dumps({"tool_name": "Bash"}),
+        json.dumps({"tool_name": "Bash", "tool_input": None}),
+    ):
+        result = subprocess.run(
+            ["bash", str(SCRIPT)],
+            input=payload,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            env=env,
+            cwd=str(REPO_ROOT),
+        )
+        assert result.returncode == 0, f"payload={payload!r}: expected allow, got {result.returncode}"
+        assert result.stdout == ""
+        assert result.stderr == ""
+
+
+@pytest.mark.parametrize("tool_name", [["Bash"], {"x": 1}, 5, True], ids=["array", "object", "number", "bool"])
+def test_denied_when_tool_name_is_not_a_string(tool_name: object) -> None:
+    """Found by code review (PR #1213): jq -r never errors on a non-string
+    `.tool_name` -- it pretty-prints the JSON form across multiple lines
+    instead, which then never equals the plain "Bash" string the matcher
+    re-check compares against, silently falling through as "not our tool"
+    (exit 0) instead of failing closed. Live-confirmed before this guard
+    existed: an array-wrapped tool_name let a `gh pr merge` command
+    straight through. Must now deny."""
+    result = run("gh pr merge 1", tool_name=tool_name)
+    assert result.returncode == 2, f"expected deny (exit 2) for tool_name={tool_name!r}, got {result.returncode}"
+    parsed = json.loads(result.stderr)
+    assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+@pytest.mark.parametrize(
+    "command",
+    [["gh", "pr", "merge", "1"], {"argv": ["gh", "pr", "merge", "1"]}, 5, True],
+    ids=["array", "object", "number", "bool"],
+)
+def test_denied_when_tool_input_command_is_not_a_string(command: object) -> None:
+    """Found by code review (PR #1213, round 4): jq -r never errors on a
+    non-string `.tool_input.command` -- for an array/object it pretty-
+    prints the JSON form across multiple lines, which splits a dangerous
+    substring across JSON punctuation (quotes, commas, brackets) and
+    breaks every `[[:space:]]`-anchored danger-pattern regex below,
+    silently letting a genuinely dangerous command through (exit 0)
+    instead of failing closed. Live-confirmed before this guard existed:
+    an array-wrapped `["gh","pr","merge","1"]` command let a real merge
+    call straight through. Must now deny."""
+    payload = json.dumps({"tool_name": "Bash", "tool_input": {"command": command}})
+    env = dict(os.environ)
+    env.pop("CLAUDE_PROJECT_DIR", None)
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        input=payload,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env=env,
+        cwd=str(REPO_ROOT),
+    )
+    assert result.returncode == 2, f"expected deny (exit 2) for command={command!r}, got {result.returncode}"
+    parsed = json.loads(result.stderr)
+    assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_denied_on_valid_json_non_object_stdin() -> None:
+    """Valid JSON that isn't an object at the top level (e.g. a bare array)
+    would otherwise crash the first field-extraction jq call the same way.
+    Must deny."""
+    env = dict(os.environ)
+    env.pop("CLAUDE_PROJECT_DIR", None)
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        input="[]",
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env=env,
+        cwd=str(REPO_ROOT),
+    )
+    assert result.returncode == 2, f"expected deny (exit 2), got {result.returncode}: stderr={result.stderr!r}"
+    payload = json.loads(result.stderr)
+    assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+# ---------------------------------------------------------------------------
 # Finding 4: git push gated (warn, not deny) on gitapex_scan_provenance.py
 # ---------------------------------------------------------------------------
 
@@ -293,6 +472,42 @@ def test_git_push_warns_when_scan_flags_a_hit(tmp_path: Path) -> None:
     assert result.stderr == ""
     payload = json.loads(result.stdout)
     assert "flagged the outgoing push for review" in payload["systemMessage"]
+
+
+def _project_with_huge_warning_scan_script(tmp_path: Path, *, size: int = 3_000_000) -> Path:
+    """A project dir whose scan script is a stand-in, not the real
+    gitapex_scan_provenance.py: it always exits 1 with `size` bytes of
+    output, to exercise warn()'s own robustness against a large message in
+    isolation from the real scanner's detection logic (covered by that
+    script's own test suite elsewhere)."""
+    project_dir = tmp_path / "project"
+    scan_dir = project_dir / "skills" / "outward-artifact-preflight" / "scripts"
+    scan_dir.mkdir(parents=True)
+    (scan_dir / "gitapex_scan_provenance.py").write_text(f"import sys\nsys.stdout.write('A' * {size})\nsys.exit(1)\n")
+    return project_dir
+
+
+def test_git_push_warn_survives_a_huge_scan_message(tmp_path: Path) -> None:
+    """Found by code review (PR #1213): warn()'s own pre-fix form (`jq -n
+    --arg`) crashed with exit 126 ("Argument list too long") on a
+    message this large -- live-confirmed before the fix, via the same
+    construction used here. Under `set -euo pipefail` that crash would
+    abort the whole script before `exit 0`; the push still proceeds
+    either way (any non-2 exit is non-blocking per Claude Code's
+    PreToolUse contract), but the warning itself would be silently lost
+    instead of reaching the operator. Must now exit 0 with the full
+    message intact."""
+    project_dir = _project_with_huge_warning_scan_script(tmp_path)
+    _init_diverged_repo(project_dir, feature_commit_messages=["Fix bug in parser"])
+    result = run(
+        "git push origin HEAD",
+        extra_env={"CLAUDE_PROJECT_DIR": str(project_dir)},
+    )
+    assert result.returncode == 0, f"expected allow (exit 0), got {result.returncode}: stderr={result.stderr[:500]!r}"
+    assert result.stderr == ""
+    payload = json.loads(result.stdout)
+    assert "flagged the outgoing push for review" in payload["systemMessage"]
+    assert len(payload["systemMessage"]) > 3_000_000
 
 
 def test_git_push_silent_when_scan_finds_nothing(tmp_path: Path) -> None:
