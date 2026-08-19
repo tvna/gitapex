@@ -155,6 +155,20 @@
       "supersedes": null
     },
     {
+      "id": "merge-pull-request-block",
+      "kind": "script",
+      "script": "hooks/check-merge-pull-request-block.sh",
+      "rule": "Denies mcp__github__merge_pull_request unconditionally, no override -- per planning-a-branch-from-an-issue/SKILL.md (\"Do not merge or enable auto-merge; that is a separate, explicit human or CI decision\"), drafting-a-pr-to-merge/SKILL.md's own step 9 (a PR's terminal action is converting to DRAFT, never merging it), and the ranking-the-open-queue Routine specs' \"100% human review of any pull request merge\" policy; closes the gap where check-bash-safety.sh's shell-only 'gh pr merge' block had no equivalent for the platform-integrated MCP tool call. Fails closed (denies) rather than allowing the call through when jq is missing from PATH, the payload is not a JSON object, or tool_name is present but not a string, since none of those states let the hook confirm the call is not a disguised merge_pull_request.",
+      "planes": ["pretooluse"],
+      "local_exclusion": "Grades a Claude Code tool-call matcher only (mcp__github__merge_pull_request), an unconditional deny with no payload inspection; nothing in the working tree to reconstruct this decision against.",
+      "trigger": "PreToolUse matcher mcp__github__merge_pull_request (hooks/hooks.json)",
+      "policy_refs": [],
+      "cluster": "github-operations",
+      "tracking_issue": 637,
+      "status": "active",
+      "supersedes": null
+    },
+    {
       "id": "skill-audit-disclosure",
       "kind": "script",
       "script": [
@@ -197,16 +211,16 @@
       "supersedes": null
     },
     {
-      "id": "merge-pull-request-block",
+      "id": "pr-duplicate-issue",
       "kind": "script",
-      "script": "hooks/check-merge-pull-request-block.sh",
-      "rule": "Denies every mcp__github__merge_pull_request call unconditionally, with no override -- merging a PR is always a separate, explicit human or CI decision. Fails closed (denies) rather than allowing the call through when jq is missing from PATH, the payload is not a JSON object, or tool_name is present but not a string, since none of those states let the hook confirm the call is not a disguised merge_pull_request.",
+      "script": ["hooks/check-pr-duplicate-issue.sh", "hooks/gitapex_check_pr_duplicate_issue.py"],
+      "rule": "Denies mcp__github__create_pull_request when the new PR's own resolving-cited issue (Closes/Fixes/Resolves) is already cited -- resolving or context (Closes/Fixes/Resolves/Refs/bare #N) -- by another currently-open PR, unless the new PR's own body carries an explicit `Duplicate-PR-waiver: <reason>` line; fails closed on a missing GH_TOKEN/GITHUB_TOKEN or an unresolvable open-PR-list fetch.",
       "planes": ["pretooluse"],
-      "local_exclusion": "PreToolUse-only: grades a Claude Code tool-call JSON payload arriving on stdin, which has no working-tree equivalent to reconstruct ahead of a push.",
-      "trigger": "PreToolUse matcher mcp__github__merge_pull_request (hooks/hooks.json)",
+      "local_exclusion": "Grades the new PR's own citations against live open-PR state on GitHub; 'other currently-open PRs' has no local/offline equivalent to check against.",
+      "trigger": "PreToolUse matcher mcp__github__create_pull_request (hooks/hooks.json)",
       "policy_refs": [],
-      "cluster": "github-operations",
-      "tracking_issue": 637,
+      "cluster": ["plan-integrity", "github-operations"],
+      "tracking_issue": 1197,
       "status": "active",
       "supersedes": null
     },
@@ -983,6 +997,20 @@
       "tracking_issue": 1178,
       "status": "active",
       "supersedes": null
+    },
+    {
+      "id": "betterleaks-merge-gate",
+      "kind": "script",
+      "script": [".github/scripts/gitapex_run_betterleaks.py", ".github/workflows/betterleaks-merge-gate.yml"],
+      "rule": "Every pull_request runs a full-history betterleaks secret scan (uv run --frozen python3 .github/scripts/gitapex_run_betterleaks.py --mode history, against the flake.nix-pinned 1.6.1 binary built via `nix build .#betterleaks` and the committed .betterleaks.toml) -- closing the --no-verify bypass left open by the pre-commit/pre-push hooks alone (issue #890). Registered as a required status check in .github/rulesets/main.json; a failing run only blocks merge once a human dispatches apply-rulesets.yml (a separate, reviewer-gated step -- see that workflow and docs/runbooks/rulesets.md) to apply that file's committed source of truth to the live GitHub ruleset.",
+      "planes": ["ci"],
+      "local_exclusion": "Duplicates, at CI scope, the same full-history scan the pre-push betterleaks-history hook in .pre-commit-config.yaml already runs locally; this entry registers issue #894's separate merge-path enforcement (the local hook is bypassable with --no-verify), not a third local invocation of the same script.",
+      "trigger": ".github/workflows/betterleaks-merge-gate.yml on pull_request (no paths filter, so a required check can never be left Pending) and workflow_dispatch",
+      "policy_refs": ["main-branch-ruleset"],
+      "cluster": "secret-scanning",
+      "tracking_issue": 894,
+      "status": "active",
+      "supersedes": null
     }
   ],
   "clusters": {
@@ -995,6 +1023,7 @@
     "supply-chain": "Toolchain and dependency provisioning, and manifest-identity drift.",
     "test-integrity": "Quality floors on the artifacts backing the other clusters' own gates: test-suite coverage, static type checking, and static analysis of the gate scripts' own error paths.",
     "registry-integrity": "Self-validation of this registry file itself against its schema and against the repo's real files.",
-    "runtime-compatibility": "Cross-runtime execution-requirement compatibility matrix (parent issue #307's W2): schema validation now, real-runtime research-data drift checks once populated."
+    "runtime-compatibility": "Cross-runtime execution-requirement compatibility matrix (parent issue #307's W2): schema validation now, real-runtime research-data drift checks once populated.",
+    "secret-scanning": "Detection of credentials and other secrets committed to the repository, on both the local hook path and the CI merge path."
   }
 }

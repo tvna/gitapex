@@ -26,6 +26,36 @@ Two scopes, one per git stage:
     undocumented), and it still catches a secret introduced by a history
     rewrite or by a ``git commit --no-verify`` that skipped the staged hook.
 
+    ``--log-opts=HEAD`` is passed explicitly (issue #894, live-reproduced
+    on that issue's own CI job before being trusted): with no ``--log-opts``
+    at all, ``betterleaks git`` walks every ref its process can see, not
+    just the checked-out branch. A checkout whose remote has fetched other
+    branches -- ``git clone``'s own default refspec
+    (``+refs/heads/*:refs/remotes/origin/*``), or a CI job whose
+    ``fetch-depth: 0`` GitHub's own docs describe as "all history for all
+    branches and tags" -- then has any finding on any other fetched
+    branch, merged or not, reported against a scan of *this* one. Verified
+    live at 1.6.1: a scan with those other branches fetched and no
+    ``--log-opts`` reported findings from a commit that
+    ``git merge-base --is-ancestor <sha> HEAD`` confirms is not even an
+    ancestor of the checked-out branch; the identical scan with
+    ``--log-opts=HEAD`` added reported none. ``HEAD`` resolves correctly
+    whether the checkout is on a branch or detached (also verified live),
+    so this holds for both the pre-push hook and a CI job that checks out
+    a specific commit.
+
+    Known, disclosed edge case (found by an adversarial review of this
+    same change): a repository with zero commits (unborn ``HEAD``) used to
+    report a vacuous "no leaks found" here; ``--log-opts=HEAD`` now makes
+    ``betterleaks`` fail instead, since ``HEAD`` does not resolve. That is
+    a fail-*closed* change, consistent with this file's own no-fail-open
+    stance elsewhere, and not reachable through either real caller: the
+    pre-push hook only runs at the ``git push`` stage
+    (``.pre-commit-config.yaml``'s ``betterleaks-history``, ``stages:
+    [pre-push]``), and the CI job only runs on a pull request -- both
+    require at least one commit to exist already. Left unguarded rather
+    than adding speculative handling for a path neither caller can reach.
+
 Why a local wrapper instead of betterleaks' own published pre-commit repo:
 a remote ``rev`` would be a second version source alongside ``flake.nix``,
 which is exactly the two-different-versions split issue #678 exists to
@@ -84,9 +114,13 @@ _SCAN_TIMEOUT_SECONDS = 300
 _COMMON_FLAGS: tuple[str, ...] = ("--redact", "--verbose", "--no-banner")
 
 # Per-mode flags. `staged` mirrors betterleaks' own published hook entry.
+# `history`'s `--log-opts=HEAD` is not a push-range restriction -- see the
+# module docstring's own `history` section for why it is required rather
+# than optional: with no `--log-opts` at all, `betterleaks git` walks every
+# ref the process can see, not just the checked-out branch.
 _MODE_FLAGS: dict[str, tuple[str, ...]] = {
     "staged": ("--pre-commit", "--staged"),
-    "history": (),
+    "history": ("--log-opts=HEAD",),
 }
 
 _MISSING_BINARY_MESSAGE = """\
