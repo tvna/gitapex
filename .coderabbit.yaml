@@ -127,15 +127,17 @@ reviews:
     #                        with no implementation behind them yet.
     #   gitleaks          -- overlaps betterleaks, which #890 wired into the
     #                        pre-commit and pre-push hooks, so this is no
-    #                        longer an unconsumed-capability gap. It stays
-    #                        enabled for a different and narrower reason:
-    #                        both of those hooks are bypassable with
-    #                        `--no-verify` and no CI workflow runs
-    #                        betterleaks yet, so CodeRabbit's own pass is
-    #                        currently the only secret scan on the
-    #                        merge path. Revisit this line if a CI job ever
-    #                        runs betterleaks -- at that point it becomes
-    #                        real duplication.
+    #                        longer an unconsumed-capability gap. It stayed
+    #                        enabled for a narrower reason: both of those
+    #                        hooks are bypassable with `--no-verify`, and
+    #                        until #894 no CI workflow ran betterleaks, so
+    #                        CodeRabbit's own pass was the only secret scan
+    #                        on the merge path. #894 added that CI job
+    #                        (.github/workflows/betterleaks-merge-gate.yml),
+    #                        so this is now real duplication -- disabling
+    #                        gitleaks here is #894's own named follow-up,
+    #                        not done in that same change (see the issue's
+    #                        own "Follow-up once this lands" section).
     #   skillspector      -- no local equivalent at all.
 
 chat:

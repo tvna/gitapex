@@ -1,0 +1,95 @@
+# Issue #894: run betterleaks on the merge path, closing the --no-verify
+# bypass left by #890. The pre-commit/pre-push hooks #890/#892 wired
+# (.pre-commit-config.yaml's `betterleaks-staged`/`betterleaks-history`)
+# cover the local path only, and both are skippable with --no-verify; no CI
+# workflow ran betterleaks before this, so CodeRabbit's own bundled
+# gitleaks pass was the only secret scan actually enforced on the merge
+# path (see .coderabbit.yaml's own comment on that gap).
+#
+# Full-history scope, not the PR diff range only -- the scope choice the
+# issue itself left open. This matches .github/scripts/gitapex_run_betterleaks.py's
+# own `--mode history` (the pre-push hook's scope) and for the same reason
+# that hook already states: it is the backstop for a commit that never saw
+# a local hook at all (a --no-verify commit, an amend, or a history
+# rewrite), so scoping this job to the push/PR range would leave exactly
+# the gap this issue exists to close. Measured locally at a few seconds
+# over the full repository history, so the added cost is negligible, and
+# the last full-history scan found no real leak (this issue's own
+# Non-goals), so the baseline stays green without remediation.
+#
+# Deliberately no top-level `paths:` filter, same rationale already stated
+# in waza-eval-gate.yml/hidden-characters-gate.yml: once this job is
+# promoted to a required status check in branch protection (a repo-owner
+# action outside this PR's own reach -- see the issue's own Acceptance
+# Criteria Map), a path-filtered trigger would never fire on an unrelated
+# PR and would leave that PR's required check Pending forever. A secret can
+# land in any tracked file, so there is no path this job could safely skip
+# anyway.
+name: Betterleaks merge gate
+
+on:
+  pull_request: {}
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  betterleaks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+        with:
+          # Full-history scan (see the workflow-level comment above), so the
+          # shallow default (fetch-depth: 1) would silently under-scan.
+          fetch-depth: '0'
+
+      # betterleaks is provisioned from this repo's flake (SHA256-pinned to
+      # 1.6.1 there), not a separately downloaded copy -- the flake is the
+      # single version source of truth, and .betterleaks.toml's allowlist
+      # was verified against that exact build (see that file's own header).
+      # gitapex_scan_toolchain_pin_drift.py (the toolchain-pin-drift gate)
+      # already blocks any workflow that references betterleaks' upstream
+      # repo directly instead of going through flake.nix.
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25  # v22
+        with:
+          extra-conf: "experimental-features = nix-command flakes"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Build betterleaks (flake-pinned)
+        run: |
+          set -euo pipefail
+          nix build .#betterleaks
+          echo "$PWD/result/bin" >> "$GITHUB_PATH"
+
+      # Acceptance criterion "one version, one config" (see the issue's own
+      # Acceptance Criteria Map): prove in the job log which binary and
+      # which config file this run actually resolved, rather than only
+      # asserting it in prose.
+      - name: Report resolved betterleaks version and config
+        run: |
+          set -euo pipefail
+          betterleaks version
+          betterleaks config path
+
+      # Same script .pre-commit-config.yaml's own pre-push
+      # `betterleaks-history` hook already calls, at the same `--mode
+      # history` scope -- not reinvented here. `--redact` is unconditional
+      # inside that script (CLAUDE.md section 4: no secret value in any
+      # output sink), so a finding's rule id/path/line reaches this log but
+      # its value never does.
+      - name: Run betterleaks (full history)
+        run: uv run --frozen python3 .github/scripts/gitapex_run_betterleaks.py --mode history
