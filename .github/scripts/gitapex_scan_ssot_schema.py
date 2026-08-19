@@ -106,6 +106,31 @@ class PolicySource(BaseModel):
     authority: str
 
 
+class GateFailMode(BaseModel):
+    """Mirrors gate.fail_mode (issue #1231): what a gate does when it cannot
+    correctly evaluate its own condition, distinct from a confirmed policy
+    violation. Bare ``str`` on ``rationale``, no extra length constraint --
+    same division of responsibility as ``Gate`` itself (jsonschema is the
+    strict validator; this is the secondary typed-access layer)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    on_error: Literal["fail-open", "fail-closed", "mixed"]
+    rationale: str
+
+
+class GateTargetEntry(BaseModel):
+    """Mirrors one gate.target[] entry (issue #1231): the machine-comparable
+    subset of what ``trigger`` describes in prose."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal[
+        "mcp-tool", "bash-pattern", "file-glob", "workflow-event", "github-native", "cross-registry-consistency"
+    ]
+    ref: str
+
+
 class Gate(BaseModel):
     """.gitapex/ssot.json ``gates[]`` entry: one deterministic gate gitapex
     enforces on itself. ``script``/``native_rule`` stay optional here -- the
@@ -130,6 +155,11 @@ class Gate(BaseModel):
     tracking_issue: int | None
     status: Literal["experimental", "active", "deprecated"]
     supersedes: str | None
+    fail_mode: GateFailMode | None = None
+    target: list[GateTargetEntry] | None = None
+    bypass_review_status: Literal["not-yet-reviewed", "reviewed-none-found", "reviewed-found-listed-below"] | None = (
+        None
+    )
 
 
 class SsotMeta(BaseModel):
