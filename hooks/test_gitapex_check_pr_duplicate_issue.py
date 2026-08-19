@@ -17,8 +17,10 @@ import urllib.error
 from collections.abc import Callable
 from io import BytesIO
 from typing import Any
+from unittest.mock import Mock
 
 import gitapex_check_pr_duplicate_issue as checker
+import pytest
 
 
 class _FakeResponse:
@@ -157,20 +159,14 @@ def test_fetch_open_pull_requests_skips_entries_missing_a_number() -> None:
 
 def test_fetch_open_pull_requests_raises_on_non_array_response() -> None:
     opener = _opener_for({1: {"not": "a list"}})  # type: ignore[dict-item]
-    try:
+    with pytest.raises(checker.GitHubApiError, match="expected a JSON array"):
         checker.fetch_open_pull_requests("tvna", "gitapex", "tok", opener=opener, sleeper=_no_sleep)
-        raise AssertionError("expected GitHubApiError")
-    except checker.GitHubApiError as error:
-        assert "expected a JSON array" in str(error)
 
 
 def test_fetch_open_pull_requests_raises_on_persistent_5xx() -> None:
     opener = _opener_for({1: 503})
-    try:
+    with pytest.raises(checker.GitHubApiError, match="fetch-failed"):
         checker.fetch_open_pull_requests("tvna", "gitapex", "tok", opener=opener, sleeper=_no_sleep)
-        raise AssertionError("expected GitHubApiError")
-    except checker.GitHubApiError as error:
-        assert "fetch-failed" in str(error)
 
 
 # --- evaluate: the actual gate decision ---------------------------------
@@ -178,23 +174,23 @@ def test_fetch_open_pull_requests_raises_on_persistent_5xx() -> None:
 
 def test_allowed_when_new_pr_cites_no_resolving_issue() -> None:
     # Refs-only citation: nothing to duplicate-check, no network call needed
-    # (an opener that raises proves it was never invoked).
-    def _never(_request: Any) -> Any:
-        raise AssertionError("should not fetch when there is no resolving citation")
-
-    passed, message = checker.evaluate("tvna", "gitapex", "x", "Refs #1", token="tok", opener=_never)
+    # -- a Mock opener proves it was never invoked, via assert_not_called()
+    # below, rather than a hand-rolled callback whose own raise-on-call body
+    # is unreachable (and so uncovered) on every passing run.
+    opener = Mock()
+    passed, message = checker.evaluate("tvna", "gitapex", "x", "Refs #1", token="tok", opener=opener)
     assert passed
     assert "nothing to duplicate-check" in message
+    opener.assert_not_called()
 
 
 def test_allowed_when_waiver_present_skips_the_fetch_entirely() -> None:
-    def _never(_request: Any) -> Any:
-        raise AssertionError("should not fetch when a waiver is present")
-
+    opener = Mock()
     body = "Closes #42\n\nDuplicate-PR-waiver: splitting into two PRs, see discussion in #42"
-    passed, message = checker.evaluate("tvna", "gitapex", "x", body, token="tok", opener=_never)
+    passed, message = checker.evaluate("tvna", "gitapex", "x", body, token="tok", opener=opener)
     assert passed
     assert "waiver" in message
+    opener.assert_not_called()
 
 
 def test_denied_when_no_token_and_a_resolving_citation_exists() -> None:
@@ -393,11 +389,8 @@ def test_call_retries_on_os_error_then_succeeds() -> None:
 def test_call_does_not_retry_a_definitive_4xx() -> None:
     opener = _opener_for({1: 404})
     calls: list[float] = []
-    try:
+    with pytest.raises(checker.GitHubApiError):
         checker._call("https://api.github.com/x", "tok", opener, calls.append, max_attempts=3)
-        raise AssertionError("expected GitHubApiError")
-    except checker.GitHubApiError:
-        pass
     assert calls == []  # never slept -- a 4xx breaks out of the retry loop immediately
 
 
@@ -413,11 +406,8 @@ def test_fetch_open_pull_requests_fails_closed_when_the_last_allowed_page_is_sti
     page1 = [_pr(n) for n in range(1, 101)]
     page2 = [_pr(n) for n in range(101, 201)]
     opener = _opener_for({1: page1, 2: page2})
-    try:
+    with pytest.raises(checker.GitHubApiError, match="pagination-bound-reached"):
         checker.fetch_open_pull_requests("tvna", "gitapex", "tok", opener=opener, sleeper=_no_sleep, max_pages=2)
-        raise AssertionError("expected GitHubApiError")
-    except checker.GitHubApiError as error:
-        assert "pagination-bound-reached" in str(error)
 
 
 def test_fetch_open_pull_requests_succeeds_when_the_final_page_is_short() -> None:
