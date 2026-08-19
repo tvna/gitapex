@@ -314,6 +314,49 @@ def subprocess_executor(argv: Sequence[str], timeout: int) -> str:
     return result.stdout
 
 
+def redact_executor_failure_reason(exc: Exception) -> str:
+    """A safe, disclosed reason string for ``exc`` -- never the raw text of
+    a ``RuntimeError`` or ``subprocess.TimeoutExpired``, both of which can
+    embed live, externally-produced content a caller's own result blob
+    must not republish verbatim: ``subprocess_executor``'s own
+    ``RuntimeError`` message above includes the invoked model CLI's raw
+    stderr (issue #1143 adversarial review round), and
+    ``TimeoutExpired``'s own string form includes the full argv it ran,
+    which itself carries a fixture's prompt text (``build_command``).
+    Neither is safe to echo into a result a caller's own docstring calls
+    "loud and visible" -- CLAUDE.md's own rule against echoing untrusted/
+    external content into a generated artifact. A ``ValueError``/
+    ``OSError``, in contrast, is always raised by this module's or the
+    standard library's own code in response to malformed LOCAL,
+    repo-committed input (a missing file path, a YAML/JSON parse or
+    jsonschema-validation complaint about a committed fixture/corpus
+    file) -- never in response to a live model's own generated output.
+    Some of that text does interpolate a value straight out of the
+    parsed file (a grader name, a ``tasks:`` glob pattern) rather than
+    being purely hardcoded in this module's own source (code-review
+    finding on issue #1144's own PR, correcting an earlier, imprecise
+    "always code-controlled" framing here) -- but that value still comes
+    from a file reviewed and merged through this repository's own normal
+    PR process, not from anything live, external, or attacker-supplied
+    at run time, so it stays verbatim: genuinely useful for diagnosing a
+    malformed local corpus/fixture file, and not the live-model-output
+    leak this function exists to prevent. The split is by exception
+    type, not a per-instance guess, precisely because that type reliably
+    tracks which side of the local-input/live-output line a message's
+    content came from.
+
+    Hoisted here (issue #1144) rather than duplicated across callers:
+    every ``evals/scripts/*.py`` module that records a skipped entry's or
+    fixture's own reason (``gitapex_run_effectiveness_correlation.py``,
+    ``gitapex_run_eval_suite.py``) already imports this module, so this
+    is zero new import edges and one single definition of the redaction
+    rule.
+    """
+    if isinstance(exc, (RuntimeError, subprocess.TimeoutExpired)):
+        return f"{type(exc).__name__}: model CLI invocation failed or timed out (detail intentionally not republished here)"
+    return str(exc)
+
+
 @dataclass(frozen=True)
 class AblationResult:
     """Both arms of one task's comparison: raw outputs and their scores."""

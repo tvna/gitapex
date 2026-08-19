@@ -669,6 +669,230 @@ def test_run_eval_suite_raises_on_zero_matched_fixtures_without_calling_executor
 
 
 # ---------------------------------------------------------------------------
+# _is_content_policy_rejection (issue #1144)
+# ---------------------------------------------------------------------------
+
+_REAL_REJECTION_TEXT = (
+    "model CLI exited 1: [bio] I can't help with this request. See "
+    "https://www.anthropic.com/legal/aup for more information."
+)
+
+
+def test_is_content_policy_rejection_true_when_both_markers_present():
+    assert gitapex_run_eval_suite._is_content_policy_rejection(RuntimeError(_REAL_REJECTION_TEXT)) is True
+
+
+def test_is_content_policy_rejection_false_when_only_one_marker_present():
+    assert gitapex_run_eval_suite._is_content_policy_rejection(RuntimeError("can't help with this")) is False
+    assert gitapex_run_eval_suite._is_content_policy_rejection(RuntimeError("see anthropic.com/legal/aup")) is False
+
+
+def test_is_content_policy_rejection_false_for_unrelated_failure():
+    assert (
+        gitapex_run_eval_suite._is_content_policy_rejection(RuntimeError("model CLI exited 1: connection reset"))
+        is False
+    )
+
+
+def test_is_content_policy_rejection_ignores_the_varying_bracketed_reason_tag():
+    # The bracketed tag ("[bio]", "[weapons]", ...) varies between real
+    # rejections and is deliberately not part of the match -- only the two
+    # fixed marker strings are.
+    differently_tagged = _REAL_REJECTION_TEXT.replace("[bio]", "[some-other-category]")
+    assert gitapex_run_eval_suite._is_content_policy_rejection(RuntimeError(differently_tagged)) is True
+
+
+def test_is_content_policy_rejection_matches_typographic_apostrophe():
+    # Regression (code review finding): the classifier's own rejection text
+    # is natural-language prose, not a fixed machine-generated string -- a
+    # typographic apostrophe (U+2019) must still match the marker written
+    # with a plain ASCII apostrophe, or a live rejection rendered this way
+    # re-raises and aborts the whole suite instead of being gracefully
+    # skipped.
+    text = _REAL_REJECTION_TEXT.replace("can't", "can" + chr(0x2019) + "t")
+    assert "can't" not in text  # confirm the substitution actually happened
+    assert gitapex_run_eval_suite._is_content_policy_rejection(RuntimeError(text)) is True
+
+
+def test_is_content_policy_rejection_matches_differently_cased_sentence():
+    # A sentence-initial "Can't" (capitalized) must still match the
+    # lowercase marker.
+    text = _REAL_REJECTION_TEXT.replace("can't", "Can't")
+    assert gitapex_run_eval_suite._is_content_policy_rejection(RuntimeError(text)) is True
+
+
+# ---------------------------------------------------------------------------
+# Content-policy rejection handling in run_eval_suite (issue #1144)
+# ---------------------------------------------------------------------------
+
+
+class _ContentPolicyRejectingExecutor:
+    """Raises a content-policy-shaped RuntimeError for any call whose argv
+    contains ``trigger``; returns ``output`` for every other call. Records
+    every (argv, timeout) like the module's other hand-written executors."""
+
+    def __init__(self, trigger: str, output: str) -> None:
+        self._trigger = trigger
+        self._output = output
+        self.calls: list[tuple[list[str], int]] = []
+
+    def __call__(self, argv, timeout) -> str:
+        self.calls.append((list(argv), timeout))
+        if any(self._trigger in arg for arg in argv):
+            raise RuntimeError(_REAL_REJECTION_TEXT)
+        return self._output
+
+
+_REJECTED_TASK_TEXT = "id: reject-task\ninputs:\n  prompt: TRIGGER_REJECT\nexpected:\n  output_contains: ['ok']\n"
+
+
+def test_run_eval_suite_skips_content_policy_rejected_fixture_but_scores_sibling(tmp_path: Path):
+    eval_yaml = _write_suite(
+        tmp_path,
+        eval_yaml_text=BASE_EVAL_YAML.replace("trials_per_task: 2", "trials_per_task: 1"),
+        tasks={"a.yaml": TASK_A_TEXT, "b.yaml": _REJECTED_TASK_TEXT},
+    )
+    executor = _ContentPolicyRejectingExecutor(trigger="TRIGGER_REJECT", output="ok output")
+
+    result = gitapex_run_eval_suite.run_eval_suite(
+        eval_yaml, _skill_md(tmp_path), executor=executor, model_cli="claude"
+    )
+
+    assert [s["fixture_id"] for s in result.scores] == ["task-a"]
+    assert result.n_fixtures == 1
+    assert result.mean_score == pytest.approx(1.0)  # only task-a's score, never averaged with the skip
+    assert len(result.skipped_fixtures) == 1
+    assert result.skipped_fixtures[0]["fixture_id"] == "reject-task"
+    assert "RuntimeError" in result.skipped_fixtures[0]["reason"]
+    assert "can't help" not in result.skipped_fixtures[0]["reason"]  # redacted, not the raw rejection text
+
+
+def test_run_eval_suite_content_policy_rejection_on_first_trial_does_not_crash(tmp_path: Path):
+    # The real defeat case found during design: a rejection on trial_index
+    # 0 (the very first attempt) leaves `trials` empty for that fixture --
+    # a naive bare `break` would then crash `statistics.mean(trial["score"]
+    # for trial in trials)` with StatisticsError on that empty sequence.
+    # trials_per_task: 2 (BASE_EVAL_YAML's default) with a rejection on
+    # every call is the sharpest form of this: the first trial itself
+    # already sets skip_reason and breaks, so trials never fills at all.
+    eval_yaml = _write_suite(tmp_path, tasks={"a.yaml": TASK_A_TEXT, "b.yaml": _REJECTED_TASK_TEXT})
+    executor = _ContentPolicyRejectingExecutor(trigger="TRIGGER_REJECT", output="ok output")
+
+    result = gitapex_run_eval_suite.run_eval_suite(
+        eval_yaml, _skill_md(tmp_path), executor=executor, model_cli="claude"
+    )  # must not raise StatisticsError
+
+    assert result.n_fixtures == 1
+    assert len(result.skipped_fixtures) == 1
+    # Only one dispatch for the rejected fixture (trial_index 0, then break)
+    # -- trials 2 and 3 must never be attempted once trial 1 is rejected.
+    rejected_calls = [c for c in executor.calls if any("TRIGGER_REJECT" in a for a in c[0])]
+    assert len(rejected_calls) == 1
+
+
+class _RejectsAfterNCallsExecutor:
+    """Succeeds for the first ``n_successes`` calls, then raises the
+    content-policy rejection for every call after that -- simulates a
+    LATER trial of the SAME fixture being rejected after one or more
+    earlier trials of that fixture already succeeded (distinct from
+    ``_ContentPolicyRejectingExecutor``, whose trigger-substring match
+    makes every trial of a given fixture behave identically, unable to
+    exercise a within-fixture partial-success scenario)."""
+
+    def __init__(self, n_successes: int, output: str) -> None:
+        self._n_successes = n_successes
+        self._output = output
+        self.calls: list[tuple[list[str], int]] = []
+
+    def __call__(self, argv, timeout) -> str:
+        self.calls.append((list(argv), timeout))
+        if len(self.calls) > self._n_successes:
+            raise RuntimeError(_REAL_REJECTION_TEXT)
+        return self._output
+
+
+def test_run_eval_suite_partial_success_then_rejection_scores_successful_subset(tmp_path: Path) -> None:
+    # Regression (code review finding): a rejection on a LATER trial of a
+    # fixture must not discard EARLIER trials of that same fixture that
+    # already succeeded -- those are real, already-paid-for live-call
+    # results. The fixture still scores, on the successful subset, with
+    # the rejection disclosed rather than the whole fixture vanishing into
+    # skipped_fixtures as if nothing had been learned about it at all.
+    eval_yaml = _write_suite(
+        tmp_path,
+        eval_yaml_text=BASE_EVAL_YAML.replace("trials_per_task: 2", "trials_per_task: 3"),
+        tasks={"a.yaml": TASK_A_TEXT},
+    )
+    executor = _RejectsAfterNCallsExecutor(n_successes=2, output="ok output")
+
+    result = gitapex_run_eval_suite.run_eval_suite(
+        eval_yaml, _skill_md(tmp_path), executor=executor, model_cli="claude"
+    )
+
+    assert result.n_fixtures == 1
+    assert result.skipped_fixtures == []  # not a full skip -- some trials succeeded
+    assert len(result.scores[0]["trials"]) == 2  # only the 2 successful trials, not 3
+    assert result.scores[0]["score"] == pytest.approx(1.0)
+    assert "content_policy_partial_rejection" in result.scores[0]
+    assert "RuntimeError" in result.scores[0]["content_policy_partial_rejection"]
+    assert "can't help" not in result.scores[0]["content_policy_partial_rejection"]  # redacted
+
+
+def test_run_eval_suite_all_fixtures_rejected_raises_value_error(tmp_path: Path):
+    eval_yaml = _write_suite(
+        tmp_path,
+        eval_yaml_text=BASE_EVAL_YAML.replace("trials_per_task: 2", "trials_per_task: 1"),
+        tasks={"a.yaml": _REJECTED_TASK_TEXT},
+    )
+    executor = _ContentPolicyRejectingExecutor(trigger="TRIGGER_REJECT", output="ok output")
+
+    with pytest.raises(ValueError, match=r"all 1 fixture.*skipped") as excinfo:
+        gitapex_run_eval_suite.run_eval_suite(eval_yaml, _skill_md(tmp_path), executor=executor, model_cli="claude")
+
+    # Regression (code review finding): run_eval_suite raises before ever
+    # constructing a SuiteResult, so this ValueError's own text is the
+    # only place fixture-level detail can reach a caller that only
+    # catches ValueError and keeps it verbatim -- it must name the actual
+    # skipped fixture, not just a bare count.
+    assert "reject-task" in str(excinfo.value)
+    assert "RuntimeError" in str(excinfo.value)
+
+
+def test_run_eval_suite_all_fixtures_rejected_names_every_fixture(tmp_path: Path):
+    eval_yaml = _write_suite(
+        tmp_path,
+        eval_yaml_text=BASE_EVAL_YAML.replace("trials_per_task: 2", "trials_per_task: 1"),
+        tasks={
+            "a.yaml": _REJECTED_TASK_TEXT,
+            "b.yaml": _REJECTED_TASK_TEXT.replace("reject-task", "reject-task-2"),
+        },
+    )
+    executor = _ContentPolicyRejectingExecutor(trigger="TRIGGER_REJECT", output="ok output")
+
+    with pytest.raises(ValueError) as excinfo:
+        gitapex_run_eval_suite.run_eval_suite(eval_yaml, _skill_md(tmp_path), executor=executor, model_cli="claude")
+
+    assert "reject-task" in str(excinfo.value)
+    assert "reject-task-2" in str(excinfo.value)
+
+
+def test_run_eval_suite_non_content_policy_runtime_error_still_aborts_whole_suite(tmp_path: Path):
+    # Regression: a generic (non-content-policy) RuntimeError must still
+    # propagate and abort the whole suite, exactly as before this behavior
+    # existed -- only the specific two-marker signature is treated as a
+    # skippable content-policy rejection.
+    eval_yaml = _write_suite(tmp_path, tasks={"a.yaml": TASK_A_TEXT})
+
+    def generic_failure(argv, timeout):
+        raise RuntimeError("model CLI exited 1: connection reset by peer")
+
+    with pytest.raises(RuntimeError, match="connection reset"):
+        gitapex_run_eval_suite.run_eval_suite(
+            eval_yaml, _skill_md(tmp_path), executor=generic_failure, model_cli="claude"
+        )
+
+
+# ---------------------------------------------------------------------------
 # to_eval_scores_json / eval-scores.schema.json conformance
 # ---------------------------------------------------------------------------
 
@@ -697,6 +921,50 @@ def test_to_eval_scores_json_shape(tmp_path: Path):
     assert payload["n_fixtures"] == 1
     assert payload["scores"][0]["fixture_id"] == "task-a"
     assert "trials" in payload["scores"][0]  # additive, schema-permitted detail
+    assert payload["skipped_fixtures"] == []
+
+
+def test_to_eval_scores_json_with_populated_skipped_fixtures_validates_against_the_real_schema(tmp_path: Path):
+    # Regression: skipped_fixtures[] is additive (eval-scores.schema.json
+    # places no restriction on additional properties), but that must hold
+    # for real, non-empty skip data too, not only the empty-list case every
+    # other test in this file exercises incidentally.
+    eval_yaml = _write_suite(
+        tmp_path,
+        eval_yaml_text=BASE_EVAL_YAML.replace("trials_per_task: 2", "trials_per_task: 1"),
+        tasks={"a.yaml": TASK_A_TEXT, "b.yaml": _REJECTED_TASK_TEXT},
+    )
+    executor = _ContentPolicyRejectingExecutor(trigger="TRIGGER_REJECT", output="ok output")
+    result = gitapex_run_eval_suite.run_eval_suite(
+        eval_yaml, _skill_md(tmp_path), executor=executor, model_cli="claude"
+    )
+
+    payload = gitapex_run_eval_suite.to_eval_scores_json(result)
+    assert payload["skipped_fixtures"] == [
+        {"fixture_id": "reject-task", "reason": payload["skipped_fixtures"][0]["reason"]}
+    ]
+    schema = json.loads(EVAL_SCORES_SCHEMA_PATH.read_text(encoding="utf-8"))
+    jsonschema.validate(payload, schema)  # no raise
+
+
+def test_to_eval_scores_json_with_partial_rejection_validates_against_the_real_schema(tmp_path: Path):
+    # Same additive-field regression as the skipped_fixtures test above,
+    # for the sibling content_policy_partial_rejection key on a scores[]
+    # entry (a fixture with some, not all, trials rejected).
+    eval_yaml = _write_suite(
+        tmp_path,
+        eval_yaml_text=BASE_EVAL_YAML.replace("trials_per_task: 2", "trials_per_task: 3"),
+        tasks={"a.yaml": TASK_A_TEXT},
+    )
+    executor = _RejectsAfterNCallsExecutor(n_successes=2, output="ok output")
+    result = gitapex_run_eval_suite.run_eval_suite(
+        eval_yaml, _skill_md(tmp_path), executor=executor, model_cli="claude"
+    )
+
+    payload = gitapex_run_eval_suite.to_eval_scores_json(result)
+    assert "content_policy_partial_rejection" in payload["scores"][0]
+    schema = json.loads(EVAL_SCORES_SCHEMA_PATH.read_text(encoding="utf-8"))
+    jsonschema.validate(payload, schema)  # no raise
 
 
 # ---------------------------------------------------------------------------

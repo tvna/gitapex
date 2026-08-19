@@ -41,7 +41,18 @@ properties, so a ``trials`` key carrying per-trial/per-grader detail is added
 to each ``scores[]`` entry without breaking conformance. ``scores[]`` is
 sorted by ``fixture_id`` (not filesystem/glob discovery order) because the
 schema's own field description states this explicitly: "sorted by
-fixture_id so two runs of the same corpus produce a stable diff."
+fixture_id so two runs of the same corpus produce a stable diff." The same
+additional-properties permissiveness carries a second additive field,
+``skipped_fixtures[]`` (issue #1144): a fixture with a content-policy
+rejection (see ``_is_content_policy_rejection`` below) on every one of its
+trials lands there with its reason instead of in ``scores[]`` -- excluded
+from ``n_fixtures``/``mean_score``, loud and visible rather than silently
+dropped, the same convention ``gitapex_run_effectiveness_correlation.py``'s
+own corpus-level ``skipped`` list already established. A fixture with a
+rejection on only SOME of its trials still lands in ``scores[]`` (scored
+on whichever trials succeeded, so already-obtained live-call results are
+never discarded), with the rejection disclosed via a
+``content_policy_partial_rejection`` key on that one entry instead.
 
 ``config.executor`` (every real committed ``eval.yaml`` declares
 ``copilot-sdk``, waza's own executor concept) is read through
@@ -352,12 +363,56 @@ def run_text_grader(output: str, grader_entry: object) -> GraderResult:
 class SuiteResult:
     """A whole suite run's aggregate: one entry per fixture in ``scores``,
     sorted by ``fixture_id`` (see module docstring's "Aggregate output
-    shape" section)."""
+    shape" section). ``skipped_fixtures`` holds any fixture skipped
+    outright (today: a content-policy rejection, see
+    ``_is_content_policy_rejection``) -- ``n_fixtures``/``mean_score``
+    cover only the fixtures actually scored, never a skipped one, the
+    same "loud and visible, never silently dropped" convention
+    ``gitapex_run_effectiveness_correlation.py``'s own ``skipped`` list
+    already established for a whole-suite failure."""
 
     model_id: str
     n_fixtures: int
     mean_score: float
     scores: list[dict[str, Any]]
+    skipped_fixtures: list[dict[str, Any]]
+
+
+# Both substrings must appear in a RuntimeError's own text for a rejection
+# to count as content-policy, not just one -- this is the stable
+# structural signature confirmed empirically against a real live
+# rejection (issue #1183's own pilot): a bracketed reason tag (e.g.
+# "[bio]") varies between rejections and is deliberately not matched on,
+# only these two fixed strings are. Lowercase, ASCII apostrophe: matched
+# against normalized text (see _is_content_policy_rejection) so a
+# differently-cased or typographic-apostrophe rendering of the same
+# sentence still matches -- the natural-language wording is not the
+# stable part of the signature, only these two substrings are.
+_CONTENT_POLICY_MARKERS = ("can't help with this", "anthropic.com/legal/aup")
+
+
+def _is_content_policy_rejection(exc: RuntimeError) -> bool:
+    """True if ``exc`` (as raised by ``executor``, e.g.
+    ``gitapex_run_ablation.subprocess_executor``'s own ``RuntimeError``)
+    carries Anthropic's own content-policy classifier rejection
+    signature -- confirmed empirically against a real live rejection
+    (issue #1183's own pilot: at least one committed adversarial fixture,
+    ``responding-to-a-fresh-arrival``'s ``content-injection.yaml``,
+    deterministically trips it when actually executed live). Requires
+    BOTH markers present, not just one, so an unrelated failure that
+    happens to mention only one of the two strings is not misclassified.
+
+    ``exc``'s text is casefolded and its apostrophe normalized (``'``,
+    U+2019, to the plain ASCII ``'`` ``_CONTENT_POLICY_MARKERS`` uses)
+    before matching (code-review finding): the classifier's own rejection
+    text is natural-language prose, not a fixed machine-generated string,
+    so its exact capitalization and apostrophe glyph are not guaranteed --
+    only the two marker substrings are the stable part of the signature.
+    Missing this rejection re-raises the ``RuntimeError`` and aborts the
+    whole suite, exactly the failure mode this function exists to avoid.
+    """
+    text = str(exc).replace(chr(0x2019), "'").casefold()  # typographic right single quote -> ASCII
+    return all(marker in text for marker in _CONTENT_POLICY_MARKERS)
 
 
 def run_eval_suite(
@@ -377,6 +432,27 @@ def run_eval_suite(
     ``expected``/``graders`` shape) happens before the first trial of any
     fixture dispatches -- a malformed fixture three suites in must not have
     let the first two already spend real executor calls.
+
+    A fixture whose ``executor`` call raises a content-policy-shaped
+    ``RuntimeError`` (see ``_is_content_policy_rejection``) is skipped
+    rather than treated as a whole-suite failure, and the remaining trials
+    for that one fixture are not attempted -- a live pilot (issue #1183)
+    found this rejection deterministic per identical prompt, so retrying
+    would only spend further live calls on a fixture already known to
+    fail the same way. If NO trial of that fixture succeeded, it lands in
+    the returned ``SuiteResult.skipped_fixtures`` with its (redacted)
+    reason and contributes nothing to ``mean_score``. If one or more
+    earlier trials of that SAME fixture already succeeded before a later
+    one was rejected, those already-obtained (and already-paid-for) trial
+    results are not discarded: the fixture still lands in ``scores``,
+    scored on the successful subset, with the rejection disclosed via a
+    ``content_policy_partial_rejection`` key on its own entry rather than
+    silently dropped. Any other ``RuntimeError`` re-raises unchanged: that
+    means the run's own validity is compromised (auth, network, ...), not
+    just one fixture's content, and must still abort the whole suite
+    exactly as before this behavior existed. Raises ``ValueError`` if
+    every fixture in the suite ends up fully skipped (nothing left to
+    average into ``mean_score``).
     """
     suite = load_eval_suite(eval_yaml_path)
     fixture_paths = discover_task_fixtures(eval_yaml_path, suite["tasks"])
@@ -390,11 +466,19 @@ def run_eval_suite(
     model = suite["config"]["model"]
 
     scores: list[dict[str, Any]] = []
+    skipped_fixtures: list[dict[str, Any]] = []
     for fixture in fixtures:
         trials: list[dict[str, Any]] = []
+        skip_reason: str | None = None
         for trial_index in range(trials_per_task):
             argv = gitapex_run_ablation.build_command(model_cli, fixture["prompt"], skill_md, model=model)
-            output = executor(argv, timeout_seconds)
+            try:
+                output = executor(argv, timeout_seconds)
+            except RuntimeError as exc:
+                if not _is_content_policy_rejection(exc):
+                    raise
+                skip_reason = gitapex_run_ablation.redact_executor_failure_reason(exc)
+                break
             substring_score = gitapex_score_contract.score(output, fixture["expected"])
             grader_results = [run_text_grader(output, entry) for entry in fixture["graders"]]
             trial_score = statistics.mean([substring_score] + [1.0 if gr.passed else 0.0 for gr in grader_results])
@@ -407,22 +491,67 @@ def run_eval_suite(
                     ],
                 }
             )
+        if skip_reason is not None and not trials:
+            # Explicit flag-and-continue, not a bare inner `break`: a
+            # rejection on the very first trial leaves `trials` empty, and
+            # falling through to `statistics.mean(trial["score"] for trial
+            # in trials)` below would crash with StatisticsError on that
+            # empty sequence -- precisely on the fixture this behavior
+            # exists to handle gracefully. `continue` skips both that mean
+            # and the scores.append below for this one fixture.
+            skipped_fixtures.append({"fixture_id": fixture["id"], "reason": skip_reason})
+            continue
         fixture_score = statistics.mean(trial["score"] for trial in trials)
-        scores.append({"fixture_id": fixture["id"], "score": fixture_score, "trials": trials})
+        score_entry: dict[str, Any] = {"fixture_id": fixture["id"], "score": fixture_score, "trials": trials}
+        if skip_reason is not None:
+            # A later trial of this SAME fixture was rejected after one or
+            # more earlier trials of it already succeeded (a real, already
+            # -paid-for live call each) -- score on the successful subset
+            # rather than discard that data outright (the determinism this
+            # break's own docstring assumes is based on a single pilot
+            # observation, not a guarantee), but still disclose the
+            # rejection loudly rather than silently drop it.
+            score_entry["content_policy_partial_rejection"] = skip_reason
+        scores.append(score_entry)
+
+    if not scores:
+        # Embed each skipped fixture's own (already-redacted) id/reason in
+        # the message itself (code-review finding): run_eval_suite raises
+        # here before ever constructing a SuiteResult, so this is the only
+        # path fixture-level detail can reach a caller that only catches
+        # ValueError and keeps its text verbatim (compute_pairs' own
+        # per-entry failure handling) -- without it, an all-skipped suite
+        # loses every fixture id/reason down to a single generic count.
+        detail = "; ".join(f"{sf['fixture_id']}: {sf['reason']}" for sf in skipped_fixtures)
+        raise ValueError(
+            f"eval suite {eval_yaml_path}: all {len(fixtures)} fixture(s) were skipped "
+            f"(content-policy rejection) -- {detail}; cannot compute mean_score"
+        )
 
     scores.sort(key=lambda entry: entry["fixture_id"])
     mean_score = statistics.mean(entry["score"] for entry in scores)
-    return SuiteResult(model_id=model, n_fixtures=len(scores), mean_score=mean_score, scores=scores)
+    return SuiteResult(
+        model_id=model,
+        n_fixtures=len(scores),
+        mean_score=mean_score,
+        scores=scores,
+        skipped_fixtures=skipped_fixtures,
+    )
 
 
 def to_eval_scores_json(result: SuiteResult) -> dict[str, Any]:
     """Serialize ``result`` into the ``eval-scores.schema.json``-compatible
-    shape (see module docstring's "Aggregate output shape" section)."""
+    shape (see module docstring's "Aggregate output shape" section).
+    ``skipped_fixtures`` is additive -- the schema places no restriction
+    on additional properties, so this validates without a schema change,
+    though the schema's own doc comment names the field explicitly
+    anyway (issue #1144)."""
     return {
         "model_id": result.model_id,
         "n_fixtures": result.n_fixtures,
         "mean_score": result.mean_score,
         "scores": result.scores,
+        "skipped_fixtures": result.skipped_fixtures,
     }
 
 
