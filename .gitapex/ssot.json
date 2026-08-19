@@ -973,7 +973,7 @@
     {
       "id": "betterleaks-merge-gate",
       "kind": "script",
-      "script": ".github/workflows/betterleaks-merge-gate.yml",
+      "script": [".github/scripts/gitapex_run_betterleaks.py", ".github/workflows/betterleaks-merge-gate.yml"],
       "rule": "Every pull_request runs a full-history betterleaks secret scan (uv run --frozen python3 .github/scripts/gitapex_run_betterleaks.py --mode history, against the flake.nix-pinned 1.6.1 binary built via `nix build .#betterleaks` and the committed .betterleaks.toml) -- closing the --no-verify bypass left open by the pre-commit/pre-push hooks alone (issue #890). Registered as a required status check in .github/rulesets/main.json; a failing run only blocks merge once a human dispatches apply-rulesets.yml (a separate, reviewer-gated step -- see that workflow and docs/runbooks/rulesets.md) to apply that file's committed source of truth to the live GitHub ruleset.",
       "planes": ["ci"],
       "local_exclusion": "Duplicates, at CI scope, the same full-history scan the pre-push betterleaks-history hook in .pre-commit-config.yaml already runs locally; this entry registers issue #894's separate merge-path enforcement (the local hook is bypassable with --no-verify), not a third local invocation of the same script.",
