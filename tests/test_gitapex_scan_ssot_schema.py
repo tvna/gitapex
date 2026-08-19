@@ -217,6 +217,45 @@ def test_parse_registry_succeeds_on_valid_instance_with_correct_typed_values():
     assert registry.clusters == {"example-cluster": "an example cluster"}
 
 
+def test_parse_registry_succeeds_with_new_optional_gate_fields():
+    """Issue #1231: a gate carrying fail_mode/target/bypass_review_status
+    (all optional, schema-valid) must still parse into a typed Gate --
+    guards the exact blind spot the new fields could otherwise introduce:
+    Gate's own extra="forbid" rejecting an unrecognized key would make
+    SsotRegistry.model_validate fail on every gate carrying it, silently
+    disabling every reference-drift check below for the whole registry."""
+    instance = json.loads(json.dumps(_VALID_INSTANCE))
+    instance["gates"][0]["fail_mode"] = {"on_error": "fail-open", "rationale": "test fixture"}
+    instance["gates"][0]["target"] = [{"kind": "bash-pattern", "ref": "test fixture"}]
+    instance["gates"][0]["bypass_review_status"] = "not-yet-reviewed"
+    registry = drift._parse_registry(instance)
+    assert registry is not None
+    gate = registry.gates[0]
+    assert gate.fail_mode is not None
+    assert gate.fail_mode.on_error == "fail-open"
+    assert gate.fail_mode.rationale == "test fixture"
+    assert gate.target is not None
+    assert gate.target[0].kind == "bash-pattern"
+    assert gate.target[0].ref == "test fixture"
+    assert gate.bypass_review_status == "not-yet-reviewed"
+
+
+def test_script_drift_still_caught_when_gate_carries_new_fields(tmp_path):
+    """Defeat test (refactor-and-review-gate.md's own mandatory step 8
+    requirement, constructed here at task time since it exercises this
+    exact new code path directly): a gate carrying the new optional fields
+    AND a broken script path must still be caught by find_script_drift, not
+    silently pass because _parse_registry choked on the unrecognized fields
+    and returned None -- the exact blind spot #1231's own backfill would
+    introduce without this Gate model mirror."""
+    bad = json.loads(json.dumps(_VALID_INSTANCE))
+    bad["gates"][0]["bypass_review_status"] = "not-yet-reviewed"
+    bad["gates"][0]["script"] = "hooks/does-not-exist.sh"
+    instance_path = _write_instance(tmp_path, bad)
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+    assert any("script-drift" in f and "does-not-exist.sh" in f for f in findings), findings
+
+
 def test_parse_registry_returns_none_without_crashing_on_invalid_instance():
     """The pydantic model's own rejection path: an instance missing a
     required Gate field (schema-invalid too) fails the pydantic parse and
