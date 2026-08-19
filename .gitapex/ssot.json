@@ -646,6 +646,26 @@
       "bypass_review_status": "not-yet-reviewed"
     },
     {
+      "id": "ssot-field-coverage-report",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_report_ssot_field_coverage.py",
+      "rule": "Reports, per field (fail_mode, target), how many of .gitapex/ssot.json's gates carry it and lists which ones don't. Always exits 0 except on a genuine read/parse failure of ssot.json itself -- incomplete field coverage is expected, honestly-disclosed state (issue #1232), never a CI failure. Not a required status check; report-only by explicit design, distinct from every other gate in this cluster.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_report_ssot_field_coverage.py"],
+      "trigger": "tests/test_gitapex_report_ssot_field_coverage.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "registry-integrity",
+      "tracking_issue": 1232,
+      "status": "experimental",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": ".gitapex/ssot.json"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
+    },
+    {
       "id": "plugin-root-brace-notation",
       "kind": "script",
       "script": ".github/scripts/gitapex_gate_plugin_root_brace_notation.py",

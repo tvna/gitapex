@@ -125,9 +125,10 @@ used to be discovered one red check at a time on an already-open PR.
 
 The same `uv run prek install -t pre-commit -t pre-push` above also installs
 a **pre-push** hook that runs every gate with a working-tree-only form in
-one pass, before the push leaves your machine. A warm run of all 34 wired
-gates measures roughly 11 seconds end to end (the prior 31-gate set measured
-roughly 7 seconds, and the 26-gate set before it measured ~8-9 seconds; all
+one pass, before the push leaves your machine. A warm run of all 35 wired
+gates measures roughly 13 seconds end to end (the prior 34-gate set measured
+roughly 11 seconds, the 31-gate set before it measured roughly 7 seconds, and
+the 26-gate set before that measured ~8-9 seconds; all
 are warm-run measurements, not a strict budget, and can vary by hardware --
 up from ~4-6 seconds for the 24-gate set before issue `#985`'s `behind-base`
 gate, this runner's first gate that makes a network call -- it fetches
@@ -146,7 +147,7 @@ If a clone predates this hook, re-run the install command above once to pick
 it up, then confirm both shims with the check in the previous section.
 `git push --no-verify` skips it, as with any pre-push hook.
 
-The runner itself needs no dependencies, but all 34 wired gates run through
+The runner itself needs no dependencies, but all 35 wired gates run through
 `uv` (the same `uv run` pins CI uses). Without `uv` on PATH every one of
 them reports `FAIL ... failed to run` -- that is one missing tool, not a
 whole broken wired set.
