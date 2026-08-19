@@ -1,9 +1,14 @@
 # drafting-an-acm-issue eval status
 
-The committed eval suite (`evals/drafting-an-acm-issue/`) has 10 task files
-under `tasks/` and no committed no-skill baseline run; only
-`claude-sonnet-4.6` has been evaluated -- cross-model behavior is
-currently unmeasured. Every committed task's own prompt explicitly
+The committed eval suite (`evals/drafting-an-acm-issue/`) has 12 task files
+under `tasks/` (PR #1215's own `dedup-disclosure-missing.yaml` is the
+most recent addition) and no committed no-skill baseline run; only
+`claude-sonnet-4.6` has actually been evaluated -- `eval.yaml`'s own
+`model: claude-sonnet-5` config field has never been run against this
+suite, a pre-existing gap independently found again (not fixed, since a
+live evaluation run is outside that audit's own scope) by an
+`evaluating-skill-quality` audit on PR #1215. Cross-model behavior stays
+currently unmeasured either way. Every committed task's own prompt explicitly
 force-names the skill (`Use drafting-an-acm-issue.`), and the suite's
 `eval.yaml` fixes a top-level `skill: drafting-an-acm-issue` field that
 forces dispatch regardless of prompt content -- this suite tests

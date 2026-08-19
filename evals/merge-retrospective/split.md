@@ -35,12 +35,16 @@ band -- one over the 8-fixture upper end, from PR #328's own follow-up fix
 adding class 9 (see below) after a Codex review found the original
 16-fixture corpus left it uncovered; a single fixture pair over the stated
 band is not renegotiated back down, since the alternative is leaving a
-named coverage gap open.
+named coverage gap open. PR #1215's own follow-up (class 10, see below)
+widens this further to **10:6:4**, one more train and one more test
+fixture -- the selection split (the one that actually gates an
+improve-or-reject decision) is unchanged, so the corpus-size caveat's own
+reasoning still holds at the new totals.
 
 Split-arithmetic exclusions: none
 
 Every fixture `split.json`'s `assignment` object lists is counted in the
-`9:6:3` declared above -- 9 train, 6 selection, 3 test, matching exactly,
+`10:6:4` declared above -- 10 train, 6 selection, 4 test, matching exactly,
 with no listing-consistency entry sitting outside the arithmetic. That line is
 machine-readable: `.github/scripts/gitapex_gate_split_fixture_coverage.py`'s
 Check D (gitapex#907) parses the declared partition and this line, then
@@ -49,14 +53,15 @@ equals the declared figure.
 
 ## Equivalence classes
 
-Nine equivalence classes cover the taxonomy's three categories
+Ten equivalence classes cover the taxonomy's three categories
 (missing-deterministic-gate / unclear-agent-instruction /
 external-human-decision) crossed with zero-repair, multi-repair-mixed, and
-four procedural edge cases the skill's own text calls out by name (the
-tie-break rule, the Step 0 carry-forward check, the force-push
-enumeration caveat, and Step 4's template/title-convention precedence
-rule). Every class has at least one fixture in train and at least one in
-held-out (selection or test); no class exists only on one side.
+five procedural edge cases the skill's own text calls out by name (the
+tie-break rule, the Step 0 carry-forward check, the Step 0 dedup check's
+own exact-match discipline, the force-push enumeration caveat, and Step 4's
+template/title-convention precedence rule). Every class has at least one
+fixture in train and at least one in held-out (selection or test); no
+class exists only on one side.
 
 | # | Class | Train | Held-out |
 |---|---|---|---|
@@ -69,13 +74,14 @@ held-out (selection or test); no class exists only on one side.
 | 7 | Step 0 carry-forward check (prior retrospective's proposed gate) | `carried-forward-gate-unimplemented-train.yaml` | `carried-forward-gate-implemented-test.yaml` (test, restraint) |
 | 8 | Force-push enumerated as its own repair, only when directly observed | `force-push-observed-train.yaml` | `force-push-not-claimable-test.yaml` (test, restraint) |
 | 9 | Step 4: repo's own title convention takes precedence over the skill's fallback shape | `title-convention-precedence-train.yaml` | `no-title-convention-fallback-selection.yaml` (selection, non-trigger) |
+| 10 | Step 0 dedup check: exact string equality, not substring, decides a title match | `dedup-step0-exact-match-train.yaml` | `dedup-step0-title-substring-not-exact-match-test.yaml` (test, restraint) |
 
 Class 1's train exemplar (`propose-dont-implement.yaml`) and class 5's
 train exemplar (`normal.yaml`) also incidentally exercise class 2's
 classification vocabulary (`normal.yaml` contains one gate repair and one
 instruction repair together); this is intentional reuse, not
 double-counting -- their own listed classes above are what motivated each
-fixture's construction and none of the nine classes is represented on
+fixture's construction and none of the ten classes is represented on
 only one side because of the reuse.
 
 Class 9 was added after the original 16-fixture corpus shipped (PR #328's
@@ -97,19 +103,23 @@ Every held-out fixture pairs with its train counterpart on a **distinct
 domain** (different language, different subsystem, different failure
 mode) so the gate measures generalization of the classification behavior,
 not memorization of a train fixture's exact wording -- the same discipline
-`evals/evaluating-skill-quality/split.md`'s pairs already document. Three
-of the eight held-out fixtures (classes 6-8) are additionally **restraint**
-checks: each presents a scenario that superficially resembles its train
-counterpart's positive case but must NOT trigger the same conclusion --
-`tie-break-restraint-not-reclassified` must stay classified as
-unclear-agent-instruction rather than being over-reclassified as a gate
-gap; `carried-forward-gate-implemented` must NOT produce a
-"Carried-forward gate" subsection once a citing commit is found;
-`force-push-not-claimable` must neither claim nor deny a force-push beyond
-what the available data shows. These sit in the test split (read once, for
-a final report only) rather than selection, since a restraint check that
-already informed fixture design should not also gate acceptance of the
-same edit that motivated it.
+`evals/evaluating-skill-quality/split.md`'s pairs already document. Four
+of the ten held-out fixtures (classes 6-8 and 10) are additionally
+**restraint** checks: each presents a scenario that superficially
+resembles its train counterpart's positive case but must NOT trigger the
+same conclusion -- `tie-break-restraint-not-reclassified` must stay
+classified as unclear-agent-instruction rather than being
+over-reclassified as a gate gap; `carried-forward-gate-implemented` must
+NOT produce a "Carried-forward gate" subsection once a citing commit is
+found; `force-push-not-claimable` must neither claim nor deny a
+force-push beyond what the available data shows;
+`dedup-step0-title-substring-not-exact-match` must NOT be treated as a
+duplicate of a near-identically-titled prior retrospective once the two
+titles are compared for exact equality rather than substring
+containment. These sit in the test split (read once, for a final report
+only) rather than selection, since a restraint check that already
+informed fixture design should not also gate acceptance of the same edit
+that motivated it.
 
 The five pre-existing fixtures (`normal.yaml`, `edge.yaml`,
 `guardrail.yaml`, `external-human-decision.yaml`,
@@ -150,34 +160,23 @@ fabricated as covered.
 `evals/scripts/gitapex_lint_fixture_assertions.py --tasks-glob
 "evals/merge-retrospective/tasks/*.yaml" --rubric
 skills/merge-retrospective/SKILL.md --skill skills/merge-retrospective/SKILL.md`
-was run against the full eighteen-fixture corpus (re-run after PR #328's
-class-9 addition; the 2 new fixtures added 2 more of the same warning
-shape, 18 -> 20) and reported 20 case-sensitivity warnings, all of the
-same shape: a lowercase `output_contains` (`"missing deterministic gate"`,
-`"unclear agent instruction"`, `"external/human decision"`, `"file the
-retrospective"`) flagged against the script's chosen anchor, `SKILL.md`'s
-bold enumeration heading (`**Missing deterministic gate**`, capitalized).
-Checked directly against `SKILL.md`'s own primary text rather than
-accepted at face value: the frontmatter `description` field and the
-Step 4 prose (lines 124-128) already use the identical lowercase phrasing
-in running text (`"a missing deterministic gate"`, `"an unclear agent
-instruction"`, `"an external/human decision"`), and the worked example's
-own inline classification sentences use it too -- `"Classification:
-missing deterministic gate."` and `"Classification: unclear agent
-instruction"` (`SKILL.md` lines 192 and 201, verbatim, lowercase). A real
-dispatch classifying a repair is far more likely to echo this inline
-`"Classification: <lowercase phrase>"` convention than to reproduce the
-enumeration heading's bold Title Case, so the lowercase assertions are
-grounded in the skill's own primary usage, not a miscasing bug -- no
-fixture change made for these 19 of 20 warnings. The 20th
-(`"file the retrospective"`, in the pre-existing `guardrail.yaml` and this
-split's `zero-repair-docs-only-train.yaml`) is a plausible paraphrase
-of `SKILL.md`'s own `"filing the retrospective"` (Stop boundary) and
-`"File the retrospective issue"` (Step 4 heading) rather than a verbatim
-quote of either; this is the same class of run-to-run wording risk
-`evals/evaluating-skill-quality/split.md` has repeatedly disclosed rather
-than treated as blocking, and is left as-is since it is `guardrail.yaml`'s
-pre-existing, unaudited convention, not something this PR introduced.
+was re-run against the full twenty-fixture corpus (PR #1215's class-10
+addition) and reported **0 warnings** -- including for the 2 new
+fixtures' own lowercase `"missing deterministic gate"` /
+`"already retrospected"` assertions. This supersedes an earlier version
+of this note (PR #328's class-9 addition) that disclosed 20
+case-sensitivity warnings against that run's linter, all argued as
+non-issues grounded in `SKILL.md`'s own lowercase running-text usage
+(`"a missing deterministic gate"`, inline `"Classification: missing
+deterministic gate."`, etc.) rather than fixed. `extract_anchors` in the
+now-current linter (`evals/scripts/gitapex_lint_fixture_assertions.py`)
+scans quoted-phrase anchors (`QUOTED_RE`) alongside headings and bold
+spans, and `check_case` clears an assertion on an exact-case match
+against *any* anchor in that list -- so the same lowercase running-text
+occurrences this note's prior version already cited as the correct
+grounding are now themselves picked up as anchors, closing the warnings
+without any fixture wording change. Verified live against the current
+tool rather than assumed from that mechanism description alone.
 
 ## Iteration log
 

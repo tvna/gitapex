@@ -211,6 +211,20 @@
       "supersedes": null
     },
     {
+      "id": "pr-duplicate-issue",
+      "kind": "script",
+      "script": ["hooks/check-pr-duplicate-issue.sh", "hooks/gitapex_check_pr_duplicate_issue.py"],
+      "rule": "Denies mcp__github__create_pull_request when the new PR's own resolving-cited issue (Closes/Fixes/Resolves) is already cited -- resolving or context (Closes/Fixes/Resolves/Refs/bare #N) -- by another currently-open PR, unless the new PR's own body carries an explicit `Duplicate-PR-waiver: <reason>` line; fails closed on a missing GH_TOKEN/GITHUB_TOKEN or an unresolvable open-PR-list fetch.",
+      "planes": ["pretooluse"],
+      "local_exclusion": "Grades the new PR's own citations against live open-PR state on GitHub; 'other currently-open PRs' has no local/offline equivalent to check against.",
+      "trigger": "PreToolUse matcher mcp__github__create_pull_request (hooks/hooks.json)",
+      "policy_refs": [],
+      "cluster": ["plan-integrity", "github-operations"],
+      "tracking_issue": 1197,
+      "status": "active",
+      "supersedes": null
+    },
+    {
       "id": "gitignore-pattern-test-coverage",
       "kind": "script",
       "script": ".github/scripts/gitapex_gate_gitignore_pattern_coverage.py",

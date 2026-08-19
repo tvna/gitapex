@@ -156,9 +156,9 @@ SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
 # Stated precisely, because an earlier revision of this comment got the
 # arithmetic backwards and would have justified the wrong number:
 # mypy-type-check runs gitapex_run_precommit_mypy.py, which invokes mypy
-# once per entry in its own MYPY_GROUPS -- eight groups today, each with its
+# once per entry in its own MYPY_GROUPS -- seven groups today, each with its
 # own _GROUP_TIMEOUT_SECONDS = 600 -- so that one gate's own theoretical
-# worst case is ~4800 s, not 600 s. A ceiling matching that would be useless
+# worst case is ~4200 s, not 600 s. A ceiling matching that would be useless
 # as a hang guard (80 minutes of a silent pre-push), so this is a judgment
 # call in the other direction. For scale: a warm run of all 33 wired gates
 # combined measures roughly 11 s end to end (the prior 31-gate set measured
