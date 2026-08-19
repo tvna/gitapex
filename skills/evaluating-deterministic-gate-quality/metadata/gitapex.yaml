@@ -669,6 +669,28 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/943"
       summary: "Supersedes the caveat above (https://github.com/tvna/gitapex/issues/843) and the decision above (https://github.com/tvna/gitapex/issues/846) that left the prose unchanged: the rename is no longer speculative, so the delegation step can name a confirmable delegate again. SKILL.md, grading-procedure.md, and output-schema.json now name scanning-attack-surfaces, and the coupled eval fixture was updated in the same commit so the two cannot drift apart."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1229"
+      summary: "Added Dimension 24 (Deny-path recoverability, post-block agent behavior) to references/dimensions.md's probabilistic-maturity lane, appended after dimension 23 without renumbering (lane range 7-23 -> 7-24). Mirrors dimension 21's design-plus-real-firing-audit shape; fixed four-token verdict vocabulary (actionable-recovery, dead-end-risk, escalation-risk, indeterminate); grounded in arXiv:2607.07405, arXiv:2608.02670, an Ona engineering blog post, and Google's Tricorder paper (ICSE 2015)."
+      outcome:
+        lines: "dimensions.md 449->548"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1229"
+      summary: "output-schema.json's findings[].dimensionId.maximum bumped 23->24 and the findings-array description's 'dimensions.md, 1-23' citation bumped to 'dimensions.md, 1-24', so a Dimension 24 finding validates against the schema and the description stays accurate. No line-count change: both edits land on already-existing lines."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1229"
+      summary: "A new drift gate ships in the same change, per this repository's build-the-gate-with-the-invariant rule: gitapex_scan_dimensions_numbering_drift.py, registered in ssot.json as dimensions-numbering-drift, enforced via its own pytest test file. Locks dimensions.md's continuous 1..N numbering across both lanes, both lane-range declarations, the schema's dimensionId ceiling, and every dimension/shape-check cross-reference -- including one naming the wrong lane's number. 35 tests, 100% coverage."
+    - kind: caveat
+      anchor: "https://github.com/tvna/gitapex/issues/1229"
+      summary: "Dimension 24's four primary-source citations were carried from this issue's own text, asserted checked against primary sources when drafted. arXiv:2607.07405 was already an established citation in this skill's dimension 21/10. The other three -- arXiv:2608.02670, an Ona engineering blog post, and Google's Tricorder paper (ICSE 2015) -- were not independently re-verified in the session that implemented this change; carried as represented facts, not re-derived."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/1229 -> https://github.com/tvna/gitapex/issues/1230"
+      summary: "This issue's own third acceptance criterion -- re-audit every registered gate against the finalized Dimension 24 wording -- was flagged by its own text as comparable in cost to the original discovery workflow (roughly 1.1M tokens), possibly spanning more than one PR. The registered-gate count had already drifted from the cited 57 to 63 by the time this PR opened. Deferred to https://github.com/tvna/gitapex/issues/1230, scoping this change to the rubric, the schema fix, and the drift gate."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1229"
+      summary: "Downstream self-consistency gates this diff tripped, fixed in the same PR: eval-status.md's coverage headline/uncovered-list (13/23 -> 13/24, dimension 24 added with its own rationale) plus its snapshot test; a bare external-paper task-39 citation the no-bare-issue-citation check flags on sight, fixed via its own inline-code escape hatch; wired-gate-count prose across four files (33->34); and a pre-existing, unrelated exclusions-count staleness (28->29) the same test caught in passing."
+      outcome:
+        fixed: 5
   skillDependencies:
     requires:
       - evaluating-skill-quality

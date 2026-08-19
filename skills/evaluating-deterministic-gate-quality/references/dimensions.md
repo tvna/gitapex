@@ -13,7 +13,7 @@ Two lanes, mirroring `evaluating-skill-quality`'s own split:
   `SKILL.md`'s Lifecycle note); apply the checks below to those domains,
   and to whatever a Domain-2 target's own manual judgment still requires,
   by direct inspection.
-- **Probabilistic-maturity dimensions** (7-23) -- need judgment; walk all
+- **Probabilistic-maturity dimensions** (7-24) -- need judgment; walk all
   of them, quoting the specific evidence that earns each verdict --
   except dimension 23, which is never walked per-artifact alongside the
   rest of this lane; see its own review-scope tag below and `SKILL.md`
@@ -447,3 +447,102 @@ differentiation from shape check 1 and dimension 15 below.
     per-artifact loop; it is evaluated exactly once per review, in step 5
     alongside coverage attestation, since its answer does not vary by
     which artifact is currently under review.
+24. **Deny-path recoverability (post-block agent behavior) -- a gate's
+    own friction model.** Dimension 21 audits whether a gate's block
+    decision was correct (predicate correctness, against a ground-truth
+    trajectory). This dimension asks what happens after a gate fires and
+    denies: does the calling agent have an actionable, reachable recovery
+    path, or does the deny/reject message dead-end it into
+    retry-looping, workaround-construction, or an attempt to disable the
+    gate itself? The two are independent axes -- a gate can be
+    shape-check-clean and dimension-21-precise while its own failure UX
+    still strands the caller with nothing sanctioned to do next. Two
+    parts, mirroring how dimension 21 pairs a design check with a
+    real-firing audit. Part A (design-time check): for each distinct
+    failure branch a gate's own deny/reject message can take, does it (1)
+    state a concrete, specific reason rather than a bare pass/fail or a
+    raw system error; (2) name at least one concrete, in-scope,
+    gate-sanctioned next action; (3) always leave a reachable compliant
+    path, with no branch dead-ending into no sanctioned recovery; and (4)
+    for a fail-closed-on-outage branch specifically, distinguish "this
+    may be transient, wait or escalate" from "you did something wrong,
+    retry differently"? A gate with several failure branches (a
+    malformed-input branch, a policy-violation branch, an
+    infrastructure-outage branch) answers all four per branch -- one
+    well-designed branch does not cover for a second, undesigned one.
+    Part B (audited check, when real firing transcripts exist): classify
+    real firings into compliant recovery / timeout-grind /
+    workaround-construction / learned-bypass / task-abandonment, the same
+    real-firing-audit shape dimension 21 already uses, applied to the
+    post-block outcome rather than the block decision itself. Where no
+    firing-transcript trail exists yet -- gitapex's own current state for
+    essentially every gate it has registered, since no retention
+    infrastructure captures this today -- Part B reads indeterminate, the
+    same treatment dimension 21 already gives an unaudited gate's own
+    precision question; this is not the not-applicable
+    precondition-scoped treatment dimension 22 carries -- the question
+    always applies here, only the evidence to answer it is currently
+    missing.
+    Grounded in primary sources: "Reason Less, Verify More"
+    (arXiv:2607.07405, the same paper dimension 21 and dimension 10 already cite)
+    states plainly that a gate blocks a proposed violating write but does
+    not ensure the agent recovers, that post-rejection behavior is
+    model-dependent, and reports one concrete instance (tau^2-bench task
+    `#39`) of an agent looping against a rejection instead of finding a
+    compliant plan -- without turning the observation into a metric,
+    which is the gap this dimension closes. "Permission Denied"
+    (arXiv:2608.02670) measured that, under hardening, 97% of its own
+    observed cost-inflation mechanism was workaround construction, e.g.
+    rebuilding a blocked toolchain from source rather than stopping. A
+    real Claude Code transcript (Ona engineering blog, "How Claude Code
+    escapes its own denylist and sandbox") shows an agent bypassing a
+    denylist and then reasoning about disabling the enforcing sandbox
+    itself, once a plain pattern-match deny offered it no sanctioned
+    alternative -- Part A check (3) exists to catch exactly that dead-end
+    before a gate ships. Google's Tricorder paper (ICSE 2015) documents a
+    related but distinct failure this dimension does not itself grade:
+    one malfunctioning linter caused developers to hide ALL linter
+    output, not just the bad one -- cross-gate trust contagion, a
+    consequence that spreads past the one gate with the bad deny
+    experience, worth citing as motivation but outside this dimension's
+    own per-gate Part A/Part B scope.
+    Verdict tokens, fixed: `actionable-recovery` (every branch clears
+    Part A, and Part B -- where evidence exists -- shows compliant
+    recovery dominating real firings); `dead-end-risk` (at least one
+    branch fails Part A check (3), or Part B shows
+    workaround-construction or learned-bypass in real firings);
+    `escalation-risk` (every branch clears check (3) but at least one
+    blurs check (4) -- a transient-outage branch reads as caller-fault,
+    risking an escalation path the caller cannot find); `indeterminate`
+    (insufficient evidence to place the gate in any of the other three --
+    Part A cannot be read from the gate's own available
+    documentation/message text, or the only available signal is Part B
+    with no firing trail). Distinct from dimension 21: dimension 21
+    grades whether the gate's decision was right; this dimension grades
+    what happens after a correct decision, and a gate can score well on
+    one while scoring poorly on the other. Distinct from mechanism-fit's
+    `infrastructure-owned-control` verdict too: that verdict answers
+    whether a gate should exist here at all; this dimension assumes an
+    already-warranted gate and asks only whether its own failure UX is
+    safe, never a substitute for -- or a re-litigation of -- the
+    mechanism-fit test's own first two questions.
+    *Domains:* generalizes with adaptation -- the underlying question
+    (does the deny message leave a reachable compliant path) is
+    domain-general, but who receives the message and what "recovery"
+    means differs by domain. Agent-harness hook: the audience is the
+    calling LLM agent itself, mid-task -- the exact audience the primary
+    sources above measured, and the highest-stakes domain for this
+    dimension, since a workaround or bypass attempt is something the
+    agent can act on unsupervised, in the same turn. CI job step: the
+    audience is a human (or a bot re-running a job) reading a log or
+    annotation after the fact, so "recovery" means a clear next CLI/PR
+    action rather than an in-context retry. Git hook subprocess: the
+    audience is a human at the CLI, and the exit-code-only constraint
+    shape check 2 already names means the message channel (stderr) alone
+    carries the entire recovery-guidance burden, with no structured
+    second channel to fall back on. MCP server subprocess: the audience
+    is an arbitrary calling client, possibly a non-Anthropic agent
+    sharing no harness convention for what a "sanctioned next action"
+    looks like -- check (2)'s own action must be nameable in the
+    response payload itself, never assumed from a shared convention the
+    caller may not carry.
