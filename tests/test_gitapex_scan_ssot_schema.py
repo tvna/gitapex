@@ -742,6 +742,35 @@ def test_invalid_json_syntax_raises_registry_read_error_not_a_traceback(tmp_path
         drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
 
 
+def test_non_object_schema_raises_registry_read_error_not_a_traceback(tmp_path):
+    """Deterministic-gate-quality review (issue #1232) live-reproduced this:
+    a syntactically-valid-JSON-but-non-object schema file (e.g. a bare JSON
+    array) reached jsonschema.Draft202012Validator's own internals and
+    raised an uncaught AttributeError, falsifying RegistryReadError's own
+    docstring promise ("exit 1, never a traceback"). Mirrors the identical
+    guard gitapex_scan_plugin_manifest_schema.py already carries for its own
+    vendored schema."""
+    instance_path = _write_instance(tmp_path, _VALID_INSTANCE)
+    schema_path = tmp_path / "ssot.schema.json"
+    schema_path.write_text(json.dumps([1, 2, 3]))
+    with pytest.raises(drift.RegistryReadError, match="must be a JSON object"):
+        drift.find_drift(instance_path, schema_path, REPO_ROOT)
+
+
+def test_semantically_invalid_schema_raises_registry_read_error_not_a_traceback(tmp_path):
+    """Same finding as above, the other half: an object-shaped but
+    semantically-invalid JSON Schema (e.g. {"type": 1}, jsonschema's own
+    canonical example) crashed with an uncaught TypeError from inside
+    iter_errors instead. This exact defect class is plausible, not
+    contrived: this PR's own diff hand-edits two array literals inside
+    .gitapex/ssot.schema.json (required[] and target.kind's enum[])."""
+    instance_path = _write_instance(tmp_path, _VALID_INSTANCE)
+    schema_path = tmp_path / "ssot.schema.json"
+    schema_path.write_text(json.dumps({"type": 1}))
+    with pytest.raises(drift.RegistryReadError, match="not a valid JSON Schema"):
+        drift.find_drift(instance_path, schema_path, REPO_ROOT)
+
+
 def test_get_list_defaults_to_empty_when_d_is_not_a_dict():
     assert drift._get_list([], "gates") == []
     assert drift._get_list("not a dict", "gates") == []
