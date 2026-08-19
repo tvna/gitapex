@@ -1,6 +1,9 @@
 # gitapex is normally an apm *provider* (see docs/repository-layout.md); this
-# declares the two plugins its own skills already assume are present
-# (docs/motivation.md), so `apm install` provisions them too.
+# declares the plugins provisioned at development time, so `apm install`
+# provisions them too. obra/superpowers and tvna/clairvoyance are assumed
+# present by gitapex's own skills (docs/motivation.md);
+# cathrynlavery/diagram-design is a development-time convenience (issue #1158),
+# not assumed by any gitapex skill.
 #
 # name/version are required by apm's manifest schema; they mirror
 # .claude-plugin/plugin.json, which is itself mechanically generated from the
@@ -14,3 +17,4 @@ devDependencies:
   apm:
     - obra/superpowers
     - tvna/clairvoyance
+    - cathrynlavery/diagram-design

@@ -17,11 +17,11 @@ itself on every future change.
 from __future__ import annotations
 
 import json
-import subprocess
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+import gitapex_run_ablation
 import gitapex_run_effectiveness_correlation as m
 import pytest
 from pydantic import ValidationError
@@ -85,40 +85,14 @@ def _write_corpus(root: Path, entries: list[dict[str, Any]]) -> Path:
 # ---------------------------------------------------------------------------
 
 
-def test_skip_reason_redacts_runtime_error_with_embedded_stderr() -> None:
-    # Defeat test (issue #1143 adversarial review, CodeRabbit finding): a
-    # live model CLI's raw stderr, exactly as subprocess_executor embeds it
-    # in its own RuntimeError message, must never survive into the
-    # returned reason.
-    exc = RuntimeError("model CLI exited 1: ACME_SECRET_TOKEN=sk-live-deadbeef leaked in stderr")
-    reason = m._skip_reason(exc)
-    assert "ACME_SECRET_TOKEN" not in reason
-    assert "sk-live-deadbeef" not in reason
-    assert "RuntimeError" in reason
-
-
-def test_skip_reason_redacts_timeout_expired_with_embedded_prompt() -> None:
-    # TimeoutExpired's own str() includes the full argv it ran, which
-    # includes the fixture's prompt text (build_command's own -p PROMPT
-    # positional) -- must not survive into the returned reason either.
-    exc = subprocess.TimeoutExpired(cmd=["claude", "-p", "the fixture's own private prompt text"], timeout=300)
-    reason = m._skip_reason(exc)
-    assert "private prompt text" not in reason
-    assert "TimeoutExpired" in reason
-
-
-def test_skip_reason_keeps_value_error_verbatim() -> None:
-    # ValueError is always this module's or gitapex_run_eval_suite's own
-    # deterministic, code-controlled text -- never live external output --
-    # so it stays verbatim, genuinely useful for diagnosing which corpus
-    # entry or fixture was malformed.
-    reason = m._skip_reason(ValueError("skill_md not found: skills/ghost/SKILL.md"))
-    assert reason == "skill_md not found: skills/ghost/SKILL.md"
-
-
-def test_skip_reason_keeps_os_error_verbatim() -> None:
-    reason = m._skip_reason(OSError("[Errno 2] No such file or directory: 'x.yaml'"))
-    assert "No such file or directory" in reason
+def test_skip_reason_is_the_hoisted_ablation_redaction_function() -> None:
+    # _skip_reason is a module-level alias (issue #1144), not a
+    # reimplementation -- its own redaction behavior (RuntimeError/
+    # TimeoutExpired redacted, ValueError/OSError kept verbatim) is
+    # covered directly against the real definition in
+    # test_gitapex_run_ablation.py, not duplicated here a second time
+    # against what is, post-hoist, literally the same function object.
+    assert m._skip_reason is gitapex_run_ablation.redact_executor_failure_reason
 
 
 # ---------------------------------------------------------------------------
@@ -225,8 +199,12 @@ def test_compute_pairs_happy_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     assert skipped == []
     assert len(pairs) == 1
     assert pairs[0].skill == "demo-a"
-    assert pairs[0].x == 2.0  # "one\ntwo\n" is 2 lines
+    # "one\ntwo\n" has no frontmatter, no sentence/bullet-initial Must/Never/Always,
+    # and no Worked example/Examples or Error handling/Troubleshooting heading.
+    assert pairs[0].x_negative_delta_risk == 0.0
+    assert pairs[0].x_body_structure == 0.0
     assert pairs[0].y == 1.0  # stub always returns "ok", matching expected.output_contains: ["ok"]
+    assert pairs[0].skipped_fixtures == []
 
 
 def test_compute_pairs_skips_missing_skill_md(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -293,6 +271,57 @@ def test_compute_pairs_one_bad_entry_does_not_block_others(tmp_path: Path, monke
     assert skipped[0].skill == "ghost"
 
 
+_REAL_REJECTION_TEXT = (
+    "model CLI exited 1: [bio] I can't help with this request. See "
+    "https://www.anthropic.com/legal/aup for more information."
+)
+
+
+def _executor_rejects_reject_me_prompt(argv: Sequence[str], timeout: int) -> str:
+    if "REJECT_ME" in " ".join(argv):
+        raise RuntimeError(_REAL_REJECTION_TEXT)
+    return "ok"
+
+
+def test_compute_pairs_preserves_partial_skipped_fixtures_on_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Regression (code review finding): an entry whose suite SUCCEEDS
+    # overall (one fixture scored, one fully content-policy-skipped) must
+    # not have that skip silently dropped -- compute_pairs' own
+    # try/except never fires here (only an ALL-skipped suite raises
+    # ValueError and lands in the corpus-level `skipped` list), so this
+    # detail is only visible via CorpusEntryResult.skipped_fixtures.
+    monkeypatch.setattr(m, "REPO_ROOT", tmp_path)
+    _write_demo_skill(
+        tmp_path,
+        "demo-a",
+        tasks={
+            "a.yaml": DEMO_TASK_YAML,
+            "b.yaml": 'id: reject-task\ninputs:\n  prompt: REJECT_ME\nexpected:\n  output_contains: ["ok"]\n',
+        },
+    )
+    entries = [
+        {
+            "skill": "demo-a",
+            "skill_md": "skills/demo-a/SKILL.md",
+            "eval_yaml": "evals/demo-a/eval.yaml",
+            "split": "selection",
+        }
+    ]
+
+    pairs, skipped = m.compute_pairs(entries, executor=_executor_rejects_reject_me_prompt, model_cli="claude")
+
+    assert skipped == []  # the suite overall succeeded -- not a corpus-level skip
+    assert len(pairs) == 1
+    assert pairs[0].y == 1.0  # mean_score over demo-task alone -- reject-task excluded
+    assert pairs[0].skipped_fixtures == [
+        {"fixture_id": "reject-task", "reason": pairs[0].skipped_fixtures[0]["reason"]}
+    ]
+    assert "RuntimeError" in pairs[0].skipped_fixtures[0]["reason"]
+    assert "can't help" not in pairs[0].skipped_fixtures[0]["reason"]  # redacted, not raw
+
+
 # ---------------------------------------------------------------------------
 # main() -- synthetic corpus
 # ---------------------------------------------------------------------------
@@ -308,12 +337,18 @@ def test_main_dry_run_happy_path(
     # identical-scoring entries would make y constant and correlation
     # undefined by construction (spearman_rho correctly rejects that) --
     # not this test's own concern, which is proving the happy path wires
-    # end to end when a real correlation *can* be computed.
+    # end to end when a real correlation *can* be computed. demo-a's and
+    # demo-b's SKILL.md bodies are likewise chosen so BOTH x metrics vary
+    # across the two entries (demo-a has neither signal; demo-b has one
+    # sentence-initial "Never" and one "## Worked example" heading) -- a
+    # constant series in either metric would make that metric's own
+    # correlation undefined too, and this test's job is proving both
+    # succeed end to end.
     _write_demo_skill(tmp_path, "demo-a", body="one\ntwo\nthree\n")
     _write_demo_skill(
         tmp_path,
         "demo-b",
-        body="one\ntwo\n",
+        body="Never skip this step.\n\n## Worked example\n\nSample text.\n",
         tasks={
             "a.yaml": 'id: demo-task\ninputs:\n  prompt: Say ok.\nexpected:\n  output_contains: ["never-produced-by-stub"]\n'
         },
@@ -354,8 +389,9 @@ def test_main_dry_run_happy_path(
     assert payload["split"] == "selection"
     assert len(payload["pairs"]) == 2
     assert payload["skipped"] == []
-    assert "PLACEHOLDER" in payload["x_metric_caveat"]
-    assert payload["correlation"]["n"] == 2
+    assert "waza-independent" in payload["x_metric_caveat"]
+    assert [c["metric"] for c in payload["correlations"]] == ["negative_delta_risk", "body_structure"]
+    assert all(c["n"] == 2 for c in payload["correlations"])
 
 
 def test_main_missing_corpus_exits_2(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -436,11 +472,16 @@ def test_main_too_few_usable_pairs_exits_1(
 def test_main_constant_x_series_exits_1(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # Two skills with identical SKILL.md line counts (x) but different task
-    # outcomes (y varies) -- enough usable pairs to attempt a correlation,
-    # but x itself is constant, so compute_correlation must reject it
-    # (correlation is undefined against a constant series) rather than the
-    # earlier "too few pairs" guard catching it first.
+    # Two skills whose SKILL.md bodies contain neither a sentence/bullet-
+    # initial Must/Never/Always nor a Worked example/Examples/Error
+    # handling/Troubleshooting heading -- both x metrics are constant
+    # (0.0, 0.0) even though the task outcomes (y) differ -- enough usable
+    # pairs to attempt a correlation, but negative_delta_risk's own series
+    # is constant, so compute_correlation must reject it (correlation is
+    # undefined against a constant series) rather than the earlier "too
+    # few pairs" guard catching it first. negative_delta_risk is computed
+    # (and therefore fails) before body_structure in main(), so this is
+    # the one whose own error message actually surfaces here.
     monkeypatch.setattr(m, "REPO_ROOT", tmp_path)
     _write_demo_skill(tmp_path, "demo-a", body="one\ntwo\n")
     _write_demo_skill(
@@ -472,7 +513,52 @@ def test_main_constant_x_series_exits_1(
         ["--corpus", str(corpus_path), "--schema", str(DEMO_SCHEMA_PATH), "--split", "selection", "--dry-run"]
     )
     assert exit_code == 1
-    assert "constant" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "negative_delta_risk correlation" in err
+    assert "constant" in err
+
+
+def test_main_body_structure_constant_but_negative_delta_risk_varies_exits_1(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Regression: the two correlations are independent -- a constant
+    # body_structure series must be caught even when negative_delta_risk
+    # itself varies (proving main() does not stop checking after the
+    # first metric happens to succeed).
+    monkeypatch.setattr(m, "REPO_ROOT", tmp_path)
+    _write_demo_skill(tmp_path, "demo-a", body="one\ntwo\n")
+    _write_demo_skill(
+        tmp_path,
+        "demo-b",
+        body="Never skip this step.\n",
+        tasks={
+            "a.yaml": 'id: demo-task\ninputs:\n  prompt: Say ok.\nexpected:\n  output_contains: ["never-produced-by-stub"]\n'
+        },
+    )
+    corpus_path = _write_corpus(
+        tmp_path,
+        [
+            {
+                "skill": "demo-a",
+                "skill_md": "skills/demo-a/SKILL.md",
+                "eval_yaml": "evals/demo-a/eval.yaml",
+                "split": "selection",
+            },
+            {
+                "skill": "demo-b",
+                "skill_md": "skills/demo-b/SKILL.md",
+                "eval_yaml": "evals/demo-b/eval.yaml",
+                "split": "selection",
+            },
+        ],
+    )
+    exit_code = m.main(
+        ["--corpus", str(corpus_path), "--schema", str(DEMO_SCHEMA_PATH), "--split", "selection", "--dry-run"]
+    )
+    assert exit_code == 1
+    err = capsys.readouterr().err
+    assert "body_structure correlation" in err
+    assert "constant" in err
 
 
 def test_validation_error_message_native_pydantic_error_not_wrapped() -> None:
@@ -521,8 +607,9 @@ def test_dry_run_against_real_committed_corpus_produces_correlation_without_erro
     # pass a bare lower-bound check (issue #1143 adversarial review round).
     expected_n = {"selection": 20, "test": 5, "all": 25}[split]
     assert len(payload["pairs"]) == expected_n
-    assert payload["correlation"]["n"] == expected_n
-    correlation = payload["correlation"]
-    assert -1.0 <= correlation["rho"] <= 1.0
-    assert correlation["ci_low"] <= correlation["ci_high"]
-    assert correlation["power_caveat"]
+    assert [c["metric"] for c in payload["correlations"]] == ["negative_delta_risk", "body_structure"]
+    for correlation in payload["correlations"]:
+        assert correlation["n"] == expected_n
+        assert -1.0 <= correlation["rho"] <= 1.0
+        assert correlation["ci_low"] <= correlation["ci_high"]
+        assert correlation["power_caveat"]
