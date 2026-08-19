@@ -920,6 +920,20 @@
       "bypass_review_status": "not-yet-reviewed"
     },
     {
+      "id": "dimensions-numbering-drift",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_scan_dimensions_numbering_drift.py",
+      "rule": "evaluating-deterministic-gate-quality's references/dimensions.md carries one continuous ordered-list numbering across two lanes (deterministic-shape checks 1-6, probabilistic-maturity dimensions 7-N): every item must stay sequential with no gap, duplicate, or out-of-order entry; both '**<lane>** (X-Y)' range declarations, output-schema.json's findings[].dimensionId.maximum, and that same schema's findings-array description's 'dimensions.md, 1-N' span must all match the real item count; and every 'dimension N' / 'shape check N' cross-reference in dimensions.md or SKILL.md must name a number that actually exists in its own lane. A missing, duplicated, or empty section heading, zero items in either lane, or malformed schema JSON fails closed rather than passing.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_dimensions_numbering_drift.py"],
+      "trigger": "tests/test_gitapex_scan_dimensions_numbering_drift.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "self-governance",
+      "tracking_issue": 1229,
+      "status": "active",
+      "supersedes": null
+    },
+    {
       "id": "behind-base",
       "kind": "script",
       "script": ".github/scripts/gitapex_gate_behind_base.py",

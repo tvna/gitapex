@@ -93,8 +93,8 @@ text for a `"dimension N"` or axis-name citation.
 runs it against this real corpus and fails CI if any dimension it reports
 uncovered is not named right here -- so this list can't silently drift from
 the real corpus the way the "dimension 12" mislabel above did. Current
-output: 13/23 dimensions and 5/5 axes cited; **dimensions 9, 11, 12, 13, 14,
-16, 17, 20, 21, and 22 remain uncovered**, not exhaustive by design -- no fixture's
+output: 13/24 dimensions and 5/5 axes cited; **dimensions 9, 11, 12, 13, 14,
+16, 17, 20, 21, 22, and 24 remain uncovered**, not exhaustive by design -- no fixture's
 scenario naturally exercises known-limitation disclosure (9), deployment-
 mode portability (11), duplication/drift risk (12), side-effect independence
 from the deny decision (13), structured-output hygiene (14), runtime
@@ -109,6 +109,14 @@ a real multi-firing audit trail (21) or a multi-trial replication harness
 (22) -- no fixture in this corpus currently constructs one, and inventing a
 synthetic stand-in risked the same paraphrase-drift false-fail already
 named below rather than a real test of either dimension's substance.
+Dimension 24 (deny-path recoverability, post-block agent behavior) was
+added per issue #1229, grounded in arXiv:2607.07405, arXiv:2608.02670, the
+Ona engineering blog, and the Tricorder (ICSE 2015) paper; it has no
+fixture yet either -- Part B shares dimension 21/22's own real-firing-trail
+precondition, and issue #1229's own acceptance criteria scoped this change
+to the dimension's rubric text and a numbering drift gate, not a new eval
+fixture, so authoring one (for Part A, which is more directly testable in
+principle) is left to a follow-up rather than folded in here.
 Dimension 23 (caller/installing-environment maturity, distinct from any
 single gate's own quality -- issue #829) was added to close a gap
 identified in a session-level review: no prior dimension measured the
