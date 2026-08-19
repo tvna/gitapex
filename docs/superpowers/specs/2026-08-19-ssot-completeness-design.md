@@ -157,6 +157,39 @@ Design-only。`.gitapex/`配下のファイルは一切作成・変更してい�
 
 ## 図: 現状(平坦・不可視)と提案(ファセット化・可視)の比較
 
+> 元のArtifactではこの節は左右2枚のSVG比較図だったが、この変換スクリプトは`<svg>`/`<figure>`を扱わないため図そのものは失われた。以下は図の実データ(ラベル・テーブル内容)をMarkdownとして忠実に再構成したもの(創作的な再解釈ではない)。同じ内容の要約はFacts項目5・6にも散文で既出。
+
+**現状: 平坦なidリスト**
+
+```
+bash-cli-write-and-install-guard
+pr-title-convention
+skill-audit-disclosure
+pr-upstream-pushed
+... (57件、アルファベット順)
+```
+
+共通の座標系なし、目的で命名された文字列の羅列。
+
+`mcp__github__merge_pull_request`は? → この57件を読むだけでは分からない → コードベース全体をgrepして初めて発見(shadow gate)。
+
+**提案: targetファセットによる被覆表(自動生成)**
+
+mcp-toolターゲット × 登録ゲート:
+
+| mcp-toolターゲット | 状態 |
+| --- | --- |
+| `create_pull_request` | 登録済み |
+| `update_pull_request` | 登録済み |
+| `issue_write` | 登録済み |
+| `merge_pull_request` | shadow gate |
+| `enable_pr_auto_merge` | 未監査 |
+| `create_or_update_file` | 未監査 |
+
+実行可能なツール一覧から機械的に列挙、表自体が自動生成される。「shadow gate」と「未監査」を区別 -- 後者は安全性未判定であることが可視化される。
+
+現状(上)はgate idの平坦なリストで、特定のツールを対象とする項目の有無はコードベースを直接探索しない限り分からない。提案(下)は実行可能なツール一覧を行、登録有無を列とする被覆表を自動生成し、`merge_pull_request`のような既知の欠落(shadow gate)と`enable_pr_auto_merge`のような未監査の対象を、表そのものから直接見分けられるようにする。
+
 ## メタデータ成熟度: 弱みを克服する修正案(4件、`target`案と合わせて計5件)
 
 前段のレビュー(セキュア開発の文脈でのスキーマ成熟度評価)で見つかった4つの弱み -- fail-open/fail-closedの未構造化、既知のbypass・深刻度の未構造化、`security-control-inventory.md`との非連結、測定結果を書き戻す場所の不在 -- それぞれに対する具体的な修正案。`target`フィールド(前述)と合わせて計5件の新設フィールド提案になるため、末尾で導入順序をまとめて示す。
