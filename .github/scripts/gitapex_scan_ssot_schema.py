@@ -163,9 +163,7 @@ class Gate(BaseModel):
     supersedes: str | None
     fail_mode: GateFailMode | None = None
     target: list[GateTargetEntry] | None = None
-    bypass_review_status: Literal["not-yet-reviewed", "reviewed-none-found", "reviewed-found-listed-below"] | None = (
-        None
-    )
+    bypass_review_status: Literal["not-yet-reviewed", "reviewed-none-found", "reviewed-found-listed-below"]
 
 
 class SsotMeta(BaseModel):

@@ -46,6 +46,7 @@ _VALID_INSTANCE = {
             "tracking_issue": None,
             "status": "active",
             "supersedes": None,
+            "bypass_review_status": "not-yet-reviewed",
         }
     ],
     "clusters": {"example-cluster": "an example cluster"},
@@ -267,6 +268,22 @@ def test_script_drift_still_caught_when_gate_carries_new_fields(tmp_path):
     # this line was added.
     assert any("script-drift" in f and "does-not-exist.sh" in f for f in findings), findings
     assert not any(f.startswith("schema:") for f in findings), findings
+
+
+def test_a_gate_missing_bypass_review_status_is_rejected_by_both_layers(tmp_path):
+    """Issue #1232: bypass_review_status moved from optional to gate's
+    required[] now that #1231 (schema shape + 62-gate backfill) and this
+    issue's own dimensions-numbering-drift top-up together guarantee 100%
+    live coverage. A gate missing the key must fail the raw schema check
+    (not just happen to still parse) -- the same two-layer proof pattern as
+    the runtime-resolved-reference tests above, applied to a required-key
+    tightening instead of an enum widening."""
+    bad = json.loads(json.dumps(_VALID_INSTANCE))
+    del bad["gates"][0]["bypass_review_status"]
+    instance_path = _write_instance(tmp_path, bad)
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+    assert any(f.startswith("schema:") and "bypass_review_status" in f for f in findings), findings
+    assert drift._parse_registry(bad) is None
 
 
 def test_runtime_resolved_reference_is_a_valid_target_kind(tmp_path):
