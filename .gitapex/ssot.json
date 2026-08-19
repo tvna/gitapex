@@ -600,7 +600,7 @@
         ".github/scripts/gitapex_scan_ssot_schema.py",
         ".github/scripts/_gitapex_argv_safety.py"
       ],
-      "rule": "Validates .gitapex/ssot.json against .gitapex/ssot.schema.json (JSON Schema draft 2020-12); fails if any gates[].script path doesn't exist as a real file, or any policy_refs[] value doesn't resolve to a real policy_sources[].id. The argv-safety predicates this gate applies to local_invocation/local_stdin live in _gitapex_argv_safety.py, registered here (issue #904) so gitapex_detect_changed_gate_scripts.py selects an edit to them as a gate change requiring disclosure.",
+      "rule": "Validates .gitapex/ssot.json against .gitapex/ssot.schema.json (JSON Schema draft 2020-12); fails if any gates[].script path doesn't exist as a real file, or any policy_refs[] value doesn't resolve to a real policy_sources[].id. The argv-safety predicates this gate applies to local_invocation/local_stdin live in _gitapex_argv_safety.py, registered here (issue #904) so gitapex_detect_changed_gate_scripts.py selects an edit to them as a gate change requiring disclosure. Known gap (issue #1227): checks only that a registered entry's script path is real, not the reverse -- a real gate-shaped file (matching the naming convention gitapex_detect_changed_gate_scripts.py already applies for a different purpose) with no gates[] entry passes this check undetected.",
       "planes": ["ci", "local"],
       "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_ssot_schema.py"],
       "trigger": "tests/test_gitapex_scan_ssot_schema.py inside the pytest step of .github/workflows/test.yml",
