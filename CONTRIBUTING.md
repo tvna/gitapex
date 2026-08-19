@@ -102,9 +102,14 @@ means editing that allowlist on purpose. That file also records which
 suppression mechanism was verified to work on the pinned version, and which
 silently does not; re-run both checks if the pin is ever bumped.
 
-Neither hook is a merge gate: `git commit --no-verify` and
-`git push --no-verify` both bypass them, and no CI workflow runs betterleaks
-yet (named as a non-goal in #890).
+Neither hook alone is a merge gate: `git commit --no-verify` and
+`git push --no-verify` both bypass them. `.github/workflows/betterleaks-merge-gate.yml`
+(issue #894) closes that gap: it runs the same `--mode history` scan in CI
+on every pull request, against the same flake-pinned binary and the same
+`.betterleaks.toml`, so a commit that skipped the local hooks still gets
+scanned before merge. Whether that CI job actually blocks the merge button
+depends on this repository's branch-protection required-status-checks
+list, a GitHub admin setting no in-repo tooling can read or confirm.
 
 ## Local pre-push preflight
 
