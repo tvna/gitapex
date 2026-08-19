@@ -177,11 +177,11 @@
             "additionalProperties": false,
             "required": ["kind", "ref"],
             "properties": {
-              "kind": { "enum": ["mcp-tool", "bash-pattern", "file-glob", "workflow-event", "github-native", "cross-registry-consistency"] },
+              "kind": { "enum": ["mcp-tool", "bash-pattern", "file-glob", "workflow-event", "github-native", "cross-registry-consistency", "runtime-resolved-reference"] },
               "ref": { "type": "string", "minLength": 1 }
             }
           },
-          "description": "The machine-comparable subset of what trigger describes in prose: the concrete tool/pattern/path/event this gate actually targets. Absent means not yet backfilled, not 'targets nothing'. trigger remains the human-readable prose description; this field does not replace it."
+          "description": "The machine-comparable subset of what trigger describes in prose: the concrete tool/pattern/path/event this gate actually targets. Absent means not yet backfilled, not 'targets nothing'. trigger remains the human-readable prose description; this field does not replace it. 'runtime-resolved-reference' (issue #1232) is for a target whose identity is not decidable from committed source at all: it is only resolvable at runtime from live platform state (e.g. a GitHub API read) or an arbitrary per-instance pointer recorded elsewhere (an issue body, a secret's value, an arbitrary file/commit pair) -- distinct from 'github-native', which is a fixed platform *setting* (e.g. branch protection), not a per-instance value."
         },
         "bypass_review_status": {
           "enum": ["not-yet-reviewed", "reviewed-none-found", "reviewed-found-listed-below"],

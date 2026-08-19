@@ -269,6 +269,34 @@ def test_script_drift_still_caught_when_gate_carries_new_fields(tmp_path):
     assert not any(f.startswith("schema:") for f in findings), findings
 
 
+def test_runtime_resolved_reference_is_a_valid_target_kind(tmp_path):
+    """Issue #1232: target.kind's 7th value, for a target whose identity is
+    only resolvable at runtime (live platform state or an arbitrary
+    per-instance pointer) rather than from committed source. Must be
+    schema-valid AND parse into the typed GateTargetEntry -- the same
+    two-layer gap #1231's own adversarial review found for the first three
+    fields, checked here from the start instead of after the fact."""
+    good = json.loads(json.dumps(_VALID_INSTANCE))
+    good["gates"][0]["target"] = [{"kind": "runtime-resolved-reference", "ref": "test fixture"}]
+    instance_path = _write_instance(tmp_path, good)
+    assert drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT) == []
+    registry = drift._parse_registry(good)
+    assert registry is not None
+    assert registry.gates[0].target[0].kind == "runtime-resolved-reference"
+
+
+def test_an_unrecognized_target_kind_is_rejected_by_both_layers(tmp_path):
+    """Defeat test for the above: a target.kind value outside the (now
+    7-member) enum must be rejected by the raw JSON-Schema check. Guards
+    against the enum silently becoming open (e.g. a stray oneOf/anyOf, or a
+    typo that widens rather than extends it)."""
+    bad = json.loads(json.dumps(_VALID_INSTANCE))
+    bad["gates"][0]["target"] = [{"kind": "not-a-real-kind", "ref": "test fixture"}]
+    instance_path = _write_instance(tmp_path, bad)
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+    assert any(f.startswith("schema:") for f in findings), findings
+
+
 def test_parse_registry_returns_none_without_crashing_on_invalid_instance():
     """The pydantic model's own rejection path: an instance missing a
     required Gate field (schema-invalid too) fails the pydantic parse and

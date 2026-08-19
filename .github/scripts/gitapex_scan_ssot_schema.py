@@ -126,7 +126,13 @@ class GateTargetEntry(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     kind: Literal[
-        "mcp-tool", "bash-pattern", "file-glob", "workflow-event", "github-native", "cross-registry-consistency"
+        "mcp-tool",
+        "bash-pattern",
+        "file-glob",
+        "workflow-event",
+        "github-native",
+        "cross-registry-consistency",
+        "runtime-resolved-reference",
     ]
     ref: str
 
