@@ -44,6 +44,18 @@ Two scopes, one per git stage:
     so this holds for both the pre-push hook and a CI job that checks out
     a specific commit.
 
+    Known, disclosed edge case (found by an adversarial review of this
+    same change): a repository with zero commits (unborn ``HEAD``) used to
+    report a vacuous "no leaks found" here; ``--log-opts=HEAD`` now makes
+    ``betterleaks`` fail instead, since ``HEAD`` does not resolve. That is
+    a fail-*closed* change, consistent with this file's own no-fail-open
+    stance elsewhere, and not reachable through either real caller: the
+    pre-push hook only runs at the ``git push`` stage
+    (``.pre-commit-config.yaml``'s ``betterleaks-history``, ``stages:
+    [pre-push]``), and the CI job only runs on a pull request -- both
+    require at least one commit to exist already. Left unguarded rather
+    than adding speculative handling for a path neither caller can reach.
+
 Why a local wrapper instead of betterleaks' own published pre-commit repo:
 a remote ``rev`` would be a second version source alongside ``flake.nix``,
 which is exactly the two-different-versions split issue #678 exists to
