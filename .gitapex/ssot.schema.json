@@ -159,6 +159,33 @@
         "supersedes": {
           "type": ["string", "null"],
           "description": "id of a gate this one replaces, if any. An active gate may only move to deprecated in the same PR that either sets a replacement's supersedes or states in the PR body why none exists."
+        },
+        "fail_mode": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["on_error", "rationale"],
+          "properties": {
+            "on_error": { "enum": ["fail-open", "fail-closed", "mixed"] },
+            "rationale": { "type": "string", "minLength": 1 }
+          },
+          "description": "What this gate does when it cannot correctly evaluate its own condition (crash, timeout, unreachable dependency, malformed input) -- distinct from a confirmed policy violation, which always denies by definition. Absent means not yet assessed; never assume fail-closed by default from absence alone. 'mixed' is for a gate whose branches differ; rationale must say which branch is which."
+        },
+        "target": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "ref"],
+            "properties": {
+              "kind": { "enum": ["mcp-tool", "bash-pattern", "file-glob", "workflow-event", "github-native", "cross-registry-consistency"] },
+              "ref": { "type": "string", "minLength": 1 }
+            }
+          },
+          "description": "The machine-comparable subset of what trigger describes in prose: the concrete tool/pattern/path/event this gate actually targets. Absent means not yet backfilled, not 'targets nothing'. trigger remains the human-readable prose description; this field does not replace it."
+        },
+        "bypass_review_status": {
+          "enum": ["not-yet-reviewed", "reviewed-none-found", "reviewed-found-listed-below"],
+          "description": "Whether this gate's known-bypass surface has been reviewed at all, independent of what was found. 'reviewed-found-listed-below' refers to a known_bypasses array that is a separate, not-yet-added field (tracked in #1232) -- until that field ships, no gate should carry this value, since there is nowhere to list the bypass yet. Backfilled to 'not-yet-reviewed' for every currently-registered gate as part of issue #1231: a mechanical, zero-judgment default, not a claim that no gate has been reviewed for bypasses in some other, undocumented sense."
         }
       },
       "allOf": [

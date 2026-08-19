@@ -1,6 +1,6 @@
 {
   "meta": {
-    "schema_version": "1.1.0",
+    "schema_version": "1.2.0",
     "tracking_issue": 123,
     "status": "active",
     "phase": "phase-0"
@@ -92,7 +92,8 @@
       "cluster": ["outward-hygiene", "github-operations"],
       "tracking_issue": null,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "post-write-provenance-recheck",
@@ -106,7 +107,8 @@
       "cluster": ["outward-hygiene", "github-operations"],
       "tracking_issue": 878,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "template-overwrite-guard",
@@ -120,7 +122,8 @@
       "cluster": "outward-hygiene",
       "tracking_issue": null,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "acm-issue-disclosure",
@@ -138,7 +141,8 @@
       "cluster": "plan-integrity",
       "tracking_issue": null,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "pr-upstream-pushed",
@@ -152,7 +156,8 @@
       "cluster": "github-operations",
       "tracking_issue": 187,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "merge-pull-request-block",
@@ -166,7 +171,8 @@
       "cluster": "github-operations",
       "tracking_issue": 637,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "skill-audit-disclosure",
@@ -190,7 +196,8 @@
       "cluster": "skill-lifecycle",
       "tracking_issue": null,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "pr-issue-acm-disclosure",
@@ -208,7 +215,8 @@
       "cluster": ["plan-integrity", "github-operations"],
       "tracking_issue": 657,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "pr-duplicate-issue",
@@ -222,7 +230,8 @@
       "cluster": ["plan-integrity", "github-operations"],
       "tracking_issue": 1197,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "gitignore-pattern-test-coverage",
@@ -236,7 +245,8 @@
       "cluster": "repo-hygiene",
       "tracking_issue": 519,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "provenance-disclosure",
@@ -253,7 +263,8 @@
       "cluster": "outward-hygiene",
       "tracking_issue": 520,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "retro-title-convention-citation",
@@ -267,7 +278,8 @@
       "cluster": "self-governance",
       "tracking_issue": 520,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "routine-scope-enforcement",
@@ -281,7 +293,8 @@
       "cluster": "self-governance",
       "tracking_issue": 520,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "skill-rename-lifecycle",
@@ -295,7 +308,8 @@
       "cluster": "skill-lifecycle",
       "tracking_issue": 285,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "skill-branch-fixture-coverage",
@@ -309,7 +323,8 @@
       "cluster": "skill-lifecycle",
       "tracking_issue": 49,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "split-fixture-coverage",
@@ -323,7 +338,8 @@
       "cluster": "skill-lifecycle",
       "tracking_issue": 526,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "transfer-check-disclosure",
@@ -337,7 +353,8 @@
       "cluster": "skill-lifecycle",
       "tracking_issue": 517,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "skill-metadata-schema-drift",
@@ -351,7 +368,8 @@
       "cluster": "skill-lifecycle",
       "tracking_issue": 745,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "split-schema-drift",
@@ -365,7 +383,8 @@
       "cluster": "skill-lifecycle",
       "tracking_issue": 928,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "skill-eval-yaml-parity",
@@ -379,7 +398,8 @@
       "cluster": "skill-lifecycle",
       "tracking_issue": 928,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "skill-eval-status-doc-drift",
@@ -393,7 +413,8 @@
       "cluster": "skill-lifecycle",
       "tracking_issue": 928,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "evals-scripts-coverage-floor",
@@ -407,7 +428,8 @@
       "cluster": ["supply-chain", "test-integrity"],
       "tracking_issue": 536,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "apm-manifest-drift",
@@ -421,7 +443,8 @@
       "cluster": "supply-chain",
       "tracking_issue": 234,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "plugin-manifest-mirror-drift",
@@ -442,7 +465,8 @@
       "cluster": "supply-chain",
       "tracking_issue": 1028,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "plugin-manifest-schema-conformance",
@@ -462,7 +486,8 @@
       "cluster": "supply-chain",
       "tracking_issue": 1028,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "toolchain-pin-drift",
@@ -476,7 +501,8 @@
       "cluster": "supply-chain",
       "tracking_issue": 57,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "owasp-asi-mapping-completeness",
@@ -490,7 +516,8 @@
       "cluster": "self-governance",
       "tracking_issue": 144,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "owasp-llm-mapping-completeness",
@@ -504,7 +531,8 @@
       "cluster": "self-governance",
       "tracking_issue": 145,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "retrospective-gate-drift-scan",
@@ -518,7 +546,8 @@
       "cluster": "self-governance",
       "tracking_issue": 297,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "waza-eval-gate",
@@ -535,7 +564,8 @@
       "cluster": "skill-lifecycle",
       "tracking_issue": 582,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "workflow-lint",
@@ -549,7 +579,8 @@
       "cluster": "supply-chain",
       "tracking_issue": null,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "python-lint",
@@ -563,7 +594,8 @@
       "cluster": "supply-chain",
       "tracking_issue": 678,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "mypy-type-check",
@@ -577,7 +609,8 @@
       "cluster": ["test-integrity", "supply-chain"],
       "tracking_issue": 684,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "toolchain-nix-build-verify",
@@ -591,7 +624,8 @@
       "cluster": "supply-chain",
       "tracking_issue": null,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "ssot-schema-drift",
@@ -608,7 +642,8 @@
       "cluster": "registry-integrity",
       "tracking_issue": 123,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "plugin-root-brace-notation",
@@ -622,7 +657,8 @@
       "cluster": "supply-chain",
       "tracking_issue": 650,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "exception-handler-gap",
@@ -640,7 +676,8 @@
       "cluster": "test-integrity",
       "tracking_issue": 682,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "hidden-characters",
@@ -654,7 +691,8 @@
       "cluster": "repo-hygiene",
       "tracking_issue": 702,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "cyclomatic-complexity-floor",
@@ -668,7 +706,8 @@
       "cluster": "test-integrity",
       "tracking_issue": 727,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "stale-retro-stub-autoclose",
@@ -682,7 +721,8 @@
       "cluster": "self-governance",
       "tracking_issue": 694,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "low-trust-workflow-hooks-review",
@@ -696,7 +736,8 @@
       "cluster": "repo-hygiene",
       "tracking_issue": 136,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "registry-wiring-scan",
@@ -710,7 +751,8 @@
       "cluster": "self-governance",
       "tracking_issue": 682,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "harden-checkout-pin-drift",
@@ -724,7 +766,8 @@
       "cluster": "supply-chain",
       "tracking_issue": 813,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "runtime-compatibility-matrix-schema-drift",
@@ -738,7 +781,8 @@
       "cluster": "runtime-compatibility",
       "tracking_issue": 828,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "metadata-outcome-lines-drift",
@@ -752,7 +796,8 @@
       "cluster": "self-governance",
       "tracking_issue": 877,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "eval-suite-schema-drift",
@@ -766,7 +811,8 @@
       "cluster": "test-integrity",
       "tracking_issue": 862,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "eval-results-schema-drift",
@@ -780,7 +826,8 @@
       "cluster": "test-integrity",
       "tracking_issue": 926,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "eval-declared-model-allowlist",
@@ -794,7 +841,8 @@
       "cluster": "test-integrity",
       "tracking_issue": 925,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "main-ruleset-required-checks",
@@ -808,7 +856,8 @@
       "cluster": "self-governance",
       "tracking_issue": 439,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "ruleset-sync-gate",
@@ -822,7 +871,8 @@
       "cluster": "self-governance",
       "tracking_issue": 439,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "ruleset-drift-scan",
@@ -836,7 +886,8 @@
       "cluster": "self-governance",
       "tracking_issue": 439,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "contract-axis-vocabulary-drift",
@@ -850,7 +901,8 @@
       "cluster": "self-governance",
       "tracking_issue": 949,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "skill-quality-rubric-vocabulary-drift",
@@ -863,6 +915,21 @@
       "policy_refs": [],
       "cluster": "self-governance",
       "tracking_issue": 993,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
+    },
+    {
+      "id": "dimensions-numbering-drift",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_scan_dimensions_numbering_drift.py",
+      "rule": "evaluating-deterministic-gate-quality's references/dimensions.md carries one continuous ordered-list numbering across two lanes (deterministic-shape checks 1-6, probabilistic-maturity dimensions 7-N): every item must stay sequential with no gap, duplicate, or out-of-order entry; both '**<lane>** (X-Y)' range declarations, output-schema.json's findings[].dimensionId.maximum, and that same schema's findings-array description's 'dimensions.md, 1-N' span must all match the real item count; and every 'dimension N' / 'shape check N' cross-reference in dimensions.md or SKILL.md must name a number that actually exists in its own lane. A missing, duplicated, or empty section heading, zero items in either lane, or malformed schema JSON fails closed rather than passing.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_dimensions_numbering_drift.py"],
+      "trigger": "tests/test_gitapex_scan_dimensions_numbering_drift.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "self-governance",
+      "tracking_issue": 1229,
       "status": "active",
       "supersedes": null
     },
@@ -878,7 +945,8 @@
       "cluster": "github-operations",
       "tracking_issue": 985,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "bare-python3-invocation",
@@ -892,7 +960,8 @@
       "cluster": "supply-chain",
       "tracking_issue": 1035,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "stdlib-only-claim-drift",
@@ -910,7 +979,8 @@
       "cluster": "test-integrity",
       "tracking_issue": 1052,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "pr-title-convention",
@@ -929,7 +999,8 @@
       "cluster": "github-operations",
       "tracking_issue": 1058,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "copilot-endpoint-preflight",
@@ -947,7 +1018,8 @@
       "cluster": "skill-lifecycle",
       "tracking_issue": 124,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "real-checkout-git-write",
@@ -961,7 +1033,8 @@
       "cluster": "repo-hygiene",
       "tracking_issue": 991,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "dependency-allowlist",
@@ -978,7 +1051,8 @@
       "cluster": "skill-lifecycle",
       "tracking_issue": 1141,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "detection-logic-property-coverage",
@@ -996,7 +1070,8 @@
       "cluster": "test-integrity",
       "tracking_issue": 1178,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "betterleaks-merge-gate",
@@ -1010,7 +1085,8 @@
       "cluster": "secret-scanning",
       "tracking_issue": 894,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     }
   ],
   "clusters": {
