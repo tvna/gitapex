@@ -350,7 +350,9 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
+        {"kind": "file-glob", "ref": "skills/*.md"},
         {"kind": "file-glob", "ref": "skills/**/*.md"},
+        {"kind": "file-glob", "ref": "docs/*.md"},
         {"kind": "file-glob", "ref": "docs/**/*.md"},
         {"kind": "workflow-event", "ref": "retro-title-convention-citation-gate.yml:pull_request"},
         {"kind": "runtime-resolved-reference", "ref": "GitHub API GET /repos/{owner}/{repo}/issues/{issue_number} (is_resolvable_issue) for each #<N> citation found in an offending file"}
@@ -780,6 +782,7 @@
       "bypass_review_status": "not-yet-reviewed",
       "target": [
         {"kind": "file-glob", "ref": ".github/workflows/*.yml"},
+        {"kind": "file-glob", "ref": ".github/workflows/*.yaml"},
         {"kind": "workflow-event", "ref": "lint.yml:pull_request"},
         {"kind": "workflow-event", "ref": "lint.yml:push"}
       ]
@@ -1225,6 +1228,7 @@
       "target": [
         {"kind": "file-glob", "ref": ".github/rulesets/main.json"},
         {"kind": "file-glob", "ref": ".github/workflows/*.yml"},
+        {"kind": "file-glob", "ref": ".github/workflows/*.yaml"},
         {"kind": "cross-registry-consistency", "ref": "rules[].parameters.required_status_checks[].context (main.json) <-> unconditional-pull_request job/check-run names in .github/workflows/*.yml"},
         {"kind": "workflow-event", "ref": "test.yml:pull_request"},
         {"kind": "workflow-event", "ref": "test.yml:push"}
