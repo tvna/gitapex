@@ -1,14 +1,23 @@
 #!/usr/bin/env python3
 """Report, non-blocking, which .gitapex/ssot.json gates still lack fail_mode/target.
 
-Issue #1232's own explicit design: `target` is not expected to reach 100%
-quickly (8 of the 63 live gates resist a clean fit even after real
-investigation, per docs/superpowers/specs/2026-08-19-ssot-completeness-design.md),
-and `fail_mode` has no backfill effort behind it at all yet. A fail-closed
-gate against either field would just get bypassed or waived immediately,
-which is worse than an honest, visible report -- so this script always
-exits 0 except on a genuine read/parse failure (missing file, invalid
-JSON): incomplete coverage is expected, honestly-reported state, never a
+Issue #1232's own explicit design: this report is non-blocking regardless
+of the coverage level it finds, on purpose. `target` reached 100% of the
+63 pre-existing gates in this same issue's own backfill (0 of the 8 gates
+docs/superpowers/specs/2026-08-19-ssot-completeness-design.md flagged as
+medium/ambiguous actually needed a NO-FIT verdict once grounded in their
+real, current scripts) -- but that is this issue's outcome, not a
+structural guarantee: a future gate can land without target, and
+`fail_mode` has no backfill effort behind it at all yet, so a fail-closed
+check against either field would still just get bypassed or waived the
+moment either regresses below 100%, which is worse than an honest,
+visible report. So this script always exits 0 except on a genuine
+read/parse failure (missing file, invalid JSON, non-UTF-8 text) -- a
+non-object top-level value (a bare list/string/number/null) is schema-
+invalid but still valid JSON, so it is not one of those failures either:
+field_coverage() treats it the same as an empty gates list and reports an
+honest 0/0, exit 0. Incomplete coverage, and a malformed-but-parseable
+registry shape, are both expected, honestly-reported states, never a
 structural error. Whether to later promote either field to a fail-closed
 check (e.g. "new gates must carry target") is a separate, future decision,
 left open here per that same design doc.

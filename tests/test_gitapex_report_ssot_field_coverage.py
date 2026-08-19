@@ -85,6 +85,30 @@ def test_main_returns_zero_even_when_every_gate_lacks_both_fields(
     assert "target: 0/1 gates (0%)" in out
 
 
+@pytest.mark.parametrize("bad_top_level_json", ["[]", '"a string"', "1", "null"])
+def test_main_returns_zero_when_the_registry_top_level_is_not_an_object(
+    bad_top_level_json: str,
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Adversarial review found this exact end-to-end path (main() reading a
+    non-dict-but-valid-JSON file from disk) was untested: field_coverage()
+    had direct unit coverage for a non-dict top-level value, but nothing
+    exercised main() itself with one, so a plausible defensive-programming
+    regression (an isinstance(instance, dict) guard added to main() that
+    returns 1) left all other tests green. Schema-invalid but still valid,
+    readable JSON must not be treated as the read/parse failure that earns
+    exit 1 -- ssot-schema-drift's own schema check is what a malformed
+    registry shape should fail, not this always-0 report."""
+    instance_path = tmp_path / "ssot.json"
+    instance_path.write_text(bad_top_level_json)
+    monkeypatch.setattr(coverage, "SSOT_PATH", instance_path)
+    assert coverage.main() == 0
+    out = capsys.readouterr().out
+    assert "target: 0/0 gates (0%)" in out
+
+
 def test_main_returns_one_on_unreadable_registry_path(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

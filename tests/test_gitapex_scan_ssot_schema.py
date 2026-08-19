@@ -304,14 +304,19 @@ def test_runtime_resolved_reference_is_a_valid_target_kind(tmp_path):
 
 def test_an_unrecognized_target_kind_is_rejected_by_both_layers(tmp_path):
     """Defeat test for the above: a target.kind value outside the (now
-    7-member) enum must be rejected by the raw JSON-Schema check. Guards
-    against the enum silently becoming open (e.g. a stray oneOf/anyOf, or a
-    typo that widens rather than extends it)."""
+    7-member) enum must be rejected by the raw JSON-Schema check AND fail
+    the pydantic parse -- the name already claimed both layers, but the
+    body originally only asserted the schema half; adversarial review
+    confirmed the gap empirically by widening GateTargetEntry.kind to a
+    bare str and watching this test (and all 87 others) stay green. Guards
+    against either layer silently becoming open (e.g. a stray oneOf/anyOf
+    in the schema, or a Literal quietly widened to str in the model)."""
     bad = json.loads(json.dumps(_VALID_INSTANCE))
     bad["gates"][0]["target"] = [{"kind": "not-a-real-kind", "ref": "test fixture"}]
     instance_path = _write_instance(tmp_path, bad)
     findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
     assert any(f.startswith("schema:") for f in findings), findings
+    assert drift._parse_registry(bad) is None
 
 
 def test_parse_registry_returns_none_without_crashing_on_invalid_instance():
