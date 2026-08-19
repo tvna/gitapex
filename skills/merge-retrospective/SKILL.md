@@ -138,53 +138,49 @@ such taxonomy applies only `retrospective`, unchanged from before.
 
 ## Procedure
 
-0. **Dedup check.** Before doing any of the (expensive) work in Steps
-   1-4 below, search for an existing retrospective issue for this PR, so
-   a prior run's completed work is never redone or duplicated.
-   - **Dedup against an existing CI-opened stub first.** Some
-     repositories run an automated, deterministic opener (a CI script
-     triggered on PR merge, comparable to this repository's own
-     `.github/scripts/gitapex_post_merge_retro.py`) that files a bare stub
-     retrospective issue with no repair content before this skill ever
-     runs, specifically so a PR merged with no interactive session
-     watching still gets a placeholder to enrich later. Running this
-     step against a PR that already has such a stub without checking
-     for it first produces a duplicate issue -- the stub and this
-     skill's own filing, both matching `label:retrospective` but never
-     reconciled. Before creating anything, search using the same
-     title/label identity predicate the opener itself uses at creation
-     time -- where the calling repository has its own established
-     title convention (a single source-of-truth function like this
-     repository's own `_retro_title`/`dedup_query` in
-     `gitapex_post_merge_retro.py`, producing
-     `chore(retrospective): merge retrospective for PR #N`), search that
-     exact phrase plus `label:retrospective`; a repository with neither
-     an opener nor its own convention has nothing to dedup against here,
-     so this check is a no-op and filing proceeds as normal.
-     - **Match found, body still carries the opener's own stub marker
-       text** (this repository's marker: `"Automated stub opened by the
-       post-merge-auto-retro gate"`, from `gitapex_post_merge_retro.py`'s own
-       issue body -- unenriched, i.e. no session has replaced it yet) ->
-       this is the stub to fill, not a reason to open a second issue.
-       Continue into Step 1 below; when Step 5 files, call `issue_write`
-       method `update` on that issue number instead of `create`,
-       replacing the stub body with the full Repairs content Step 5's
-       remaining bullets below describe, and add the repository's own
-       secondary lifecycle label (if any) alongside the `retrospective`
-       label the stub already carries. Cross-linking (Step 6) and
-       verification (Step 7) both still apply, just against the updated
-       existing issue number rather than a newly created one.
-     - **Match found, body no longer carries the marker** -> a prior run
-       (this skill, on an earlier pass, or a human) already enriched this
-       exact PR's retrospective; there is nothing left for this cycle to
-       file. Do not overwrite real content with this cycle's own
-       analysis, and do not create a duplicate -- treat the PR as already
-       retrospected and stop here, before Step 1's carry-forward check or
+0. **Dedup check.** Before doing any of the (expensive) work in Steps 1-4
+   below, search for an existing retrospective issue for this PR, so a prior
+   run's completed work is never redone or duplicated.
+   - **Dedup against an existing CI-opened stub first.** Some repositories run
+     an automated opener (e.g. this repository's own
+     `.github/scripts/gitapex_post_merge_retro.py`, triggered on PR merge) that
+     files a bare stub retrospective issue before this skill runs, so an
+     unattended merge still gets a placeholder. Skipping this check against a
+     PR with such a stub produces a duplicate -- the stub and this skill's own
+     filing, both labeled `retrospective` but never reconciled. Before creating
+     anything, search using the same title/label identity predicate the opener
+     itself uses (where the repository has its own convention -- e.g. this
+     repository's `_retro_title`/`dedup_query`, producing
+     `chore(retrospective): merge retrospective for PR #N`): fetch candidates
+     via `mcp__github__list_issues(labels: ["retrospective"])`, an exact
+     deterministic label filter, never `mcp__github__search_issues`'s
+     natural-language matching (Step 1 also calls `search_issues`, for a
+     different task -- not license to widen this step's tool choice). Page
+     through every result (`pageInfo.endCursor` via `after`) before concluding
+     "no match" -- the same fail-closed pagination discipline as
+     `hooks/gitapex_check_pr_duplicate_issue.py`. Then compare titles with
+     **exact string equality**, never substring containment: a shorter PR
+     number's title is a literal prefix of a longer one sharing the same
+     leading digits, so substring matching could mistake the longer number's
+     issue for the shorter number's own. A repository with neither an opener
+     nor its own convention has nothing to dedup against, so this check is a
+     no-op.
+     - **Match found, body still carries the opener's own stub marker text**
+       (`"Automated stub opened by the post-merge-auto-retro gate"` --
+       unenriched) -> fill the stub, don't open a second issue. Continue into
+       Step 1; when Step 5 files, call `issue_write` method `update` on that
+       issue number instead of `create`, replacing the stub body with Step 5's
+       full Repairs content, and add the repository's secondary lifecycle label
+       (if any) alongside `retrospective`. Cross-linking (Step 6) and
+       verification (Step 7) still apply to the updated issue.
+     - **Match found, body no longer carries the marker** -> a prior run (this
+       skill, an earlier pass, or a human) already enriched this PR's
+       retrospective; nothing is left to file. Do not overwrite real content or
+       create a duplicate -- stop here, before Step 1's carry-forward check or
        Step 2's repair enumeration ever runs.
-     - **No match** -> nothing to dedup against; continue into Step 1
-       below, and when Step 5 files, proceed to `create` per its
-       remaining bullets, same as a repository with no stub-opening CI
-       script at all.
+     - **No match** -> nothing to dedup against; continue into Step 1 below,
+       and when Step 5 files, proceed to `create` per its remaining bullets,
+       same as a repository with no stub-opening CI script at all.
 1. **Carry-forward check.** Before enumerating this cycle's repairs,
    check whether gates proposed by *prior* retrospective issues actually
    got implemented, so a proposed gate cannot silently rot across cycles

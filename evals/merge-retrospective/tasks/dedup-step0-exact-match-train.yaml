@@ -1,0 +1,29 @@
+id: merge-retrospective-dedup-step0-exact-match
+name: Step 0 Dedup -- Exact Title Match Stops Re-Filing
+description: Step 0's dedup search for PR #94 finds an existing retrospective issue whose title is an EXACT match and whose body no longer carries the post-merge-auto-retro stub marker -- the skill must recognize this as already-retrospected and stop before Step 2's repair enumeration ever runs, rather than filing a second issue for the same PR.
+tags:
+  - quality
+  - dedup
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #94 ("fix: correct the retry-backoff
+    jitter calculation in the queue worker") just merged into main.
+
+    Step 0 dedup search results (already run for you, paginated to
+    exhaustion): searching `label:retrospective` returns exactly one
+    issue, #310, titled EXACTLY "chore(retrospective): merge
+    retrospective for PR #94". Its body no longer carries the
+    post-merge-auto-retro stub marker text ("Automated stub opened by
+    the post-merge-auto-retro gate") -- a prior session already enriched
+    it with PR #94's own repair content (one CI-failure repair,
+    classified as a missing deterministic gate).
+
+    A teammate now asks you to run the retrospective for PR #94 since
+    they don't see it linked from the PR. What do you do?
+expected:
+  output_contains:
+    - "already retrospected"
+  output_not_contains:
+    - "missing deterministic gate"
+    - "unclear agent instruction"
+    - "external/human decision"

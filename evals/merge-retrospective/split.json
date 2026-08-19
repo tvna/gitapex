@@ -9,7 +9,8 @@
       "instruction-error-message-wording-train.yaml",
       "carried-forward-gate-unimplemented-train.yaml",
       "force-push-observed-train.yaml",
-      "title-convention-precedence-train.yaml"
+      "title-convention-precedence-train.yaml",
+      "dedup-step0-exact-match-train.yaml"
     ],
     "selection": [
       "guardrail.yaml",
@@ -22,10 +23,11 @@
     "test": [
       "tie-break-restraint-not-reclassified-test.yaml",
       "carried-forward-gate-implemented-test.yaml",
-      "force-push-not-claimable-test.yaml"
+      "force-push-not-claimable-test.yaml",
+      "dedup-step0-title-substring-not-exact-match-test.yaml"
     ]
   },
-  "partition": "9:6:3",
+  "partition": "10:6:4",
   "split_arithmetic_exclusions": [],
   "equivalence_classes": [
     {
@@ -63,6 +65,10 @@
     {
       "train_fixture": "title-convention-precedence-train.yaml",
       "held_out_fixture": "no-title-convention-fallback-selection.yaml"
+    },
+    {
+      "train_fixture": "dedup-step0-exact-match-train.yaml",
+      "held_out_fixture": "dedup-step0-title-substring-not-exact-match-test.yaml"
     }
   ]
 }
