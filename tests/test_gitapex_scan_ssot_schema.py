@@ -249,6 +249,8 @@ def test_script_drift_still_caught_when_gate_carries_new_fields(tmp_path):
     and returned None -- the exact blind spot #1231's own backfill would
     introduce without this Gate model mirror."""
     bad = json.loads(json.dumps(_VALID_INSTANCE))
+    bad["gates"][0]["fail_mode"] = {"on_error": "fail-open", "rationale": "test fixture"}
+    bad["gates"][0]["target"] = [{"kind": "bash-pattern", "ref": "test fixture"}]
     bad["gates"][0]["bypass_review_status"] = "not-yet-reviewed"
     bad["gates"][0]["script"] = "hooks/does-not-exist.sh"
     instance_path = _write_instance(tmp_path, bad)
