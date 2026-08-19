@@ -5,8 +5,10 @@ description: Use when a pull request has just merged, before closing the turn --
 
 # Merge Retrospective
 
-This is a self-contained procedure; it depends only on a connected GitHub
-MCP server for the issue-filing step.
+This is a self-contained procedure; it depends on a connected GitHub MCP
+server for Step 1's issue discovery and the issue-filing step, plus local
+shell access (a `git log` subprocess and a `.gitapex/ssot.json` read) for
+Step 1's own bundled gate-resolution script.
 
 A merged PR is not the end of the cycle. Before closing the turn, look
 back at everything that had to be repaired between opening the PR and
@@ -27,7 +29,15 @@ connected GitHub MCP server (`mcp__github__*` tools). Where the
 environment lacks one, fall back to the repo's own approved read-only
 REST API wrapper for Step 0's dedup search, Step 1's issue search, and
 Step 2's history reconstruction, and to whatever write path the repo
-already uses for filing issues in Step 5.
+already uses for filing issues in Step 5. Step 1's own bundled
+gate-resolution script additionally needs local shell access to the
+checked-out repository (a `git log` subprocess and a `.gitapex/ssot.json`
+read) -- a separate, non-MCP prerequisite from the GitHub-connector one
+this paragraph otherwise covers. That `git log` only sees history the
+checkout actually has: a shallow clone would undercount citing commits,
+misreporting an already-resolved gate as unresolved (the CI sibling
+script's own workflow sets `fetch-depth: '0'` for this reason) -- run
+`git fetch --unshallow` first if the checkout might be shallow.
 
 ## Classification taxonomy (fixed -- never invent a fourth category)
 
@@ -179,34 +189,70 @@ such taxonomy applies only `retrospective`, unchanged from before.
    check whether gates proposed by *prior* retrospective issues actually
    got implemented, so a proposed gate cannot silently rot across cycles
    unnoticed.
-   - **Find prior retrospective issues:** `mcp__github__search_issues`
-     for `label:retrospective` -- deliberately unfiltered by state.
-     Closing an issue is not proof its proposed gate was implemented
-     (a retrospective can be closed as stale, deduplicated, or superseded
-     while its gate is still unbuilt), so an open-only search would
-     silently drop exactly the issues this check exists to catch. This
-     is the reliable, non-text-matching anchor Step 5 below now creates.
-     Issues filed before the label existed carry no label; for those,
-     fall back to `"Merge retrospective:" in:title` (or the repo's own
-     retrospective title convention, if it has one), also unfiltered by
-     state.
-   - **For each hit, check whether its proposed gate was implemented:**
-     `mcp__github__search_commits` (or `search_issues` scoped to merged
-     PRs) for a merged PR or commit whose message cites that
-     retrospective issue's number -- any of `Refs #N`, `Closes #N`,
-     `Fixes #N`, or a bare `#N` counts (where the calling repository
-     already has its own "cite the issue number in every commit"
-     convention, that convention is what creates the citation trail this
-     step reads back; a repository with no such convention may simply
-     have no citation to find, which this step cannot distinguish from a
-     gate that was never implemented). No such citation found means the
-     gate is still unimplemented.
-   - **Report, don't implement:** for each unimplemented gate found, hand
-     it to Step 5 below as a **"Carried-forward gate"** entry, kept in
-     its own subsection separate from this cycle's own Repairs (do not
-     merge the two lists -- a carried-forward gate was not a repair in
-     *this* cycle). Never post it as a comment on the old issue, which
-     would fragment visibility instead of concentrating it.
+   - **Find prior retrospective issues:** `mcp__github__list_issues`
+     with `labels: ["retrospective"]` -- deliberately unfiltered by
+     state (omit the `state` parameter; it returns both open and closed
+     issues when omitted). Do not use `mcp__github__search_issues` for
+     the labeled query: that tool performs natural-language semantic
+     matching, not an exact label filter, and is itself a source of
+     cross-session divergence, upstream of the citation-only weakness
+     the next bullet below replaces. Closing an issue is not proof its
+     proposed gate was implemented (a retrospective can be closed as
+     stale, deduplicated, or superseded while its gate is still
+     unbuilt), so an open-only search would silently drop exactly the
+     issues this check exists to catch. This is the reliable,
+     non-text-matching anchor Step 5 below now creates. Issues filed
+     before the label existed carry no label; for those, fall back to
+     `mcp__github__search_issues` for `"Merge retrospective:" in:title`
+     (or the repo's own retrospective title convention, if it has one),
+     also unfiltered by state -- title text has no exact-filter tool
+     equivalent, so this fallback keeps `search_issues` deliberately,
+     unlike the labelled case above. `search_issues` is semantic, not an
+     exact filter, so validate each returned title against the exact
+     expected convention before adding its issue number -- a
+     semantically-similar but non-matching title (for example, an issue
+     merely discussing retrospectives rather than being one) must not
+     enter the candidate batch.
+   - **Check whether each hit's proposed gate was implemented:** collect
+     every candidate issue number found above into one list. If that
+     list is empty (no retrospective-labelled issues and no legacy-title
+     match either), there is nothing to carry forward -- skip the script
+     invocation entirely rather than calling it with zero arguments (its
+     `issue_numbers` CLI argument requires at least one, per its own
+     `nargs="+"`, and rejects a zero-argument call before the script's
+     own logic ever runs). Otherwise, run a single batch invocation of
+     `uv run --frozen python3
+     skills/merge-retrospective/scripts/gitapex_check_retro_gate_resolved.py
+     <every candidate issue number>` (never `mcp__github__search_commits`
+     or a bare citation check directly -- a citing commit alone is not
+     proof a gate was actually built, only that someone touched
+     something related to the issue). This script re-implements the same
+     two-signal check `.github/scripts/gitapex_scan_retrospective_gate_drift.py`
+     already runs in CI: an issue number only clears as resolved when
+     both a commit on `HEAD` cites it AND `.gitapex/ssot.json`
+     `gates[].tracking_issue` names it. It prints one JSON object to
+     stdout partitioning every *distinct* input issue number (the script
+     deduplicates first) into exactly one of two arrays:
+     `{"unresolved": [...], "resolved": [...]}`. This
+     script's `.gitapex/ssot.json` dependency is a gitapex-specific gate
+     registry, not a portable convention every calling repository has --
+     unlike the CI-opener check above, this step has no repository-
+     agnostic fallback yet: a repository with no such registry (or an
+     equivalent one pointed at via `--ssot-path`) cannot run the
+     two-signal check as written, a known limitation, not silently
+     papered over. The script fails loudly (exit 1, on stderr) rather
+     than silently reporting an empty result when the registry or
+     `git log` itself is unreadable -- treat that exit code as "the
+     check could not run," never as "nothing is unresolved," and
+     escalate rather than silently falling back to a citation-only read
+     of the same repair.
+   - **Report, don't implement:** for each issue number in the script's
+     own `unresolved` array, hand it to Step 5 below as a
+     **"Carried-forward gate"** entry, kept in its own subsection
+     separate from this cycle's own Repairs (do not merge the two lists
+     -- a carried-forward gate was not a repair in *this* cycle). Never
+     post it as a comment on the old issue, which would fragment
+     visibility instead of concentrating it.
 2. **Enumerate every repair** between PR open and merge. Use
    `mcp__github__pull_request_read` (`get_commits`, `get_reviews`,
    `get_review_comments`, `get_check_runs`) to reconstruct the history.
@@ -414,8 +460,9 @@ Three repairs occurred between PR open and merge.
 ## Carried-forward gate
 
 - Issue #31 ("Merge retrospective: PR #29") proposed a pre-commit hook
-  enforcing conventional-commit message format, but no merged PR or
-  commit citing #31 exists yet -- the gate is still unimplemented one
+  enforcing conventional-commit message format, but the two-signal check
+  found neither a merged PR or commit citing #31 nor a corroborating
+  `.gitapex/ssot.json` entry -- the gate is still unimplemented one
   cycle later. Escalating visibility here rather than letting it rot
   silently; implementing it remains separate follow-on work, same as any
   gate proposed in this cycle's own Repairs section above.

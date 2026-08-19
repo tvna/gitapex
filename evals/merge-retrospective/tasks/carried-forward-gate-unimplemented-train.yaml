@@ -1,6 +1,6 @@
 id: merge-retrospective-carried-forward-gate-unimplemented
-name: Step 0 Finds an Unimplemented Prior Retrospective Gate
-description: Step 0's carry-forward check finds a prior retrospective issue whose proposed gate has no citing merged PR or commit, and reports it as its own "Carried-forward gate" subsection, separate from this cycle's own repair.
+name: Step 1 Finds an Unimplemented Prior Retrospective Gate
+description: Step 1's carry-forward check finds a prior retrospective issue whose proposed gate lacks at least one of the two required signals (the scenario below only establishes the citation signal is missing, not the .gitapex/ssot.json one), and reports it as its own "Carried-forward gate" subsection, separate from this cycle's own repair.
 tags:
   - quality
   - carried-forward
@@ -9,13 +9,14 @@ inputs:
     Use merge-retrospective. PR #254 ("feat: add --parallel flag to the
     batch-import command") just merged into main.
 
-    Step 0 carry-forward search results (already run for you): searching
-    `label:retrospective` (unfiltered by state) returns one issue, #201
-    ("Merge retrospective: PR #188"), which proposed adding a `commitlint`
-    pre-commit hook enforcing conventional-commit message format. A search
-    for a merged PR or commit citing "#201" (`Refs #201`, `Closes #201`,
-    `Fixes #201`, or a bare `#201`) returns no results -- the hook was
-    never implemented.
+    Step 1 carry-forward check results (already run for you):
+    `mcp__github__list_issues` with `labels: ["retrospective"]`
+    (unfiltered by state) returns one issue, #201 ("Merge retrospective:
+    PR #188"), which proposed adding a `commitlint` pre-commit hook
+    enforcing conventional-commit message format. Running
+    `gitapex_check_retro_gate_resolved.py 201` returns
+    `{"unresolved": [201], "resolved": []}` -- no commit on `HEAD` cites
+    "#201", so the two-signal check reports it unresolved.
 
     Here is the one repair that happened between open and merge for PR
     #254 itself: CI run #1 failed -- `pytest -k batch_import` timed out
