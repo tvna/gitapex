@@ -931,7 +931,8 @@
       "cluster": "self-governance",
       "tracking_issue": 1229,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "behind-base",
