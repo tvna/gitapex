@@ -144,7 +144,9 @@
         {"kind": "file-glob", "ref": "*.github/pull_request_template/*"},
         {"kind": "file-glob", "ref": "*.gitlab/issue_templates/*"},
         {"kind": "file-glob", "ref": "*.gitlab/merge_request_templates/*"},
-        {"kind": "file-glob", "ref": "pull_request_template|pull_request_template.md|pull_request_template.txt"}
+        {"kind": "file-glob", "ref": "pull_request_template"},
+        {"kind": "file-glob", "ref": "pull_request_template.md"},
+        {"kind": "file-glob", "ref": "pull_request_template.txt"}
       ]
     },
     {
