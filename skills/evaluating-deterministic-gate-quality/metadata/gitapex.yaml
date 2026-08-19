@@ -691,6 +691,23 @@ spec:
       summary: "Downstream self-consistency gates this diff tripped, fixed in the same PR: eval-status.md's coverage headline/uncovered-list (13/23 -> 13/24, dimension 24 added with its own rationale) plus its snapshot test; a bare external-paper task-39 citation the no-bare-issue-citation check flags on sight, fixed via its own inline-code escape hatch; wired-gate-count prose across four files (33->34); and a pre-existing, unrelated exclusions-count staleness (28->29) the same test caught in passing."
       outcome:
         fixed: 5
+    - kind: audit
+      anchor: "method:evaluating-deterministic-gate-quality"
+      summary: "A gitapex:evaluating-deterministic-gate-quality dispatch reviewed the new dimensions-numbering-drift gate: well-formed and well-placed. Nine live adversarial probes against dimension 15 found zero fail-open bugs. Disclosed the same CLAUDE.md dispatch-isolation leak this repository's own prior audit rounds have already disclosed, and surfaced one unrelated, currently-open live-ruleset drift on main worth separate attention."
+      outcome:
+        verdict: WELL-FORMED-AND-WELL-PLACED
+    - kind: audit
+      anchor: "method:adversarial-code-review"
+      summary: "An independent adversarial code-review pass found one blocking bug: check_lane_range_declarations and check_schema used re.search (first match only), not re.finditer, missing a second stale range/citation elsewhere in the same text -- inconsistent with this file's own check_cross_references and both precedent scripts. Also found the open-ended dimension-lane section had no upper heading bound."
+      outcome:
+        verdict: FAIL
+        found: 2
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1229"
+      summary: "Fixed both real findings from the adversarial review: the three search-only checks now validate every match via finditer, and the dimension lane's own section extraction now bounds to the next level-1-or-2 heading instead of end-of-file. Added 5 regression tests (40 total, 100% coverage) reproducing each defeat case the review itself constructed."
+      outcome:
+        fixed: 2
+        tests: "gitapex_scan_dimensions_numbering_drift.py test count 35->40"
   skillDependencies:
     requires:
       - evaluating-skill-quality

@@ -215,6 +215,50 @@ def test_missing_dimension_range_declaration_fails(tmp_path: Path) -> None:
     assert any("dimension range lock cannot run" in p for p in problems), problems
 
 
+def test_second_stale_shape_range_declaration_is_still_caught(tmp_path: Path) -> None:
+    """A second '**Deterministic-shape checks** (X-Y)' sentence landing
+    elsewhere in the document, stale, while the first stays correct, must
+    not silently escape this lock -- grading only re.search's first match
+    left exactly this exposure open (adversarial-review finding)."""
+    skill_dir = _copy_skill(tmp_path)
+    _mutate(
+        skill_dir,
+        G.DIMENSIONS_MD,
+        "## Deterministic-shape checks\n",
+        "## Deterministic-shape checks\n\nAs a reminder, **Deterministic-shape checks** (1-5) stay fixed.\n",
+    )
+    problems = G.scan(skill_dir)
+    assert any("declares shape checks '(1-5)' but 6 shape-check item(s)" in p for p in problems), problems
+
+
+def test_second_stale_dimension_range_declaration_is_still_caught(tmp_path: Path) -> None:
+    skill_dir = _copy_skill(tmp_path)
+    _mutate(
+        skill_dir,
+        G.DIMENSIONS_MD,
+        "## Probabilistic-maturity dimensions\n",
+        "## Probabilistic-maturity dimensions\n\n"
+        "As a reminder, **Probabilistic-maturity dimensions** (7-23) stay open-ended.\n",
+    )
+    problems = G.scan(skill_dir)
+    assert any("declares dimensions '(7-23)' but 18 dimension item(s)" in p for p in problems), problems
+
+
+def test_unrelated_trailing_section_is_not_swept_into_dimension_lane(tmp_path: Path) -> None:
+    """The open-ended (end_heading=None) dimension-lane extraction must
+    stop at the next level-1-or-2 heading, not run to literal
+    end-of-file -- otherwise a later, unrelated numbered list (an
+    appendix, a changelog) is misread as more dimension items
+    (adversarial-review finding). Appending such a section must change
+    nothing about this gate's own verdict."""
+    skill_dir = _copy_skill(tmp_path)
+    path = skill_dir / G.DIMENSIONS_MD
+    text = path.read_text(encoding="utf-8")
+    text += "\n## Appendix: revision notes\n\n1. **Initial draft.** Body.\n2. **Incorporated feedback.** Body.\n"
+    path.write_text(text, encoding="utf-8")
+    assert G.scan(skill_dir) == []
+
+
 # --- Cross-reference lock -------------------------------------------------------
 
 
@@ -249,6 +293,24 @@ def test_stale_dimension_reference_in_skill_md_fails(tmp_path: Path) -> None:
     assert any("SKILL.md: cites 'dimension 97'" in p for p in problems), problems
 
 
+def test_stale_shape_check_reference_in_skill_md_fails(tmp_path: Path) -> None:
+    """SKILL.md carries no real 'shape check N' citation today, so this
+    branch of check_cross_references was previously exercised only via
+    dimensions.md -- 100% line coverage did not by itself prove this
+    (file, phrase) combination was checked (adversarial-review finding)."""
+    skill_dir = _copy_skill(tmp_path)
+    _mutate(
+        skill_dir,
+        G.SKILL_MD,
+        'and the "never both" rule keeping it off dimension 15\'s ground:',
+        'and the "never both" rule keeping it off dimension 15\'s ground (as shape check 9 already establishes):',
+    )
+    problems = G.scan(skill_dir)
+    assert any("SKILL.md: cites 'shape check 9' but shape checks are only numbered 1-6" in p for p in problems), (
+        problems
+    )
+
+
 def test_valid_dimension_reference_to_the_newest_dimension_passes(tmp_path: Path) -> None:
     """A reference to the highest real dimension number is legitimate, not
     a false positive -- the range check is inclusive at both ends."""
@@ -270,6 +332,19 @@ def test_stale_schema_dimension_id_maximum_fails(tmp_path: Path) -> None:
 def test_stale_schema_findings_description_range_fails(tmp_path: Path) -> None:
     skill_dir = _copy_skill(tmp_path)
     _mutate(skill_dir, G.SCHEMA_JSON, "dimensions.md, 1-24", "dimensions.md, 1-23")
+    problems = G.scan(skill_dir)
+    assert any("cites 'dimensions.md, 1-23' but 24 is the real highest" in p for p in problems), problems
+
+
+def test_second_stale_schema_range_citation_is_still_caught(tmp_path: Path) -> None:
+    """A second 'dimensions.md, 1-<N>' fragment inserted into the same
+    findings.description string, stale, while the first stays correct,
+    must not silently escape this lock (adversarial-review finding)."""
+    skill_dir = _copy_skill(tmp_path)
+    path = skill_dir / G.SCHEMA_JSON
+    schema = json.loads(path.read_text(encoding="utf-8"))
+    schema["properties"]["findings"]["description"] += " See also dimensions.md, 1-23 for an older count."
+    path.write_text(json.dumps(schema), encoding="utf-8")
     problems = G.scan(skill_dir)
     assert any("cites 'dimensions.md, 1-23' but 24 is the real highest" in p for p in problems), problems
 

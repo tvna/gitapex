@@ -44,10 +44,11 @@ Checks, grouped by the file they read:
        dimensions" continues that same sequence, numbered (S+1)..(S+D)
        with no gap, duplicate, or out-of-order entry, where D is that
        section's own real item count.
-    3. The "**Deterministic-shape checks** (X-Y)" declaration matches the
-       real shape-check span (X=1, Y=S).
-    4. The "**Probabilistic-maturity dimensions** (X-Y)" declaration
-       matches the real dimension span (X=S+1, Y=S+D).
+    3. Every "**Deterministic-shape checks** (X-Y)" declaration -- not
+       only the first -- matches the real shape-check span (X=1, Y=S).
+    4. Every "**Probabilistic-maturity dimensions** (X-Y)" declaration --
+       not only the first -- matches the real dimension span (X=S+1,
+       Y=S+D).
     5. Every "shape check N" cross-reference names a number in [1, S].
     6. Every "dimension N" cross-reference names a number in [S+1, S+D] --
        a citation naming a shape-check's own number as a "dimension" is
@@ -60,8 +61,9 @@ Checks, grouped by the file they read:
 
   ``references/output-schema.json``
     9. ``findings.items.properties.dimensionId.maximum`` equals S+D.
-    10. The ``findings`` array's own top-level description states the
-       real "dimensions.md, 1-<N>" span.
+    10. Every "dimensions.md, 1-<N>" span in the ``findings`` array's own
+       top-level description -- not only the first -- states the real
+       S+D total.
 
 Fail-closed: a missing or unreadable file, a missing/duplicated/empty
 section heading, zero items found in either lane (nothing to compute a
@@ -78,8 +80,8 @@ not merely the next one of any kind.
 
 Usage::
 
-    python3 .github/scripts/gitapex_scan_dimensions_numbering_drift.py
-    python3 .github/scripts/gitapex_scan_dimensions_numbering_drift.py \\
+    uv run --frozen python3 .github/scripts/gitapex_scan_dimensions_numbering_drift.py
+    uv run --frozen python3 .github/scripts/gitapex_scan_dimensions_numbering_drift.py \\
         --skill-dir path/to/evaluating-deterministic-gate-quality
 
 Exit codes:
@@ -116,6 +118,11 @@ DIMENSION_HEADING = "## Probabilistic-maturity dimensions"
 # own "(1) state a concrete reason...") is mistaken for a real
 # shape-check/dimension item.
 _ITEM_RE = re.compile(r"^(\d+)\.\s+\*\*", re.MULTILINE)
+# Same boundary rule the shared _gitapex_vocabulary_lock.extract_section
+# uses: the next heading of level 1 or 2, of any kind -- not only the next
+# NUMBERED one -- so an intervening non-lane "##" section is never read as
+# part of the open-ended (end_heading=None) lane.
+_NEXT_LEVEL_1_OR_2_HEADING_RE = re.compile(r"^#{1,2}[ \t]+\S", re.MULTILINE)
 
 _SHAPE_RANGE_RE = re.compile(r"\*\*Deterministic-shape checks\*\*\s*\((\d+)-(\d+)\)")
 _DIMENSION_RANGE_RE = re.compile(r"\*\*Probabilistic-maturity dimensions\*\*\s*\((\d+)-(\d+)\)")
@@ -159,7 +166,13 @@ def _section_between(text: str, start_heading: str, end_heading: str | None, pat
         raise ScanError(f"{path_label}: heading appears {len(starts)} times, expected exactly once: {start_heading!r}")
     begin = starts[0] + len(start_heading)
     if end_heading is None:
-        return text[begin:]
+        # Bounded to the next heading of level 1 or 2, not literal
+        # end-of-file: dimensions.md's own dimension lane is the last
+        # section today, but an unrelated section appended later (an
+        # appendix, a changelog) must not be swept into "dimension items"
+        # just because nothing named it as the boundary.
+        next_heading = _NEXT_LEVEL_1_OR_2_HEADING_RE.search(text, begin)
+        return text[begin : next_heading.start()] if next_heading else text[begin:]
 
     ends = [m.start() for m in re.finditer(rf"^{re.escape(end_heading)}[ \t]*$", text, re.MULTILINE)]
     if not ends:
@@ -222,17 +235,24 @@ def compute_lane_counts(dimensions_text: str) -> tuple[LaneCount, list[str]]:
 
 
 def check_lane_range_declarations(dimensions_text: str, counts: LaneCount) -> list[str]:
-    """The two "**<Lane name>** (X-Y)" declarations against the real lane
-    spans ``counts`` already computed."""
+    """Every "**<Lane name>** (X-Y)" declaration -- not only the first --
+    against the real lane spans ``counts`` already computed.
+
+    A second, restated declaration landing elsewhere in the document later
+    must not silently escape this lock -- grading only ``re.search``'s
+    first match left exactly that exposure open, the same failure mode
+    the sibling vocabulary-lock gates' own docstrings already name and
+    guard against with ``finditer``/``findall``.
+    """
     problems: list[str] = []
 
-    match = _SHAPE_RANGE_RE.search(dimensions_text)
-    if match is None:
+    shape_matches = list(_SHAPE_RANGE_RE.finditer(dimensions_text))
+    if not shape_matches:
         problems.append(
             f"{DIMENSIONS_MD}: no '**Deterministic-shape checks** (X-Y)' declaration found -- "
             "the shape-check range lock cannot run"
         )
-    else:
+    for match in shape_matches:
         start, end = int(match.group(1)), int(match.group(2))
         if (start, end) != (1, counts.shape_max):
             problems.append(
@@ -242,13 +262,13 @@ def check_lane_range_declarations(dimensions_text: str, counts: LaneCount) -> li
             )
 
     expected_start = counts.shape_max + 1
-    match = _DIMENSION_RANGE_RE.search(dimensions_text)
-    if match is None:
+    dimension_matches = list(_DIMENSION_RANGE_RE.finditer(dimensions_text))
+    if not dimension_matches:
         problems.append(
             f"{DIMENSIONS_MD}: no '**Probabilistic-maturity dimensions** (X-Y)' declaration found -- "
             "the dimension range lock cannot run"
         )
-    else:
+    for match in dimension_matches:
         start, end = int(match.group(1)), int(match.group(2))
         if (start, end) != (expected_start, counts.dimension_max):
             problems.append(
@@ -317,18 +337,19 @@ def check_schema(schema_text: str, counts: LaneCount) -> list[str]:
     description = _node_at(schema, *_SCHEMA_FINDINGS_DESC_PATH)
     if not isinstance(description, str):
         raise ScanError(f"{SCHEMA_JSON}: findings.description is not a string")
-    match = _SCHEMA_RANGE_RE.search(description)
-    if match is None:
+    range_matches = list(_SCHEMA_RANGE_RE.finditer(description))
+    if not range_matches:
         problems.append(
             f"{SCHEMA_JSON}: findings.description has no 'dimensions.md, 1-<N>' span -- "
             "the schema range-citation lock cannot run"
         )
-    elif int(match.group(1)) != counts.dimension_max:
-        problems.append(
-            f"{SCHEMA_JSON}: findings.description cites 'dimensions.md, 1-{match.group(1)}' but "
-            f"{counts.dimension_max} is the real highest dimension number -- update the citation in "
-            "the same change as the heading"
-        )
+    for match in range_matches:
+        if int(match.group(1)) != counts.dimension_max:
+            problems.append(
+                f"{SCHEMA_JSON}: findings.description cites 'dimensions.md, 1-{match.group(1)}' but "
+                f"{counts.dimension_max} is the real highest dimension number -- update the citation in "
+                "the same change as the heading"
+            )
     return problems
 
 
