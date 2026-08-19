@@ -255,7 +255,18 @@ def test_script_drift_still_caught_when_gate_carries_new_fields(tmp_path):
     bad["gates"][0]["script"] = "hooks/does-not-exist.sh"
     instance_path = _write_instance(tmp_path, bad)
     findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+    # The schema half's own coverage for fail_mode/target: this fixture's
+    # values must stay schema-valid, so no "schema:" finding should appear
+    # alongside the expected script-drift one. Absent this check, a broken
+    # fail_mode/target schema definition (wrong type, a renamed required
+    # key, a narrowed enum) would leave this test green regardless, since
+    # find_schema_violations is never otherwise exercised against these
+    # two fields anywhere in this file (the real ssot.json carries neither
+    # yet) -- confirmed by adversarial review: four independent schema
+    # mutations to fail_mode/target all left the full suite green before
+    # this line was added.
     assert any("script-drift" in f and "does-not-exist.sh" in f for f in findings), findings
+    assert not any(f.startswith("schema:") for f in findings), findings
 
 
 def test_parse_registry_returns_none_without_crashing_on_invalid_instance():
