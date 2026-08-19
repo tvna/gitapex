@@ -155,6 +155,20 @@
       "supersedes": null
     },
     {
+      "id": "merge-pull-request-block",
+      "kind": "script",
+      "script": "hooks/check-merge-pull-request-block.sh",
+      "rule": "Denies mcp__github__merge_pull_request unconditionally, no override -- per planning-a-branch-from-an-issue/SKILL.md (\"Do not merge or enable auto-merge; that is a separate, explicit human or CI decision\"), drafting-a-pr-to-merge/SKILL.md's own step 9 (a PR's terminal action is converting to DRAFT, never merging it), and the ranking-the-open-queue Routine specs' \"100% human review of any pull request merge\" policy; closes the gap where check-bash-safety.sh's shell-only 'gh pr merge' block had no equivalent for the platform-integrated MCP tool call.",
+      "planes": ["pretooluse"],
+      "local_exclusion": "Grades a Claude Code tool-call matcher only (mcp__github__merge_pull_request), an unconditional deny with no payload inspection; nothing in the working tree to reconstruct this decision against.",
+      "trigger": "PreToolUse matcher mcp__github__merge_pull_request (hooks/hooks.json)",
+      "policy_refs": [],
+      "cluster": "github-operations",
+      "tracking_issue": 637,
+      "status": "active",
+      "supersedes": null
+    },
+    {
       "id": "skill-audit-disclosure",
       "kind": "script",
       "script": [
