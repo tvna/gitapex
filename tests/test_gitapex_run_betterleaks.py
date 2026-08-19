@@ -84,10 +84,17 @@ def test_staged_mode_matches_the_upstream_published_hook_entry() -> None:
 
 def test_history_mode_scans_every_commit_rather_than_a_range() -> None:
     command = runner.build_command("/usr/bin/betterleaks", "history")
-    # No --log-opts and no --staged: an unrestricted `betterleaks git` is a
-    # full-history scan. A range flag appearing here would silently reintroduce
-    # the --no-verify gap the pre-push stage exists to close.
-    assert command == ("/usr/bin/betterleaks", "git", "--redact", "--verbose", "--no-banner")
+    # No --staged, and no push-range restriction: an unrestricted `betterleaks
+    # git --log-opts=HEAD` is a full-history scan of the checked-out branch. A
+    # range flag (e.g. a from-ref..to-ref restriction) appearing here would
+    # silently reintroduce the --no-verify gap the pre-push stage exists to
+    # close.
+    #
+    # --log-opts=HEAD is required, not optional (issue #894, live-reproduced):
+    # with no --log-opts at all, `betterleaks git` walks every ref the process
+    # can see, not just the checked-out branch -- see the module docstring's
+    # own `history` section.
+    assert command == ("/usr/bin/betterleaks", "git", "--log-opts=HEAD", "--redact", "--verbose", "--no-banner")
 
 
 @pytest.mark.parametrize("mode", ["staged", "history"])
