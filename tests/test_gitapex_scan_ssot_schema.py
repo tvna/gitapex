@@ -286,6 +286,25 @@ def test_a_gate_missing_bypass_review_status_is_rejected_by_both_layers(tmp_path
     assert drift._parse_registry(bad) is None
 
 
+def test_reviewed_found_listed_below_is_rejected_by_both_layers(tmp_path):
+    """Adversarial review of this PR (CodeRabbit) found: the schema still
+    accepted 'reviewed-found-listed-below' even though known_bypasses --
+    the array that value claims to point at -- is not a field in this
+    schema at all yet (issue #1232's own explicit non-goal). A gate could
+    therefore make a schema-valid but false bypass-disclosure claim, with
+    additionalProperties: false powerless to catch it since there is no
+    known_bypasses key to be missing. Narrowed the enum to the two values
+    with something real behind them; re-add the third only in the same
+    change that adds known_bypasses. Both layers must reject it -- the
+    same two-layer proof pattern as every other enum change in this file."""
+    bad = json.loads(json.dumps(_VALID_INSTANCE))
+    bad["gates"][0]["bypass_review_status"] = "reviewed-found-listed-below"
+    instance_path = _write_instance(tmp_path, bad)
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+    assert any(f.startswith("schema:") for f in findings), findings
+    assert drift._parse_registry(bad) is None
+
+
 def test_runtime_resolved_reference_is_a_valid_target_kind(tmp_path):
     """Issue #1232: target.kind's 7th value, for a target whose identity is
     only resolvable at runtime (live platform state or an arbitrary

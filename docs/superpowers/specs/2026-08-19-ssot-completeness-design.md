@@ -1,6 +1,6 @@
 # SSoT(ssot.json)の完全性: shadow gate問題と構造化の設計
 
-> **本ファイルの由来(issue #1232でリポジトリに追加)**: この設計記録は、issue #1231/#1232双方が名前で参照している一次資料でありながら、これまでリポジトリにコミットされたことがなく、Claude Artifactとしてのみ存在していた。issue #1232の計画段階で「`ssot-completeness-design.md`がリポジトリに存在しない」という事実を発見し、依頼者から当該Artifact URLを提示されたことで解決した。原文のHTML本文をこのMarkdownへ機械変換した上で、この由来ノートのみを追記している(内容そのものへの加筆・要約・取捨選択は行っていない)。作成元セッションの正確な日時は本文中に記録されておらず不明(issue #1232時点で「数週間前」とだけ開示されている)。ファイル名の日付はこのコミットが行われた日を表し、分析が実施された日ではない。
+> **本ファイルの由来(issue #1232でリポジトリに追加)**: この設計記録は、issue #1231/#1232双方が名前で参照している一次資料でありながら、これまでリポジトリにコミットされたことがなく、Claude Artifactとしてのみ存在していた。issue #1232の計画段階で「`ssot-completeness-design.md`がリポジトリに存在しない」という事実を発見し、依頼者から当該Artifact URLを提示されたことで解決した。原文のHTML本文をこのMarkdownへ機械変換した上で、この由来ノートのみを追記している -- 本文中に現れる「追記」「訂正すべき点」等の見出しは、変換時に私が加えたものではなく、Artifact自身がその作成セッション中に自己更新した際の原文そのものである(内容そのものへの加筆・要約・取捨選択は行っていない)。作成元セッションの正確な日時は本文中に記録されておらず不明(issue #1232時点で「数週間前」とだけ開示されている)。ファイル名の日付はこのコミットが行われた日を表し、分析が実施された日ではない。
 >
 > **重要な注意**: 本文中の「実データによるtargetバックフィル検証」節が示す57件中49件・kind別の項目数(107/56/21/14/10/9)は、あくまで**集計結果**であり、49件それぞれの個別`target`配列の値を列挙した表ではない(明示的に列挙されているのは、medium/ambiguousと判定された8件のidと理由のみ)。したがって、この文書を49件分の`target`値のコピー元として扱うことはできない -- issue #1232自身が要求する「ライブスクリプトに対する再検証」は、このファイルとの照合ではなく、各gateの実際のスクリプト/トリガーからの独立した再導出を意味する。
 
@@ -40,7 +40,7 @@ Design-only。`.gitapex/`配下のファイルは一切作成・変更してい�
 
 ## 提案する設計
 
-```
+```json
 "target": {
   "type": "array",
   "items": {
@@ -161,7 +161,7 @@ Design-only。`.gitapex/`配下のファイルは一切作成・変更してい�
 
 **現状: 平坦なidリスト**
 
-```
+```text
 bash-cli-write-and-install-guard
 pr-title-convention
 skill-audit-disclosure
@@ -198,7 +198,7 @@ mcp-toolターゲット × 登録ゲート:
 
 ### 1. `fail_mode` -- fail-open/fail-closedの構造化
 
-```
+```json
 "fail_mode": {
   "type": "object",
   "additionalProperties": false,
@@ -214,7 +214,7 @@ mcp-toolターゲット × 登録ゲート:
 
 ### 2. `known_bypasses` + `blast_radius` -- 既知の回避手段と深刻度の構造化
 
-```
+```json
 "bypass_review_status": {"enum": ["reviewed-none-found", "reviewed-found-listed-below", "not-yet-reviewed"]},
 "known_bypasses": {
   "type": "array",
@@ -236,7 +236,7 @@ mcp-toolターゲット × 登録ゲート:
 
 ### 3. `threat_refs` -- `docs/security-control-inventory.md`との構造的連結
 
-```
+```json
 "threat_refs": {
   "type": "array",
   "items": {"type": "string", "pattern": "^(ASI|LLM)\\d{2}$"}
@@ -249,7 +249,7 @@ mcp-toolターゲット × 登録ゲート:
 
 ### 4. `review`オブジェクト -- 測定結果の永続化(検証系、事実系と分離)
 
-```
+```json
 "review": {
   "type": "object",
   "additionalProperties": false,

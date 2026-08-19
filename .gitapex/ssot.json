@@ -1485,7 +1485,7 @@
         {"kind": "file-glob", "ref": "tests/**/test_*.py"},
         {"kind": "file-glob", "ref": "tests/**/*_test.py"},
         {"kind": "file-glob", "ref": "tests/**/conftest.py"},
-        {"kind": "file-glob", "ref": "pyproject.toml ([tool.pytest.ini_options] testpaths)"},
+        {"kind": "file-glob", "ref": "pyproject.toml"},
         {"kind": "workflow-event", "ref": "test.yml:pull_request"},
         {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
