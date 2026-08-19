@@ -506,14 +506,19 @@ differentiation from shape check 1 and dimension 15 below.
     consequence that spreads past the one gate with the bad deny
     experience, worth citing as motivation but outside this dimension's
     own per-gate Part A/Part B scope.
-    Verdict tokens, fixed: `actionable-recovery` (every branch clears
-    Part A, and Part B -- where evidence exists -- shows compliant
+    Verdict tokens, fixed, partitioning every branch across all four Part
+    A checks so a real, evidenced failure always has exactly one token to
+    land on: `actionable-recovery` (every branch clears all four Part A
+    checks, and Part B -- where evidence exists -- shows compliant
     recovery dominating real firings); `dead-end-risk` (at least one
-    branch fails Part A check (3), or Part B shows
-    workaround-construction or learned-bypass in real firings);
-    `escalation-risk` (every branch clears check (3) but at least one
-    blurs check (4) -- a transient-outage branch reads as caller-fault,
-    risking an escalation path the caller cannot find); `indeterminate`
+    branch fails Part A check (1), (2), or (3) -- a bare pass/fail
+    message, no named sanctioned next action, and no reachable compliant
+    path are each their own real dead end, not only the third -- or Part
+    B shows workaround-construction or learned-bypass in real firings);
+    `escalation-risk` (every branch clears checks (1)-(3) but at least
+    one blurs check (4) -- a transient-outage branch reads as
+    caller-fault, risking an escalation path the caller cannot find);
+    `indeterminate`
     (insufficient evidence to place the gate in any of the other three --
     Part A cannot be read from the gate's own available
     documentation/message text, or the only available signal is Part B

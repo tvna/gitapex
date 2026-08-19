@@ -673,7 +673,7 @@ spec:
       anchor: "https://github.com/tvna/gitapex/issues/1229"
       summary: "Added Dimension 24 (Deny-path recoverability, post-block agent behavior) to references/dimensions.md's probabilistic-maturity lane, appended after dimension 23 without renumbering (lane range 7-23 -> 7-24). Mirrors dimension 21's design-plus-real-firing-audit shape; fixed four-token verdict vocabulary (actionable-recovery, dead-end-risk, escalation-risk, indeterminate); grounded in arXiv:2607.07405, arXiv:2608.02670, an Ona engineering blog post, and Google's Tricorder paper (ICSE 2015)."
       outcome:
-        lines: "dimensions.md 449->548"
+        lines: "dimensions.md 449->553"
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1229"
       summary: "output-schema.json's findings[].dimensionId.maximum bumped 23->24 and the findings-array description's 'dimensions.md, 1-23' citation bumped to 'dimensions.md, 1-24', so a Dimension 24 finding validates against the schema and the description stays accurate. No line-count change: both edits land on already-existing lines."
@@ -708,6 +708,17 @@ spec:
       outcome:
         fixed: 2
         tests: "gitapex_scan_dimensions_numbering_drift.py test count 35->40"
+    - kind: audit
+      anchor: "method:coderabbitai"
+      summary: "CodeRabbit's automated review on the pushed branch found one Major finding: the four Dimension 24 verdict tokens did not partition Part A's four checks -- a branch failing only check (1) or check (2) while clearing (3)/(4) matched no token. Two trivial nitpicks: a dead insert-then-revert step in one test, and an unaddressed plural-range citation form with no live instance today."
+      outcome:
+        found: 3
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1229"
+      summary: "Fixed the Major finding: dead-end-risk now explicitly covers a check (1), (2), or (3) failure, not only (3), closing the partition gap so every evidenced Part A failure has exactly one token. Fixed the test nitpick by removing the dead insert-then-revert step. Declined the plural-range nitpick (no live citation of that shape exists in either source file today) -- disclosed, not silently dropped."
+      outcome:
+        fixed: 2
+        lines: "dimensions.md 548->553"
   skillDependencies:
     requires:
       - evaluating-skill-quality

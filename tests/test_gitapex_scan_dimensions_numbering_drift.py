@@ -395,20 +395,10 @@ def test_scan_passes_after_a_well_formed_dimension_25_lands(tmp_path: Path) -> N
     """Every dependent citation moved together for a hypothetical dimension
     25 -- the lock should hold, proving it is not simply hardcoded to 24."""
     skill_dir = _copy_skill(tmp_path)
-    _mutate(
-        skill_dir,
-        G.DIMENSIONS_MD,
-        "which artifact is currently under review.\n24. **Deny-path recoverability",
-        "which artifact is currently under review.\n25. **Invented follow-on dimension.** Body text.\n24. **Deny-path recoverability",
-    )
-    # The insert above lands dimension 25 BEFORE 24 in document order but
-    # numbered higher -- fix numbering by renumbering in real document
-    # order instead: simplest is to append after 24's own body ends.
+    # The dimension lane is the last section in the real document, so
+    # appending directly lands dimension 25 in real document order, after
+    # 24's own body ends -- no insert-then-renumber dance needed.
     text = (skill_dir / G.DIMENSIONS_MD).read_text(encoding="utf-8")
-    text = text.replace(
-        "which artifact is currently under review.\n25. **Invented follow-on dimension.** Body text.\n24. **Deny-path recoverability",
-        "which artifact is currently under review.\n24. **Deny-path recoverability",
-    )
     text = text.rstrip("\n") + "\n25. **Invented follow-on dimension.** Body text for a hypothetical dimension.\n"
     text = text.replace("**Probabilistic-maturity dimensions** (7-24)", "**Probabilistic-maturity dimensions** (7-25)")
     (skill_dir / G.DIMENSIONS_MD).write_text(text, encoding="utf-8")
