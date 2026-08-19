@@ -719,6 +719,17 @@ spec:
       outcome:
         fixed: 2
         lines: "dimensions.md 548->553"
+    - kind: audit
+      anchor: "method:coderabbitai"
+      summary: "A second CodeRabbit incremental review (triggered manually after auto-incremental reviews returned no new pass) found one further Major finding: output-schema.json's shared verdict enum (pass/fail/not_applicable/indeterminate) cannot represent 3 of Dimension 24's own 4 fixed tokens, so a reviewer applying Dimension 24 has no structured field to record actionable-recovery, dead-end-risk, or escalation-risk in."
+      outcome:
+        found: 1
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1229"
+      summary: "Added denyPathVerdict to output-schema.json's findings[] items: an optional, dimension-24-only enum field carrying the four fixed tokens verbatim, mirroring how preconditionScoped/reviewScoped already carry a dimension-scoped flag beside the shared verdict field. verdict itself stays required, still recording the coarse pass/fail/indeterminate projection dimensions.md now states explicitly, so a generic consumer reading only verdict is unaffected."
+      outcome:
+        fixed: 1
+        lines: "dimensions.md 553->560, output-schema.json 398->403"
   skillDependencies:
     requires:
       - evaluating-skill-quality

@@ -140,6 +140,11 @@
             "description": "true only for dimension 23, whose own answer characterizes the calling/installing repository as a whole rather than the specific artifact in mechanismFit/artifactRef -- see this findings array's own top-level description for the resulting once-per-review placement rule."
           },
           "verdict": { "type": "string", "enum": ["pass", "fail", "not_applicable", "indeterminate"] },
+          "denyPathVerdict": {
+            "type": "string",
+            "enum": ["actionable-recovery", "dead-end-risk", "escalation-risk", "indeterminate"],
+            "description": "Populated only for dimension 24 (deny-path recoverability), whose own fixed four-token vocabulary -- see references/dimensions.md's own Dimension 24 text -- is a distinct, finer-grained axis than the shared verdict enum above, the same relationship subFindings.classification already has to honestyClassification for dimension 23. verdict above is still required and still records the coarse pass/fail projection for dimension 24 too (actionable-recovery -> pass; dead-end-risk and escalation-risk -> fail; indeterminate -> indeterminate), so a generic consumer that reads only verdict still gets a correct coarse answer without needing this field."
+          },
           "evidence": {
             "type": "array",
             "items": {

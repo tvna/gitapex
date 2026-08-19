@@ -522,7 +522,14 @@ differentiation from shape check 1 and dimension 15 below.
     (insufficient evidence to place the gate in any of the other three --
     Part A cannot be read from the gate's own available
     documentation/message text, or the only available signal is Part B
-    with no firing trail). Distinct from dimension 21: dimension 21
+    with no firing trail). Recorded in `references/output-schema.json` as
+    `denyPathVerdict`, a dimension-24-only field distinct from the shared
+    `verdict` enum every dimension already carries -- `verdict` itself is
+    still required and still records the coarse projection
+    (`actionable-recovery` -> `pass`; `dead-end-risk` and
+    `escalation-risk` -> `fail`; `indeterminate` -> `indeterminate`), so a
+    consumer reading only `verdict` still gets a correct coarse answer.
+    Distinct from dimension 21: dimension 21
     grades whether the gate's decision was right; this dimension grades
     what happens after a correct decision, and a gate can score well on
     one while scoring poorly on the other. Distinct from mechanism-fit's
