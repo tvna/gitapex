@@ -755,7 +755,7 @@
       "rule": "Executes each PR-touched skill's own evals/<skill>/ suite via 'nix run .#waza -- run <skill>' and fails the job if any suite fails; not yet a required status check.",
       "planes": ["ci"],
       "local_exclusion": "Runs waza eval suites, which need the Class B toolchain plus model access rather than a working-tree read.",
-      "trigger": ".github/workflows/waza-eval-gate.yml on pull_request",
+      "trigger": ".github/workflows/waza-eval-gate.yml on pull_request and workflow_dispatch",
       "policy_refs": [],
       "cluster": "skill-lifecycle",
       "tracking_issue": 582,
@@ -775,7 +775,7 @@
       "rule": "Runs actionlint (rhysd/actionlint, digest-pinned) against changed .github/workflows/** files.",
       "planes": ["ci"],
       "local_exclusion": "actionlint runs from a digest-pinned Docker image in CI; resolving actionlint from ambient PATH instead is the exact drift issue #678 closed for ruff, so no local equivalent is offered.",
-      "trigger": ".github/workflows/lint.yml on pull_request",
+      "trigger": ".github/workflows/lint.yml on pull_request and push to main",
       "policy_refs": [],
       "cluster": "supply-chain",
       "tracking_issue": null,
@@ -829,18 +829,7 @@
         {"kind": "file-glob", "ref": "hooks"},
         {"kind": "file-glob", "ref": ".github/scripts"},
         {"kind": "file-glob", "ref": "evals/scripts"},
-        {"kind": "file-glob", "ref": "skills/battle-testing-a-skill/scripts"},
-        {"kind": "file-glob", "ref": "skills/scorer-gated-skill-edits/scripts"},
-        {"kind": "file-glob", "ref": "skills/evaluating-skill-quality/scripts"},
-        {"kind": "file-glob", "ref": "skills/auditing-agent-product-scope/scripts"},
-        {"kind": "file-glob", "ref": "skills/evaluating-deterministic-gate-quality/scripts"},
-        {"kind": "file-glob", "ref": "skills/drafting-an-acm-issue/scripts"},
-        {"kind": "file-glob", "ref": "skills/executing-a-branch-plan/scripts"},
-        {"kind": "file-glob", "ref": "skills/drafting-an-adr/scripts"},
-        {"kind": "file-glob", "ref": "skills/scanning-attack-surfaces/scripts"},
-        {"kind": "file-glob", "ref": "skills/outward-artifact-preflight/scripts"},
-        {"kind": "file-glob", "ref": "skills/planning-a-branch-from-an-issue/scripts"},
-        {"kind": "file-glob", "ref": "skills/setup-gitapex-toolchain/scripts"},
+        {"kind": "file-glob", "ref": "skills/*/scripts"},
         {"kind": "workflow-event", "ref": "test.yml:pull_request"},
         {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
@@ -923,7 +912,7 @@
       "rule": "Every hook command in a hooks.json manifest or an agent definition's frontmatter must reference the plugin root as ${CLAUDE_PLUGIN_ROOT}; the unbraced $CLAUDE_PLUGIN_ROOT fails. apm substitutes only the braced form, so an unbraced command is deployed verbatim into a consumer's .claude/settings.json, resolves against an unset variable, and its hook silently never fires while the install log still reports it integrated. Only command values are graded, never prose. Discovery reads git-tracked files, so every ignored path (apm's package cache and deploy trees, worktree checkouts) is out of scope by construction. Exits 2, never a silent pass, when no surface is discovered or a file is unreadable or malformed.",
       "planes": ["ci", "local"],
       "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_plugin_root_brace_notation.py"],
-      "trigger": ".github/workflows/plugin-root-brace-notation-gate.yml on pull_request, plus tests/test_gitapex_gate_plugin_root_brace_notation.py inside the pytest step of .github/workflows/test.yml",
+      "trigger": ".github/workflows/plugin-root-brace-notation-gate.yml on pull_request and workflow_dispatch, plus tests/test_gitapex_gate_plugin_root_brace_notation.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "supply-chain",
       "tracking_issue": 650,
@@ -965,7 +954,9 @@
         {"kind": "file-glob", "ref": "hooks/*.py"},
         {"kind": "file-glob", "ref": "evals/scripts/*.py"},
         {"kind": "file-glob", "ref": "skills/*/scripts/*.py"},
-        {"kind": "workflow-event", "ref": "exception-handler-gap-gate.yml:pull_request"}
+        {"kind": "workflow-event", "ref": "exception-handler-gap-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -975,7 +966,7 @@
       "rule": "No repository-tracked file may carry a literal hidden/invisible Unicode character -- U+FEFF, the zero-width family (U+200B-U+200D), the bidi control characters (U+200E/U+200F, U+202A-U+202E, U+2066-U+2069), or word joiner (U+2060). The escape-sequence spelling of any of these (e.g. \\ufeff) is never graded -- that is the fix this gate steers authors toward. Discovery reads git-tracked files, so every ignored path is out of scope by construction. Diagnostic output never reproduces the offending character itself, naming the codepoint, its Unicode name, and line/column instead. Exits 2, never a silent pass, when no tracked file is discovered or a file cannot be read/decoded as UTF-8.",
       "planes": ["ci", "local"],
       "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_hidden_characters.py"],
-      "trigger": ".github/workflows/hidden-characters-gate.yml on pull_request, plus tests/test_gitapex_gate_hidden_characters.py inside the pytest step of .github/workflows/test.yml",
+      "trigger": ".github/workflows/hidden-characters-gate.yml on pull_request and workflow_dispatch, plus tests/test_gitapex_gate_hidden_characters.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "repo-hygiene",
       "tracking_issue": 702,
@@ -1135,7 +1126,9 @@
       "bypass_review_status": "not-yet-reviewed",
       "target": [
         {"kind": "file-glob", "ref": "skills/*/metadata/gitapex.yaml"},
-        {"kind": "runtime-resolved-reference", "ref": "outcome.lines / outcome.<x>_lines claim value's target-file token + outcome.commit (or an inline commit-ish token) revision"}
+        {"kind": "runtime-resolved-reference", "ref": "outcome.lines / outcome.<x>_lines claim value's target-file token + outcome.commit (or an inline commit-ish token) revision"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -1363,7 +1356,9 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {"kind": "runtime-resolved-reference", "ref": "origin/main...HEAD"}
+        {"kind": "runtime-resolved-reference", "ref": "origin/main...HEAD"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -1412,7 +1407,9 @@
         {"kind": "file-glob", "ref": ".github/scripts/*.py"},
         {"kind": "file-glob", "ref": "evals/scripts/*.py"},
         {"kind": "file-glob", "ref": ".github/workflows/*.yml"},
-        {"kind": "workflow-event", "ref": "stdlib-only-claim-drift-gate.yml:pull_request"}
+        {"kind": "workflow-event", "ref": "stdlib-only-claim-drift-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -1542,7 +1539,9 @@
         {"kind": "file-glob", "ref": "hooks/gitapex_check_*.py"},
         {"kind": "file-glob", "ref": "tests/test_*_properties.py"},
         {"kind": "cross-registry-consistency", "ref": "new regex/path-resolution/string-comparison call sites in skills/*/scripts/gitapex_check_*.py, .github/scripts/gitapex_gate_*.py, hooks/gitapex_check_*.py <-> co-located tests/test_<stem>_properties.py @given coverage"},
-        {"kind": "workflow-event", "ref": "detection-logic-property-coverage-gate.yml:pull_request"}
+        {"kind": "workflow-event", "ref": "detection-logic-property-coverage-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
