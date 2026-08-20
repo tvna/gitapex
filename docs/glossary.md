@@ -257,8 +257,8 @@ file -- `CLAUDE.md`, `AGENTS.md`, or an equivalent auto-loaded mechanism
 -- regardless of whether that dispatch is otherwise fresh or carries the
 calling conversation's own history. Distinct from `Isolation-for-neutrality`
 (above): the two properties are independent, and this repository's own
-harness has been observed to grant the former without the latter --
-issue #475 found this for an ordinary dispatch, and a later session's
+harness has been observed to grant `Isolation-for-neutrality` without
+`Instruction-file airgap` -- issue #475 found this for an ordinary dispatch, and a later session's
 live test (recorded in issue #1199's own Facts) found it held even when
 the dispatch was given a different backing model (`fable`), so a
 dispatch with no conversation history can still inherit the repository's
@@ -279,9 +279,9 @@ skill's own operative Procedure or Subagent dispatch prose, and specific
 to one harness's own file name besides (`AGENTS.md` or an equivalent
 names the identical property in a different agent tool; the same
 portability litmus `references/rubric.md`'s Portability level section
-already applies to skill content applies here to a glossary term's own
-name). Third, and current, `Instruction-file airgap`, for the reason
-below.
+already applies to skill content, and it applies here to a glossary
+term's own name too). Third, and current, `Instruction-file airgap`, for
+the reason below.
 
 The repository owner stated the actual success criterion directly, after
 judging PR #1204 (which shipped `Instruction-file freedom`) not to have
@@ -319,10 +319,12 @@ evidentiary basis (#1203).
 
 As of this entry, no skill's own operative `SKILL.md` text -- Procedure,
 Subagent dispatch section, or Stop boundary -- uses `Instruction-file
-airgap`, either of its two superseded predecessors, or an equivalent
-phrase for this property; `evaluating-skill-quality/SKILL.md` itself
-still reads "project-instruction file" / "exclude that file" (lines
-131-132, 452) and bare "isolat-" elsewhere (lines 40, 46, 171, 186). This
+airgap` or either of its two superseded predecessors as a glossary
+label; `evaluating-skill-quality/SKILL.md` itself already expresses the
+identical property in ordinary prose, unnamed -- "project-instruction
+file" / "exclude that file" (lines 131-132, 452) and bare "isolat-"
+elsewhere (lines 40, 46, 171, 186) -- which is precisely the raw
+material this entry gives a name to, not a competing name for it. This
 entry resolves and records the term; it does not propagate it into any
 skill's own operative text -- a separate, later rename issue would be
 needed for that, the same disclosure `Isolation-for-neutrality` (above)
