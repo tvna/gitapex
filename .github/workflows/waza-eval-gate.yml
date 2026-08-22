@@ -250,6 +250,21 @@ jobs:
       # skill's directory basename) already names. `uv run --frozen`, not a
       # bare `python3` invocation, since this script reaches PyYAML through
       # gitapex_run_ablation.py (see that script's own module docstring).
+      #
+      # An adversarial review of this PR (issue #1134) caught a real defect
+      # in an earlier revision of this step: gitapex_run_eval_suite.py's own
+      # `main()` returns 0 whenever run_eval_suite() completes without an
+      # exception, regardless of the computed `mean_score` -- it only
+      # returns non-zero on malformed input or an execution failure
+      # (crash/timeout), never on a suite that simply scored low. Trusting
+      # that exit code alone (as an earlier revision did) would report
+      # "pass" for a skill that scored 0.0 on every fixture, as long as the
+      # `claude` CLI subprocess itself did not crash -- silently defeating
+      # the whole point of a gate. Every committed `eval.yaml` declares
+      # exactly one `metrics[]` entry with its own `threshold` (verified
+      # against all 26 committed suites), so this step now separately reads
+      # the run's own written `mean_score` and that threshold, and only
+      # reports "pass" when the score actually clears it.
       - name: Run touched skills' evals suites
         if: steps.diff.outputs.has-changes == 'true'
         env:
@@ -268,13 +283,20 @@ jobs:
           IFS=',' read -r -a skills_array <<< "$SKILLS"
           for skill in "${skills_array[@]}"; do
             [ -n "$skill" ] || continue
-            if uv run --frozen python3 evals/scripts/gitapex_run_eval_suite.py \
-                 --eval-yaml "evals/${skill}/eval.yaml" \
+            eval_yaml="evals/${skill}/eval.yaml"
+            out="results/${skill}.json"
+            if ! uv run --frozen python3 evals/scripts/gitapex_run_eval_suite.py \
+                 --eval-yaml "$eval_yaml" \
                  --skill-md "skills/${skill}/SKILL.md" \
-                 -o "results/${skill}.json"; then
+                 -o "$out"; then
+              echo "| ${skill} | FAIL (execution error) |" >> "$GITHUB_STEP_SUMMARY"
+              failed=1
+              continue
+            fi
+            if uv run --frozen python3 -c "import json, sys, yaml; result = json.load(open(sys.argv[1], encoding='utf-8')); suite = yaml.safe_load(open(sys.argv[2], encoding='utf-8')); threshold = suite['metrics'][0]['threshold']; mean_score = result['mean_score']; print(f'mean_score={mean_score!r} threshold={threshold!r}', file=sys.stderr); sys.exit(0 if mean_score >= threshold else 1)" "$out" "$eval_yaml"; then
               echo "| ${skill} | pass |" >> "$GITHUB_STEP_SUMMARY"
             else
-              echo "| ${skill} | FAIL |" >> "$GITHUB_STEP_SUMMARY"
+              echo "| ${skill} | FAIL (below threshold) |" >> "$GITHUB_STEP_SUMMARY"
               failed=1
             fi
           done
