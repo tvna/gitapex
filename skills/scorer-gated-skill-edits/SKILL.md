@@ -59,13 +59,18 @@ evaluation. Name the gap; never fake a score to proceed.
    -- the eval runner is missing**, naming which it was. Because the
    runner is version-controlled content read from the same checkout as the
    skill under iteration, not an externally pinned binary, its recorded
-   "version" is the exact commit that last touched it: run `git log -1
-   --format=%H -- evals/scripts/gitapex_run_eval_suite.py` in that same
-   checkout and carry the hex commit it prints into the run record step 7
-   writes. If git reports no commit for that path (an untracked or
-   uncommitted copy), STOP the same way -- a runner whose exact content
-   cannot be pinned is exactly as unattributable as a binary that reports
-   no version. A run whose runner version is unknown is unattributable: a
+   "version" is the exact commit that last touched it. First run `git diff
+   --quiet -- evals/scripts/gitapex_run_eval_suite.py` in that same
+   checkout: a nonzero exit means the tracked file carries local,
+   uncommitted edits, so no commit names what is actually about to run --
+   STOP the same way. Only once that passes, run `git log -1 --format=%H
+   -- evals/scripts/gitapex_run_eval_suite.py` and carry the hex commit it
+   prints into the run record step 7 writes. If git instead reports no
+   commit for that path at all (a never-committed, untracked copy), STOP
+   the same way too -- a runner whose exact content cannot be pinned,
+   dirty or absent from history alike, is exactly as unattributable as a
+   binary that reports no version. A run whose runner version is unknown
+   is unattributable: a
    later run cannot be compared against it, and a gate verdict nobody can
    re-derive is not a measurement. Never substitute a hand-read
    transcript, a remembered score, or a second tool's output for the
@@ -100,34 +105,40 @@ evaluation. Name the gap; never fake a score to proceed.
    rewords no behavior; a replacement, mixed add/delete patch, relabeling,
    or uncertain classification uses the ordinary gate.
 4. **Gate: strict improve-or-reject.** Run the selection-split trials with
-   the runner step 1 confirmed -- `uv run python3
-   evals/scripts/gitapex_run_eval_suite.py --eval-yaml <suite's eval.yaml>
-   --skill-md <candidate SKILL.md> -o <results.json>` -- writing the
-   aggregate result to a file (`-o`) rather than reading it off the
-   terminal; the suite's own `eval.yaml` `config.trials_per_task` sets the
-   trials-per-fixture, so there is no separate flag for it. Both sides of
-   the comparison run on the same runner commit, model, and fixture set; a
-   prior mean produced by a different runner commit, model, or fixture set
-   is not a baseline this gate can compare against, and substituting one
-   is the same unattributable-run failure step 1 stops for. Keep the
-   candidate only if the selection correctness score strictly increases.
-   Ordinary ties are rejected. A predeclared pruning-only candidate has
-   one narrow lexicographic exception: correctness may not fall, and at
-   exactly matched correctness its measured context cost must strictly
-   decrease. This does not turn a style-only or ordinary scalar tie into a
-   keep. `scripts/gitapex_score_contract.py` itself is unchanged by this
-   skill's move off `waza`: it still reads one task score per line from
-   `--scores` or stdin, so extract the aggregate JSON's per-fixture scores
-   into that flat shape first:
+   the runner step 1 confirmed, at the suite's own `eval.yaml`
+   `config.trials_per_task` (no separate flag for it), then feed
+   `scripts/gitapex_score_contract.py`'s unchanged flat-score gate from the
+   result -- as one script, so a failed run can never leave a stale or
+   partial result silently scored as this run's own:
 
    ```sh
-   uv run python3 -c 'import json, sys; d = json.load(open(sys.argv[1])); [print(e["score"]) for e in d["scores"]]' <results.json> \
+   set -euo pipefail
+   results="$(mktemp)"
+   uv run python3 evals/scripts/gitapex_run_eval_suite.py \
+     --eval-yaml <suite's eval.yaml> --skill-md <candidate SKILL.md> -o "$results"
+   uv run python3 -c 'import json, sys; d = json.load(open(sys.argv[1])); [print(e["score"]) for e in d["scores"]]' "$results" \
      | python3 scripts/gitapex_score_contract.py --compare-to <prior_mean>
    ```
 
-   for the ordinary gate; add `--pruning-only --prior-context-cost <n>`
-   and `--candidate-context-cost <n>` only for the predeclared pruning
-   gate. `--compare-to` still requires the exact six-decimal baseline it
+   `set -euo pipefail` plus a fresh `mktemp` path close a real hole:
+   without them, a failed runner invocation (a bad `--skill-md`/
+   `--eval-yaml`, a timeout, ...) exits nonzero without ever writing
+   `-o`, and a reused output path from an earlier run would then be
+   extracted and scored as if it were this run's own -- a fabricated
+   verdict with no surfaced sign the real invocation ever failed. Both
+   sides of the comparison run on the same runner commit, model, and
+   fixture set; a prior mean produced by a different runner commit,
+   model, or fixture set is not a baseline this gate can compare against,
+   and substituting one is the same unattributable-run failure step 1
+   stops for. Keep the candidate only if the selection correctness score
+   strictly increases. Ordinary ties are rejected. A predeclared
+   pruning-only candidate has one narrow lexicographic exception:
+   correctness may not fall, and at exactly matched correctness its
+   measured context cost must strictly decrease. This does not turn a
+   style-only or ordinary scalar tie into a keep. Add
+   `--pruning-only --prior-context-cost <n>` and
+   `--candidate-context-cost <n>` only for the predeclared pruning gate.
+   `--compare-to` still requires the exact six-decimal baseline it
    previously printed, then compares the candidate at that same published
    precision. A higher-precision prior is ambiguous input and fails
    loudly. It prints the mean plus `KEEP`/`REJECT`, avoiding hand
