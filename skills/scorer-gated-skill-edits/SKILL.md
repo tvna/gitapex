@@ -1,6 +1,6 @@
 ---
 name: scorer-gated-skill-edits
-description: Use when iteratively editing an existing SKILL.md across repeated measured trials and deciding whether to keep each edit. Requires a checkable scorer, a held-out split, and the waza eval runner available to report its version first; applies SkillOpt's strict improve-or-reject validation gate by hand, and records what each completed run measured.
+description: Use when iteratively editing an existing SKILL.md across repeated measured trials and deciding whether to keep each edit. Requires a checkable scorer, a held-out split, and evals/scripts/gitapex_run_eval_suite.py (this repository's own eval runner) confirmed firsthand before any trial; applies SkillOpt's strict improve-or-reject validation gate by hand, and records what each completed run measured.
 ---
 
 # Scorer-gated skill edits
@@ -43,24 +43,42 @@ evaluation. Name the gap; never fake a score to proceed.
 ## Procedure
 
 1. **Confirm the eval runner and record its version.** This skill executes
-   its measured trials with `waza`, the external eval runner whose suite
-   and task formats the fixture corpus is written for. Run
-   `waza --version` and carry the version string it reports into the run
-   record step 7 writes. If the binary is absent, or runs but reports no
-   version, STOP and say **cannot iterate -- the eval runner is
-   missing**, naming which of the two it was. A run whose runner version
-   is unknown is unattributable: a later run cannot be compared against
-   it, and a gate verdict nobody can re-derive is not a measurement.
-   Never substitute a hand-read transcript, a remembered score, or a
-   second tool's output for the runner that did not run. The version goes
-   in the record only when this step obtained it firsthand, by running the
-   command where the trials will run: a version a requester reports, a
-   toolchain manifest declares, or an earlier record carries is a claim
-   about some other environment, and recording it as this run's would make
-   the record say something nobody checked. What the binary reports is its
-   own self-description, not evidence of its provenance -- whether the
-   right binary is installed is the calling environment's own pinning
-   question, and this step neither answers it nor pretends to.
+   its measured trials with `evals/scripts/gitapex_run_eval_suite.py`, the
+   repository-owned runner the fixture corpus's suite and task formats are
+   written for -- invoked as `uv run python3
+   evals/scripts/gitapex_run_eval_suite.py --eval-yaml EVAL.yaml --skill-md
+   SKILL.md`, never bare `python3` (the script reaches PyYAML through
+   `evals/scripts/gitapex_run_ablation.py`, which fails outside `uv`'s
+   managed virtualenv with `ModuleNotFoundError`). Run `uv run python3
+   evals/scripts/gitapex_run_eval_suite.py --help` and confirm it prints
+   usage without error -- this resolves `uv`, the interpreter, and the
+   runner's own import chain in the environment the trials will run in,
+   the functional equivalent of a `--version` check for a script with no
+   independent version string of its own. If `uv` is absent, the script
+   cannot be found, or the command errors, STOP and say **cannot iterate
+   -- the eval runner is missing**, naming which it was. Because the
+   runner is version-controlled content read from the same checkout as the
+   skill under iteration, not an externally pinned binary, its recorded
+   "version" is the exact commit that last touched it: run `git log -1
+   --format=%H -- evals/scripts/gitapex_run_eval_suite.py` in that same
+   checkout and carry the hex commit it prints into the run record step 7
+   writes. If git reports no commit for that path (an untracked or
+   uncommitted copy), STOP the same way -- a runner whose exact content
+   cannot be pinned is exactly as unattributable as a binary that reports
+   no version. A run whose runner version is unknown is unattributable: a
+   later run cannot be compared against it, and a gate verdict nobody can
+   re-derive is not a measurement. Never substitute a hand-read
+   transcript, a remembered score, or a second tool's output for the
+   runner that did not run. The commit goes in the record only when this
+   step obtained it firsthand, by running the command against the same
+   checkout the trials run in: a commit a requester reports, a toolchain
+   manifest declares, or an earlier record carries is a claim about some
+   other environment, and recording it as this run's would make the
+   record say something nobody checked. (A repository that vendors this
+   skill alongside a different, externally pinned eval runner instead
+   restores this step's original shape: confirm the binary and capture
+   the real `--version` string it reports, under the same firsthand-only
+   rule.)
 2. **Split the tasks, disjoint.** Partition fixtures into train /
    selection (held-out) / test. Edits are motivated only by train-split
    evidence; the selection split gates acceptance; the test split is read
@@ -82,27 +100,38 @@ evaluation. Name the gap; never fake a score to proceed.
    rewords no behavior; a replacement, mixed add/delete patch, relabeling,
    or uncertain classification uses the ordinary gate.
 4. **Gate: strict improve-or-reject.** Run the selection-split trials with
-   the runner step 1 confirmed -- `waza run <eval spec>`, at the
-   trials-per-fixture the suite declares, writing the per-task results to
-   a file (`--output`/`--output-dir`) rather than reading them off the
-   terminal. Both sides of the comparison run on the same model and
-   harness; a prior mean produced by a different runner version, model, or
-   fixture set is not a baseline this gate can compare against, and
-   substituting one is the same unattributable-run failure step 1 stops
-   for. Keep the candidate only if the selection correctness score
-   strictly increases. Ordinary ties are rejected. A
-   predeclared pruning-only candidate has one narrow lexicographic exception:
-   correctness may not fall, and at exactly matched correctness its measured
-   context cost must strictly decrease. This does not turn a style-only or
-   ordinary scalar tie into a keep. When per-task scores come from
-   `scripts/gitapex_score_contract.py`, use `--compare-to <prior_mean>` for the
-   ordinary gate; add `--pruning-only --prior-context-cost <n>` and
-   `--candidate-context-cost <n>` only for the predeclared pruning gate.
-   The script reads one task score per line from `--scores` or stdin and
-   requires `--compare-to` to be the exact six-decimal baseline it previously
-   printed, then compares the candidate at that same published precision.
-   A higher-precision prior is ambiguous input and fails loudly.
-   It prints the mean plus `KEEP`/`REJECT`, avoiding hand arithmetic. See
+   the runner step 1 confirmed -- `uv run python3
+   evals/scripts/gitapex_run_eval_suite.py --eval-yaml <suite's eval.yaml>
+   --skill-md <candidate SKILL.md> -o <results.json>` -- writing the
+   aggregate result to a file (`-o`) rather than reading it off the
+   terminal; the suite's own `eval.yaml` `config.trials_per_task` sets the
+   trials-per-fixture, so there is no separate flag for it. Both sides of
+   the comparison run on the same runner commit, model, and fixture set; a
+   prior mean produced by a different runner commit, model, or fixture set
+   is not a baseline this gate can compare against, and substituting one
+   is the same unattributable-run failure step 1 stops for. Keep the
+   candidate only if the selection correctness score strictly increases.
+   Ordinary ties are rejected. A predeclared pruning-only candidate has
+   one narrow lexicographic exception: correctness may not fall, and at
+   exactly matched correctness its measured context cost must strictly
+   decrease. This does not turn a style-only or ordinary scalar tie into a
+   keep. `scripts/gitapex_score_contract.py` itself is unchanged by this
+   skill's move off `waza`: it still reads one task score per line from
+   `--scores` or stdin, so extract the aggregate JSON's per-fixture scores
+   into that flat shape first:
+
+   ```sh
+   uv run python3 -c 'import json, sys; d = json.load(open(sys.argv[1])); [print(e["score"]) for e in d["scores"]]' <results.json> \
+     | python3 scripts/gitapex_score_contract.py --compare-to <prior_mean>
+   ```
+
+   for the ordinary gate; add `--pruning-only --prior-context-cost <n>`
+   and `--candidate-context-cost <n>` only for the predeclared pruning
+   gate. `--compare-to` still requires the exact six-decimal baseline it
+   previously printed, then compares the candidate at that same published
+   precision. A higher-precision prior is ambiguous input and fails
+   loudly. It prints the mean plus `KEEP`/`REJECT`, avoiding hand
+   arithmetic. See
    [references/worked-example.md](references/worked-example.md).
 
    - **Conditional branch -- LLM-as-judge only with adversarial
@@ -230,8 +259,10 @@ just measures the wrong thing.
 
 ## Output
 
-- **Runner:** the eval runner's reported version, or the STOP when it is
-  absent or silent about its version.
+- **Runner:** the eval runner's recorded version -- a reported string for
+  an external binary, or a firsthand git commit for this repository's own
+  runner -- or the STOP when it is absent or its exact content cannot be
+  pinned.
 - **Precondition:** the scorer and the held-out split, named, or the STOP
   with the gap identified.
 - **Splits:** which fixtures are train / selection / test.
@@ -247,9 +278,11 @@ just measures the wrong thing.
 ## Stop boundaries
 
 - Never run a measured trial without first confirming the eval runner and
-  its reported version. An absent binary, or one that runs but names no
-  version, is the STOP -- not a cue to score by reading transcripts and
-  calling the result a measurement.
+  recording its version -- a reported string for an external binary, or a
+  firsthand-obtained commit for this repository's own runner. An absent
+  runner, or one whose exact content or version cannot be pinned, is the
+  STOP -- not a cue to score by reading transcripts and calling the result
+  a measurement.
 - Never close a gate run without writing its run record, and never write
   one with a field left blank, guessed, or silently omitted. A field that
   cannot be filled honestly is a disclosed gap in `known_gaps`, stated in
@@ -301,14 +334,19 @@ Portability: sibling-skill mentions (`battle-testing-a-skill`,
 scorer/verification source, not a dependency -- any equivalent scorer or
 adversarial-verification mechanism satisfies the precondition gate.
 
-The `waza` dependency step 1 declares is an external, publicly available
-CLI, not state belonging to the repository this skill was authored in: a
-copy of this skill installed anywhere reaches the same tool by the same
-name. Which version it must be is deliberately not stated here. A
-repository that pins the runner does so in its own toolchain manifest,
-and step 1 requires only that whatever version ran be recorded -- so this
-file never carries a pin that would rot in a copy that pins a different
-one. For the same reason step 7 names the target repository's own
-eval-results location rather than any literal directory layout; the two
-schemas it validates against travel inside this skill's `references/`,
-so a vendored copy carries the whole contract with it.
+Step 1's default runner, `evals/scripts/gitapex_run_eval_suite.py`, is this
+repository's own content, not an external, independently-versioned binary
+the way `waza` was: a copy of this skill vendored into
+another repository does not carry that script along with it, since it
+lives outside `skills/scorer-gated-skill-edits/` entirely, at a
+repository-wide `evals/scripts/` path. That is the one instruction in this
+file that does not resolve inside the skill's own directory, which is why
+`spec.portability` is declared `Mixed` rather than `Portable`. A
+repository vendoring this skill without also vendoring that runner (or an
+equivalent) restores step 1's original external-binary shape instead:
+confirm the binary, capture the real `--version` string it reports. For
+the same target-repository-generic reason step 7 names the target
+repository's own eval-results location rather than any literal directory
+layout; the two schemas it validates against travel inside this skill's
+`references/`, so a vendored copy still carries the run-record contract
+itself, even though the default runner it names is left behind.
