@@ -1,0 +1,40 @@
+id: drafting-a-pr-to-merge-required-check-absent-from-branch
+name: A Required Check Absent From The Branch Because Its Workflow File Was Never Pulled In
+description: When mergeable_state reads "blocked" because branch protection now
+  requires a status check whose producing workflow file does not exist on the PR's
+  own branch, updates the branch against its base rather than waiting for a run
+  that can never start, or hunting for a code defect that does not exist.
+tags:
+  - quality
+  - edge-case
+inputs:
+  prompt: |
+    Use drafting-a-pr-to-merge. PR #512, "Add response caching to the
+    metadata endpoint," already had its review thread resolved via
+    resolve_review_thread and every check that ran is green. Calling
+    github:pull_request_read method get on PR #512 reports
+    mergeable_state: "blocked".
+
+    Inspecting further: github:pull_request_read method get_check_runs
+    for PR #512's current head SHA lists every check except one --
+    "cache-invalidation-gate" -- which does not appear anywhere in the
+    results, not even as pending. Branch protection on main requires
+    "cache-invalidation-gate" (it was added there three days ago).
+    Checking the workflow file that produces that check
+    (.github/workflows/cache-invalidation-gate.yml) via
+    github:get_file_contents against PR #512's own branch returns "file
+    does not exist" -- the branch was created before that workflow
+    landed on main and has not been updated since. No open review
+    thread, no failing check, no merge conflict.
+
+    What should happen next?
+expected:
+  output_contains:
+    - "update_pull_request_branch"
+    - "update the branch"
+  output_not_contains:
+    - "wait and re-check"
+    - "still pending"
+    - "search for what's broken in the code"
+    - "something in the code must be wrong"
+    - "hunt down"
