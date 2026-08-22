@@ -215,39 +215,22 @@ conversation's own history, framing, prior discussion, or opinion of the
 specific artifact under review -- achieved by handing the dispatch only
 the target artifact's path (or content) and the reviewing skill's own
 files, never the calling conversation's context. Distinct from
-`Instruction-file airgap` (below): a dispatch can hold this property while still
-inheriting the calling repository's own project-instruction file, since a
-fresh dispatch with no conversation history is not automatically free of
-that file -- this repository's own harness has been observed to grant one
-without the other (see that entry).
+`Instruction-file airgap` (below): the two properties are independent, so
+a dispatch can hold this one while still inheriting the calling
+repository's own project-instruction file.
 
 Adopted from `skills/evaluating-skill-quality/references/adversarial-self-audit.md`'s
-own "Contaminated-dispatch disclosure" section, where the phrase already
-named this concept precisely: "a contaminated grader is exactly the bias
-risk isolation-for-neutrality exists to prevent." That file is not merely
-historical color: `SKILL.md`'s own Subagent dispatch section directs every
-dispatch to "Apply [it] ... throughout steps 1-6," so this phrase comes
-from a document the operative Procedure actually incorporates by
-reference -- stronger footing than `Instruction-file airgap`'s own
-precedent (see that entry's own note on this asymmetry).
+own "Contaminated-dispatch disclosure" section, which already named this
+concept precisely: "a contaminated grader is exactly the bias risk
+isolation-for-neutrality exists to prevent."
 
 Superseded terms: bare "isolated"/"isolation", and "contaminated" /
-"contaminated context" as used for this specific concept in
-`skills/evaluating-skill-quality/SKILL.md` lines 119 and 145 ("still
-grading from a contaminated context," describing a main thread that has
-itself seen or discussed the target) -- both retire as names for this
-concept, since that same skill's own `adversarial-self-audit.md` uses
-"contaminated" for the unrelated `Instruction-file airgap` concept
-instead (see below), and mixing the two under one word is exactly the conflict this
-entry resolves. Resolved by the repository owner, directly, per the
-Resolve step, choosing to formalize this repository's own existing phrase
-over two invented alternatives (#1203). Stated precisely so this entry is
-not read as claiming more than it does: `SKILL.md` lines 119/145's own
-wording, and its Subagent dispatch section and Stop boundary (lines
-130-132, 452) that still say "isolated"/"exclude that file," are not
-renamed by that issue -- this term is resolved and recorded here, not yet
-propagated into any skill's own operative text. A separate, later rename
-issue would be needed for that.
+"contaminated context" as used for this concept in
+`skills/evaluating-skill-quality/SKILL.md` lines 119 and 145, since that
+same skill's own `adversarial-self-audit.md` uses "contaminated" for the
+unrelated `Instruction-file airgap` concept instead. Resolved by the
+repository owner, directly, per the Resolve step (#1203). Not yet
+propagated into any skill's own operative text.
 
 ## `Instruction-file airgap`
 
@@ -258,99 +241,13 @@ file -- `CLAUDE.md`, `AGENTS.md`, or an equivalent auto-loaded mechanism
 calling conversation's own history. Distinct from `Isolation-for-neutrality`
 (above): the two properties are independent, and this repository's own
 harness has been observed to grant `Isolation-for-neutrality` without
-`Instruction-file airgap` -- issue #475 found this for an ordinary dispatch, and a later session's
-live test (recorded in issue #1199's own Facts) found it held even when
-the dispatch was given a different backing model (`fable`), so a
-dispatch with no conversation history can still inherit the repository's
-own `CLAUDE.md` in full.
+`Instruction-file airgap` (issue #475; issue #1199's own Facts).
 
-This entry has been resolved three times within the same issue, each
-supersession replacing the one before it once that choice's own rationale
-was weighed and found wanting. First, `CLAUDE.md-free`, on the strength
-of its own organic precedent. Second, `Instruction-file freedom`, once
-that precedent turned out to be four instances of retrospective audit
-narration -- two `kind: audit` entries' own `summary:` field in a
-`metadata/gitapex.yaml` sidecar
-(`skills/evaluating-skill-quality/metadata/gitapex.yaml`,
-`skills/scanning-attack-surfaces/metadata/gitapex.yaml`), and
-`skills/battle-testing-a-skill/references/provenance-and-caveats.md`,
-which names itself descriptive precedent, not a requirement -- never any
-skill's own operative Procedure or Subagent dispatch prose, and specific
-to one harness's own file name besides (`AGENTS.md` or an equivalent
-names the identical property in a different agent tool; the same
-portability litmus `references/rubric.md`'s Portability level section
-already applies to skill content, and it applies here to a glossary
-term's own name too). Third, and current, `Instruction-file airgap`, for
-the reason below.
-
-The repository owner stated the actual success criterion directly, after
-judging PR #1204 (which shipped `Instruction-file freedom`) not to have
-turned out as intended: whether an agent in another session or a
-redistribution destination -- no glossary access, no prior discussion of
-this repository's own vocabulary -- can correctly tell this property
-apart from `Isolation-for-neutrality` from the bare term alone. Inventing
-a unique word is explicitly not the goal; reading correctly cold is. That
-criterion was checked empirically rather than argued: `claude -p` trials
-run from outside this repository's own `CLAUDE.md` directory ancestry (to
-simulate a genuinely isolated read), given only this entry's and
-`Isolation-for-neutrality`'s defining sentences with no glossary access,
-scored against four classification scenarios plus a "first guess before
-seeing the definition" grammar check, three trials per candidate. Two
-intermediate candidates were tested and rejected on this basis:
-`Isolation-for-Instruction-file` (shares `Isolation-for-neutrality`'s own
-"Isolation-for-" prefix, but "for" plays an inconsistent role across the
-two terms -- purpose in one, separation in the other; independently
-called a "naming trap" in 3 of 3 trials) and `airgapped Instruction-file`
-(adjective-first word order makes the instruction file itself, not the
-dispatch, read as the grammatical subject; failed the first-guess check
-in 3 of 3 trials for that reason). `Instruction-file freedom` was then
-re-tested under this same methodology, to check it against a bar it had
-never actually been held to (it shipped in PR #1204 before this stricter
-check existed): scenario-classification accuracy held at 12 of 12,
-matching every other candidate, but the first-guess check failed in 1 of
-3 trials -- that trial's honest first guess read "Instruction-file
-freedom" as freedom *possessed by* the instruction file (the "press
-freedom" / "academic freedom" sense), not freedom *from* it, a genuine
-competing sense "freedom" carries in English that "airgap" does not.
-`Instruction-file airgap` passed the first-guess check cleanly in 3 of 3
-trials, with the same 12-of-12 scenario accuracy. Resolved by the
-repository owner, directly, choosing this term as final on that
-evidentiary basis (#1203).
-
-As of this entry, no skill's own operative `SKILL.md` text -- Procedure,
-Subagent dispatch section, or Stop boundary -- uses `Instruction-file
-airgap` or either of its two superseded predecessors as a glossary
-label; `evaluating-skill-quality/SKILL.md` itself already expresses the
-identical property in ordinary prose, unnamed -- "project-instruction
-file" / "exclude that file" (lines 131-132, 452) and bare "isolat-"
-elsewhere (lines 40, 46, 171, 186) -- which is precisely the raw
-material this entry gives a name to, not a competing name for it. This
-entry resolves and records the term; it does not propagate it into any
-skill's own operative text -- a separate, later rename issue would be
-needed for that, the same disclosure `Isolation-for-neutrality` (above)
-carries for its own term.
-
-Superseded terms: "contaminated"/"contamination" as used for this concept
-in `skills/evaluating-skill-quality/references/adversarial-self-audit.md`'s
-"Contaminated-dispatch disclosure" section; bare "isolated"/"isolation"
-as used in `evaluating-skill-quality`'s own Subagent dispatch section for
-the project-instruction-file exclusion requirement specifically; and this
-entry's own two prior resolutions, `CLAUDE.md-free` and `Instruction-file
-freedom`, each superseded in turn once its own rationale was weighed
-against a better-evidenced alternative -- see the paragraphs above. All
-four retained here as accurate description of the mechanism, the failure
-mode, or this entry's own resolution history; none is a name a future
-reader should reach for going forward. `Isolation-for-Instruction-file`
-and `airgapped Instruction-file` are not listed here on the same footing:
-both were candidates considered and rejected during the empirical testing
-above, but neither was ever adopted as this repository's own term for
-this concept at any point, so neither superseded anything -- they are
-recorded in the paragraph above for the reasoning that rejected them, not
-here. Resolved by the repository owner, directly, per the Resolve step,
-three times within the same issue -- `CLAUDE.md-free`, then
-`Instruction-file freedom`, then this term, each time once the prior
-choice's own rationale did not hold up under scrutiny (#1203).
-`evaluating-deterministic-gate-quality`'s own equivalent wording is
-intentionally not cited here: a separate, concurrently open issue governs
-that skill's own exclusion-requirement text, and this entry does not
-assume or depend on that issue's outcome.
+Superseded terms: "contaminated"/"contamination" and bare
+"isolated"/"isolation" as used for this concept in
+`evaluating-skill-quality`'s own `adversarial-self-audit.md` and Subagent
+dispatch section; and this entry's own two prior names, `CLAUDE.md-free`
+and `Instruction-file freedom`, each superseded once its own basis did
+not hold up under scrutiny -- see #1203 for the full resolution history.
+Resolved by the repository owner, directly, per the Resolve step (#1203).
+Not yet propagated into any skill's own operative text.
