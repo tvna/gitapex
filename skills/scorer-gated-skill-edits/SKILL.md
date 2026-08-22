@@ -47,9 +47,11 @@ evaluation. Name the gap; never fake a score to proceed.
    repository-owned runner the fixture corpus's suite and task formats are
    written for -- invoked as `uv run python3
    evals/scripts/gitapex_run_eval_suite.py --eval-yaml EVAL.yaml --skill-md
-   SKILL.md`, never bare `python3` (the script reaches PyYAML through
-   `evals/scripts/gitapex_run_ablation.py`, which fails outside `uv`'s
-   managed virtualenv with `ModuleNotFoundError`). Run `uv run python3
+   SKILL.md`, never bare `python3` (the script reaches third-party
+   dependencies -- PyYAML, pydantic -- through
+   `evals/scripts/gitapex_run_ablation.py`, either of which can be
+   missing outside `uv`'s managed virtualenv and fails with
+   `ModuleNotFoundError`). Run `uv run python3
    evals/scripts/gitapex_run_eval_suite.py --help` and confirm it prints
    usage without error -- this resolves `uv`, the interpreter, and the
    runner's own import chain in the environment the trials will run in,
@@ -68,12 +70,22 @@ evaluation. Name the gap; never fake a score to proceed.
    output at all means the tracked file carries local edits, so no commit
    names what is actually about to run -- STOP the same way. Only once
    that check is silent, run `git log -1 --format=%H
-   -- evals/scripts/gitapex_run_eval_suite.py` and carry the hex commit it
-   prints into the run record step 7 writes. If git instead reports no
-   commit for that path at all (a never-committed, untracked copy), STOP
-   the same way too -- a runner whose exact content cannot be pinned,
-   dirty or absent from history alike, is exactly as unattributable as a
-   binary that reports no version. A run whose runner version is unknown
+   -- evals/scripts/gitapex_run_eval_suite.py` to get a candidate commit.
+   If git reports none at all (a never-committed, untracked copy), STOP
+   the same way. Otherwise confirm that candidate actually has a
+   resolvable parent -- `git rev-parse --verify -q <candidate>^` --
+   before trusting it: a shallow clone's own boundary commit has no
+   locally-known parent, and `git log -1 -- <path>` silently reports that
+   boundary commit as having "touched" every path in its tree rather than
+   the file's true last-touching commit, exactly the failure
+   `.github/scripts/gitapex_scan_harden_checkout_pin_drift.py` already
+   found and fixed for an unrelated pinned path in this same repository.
+   No resolvable parent -- STOP the same way once more. Only past all
+   three checks does the candidate become the commit carried into the run
+   record step 7 writes. A runner whose exact content cannot be pinned --
+   dirty, absent from history, or a shallow-clone artifact alike -- is
+   exactly as unattributable as a binary that reports no version. A run
+   whose runner version is unknown
    is unattributable: a
    later run cannot be compared against it, and a gate verdict nobody can
    re-derive is not a measurement. Never substitute a hand-read
@@ -115,13 +127,17 @@ evaluation. Name the gap; never fake a score to proceed.
    result -- as one script, so a failed run can never leave a stale or
    partial result silently scored as this run's own:
 
+   Run from the target repository's own root (both paths below are
+   root-relative; this skill's bundled scorer has no other fixed
+   location to run this script from):
+
    ```sh
    set -euo pipefail
    results="$(mktemp)"
    uv run python3 evals/scripts/gitapex_run_eval_suite.py \
      --eval-yaml <suite's eval.yaml> --skill-md <candidate SKILL.md> -o "$results"
    uv run python3 -c 'import json, sys; d = json.load(open(sys.argv[1])); [print(e["score"]) for e in d["scores"]]' "$results" \
-     | python3 scripts/gitapex_score_contract.py --compare-to <prior_mean>
+     | python3 skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py --compare-to <prior_mean>
    ```
 
    `set -euo pipefail` plus a fresh `mktemp` path close a real hole:
