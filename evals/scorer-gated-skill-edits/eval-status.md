@@ -47,3 +47,23 @@ ruled a suite re-run out of scope:
   before anything else. It should pass, since waza is by construction
   present in a waza-executed run, but that expectation is unverified here
   and is the first thing a future measured run should check.
+
+**Issue #1133 (points this skill at the new in-repo runner instead of
+waza):** the three fixtures whose prompts/assertions named `waza`
+literally -- `runner-version-confirmed-proceeds.yaml`,
+`heldout-runner-version-absent-stop.yaml`,
+`precondition-stop-writes-no-run-record.yaml` -- were updated to the new
+`evals/scripts/gitapex_run_eval_suite.py` runner's confirmation shape
+(a `--help` dry-run plus a firsthand `git log -1 --format=%H` in place of
+`--version`), so their assertions still describe what an agent following
+the current SKILL.md would actually say. No fixture was added or removed;
+this is a wording update on the same three branches issue #932 already
+covered, not a new enforced branch. Not re-scored against a live model,
+same disclosed limit the #932 entry above already carries for this
+corpus: this repository cannot currently issue an Anthropic API key for
+budget reasons (issue #1132's own architecture-tradeoff comment). What was
+verified live in this environment instead: `uv run python3
+evals/scripts/gitapex_run_eval_suite.py --help` exits 0, `git log -1
+--format=%H -- evals/scripts/gitapex_run_eval_suite.py` resolves a real
+commit, and every edited YAML file still validates against this
+repository's own fixture/split schemas. Refs #1133, #1132, #1130.

@@ -39,17 +39,17 @@
     "runner": {
       "type": "object",
       "required": ["name", "version"],
-      "description": "The eval runner Procedure step 1 confirmed. Both fields come from the tool itself -- its own name and the version string it reported -- never from memory or from a toolchain pin read elsewhere.",
+      "description": "The eval runner Procedure step 1 confirmed. Both fields are obtained firsthand in the environment the trials ran in -- never from memory or from a toolchain pin read elsewhere.",
       "properties": {
         "name": {
           "type": "string",
           "minLength": 1,
-          "description": "The runner binary's name as invoked."
+          "description": "The runner's name as invoked (a binary name, or a repository-owned script path such as evals/scripts/gitapex_run_eval_suite.py)."
         },
         "version": {
           "type": "string",
           "minLength": 1,
-          "description": "The version string the runner itself reported. A run that could not obtain one is not recorded here; step 1 stops instead."
+          "description": "For an external, independently-versioned binary, the version string it itself reported. For a version-controlled, repository-owned runner with no independent version identity, the hex commit that last touched its own content (obtained firsthand, e.g. `git log -1 --format=%H -- <runner path>`), never a version a requester reports, a toolchain manifest declares, or an earlier record carries. A run that could not obtain either is not recorded here; step 1 stops instead."
         }
       }
     },
