@@ -76,7 +76,7 @@ produced and later had to trim back down (two entries once carried this
 shape until a later commit cut them to the register `Dimension`/`Shape
 check` use):
 
-```
+```markdown
 ## Contributor
 The human giving instructions in this repository's Design-by-Contract
 issue/PR flow. Not to be conflated with "repository owner" (a GitHub

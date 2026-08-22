@@ -26,6 +26,7 @@ expected:
   output_contains:
     - "Maintain the glossary"
     - "Worker"
+    - "Runner"
     - "superseded"
     - "issue history"
   output_not_contains:
@@ -33,3 +34,7 @@ expected:
     - "1 of 3 trials"
     - "3 trials cleanly"
     - "confused it with the existing database connection-pool executor"
+    - "out of three"
+    - "confused it with"
+    - "rejected because"
+    - "passed every trial"
