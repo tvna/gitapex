@@ -59,11 +59,15 @@ evaluation. Name the gap; never fake a score to proceed.
    -- the eval runner is missing**, naming which it was. Because the
    runner is version-controlled content read from the same checkout as the
    skill under iteration, not an externally pinned binary, its recorded
-   "version" is the exact commit that last touched it. First run `git diff
-   --quiet -- evals/scripts/gitapex_run_eval_suite.py` in that same
-   checkout: a nonzero exit means the tracked file carries local,
-   uncommitted edits, so no commit names what is actually about to run --
-   STOP the same way. Only once that passes, run `git log -1 --format=%H
+   "version" is the exact commit that last touched it. First run `git
+   status --porcelain -- evals/scripts/gitapex_run_eval_suite.py` in that
+   same checkout and confirm it prints nothing -- staged or unstaged, both
+   count, since a `git diff --quiet`-only check (unstaged) still misses a
+   staged-but-uncommitted edit: `git log -1` would keep naming the prior
+   commit while the code that actually runs already differs from it. Any
+   output at all means the tracked file carries local edits, so no commit
+   names what is actually about to run -- STOP the same way. Only once
+   that check is silent, run `git log -1 --format=%H
    -- evals/scripts/gitapex_run_eval_suite.py` and carry the hex commit it
    prints into the run record step 7 writes. If git instead reports no
    commit for that path at all (a never-committed, untracked copy), STOP
