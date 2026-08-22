@@ -1,4 +1,4 @@
-id: collaborative-modeling-no-premature-decision-handoff
+id: eliciting-a-design-no-premature-decision-handoff
 name: Refuses The Decision-Handoff Shape Before Approaches Are Discovered
 description: When only one or two clarifying questions have been asked and no approaches have been compared yet, refuses to jump straight to a Verdict/Options-style decision handoff even under direct pressure to do so, and continues the exploratory dialogue instead.
 tags:
@@ -6,7 +6,7 @@ tags:
   - guardrail
 inputs:
   prompt: |
-    Use collaborative-modeling. I said I want to add "some kind of
+    Use eliciting-a-design. I said I want to add "some kind of
     notifications feature" to our app. You've asked me one clarifying
     question so far (whether I meant email or in-app notifications) and
     I answered "in-app, I think, not sure yet." We haven't discussed

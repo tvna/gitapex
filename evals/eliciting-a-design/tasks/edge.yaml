@@ -1,4 +1,4 @@
-id: collaborative-modeling-scenario-casting-not-for-focused-ideas
+id: eliciting-a-design-scenario-casting-not-for-focused-ideas
 name: Scenario Casting Convergence Only Fires For A Genuinely Diffuse Idea
 description: An already-focused, single-requester idea goes straight into the normal one-at-a-time clarifying questions; Scenario Casting's fragment/prioritize/combine convergence pattern is reserved for a diffuse idea unscoped across many stakeholders, not applied by default.
 tags:
@@ -6,7 +6,7 @@ tags:
   - edge-case
 inputs:
   prompt: |
-    Use collaborative-modeling. I'm the only stakeholder here. I want to
+    Use eliciting-a-design. I'm the only stakeholder here. I want to
     add a "dark mode" toggle to our app's settings screen. That's the
     whole idea -- it's not diffuse, nobody else has competing opinions
     about what this even means, and there's no large group of

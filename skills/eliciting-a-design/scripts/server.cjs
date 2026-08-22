@@ -6,7 +6,13 @@ const path = require('path');
 // ========== WebSocket Protocol (RFC 6455) ==========
 
 const OPCODES = { TEXT: 0x01, CLOSE: 0x08, PING: 0x09, PONG: 0x0A };
+// Fixed by RFC 6455 section 1.3 -- concatenated with the client's Sec-WebSocket-Key
+// to derive the accept key. Not a tunable: changing it breaks every handshake.
 const WS_MAGIC = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
+// Cap on a single inbound frame, so a hostile or buggy client cannot make the
+// server allocate unbounded memory from a declared 64-bit length. 10 MB is far
+// above any real selection event (a few hundred bytes) while staying small
+// enough that a rejected frame costs nothing.
 const MAX_FRAME_PAYLOAD_BYTES = 10 * 1024 * 1024;
 
 function computeAcceptKey(clientKey) {
@@ -83,6 +89,8 @@ function decodeFrame(buffer) {
 // ========== Configuration ==========
 
 const PORT_FILE = process.env.BRAINSTORM_PORT_FILE || null;
+// Pick from the IANA dynamic/private range (49152-65535, RFC 6335 section 6):
+// no registered service can collide, and no privileged bind is needed.
 const randomPort = () => 49152 + Math.floor(Math.random() * 16383);
 // Prefer an explicit port, else the port this session last bound (so a restart
 // reuses it and an already-open browser tab reconnects), else a random high port.
@@ -102,14 +110,7 @@ const URL_HOST = process.env.BRAINSTORM_URL_HOST || (HOST === '127.0.0.1' ? 'loc
 const SESSION_DIR = process.env.BRAINSTORM_DIR || '/tmp/brainstorm';
 const CONTENT_DIR = path.join(SESSION_DIR, 'content');
 const STATE_DIR = path.join(SESSION_DIR, 'state');
-const SUPERPOWERS_VERSION = readSuperpowersVersion();
-const SUPERPOWERS_BRAND_IMAGE_URL = 'https://primeradiant.com/brand/superpowers-visual-brainstorming-logo.png';
-const TELEMETRY_DISABLE_ENV_VARS = [
-  'SUPERPOWERS_DISABLE_TELEMETRY',
-  'DISABLE_TELEMETRY',
-  'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC'
-];
-const SUPERPOWERS_TELEMETRY_DISABLED = TELEMETRY_DISABLE_ENV_VARS.some(name => isTruthyEnv(process.env[name]));
+const COMPANION_VERSION = readCompanionVersion();
 let ownerPid = process.env.BRAINSTORM_OWNER_PID ? Number(process.env.BRAINSTORM_OWNER_PID) : null;
 
 // Per-session secret key. The companion is reachable by any local browser tab
@@ -168,7 +169,6 @@ h1 { color: #333; } p { color: #666; }
 .brand { display: flex; align-items: center; min-width: 0; overflow: hidden; margin-bottom: 1.5rem; color: #666; font-size: 0.9rem; line-height: 1; }
 .brand a { color: inherit; text-decoration: none; display: flex; align-items: center; gap: 0.5rem; min-width: 0; max-width: 100%; line-height: 1; }
 .brand-copy { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1; transform: translateY(-1px); }
-.brand-logo { display: block; height: 1em; width: auto; max-width: 180px; filter: invert(1); }
 </style>
 </head>
 <body><!-- BRANDING --><h1>Brainstorm Companion</h1>
@@ -205,7 +205,12 @@ const helperInjection = '<script>\n' + helperScript + '\n</script>';
 
 // ========== Helper Functions ==========
 
-function readSuperpowersVersion() {
+function readCompanionVersion() {
+  // Deliberate reach outside the skill's own directory: the version lives in the
+  // enclosing plugin/package manifest, three levels up from scripts/. It is
+  // display-only (a header string), never control flow, and every miss falls
+  // through to 'unknown' below -- so a vendored copy with no manifest at that
+  // depth degrades cosmetically rather than breaking.
   const root = path.join(__dirname, '../../..');
   const manifests = [
     path.join(root, 'package.json'),
@@ -224,13 +229,6 @@ function readSuperpowersVersion() {
   return 'unknown';
 }
 
-function isTruthyEnv(value) {
-  if (!value) return false;
-  const normalized = String(value).trim().toLowerCase();
-  if (!normalized) return false;
-  return !['0', 'false', 'no', 'off'].includes(normalized);
-}
-
 function escapeHtmlText(value) {
   return String(value)
     .replace(/&/g, '&amp;')
@@ -239,16 +237,15 @@ function escapeHtmlText(value) {
     .replace(/"/g, '&quot;');
 }
 
+// Text-only attribution, no network fetch: this skill is a renamed, diverged
+// native rewrite (Decision 1/2, docs/superpowers/specs/2026-08-22-eliciting-
+// a-design-design.md), not a re-served copy of obra/superpowers, so it does
+// not display that project's own brand logo.
 function brandMarkup() {
-  const version = escapeHtmlText(SUPERPOWERS_VERSION);
-  const text = SUPERPOWERS_TELEMETRY_DISABLED
-    ? 'Prime Radiant Superpowers v' + version
-    : 'Superpowers v' + version;
-  const logo = SUPERPOWERS_TELEMETRY_DISABLED
-    ? ''
-    : '<img class="brand-logo" src="' + SUPERPOWERS_BRAND_IMAGE_URL + '?v=' + encodeURIComponent(SUPERPOWERS_VERSION) + '" alt="Prime Radiant" referrerpolicy="no-referrer" decoding="async">';
+  const version = escapeHtmlText(COMPANION_VERSION);
+  const text = 'Eliciting a Design (gitapex) v' + version + ' -- techniques derived from Superpowers';
 
-  return '<div class="brand"><a href="https://github.com/obra/superpowers">' + logo + '<span class="brand-copy">' + text + '</span></a></div>';
+  return '<div class="brand"><a href="https://github.com/obra/superpowers"><span class="brand-copy">' + text + '</span></a></div>';
 }
 
 function renderBranding(html) {

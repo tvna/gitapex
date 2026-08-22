@@ -1,11 +1,11 @@
-id: collaborative-modeling-core-domain-precedent
+id: eliciting-a-design-core-domain-precedent
 name: Core Domain Check Redirects A Generic Target Toward Precedent
 description: When the target of heavy custom-modeling effort is a solved, non-differentiating problem, the Core Domain check scores it Generic and redirects toward searching for a precedent instead of designing from scratch.
 tags:
   - quality
 inputs:
   prompt: |
-    Use collaborative-modeling. I run a small B2B invoicing SaaS. I want
+    Use eliciting-a-design. I run a small B2B invoicing SaaS. I want
     to design a brand-new, fully custom PDF-generation engine for our
     invoices from scratch -- our own layout engine, our own font
     rendering, the works. Every other invoicing tool on the market
