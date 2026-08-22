@@ -207,3 +207,47 @@ Adopted via #1187, replacing this skill's own prior "dimension 1" through
 "dimension 6" usage for the same six criteria, to resolve the terminology
 conflict with `evaluating-skill-quality`'s narrower, judgment-only sense of
 `Dimension`. See that entry for the full resolution.
+
+## `Isolation-for-neutrality`
+
+The property of a subagent dispatch being independent of the calling
+conversation's own history, framing, prior discussion, or opinion of the
+specific artifact under review -- achieved by handing the dispatch only
+the target artifact's path (or content) and the reviewing skill's own
+files, never the calling conversation's context. Distinct from
+`Instruction-file airgap` (below): the two properties are independent, so
+a dispatch can hold this one while still inheriting the calling
+repository's own project-instruction file.
+
+Adopted from `skills/evaluating-skill-quality/references/adversarial-self-audit.md`'s
+own "Contaminated-dispatch disclosure" section, which already named this
+concept precisely: "a contaminated grader is exactly the bias risk
+isolation-for-neutrality exists to prevent."
+
+Superseded terms: bare "isolated"/"isolation", and "contaminated" /
+"contaminated context" as used for this concept in
+`skills/evaluating-skill-quality/SKILL.md` lines 119 and 145, since that
+same skill's own `adversarial-self-audit.md` uses "contaminated" for the
+unrelated `Instruction-file airgap` concept instead. Resolved by the
+repository owner, directly, per the Resolve step (#1203). Not yet
+propagated into any skill's own operative text.
+
+## `Instruction-file airgap`
+
+The property of a subagent dispatch (or any other agent-tool invocation)
+being verifiably free of the calling repository's own project-instruction
+file -- `CLAUDE.md`, `AGENTS.md`, or an equivalent auto-loaded mechanism
+-- regardless of whether that dispatch is otherwise fresh or carries the
+calling conversation's own history. Distinct from `Isolation-for-neutrality`
+(above): the two properties are independent, and this repository's own
+harness has been observed to grant `Isolation-for-neutrality` without
+`Instruction-file airgap` (issue #475; issue #1199's own Facts).
+
+Superseded terms: "contaminated"/"contamination" and bare
+"isolated"/"isolation" as used for this concept in
+`evaluating-skill-quality`'s own `adversarial-self-audit.md` and Subagent
+dispatch section; and this entry's own two prior names, `CLAUDE.md-free`
+and `Instruction-file freedom`, each superseded once its own basis did
+not hold up under scrutiny -- see #1203 for the full resolution history.
+Resolved by the repository owner, directly, per the Resolve step (#1203).
+Not yet propagated into any skill's own operative text.
