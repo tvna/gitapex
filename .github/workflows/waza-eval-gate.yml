@@ -264,7 +264,13 @@ jobs:
       # exactly one `metrics[]` entry with its own `threshold` (verified
       # against all 26 committed suites), so this step now separately reads
       # the run's own written `mean_score` and that threshold, and only
-      # reports "pass" when the score actually clears it.
+      # reports "pass" when the score actually clears it. A second review
+      # pass caught that an earlier revision of this check indexed
+      # `metrics[0]` unconditionally -- the vendored eval schema allows any
+      # `metrics[]` length >= 1, so a future suite declaring a second,
+      # stricter metric would have had it silently ignored. This step now
+      # fails loudly (a distinct message, not a raw traceback) unless
+      # exactly one `metrics[]` entry exists, rather than assuming it.
       - name: Run touched skills' evals suites
         if: steps.diff.outputs.has-changes == 'true'
         env:
@@ -293,7 +299,7 @@ jobs:
               failed=1
               continue
             fi
-            if uv run --frozen python3 -c "import json, sys, yaml; result = json.load(open(sys.argv[1], encoding='utf-8')); suite = yaml.safe_load(open(sys.argv[2], encoding='utf-8')); threshold = suite['metrics'][0]['threshold']; mean_score = result['mean_score']; print(f'mean_score={mean_score!r} threshold={threshold!r}', file=sys.stderr); sys.exit(0 if mean_score >= threshold else 1)" "$out" "$eval_yaml"; then
+            if uv run --frozen python3 -c "import json, sys, yaml; result = json.load(open(sys.argv[1], encoding='utf-8')); suite = yaml.safe_load(open(sys.argv[2], encoding='utf-8')); metrics = suite.get('metrics') or []; sys.exit(f'expected exactly 1 metrics[] entry in {sys.argv[2]!r}, got {len(metrics)}') if len(metrics) != 1 else None; threshold = metrics[0]['threshold']; mean_score = result['mean_score']; print(f'mean_score={mean_score!r} threshold={threshold!r}', file=sys.stderr); sys.exit(0 if mean_score >= threshold else 1)" "$out" "$eval_yaml"; then
               echo "| ${skill} | pass |" >> "$GITHUB_STEP_SUMMARY"
             else
               echo "| ${skill} | FAIL (below threshold) |" >> "$GITHUB_STEP_SUMMARY"
