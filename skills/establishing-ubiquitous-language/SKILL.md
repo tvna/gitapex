@@ -63,12 +63,10 @@ full walkthrough, step by step.
   anything to the glossary, even when no conflict turns out to exist.
 - Never resolve a detected conflict silently. Ask the owner; do not decide
   by fiat, frequency, or authorship convenience.
-- Never carry session-specific deliberation -- test methodology, trial
-  counts, rejected-candidate reasoning -- into the glossary entry itself.
-  That narrative belongs in the PR or issue history that recorded the
-  Resolve step; the entry stays at the `Contributor` worked example's own
-  register (definition, at most one cross-reference, a brief superseded-
-  terms note), never the fuller record the PR/issue keeps.
+- Never carry session-specific deliberation into the glossary entry
+  itself -- Step 4's own cap, restated here as a prohibition. Match the
+  `Contributor` worked example's own register, never the fuller record
+  the PR/issue keeps.
 
 ## Notes
 
