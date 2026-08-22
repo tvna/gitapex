@@ -106,6 +106,61 @@ dependencies:
     assert findings == [("owner/complete", "missing-deployed-file-hashes")]
 
 
+def test_deployed_files_as_truthy_scalar_is_drift(tmp_path):
+    # Defeat test: a truthiness-only check (`not entry.get("deployed_files")`)
+    # would let a non-empty *string* -- truthy, but not a list of paths --
+    # slip past as "complete".
+    lock = """\
+lockfile_version: '1'
+dependencies:
+- repo_url: owner/complete
+  name: complete
+  deployed_files: "not-a-list"
+  deployed_file_hashes:
+    .claude/skills/complete/SKILL.md: sha256:deadbeef
+"""
+    apm, lock_path = _write_pair(tmp_path, _VALID_APM, lock)
+    findings = drift.find_drift(apm, lock_path)
+    assert findings == [("owner/complete", "missing-deployed-files")]
+
+
+def test_deployed_file_hashes_as_truthy_scalar_is_drift(tmp_path):
+    lock = """\
+lockfile_version: '1'
+dependencies:
+- repo_url: owner/complete
+  name: complete
+  deployed_files:
+  - .claude/skills/complete/SKILL.md
+  deployed_file_hashes: "not-a-mapping"
+"""
+    apm, lock_path = _write_pair(tmp_path, _VALID_APM, lock)
+    findings = drift.find_drift(apm, lock_path)
+    assert findings == [("owner/complete", "missing-deployed-file-hashes")]
+
+
+def test_duplicate_repo_url_raises_lockfile_read_error(tmp_path):
+    # Defeat test: a plain dict-index build (`index[repo_url] = entry`) would
+    # let a later, incomplete duplicate silently overwrite -- or an earlier
+    # incomplete duplicate silently mask -- another entry for the same
+    # repo_url, with no diagnostic either way.
+    lock = """\
+lockfile_version: '1'
+dependencies:
+- repo_url: owner/complete
+  name: complete
+- repo_url: owner/complete
+  name: complete
+  deployed_files:
+  - .claude/skills/complete/SKILL.md
+  deployed_file_hashes:
+    .claude/skills/complete/SKILL.md: sha256:deadbeef
+"""
+    apm, lock_path = _write_pair(tmp_path, _VALID_APM, lock)
+    with pytest.raises(drift.LockfileReadError, match="duplicate dependencies\\[\\] entry for repo_url"):
+        drift.find_drift(apm, lock_path)
+
+
 def test_devdependencies_not_a_mapping_raises_lockfile_read_error(tmp_path):
     apm, lock = _write_pair(
         tmp_path,

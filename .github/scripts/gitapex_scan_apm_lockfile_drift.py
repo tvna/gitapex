@@ -26,7 +26,11 @@ This scanner is the drift gate that fills that gap: it fails if any
 ``devDependencies.apm`` entry in ``apm.yml`` lacks a matching
 ``apm.lock.yaml`` ``dependencies[]`` entry (matched by ``repo_url``), or
 that entry has an empty/missing ``deployed_files`` or
-``deployed_file_hashes``.
+``deployed_file_hashes``. Both fields are checked for their expected type
+(list / mapping), not merely truthiness -- a wrong-typed value is exactly
+as incomplete as a missing one -- and a duplicate ``repo_url`` in
+``dependencies[]`` is rejected outright rather than letting the later
+entry silently mask an earlier, possibly-incomplete one.
 
 Run standalone (exit 1 on drift) or via the pytest gate in
 ``tests/test_gitapex_scan_apm_lockfile_drift.py``.
@@ -110,7 +114,10 @@ def _lockfile_index(lock_data: dict[str, Any], apm_lockfile: pathlib.Path) -> di
             raise LockfileReadError(
                 f"{apm_lockfile}: every dependencies[] entry must be a mapping with a 'repo_url' field"
             )
-        index[entry["repo_url"]] = entry
+        repo_url = entry["repo_url"]
+        if repo_url in index:
+            raise LockfileReadError(f"{apm_lockfile}: duplicate dependencies[] entry for repo_url '{repo_url}'")
+        index[repo_url] = entry
     return index
 
 
@@ -124,8 +131,8 @@ def find_drift(
 
     reason is one of:
       - "missing-lockfile-entry": no dependencies[] entry with this repo_url
-      - "missing-deployed-files": entry exists but deployed_files is absent/empty
-      - "missing-deployed-file-hashes": entry exists but deployed_file_hashes is absent/empty
+      - "missing-deployed-files": entry exists but deployed_files is absent, empty, or not a list
+      - "missing-deployed-file-hashes": entry exists but deployed_file_hashes is absent, empty, or not a mapping
 
     Fails loudly (raises LockfileReadError) if either file is missing,
     unreadable as UTF-8, not valid YAML syntax, or syntactically valid but
@@ -149,10 +156,12 @@ def find_drift(
         if entry is None:
             findings.append((repo, "missing-lockfile-entry"))
             continue
-        if not entry.get("deployed_files"):
+        deployed_files = entry.get("deployed_files")
+        if not isinstance(deployed_files, list) or not deployed_files:
             findings.append((repo, "missing-deployed-files"))
             continue
-        if not entry.get("deployed_file_hashes"):
+        deployed_file_hashes = entry.get("deployed_file_hashes")
+        if not isinstance(deployed_file_hashes, dict) or not deployed_file_hashes:
             findings.append((repo, "missing-deployed-file-hashes"))
     return findings
 
