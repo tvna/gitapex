@@ -20,6 +20,7 @@ lockfile_version: '1'
 dependencies:
 - repo_url: owner/complete
   name: complete
+  package_type: marketplace_plugin
   deployed_files:
   - .claude/skills/complete/SKILL.md
   deployed_file_hashes:
@@ -72,6 +73,7 @@ lockfile_version: '1'
 dependencies:
 - repo_url: owner/complete
   name: complete
+  package_type: marketplace_plugin
 """
     apm, lock_path = _write_pair(tmp_path, _VALID_APM, lock)
     findings = drift.find_drift(apm, lock_path)
@@ -84,6 +86,7 @@ lockfile_version: '1'
 dependencies:
 - repo_url: owner/complete
   name: complete
+  package_type: marketplace_plugin
   deployed_files: []
   deployed_file_hashes: {}
 """
@@ -98,6 +101,7 @@ lockfile_version: '1'
 dependencies:
 - repo_url: owner/complete
   name: complete
+  package_type: marketplace_plugin
   deployed_files:
   - .claude/skills/complete/SKILL.md
 """
@@ -115,6 +119,7 @@ lockfile_version: '1'
 dependencies:
 - repo_url: owner/complete
   name: complete
+  package_type: marketplace_plugin
   deployed_files: "not-a-list"
   deployed_file_hashes:
     .claude/skills/complete/SKILL.md: sha256:deadbeef
@@ -130,6 +135,7 @@ lockfile_version: '1'
 dependencies:
 - repo_url: owner/complete
   name: complete
+  package_type: marketplace_plugin
   deployed_files:
   - .claude/skills/complete/SKILL.md
   deployed_file_hashes: "not-a-mapping"
@@ -137,6 +143,61 @@ dependencies:
     apm, lock_path = _write_pair(tmp_path, _VALID_APM, lock)
     findings = drift.find_drift(apm, lock_path)
     assert findings == [("owner/complete", "missing-deployed-file-hashes")]
+
+
+def test_non_marketplace_plugin_package_type_skips_deployed_files_check(tmp_path):
+    # A dep-only aggregator package (verified against the real apm CLI):
+    # package_type != "marketplace_plugin" permanently carries no
+    # deployed_files by design, not because `apm install` never ran.
+    lock = """\
+lockfile_version: '1'
+dependencies:
+- repo_url: owner/complete
+  name: complete
+  package_type: apm_package
+"""
+    apm, lock_path = _write_pair(tmp_path, _VALID_APM, lock)
+    assert drift.find_drift(apm, lock_path) == []
+
+
+def test_non_marketplace_plugin_package_type_still_flags_missing_entry(tmp_path):
+    # The package_type exemption only waives the deployed-file completeness
+    # check on an existing entry -- a devDependency with no lockfile entry
+    # at all is still drift regardless of what package_type it would carry.
+    apm, lock_path = _write_pair(tmp_path, _VALID_APM, "dependencies: []\n")
+    findings = drift.find_drift(apm, lock_path)
+    assert findings == [("owner/complete", "missing-lockfile-entry")]
+
+
+def test_local_path_devdependency_is_skipped(tmp_path):
+    # apm CLI normalizes a local-path devDependency's apm.lock.yaml
+    # repo_url to a "_local/<name>" form this gate cannot reconstruct
+    # (verified against the real CLI) -- out of scope, not a false drift.
+    apm, lock_path = _write_pair(
+        tmp_path,
+        "name: gitapex\nversion: 0.1.0\ndevDependencies:\n  apm:\n    - ./sibling-pkg\n",
+        "dependencies: []\n",
+    )
+    assert drift.find_drift(apm, lock_path) == []
+
+
+def test_devdependencies_apm_entry_not_a_string_raises_lockfile_read_error(tmp_path):
+    # Defeat test: a YAML-typo'd mapping in place of a plain "owner/repo"
+    # string must not reach the later dict-key lookup as an unhashable value.
+    apm, lock_path = _write_pair(
+        tmp_path,
+        "name: gitapex\nversion: 0.1.0\ndevDependencies:\n  apm:\n    - owner/repo: v2\n",
+        "dependencies: []\n",
+    )
+    with pytest.raises(drift.LockfileReadError, match=r"every 'devDependencies\.apm' entry must be a string"):
+        drift.find_drift(apm, lock_path)
+
+
+def test_lockfile_repo_url_not_a_string_raises_lockfile_read_error(tmp_path):
+    lock = "dependencies:\n- repo_url: [a, b]\n  name: complete\n"
+    apm, lock_path = _write_pair(tmp_path, _VALID_APM, lock)
+    with pytest.raises(drift.LockfileReadError, match="'repo_url' must be a string"):
+        drift.find_drift(apm, lock_path)
 
 
 def test_duplicate_repo_url_raises_lockfile_read_error(tmp_path):

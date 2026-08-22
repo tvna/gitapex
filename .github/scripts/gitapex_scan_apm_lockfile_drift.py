@@ -32,6 +32,17 @@ as incomplete as a missing one -- and a duplicate ``repo_url`` in
 ``dependencies[]`` is rejected outright rather than letting the later
 entry silently mask an earlier, possibly-incomplete one.
 
+Two shapes are deliberately out of scope, verified against the real apm
+CLI rather than assumed: a local-path devDependency (e.g. ``./sibling``)
+resolves to a ``_local/<name>`` ``repo_url`` this gate cannot reconstruct
+without reimplementing that normalization, so local-path entries are
+skipped rather than matched incorrectly; and a "dep-only" package (e.g.
+``package_type: apm_package``, an aggregator that only declares further
+dependencies and deploys no primitives of its own) permanently carries no
+``deployed_files`` by design, not because ``apm install`` never ran --
+only ``marketplace_plugin`` entries are checked for deployed-file
+completeness.
+
 Run standalone (exit 1 on drift) or via the pytest gate in
 ``tests/test_gitapex_scan_apm_lockfile_drift.py``.
 """
@@ -71,13 +82,28 @@ def _load_yaml(path: pathlib.Path) -> Any:
         raise LockfileReadError(f"{path}: is not valid YAML: {error}") from error
 
 
+def _is_local_path_devdep(value: str) -> bool:
+    """Whether `value` is a local-path apm devDependency (e.g. "./sibling")
+    rather than a remote "owner/repo" one.
+
+    apm CLI 0.25.0 normalizes a local-path dependency's apm.lock.yaml
+    repo_url to a "_local/<name>" form distinct from the literal path
+    string in apm.yml (verified against the real CLI) -- out of this
+    gate's scope rather than matched incorrectly.
+    """
+    return value.startswith((".", "/"))
+
+
 def _devdep_repos(apm_data: dict[str, Any], apm_manifest: pathlib.Path) -> list[str]:
-    """Return apm.yml's devDependencies.apm list of "owner/repo" strings.
+    """Return apm.yml's devDependencies.apm list of remote "owner/repo"
+    strings, excluding local-path entries (see _is_local_path_devdep).
 
     Missing devDependencies, or a devDependencies with no apm key, means
     this project declares no apm dev dependencies -- a legitimate empty
-    result, not an error. devDependencies.apm present but not a list is a
-    malformed manifest and fails loudly.
+    result, not an error. devDependencies.apm present but not a list, or
+    containing a non-string entry, is a malformed manifest and fails
+    loudly -- a YAML-typo'd entry (e.g. a mapping instead of a string)
+    must not reach a later dict-key lookup as an unhashable value.
     """
     dev_deps = apm_data.get("devDependencies")
     if dev_deps is None:
@@ -93,7 +119,15 @@ def _devdep_repos(apm_data: dict[str, Any], apm_manifest: pathlib.Path) -> list[
         raise LockfileReadError(
             f"{apm_manifest}: 'devDependencies.apm' must be a YAML list, got {type(repos).__name__}"
         )
-    return repos
+    result: list[str] = []
+    for repo in repos:
+        if not isinstance(repo, str):
+            raise LockfileReadError(
+                f"{apm_manifest}: every 'devDependencies.apm' entry must be a string, got {type(repo).__name__}"
+            )
+        if not _is_local_path_devdep(repo):
+            result.append(repo)
+    return result
 
 
 def _lockfile_index(lock_data: dict[str, Any], apm_lockfile: pathlib.Path) -> dict[str, dict[str, Any]]:
@@ -115,6 +149,10 @@ def _lockfile_index(lock_data: dict[str, Any], apm_lockfile: pathlib.Path) -> di
                 f"{apm_lockfile}: every dependencies[] entry must be a mapping with a 'repo_url' field"
             )
         repo_url = entry["repo_url"]
+        if not isinstance(repo_url, str):
+            raise LockfileReadError(
+                f"{apm_lockfile}: every dependencies[] entry's 'repo_url' must be a string, got {type(repo_url).__name__}"
+            )
         if repo_url in index:
             raise LockfileReadError(f"{apm_lockfile}: duplicate dependencies[] entry for repo_url '{repo_url}'")
         index[repo_url] = entry
@@ -133,6 +171,12 @@ def find_drift(
       - "missing-lockfile-entry": no dependencies[] entry with this repo_url
       - "missing-deployed-files": entry exists but deployed_files is absent, empty, or not a list
       - "missing-deployed-file-hashes": entry exists but deployed_file_hashes is absent, empty, or not a mapping
+
+    An entry whose package_type is not "marketplace_plugin" is checked
+    only for existence (missing-lockfile-entry), never for deployed-file
+    completeness -- a dep-only aggregator package legitimately deploys no
+    primitives of its own and permanently carries no deployed_files by
+    design, not because `apm install` never ran.
 
     Fails loudly (raises LockfileReadError) if either file is missing,
     unreadable as UTF-8, not valid YAML syntax, or syntactically valid but
@@ -155,6 +199,8 @@ def find_drift(
         entry = index.get(repo)
         if entry is None:
             findings.append((repo, "missing-lockfile-entry"))
+            continue
+        if entry.get("package_type") != "marketplace_plugin":
             continue
         deployed_files = entry.get("deployed_files")
         if not isinstance(deployed_files, list) or not deployed_files:
