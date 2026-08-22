@@ -33,7 +33,12 @@ issues, and conversation.
    write real entries into this skill's own
    [references/glossary.md](references/glossary.md); that file is a
    read-only template and rots when the skill is vendored or installed
-   read-only.
+   read-only. Keep the entry itself to a definition, at most one
+   cross-reference to a sibling or distinct concept, and a brief
+   superseded-terms note citing the resolving issue -- session-specific
+   deliberation (test methodology, trial-by-trial evidence, rejected-
+   candidate reasoning) belongs in the PR or issue history that recorded
+   the Resolve step, not in the glossary entry itself.
 
 ## Worked example: owner vs. author vs. contributor
 
@@ -58,6 +63,10 @@ full walkthrough, step by step.
   anything to the glossary, even when no conflict turns out to exist.
 - Never resolve a detected conflict silently. Ask the owner; do not decide
   by fiat, frequency, or authorship convenience.
+- Never carry session-specific deliberation into the glossary entry
+  itself -- Step 4's own cap, restated here as a prohibition. Match the
+  `Contributor` worked example's own register, never the fuller record
+  the PR/issue keeps.
 
 ## Notes
 

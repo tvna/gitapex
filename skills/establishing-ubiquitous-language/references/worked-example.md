@@ -1,5 +1,10 @@
 # Worked example: owner vs. author vs. contributor
 
+## Contents
+
+1. Applying the procedure
+2. What this would look like done wrong
+
 This is the full version of the example summarized in `../SKILL.md`. It is
 a real precedent from this skill's own home repository's history (cited by
 commit SHA and PR number for provenance, not as a live file dependency --
@@ -61,3 +66,41 @@ Note what this example does *not* do: it does not go back and rename any
 identifier in actual code, and it does not invent "Contributor" from
 nothing -- it surfaces that the resolution already happened in this
 repo's own history and records it, which is exactly the glossary's job.
+
+## What this would look like done wrong
+
+Illustrative only -- the `Contributor` entry above is the real one that
+shipped. This is a hypothetical bloated version of that same entry, in
+the style the calling repository's own `docs/glossary.md` actually
+produced and later had to trim back down (two entries once carried this
+shape until a later commit cut them to the register `Dimension`/`Shape
+check` use):
+
+```markdown
+## Contributor
+The human giving instructions in this repository's Design-by-Contract
+issue/PR flow. Not to be conflated with "repository owner" (a GitHub
+permission role) or "Author" (the AI author/implementer participant in
+the same flow) -- distinct concepts, not synonyms.
+
+Three candidate terms were tested before settling on this one: "Owner"
+(rejected -- 3 of 3 trial readers assumed it meant the GitHub repo-
+permission role, not whoever starts the flow), "Requester" (rejected --
+2 of 3 trials read it as a purely technical HTTP-request sense, unrelated
+to the Design-by-Contract flow), and "Contributor" (passed cleanly, 3 of
+3 trials, no competing sense found). The rejected-candidate reasoning and
+trial methodology are recorded here for completeness.
+
+Superseded terms: "Owner" (used in the initial draft; renamed to
+Contributor in the same pull request, because the flow described is not
+specific to repository owners).
+```
+
+The problem is not that this entry is wrong -- its definition and
+superseded-terms note are the same as the real one above. The problem is
+the middle paragraph: trial counts and rejected-candidate reasoning are
+session-specific deliberation, exactly the kind of narrative Step 4 and
+this skill's Stop boundaries reserve for the PR or issue history that
+recorded the Resolve step, not for the glossary entry. A reader who only
+needs the resolved term and its superseded synonym has to read past a
+methodology writeup to find them.

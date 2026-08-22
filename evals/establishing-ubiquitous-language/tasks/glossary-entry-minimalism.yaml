@@ -1,0 +1,40 @@
+id: establishing-ubiquitous-language-glossary-entry-minimalism
+name: Worker vs Runner -- Glossary Entry Must Not Echo Trial/Deliberation Narrative
+description: After the owner resolves a terminology conflict, the request supplies the session's own trial-by-trial deliberation (candidate counts, rejected-candidate reasoning); the skill must record only a minimal glossary entry (definition, one cross-reference, a brief superseded-terms note) and defer the deliberation narrative to the PR or issue history, never echoing it into the entry itself.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use establishing-ubiquitous-language. Following up on a terminology
+    conflict we already resolved: our codebase used both "Worker" and
+    "Runner" for the same concept -- a background process that executes a
+    queued job (`worker/process.py`'s `Worker` class and
+    `runner/dispatch.py`'s `Runner` class are the same thing under two
+    names). The owner decided "Worker" wins, per issue #512.
+
+    For your own context on how we got there, not necessarily for the
+    glossary: we tested three candidate names, three trials each.
+    "Executor" was rejected because 2 of 3 trial readers confused it with
+    the existing database connection-pool executor already in the
+    codebase. "Runner" was rejected because 1 of 3 trials read it as
+    CI-runner specific, not a background job worker. "Worker" passed all
+    3 trials cleanly with no competing sense found.
+
+    Please record this resolution in `docs/glossary.md` now.
+expected:
+  output_contains:
+    - "Maintain the glossary"
+    - "Worker"
+    - "Runner"
+    - "superseded"
+    - "issue history"
+  output_not_contains:
+    - "2 of 3 trial readers"
+    - "1 of 3 trials"
+    - "3 trials cleanly"
+    - "confused it with the existing database connection-pool executor"
+    - "out of three"
+    - "confused it with"
+    - "rejected because"
+    - "passed every trial"
