@@ -286,7 +286,19 @@ it through implementation:** the entries were added on the same branch,
 per `establishing-ubiquitous-language/SKILL.md`'s own Maintain step --
 one glossary heading per adopted row above, except `Generic Subdomain /
 precedent search`, which is folded into the `Core Domain check` entry
-rather than given a heading of its own.
+rather than given a heading of its own, and except the "collaborative
+modeling" row itself. **Further corrected after the `eliciting-a-design`
+rename:** the row's own disambiguation heading was initially kept in
+`docs/glossary.md` too, reworded to note the old name as a superseded
+synonym. On review, the heading was dropped entirely rather than kept in
+reworded form: the generic phrase does not appear anywhere in the shipped
+skill's own text, and the lexical collision that row's Detect step found
+no longer exists once the skill's own name stopped containing the word
+"modeling" -- a glossary entry recording a disambiguation between two
+terms that no longer collide, for a generic phrase the skill's own text
+never uses, served no forward-looking purpose. The row above is this
+doc's own retained historical record of that original finding and
+resolution; `docs/glossary.md` does not carry a parallel copy of it.
 
 ## Decision 4: techniques evaluated -- adopted vs. rejected
 

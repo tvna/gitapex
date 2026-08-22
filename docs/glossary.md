@@ -322,18 +322,3 @@ Adopted verbatim from the `clairvoyance` family into
 skill's own terminal step
 (`docs/superpowers/specs/2026-08-22-eliciting-a-design-design.md`,
 Decision 2, Decision 3, and Decision 4's rejected item 3).
-
-## `Collaborative modeling` (generic term) vs. `eliciting-a-design` (skill name)
-
-The lowercase phrase names a whole family of DDD elicitation/convergence
-techniques (EventStorming, Domain Storytelling, Scenario Casting, Event
-Modeling, Impact Mapping, Example Mapping, Context Mapping,
-Storystorming, User Story Mapping). `eliciting-a-design` is the gitapex
-skill that draws on part of that family; its own name does not use
-"modeling," so the generic phrase and the skill name do not collide
-lexically.
-
-Checked via the same Detect step as `Architecture trade-off` vs.
-`Approach`, above: family vs. instance, not a synonym conflict
-(`docs/superpowers/specs/2026-08-22-eliciting-a-design-design.md`,
-Decision 3).
