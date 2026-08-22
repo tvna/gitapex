@@ -17,7 +17,7 @@ inputs:
     custom?
 expected:
   output_contains:
-    - "competitive advantage"
+    - "Competitive advantage"
     - "Generic"
     - "precedent"
   output_not_contains:
