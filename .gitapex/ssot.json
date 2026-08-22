@@ -1,6 +1,6 @@
 {
   "meta": {
-    "schema_version": "1.2.0",
+    "schema_version": "1.3.0",
     "tracking_issue": 123,
     "status": "active",
     "phase": "phase-0"
@@ -93,7 +93,16 @@
       "tracking_issue": null,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "bash-pattern", "ref": "pip install|pip3 install|npm install|npm i|yarn add|pnpm add|go install|brew install|apt install|apt-get install|gem install|cargo install|uv pip install|uv install|uv add|plugin install"},
+        {"kind": "bash-pattern", "ref": "gh issue create|edit|close|comment|delete|reopen|transfer|pin|unpin|lock|unlock|develop"},
+        {"kind": "bash-pattern", "ref": "gh pr create|edit|close|comment|merge|review|ready|reopen|lock|unlock|update-branch"},
+        {"kind": "bash-pattern", "ref": "gh api -X|--method POST|PUT|PATCH|DELETE"},
+        {"kind": "bash-pattern", "ref": "gh api -f|-F|--field|--raw-field"},
+        {"kind": "bash-pattern", "ref": "gh api graphql ... mutation"},
+        {"kind": "bash-pattern", "ref": "git push"}
+      ]
     },
     {
       "id": "post-write-provenance-recheck",
@@ -108,7 +117,13 @@
       "tracking_issue": 878,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "mcp-tool", "ref": "mcp__github__create_pull_request"},
+        {"kind": "mcp-tool", "ref": "mcp__github__update_pull_request"},
+        {"kind": "mcp-tool", "ref": "mcp__github__issue_write"},
+        {"kind": "runtime-resolved-reference", "ref": "GET /repos/{owner}/{repo}/issues/{number} (the stored PR/issue body, re-fetched post-write)"}
+      ]
     },
     {
       "id": "template-overwrite-guard",
@@ -123,7 +138,16 @@
       "tracking_issue": null,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "*.github/issue_template/*"},
+        {"kind": "file-glob", "ref": "*.github/pull_request_template/*"},
+        {"kind": "file-glob", "ref": "*.gitlab/issue_templates/*"},
+        {"kind": "file-glob", "ref": "*.gitlab/merge_request_templates/*"},
+        {"kind": "file-glob", "ref": "pull_request_template"},
+        {"kind": "file-glob", "ref": "pull_request_template.md"},
+        {"kind": "file-glob", "ref": "pull_request_template.txt"}
+      ]
     },
     {
       "id": "acm-issue-disclosure",
@@ -142,7 +166,12 @@
       "tracking_issue": null,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "mcp-tool", "ref": "mcp__github__issue_write"},
+        {"kind": "workflow-event", "ref": ".github/workflows/acm-issue-gate.yml:issues:opened,edited"},
+        {"kind": "runtime-resolved-reference", "ref": "github.event.issue.body"}
+      ]
     },
     {
       "id": "pr-upstream-pushed",
@@ -157,7 +186,10 @@
       "tracking_issue": 187,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "mcp-tool", "ref": "mcp__github__create_pull_request"}
+      ]
     },
     {
       "id": "merge-pull-request-block",
@@ -172,7 +204,10 @@
       "tracking_issue": 637,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "mcp-tool", "ref": "mcp__github__merge_pull_request"}
+      ]
     },
     {
       "id": "skill-audit-disclosure",
@@ -197,7 +232,20 @@
       "tracking_issue": null,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "mcp-tool", "ref": "mcp__github__create_pull_request"},
+        {"kind": "mcp-tool", "ref": "mcp__github__update_pull_request"},
+        {"kind": "workflow-event", "ref": "skill-audit-gate.yml:pull_request"},
+        {"kind": "file-glob", "ref": "skills/*/SKILL.md"},
+        {"kind": "file-glob", "ref": "docs/superpowers/specs/*.md"},
+        {"kind": "file-glob", "ref": "skills/*/scripts/*.py"},
+        {"kind": "file-glob", "ref": "evals/scripts/*.py"},
+        {"kind": "file-glob", "ref": ".github/scripts/*.py"},
+        {"kind": "file-glob", "ref": "hooks/**"},
+        {"kind": "file-glob", "ref": ".gitapex/ssot.json"},
+        {"kind": "cross-registry-consistency", "ref": "gates[].script paths + .gitapex/ssot.json + hooks/hooks.json + gitapex_(gate|scan)_*.py/check-*.sh naming convention <-> diff paths (gitapex_detect_changed_gate_scripts.py)"}
+      ]
     },
     {
       "id": "pr-issue-acm-disclosure",
@@ -216,7 +264,11 @@
       "tracking_issue": 657,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "mcp-tool", "ref": "mcp__github__create_pull_request"},
+        {"kind": "runtime-resolved-reference", "ref": "GET /repos/{owner}/{repo}/issues/{number}"}
+      ]
     },
     {
       "id": "pr-duplicate-issue",
@@ -231,7 +283,11 @@
       "tracking_issue": 1197,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "mcp-tool", "ref": "mcp__github__create_pull_request"},
+        {"kind": "runtime-resolved-reference", "ref": "GET /repos/{owner}/{repo}/pulls?state=open"}
+      ]
     },
     {
       "id": "gitignore-pattern-test-coverage",
@@ -246,7 +302,12 @@
       "tracking_issue": 519,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": ".gitignore"},
+        {"kind": "file-glob", "ref": "tests/**/*.py"},
+        {"kind": "workflow-event", "ref": "gitignore-pattern-coverage-gate.yml:pull_request"}
+      ]
     },
     {
       "id": "provenance-disclosure",
@@ -264,7 +325,17 @@
       "tracking_issue": 520,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "runtime-resolved-reference", "ref": "github.event.pull_request.body"},
+        {"kind": "file-glob", "ref": "docs/*.md"},
+        {"kind": "file-glob", "ref": "docs/**/*.md"},
+        {"kind": "file-glob", "ref": "evals/*.md"},
+        {"kind": "file-glob", "ref": "evals/**/*.md"},
+        {"kind": "file-glob", "ref": "skills/*.md"},
+        {"kind": "file-glob", "ref": "skills/**/*.md"},
+        {"kind": "workflow-event", "ref": "provenance-disclosure-gate.yml:pull_request"}
+      ]
     },
     {
       "id": "retro-title-convention-citation",
@@ -279,7 +350,15 @@
       "tracking_issue": 520,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "skills/*.md"},
+        {"kind": "file-glob", "ref": "skills/**/*.md"},
+        {"kind": "file-glob", "ref": "docs/*.md"},
+        {"kind": "file-glob", "ref": "docs/**/*.md"},
+        {"kind": "workflow-event", "ref": "retro-title-convention-citation-gate.yml:pull_request"},
+        {"kind": "runtime-resolved-reference", "ref": "GitHub API GET /repos/{owner}/{repo}/issues/{issue_number} (is_resolvable_issue) for each #<N> citation found in an offending file"}
+      ]
     },
     {
       "id": "routine-scope-enforcement",
@@ -294,7 +373,13 @@
       "tracking_issue": 520,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "docs/superpowers/specs/*routine*.md"},
+        {"kind": "file-glob", "ref": "skills/*/metadata/gitapex.yaml"},
+        {"kind": "workflow-event", "ref": "routine-scope-enforcement-gate.yml:pull_request"},
+        {"kind": "cross-registry-consistency", "ref": "referenced_skill_names() in the routine-connection doc <-> capability_assumption() read from skills/<name>/metadata/gitapex.yaml"}
+      ]
     },
     {
       "id": "skill-rename-lifecycle",
@@ -309,7 +394,13 @@
       "tracking_issue": 285,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "workflow-event", "ref": "skill-rename-lifecycle-gate.yml:pull_request"},
+        {"kind": "file-glob", "ref": "skills/**/SKILL.md"},
+        {"kind": "file-glob", "ref": "skills/*/metadata/gitapex.yaml"},
+        {"kind": "cross-registry-consistency", "ref": "removed skills/ directory names <-> skills/*/metadata/gitapex.yaml spec.lifecycle.renamedFrom values"}
+      ]
     },
     {
       "id": "skill-branch-fixture-coverage",
@@ -324,7 +415,13 @@
       "tracking_issue": 49,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "workflow-event", "ref": "skill-branch-fixture-coverage-gate.yml:pull_request"},
+        {"kind": "file-glob", "ref": "skills/**/SKILL.md"},
+        {"kind": "file-glob", "ref": "evals/*/tasks/*.yaml"},
+        {"kind": "cross-registry-consistency", "ref": "SKILL.md Stop-boundary bullets + named dispatch branches count <-> evals/<skill>/tasks/*.yaml fixture count"}
+      ]
     },
     {
       "id": "split-fixture-coverage",
@@ -339,7 +436,17 @@
       "tracking_issue": 526,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "workflow-event", "ref": "split-fixture-coverage-gate.yml:pull_request"},
+        {"kind": "file-glob", "ref": "evals/*/split.md"},
+        {"kind": "file-glob", "ref": "skills/*/SKILL.md"},
+        {"kind": "file-glob", "ref": "evals/*/split.json"},
+        {"kind": "cross-registry-consistency", "ref": "split.json assignment.selection <-> split.md's most recent gate-result table Fixture column"},
+        {"kind": "cross-registry-consistency", "ref": "split.json equivalence_classes train_fixture/held_out_fixture pairs <-> SKILL.md precedence/priority sentence"},
+        {"kind": "cross-registry-consistency", "ref": "split.json assignment.selection fixtures' exercises declarations <-> SKILL.md ###-level section headings"},
+        {"kind": "cross-registry-consistency", "ref": "split.json partition figure <-> assignment listing's unique fixture count minus split_arithmetic_exclusions"}
+      ]
     },
     {
       "id": "transfer-check-disclosure",
@@ -354,7 +461,11 @@
       "tracking_issue": 517,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "workflow-event", "ref": "transfer-check-disclosure-gate.yml:pull_request"},
+        {"kind": "file-glob", "ref": "evals/*/split.md"}
+      ]
     },
     {
       "id": "skill-metadata-schema-drift",
@@ -369,7 +480,16 @@
       "tracking_issue": 745,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"},
+        {"kind": "file-glob", "ref": "skills/*/metadata/gitapex.yaml"},
+        {"kind": "file-glob", "ref": "skills/evaluating-skill-quality/references/skill-metadata.schema.json"},
+        {"kind": "cross-registry-consistency", "ref": "metadata.name <-> skill directory name"},
+        {"kind": "cross-registry-consistency", "ref": "spec.skillDependencies.requires/relatedTo + spec.lifecycle.deprecated.replacement <-> sibling skills/<name>/ directories"},
+        {"kind": "cross-registry-consistency", "ref": "spec.skillDependencies.requires graph acyclicity across skills/*/metadata/gitapex.yaml"}
+      ]
     },
     {
       "id": "split-schema-drift",
@@ -384,7 +504,13 @@
       "tracking_issue": 928,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "evals/*/split.json"},
+        {"kind": "file-glob", "ref": "skills/scorer-gated-skill-edits/references/split.schema.json"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     },
     {
       "id": "skill-eval-yaml-parity",
@@ -399,7 +525,14 @@
       "tracking_issue": 928,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "skills/*/"},
+        {"kind": "file-glob", "ref": "evals/*/eval.yaml"},
+        {"kind": "cross-registry-consistency", "ref": "skills/*/ <-> evals/*/eval.yaml"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     },
     {
       "id": "skill-eval-status-doc-drift",
@@ -414,7 +547,17 @@
       "tracking_issue": 928,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "docs/skill-eval-status.md"},
+        {"kind": "file-glob", "ref": "docs/skill-eval-status-narrative.md"},
+        {"kind": "file-glob", "ref": "evals/*/eval.yaml"},
+        {"kind": "file-glob", "ref": "evals/*/tasks/*.yaml"},
+        {"kind": "file-glob", "ref": "evals/*/results/*/manifest.json"},
+        {"kind": "cross-registry-consistency", "ref": "docs/skill-eval-status.md <-> regeneration from docs/skill-eval-status-narrative.md + evals/*/eval.yaml + evals/*/tasks/*.yaml + evals/*/results/*/manifest.json"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     },
     {
       "id": "evals-scripts-coverage-floor",
@@ -429,7 +572,13 @@
       "tracking_issue": 536,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "pyproject.toml"},
+        {"kind": "file-glob", "ref": "coverage.json"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     },
     {
       "id": "apm-manifest-drift",
@@ -444,7 +593,14 @@
       "tracking_issue": 234,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "apm.yml"},
+        {"kind": "file-glob", "ref": ".claude-plugin/plugin.json"},
+        {"kind": "cross-registry-consistency", "ref": "apm.yml <-> .claude-plugin/plugin.json"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     },
     {
       "id": "plugin-manifest-mirror-drift",
@@ -466,7 +622,14 @@
       "tracking_issue": 1028,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "plugin.json"},
+        {"kind": "file-glob", "ref": ".claude-plugin/plugin.json"},
+        {"kind": "cross-registry-consistency", "ref": "plugin.json <-> .claude-plugin/plugin.json"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     },
     {
       "id": "plugin-manifest-schema-conformance",
@@ -487,7 +650,13 @@
       "tracking_issue": 1028,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "plugin.json"},
+        {"kind": "file-glob", "ref": ".gitapex/agent-plugins-plugin.schema.json"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     },
     {
       "id": "toolchain-pin-drift",
@@ -502,7 +671,17 @@
       "tracking_issue": 57,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": ".github/workflows/*.yml"},
+        {"kind": "file-glob", "ref": ".github/workflows/*.yaml"},
+        {"kind": "bash-pattern", "ref": "microsoft/waza"},
+        {"kind": "bash-pattern", "ref": "microsoft/apm"},
+        {"kind": "bash-pattern", "ref": "rtk-ai/rtk"},
+        {"kind": "bash-pattern", "ref": "betterleaks/betterleaks"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     },
     {
       "id": "owasp-asi-mapping-completeness",
@@ -517,7 +696,12 @@
       "tracking_issue": 144,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "docs/security-control-inventory.md"},
+        {"kind": "workflow-event", "ref": "test.yml:push"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"}
+      ]
     },
     {
       "id": "owasp-llm-mapping-completeness",
@@ -532,7 +716,12 @@
       "tracking_issue": 145,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "docs/security-control-inventory.md"},
+        {"kind": "workflow-event", "ref": "test.yml:push"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"}
+      ]
     },
     {
       "id": "retrospective-gate-drift-scan",
@@ -547,7 +736,14 @@
       "tracking_issue": 297,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": ".gitapex/ssot.json"},
+        {"kind": "runtime-resolved-reference", "ref": "GitHub API GET /repos/{owner}/{repo}/issues?labels=retrospective&state=all (list_labelled_issues) -- the live retrospective-labelled issue set"},
+        {"kind": "runtime-resolved-reference", "ref": "git log <ref> commit messages (git_commit_messages) matched against a #<N> citation pattern (_citation_pattern) per issue number"},
+        {"kind": "workflow-event", "ref": "retrospective-gate-drift.yml:schedule"},
+        {"kind": "workflow-event", "ref": "retrospective-gate-drift.yml:workflow_dispatch"}
+      ]
     },
     {
       "id": "waza-eval-gate",
@@ -559,13 +755,18 @@
       "rule": "Executes each PR-touched skill's own evals/<skill>/ suite via 'nix run .#waza -- run <skill>' and fails the job if any suite fails; not yet a required status check.",
       "planes": ["ci"],
       "local_exclusion": "Runs waza eval suites, which need the Class B toolchain plus model access rather than a working-tree read.",
-      "trigger": ".github/workflows/waza-eval-gate.yml on pull_request",
+      "trigger": ".github/workflows/waza-eval-gate.yml on pull_request and workflow_dispatch",
       "policy_refs": [],
       "cluster": "skill-lifecycle",
       "tracking_issue": 582,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "workflow-event", "ref": "waza-eval-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "waza-eval-gate.yml:workflow_dispatch"},
+        {"kind": "file-glob", "ref": "evals/*/eval.yaml"}
+      ]
     },
     {
       "id": "workflow-lint",
@@ -574,13 +775,19 @@
       "rule": "Runs actionlint (rhysd/actionlint, digest-pinned) against changed .github/workflows/** files.",
       "planes": ["ci"],
       "local_exclusion": "actionlint runs from a digest-pinned Docker image in CI; resolving actionlint from ambient PATH instead is the exact drift issue #678 closed for ruff, so no local equivalent is offered.",
-      "trigger": ".github/workflows/lint.yml on pull_request",
+      "trigger": ".github/workflows/lint.yml on pull_request and push to main",
       "policy_refs": [],
       "cluster": "supply-chain",
       "tracking_issue": null,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": ".github/workflows/*.yml"},
+        {"kind": "file-glob", "ref": ".github/workflows/*.yaml"},
+        {"kind": "workflow-event", "ref": "lint.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "lint.yml:push"}
+      ]
     },
     {
       "id": "python-lint",
@@ -595,7 +802,13 @@
       "tracking_issue": 678,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "**/*.py"},
+        {"kind": "cross-registry-consistency", "ref": "pyproject.toml <-> uv.lock"},
+        {"kind": "workflow-event", "ref": "lint.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "lint.yml:push"}
+      ]
     },
     {
       "id": "mypy-type-check",
@@ -610,7 +823,16 @@
       "tracking_issue": 684,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "tests"},
+        {"kind": "file-glob", "ref": "hooks"},
+        {"kind": "file-glob", "ref": ".github/scripts"},
+        {"kind": "file-glob", "ref": "evals/scripts"},
+        {"kind": "file-glob", "ref": "skills/*/scripts"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     },
     {
       "id": "toolchain-nix-build-verify",
@@ -625,7 +847,14 @@
       "tracking_issue": null,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "flake.nix"},
+        {"kind": "file-glob", "ref": "flake.lock"},
+        {"kind": "cross-registry-consistency", "ref": "flake.nix <-> flake.lock"},
+        {"kind": "workflow-event", "ref": "toolchain-nix.yml:push"},
+        {"kind": "workflow-event", "ref": "toolchain-nix.yml:pull_request"}
+      ]
     },
     {
       "id": "ssot-schema-drift",
@@ -643,7 +872,38 @@
       "tracking_issue": 123,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": ".gitapex/ssot.json"},
+        {"kind": "file-glob", "ref": ".gitapex/ssot.schema.json"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"},
+        {"kind": "cross-registry-consistency", "ref": "gates[].script <-> real files on disk"},
+        {"kind": "cross-registry-consistency", "ref": "gates[].policy_refs[] <-> policy_sources[].id"},
+        {"kind": "cross-registry-consistency", "ref": "gates[].cluster <-> clusters keys"},
+        {"kind": "cross-registry-consistency", "ref": "gates[].local_invocation/local_stdin path tokens <-> real files on disk"},
+        {"kind": "cross-registry-consistency", "ref": "gates[].local_invocation <-> gates[].script (same gate)"}
+      ]
+    },
+    {
+      "id": "ssot-field-coverage-report",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_report_ssot_field_coverage.py",
+      "rule": "Reports, per field (fail_mode, target), how many of .gitapex/ssot.json's gates carry it and lists which ones don't. Always exits 0 except on a genuine read/parse failure of ssot.json itself -- incomplete field coverage is expected, honestly-disclosed state (issue #1232), never a CI failure. Not a required status check; report-only by explicit design, distinct from every other gate in this cluster.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_report_ssot_field_coverage.py"],
+      "trigger": "tests/test_gitapex_report_ssot_field_coverage.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "registry-integrity",
+      "tracking_issue": 1232,
+      "status": "experimental",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": ".gitapex/ssot.json"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     },
     {
       "id": "plugin-root-brace-notation",
@@ -652,13 +912,24 @@
       "rule": "Every hook command in a hooks.json manifest or an agent definition's frontmatter must reference the plugin root as ${CLAUDE_PLUGIN_ROOT}; the unbraced $CLAUDE_PLUGIN_ROOT fails. apm substitutes only the braced form, so an unbraced command is deployed verbatim into a consumer's .claude/settings.json, resolves against an unset variable, and its hook silently never fires while the install log still reports it integrated. Only command values are graded, never prose. Discovery reads git-tracked files, so every ignored path (apm's package cache and deploy trees, worktree checkouts) is out of scope by construction. Exits 2, never a silent pass, when no surface is discovered or a file is unreadable or malformed.",
       "planes": ["ci", "local"],
       "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_plugin_root_brace_notation.py"],
-      "trigger": ".github/workflows/plugin-root-brace-notation-gate.yml on pull_request, plus tests/test_gitapex_gate_plugin_root_brace_notation.py inside the pytest step of .github/workflows/test.yml",
+      "trigger": ".github/workflows/plugin-root-brace-notation-gate.yml on pull_request and workflow_dispatch, plus tests/test_gitapex_gate_plugin_root_brace_notation.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "supply-chain",
       "tracking_issue": 650,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "hooks.json"},
+        {"kind": "file-glob", "ref": "*/hooks.json"},
+        {"kind": "file-glob", "ref": "agents/*.md"},
+        {"kind": "file-glob", "ref": ".claude/agents/*.md"},
+        {"kind": "bash-pattern", "ref": "$CLAUDE_PLUGIN_ROOT"},
+        {"kind": "workflow-event", "ref": "plugin-root-brace-notation-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "plugin-root-brace-notation-gate.yml:workflow_dispatch"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     },
     {
       "id": "exception-handler-gap",
@@ -677,7 +948,16 @@
       "tracking_issue": 682,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": ".github/scripts/*.py"},
+        {"kind": "file-glob", "ref": "hooks/*.py"},
+        {"kind": "file-glob", "ref": "evals/scripts/*.py"},
+        {"kind": "file-glob", "ref": "skills/*/scripts/*.py"},
+        {"kind": "workflow-event", "ref": "exception-handler-gap-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     },
     {
       "id": "hidden-characters",
@@ -686,13 +966,20 @@
       "rule": "No repository-tracked file may carry a literal hidden/invisible Unicode character -- U+FEFF, the zero-width family (U+200B-U+200D), the bidi control characters (U+200E/U+200F, U+202A-U+202E, U+2066-U+2069), or word joiner (U+2060). The escape-sequence spelling of any of these (e.g. \\ufeff) is never graded -- that is the fix this gate steers authors toward. Discovery reads git-tracked files, so every ignored path is out of scope by construction. Diagnostic output never reproduces the offending character itself, naming the codepoint, its Unicode name, and line/column instead. Exits 2, never a silent pass, when no tracked file is discovered or a file cannot be read/decoded as UTF-8.",
       "planes": ["ci", "local"],
       "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_hidden_characters.py"],
-      "trigger": ".github/workflows/hidden-characters-gate.yml on pull_request, plus tests/test_gitapex_gate_hidden_characters.py inside the pytest step of .github/workflows/test.yml",
+      "trigger": ".github/workflows/hidden-characters-gate.yml on pull_request and workflow_dispatch, plus tests/test_gitapex_gate_hidden_characters.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "repo-hygiene",
       "tracking_issue": 702,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "**/*"},
+        {"kind": "workflow-event", "ref": "hidden-characters-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "hidden-characters-gate.yml:workflow_dispatch"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     },
     {
       "id": "cyclomatic-complexity-floor",
@@ -707,7 +994,12 @@
       "tracking_issue": 727,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "bash-pattern", "ref": "xenon --max-absolute E --max-modules B --max-average A"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     },
     {
       "id": "stale-retro-stub-autoclose",
@@ -722,7 +1014,12 @@
       "tracking_issue": 694,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "runtime-resolved-reference", "ref": "GitHub API GET /repos/{owner}/{repo}/issues?labels=retrospective&state=open (list_open_retro_issues), filtered by is_unenriched_stub's literal marker \"Automated stub opened by the post-merge-auto-retro gate\" and is_stale's --stale-hours (default 48) elapsed-time check"},
+        {"kind": "workflow-event", "ref": "stale-retro-stub-autoclose.yml:schedule"},
+        {"kind": "workflow-event", "ref": "stale-retro-stub-autoclose.yml:workflow_dispatch"}
+      ]
     },
     {
       "id": "low-trust-workflow-hooks-review",
@@ -737,7 +1034,14 @@
       "tracking_issue": 136,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": ".github/workflows/**"},
+        {"kind": "file-glob", "ref": "hooks/**"},
+        {"kind": "runtime-resolved-reference", "ref": "github.event.pull_request.author_association"},
+        {"kind": "runtime-resolved-reference", "ref": "workflow-hooks-reviewed"},
+        {"kind": "workflow-event", "ref": "low-trust-workflow-hooks-gate.yml:pull_request"}
+      ]
     },
     {
       "id": "registry-wiring-scan",
@@ -752,7 +1056,15 @@
       "tracking_issue": 682,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": ".github/scripts/*.py"},
+        {"kind": "file-glob", "ref": ".github/workflows/*.yml"},
+        {"kind": "file-glob", "ref": ".github/workflows/*.yaml"},
+        {"kind": "cross-registry-consistency", "ref": "cli_flag string literals in .github/scripts/*.py module-level tuple/list registries (find_registry_rows) <-> flag tokens present in .github/workflows/*.yml|*.yaml run: step text (find_unwired_rows registry->workflow direction, find_orphaned_flags converse workflow->registry direction)"},
+        {"kind": "workflow-event", "ref": "test.yml:push"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"}
+      ]
     },
     {
       "id": "harden-checkout-pin-drift",
@@ -767,7 +1079,15 @@
       "tracking_issue": 813,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": ".github/actions/harden-checkout/action.yml"},
+        {"kind": "file-glob", "ref": ".github/workflows/*.yml"},
+        {"kind": "file-glob", "ref": ".github/workflows/*.yaml"},
+        {"kind": "cross-registry-consistency", "ref": ".github/workflows/*.yml uses: pins <-> .github/actions/harden-checkout/action.yml"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     },
     {
       "id": "runtime-compatibility-matrix-schema-drift",
@@ -782,7 +1102,13 @@
       "tracking_issue": 828,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": ".gitapex/runtime-compatibility-matrix.json"},
+        {"kind": "file-glob", "ref": ".gitapex/runtime-compatibility-matrix.schema.json"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     },
     {
       "id": "metadata-outcome-lines-drift",
@@ -797,7 +1123,13 @@
       "tracking_issue": 877,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "skills/*/metadata/gitapex.yaml"},
+        {"kind": "runtime-resolved-reference", "ref": "outcome.lines / outcome.<x>_lines claim value's target-file token + outcome.commit (or an inline commit-ish token) revision"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     },
     {
       "id": "eval-suite-schema-drift",
@@ -812,7 +1144,19 @@
       "tracking_issue": 862,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "evals/*/eval.yaml"},
+        {"kind": "file-glob", "ref": "evals/*/tasks/*.yaml"},
+        {"kind": "file-glob", "ref": "evals/*/tasks/*.yml"},
+        {"kind": "file-glob", "ref": ".gitapex/waza-eval.schema.json"},
+        {"kind": "file-glob", "ref": ".gitapex/waza-task.schema.json"},
+        {"kind": "cross-registry-consistency", "ref": "flake.nix pinned waza release tag <-> VENDORED_WAZA_TAG (gitapex_scan_eval_suite_schema.py)"},
+        {"kind": "cross-registry-consistency", "ref": ".gitapex/waza-eval.schema.json & .gitapex/waza-task.schema.json bytes <-> VENDORED_DIGESTS recorded sha256"},
+        {"kind": "cross-registry-consistency", "ref": "EXTENSION_KEYS allowlist rows <-> named consumer files' real content"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     },
     {
       "id": "eval-results-schema-drift",
@@ -827,7 +1171,16 @@
       "tracking_issue": 926,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "evals/*/results/*"},
+        {"kind": "file-glob", "ref": "evals/*/results/*/manifest.json"},
+        {"kind": "file-glob", "ref": "skills/scorer-gated-skill-edits/references/eval-run.schema.json"},
+        {"kind": "file-glob", "ref": "skills/scorer-gated-skill-edits/references/eval-scores.schema.json"},
+        {"kind": "cross-registry-consistency", "ref": "evals/*/results/*/manifest.json artifacts[] <-> real files under that run directory"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     },
     {
       "id": "eval-declared-model-allowlist",
@@ -842,7 +1195,16 @@
       "tracking_issue": 925,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "evals/*/eval.yaml"},
+        {"kind": "file-glob", "ref": "evals/*/tasks/*.yaml"},
+        {"kind": "file-glob", "ref": ".github/workflows/waza-eval-matrix.yml"},
+        {"kind": "file-glob", "ref": ".gitapex/eval-model-allowlist.yaml"},
+        {"kind": "cross-registry-consistency", "ref": "declared model ids (evals/*/eval.yaml, evals/*/tasks/*.yaml, waza-eval-matrix.yml 'models' dispatch default & hardcoded *_MODEL env) <-> .gitapex/eval-model-allowlist.yaml approved_models/retired_models"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     },
     {
       "id": "main-ruleset-required-checks",
@@ -857,7 +1219,15 @@
       "tracking_issue": 439,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": ".github/rulesets/main.json"},
+        {"kind": "file-glob", "ref": ".github/workflows/*.yml"},
+        {"kind": "file-glob", "ref": ".github/workflows/*.yaml"},
+        {"kind": "cross-registry-consistency", "ref": "rules[].parameters.required_status_checks[].context (main.json) <-> unconditional-pull_request job/check-run names in .github/workflows/*.yml"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     },
     {
       "id": "ruleset-sync-gate",
@@ -872,7 +1242,13 @@
       "tracking_issue": 439,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": ".github/rulesets/main.json"},
+        {"kind": "github-native", "ref": "GET /repos/{owner}/{repo}/rulesets"},
+        {"kind": "cross-registry-consistency", "ref": "required_check_contexts(sot) from .github/rulesets/main.json at the PR base SHA <-> required_check_contexts(live) from the live GitHub ruleset, one-directional"},
+        {"kind": "workflow-event", "ref": "ruleset-verify.yml:pull_request"}
+      ]
     },
     {
       "id": "ruleset-drift-scan",
@@ -887,7 +1263,14 @@
       "tracking_issue": 439,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": ".github/rulesets/main.json"},
+        {"kind": "github-native", "ref": "GET /repos/{owner}/{repo}/rulesets"},
+        {"kind": "cross-registry-consistency", "ref": "canonical_projection(sot) from .github/rulesets/main.json on main <-> canonical_projection(live) from the live GitHub ruleset, bidirectional"},
+        {"kind": "workflow-event", "ref": "ruleset-verify.yml:schedule"},
+        {"kind": "workflow-event", "ref": "ruleset-verify.yml:workflow_dispatch"}
+      ]
     },
     {
       "id": "contract-axis-vocabulary-drift",
@@ -902,7 +1285,16 @@
       "tracking_issue": 949,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "skills/evaluating-deterministic-gate-quality/SKILL.md"},
+        {"kind": "file-glob", "ref": "skills/evaluating-deterministic-gate-quality/references/cross-cutting-axes.md"},
+        {"kind": "file-glob", "ref": "skills/evaluating-deterministic-gate-quality/references/output-schema.json"},
+        {"kind": "file-glob", "ref": "skills/evaluating-deterministic-gate-quality/references/security-level.md"},
+        {"kind": "cross-registry-consistency", "ref": "SKILL.md axis-count/'the other N axes' declarations <-> references/cross-cutting-axes.md '## Axis: Contract role / input-domain closure' section vocabulary <-> references/output-schema.json contractRole/inputDomainKind enums <-> references/security-level.md 'narrower than all N' count"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     },
     {
       "id": "skill-quality-rubric-vocabulary-drift",
@@ -917,7 +1309,14 @@
       "tracking_issue": 993,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "skills/evaluating-skill-quality/SKILL.md"},
+        {"kind": "file-glob", "ref": "skills/evaluating-skill-quality/references/rubric.md"},
+        {"kind": "cross-registry-consistency", "ref": "SKILL.md dimension-count/'dimensions 1-N' range declarations + Mechanism-fit step labels <-> references/rubric.md '## N. <Name>' dimension headings (numbering/order/non-empty)"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     },
     {
       "id": "dimensions-numbering-drift",
@@ -931,7 +1330,16 @@
       "cluster": "self-governance",
       "tracking_issue": 1229,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "skills/evaluating-deterministic-gate-quality/references/dimensions.md"},
+        {"kind": "file-glob", "ref": "skills/evaluating-deterministic-gate-quality/SKILL.md"},
+        {"kind": "file-glob", "ref": "skills/evaluating-deterministic-gate-quality/references/output-schema.json"},
+        {"kind": "cross-registry-consistency", "ref": "references/dimensions.md two-lane ordinal numbering ('## Deterministic-shape checks' 1-S, '## Probabilistic-maturity dimensions' S+1-S+D) + its own range declarations <-> SKILL.md 'dimension N'/'shape check N' cross-references <-> references/output-schema.json findings[].dimensionId.maximum + 'dimensions.md, 1-N' description span"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     },
     {
       "id": "behind-base",
@@ -946,7 +1354,12 @@
       "tracking_issue": 985,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "runtime-resolved-reference", "ref": "origin/main...HEAD"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     },
     {
       "id": "bare-python3-invocation",
@@ -961,7 +1374,16 @@
       "tracking_issue": 1035,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": ".github/workflows/*.yml"},
+        {"kind": "file-glob", "ref": ".github/workflows/*.yaml"},
+        {"kind": "bash-pattern", "ref": "python3 .github/scripts/*.py"},
+        {"kind": "workflow-event", "ref": "bare-python3-invocation-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "bare-python3-invocation-gate.yml:workflow_dispatch"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     },
     {
       "id": "stdlib-only-claim-drift",
@@ -980,7 +1402,15 @@
       "tracking_issue": 1052,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": ".github/scripts/*.py"},
+        {"kind": "file-glob", "ref": "evals/scripts/*.py"},
+        {"kind": "file-glob", "ref": ".github/workflows/*.yml"},
+        {"kind": "workflow-event", "ref": "stdlib-only-claim-drift-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     },
     {
       "id": "pr-title-convention",
@@ -1000,7 +1430,13 @@
       "tracking_issue": 1058,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "mcp-tool", "ref": "mcp__github__create_pull_request"},
+        {"kind": "mcp-tool", "ref": "mcp__github__update_pull_request"},
+        {"kind": "workflow-event", "ref": ".github/workflows/pr-title-convention-gate.yml:pull_request"},
+        {"kind": "github-native", "ref": ".github/rulesets/main.json:required_status_checks[context=pr-title-convention]"}
+      ]
     },
     {
       "id": "copilot-endpoint-preflight",
@@ -1019,7 +1455,16 @@
       "tracking_issue": 124,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "runtime-resolved-reference", "ref": "secrets.COPILOT_BASE_URL"},
+        {"kind": "runtime-resolved-reference", "ref": "secrets.COPILOT_PROVIDER_BASE_URL"},
+        {"kind": "workflow-event", "ref": "waza-eval-matrix.yml:workflow_dispatch"},
+        {"kind": "workflow-event", "ref": "waza-eval-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "waza-eval-gate.yml:workflow_dispatch"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     },
     {
       "id": "real-checkout-git-write",
@@ -1034,7 +1479,15 @@
       "tracking_issue": 991,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "tests/**/test_*.py"},
+        {"kind": "file-glob", "ref": "tests/**/*_test.py"},
+        {"kind": "file-glob", "ref": "tests/**/conftest.py"},
+        {"kind": "file-glob", "ref": "pyproject.toml"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     },
     {
       "id": "dependency-allowlist",
@@ -1052,7 +1505,15 @@
       "tracking_issue": 1141,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "skills/*/metadata/gitapex.yaml"},
+        {"kind": "file-glob", "ref": ".github/scripts/gitapex_gate_dependency_allowlist.py"},
+        {"kind": "file-glob", "ref": ".github/workflows/dependency-allowlist-gate.yml"},
+        {"kind": "workflow-event", "ref": "dependency-allowlist-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     },
     {
       "id": "detection-logic-property-coverage",
@@ -1071,7 +1532,17 @@
       "tracking_issue": 1178,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "skills/*/scripts/gitapex_check_*.py"},
+        {"kind": "file-glob", "ref": ".github/scripts/gitapex_gate_*.py"},
+        {"kind": "file-glob", "ref": "hooks/gitapex_check_*.py"},
+        {"kind": "file-glob", "ref": "tests/test_*_properties.py"},
+        {"kind": "cross-registry-consistency", "ref": "new regex/path-resolution/string-comparison call sites in skills/*/scripts/gitapex_check_*.py, .github/scripts/gitapex_gate_*.py, hooks/gitapex_check_*.py <-> co-located tests/test_<stem>_properties.py @given coverage"},
+        {"kind": "workflow-event", "ref": "detection-logic-property-coverage-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     },
     {
       "id": "betterleaks-merge-gate",
@@ -1086,7 +1557,13 @@
       "tracking_issue": 894,
       "status": "active",
       "supersedes": null,
-      "bypass_review_status": "not-yet-reviewed"
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "workflow-event", "ref": "betterleaks-merge-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "betterleaks-merge-gate.yml:workflow_dispatch"},
+        {"kind": "file-glob", "ref": ".betterleaks.toml"},
+        {"kind": "github-native", "ref": "required_status_checks context \"betterleaks\" (repository ruleset on the default branch)"}
+      ]
     }
   ],
   "clusters": {

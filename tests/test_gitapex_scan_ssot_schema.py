@@ -46,6 +46,7 @@ _VALID_INSTANCE = {
             "tracking_issue": None,
             "status": "active",
             "supersedes": None,
+            "bypass_review_status": "not-yet-reviewed",
         }
     ],
     "clusters": {"example-cluster": "an example cluster"},
@@ -267,6 +268,74 @@ def test_script_drift_still_caught_when_gate_carries_new_fields(tmp_path):
     # this line was added.
     assert any("script-drift" in f and "does-not-exist.sh" in f for f in findings), findings
     assert not any(f.startswith("schema:") for f in findings), findings
+
+
+def test_a_gate_missing_bypass_review_status_is_rejected_by_both_layers(tmp_path):
+    """Issue #1232: bypass_review_status moved from optional to gate's
+    required[] now that #1231 (schema shape + 62-gate backfill) and this
+    issue's own dimensions-numbering-drift top-up together guarantee 100%
+    live coverage. A gate missing the key must fail the raw schema check
+    (not just happen to still parse) -- the same two-layer proof pattern as
+    the runtime-resolved-reference tests above, applied to a required-key
+    tightening instead of an enum widening."""
+    bad = json.loads(json.dumps(_VALID_INSTANCE))
+    del bad["gates"][0]["bypass_review_status"]
+    instance_path = _write_instance(tmp_path, bad)
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+    assert any(f.startswith("schema:") and "bypass_review_status" in f for f in findings), findings
+    assert drift._parse_registry(bad) is None
+
+
+def test_reviewed_found_listed_below_is_rejected_by_both_layers(tmp_path):
+    """Adversarial review of this PR (CodeRabbit) found: the schema still
+    accepted 'reviewed-found-listed-below' even though known_bypasses --
+    the array that value claims to point at -- is not a field in this
+    schema at all yet (issue #1232's own explicit non-goal). A gate could
+    therefore make a schema-valid but false bypass-disclosure claim, with
+    additionalProperties: false powerless to catch it since there is no
+    known_bypasses key to be missing. Narrowed the enum to the two values
+    with something real behind them; re-add the third only in the same
+    change that adds known_bypasses. Both layers must reject it -- the
+    same two-layer proof pattern as every other enum change in this file."""
+    bad = json.loads(json.dumps(_VALID_INSTANCE))
+    bad["gates"][0]["bypass_review_status"] = "reviewed-found-listed-below"
+    instance_path = _write_instance(tmp_path, bad)
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+    assert any(f.startswith("schema:") for f in findings), findings
+    assert drift._parse_registry(bad) is None
+
+
+def test_runtime_resolved_reference_is_a_valid_target_kind(tmp_path):
+    """Issue #1232: target.kind's 7th value, for a target whose identity is
+    only resolvable at runtime (live platform state or an arbitrary
+    per-instance pointer) rather than from committed source. Must be
+    schema-valid AND parse into the typed GateTargetEntry -- the same
+    two-layer gap #1231's own adversarial review found for the first three
+    fields, checked here from the start instead of after the fact."""
+    good = json.loads(json.dumps(_VALID_INSTANCE))
+    good["gates"][0]["target"] = [{"kind": "runtime-resolved-reference", "ref": "test fixture"}]
+    instance_path = _write_instance(tmp_path, good)
+    assert drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT) == []
+    registry = drift._parse_registry(good)
+    assert registry is not None
+    assert registry.gates[0].target[0].kind == "runtime-resolved-reference"
+
+
+def test_an_unrecognized_target_kind_is_rejected_by_both_layers(tmp_path):
+    """Defeat test for the above: a target.kind value outside the (now
+    7-member) enum must be rejected by the raw JSON-Schema check AND fail
+    the pydantic parse -- the name already claimed both layers, but the
+    body originally only asserted the schema half; adversarial review
+    confirmed the gap empirically by widening GateTargetEntry.kind to a
+    bare str and watching this test (and all 87 others) stay green. Guards
+    against either layer silently becoming open (e.g. a stray oneOf/anyOf
+    in the schema, or a Literal quietly widened to str in the model)."""
+    bad = json.loads(json.dumps(_VALID_INSTANCE))
+    bad["gates"][0]["target"] = [{"kind": "not-a-real-kind", "ref": "test fixture"}]
+    instance_path = _write_instance(tmp_path, bad)
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+    assert any(f.startswith("schema:") for f in findings), findings
+    assert drift._parse_registry(bad) is None
 
 
 def test_parse_registry_returns_none_without_crashing_on_invalid_instance():
@@ -690,6 +759,35 @@ def test_invalid_json_syntax_raises_registry_read_error_not_a_traceback(tmp_path
     instance_path.write_text("{not json")
     with pytest.raises(drift.RegistryReadError, match="not valid JSON"):
         drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+
+
+def test_non_object_schema_raises_registry_read_error_not_a_traceback(tmp_path):
+    """Deterministic-gate-quality review (issue #1232) live-reproduced this:
+    a syntactically-valid-JSON-but-non-object schema file (e.g. a bare JSON
+    array) reached jsonschema.Draft202012Validator's own internals and
+    raised an uncaught AttributeError, falsifying RegistryReadError's own
+    docstring promise ("exit 1, never a traceback"). Mirrors the identical
+    guard gitapex_scan_plugin_manifest_schema.py already carries for its own
+    vendored schema."""
+    instance_path = _write_instance(tmp_path, _VALID_INSTANCE)
+    schema_path = tmp_path / "ssot.schema.json"
+    schema_path.write_text(json.dumps([1, 2, 3]))
+    with pytest.raises(drift.RegistryReadError, match="must be a JSON object"):
+        drift.find_drift(instance_path, schema_path, REPO_ROOT)
+
+
+def test_semantically_invalid_schema_raises_registry_read_error_not_a_traceback(tmp_path):
+    """Same finding as above, the other half: an object-shaped but
+    semantically-invalid JSON Schema (e.g. {"type": 1}, jsonschema's own
+    canonical example) crashed with an uncaught TypeError from inside
+    iter_errors instead. This exact defect class is plausible, not
+    contrived: this PR's own diff hand-edits two array literals inside
+    .gitapex/ssot.schema.json (required[] and target.kind's enum[])."""
+    instance_path = _write_instance(tmp_path, _VALID_INSTANCE)
+    schema_path = tmp_path / "ssot.schema.json"
+    schema_path.write_text(json.dumps({"type": 1}))
+    with pytest.raises(drift.RegistryReadError, match="not a valid JSON Schema"):
+        drift.find_drift(instance_path, schema_path, REPO_ROOT)
 
 
 def test_get_list_defaults_to_empty_when_d_is_not_a_dict():

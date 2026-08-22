@@ -10,7 +10,10 @@ inputs:
     Use scorer-gated-skill-edits. We're iterating on
     `skills/incident-summary/SKILL.md`.
 
-    `waza --version` prints `waza version 0.38.0`, so the runner is fine.
+    `uv run python3 evals/scripts/gitapex_run_eval_suite.py --help` prints
+    usage cleanly and `git log -1 --format=%H --
+    evals/scripts/gitapex_run_eval_suite.py` resolves a real commit, so
+    the runner is fine.
 
     We have 12 fixtures but no split at all -- every one of them was
     written while reading the failures we're trying to fix, and we've
