@@ -90,8 +90,27 @@ def _is_local_path_devdep(value: str) -> bool:
     repo_url to a "_local/<name>" form distinct from the literal path
     string in apm.yml (verified against the real CLI) -- out of this
     gate's scope rather than matched incorrectly.
+
+    Mirrors apm CLI's own DependencyReference.is_local_path() (apm_cli/
+    models/dependency/reference.py) exactly, including the "//"
+    protocol-relative-URL exclusion and the Windows-drive-letter form --
+    verified against that primary source rather than guessed at, after an
+    independent review caught the narrower `startswith((".", "/"))` check
+    missing "~/"-prefixed local paths (live-reproduced against the real
+    CLI: a "~/sibling" devDependency resolves to a "_local/sibling"
+    repo_url this gate cannot match).
     """
-    return value.startswith((".", "/"))
+    stripped = value.strip()
+    if stripped.startswith("//"):
+        return False
+    if stripped.startswith(("./", "../", "/", "~/", "~\\", ".\\", "..\\")):
+        return True
+    return bool(
+        len(stripped) >= 3
+        and ("A" <= stripped[0] <= "Z" or "a" <= stripped[0] <= "z")
+        and stripped[1] == ":"
+        and stripped[2] in ("\\", "/")
+    )
 
 
 def _devdep_repos(apm_data: dict[str, Any], apm_manifest: pathlib.Path) -> list[str]:

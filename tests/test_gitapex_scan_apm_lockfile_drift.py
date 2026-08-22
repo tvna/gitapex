@@ -169,16 +169,47 @@ def test_non_marketplace_plugin_package_type_still_flags_missing_entry(tmp_path)
     assert findings == [("owner/complete", "missing-lockfile-entry")]
 
 
-def test_local_path_devdependency_is_skipped(tmp_path):
+@pytest.mark.parametrize(
+    "local_path",
+    [
+        "./sibling-pkg",
+        "../sibling-pkg",
+        "/abs/sibling-pkg",
+        "~/sibling-pkg",
+        "~\\sibling-pkg",
+        ".\\sibling-pkg",
+        "..\\sibling-pkg",
+        "C:\\sibling-pkg",
+        "C:/sibling-pkg",
+    ],
+)
+def test_local_path_devdependency_is_skipped(tmp_path, local_path):
     # apm CLI normalizes a local-path devDependency's apm.lock.yaml
     # repo_url to a "_local/<name>" form this gate cannot reconstruct
     # (verified against the real CLI) -- out of scope, not a false drift.
+    # Every prefix here mirrors apm CLI's own DependencyReference.is_local_path()
+    # exactly (independent review caught "~/sibling-pkg" as a live-reproduced
+    # gap in an earlier, narrower `startswith((".", "/"))` version of this check).
     apm, lock_path = _write_pair(
         tmp_path,
-        "name: gitapex\nversion: 0.1.0\ndevDependencies:\n  apm:\n    - ./sibling-pkg\n",
+        f"name: gitapex\nversion: 0.1.0\ndevDependencies:\n  apm:\n    - {local_path}\n",
         "dependencies: []\n",
     )
     assert drift.find_drift(apm, lock_path) == []
+
+
+def test_protocol_relative_url_devdependency_is_not_skipped(tmp_path):
+    # apm CLI's is_local_path() explicitly excludes "//"-prefixed strings
+    # from local-path detection (they're rejected by its own parser before
+    # ever reaching a lockfile) -- this gate mirrors that exclusion exactly,
+    # so a "//"-prefixed devDependency is still treated as a normal
+    # (non-local) reference and checked for a matching lockfile entry.
+    apm, lock_path = _write_pair(
+        tmp_path,
+        "name: gitapex\nversion: 0.1.0\ndevDependencies:\n  apm:\n    - //host/sibling-pkg\n",
+        "dependencies: []\n",
+    )
+    assert drift.find_drift(apm, lock_path) == [("//host/sibling-pkg", "missing-lockfile-entry")]
 
 
 def test_devdependencies_apm_entry_not_a_string_raises_lockfile_read_error(tmp_path):
