@@ -57,53 +57,52 @@ You MUST create a task for each of these items and complete them in order:
 
 ## Process Flow
 
-```dot
-digraph eliciting_a_design {
-    "Explore project context" [shape=box];
-    "Subject and scope check" [shape=diamond];
-    "Core Domain check" [shape=diamond];
-    "Search precedent" [shape=box];
-    "Scenario Casting convergence" [shape=box];
-    "Ask clarifying questions" [shape=box];
-    "Name the state and stop" [shape=doublecircle];
-    "Propose 2-3 approaches" [shape=box];
-    "Architecture trade-off (inline)" [shape=box];
-    "Fit-and-Gap" [shape=box];
-    "Present design sections" [shape=box];
-    "User approves design?" [shape=diamond];
-    "Terminal decision handoff" [shape=box];
-    "Write design doc" [shape=box];
-    "Spec self-review\n(fix inline)" [shape=box];
-    "User reviews spec?" [shape=diamond];
-    "drafting-issues (or fallback)" [shape=doublecircle];
+```mermaid
+flowchart TD
+    explore["Explore project context"]
+    scope{"Subject and scope check"}
+    core{"Core Domain check"}
+    precedent["Search precedent"]
+    scenario["Scenario Casting convergence"]
+    ask["Ask clarifying questions"]
+    stop(("Name the state and stop"))
+    approaches["Propose 2-3 approaches"]
+    tradeoff["Architecture trade-off (inline)"]
+    fitgap["Fit-and-Gap"]
+    present["Present design sections"]
+    approved{"User approves design?"}
+    handoff["Terminal decision handoff"]
+    writedoc["Write design doc"]
+    selfreview["Spec self-review<br/>(fix inline)"]
+    userreview{"User reviews spec?"}
+    issueformalize(("drafting-issues (or fallback)"))
 
-    "Explore project context" -> "Subject and scope check";
-    "Subject and scope check" -> "Name the state and stop" [label="no subject, or too large\nand decomposition declined"];
-    "Subject and scope check" -> "Scenario Casting convergence" [label="diffuse idea"];
-    "Subject and scope check" -> "Core Domain check" [label="focused idea"];
-    "Scenario Casting convergence" -> "Core Domain check";
-    "Core Domain check" -> "Search precedent" [label="Generic"];
-    "Core Domain check" -> "Ask clarifying questions" [label="Core / not yet applicable"];
-    "Search precedent" -> "Name the state and stop" [label="off-the-shelf answer fits:\ndon't build it"];
-    "Search precedent" -> "Ask clarifying questions" [label="no precedent fits"];
-    "Ask clarifying questions" -> "Name the state and stop" [label="contradiction, or\ncannot determine"];
-    "Ask clarifying questions" -> "Propose 2-3 approaches";
-    "Propose 2-3 approaches" -> "Architecture trade-off (inline)" [label="trade-off surfaces"];
-    "Architecture trade-off (inline)" -> "Propose 2-3 approaches";
-    "Propose 2-3 approaches" -> "Fit-and-Gap" [label="existing system"];
-    "Propose 2-3 approaches" -> "Present design sections" [label="greenfield"];
-    "Fit-and-Gap" -> "Present design sections";
-    "Fit-and-Gap" -> "Name the state and stop" [label="gap unbridgeable"];
-    "Present design sections" -> "User approves design?";
-    "User approves design?" -> "Present design sections" [label="no, revise"];
-    "User approves design?" -> "Name the state and stop" [label="still unapproved\nafter two revisions"];
-    "User approves design?" -> "Terminal decision handoff" [label="yes"];
-    "Terminal decision handoff" -> "Write design doc";
-    "Write design doc" -> "Spec self-review\n(fix inline)";
-    "Spec self-review\n(fix inline)" -> "User reviews spec?";
-    "User reviews spec?" -> "Write design doc" [label="changes requested"];
-    "User reviews spec?" -> "drafting-issues (or fallback)" [label="approved"];
-}
+    explore --> scope
+    scope -->|"no subject, or too large<br/>and decomposition declined"| stop
+    scope -->|"diffuse idea"| scenario
+    scope -->|"focused idea"| core
+    scenario --> core
+    core -->|"Generic"| precedent
+    core -->|"Core / not yet applicable"| ask
+    precedent -->|"off-the-shelf answer fits:<br/>don't build it"| stop
+    precedent -->|"no precedent fits"| ask
+    ask -->|"contradiction, or<br/>cannot determine"| stop
+    ask --> approaches
+    approaches -->|"trade-off surfaces"| tradeoff
+    tradeoff --> approaches
+    approaches -->|"existing system"| fitgap
+    approaches -->|"greenfield"| present
+    fitgap --> present
+    fitgap -->|"gap unbridgeable"| stop
+    present --> approved
+    approved -->|"no, revise"| present
+    approved -->|"still unapproved<br/>after two revisions"| stop
+    approved -->|"yes"| handoff
+    handoff --> writedoc
+    writedoc --> selfreview
+    selfreview --> userreview
+    userreview -->|"changes requested"| writedoc
+    userreview -->|"approved"| issueformalize
 ```
 
 **The graph has two terminals, and both are successful ends.** For a project that goes ahead, the terminal state is issue formalization: do NOT invoke `writing-plans`, `frontend-design`, `mcp-builder`, or any other implementation skill directly from here. The only handoff after this skill is `drafting-issues` (or its fallback, `drafting-an-acm-issue`) - detailed plan authoring now happens downstream of that, once an issue exists. The other terminal, "Name the state and stop", is where every route in the Stopping, Rejecting, and Escalating section below lands; reaching it is a completed run, not an abandoned one.
