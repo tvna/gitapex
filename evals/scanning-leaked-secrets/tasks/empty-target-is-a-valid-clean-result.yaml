@@ -1,0 +1,48 @@
+id: scanning-leaked-secrets-empty-target-is-a-valid-clean-result
+name: An Empty Target With An Initialized But Commit-Less Repo Is A Valid Clean Result
+description: >-
+  The target is a brand-new directory with .git initialized but zero
+  commits, and nothing else in it. Both betterleaks dir and betterleaks git
+  complete and report null. Unlike scanning-ci-workflows' own Applicability gate,
+  this skill declares none of its own -- a trivial or empty target is a valid
+  clean result, not a not-applicable case, and an empty repository's own clean
+  git result is as valid as any other clean result. That verdict is asserted
+  positively (the report must reach SKILL.md's own word, clean) rather than by
+  banning "not applicable": defending the very distinction this fixture rewards
+  requires writing the phrase in order to deny it ("this is not a not applicable
+  case"), and the skill's own Stop boundary on naming the full-vs-shallow
+  checkout status invites a second legitimate use ("the shallow-clone gap is not
+  applicable -- this repository has no commits"), so the ban would score a
+  correct report as a failure.
+tags:
+  - quality
+  - applicability
+  - history-coverage
+inputs:
+  prompt: |
+    Use scanning-leaked-secrets. Scan this target for leaked secrets.
+
+    The target is a brand-new directory: `git init` was run and nothing has
+    ever been committed to it. No other files exist in it either.
+
+    ```
+    $ betterleaks --version
+    betterleaks version 1.6.1
+
+    $ betterleaks dir --redact --exit-code 0 --report-format json --report-path - /path/to/empty-target
+    10:30AM INF scanned ~0 bytes (0) in 2.1ms
+    10:30AM INF no leaks found
+    null
+    EXIT=0
+
+    $ betterleaks git --redact --exit-code 0 --report-format json --report-path - /path/to/empty-target
+    10:30AM INF no leaks found
+    null
+    EXIT=0
+    ```
+
+    Is there even anything here to scan? Give me the scan report.
+expected:
+  output_contains:
+    - "null"
+    - "clean"

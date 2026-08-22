@@ -1,0 +1,40 @@
+id: scanning-leaked-secrets-shallow-clone-coverage-gap
+name: A Shallow Clone's Clean git Result Covers Only What Is Locally Present
+description: betterleaks git completes and reports null against a checkout made
+  with git clone --depth 1. The report must name the shallow-clone coverage gap
+  explicitly, per the History-scan coverage boundary and its own Stop boundary
+  against silently omitting it -- a shallow clone's own clean result is real but
+  incomplete, never a full-history guarantee.
+tags:
+  - quality
+  - history-coverage
+inputs:
+  prompt: |
+    Use scanning-leaked-secrets. Scan this target for leaked secrets.
+
+    This checkout was made with `git clone --depth 1` -- only the most recent
+    commit is present locally.
+
+    ```
+    $ betterleaks --version
+    betterleaks version 1.6.1
+
+    $ betterleaks dir --redact --exit-code 0 --report-format json --report-path - /path/to/target
+    10:19AM INF no leaks found
+    null
+    EXIT=0
+
+    $ betterleaks git --redact --exit-code 0 --report-format json --report-path - /path/to/target
+    10:19AM INF no leaks found
+    null
+    EXIT=0
+    ```
+
+    Give me the scan report.
+expected:
+  output_contains:
+    - "shallow"
+    - "full history"
+  output_not_contains:
+    - "full history is clean"
+    - "no secrets in the full history"

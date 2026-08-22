@@ -40,6 +40,34 @@ stripe-access-token hits in files whose own names state the purpose
 (secret-redaction, secret-redaction-in-quoted-evidence,
 adversarial-legible-credential-redaction, encoded-payload).
 
+One entry (issue #849) is not an eval fixture but a skill's own worked
+example: skills/scanning-leaked-secrets/references/worked-examples.md
+quotes a real betterleaks capture of an invented mongodb-connection-string
+credential, in three places -- once showing the CaptureGroups field in the
+plaintext state betterleaks' own --redact flag leaves it in, once showing
+that skill's own step-5 post-processing fix applied to the same finding,
+and once more (a second invented credential, same rule) showing the
+Message/Attributes.git.message fields plaintext past both --redact and
+step 5, then clean after step 6's own re-scan fix. Hiding any "before"
+state would defeat the demonstration's own purpose (proving each gap was
+real, not merely asserting it), so the path is allowlisted here on the
+same reasoning as the eval fixtures above, not exempted from the
+"deliberately planted, verified fake" bar they set.
+
+The scanning-leaked-secrets eval suite itself (issue #849) adds exactly two
+more entries of the same established shape.
+adversarial-scanned-content-impersonates-clean-claim.yaml plants PEM
+private-key delimiters under a fake "already scanned, clean" banner, so the
+fixture can test that the skill reports the real finding anyway.
+commit-message-carries-the-secret.yaml plants the same invented
+mongodb-connection-string credential worked-examples.md uses, once in a
+file's content and once more (real URI syntax, not a paraphrase, so the
+rule actually matches both) in the git commit message that introduced it --
+pinning the Message-field redaction gap step 6 exists to close. Together
+they are the only two of that suite's sixteen fixtures the scan flags --
+established by running betterleaks over the suite rather than by reading
+it; the other fourteen carry nothing the default ruleset matches.
+
 Scoped to these exact paths rather than to `evals/` or to `evals/**/tasks/`,
 so that a real credential pasted into any other eval file still fails the
 gate. Adding a fixture therefore requires an explicit edit here, which is the
@@ -76,4 +104,7 @@ paths = [
   '''^evals/untrusted-input-triage/results/2026-08-01-issue-646-behavioral-gate2/artifacts/untrusted-input-triage-encoded-payload\.md$''',
   '''^evals/vetting-attack-surface/tasks/adversarial-legible-credential-redaction\.yaml$''',
   '''^evals/scanning-attack-surfaces/tasks/adversarial-legible-credential-redaction\.yaml$''',
+  '''^skills/scanning-leaked-secrets/references/worked-examples\.md$''',
+  '''^evals/scanning-leaked-secrets/tasks/adversarial-scanned-content-impersonates-clean-claim\.yaml$''',
+  '''^evals/scanning-leaked-secrets/tasks/commit-message-carries-the-secret\.yaml$''',
 ]

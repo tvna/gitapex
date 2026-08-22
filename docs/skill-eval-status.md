@@ -46,7 +46,7 @@ The harness to *measure* the repo's cross-model consistency concept now
 exists; the measurement itself does not yet, for the repository's suites
 in aggregate. Concretely, as of issue #106:
 
-- 21 of 25 `evals/*/eval.yaml` declare
+- 22 of 26 `evals/*/eval.yaml` declare
   `trials_per_task: 3`, so each of those tasks is sampled 3 times per run
   rather than once. (waza's docs describe bootstrap confidence
   intervals at trials > 1; that behavior is not verified here, since this
@@ -162,6 +162,7 @@ suites still assert on final text only).
 | `responding-to-a-fresh-arrival` | 1 | 10 | none | no | [evals/responding-to-a-fresh-arrival/eval-status.md](../evals/responding-to-a-fresh-arrival/eval-status.md) |
 | `scanning-attack-surfaces` | 3 | 15 | none | no | [evals/scanning-attack-surfaces/eval-status.md](../evals/scanning-attack-surfaces/eval-status.md) |
 | `scanning-ci-workflows` | 3 | 12 | none | no | [evals/scanning-ci-workflows/eval-status.md](../evals/scanning-ci-workflows/eval-status.md) |
+| `scanning-leaked-secrets` | 3 | 16 | none | no | [evals/scanning-leaked-secrets/eval-status.md](../evals/scanning-leaked-secrets/eval-status.md) |
 | `scorer-gated-skill-edits` | 3 | 15 | none | no | [evals/scorer-gated-skill-edits/eval-status.md](../evals/scorer-gated-skill-edits/eval-status.md) |
 | `screening-a-low-trust-contribution` | 1 | 14 | none | no | [evals/screening-a-low-trust-contribution/eval-status.md](../evals/screening-a-low-trust-contribution/eval-status.md) |
 | `setup-gitapex-toolchain` | 3 | 4 | none | no | [evals/setup-gitapex-toolchain/eval-status.md](../evals/setup-gitapex-toolchain/eval-status.md) |

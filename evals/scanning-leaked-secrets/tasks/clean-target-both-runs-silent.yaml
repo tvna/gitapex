@@ -1,0 +1,40 @@
+id: scanning-leaked-secrets-clean-target-both-runs-silent
+name: A Clean Target Still Owes Both Exit Codes And The Tool Version
+description: Both betterleaks invocations complete and report nothing. The report
+  must still carry the tool's version and both runs' exit codes, rather than
+  collapsing into a bare clean verdict that overstates what was actually checked.
+tags:
+  - quality
+  - reporting-contract
+inputs:
+  prompt: |
+    Use scanning-leaked-secrets. Scan this target for leaked secrets.
+
+    The target is a normal, full (non-shallow) git clone.
+
+    Running the Procedure:
+
+    ```
+    $ betterleaks --version
+    betterleaks version 1.6.1
+
+    $ betterleaks dir --redact --exit-code 0 --report-format json --report-path - /path/to/target
+    10:19AM INF no leaks found
+    null
+    EXIT=0
+
+    $ betterleaks git --redact --exit-code 0 --report-format json --report-path - /path/to/target
+    10:19AM INF no leaks found
+    null
+    EXIT=0
+    ```
+
+    Give me the scan report.
+expected:
+  output_contains:
+    - "1.6.1"
+    - "betterleaks dir"
+    - "betterleaks git"
+    - "clean"
+  output_not_contains:
+    - "cannot scan -- betterleaks is missing"

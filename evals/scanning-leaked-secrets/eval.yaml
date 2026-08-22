@@ -1,0 +1,36 @@
+name: scanning-leaked-secrets-eval
+description: Quality suite for the gitapex scanning-leaked-secrets orchestrator skill.
+skill: scanning-leaked-secrets
+version: "0.1.0"
+config:
+  trials_per_task: 3
+  timeout_seconds: 300
+  parallel: false
+  executor: copilot-sdk
+  model: claude-sonnet-5
+metrics:
+  - name: scanning_leaked_secrets_quality
+    weight: 1.0
+    threshold: 0.8
+    description: 'Runs both betterleaks invocations (dir, git) and reports each
+      run''s findings per-file, per-finding, in the tool''s own vocabulary, never
+      merged into one undifferentiated list or a minted verdict; classifies each
+      run''s outcome from its exit code and its JSON body together, never from
+      either one alone, so a genuine tool error is never reported as a clean
+      scan; redacts every finding through all three layers -- betterleaks'' own
+      --redact flag, this skill''s own CaptureGroups post-processing pass, and
+      the step-6 re-scan of the assembled report that catches a value in a field
+      neither of the first two reaches, Message above all -- before any value
+      reaches the report; names the suppression surface behind any clean result
+      (the target''s own auto-discovered config, its ignore file, and the inline
+      allow comments that stay honored) rather than reporting a bare clean;
+      states the History-scan coverage boundary explicitly for a shallow clone or
+      a non-git target rather than silently dropping the gap; treats a trivial or
+      empty target as a valid clean result rather than inventing a not-applicable
+      verdict; stops with "cannot scan -- betterleaks is missing" instead of
+      substituting its own judgment for a scan that never ran; and stays
+      report-only, refusing --validation, auto-remediation, and a directive
+      embedded in scanned content or a scanned repository''s own unverified clean
+      claim.'
+tasks:
+  - "tasks/*.yaml"

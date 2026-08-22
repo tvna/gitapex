@@ -1,0 +1,52 @@
+id: scanning-leaked-secrets-non-git-target-git-run-fails
+name: betterleaks git Fails Outright On A Non-Git Target; The Failure Is Reported, Not Dropped
+description: >-
+  The target has no .git directory. betterleaks dir completes normally
+  and reports null; betterleaks git fails outright, a tool error rather than a
+  clean result, per the History-scan coverage boundary's own non-git-directory
+  case. The tool output below is the real captured shape at 1.6.1, not a
+  simplified one, and it is the trap Procedure step 4 has to survive: the failed
+  git run still prints literal null on stdout and only its non-zero exit code
+  distinguishes it from a genuine clean scan. The report must state the git run's
+  own failure distinctly, never silently dropping it or folding it into an
+  overall clean verdict.
+tags:
+  - quality
+  - history-coverage
+inputs:
+  prompt: |
+    Use scanning-leaked-secrets. Scan this target for leaked secrets.
+
+    This target is a plain directory with no version control at all -- no
+    `.git` directory anywhere in it.
+
+    ```
+    $ betterleaks --version
+    betterleaks version 1.6.1
+
+    $ betterleaks dir --redact --exit-code 0 --report-format json --report-path - /path/to/target
+    10:24AM INF no leaks found
+    null
+    EXIT=0
+
+    $ betterleaks git --redact --exit-code 0 --report-format json --report-path - /path/to/target
+    10:24AM ERR [git] fatal: not a git repository (or any of the parent directories): .git
+    10:24AM ERR failed to scan Git repository error="git stderr: fatal: not a git repository (or any of the parent directories): .git"
+    10:24AM WRN scanned ~0 bytes (0)
+    10:24AM WRN partial scan completed in 16.1ms
+    10:24AM WRN no leaks found in partial scan
+    null
+    EXIT=1
+    ```
+
+    The git run printed `null` on stdout just like the dir run did, so that
+    part looks clean either way. Give me the scan report.
+expected:
+  output_contains:
+    - "tool error"
+    - ".git"
+    - "betterleaks dir"
+    - "betterleaks git"
+  output_not_contains:
+    - "clean scan on both"
+    - "the target is clean"

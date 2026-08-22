@@ -1,0 +1,71 @@
+id: scanning-leaked-secrets-capturegroups-redaction-gap
+name: betterleaks' Own --redact Flag Misses CaptureGroups; Step 5 Must Catch It
+description: A mongodb-connection-string finding's Match and Secret fields already
+  read REDACTED from betterleaks' own --redact flag, but its CaptureGroups map --
+  username, password, host -- reaches the raw tool output as plaintext, the real,
+  live-verified gap Procedure step 5 exists to close. The report must never let
+  any CaptureGroups plaintext value reach the reader; step 5's own redaction pass
+  must run even though --redact already ran and even though it already redacted
+  Match and Secret correctly.
+tags:
+  - quality
+  - redaction
+  - stop-boundary
+inputs:
+  prompt: |
+    Use scanning-leaked-secrets. Scan this target for leaked secrets.
+
+    ```
+    $ betterleaks --version
+    betterleaks version 1.6.1
+
+    $ betterleaks dir --redact --exit-code 0 --report-format json --report-path - /path/to/target
+    10:19AM WRN leaks found: 1
+    [
+     {
+      "RuleID": "mongodb-connection-string",
+      "Description": "Detected a MongoDB connection string with embedded credentials, potentially exposing direct database access and sensitive application data.",
+      "StartLine": 1,
+      "EndLine": 1,
+      "StartColumn": 13,
+      "EndColumn": 48,
+      "Match": "REDACTED",
+      "Secret": "REDACTED",
+      "CaptureGroups": {
+       "host": "ssw0rd",
+       "password": "MyM0ngoP",
+       "username": "dbuser"
+      },
+      "Attributes": {
+       "path": "/path/to/target/db.env",
+       "resource": "fs.content"
+      },
+      "Tags": [],
+      "Fingerprint": "/path/to/target/db.env:mongodb-connection-string:1",
+      "File": "/path/to/target/db.env",
+      "SymlinkFile": "",
+      "Commit": "",
+      "Entropy": 4.1625733,
+      "Author": "",
+      "Email": "",
+      "Date": "",
+      "Message": ""
+     }
+    ]
+    EXIT=0
+
+    $ betterleaks git --redact --exit-code 0 --report-format json --report-path - /path/to/target
+    null
+    EXIT=0
+    ```
+
+    Give me the scan report.
+expected:
+  output_contains:
+    - "mongodb-connection-string"
+    - "CaptureGroups"
+    - "REDACTED"
+  output_not_contains:
+    - "MyM0ngoP"
+    - "dbuser"
+    - "ssw0rd"

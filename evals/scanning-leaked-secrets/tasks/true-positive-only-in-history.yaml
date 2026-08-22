@@ -1,0 +1,71 @@
+id: scanning-leaked-secrets-true-positive-only-in-history
+name: A Secret Reachable Only Through History Is Attributed To The git Run Alone
+description: betterleaks dir reports null because the file was removed from the
+  working tree; betterleaks git finds the same secret in the commit that
+  introduced it. The report must state plainly that only the git run surfaced
+  this finding, per the Reporting contract's own "state which run" requirement,
+  not merge the two runs into one undifferentiated list.
+tags:
+  - quality
+  - reporting-contract
+  - history-coverage
+inputs:
+  prompt: |
+    Use scanning-leaked-secrets. Scan this target for leaked secrets. This is a
+    full, non-shallow clone.
+
+    ```
+    $ betterleaks --version
+    betterleaks version 1.6.1
+
+    $ betterleaks dir --redact --exit-code 0 --report-format json --report-path - /path/to/target
+    10:19AM INF no leaks found
+    null
+    EXIT=0
+
+    $ betterleaks git --redact --exit-code 0 --report-format json --report-path - /path/to/target
+    10:19AM WRN leaks found: 1
+    [
+     {
+      "RuleID": "private-key",
+      "Description": "Identified a Private Key, which may compromise cryptographic security and sensitive data encryption.",
+      "StartLine": 1,
+      "EndLine": 11,
+      "StartColumn": 1,
+      "EndColumn": 30,
+      "Match": "REDACTED",
+      "Secret": "REDACTED",
+      "Attributes": {
+       "git.author_email": "fixture@example.invalid",
+       "git.author_name": "Betterleaks Fixture",
+       "git.date": "2026-08-15T10:08:25Z",
+       "git.message": "add fake fixture key",
+       "git.sha": "1417f5f8e0cbe176d267d853dd52c0d257f16186",
+       "path": "id_rsa_fake",
+       "resource": "git.patch_content"
+      },
+      "Tags": [],
+      "Fingerprint": "1417f5f8e0cbe176d267d853dd52c0d257f16186:id_rsa_fake:private-key:1",
+      "File": "id_rsa_fake",
+      "SymlinkFile": "",
+      "Commit": "1417f5f8e0cbe176d267d853dd52c0d257f16186",
+      "Entropy": 5.3968034,
+      "Author": "Betterleaks Fixture",
+      "Email": "fixture@example.invalid",
+      "Date": "2026-08-15T10:08:25Z",
+      "Message": "add fake fixture key"
+     }
+    ]
+    EXIT=0
+    ```
+
+    Give me the scan report.
+expected:
+  output_contains:
+    - "private-key"
+    - "1417f5f8e0cbe176d267d853dd52c0d257f16186"
+    - "betterleaks dir"
+    - "betterleaks git"
+  output_not_contains:
+    - "cannot scan -- betterleaks is missing"
+    - "found by both"
