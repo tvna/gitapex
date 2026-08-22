@@ -323,34 +323,17 @@ skill's own terminal step
 (`docs/superpowers/specs/2026-08-22-eliciting-a-design-design.md`,
 Decision 2, Decision 3, and Decision 4's rejected item 3).
 
-## `Collaborative modeling` (generic term) vs. `eliciting-a-design` (skill, formerly `collaborative-modeling`)
+## `Collaborative modeling` (generic term) vs. `eliciting-a-design` (skill name)
 
 The lowercase phrase names a whole family of DDD elicitation/convergence
 techniques (EventStorming, Domain Storytelling, Scenario Casting, Event
 Modeling, Impact Mapping, Example Mapping, Context Mapping,
 Storystorming, User Story Mapping). `eliciting-a-design` is the gitapex
 skill that draws on part of that family; its own name does not use
-"modeling," so the generic phrase and the skill name no longer collide
+"modeling," so the generic phrase and the skill name do not collide
 lexically.
 
-**Superseded synonym, noted so it does not resurface unrecognized
-later** (`establishing-ubiquitous-language/SKILL.md`'s own Maintain
-step): this skill originally shipped as `collaborative-modeling`, a
-name that collided with the generic phrase above. The originally
-recorded resolution required skill text to always use the hyphenated
-form and never let the generic phrase silently mean "this skill" -- a
-usage convention that depended on every future sentence following it
-correctly, with no structural backstop if one didn't. The operator
-identified this while reviewing this very entry and asked for
-alternatives; the skill was renamed to `eliciting-a-design`, which
-removes the collision at its root instead of managing it by convention.
-See `docs/superpowers/specs/2026-08-22-eliciting-a-design-design.md`
-(Decision 1's rename correction, and Decision 3's original row, retained
-there for the full history) for the complete account.
-
 Checked via the same Detect step as `Architecture trade-off` vs.
-`Approach`, above: family vs. instance, not a synonym conflict, before
-the rename surfaced the naming-collision concern that superseded that
-original resolution
+`Approach`, above: family vs. instance, not a synonym conflict
 (`docs/superpowers/specs/2026-08-22-eliciting-a-design-design.md`,
 Decision 3).
