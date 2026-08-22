@@ -55,24 +55,20 @@ Output contract already named this concept "Branch Plan" first, so that
 term wins; bare "plan" retires as an ambiguous synonym in any new skill
 text rather than being introduced as a second name for the same thing.
 
-## `Evaluating-*` vs. `Auditing-*` vs. `Vetting-*` vs. `Scanning-*` (skill-naming verb families)
+## `Evaluating-*` vs. `Auditing-*` vs. `Scanning-*` (skill-naming verb families)
 
-Four gerund-verb families this repository's skill names split into --
-three carried by shipped skills today, the fourth reserved ahead of its
-own first skill (see the `Scanning-*` provenance paragraph below) -- each
-with a distinct meaning, not interchangeable, despite all four English
-words casually meaning "review." They split along three independent axes:
-what the skill's *target* is (a repository-internal artifact vs. an
-external-facing surface or this repository's own scope), what its
-*verdict style* is (a fixed-dimension rubric vs. a checklist/axis map vs.
-concrete per-item pass/fail tests vs. a wrapped tool's own finding
-format), and who *owns the judgment* (the skill itself, reasoning against
-a rubric or checklist, vs. an external tool whose findings the skill
-reports unmodified). The axes do not always co-vary -- `Vetting-*` exists
-because one real skill combined an `Evaluating-*`-style target with
-neither other family's verdict style, and the judgment-ownership axis is
-what separates `Scanning-*` from all three families above it -- something
-the first two axes alone could not do.
+Three gerund-verb families this repository's skill names split into --
+each with a distinct meaning, not interchangeable, despite all three
+English words casually meaning "review." They split along three
+independent axes: what the skill's *target* is (a repository-internal
+artifact vs. an external-facing surface or this repository's own scope),
+what its *verdict style* is (a fixed-dimension rubric vs. a
+checklist/axis map vs. a wrapped tool's own finding format), and who
+*owns the judgment* (the skill itself, reasoning against a rubric or
+checklist, vs. an external tool whose findings the skill reports
+unmodified). The axes do not always co-vary -- the judgment-ownership
+axis is what separates `Scanning-*` from the other two families --
+something the first two axes alone could not do.
 
 - **`Evaluating-*`**: grades a repository-internal artifact (a `SKILL.md`,
   a deterministic gate) against a fixed-dimension quality rubric, producing
@@ -89,18 +85,12 @@ the first two axes alone could not do.
   `Gap` vocabulary for that half of its work -- the vocabulary outlived
   the family membership, and the family list is short by one on purpose,
   not by oversight.
-- **`Vetting-*`**: examines an individual artifact's own design against
-  concrete, per-item pass/fail tests specific to that check -- neither a
-  fixed-dimension maturity rubric nor a checklist/axis map of an
-  external-facing surface. Verdict vocabulary is bespoke per skill (e.g.
-  `exposure-minimal`/`exposure-excess`), always reported per item, never
-  as one aggregate verdict.
 - **`Scanning-*`**: delegates the judgment entirely to one external,
   pinned diagnostic CLI tool and reports that tool's own findings
   unmodified -- the first family in the "delegates judgment" category,
-  where the three families above all perform the judgment themselves
-  (a rubric, a checklist/axis map, or per-item tests) against human or
-  LLM reasoning. Target is whatever the wrapped tool takes as input
+  where the other two families both perform the judgment themselves
+  (a rubric or a checklist/axis map) against human or LLM reasoning.
+  Target is whatever the wrapped tool takes as input
   (CI workflow files, a dependency graph, tracked file content); verdict
   style is the wrapped tool's own finding format, never a gitapex-minted
   verdict vocabulary layered on top. Knowledge of what is vulnerable or
@@ -131,21 +121,15 @@ directly, per the Resolve step: the definitions above win, and that one
 drifted description line was corrected to "Use when classifying..." to
 match.
 
-`Vetting-*` (#464) was added after reviewing PR #463's new
-`evaluating-attack-surface` skill against the two definitions above: its
-target (an individual artifact -- a gate, CI workflow, MCP server, or
-subagent) fit `Evaluating-*`, but its verdict style (concrete per-item
-tests explicitly modeled on `auditing-git-hosting-surface`'s own per-item
-checklist discipline -- that skill was later absorbed into this same one
-by #848, so the discipline now lives there rather than in a sibling --
-not a maturity rubric) fit neither family's
-canonical vocabulary. Resolved by the repository owner directly, per the
-Resolve step: the third family above wins, rather than stretching either
-existing definition to cover a shape it wasn't written for.
-`evaluating-attack-surface` -> `vetting-attack-surface` was proposed as a
-rename candidate on PR #463 itself, not changed here. That rename executed
-in gitapex#466 via `git mv` + `spec.lifecycle.renamedFrom`, once this entry
-itself had merged.
+`Vetting-*` (#464) was added after PR #463's `evaluating-attack-surface`
+skill combined an `Evaluating-*`-style target with a verdict style
+neither existing family named -- concrete per-item pass/fail tests.
+Resolved by the repository owner directly as a third family rather than
+stretching either existing definition. Its only member was renamed
+`evaluating-attack-surface` -> `vetting-attack-surface` in gitapex#466,
+then itself renamed to `scanning-attack-surfaces` once `Scanning-*`
+absorbed its judgment-delegating half (#843, #844, #848) -- retiring
+`Vetting-*` rather than leaving it reserved.
 
 `Scanning-*` (#844) was added ahead of any skill that carries the name,
 deliberately reusing the #464 -> gitapex#466 ordering above: the family
