@@ -1,0 +1,38 @@
+id: evaluating-skill-quality-description-conciseness-trigger-selection
+name: Near-Cap Description Padded With Internally Duplicated Rule Text, Different Domain
+description: A different domain and a different bloat shape from the train fixture (duplication -- the same rule restated in full within the description itself -- not a well-known-concept explanation) -- the target's frontmatter description sits at 934 of the 1024-character cap (91.2%). The gate measures whether the new Description-length trigger generalizes to a distinct target and a distinct pruning classification, rather than memorizing the train fixture's domain or relevance-flavored wording.
+tags:
+  - quality
+  - conciseness
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "parking-ticket-appeal-drafter". Its frontmatter
+    `description` is currently 934 characters, 91.2% of the 1024-character
+    Skills API cap (confirmed via gitapex_check_skill_shape.py's
+    description-length check).
+
+    ---
+    name: parking-ticket-appeal-drafter
+    description: Draft a formal appeal letter contesting a parking ticket or citation, citing the specific municipal code section and any mitigating evidence the user provides. Draft a formal appeal letter contesting a parking ticket, always citing the exact municipal code section under which the ticket was issued together with whatever mitigating evidence -- photos, timestamps, signage records, witness statements -- the user supplies, since an appeal with no cited code section and no supporting evidence is routinely rejected by review boards without further consideration, and a rejected first appeal is often much harder to re-open later, sometimes requiring an in-person hearing instead of a simple written resubmission, which can cost the user significantly more time than getting the citation and the evidence right the first time around. Use when the user mentions a parking ticket, a citation number, or wants to appeal or contest a fine.
+    ---
+
+    # Parking Ticket Appeal Drafter
+
+    ## Procedure
+
+    1. Read the ticket details and any evidence the user provides.
+    2. Identify the specific municipal code section cited on the ticket.
+    3. Draft the appeal letter, citing the code section and the evidence.
+expected:
+  output_contains:
+    - "Description-length trigger"
+    - "DESCRIPTION_MAX_CHARS"
+    - "uplication"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"
+    - "automatically fail"
+    - "fails automatically"
+    - "fails simply"
+    - "fails solely"

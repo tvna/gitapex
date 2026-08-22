@@ -46,7 +46,25 @@ def test_load_task_fixture_happy_path(tmp_path: Path):
         "id": "demo-task",
         "prompt": "Say the magic word.\n",
         "expected": {"output_contains": ["magic-word-present"]},
+        "graders": [],
     }
+
+
+def test_load_task_fixture_returns_graders_when_present(tmp_path: Path):
+    p = tmp_path / "task.yaml"
+    p.write_text(
+        BASE_FIXTURE_TEXT + "graders:\n  - name: check\n    type: text\n    config:\n      contains: [ok]\n",
+        encoding="utf-8",
+    )
+    fixture = gitapex_run_ablation.load_task_fixture(p)
+    assert fixture["graders"] == [{"name": "check", "type": "text", "config": {"contains": ["ok"]}}]
+
+
+def test_load_task_fixture_rejects_non_list_graders(tmp_path: Path):
+    p = tmp_path / "task.yaml"
+    p.write_text(BASE_FIXTURE_TEXT + "graders: not-a-list\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="'graders' must be a list"):
+        gitapex_run_ablation.load_task_fixture(p)
 
 
 def test_load_task_fixture_rejects_non_mapping(tmp_path: Path):
@@ -198,7 +216,7 @@ def test_load_task_fixture_real_committed_suite_shape():
 
 def test_build_command_without_skill_md():
     argv = gitapex_run_ablation.build_command("claude", "hello", None)
-    assert argv == ["claude", "-p", "hello", "--bare"]
+    assert argv == ["claude", "-p", "hello", "--bare", "--tools", ""]
 
 
 def test_build_command_with_skill_md():
@@ -209,6 +227,8 @@ def test_build_command_with_skill_md():
         "-p",
         "hello",
         "--bare",
+        "--tools",
+        "",
         "--append-system-prompt-file",
         str(skill_md),
     ]
@@ -217,6 +237,44 @@ def test_build_command_with_skill_md():
 def test_build_command_always_includes_bare_flag():
     assert "--bare" in gitapex_run_ablation.build_command("claude", "p", None)
     assert "--bare" in gitapex_run_ablation.build_command("claude", "p", Path("x.md"))
+
+
+def test_build_command_always_includes_hermetic_tools_flag():
+    # Regression: --bare alone still leaves Bash and file read/edit
+    # available (confirmed against a live `claude --help`) -- --tools ""
+    # is the actual "no tools at all" mechanism, and must survive
+    # regardless of skill_md/model.
+    argv = gitapex_run_ablation.build_command("claude", "p", None)
+    assert argv[argv.index("--tools") + 1] == ""
+    argv_with_skill = gitapex_run_ablation.build_command("claude", "p", Path("x.md"), model="claude-sonnet-5")
+    assert argv_with_skill[argv_with_skill.index("--tools") + 1] == ""
+
+
+def test_build_command_with_model():
+    argv = gitapex_run_ablation.build_command("claude", "hello", None, model="claude-sonnet-5")
+    assert argv == ["claude", "-p", "hello", "--bare", "--tools", "", "--model", "claude-sonnet-5"]
+
+
+def test_build_command_without_model_omits_flag():
+    argv = gitapex_run_ablation.build_command("claude", "hello", None)
+    assert "--model" not in argv
+
+
+def test_build_command_with_model_and_skill_md():
+    skill_md = Path("/tmp/SKILL.md")
+    argv = gitapex_run_ablation.build_command("claude", "hello", skill_md, model="claude-sonnet-5")
+    assert argv == [
+        "claude",
+        "-p",
+        "hello",
+        "--bare",
+        "--tools",
+        "",
+        "--append-system-prompt-file",
+        str(skill_md),
+        "--model",
+        "claude-sonnet-5",
+    ]
 
 
 def test_build_command_rejects_empty_model_cli():
@@ -256,6 +314,41 @@ def test_subprocess_executor_propagates_timeout_expired():
         gitapex_run_ablation.subprocess_executor(argv, timeout=0.1)
 
 
+def test_subprocess_executor_does_not_leak_ambient_credentials(monkeypatch):
+    # Regression (issue #1132, hermetic-by-default): an ambient CI
+    # credential set in the parent process (GITHUB_TOKEN, gh-related
+    # variables, ...) must never reach the invoked model-CLI subprocess,
+    # even though subprocess.run inherits the full parent environment by
+    # default when no env= override is given.
+    monkeypatch.setenv("GITHUB_TOKEN", "fake-secret-token-value")
+    argv = [
+        sys.executable,
+        "-c",
+        "import os, sys; sys.stdout.write('TOKEN=' + os.environ.get('GITHUB_TOKEN', '<absent>'))",
+    ]
+    out = gitapex_run_ablation.subprocess_executor(argv, timeout=10)
+    assert out == "TOKEN=<absent>"
+
+
+def test_subprocess_executor_passes_allowlisted_env_vars(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "fake-api-key-for-test")
+    argv = [
+        sys.executable,
+        "-c",
+        "import os, sys; sys.stdout.write('KEY=' + os.environ.get('ANTHROPIC_API_KEY', '<absent>'))",
+    ]
+    out = gitapex_run_ablation.subprocess_executor(argv, timeout=10)
+    assert out == "KEY=fake-api-key-for-test"
+
+
+def test_hermetic_env_allowlist_filters_arbitrary_variables(monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "fake-secret-token-value")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "fake-api-key-for-test")
+    env = gitapex_run_ablation._hermetic_env()
+    assert "GITHUB_TOKEN" not in env
+    assert env.get("ANTHROPIC_API_KEY") == "fake-api-key-for-test"
+
+
 def test_subprocess_executor_replaces_invalid_utf8_instead_of_raising():
     # Regression: subprocess.run(text=True) with no explicit errors= policy
     # raises UnicodeDecodeError (a ValueError subclass) on a stray non-UTF-8
@@ -269,6 +362,42 @@ def test_subprocess_executor_replaces_invalid_utf8_instead_of_raising():
     out = gitapex_run_ablation.subprocess_executor(argv, timeout=10)
     assert "ok " in out
     assert "\ufffd" in out  # the Unicode replacement character
+
+
+# ---------------------------------------------------------------------------
+# redact_executor_failure_reason (issue #1144 -- hoisted from
+# gitapex_run_effectiveness_correlation.py's own former _skip_reason, same
+# defeat-test discipline as that module's own test suite)
+# ---------------------------------------------------------------------------
+
+
+def test_redact_executor_failure_reason_redacts_runtime_error_with_embedded_stderr():
+    exc = RuntimeError("model CLI exited 1: ACME_SECRET_TOKEN=sk-live-deadbeef leaked in stderr")
+    reason = gitapex_run_ablation.redact_executor_failure_reason(exc)
+    assert "ACME_SECRET_TOKEN" not in reason
+    assert "sk-live-deadbeef" not in reason
+    assert "RuntimeError" in reason
+
+
+def test_redact_executor_failure_reason_redacts_timeout_expired_with_embedded_prompt():
+    exc = subprocess.TimeoutExpired(cmd=["claude", "-p", "the fixture's own private prompt text"], timeout=300)
+    reason = gitapex_run_ablation.redact_executor_failure_reason(exc)
+    assert "private prompt text" not in reason
+    assert "TimeoutExpired" in reason
+
+
+def test_redact_executor_failure_reason_keeps_value_error_verbatim():
+    reason = gitapex_run_ablation.redact_executor_failure_reason(
+        ValueError("skill_md not found: skills/ghost/SKILL.md")
+    )
+    assert reason == "skill_md not found: skills/ghost/SKILL.md"
+
+
+def test_redact_executor_failure_reason_keeps_os_error_verbatim():
+    reason = gitapex_run_ablation.redact_executor_failure_reason(
+        OSError("[Errno 2] No such file or directory: 'x.yaml'")
+    )
+    assert "No such file or directory" in reason
 
 
 # ---------------------------------------------------------------------------
@@ -320,6 +449,17 @@ def test_validate_expected_shape_converts_type_error_to_value_error():
     # ValueError like every other shape defect this function catches.
     with pytest.raises(ValueError, match="'expected' assertions are malformed"):
         gitapex_run_ablation._validate_expected_shape({"output_contains": [123]})
+
+
+@pytest.mark.parametrize("key", ["output_icontains", "output_not_icontains"])
+def test_validate_expected_shape_converts_attribute_error_to_value_error(key: str):
+    # Regression: the case-INSENSITIVE keys reach the same malformed entry
+    # through str.casefold() instead of `in`, so a non-string substring (an
+    # unquoted YAML year/version/issue number) raises AttributeError, not
+    # TypeError -- which escaped this function's single-ValueError contract
+    # and surfaced as an uncaught traceback in both runners' main().
+    with pytest.raises(ValueError, match="'expected' assertions are malformed"):
+        gitapex_run_ablation._validate_expected_shape({key: [2024]})
 
 
 def test_run_ablation_rejects_empty_expected_without_calling_executor(tmp_path: Path):

@@ -131,7 +131,7 @@ apart. Answering consumes the impossible-vs-tedious distinction to pick
 an owner; it records no floor / tier-scalable classification of its own.
 Where such a classification is to be reported, it goes through the
 Security-level axis under that axis's own discipline (its
-ceiling-document search, and dimensions 1 and 15's live-tested evidence
+ceiling-document search, and shape check 1 and dimension 15's live-tested evidence
 as input), never as a by-product of this question.
 
 Take the two questions above as a pair. Every combination of their

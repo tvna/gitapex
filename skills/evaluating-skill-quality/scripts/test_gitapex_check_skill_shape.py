@@ -4,6 +4,7 @@ Fixtures are synthesized in tmp_path so the test is self-contained and
 travels with the skill on vendoring.
 """
 
+import json
 import os
 import re
 import subprocess
@@ -58,6 +59,7 @@ def _write_skill(
     meta_name="skill",
     portability="Portable",
     capability_assumption="Broad",
+    dependency_policy=None,
 ):
     d = tmp_path / "skill"
     d.mkdir()
@@ -83,6 +85,8 @@ def _write_skill(
             lines.append(f"  portability: {portability}")
         if capability_assumption is not None:
             lines.append(f"  capabilityAssumption: {capability_assumption}")
+        if dependency_policy is not None:
+            lines.append(f"  dependencyPolicy: {dependency_policy}")
         (d / "metadata").mkdir(parents=True, exist_ok=True)
         (d / "metadata/gitapex.yaml").write_text("\n".join(lines) + "\n", encoding="utf-8")
     if references:
@@ -1395,6 +1399,7 @@ def test_sidecar_checks_pass_on_good_skill(tmp_path):
         "metadata-name-matches-dir",
         "portability-declared",
         "capability-assumption-declared",
+        "dependency-policy-declared",
         "references-well-formed",
     ):
         assert by[check].passed is True, check
@@ -1472,6 +1477,97 @@ def test_invalid_capability_assumption_value_fails(tmp_path):
     assert _by_name(css.check_shape(d))["capability-assumption-declared"].passed is False
 
 
+# ---- dependency-policy-declared (OPTIONAL, unlike portability/
+#      capability-assumption -- mirrors the references-well-formed pattern) ----
+
+
+def test_dependency_policy_absent_is_well_formed(tmp_path):
+    d = _write_skill(tmp_path)
+    by = _by_name(css.check_shape(d))
+    assert by["dependency-policy-declared"].passed is True
+    assert by["dependency-policy-declared"].evidence == "not declared (optional, treated as StdlibOnly-equivalent)"
+    assert css.main([str(d)]) == 0
+
+
+def test_dependency_policy_stdlib_only_passes(tmp_path):
+    d = _write_skill(tmp_path, dependency_policy="StdlibOnly")
+    by = _by_name(css.check_shape(d))
+    assert by["dependency-policy-declared"].passed is True
+    assert by["dependency-policy-declared"].evidence == "'StdlibOnly'"
+    assert css.main([str(d)]) == 0
+
+
+def test_dependency_policy_declared_passes(tmp_path):
+    d = _write_skill(tmp_path, dependency_policy="Declared")
+    by = _by_name(css.check_shape(d))
+    assert by["dependency-policy-declared"].passed is True
+    assert by["dependency-policy-declared"].evidence == "'Declared'"
+    assert css.main([str(d)]) == 0
+
+
+def test_invalid_dependency_policy_value_fails(tmp_path):
+    d = _write_skill(tmp_path, dependency_policy="OnlyGoodVibes")
+    by = _by_name(css.check_shape(d))
+    assert by["dependency-policy-declared"].passed is False
+    assert by["dependency-policy-declared"].evidence == "'OnlyGoodVibes'"
+    assert css.main([str(d)]) == 1
+
+
+def test_dependency_policy_declared_fails_when_spec_is_not_a_mapping(tmp_path):
+    # Regression guard, same shape as
+    # test_references_well_formed_fails_when_spec_is_not_a_mapping below:
+    # "spec: some-scalar" is the same precondition failure portability-
+    # declared/capability-assumption-declared already report --
+    # dependency-policy-declared must not misreport it as the ordinary
+    # optional-and-absent case.
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\nkind: SkillMetadata\nmetadata:\n  name: skill\nspec: not-a-mapping-scalar\n",
+        encoding="utf-8",
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["portability-declared"].passed is False
+    assert by["dependency-policy-declared"].passed is False
+    assert "not a mapping" in by["dependency-policy-declared"].evidence
+
+
+def test_dependency_policy_written_as_a_list_fails_not_treated_as_absent(tmp_path):
+    # A present-but-block-shaped "dependencyPolicy:" (list items on
+    # following lines, instead of an inline scalar) parses to Python None
+    # -- the same value real absence produces. A present dependencyPolicy
+    # that fails to name a real level must FAIL, the same way an inline
+    # garbage string already does above, not be indistinguishable from
+    # the field never having been written at all.
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\nkind: SkillMetadata\nmetadata:\n  name: skill\n"
+        "spec:\n  portability: Portable\n  capabilityAssumption: Broad\n"
+        "  dependencyPolicy:\n    - StdlibOnly\n    - Declared\n",
+        encoding="utf-8",
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["dependency-policy-declared"].passed is False
+    assert by["dependency-policy-declared"].evidence != "not declared (optional, treated as StdlibOnly-equivalent)"
+    assert css.main([str(d)]) == 1
+
+
+def test_dependency_policy_bare_colon_fails_not_treated_as_absent(tmp_path):
+    # Same underlying gap as the list-shaped case above, narrower trigger:
+    # a "dependencyPolicy:" header with literally nothing after it and no
+    # following block content either -- still present, still malformed
+    # (no real level named), still must not read as absent.
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\nkind: SkillMetadata\nmetadata:\n  name: skill\n"
+        "spec:\n  portability: Portable\n  capabilityAssumption: Broad\n  dependencyPolicy:\n",
+        encoding="utf-8",
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["dependency-policy-declared"].passed is False
+    assert by["dependency-policy-declared"].evidence != "not declared (optional, treated as StdlibOnly-equivalent)"
+    assert css.main([str(d)]) == 1
+
+
 def test_quoted_portability_value_passes(tmp_path):
     # A double-quoted scalar ("Portable") must be unquoted before matching
     # PORTABILITY_LEVELS -- exercises _unquote via _parse_manifest.
@@ -1500,6 +1596,7 @@ def test_non_utf8_sidecar_fails_checks_not_exit_2(tmp_path):
         "metadata-name-matches-dir",
         "portability-declared",
         "capability-assumption-declared",
+        "dependency-policy-declared",
         "references-well-formed",
     ):
         assert by[check].passed is False, check
@@ -3379,6 +3476,35 @@ def test_manifest_parser_still_ignores_eval_status():
     )
     parsed = css._parse_manifest(text)
     assert "evalStatus" not in parsed.root["spec"]
+    assert parsed.malformed_lines == []
+
+
+def test_manifest_parser_registers_block_shaped_dependency_policy_as_present():
+    # Contrast with test_manifest_parser_still_ignores_eval_status above:
+    # dependencyPolicy is NOT reserved-and-ignored like evalStatus -- it is
+    # a real, optional, closed-vocabulary field whose own check
+    # (dependency-policy-declared) treats a parsed value of None as
+    # "genuinely absent, therefore fine". A block-shaped (or bare-colon)
+    # "dependencyPolicy:" must therefore register as present with an
+    # empty-string value -- distinct from real absence -- rather than
+    # silently vanishing from spec the way an unrecognized/reserved key
+    # does, or dependency-policy-declared could never tell "never written"
+    # apart from "written but malformed".
+    text = (
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  dependencyPolicy:\n"
+        "    - StdlibOnly\n"
+        "    - Declared\n"
+    )
+    parsed = css._parse_manifest(text)
+    assert "dependencyPolicy" in parsed.root["spec"]
+    assert parsed.root["spec"]["dependencyPolicy"] == ""
     assert parsed.malformed_lines == []
 
 
@@ -5353,6 +5479,303 @@ def test_execution_requirements_tools_and_network_both_declared_is_well_formed(t
     assert css.main([str(d)]) == 0
 
 
+# ---- execution-requirements-well-formed: packages category (issue #1115's
+# own ADR follow-up: package-shape recognition) ----
+
+
+def test_execution_requirements_packages_declared_is_well_formed(tmp_path):
+    skill_dir, _repo_root = _write_skill_at_repo_root(tmp_path)
+    d = _write_exec_req_sidecar(skill_dir, "  executionRequirements:\n    packages:\n      pip:\n        - pyyaml\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True
+    assert result.evidence == "packages.pip declared"
+    assert css.main([str(d)]) == 0
+
+
+def test_execution_requirements_packages_multiple_ecosystems_declared(tmp_path):
+    skill_dir, _repo_root = _write_skill_at_repo_root(tmp_path)
+    d = _write_exec_req_sidecar(
+        skill_dir,
+        "  executionRequirements:\n"
+        "    packages:\n"
+        "      pip:\n"
+        "        - pyyaml\n"
+        "        - jsonschema\n"
+        "      npm:\n"
+        "        - left-pad\n",
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True
+    assert result.evidence == "packages.pip, packages.npm declared"
+    assert css.main([str(d)]) == 0
+
+
+def test_execution_requirements_packages_absent_with_tools_present_is_well_formed(tmp_path):
+    # packages' own absence must not affect a sibling subkey's own
+    # evidence or well-formedness -- mirrors
+    # test_execution_requirements_declared_with_no_tools_is_well_formed's
+    # own "each subkey is independently optional" contract, one level up.
+    d = _write_exec_req_sidecar(_write_skill(tmp_path), "  executionRequirements:\n    tools:\n      read: []\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True
+    assert result.evidence == "tools.read declared"
+    assert css.main([str(d)]) == 0
+
+
+def test_execution_requirements_blank_packages_is_null_fails_well_formed(tmp_path):
+    # Same null-vs-empty-mapping rule tools'/network's own blank-header
+    # tests cover, applied to packages.
+    d = _write_exec_req_sidecar(_write_skill(tmp_path), "  executionRequirements:\n    packages:\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "packages is not a mapping: None" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_execution_requirements_packages_not_a_mapping_fails(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path), "  executionRequirements:\n    packages: not-a-mapping-scalar\n"
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "packages is not a mapping" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_execution_requirements_packages_malformed_ecosystem_key_fails(tmp_path):
+    # REGEX mismatch (EXEC_REQ_PACKAGES_KEY_RE), not tuple membership --
+    # the structural difference from tools'/network's own fixed-tuple
+    # unknown-key detection.
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path), "  executionRequirements:\n    packages:\n      PIP:\n        - pyyaml\n"
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "unknown packages key" in result.evidence
+    assert "PIP" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_execution_requirements_packages_quoted_invalid_ecosystem_key_fails(tmp_path):
+    # Regression guard mirroring
+    # test_execution_requirements_quoted_unknown_top_level_key_fails: a
+    # quoted invalid ecosystem key must not bypass the regex check --
+    # _match_key_line already strips the quote before
+    # EXEC_REQ_PACKAGES_KEY_RE ever sees the key text.
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path), '  executionRequirements:\n    packages:\n      "PIP":\n        - pyyaml\n'
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "unknown packages key" in result.evidence
+    assert "PIP" in result.evidence
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    # Both the unrecognized key line AND its own child list-item line are
+    # flagged -- the same fail-closed behavior
+    # test_execution_requirements_unknown_tools_key_fails' own sibling
+    # fixture already exhibits for tools (an unrecognized key does not
+    # open a list, so its own "- <value>" children fall through to the
+    # generic "unmatched line at this indent" gate one line at a time,
+    # not just the key line itself).
+    assert parsed.unknown_execution_requirement_packages_keys == ['"PIP":', "- pyyaml"]
+    assert parsed.root["spec"]["executionRequirements"]["packages"] == {}
+
+
+def test_execution_requirements_packages_ecosystem_list_inline_scalar_fails(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path), "  executionRequirements:\n    packages:\n      pip: not-a-list\n"
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "packages.pip is not a list of non-empty strings" in result.evidence
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.root["spec"]["executionRequirements"]["packages"]["pip"] == "not-a-list"
+
+
+def test_execution_requirements_packages_mapping_shaped_list_item_fails(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path), "  executionRequirements:\n    packages:\n      pip:\n        - path: sneaky\n"
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "malformed packages entry" in result.evidence
+    assert "path: sneaky" in result.evidence
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.malformed_execution_requirement_packages_items == ["- path: sneaky"]
+    assert parsed.root["spec"]["executionRequirements"]["packages"]["pip"] == []
+
+
+def test_execution_requirements_packages_non_string_scalar_item_fails(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path), "  executionRequirements:\n    packages:\n      pip:\n        - null\n"
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "malformed packages entry" in result.evidence
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.malformed_execution_requirement_packages_items == ["- null"]
+
+
+def test_execution_requirements_packages_empty_string_item_fails(tmp_path):
+    # Explicit empty-string coverage, distinct from the null/mapping-shaped
+    # cases above: "" is a syntactically valid quoted scalar, not a
+    # mapping-like or non-string-plain-scalar item, so it survives both
+    # malformed-item gates in the parser and must instead be caught by
+    # _valid_execution_requirements_tools_list's own non-empty check
+    # downstream, in the checker layer.
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path), '  executionRequirements:\n    packages:\n      pip:\n        - ""\n'
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "packages.pip is not a list of non-empty strings" in result.evidence
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.root["spec"]["executionRequirements"]["packages"]["pip"] == [""]
+
+
+def test_execution_requirements_packages_inconsistent_indent_item_fails(tmp_path):
+    d = _write_exec_req_sidecar(
+        _write_skill(tmp_path),
+        '  executionRequirements:\n    packages:\n      pip:\n        - "a"\n      - "b"\n',
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.root["spec"]["executionRequirements"]["packages"]["pip"] == ["a"]
+    assert parsed.malformed_execution_requirement_packages_items == ['- "b"']
+
+
+def test_execution_requirements_packages_empty_list_distinguished_from_absent(tmp_path):
+    d = _write_exec_req_sidecar(_write_skill(tmp_path), "  executionRequirements:\n    packages:\n      pip: []\n")
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True
+    assert result.evidence == "packages.pip declared"
+    assert result.evidence != "no keys declared"
+    assert css.main([str(d)]) == 0
+
+
+def test_execution_requirements_packages_unmatched_key_line_fails_closed(tmp_path):
+    # Regression guard mirroring tools'/network's own
+    # test_execution_requirements_unmatched_key_line_fails_closed: a line
+    # KEY_LINE_RE_6 cannot parse (whitespace before a quoted key's colon)
+    # must still fail closed via the unknown-key fallback, not be
+    # silently skipped.
+    d = _write_exec_req_sidecar(_write_skill(tmp_path), '  executionRequirements:\n    packages:\n      "pip" : []\n')
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "unknown packages key" in result.evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_execution_requirements_packages_trailing_comment_still_opens(tmp_path):
+    # Same trailing-bare-comment fix tools'/network's own equivalent tests
+    # cover, applied to packages' own block header and ecosystem key.
+    skill_dir, _repo_root = _write_skill_at_repo_root(tmp_path)
+    d = _write_exec_req_sidecar(
+        skill_dir,
+        "  executionRequirements:\n    packages:  # not yet fully specified\n      pip:  # comment\n        - pyyaml\n",
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True
+    assert result.evidence == "packages.pip declared"
+    assert css.main([str(d)]) == 0
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.root["spec"]["executionRequirements"]["packages"]["pip"] == ["pyyaml"]
+
+
+def test_execution_requirements_packages_dedent_to_sibling_key_falls_through(tmp_path):
+    skill_dir, _repo_root = _write_skill_at_repo_root(tmp_path)
+    d = _write_exec_req_sidecar(
+        skill_dir,
+        "  executionRequirements:\n    packages:\n      pip:\n        - pyyaml\n"
+        "  skillDependencies:\n    requires: []\n    relatedTo: []\n",
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["execution-requirements-well-formed"].passed is True
+    assert by["skill-dependencies-well-formed"].passed is True
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.root["spec"]["executionRequirements"]["packages"] == {"pip": ["pyyaml"]}
+    assert parsed.root["spec"]["skillDependencies"] == {"requires": [], "relatedTo": []}
+
+
+def test_execution_requirements_tools_packages_network_all_declared_is_well_formed(tmp_path):
+    skill_dir, _repo_root = _write_skill_at_repo_root(tmp_path)
+    d = _write_exec_req_sidecar(
+        skill_dir,
+        "  executionRequirements:\n"
+        "    tools:\n"
+        "      read:\n"
+        "        - files\n"
+        "    packages:\n"
+        "      pip:\n"
+        "        - pyyaml\n"
+        "    network:\n"
+        "      mode: disabled\n",
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True
+    assert result.evidence == "tools.read, packages.pip, network.mode declared"
+    assert css.main([str(d)]) == 0
+
+
+def test_docstring_execution_requirement_packages_key_pattern_names_constant():
+    docstring = css._parse_manifest.__doc__
+    m = re.search(r"matching\s+``(\w+)``,\s*not a closed tuple", docstring)
+    assert m is not None, (
+        "_parse_manifest's docstring no longer names its packages "
+        "ecosystem-key-pattern constant in the expected "
+        "'matching ``X``, not a closed tuple' shape -- update this test's "
+        "extraction logic."
+    )
+    assert m.group(1) == "EXEC_REQ_PACKAGES_KEY_RE", (
+        f"_parse_manifest's docstring names the packages key-pattern "
+        f"constant as {m.group(1)!r}, not EXEC_REQ_PACKAGES_KEY_RE -- a "
+        "rename landed in one but not the other."
+    )
+
+
+def test_execution_requirement_packages_key_pattern_matches_schema():
+    # Cross-file drift guard (this module's OWN established precedent:
+    # EXEC_REQ_PACKAGES_KEY_RE is deliberately hand-duplicated from
+    # skill-metadata.schema.json's own executionRequirementsPackages.
+    # propertyNames pattern, not imported, per EXEC_REQ_NETWORK_SUBKEYS'
+    # own comment precedent for why a schema constraint is re-expressed
+    # here rather than shared) -- a hand-duplicated pair can silently
+    # drift with no test watching it, so assert the two literal pattern
+    # strings stay equal.
+    schema_path = _SCRIPT_PATH.parent.parent / "references" / "skill-metadata.schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    schema_pattern = schema["$defs"]["executionRequirementsPackages"]["propertyNames"]["pattern"]
+    assert schema_pattern == css.EXEC_REQ_PACKAGES_KEY_RE.pattern, (
+        f"skill-metadata.schema.json's executionRequirementsPackages."
+        f"propertyNames.pattern is {schema_pattern!r}, but "
+        f"EXEC_REQ_PACKAGES_KEY_RE is {css.EXEC_REQ_PACKAGES_KEY_RE.pattern!r} "
+        "-- the schema and the hand-rolled parser have drifted."
+    )
+
+
 def test_docstring_execution_requirement_network_subkeys_match_constant():
     docstring = css._parse_manifest.__doc__
     m = re.search(r"own two subkeys, ``(\w+)``/``(\w+)``", docstring)
@@ -5418,6 +5841,213 @@ def test_execution_requirements_nesting_never_flagged_as_malformed_top_level(tmp
     assert by["experimental-stable-compatible"].passed is True
 
 
+# ---- executionRequirements.packages: parser-robustness regression tests
+# (8 findings against this file's own executionRequirements.packages
+# recognition) ----
+
+
+def _write_skill_at_repo_root(tmp_path, **kwargs):
+    """Build a synthetic skill directory nested two levels under a fresh
+    repo-root (``tmp_path/repo/skills/<name>``), matching the real
+    ``<repo-root>/skills/<name>/`` layout, with a real ``.git`` marker
+    directory planted at ``tmp_path/repo``.
+
+    Deliberately nested fully inside ``tmp_path`` -- unlike
+    ``_write_skill``'s own bare ``tmp_path/skill`` layout, whose
+    resolved repo root would land at ``tmp_path``'s own parent, OUTSIDE
+    this test's assigned tmp_path. This repo's pytest config runs with
+    ``-n auto`` (pytest-xdist, parallel workers): writing a repo-root
+    marker outside tmp_path would land in a directory shared across many
+    tests/workers, risking cross-test contention.
+    """
+    skills_dir = tmp_path / "repo" / "skills"
+    skills_dir.mkdir(parents=True)
+    (skills_dir.parent / ".git").mkdir()
+    skill_dir = _write_skill(skills_dir, **kwargs)
+    return skill_dir, skills_dir.parent
+
+
+# ---- adversarial-review regression tests (8 findings against this file's
+# own executionRequirements.packages recognition) ----
+
+
+def test_execution_requirements_packages_tab_indented_item_is_malformed_not_silently_empty(tmp_path):
+    # Finding 1 (CRITICAL): a list header opened ("pip:", blank value) but
+    # its own item line is indented with a TAB, so the strict
+    # EXEC_REQ_TOOLS_LIST_ITEM_RE (literal SPACE characters only) never
+    # matches it. Before the fix, this silently finalized packages.pip as
+    # [] -- indistinguishable from the package never having been declared
+    # at all -- defeating the allowlist gate for any sidecar using a tab.
+    skill_dir, _repo_root = _write_skill_at_repo_root(tmp_path)
+    d = _write_exec_req_sidecar(
+        skill_dir, "  executionRequirements:\n    packages:\n      pip:\n\t- some-unapproved-package\n"
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "malformed packages entry" in result.evidence
+    assert "some-unapproved-package" in result.evidence
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.malformed_execution_requirement_packages_items == ["- some-unapproved-package"]
+    # The malformed item must NOT silently survive into the parsed list --
+    # pip stays [] (an attempted-but-rejected item, not a declared one),
+    # matching every other malformed-item case's own contract.
+    assert parsed.root["spec"]["executionRequirements"]["packages"]["pip"] == []
+
+
+def test_execution_requirements_packages_underindented_item_is_malformed_not_silently_empty(tmp_path):
+    # Finding 1's second reproduction: 2 spaces (fewer than the required
+    # 6+), no tab involved -- confirms the fix is not tab-specific.
+    skill_dir, _repo_root = _write_skill_at_repo_root(tmp_path)
+    d = _write_exec_req_sidecar(
+        skill_dir, "  executionRequirements:\n    packages:\n      pip:\n  - some-unapproved-package\n"
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "malformed packages entry" in result.evidence
+    assert css.main([str(d)]) == 1
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.malformed_execution_requirement_packages_items == ["- some-unapproved-package"]
+
+
+def test_execution_requirements_packages_misindented_item_regression_does_not_break_legitimate_shapes(tmp_path):
+    # Companion regression guard for Finding 1's fix: a correctly-indented
+    # multi-ecosystem declaration, and a packages block followed by a
+    # sibling executionRequirements block, must both still parse cleanly
+    # -- the new malformed-item detection must never fire on legitimate
+    # content.
+    skill_dir, _repo_root = _write_skill_at_repo_root(tmp_path)
+    d = _write_exec_req_sidecar(
+        skill_dir,
+        "  executionRequirements:\n"
+        "    packages:\n"
+        "      pip:\n"
+        "        - requests\n"
+        "      npm:\n"
+        "        - left-pad\n"
+        "    network:\n"
+        "      mode: disabled\n",
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["execution-requirements-well-formed"].passed is True
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.malformed_execution_requirement_packages_items == []
+    assert parsed.root["spec"]["executionRequirements"]["packages"] == {"pip": ["requests"], "npm": ["left-pad"]}
+
+
+def test_execution_requirements_packages_trailing_document_marker_not_misindented_item(tmp_path):
+    # CodeRabbit finding (PR #1120 review): EXEC_REQ_PACKAGES_MISINDENTED_
+    # ITEM_RE's own leading "[ \t]*" is zero-or-more (deliberately looser
+    # than the well-formed-item regex, to catch an under-indented item --
+    # see the sibling test above), so a column-0 "---" also matched it
+    # while the packages list was still open, misrouting a legitimate
+    # trailing YAML document marker into malformed_exec_packages_items and
+    # spuriously failing execution-requirements-well-formed for an
+    # otherwise valid sidecar.
+    skill_dir, _repo_root = _write_skill_at_repo_root(tmp_path)
+    d = _write_exec_req_sidecar(
+        skill_dir, "  executionRequirements:\n    packages:\n      pip:\n        - somepkg\n---\n"
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True, result.evidence
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.malformed_execution_requirement_packages_items == []
+    assert parsed.root["spec"]["executionRequirements"]["packages"] == {"pip": ["somepkg"]}
+
+
+def test_execution_requirements_packages_stray_column_zero_dash_not_misindented_item(tmp_path):
+    # Companion to the document-marker regression above: a genuine
+    # column-0 "- stray" line (not a document marker, not an attempted
+    # list item at any real indent) must also fall through to its own
+    # correct handling -- the generic top-level malformed-line catch-all
+    # -- rather than being misreported as a malformed *packages* item.
+    skill_dir, _repo_root = _write_skill_at_repo_root(tmp_path)
+    d = _write_exec_req_sidecar(
+        skill_dir, "  executionRequirements:\n    packages:\n      pip:\n        - somepkg\n- stray\n"
+    )
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True, result.evidence
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.malformed_execution_requirement_packages_items == []
+
+
+def test_execution_requirements_packages_item_trailing_comment_stripped_from_name(tmp_path):
+    # Finding 6 (MEDIUM): "- requests  # transitively needed" must parse to
+    # the package name "requests", not "requests  # transitively needed".
+    skill_dir, _repo_root = _write_skill_at_repo_root(tmp_path)
+    d = _write_exec_req_sidecar(
+        skill_dir, "  executionRequirements:\n    packages:\n      pip:\n        - requests  # transitively needed\n"
+    )
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.root["spec"]["executionRequirements"]["packages"]["pip"] == ["requests"]
+
+
+def test_execution_requirements_packages_item_quoted_hash_not_treated_as_comment(tmp_path):
+    # Regression guard alongside Finding 6's own fix: a QUOTED item's own
+    # literal "#" must never be stripped -- only an unquoted item's
+    # trailing comment is real-YAML comment syntax.
+    skill_dir, _repo_root = _write_skill_at_repo_root(tmp_path)
+    d = _write_exec_req_sidecar(
+        skill_dir, '  executionRequirements:\n    packages:\n      pip:\n        - "my#package"\n'
+    )
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.root["spec"]["executionRequirements"]["packages"]["pip"] == ["my#package"]
+
+
+def test_exec_req_packages_key_re_fullmatch_rejects_trailing_newline():
+    # Finding 8 (LOW): Python's own "$" (unlike JSON Schema/ECMA-262's own
+    # "$", which EXEC_REQ_PACKAGES_KEY_RE's pattern text is hand-duplicated
+    # from) also matches immediately before a trailing "\n" under .match().
+    # The parser's own call site must not inherit that quirk. Verified at
+    # the call site's own fullmatch() mechanism directly, not through
+    # _parse_manifest (whose lines are always rstrip()-ped before reaching
+    # this regex, so a "\n"-suffixed key is not otherwise reachable there
+    # -- this is a direct-usage/defense-in-depth guard, not a reproduction
+    # through the full parsing pipeline).
+    assert css.EXEC_REQ_PACKAGES_KEY_RE.match("pip\n") is not None  # the quirk .match() alone still has
+    assert css.EXEC_REQ_PACKAGES_KEY_RE.fullmatch("pip\n") is None  # fullmatch() closes it
+    assert css.EXEC_REQ_PACKAGES_KEY_RE.fullmatch("pip") is not None  # ordinary case unaffected
+
+
+def test_exec_req_packages_key_pattern_still_matches_schema_after_fullmatch_fix():
+    # Companion to test_execution_requirement_packages_key_pattern_matches_schema:
+    # Finding 8 was deliberately implemented as a fullmatch() call-site
+    # change rather than a "$" -> "\\Z" edit to EXEC_REQ_PACKAGES_KEY_RE's
+    # own pattern text, specifically so this drift guard keeps passing
+    # unmodified (a "\\Z" edit would desync .pattern from the schema's own
+    # ECMA-262 "$", which does not support "\\Z" at all). Asserted here
+    # too so a future edit that reintroduces a "\\Z"-in-source approach
+    # gets caught by this test file, not just noticed via schema drift.
+    schema_path = _SCRIPT_PATH.parent.parent / "references" / "skill-metadata.schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    schema_pattern = schema["$defs"]["executionRequirementsPackages"]["propertyNames"]["pattern"]
+    assert schema_pattern == css.EXEC_REQ_PACKAGES_KEY_RE.pattern
+    assert "\\Z" not in css.EXEC_REQ_PACKAGES_KEY_RE.pattern
+
+
+def test_execution_requirements_packages_duplicate_items_currently_not_flagged_known_gap(tmp_path):
+    # Finding 8's second half (disclosed, not fixed): $defs.packageList in
+    # skill-metadata.schema.json declares "uniqueItems": true, but this
+    # checker does not enforce it yet -- see the comment directly above
+    # the "for key in packages" loop in _execution_requirements_checks.
+    # Characterization test: locks in today's documented behavior (a
+    # same-ecosystem duplicate item currently still passes well-formed) so
+    # a silent behavior change either direction is caught by this test,
+    # not just discovered later.
+    skill_dir, _repo_root = _write_skill_at_repo_root(tmp_path)
+    d = _write_exec_req_sidecar(
+        skill_dir, "  executionRequirements:\n    packages:\n      pip:\n        - pyyaml\n        - pyyaml\n"
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["execution-requirements-well-formed"].passed is True
+    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
+    assert parsed.root["spec"]["executionRequirements"]["packages"]["pip"] == ["pyyaml", "pyyaml"]
+
+
 def test_null_vs_empty_mapping_matches_real_yaml_semantics():
     # Differential test against a real YAML parser (issue #356, ACM row
     # 2's own proof method), across every gated mapping-valued block: a
@@ -5447,6 +6077,7 @@ def test_null_vs_empty_mapping_matches_real_yaml_semantics():
         ("lifecycle", "  lifecycle:\n    renamedFrom: old-name\n"),
         ("executionRequirements", "  executionRequirements:\n"),
         ("executionRequirements", "  executionRequirements:\n    tools:\n      read: []\n"),
+        ("executionRequirements", "  executionRequirements:\n    packages:\n      pip: []\n"),
     ]
     for key, body in cases:
         text = manifest_prefix + body

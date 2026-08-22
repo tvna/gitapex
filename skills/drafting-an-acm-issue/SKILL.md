@@ -11,7 +11,7 @@ repository has a sibling skill that builds and validates the same ACM
 shape from an existing issue (for example, planning-a-branch-from-an-issue in this
 repository), producing the map here can save that skill from
 constructing one from scratch -- but the map is always a draft, never
-pre-verified (Step 8 states the full rule; it is not repeated here).
+pre-verified (Step 9 states the full rule; it is not repeated here).
 
 ## Steps
 
@@ -37,7 +37,7 @@ pre-verified (Step 8 states the full rule; it is not repeated here).
    genuinely ambiguous between a classification that proceeds (feature,
    fix, or refactor) and one that stops (chore, docs-only, or tracking),
    classify by the requester's own stated intent; if the requester's
-   words do not settle it either, treat this as Step 7's ambiguity
+   words do not settle it either, treat this as Step 8's ambiguity
    case rather than guessing a category to keep moving.
 3. Draft Facts (only what the requester actually stated, cited to
    their own words) and Requested outcome (one to two sentences).
@@ -62,12 +62,27 @@ pre-verified (Step 8 states the full rule; it is not repeated here).
 5. Draft Constraints (hard limits the requester named) and Non-goals
    (what this issue explicitly does not cover), each only from stated
    or clearly implied scope, not invention.
-6. Validate the drafted body carries the ACM table before creating the
-   issue (Run `gitapex_check_acm_present.py`):
+6. Search for an existing, already-filed issue on the same topic before
+   the draft is finalized: run the connected git hosting server's
+   semantic issue-search tool (e.g. `github:search_issues`) for the
+   Requested outcome drafted in Step 3 -- semantic matching is the
+   correct tool choice here, unlike an exact-label or exact-title
+   lookup elsewhere in this repository's own tooling, since "is this a
+   duplicate" is inherently a semantic judgment, not an exact-string
+   one. Disclose the result in the drafted body as a `Dedup: {query
+   used}, {N results reviewed}` line, or an explicit `Dedup: none
+   found` line when the search returns nothing. This is disclosure
+   only -- no mechanical similarity or duplicate-detection algorithm is
+   attempted (see Stop boundaries); a genuinely similar existing issue
+   found here is Step 2's classification question re-opened (is this
+   really a new issue, or a comment on the existing one), not something
+   this step decides unilaterally.
+7. Validate the drafted body carries the ACM table and the `Dedup:`
+   line before creating the issue (Run `gitapex_check_acm_present.py`):
    `python3 scripts/gitapex_check_acm_present.py --body <draft-file>`
    (or pipe the draft on stdin) rather than re-reasoning "does this have
-   the table" in prose each run.
-7. Ask one focused question only when a stated criterion is genuinely
+   the table" / "does this have the Dedup line" in prose each run.
+8. Ask one focused question only when a stated criterion is genuinely
    ambiguous -- never guess silently, never invent a criterion to fill
    a gap, and never treat an "unknown, pending X" column from Step 4 as
    something to resolve here (that is deferred work, not ambiguity). A
@@ -77,7 +92,7 @@ pre-verified (Step 8 states the full rule; it is not repeated here).
    accepting the claim itself as evidence. Use portable question
    handoff: `AskUserQuestion` when available, otherwise
    `AskUserQuestion:` text with the same choices.
-8. Create the issue with the validated body via the connected git
+9. Create the issue with the validated body via the connected git
    hosting server's issue-creation tool (e.g. `github:issue_write`
    method `create`), preferring the connector over a CLI fallback.
    State plainly in the drafted body that its Acceptance Criteria Map
@@ -102,23 +117,25 @@ pre-verified (Step 8 states the full rule; it is not repeated here).
 - **Requested outcome:** one to two sentences.
 - **Acceptance Criteria Map:** criterion -> interpretation -> planned
   ops -> proof method -> residual risk, marked as a draft for the
-  reader, not a pre-verified result (Step 8).
+  reader, not a pre-verified result (Step 9).
 - **Constraints:** hard limits the requester named.
 - **Non-goals:** what this issue explicitly excludes.
-- **Human Decision:** only when Step 7 applies; omit otherwise.
+- **Dedup:** the search query run and result count, or `none found`
+  (Step 6).
+- **Human Decision:** only when Step 8 applies; omit otherwise.
 - **Next Move:** the concrete next action (draft ready to create, or the
   question blocking it).
 
 Pattern: **Facts** -> **Requested outcome** -> **Acceptance Criteria
-Map** -> **Constraints** -> **Non-goals** -> **Next Move**. Insert
-**Human Decision** only when needed.
+Map** -> **Constraints** -> **Non-goals** -> **Dedup** -> **Next Move**.
+Insert **Human Decision** only when needed.
 
 ## Stop boundaries
 
 - Do not fabricate or infer acceptance criteria the requester never
   stated, or a value for a column the requester's words don't yet
   support -- mark it "unknown, pending X" instead (Step 4); an
-  unstated criterion is a Human Decision trigger (Step 7), not
+  unstated criterion is a Human Decision trigger (Step 8), not
   something to invent so the map looks complete.
 - Do not skip the Acceptance Criteria Map to satisfy a request phrased
   as "just open the issue" -- Step 4 runs regardless of how the
@@ -131,15 +148,20 @@ Map** -> **Constraints** -> **Non-goals** -> **Next Move**. Insert
   shape instead) -- classify and stop per Step 2 rather than bending
   the request into a feature/fix/refactor shape it is not.
 - Do not blend an ACM column into a target-template field whose own
-  declared meaning differs (Step 8's field-population rule).
+  declared meaning differs (Step 9's field-population rule).
 - Do not carry a secret, credential, token, or personal data from the
   requester's own words into the drafted issue -- redact it (Step 3).
 - Do not present the drafted Acceptance Criteria Map as pre-verified
-  (Step 8's draft-labeling rule).
+  (Step 9's draft-labeling rule).
 - Do not implement the change or open a branch/PR as part of this
   skill; it authors an issue, nothing past that.
 - Do not create the issue before `gitapex_check_acm_present.py` passes on the
   drafted body.
+- Do not create the issue without a `Dedup:` disclosure line (Step 6)
+  -- a search that found nothing is still required to be disclosed as
+  `Dedup: none found`, never silently omitted; this is a disclosure
+  requirement only, not license to invent a similarity verdict the
+  search itself did not establish.
 
 ## Related skills
 
@@ -149,7 +171,7 @@ Map** -> **Constraints** -> **Non-goals** -> **Next Move**. Insert
   when the issue does not already carry one. This skill runs earlier,
   at issue-authoring time, and can save that skill from constructing
   the map from scratch when the issue already carries one drafted here
-  -- always as a draft to re-check, not an unconditional read (Step 8).
+  -- always as a draft to re-check, not an unconditional read (Step 9).
 - **vs. `fixing-a-reported-issue`:** that skill starts from a bare defect report
   and reproduces/fixes it; it does not author issues. This skill can
   produce the fix-type issue that skill would then start from.
@@ -157,14 +179,16 @@ Map** -> **Constraints** -> **Non-goals** -> **Next Move**. Insert
 ## Notes
 
 Portability: this skill's Steps/Output are general and repo-agnostic;
-Step 8's tool name and the "connector over CLI" preference are the one
+Step 9's tool name and the "connector over CLI" preference are the one
 git-hosting-specific detail, and even that degrades to whatever
-issue-creation path the calling repository actually has.
+issue-creation path the calling repository actually has. Step 6's own
+tool name (a semantic issue-search call) is the same kind of
+git-hosting-specific detail, degrading the same way.
 
 Install/vendoring-time integrity (whether this SKILL.md and its
 bundled `scripts/gitapex_check_acm_present.py` are themselves the untampered,
 intended copies) is a separate question from the runtime content trust
-Step 1 covers -- a runtime PASS from Step 6 says nothing about whether
+Step 1 covers -- a runtime PASS from Step 7 says nothing about whether
 the copy that produced it was the one actually intended for
 installation. Verify that through the calling repository's own
 vendoring/install process, not this skill's own output.

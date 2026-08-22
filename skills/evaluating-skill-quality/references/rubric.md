@@ -38,6 +38,7 @@ skill's own folder.
 - [Compatibility awareness](#compatibility-awareness)
 - [Confidentiality awareness](#confidentiality-awareness)
 - [Capability assumption](#capability-assumption)
+- [Dependency policy](#dependency-policy)
 - [Lifecycle](#lifecycle)
 - [Execution requirements](#execution-requirements)
 - [1. Discovery -- name and description](#1-discovery----name-and-description)
@@ -130,11 +131,12 @@ fixes where a fault actually lives when a review goes wrong.
   before dimension grading starts: the target has actually been read
   (step 1), its mechanism fit is checked and the Blind spot pass is run
   (step 2, see below and the Unknowns framework section above), its
-  deterministic shape is checked (step 3), and its portability level and
-  capability assumption are established, including the declaration-vs-pin
-  consistency check (step 4, see below and the Capability assumption
-  section above). Per Meyer: "the precondition expresses requirements that
-  any call must satisfy if it is to be correct."
+  deterministic shape is checked (step 3), and its portability level,
+  capability assumption, and dependency policy are established, including
+  the declaration-vs-pin consistency check (step 4, see below and the
+  Capability assumption and Dependency policy sections above). Per Meyer:
+  "the precondition expresses requirements that any call must satisfy if
+  it is to be correct."
 - **Postcondition** -- what step 6 delivers *if the precondition held*: a
   verdict with cited evidence per dimension, every quoted span matched
   against the file it is attributed to under the one Citation fidelity rule
@@ -1156,10 +1158,92 @@ Procedure checkpoint.
     keeps its own question (2: is the body concise; 5: is the split real
     and reachable).
 
+## Dependency policy
+
+A precondition the review establishes before grading (see [Contract
+discipline](#contract-discipline)), read from the skill's
+`metadata/gitapex.yaml` sidecar as `spec.dependencyPolicy`. The two levels
+are defined in `SKILL.md`, checkable without opening this file. Unlike
+[Portability level](#portability-level) and [Capability
+assumption](#capability-assumption), this field is OPTIONAL -- the
+`dependency-policy-declared` shape check PASSes on an absent declaration
+rather than FAILing (the sidecar's own optional-field pattern, matching
+`spec.references`' own `references-well-formed`, not the required-field
+pattern `portability`/`capabilityAssumption` use). An absent declaration is
+not "no policy": it is treated as **StdlibOnly-equivalent** -- see the
+Undeclared branch below.
+
+**Applicability.** This precondition, and the dimension 7 criterion it
+calibrates, apply only to a skill that actually bundles scripts -- the same
+"only if the skill ships code" gate dimension 7's own heading already
+states. A skill with no `scripts/` directory needs no `dependencyPolicy`
+declaration at all, StdlibOnly included, and this whole precondition is
+not-applicable for it: do not grade a scriptless skill against either
+branch below, and do not treat a scriptless skill's silence on this field
+as a finding of any kind.
+
+Unlike [Compatibility awareness](#compatibility-awareness) and
+[Confidentiality awareness](#confidentiality-awareness) -- warning-only
+axes that never change the verdict -- this precondition's two branches
+directly gate dimension 7's own Pass/Fail on its "Dependencies listed;
+execution intent stated" criterion. It calibrates that one criterion of
+that one dimension, not several dimensions the way Capability assumption
+calibrates dimensions 2/3/5/9.
+
+**StdlibOnly.** **Pass**: no non-stdlib import anywhere in the skill's
+`scripts/*.py`. Mechanical backing: the execution-requirements drift
+scanner's `find_packages_drift` already produces its
+`packages-pip-vs-script-content` under-declared finding for every
+AST-visible non-stdlib import (a literal `import`/`from ... import`
+statement) once `executionRequirements.packages.pip` is absent or empty
+-- exactly this branch's contradiction signal for that visible subset,
+with no new scanner logic needed. Not a completeness guarantee: a
+dynamically-constructed import (`importlib.import_module(...)`,
+`__import__(...)`) is invisible to this AST-based check, the same
+disclosed class of gap `find_packages_drift`'s own module docstring
+already names for `find_network_drift`/`find_tools_drift` -- grade a
+suspected dynamic import by direct reading when the mechanical check
+alone cannot settle it. **Fail**: a real non-stdlib import (mechanically
+found, or found by direct reading per the limitation just named)
+contradicts the declaration -- a correctness defect in the declaration
+itself, not merely an undisclosed one.
+
+**Declared.** **Pass** requires ALL FOUR of:
+
+- (a) every non-stdlib import is declared in
+  `executionRequirements.packages.pip`, directly or via alias
+  (`find_packages_drift`'s `packages-pip-vs-script-content` under-declared
+  check clean for every AST-visible import -- the same dynamic-import
+  visibility limit as StdlibOnly's own Pass criterion above, not a
+  completeness guarantee);
+- (b) every declared package name also appears in the skill's
+  `compatibility` field (`find_packages_drift`'s
+  `packages-pip-vs-compatibility` heuristic finding clean);
+- (c) the script(s) actually use the PEP 723 self-contained-script pattern
+  (a `# /// script` metadata block, invoked via `uv run`) -- **no existing
+  mechanical check covers this sub-criterion**; grade it by direct
+  reading/judgment, the same way dimension 7's other prose-judged bullets
+  already work, and say so explicitly rather than silently implying it is
+  mechanically gated;
+- (d) every declared package is within gitapex's own allowlist --
+  enforced by a repository-owned CI gate outside this skill's own bundled
+  shape checker, via a hardcoded allowlist constant that gate defines;
+  grading this sub-criterion outside a live CI/PR context means reading
+  that constant directly, the same disclosed-not-mechanically-visible
+  situation sub-criterion (c) above already states explicitly.
+
+**Fail**: any one of the four is violated -- name which sub-criterion.
+
+**Undeclared (the field is absent).** Grade against the same criteria as
+StdlibOnly above, plus one additional disclosure-consistency note if a
+non-stdlib import is found anyway: the declaration gap itself is worth
+naming, distinct from the underlying contradiction the StdlibOnly branch
+already flags on its own.
+
 ## Lifecycle
 
-Unlike Portability level and Capability assumption, this field has no
-per-dimension grading effect -- declaring `spec.lifecycle` does not
+Unlike Portability level, Capability assumption, and Dependency policy,
+this field has no per-dimension grading effect -- declaring `spec.lifecycle` does not
 change how any of the nine dimensions grade. It exists as structured,
 checkable bookkeeping for a skill not yet proven, or superseded by
 another, gated with the same rigor as the two grading-affecting
@@ -1229,26 +1313,44 @@ Three independent, optional sub-blocks plus one plain scalar under
 
 ## Execution requirements
 
-Like Lifecycle, this field has no per-dimension grading effect. It is
-structured bookkeeping -- `spec.executionRequirements.tools`
-(`read`/`write`/`shell` capability-tag lists) and
+Like Lifecycle, this field has no per-dimension grading effect on its
+own. It is structured bookkeeping -- `spec.executionRequirements.tools`
+(`read`/`write`/`shell` capability-tag lists),
 `spec.executionRequirements.network` (`mode`, a
 `disabled`/`allowlist`/`unrestricted` enum, plus `domains`, an exact-host
-list non-empty iff `mode: allowlist`) so far -- gated by the same
-shape-check rigor and unknown-key fail-closed treatment as every other
-sidecar field, and behavior-neutral like the rest of this sidecar. Once
-declared, `tools`' own subkeys are each a complete, closed allowlist for
-that category: non-empty means required/exclusively-permitted, an
-explicit empty list means prohibited, and an absent subkey means not yet
-declared (not the same as either). `network` carries its own,
-different rule instead: it is a single declaration (`mode` required once
-`network` is present at all), not a per-subkey allowlist -- `disabled`
-means no network access, `allowlist` means only the listed exact hosts,
-and `unrestricted` means no restriction from this declaration, schema-
-permitted but requiring the declaring PR's own explicit written
-justification for why the skill's real behavior needs unrestricted
-network access, checked against whatever security policy the calling
-repository has adopted, before first real use.
+list non-empty iff `mode: allowlist`), and
+`spec.executionRequirements.packages` (free-form ecosystem keys, e.g.
+`pip`, each a list of package names the skill's own bundled scripts
+depend on) so far -- gated by the same shape-check rigor and unknown-key
+fail-closed treatment as every other sidecar field, and behavior-neutral
+like the rest of this sidecar. Once declared, `tools`' own subkeys are
+each a complete, closed allowlist for that category: non-empty means
+required/exclusively-permitted, an explicit empty list means prohibited,
+and an absent subkey means not yet declared (not the same as either).
+`network` carries its own, different rule instead: it is a single
+declaration (`mode` required once `network` is present at all), not a
+per-subkey allowlist -- `disabled` means no network access, `allowlist`
+means only the listed exact hosts, and `unrestricted` means no
+restriction from this declaration, schema-permitted but requiring the
+declaring PR's own explicit written justification for why the skill's
+real behavior needs unrestricted network access, checked against
+whatever security policy the calling repository has adopted, before
+first real use. `packages` carries a third rule, enforced differently
+from `tools`/`network`: each declared ecosystem/package-name pair is
+resolved against gitapex's own closed allowlist, but that resolution
+happens entirely outside this skill's own bundled shape checker -- a
+repository-owned CI gate, triggered whenever any skill's own
+`metadata/gitapex.yaml` changes, that checks each declared name against a hardcoded allowlist
+constant living in the gate itself, PEP 503 normalized on both sides (so
+"PyYAML" and "pyyaml" match the same allowlist entry -- looser than the
+prior mechanism's exact, case-sensitive comparison). No packages declared
+is a no-op; a declared pair outside the allowlist fails that CI gate's own
+run, naming the offending skill/ecosystem/package -- it never produces a
+`gitapex_check_skill_shape.py` `CheckResult` at all. This portable
+script's own `execution-requirements-well-formed` check still validates
+`packages`' SHAPE (a well-formed ecosystem/package-name-list mapping),
+never its allowlist membership. Dimension 7 (Bundled scripts) below is
+where a declared package's real consequences are graded.
 
 ## 1. Discovery -- name and description
 
@@ -1328,6 +1430,28 @@ Adaptive) exactly this Fail example for the identical sentence; that section
 is authoritative for a declared target, not this one -- read it first, and
 apply the plain examples below only when no declaration exists or applies.
 
+- **Description-length trigger.** The mental model's cost pricing (`name`
+  + `description` always resident, every skill, every turn) puts the
+  frontmatter `description` field in scope for this same paragraph-cost
+  challenge, not only the `SKILL.md` body it prices separately. A
+  description at or above 90% of `scripts/gitapex_check_skill_shape.py`'s
+  own `DESCRIPTION_MAX_CHARS` cap (that script's `description-length`
+  check already reports the exact character count as evidence on every
+  run; a vendored target with an equivalent hard description-length limit
+  qualifies the same way) triggers this dimension's ordinary
+  relevance/duplication/sediment/sprawl classification below, applied to
+  the description's own sentences. The 90% threshold itself is only ever
+  a trigger for that judgment, never a pass/fail rule on its own -- the
+  same structural role a deterministic threshold plays in the Capability
+  assumption section's own Declaration-vs-structure fit check, which
+  fires the same way at 90% of `BODY_MAX_LINES` before its own separate
+  disclosure-adequacy judgment runs. A description below the trigger is
+  not thereby exempt: dimension
+  1's adequacy/specificity floor and this dimension's own judgment both
+  still apply regardless of length. No description may be failed for
+  length alone -- the cap is only ever a cue for when this challenge is
+  worth applying deliberately, never a soft word/character ceiling
+  advisory in its own right.
 - Prune sentence by sentence and classify the reason: **relevance**
   (irrelevant to this skill's task), **duplication** (the same rule has another
   owner), **sediment** (historical rationale that no longer controls
@@ -1617,24 +1741,37 @@ reading the source.
   model to cope.
 - **No voodoo constants** -- every configuration value is justified in a
   comment. A constant the author cannot justify, the model cannot either.
-- **Dependencies listed; execution intent stated** -- required packages
-  named and verified available on the target surface (see dimension 6),
-  and it is explicit whether the model should execute the script ("Run
-  `analyze_form.py`") or read it as reference ("See `analyze_form.py` for
-  the algorithm").
+- **Dependencies listed; execution intent stated** -- calibrated by the
+  [Dependency policy](#dependency-policy) precondition's StdlibOnly/
+  Declared/Undeclared branches above: required packages named and verified
+  available on the target surface (see dimension 6) per whichever branch
+  the skill's `spec.dependencyPolicy` declares (or, if undeclared,
+  StdlibOnly-equivalent), and it is explicit whether the model should
+  execute the script ("Run `analyze_form.py`") or read it as reference
+  ("See `analyze_form.py` for the algorithm").
 - **Scripts have clear documentation** -- what the script does, its
   inputs/outputs, and how to invoke it, not left for the model to infer
   from source.
 - **Verifiable intermediate outputs** for high-stakes batch work -- a
   plan -> validate -> execute pattern with a machine-checkable plan file.
+- **Single ownership and boundary fit** -- when the script is shared
+  with, or reachable from, another skill, exactly one skill bundles it
+  and every other consumer declares the dependency rather than reaching
+  for it undeclared; the script's own imports resolve on the target's
+  deployment surface with no install step, unless the target
+  repository's own recorded decision (an ADR or equivalent) licenses
+  the specific package.
 
 - **Fail:** a script that throws on a missing file and leaves the model to
-  cope, or a magic constant with no comment explaining why that value was
-  chosen.
+  cope, a magic constant with no comment explaining why that value was
+  chosen, or a script two skills both bundle copies of (or one reaches
+  into the other's directory for) with neither side declaring the
+  dependency.
 - **Pass:** the script handles its own error conditions, every
-  configuration value is justified inline, and its documentation states
+  configuration value is justified inline, its documentation states
   what it does, its inputs/outputs, and whether the model should run it or
-  read it as reference.
+  read it as reference, and -- when shared -- exactly one skill owns it
+  with every other consumer's dependency declared.
 
 **Comment categorization (Interface vs. Implementation).** Grounded in
 John Ousterhout's Stanford CS190 "Writing Comments" lecture ([ouster]):
@@ -1678,6 +1815,44 @@ judgment: no shape-checker mechanization is planned for this axis: which
 comment lines earn their token cost is a per-comment value judgment, not
 a mechanically checkable rule the way an unjustified constant or a
 missing execution-intent phrase is.
+
+**Single ownership and boundary fit, in depth.** Applies only when the
+script is reachable from more than one skill -- imported by name, its
+directory referenced by a sibling skill's own default path constant, or
+documented as shared infrastructure. Four checks, run against the target
+repository's own deployment model (which tree ships to a consumer with no
+install step is repository-specific; read that repository's own layout
+doc or equivalent before grading this):
+
+1. **One owner.** Exactly one skill's `scripts/` bundles the file. Every
+   other consumer -- a sibling skill's SKILL.md, a reference doc, an
+   `import`, a hardcoded default path -- declares the dependency in its
+   own sidecar metadata (where the target repository has one, e.g. a
+   `spec.skillDependencies.requires` entry) rather than reaching for it
+   silently.
+2. **Boundary fit.** The script's own imports resolve on the deployment
+   surface its bundling skill ships to, with no install step. A
+   third-party import inside a bundled script is a finding unless the
+   target repository's own recorded architectural decision licenses that
+   specific package for that surface.
+3. **No undeclared reach-out.** Unless the reach is declared -- the
+   script's own bundling skill names the target skill as a dependency in
+   its sidecar metadata, per check 1 above -- the script does not default
+   to, or read from, a path outside its own bundling skill's directory --
+   watch a `parents[N]`-style default path constant as closely as prose,
+   since the reach hides there at least as often as in a docstring.
+4. **Duplication has a drift gate.** If the same functionality is copied
+   into more than one skill instead of shared, a deterministic drift gate
+   keeps the copies from silently diverging.
+
+**Fail:** a script one skill's own default path constant reaches into a
+sibling skill's `scripts/` directory for, with no declared dependency
+either side; or a bundled script whose own top-level import requires a
+package the bundling skill's shipped surface never installs.
+**Pass:** a script with no third-party import at all inside a skill
+shipped with no install step, or one whose single third-party import is
+named and licensed by the target repository's own recorded decision, with
+every cross-skill consumer declared.
 
 **Test methodology and test code structure, when the script ships its own
 test suite.** The five bullets above grade the script's code quality; a

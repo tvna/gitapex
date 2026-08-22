@@ -1,6 +1,6 @@
 {
   "meta": {
-    "schema_version": "1.1.0",
+    "schema_version": "1.2.0",
     "tracking_issue": 123,
     "status": "active",
     "phase": "phase-0"
@@ -84,7 +84,7 @@
       "id": "bash-cli-write-and-install-guard",
       "kind": "script",
       "script": "hooks/check-bash-safety.sh",
-      "rule": "Denies a Bash call matching a package/plugin-install verb; denies gh issue/gh pr write subcommands and gh api writes (POST/PUT/PATCH/DELETE, a field flag, or 'mutation' in gh api graphql); on git push, runs skills/outward-artifact-preflight/scripts/gitapex_scan_provenance.py against the outgoing commit range and warns (never blocks) if it flags something.",
+      "rule": "Denies a Bash call matching a package/plugin-install verb; denies gh issue/gh pr write subcommands and gh api writes (POST/PUT/PATCH/DELETE, a field flag, or 'mutation' in gh api graphql); on git push, runs skills/outward-artifact-preflight/scripts/gitapex_scan_provenance.py against the outgoing commit range and warns (never blocks) if it flags something. Fails closed (denies) rather than allowing the call through when jq is missing from PATH, the payload or tool_input is not a JSON object, tool_name is present but not a string, or tool_input.command is present but not a string.",
       "planes": ["pretooluse"],
       "local_exclusion": "PreToolUse-only: grades a Claude Code tool-call JSON payload arriving on stdin, which has no working-tree equivalent to reconstruct ahead of a push.",
       "trigger": "PreToolUse matcher Bash (hooks/hooks.json)",
@@ -92,7 +92,8 @@
       "cluster": ["outward-hygiene", "github-operations"],
       "tracking_issue": null,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "post-write-provenance-recheck",
@@ -106,13 +107,14 @@
       "cluster": ["outward-hygiene", "github-operations"],
       "tracking_issue": 878,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "template-overwrite-guard",
       "kind": "script",
       "script": "hooks/check-template-overwrite.sh",
-      "rule": "Denies a Write call whose file_path case-insensitively matches an existing GitHub/GitLab issue/PR/MR template location.",
+      "rule": "Denies a Write call whose file_path case-insensitively matches an existing GitHub/GitLab issue/PR/MR template location. Fails closed (denies) rather than allowing the call through when jq is missing from PATH, the payload or tool_input is not a JSON object, tool_name is present but not a string, or tool_input.file_path is present but not a string.",
       "planes": ["pretooluse"],
       "local_exclusion": "PreToolUse-only: grades a Claude Code Write tool-call payload, not repository state.",
       "trigger": "PreToolUse matcher Write (hooks/hooks.json)",
@@ -120,7 +122,8 @@
       "cluster": "outward-hygiene",
       "tracking_issue": null,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "acm-issue-disclosure",
@@ -138,7 +141,8 @@
       "cluster": "plan-integrity",
       "tracking_issue": null,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "pr-upstream-pushed",
@@ -152,7 +156,23 @@
       "cluster": "github-operations",
       "tracking_issue": 187,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
+    },
+    {
+      "id": "merge-pull-request-block",
+      "kind": "script",
+      "script": "hooks/check-merge-pull-request-block.sh",
+      "rule": "Denies mcp__github__merge_pull_request unconditionally, no override -- per planning-a-branch-from-an-issue/SKILL.md (\"Do not merge or enable auto-merge; that is a separate, explicit human or CI decision\"), drafting-a-pr-to-merge/SKILL.md's own step 9 (a PR's terminal action is converting to DRAFT, never merging it), and the ranking-the-open-queue Routine specs' \"100% human review of any pull request merge\" policy; closes the gap where check-bash-safety.sh's shell-only 'gh pr merge' block had no equivalent for the platform-integrated MCP tool call. Fails closed (denies) rather than allowing the call through when jq is missing from PATH, the payload is not a JSON object, or tool_name is present but not a string, since none of those states let the hook confirm the call is not a disguised merge_pull_request.",
+      "planes": ["pretooluse"],
+      "local_exclusion": "Grades a Claude Code tool-call matcher only (mcp__github__merge_pull_request), an unconditional deny with no payload inspection; nothing in the working tree to reconstruct this decision against.",
+      "trigger": "PreToolUse matcher mcp__github__merge_pull_request (hooks/hooks.json)",
+      "policy_refs": [],
+      "cluster": "github-operations",
+      "tracking_issue": 637,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "skill-audit-disclosure",
@@ -168,7 +188,7 @@
         ".github/workflows/skill-audit-gate.yml",
         "hooks/hooks.json"
       ],
-      "rule": "Requires a PR touching skills/*/SKILL.md to disclose battle-testing-a-skill / evaluating-skill-quality verdicts or waivers under a '## Skill audit evidence' heading; the CI twin additionally requires disclosure for description changes, security-relevant skills, changed design docs, changed checker scripts, changed deterministic gates, and (issue #998) changed checker-or-gate scripts (the union of the checker-script and gate-script scopes). Gate membership is the union of the .github/scripts/gate_*.py / scan_*.py naming convention, every gates[].script path registered in this file, and this file itself; deletions and renames count, and the disclosure must be 'deterministic-gate-quality: RAN' or an explicit waiver with a reason, never 'NOT-RUN'. 'defeat-test-disclosure' shares checker-script-adversarial-review's RAN/NOT-RUN/WAIVED shape instead, disclosing that at least one test was constructed to defeat (not merely exercise the happy path of) the new or changed detection logic. The applicability computation lives in one place (gitapex_compute_skill_audit_flags.py), which the CI diff step and the local pre-push wrapper (gitapex_gate_skill_audit_disclosure.py --check-diff BASE HEAD --body-file PATH, invoked by the PreToolUse hook when .github/ is present) both call, so the full verdict including every conditional extension is reachable before a push.",
+      "rule": "Requires a PR touching skills/*/SKILL.md to disclose battle-testing-a-skill / evaluating-skill-quality verdicts or waivers under a '## Skill audit evidence' heading; the CI twin additionally requires disclosure for description changes, security-relevant skills, changed design docs, changed checker scripts, changed deterministic gates, and (issue #998) changed checker-or-gate scripts (the union of the checker-script and gate-script scopes). Gate membership is the union of the .github/scripts/gate_*.py / scan_*.py naming convention, every gates[].script path registered in this file, and this file itself; deletions and renames count, and the disclosure must be 'deterministic-gate-quality: RAN' or an explicit waiver with a reason, never 'NOT-RUN'. 'defeat-test-disclosure' shares checker-script-adversarial-review's RAN/NOT-RUN/WAIVED shape instead, disclosing that at least one test was constructed to defeat (not merely exercise the happy path of) the new or changed detection logic. The applicability computation lives in one place (gitapex_compute_skill_audit_flags.py), which the CI diff step and the local pre-push wrapper (gitapex_gate_skill_audit_disclosure.py --check-diff BASE HEAD --body-file PATH, invoked by the PreToolUse hook when .github/ is present) both call, so the full verdict including every conditional extension is reachable before a push. The PreToolUse hook itself fails closed (denies) when jq is missing from PATH, the payload or tool_input is not a JSON object, or tool_name is present but not a string -- an unparseable payload is treated as indeterminate, not as evidence the disclosure requirement does not apply.",
       "planes": ["pretooluse", "ci"],
       "local_exclusion": "Grades a PR body against the changed-skill list; the body does not exist until the PR is opened.",
       "trigger": "PreToolUse matcher mcp__github__create_pull_request and mcp__github__update_pull_request (hooks/hooks.json); .github/workflows/skill-audit-gate.yml on pull_request",
@@ -176,7 +196,8 @@
       "cluster": "skill-lifecycle",
       "tracking_issue": null,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "pr-issue-acm-disclosure",
@@ -194,7 +215,23 @@
       "cluster": ["plan-integrity", "github-operations"],
       "tracking_issue": 657,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
+    },
+    {
+      "id": "pr-duplicate-issue",
+      "kind": "script",
+      "script": ["hooks/check-pr-duplicate-issue.sh", "hooks/gitapex_check_pr_duplicate_issue.py"],
+      "rule": "Denies mcp__github__create_pull_request when the new PR's own resolving-cited issue (Closes/Fixes/Resolves) is already cited -- resolving or context (Closes/Fixes/Resolves/Refs/bare #N) -- by another currently-open PR, unless the new PR's own body carries an explicit `Duplicate-PR-waiver: <reason>` line; fails closed on a missing GH_TOKEN/GITHUB_TOKEN or an unresolvable open-PR-list fetch.",
+      "planes": ["pretooluse"],
+      "local_exclusion": "Grades the new PR's own citations against live open-PR state on GitHub; 'other currently-open PRs' has no local/offline equivalent to check against.",
+      "trigger": "PreToolUse matcher mcp__github__create_pull_request (hooks/hooks.json)",
+      "policy_refs": [],
+      "cluster": ["plan-integrity", "github-operations"],
+      "tracking_issue": 1197,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "gitignore-pattern-test-coverage",
@@ -208,7 +245,8 @@
       "cluster": "repo-hygiene",
       "tracking_issue": 519,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "provenance-disclosure",
@@ -225,7 +263,8 @@
       "cluster": "outward-hygiene",
       "tracking_issue": 520,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "retro-title-convention-citation",
@@ -239,7 +278,8 @@
       "cluster": "self-governance",
       "tracking_issue": 520,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "routine-scope-enforcement",
@@ -253,7 +293,8 @@
       "cluster": "self-governance",
       "tracking_issue": 520,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "skill-rename-lifecycle",
@@ -267,7 +308,8 @@
       "cluster": "skill-lifecycle",
       "tracking_issue": 285,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "skill-branch-fixture-coverage",
@@ -281,7 +323,8 @@
       "cluster": "skill-lifecycle",
       "tracking_issue": 49,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "split-fixture-coverage",
@@ -295,7 +338,8 @@
       "cluster": "skill-lifecycle",
       "tracking_issue": 526,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "transfer-check-disclosure",
@@ -309,7 +353,8 @@
       "cluster": "skill-lifecycle",
       "tracking_issue": 517,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "skill-metadata-schema-drift",
@@ -323,7 +368,8 @@
       "cluster": "skill-lifecycle",
       "tracking_issue": 745,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "split-schema-drift",
@@ -337,7 +383,8 @@
       "cluster": "skill-lifecycle",
       "tracking_issue": 928,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "skill-eval-yaml-parity",
@@ -351,7 +398,8 @@
       "cluster": "skill-lifecycle",
       "tracking_issue": 928,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "skill-eval-status-doc-drift",
@@ -365,7 +413,8 @@
       "cluster": "skill-lifecycle",
       "tracking_issue": 928,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "evals-scripts-coverage-floor",
@@ -379,7 +428,8 @@
       "cluster": ["supply-chain", "test-integrity"],
       "tracking_issue": 536,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "apm-manifest-drift",
@@ -393,7 +443,8 @@
       "cluster": "supply-chain",
       "tracking_issue": 234,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "plugin-manifest-mirror-drift",
@@ -414,7 +465,8 @@
       "cluster": "supply-chain",
       "tracking_issue": 1028,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "plugin-manifest-schema-conformance",
@@ -434,7 +486,8 @@
       "cluster": "supply-chain",
       "tracking_issue": 1028,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "toolchain-pin-drift",
@@ -448,7 +501,8 @@
       "cluster": "supply-chain",
       "tracking_issue": 57,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "owasp-asi-mapping-completeness",
@@ -462,7 +516,8 @@
       "cluster": "self-governance",
       "tracking_issue": 144,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "owasp-llm-mapping-completeness",
@@ -476,7 +531,8 @@
       "cluster": "self-governance",
       "tracking_issue": 145,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "retrospective-gate-drift-scan",
@@ -490,7 +546,8 @@
       "cluster": "self-governance",
       "tracking_issue": 297,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "waza-eval-gate",
@@ -507,7 +564,8 @@
       "cluster": "skill-lifecycle",
       "tracking_issue": 582,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "workflow-lint",
@@ -521,7 +579,8 @@
       "cluster": "supply-chain",
       "tracking_issue": null,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "python-lint",
@@ -535,7 +594,8 @@
       "cluster": "supply-chain",
       "tracking_issue": 678,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "mypy-type-check",
@@ -549,7 +609,8 @@
       "cluster": ["test-integrity", "supply-chain"],
       "tracking_issue": 684,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "toolchain-nix-build-verify",
@@ -563,7 +624,8 @@
       "cluster": "supply-chain",
       "tracking_issue": null,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "ssot-schema-drift",
@@ -572,7 +634,7 @@
         ".github/scripts/gitapex_scan_ssot_schema.py",
         ".github/scripts/_gitapex_argv_safety.py"
       ],
-      "rule": "Validates .gitapex/ssot.json against .gitapex/ssot.schema.json (JSON Schema draft 2020-12); fails if any gates[].script path doesn't exist as a real file, or any policy_refs[] value doesn't resolve to a real policy_sources[].id. The argv-safety predicates this gate applies to local_invocation/local_stdin live in _gitapex_argv_safety.py, registered here (issue #904) so gitapex_detect_changed_gate_scripts.py selects an edit to them as a gate change requiring disclosure.",
+      "rule": "Validates .gitapex/ssot.json against .gitapex/ssot.schema.json (JSON Schema draft 2020-12); fails if any gates[].script path doesn't exist as a real file, or any policy_refs[] value doesn't resolve to a real policy_sources[].id. The argv-safety predicates this gate applies to local_invocation/local_stdin live in _gitapex_argv_safety.py, registered here (issue #904) so gitapex_detect_changed_gate_scripts.py selects an edit to them as a gate change requiring disclosure. Known gap (issue #1227): checks only that a registered entry's script path is real, not the reverse -- a real gate-shaped file (matching the naming convention gitapex_detect_changed_gate_scripts.py already applies for a different purpose) with no gates[] entry passes this check undetected.",
       "planes": ["ci", "local"],
       "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_ssot_schema.py"],
       "trigger": "tests/test_gitapex_scan_ssot_schema.py inside the pytest step of .github/workflows/test.yml",
@@ -580,7 +642,8 @@
       "cluster": "registry-integrity",
       "tracking_issue": 123,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "plugin-root-brace-notation",
@@ -594,7 +657,8 @@
       "cluster": "supply-chain",
       "tracking_issue": 650,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "exception-handler-gap",
@@ -612,7 +676,8 @@
       "cluster": "test-integrity",
       "tracking_issue": 682,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "hidden-characters",
@@ -626,7 +691,8 @@
       "cluster": "repo-hygiene",
       "tracking_issue": 702,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "cyclomatic-complexity-floor",
@@ -640,7 +706,8 @@
       "cluster": "test-integrity",
       "tracking_issue": 727,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "stale-retro-stub-autoclose",
@@ -654,7 +721,8 @@
       "cluster": "self-governance",
       "tracking_issue": 694,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "low-trust-workflow-hooks-review",
@@ -668,7 +736,8 @@
       "cluster": "repo-hygiene",
       "tracking_issue": 136,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "registry-wiring-scan",
@@ -682,7 +751,8 @@
       "cluster": "self-governance",
       "tracking_issue": 682,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "harden-checkout-pin-drift",
@@ -696,7 +766,8 @@
       "cluster": "supply-chain",
       "tracking_issue": 813,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "runtime-compatibility-matrix-schema-drift",
@@ -710,7 +781,8 @@
       "cluster": "runtime-compatibility",
       "tracking_issue": 828,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "metadata-outcome-lines-drift",
@@ -724,7 +796,8 @@
       "cluster": "self-governance",
       "tracking_issue": 877,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "eval-suite-schema-drift",
@@ -738,7 +811,8 @@
       "cluster": "test-integrity",
       "tracking_issue": 862,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "eval-results-schema-drift",
@@ -752,7 +826,8 @@
       "cluster": "test-integrity",
       "tracking_issue": 926,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "eval-declared-model-allowlist",
@@ -766,7 +841,8 @@
       "cluster": "test-integrity",
       "tracking_issue": 925,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "main-ruleset-required-checks",
@@ -780,7 +856,8 @@
       "cluster": "self-governance",
       "tracking_issue": 439,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "ruleset-sync-gate",
@@ -794,7 +871,8 @@
       "cluster": "self-governance",
       "tracking_issue": 439,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "ruleset-drift-scan",
@@ -808,7 +886,8 @@
       "cluster": "self-governance",
       "tracking_issue": 439,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "contract-axis-vocabulary-drift",
@@ -822,7 +901,8 @@
       "cluster": "self-governance",
       "tracking_issue": 949,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "skill-quality-rubric-vocabulary-drift",
@@ -835,6 +915,21 @@
       "policy_refs": [],
       "cluster": "self-governance",
       "tracking_issue": 993,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
+    },
+    {
+      "id": "dimensions-numbering-drift",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_scan_dimensions_numbering_drift.py",
+      "rule": "evaluating-deterministic-gate-quality's references/dimensions.md carries one continuous ordered-list numbering across two lanes (deterministic-shape checks 1-6, probabilistic-maturity dimensions 7-N): every item must stay sequential with no gap, duplicate, or out-of-order entry; both '**<lane>** (X-Y)' range declarations, output-schema.json's findings[].dimensionId.maximum, and that same schema's findings-array description's 'dimensions.md, 1-N' span must all match the real item count; and every 'dimension N' / 'shape check N' cross-reference in dimensions.md or SKILL.md must name a number that actually exists in its own lane. A missing, duplicated, or empty section heading, zero items in either lane, or malformed schema JSON fails closed rather than passing.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_dimensions_numbering_drift.py"],
+      "trigger": "tests/test_gitapex_scan_dimensions_numbering_drift.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "self-governance",
+      "tracking_issue": 1229,
       "status": "active",
       "supersedes": null
     },
@@ -850,7 +945,8 @@
       "cluster": "github-operations",
       "tracking_issue": 985,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "bare-python3-invocation",
@@ -864,7 +960,8 @@
       "cluster": "supply-chain",
       "tracking_issue": 1035,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "stdlib-only-claim-drift",
@@ -882,7 +979,8 @@
       "cluster": "test-integrity",
       "tracking_issue": 1052,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     },
     {
       "id": "pr-title-convention",
@@ -901,7 +999,94 @@
       "cluster": "github-operations",
       "tracking_issue": 1058,
       "status": "active",
-      "supersedes": null
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
+    },
+    {
+      "id": "copilot-endpoint-preflight",
+      "kind": "script",
+      "script": [
+        ".github/scripts/gitapex_check_copilot_endpoint_configured.py",
+        ".github/workflows/waza-eval-matrix.yml",
+        ".github/workflows/waza-eval-gate.yml"
+      ],
+      "rule": "Fails loudly unless COPILOT_BASE_URL or COPILOT_PROVIDER_BASE_URL resolves (waza's own envFirst() precedence) to a well-formed absolute URL (scheme + host, matching waza's own providerHost()) before either workflow attempts a copilot-sdk-executor run; never prints the resolved value.",
+      "planes": ["ci"],
+      "local_exclusion": "Grades GitHub Actions repository secrets (COPILOT_BASE_URL / COPILOT_PROVIDER_BASE_URL); a local working tree has no equivalent secret to check, and failing every unrelated local pre-push on their absence would be a false-alarm regression.",
+      "trigger": ".github/workflows/waza-eval-matrix.yml's eval-matrix job (workflow_dispatch) and .github/workflows/waza-eval-gate.yml (pull_request / workflow_dispatch), plus tests/test_gitapex_check_copilot_endpoint_configured.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "skill-lifecycle",
+      "tracking_issue": 124,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
+    },
+    {
+      "id": "real-checkout-git-write",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_gate_real_checkout_git_write.py",
+      "rule": "No pytest-discovered test file may construct a REPO_ROOT-rooted path expression that continues into a literal \".git\" path segment, unless the flagged line carries an inline \"# real-checkout-git-write: WAIVED: <reason>\" comment with a non-empty reason. Catches a test writing into this repository's own real checkout's .git directory (issue #991) without needing to distinguish a read from a write -- the waiver is the escape hatch for a genuine read-only need.",
+      "planes": ["local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_real_checkout_git_write.py"],
+      "trigger": "tests/test_gitapex_gate_real_checkout_git_write.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "repo-hygiene",
+      "tracking_issue": 991,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
+    },
+    {
+      "id": "dependency-allowlist",
+      "kind": "script",
+      "script": [
+        ".github/scripts/gitapex_gate_dependency_allowlist.py",
+        ".github/workflows/dependency-allowlist-gate.yml"
+      ],
+      "rule": "Every skills/*/metadata/gitapex.yaml's spec.executionRequirements.packages.<ecosystem> entries, PEP-503-normalized, must be in this gate's own hardcoded ALLOWED_PACKAGES allowlist (currently pip: pyyaml/jsonschema/pydantic, matching ADR 0001/issue #1115). A skill declaring no packages is a no-op.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_dependency_allowlist.py"],
+      "trigger": ".github/workflows/dependency-allowlist-gate.yml on pull_request, paths: skills/**/metadata/gitapex.yaml, .github/scripts/gitapex_gate_dependency_allowlist.py, .github/workflows/dependency-allowlist-gate.yml; also re-checked unconditionally by tests/test_gitapex_gate_dependency_allowlist.py's own real-repository test inside the required pytest step of .github/workflows/test.yml",
+      "policy_refs": ["skill-metadata-sidecar"],
+      "cluster": "skill-lifecycle",
+      "tracking_issue": 1141,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
+    },
+    {
+      "id": "detection-logic-property-coverage",
+      "kind": "script",
+      "script": [
+        ".github/scripts/gitapex_gate_detection_logic_property_coverage.py",
+        ".github/workflows/detection-logic-property-coverage-gate.yml"
+      ],
+      "rule": "A regex call (a .compile() on a bare name the graded file's own imports bind to the re module, including an 'import re as <alias>' alias, or a receiver-agnostic .match()/.search()/.fullmatch()), a path-resolution call (receiver-agnostic .resolve()/.is_symlink()/.relative_to(), or os.path.realpath()/os.path.abspath() matched on the call's final two attribute segments), or a string-comparison allowlist/denylist construct (receiver-agnostic .startswith()/.endswith(), an in/not in comparison against an inline list/tuple/set literal, or a frozenset()/set() call over one), newly added by a PR diff inside skills/*/scripts/gitapex_check_*.py, .github/scripts/gitapex_gate_*.py or hooks/gitapex_check_*.py (test_*.py and conftest.py excluded) must be covered by a co-located tests/test_<source-stem>_properties.py that imports the source module and defines an @given(...) property test whose own body references the trigger's enclosing function name, or any @given test in the file for a module-level trigger. Scope is the diff, not the repository. An inline '# detection-logic-property-coverage: WAIVED: <reason>' comment waives findings on that exact line. Exits 2 rather than pass silently on a malformed diff (an unparseable @@ hunk header, a post-image path that is neither /dev/null nor b/-prefixed, or a '+++ ' post-image header outside a hunk with no '--- ' source header before it) or an in-scope file that cannot be read or parsed. See the script's own module docstring for the disclosed known misses and over-reports.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_detection_logic_property_coverage.py"],
+      "local_stdin": ["git", "-c", "core.quotePath=false", "diff", "-U0", "--no-renames", "--merge-base", "origin/main", "HEAD", "--", "*.py"],
+      "trigger": ".github/workflows/detection-logic-property-coverage-gate.yml on pull_request, plus tests/test_gitapex_gate_detection_logic_property_coverage.py and tests/test_gitapex_gate_detection_logic_property_coverage_properties.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "test-integrity",
+      "tracking_issue": 1178,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
+    },
+    {
+      "id": "betterleaks-merge-gate",
+      "kind": "script",
+      "script": [".github/scripts/gitapex_run_betterleaks.py", ".github/workflows/betterleaks-merge-gate.yml"],
+      "rule": "Every pull_request runs a full-history betterleaks secret scan (uv run --frozen python3 .github/scripts/gitapex_run_betterleaks.py --mode history, against the flake.nix-pinned 1.6.1 binary built via `nix build .#betterleaks` and the committed .betterleaks.toml) -- closing the --no-verify bypass left open by the pre-commit/pre-push hooks alone (issue #890). Registered as a required status check in .github/rulesets/main.json; a failing run only blocks merge once a human dispatches apply-rulesets.yml (a separate, reviewer-gated step -- see that workflow and docs/runbooks/rulesets.md) to apply that file's committed source of truth to the live GitHub ruleset.",
+      "planes": ["ci"],
+      "local_exclusion": "Duplicates, at CI scope, the same full-history scan the pre-push betterleaks-history hook in .pre-commit-config.yaml already runs locally; this entry registers issue #894's separate merge-path enforcement (the local hook is bypassable with --no-verify), not a third local invocation of the same script.",
+      "trigger": ".github/workflows/betterleaks-merge-gate.yml on pull_request (no paths filter, so a required check can never be left Pending) and workflow_dispatch",
+      "policy_refs": ["main-branch-ruleset"],
+      "cluster": "secret-scanning",
+      "tracking_issue": 894,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed"
     }
   ],
   "clusters": {
@@ -914,6 +1099,7 @@
     "supply-chain": "Toolchain and dependency provisioning, and manifest-identity drift.",
     "test-integrity": "Quality floors on the artifacts backing the other clusters' own gates: test-suite coverage, static type checking, and static analysis of the gate scripts' own error paths.",
     "registry-integrity": "Self-validation of this registry file itself against its schema and against the repo's real files.",
-    "runtime-compatibility": "Cross-runtime execution-requirement compatibility matrix (parent issue #307's W2): schema validation now, real-runtime research-data drift checks once populated."
+    "runtime-compatibility": "Cross-runtime execution-requirement compatibility matrix (parent issue #307's W2): schema validation now, real-runtime research-data drift checks once populated.",
+    "secret-scanning": "Detection of credentials and other secrets committed to the repository, on both the local hook path and the CI merge path."
   }
 }

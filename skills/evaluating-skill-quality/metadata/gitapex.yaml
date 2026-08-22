@@ -473,6 +473,65 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1064"
       summary: "PR review (CodeRabbit): the fix's sidecar.is_file() guard was called twice (once before parsing, once at the external-citations-resolve decision), a redundant re-check that could desync if the sidecar changed mid-run. Cached the initial result once as sidecar_present and reused it at both sites. Re-verified: 530/530 pytest, 64/64 self-dogfood, ruff/mypy clean."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/364"
+      summary: "Built the deferred dimension-14 self-referential corpus's deterministic half: evals/guardrail-manifest.yaml (co-located, distinct from top-level evals/evaluating-skill-quality/) names five guardrail clauses across this SKILL.md and references/adversarial-self-audit.md; evals/scripts/gitapex_check_skill_guardrail_presence.py checks each is still present, whitespace-normalized. No new workflow/gate registration needed -- it runs under this repo's existing pytest suite (test.yml)."
+      outcome:
+        verdict: KEEP
+        anchors: 5
+        coverage_percent: 100
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/364"
+      summary: "The behavioral half (feed this skill a degraded copy of itself, confirm its own procedure catches the gap generically) was not built: no waza/model-CLI toolchain or live-dispatch budget was available this session to measure it, and an unverified fixture would be exactly the kind of unearned confidence this skill's own Stop boundaries warn against for a reviewed target. Recorded per this issue's own explicit escape hatch rather than silently dropped; full rationale in evals/README.md."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1124"
+      summary: "Added spec.dependencyPolicy (StdlibOnly/Declared), a new optional precondition axis mirroring portability/capabilityAssumption, not warning-only like Compatibility/Confidentiality awareness -- it calibrates dimension 7's grading directly. New rubric.md Dependency policy section, SKILL.md section, dependency-policy-declared shape check (PASS on absence), schema property. No new scanner logic: reuses PR3's find_packages_drift and PR2's execution-requirements-packages-allowlisted."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1124"
+      summary: "Adversarial review found: a block-shaped or bare-colon 'dependencyPolicy:' sidecar value parsed to None, identical to true absence, so the check silently PASSed a malformed declaration as 'not declared'. Traced to _parse_manifest's generic scalar handling dropping any non-block key with no inline value. Fixed narrowly for dependencyPolicy only (a blanket fix broke test_manifest_parser_still_ignores_eval_status) with 4 new regression tests."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/1124"
+      summary: "Re-verified live after the fix: full pytest suite 4828/4828 passed (one pre-existing unrelated environment failure), self-dogfood 68/68 PASS, ruff/mypy clean. Held-out gate: both fixtures moved 0.800000 -> 1.000000, KEEP. Drift-scanning this skill itself surfaces two pre-existing, already-tracked findings (an undeclared PyYAML import; a network-drift false positive on a validation regex) -- neither introduced or fixed here."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1124"
+      summary: "A battle-testing-a-skill audit (after the entries above) found dimension 5 FAIL: the new Dependency policy prose claimed find_packages_drift catches 'ANY non-stdlib import,' contradicting that scanner's own docstring disclosing a dynamic-import blind spot. Fixed by naming the AST-visible-only subset explicitly in the StdlibOnly and Declared(a) criteria, mirroring sub-criterion (c)'s own disclosure pattern. Re-verified: 68/68 self-dogfood, full suite green."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1141"
+      summary: "Redesigned package-allowlist enforcement: removed execution-requirements-packages-allowlisted and its supporting functions from gitapex_check_skill_shape.py -- a portable skill script should not need gitapex's package policy, and the shared allowlist config it read (never committed) coupled otherwise-independent skills. Supersedes that clause in the issues/1124 entry above (append-only). Replaced with a repository-owned CI gate validating packages against a hardcoded allowlist matching ADR 0001."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/1141"
+      summary: "Independent adversarial code review (this issue's own required round) found 3 issues, all fixed: two live eval task fixtures still referenced the removed .gitapex/dependency-allowlist.json path; one kept test's leading comment described the removed mechanism's now-stale rationale; rubric.md's Execution requirements paragraph did not disclose PEP-503 normalization is looser than the removed check's exact/case-sensitive matching. Full suite 4846 passed, self-dogfood 67/67, ruff/mypy clean."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/1141"
+      summary: "battle-testing-a-skill: PASS (all 22 applicable dimensions plus one added, quoted evidence verified against primary source). evaluating-skill-quality self-review: WELL-FORMED-NOT-MATURE (67/67 shape checks; two standing pre-existing gaps, dimensions 5 and 7, neither introduced here). Both dispatched as isolated fresh agents per this skill's own Subagent dispatch requirement."
+      outcome:
+        verdict: WELL-FORMED-NOT-MATURE
+        reason: pre-existing-dimension-5-and-7-findings
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1142"
+      summary: "Added a Description-length trigger bullet to references/rubric.md's Dimension 2 (Conciseness): the frontmatter description field is explicitly in scope for the existing paragraph-cost challenge, triggered at or above 90% of DESCRIPTION_MAX_CHARS -- the same deterministic-threshold-as-trigger shape Declaration-vs-structure fit already uses for BODY_MAX_LINES. No soft word/character ceiling advisory introduced, per parent issue 1137's own rejection of that framing."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/1142"
+      summary: "scorer-gated-skill-edits held-out gate, ordinary class: 2 new fixtures added (80 total, 31:34:14). One fresh isolated claude -p dispatch pair against the new selection fixture moved to 1.000000, KEEP; 33 pre-existing selection fixtures confirmed content-disjoint by inspection. Both dispatches independently reached the same surface Fail verdict; only the after dispatch could cite the new bullet by name. Full record: evals/evaluating-skill-quality/split.md."
+      outcome:
+        verdict: KEEP
+        before: 0.777778
+        after: 1.0
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/1142"
+      summary: "Pre-merge dogfood, diff-scoped self-review and battle-testing-a-skill, both isolated. Self-review: WELL-FORMED-NOT-MATURE, one Dimension 4 ambiguity found. Battle-testing-a-skill: FAIL, one citation-accuracy misattribution on the same clause, plus a disclosed discriminating-power finding. Ambiguity/misattribution fixed same PR without re-gating; discriminating-power finding kept-and-disclosed per the confidentiality-awareness follow-up precedent above."
+      outcome:
+        verdict: WELL-FORMED-NOT-MATURE/FAIL
+        found: 2
+        fixed: 1
+        disclosed_not_fixed: 1
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/pull/1174"
+      summary: "CodeRabbit review found both new fixtures' assertions did not exclude an auto-fail misapplication of the new trigger. Added a real-classification marker per fixture (uplication/well-known) plus four output_not_contains auto-fail-phrasing guards, re-scored against the same transcripts (before 0.5->0.777778, KEEP preserved). Its separate restraint-fixture suggestion stays a disclosed, deferred gap, unchanged from this iteration's own prior Blind spot pass."
+      outcome:
+        verdict: fixed
+        before: 0.777778
+        after: 1.0
   skillDependencies:
     requires: []
     relatedTo:

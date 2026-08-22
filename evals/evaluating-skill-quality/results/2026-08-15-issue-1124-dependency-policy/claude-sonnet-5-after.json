@@ -1,0 +1,32 @@
+{
+  "model_id": "claude-sonnet-5",
+  "n_fixtures": 5,
+  "mean_score": 1.0,
+  "scores": [
+    {
+      "fixture_id": "evaluating-skill-quality-dependency-policy-declared-fail-selection",
+      "score": 1.0,
+      "split": "selection"
+    },
+    {
+      "fixture_id": "evaluating-skill-quality-dependency-policy-declared-pass-train",
+      "score": 1.0,
+      "split": "train"
+    },
+    {
+      "fixture_id": "evaluating-skill-quality-dependency-policy-stdlib-only-fail-selection",
+      "score": 1.0,
+      "split": "selection"
+    },
+    {
+      "fixture_id": "evaluating-skill-quality-dependency-policy-stdlib-only-pass-train",
+      "score": 1.0,
+      "split": "train"
+    },
+    {
+      "fixture_id": "evaluating-skill-quality-dependency-policy-undeclared-real-import-fail-test",
+      "score": 1.0,
+      "split": "test"
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+id: evaluating-skill-quality-dependency-policy-stdlib-only-fail-selection
+name: StdlibOnly Declaration Contradicted by a Real Non-Stdlib Import
+description: A distinct domain from the train fixture (a Slack deploy-status notifier, not a git-branch archiver) -- the reviewed skill's sidecar declares spec.dependencyPolicy StdlibOnly, but its bundled script imports the third-party `requests` package, a real correctness defect in the declaration itself per the new Dependency policy StdlibOnly branch. Held out in selection to measure whether the check generalizes to a genuine contradiction rather than memorizing the train fixture's clean-pass domain or wording.
+tags:
+  - quality
+  - bundled-scripts
+  - dependency-policy
+  - selection
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft skill called
+    "notifying-deploy-status". Its metadata/gitapex.yaml sidecar declares:
+
+    spec:
+      portability: Portable
+      capabilityAssumption: Broad
+      dependencyPolicy: StdlibOnly
+
+    ---
+    name: notifying-deploy-status
+    description: Post a deploy status message to a Slack webhook. Use when a deploy finishes and the team channel needs a status update.
+    ---
+
+    # Notifying Deploy Status
+
+    ## Procedure
+
+    1. Run `scripts/notify_slack.py "<message>"` with the deploy outcome as
+       the message text.
+
+    `scripts/notify_slack.py`'s full content:
+
+    ```python
+    #!/usr/bin/env python3
+    """Post a deploy status message to a Slack webhook."""
+    import argparse
+    import os
+
+    import requests
+
+
+    def main() -> int:
+        parser = argparse.ArgumentParser()
+        parser.add_argument("message")
+        args = parser.parse_args()
+        url = os.environ["SLACK_WEBHOOK_URL"]
+        response = requests.post(url, json={"text": args.message}, timeout=10)
+        response.raise_for_status()
+        return 0
+
+
+    if __name__ == "__main__":
+        raise SystemExit(main())
+    ```
+
+    Is dimension 7's "Dependencies listed; execution intent stated"
+    criterion a clean Pass or Fail for this script? Name the specific
+    import that matters to your verdict, cite the specific rubric wording
+    you are applying, and state literally the word PASS or FAIL as your
+    verdict for this one criterion.
+expected:
+  output_contains:
+    - "requests"
+    - "FAIL"
+    - "contradicts the declaration"
+  output_not_contains:
+    - "LGTM"
+    - "is a clean pass"

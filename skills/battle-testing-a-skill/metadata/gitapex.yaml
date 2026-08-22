@@ -90,6 +90,16 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/818"
       summary: "Declared spec.executionRequirements.tools (W3 second slice, https://github.com/tvna/gitapex/issues/307): gitapex_route_test_model.py reads an optional --fixed-routes JSON file when given; no writes, no subprocess/shell calls."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/364"
+      summary: "Built the deferred dimension-14 self-referential corpus's deterministic half: evals/guardrail-manifest.yaml (co-located, distinct from top-level evals/battle-testing-a-skill/) names five guardrail clauses from this SKILL.md; evals/scripts/gitapex_check_skill_guardrail_presence.py checks each is still present, whitespace-normalized. No new workflow/gate registration needed -- it runs under this repo's existing pytest suite (test.yml)."
+      outcome:
+        verdict: KEEP
+        anchors: 5
+        coverage_percent: 100
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/364"
+      summary: "The behavioral half (feed this skill a degraded copy of itself, confirm its own procedure catches the gap generically) was not built: no waza/model-CLI toolchain or live-dispatch budget was available this session to measure it, and an unverified fixture would be exactly the fail-open dimension 14 itself warns against. Recorded per this issue's own explicit escape hatch rather than silently dropped; full rationale in evals/README.md."
   skillDependencies:
     requires:
       - evaluating-skill-quality

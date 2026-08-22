@@ -100,9 +100,9 @@ needed. If the retry also fails, dispatch on what actually failed:
   rollback below.
 - **The execution was wrong but the fix is not obvious** -> escalate: a
   `StageDeviated{action: escalate}` event, plus a comment on the (still
-  draft) PR naming exactly what was tried -- matching `driving-pr-to-
-  merge`'s own "escalate only when blocked... not for anything the agent
-  can fix on its own."
+  draft) PR naming exactly what was tried -- matching
+  `drafting-a-pr-to-merge`'s own "escalate only when blocked... not for
+  anything the agent can fix on its own."
 - **`NeedsInput`** -> answer from the ACM/Branch Plan's own already-stated
   content when possible; escalate per the rule above when the ACM itself
   does not settle it. Never counted against the one-retry budget.

@@ -669,6 +669,67 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/943"
       summary: "Supersedes the caveat above (https://github.com/tvna/gitapex/issues/843) and the decision above (https://github.com/tvna/gitapex/issues/846) that left the prose unchanged: the rename is no longer speculative, so the delegation step can name a confirmable delegate again. SKILL.md, grading-procedure.md, and output-schema.json now name scanning-attack-surfaces, and the coupled eval fixture was updated in the same commit so the two cannot drift apart."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1229"
+      summary: "Added Dimension 24 (Deny-path recoverability, post-block agent behavior) to references/dimensions.md's probabilistic-maturity lane, appended after dimension 23 without renumbering (lane range 7-23 -> 7-24). Mirrors dimension 21's design-plus-real-firing-audit shape; fixed four-token verdict vocabulary (actionable-recovery, dead-end-risk, escalation-risk, indeterminate); grounded in arXiv:2607.07405, arXiv:2608.02670, an Ona engineering blog post, and Google's Tricorder paper (ICSE 2015)."
+      outcome:
+        lines: "dimensions.md 449->553"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1229"
+      summary: "output-schema.json's findings[].dimensionId.maximum bumped 23->24 and the findings-array description's 'dimensions.md, 1-23' citation bumped to 'dimensions.md, 1-24', so a Dimension 24 finding validates against the schema and the description stays accurate. No line-count change: both edits land on already-existing lines."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1229"
+      summary: "A new drift gate ships in the same change, per this repository's build-the-gate-with-the-invariant rule: gitapex_scan_dimensions_numbering_drift.py, registered in ssot.json as dimensions-numbering-drift, enforced via its own pytest test file. Locks dimensions.md's continuous 1..N numbering across both lanes, both lane-range declarations, the schema's dimensionId ceiling, and every dimension/shape-check cross-reference -- including one naming the wrong lane's number. 35 tests, 100% coverage."
+    - kind: caveat
+      anchor: "https://github.com/tvna/gitapex/issues/1229"
+      summary: "Dimension 24's four primary-source citations were carried from this issue's own text, asserted checked against primary sources when drafted. arXiv:2607.07405 was already an established citation in this skill's dimension 21/10. The other three -- arXiv:2608.02670, an Ona engineering blog post, and Google's Tricorder paper (ICSE 2015) -- were not independently re-verified in the session that implemented this change; carried as represented facts, not re-derived."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/1229 -> https://github.com/tvna/gitapex/issues/1230"
+      summary: "This issue's own third acceptance criterion -- re-audit every registered gate against the finalized Dimension 24 wording -- was flagged by its own text as comparable in cost to the original discovery workflow (roughly 1.1M tokens), possibly spanning more than one PR. The registered-gate count had already drifted from the cited 57 to 63 by the time this PR opened. Deferred to https://github.com/tvna/gitapex/issues/1230, scoping this change to the rubric, the schema fix, and the drift gate."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1229"
+      summary: "Downstream self-consistency gates this diff tripped, fixed in the same PR: eval-status.md's coverage headline/uncovered-list (13/23 -> 13/24, dimension 24 added with its own rationale) plus its snapshot test; a bare external-paper task-39 citation the no-bare-issue-citation check flags on sight, fixed via its own inline-code escape hatch; wired-gate-count prose across four files (33->34); and a pre-existing, unrelated exclusions-count staleness (28->29) the same test caught in passing."
+      outcome:
+        fixed: 5
+    - kind: audit
+      anchor: "method:evaluating-deterministic-gate-quality"
+      summary: "A gitapex:evaluating-deterministic-gate-quality dispatch reviewed the new dimensions-numbering-drift gate: well-formed and well-placed. Nine live adversarial probes against dimension 15 found zero fail-open bugs. Disclosed the same CLAUDE.md dispatch-isolation leak this repository's own prior audit rounds have already disclosed, and surfaced one unrelated, currently-open live-ruleset drift on main worth separate attention."
+      outcome:
+        verdict: WELL-FORMED-AND-WELL-PLACED
+    - kind: audit
+      anchor: "method:adversarial-code-review"
+      summary: "An independent adversarial code-review pass found one blocking bug: check_lane_range_declarations and check_schema used re.search (first match only), not re.finditer, missing a second stale range/citation elsewhere in the same text -- inconsistent with this file's own check_cross_references and both precedent scripts. Also found the open-ended dimension-lane section had no upper heading bound."
+      outcome:
+        verdict: FAIL
+        found: 2
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1229"
+      summary: "Fixed both real findings from the adversarial review: the three search-only checks now validate every match via finditer, and the dimension lane's own section extraction now bounds to the next level-1-or-2 heading instead of end-of-file. Added 5 regression tests (40 total, 100% coverage) reproducing each defeat case the review itself constructed."
+      outcome:
+        fixed: 2
+        tests: "gitapex_scan_dimensions_numbering_drift.py test count 35->40"
+    - kind: audit
+      anchor: "method:coderabbitai"
+      summary: "CodeRabbit's automated review on the pushed branch found one Major finding: the four Dimension 24 verdict tokens did not partition Part A's four checks -- a branch failing only check (1) or check (2) while clearing (3)/(4) matched no token. Two trivial nitpicks: a dead insert-then-revert step in one test, and an unaddressed plural-range citation form with no live instance today."
+      outcome:
+        found: 3
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1229"
+      summary: "Fixed the Major finding: dead-end-risk now explicitly covers a check (1), (2), or (3) failure, not only (3), closing the partition gap so every evidenced Part A failure has exactly one token. Fixed the test nitpick by removing the dead insert-then-revert step. Declined the plural-range nitpick (no live citation of that shape exists in either source file today) -- disclosed, not silently dropped."
+      outcome:
+        fixed: 2
+        lines: "dimensions.md 548->553"
+    - kind: audit
+      anchor: "method:coderabbitai"
+      summary: "A second CodeRabbit incremental review (triggered manually after auto-incremental reviews returned no new pass) found one further Major finding: output-schema.json's shared verdict enum (pass/fail/not_applicable/indeterminate) cannot represent 3 of Dimension 24's own 4 fixed tokens, so a reviewer applying Dimension 24 has no structured field to record actionable-recovery, dead-end-risk, or escalation-risk in."
+      outcome:
+        found: 1
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1229"
+      summary: "Added denyPathVerdict to output-schema.json's findings[] items: an optional, dimension-24-only enum field carrying the four fixed tokens verbatim, mirroring how preconditionScoped/reviewScoped already carry a dimension-scoped flag beside the shared verdict field. verdict itself stays required, still recording the coarse pass/fail/indeterminate projection dimensions.md now states explicitly, so a generic consumer reading only verdict is unaffected."
+      outcome:
+        fixed: 1
+        lines: "dimensions.md 553->560, output-schema.json 398->403"
   skillDependencies:
     requires:
       - evaluating-skill-quality

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import gitapex_gate_gitignore_pattern_coverage as gate
 from conftest import FakeStdin as _FakeStdin
-from conftest import make_validation_error
+from conftest import assert_workflow_feeds_merge_base_to, make_validation_error
 
 
 def _write_test_file(tmp_path, name, content):
@@ -200,3 +200,22 @@ def test_main_exits_two_when_args_fail_validation(monkeypatch, capsys):
     monkeypatch.setattr(gate, "GitignorePatternCoverageArgs", _raise)
     assert gate.main([]) == 2
     assert "invalid CLI arguments" in capsys.readouterr().err
+
+
+# --- the real repository's own CI workflow -------------------------------
+
+
+def test_the_workflow_uses_merge_base_not_base_sha() -> None:
+    """Drift gate for an invariant this change establishes, per CLAUDE.md
+    section 3, mirroring `skill-rename-lifecycle-gate.yml`'s own identical
+    reasoning: `git merge-base` is resolved between `BASE_SHA` and
+    `HEAD_SHA` rather than diffing against `base.sha` directly, so a
+    `.gitignore` change that landed on the base branch after this PR
+    forked is never misattributed to this PR.
+
+    `conftest.assert_workflow_feeds_merge_base_to`'s own docstring carries
+    the defeat cases it closes, kept there rather than re-enumerated here
+    so this comment cannot go stale the next time that list grows.
+    `"diff"` is the producer command this gate depends on.
+    """
+    assert_workflow_feeds_merge_base_to("gitignore-pattern-coverage-gate.yml", "diff")

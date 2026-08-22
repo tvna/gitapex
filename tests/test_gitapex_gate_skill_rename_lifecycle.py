@@ -17,7 +17,7 @@ from __future__ import annotations
 import gitapex_gate_skill_rename_lifecycle as gate
 import pytest
 from conftest import FakeStdin as _FakeStdin
-from conftest import make_validation_error
+from conftest import assert_workflow_feeds_merge_base_to, make_validation_error
 
 
 def _write_sidecar(tmp_path, new_name, *, renamed_from=None, under_wrong_key=False):
@@ -255,3 +255,24 @@ def test_main_exits_two_when_args_fail_validation(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(gate, "GateSkillRenameLifecycleArgs", _raise)
     assert gate.main(["--removed", "/dev/null"]) == 2
     assert "invalid CLI arguments" in capsys.readouterr().err
+
+
+# --- the real repository's own CI workflow -------------------------------
+
+
+def test_the_workflow_uses_merge_base_not_base_sha() -> None:
+    """Drift gate for an invariant this change establishes, per CLAUDE.md
+    section 3: `git merge-base` is resolved between `BASE_SHA` and
+    `HEAD_SHA` rather than diffing against `base.sha` directly (the same
+    reason `skill-audit-gate.yml`'s three-dot diff is used there), so a
+    rename that landed on the base branch after this PR forked is never
+    misattributed to this PR.
+
+    `conftest.assert_workflow_feeds_merge_base_to`'s own docstring carries
+    the defeat cases it closes, kept there rather than re-enumerated here
+    so this comment cannot go stale the next time that list grows.
+    `"ls-tree"` is passed alongside `"diff"` because this workflow's own
+    producer command is `git ls-tree`, unlike the sibling `git diff`-based
+    gates asserted through the same helper elsewhere in this repository.
+    """
+    assert_workflow_feeds_merge_base_to("skill-rename-lifecycle-gate.yml", "diff", "ls-tree")

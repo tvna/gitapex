@@ -1,0 +1,90 @@
+id: evaluating-skill-quality-dependency-policy-declared-pass-train
+name: Declared Branch -- All Four Sub-Criteria Satisfied, Clean Pass
+description: The reviewed skill's sidecar declares spec.dependencyPolicy Declared with executionRequirements.packages.pip listing pyyaml, SKILL.md's compatibility field names pyyaml, the script genuinely uses the PEP 723 self-contained-script pattern invoked via `uv run`, and pyyaml is stipulated as allowlisted -- all four Declared-branch sub-criteria hold, so dimension 7 must be a clean Pass. Motivates the Dependency policy Declared-Pass branch, including the judged (not mechanically gated) PEP 723 sub-criterion.
+tags:
+  - quality
+  - bundled-scripts
+  - dependency-policy
+  - train
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft skill called
+    "converting-yaml-configs". Its metadata/gitapex.yaml sidecar declares:
+
+    spec:
+      portability: Portable
+      capabilityAssumption: Broad
+      dependencyPolicy: Declared
+      executionRequirements:
+        packages:
+          pip:
+            - pyyaml
+
+    ---
+    name: converting-yaml-configs
+    description: Convert a legacy YAML config file to the current schema. Use when a config still uses the old top-level key layout.
+    compatibility: "Requires pyyaml for YAML parsing; no other runtime assumptions."
+    ---
+
+    # Converting YAML Configs
+
+    ## Procedure
+
+    1. Run `uv run scripts/convert_config.py <path>` to rewrite the config
+       in place to the current schema.
+
+    `scripts/convert_config.py`'s full content:
+
+    ```python
+    #!/usr/bin/env python3
+    # /// script
+    # dependencies = ["pyyaml"]
+    # ///
+    """Convert a legacy YAML config to the current schema."""
+    import sys
+
+    import yaml
+
+
+    def _migrate(data: dict) -> dict:
+        if "old_key" in data:
+            data["new_key"] = data.pop("old_key")
+        return data
+
+
+    def main() -> int:
+        path = sys.argv[1]
+        with open(path) as f:
+            data = yaml.safe_load(f)
+        data = _migrate(data)
+        with open(path, "w") as f:
+            yaml.safe_dump(data, f)
+        return 0
+
+
+    if __name__ == "__main__":
+        raise SystemExit(main())
+    ```
+
+    For this review, treat `pyyaml` as present in this repository's own
+    dependency allowlist (enforced by a repository-owned CI gate) under the
+    `pip` ecosystem -- a stipulated fact for this exercise, not something
+    you need to independently verify.
+
+    Is dimension 7's "Dependencies listed; execution intent stated"
+    criterion a clean Pass or Fail here? Cite the specific rubric wording
+    you are applying (including every requirement it holds this skill to),
+    and state literally the word PASS or FAIL as your verdict.
+expected:
+  output_contains:
+    - "PASS"
+    - "packages-pip-vs-script-content"
+    - "packages-pip-vs-compatibility"
+    - "PEP 723"
+    - "allowlist"
+  output_not_contains:
+    - "LGTM"
+    - "under-declared"
+    - "not allowlisted"
+    - "under-declared"
+    - "not allowlisted"

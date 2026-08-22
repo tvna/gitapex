@@ -35,6 +35,12 @@ import subprocess
 
 import gitapex_gate_exception_handler_gaps as gate
 import pytest
+from conftest import (
+    assert_workflow_checkout_pins_head_sha_with_full_history,
+    assert_workflow_diff_carries_flags,
+    assert_workflow_feeds_merge_base_to,
+    assert_workflow_has_no_trigger_path_filter,
+)
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
@@ -497,6 +503,39 @@ def test_a_deleted_file_adds_nothing_to_grade(tmp_path: pathlib.Path) -> None:
     assert gate.find_violations(diff, tmp_path) == ([], [], 0)
 
 
+def test_a_deleted_files_own_removal_lines_still_bound_in_hunk() -> None:
+    """CodeRabbit review finding on this PR. `path` is None for the whole
+    of a deleted file's hunk (`+++ /dev/null` maps to None), and the old
+    code's `if path is None: continue` skipped the counter decrements and
+    the `in_hunk` exhaustion check for every line of it -- not just the
+    `added` recording. `old_remaining`/`new_remaining` stayed frozen at
+    their post-header values and `in_hunk` stayed True indefinitely, so a
+    patch with no `diff --git ` header between a deleted file and the next
+    one left that next file's own real `--- `/`+++ ` headers unrecognised.
+
+    Verified live against the pre-fix code: this exact diff returned `{}`
+    -- the second file's own real added line dropped entirely, with no
+    trace anywhere (not even misattributed to the wrong file, the way gap
+    2's own original shape was). The counters and the exhaustion check now
+    run regardless of `path`; only recording into `added` is still guarded
+    on it, so a deleted file's own declared removal count correctly bounds
+    its hunk and the next file is read normally afterward."""
+    diff = (
+        "--- a/hooks/gitapex_check_deleted.py\n"
+        "+++ /dev/null\n"
+        "@@ -1,3 +0,0 @@\n"
+        "-line1\n"
+        "-line2\n"
+        "-line3\n"
+        "--- a/hooks/gitapex_check_next.py\n"
+        "+++ b/hooks/gitapex_check_next.py\n"
+        "@@ -1,1 +1,2 @@\n"
+        " def g():\n"
+        "+    pass\n"
+    )
+    assert gate.parse_added_lines(diff) == {"hooks/gitapex_check_next.py": {2}}
+
+
 def test_an_added_line_whose_content_starts_with_two_plusses_is_not_a_header(
     tmp_path: pathlib.Path,
 ) -> None:
@@ -520,12 +559,19 @@ def test_a_removed_line_whose_content_starts_with_two_dashes_is_not_a_header(
     tmp_path: pathlib.Path,
 ) -> None:
     """The mirror case: removed content beginning `-- ` is emitted as
-    `--- ...`, and must not arm the post-image-header state machine."""
+    `--- ...`, and must not arm the post-image-header state machine.
+
+    `@@ -1,1 +1,1 @@`, not `-1,2`: the body has exactly one `-`-prefixed
+    line (consumes the pre-image side only) and one `+`-prefixed line
+    (consumes the post-image side only), so the accurate pre-image count
+    is 1 -- an inflated pre-image count here would leave `old_remaining`
+    permanently above zero and incorrectly trip issue #1193's own
+    declared-vs-actual validation."""
     diff = (
         "diff --git a/.github/scripts/gate_x.py b/.github/scripts/gate_x.py\n"
         "--- a/.github/scripts/gate_x.py\n"
         "+++ b/.github/scripts/gate_x.py\n"
-        "@@ -1,2 +1,1 @@\n"
+        "@@ -1,1 +1,1 @@\n"
         "--- a signature dash line\n"
         "+text = p.read_text()\n"
     )
@@ -537,17 +583,259 @@ def test_both_in_hunk_header_lookalikes_in_one_hunk_are_content(
 ) -> None:
     """The killing case for the hunk-state machine: a removed `-- ` line arms
     nothing, and the `++ ` line after it is content. Testing either half alone
-    left both guards passing individually while jointly broken."""
+    left both guards passing individually while jointly broken.
+
+    `@@ -1,1 +1,2 @@`, not `-1,2`: the body has exactly one `-`-prefixed
+    line (consumes the pre-image side only) and two `+`-prefixed lines
+    (each consumes the post-image side only), so the accurate pre-image
+    count is 1 -- an inflated pre-image count here would leave
+    `old_remaining` permanently above zero and incorrectly trip issue
+    #1193's own declared-vs-actual validation."""
     diff = (
         "diff --git a/.github/scripts/gate_x.py b/.github/scripts/gate_x.py\n"
         "--- a/.github/scripts/gate_x.py\n"
         "+++ b/.github/scripts/gate_x.py\n"
-        "@@ -1,2 +1,2 @@\n"
+        "@@ -1,1 +1,2 @@\n"
         "--- an added list marker line\n"
         "++ a list marker, not a diff header\n"
         "+text = p.read_text()\n"
     )
     assert gate.parse_added_lines(diff) == {".github/scripts/gate_x.py": {1, 2}}
+
+
+# --- parse_added_lines: over-declared hunk length (issue #1193) ------------
+
+
+def test_an_over_declared_hunk_length_before_a_new_hunk_header_raises_scanerror() -> None:
+    """Issue #1193, ported from this file's own architectural mirror
+    `gitapex_gate_detection_logic_property_coverage.py`. The dual-counter
+    bound (issue #1184) never checks either declared count against how many
+    pre-/post-image lines the hunk body actually has. `@@ -0,0 +1,5 @@`
+    declares a pure-addition hunk (0 pre-image lines, matched by its body:
+    no context, no removal) claiming 5 post-image lines; only 2 real added
+    lines follow before the next file's own `--- `/`+++ ` headers begin.
+    With no `diff --git ` separator between the two files, `new_remaining`
+    stays above zero once the real body is exhausted, so `in_hunk` stays
+    True straight through those headers, reopening the exact misattribution
+    the dual-counter bound closes for the missing-separator case. Must now
+    raise instead, caught here at the second file's own `@@` line -- the
+    next unambiguous boundary -- before any of its real content is
+    consumed. `new_remaining` is 2 at that point: 5 declared, minus the 2
+    real added lines already consumed."""
+    diff = (
+        "--- a/hooks/gitapex_check_file1.py\n"
+        "+++ b/hooks/gitapex_check_file1.py\n"
+        "@@ -0,0 +1,5 @@\n"
+        "+def f():\n"
+        "+    pass\n"
+        "--- a/hooks/gitapex_check_file2.py\n"
+        "+++ b/hooks/gitapex_check_file2.py\n"
+        "@@ -1,1 +1,2 @@\n"
+    )
+    with pytest.raises(gate.ScanError, match=r"2 post-image line\(s\) still unconsumed"):
+        gate.parse_added_lines(diff)
+
+
+def test_an_over_declared_hunk_that_exactly_drains_into_a_real_header_pair_raises_scanerror() -> None:
+    """Ported from this file's own architectural mirror
+    `gitapex_gate_detection_logic_property_coverage.py`. The gap the three
+    tests around this one all miss, found by two independent adversarial
+    reviews dispatched against the fix above: each of them uses an excess
+    (2-5 lines) larger than what the next file's own `--- `/`+++ ` pair can
+    absorb, so the `@@`-boundary check still catches it. Here file1's hunk
+    declares exactly 1 pre-image and 1 post-image line but its real body
+    has none at all -- the very next lines are file2's own real
+    `--- `/`+++ ` headers. Because `--- `/`+++ ` content is read
+    unconditionally while `in_hunk` is still (wrongly) true, `--- a/file2.py`
+    is silently absorbed as a removal (decrementing `old_remaining` to
+    exactly 0) and `+++ b/file2.py` as an addition (decrementing
+    `new_remaining` to exactly 0 too) -- draining both counters to exactly
+    zero one line early, so `in_hunk` clears itself *before* the
+    `@@`-boundary check ever runs. Neither of the other two boundary
+    checks fires either: `diff --git ` never appears in this diff, and
+    end-of-input is still two real content lines away.
+
+    Verified live against the fix without this test's own guard: returns
+    `{'hooks/gitapex_check_file1.py': {1, 2}}` -- file2 never appears at
+    all, and file1 gains a phantom line 1 (the misread `+++
+    b/hooks/gitapex_check_file2.py` text) plus file2's own real added line
+    2, both misattributed. Must now raise instead, caught by recognising
+    that a hunk closing exactly on a `+++ `-shaped line immediately after
+    a `--- `-shaped one is inherently ambiguous with a real file
+    transition missing its `diff --git ` separator."""
+    diff = (
+        "--- a/hooks/gitapex_check_file1.py\n"
+        "+++ b/hooks/gitapex_check_file1.py\n"
+        "@@ -1,1 +1,1 @@\n"
+        "--- a/hooks/gitapex_check_file2.py\n"
+        "+++ b/hooks/gitapex_check_file2.py\n"
+        "@@ -1,1 +1,2 @@\n"
+    )
+    with pytest.raises(gate.ScanError, match="closes exactly on a line shaped like"):
+        gate.parse_added_lines(diff)
+
+
+def test_an_accurately_declared_hunk_ending_in_dash_plus_shaped_content_is_not_an_error() -> None:
+    """Ported from this file's own architectural mirror
+    `gitapex_gate_detection_logic_property_coverage.py`. The false
+    positive the fix above regressed, found independently by CodeRabbit
+    and by a second adversarial review dispatched against the first
+    version of that fix -- confirmed live against this exact file's own
+    real CLI, not just the bare function, since the regression review
+    flagged this as reachable through this gate's real wired `-U0`
+    invocation, not only its `--diff` flag. A single, accurately-declared,
+    well-formed hunk whose own real content simply edits a line starting
+    `-- ` into one starting `++ ` -- exactly the shape the check above
+    raises on, except this hunk's declared count genuinely matches its
+    real body and nothing else follows. `@@ -6 +6 @@` (bare, one line
+    each side) is honestly satisfied by exactly the one real removal and
+    one real addition -- no missing `diff --git `, no disguised file
+    transition, just an ordinary edit to a changelog-marker-shaped line
+    (this repository's own docstrings are full of such literal
+    `--- `/`+++ ` examples). Confirmed live against `origin/main` (before
+    issue #1193's own fix existed): this exact diff already returns
+    `{'hooks/gitapex_check_dashplus.py': {6}}` cleanly -- a fix for a
+    different gap must not regress an already-working case. Resolved by
+    requiring a lookahead: the ambiguous shape only actually raises when
+    the line *after* it also looks like a new hunk or file header, which
+    is not true here (nothing follows)."""
+    diff = (
+        "diff --git a/hooks/gitapex_check_dashplus.py b/hooks/gitapex_check_dashplus.py\n"
+        "--- a/hooks/gitapex_check_dashplus.py\n"
+        "+++ b/hooks/gitapex_check_dashplus.py\n"
+        '@@ -6 +6 @@ DIVIDER = """\n'
+        "--- old changelog marker\n"
+        "+++ new changelog marker\n"
+    )
+    assert gate.parse_added_lines(diff) == {"hooks/gitapex_check_dashplus.py": {6}}
+
+
+def test_a_dash_plus_shaped_hunk_followed_by_a_real_second_file_is_not_an_error() -> None:
+    """Ported from this file's own architectural mirror
+    `gitapex_gate_detection_logic_property_coverage.py`. The lookahead-only
+    fix's own false positive, found live by three independent reviews
+    dispatched against it (two adversarial passes plus a
+    convention-adherence pass): the test directly above only covers the
+    case where *nothing* follows the dash/plus-shaped hunk, so the
+    lookahead trivially saw no confirming `@@`/`diff --git ` and never
+    raised. But in any real diff with more than one hunk or file, *some*
+    `@@`- or `diff --git `-shaped line almost always immediately follows
+    any given hunk regardless of whether its own declared count is
+    honest -- so the lookahead alone still raised here, on a completely
+    ordinary two-file diff with no ambiguity at all. Confirmed live
+    against the lookahead-only fix (commit 0372217d): this exact diff
+    raised `ScanError`, incorrectly, purely because a second real file
+    happens to follow the first file's own dash/plus-shaped last line.
+    Resolved by requiring the ambiguous pair to also look header-shaped
+    (`_looks_like_real_header_pair`: `a/<path>`/`b/<path>`, not just the
+    4-character prefix) before the lookahead is even consulted -- ordinary
+    content like `old changelog marker` never has that shape, so this
+    hunk no longer reaches the lookahead at all, regardless of what
+    follows it."""
+    diff = (
+        "diff --git a/hooks/gitapex_check_dashplus.py b/hooks/gitapex_check_dashplus.py\n"
+        "--- a/hooks/gitapex_check_dashplus.py\n"
+        "+++ b/hooks/gitapex_check_dashplus.py\n"
+        '@@ -6 +6 @@ DIVIDER = """\n'
+        "--- old changelog marker\n"
+        "+++ new changelog marker\n"
+        "diff --git a/hooks/gitapex_check_other.py b/hooks/gitapex_check_other.py\n"
+        "--- a/hooks/gitapex_check_other.py\n"
+        "+++ b/hooks/gitapex_check_other.py\n"
+        "@@ -2,0 +3,2 @@ def g():\n"
+        "+\n"
+        "+    return 1\n"
+    )
+    assert gate.parse_added_lines(diff) == {
+        "hooks/gitapex_check_dashplus.py": {6},
+        "hooks/gitapex_check_other.py": {3, 4},
+    }
+
+
+def test_a_header_shaped_pair_with_nothing_confirming_it_after_is_not_an_error() -> None:
+    """Ported from this file's own architectural mirror
+    `gitapex_gate_detection_logic_property_coverage.py`. Pins the one case
+    `_looks_like_real_header_pair` alone cannot resolve, found by a fourth
+    adversarial review dispatched against the fix above: a hunk whose
+    declared count is small enough (`@@ -1,1 +1,1 @@`) to be honestly,
+    exactly satisfied by content that itself happens to be
+    `a/<path>`/`b/<path>`-shaped, with nothing `@@`- or `diff --git
+    `-shaped confirming it afterward. Confirmed identical against the
+    commit before any of this bypass work began (issue #1200's own
+    already-disclosed gap, not a new regression): the header-shape signal
+    alone cannot tell "an honest 1-line hunk whose real content happens
+    to look header-shaped" from "a 1-line over-declaration absorbing a
+    real header" -- that is exactly what the lookahead's second,
+    independent condition still guards, which is why raising requires
+    both signals together rather than the header-shape check alone. Left
+    unchanged by this fix, deliberately: closing it needs #1200's own
+    structurally different mechanism, not an incremental extension of
+    this one."""
+    diff = (
+        "--- a/hooks/gitapex_check_file1.py\n"
+        "+++ b/hooks/gitapex_check_file1.py\n"
+        "@@ -1,1 +1,1 @@\n"
+        "--- a/hooks/gitapex_check_file2.py\n"
+        "+++ b/hooks/gitapex_check_file2.py\n"
+    )
+    assert gate.parse_added_lines(diff) == {"hooks/gitapex_check_file1.py": {1}}
+
+
+def test_an_over_declared_hunk_length_before_a_diff_git_header_raises_scanerror() -> None:
+    """Same over-declaration as directly above, but with a `diff --git `
+    separator before the second file -- the shape a real `git diff` always
+    emits. `diff --git ` is recognised unconditionally (no `not in_hunk`
+    guard), so it is a second, independent place the same declared/actual
+    mismatch must be caught -- reached one line earlier than the `@@` case
+    above, before either of file2's own `--- `/`+++ ` lines is consumed, so
+    `new_remaining` is still 3 (not yet decremented by a misread `+++ `
+    line): 5 declared, minus only the 2 real added lines."""
+    diff = (
+        "--- a/hooks/gitapex_check_file1.py\n"
+        "+++ b/hooks/gitapex_check_file1.py\n"
+        "@@ -0,0 +1,5 @@\n"
+        "+def f():\n"
+        "+    pass\n"
+        "diff --git a/hooks/gitapex_check_file2.py b/hooks/gitapex_check_file2.py\n"
+    )
+    with pytest.raises(gate.ScanError, match=r"3 post-image line\(s\) still unconsumed"):
+        gate.parse_added_lines(diff)
+
+
+def test_an_over_declared_hunk_length_at_end_of_input_raises_scanerror() -> None:
+    """Same over-declaration as the two tests above, but with nothing at all
+    following the short body -- no second file, no further hunk. Neither
+    the `diff --git ` nor the `@@` boundary check ever fires, so this is a
+    third, independent place the same declared/actual mismatch must be
+    caught: end of input reached with `in_hunk` still true, `new_remaining`
+    still 3."""
+    diff = "--- a/hooks/gitapex_check_file1.py\n+++ b/hooks/gitapex_check_file1.py\n@@ -0,0 +1,5 @@\n+def f():\n+    pass\n"
+    with pytest.raises(gate.ScanError, match=r"3 post-image line\(s\) still unconsumed"):
+        gate.parse_added_lines(diff)
+
+
+def test_an_added_line_under_a_deleted_files_hunk_advances_counters_but_is_not_recorded() -> None:
+    """A real `+++ /dev/null` hunk is never declared with post-image lines
+    -- a deletion has nothing left to add -- but a hand-fed or foreign
+    patch (the same `--diff` exposure every malformed-input test in this
+    module guards against) could claim one anyway. `path` is None for the
+    whole of a deleted file's hunk, so the `+` branch's own
+    `if path is not None: added.setdefault(...)` guard must skip recording
+    -- there is no real path to attribute it to -- while still advancing
+    `lineno` and `new_remaining` exactly as a real addition would, so the
+    hunk's own declared count is still correctly consumed and does not
+    leak into whatever follows."""
+    diff = (
+        "--- a/hooks/gitapex_check_gone.py\n"
+        "+++ /dev/null\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+phantom added line under a deletion\n"
+        "--- a/.github/scripts/gate_x.py\n"
+        "+++ b/.github/scripts/gate_x.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+x = 1\n"
+    )
+    assert gate.parse_added_lines(diff) == {".github/scripts/gate_x.py": {1}}
 
 
 def test_a_post_image_path_without_the_b_prefix_fails_closed() -> None:
@@ -556,6 +844,137 @@ def test_a_post_image_path_without_the_b_prefix_fails_closed() -> None:
     diff = "diff --git a/x b/x\n--- a/x\n+++ .github/scripts/gate_x.py\n@@ -0,0 +1,1 @@\n+x = 1\n"
     with pytest.raises(gate.ScanError, match="not a plain b/-prefixed path"):
         gate.parse_added_lines(diff)
+
+
+def test_a_post_image_header_with_no_source_header_before_it_raises_scanerror() -> None:
+    """Fail-closed regression (issue #1184, gap 1). `parse_added_lines` only
+    bound the current path from a `+++ ` header that a `--- ` header
+    preceded; reaching one with no preceding `--- ` fell through both
+    branches silently, leaving `path` at None -- so every added line in
+    every hunk that follows was dropped and the run reported `OK: 0
+    in-scope file(s) graded`, exit 0, instead of raising. Real `git diff`
+    output always emits `--- ` before `+++ `, so no wired invocation
+    reaches this; `--diff <file>` accepts a patch from anywhere, and a
+    fail-closed gate does not get to assume its input came from the
+    wiring."""
+    diff = (
+        "diff --git a/hooks/gitapex_check_example.py b/hooks/gitapex_check_example.py\n"
+        "+++ b/hooks/gitapex_check_example.py\n"
+        "@@ -0,0 +1,2 @@\n"
+        "+try:\n"
+        "+    pass\n"
+    )
+    with pytest.raises(gate.ScanError, match="no `--- ` source header before it"):
+        gate.parse_added_lines(diff)
+
+
+def test_a_second_file_with_no_diff_git_header_between_files_is_not_misattributed() -> None:
+    """Issue #1184, gap 2. `in_hunk` used to be reset only by a `diff --git `
+    line, never by a hunk's own declared post-image length running out. A
+    patch with no `diff --git ` header between two files (real `git diff`
+    output always has one; `--diff <file>` accepts a patch from anywhere)
+    left `in_hunk` True straight through the second file's own `--- `/`+++ `
+    lines: `--- ` read as a harmless no-op removal, but `+++ ` -- never
+    recognised as a header, since `in_hunk` blocked that check -- read as
+    *content* (its own leading `+`) and was added to the *first* file's
+    `path` at a stale `lineno`. Because that `+++ ` line was never
+    recognised as a header, `path` never advanced to the second file
+    either, so the second file's own real added lines misattributed to the
+    first file too.
+
+    Verified live against the pre-fix gate: this exact diff returned
+    `{'hooks/gitapex_check_file1.py': {2, 3, 4}}` -- file2's own line
+    silently missing, and a bogus line 4 (the misread `+++ ` header)
+    attributed to file1 instead. Both files must now be graded separately,
+    each at its own correct line numbers, with nothing bogus added.
+
+    `@@ -1,1 +1,3 @@`, not `-1,2`: the hunk's own body has one context line
+    (old+new) and two additions (new only), so the accurate pre-image count
+    is 1 -- an inflated pre-image count here would leave `old_remaining`
+    permanently above zero (nothing in this body ever decrements it to 0)
+    and reopen this exact gap under the fixed dual-counter accounting,
+    despite being an inaccuracy `git diff` itself never produces."""
+    diff = (
+        "--- a/hooks/gitapex_check_file1.py\n"
+        "+++ b/hooks/gitapex_check_file1.py\n"
+        "@@ -1,1 +1,3 @@\n"
+        " def f():\n"
+        "+    try:\n"
+        "+        pass\n"
+        "--- a/hooks/gitapex_check_file2.py\n"
+        "+++ b/hooks/gitapex_check_file2.py\n"
+        "@@ -1,1 +1,2 @@\n"
+        " def g():\n"
+        "+    pass\n"
+    )
+    assert gate.parse_added_lines(diff) == {
+        "hooks/gitapex_check_file1.py": {2, 3},
+        "hooks/gitapex_check_file2.py": {2},
+    }
+
+
+def test_a_zero_post_image_hunk_still_protects_its_own_removal_lines() -> None:
+    """Regression on the first fix for issue #1184's own gap 2 (post-image
+    count alone), found during this PR's own adversarial review. `git diff
+    -U0` -- this gate's real wired invocation -- emits a pure-deletion hunk
+    as `@@ -a,b +c,0 @@`: zero post-image lines. Bounding `in_hunk` by the
+    post-image count alone reads `remaining` as already exhausted on the
+    `@@` line itself, before the hunk's own `b` removal lines are consumed,
+    so the very next line -- itself this hunk's own removal content -- is
+    read as a real header instead.
+
+    Verified live against the first (post-image-count-only) fix: this exact
+    diff returned `{'hooks/gitapex_check_payload.py': {1}}` -- the real
+    exception-handler gap this diff's own added line represents silently
+    vanished from `gitapex_check_target.py`, reattributed to a same-shaped
+    but unrelated file entirely, exactly the "silent pass on a file this
+    gate cannot grade" class issue #682 exists to catch. Tracking the
+    pre-image count too (a removal decrements it) protects this hunk's own
+    removal line via that side even though the post-image side is already
+    at zero, so the disguised `+++ ` line below is now correctly read as
+    content of that still-open hunk rather than a header -- which leaves it
+    reached with no real `--- ` predecessor once the hunk genuinely does
+    end, so `parse_added_lines` raises `ScanError` (fail-closed) instead of
+    silently misattributing anything. This diff has no real added line to
+    keep at all -- it is a pure-deletion hunk -- so the fix's own visible
+    effect here is the raise, not a correctly-kept line."""
+    diff = (
+        "diff --git a/hooks/gitapex_check_target.py b/hooks/gitapex_check_target.py\n"
+        "--- a/hooks/gitapex_check_target.py\n"
+        "+++ b/hooks/gitapex_check_target.py\n"
+        "@@ -1,1 +1,0 @@\n"
+        "--- a disguised removal line, not a real source header\n"
+        "+++ b/hooks/gitapex_check_payload.py\n"
+        '+text = p.read_text(encoding="utf-8")\n'
+    )
+    with pytest.raises(gate.ScanError, match="no `--- ` source header before it"):
+        gate.parse_added_lines(diff)
+
+
+def test_a_pure_deletion_hunk_contributes_nothing_and_does_not_disrupt_the_next_file() -> None:
+    """The realistic shape behind the regression above, with no adversarial
+    disguise: `git diff -U0` -- this gate's own real wired invocation --
+    emits a pure-deletion hunk exactly as `@@ -a,b +c,0 @@` whenever a diff
+    removes lines with nothing added in their place, which is ordinary,
+    everyday output, not a contrived input. The deleted file contributes no
+    added lines (a pure removal has none to grade), and the next file's own
+    real headers -- reached via a normal `diff --git ` separator, matching
+    every real multi-file `git diff` -- must still be read correctly and
+    graded on its own merits."""
+    diff = (
+        "diff --git a/hooks/gitapex_check_a.py b/hooks/gitapex_check_a.py\n"
+        "--- a/hooks/gitapex_check_a.py\n"
+        "+++ b/hooks/gitapex_check_a.py\n"
+        "@@ -3,1 +2,0 @@\n"
+        "-old_line_being_removed = 1\n"
+        "diff --git a/hooks/gitapex_check_b.py b/hooks/gitapex_check_b.py\n"
+        "--- a/hooks/gitapex_check_b.py\n"
+        "+++ b/hooks/gitapex_check_b.py\n"
+        "@@ -1,1 +1,2 @@\n"
+        " def g():\n"
+        "+    pass\n"
+    )
+    assert gate.parse_added_lines(diff) == {"hooks/gitapex_check_b.py": {2}}
 
 
 def test_the_minus_header_line_is_not_counted_as_a_removal(tmp_path: pathlib.Path) -> None:
@@ -1277,7 +1696,10 @@ def test_a_waiver_must_sit_on_the_line_the_gate_reports(
 
 
 def test_an_unparseable_hunk_header_fails_closed(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
-    diff = "diff --git a/x.py b/x.py\n+++ b/.github/scripts/gate_x.py\n@@ garbage @@\n+text = 1\n"
+    """The `--- ` line here is load-bearing, not decoration: without it this
+    fixture would exercise the missing-source-header ScanError (issue #1184,
+    gap 1) instead of the unparseable-hunk-header one this test names."""
+    diff = "diff --git a/x.py b/x.py\n--- a/x.py\n+++ b/.github/scripts/gate_x.py\n@@ garbage @@\n+text = 1\n"
     _write(tmp_path, "diff.txt", diff)
     assert gate.main(["--root", str(tmp_path), "--diff", str(tmp_path / "diff.txt")]) == 2
     assert "unparseable hunk header" in capsys.readouterr().err
@@ -1640,10 +2062,7 @@ def test_the_workflow_passes_the_two_flags_the_gate_depends_on() -> None:
     otherwise arrives C-quoted, which the gate refuses to resolve (exit 2) --
     failing the job over a file that need not even be in scope.
     """
-    workflow = (REPO_ROOT / ".github/workflows/exception-handler-gap-gate.yml").read_text(encoding="utf-8")
-    invocation = next(line for line in workflow.split("\n") if "git" in line and "diff -U0" in line)
-    assert "--no-renames" in invocation, invocation
-    assert "core.quotePath=false" in invocation, invocation
+    assert_workflow_diff_carries_flags("exception-handler-gap-gate.yml", "--no-renames", "core.quotePath=false")
 
 
 def test_the_workflow_checks_out_the_head_sha_with_full_history() -> None:
@@ -1658,18 +2077,66 @@ def test_the_workflow_checks_out_the_head_sha_with_full_history() -> None:
     such a file grades clean. There is no exit code and no message when that
     happens, so nothing else in this suite would notice.
 
-    `fetch-depth: 0` is load-bearing *for* that pin, not decoration. A 40-hex
-    `ref` becomes `settings.commit` with `settings.ref` empty
+    `fetch-depth: '0'` is load-bearing *for* that pin, not decoration. A
+    40-hex `ref` becomes `settings.commit` with `settings.ref` empty
     (actions/checkout `input-helper.ts`), and only the `fetchDepth <= 0`
     branch of `git-source-provider.ts` fetches
     `+refs/heads/*:refs/remotes/origin/*`; the shallow branch would fetch the
     bare commit alone, leaving `$BASE_SHA` absent from the object store and
     the `git merge-base` step failing. The two settings are therefore one
     invariant and are asserted together.
+
+    Both settings have now been read off this workflow's parsed `with:`
+    mapping twice over, because a whole-file text check for either kept
+    matching prose instead of config: first the bare `fetch-depth: 0` form,
+    which only ever passed off a comment line reading "fetch-depth: 0 so the
+    merge-base below resolves"; then the quoted `fetch-depth: '0'` form that
+    replaced it, which only ever passed off the shrunk pointer comment this
+    same PR introduced above the step. `conftest`'s own docstring carries
+    the defeat case that closed the second one.
     """
-    workflow = (REPO_ROOT / ".github/workflows/exception-handler-gap-gate.yml").read_text(encoding="utf-8")
-    assert "ref: ${{ github.event.pull_request.head.sha }}" in workflow, workflow
-    assert "fetch-depth: 0" in workflow, workflow
+    assert_workflow_checkout_pins_head_sha_with_full_history("exception-handler-gap-gate.yml")
+
+
+def test_the_workflow_has_no_paths_filter() -> None:
+    """Drift gate for an invariant this change establishes, per CLAUDE.md
+    section 3: a `paths:` filter under `pull_request:` is not merely absent
+    by omission here -- it is deliberately never added, following the same
+    rationale `lint.yml` and `plugin-root-brace-notation-gate.yml` state for
+    themselves. GitHub distinguishes a job that runs and reports `skipped`
+    (which does not block a required check) from a workflow that never
+    fires for a given PR at all (which leaves a required check `Pending`
+    forever, with no in-repo fix). This gate is intended for promotion to a
+    required status check, so a `paths:` filter would recreate that exact
+    stuck-Pending failure mode for any PR that happens not to touch a
+    matched path. The scan itself still only grades files a diff actually
+    adds lines to, so running the job unconditionally costs a few seconds,
+    not a full-repo sweep.
+
+    `conftest.assert_workflow_has_no_trigger_path_filter`'s own docstring
+    carries how the trigger keys are read and why `paths-ignore:` is
+    rejected too.
+    """
+    assert_workflow_has_no_trigger_path_filter("exception-handler-gap-gate.yml")
+
+
+def test_the_workflow_uses_merge_base_not_base_sha() -> None:
+    """Drift gate for an invariant this change establishes, per CLAUDE.md
+    section 3, mirroring `gitignore-pattern-coverage-gate.yml`'s and
+    `skill-rename-lifecycle-gate.yml`'s own identical reasoning: `git
+    merge-base` is resolved between `BASE_SHA` and `HEAD_SHA` rather than
+    diffing against `base.sha` directly, so a change that landed on the
+    base branch after this PR forked is never misattributed to this PR.
+    Diffing against `base.sha` directly instead would silently re-attribute
+    someone else's already-merged change to this PR's own diff, with no
+    exit code or message when that happens.
+
+    `conftest.assert_workflow_feeds_merge_base_to`'s own docstring carries
+    the defeat cases it closes, kept there rather than re-enumerated here
+    so this comment cannot go stale the next time that list grows.
+    `"diff"` is the producer command this gate depends on.
+    """
+    assert_workflow_feeds_merge_base_to("exception-handler-gap-gate.yml", "diff")
 
 
 def test_this_gate_grades_itself_clean() -> None:

@@ -29,8 +29,14 @@ follow-up), a 0:1:0 trade-secret/competitive-harm broadening (gitapex#537
 follow-up), and a 3:3:0 addition for the three new evaluation criteria
 issue #614's own retrospective motivated (gitapex#619:
 declaration-vs-structure fit, correction-narration sediment, repeated-
-restatement duplication), and a 1:0:0 multi-turn-relaxation addition
-(gitapex#332's own ACM-7 audit round), for a resulting 27:30:12 partition. This is
+restatement duplication), a 1:0:0 multi-turn-relaxation addition
+(gitapex#332's own ACM-7 audit round), a 1:1:1 addition for the new
+Single ownership and boundary fit dimension-7 check (gitapex#1111), and a
+2:2:1 dependency-policy addition (gitapex#1124: the new
+`spec.dependencyPolicy` precondition axis), and a 1:1:0
+description-conciseness addition (gitapex#1142: the new Dimension 2
+Description-length trigger), for a resulting 31:34:14
+partition. This is
 named explicitly as a deviation from the 2:1:7 default. The
 honest minimal groundwork, per that same worked example, is a larger
 fixture corpus over time, not a smaller gate.
@@ -39,9 +45,9 @@ Exclusion rule for this arithmetic, stated once so the figures above can be
 checked against the Assignment section below (gitapex#907): every listed
 fixture, in every split, is counted in exactly one of the additions above,
 except the one named on the declaration line below. Verified per split, not
-only for train: the Assignment section lists 28 unique train fixtures against
-the declared 27 (the single exclusion), and 30 selection and 12 test fixtures
-against the declared 30 and 12 exactly.
+only for train: the Assignment section lists 32 unique train fixtures against
+the declared 31 (the single exclusion), and 34 selection and 14 test fixtures
+against the declared 34 and 14 exactly.
 
 Split-arithmetic exclusions: `dispatch-required-negative-control.yaml` -- listed
 in train for split-listing consistency with `normal.yaml` rather than as a
@@ -3854,3 +3860,643 @@ does not work.
 Not run this cycle, for the same reason as the two waivers above --
 no completed dispatch to transfer-check. Carried forward as an open
 item alongside the `checkerRef` gap and the not-run self-audits.
+
+## Iteration: issue #1111, Single ownership and boundary fit (dimension-7 check)
+
+Candidate edit: add a new check, "Single ownership and boundary fit," to
+`references/rubric.md`'s existing Dimension 7 ("Bundled scripts") -- one
+bullet in the main checklist, an extended Fail/Pass clause, and a fuller
+"in depth" subsection with four sub-checks (one owner, boundary fit, no
+undeclared reach-out, duplication drift gate). Not a tenth dimension:
+`references/output-schema.json` pins exactly nine dimensions. Full text:
+this PR's diff. Motivated by a decision-brief analysis of relocating
+`evals/scripts/` tooling into owning skills (gitapex#1105 follow-up),
+which found an already-shipped instance of the exact failure this check
+targets inside this repository's own `skills/evaluating-skill-quality/
+scripts/gitapex_scan_execution_requirements_drift.py` (a disclosed,
+gracefully-guarded PyYAML import, tracked separately, not fixed by this
+edit).
+
+Precondition and splits: satisfied. `waza --version` reports `0.38.0`
+(runner confirmed). No fixture in the pre-existing 70-fixture corpus
+probes bundled-script ownership or boundary fit at all (verified by
+grepping every `tasks/*.yaml` file for the relevant vocabulary before
+authoring new fixtures) -- this motivated three new fixtures rather than
+reusing existing coverage: `shared-bundled-script-undeclared-reach-
+train.yaml` (train -- an invoice-reconciliation skill's script reaches,
+undeclared, into a sibling skill's `scripts/` directory), `shared-
+bundled-script-boundary-fit-selection.yaml` (selection -- a distinct
+domain, log-anomaly detection, and a distinct sub-failure, an unlicensed
+third-party import on a stated no-install-step surface, so the gate
+measures generalization across both named sub-failures rather than
+memorizing the train fixture's cross-skill-reach shape), and `shared-
+bundled-script-declared-dependency-restraint.yaml` (test, read once --
+a properly declared, sole-owned, stdlib-safe cross-skill dependency,
+with the import additionally guarded against a missing sibling, so the
+restraint check isolates the ownership/declaration question from the
+separate, pre-existing "Solve, don't punt" error-handling bullet). Split
+updated: 27:30:12 -> 28:31:13 (partition arithmetic re-verified by
+`.github/scripts/gitapex_gate_split_fixture_coverage.py`, which passes).
+
+**Fixture-authoring bug found and fixed before any score was banked,
+disclosed per this file's own recurring practice:** the restraint
+fixture's first draft placed `spec.skillDependencies.requires` directly
+inside the target's `SKILL.md` frontmatter fence. A live after-dispatch
+against that draft correctly flagged the resulting top-level `spec` key
+as an undocumented frontmatter extension (`Compatibility awareness:
+PROPOSE_COMPATIBILITY`) and, independently, correctly flagged the
+script's unhandled `ModuleNotFoundError` on a missing sibling as a
+"Solve, don't punt" failure under the pre-existing dimension-7 bullet --
+both real, and both outside what this fixture intended to isolate. Fixed
+by (a) moving the dependency declaration into descriptive prose about
+the skill's `metadata/gitapex.yaml` sidecar, matching this repository's
+own real `spec.skillDependencies.requires` schema location (`skills/
+evaluating-skill-quality/references/skill-metadata.schema.json:134-143`,
+confirmed by reading it directly, not assumed), and (b) guarding the
+import with the same `try/except ModuleNotFoundError` shape this
+repository's own `gitapex_scan_execution_requirements_drift.py` uses for
+its real PyYAML guard, so the restraint case cleanly isolates "is this
+cross-skill dependency legitimately owned and declared" from "does the
+script handle its own absence gracefully."
+
+Blind spot pass: the corpus covers an undeclared cross-skill reach
+(train) and an unlicensed third-party import (selection), two distinct
+sub-failure shapes for the same check. It does not prove the check
+generalizes to a *different* target repository's own deployment model
+(one with a real install step, a vendored-dependency directory, or an
+npm-style lockfile convention) -- every fixture here states the same
+"no install step, stdlib-only guaranteed" constraint, matching this
+repository's own. A future addition targeting that gap should add a
+fixture against a stated different deployment model and confirm the
+check's own "read that repository's own layout doc... before grading
+this" instruction actually changes the verdict rather than defaulting to
+this corpus's own assumption.
+
+### Gate result
+
+Methodology: one fresh, isolated dispatch per side, against only
+`shared-bundled-script-boundary-fit-selection.yaml` -- the "before" side
+grounded against a `git show HEAD`-pinned
+snapshot of the pre-edit `references/rubric.md` (temp file, not the
+working tree, per this file's own Stop-boundary discipline against
+reading a working tree mid-edit), the "after" side against the real
+post-edit file. Each dispatch read `SKILL.md` and the given `rubric.md`
+content fresh and applied the full Procedure blind (not told what
+property was being measured). All 30 pre-existing selection fixtures are
+reused unchanged, per **assertion-surface disjointness, verified by
+reading every one of their own `expected` blocks and target-skill
+content in this merged tree** (the same methodology the issue #406 entry
+above established): my edit is purely additive to Dimension 7's text,
+and grepping all 30 files for the relevant vocabulary (bundled script,
+single ownership, boundary fit, shared script, sibling skill,
+third-party, no install step, deployment boundary, skillDependencies,
+sys.path.insert) surfaced only two incidental matches on the bare word
+"third-party" -- `third-party-not-authoritative.yaml` (a third-party
+*blog post* cited as platform-behavior evidence, a grounding-in-primary-
+sources fixture) and `confidentiality-awareness-selection.yaml` (PII
+forwarded to a third-party *analytics webhook*) -- both confirmed
+unrelated by reading their full `expected` blocks directly: neither
+references "Single ownership and boundary fit," "numpy," or any
+bundled-script vocabulary at all.
+
+| Fixture | Before | After |
+|---|---|---|
+| `shared-bundled-script-boundary-fit-selection.yaml` | 0.750000 (fresh) | 1.000000 (fresh) |
+| 30 pre-existing selection fixtures | unchanged (assertion-surface disjoint, confirmed by inspection) | unchanged (same) |
+
+`gitapex_score_contract.py --compare-to 0.750000` on the single fresh
+pair: `1.000000 KEEP`. Concluded analytically for the full 31-fixture
+selection mean, the same construction the issue #406 entry above used
+for its own tie: since the other 30 fixtures' scores are identical on
+both sides, `after_mean - before_mean = (1.000000 - 0.750000) / 31 ~=
++0.008065`, strictly positive regardless of the (unreconstructed) exact
+value of the other 30 fixtures' contribution -- the strict
+improve-or-reject rule is satisfied by construction, not by re-running
+30 fixtures whose scores cannot move.
+
+The before-dispatch is itself worth recording as a finding, not just a
+number: against the *pre-edit* rubric, the reviewer already caught the
+selection fixture's `numpy`-on-a-no-install-surface defect in full,
+citing `docs/repository-layout.md` and ADR 0001 directly under the
+pre-existing Dimension 6 ("Durability") bullet -- the 0.75 score reflects
+that the *new check's own name* ("Single ownership and boundary fit")
+could not appear in a review of a rubric that does not yet contain it,
+not that the underlying problem went undetected. The edit's own,
+disclosed value on this specific fixture is narrower than "detects a
+previously-undetectable defect": it gives the *same, already-detectable*
+defect a named, citable home inside Dimension 7 specifically (where a
+reviewer would otherwise have to reconstruct the finding under
+Durability each time), which is exactly the discrimination the selection
+fixture's own two required substrings were designed to measure together.
+
+Classification: **ordinary** (adds new rubric prose, a new bullet, and
+three new fixture files -- not deletion-only, so the pruning-only
+lexicographic exception does not apply; the strict improve-or-reject
+gate applies in full).
+
+### Restraint check (test split, read once)
+
+`shared-bundled-script-declared-dependency-restraint.yaml`, one fresh
+dispatch against the post-edit rubric: **1.000000.** The dispatch applied
+the "Single ownership and boundary fit, in depth" four sub-checks
+directly and marked all four satisfied ("with the dependency declared,
+not reached for silently," "no third-party/install-step risk," "this
+reach is declared, not silent, so it does not match the rubric's own
+worked Fail example," duplication check moot) -- correctly withholding a
+Fail on this check specifically, matching the restraint the fixture was
+built to test. The dispatch separately, correctly flagged two unrelated
+defects the fixture never intended to guard against (an undisclosed
+required Portability level, and the excerpt describing a sidecar it
+doesn't ship) -- real findings under different dimensions, not evidence
+against this check's own restraint.
+
+The fixture's own first draft needed one repair mid-run, disclosed
+above rather than silently absorbed: v1's script had no guard on the
+missing-sibling import, so a v1 after-dispatch correctly flagged an
+unhandled `ModuleNotFoundError` under the pre-existing "Solve, don't
+punt" bullet -- a real defect, just not the one this fixture exists to
+isolate. v2 (scored above) adds the same `try/except
+ModuleNotFoundError` shape this repository's own
+`gitapex_scan_execution_requirements_drift.py` already uses for its own
+PyYAML guard, cleanly separating the two questions.
+
+### Transfer check
+
+Not run this iteration, the same disclosed, still-open gap issue #200's
+own entry first named and every iteration in this log since has
+carried forward undischarged -- not silently assumed clear for this
+edit specifically.
+
+### Verdict
+
+**KEEP.** Selection-split score strictly improves (analytically, by
+construction, per the Gate result section above); ordinary-gate rule
+satisfied. Applied to `references/rubric.md` in this PR.
+
+## Iteration: issue #1124, Dependency policy precondition axis
+
+Candidate edit, ordinary class (adds new capability -- a whole new
+precondition axis, `spec.dependencyPolicy`, plus its `references/rubric.md`
+section, `SKILL.md` section, `dependency-policy-declared` shape check, and
+schema property; not pruning-only): `skill-metadata.schema.json` gains
+`spec.properties.dependencyPolicy` (`StdlibOnly`/`Declared`, optional,
+`properties` not `required`, a deliberate divergence from
+`portability`/`capabilityAssumption` disclosed in issue #1124's own Facts);
+`gitapex_check_skill_shape.py` gains `DEPENDENCY_POLICY_LEVELS` and a new
+`dependency-policy-declared` `CheckResult`, mirroring `references-well-
+formed`'s absent/valid/invalid three-way pattern (PASS on absence, unlike
+`portability-declared`'s FAIL-on-absence); `references/rubric.md` gains a
+new `## Dependency policy` section (between Capability assumption and
+Lifecycle) plus a rewritten dimension-7 "Dependencies listed; execution
+intent stated" bullet; `SKILL.md` gains a matching `## Dependency policy`
+section and an extended Procedure step 4 (both fit inside the existing
+500-line ceiling via the same long-unwrapped-line technique PR2's own
+`execution-requirements.packages` addition used, net zero line growth); the
+Contract discipline Precondition bullet and
+`test_gitapex_contract_precondition_sync.py`'s own `_CHECKPOINT_PHRASES`
+registry were updated in the same change, per that test's own docstring
+instruction ("Extend `_CHECKPOINT_PHRASES` in the same change that adds a
+new step-1-4 checkpoint"). No new deterministic scanner logic: both
+branches reuse PR3's `find_packages_drift`
+(`packages-pip-vs-script-content` / `packages-pip-vs-compatibility`) and
+the repository's dependency-allowlist CI gate as their mechanical
+backing; the PEP 723/`uv run` sub-criterion is disclosed in the rubric text
+itself as judged, not mechanically gated.
+
+Precondition and splits: satisfied. Scorer:
+`skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py`. Held-out
+split: this file's own corpus, now 78 fixtures, 28:31:13 -> 30:33:14 (see
+Corpus size caveat above; the issue #1111 entry immediately above landed
+first and already advanced the declared base to 28:31:13, so this addition's
+own 2:2:1 delta is applied on top of that, not the 27:30:12 solo-branch base
+this entry was originally drafted against) -- 5 new fixtures added under
+`evals/evaluating-skill-quality/tasks/`:
+`dependency-policy-stdlib-only-pass-train.yaml` (train, motivates),
+`dependency-policy-declared-pass-train.yaml` (train, motivates),
+`dependency-policy-stdlib-only-fail-selection.yaml` (selection, gates),
+`dependency-policy-declared-fail-selection.yaml` (selection, gates),
+`dependency-policy-undeclared-real-import-fail-test.yaml` (test, read once).
+
+**Blind spot pass for this addition.** The five fixtures cover: StdlibOnly
+Pass and Fail; Declared Pass (all four sub-criteria satisfied) and Fail
+(sub-criterion (a), under-declared, the clearest single violation); and
+Undeclared with a real import (Fail, plus the disclosure-consistency note).
+Two gaps are named explicitly, not silently left uncovered: (1) an
+Undeclared-but-clean skill (no `dependencyPolicy` declared, no non-stdlib
+import) has no dedicated fixture -- the rubric text itself grades this
+identically to the StdlibOnly Pass case ("Grade against the same criteria
+as StdlibOnly above"), so `dependency-policy-stdlib-only-pass-train.yaml`
+is treated as covering that reasoning path by construction, not by a
+separate fixture; (2) the Applicability gate itself (a skill with no
+`scripts/` directory at all needs no declaration and this whole
+precondition is not-applicable) has no fixture exercising the restraint
+side -- left as a disclosed, open gap for a future addition, the same
+disposition this file's own confidentiality-awareness entry used for its
+own analogous gap.
+
+### Gate result
+
+Isolated `claude -p` dispatches (no `--dangerously-skip-permissions` --
+this session's own permission classifier blocks that flag outright for a
+nested `claude` invocation; a plain `claude -p` was not blocked and needed
+no tool use, since every dispatch's prompt is fully self-contained), per
+`references/adversarial-self-audit.md`'s Isolation verification section:
+this platform (`CLAUDE_CODE_REMOTE=true`,
+`CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=cloud_default`) matches the existing
+registry entries' identifying signal, but at CLI `2.1.233`, newer than any
+entry recorded there (`2.1.226`, 2026-08-08) -- the two-control Verification
+procedure was re-run fresh (synthetic-sentinel positive control correctly
+quoted; negative control from a `CLAUDE.md`-free isolated cwd correctly
+reported none loaded) and a new Same-run entry recorded in that section
+rather than trusting the stale one. `waza` was attempted first per Procedure
+step 1 (`waza --version` confirmed `0.38.0`), but `eval.yaml`'s
+`executor: copilot-sdk` requires GitHub Copilot CLI authentication, and
+every invocation, including the credential-independent `waza models`,
+failed with `not authenticated -- run "copilot login" first` -- the same
+disclosed constraint the issue #1014 entry above already recorded;
+provisioning Copilot credentials solely for this gate was judged outside
+this task's authorization and not pursued. Every dispatch's prompt embeds
+the relevant `references/rubric.md` excerpt directly (this isolated cwd has
+no access to this repository's own `skills/` directory by design, and no
+plugin/marketplace registration was set up for it), not a bare "Use
+evaluating-skill-quality" instruction relying on Skill auto-discovery.
+
+**`dependency-policy-stdlib-only-fail-selection.yaml`, one fresh dispatch
+per side against only `dependency-policy-stdlib-only-fail-selection.yaml`:**
+
+| Fixture | Before | After |
+|---|---|---|
+| `dependency-policy-stdlib-only-fail-selection.yaml` | 0.800000 (fresh) | 1.000000 (fresh) |
+
+Both sides correctly identified the contradicting `requests` import and
+reached `FAIL`; the pre-edit dispatch, applying only dimension 7's old
+generic "required packages named" bullet, had no way to ground that verdict
+in a branch-specific rule, and the fixture's own question text was reworded
+mid-run (before either score was banked) to stop pre-supplying the branch
+vocabulary after a first pass produced a false 1.0/1.0 tie -- see Known gaps
+below.
+
+**`dependency-policy-declared-fail-selection.yaml`, one fresh dispatch per
+side against only `dependency-policy-declared-fail-selection.yaml`:**
+
+| Fixture | Before | After |
+|---|---|---|
+| `dependency-policy-declared-fail-selection.yaml` | 0.800000 (fresh) | 1.000000 (fresh) |
+
+`gitapex_score_contract.py --compare-to 0.800000`, scores `1.000000` /
+`1.000000`: **`1.000000 KEEP`** -- selection mean 0.800000 -> 1.000000,
+strict improvement across both gated fixtures.
+
+Three further dispatches were run informationally (not gating, per this
+skill's own train-motivates/test-read-once rules):
+`dependency-policy-stdlib-only-pass-train.yaml` (train, after-only) scored
+`1.000000`; `dependency-policy-declared-pass-train.yaml` (train, after-only)
+scored `1.000000`, correctly walking all four Declared-branch sub-criteria
+one by one; `dependency-policy-undeclared-real-import-fail-test.yaml` (test,
+read once) scored `1.000000`, correctly grading the absent field as
+StdlibOnly-equivalent plus naming the extra disclosure-consistency note.
+
+**Fixture-assertion repair, before any score was banked.** A first pass at
+both selection fixtures' question text read "Given the declared
+spec.dependencyPolicy: StdlibOnly, ... Name which of the three
+dependency-policy branches (StdlibOnly, Declared, or Undeclared) applies
+here" -- pre-supplying the branch vocabulary directly, which let the
+pre-edit dispatch echo it back from the sidecar YAML shown in the prompt
+without ever citing the new rubric section, producing a false 1.000000 /
+1.000000 tie on both fixtures. Reworded to an open Pass/Fail question with
+no branch-name pre-supply ("Is dimension 7's ... criterion a clean Pass or
+Fail here? Cite the specific rubric wording you are applying..."), matching
+this corpus's own established convention (e.g.
+`capability-assumption-frontier-flags-explanation.yaml`'s phrasing). One
+assertion per fixture was also tightened from a bare enum-name string
+(`"Declared"`, which coincidentally matched an unrelated "Declared
+dependencies:" prose heading in one before-transcript) to a rubric-specific
+technical phrase, confirmed present in the post-edit transcript and absent
+from the pre-edit one by direct substring check before banking:
+`"contradicts the declaration"` (stdlib-only-fail) and
+`"packages-pip-vs-script-content"` (declared-fail).
+
+Full structured run record, per-fixture scores, and every artifact
+transcript:
+[results/2026-08-15-issue-1124-dependency-policy/](results/2026-08-15-issue-1124-dependency-policy/manifest.json)
+-- the first record in that directory written as a genuine
+`record_contract: "gate-run"` rather than migrated as `pre-contract`.
+
+### Transfer check
+
+Not run this iteration -- the same pre-existing, still-open gap named
+across nearly every entry in this file's own Kept-edit log, not newly
+introduced here.
+
+### Verdict
+
+**KEEP.** Selection mean strictly improved (0.800000 -> 1.000000) across
+both gated fixtures, satisfying the ordinary class's strict improve-or-
+reject rule. The axis genuinely did not exist before this PR -- the
+pre-edit dispatches could still reach the correct surface verdict (PASS/
+FAIL, the right offending import) through generic reasoning applied to
+dimension 7's old undifferentiated bullet, but could not ground it in the
+new rubric's own explicit, citable branch rule -- the same
+axis-did-not-exist-yet improvement shape this file's own
+confidentiality-awareness axis-addition entry (issue #537, above)
+established as what a genuine, non-tied improvement looks like for a new
+precondition axis. Two disclosed gaps (the Undeclared-but-clean and
+scriptless-skill restraint cases; no repeat-trial variance data; no
+transfer check) are named above rather than silently assumed clear.
+
+**Post-verdict correction (before merge, found by a `battle-testing-a-skill`
+audit run after the Gate result above was recorded).** The StdlibOnly and
+Declared(a) "Mechanical backing" prose overclaimed `find_packages_drift`'s
+own coverage: "for ANY non-stdlib import... no new scanner logic needed"
+contradicts that scanner's own module docstring, which already discloses
+a dynamic-import blind spot (`importlib.import_module(...)`/
+`__import__(...)` calls are invisible to its AST-based check) -- the same
+disclosed limitation `find_network_drift`/`find_tools_drift` already
+carry, just left unhedged here. Confirmed live (`git diff origin/main` on
+both files) before fixing. Corrected both spots to name the AST-visible
+subset explicitly, mirroring sub-criterion (c)'s own existing "no existing
+mechanical check covers this" disclosure pattern rather than silently
+implying full coverage. Not re-gated with a fresh dispatch: the correction
+only adds a hedge to the mechanical-backing explanation, changing no
+Pass/Fail rule any existing fixture exercises (none of the five new
+fixtures involve a dynamically-constructed import), so the recorded
+0.800000 -> 1.000000 scores above remain the correct evidence for the
+rule itself. Re-verified after the edit: 68/68 self-dogfood PASS, full
+suite 4828/4828 (one pre-existing unrelated failure), contract-precondition-
+sync 22/22 passed, ruff/mypy clean.
+
+## Iteration: issue #1142, Dimension 2 Description-length trigger
+
+Candidate edit, ordinary class (pure insertion, no deletion or reword of
+existing text -- confirmed via `git diff --stat`: 22 insertions, 0
+deletions in `references/rubric.md` as landed (19 at this gate's own
+before/after dispatch time; +3 from a same-PR wording correction below,
+which added no deletion of its own either), so pruning-only's eligibility rule
+does not apply): `references/rubric.md`'s `## 2. Conciseness` section
+gains one new bullet, **Description-length trigger**, naming the
+frontmatter `description` field explicitly in scope for Dimension 2's
+existing paragraph-cost challenge, triggered at or above 90% of
+`scripts/gitapex_check_skill_shape.py`'s own `DESCRIPTION_MAX_CHARS` cap
+-- the same trigger-for-judgment shape (a deterministic threshold cueing a
+judgment check, not a pass/fail rule of its own) the Capability
+assumption section's pre-existing Declaration-vs-structure fit check
+already uses for `BODY_MAX_LINES`. Explicitly does not introduce a soft
+word/character ceiling advisory below the hard cap (the rejected
+waza-style framing issue #1137's own parent tracking issue names), and
+explicitly states a description below the trigger stays subject to
+dimension 1's adequacy/specificity floor and dimension 2's own ordinary
+judgment. No companion `SKILL.md` edit: it does not restate per-dimension
+rubric content, only pointing to `references/rubric.md` generically (same
+precedent as the issue #185 entry above). Refs #1142, parent #1137.
+
+Precondition and splits: satisfied. Scorer:
+`skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py`.
+Held-out split: this file's own corpus, now 80 fixtures, 30:33:14 ->
+31:34:14 (see Corpus size caveat above) -- 2 new fixtures added under
+`evals/evaluating-skill-quality/tasks/`:
+`description-conciseness-trigger-train.yaml` (train, motivates --
+relevance/well-known-concept-explanation bloat flavor, a
+`meeting-minutes-summarizer` target whose description explains what
+meeting minutes are), `description-conciseness-trigger-selection.yaml`
+(selection, gates -- a distinct domain and a distinct bloat flavor,
+duplication, not relevance: a `parking-ticket-appeal-drafter` target
+whose description restates the same rule twice in immediate succession).
+
+**Blind spot pass for this addition.** The two fixtures cover two of the
+four pruning classifications (relevance/well-known-concept and
+duplication) applied specifically to a near-cap description; sediment and
+sprawl are not separately isolated for the description field (sprawl
+happens to also appear as a secondary finding in both live transcripts
+below, riding along with the primary classification each fixture targets,
+but no fixture isolates it as the sole bloat flavor). A dedicated
+restraint fixture (a description that is long but not bloated -- e.g. a
+skill with a legitimately dense, non-redundant trigger vocabulary sitting
+near the cap on real content) is not included -- left as a disclosed, open
+gap for a future addition, the same disposition this file's own
+confidentiality-awareness and dependency-policy entries used for their
+own analogous gaps.
+
+### Gate result
+
+Isolated `claude -p` dispatches (no `--dangerously-skip-permissions`,
+needed none since every dispatch's prompt is fully self-contained), per
+`references/adversarial-self-audit.md`'s Isolation verification section.
+`waza --version` confirmed `0.38.0` (Procedure step 1), but `waza models`
+failed `not authenticated -- run "copilot login" first` -- the same
+disclosed `executor: copilot-sdk` constraint every prior iteration in this
+log has recorded; not pursued for the same reason (provisioning Copilot
+credentials solely for this gate is outside this task's authorization).
+This platform (`CLAUDE_CODE_REMOTE=true`,
+`CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=cloud_default`) matches the existing
+`2.1.233` Same-run registry entry exactly (no newer CLI version to
+re-verify against), but that entry was still independently re-run fresh
+here rather than trusted on the strength of a matching version string
+alone: synthetic-sentinel positive control (isolated cwd + isolated
+`$HOME`, a `CLAUDE.md` containing a nonce phrase) correctly quoted the
+nonce verbatim; negative control (isolated cwd with no `CLAUDE.md`/
+`AGENTS.md` anywhere in its ancestry, isolated `$HOME`) correctly reported
+`NONE_LOADED`. Every dispatch's prompt embeds the relevant
+`references/rubric.md` excerpt directly (`## The mental model` plus the
+full `## 2. Conciseness` section, before- or after-edit as appropriate) --
+this isolated cwd has no access to this repository's own `skills/`
+directory by design, and no plugin/marketplace registration was set up
+for it.
+
+**`description-conciseness-trigger-selection.yaml`, one fresh dispatch per
+side against only `description-conciseness-trigger-selection.yaml`:**
+
+| Fixture | Before | After |
+|---|---|---|
+| `description-conciseness-trigger-selection.yaml` | 0.777778 (fresh) | 1.000000 (fresh) |
+
+`gitapex_score_contract.py --compare-to 0.777778`, score `1.000000`:
+**`1.000000 KEEP`** -- selection mean 0.777778 -> 1.000000, strict
+improvement. (Scores shown here already reflect the assertion
+strengthening in the second Post-verdict correction below, re-scored
+against the same transcripts -- see that subsection for why the
+original 0.500000 baseline changed to 0.777778 without a fresh
+dispatch.)
+
+Both dispatches correctly identified the description's duplicated rule and
+its trailing sprawl clause and reached **Fail** through the shared,
+pre-existing relevance/duplication/sediment/sprawl classification
+language -- the before dispatch reasoned to the same surface verdict
+through generic paragraph-cost reasoning already present in the
+pre-edit text (it explicitly invoked "The mental model" and the
+pre-existing "same extended rule ... restated in full" duplication
+bullet), but had no way to ground that verdict in a citable
+description-specific rule: it never produced the literal `Description-
+length trigger` heading or the `DESCRIPTION_MAX_CHARS` identifier, both
+of which do not exist anywhere in the pre-edit excerpt. The after
+dispatch opened by naming the trigger explicitly ("The description is
+934/1024 chars = 91.2%, which is >=90% of `DESCRIPTION_MAX_CHARS`. Per the
+**Description-length trigger** bullet...") before applying the identical
+classification. This is the same axis-did-not-exist-yet improvement shape
+the issue #537 and issue #1124 entries above both establish as what a
+genuine, non-tied improvement looks like for a new rubric bullet whose
+underlying judgment a strong tier can partially reach by generic
+reasoning alone, but cannot cite without the new text.
+
+One further dispatch was run informationally (not gating, per this
+skill's own train-motivates rule): `description-conciseness-trigger-
+train.yaml` (train, after-only) scored `1.000000`, correctly walking all
+three description sentences one by one, naming sentence 2 (the
+well-known-concept explanation of what meeting minutes are) as the sole
+Fail, citing both "The mental model" ("Content that re-teaches general
+concepts ... is waste") and the Conciseness Fail bullet ("explaining what
+a well-known format or tool is") together with the new Description-length
+trigger bullet by name.
+
+**Pre-existing selection fixtures: confirmed content-disjoint by direct
+inspection, not re-dispatched.** `git diff --stat` on `references/rubric.md`
+shows a pure 22-line insertion with zero deletions (19 at this gate's own
+dispatch time, +3 from the wording correction below); `grep -l
+"Description-length trigger\|DESCRIPTION_MAX_CHARS"` across every file
+under `evals/evaluating-skill-quality/tasks/` other than this iteration's
+own two new fixtures returns no matches, so no pre-existing selection
+fixture's own `expected` assertions reference this edit's vocabulary and
+none can move on account of it -- the same "confirmed by inspection" basis
+the issue #406, #495, #537, and #1124 entries above all use for their own
+unaffected fixtures.
+
+### Transfer check
+
+Not run this iteration -- the same pre-existing, still-open gap named
+across nearly every entry in this file's own Kept-edit log, not newly
+introduced here.
+
+### Verdict
+
+**KEEP.** Selection mean strictly improved (0.777778 -> 1.000000, after
+the post-review assertion strengthening below moved the original
+0.500000 baseline) on the one gated, purpose-built fixture, satisfying
+the ordinary class's strict improve-or-reject rule; the 33 pre-existing
+selection fixtures are
+confirmed unaffected by direct inspection rather than re-scored, per the
+disclosed methodology above. Full structured run record, per-fixture
+scores, and every artifact transcript:
+[results/2026-08-17-issue-1142-description-conciseness/](results/2026-08-17-issue-1142-description-conciseness/manifest.json).
+Two disclosed gaps (no dedicated restraint fixture for a legitimately
+dense non-redundant near-cap description; no sediment- or
+pure-sprawl-only isolated fixture; no repeat-trial variance data; no
+transfer check) are named above rather than silently assumed clear.
+
+**Post-verdict correction (before merge, found by a diff-scoped
+self-review and battle-testing-a-skill audit run after the Gate result
+above was recorded), both isolated `claude -p` dispatches under the same
+mechanism as the gate itself.** Self-review returned
+**WELL-FORMED-NOT-MATURE**, naming one genuine Dimension 4 defect: the
+clause "the same trigger-for-judgment shape ... already uses for
+`BODY_MAX_LINES`, not a new pass/fail rule of its own" has an ambiguous
+modifier attachment -- read the more locally-attached way, "not a new
+pass/fail rule of its own" describes Declaration-vs-structure fit itself,
+which is factually wrong (that check has its own dedicated Check/Fail/Pass
+triad). Battle-testing-a-skill independently converged on the identical
+sentence from a different angle and returned **FAIL** on citation
+accuracy: the bullet's "same trigger-for-judgment shape" claim implied
+Declaration-vs-structure fit routes to this dimension's own
+relevance/duplication/sediment/sprawl classification, when that check
+actually routes to its own separate disclosure-of-Adaptive-consideration
+judgment -- a real misattribution, not a defensible paraphrase. Both
+findings target the same clause and corroborate each other. Fixed in the
+same PR: the sentence now names its subject explicitly ("The 90%
+threshold itself is only ever a trigger for that judgment, never a
+pass/fail rule on its own") and narrows the cited parallel to the
+structural role only (a deterministic threshold serving as a trigger,
+not a verdict), stating plainly that Declaration-vs-structure fit's own
+downstream judgment is separate ("its own separate disclosure-adequacy
+judgment") rather than implying it shares this dimension's
+relevance/duplication/sediment/sprawl classification. Not re-gated with a
+fresh dispatch: the correction only tightens a cross-reference sentence's
+wording, changing neither of the two literal strings
+(`Description-length trigger`, `DESCRIPTION_MAX_CHARS`) the selection
+fixture's assertions test -- both confirmed still present exactly once
+each by direct `grep -c` after the edit -- so the recorded before/after
+score pair above remains the correct evidence for the rule itself, the
+same disclosed-not-re-gated disposition the issue #1124 entry above used
+for an analogous post-verdict prose correction. Re-verified after the
+edit: `gitapex_check_skill_shape.py` 67/67; full `pytest` suite 4935
+passed, 1 pre-existing unrelated failure (a shallow-clone git-history
+artifact in `test_gitapex_scan_harden_checkout_pin_drift.py`, reproduced
+identically on a clean, unmodified `HEAD` via `git stash`).
+
+Battle-testing-a-skill's remaining Angle 4 finding is disclosed, not
+fixed: by the bullet's own admission ("this dimension's own judgment ...
+still apply[ies] regardless of length"), a competent reviewer applying
+only the pre-existing generic relevance/duplication/sediment/sprawl
+bullet could already reach the identical verdict on both new fixtures --
+borne out directly by this iteration's own gate transcripts, where the
+pre-edit dispatch reasoned to the same Fail/duplication/sprawl conclusion
+through generic reasoning alone. This is the identical shape this file's
+own three confidentiality-awareness follow-up entries above (`## Compatibility-awareness
+branch coverage`, payment-data/MNPI/trade-secret) already named and kept
+anyway: a strong tier (Sonnet, high effort) generalizing correctly on a
+single live sample is evidence about this specific trial, not proof the
+addition adds nothing. The same independent, freestanding rationale
+applies here without depending on this corpus detecting a substance
+change: explicit citability (a reviewer or a weaker tier can now ground
+the same verdict in a named rule rather than open-ended paragraph-cost
+reasoning, the same "Correctness and consistency" argument
+`SKILL.md`'s own Skill-step-vs-bundled-script section makes for
+deterministic rules over in-head judgment), direct scope coverage of a
+gap the issue's own parent tracking issue (#1137) had already decided was
+worth closing, and near-zero cost (one bullet,
+`gitapex_check_skill_shape.py` unaffected throughout). Kept per this same
+drift-correction precedent, not reclassified to force a cleaner-looking
+result.
+
+**Second post-verdict correction (before merge, found by an independent
+GitHub-native reviewer, CodeRabbit, on PR #1174).** A real construct-
+validity gap in both new fixtures' assertions, independently validated
+against the actual scorer and the actual transcripts before treating it
+as something to fix (per `drafting-a-pr-to-merge`'s own untrusted-review
+discipline): `description-conciseness-trigger-selection.yaml`'s original
+`expected` block required only `Description-length trigger` and
+`DESCRIPTION_MAX_CHARS` -- both satisfied by a response that misapplies
+the new bullet as an unconditional length-based auto-fail rather than a
+trigger for judgment, since neither string is unique to a *correct*
+application. Confirmed directly: `gitapex_score_contract.py` scored a
+hand-constructed reading of the assertions against that failure mode as
+indistinguishable from a correct pass. Fixed by adding one positive
+real-classification marker per fixture (`uplication`, case-agnostic for
+"duplication"/"Duplication", to the selection fixture; `well-known` to
+the train fixture, matching each fixture's own distinct bloat flavor) and
+four shared `output_not_contains` guards against the specific
+misapplication phrasing (`automatically fail`, `fails automatically`,
+`fails simply`, `fails solely`) -- each candidate string checked against
+all three already-captured transcripts before adoption, confirmed absent
+from the correct before/after/train transcripts (so the guards cost
+nothing against real behavior) and confirmed the two new positive markers
+are actually present in the relevant transcripts. Not re-dispatched: the
+existing transcripts are static text, re-scorable as-is.
+`gitapex_score_contract.py --assertions` against the strengthened
+contracts moved the selection fixture's before-score from 0.500000 to
+0.777778 (the added `output_not_contains` guards are trivially satisfied
+by both before and after, raising the shared denominator; the two
+original discriminating assertions are unchanged) and left the after-score
+at 1.000000 -- selection mean **0.777778 -> 1.000000, KEEP** still holds,
+strict improvement preserved. `results/2026-08-17-issue-1142-description-
+conciseness/manifest.json` and `claude-sonnet-5-before-after-detail.json`
+updated to the new scores in the same commit.
+
+CodeRabbit's separate, lower-severity ("Trivial"/"Nitpick") suggestion --
+add a dedicated held-out restraint fixture (a legitimately dense,
+non-redundant near-cap description that should Pass) -- is not fixed
+here. This gap was already named explicitly in this iteration's own Blind
+spot pass above, before CodeRabbit's review ran, as "left as a disclosed,
+open gap for a future addition, the same disposition this file's own
+confidentiality-awareness and dependency-policy entries used for their
+own analogous gaps" -- CodeRabbit's own review independently reached the
+identical conclusion. Declining to build it in this iteration is a
+scope call, not an oversight: the two Applicability-direction fixtures
+already in this iteration exercise the Fail path fully, a restraint
+fixture requires its own fresh live dispatch pair (CodeRabbit's own
+"Heavy lift" effort tag), and this repository's own established
+precedent (the `tool-capability-verification`, `consumer-repo-
+convention-deference`, and `confidentiality-awareness` entries above)
+repeatedly accepts "the existing generic restraint fixtures
+(`guardrail.yaml`/`no-fabricated-violation.yaml`) already probe
+generic false-positive restraint across the whole rubric" as sufficient
+coverage for a first landing, with a dedicated restraint fixture left to
+a follow-up. Disclosed in the run record's own `known_gaps`, not
+silently dropped.

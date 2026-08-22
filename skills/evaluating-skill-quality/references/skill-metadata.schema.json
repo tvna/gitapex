@@ -36,7 +36,7 @@
       "type": "object",
       "required": ["portability", "capabilityAssumption"],
       "additionalProperties": true,
-      "description": "additionalProperties is deliberately true: gitapex_check_skill_shape.py's own _parse_manifest docstring states that any spec key other than the six gated ones below (e.g. the reserved-but-ungated spec.evalStatus) is 'still deliberately skipped' -- tolerated, not rejected. Only the six keys enumerated in `properties` below carry a real shape contract; anything else is unenforced free-form space by design, not an oversight.",
+      "description": "additionalProperties is deliberately true: gitapex_check_skill_shape.py's own _parse_manifest docstring states that any spec key other than the eight gated ones below (e.g. the reserved-but-ungated spec.evalStatus) is 'still deliberately skipped' -- tolerated, not rejected. Only the eight keys enumerated in `properties` below carry a real shape contract; anything else is unenforced free-form space by design, not an oversight.",
       "properties": {
         "portability": {
           "type": "string",
@@ -47,6 +47,11 @@
           "type": "string",
           "enum": ["Broad", "Frontier", "Adaptive"],
           "description": "CAPABILITY_ASSUMPTIONS. The compute/capability regime this skill's own verbosity and degree-of-freedom are calibrated for; grades the rubric's dimensions 2/3/9 (and 5, Adaptive-only) relative to this declaration rather than one fixed preference."
+        },
+        "dependencyPolicy": {
+          "type": "string",
+          "enum": ["StdlibOnly", "Declared"],
+          "description": "DEPENDENCY_POLICY_LEVELS. StdlibOnly: scripts/*.py must import nothing outside sys.stdlib_module_names. Declared: scripts/*.py may import packages listed in executionRequirements.packages.pip, each also named in compatibility prose. Optional (unlike portability/capabilityAssumption) -- absent is treated as StdlibOnly-equivalent."
         },
         "references": {
           "type": "array",
@@ -228,7 +233,7 @@
     "executionRequirements": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Three recognized subkeys so far (tools, packages, network); further categories (filesystem/mcp/credentials/browser/externalServices/context) are deferred -- until they land, any key other than these here is a real unknown key, not reserved space, matching this skill's own bundled shape checker's current behavior for tools and network (packages is schema-only for now and is not yet recognized by that hand-rolled parser).",
+      "description": "Three recognized subkeys so far (tools, packages, network); further categories (filesystem/mcp/credentials/browser/externalServices/context) are deferred -- until they land, any key other than these here is a real unknown key, not reserved space, matching this skill's own bundled shape checker's current behavior for all three (packages is recognized by that hand-rolled parser too, for SHAPE only -- allowlist resolution against gitapex's own closed package list is enforced separately, by a repository-owned CI gate outside this schema and that parser).",
       "properties": {
         "tools": { "$ref": "#/$defs/executionRequirementsTools" },
         "packages": { "$ref": "#/$defs/executionRequirementsPackages" },

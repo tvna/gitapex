@@ -104,10 +104,10 @@ Checks (the canonical list -- the manual fallback is to apply these):
     exists. No skill's runtime procedure may read or branch on any part
     of spec.lifecycle (the sidecar's behavior-neutrality invariant).
     spec.executionRequirements, if present, is a mapping with only the
-    tools and network keys so far (further categories -- filesystem/mcp/
-    credentials/browser/externalServices/context -- are deferred; until
-    they land, any key other than tools/network here is an unknown key,
-    not reserved space);
+    tools, packages, and network keys so far (further categories --
+    filesystem/mcp/credentials/browser/externalServices/context -- are
+    deferred; until they land, any key other than tools/packages/network
+    here is an unknown key, not reserved space);
     tools, if present, is itself a mapping -- like spec.executionRequirements
     itself, never real YAML null -- with only the keys
     read/write/shell, each -- if present -- a list of non-empty scalar
@@ -129,11 +129,29 @@ Checks (the canonical list -- the manual fallback is to apply these):
     sidecar sub-block mixing a scalar field with a list field in the same
     block -- see EXEC_REQ_NETWORK_SUBKEYS' own comment above for why the
     parser treats that as no different from tools' all-list shape.
+    packages, if present, is itself a mapping -- never real YAML null,
+    same rule -- but unlike tools/network its own subkeys are not a fixed
+    tuple: each is a free-form ecosystem identifier (e.g. "pip", "npm")
+    matching EXEC_REQ_PACKAGES_KEY_RE (skill-metadata.schema.json's own
+    executionRequirementsPackages.propertyNames pattern), so unknown-
+    subkey detection here is a regex mismatch rather than a
+    tuple-membership check. Each matching ecosystem key's own value is,
+    like tools' read/write/shell, a list of non-empty scalar strings with
+    the same per-item shape rules (execution-requirements-well-formed). An
+    absent executionRequirements block, an absent packages block, or an
+    absent specific-ecosystem key each mean "not yet declared"; an
+    explicit empty list (e.g. pip: []) means "declared, zero packages
+    needed from that ecosystem" -- a deliberate statement, not the same as
+    absence. Whether a declared package is one gitapex permits at all is
+    not checked here: that allowlist-membership question is enforced
+    entirely outside this portable script, by a repository-owned CI gate
+    (.github/scripts/gitapex_gate_dependency_allowlist.py).
 
     Three-way absent/null/empty-mapping distinction, shared by every gated *mapping*-valued block above
     (spec.skillDependencies, spec.lifecycle and each of its
     experimental/deprecated/stable sub-blocks, spec.executionRequirements,
-    and spec.executionRequirements.tools): the key never appearing at all
+    spec.executionRequirements.tools, and
+    spec.executionRequirements.packages): the key never appearing at all
     means "not declared" (optional, passes); the key appearing with a
     blank value and no child key ever following at the next indent level
     is real YAML null -- a real YAML parser never reads a bare block
@@ -148,7 +166,8 @@ Checks (the canonical list -- the manual fallback is to apply these):
     *list* (read: []) does for list-valued fields. This distinction does
     NOT extend to list-valued keys (spec.references;
     spec.skillDependencies.requires/relatedTo;
-    spec.executionRequirements.tools.read/write/shell) -- a blank list
+    spec.executionRequirements.tools.read/write/shell;
+    spec.executionRequirements.packages.<ecosystem>) -- a blank list
     header is still read as an empty list, unchanged, matching each
     field's own already-established "explicit empty list is a deliberate
     statement" semantics documented above. Other
@@ -660,6 +679,7 @@ EXPECTED_API_VERSION = "gitapex.io/v1alpha1"
 EXPECTED_KIND = "SkillMetadata"  # the sidecar's fixed manifest kind, alongside EXPECTED_API_VERSION above
 PORTABILITY_LEVELS = ("Portable", "Repository-scoped", "Mixed")  # closed vocabulary for spec.portability
 CAPABILITY_ASSUMPTIONS = ("Broad", "Frontier", "Adaptive")  # closed vocabulary for spec.capabilityAssumption
+DEPENDENCY_POLICY_LEVELS = ("StdlibOnly", "Declared")  # closed vocabulary for spec.dependencyPolicy
 # A plain "- <value>" list item, indented 2 or more spaces -- real YAML
 # accepts a block sequence indented level with its mapping key (2 spaces,
 # same as spec.references' own key) or further indented (4 spaces, this
@@ -679,7 +699,8 @@ REFERENCES_MAPPING_LIKE_RE = re.compile(r"^[A-Za-z0-9_.-]+:(\s|$)")
 # OTHER than a string -- null, boolean, or numeric -- rather than the
 # string every list-of-scalar-strings field (spec.references,
 # spec.skillDependencies.requires/relatedTo,
-# spec.executionRequirements.tools.read/write/shell) assumes each of its
+# spec.executionRequirements.tools.read/write/shell,
+# spec.executionRequirements.packages.<ecosystem>) assumes each of its
 # items is. Deliberately the common, uncontroversial
 # subset -- not YAML 1.1's yes/no/on/off, which are also ordinary English
 # words a legitimate capability-tag or reference string could contain --
@@ -715,7 +736,8 @@ def _is_non_string_plain_scalar(raw_text: str) -> bool:
     way a real YAML parser would before resolving the item's type.
     Shared by every gated list-of-scalar-strings site (spec.references;
     spec.skillDependencies.requires/relatedTo;
-    spec.executionRequirements.tools.read/write/shell)."""
+    spec.executionRequirements.tools.read/write/shell;
+    spec.executionRequirements.packages.<ecosystem>)."""
     stripped = _INLINE_COMMENT_RE.sub("", raw_text).strip()
     return bool(YAML_NON_STRING_SCALAR_RE.match(stripped))
 
@@ -872,6 +894,46 @@ EXEC_REQ_TOOLS_LIST_ITEM_RE = re.compile(r"^[ ]{6,}-\s*(.*)$")
 # rather than silently claiming a generalization that was not attempted.
 EXEC_REQ_NETWORK_SUBKEYS = ("mode", "domains")
 EXEC_REQ_NETWORK_MODES = ("disabled", "allowlist", "unrestricted")  # closed vocabulary for network.mode
+
+# spec.executionRequirements' third recognized block sub-key: "packages" --
+# the first whose own subkeys are NOT a fixed, closed tuple the way tools'
+# read/write/shell (EXEC_REQ_TOOLS_SUBKEYS) and network's mode/domains
+# (EXEC_REQ_NETWORK_SUBKEYS) are. A package ecosystem (pip, npm, cargo, ...)
+# is an open-ended set by design -- skill-metadata.schema.json's own
+# executionRequirementsPackages deliberately declares no closed enum of
+# supported ecosystems, via propertyNames rather than a fixed properties
+# list -- so unknown-subkey detection here must be a REGEX match against
+# that same pattern, not a tuple-membership check: a future ecosystem
+# becomes usable with no parser change, matching the schema's own design
+# intent. Kept as a separate, hand-duplicated regex here rather than
+# imported from the schema (the same precedent EXTERNAL_CITATION_PATH_RE
+# already established for a schema constraint that also needs enforcing in
+# this dependency-free, no-YAML-library parser).
+EXEC_REQ_PACKAGES_KEY_RE = re.compile(r"^[a-z][a-z0-9-]*$")
+# Detects a line that LOOKS like an attempted "- <value>" packages list item
+# (a "-" as its first non-whitespace character, tabs included) but whose
+# leading whitespace fails EXEC_REQ_TOOLS_LIST_ITEM_RE's own strict "6 or
+# more literal SPACE characters" requirement -- a tab anywhere in the
+# indent, or fewer than 6 spaces. Used only to distinguish that case from a
+# packages ecosystem list genuinely ending (a real dedent, or a new sibling
+# ecosystem key) while collecting_exec_packages_list is open: without it, a
+# line like "\t- some-package" (or "  - some-package", 2 spaces) silently
+# finalizes the list as empty -- indistinguishable from the package truly
+# never having been declared -- instead of being recorded into
+# malformed_execution_requirement_packages_items the way an item
+# EXEC_REQ_TOOLS_LIST_ITEM_RE itself rejects (mapping-shaped, wrong type)
+# already is. Cannot collide with a legitimate new KEY_LINE_RE_6 sibling
+# key: whenever this matches AND the strict item regex already failed, the
+# leading whitespace run is provably not "exactly 6 literal spaces" (either
+# shorter, or tab-containing), which KEY_LINE_RE_6 requires verbatim -- so
+# the two can never both match the same line. Scoped to packages only, per
+# this fix's own issue: tools' and network's own sibling list-item blocks
+# (collecting_exec_tools_list/collecting_exec_network_list below) share this
+# exact latent gap -- no equivalent fail-closed check exists at their own
+# list-item level either, only at the surrounding key level -- and are
+# deliberately left as-is here rather than silently duplicating the fix
+# beyond this issue's own scope.
+EXEC_REQ_PACKAGES_MISINDENTED_ITEM_RE = re.compile(r"^[ \t]*-\s*(.*)$")
 
 TAG_RE = re.compile(r"</?[A-Za-z][^>]*>")
 # A YAML plain (unquoted) scalar cannot safely contain ": " (colon followed
@@ -1444,11 +1506,12 @@ class ManifestParse:
     ``unknown_execution_requirement_keys``, ``unknown_execution_requirement_tools_keys``,
     and ``malformed_execution_requirement_tools_items`` are
     spec.executionRequirements' equivalents: the first holds each key found directly under
-    spec.executionRequirements that is not ``tools`` or ``network`` (only
-    two recognized keys exist so far -- further categories are deferred to
-    sibling child issues, and any other key here is unknown, not reserved
-    space); the second holds each key found directly under ``tools`` that
-    is not ``read``, ``write``, or ``shell``; the third holds each
+    spec.executionRequirements that is not ``tools``, ``packages``, or
+    ``network`` (only three recognized keys exist so far -- further
+    categories are deferred to sibling child issues, and any other key
+    here is unknown, not reserved space); the second holds each key found
+    directly under ``tools`` that is not ``read``, ``write``, or
+    ``shell``; the third holds each
     read/write/shell list item that is mapping-shaped or inconsistently
     indented, the same rule ``malformed_reference_items``/
     ``malformed_skill_dependency_items`` use one nesting level shallower.
@@ -1462,6 +1525,29 @@ class ManifestParse:
     ``domains``; the second holds each ``domains`` list item that is
     mapping-shaped or inconsistently indented. Both empty when the field
     is absent or parsed cleanly.
+
+    ``unknown_execution_requirement_packages_keys`` and
+    ``malformed_execution_requirement_packages_items`` are ``packages``'s
+    own equivalents, differing from ``tools``'/``network``'s in HOW both
+    are populated: since ``packages``' own subkeys are free-form
+    ecosystem identifiers rather than a fixed tuple (see
+    EXEC_REQ_PACKAGES_KEY_RE), the first holds each key found directly
+    under ``packages`` that does NOT match EXEC_REQ_PACKAGES_KEY_RE's own
+    pattern (a regex mismatch, not a tuple-membership miss); the second
+    holds each per-ecosystem list item that is mapping-shaped or
+    inconsistently indented, the same rule every other malformed-item
+    channel above uses, PLUS one packages-only addition
+    (EXEC_REQ_PACKAGES_MISINDENTED_ITEM_RE, see its own comment): a line
+    that looks like an attempted "- <value>" item (a "-" as its first
+    non-whitespace character) but whose leading whitespace fails the
+    strict list-item regex's own "6 or more literal spaces" requirement
+    -- a tab, or fewer than 6 spaces -- is ALSO recorded here rather than
+    silently finalizing the list as empty, indistinguishable from the
+    package never having been declared at all. tools'/network's own
+    sibling list-item blocks do not have this addition; see
+    EXEC_REQ_PACKAGES_MISINDENTED_ITEM_RE's own comment for why that gap
+    is deliberately left as-is there. Both empty when the field is absent
+    or parsed cleanly.
 
     ``malformed_external_citation_items`` and
     ``unknown_external_citation_item_keys`` are spec.externalCitations'
@@ -1487,6 +1573,8 @@ class ManifestParse:
     unknown_execution_requirement_keys: list[str]
     unknown_execution_requirement_tools_keys: list[str]
     malformed_execution_requirement_tools_items: list[str]
+    unknown_execution_requirement_packages_keys: list[str]
+    malformed_execution_requirement_packages_items: list[str]
     unknown_execution_requirement_network_keys: list[str]
     malformed_execution_requirement_network_items: list[str]
     malformed_external_citation_items: list[str]
@@ -1618,6 +1706,31 @@ def _parse_manifest(text: str) -> ManifestParse:
       ``ManifestParse.unknown_execution_requirement_network_keys``; a
       malformed ``domains`` list item is collected into
       ``ManifestParse.malformed_execution_requirement_network_items``.
+    - spec.executionRequirements' third recognized block sub-key:
+      ``packages``, also an empty value opening a nested block at 6-space
+      indent, also finalizing to real YAML null when its own header sees
+      zero child key lines -- but unlike ``tools``' fixed
+      read/write/shell and ``network``'s fixed mode/domains, ``packages``'
+      own subkeys are free-form ecosystem identifiers (``pip``, ``npm``,
+      ...) matching ``EXEC_REQ_PACKAGES_KEY_RE``, not a closed tuple,
+      mirroring skill-metadata.schema.json's own
+      executionRequirementsPackages.propertyNames pattern (no closed enum
+      of supported ecosystems, so a future ecosystem needs no parser
+      change to become recognized). Each ecosystem key matching that
+      pattern is captured the same way tools' own read/write/shell are:
+      an inline non-blank value is stored as a raw scalar (the wrong
+      shape for a package list, caught downstream by
+      ``_execution_requirements_checks``); a blank value opens a list of
+      "- <value>" items at 6-or-more-space indent, reusing
+      ``EXEC_REQ_TOOLS_LIST_ITEM_RE`` verbatim (the same depth-reuse
+      ``domains`` above already established -- an ecosystem key sits at
+      the identical 6-space depth tools' own read/write/shell and
+      network's mode/domains do). A key under ``packages`` NOT matching
+      ``EXEC_REQ_PACKAGES_KEY_RE`` is collected into
+      ``ManifestParse.unknown_execution_requirement_packages_keys``
+      instead of being silently skipped; a malformed per-ecosystem list
+      item is collected into
+      ``ManifestParse.malformed_execution_requirement_packages_items``.
 
     Every other nested map or list (e.g. spec.evalStatus) is still
     deliberately skipped, exactly as before: skipping keeps this
@@ -1770,6 +1883,22 @@ def _parse_manifest(text: str) -> ManifestParse:
     malformed_exec_tools_items: list[str] = []
     unknown_exec_req_keys: list[str] = []
     unknown_exec_tools_keys: list[str] = []
+    # packages' own state, structurally parallel to exec_tools' above (see
+    # EXEC_REQ_NETWORK_SUBKEYS' own comment for why this is a hand-
+    # duplicated analog rather than a shared helper -- a third parallel
+    # block here rather than an extraction, same precedent, same
+    # regression-risk-vs-scope tradeoff). Unlike exec_tools/exec_network,
+    # unknown_exec_packages_keys is populated by a REGEX mismatch
+    # (EXEC_REQ_PACKAGES_KEY_RE), not a tuple-membership miss -- see the
+    # parsing loop below.
+    in_exec_packages = False
+    exec_packages: dict[str, object] = {}
+    exec_packages_has_content = False
+    collecting_exec_packages_list: list[str] | None = None
+    collecting_exec_packages_key: str | None = None
+    exec_packages_list_indent: int | None = None
+    malformed_exec_packages_items: list[str] = []
+    unknown_exec_packages_keys: list[str] = []
     # network's own state, structurally parallel to exec_tools' above (see
     # EXEC_REQ_NETWORK_SUBKEYS' own comment for why this is a hand-
     # duplicated analog rather than a shared helper).
@@ -1884,6 +2013,23 @@ def _parse_manifest(text: str) -> ManifestParse:
         exec_tools = {}
         exec_tools_has_content = False
 
+    def _finalize_exec_packages_list() -> None:
+        nonlocal collecting_exec_packages_list, collecting_exec_packages_key, exec_packages_list_indent
+        if collecting_exec_packages_list is not None and collecting_exec_packages_key is not None:
+            exec_packages[collecting_exec_packages_key] = collecting_exec_packages_list
+        collecting_exec_packages_list = None
+        collecting_exec_packages_key = None
+        exec_packages_list_indent = None
+
+    def _finalize_exec_packages() -> None:
+        nonlocal in_exec_packages, exec_packages, exec_packages_has_content
+        _finalize_exec_packages_list()
+        if in_exec_packages:
+            execution_requirements["packages"] = exec_packages if exec_packages_has_content else None
+        in_exec_packages = False
+        exec_packages = {}
+        exec_packages_has_content = False
+
     def _finalize_exec_network_list() -> None:
         nonlocal collecting_exec_network_list, collecting_exec_network_key, exec_network_list_indent
         if collecting_exec_network_list is not None and collecting_exec_network_key is not None:
@@ -1904,6 +2050,7 @@ def _parse_manifest(text: str) -> ManifestParse:
     def _finalize_execution_requirements() -> None:
         nonlocal in_execution_requirements, execution_requirements, exec_req_has_content
         _finalize_exec_tools()
+        _finalize_exec_packages()
         _finalize_exec_network()
         if in_execution_requirements and current is not None:
             current["executionRequirements"] = execution_requirements if exec_req_has_content else None
@@ -2250,6 +2397,149 @@ def _parse_manifest(text: str) -> ManifestParse:
             # Finalize it and fall through to process this line normally
             # below.
             _finalize_exec_tools()
+        if collecting_exec_packages_list is not None:
+            item = EXEC_REQ_TOOLS_LIST_ITEM_RE.match(line)
+            if item:
+                item_indent = len(line) - len(line.lstrip(" "))
+                if exec_packages_list_indent is None:
+                    exec_packages_list_indent = item_indent
+                if item_indent != exec_packages_list_indent:
+                    # Same list, different indent than its own first item --
+                    # real YAML would reject this outright.
+                    malformed_exec_packages_items.append(line.strip())
+                    continue
+                raw_text = item.group(1).strip()
+                is_quoted = len(raw_text) >= 2 and raw_text[0] == raw_text[-1] and raw_text[0] in "\"'"
+                if not is_quoted:
+                    # A trailing "# comment" on an otherwise-valid item
+                    # (e.g. "- requests  # transitively needed") must not
+                    # become part of the stored package name. Real YAML's
+                    # own comment rule -- an unquoted "#" preceded by
+                    # start-of-string or whitespace -- is exactly what
+                    # _INLINE_COMMENT_RE already encodes for
+                    # _is_non_string_plain_scalar's own type-classification
+                    # use below; that stripped copy was never fed back into
+                    # the STORED value before this fix, so a trailing
+                    # comment silently became part of the parsed package
+                    # name and then failed the allowlist check with
+                    # nothing pointing at the comment as the actual
+                    # problem. Gated on is_quoted the same way
+                    # REFERENCES_MAPPING_LIKE_RE/_is_non_string_plain_scalar
+                    # below already are -- a quoted item's own "#" is never
+                    # a real comment marker, so stripping must not touch
+                    # it. Scoped to packages only, per this fix's own
+                    # issue: tools'/network's own sibling item-storage
+                    # sites below share this same "stored value keeps a
+                    # trailing comment" gap and are deliberately left as-is
+                    # here.
+                    raw_text = _INLINE_COMMENT_RE.sub("", raw_text).strip()
+                if (not is_quoted and REFERENCES_MAPPING_LIKE_RE.match(raw_text)) or (
+                    not is_quoted and _is_non_string_plain_scalar(raw_text)
+                ):
+                    malformed_exec_packages_items.append(line.strip())
+                else:
+                    collecting_exec_packages_list.append(_unquote(raw_text))
+                continue
+            if (
+                line[:1] in (" ", "\t")
+                and line.strip() not in ("---", "...")
+                and EXEC_REQ_PACKAGES_MISINDENTED_ITEM_RE.match(line)
+            ):
+                # Looks like an attempted list item that the strict regex
+                # above rejected on indentation alone (a tab, or fewer
+                # than 6 spaces) -- see
+                # EXEC_REQ_PACKAGES_MISINDENTED_ITEM_RE's own comment. A
+                # real YAML parser (and a human reading the file) would
+                # still see a declared package here, so this must fail
+                # loudly as a malformed item like any other malformed
+                # packages entry, rather than silently finalizing the list
+                # as empty -- indistinguishable from the package never
+                # having been declared at all.
+                #
+                # The line[:1] guard (found live by an independent
+                # adversarial review) is required because
+                # EXEC_REQ_PACKAGES_MISINDENTED_ITEM_RE's own leading
+                # "[ \t]*" is zero-or-more, deliberately looser than
+                # EXEC_REQ_TOOLS_LIST_ITEM_RE's own "{6,}" -- exactly the
+                # width this branch needs to catch an under-indented item
+                # (the bug the comment above already describes), but that
+                # same width also matches a column-0 "---"/"..." YAML
+                # document marker (both start with "-") and a bare
+                # column-0 "- stray" line, neither of which is an
+                # attempted list item at all. Excluding both here lets
+                # them fall through to their own correct handling instead
+                # (the document-marker skip below, or the generic
+                # top-level malformed-line catch-all) rather than being
+                # misreported as a malformed *packages* item and spuriously
+                # failing a sidecar whose packages list is actually
+                # well-formed. A real, indented-but-under-6-spaces item
+                # (the tab/two-space regression fixtures this branch
+                # already has) always starts with a space or tab, so this
+                # guard does not narrow the original fix's own coverage.
+                malformed_exec_packages_items.append(line.strip())
+                continue
+            # Not a list item: this per-ecosystem package-name list ends here.
+            _finalize_exec_packages_list()
+        if in_exec_packages:
+            matched = _match_key_line(KEY_LINE_RE_6, line)
+            if matched:
+                exec_packages_has_content = True
+                key, value = matched
+                # Same comment-only-value fix as tools'/network's own
+                # equivalent branches above (e.g. "pip:  # comment").
+                value = _strip_bare_comment(value)
+                # REGEX match, not tuple membership -- packages' own
+                # subkeys are free-form ecosystem identifiers
+                # (EXEC_REQ_PACKAGES_KEY_RE), unlike tools'/network's own
+                # fixed EXEC_REQ_TOOLS_SUBKEYS/EXEC_REQ_NETWORK_SUBKEYS
+                # tuples (see EXEC_REQ_PACKAGES_KEY_RE's own comment).
+                # fullmatch(), not match(): Python's trailing "$" (unlike
+                # JSON Schema's own ECMA-262 "$", which EXEC_REQ_PACKAGES_KEY_RE
+                # is hand-duplicated from -- see its own comment) also
+                # matches immediately before a trailing "\n", which
+                # match() would silently accept. key can never actually
+                # carry a "\n" here (every line is rstrip()-ped before
+                # this point in the parsing loop), so this is defense in
+                # depth against unintended reuse of this pattern with
+                # unstripped input, not a reachable bug today. Deliberately
+                # NOT rewritten to "\Z" in the regex source itself: that
+                # would desync EXEC_REQ_PACKAGES_KEY_RE.pattern from
+                # skill-metadata.schema.json's own propertyNames.pattern,
+                # which test_execution_requirement_packages_key_pattern_matches_schema
+                # asserts stay byte-identical -- and "\Z" is not a valid
+                # ECMA-262 escape, so mirroring it into the JSON Schema
+                # file would break every real downstream JSON-Schema
+                # validator that consumes it. fullmatch() gets the same
+                # exact-end semantics without touching the shared pattern
+                # text.
+                if not EXEC_REQ_PACKAGES_KEY_RE.fullmatch(key):
+                    unknown_exec_packages_keys.append(line.strip())
+                elif value == "[]":
+                    exec_packages[key] = []
+                elif not value:
+                    collecting_exec_packages_list = []
+                    collecting_exec_packages_key = key
+                    exec_packages_list_indent = None
+                else:
+                    # Not an empty list and not "[]" -- no flow-sequence
+                    # support; store the raw scalar so the shape gate can
+                    # fail it as the wrong type rather than silently
+                    # dropping it, exactly as tools'/network's own
+                    # equivalent branches do.
+                    exec_packages[key] = value
+                continue
+            indent = len(line) - len(line.lstrip(" "))
+            if line[:1] in (" ", "\t") and indent >= 6:
+                # Same fail-closed reasoning as tools'/network's own
+                # equivalent branches -- an unmatched line at this indent
+                # is flagged, not silently tolerated.
+                exec_packages_has_content = True
+                unknown_exec_packages_keys.append(line.strip())
+                continue
+            # Dedented below packages' own indent: the block ends here.
+            # Finalize it and fall through to process this line normally
+            # below.
+            _finalize_exec_packages()
         if collecting_exec_network_list is not None:
             item = EXEC_REQ_TOOLS_LIST_ITEM_RE.match(line)
             if item:
@@ -2321,7 +2611,7 @@ def _parse_manifest(text: str) -> ManifestParse:
                 # Same comment-only-value fix as spec.skillDependencies'
                 # equivalent branch above (e.g. "tools:  # comment").
                 value = _strip_bare_comment(value)
-                if key not in ("tools", "network"):
+                if key not in ("tools", "packages", "network"):
                     unknown_exec_req_keys.append(line.strip())
                 elif value:
                     # Not opening a block -- a bare scalar written where a
@@ -2332,6 +2622,9 @@ def _parse_manifest(text: str) -> ManifestParse:
                 elif key == "tools":
                     in_exec_tools = True
                     exec_tools = {}
+                elif key == "packages":
+                    in_exec_packages = True
+                    exec_packages = {}
                 else:
                     in_exec_network = True
                     exec_network = {}
@@ -2381,6 +2674,27 @@ def _parse_manifest(text: str) -> ManifestParse:
                 elif key == "executionRequirements" and current is root.get("spec") and not value:
                     in_execution_requirements = True
                     execution_requirements = {}
+                elif key == "dependencyPolicy" and current is root.get("spec") and not value:
+                    # dependencyPolicy is a closed-vocabulary scalar, not a
+                    # block key like the four above -- but it still needs its
+                    # own explicit branch: dependency-policy-declared is the
+                    # first check in this file to treat "spec.get(key) is
+                    # None" as "absent, therefore fine" for an *optional*
+                    # field (contrast with the reserved, silently-ignored
+                    # spec.evalStatus, see
+                    # test_manifest_parser_still_ignores_eval_status).
+                    # Falling through here would leave a bare
+                    # "dependencyPolicy:" (or one followed by list/mapping
+                    # content this parser does not interpret at this key's
+                    # own indent) completely unregistered, indistinguishable
+                    # from the key never having been written at all --
+                    # dependency-policy-declared would then silently PASS a
+                    # present-and-malformed declaration as if it were
+                    # absent. Registering it as an empty string keeps it
+                    # distinct from real absence while still failing the
+                    # DEPENDENCY_POLICY_LEVELS membership check (empty
+                    # string is not StdlibOnly/Declared).
+                    current[key] = ""
                 elif value:
                     current[key] = _unquote(value)
             continue
@@ -2415,6 +2729,8 @@ def _parse_manifest(text: str) -> ManifestParse:
         unknown_execution_requirement_keys=unknown_exec_req_keys,
         unknown_execution_requirement_tools_keys=unknown_exec_tools_keys,
         malformed_execution_requirement_tools_items=malformed_exec_tools_items,
+        unknown_execution_requirement_packages_keys=unknown_exec_packages_keys,
+        malformed_execution_requirement_packages_items=malformed_exec_packages_items,
         unknown_execution_requirement_network_keys=unknown_exec_network_keys,
         malformed_execution_requirement_network_items=malformed_exec_network_items,
         malformed_external_citation_items=malformed_ext_citations,
@@ -3579,6 +3895,8 @@ def check_shape(target: Path) -> list[CheckResult]:
             unknown_execution_requirement_keys = parsed.unknown_execution_requirement_keys
             unknown_execution_requirement_tools_keys = parsed.unknown_execution_requirement_tools_keys
             malformed_execution_requirement_tools_items = parsed.malformed_execution_requirement_tools_items
+            unknown_execution_requirement_packages_keys = parsed.unknown_execution_requirement_packages_keys
+            malformed_execution_requirement_packages_items = parsed.malformed_execution_requirement_packages_items
             unknown_execution_requirement_network_keys = parsed.unknown_execution_requirement_network_keys
             malformed_execution_requirement_network_items = parsed.malformed_execution_requirement_network_items
             malformed_external_citation_items = parsed.malformed_external_citation_items
@@ -3596,6 +3914,8 @@ def check_shape(target: Path) -> list[CheckResult]:
             unknown_execution_requirement_keys = []
             unknown_execution_requirement_tools_keys = []
             malformed_execution_requirement_tools_items = []
+            unknown_execution_requirement_packages_keys = []
+            malformed_execution_requirement_packages_items = []
             unknown_execution_requirement_network_keys = []
             malformed_external_citation_items = []
             unknown_external_citation_item_keys = []
@@ -3631,6 +3951,14 @@ def check_shape(target: Path) -> list[CheckResult]:
                     "capability-assumption-declared",
                     False,
                     f"spec.capabilityAssumption is one of {CAPABILITY_ASSUMPTIONS}",
+                    evidence,
+                )
+            )
+            results.append(
+                CheckResult(
+                    "dependency-policy-declared",
+                    False,
+                    f"spec.dependencyPolicy, if present, is one of {DEPENDENCY_POLICY_LEVELS}",
                     evidence,
                 )
             )
@@ -3734,13 +4062,15 @@ def check_shape(target: Path) -> list[CheckResult]:
                     "execution-requirements-well-formed",
                     False,
                     "spec.executionRequirements, if present, is a mapping with "
-                    "only the tools/network keys; tools, if present, is a "
-                    "mapping with only read/write/shell keys, each -- if "
-                    "present -- a list of non-empty strings; network, if "
-                    "present, is a mapping with only mode (a "
-                    "disabled/allowlist/unrestricted enum) and domains (a "
-                    "list of non-empty strings, non-empty only when mode is "
-                    "allowlist)",
+                    "only the tools/packages/network keys; tools, if present, "
+                    "is a mapping with only read/write/shell keys, each -- if "
+                    "present -- a list of non-empty strings; packages, if "
+                    "present, is a mapping keyed by free-form ecosystem "
+                    "identifiers, each value -- if present -- a list of "
+                    "non-empty strings; network, if present, is a mapping "
+                    "with only mode (a disabled/allowlist/unrestricted enum) "
+                    "and domains (a list of non-empty strings, non-empty "
+                    "only when mode is allowlist)",
                     evidence,
                 )
             )
@@ -3811,6 +4141,40 @@ def check_shape(target: Path) -> list[CheckResult]:
                     repr(capability),
                 )
             )
+            dependency_policy_declared_rule = f"spec.dependencyPolicy, if present, is one of {DEPENDENCY_POLICY_LEVELS}"
+            dependency_policy = spec.get("dependencyPolicy")
+            if not spec_is_mapping:
+                # Same precondition failure portability-declared/
+                # capability-assumption-declared already report above --
+                # "not declared (optional)" would misreport a non-mapping
+                # spec as the ordinary optional-and-absent case, mirroring
+                # references-well-formed's own guard below.
+                results.append(
+                    CheckResult(
+                        "dependency-policy-declared",
+                        False,
+                        dependency_policy_declared_rule,
+                        f"spec is not a mapping: {spec_raw!r}",
+                    )
+                )
+            elif dependency_policy is None:
+                results.append(
+                    CheckResult(
+                        "dependency-policy-declared",
+                        True,
+                        dependency_policy_declared_rule,
+                        "not declared (optional, treated as StdlibOnly-equivalent)",
+                    )
+                )
+            else:
+                results.append(
+                    CheckResult(
+                        "dependency-policy-declared",
+                        dependency_policy in DEPENDENCY_POLICY_LEVELS,
+                        dependency_policy_declared_rule,
+                        repr(dependency_policy),
+                    )
+                )
             references = spec.get("references")
             references_well_formed_rule = (
                 "spec.references, if present, is a non-empty list of "
@@ -4023,6 +4387,8 @@ def check_shape(target: Path) -> list[CheckResult]:
                     unknown_execution_requirement_keys,
                     unknown_execution_requirement_tools_keys,
                     malformed_execution_requirement_tools_items,
+                    unknown_execution_requirement_packages_keys,
+                    malformed_execution_requirement_packages_items,
                     unknown_execution_requirement_network_keys,
                     malformed_execution_requirement_network_items,
                 )
@@ -5551,6 +5917,8 @@ def _execution_requirements_checks(
     unknown_keys: list[str],
     unknown_tools_keys: list[str],
     malformed_tools_items: list[str],
+    unknown_packages_keys: list[str],
+    malformed_packages_items: list[str],
     unknown_network_keys: list[str],
     malformed_network_items: list[str],
 ) -> list[CheckResult]:
@@ -5560,12 +5928,13 @@ def _execution_requirements_checks(
     Mirrors ``_skill_dependency_checks``'s early-return ladder (spec not a
     mapping / not declared / not a mapping) before real validation, and its
     problem-accumulation-then-single-CheckResult pattern. Unlike
-    spec.skillDependencies or spec.lifecycle, this field has only two
-    recognized top-level subkeys so far, ``tools`` and ``network`` (issue
-    #845) -- the remaining categories (filesystem, mcp, credentials,
-    browser, externalServices, context) are deferred; any key here other
-    than ``tools``/``network`` fails closed via ``unknown_keys`` rather
-    than being silently accepted as reserved space. There is no
+    spec.skillDependencies or spec.lifecycle, this field has only three
+    recognized top-level subkeys so far, ``tools``, ``packages``, and
+    ``network`` (issue #845; #1115's own ADR follow-up added ``packages``)
+    -- the remaining categories (filesystem, mcp, credentials, browser,
+    externalServices, context) are deferred; any key here other than
+    ``tools``/``packages``/``network`` fails closed via ``unknown_keys``
+    rather than being silently accepted as reserved space. There is no
     dangling-reference or cross-field check the way
     spec.skillDependencies/spec.lifecycle have one each -- tools'
     read/write/shell entries are free-form capability tags, not names that
@@ -5576,18 +5945,27 @@ def _execution_requirements_checks(
     compatible is checked elsewhere in this file, just folded into this
     same well-formed check rather than earning its own separate
     CheckResult -- tools has no analogous cross-subkey rule to justify the
-    same split.
+    same split. packages' own allowlist-membership resolution (whether a
+    declared package name is one gitapex permits at all) is not part of
+    this check: it is enforced entirely outside this portable script, by
+    a repository-owned CI gate
+    (``.github/scripts/gitapex_gate_dependency_allowlist.py``) that never
+    produces a CheckResult here. This function validates only packages'
+    own internal SHAPE, the same as tools and network.
     """
     well_formed_rule = (
         "spec.executionRequirements, if present, is a "
-        "mapping with only the tools/network keys; tools, "
-        "if present, is a mapping with only read/write/shell "
-        "keys, each -- if present -- a list of non-empty "
-        "strings; network, if present, is a mapping with "
-        "only mode (a disabled/allowlist/unrestricted enum, "
-        "required when network is declared) and domains (a "
-        "list of non-empty strings, non-empty iff mode is "
-        "allowlist)"
+        "mapping with only the tools/packages/network keys; "
+        "tools, if present, is a mapping with only "
+        "read/write/shell keys, each -- if present -- a list "
+        "of non-empty strings; packages, if present, is a "
+        "mapping keyed by free-form ecosystem identifiers "
+        "(matching ^[a-z][a-z0-9-]*$), each value -- if "
+        "present -- a list of non-empty strings; network, if "
+        "present, is a mapping with only mode (a "
+        "disabled/allowlist/unrestricted enum, required when "
+        "network is declared) and domains (a list of "
+        "non-empty strings, non-empty iff mode is allowlist)"
     )
 
     if not spec_is_mapping:
@@ -5637,6 +6015,48 @@ def _execution_requirements_checks(
             if key in tools and not _valid_execution_requirements_tools_list(tools[key]):
                 problems.append(f"tools.{key} is not a list of non-empty strings: {tools[key]!r}")
 
+    packages_present = "packages" in execution_requirements
+    packages = execution_requirements.get("packages")
+    # Same present-but-null-vs-absent distinction tools' own branch above
+    # already draws.
+    if packages_present and not isinstance(packages, dict):
+        problems.append(f"packages is not a mapping: {packages!r}")
+    elif isinstance(packages, dict):
+        if unknown_packages_keys:
+            count = len(unknown_packages_keys)
+            problems.append(f"{count} unknown packages key{'' if count == 1 else 's'}: {unknown_packages_keys[0]!r}")
+        if malformed_packages_items:
+            count = len(malformed_packages_items)
+            problems.append(
+                f"{count} malformed packages entr{'y' if count == 1 else 'ies'}: {malformed_packages_items[0]!r}"
+            )
+        # packages' own subkeys are free-form ecosystem identifiers, not a
+        # fixed tuple like EXEC_REQ_TOOLS_SUBKEYS -- iterate the parsed
+        # mapping's own keys (already guaranteed to match
+        # EXEC_REQ_PACKAGES_KEY_RE by the parser; a non-matching key never
+        # reaches this dict at all, landing in unknown_packages_keys
+        # instead, per _parse_manifest) rather than a fixed vocabulary, so
+        # only each key's own VALUE shape remains to check here.
+        for key in packages:
+            if not _valid_execution_requirements_tools_list(packages[key]):
+                problems.append(f"packages.{key} is not a list of non-empty strings: {packages[key]!r}")
+        # KNOWN, DISCLOSED GAP (not fixed here): $defs.packageList in
+        # skill-metadata.schema.json declares "uniqueItems": true, but
+        # this checker does not enforce it -- a package name repeated
+        # twice under the same ecosystem (e.g. "pip: [pyyaml, pyyaml]")
+        # currently still passes execution-requirements-well-formed.
+        # Fail-open only in the sense of "does not additionally flag a
+        # redundant duplicate as its own defect"; it is not an
+        # allowlist-bypass gap (the CI gate that resolves allowlist
+        # membership dedupes by normalized name before checking, so a
+        # duplicate cannot inflate or hide an offender there). Left
+        # unimplemented rather than folded into
+        # _valid_execution_requirements_tools_list, which tools.read/
+        # write/shell and network.domains also share -- enforcing
+        # uniqueItems there too is a broader, separate change this
+        # finding did not ask for and risks failing existing skills that
+        # currently rely on tolerated duplicates in those other lists.
+
     network_present = "network" in execution_requirements
     network = execution_requirements.get("network")
     # Same present-but-null-vs-absent distinction tools' own branch above
@@ -5674,6 +6094,10 @@ def _execution_requirements_checks(
         return [CheckResult("execution-requirements-well-formed", False, well_formed_rule, "; ".join(problems))]
 
     declared = [f"tools.{k}" for k in EXEC_REQ_TOOLS_SUBKEYS if k in tools] if isinstance(tools, dict) else []
+    # packages has no fixed subkey tuple to iterate (see the loop above) --
+    # walk the parsed mapping's own keys instead, in file order (Python
+    # dict iteration order is insertion order, which here is parse order).
+    declared += [f"packages.{k}" for k in packages] if isinstance(packages, dict) else []
     declared += [f"network.{k}" for k in EXEC_REQ_NETWORK_SUBKEYS if k in network] if isinstance(network, dict) else []
     evidence = ", ".join(declared) + " declared" if declared else "no keys declared"
     return [CheckResult("execution-requirements-well-formed", True, well_formed_rule, evidence)]
@@ -5701,9 +6125,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("target", help="Path to a skill directory or a SKILL.md file.")
     args = parser.parse_args(argv)
     target = Path(args.target)
-    if args.allowed_root:
+    allowed_root = Path(args.allowed_root) if args.allowed_root else None
+    if allowed_root is not None:
         try:
-            _validate_read_scope(target, Path(args.allowed_root))
+            _validate_read_scope(target, allowed_root)
         except (OSError, ValueError) as exc:
             print(f"error: unsafe target path: {exc}", file=sys.stderr)
             return 2

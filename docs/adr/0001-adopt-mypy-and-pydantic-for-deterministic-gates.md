@@ -26,6 +26,21 @@ introduces the tooling, not a retrofit of already-shipped behavior --
 though the change did surface and fix a handful of genuine pre-existing
 type errors along the way.
 
+This ADR originally treated the `skills/`/`hooks/` deployment boundary
+below as an unconditional bar on any third-party runtime dependency
+living there. A later decision recorded in this same ADR
+(https://github.com/tvna/gitapex/issues/1115) narrows, without
+reversing, that premise: the [Agent Skills
+specification](https://agentskills.io/skill-creation/using-scripts)
+documents "self-contained scripts" -- a bundled script that declares
+its own dependencies inline via [PEP 723](https://peps.python.org/pep-0723/)
+and runs via `uv run`, which installs the declared dependencies on
+demand rather than assuming a pre-installed site-package. This resolves
+the "no guaranteed install step" concern for a consumer that has `uv`
+available, with the remaining gap (a `uv`-less consumer) covered by this
+repository's existing `compatibility`-disclosure convention. See
+Decision Outcome below for the exact scope and package list.
+
 ## Decision Drivers
 
 - Prevent regression of the ~65%-already-typed baseline as new gates are
@@ -36,7 +51,11 @@ type errors along the way.
   violating this repository's own existing deployment boundary: only
   `skills/` (and, later, `hooks/`) ship to a consumer installing gitapex
   as a plugin, with no guaranteed `uv`/pip install step, so a
-  third-party runtime dependency cannot live there.
+  third-party runtime dependency cannot live there via a normal
+  site-package install. (A narrower, self-contained-script exception for
+  `skills/*/scripts/` is recorded in Decision Outcome below; it does not
+  change this driver's own scope, which stays `.github/scripts/`/
+  `evals/scripts/`.)
 - Make the new type-checking gate itself a required check, consistent
   with how this repository already treats its other deterministic gates
   (a check that exists but is merely advisory has, in this repository's
@@ -62,11 +81,25 @@ type errors along the way.
   already runs a large family of required deterministic gates precisely
   because an advisory check is one a busy reviewer learns to ignore; a
   non-blocking type-check gate would not hold the line it exists for.
-- **pydantic everywhere in scope, including `hooks/`/`skills/*/scripts/`.**
-  Rejected once `docs/repository-layout.md`'s own deployment-boundary
-  statement was checked directly: those directories ship to a plugin
-  consumer with no install step, so a pydantic import there would break
-  silently for that consumer.
+- **pydantic everywhere in scope, including `hooks/`/`skills/*/scripts/`,
+  via a normal site-package install.** Rejected once
+  `docs/repository-layout.md`'s own deployment-boundary statement was
+  checked directly: those directories ship to a plugin consumer with no
+  install step, so a pydantic import there would break silently for that
+  consumer. Still rejected in that unrestricted, normal-install form --
+  see the narrower option below, which resolves the same "no guaranteed
+  install step" problem a different way instead of reversing this
+  rejection.
+- **Allow `skills/*/scripts/*.py` to depend on a small, curated, closed
+  package set via PEP 723 self-contained scripts (`uv run`), dual-declared
+  in `compatibility` and `metadata/gitapex.yaml`.** Chosen, for that
+  narrower scope only (see Decision Outcome) --
+  https://github.com/tvna/gitapex/issues/1115. Distinct from the option
+  immediately above: a self-contained script installs its own declared
+  dependencies on demand rather than assuming them preinstalled, so it
+  does not reintroduce the silent-breakage risk that rejection exists to
+  avoid. The remaining risk (a `uv`-less consumer) is disclosed via
+  `compatibility`, not silently assumed away.
 - **pydantic across the entire remaining `.github/scripts/`/
   `evals/scripts/` surface, no further narrowing.** The starting
   position for this decision; corrected mid-implementation once 14 files
@@ -96,6 +129,23 @@ repository's own already-documented deployment/CI-invocation
 constraints or demanding an all-at-once fix of every pre-existing typing
 gap before the gate can go live.
 
+Separately (https://github.com/tvna/gitapex/issues/1115):
+`skills/*/scripts/*.py` may depend, as direct dependencies (their own
+transitive dependencies are not separately gated by this decision), on
+exactly `pyyaml`, `jsonschema`, and `pydantic` (pip), and only when the
+script uses the PEP 723 self-contained-script pattern (a `# /// script`
+metadata block declaring `dependencies = [...]`) executed via `uv run`,
+with the dependency stated in both the skill's `compatibility`
+frontmatter field and its `metadata/gitapex.yaml` sidecar's
+`spec.executionRequirements.packages.pip` list. This is narrower than,
+and does not reverse, the unrestricted-pydantic-everywhere rejection
+above: a self-contained script never assumes a pre-installed
+site-package, so it does not reintroduce the silent-breakage risk that
+rejection exists to avoid. `hooks/*.py` is unaffected by this narrowing
+-- it is not yet a deployed runtime primitive
+(`docs/repository-layout.md`), and extending this allowance there is
+left to a separate, later decision.
+
 ## Consequences
 
 Good, because new type errors in the already-typed core are now caught
@@ -117,6 +167,23 @@ no-dependency-install-workflow boundary within `.github/scripts/`/
 contributor deciding whether a new script may import pydantic, mitigated
 by this ADR and the registry entry below stating the rule explicitly
 rather than leaving it to be rediscovered by a second broken CI run.
+Good, because `skills/*/scripts/` authors get a real, checkable path to
+a small set of common dependencies (YAML parsing, JSON Schema
+validation, data models) without this repository silently assuming a
+site-package install its own deployment boundary cannot guarantee.
+Bad, because a consumer without `uv` (or another PEP 723-compatible
+runner, e.g. `pipx`) available cannot use the zero-setup `uv run` path
+this decision relies on -- they could still run an affected script by
+separately installing its declared dependencies themselves, but that
+manual step is exactly what the self-contained-script mechanism exists
+to avoid needing. The `compatibility` disclosure this decision requires
+makes the limitation visible before invocation, but does not remove it.
+Bad, because the same fact -- which packages a given skill actually
+depends on -- must now stay consistent across three places (this ADR's
+own closed list, the skill's `compatibility` prose, and its
+`metadata/gitapex.yaml` declaration), with no automated enforcement from
+this ADR alone; the follow-up work named in Confirmation below is what
+closes that gap.
 
 ## Confirmation
 
@@ -130,3 +197,29 @@ code review noticing a `from pydantic import` line in
 `.github/scripts/`/`evals/scripts/` and checking whether that file's own
 dedicated workflow (if any) sets up `uv` first. Automating that check is
 named here as a real gap, not proposed as part of this decision.
+
+For the `skills/*/scripts/` dependency allowance
+(https://github.com/tvna/gitapex/issues/1115), no automated enforcement
+exists yet as of this edit -- this ADR only records the decision. Four
+follow-up changes are expected to build it: recognizing
+`executionRequirements.packages` as a valid sidecar shape (closing the
+gap https://github.com/tvna/gitapex/issues/845 left open after
+https://github.com/tvna/gitapex/issues/804), a declared-vs-actual-imports
+drift scanner for `skills/*/scripts/`, a `dependencyPolicy` precondition
+in the skill-quality rubric that grades a skill's stdlib-only or
+declared-dependency claim on its own merits, and a repository-local
+closed-list configuration plus a CI gate enforcing it against every
+skill. Until all four land, this decision relies on review, not a
+required check.
+
+A related, pre-existing gap this decision surfaced rather than caused:
+`skills/evaluating-skill-quality/scripts/gitapex_scan_execution_requirements_drift.py`
+already imports PyYAML today, guarded only by a friendly error message
+pointing at `uv sync --group dev` (a whole-repository dev-dependency-
+group install), not the PEP 723 + `uv run` pattern this decision
+establishes -- and that dependency is declared in neither
+`compatibility` nor `metadata/gitapex.yaml` on `evaluating-skill-quality`
+itself. It predates this decision and is not yet reconciled with it;
+deciding whether to migrate it to the new pattern or document it as a
+standing development-tool exception is tracked separately
+(https://github.com/tvna/gitapex/issues/1117).

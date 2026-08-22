@@ -19,10 +19,11 @@ Four membership rules, unioned, each covering a gap the others leave:
    of the 25 registered gates live under `hooks/`, registration is a
    separate unenforced step, and an earlier revision anchored this rule to
    `.github/scripts/` alone -- so a new `hooks/check-new-deny.sh`
-   PreToolUse gate shipped entirely outside this check. That also brings
-   `hooks/check-merge-pull-request-block.sh`, a live deny gate that is
-   unregistered today, into scope without needing a registry edit
-   (`gitapex_scan_ssot_schema.py` documents under-registration as a known gap).
+   PreToolUse gate shipped entirely outside this check. That also brought
+   `hooks/check-merge-pull-request-block.sh` into scope without needing a
+   registry edit while it remained unregistered (issue #1222 has since
+   closed that specific gap; `gitapex_scan_ssot_schema.py` documents the
+   general under-registration risk rule 1 guards against as a known gap).
 2. **The registry** -- any path listed in a `.gitapex/ssot.json`
    `gates[].script` value. Rule 1 alone was the first version of this
    check and it under-covered badly: 16 of the 35 registered gate script

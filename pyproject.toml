@@ -24,9 +24,9 @@ dev = [
     # is accepted, not overlooked: this pin trades a possible silent coverage
     # drift for staying off the ruff-style measured-baseline treadmill, since
     # nothing here defines a baseline a bump could silently redefine.
-    "hypothesis>=6.100",
+    "hypothesis>=6.165.5",
     "pyyaml>=6.0",
-    "prek>=0.4.12",
+    "prek>=0.4.13",
     "jsonschema>=4.23",
     "pydantic>=2.9",
     "mypy>=1.13",
@@ -253,6 +253,7 @@ module = [
     "test_gitapex_repository_skill_shape",
     "test_gitapex_route_test_model",
     "test_gitapex_run_ablation",
+    "test_gitapex_run_eval_suite",
     "test_gitapex_scan_apm_manifest_drift",
     "test_gitapex_scan_retrospective_gate_drift",
     "test_gitapex_scan_ssot_schema",
@@ -327,9 +328,9 @@ ignore = ["E501", "SIM108", "RET504"]
 "**/conftest.py" = ["B011", "B017", "S101", "S105", "S106", "S108", "S404", "S603", "S607"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "skills/battle-testing-a-skill/scripts", "skills/evaluating-skill-quality/scripts", "skills/executing-a-branch-plan/scripts", "skills/auditing-agent-product-scope/scripts", "skills/setup-gitapex-toolchain/scripts", "skills/evaluating-deterministic-gate-quality/scripts", "hooks"]
-pythonpath = [".github/scripts", "skills/battle-testing-a-skill/scripts", "skills/scorer-gated-skill-edits/scripts", "skills/evaluating-skill-quality/scripts", "skills/auditing-agent-product-scope/scripts", "skills/evaluating-deterministic-gate-quality/scripts", "evals/scripts", "hooks"]
-addopts = "--cov=.github/scripts --cov=skills/battle-testing-a-skill/scripts --cov=skills/scorer-gated-skill-edits/scripts --cov=skills/evaluating-skill-quality/scripts --cov=skills/auditing-agent-product-scope/scripts --cov=skills/setup-gitapex-toolchain/scripts --cov=skills/evaluating-deterministic-gate-quality/scripts --cov=evals/scripts --cov=hooks --cov-report=term-missing -n auto --strict-markers"
+testpaths = ["tests", "skills/battle-testing-a-skill/scripts", "skills/evaluating-skill-quality/scripts", "skills/executing-a-branch-plan/scripts", "skills/auditing-agent-product-scope/scripts", "skills/setup-gitapex-toolchain/scripts", "skills/evaluating-deterministic-gate-quality/scripts", "skills/drafting-an-acm-issue/scripts", "hooks"]
+pythonpath = [".github/scripts", "skills/battle-testing-a-skill/scripts", "skills/scorer-gated-skill-edits/scripts", "skills/evaluating-skill-quality/scripts", "skills/auditing-agent-product-scope/scripts", "skills/evaluating-deterministic-gate-quality/scripts", "skills/drafting-an-acm-issue/scripts", "evals/scripts", "hooks"]
+addopts = "--cov=.github/scripts --cov=skills/battle-testing-a-skill/scripts --cov=skills/scorer-gated-skill-edits/scripts --cov=skills/evaluating-skill-quality/scripts --cov=skills/auditing-agent-product-scope/scripts --cov=skills/setup-gitapex-toolchain/scripts --cov=skills/evaluating-deterministic-gate-quality/scripts --cov=skills/drafting-an-acm-issue/scripts --cov=evals/scripts --cov=hooks --cov-report=term-missing -n auto --strict-markers"
 markers = [
     "slow: spawns a real subprocess (git/uv/shell); skip locally with -m \"not slow\" for a fast dev loop",
 ]

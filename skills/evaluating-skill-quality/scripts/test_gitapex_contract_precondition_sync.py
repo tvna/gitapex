@@ -55,6 +55,7 @@ _CHECKPOINT_PHRASES = (
     "portability level",
     "capability assumption",
     "declaration-vs-pin",
+    "dependency policy",
 )
 
 

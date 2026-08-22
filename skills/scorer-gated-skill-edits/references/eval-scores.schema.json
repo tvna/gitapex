@@ -45,6 +45,31 @@
             "type": "string",
             "enum": ["train", "selection", "test"],
             "description": "Optional. Which split this fixture belongs to. Recording it lets a reader confirm that the gate verdict was computed over the selection split alone, rather than trusting that it was."
+          },
+          "content_policy_partial_rejection": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Optional. Present only when this fixture's own trials were not all attempted: one or more of its trials already succeeded (and are reflected in `score`/`trials`) before a later trial tripped Anthropic's own content-policy classifier (gitapex_run_eval_suite.py's own _is_content_policy_rejection). A safe, redacted reason, same convention as `skipped_fixtures[].reason` -- never a RuntimeError's or TimeoutExpired's own raw text. A fixture with NO successful trial is not scored at all and appears in `skipped_fixtures` instead, never here."
+          }
+        }
+      }
+    },
+    "skipped_fixtures": {
+      "type": "array",
+      "description": "Optional. Fixtures with zero successful trials, skipped outright rather than scored -- today, a fixture whose every trial's model-CLI invocation tripped Anthropic's own content-policy classifier (gitapex_run_eval_suite.py's own _is_content_policy_rejection). Excluded from `n_fixtures`/`mean_score`/`scores` entirely, recorded here so a skip is loud and visible rather than silently absent. A fixture with at least one successful trial before a later rejection is scored on that successful subset instead -- see `scores[].content_policy_partial_rejection`, not this list. Always present (possibly empty) in output produced by gitapex_run_eval_suite.py; absent in a file written before this field existed, which this schema's own additional-properties permissiveness already tolerated before this field was named explicitly.",
+      "items": {
+        "type": "object",
+        "required": ["fixture_id", "reason"],
+        "properties": {
+          "fixture_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The skipped fixture's own declared identifier, same convention as `scores[].fixture_id`."
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "description": "A safe, redacted reason -- never a RuntimeError's or TimeoutExpired's own raw text, which can embed a live model CLI's stderr or a fixture's prompt (see gitapex_run_ablation.redact_executor_failure_reason)."
           }
         }
       }

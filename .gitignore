@@ -5,12 +5,14 @@ __pycache__/
 coverage.xml
 coverage.json
 
-# APM dependencies: apm_modules/ is apm's package cache; .claude/skills/ and the
-# apm-vendored .claude/hooks/<vendor>/ subtrees are what `apm install` deploys
-# from apm.lock.yaml (obra/superpowers, tvna/clairvoyance) -- reproducible from
-# the lockfile, so not committed.
+# APM dependencies: apm_modules/ is apm's package cache; .claude/skills/,
+# .claude/commands/, and the apm-vendored .claude/hooks/<vendor>/ subtrees are
+# what `apm install` deploys from apm.lock.yaml (obra/superpowers,
+# tvna/clairvoyance, cathrynlavery/diagram-design) -- reproducible from the
+# lockfile, so not committed.
 apm_modules/
 /.claude/skills/
+/.claude/commands/
 # `/.claude/hooks/*` (not a bare `/.claude/hooks/` dir-match) is required so the
 # negation below actually works -- git prunes traversal into an excluded
 # directory entirely and never looks for negations inside it (see `man

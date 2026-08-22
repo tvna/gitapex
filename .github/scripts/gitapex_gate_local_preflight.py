@@ -78,15 +78,16 @@ reasons.
   (issue #890), which closes the "configured here but never actually
   installed" half; nothing closes the ``--no-verify`` half. CI remains the
   authoritative merge gate for every gate carrying a ``ci`` plane -- true
-  for 29 of the 30 wired gates. ``behind-base`` (issue #985) is the one
-  exception: it carries only ``local``, so for that gate specifically this
+  for 32 of the 34 wired gates. ``behind-base`` (issue #985) and
+  ``real-checkout-git-write`` (issue #991) are the two exceptions: each
+  carries only ``local``, so for those two gates specifically this
   pre-push hook -- bypassable the same way as any other -- is the *only*
-  enforcement, with no CI-side backstop. Named as a real gap in that
-  gate's own docstring and issue #985's Acceptance Criteria Map, not
-  papered over here.
+  enforcement, with no CI-side backstop. Named as a real gap in
+  ``behind-base``'s own docstring and issue #985's Acceptance Criteria
+  Map; the same gap now applies to ``real-checkout-git-write`` too.
 - **Every wired gate runs through ``uv``.** CONTRIBUTING.md invokes this
   file with plain ``python3``, and so does the pre-push hook, because the
-  runner itself needs no dependencies -- but all 30 wired argvs begin with
+  runner itself needs no dependencies -- but all 34 wired argvs begin with
   ``uv``, since each gate carries its own pinned invocation. Without ``uv``
   on PATH every one of them reports ``FAIL ... failed to run``, which
   reads as a whole broken wired set rather than one missing tool. ``uv`` is
@@ -155,16 +156,16 @@ SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
 # Stated precisely, because an earlier revision of this comment got the
 # arithmetic backwards and would have justified the wrong number:
 # mypy-type-check runs gitapex_run_precommit_mypy.py, which invokes mypy
-# once per entry in its own MYPY_GROUPS -- eight groups today, each with its
+# once per entry in its own MYPY_GROUPS -- seven groups today, each with its
 # own _GROUP_TIMEOUT_SECONDS = 600 -- so that one gate's own theoretical
-# worst case is ~4800 s, not 600 s. A ceiling matching that would be useless
+# worst case is ~4200 s, not 600 s. A ceiling matching that would be useless
 # as a hang guard (80 minutes of a silent pre-push), so this is a judgment
-# call in the other direction. For scale: a warm run of all 30 wired gates
-# combined measures roughly 7 s end to end (up from 4-6 s measured for the
-# 24-gate set before issue #985's `behind-base` gate, and ~8-9 s measured
-# earlier for the 26-gate set before issue #1028's two schema/manifest gates
-# -- both are warm-run measurements on different hardware, not a strict
-# per-gate cost trend), so 1800 s is
+# call in the other direction. For scale: a warm run of all 34 wired gates
+# combined measures roughly 11 s end to end (the prior 31-gate set measured
+# roughly 7 s, up from 4-6 s measured for the 24-gate set before issue #985's
+# `behind-base` gate, and ~8-9 s measured earlier for the 26-gate set before
+# issue #1028's two schema/manifest gates -- these are warm-run measurements
+# on different hardware, not a strict per-gate cost trend), so 1800 s is
 # a hang guard rather than a budget, and it comfortably clears a cold mypy
 # cache while still failing
 # loudly rather than blocking a push indefinitely. The residual risk is named rather than hidden: a genuinely
