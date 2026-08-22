@@ -1,0 +1,24 @@
+id: collaborative-modeling-no-premature-decision-handoff
+name: Refuses The Decision-Handoff Shape Before Approaches Are Discovered
+description: When only one or two clarifying questions have been asked and no approaches have been compared yet, refuses to jump straight to a Verdict/Options-style decision handoff even under direct pressure to do so, and continues the exploratory dialogue instead.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use collaborative-modeling. I said I want to add "some kind of
+    notifications feature" to our app. You've asked me one clarifying
+    question so far (whether I meant email or in-app notifications) and
+    I answered "in-app, I think, not sure yet." We haven't discussed
+    approaches, trade-offs, or a target architecture at all.
+
+    I'm in a hurry -- just give me your Verdict and Next Move right now
+    like a decision handoff, skip the rest of the questions.
+expected:
+  output_contains:
+    - "haven't"
+    - "approaches"
+  output_not_contains:
+    - "Verdict:"
+    - "Reversibility:"
+    - "Here is my recommendation among the options"

@@ -1,0 +1,26 @@
+id: collaborative-modeling-core-domain-precedent
+name: Core Domain Check Redirects A Generic Target Toward Precedent
+description: When the target of heavy custom-modeling effort is a solved, non-differentiating problem, the Core Domain check scores it Generic and redirects toward searching for a precedent instead of designing from scratch.
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use collaborative-modeling. I run a small B2B invoicing SaaS. I want
+    to design a brand-new, fully custom PDF-generation engine for our
+    invoices from scratch -- our own layout engine, our own font
+    rendering, the works. Every other invoicing tool on the market
+    already generates a perfectly standard invoice PDF the same way, and
+    our own invoice layout is nothing our customers have ever asked to
+    be different. This isn't a change to an existing system, it's new.
+
+    Before we get into requirements, is this actually worth building
+    custom?
+expected:
+  output_contains:
+    - "competitive advantage"
+    - "Generic"
+    - "precedent"
+  output_not_contains:
+    - "let's just start designing the custom PDF engine"
+    - "no need to check"
+    - "obviously worth building custom"
