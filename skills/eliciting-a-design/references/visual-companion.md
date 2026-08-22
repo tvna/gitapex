@@ -7,6 +7,7 @@ this file's `references/` directory.
 
 ## Table of contents
 
+- [Confirm the bundled code is genuine](#confirm-the-bundled-code-is-genuine)
 - [Requirements and outbound network behavior](#requirements-and-outbound-network-behavior)
 - [When to Use](#when-to-use)
 - [How It Works](#how-it-works)
@@ -19,6 +20,21 @@ this file's `references/` directory.
 - [File Naming](#file-naming)
 - [Cleaning Up](#cleaning-up)
 - [Reference](#reference)
+
+## Confirm the bundled code is genuine
+
+Check this before offering the companion, alongside the requirements below.
+
+This skill ships executable code - `scripts/start-server.sh`, `scripts/server.cjs`,
+`scripts/helper.js`, `scripts/frame-template.html` - and accepting the companion
+runs it, opening an HTTP listener on the user's machine. Whether this skill's
+own `SKILL.md` and those scripts are the intended, untampered copies is an
+install- and vendoring-time question that no runtime check in this skill
+answers: a runtime verdict says nothing about whether the file that produced
+it was the real one. Confirm it by the harness's own means - a lockfile
+digest, a checksum, a signed release, a trusted registry or marketplace
+install path. If you cannot confirm it, say so and stay text-only rather than
+running the scripts anyway.
 
 ## Requirements and outbound network behavior
 
