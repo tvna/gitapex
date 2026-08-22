@@ -117,11 +117,13 @@ platform naming.
    via `github:pull_request_read` methods `get_status`, `get_check_runs`,
    and/or `get_reviews` (as relevant) first:
    - `"clean"` -> proceed to step 8.
-   - `"unstable"` or `"blocked"` -> both can mean either a check or
-     required review that is still pending, or one that has already
-     failed or been rejected — the state name alone does not say which.
-     Still pending -> wait and re-check step 6. Already failed or
-     rejected -> loop back to step 3.
+   - `"unstable"` or `"blocked"` -> pending, failed/rejected, or a
+     required check missing from `get_check_runs` because its
+     workflow file is absent from this branch (verify via
+     `github:get_file_contents` first). Pending -> wait, re-check
+     step 6; failed/rejected -> loop back to step 3; missing workflow
+     file -> same remedy as `"behind"` below: update the branch, then
+     re-check step 6.
    - `"dirty"` -> a real merge conflict; loop back to step 3 to resolve
      it (e.g. rebase onto or merge the base branch). Once resolved and
      pushed, this skill's own rule is stricter than this environment's
@@ -440,11 +442,9 @@ intentionally not included here.
 
 `planning-a-branch-from-an-issue` (see
 `skills/planning-a-branch-from-an-issue/SKILL.md`) already holds the same
-never-merge boundary for its own PR handoff ("Do not merge or enable
-auto-merge; that is a separate, explicit human or CI decision, never this
-skill's call to make"). Step 9 above holds the identical boundary for
-this skill's own terminal action -- see that step for the hook-backing
-detail, not repeated here to avoid the two statements drifting apart.
+never-merge boundary for its own PR handoff. Step 9 above holds the
+identical boundary for this skill's own terminal action -- see that step
+for the hook-backing detail, not repeated here to avoid drift.
 
 Step 8's independent-review mechanism is a two-layer design inlined
 directly into this step rather than a separate skill file: an outer
