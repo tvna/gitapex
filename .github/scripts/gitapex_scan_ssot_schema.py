@@ -126,7 +126,13 @@ class GateTargetEntry(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     kind: Literal[
-        "mcp-tool", "bash-pattern", "file-glob", "workflow-event", "github-native", "cross-registry-consistency"
+        "mcp-tool",
+        "bash-pattern",
+        "file-glob",
+        "workflow-event",
+        "github-native",
+        "cross-registry-consistency",
+        "runtime-resolved-reference",
     ]
     ref: str
 
@@ -157,9 +163,7 @@ class Gate(BaseModel):
     supersedes: str | None
     fail_mode: GateFailMode | None = None
     target: list[GateTargetEntry] | None = None
-    bypass_review_status: Literal["not-yet-reviewed", "reviewed-none-found", "reviewed-found-listed-below"] | None = (
-        None
-    )
+    bypass_review_status: Literal["not-yet-reviewed", "reviewed-none-found"]
 
 
 class SsotMeta(BaseModel):
@@ -529,6 +533,19 @@ def find_drift(
     repo-grounded reference checks. Empty list means the registry is clean."""
     instance = _gitapex_schema_validation.load_json_or_raise(instance_path, RegistryReadError)
     schema = _gitapex_schema_validation.load_json_or_raise(schema_path, RegistryReadError)
+    # load_json_or_raise does not itself check the parsed value's shape (its
+    # own docstring says so: that is each caller's responsibility). A
+    # syntactically-valid-JSON-but-non-object schema reaches
+    # jsonschema.Draft202012Validator's own internals and raises an uncaught
+    # AttributeError; a schema that is an object but semantically invalid
+    # (e.g. {"type": 1}) raises an uncaught TypeError from inside
+    # iter_errors -- a real defect a live evaluating-deterministic-gate-quality
+    # review found by actually feeding this script a corrupted schema (issue
+    # #1232). gitapex_scan_plugin_manifest_schema.py already guards its own
+    # vendored schema this same way; this mirrors that.
+    if not isinstance(schema, dict):
+        raise RegistryReadError(f"{schema_path}: must be a JSON object, got {type(schema).__name__}")
+    _gitapex_schema_validation.check_schema_or_raise(schema, RegistryReadError, str(schema_path))
     registry = _parse_registry(instance)
 
     findings: list[str] = []
