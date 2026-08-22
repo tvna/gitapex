@@ -129,6 +129,25 @@ jobs:
             exit 1
           fi
 
+      # evals/scripts/gitapex_run_ablation.build_command shells out to the
+      # `claude` CLI directly (`argv = [model_cli, "-p", prompt, ...]`,
+      # DEFAULT_MODEL_CLI = "claude") -- unlike waza, this binary is not
+      # provisioned by this repo's own Nix flake, and it is not preinstalled
+      # on GitHub's ubuntu-latest image (confirmed against
+      # actions/runner-images' own published software manifest; the only
+      # other workflow in this repo that runs Claude in CI,
+      # ranking-the-open-queue-weekly.yml, does it through
+      # anthropics/claude-code-action, a wrapped whole-session action with no
+      # bare CLI left on PATH for a later step to shell out to -- not usable
+      # here). Installed via npm (Node.js already ships on ubuntu-latest, per
+      # the same manifest), pinned to a specific released version rather than
+      # `@latest`, matching this repo's own pin-everything convention for CI
+      # tooling. No Dependabot ecosystem tracks a bare npm install line
+      # inside a workflow `run:` step, so this pin needs a deliberate,
+      # manual bump over time, not a silent drift.
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code@2.1.240
+
       # For each committed suite: rewrite its config.model to this matrix
       # tier (the new runner reads config.model from eval.yaml itself and
       # exposes no CLI override either -- confirmed by reading
