@@ -1,7 +1,7 @@
 ---
 name: eliciting-a-design
 description: "Turn an underspecified idea into an approved design doc through collaborative dialogue, informed by Domain-Driven Design elicitation and convergence techniques (Domain Storytelling, Scenario Casting, Core Domain analysis). Use when a feature, component, or behavior change has no agreed design yet and its shape is still genuinely open. Distinct from drafting-an-acm-issue (authors the issue once a design exists), planning-a-branch-from-an-issue (starts from an issue that already exists), fixing-a-reported-issue (reproduces and fixes a reported defect -- a bare defect report earns reproduction, not a design dialogue), and writing-plans (authors the implementation plan downstream of an issue). Supersedes the vendored obra/superpowers brainstorming skill; prefer this one when both are installed."
-compatibility: "The text dialogue runs on any Agent Skills runtime; AskUserQuestion is used where the harness offers it, with a plain-text fallback where it does not. The optional visual companion has two paths -- where the Artifact tool is present in the session's own tool inventory, it publishes to the user's own account through the harness's own artifact hosting, no local port and no third-party network request; otherwise it falls back to a local Node.js server requiring Node.js on PATH, a browser, and a free local port, entirely local with no outbound network requests either way."
+compatibility: "The text dialogue runs on any Agent Skills runtime; AskUserQuestion is used where the harness offers it, with a plain-text fallback where it does not. The optional visual companion has two paths -- where the Artifact tool is present in the session's own tool inventory, it publishes to the user's own account through the harness's own artifact hosting, no local port and no third-party network request; otherwise it falls back to a local Node.js server requiring Node.js on PATH, a browser, and a free local port -- that fallback path is entirely local, with no outbound network requests of its own."
 ---
 
 # Eliciting a Design
@@ -42,7 +42,7 @@ You MUST create a task for each of these items and complete them in order:
 1. **Explore project context** - check files, docs, recent commits. If there is nothing readable (empty or brand-new repository, no git history, an unreadable or missing path), say which check came back empty and continue from the user's own description alone. Never invent context, and never infer a project that is not there.
 2. **Converge a diffuse idea via Scenario Casting** - only when the idea is unscoped across many stakeholders: gather scenario fragments, prioritize, and combine the top-priority causally-linked ones into a single Orientation Scenario before narrowing further. This comes first because it decides *what* the dialogue is about; the check below judges that subject once it exists. See Scenario Casting below.
 3. **Core Domain check** - only when about to commit heavy custom-modeling effort anywhere in the design: judge competitive advantage, complexity, and volatility. If the target is Generic, search for a precedent - a published model, an analysis pattern, or an off-the-shelf solution - before designing from scratch. See Core Domain Check below.
-4. **Offer the visual companion just-in-time** - NOT upfront. The first time a question would genuinely be clearer shown than described, offer it then (its own message); on approval its browser tab opens for you. If no visual question ever arises, never offer it. See the Visual Companion section below.
+4. **Offer the visual companion just-in-time** - NOT upfront. The first time a question would genuinely be clearer shown than described, offer it then (its own message); on approval the selected path starts for you (a browser tab or a published page, depending on which path applies). If no visual question ever arises, never offer it. See the Visual Companion section below.
 5. **Ask clarifying questions** - one at a time, understand purpose/constraints/success criteria. Prefer the `AskUserQuestion` tool; if unavailable, use portable question handoff (print `AskUserQuestion:` followed by the same question and choices as plain text). Apply Domain Storytelling's facilitation patterns - see below.
 6. **Propose 2-3 approaches** - with trade-offs and your recommendation. Any system-level architecture trade-off surfaced here, or at any later point, gets agreed inline via the Architecture Trade-Off step below - not deferred to the end.
 7. **Fit-and-Gap** - only when the idea is a change to an existing system, not a greenfield build, once a candidate approach exists: make the user's current state and target state visible side by side, then surface the gap. See Fit-and-Gap below.
@@ -273,9 +273,10 @@ Wait for the user's response. If they accept, start the selected path - the Node
 ## Notes
 
 Portability rationale: every step resolves inside this skill's own directory -
-`references/visual-companion.md` and `references/spec-document-reviewer-prompt.md`
-are linked relatively, and the bundled `scripts/` are invoked by paths relative
-to the skill root. The spec output path and the "is this sibling skill
+`references/visual-companion.md`, `references/visual-companion-artifact.md`,
+and `references/spec-document-reviewer-prompt.md` are linked relatively, and
+the bundled `scripts/` are invoked by paths relative to the skill root. The
+spec output path and the "is this sibling skill
 installed" branches are deliberately written as defaults the calling repository
 overrides, not as facts about any one repository. Declared level:
 `metadata/gitapex.yaml`.
