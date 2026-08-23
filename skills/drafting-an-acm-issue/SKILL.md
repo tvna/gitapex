@@ -67,7 +67,13 @@ pre-verified (Step 9 states the full rule; it is not repeated here).
    pipe character, a code-fence marker, or another Markdown/HTML
    control sequence from the requester's own words, escape or
    neutralize it first so it cannot break the table's rendering or
-   forge an unintended line elsewhere in the drafted body.
+   forge an unintended line elsewhere in the drafted body. Named as a
+   residual risk, not a solved one: a bare `#N` issue/PR reference or
+   an `@username` mention from the requester's own words is not
+   neutralized by this rule (scoped to rendering-breaking control
+   sequences, not to the connected git hosting server's own reference
+   auto-linking) and can cross-link or notify an unrelated issue or
+   person once the drafted body is created.
 5. Draft Constraints (hard limits the requester named) and Non-goals
    (what this issue explicitly does not cover), each only from stated
    or clearly implied scope, not invention. Apply the same Step 4
