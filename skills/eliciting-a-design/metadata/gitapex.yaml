@@ -1,0 +1,31 @@
+apiVersion: gitapex.io/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: eliciting-a-design
+spec:
+  portability: Portable
+  capabilityAssumption: Broad
+  lifecycle:
+    renamedFrom: collaborative-modeling
+  skillDependencies:
+    requires: []
+    relatedTo:
+      - drafting-an-acm-issue
+  executionRequirements:
+    tools:
+      read:
+        - files
+      write:
+        - files
+      shell:
+        - bash
+  references:
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1163"
+      summary: "New native skill supersedes the vendored obra/superpowers brainstorming mechanism, incorporating Domain-Driven Design elicitation/convergence techniques per this repository's own 2026-08-22 design record."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/823"
+      summary: "Declared spec.executionRequirements (W3 third slice, https://github.com/tvna/gitapex/issues/307): reads project context; writes the design doc and companion screen files; shells out to start-server.sh/stop-server.sh. No network field: unlike the vendored obra/superpowers companion this was derived from, this rewrite fetches no third-party host -- its HTTP listener is local-only and its page attribution is text-only."
+    - kind: caveat
+      anchor: "https://github.com/tvna/gitapex/issues/1163"
+      summary: "skillDependencies.relatedTo names only drafting-an-acm-issue, this skill's own terminal-step fallback target. clairvoyance and architecture-tradeoff are vendored under .claude/skills/ (a different apm package, tvna/clairvoyance) and drafting-issues does not exist yet -- neither resolves as a skills/*/ sibling."

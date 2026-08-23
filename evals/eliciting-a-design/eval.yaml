@@ -1,0 +1,17 @@
+name: eliciting-a-design-eval
+description: Quality suite for the gitapex eliciting-a-design skill.
+skill: eliciting-a-design
+version: "0.1.0"
+config:
+  trials_per_task: 3
+  timeout_seconds: 300
+  parallel: false
+  executor: copilot-sdk
+  model: claude-sonnet-5
+metrics:
+  - name: eliciting_a_design_quality
+    weight: 1.0
+    threshold: 0.8
+    description: Runs the Core Domain check before heavy custom-modeling effort and searches for precedent on a Generic target, redirects the terminal handoff to drafting-issues (or its fallback) rather than writing-plans, refuses to apply the terminal decision-handoff shape before the exploratory dialogue has actually discovered its own options, and only opens with Scenario Casting convergence when the idea is genuinely diffuse across many stakeholders.
+tasks:
+  - "tasks/*.yaml"

@@ -235,3 +235,90 @@ and `Instruction-file freedom`, each superseded once its own basis did
 not hold up under scrutiny -- see #1203 for the full resolution history.
 Resolved by the repository owner, directly, per the Resolve step (#1203).
 Not yet propagated into any skill's own operative text.
+
+## `Core Domain check`
+
+A judgment step, before committing heavy custom-modeling effort anywhere
+in a design dialogue, that scores a target against three axes --
+competitive advantage, complexity, volatility -- to decide whether it is
+Core Domain (worth custom modeling) or Generic Subdomain (worth searching
+for a precedent instead). Used in `eliciting-a-design`.
+
+Adopted via `establishing-ubiquitous-language`'s Elicit/Detect/Resolve
+procedure while designing `eliciting-a-design`
+(`docs/superpowers/specs/2026-08-22-eliciting-a-design-design.md`,
+Decision 3). No existing gitapex synonym covered this concept --
+fresh-term case, not a conflict resolution. Grounded in Eric Evans's
+Core Domain / Generic Subdomain distinction, refined into this
+three-axis form by Vlad Khononov.
+
+## `Fit-and-Gap`
+
+In `eliciting-a-design`, a step used only when the idea under
+discussion is a change to an existing system, not a greenfield build:
+make the user's current state and target/destination state visible side
+by side, then surface the gap between them explicitly -- what must
+move, what can stay, what's genuinely new.
+
+Adopted via the same procedure and doc as `Core Domain check`, above. No
+existing gitapex synonym for this specific concept (distinct from
+generic "gap analysis" usage in the wider industry). Grounded in Domain-
+Driven Transformation's strategic Step 3, "Align Current Architecture
+with Target."
+
+## `Orientation Scenario`
+
+In `eliciting-a-design`, the single concrete scenario a diffuse,
+many-stakeholder conversation converges on -- via gathering scenario
+fragments, prioritizing, and combining the top-priority causally-linked
+ones -- before narrowing further with the normal question-and-answer
+dialogue.
+
+Adopted via the same procedure and doc as `Core Domain check`, above. No
+existing gitapex synonym. Grounded in Scenario Casting (Jorn Koch, 2018).
+
+## `Architecture trade-off` vs. `Approach`
+
+Two distinct concepts in `eliciting-a-design`, not two names for one
+thing, despite surfacing in the same dialogue. `Approach` is the
+one-time, whole-project direction choice (2-3 options compared once,
+early). `Architecture trade-off` is a system-level decision point
+(implementation options, ownership boundaries, dependency shapes,
+data-flow choices, failure-mode trade-offs, including release/rollout
+strategy) that can surface at any point in the dialogue and is agreed
+inline, immediately, via `clairvoyance:architecture-tradeoff` when
+available.
+
+Checked via `establishing-ubiquitous-language`'s Detect step while
+designing `eliciting-a-design`
+(`docs/superpowers/specs/2026-08-22-eliciting-a-design-design.md`,
+Decision 3): the lexical similarity between the two is not evidence of
+a synonym conflict, since they name genuinely different concepts (a
+one-time choice vs. a recurring decision point) -- no owner Resolve
+step was needed.
+
+## `Portable Question Handoff`
+
+The convention of preferring the `AskUserQuestion` tool for any decision
+that needs the user's input, with a stated plain-text fallback
+(`AskUserQuestion:` followed by the same question and choices) when the
+tool is unavailable.
+
+Adopted verbatim from the `clairvoyance` family
+(`apm_modules/tvna/clairvoyance`) into `eliciting-a-design`'s own
+vocabulary -- no translation needed, direct reuse
+(`docs/superpowers/specs/2026-08-22-eliciting-a-design-design.md`,
+Decision 2 and Decision 3).
+
+## `Decision handoff`
+
+A structured, evidence-backed presentation of an already-investigated
+recommendation to a human (Verdict, Evidence, Options, Risks,
+Reversibility, Next Move), used once at a closing gate -- never for an
+exploratory dialogue that has not yet discovered its own options.
+
+Adopted verbatim from the `clairvoyance` family into
+`eliciting-a-design`'s own vocabulary, scoped strictly to that
+skill's own terminal step
+(`docs/superpowers/specs/2026-08-22-eliciting-a-design-design.md`,
+Decision 2, Decision 3, and Decision 4's rejected item 3).

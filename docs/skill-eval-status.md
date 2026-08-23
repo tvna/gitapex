@@ -46,7 +46,7 @@ The harness to *measure* the repo's cross-model consistency concept now
 exists; the measurement itself does not yet, for the repository's suites
 in aggregate. Concretely, as of issue #106:
 
-- 22 of 26 `evals/*/eval.yaml` declare
+- 23 of 27 `evals/*/eval.yaml` declare
   `trials_per_task: 3`, so each of those tasks is sampled 3 times per run
   rather than once. (waza's docs describe bootstrap confidence
   intervals at trials > 1; that behavior is not verified here, since this
@@ -147,6 +147,7 @@ suites still assert on final text only).
 | `drafting-a-pr-to-merge` | 3 | 24 | none | no | [evals/drafting-a-pr-to-merge/eval-status.md](../evals/drafting-a-pr-to-merge/eval-status.md) |
 | `drafting-an-acm-issue` | 3 | 12 | none | no | [evals/drafting-an-acm-issue/eval-status.md](../evals/drafting-an-acm-issue/eval-status.md) |
 | `drafting-an-adr` | 3 | 18 | none | no | [evals/drafting-an-adr/eval-status.md](../evals/drafting-an-adr/eval-status.md) |
+| `eliciting-a-design` | 3 | 6 | none | no | [evals/eliciting-a-design/eval-status.md](../evals/eliciting-a-design/eval-status.md) |
 | `establishing-ubiquitous-language` | 3 | 6 | none | no | [evals/establishing-ubiquitous-language/eval-status.md](../evals/establishing-ubiquitous-language/eval-status.md) |
 | `evaluating-context-channel-maturity` | 3 | 13 | none | no | [evals/evaluating-context-channel-maturity/eval-status.md](../evals/evaluating-context-channel-maturity/eval-status.md) |
 | `evaluating-deterministic-gate-quality` | 3 | 40 | none | no | [evals/evaluating-deterministic-gate-quality/eval-status.md](../evals/evaluating-deterministic-gate-quality/eval-status.md) |

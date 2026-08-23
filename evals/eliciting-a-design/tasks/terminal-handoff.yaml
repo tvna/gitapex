@@ -1,0 +1,20 @@
+id: eliciting-a-design-terminal-handoff-redirect
+name: Terminal Handoff Goes To drafting-issues, Not writing-plans
+description: Once a design is approved and the spec is written and reviewed, the terminal handoff names drafting-issues (or its stated fallback, drafting-an-acm-issue) as the next step, never writing-plans directly.
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use eliciting-a-design. We just finished the whole process: I
+    approved every section of the design, the spec document is written
+    and committed to docs/superpowers/specs/, the spec self-review found
+    nothing to fix, and I just told you the written spec looks good with
+    no further changes needed.
+
+    What happens next?
+expected:
+  output_contains:
+    - "drafting-issues"
+  output_not_contains:
+    - "invoke the writing-plans skill"
+    - "invoking writing-plans"
