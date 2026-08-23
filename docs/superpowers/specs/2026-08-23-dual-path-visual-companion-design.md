@@ -117,6 +117,24 @@ compare-and-set; a `conflict` response is documented as routine by
 `artifact-capabilities`, not an error -- handle it by re-reading current
 state and retrying, never by surfacing it to the user as a failure.
 
+**Correction, found via design-doc-adversarial-review, after
+implementation:** this Decision's "Hard rule carried over" paragraph
+above cited `references/visual-companion.md`'s "Escape anything you did
+not author" as if that phrase named its own section -- it is a bolded
+lead-in sentence inside that file's "Writing Content Fragments"
+section, not a heading of its own. The shipped reference file
+(`references/visual-companion-artifact.md`) now cites "Writing Content
+Fragments" by name; read this Decision's own citation above as the same
+correction. Separately, this Decision did not originally state that
+Live Doc sync requires declaring `capabilities: {artifact: {}}` on the
+session's first `publish()` call -- an `evaluating-skill-quality` audit
+found the omission and confirmed the requirement directly against
+`artifact-capabilities`'s own docs (without it, `claude.use("artifact")`
+resolves `null` and the whole read-back loop silently does nothing).
+The shipped reference file now states this as its own first instruction
+under "The Publish/Read Cycle"; the "publish each screen" description
+above should be read as covering that prerequisite too.
+
 ## Decision 3: security-model parity, stated explicitly, not assumed
 
 The Node.js path's defenses were worked out through three independent
@@ -156,6 +174,26 @@ item 4 -- "if no visual question ever arises, never offer it"), so
 per-path detail belongs in reference files, not in SKILL.md's own
 always-read body -- the same "condition-based reference" discipline
 already governing the Node.js path.
+
+**Correction, found via design-doc-adversarial-review, after
+implementation:** this Decision's own "Add 1-2 sentences" scoping for
+the `SKILL.md` edit undercounted what actually shipped. A Step 8
+adversarial review found the pre-existing genuineness/runnability gate,
+the offer-script quote, and the start-up instruction all stayed
+unconditionally Node.js-specific after the fallback-order sentence was
+added -- making the offer script's own "nothing leaves your machine"
+claim false whenever the Artifact path is selected. All three
+paragraphs were rewritten to branch per path, not only the one sentence
+this Decision named. Also: this Decision's "17 sections" count for
+`references/visual-companion.md` does not match the file under any
+counting convention (21 `##` headings, or 28 including `###`
+subsections) -- corrected here as a wrong count, not left stale; the
+file's own content is otherwise confirmed unchanged (`git diff` since
+commit `e6d9be3a` is empty). Finally, this Decision did not name
+`SKILL.md`'s own `compatibility` frontmatter field as part of what
+changes -- it was rewritten (also by the `evaluating-skill-quality`
+fix) because its pre-existing "additionally requires Node.js... entirely
+local" claim became false once the Artifact path shipped.
 
 ## Architecture Trade-Off (inline, resolved during the design dialogue)
 
