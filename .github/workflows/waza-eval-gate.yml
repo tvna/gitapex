@@ -62,9 +62,10 @@ jobs:
       #
       # `--name-status` (not `--name-only`) plus `-z`: a PR that deletes an
       # entire evals/<skill>/ directory must not have those paths reported
-      # as touched -- the run step would then try `nix run .#waza -- run
-      # <skill>` against a skill directory that no longer exists on HEAD,
-      # failing a legitimate deletion PR. So `D` (deleted) and `R100` (pure
+      # as touched -- the run step would then try to run
+      # evals/scripts/gitapex_run_eval_suite.py against an evals/<skill>/
+      # eval.yaml that no longer exists on HEAD, failing a legitimate
+      # deletion PR. So `D` (deleted) and `R100` (pure
       # rename, no content change) status records are dropped, mirroring
       # skill-audit-gate.yml's own established `grep -vE '^(D|R100)[[:space:]]'`
       # convention -- adapted here to `--name-status -z`'s NUL-separated (not
@@ -163,54 +164,77 @@ jobs:
             echo "has-changes=${has_changes}"
           } >> "$GITHUB_OUTPUT"
 
-      # waza is provisioned from this repo's flake (SSoT), never re-installed
-      # by hand -- same rule waza-check.yml and waza-eval-matrix.yml follow.
-      # See flake.nix + #57. Deferred to run only once there is actually
-      # touched-skill work to do (the diff step above needs only git/python3,
-      # both already on the runner image) -- this workflow's trigger is
-      # deliberately broad/unfiltered (see the top-of-file rationale), so
-      # most PRs never touch evals/ at all, and this avoids paying the
-      # Nix-install cost on every one of them.
-      - name: Install Nix
-        if: steps.diff.outputs.has-changes == 'true'
-        uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25  # v22
-        with:
-          extra-conf: "experimental-features = nix-command flakes"
+      # Issue #1134: this gate no longer needs waza/Nix at all -- the run
+      # step below now calls evals/scripts/gitapex_run_eval_suite.py (#1132/
+      # #1157), a repository-owned runner that never shells out to the waza
+      # binary. `uv` (already installed above) is the only toolchain this
+      # job needs.
 
-      # Fail loudly if the credentials the copilot-sdk executor needs are not
-      # configured, before any run is attempted, but only when there is
-      # actually at least one touched skill to run -- a PR that touches
-      # nothing under evals/ must not be blocked on a secret it will never
-      # need. Presence is checked; values are never printed (CLAUDE.md
-      # section 4 -- secrets must not reach a log). This job is not yet a
-      # required status check (see issue #582 and #124 for the sequencing).
-      # Shared with waza-eval-matrix.yml's own identical preflight step via
-      # gitapex_check_copilot_endpoint_configured.py (issue #124) rather than
-      # each workflow keeping its own copy of the bash check -- see that
-      # script's docstring for the primary-source verification of exactly
-      # what it does and does not enforce.
+      # Fail loudly if the credential the new runner's model-CLI subprocess
+      # needs is not configured, before any run is attempted, but only when
+      # there is actually at least one touched skill to run -- a PR that
+      # touches nothing under evals/ must not be blocked on a secret it will
+      # never need. Presence is checked; the value is never printed
+      # (CLAUDE.md section 4 -- secrets must not reach a log).
       #
-      # Known, accepted limitation (not a bug): this workflow triggers on
-      # `pull_request`, and GitHub never exposes repository secrets to a
-      # `pull_request`-triggered run for a fork-originated PR (its own
-      # documented, non-configurable security default). So this step's
-      # "no copilot-sdk endpoint configured" error will fire for every
-      # fork PR that touches evals/, even when COPILOT_BASE_URL /
-      # COPILOT_PROVIDER_BASE_URL are genuinely configured as repo secrets
-      # -- misleadingly looking like a credentials-provisioning gap rather
-      # than an inherent fork-PR limitation. The fix for that would be
-      # switching to `pull_request_target`, which is deliberately NOT done
-      # here: `pull_request_target` runs with the base repo's secrets and
-      # write-scoped token against the *fork's* untrusted code, which would
-      # be a real security regression, not a fix -- and this repo currently
-      # has no evidence of accepting external fork contributions to weigh
-      # against that risk.
-      - name: Preflight -- require executor endpoint secrets
+      # ANTHROPIC_API_KEY, not COPILOT_BASE_URL/COPILOT_PROVIDER_BASE_URL
+      # (issue #1134, replacing this gate's former shared preflight,
+      # gitapex_check_copilot_endpoint_configured.py): the new runner
+      # executes exclusively through evals/scripts/gitapex_run_ablation.py's
+      # `claude` CLI subprocess, whose own hermetic env allowlist
+      # (`_HERMETIC_ENV_ALLOWLIST`) passes through only PATH/HOME/
+      # ANTHROPIC_API_KEY/TMPDIR/TMP/TEMP -- verified by reading that
+      # module's source, not assumed. The old copilot-sdk endpoint pair is
+      # not read anywhere on this path and would preflight the wrong thing.
+      # This job is not yet a required status check (see issue #582 and
+      # #124 for the sequencing).
+      #
+      # Known, accepted limitation (not a bug), carried over from the old
+      # preflight: this workflow triggers on `pull_request`, and GitHub
+      # never exposes repository secrets to a `pull_request`-triggered run
+      # for a fork-originated PR (its own documented, non-configurable
+      # security default). So this step's error will fire for every fork PR
+      # that touches evals/, even when ANTHROPIC_API_KEY is genuinely
+      # configured as a repo secret. `pull_request_target` is deliberately
+      # NOT used here for the same reason the old preflight rejected it: it
+      # would run with the base repo's secrets and write-scoped token
+      # against the fork's untrusted code, a real security regression, and
+      # this repo currently has no evidence of accepting external fork
+      # contributions to weigh against that risk.
+      - name: Preflight -- require ANTHROPIC_API_KEY
         if: steps.diff.outputs.has-changes == 'true'
         env:
-          COPILOT_BASE_URL: ${{ secrets.COPILOT_BASE_URL }}
-          COPILOT_PROVIDER_BASE_URL: ${{ secrets.COPILOT_PROVIDER_BASE_URL }}
-        run: uv run --frozen python3 .github/scripts/gitapex_check_copilot_endpoint_configured.py
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::error::No ANTHROPIC_API_KEY configured. Set repository" \
+              "secret ANTHROPIC_API_KEY under Settings -> Secrets and" \
+              "variables -> Actions before dispatching --" \
+              "evals/scripts/gitapex_run_eval_suite.py invokes the claude CLI" \
+              "directly and needs this for authentication. Never printed" \
+              "here; only checked for presence."
+            exit 1
+          fi
+
+      # evals/scripts/gitapex_run_ablation.build_command shells out to the
+      # `claude` CLI directly (`argv = [model_cli, "-p", prompt, ...]`,
+      # DEFAULT_MODEL_CLI = "claude") -- unlike waza, this binary is not
+      # provisioned by this repo's own Nix flake, and it is not preinstalled
+      # on GitHub's ubuntu-latest image (confirmed against
+      # actions/runner-images' own published software manifest; the only
+      # other workflow in this repo that runs Claude in CI,
+      # ranking-the-open-queue-weekly.yml, does it through
+      # anthropics/claude-code-action, a wrapped whole-session action with no
+      # bare CLI left on PATH for a later step to shell out to -- not usable
+      # here). Installed via npm (Node.js already ships on ubuntu-latest, per
+      # the same manifest), pinned to a specific released version rather than
+      # `@latest`, matching this repo's own pin-everything convention for CI
+      # tooling. No Dependabot ecosystem tracks a bare npm install line
+      # inside a workflow `run:` step, so this pin needs a deliberate,
+      # manual bump over time, not a silent drift.
+      - name: Install Claude Code CLI
+        if: steps.diff.outputs.has-changes == 'true'
+        run: npm install -g @anthropic-ai/claude-code@2.1.240
 
       # Run each touched skill's suite at its own committed default model --
       # unlike waza-eval-matrix.yml, there is deliberately no
@@ -218,11 +242,39 @@ jobs:
       # skill behave correctly" (its own pinned default), not "how does it
       # behave across models" (that matrix's own separate question). Mirrors
       # waza-eval-matrix.yml's per-suite loop/summary-table style otherwise.
+      #
+      # evals/scripts/gitapex_run_eval_suite.py (issue #1132/#1157), not
+      # `nix run .#waza -- run` (issue #1134): every committed suite lives at
+      # `evals/<skill>/eval.yaml` with its skill's SKILL.md at
+      # `skills/<skill>/SKILL.md`, the same mapping `skill` (the touched
+      # skill's directory basename) already names. `uv run --frozen`, not a
+      # bare `python3` invocation, since this script reaches PyYAML through
+      # gitapex_run_ablation.py (see that script's own module docstring).
+      #
+      # An adversarial review of this PR (issue #1134) caught a real defect
+      # in an earlier revision of this step: gitapex_run_eval_suite.py's own
+      # `main()` returns 0 whenever run_eval_suite() completes without an
+      # exception, regardless of the computed `mean_score` -- it only
+      # returns non-zero on malformed input or an execution failure
+      # (crash/timeout), never on a suite that simply scored low. Trusting
+      # that exit code alone (as an earlier revision did) would report
+      # "pass" for a skill that scored 0.0 on every fixture, as long as the
+      # `claude` CLI subprocess itself did not crash -- silently defeating
+      # the whole point of a gate. Every committed `eval.yaml` declares
+      # exactly one `metrics[]` entry with its own `threshold` (verified
+      # against all 26 committed suites), so this step now separately reads
+      # the run's own written `mean_score` and that threshold, and only
+      # reports "pass" when the score actually clears it. A second review
+      # pass caught that an earlier revision of this check indexed
+      # `metrics[0]` unconditionally -- the vendored eval schema allows any
+      # `metrics[]` length >= 1, so a future suite declaring a second,
+      # stricter metric would have had it silently ignored. This step now
+      # fails loudly (a distinct message, not a raw traceback) unless
+      # exactly one `metrics[]` entry exists, rather than assuming it.
       - name: Run touched skills' evals suites
         if: steps.diff.outputs.has-changes == 'true'
         env:
-          COPILOT_BASE_URL: ${{ secrets.COPILOT_BASE_URL }}
-          COPILOT_PROVIDER_BASE_URL: ${{ secrets.COPILOT_PROVIDER_BASE_URL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           SKILLS: ${{ steps.diff.outputs.skills }}
         run: |
           set -u
@@ -237,10 +289,20 @@ jobs:
           IFS=',' read -r -a skills_array <<< "$SKILLS"
           for skill in "${skills_array[@]}"; do
             [ -n "$skill" ] || continue
-            if nix run .#waza -- run "$skill" -o "results/${skill}.json"; then
+            eval_yaml="evals/${skill}/eval.yaml"
+            out="results/${skill}.json"
+            if ! uv run --frozen python3 evals/scripts/gitapex_run_eval_suite.py \
+                 --eval-yaml "$eval_yaml" \
+                 --skill-md "skills/${skill}/SKILL.md" \
+                 -o "$out"; then
+              echo "| ${skill} | FAIL (execution error) |" >> "$GITHUB_STEP_SUMMARY"
+              failed=1
+              continue
+            fi
+            if uv run --frozen python3 -c "import json, sys, yaml; result = json.load(open(sys.argv[1], encoding='utf-8')); suite = yaml.safe_load(open(sys.argv[2], encoding='utf-8')); metrics = suite.get('metrics') or []; sys.exit(f'expected exactly 1 metrics[] entry in {sys.argv[2]!r}, got {len(metrics)}') if len(metrics) != 1 else None; threshold = metrics[0]['threshold']; mean_score = result['mean_score']; print(f'mean_score={mean_score!r} threshold={threshold!r}', file=sys.stderr); sys.exit(0 if mean_score >= threshold else 1)" "$out" "$eval_yaml"; then
               echo "| ${skill} | pass |" >> "$GITHUB_STEP_SUMMARY"
             else
-              echo "| ${skill} | FAIL |" >> "$GITHUB_STEP_SUMMARY"
+              echo "| ${skill} | FAIL (below threshold) |" >> "$GITHUB_STEP_SUMMARY"
               failed=1
             fi
           done
