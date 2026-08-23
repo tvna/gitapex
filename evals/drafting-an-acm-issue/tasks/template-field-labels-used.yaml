@@ -1,0 +1,20 @@
+id: drafting-an-acm-issue-template-field-labels-used
+name: Uses the Calling Repository's Real Issue-Template Field Labels
+description: Exercises Step 9's requirement to read the calling repository's actual issue-template field labels before mapping drafted content into the created issue, and use those labels verbatim -- distinct from template-gap.yaml, which covers the no-matching-template fallback case. This repository's own .github/ISSUE_TEMPLATE/feat.yml uses Problem/Proposed solution/Acceptance criteria, never this skill's generic Facts/Requested outcome headers.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use drafting-an-acm-issue in this repository (gitapex). Open a new
+    feature-request issue.
+
+    Add a `--dry-run` flag to the export CLI that prints what would be
+    exported without writing any files, so a user can preview the output
+    before committing to a real run.
+expected:
+  output_contains:
+    - "Problem"
+    - "Proposed solution"
+  output_not_contains:
+    - "LGTM"

@@ -1,8 +1,21 @@
 # drafting-an-acm-issue eval status
 
-The committed eval suite (`evals/drafting-an-acm-issue/`) has 12 task files
-under `tasks/` (PR #1215's own `dedup-disclosure-missing.yaml` is the
-most recent addition) and no committed no-skill baseline run; only
+The committed eval suite (`evals/drafting-an-acm-issue/`) has 17 task files
+under `tasks/` -- issue #276's own SKILL.md edits (a required
+`Classification:` output line, Step 9's issue-template field-label
+discovery, the new Updating an existing ACM issue procedure, and the
+generalized control-sequence escaping rule) added five: `classification-
+line-required.yaml`, `template-field-labels-used.yaml` (distinct from the
+pre-existing `template-gap.yaml`, which covers the no-matching-template
+fallback rather than the has-a-match case), `control-sequence-escaping-
+facts.yaml`, `updating-existing-acm-issue-procedure.yaml`, and `updating-
+appended-row-redaction-escaping.yaml` -- required by
+`.github/scripts/gitapex_gate_skill_branch_fixture_coverage.py`, whose own
+decision-branch count grew from 10 to 15 across this same diff, and closing
+an `evaluating-skill-quality` audit finding on the same PR that zero
+fixtures exercised the Updating branch at all. `dedup-disclosure-missing.yaml`
+(PR #1215) was the previously most recent addition. No committed no-skill
+baseline run; only
 `claude-sonnet-4.6` has actually been evaluated -- `eval.yaml`'s own
 `model: claude-sonnet-5` config field has never been run against this
 suite, a pre-existing gap independently found again (not fixed, since a

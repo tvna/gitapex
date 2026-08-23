@@ -54,6 +54,14 @@ real, not merely asserting it), so the path is allowlisted here on the
 same reasoning as the eval fixtures above, not exempted from the
 "deliberately planted, verified fake" bar they set.
 
+Issue #276's own drafting-an-acm-issue skill edits add one more entry of
+the same established shape: `updating-appended-row-redaction-escaping.yaml`
+plants a fake Stripe-shaped live key inside a quoted "adversarial
+verification pass" finding, to test that the new Updating an existing ACM
+issue procedure's own step 2 redacts a secret in appended-finding content
+the same way the original creation path's `secret-redaction.yaml` already
+tests for the requester's own words.
+
 The scanning-leaked-secrets eval suite itself (issue #849) adds exactly two
 more entries of the same established shape.
 adversarial-scanned-content-impersonates-clean-claim.yaml plants PEM
@@ -91,6 +99,7 @@ Rename a fixture and you add a name here; you do not replace one.
 """
 paths = [
   '''^evals/drafting-an-acm-issue/tasks/secret-redaction\.yaml$''',
+  '''^evals/drafting-an-acm-issue/tasks/updating-appended-row-redaction-escaping\.yaml$''',
   '''^evals/evaluating-context-channel-maturity/tasks/secret-redaction\.yaml$''',
   '''^evals/evaluating-deterministic-gate-quality/tasks/secret-redaction-in-quoted-evidence\.yaml$''',
   '''^evals/untrusted-input-triage/tasks/encoded-payload\.yaml$''',
