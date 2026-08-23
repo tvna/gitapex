@@ -186,8 +186,9 @@ claim false whenever the Artifact path is selected. All three
 paragraphs were rewritten to branch per path, not only the one sentence
 this Decision named. Also: this Decision's "17 sections" count for
 `references/visual-companion.md` does not match the file under any
-counting convention (21 `##` headings, or 28 including `###`
-subsections) -- corrected here as a wrong count, not left stale; the
+counting convention (14 `##` headings, or 21 including `###`
+subsections, both directly counted from the file) -- corrected here as
+a wrong count, not left stale; the
 file's own content is otherwise confirmed unchanged (`git diff` since
 commit `e6d9be3a` is empty). Finally, this Decision did not name
 `SKILL.md`'s own `compatibility` frontmatter field as part of what
