@@ -260,6 +260,8 @@ Wait for the user's response. If they request changes, make them and re-run the 
 
 A browser-based companion for showing mockups, diagrams, and visual options during the dialogue. Available as a tool - not a mode. Accepting the companion means it's available for questions that benefit from visual treatment; it does NOT mean every question goes through the browser.
 
+**Fallback order, tried in this sequence:** if the Artifact tool is present in the session's own tool inventory, use the Artifact path; else if `node` is on `PATH` and a reachable browser exists, use the existing Node.js path, completely unchanged; else stay text-only. See [references/visual-companion-artifact.md](references/visual-companion-artifact.md) for the Artifact path's detection method, publish/read cycle, and security-model parity with the Node.js path below.
+
 **Before offering it, confirm two things and stay text-only if either fails:** the bundled code is genuine (untampered by the harness's own means - a lockfile digest, a checksum, a signed release, a trusted install path) and it can actually run (Node.js on `PATH`, a browser that can reach the bound port). See [references/visual-companion.md](references/visual-companion.md)'s "Confirm the bundled code is genuine" and "Requirements and outbound network behavior" sections for exactly what to check and why - both matter enough to read once before your first offer, not to assume.
 
 **Offering the companion (just-in-time):** Do NOT offer it upfront. Wait until a question would genuinely be clearer shown than told - a real mockup / layout / diagram question, not merely a UI *topic*. The first time that happens, offer it then, as its own message, with no clarifying question or other content mixed in:
