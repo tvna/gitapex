@@ -1,6 +1,6 @@
 ---
 name: drafting-an-acm-issue
-description: Use when the user -- or the current workflow itself, mid-task -- needs to open, file, or draft a brand-new GitHub issue for a feature, fix, or refactor and no issue exists yet. Elicits the change from the requester and drafts an Acceptance Criteria Map before the issue is created, so planning-a-branch-from-an-issue can read it instead of building one from scratch. Distinct from planning-a-branch-from-an-issue (starts from an existing issue, plans a branch/PR) and fixing-a-reported-issue (reproduces and fixes a defect); this skill only authors the issue.
+description: Use when the user -- or the current workflow itself, mid-task -- needs to open, file, or draft a brand-new GitHub issue for a feature, fix, or refactor and no issue exists yet, or needs to append new findings to an ACM issue this skill already drafted. Elicits the change from the requester and drafts an Acceptance Criteria Map before the issue is created, so planning-a-branch-from-an-issue can read it instead of building one from scratch. Distinct from planning-a-branch-from-an-issue (starts from an existing issue, plans a branch/PR) and fixing-a-reported-issue (reproduces and fixes a defect); this skill only authors or updates the issue.
 ---
 
 # Drafting an ACM Issue
@@ -48,7 +48,12 @@ pre-verified (Step 9 states the full rule; it is not repeated here).
    Before citing anything verbatim, scan it for what looks like a
    secret, credential, token, or personal data pasted alongside the
    real request; redact it rather than carrying it into a public
-   issue -- see Stop boundaries.
+   issue -- see Stop boundaries. Apply Step 4's own escape-or-neutralize
+   treatment for a raw pipe character, a code-fence marker, or another
+   Markdown/HTML control sequence here too -- Facts and Requested
+   outcome cite the requester's words into the same outward-facing
+   issue body an ACM cell does, so the same control sequence can break
+   rendering or forge a line here just as easily.
 4. Build the Acceptance Criteria Map: one row per criterion --
    criterion (the requester's own words) -> interpretation -> planned
    ops -> proof method -> residual risk. See
@@ -65,7 +70,8 @@ pre-verified (Step 9 states the full rule; it is not repeated here).
    forge an unintended line elsewhere in the drafted body.
 5. Draft Constraints (hard limits the requester named) and Non-goals
    (what this issue explicitly does not cover), each only from stated
-   or clearly implied scope, not invention.
+   or clearly implied scope, not invention. Apply the same Step 4
+   escaping treatment here too, for the same reason given in Step 3.
 6. Search for an existing, already-filed issue on the same topic before
    the draft is finalized: run the connected git hosting server's
    semantic issue-search tool (e.g. `github:search_issues`) for the
@@ -170,6 +176,13 @@ Pattern: **Classification** -> **Facts** -> **Requested outcome** ->
   declared meaning differs (Step 9's field-population rule).
 - Do not carry a secret, credential, token, or personal data from the
   requester's own words into the drafted issue -- redact it (Step 3).
+- Do not carry an unescaped raw pipe character, code-fence marker, or
+  other Markdown/HTML control sequence from the requester's own words
+  into any part of the drafted issue -- Facts, Requested outcome,
+  Constraints, and Non-goals all cite those words into the same
+  outward-facing body an ACM cell does, so all of them get the same
+  escape-or-neutralize treatment Step 4 already requires for a cell
+  (Steps 3-5).
 - Do not present the drafted Acceptance Criteria Map as pre-verified
   (Step 9's draft-labeling rule).
 - Do not implement the change or open a branch/PR as part of this
@@ -200,45 +213,11 @@ Pattern: **Classification** -> **Facts** -> **Requested outcome** ->
 
 When new findings surface after an ACM issue drafted by this skill has
 already been created -- a follow-up review pass, an adversarial
-verification pass, or a human-raised finding -- update it through this
-procedure rather than re-deriving the same fetch/append/validate/update
-sequence from scratch each time.
-
-1. Re-fetch the issue's current live body via the connected git hosting
-   server's issue-read tool (e.g. `github:issue_read` method `get`) --
-   never edit from a locally cached or remembered copy, which may
-   already be stale from an intervening edit by someone else.
-2. Append new Acceptance Criteria Map rows for the new findings;
-   preserve every existing row unchanged, in its original position --
-   never renumber, reorder, or drop a prior row to make room, and never
-   overwrite a prior row's content to fit a new finding into it. A
-   finding's own content (from a subagent's report or a human's raised
-   point) gets the same Step 4 escaping treatment before it lands in a
-   cell: neutralize a raw pipe character, a code-fence marker, or
-   another Markdown/HTML control sequence first, so an adversarial
-   verification pass's own output cannot break the table's rendering
-   or forge an unintended line the same way unescaped requester text
-   could at creation time.
-3. Label each appended row's origin next to the row (or in a
-   per-batch note directly above a group of rows added together) as
-   `Source: subagent (<name>)` or `Source: human` -- an unlabeled
-   appended row is not yet a completed update -- so a later reader can
-   tell how each criterion surfaced without re-deriving it from the
-   issue's edit history.
-4. Re-validate the full merged body with
-   `python3 scripts/gitapex_check_acm_present.py --body <updated-draft-file>`
-   (or pipe it on stdin) before updating the issue -- the same Step 7
-   check, re-run against the merged body every time, never skipped
-   because the table already passed once at creation.
-5. Update the issue with the validated merged body via the connected
-   git hosting server's issue-update tool (e.g. `github:issue_write`
-   method `update`), preferring the connector over a CLI fallback --
-   never a full-body replacement built from anything other than step
-   1's freshly re-fetched body plus the new rows, so no content step 1
-   did not itself carry forward is silently dropped.
-
-This procedure stays scoped to updating the ACM table itself; it is
-not a general issue-commenting, triage, or lifecycle step -- ordinary
+verification pass, or a human-raised finding -- update it through
+[this procedure](references/updating-an-existing-acm-issue.md) rather
+than re-deriving the same fetch/append/validate/update sequence from
+scratch each time. Scoped to updating the ACM table itself; it is not
+a general issue-commenting, triage, or lifecycle step -- ordinary
 issue discussion, labeling, and non-ACM commentary stay outside this
 skill's scope.
 
