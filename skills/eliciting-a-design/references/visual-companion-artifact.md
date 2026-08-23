@@ -38,9 +38,9 @@ presence only confirms the Artifact tool is callable, not that the
 account's runtime capabilities permit a write. If the first
 `publish()` attempt for a session fails outright -- not a `conflict`
 response, which is routine (see below) -- drop one level in the
-fallback order (Node.js path, then text-only) as a one-time downgrade
-for that session. This is not a retry loop: evaluate it once, at first
-use, and do not retry the Artifact path again this session.
+fallback order (Node.js path, then text-only) as a one-time downgrade:
+evaluate it once, at first use, and do not retry the Artifact path
+again this session.
 
 ## The Publish/Read Cycle
 
