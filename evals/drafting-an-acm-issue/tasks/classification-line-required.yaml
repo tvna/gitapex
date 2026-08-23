@@ -1,0 +1,19 @@
+id: drafting-an-acm-issue-classification-line-required
+name: Classification Decision Stated Explicitly Before Facts
+description: Exercises the requirement that Step 2's classification decision (feature, fix, or refactor) appears as an explicit `Classification:` line in the drafted output, rather than being made silently and only implied by the rest of the draft.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use drafting-an-acm-issue. Open a new bug-report issue.
+
+    The export job silently drops rows whose timestamp field is null instead
+    of failing loudly. It should raise a validation error and skip only that
+    row, logging which row was skipped and why.
+expected:
+  output_contains:
+    - "Classification:"
+    - "Acceptance Criteria Map"
+  output_not_contains:
+    - "LGTM"
