@@ -38,7 +38,11 @@ pre-verified (Step 9 states the full rule; it is not repeated here).
    fix, or refactor) and one that stops (chore, docs-only, or tracking),
    classify by the requester's own stated intent; if the requester's
    words do not settle it either, treat this as Step 8's ambiguity
-   case rather than guessing a category to keep moving.
+   case rather than guessing a category to keep moving. State this
+   decision explicitly in the drafted output as a `Classification:`
+   line (see Output) before Facts are drafted, so the decision is
+   visible and reviewable rather than an implicit judgment call no
+   later reader can see was even made.
 3. Draft Facts (only what the requester actually stated, cited to
    their own words) and Requested outcome (one to two sentences).
    Before citing anything verbatim, scan it for what looks like a
@@ -92,18 +96,31 @@ pre-verified (Step 9 states the full rule; it is not repeated here).
    accepting the claim itself as evidence. Use portable question
    handoff: `AskUserQuestion` when available, otherwise
    `AskUserQuestion:` text with the same choices.
-9. Create the issue with the validated body via the connected git
-   hosting server's issue-creation tool (e.g. `github:issue_write`
-   method `create`), preferring the connector over a CLI fallback.
-   State plainly in the drafted body that its Acceptance Criteria Map
-   is a draft, not a pre-verified result -- any skill or reviewer that
-   reads it later must independently re-check each row against the
-   issue's own stated facts rather than trusting it merely for being
-   well-formed. Field-population rule: only write ACM content into a
+9. Before mapping drafted content into the target issue, read the
+   calling repository's own issue-template file(s) for this request's
+   classification, if it has any (for example a `.github/ISSUE_TEMPLATE/*.yml`
+   file, GitHub's issue-form convention), for their real field labels,
+   and use those labels verbatim in the created issue when a
+   matching template exists -- do not default to this skill's own
+   generic section headers (Facts/Requested outcome/Acceptance
+   Criteria Map/Constraints/Non-goals) over a calling repository's
+   actual template fields just because they are already drafted in
+   that shape. A calling repository with no matching issue template
+   (or no issue-template convention at all) keeps this skill's generic
+   Output pattern as the fallback, unchanged. Create the issue with the
+   validated body via the connected git hosting server's issue-creation
+   tool (e.g. `github:issue_write` method `create`), preferring the
+   connector over a CLI fallback. State plainly in the drafted body
+   that its Acceptance Criteria Map is a draft, not a pre-verified
+   result -- any skill or reviewer that reads it later must
+   independently re-check each row against the issue's own stated
+   facts rather than trusting it merely for being well-formed.
+   Field-population rule: only write ACM content into a
    target-template field whose own declared meaning matches that
    content's meaning (fact into a fact field, interpretation into an
-   interpretation field) -- never blend a column into a
-   same-shaped-but-different-meaning field just because a slot is
+   interpretation field), using the real field labels just read
+   verbatim as those target fields' names -- never blend a column into
+   a same-shaped-but-different-meaning field just because a slot is
    available. When the template offers no field matching a given ACM
    column at all, append the full ACM (all five columns, including any
    "unknown, pending X" entries) as its own labelled section in the
@@ -112,6 +129,8 @@ pre-verified (Step 9 states the full rule; it is not repeated here).
 
 ## Output
 
+- **Classification:** feature, fix, or refactor -- the Step 2 decision,
+  stated explicitly before Facts are drafted (Step 2).
 - **Facts:** what the requester actually stated, cited to their words,
   with any secret/credential/PII redacted (Step 3).
 - **Requested outcome:** one to two sentences.
@@ -126,9 +145,9 @@ pre-verified (Step 9 states the full rule; it is not repeated here).
 - **Next Move:** the concrete next action (draft ready to create, or the
   question blocking it).
 
-Pattern: **Facts** -> **Requested outcome** -> **Acceptance Criteria
-Map** -> **Constraints** -> **Non-goals** -> **Dedup** -> **Next Move**.
-Insert **Human Decision** only when needed.
+Pattern: **Classification** -> **Facts** -> **Requested outcome** ->
+**Acceptance Criteria Map** -> **Constraints** -> **Non-goals** ->
+**Dedup** -> **Next Move**. Insert **Human Decision** only when needed.
 
 ## Stop boundaries
 
@@ -162,6 +181,54 @@ Insert **Human Decision** only when needed.
   `Dedup: none found`, never silently omitted; this is a disclosure
   requirement only, not license to invent a similarity verdict the
   search itself did not establish.
+- Do not draft an issue's classification decision silently -- state it
+  as the `Classification:` output line (Step 2).
+- Do not default to this skill's generic Output pattern's section
+  headers over a calling repository's actual issue-template field
+  labels when a matching template exists (Step 9).
+- Do not update an already-created ACM issue by re-deriving the
+  fetch/append/validate/update procedure ad hoc each time, or by
+  dropping, reordering, or silently overwriting an existing row --
+  follow Updating an existing ACM issue instead.
+
+## Updating an existing ACM issue
+
+When new findings surface after an ACM issue drafted by this skill has
+already been created -- a follow-up review pass, an adversarial
+verification pass, or a human-raised finding -- update it through this
+procedure rather than re-deriving the same fetch/append/validate/update
+sequence from scratch each time.
+
+1. Re-fetch the issue's current live body via the connected git hosting
+   server's issue-read tool (e.g. `github:issue_read` method `get`) --
+   never edit from a locally cached or remembered copy, which may
+   already be stale from an intervening edit by someone else.
+2. Append new Acceptance Criteria Map rows for the new findings;
+   preserve every existing row unchanged, in its original position --
+   never renumber, reorder, or drop a prior row to make room, and never
+   overwrite a prior row's content to fit a new finding into it.
+3. Label each appended row's origin next to the row (or in a
+   per-batch note directly above a group of rows added together) as
+   `Source: subagent (<name>)` or `Source: human` -- an unlabeled
+   appended row is not yet a completed update -- so a later reader can
+   tell how each criterion surfaced without re-deriving it from the
+   issue's edit history.
+4. Re-validate the full merged body with
+   `python3 scripts/gitapex_check_acm_present.py --body <updated-draft-file>`
+   (or pipe it on stdin) before updating the issue -- the same Step 7
+   check, re-run against the merged body every time, never skipped
+   because the table already passed once at creation.
+5. Update the issue with the validated merged body via the connected
+   git hosting server's issue-update tool (e.g. `github:issue_write`
+   method `update`), preferring the connector over a CLI fallback --
+   never a full-body replacement built from anything other than step
+   1's freshly re-fetched body plus the new rows, so no content step 1
+   did not itself carry forward is silently dropped.
+
+This procedure stays scoped to updating the ACM table itself; it is
+not a general issue-commenting, triage, or lifecycle step -- ordinary
+issue discussion, labeling, and non-ACM commentary stay outside this
+skill's scope.
 
 ## Related skills
 
@@ -182,8 +249,13 @@ Portability: this skill's Steps/Output are general and repo-agnostic;
 Step 9's tool name and the "connector over CLI" preference are the one
 git-hosting-specific detail, and even that degrades to whatever
 issue-creation path the calling repository actually has. Step 6's own
-tool name (a semantic issue-search call) is the same kind of
-git-hosting-specific detail, degrading the same way.
+tool name (a semantic issue-search call) and Updating an existing ACM
+issue's own read/update tool names are the same kind of
+git-hosting-specific detail, degrading the same way. Step 9's
+issue-template read is a conditional input-source check, not a control
+dependency on any specific repository's template file existing --
+degrading to the generic Output pattern is the explicit fallback when
+none is found.
 
 Install/vendoring-time integrity (whether this SKILL.md and its
 bundled `scripts/gitapex_check_acm_present.py` are themselves the untampered,
