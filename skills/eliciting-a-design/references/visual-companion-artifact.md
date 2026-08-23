@@ -60,9 +60,10 @@ disciplined way the Node.js path writes a fresh HTML fragment (see
 section). This matters for two reasons: it avoids clobbering
 in-flight viewer-made DOM state, and it avoids the same
 unescaped-untrusted-text-becomes-forged-event risk that reference's own
-"Escape anything you did not author" section already documents for the
-Node.js path -- escape `&`, `<`, `>`, and `"` in anything you did not
-author before it goes into a screen here too.
+"Writing Content Fragments" section (its own "Escape anything you did
+not author" guidance) already documents for the Node.js path -- escape
+`&`, `<`, `>`, and `"` in anything you did not author before it goes
+into a screen here too.
 
 **`publish()`'s `conflict` response is documented as routine** --
 compare-and-set contention, not an error. Handle it by re-reading
