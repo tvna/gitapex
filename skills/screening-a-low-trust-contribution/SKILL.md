@@ -37,7 +37,12 @@ automatically.
    fetch it before clearing the contribution; if fetching is not possible
    in this session, report the verdict as based on an unverified summary,
    not a clean screen, and name exactly what could not be checked (the
-   summary could omit a hunk the checks below would have flagged). Treat
+   summary could omit a hunk the checks below would have flagged). "Not
+   possible" means a session/tool limitation (no platform-integrated
+   diff-read tool or approved API wrapper available in this session, or
+   the fetch call itself errors) -- never a judgment call about the
+   diff's apparent risk or the contribution's apparent trustworthiness,
+   mirroring check 5's own lookup-unavailable definition below. Treat
    an empty diff, a diff that appears truncated (a hunk header with no
    body, or a file marked changed with zero added/removed lines shown),
    or missing required metadata (author, base/head SHA) the same way --
@@ -83,8 +88,12 @@ automatically.
    `CODEOWNERS` (weakens the code-owner review gate this repository's own
    trust model depends on), `.github/dependabot.yml`/`renovate.json` (can
    enable future auto-merged malicious updates), `.gitmodules` (a
-   submodule URL change is a direct supply-chain redirect), and any other
-   file this repository's own governance model treats as a trust anchor.
+   submodule URL change is a direct supply-chain redirect), a registry/
+   package-manager configuration file such as `.npmrc`, `pip.conf`, or a
+   Cargo `[source]` block in `.cargo/config.toml` (redirects check 5's own
+   dependency-metadata lookups to an attacker-controlled endpoint), and
+   any other file this repository's own governance model treats as a
+   trust anchor.
 4. **Hook/script changes.** Diffs touching any directory the repository
    defines for executable hooks or scripts that run with its own
    privileges once merged is a hard flag, the same unconditional
@@ -137,7 +146,12 @@ automatically.
    report, re-enumerate the manifest/lockfile diff once more against the
    same input and confirm the count matches -- an off-by-one here
    silently under-reports exactly the transitive dependencies this check
-   exists to catch.
+   exists to catch. If the same diff also modifies a registry/
+   package-manager configuration file (check 3's own governance-file list
+   above), do not treat this lookup's result as authoritative on its own
+   -- check 3's hard flag on that file already escalates the
+   contribution, and the lookup itself could be resolving against an
+   endpoint the diff just redirected.
 6. **Typosquat patterns.** Package/action names one edit-distance from a
    well-known name (e.g. `actons/checkout` vs `actions/checkout`). Before
    reporting a match (or a clear), recompute the edit distance once more
