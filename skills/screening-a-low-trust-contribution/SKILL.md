@@ -90,8 +90,10 @@ automatically.
    enable future auto-merged malicious updates), `.gitmodules` (a
    submodule URL change is a direct supply-chain redirect), a registry/
    package-manager configuration file such as `.npmrc`, `pip.conf`, or a
-   Cargo `[source]` block in `.cargo/config.toml` (redirects check 5's own
-   dependency-metadata lookups to an attacker-controlled endpoint), and
+   Cargo `[source]` block in `.cargo/config.toml` (redirects every
+   subsequent `npm install`/`pip install`/`cargo build` a human or CI
+   runs against the merged repo to an attacker-controlled registry, and
+   separately corrupts check 5's own dependency-metadata lookups), and
    any other file this repository's own governance model treats as a
    trust anchor.
 4. **Hook/script changes.** Diffs touching any directory the repository
