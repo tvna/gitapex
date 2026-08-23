@@ -24,8 +24,8 @@ infer availability from memory or from an earlier session.
 
 **Never detect it by either of these means:**
 
-- Probing the two environment variables surfaced during PR #1262's
-  review (`CLAUDE_CODE_POST_FOR_SESSION_INGRESS_V2`,
+- Probing the two suggestive but unconfirmed environment variables
+  (`CLAUDE_CODE_POST_FOR_SESSION_INGRESS_V2`,
   `CLAUDE_SESSION_INGRESS_TOKEN_FILE`). Neither is confirmed to expose
   an arbitrary local port to the operator's browser versus being
   internal plumbing specific to Claude Code's own web UI -- their
