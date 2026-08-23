@@ -211,15 +211,9 @@ Pattern: **Classification** -> **Facts** -> **Requested outcome** ->
 
 ## Updating an existing ACM issue
 
-When new findings surface after an ACM issue drafted by this skill has
-already been created -- a follow-up review pass, an adversarial
-verification pass, or a human-raised finding -- update it through
-[this procedure](references/updating-an-existing-acm-issue.md) rather
-than re-deriving the same fetch/append/validate/update sequence from
-scratch each time. Scoped to updating the ACM table itself; it is not
-a general issue-commenting, triage, or lifecycle step -- ordinary
-issue discussion, labeling, and non-ACM commentary stay outside this
-skill's scope.
+An ACM issue this skill already drafted gets new findings appended
+through [this procedure](references/updating-an-existing-acm-issue.md),
+not re-derived from scratch each time.
 
 ## Related skills
 

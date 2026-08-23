@@ -6,6 +6,14 @@ verification pass, or a human-raised finding -- update it through this
 procedure rather than re-deriving the same fetch/append/validate/update
 sequence from scratch each time.
 
+This procedure is single-writer: only one fetch/append/validate/update
+cycle (steps 1-5) may be in flight against a given issue at a time. The
+caller owns enforcing this -- never dispatch two concurrent invocations
+(for example, two subagents) against the same issue. When multiple
+findings surface around the same time, batch them into one cycle
+(append every pending finding at step 2, then validate and write once)
+rather than running the cycle once per finding.
+
 1. Re-fetch the issue's current live body via the connected git hosting
    server's issue-read tool (e.g. `github:issue_read` method `get`) --
    never edit from a locally cached or remembered copy, which may
@@ -48,15 +56,14 @@ sequence from scratch each time.
    method `update`), preferring the connector over a CLI fallback --
    never a full-body replacement built from anything other than step
    1's freshly re-fetched body plus the new rows, so no content step 1
-   did not itself carry forward is silently dropped. This procedure has
-   no protection against two updates racing on the same issue: if a
-   quick re-fetch immediately before this write shows the body no
-   longer matches what step 1 originally read, someone else wrote to
-   the issue in between -- re-run steps 1-2 against that newly current
-   body rather than writing on top of a now-stale merge. Named as a
-   residual risk to mitigate this way, not a solved one: the connected
-   git hosting server's issue-update tool has no compare-and-swap
-   primitive this procedure can rely on instead.
+   did not itself carry forward is silently dropped. As defense in
+   depth on top of the single-writer rule above (never the sole
+   mitigation): if a quick re-fetch immediately before this write shows
+   the body no longer matches what step 1 originally read, the
+   single-writer rule was violated somewhere -- stop, re-run steps 1-2
+   against that newly current body, and treat the violation itself as
+   a finding worth surfacing, rather than writing on top of a now-stale
+   merge.
 
 This procedure stays scoped to updating the ACM table itself; it is
 not a general issue-commenting, triage, or lifecycle step -- ordinary
