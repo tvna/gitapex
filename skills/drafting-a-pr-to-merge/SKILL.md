@@ -145,20 +145,21 @@ platform naming.
    - `"unknown"` -> GitHub has not finished computing mergeability yet
      (common immediately after a push); wait briefly before checking
      again.
-   - `"draft"` -> not automatically a defect, and not automatically an
-     escalation. Once this skill has reached its own step 9, DRAFT *is*
-     the correct terminal state — discovering it does not by itself mean
-     anything is wrong. But `mergeable_state` collapses to the single
-     value `"draft"` once a PR is draft and stops revealing what it would
-     otherwise report, so do not stop at the label: check the separate
-     `mergeable` field (a boolean returned by `github:pull_request_read`
-     method `get` — distinct from `mergeable_state`, and not gated by
-     draft status) together with `get_check_runs` and `get_reviews`.
-     `mergeable: true`, checks green, and no unresolved threads means
-     nothing is blocking; `mergeable: false`, a failing check, or an
-     unresolved thread means a real blocker exists underneath the draft
-     label — without first converting the PR out of draft, since fixing
-     the underlying issue never requires leaving draft.
+   - `"draft"` -> only a legitimate terminal state once this skill's own
+     step 9 has actually run this pass; a PR already reading `"draft"`
+     before that -- opened as a draft, or left draft by a different
+     skill (see Related skills) -- has not had step 8's review yet, no
+     matter how clean it looks. `mergeable_state` collapses to the
+     single value `"draft"` regardless, so do not stop at the label:
+     check the separate `mergeable` field (a boolean from
+     `github:pull_request_read` method `get`, not gated by draft
+     status) together with `get_check_runs` and `get_reviews`. Step 9
+     not yet run this pass -> step 8, unconditionally -- treat this the
+     same as `mergeable_state: "clean"` for step 8's own gate. Step 9
+     already run this pass: `mergeable: true`, checks green, no
+     unresolved threads -> nothing blocking; anything else -> loop back
+     to step 3, without leaving draft, since fixing the underlying
+     issue never requires it.
 8. **Run this skill's own two-layer independent-review mechanism**
    against the PR's current diff, only once step 7 has confirmed
    `mergeable_state: "clean"` — running it against a diff that is still
@@ -361,8 +362,9 @@ flowchart TD
     step7 -->|"unstable/blocked: failed/rejected"| step3
     step7 -->|"dirty: real conflict -- resolve,<br/>then ALWAYS post PR comment"| step3
     step7 -->|"pending / behind / unknown /<br/>missing required workflow file"| step6
-    step7 -->|"draft: mergeable=true,<br/>green, no open threads"| step10
-    step7 -->|"draft: mergeable=false,<br/>failing check, or open thread"| step3
+    step7 -->|"draft: step 9 not yet run<br/>this pass -- first encounter"| step8
+    step7 -->|"draft: step 9 already run,<br/>mergeable=true, green, no threads"| step10
+    step7 -->|"draft: step 9 already run,<br/>mergeable=false/failing/open thread"| step3
     step8 -->|"both layers clean<br/>(or outer absent, disclosed)"| step9
     step8 -->|"real validated finding"| step3
     step8 -->|"inner layer error/timeout:<br/>transient -- retry"| step8
