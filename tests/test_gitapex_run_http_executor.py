@@ -106,12 +106,22 @@ class TestBuildHttpExecutor:
     def _config(self) -> http_executor.HttpExecutorConfig:
         return http_executor.HttpExecutorConfig(base_url="https://example.com", api_key="secret")
 
-    def test_successful_call_returns_message_content(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock(message=MagicMock(content="the answer"))]
+    def _mock_client(self, monkeypatch: pytest.MonkeyPatch, *, response_content: str | None = None) -> MagicMock:
+        """Patch ``openai.OpenAI`` to return a ``MagicMock`` client. When
+        ``response_content`` is given, ``chat.completions.create`` returns a
+        response whose ``choices[0].message.content`` is that string;
+        otherwise the caller configures ``create`` itself (e.g. a
+        ``side_effect``)."""
         mock_client = MagicMock()
-        mock_client.chat.completions.create.return_value = mock_response
+        if response_content is not None:
+            mock_client.chat.completions.create.return_value = MagicMock(
+                choices=[MagicMock(message=MagicMock(content=response_content))]
+            )
         monkeypatch.setattr(http_executor.openai, "OpenAI", MagicMock(return_value=mock_client))
+        return mock_client
+
+    def test_successful_call_returns_message_content(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        mock_client = self._mock_client(monkeypatch, response_content="the answer")
 
         executor = http_executor.build_http_executor(self._config())
         argv = ["claude", "-p", "what is 2+2", "--bare", "--tools", "", "--model", "gemma-4"]
@@ -126,11 +136,7 @@ class TestBuildHttpExecutor:
     def test_system_prompt_included_as_system_message(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         skill_md = tmp_path / "SKILL.md"
         skill_md.write_text("be helpful", encoding="utf-8")
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock(message=MagicMock(content="ok"))]
-        mock_client = MagicMock()
-        mock_client.chat.completions.create.return_value = mock_response
-        monkeypatch.setattr(http_executor.openai, "OpenAI", MagicMock(return_value=mock_client))
+        mock_client = self._mock_client(monkeypatch, response_content="ok")
 
         executor = http_executor.build_http_executor(self._config())
         argv = [
@@ -151,9 +157,8 @@ class TestBuildHttpExecutor:
         assert kwargs["messages"][0] == {"role": "system", "content": "be helpful"}
 
     def test_sdk_exception_converts_to_runtime_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        mock_client = MagicMock()
+        mock_client = self._mock_client(monkeypatch)
         mock_client.chat.completions.create.side_effect = ConnectionError("boom, sensitive detail")
-        monkeypatch.setattr(http_executor.openai, "OpenAI", MagicMock(return_value=mock_client))
 
         executor = http_executor.build_http_executor(self._config())
         argv = ["claude", "-p", "hi", "--bare", "--tools", "", "--model", "gemma-4"]

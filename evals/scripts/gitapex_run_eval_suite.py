@@ -614,17 +614,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("-o", "--output", type=Path, help="Write the aggregate JSON here; stdout when omitted.")
     args = parser.parse_args(argv)
 
-    if args.executor == "http":
-        try:
-            http_config = _resolve_http_executor_config()
-        except ValueError as exc:
-            print(f"error: {exc}", file=sys.stderr)
-            return 2
-        executor = gitapex_run_http_executor.build_http_executor(http_config)
-    else:
-        executor = subprocess_executor
-
     try:
+        if args.executor == "http":
+            executor = gitapex_run_http_executor.build_http_executor(_resolve_http_executor_config())
+        else:
+            executor = subprocess_executor
         if not args.skill_md.is_file():
             raise ValueError(f"skill file not found: {args.skill_md}")
         result = run_eval_suite(
