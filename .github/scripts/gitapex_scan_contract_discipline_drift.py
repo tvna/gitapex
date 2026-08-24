@@ -41,7 +41,7 @@ than degrading to "nothing to check, pass"):
 
 Usage::
 
-    python3 .github/scripts/gitapex_scan_contract_discipline_drift.py
+    uv run --frozen python3 .github/scripts/gitapex_scan_contract_discipline_drift.py
     git diff -U0 --merge-base origin/main HEAD \\
         -- 'skills/evaluating-skill-quality/references/rubric.md' \\
            'skills/drafting-a-skill/references/contract-structure.md' \\

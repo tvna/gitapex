@@ -11,12 +11,14 @@
 # plain pytest test inside test.yml -- see
 # gitapex_scan_contract_discipline_drift.py's own docstring.
 #
-# Deliberately no `paths:` filter, following stdlib-only-claim-drift-
-# gate.yml's own stated rationale: a workflow that never fires for a
-# given PR leaves a required status check Pending forever, whereas a job
-# that runs and reports "OK: contract-discipline lock holds" on a diff
-# with nothing in scope does not. The scan itself only reads the two
-# target files, so running it unconditionally costs a few seconds.
+# Deliberately no `paths:` filter, following this repository's existing
+# per-PR diff-scan gate precedent (the sibling gate scanning
+# .github/scripts/*.py for a different stale claim) and its own stated
+# rationale: a workflow that never fires for a given PR leaves a required
+# status check Pending forever, whereas a job that runs and reports "OK:
+# contract-discipline lock holds" on a diff with nothing in scope does
+# not. The scan itself only reads the two target files, so running it
+# unconditionally costs a few seconds.
 name: Contract-discipline drift gate
 
 on:
@@ -37,8 +39,8 @@ jobs:
     permissions:
       contents: read
     steps:
-      # ref: pinned to the PR head, matching stdlib-only-claim-drift-
-      # gate.yml's own reasoning: this gate reads rubric.md's real,
+      # ref: pinned to the PR head, matching the sibling per-PR diff-scan
+      # gate's own reasoning: this gate reads rubric.md's real,
       # post-image content to compute the Contract-discipline section's
       # own current line span, so the tree checked out has to *be* that
       # post-image, not the default merge ref, which can diverge from it
@@ -57,7 +59,7 @@ jobs:
           enable-cache: true
 
       # git merge-base (not base.sha directly), and --no-renames -- same
-      # reasoning as stdlib-only-claim-drift-gate.yml: a change that
+      # reasoning as that sibling gate's own workflow: a change that
       # landed on the base branch after this PR forked must never be
       # misattributed to it, and a file renamed into either target path
       # must not arrive as a zero-added-lines "similarity index 100%"

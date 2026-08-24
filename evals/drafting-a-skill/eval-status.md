@@ -1,30 +1,32 @@
 # drafting-a-skill eval status
 
-A committed suite exists (`eval.yaml` plus four fixtures under `tasks/`:
+A committed suite exists (`eval.yaml` plus seven fixtures under `tasks/`:
 `normal.yaml`, `guardrail.yaml`, `edge.yaml`,
-`injected-self-certification-probe.yaml`), covering the Step 2
+`injected-self-certification-probe.yaml`, `no-self-authored-hook.yaml`,
+`no-inferred-metadata.yaml`, `existing-skill-routes-away.yaml`) --
+sized to match `SKILL.md`'s own 7 Stop-boundary bullets, per
+`.github/scripts/gitapex_gate_skill_branch_fixture_coverage.py`'s
+decision-branch/fixture parity requirement (verified directly: 7
+branches counted, 7 fixtures present, gate exits 0). Covers the Step 2
 Mechanism-fit gate under time pressure, a clear blank-page draft's full
 Step 1-9 walk, Step 5's advisory (never self-declared authoritative)
-cohesion finding on a two-decisive-outcome candidate, and a genuinely
-hostile embedded instruction (in the design text a draft is built from)
-trying to get Step 9's handoff skipped and the draft self-certified --
-the `adversarial`-tagged fixture this repository's own fixture-lint gate
-(`evals/scripts/gitapex_lint_fixture_assertions.py`) requires once
-`SKILL.md`'s own text claims adversarial-relevant coverage (it names
-`battle-testing-a-skill`'s "adversarial, hostile-input probing"). No
-trial has been executed yet -- the config pins `claude-sonnet-5` and `copilot-sdk`, a
+cohesion finding on a two-decisive-outcome candidate, a genuinely
+hostile embedded instruction trying to get Step 9's handoff skipped and
+the draft self-certified, a request to author a hook directly instead of
+redirecting after Step 2 blocks a hook-shaped candidate, a request to
+infer the four metadata axes instead of eliciting them, and the
+Precondition's own existing-skill route-away branch. No trial has been
+executed yet -- the config pins `claude-sonnet-5` and `copilot-sdk`, a
 declared executor, not a completed run -- so no model tier has been
 measured against this suite and there is no no-skill baseline.
 
 Disclosed gaps, not silently assumed solved: this corpus does not yet
-cover Step 3's mandatory metadata-elicitation-not-inference rule directly
-(the `normal` fixture exercises it incidentally, not as its own assertion
-target), Step 6's collision/dependency-reconciliation check, Step 7's
-domain-gap sweep, or Step 8's deterministic-checker invocation. Nor does
-it cover the Precondition's own two route-away branches (target already
-exists -> `scorer-gated-skill-edits`; target is already a finished draft
--> route directly to `evaluating-skill-quality`/`battle-testing-a-skill`
-without re-entering at Step 1), or any of the nine rows in
+cover Step 6's collision/dependency-reconciliation check, Step 7's
+domain-gap sweep, or Step 8's deterministic-checker invocation as their
+own dedicated assertion targets, nor the Precondition's second
+route-away branch (target is already a finished draft -> route directly
+to `evaluating-skill-quality`/`battle-testing-a-skill` without
+re-entering at Step 1), nor any of the nine rows in
 `references/formative-quality-dimensions.md` -- zero fixtures cite any of
 them. **Ablation state**: ablation-capable, not yet run --
 `evals/scripts/gitapex_run_ablation.py` exists in this repository and
