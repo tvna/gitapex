@@ -136,6 +136,16 @@ def parse_claude_argv(argv: Sequence[str]) -> ParsedInvocation:
     return ParsedInvocation(prompt=prompt, system_prompt=system_prompt, model=model)
 
 
+def _reject_raw_control_characters(value: str, field: str) -> None:
+    """Raise ``ValueError`` if ``value`` contains a raw C0 control character
+    or DEL. Shared by ``HttpExecutorConfig``'s two field validators
+    (reuse/simplification-review finding: the predicate was duplicated
+    byte-for-byte between them) so a future refinement to this rule cannot
+    be applied to one field and silently missed on the other."""
+    if any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in value):
+        raise ValueError(f"{field} contains a raw C0 control character or DEL")
+
+
 class HttpExecutorConfig(BaseModel):
     """Validated configuration for ``build_http_executor``.
 
@@ -170,8 +180,7 @@ class HttpExecutorConfig(BaseModel):
     @field_validator("base_url")
     @classmethod
     def _base_url_must_be_well_formed(cls, value: str) -> str:
-        if any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in value):
-            raise ValueError("base_url contains a raw C0 control character or DEL")
+        _reject_raw_control_characters(value, "base_url")
         parts = urlsplit(value)
         hostname = parts.hostname
         if not parts.scheme or not hostname:
@@ -183,8 +192,7 @@ class HttpExecutorConfig(BaseModel):
     @field_validator("api_key")
     @classmethod
     def _api_key_must_not_contain_control_characters(cls, value: str) -> str:
-        if any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in value):
-            raise ValueError("api_key contains a raw C0 control character or DEL")
+        _reject_raw_control_characters(value, "api_key")
         return value
 
 
@@ -203,6 +211,17 @@ def build_http_executor(config: HttpExecutorConfig) -> gitapex_run_ablation.Exec
     which the SDK's own response validation already rejects as an
     ``OpenAIError``) converts to that same ``RuntimeError`` too, rather
     than raising a raw ``IndexError`` no caller in this call chain catches.
+
+    ``max_retries=0`` (adversarial-review finding): the ``openai`` SDK
+    retries a timeout or connection failure up to its own default
+    ``max_retries=2`` more times, each attempt separately bounded by
+    ``timeout`` but with no bound on their sum -- confirmed live against
+    this environment's installed SDK, a non-responding endpoint took
+    ~3.8x the requested ``timeout`` to finally raise. ``subprocess_executor``
+    (this module's sibling ``Executor`` implementation) has no such
+    multiplier -- ``subprocess.run(..., timeout=timeout)`` is a single
+    attempt, a hard bound. ``max_retries=0`` restores that same
+    single-attempt, ``timeout``-is-a-hard-bound semantics here.
     """
 
     def _execute(argv: Sequence[str], timeout: int) -> str:
@@ -213,7 +232,7 @@ def build_http_executor(config: HttpExecutorConfig) -> gitapex_run_ablation.Exec
             messages.append({"role": "system", "content": parsed.system_prompt})
         messages.append({"role": "user", "content": parsed.prompt})
 
-        client = openai.OpenAI(base_url=config.base_url, api_key=config.api_key)
+        client = openai.OpenAI(base_url=config.base_url, api_key=config.api_key, max_retries=0)
         try:
             response = client.chat.completions.create(
                 model=parsed.model,

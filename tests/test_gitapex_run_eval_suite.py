@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 import gitapex_run_eval_suite
+import gitapex_run_http_executor
 import jsonschema
 import pytest
 import yaml
@@ -1290,6 +1291,27 @@ def test_resolve_http_executor_config_malformed_api_key_names_the_right_variable
     assert excinfo.value.__cause__ is None
 
 
+def test_resolve_http_executor_config_both_fields_malformed_names_both_variables(monkeypatch):
+    # Defeat test (adversarial-review finding): an exact-set check
+    # (`failing_fields == {"api_key"}`) leaves the both-invalid case falling
+    # into the base_url-only branch, silently dropping the api_key problem
+    # from the message. Both env vars malformed here -- the message must
+    # name both, not just one, so an operator does not need a second failed
+    # run to discover the second problem.
+    sentinel_secret = "sentinel-value-must-never-leak-2b7c"
+    monkeypatch.setenv("HTTP_EXECUTOR_BASE_URL", "not-a-valid-url")
+    monkeypatch.setenv("HTTP_EXECUTOR_API_KEY", f"{sentinel_secret}\r\ninjected")
+
+    with pytest.raises(ValueError) as excinfo:
+        gitapex_run_eval_suite._resolve_http_executor_config()
+
+    assert "HTTP_EXECUTOR_BASE_URL" in str(excinfo.value)
+    assert "HTTP_EXECUTOR_API_KEY" in str(excinfo.value)
+    assert sentinel_secret not in str(excinfo.value)
+    assert excinfo.value.__context__ is None
+    assert excinfo.value.__cause__ is None
+
+
 def test_main_executor_http_valid_config_builds_http_executor_and_runs(tmp_path: Path, monkeypatch):
     eval_yaml = _write_suite(tmp_path, tasks={"a.yaml": TASK_A_TEXT})
     skill_md = _skill_md(tmp_path)
@@ -1302,9 +1324,15 @@ def test_main_executor_http_valid_config_builds_http_executor_and_runs(tmp_path:
         recorded_configs.append(config)
         return _RecordingExecutor(["ok output"])
 
-    monkeypatch.setattr(
-        gitapex_run_eval_suite.gitapex_run_http_executor, "build_http_executor", fake_build_http_executor
-    )
+    # gitapex_run_eval_suite.py imports gitapex_run_http_executor lazily
+    # (issue #1259 regression-review finding -- see that module's own
+    # "Executor selection" docstring section), so there is no
+    # gitapex_run_eval_suite.gitapex_run_http_executor module attribute to
+    # patch until main() itself performs that import; patch the real,
+    # already-imported module object directly instead -- Python's module
+    # cache (sys.modules) guarantees main()'s own later `import
+    # gitapex_run_http_executor` binds to this exact same object.
+    monkeypatch.setattr(gitapex_run_http_executor, "build_http_executor", fake_build_http_executor)
 
     rc = gitapex_run_eval_suite.main(["--eval-yaml", str(eval_yaml), "--skill-md", str(skill_md), "--executor", "http"])
 

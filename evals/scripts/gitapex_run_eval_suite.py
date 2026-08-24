@@ -74,7 +74,14 @@ validated and required only when ``--executor http`` is actually selected).
 ``run_eval_suite()`` itself takes no new parameter and dispatches identically
 regardless of which ``Executor`` it was handed -- exactly the "plugged in
 behind the existing ``Executor`` DI type... without a redesign" issue #1132
-anticipated.
+anticipated. ``gitapex_run_http_executor`` (and, transitively, the ``openai``
+SDK it imports) is imported lazily, only inside the ``--executor http``
+branch -- never at this module's own top level (adversarial-review finding:
+a top-level import would have put ``openai``'s own import-time success on
+the critical path of every ``--executor claude-cli`` invocation too,
+including ``waza-eval-gate.yml``'s merge-gating call site, which never
+passes ``--executor`` and has no other reason to need that dependency
+importable at all).
 
 ``mcp_mocks`` (a top-level ``eval.yaml`` field waza's own schema still
 vendors) is rejected outright when non-empty: this script's executor grants
@@ -120,9 +127,15 @@ import sys
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
+
+if TYPE_CHECKING:
+    # Type-checking only -- never imported at runtime (see the module
+    # docstring's "Executor selection" section for why the real,
+    # runtime import of this module is deferred instead).
+    import gitapex_run_http_executor
 
 # gitapex_run_ablation.py lives in this same directory, resolved without a
 # bootstrap under both invocation styles (pytest's own pythonpath entry, and
@@ -150,7 +163,6 @@ def _ensure_importable(directory: Path) -> None:
 _ensure_importable(_SCORE_CONTRACT_DIR)
 
 import gitapex_run_ablation  # noqa: E402 -- path bootstrap above must run first
-import gitapex_run_http_executor  # noqa: E402 -- path bootstrap above must run first
 import gitapex_score_contract  # noqa: E402 -- path bootstrap above must run first
 
 DEFAULT_MODEL_CLI = gitapex_run_ablation.DEFAULT_MODEL_CLI
@@ -601,6 +613,13 @@ def _resolve_http_executor_config() -> gitapex_run_http_executor.HttpExecutorCon
     pre-existing one, a message hardcoded to always blame
     ``HTTP_EXECUTOR_BASE_URL`` would misattribute a malformed-``api_key``
     failure to the wrong environment variable).
+
+    Imports ``gitapex_run_http_executor`` locally, not at this module's own
+    top level (adversarial-review finding -- see the module docstring's
+    "Executor selection" section): that import is what pulls in the
+    ``openai`` SDK, and this function -- like the ``--executor http``
+    branch in ``main()`` that calls it -- must stay off the import-time
+    critical path of every ``--executor claude-cli`` invocation.
     """
     base_url = os.environ.get("HTTP_EXECUTOR_BASE_URL", "")
     api_key = os.environ.get("HTTP_EXECUTOR_API_KEY", "")
@@ -609,6 +628,8 @@ def _resolve_http_executor_config() -> gitapex_run_http_executor.HttpExecutorCon
     ]
     if missing:
         raise ValueError(f"--executor http requires {' and '.join(missing)} to be set")
+    import gitapex_run_http_executor
+
     malformed: ValueError | None = None
     try:
         return gitapex_run_http_executor.HttpExecutorConfig(base_url=base_url, api_key=api_key)
@@ -616,12 +637,18 @@ def _resolve_http_executor_config() -> gitapex_run_http_executor.HttpExecutorCon
         # Field names only (`loc`), never `.errors()[*]['input']` -- that
         # key carries the raw invalid value, api_key's own included.
         failing_fields = {str(err["loc"][0]) for err in validation_error.errors() if err.get("loc")}
-        if failing_fields == {"api_key"}:
-            malformed = ValueError("HTTP_EXECUTOR_API_KEY is set but contains a raw control character or DEL character")
-        else:
-            malformed = ValueError(
-                "HTTP_EXECUTOR_BASE_URL is set but is not a valid absolute URL (needs a scheme and a host)"
-            )
+        # Both fields can fail validation at once (e.g. a malformed URL
+        # pasted into both env vars); naming only one would send the
+        # operator back through a second, avoidable failed run to learn
+        # about the other (adversarial-review finding) -- so every failing
+        # field gets its own clause in the message, not just the first one
+        # checked.
+        reasons = []
+        if "base_url" in failing_fields:
+            reasons.append("HTTP_EXECUTOR_BASE_URL is set but is not a valid absolute URL (needs a scheme and a host)")
+        if "api_key" in failing_fields:
+            reasons.append("HTTP_EXECUTOR_API_KEY is set but contains a raw control character or DEL character")
+        malformed = ValueError("; ".join(reasons))
     raise malformed from None
 
 
@@ -646,6 +673,11 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         if args.executor == "http":
+            # Imported here, not at module top level -- see the module
+            # docstring's "Executor selection" section and
+            # _resolve_http_executor_config()'s own docstring for why.
+            import gitapex_run_http_executor
+
             executor = gitapex_run_http_executor.build_http_executor(_resolve_http_executor_config())
         else:
             executor = subprocess_executor
