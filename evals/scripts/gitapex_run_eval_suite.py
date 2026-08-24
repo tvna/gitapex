@@ -574,8 +574,9 @@ def to_eval_scores_json(result: SuiteResult) -> dict[str, Any]:
 def _resolve_http_executor_config() -> gitapex_run_http_executor.HttpExecutorConfig:
     """Build an ``HttpExecutorConfig`` from ``HTTP_EXECUTOR_BASE_URL``/
     ``HTTP_EXECUTOR_API_KEY`` (issue #1259). Raises ``ValueError`` if either
-    is unset/empty, or if ``HTTP_EXECUTOR_BASE_URL`` fails
-    ``HttpExecutorConfig``'s own scheme+host validation -- in both cases the
+    is unset/empty, or if ``HTTP_EXECUTOR_BASE_URL``/``HTTP_EXECUTOR_API_KEY``
+    fails ``HttpExecutorConfig``'s own validation (scheme+host for the
+    former, no raw control character for either) -- in every case the
     message never echoes either value, matching this repository's own
     never-print-the-secret convention
     (``.github/scripts/gitapex_check_copilot_endpoint_configured.py``'s
@@ -585,11 +586,21 @@ def _resolve_http_executor_config() -> gitapex_run_http_executor.HttpExecutorCon
     has left that block -- not ``raise ... from None`` directly inside
     ``except``, which clears ``__cause__``/sets ``__suppress_context__`` but
     does NOT stop CPython from auto-populating ``__context__`` with the
-    just-caught ``ValidationError`` (which embeds the raw invalid
-    ``base_url`` value in its own ``str()``/``repr()``/``.errors()``).
-    Mirrors ``gitapex_check_copilot_endpoint_configured.validate_base_url``'s
-    own identical precaution and its docstring's explanation of why ``from
+    just-caught ``ValidationError`` (which embeds the raw invalid value --
+    ``base_url`` OR ``api_key``, whichever failed -- in its own
+    ``str()``/``repr()``/``.errors()[*]['input']``). Mirrors
+    ``gitapex_check_copilot_endpoint_configured.validate_base_url``'s own
+    identical precaution and its docstring's explanation of why ``from
     None`` alone is insufficient.
+
+    Which literal message is chosen reads only ``ValidationError.errors()``'s
+    own ``loc`` (the failing field NAME, e.g. ``("api_key",)``) -- never that
+    same structure's own ``input`` key, ``str(exc)``, or ``repr(exc)``, every
+    one of which embeds the raw invalid value itself (code-review finding:
+    once ``api_key`` gained its own validator alongside ``base_url``'s
+    pre-existing one, a message hardcoded to always blame
+    ``HTTP_EXECUTOR_BASE_URL`` would misattribute a malformed-``api_key``
+    failure to the wrong environment variable).
     """
     base_url = os.environ.get("HTTP_EXECUTOR_BASE_URL", "")
     api_key = os.environ.get("HTTP_EXECUTOR_API_KEY", "")
@@ -601,10 +612,16 @@ def _resolve_http_executor_config() -> gitapex_run_http_executor.HttpExecutorCon
     malformed: ValueError | None = None
     try:
         return gitapex_run_http_executor.HttpExecutorConfig(base_url=base_url, api_key=api_key)
-    except ValidationError:
-        malformed = ValueError(
-            "HTTP_EXECUTOR_BASE_URL is set but is not a valid absolute URL (needs a scheme and a host)"
-        )
+    except ValidationError as validation_error:
+        # Field names only (`loc`), never `.errors()[*]['input']` -- that
+        # key carries the raw invalid value, api_key's own included.
+        failing_fields = {str(err["loc"][0]) for err in validation_error.errors() if err.get("loc")}
+        if failing_fields == {"api_key"}:
+            malformed = ValueError("HTTP_EXECUTOR_API_KEY is set but contains a raw control character or DEL character")
+        else:
+            malformed = ValueError(
+                "HTTP_EXECUTOR_BASE_URL is set but is not a valid absolute URL (needs a scheme and a host)"
+            )
     raise malformed from None
 
 

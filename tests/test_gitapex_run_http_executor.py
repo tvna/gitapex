@@ -117,6 +117,31 @@ class TestHttpExecutorConfig:
         with pytest.raises(ValidationError):
             http_executor.HttpExecutorConfig(base_url=value, api_key="secret")
 
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "secret\r\nX-Injected: 1",  # CRLF header-injection shape
+            "secret\nkey",  # bare LF
+            "secret\x00key",  # NUL
+            "secret\x7fkey",  # DEL
+        ],
+    )
+    def test_api_key_with_control_character_rejected(self, value: str) -> None:
+        # Regression (code review finding): api_key flows straight into the
+        # Authorization header build_http_executor sends -- this
+        # environment's own installed transport (httpx2, the openai SDK's
+        # own HTTP client) does not itself reject an embedded CR/LF in a
+        # header value at request-construction time, so an unvalidated
+        # api_key is a header-injection surface, not just an auth-failure
+        # risk. Mirrors base_url's own identical-shaped control-character
+        # check just above.
+        with pytest.raises(ValidationError):
+            http_executor.HttpExecutorConfig(base_url="https://example.com", api_key=value)
+
+    def test_api_key_without_control_characters_accepted(self) -> None:
+        config = http_executor.HttpExecutorConfig(base_url="https://example.com", api_key="sk-a-normal-token-9f3a")
+        assert config.api_key == "sk-a-normal-token-9f3a"
+
 
 class TestBuildHttpExecutor:
     def _config(self) -> http_executor.HttpExecutorConfig:
@@ -185,4 +210,20 @@ class TestBuildHttpExecutor:
         executor = http_executor.build_http_executor(self._config())
         argv = ["claude", "-p", "hi", "--bare", "--tools", ""]
         with pytest.raises(ValueError):
+            executor(argv, 30)
+
+    def test_zero_choices_response_raises_runtime_error_not_index_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Defeat test (adversarial-review finding): ChatCompletion.choices is
+        # SDK-valid as an empty list -- only a MISSING choices key raises
+        # OpenAIError. An OpenAI-compatible endpoint returning zero choices
+        # must not reach response.choices[0] and raise a raw, uncaught
+        # IndexError -- it must convert to this module's own RuntimeError
+        # contract like every other executor failure.
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = MagicMock(choices=[])
+        monkeypatch.setattr(http_executor.openai, "OpenAI", MagicMock(return_value=mock_client))
+
+        executor = http_executor.build_http_executor(self._config())
+        argv = ["claude", "-p", "hi", "--bare", "--tools", "", "--model", "gemma-4"]
+        with pytest.raises(RuntimeError):
             executor(argv, 30)

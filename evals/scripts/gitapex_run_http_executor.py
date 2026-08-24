@@ -144,6 +144,22 @@ class HttpExecutorConfig(BaseModel):
     ``_CopilotEndpointURL`` (scheme+host required, no raw C0 control
     character or DEL, no whitespace in the host) -- see module docstring
     for why this is reimplemented locally rather than imported.
+
+    ``api_key`` gets the same raw-control-character/DEL rejection as
+    ``base_url`` (code-review finding): it flows into the ``Authorization``
+    header ``build_http_executor`` sends on every call, and this
+    environment's own installed transport (``httpx2``, the ``openai`` SDK's
+    own HTTP client) does NOT itself reject an embedded CR/LF in a header
+    value at request-construction time (confirmed against that library's
+    own source/behavior directly) -- an unvalidated ``api_key`` is this
+    module's own header-injection surface into that request, not just an
+    auth-failure risk. In this repository's own real call site
+    (``.github/workflows/waza-eval-matrix.yml``'s ``eval-matrix-hf-gemma4``
+    job) the value only ever originates from a repository secret, not
+    attacker-controlled input, so this is defense-in-depth, not a fix for
+    an exploited path -- kept anyway per CLAUDE.md section 4's own
+    "preserve defense-in-depth" rule and to close the asymmetry with
+    ``base_url``'s own identical-shaped check just above.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -164,6 +180,13 @@ class HttpExecutorConfig(BaseModel):
             raise ValueError("base_url host contains whitespace")
         return value
 
+    @field_validator("api_key")
+    @classmethod
+    def _api_key_must_not_contain_control_characters(cls, value: str) -> str:
+        if any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in value):
+            raise ValueError("api_key contains a raw C0 control character or DEL")
+        return value
+
 
 def build_http_executor(config: HttpExecutorConfig) -> gitapex_run_ablation.Executor:
     """Return an ``Executor``-typed callable (``(argv, timeout) -> str``)
@@ -175,7 +198,11 @@ def build_http_executor(config: HttpExecutorConfig) -> gitapex_run_ablation.Exec
     SDK exception converts to ``RuntimeError`` -- see module docstring's
     "Error contract" section for why this, not a bespoke exception type,
     is what makes ``gitapex_run_ablation.redact_executor_failure_reason``
-    cover this path for free.
+    cover this path for free. A response with zero ``choices`` (SDK-valid
+    but semantically empty -- distinct from a MISSING ``choices`` field,
+    which the SDK's own response validation already rejects as an
+    ``OpenAIError``) converts to that same ``RuntimeError`` too, rather
+    than raising a raw ``IndexError`` no caller in this call chain catches.
     """
 
     def _execute(argv: Sequence[str], timeout: int) -> str:
@@ -193,6 +220,23 @@ def build_http_executor(config: HttpExecutorConfig) -> gitapex_run_ablation.Exec
                 messages=messages,
                 timeout=timeout,
             )
+            # ``ChatCompletion.choices`` is a required field, but its own
+            # declared type (``list[Choice]``) permits an empty list --
+            # confirmed against this environment's own installed ``openai``
+            # SDK: ``ChatCompletion(choices=[], ...)`` passes the SDK's own
+            # response validation without raising (only a MISSING `choices`
+            # key raises ``APIResponseValidationError``, already an
+            # ``OpenAIError`` subclass the except clause below catches). An
+            # OpenAI-compatible endpoint returning zero choices (a real,
+            # not just theoretical, third-party-compatibility gap given
+            # this module's own disclosed "unverified-in-this-environment"
+            # assumption) would otherwise reach ``response.choices[0]``
+            # below and raise a raw ``IndexError`` that escapes this
+            # function's -- and, in turn, ``run_eval_suite()``'s and
+            # ``main()``'s -- documented "every openai SDK exception
+            # converts to RuntimeError" contract entirely uncaught.
+            if not response.choices:
+                raise RuntimeError("HTTP executor call failed: response contained zero choices")
         except (openai.OpenAIError, OSError) as exc:
             # OSError covers ConnectionError (its own subclass) and any
             # lower-level socket failure the openai SDK does not itself
