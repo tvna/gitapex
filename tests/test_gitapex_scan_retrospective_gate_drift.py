@@ -563,6 +563,52 @@ def test_load_proposed_gate_requirements_raises_on_missing_file(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# load_gate_and_proposed_gate_corroboration (issue #1177)
+# ---------------------------------------------------------------------------
+
+
+def test_load_gate_and_proposed_gate_corroboration_matches_the_two_separate_readers(tmp_path):
+    ssot = tmp_path / "ssot.json"
+    ssot.write_text(
+        json.dumps(
+            {
+                "gates": [
+                    {"id": "a", "tracking_issue": 520},
+                    {"id": "b", "tracking_issue": 520},
+                ],
+                "proposed_gates": [{"tracking_issue": 1129, "proposals": ["a", "b", "c"]}],
+            }
+        )
+    )
+    counts, requirements = gate.load_gate_and_proposed_gate_corroboration(str(ssot))
+    assert counts == gate.load_gate_tracking_issue_counts(str(ssot))
+    assert requirements == gate.load_proposed_gate_requirements(str(ssot))
+    assert counts == {520: 2}
+    assert requirements == {1129: 3}
+
+
+def test_load_gate_and_proposed_gate_corroboration_reads_the_file_only_once(tmp_path, monkeypatch):
+    ssot = tmp_path / "ssot.json"
+    ssot.write_text(json.dumps({"gates": [{"id": "a", "tracking_issue": 1}], "proposed_gates": []}))
+    read_calls = []
+    original_read_text = pathlib.Path.read_text
+
+    def counting_read_text(self, *args, **kwargs):
+        if self == ssot:
+            read_calls.append(1)
+        return original_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(pathlib.Path, "read_text", counting_read_text)
+    gate.load_gate_and_proposed_gate_corroboration(str(ssot))
+    assert len(read_calls) == 1
+
+
+def test_load_gate_and_proposed_gate_corroboration_raises_on_missing_file(tmp_path):
+    with pytest.raises(gate.SsotLedgerError):
+        gate.load_gate_and_proposed_gate_corroboration(str(tmp_path / "nonexistent.json"))
+
+
+# ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
 
@@ -571,8 +617,7 @@ def test_main_exits_zero_when_count_at_threshold(monkeypatch, capsys):
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
     monkeypatch.setattr(gate, "list_labelled_issues", lambda *a, **k: [1, 2])
     monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: ["Refs #1", "Refs #2"])
-    monkeypatch.setattr(gate, "load_gate_tracking_issue_counts", lambda *a, **k: {1: 1, 2: 1})
-    monkeypatch.setattr(gate, "load_proposed_gate_requirements", lambda *a, **k: {})
+    monkeypatch.setattr(gate, "load_gate_and_proposed_gate_corroboration", lambda *a, **k: ({1: 1, 2: 1}, {}))
     exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", "--threshold", "0"])
     assert exit_code == 0
     assert "PASS" in capsys.readouterr().out
@@ -582,8 +627,7 @@ def test_main_exits_one_when_count_exceeds_threshold(monkeypatch, capsys):
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
     monkeypatch.setattr(gate, "list_labelled_issues", lambda *a, **k: [1, 2, 3])
     monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: [])
-    monkeypatch.setattr(gate, "load_gate_tracking_issue_counts", lambda *a, **k: {})
-    monkeypatch.setattr(gate, "load_proposed_gate_requirements", lambda *a, **k: {})
+    monkeypatch.setattr(gate, "load_gate_and_proposed_gate_corroboration", lambda *a, **k: ({}, {}))
     exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", "--threshold", "1"])
     assert exit_code == 1
     assert "FAIL" in capsys.readouterr().out
@@ -623,7 +667,7 @@ def test_main_exits_one_on_ssot_ledger_error(monkeypatch):
     def raise_ssot_error(*a, **k):
         raise gate.SsotLedgerError("boom")
 
-    monkeypatch.setattr(gate, "load_gate_tracking_issue_counts", raise_ssot_error)
+    monkeypatch.setattr(gate, "load_gate_and_proposed_gate_corroboration", raise_ssot_error)
     assert gate.main(["--owner", "tvna", "--repo", "gitapex"]) == 1
 
 
@@ -631,8 +675,7 @@ def test_main_uses_default_threshold_when_unspecified(monkeypatch, capsys):
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
     monkeypatch.setattr(gate, "list_labelled_issues", lambda *a, **k: list(range(18)))
     monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: [])
-    monkeypatch.setattr(gate, "load_gate_tracking_issue_counts", lambda *a, **k: {})
-    monkeypatch.setattr(gate, "load_proposed_gate_requirements", lambda *a, **k: {})
+    monkeypatch.setattr(gate, "load_gate_and_proposed_gate_corroboration", lambda *a, **k: ({}, {}))
     exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex"])
     assert exit_code == 0
     assert f"threshold: {gate.DEFAULT_THRESHOLD}" in capsys.readouterr().out
@@ -818,14 +861,15 @@ def test_main_keeps_invisible_padded_but_meaningful_values_unmutated(monkeypatch
         received["cwd"] = cwd
         return []
 
-    def fake_load_gate_tracking_issue_counts(path):
+    def fake_load_gate_and_proposed_gate_corroboration(path):
         received["ssot_path_joined"] = path
-        return {}
+        return {}, {}
 
     monkeypatch.setattr(gate, "list_labelled_issues", fake_list_labelled_issues)
     monkeypatch.setattr(gate, "git_commit_messages", fake_git_commit_messages)
-    monkeypatch.setattr(gate, "load_gate_tracking_issue_counts", fake_load_gate_tracking_issue_counts)
-    monkeypatch.setattr(gate, "load_proposed_gate_requirements", lambda path: {})
+    monkeypatch.setattr(
+        gate, "load_gate_and_proposed_gate_corroboration", fake_load_gate_and_proposed_gate_corroboration
+    )
     exit_code = gate.main(
         [
             "--owner",
@@ -869,14 +913,15 @@ def test_main_keeps_padded_but_meaningful_values_unmutated(monkeypatch, capsys):
         received["cwd"] = cwd
         return []
 
-    def fake_load_gate_tracking_issue_counts(path):
+    def fake_load_gate_and_proposed_gate_corroboration(path):
         received["ssot_path_joined"] = path
-        return {}
+        return {}, {}
 
     monkeypatch.setattr(gate, "list_labelled_issues", fake_list_labelled_issues)
     monkeypatch.setattr(gate, "git_commit_messages", fake_git_commit_messages)
-    monkeypatch.setattr(gate, "load_gate_tracking_issue_counts", fake_load_gate_tracking_issue_counts)
-    monkeypatch.setattr(gate, "load_proposed_gate_requirements", lambda path: {})
+    monkeypatch.setattr(
+        gate, "load_gate_and_proposed_gate_corroboration", fake_load_gate_and_proposed_gate_corroboration
+    )
     exit_code = gate.main(
         [
             "--owner",

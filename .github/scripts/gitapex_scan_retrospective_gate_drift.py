@@ -27,7 +27,11 @@ was actually built -- `#N` in a commit message only shows someone worked
 on *something related to* issue N. An issue now clears the no-citation
 report only when a citing commit AND a corroborating
 `.gitapex/ssot.json` `gates[].tracking_issue == N` entry both agree
-(`load_gate_tracking_issues`, wired into `find_no_citation_issues`).
+(`load_gate_tracking_issue_counts`, wired into `find_no_citation_issues`).
+Issue #1177 widens this from "does at least one gate cite N" to "do at
+least as many gates cite N as `proposed_gates[]` requires"
+(`load_proposed_gate_requirements`), so a multi-gate retrospective issue
+cannot clear on its first citation alone.
 
 Usage::
 
@@ -292,6 +296,28 @@ def _load_ssot_registry(path: str) -> dict[str, Any]:
     return data
 
 
+def _gate_tracking_issue_counts_from_registry(path: str, data: dict[str, Any]) -> dict[int, int]:
+    """Pure extraction half of `load_gate_tracking_issue_counts` below,
+    taking an already-loaded registry dict instead of reading `path`
+    itself -- shared with `load_gate_and_proposed_gate_corroboration` so a
+    caller needing both readers' output does not pay for two separate
+    file reads and JSON decodes of the same `.gitapex/ssot.json`."""
+    gates = data.get("gates")
+    if not isinstance(gates, list) or not gates:
+        raise SsotLedgerError(f"{path}: gate registry has no usable 'gates' list")
+
+    counts: dict[int, int] = {}
+    for gate in gates:
+        tracking_issue = gate.get("tracking_issue") if isinstance(gate, dict) else None
+        # `bool` is an `int` subclass in Python, so `isinstance(True, int)`
+        # is True -- without the extra check, a stray `"tracking_issue":
+        # true` would silently corroborate issue #1 instead of being
+        # skipped as the malformed value it is.
+        if isinstance(tracking_issue, int) and not isinstance(tracking_issue, bool):
+            counts[tracking_issue] = counts.get(tracking_issue, 0) + 1
+    return counts
+
+
 def load_gate_tracking_issue_counts(path: str) -> dict[int, int]:
     """Return, for every `.gitapex/ssot.json` `gates[].tracking_issue`
     value, how many `gates[]` entries carry it.
@@ -308,21 +334,35 @@ def load_gate_tracking_issue_counts(path: str) -> dict[int, int]:
     `gitapex_detect_changed_gate_scripts.py`'s `registered_gate_paths()`
     fail-closed shape.
     """
-    data = _load_ssot_registry(path)
-    gates = data.get("gates")
-    if not isinstance(gates, list) or not gates:
-        raise SsotLedgerError(f"{path}: gate registry has no usable 'gates' list")
+    return _gate_tracking_issue_counts_from_registry(path, _load_ssot_registry(path))
 
-    counts: dict[int, int] = {}
-    for gate in gates:
-        tracking_issue = gate.get("tracking_issue") if isinstance(gate, dict) else None
-        # `bool` is an `int` subclass in Python, so `isinstance(True, int)`
-        # is True -- without the extra check, a stray `"tracking_issue":
-        # true` would silently corroborate issue #1 instead of being
-        # skipped as the malformed value it is.
-        if isinstance(tracking_issue, int) and not isinstance(tracking_issue, bool):
-            counts[tracking_issue] = counts.get(tracking_issue, 0) + 1
-    return counts
+
+def _proposed_gate_requirements_from_registry(path: str, data: dict[str, Any]) -> dict[int, int]:
+    """Pure extraction half of `load_proposed_gate_requirements` below --
+    see `_gate_tracking_issue_counts_from_registry`'s own docstring for
+    why this split exists."""
+    proposed_gates = data.get("proposed_gates")
+    if proposed_gates is None:
+        return {}
+    if not isinstance(proposed_gates, list):
+        raise SsotLedgerError(f"{path}: gate registry's 'proposed_gates' must be a list")
+
+    requirements: dict[int, int] = {}
+    for entry in proposed_gates:
+        if not isinstance(entry, dict):
+            continue
+        tracking_issue = entry.get("tracking_issue")
+        proposals = entry.get("proposals")
+        if not (isinstance(tracking_issue, int) and not isinstance(tracking_issue, bool)):
+            continue
+        if not isinstance(proposals, list):
+            continue
+        if tracking_issue in requirements:
+            raise SsotLedgerError(
+                f"{path}: gate registry's 'proposed_gates' has more than one entry for tracking_issue {tracking_issue}"
+            )
+        requirements[tracking_issue] = len(proposals)
+    return requirements
 
 
 def load_proposed_gate_requirements(path: str) -> dict[int, int]:
@@ -347,29 +387,20 @@ def load_proposed_gate_requirements(path: str) -> dict[int, int]:
     primary gate against this ever reaching `main`, but this loader does
     not silently pick a winner if it somehow does.
     """
-    data = _load_ssot_registry(path)
-    proposed_gates = data.get("proposed_gates")
-    if proposed_gates is None:
-        return {}
-    if not isinstance(proposed_gates, list):
-        raise SsotLedgerError(f"{path}: gate registry's 'proposed_gates' must be a list")
+    return _proposed_gate_requirements_from_registry(path, _load_ssot_registry(path))
 
-    requirements: dict[int, int] = {}
-    for entry in proposed_gates:
-        if not isinstance(entry, dict):
-            continue
-        tracking_issue = entry.get("tracking_issue")
-        proposals = entry.get("proposals")
-        if not (isinstance(tracking_issue, int) and not isinstance(tracking_issue, bool)):
-            continue
-        if not isinstance(proposals, list):
-            continue
-        if tracking_issue in requirements:
-            raise SsotLedgerError(
-                f"{path}: gate registry's 'proposed_gates' has more than one entry for tracking_issue {tracking_issue}"
-            )
-        requirements[tracking_issue] = len(proposals)
-    return requirements
+
+def load_gate_and_proposed_gate_corroboration(path: str) -> tuple[dict[int, int], dict[int, int]]:
+    """Return `(load_gate_tracking_issue_counts(path),
+    load_proposed_gate_requirements(path))`, reading and JSON-decoding
+    `path` exactly once rather than the twice that calling those two
+    functions separately would cost -- both need the same parsed
+    registry, and `main()` below always needs both together."""
+    data = _load_ssot_registry(path)
+    return (
+        _gate_tracking_issue_counts_from_registry(path, data),
+        _proposed_gate_requirements_from_registry(path, data),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -489,8 +520,7 @@ def main(argv: list[str] | None = None) -> int:
         issue_numbers = list_labelled_issues(args.owner, args.repo, args.label, token)
         commit_messages = git_commit_messages(args.ref, args.cwd)
         ssot_path = str(pathlib.Path(args.cwd) / args.ssot_path)
-        tracking_issue_gate_counts = load_gate_tracking_issue_counts(ssot_path)
-        proposed_gate_requirements = load_proposed_gate_requirements(ssot_path)
+        tracking_issue_gate_counts, proposed_gate_requirements = load_gate_and_proposed_gate_corroboration(ssot_path)
     except (GitHubApiError, GitLogError, SsotLedgerError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1

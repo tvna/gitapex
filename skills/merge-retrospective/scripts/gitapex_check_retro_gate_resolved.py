@@ -196,11 +196,12 @@ def _load_ssot_registry(path: str) -> dict[str, Any]:
     return data
 
 
-def load_gate_tracking_issue_counts(path: str) -> dict[int, int]:
-    """Return, for every `.gitapex/ssot.json` `gates[].tracking_issue`
-    value, how many `gates[]` entries carry it (issue #1177: widened from
-    a bare `set[int]` to a per-issue count)."""
-    data = _load_ssot_registry(path)
+def _gate_tracking_issue_counts_from_registry(path: str, data: dict[str, Any]) -> dict[int, int]:
+    """Pure extraction half of `load_gate_tracking_issue_counts` below,
+    taking an already-loaded registry dict instead of reading `path`
+    itself -- shared with `load_gate_and_proposed_gate_corroboration` so a
+    caller needing both readers' output does not pay for two separate
+    file reads and JSON decodes of the same `.gitapex/ssot.json`."""
     gates = data.get("gates")
     if not isinstance(gates, list) or not gates:
         raise SsotLedgerError(f"{path}: gate registry has no usable 'gates' list")
@@ -216,19 +217,17 @@ def load_gate_tracking_issue_counts(path: str) -> dict[int, int]:
     return counts
 
 
-def load_proposed_gate_requirements(path: str) -> dict[int, int]:
-    """Return, for every `.gitapex/ssot.json` `proposed_gates[]` entry, how
-    many distinct gates its own retrospective issue requires
-    (`len(proposals)`). Issue #1177 -- mirrors
-    gitapex_scan_retrospective_gate_drift.py's own identically-named
-    reader. A tracking_issue absent from the returned dict defaults to
-    `required = 1` at the call site (`partition_resolved`). `proposed_gates`
-    missing entirely, or present but empty, both yield `{}`. A malformed
-    individual entry is skipped rather than raised, matching this module's
-    existing per-entry-tolerant/whole-structure-fail-closed convention. A
-    duplicate `tracking_issue` across `proposed_gates` raises
-    `SsotLedgerError` rather than silently picking a winner."""
-    data = _load_ssot_registry(path)
+def load_gate_tracking_issue_counts(path: str) -> dict[int, int]:
+    """Return, for every `.gitapex/ssot.json` `gates[].tracking_issue`
+    value, how many `gates[]` entries carry it (issue #1177: widened from
+    a bare `set[int]` to a per-issue count)."""
+    return _gate_tracking_issue_counts_from_registry(path, _load_ssot_registry(path))
+
+
+def _proposed_gate_requirements_from_registry(path: str, data: dict[str, Any]) -> dict[int, int]:
+    """Pure extraction half of `load_proposed_gate_requirements` below --
+    see `_gate_tracking_issue_counts_from_registry`'s own docstring for
+    why this split exists."""
     proposed_gates = data.get("proposed_gates")
     if proposed_gates is None:
         return {}
@@ -251,6 +250,34 @@ def load_proposed_gate_requirements(path: str) -> dict[int, int]:
             )
         requirements[tracking_issue] = len(proposals)
     return requirements
+
+
+def load_proposed_gate_requirements(path: str) -> dict[int, int]:
+    """Return, for every `.gitapex/ssot.json` `proposed_gates[]` entry, how
+    many distinct gates its own retrospective issue requires
+    (`len(proposals)`). Issue #1177 -- mirrors
+    gitapex_scan_retrospective_gate_drift.py's own identically-named
+    reader. A tracking_issue absent from the returned dict defaults to
+    `required = 1` at the call site (`partition_resolved`). `proposed_gates`
+    missing entirely, or present but empty, both yield `{}`. A malformed
+    individual entry is skipped rather than raised, matching this module's
+    existing per-entry-tolerant/whole-structure-fail-closed convention. A
+    duplicate `tracking_issue` across `proposed_gates` raises
+    `SsotLedgerError` rather than silently picking a winner."""
+    return _proposed_gate_requirements_from_registry(path, _load_ssot_registry(path))
+
+
+def load_gate_and_proposed_gate_corroboration(path: str) -> tuple[dict[int, int], dict[int, int]]:
+    """Return `(load_gate_tracking_issue_counts(path),
+    load_proposed_gate_requirements(path))`, reading and JSON-decoding
+    `path` exactly once rather than the twice that calling those two
+    functions separately would cost -- both need the same parsed
+    registry, and `main()` below always needs both together."""
+    data = _load_ssot_registry(path)
+    return (
+        _gate_tracking_issue_counts_from_registry(path, data),
+        _proposed_gate_requirements_from_registry(path, data),
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -276,8 +303,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         commit_messages = git_commit_messages(args.ref, args.cwd)
         ssot_path = str(pathlib.Path(args.cwd) / args.ssot_path)
-        tracking_issue_gate_counts = load_gate_tracking_issue_counts(ssot_path)
-        proposed_gate_requirements = load_proposed_gate_requirements(ssot_path)
+        tracking_issue_gate_counts, proposed_gate_requirements = load_gate_and_proposed_gate_corroboration(ssot_path)
     except (GitLogError, SsotLedgerError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1

@@ -353,6 +353,56 @@ def test_load_proposed_gate_requirements_raises_on_missing_file(tmp_path: pathli
 
 
 # ---------------------------------------------------------------------------
+# load_gate_and_proposed_gate_corroboration (issue #1177)
+# ---------------------------------------------------------------------------
+
+
+def test_load_gate_and_proposed_gate_corroboration_matches_the_two_separate_readers(
+    tmp_path: pathlib.Path,
+) -> None:
+    ssot = tmp_path / "ssot.json"
+    ssot.write_text(
+        json.dumps(
+            {
+                "gates": [
+                    {"id": "a", "tracking_issue": 520},
+                    {"id": "b", "tracking_issue": 520},
+                ],
+                "proposed_gates": [{"tracking_issue": 1129, "proposals": ["a", "b", "c"]}],
+            }
+        )
+    )
+    counts, requirements = checker.load_gate_and_proposed_gate_corroboration(str(ssot))
+    assert counts == checker.load_gate_tracking_issue_counts(str(ssot))
+    assert requirements == checker.load_proposed_gate_requirements(str(ssot))
+    assert counts == {520: 2}
+    assert requirements == {1129: 3}
+
+
+def test_load_gate_and_proposed_gate_corroboration_reads_the_file_only_once(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ssot = tmp_path / "ssot.json"
+    ssot.write_text(json.dumps({"gates": [{"id": "a", "tracking_issue": 1}], "proposed_gates": []}))
+    read_calls: list[int] = []
+    original_read_text = pathlib.Path.read_text
+
+    def counting_read_text(self: pathlib.Path, *args: object, **kwargs: object) -> str:
+        if self == ssot:
+            read_calls.append(1)
+        return original_read_text(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(pathlib.Path, "read_text", counting_read_text)
+    checker.load_gate_and_proposed_gate_corroboration(str(ssot))
+    assert len(read_calls) == 1
+
+
+def test_load_gate_and_proposed_gate_corroboration_raises_on_missing_file(tmp_path: pathlib.Path) -> None:
+    with pytest.raises(checker.SsotLedgerError):
+        checker.load_gate_and_proposed_gate_corroboration(str(tmp_path / "nonexistent.json"))
+
+
+# ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
 
@@ -361,8 +411,7 @@ def test_main_prints_json_partition_and_exits_zero(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.setattr(checker, "git_commit_messages", lambda *a, **k: ["Refs #1107"])
-    monkeypatch.setattr(checker, "load_gate_tracking_issue_counts", lambda *a, **k: {1107: 1})
-    monkeypatch.setattr(checker, "load_proposed_gate_requirements", lambda *a, **k: {})
+    monkeypatch.setattr(checker, "load_gate_and_proposed_gate_corroboration", lambda *a, **k: ({1107: 1}, {}))
     exit_code = checker.main(["1109", "1107"])
     assert exit_code == 0
     out = json.loads(capsys.readouterr().out)
@@ -384,10 +433,10 @@ def test_main_exits_one_on_ssot_ledger_error(
 ) -> None:
     monkeypatch.setattr(checker, "git_commit_messages", lambda *a, **k: [])
 
-    def raise_ssot_error(*a: object, **k: object) -> dict[int, int]:
+    def raise_ssot_error(*a: object, **k: object) -> tuple[dict[int, int], dict[int, int]]:
         raise checker.SsotLedgerError("boom")
 
-    monkeypatch.setattr(checker, "load_gate_tracking_issue_counts", raise_ssot_error)
+    monkeypatch.setattr(checker, "load_gate_and_proposed_gate_corroboration", raise_ssot_error)
     exit_code = checker.main(["1"])
     assert exit_code == 1
     assert "boom" in capsys.readouterr().err
@@ -396,13 +445,12 @@ def test_main_exits_one_on_ssot_ledger_error(
 def test_main_passes_default_ssot_path_joined_with_cwd(monkeypatch: pytest.MonkeyPatch) -> None:
     received: dict[str, str] = {}
 
-    def fake_load(path: str) -> dict[int, int]:
+    def fake_load(path: str) -> tuple[dict[int, int], dict[int, int]]:
         received["path"] = path
-        return {}
+        return {}, {}
 
     monkeypatch.setattr(checker, "git_commit_messages", lambda *a, **k: [])
-    monkeypatch.setattr(checker, "load_gate_tracking_issue_counts", fake_load)
-    monkeypatch.setattr(checker, "load_proposed_gate_requirements", lambda path: {})
+    monkeypatch.setattr(checker, "load_gate_and_proposed_gate_corroboration", fake_load)
     checker.main(["1", "--cwd", "/repo"])
     assert received["path"] == str(pathlib.Path("/repo") / ".gitapex/ssot.json")
 
