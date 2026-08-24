@@ -3,7 +3,14 @@ name = "gitapex-scripts"
 version = "0"
 description = "Internal tooling and tests for gitapex's CI scripts."
 requires-python = ">=3.12"
-dependencies = []
+# Issue #1259: this repository's first production dependency. Added for
+# evals/scripts/gitapex_run_http_executor.py, which calls an
+# OpenAI-Chat-Completions-compatible endpoint via the official SDK
+# (base_url override) rather than hand-rolling request/response parsing
+# for a Generic Subdomain problem -- see
+# docs/superpowers/specs/2026-08-23-hf-gemma4-http-executor-design.md's
+# Decision 2 for the Core Domain check this rests on.
+dependencies = ["openai>=1.0"]
 
 [dependency-groups]
 dev = [

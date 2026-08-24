@@ -1,0 +1,198 @@
+"""Non-Claude HTTP ``Executor`` for an OpenAI/Copilot-compatible chat
+endpoint (issue #1259).
+
+Before this module, ``evals/scripts/gitapex_run_ablation.py``'s ``Executor``
+DI type (``Callable[[Sequence[str], int], str]``, argv+timeout in,
+captured stdout out) had exactly one implementation --
+``subprocess_executor``, a ``claude`` CLI subprocess. ``waza-eval-matrix.yml``'s
+``eval-matrix-hf-gemma4`` job still called ``nix run .#waza -- run`` to
+reach a Hugging Face Inference Endpoint because no non-Claude ``Executor``
+existed. This module is that second implementation.
+
+**Argv adapter, not a new abstraction.** The ``Executor`` type itself does
+not change. ``gitapex_run_ablation.build_command()`` already produces a
+fixed argv shape for every call site in this repository:
+``[model_cli, "-p", <prompt>, "--bare", "--tools", "",
+"--append-system-prompt-file", <path>, "--model", <model>]`` (the last two
+pairs optional). ``parse_claude_argv`` extracts the three fields this
+module actually needs from that shape and ignores every other flag
+(``--bare``/``--tools ""`` carry no meaning for an HTTP chat call; a
+future ``build_command()`` addition this parser does not recognize is
+silently skipped, not rejected -- only a missing ``-p``/``--model`` fails
+loud, since those are the two fields this module cannot function
+without).
+
+**Primary-source finding this design rests on (design doc
+``docs/superpowers/specs/2026-08-23-hf-gemma4-http-executor-design.md``):**
+waza's own ``copilot-sdk`` executor does not make a bare HTTP call itself
+-- it launches an embedded GitHub Copilot CLI subprocess via the Copilot
+SDK (stdio/JSON-RPC), and that embedded CLI is what makes the real HTTP
+call, in a wire format (``COPILOT_WIRE_API`` -- ``responses`` or
+``completions``, provider-dependent) neither waza's own Go code nor this
+module needs to reproduce. This module calls the target endpoint directly
+via the official ``openai`` SDK (a Core Domain check judged
+OpenAI-compatible chat calling a Generic Subdomain -- adopt the
+off-the-shelf SDK rather than hand-roll request/response parsing), resting
+on one disclosed, unverified-in-this-environment assumption: that the
+target endpoint exposes an OpenAI-Chat-Completions-compatible surface.
+
+**Error contract matches ``subprocess_executor`` exactly.** Every
+``openai`` SDK exception (auth, connection, timeout, non-2xx status) is
+caught and re-raised as ``RuntimeError`` -- never a bespoke exception type
+-- so ``gitapex_run_ablation.redact_executor_failure_reason``'s existing
+type-based dispatch (``RuntimeError``/``subprocess.TimeoutExpired`` ->
+redacted; anything else -> passed through) already protects this path
+with zero new code in that module. A malformed argv (missing ``-p`` or
+``--model``) raises ``ValueError`` instead -- a configuration error, not a
+runtime failure, matching this repository's own malformed-input-vs-
+execution-failure convention (``gitapex_run_ablation.py``'s own module
+docstring, "Exit code contract" section).
+
+**Base-URL validation mirrors, rather than imports,**
+``.github/scripts/gitapex_check_copilot_endpoint_configured.py``'s own
+``_CopilotEndpointURL`` validator (scheme+host required, no raw
+control character, no whitespace in the host) -- reimplemented locally
+rather than imported across the ``.github/scripts``/``evals/scripts``
+boundary, to keep this module's own import surface to what
+``pyproject.toml``'s ``pythonpath``/``uv run`` invocation already
+guarantees without a new cross-directory ``sys.path`` bootstrap.
+
+Usage (imported, not run standalone -- ``evals/scripts/gitapex_run_eval_suite.py``'s
+``--executor http`` flag is this module's only real caller)::
+
+    from gitapex_run_http_executor import HttpExecutorConfig, build_http_executor
+    executor = build_http_executor(HttpExecutorConfig(base_url=..., api_key=...))
+"""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+from dataclasses import dataclass
+from pathlib import Path
+from urllib.parse import urlsplit
+
+import gitapex_run_ablation
+import openai
+from openai.types.chat import ChatCompletionMessageParam
+from pydantic import BaseModel, ConfigDict, field_validator
+
+
+@dataclass(frozen=True)
+class ParsedInvocation:
+    """The three fields this module needs out of a ``build_command()``-shaped
+    argv: the prompt, an optional system-prompt (the contents of the file
+    named by ``--append-system-prompt-file``, when present), and the model
+    id."""
+
+    prompt: str
+    system_prompt: str | None
+    model: str
+
+
+def parse_claude_argv(argv: Sequence[str]) -> ParsedInvocation:
+    """Extract ``prompt``/``system_prompt``/``model`` from a
+    ``gitapex_run_ablation.build_command()``-shaped argv.
+
+    Raises ``ValueError`` if ``-p`` (the prompt) or ``--model`` is absent --
+    both are required for this module's own HTTP call to mean anything.
+    Every other flag (``--bare``, ``--tools``, its ``""`` value, and any
+    flag this parser does not recognize) is silently skipped, not
+    rejected -- see module docstring.
+    """
+    argv = list(argv)
+    prompt: str | None = None
+    system_prompt: str | None = None
+    model: str | None = None
+
+    i = 0
+    while i < len(argv):
+        flag = argv[i]
+        if flag == "-p" and i + 1 < len(argv):
+            prompt = argv[i + 1]
+            i += 2
+            continue
+        if flag == "--append-system-prompt-file" and i + 1 < len(argv):
+            system_prompt = Path(argv[i + 1]).read_text(encoding="utf-8")
+            i += 2
+            continue
+        if flag == "--model" and i + 1 < len(argv):
+            model = argv[i + 1]
+            i += 2
+            continue
+        i += 1
+
+    if prompt is None:
+        raise ValueError("argv is missing -p (the prompt)")
+    if model is None:
+        raise ValueError("argv is missing --model")
+
+    return ParsedInvocation(prompt=prompt, system_prompt=system_prompt, model=model)
+
+
+class HttpExecutorConfig(BaseModel):
+    """Validated configuration for ``build_http_executor``.
+
+    ``base_url`` validation mirrors
+    ``.github/scripts/gitapex_check_copilot_endpoint_configured.py``'s own
+    ``_CopilotEndpointURL`` (scheme+host required, no raw C0 control
+    character or DEL, no whitespace in the host) -- see module docstring
+    for why this is reimplemented locally rather than imported.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    base_url: str
+    api_key: str
+
+    @field_validator("base_url")
+    @classmethod
+    def _base_url_must_be_well_formed(cls, value: str) -> str:
+        if any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in value):
+            raise ValueError("base_url contains a raw C0 control character or DEL")
+        parts = urlsplit(value)
+        hostname = parts.hostname
+        if not parts.scheme or not hostname:
+            raise ValueError("base_url is missing a scheme or a host")
+        if any(ch.isspace() for ch in hostname):
+            raise ValueError("base_url host contains whitespace")
+        return value
+
+
+def build_http_executor(config: HttpExecutorConfig) -> gitapex_run_ablation.Executor:
+    """Return an ``Executor``-typed callable (``(argv, timeout) -> str``)
+    backed by the official ``openai`` SDK, pointed at ``config.base_url``
+    via a custom-provider ``base_url`` override.
+
+    A missing ``-p``/``--model`` in ``argv`` propagates ``parse_claude_argv``'s
+    own ``ValueError`` unchanged (a configuration error). Every ``openai``
+    SDK exception converts to ``RuntimeError`` -- see module docstring's
+    "Error contract" section for why this, not a bespoke exception type,
+    is what makes ``gitapex_run_ablation.redact_executor_failure_reason``
+    cover this path for free.
+    """
+
+    def _execute(argv: Sequence[str], timeout: int) -> str:
+        parsed = parse_claude_argv(argv)
+
+        messages: list[ChatCompletionMessageParam] = []
+        if parsed.system_prompt is not None:
+            messages.append({"role": "system", "content": parsed.system_prompt})
+        messages.append({"role": "user", "content": parsed.prompt})
+
+        client = openai.OpenAI(base_url=config.base_url, api_key=config.api_key)
+        try:
+            response = client.chat.completions.create(
+                model=parsed.model,
+                messages=messages,
+                timeout=timeout,
+            )
+        except (openai.OpenAIError, OSError) as exc:
+            # OSError covers ConnectionError (its own subclass) and any
+            # lower-level socket failure the openai SDK does not itself
+            # wrap in an OpenAIError subclass.
+            raise RuntimeError(f"HTTP executor call failed: {exc}") from exc
+
+        content = response.choices[0].message.content
+        return content if content is not None else ""
+
+    return _execute
