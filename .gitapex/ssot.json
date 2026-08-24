@@ -1,6 +1,6 @@
 {
   "meta": {
-    "schema_version": "1.3.0",
+    "schema_version": "1.4.0",
     "tracking_issue": 123,
     "status": "active",
     "phase": "phase-0"
@@ -1594,5 +1594,27 @@
     "registry-integrity": "Self-validation of this registry file itself against its schema and against the repo's real files.",
     "runtime-compatibility": "Cross-runtime execution-requirement compatibility matrix (parent issue #307's W2): schema validation now, real-runtime research-data drift checks once populated.",
     "secret-scanning": "Detection of credentials and other secrets committed to the repository, on both the local hook path and the CI merge path."
-  }
+  },
+  "proposed_gates": [
+    {
+      "tracking_issue": 520,
+      "proposals": ["provenance-disclosure", "retro-title-convention-citation", "routine-scope-enforcement"]
+    },
+    {
+      "tracking_issue": 928,
+      "proposals": ["split-schema-drift", "skill-eval-yaml-parity", "skill-eval-status-doc-drift"]
+    },
+    {
+      "tracking_issue": 439,
+      "proposals": ["main-ruleset-required-checks", "ruleset-sync-gate", "ruleset-drift-scan"]
+    },
+    {
+      "tracking_issue": 1028,
+      "proposals": ["plugin-manifest-mirror-drift", "plugin-manifest-schema-conformance"]
+    },
+    {
+      "tracking_issue": 682,
+      "proposals": ["exception-handler-gap", "registry-wiring-scan"]
+    }
+  ]
 }

@@ -50,6 +50,7 @@ _VALID_INSTANCE = {
         }
     ],
     "clusters": {"example-cluster": "an example cluster"},
+    "proposed_gates": [],
 }
 
 
@@ -128,6 +129,45 @@ def test_dangling_cluster_is_flagged(tmp_path):
     instance_path = _write_instance(tmp_path, bad)
     findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
     assert any("cluster-drift" in f and "nonexistent-cluster" in f for f in findings)
+
+
+def test_valid_multi_proposal_manifest_entry_has_no_drift(tmp_path):
+    # Issue #1177: a proposed_gates entry with a distinct tracking_issue and
+    # 2+ proposal slugs is schema-valid and produces no drift on its own.
+    good = json.loads(json.dumps(_VALID_INSTANCE))
+    good["proposed_gates"] = [{"tracking_issue": 1129, "proposals": ["gate-one", "gate-two"]}]
+    instance_path = _write_instance(tmp_path, good)
+    assert drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT) == []
+    registry = drift._parse_registry(good)
+    assert registry is not None
+    assert registry.proposed_gates[0].tracking_issue == 1129
+    assert registry.proposed_gates[0].proposals == ["gate-one", "gate-two"]
+
+
+def test_a_single_proposal_manifest_entry_is_schema_invalid(tmp_path):
+    # minItems: 2 -- an issue proposing exactly one gate needs no manifest
+    # entry at all; a one-item entry is a mis-filed manifest, not a real
+    # multi-gate case, and is rejected rather than silently accepted.
+    bad = json.loads(json.dumps(_VALID_INSTANCE))
+    bad["proposed_gates"] = [{"tracking_issue": 1129, "proposals": ["gate-one"]}]
+    instance_path = _write_instance(tmp_path, bad)
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+    assert any(f.startswith("schema:") for f in findings), findings
+
+
+def test_duplicate_proposed_gate_tracking_issue_is_flagged(tmp_path):
+    bad = json.loads(json.dumps(_VALID_INSTANCE))
+    bad["proposed_gates"] = [
+        {"tracking_issue": 1129, "proposals": ["gate-one", "gate-two"]},
+        {"tracking_issue": 1129, "proposals": ["gate-three", "gate-four"]},
+    ]
+    instance_path = _write_instance(tmp_path, bad)
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+    assert any("proposed-gates-drift" in f and "1129" in f for f in findings), findings
+
+
+def test_proposed_gates_drift_returns_empty_without_a_parsed_registry():
+    assert drift.find_duplicate_proposed_gate_tracking_issues(None) == []
 
 
 def test_explicit_null_gates_does_not_crash(tmp_path):
