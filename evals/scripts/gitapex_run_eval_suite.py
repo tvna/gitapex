@@ -56,13 +56,32 @@ never discarded), with the rejection disclosed via a
 
 ``config.executor`` (every real committed ``eval.yaml`` declares
 ``copilot-sdk``, waza's own executor concept) is read through
-``load_eval_suite`` but never enforced or dispatched on: this script always
-executes through the Claude Code CLI path
-(``gitapex_run_ablation.build_command``/``subprocess_executor``), an explicit,
-disclosed scope decision (issue #1132's own resolved "execution backend
-reach" question) rather than a silently ignored field. A future non-Claude
-backend can be plugged in behind the existing ``Executor`` DI type this
-script reuses unchanged, without a redesign.
+``load_eval_suite`` but never enforced or dispatched on -- it remains a
+disclosed, unconsulted field, unrelated to this module's own ``--executor``
+CLI flag (below) despite the name overlap.
+
+**Executor selection (issue #1259, extending issue #1132's own
+resolved "execution backend reach" scope decision, not reversing it).**
+``main()``'s ``--executor {claude-cli,http}`` flag (default ``claude-cli``,
+byte-for-byte unchanged behavior when omitted) selects which
+``gitapex_run_ablation.Executor``-typed callable ``run_eval_suite()``
+dispatches through: the original, still-default
+``gitapex_run_ablation.build_command``/``subprocess_executor`` Claude-CLI
+path, or ``gitapex_run_http_executor.build_http_executor``, an argv-adapter
+Executor reaching an OpenAI-Chat-Completions-compatible endpoint via the
+official ``openai`` SDK (``HTTP_EXECUTOR_BASE_URL``/``HTTP_EXECUTOR_API_KEY``,
+validated and required only when ``--executor http`` is actually selected).
+``run_eval_suite()`` itself takes no new parameter and dispatches identically
+regardless of which ``Executor`` it was handed -- exactly the "plugged in
+behind the existing ``Executor`` DI type... without a redesign" issue #1132
+anticipated. ``gitapex_run_http_executor`` (and, transitively, the ``openai``
+SDK it imports) is imported lazily, only inside the ``--executor http``
+branch -- never at this module's own top level (adversarial-review finding:
+a top-level import would have put ``openai``'s own import-time success on
+the critical path of every ``--executor claude-cli`` invocation too,
+including ``waza-eval-gate.yml``'s merge-gating call site, which never
+passes ``--executor`` and has no other reason to need that dependency
+importable at all).
 
 ``mcp_mocks`` (a top-level ``eval.yaml`` field waza's own schema still
 vendors) is rejected outright when non-empty: this script's executor grants
@@ -94,13 +113,14 @@ invocation outside this repository's ``uv``-managed virtualenv fails with
 ``ModuleNotFoundError``)::
 
     uv run python3 evals/scripts/gitapex_run_eval_suite.py --eval-yaml EVAL.yaml \\
-        --skill-md SKILL.md [--model-cli claude] [-o results.json]
+        --skill-md SKILL.md [--model-cli claude] [--executor {claude-cli,http}] [-o results.json]
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import statistics
 import subprocess
 import sys
@@ -108,6 +128,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from pydantic import ValidationError
 
 # gitapex_run_ablation.py lives in this same directory, resolved without a
 # bootstrap under both invocation styles (pytest's own pythonpath entry, and
@@ -555,6 +577,88 @@ def to_eval_scores_json(result: SuiteResult) -> dict[str, Any]:
     }
 
 
+def _resolve_http_executor_config() -> Any:
+    """Build an ``HttpExecutorConfig`` from ``HTTP_EXECUTOR_BASE_URL``/
+    ``HTTP_EXECUTOR_API_KEY`` (issue #1259). Raises ``ValueError`` if either
+    is unset/empty, or if ``HTTP_EXECUTOR_BASE_URL``/``HTTP_EXECUTOR_API_KEY``
+    fails ``HttpExecutorConfig``'s own validation (scheme+host for the
+    former, no raw control character for either) -- in every case the
+    message never echoes either value, matching this repository's own
+    never-print-the-secret convention
+    (``.github/scripts/gitapex_check_copilot_endpoint_configured.py``'s
+    identical contract for the same class of preflight).
+
+    ``malformed`` is built inside ``except`` but raised only after control
+    has left that block -- not ``raise ... from None`` directly inside
+    ``except``, which clears ``__cause__``/sets ``__suppress_context__`` but
+    does NOT stop CPython from auto-populating ``__context__`` with the
+    just-caught ``ValidationError`` (which embeds the raw invalid value --
+    ``base_url`` OR ``api_key``, whichever failed -- in its own
+    ``str()``/``repr()``/``.errors()[*]['input']``). Mirrors
+    ``gitapex_check_copilot_endpoint_configured.validate_base_url``'s own
+    identical precaution and its docstring's explanation of why ``from
+    None`` alone is insufficient.
+
+    Which literal message is chosen reads only ``ValidationError.errors()``'s
+    own ``loc`` (the failing field NAME, e.g. ``("api_key",)``) -- never that
+    same structure's own ``input`` key, ``str(exc)``, or ``repr(exc)``, every
+    one of which embeds the raw invalid value itself (code-review finding:
+    once ``api_key`` gained its own validator alongside ``base_url``'s
+    pre-existing one, a message hardcoded to always blame
+    ``HTTP_EXECUTOR_BASE_URL`` would misattribute a malformed-``api_key``
+    failure to the wrong environment variable).
+
+    Imports ``gitapex_run_http_executor`` locally, not at this module's own
+    top level (adversarial-review finding -- see the module docstring's
+    "Executor selection" section): that import is what pulls in the
+    ``openai`` SDK, and this function -- like the ``--executor http``
+    branch in ``main()`` that calls it -- must stay off the import-time
+    critical path of every ``--executor claude-cli`` invocation.
+
+    Return type is ``Any``, not the precise ``HttpExecutorConfig`` --
+    deliberately, not merely unannotated: a ``typing.TYPE_CHECKING``-guarded
+    top-level import (the usual way to keep a cross-module return type
+    precise without a real runtime import) was tried first and reverted --
+    this repository's own ``pyproject.toml`` ``[tool.coverage.report]``
+    ``exclude_lines`` REPLACES coverage.py's own default list rather than
+    extending it (see ``.github/scripts/gitapex_run_betterleaks.py``'s
+    identical note about ``# pragma: no cover`` being inert here for the
+    same reason), so a ``TYPE_CHECKING``-only import line can never be
+    marked covered in this codebase and would permanently fail
+    ``codecov/patch`` -- confirmed by hitting exactly that failure before
+    reverting to this ``Any`` return type.
+    """
+    base_url = os.environ.get("HTTP_EXECUTOR_BASE_URL", "")
+    api_key = os.environ.get("HTTP_EXECUTOR_API_KEY", "")
+    missing = [
+        name for name, value in (("HTTP_EXECUTOR_BASE_URL", base_url), ("HTTP_EXECUTOR_API_KEY", api_key)) if not value
+    ]
+    if missing:
+        raise ValueError(f"--executor http requires {' and '.join(missing)} to be set")
+    import gitapex_run_http_executor
+
+    malformed: ValueError | None = None
+    try:
+        return gitapex_run_http_executor.HttpExecutorConfig(base_url=base_url, api_key=api_key)
+    except ValidationError as validation_error:
+        # Field names only (`loc`), never `.errors()[*]['input']` -- that
+        # key carries the raw invalid value, api_key's own included.
+        failing_fields = {str(err["loc"][0]) for err in validation_error.errors() if err.get("loc")}
+        # Both fields can fail validation at once (e.g. a malformed URL
+        # pasted into both env vars); naming only one would send the
+        # operator back through a second, avoidable failed run to learn
+        # about the other (adversarial-review finding) -- so every failing
+        # field gets its own clause in the message, not just the first one
+        # checked.
+        reasons = []
+        if "base_url" in failing_fields:
+            reasons.append("HTTP_EXECUTOR_BASE_URL is set but is not a valid absolute URL (needs a scheme and a host)")
+        if "api_key" in failing_fields:
+            reasons.append("HTTP_EXECUTOR_API_KEY is set but contains a raw control character or DEL character")
+        malformed = ValueError("; ".join(reasons))
+    raise malformed from None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Run every task fixture an eval.yaml's tasks: glob matches, "
@@ -563,16 +667,33 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--eval-yaml", required=True, type=Path, help="Path to an evals/<skill>/eval.yaml.")
     parser.add_argument("--skill-md", required=True, type=Path, help="Path to the skill's SKILL.md.")
     parser.add_argument("--model-cli", default=DEFAULT_MODEL_CLI)
+    parser.add_argument(
+        "--executor",
+        choices=["claude-cli", "http"],
+        default="claude-cli",
+        help="Execution backend: 'claude-cli' (default, unchanged Claude-CLI "
+        "subprocess_executor) or 'http' (an OpenAI-Chat-Completions-compatible "
+        "endpoint via HTTP_EXECUTOR_BASE_URL/HTTP_EXECUTOR_API_KEY -- issue #1259).",
+    )
     parser.add_argument("-o", "--output", type=Path, help="Write the aggregate JSON here; stdout when omitted.")
     args = parser.parse_args(argv)
 
     try:
+        if args.executor == "http":
+            # Imported here, not at module top level -- see the module
+            # docstring's "Executor selection" section and
+            # _resolve_http_executor_config()'s own docstring for why.
+            import gitapex_run_http_executor
+
+            executor = gitapex_run_http_executor.build_http_executor(_resolve_http_executor_config())
+        else:
+            executor = subprocess_executor
         if not args.skill_md.is_file():
             raise ValueError(f"skill file not found: {args.skill_md}")
         result = run_eval_suite(
             args.eval_yaml,
             args.skill_md,
-            executor=subprocess_executor,
+            executor=executor,
             model_cli=args.model_cli,
         )
     except ValueError as exc:
