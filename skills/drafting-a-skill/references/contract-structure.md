@@ -1,9 +1,14 @@
 # Contract structure for a drafted skill
 
-Loaded at Step 4 (or earlier, if Step 1's candidate job is already fuzzy
-enough that a contract shape would sharpen it). This file exists so a
-draft's Precondition, Steps, and Postcondition are written as a real
-contract, in Bertrand Meyer's Design by Contract sense of the term --
+Loaded on demand: `SKILL.md`'s own Step 4 already states the three-part
+Precondition/Steps/Postcondition definition and the never-both rule
+directly in the body -- load this file for the fault-attribution rule,
+deeper worked examples, and the drafting checklist, when that inline
+definition alone doesn't resolve a real drafting question (or earlier, if
+Step 1's candidate job is already fuzzy enough that a contract shape
+would sharpen it). This file exists so a draft's Precondition, Steps, and
+Postcondition are written as a real contract, in Bertrand Meyer's Design
+by Contract sense of the term --
 the same framing `evaluating-skill-quality`'s own review procedure
 already applies to itself
 (`skills/evaluating-skill-quality/references/rubric.md`'s "## Contract

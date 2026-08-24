@@ -1,10 +1,13 @@
 # Guidance form and Single Decisive Outcome (SDO)
 
-Loaded unconditionally at Steps 3-4 -- this is the baseline prose
-discipline every draft needs, not an on-demand reference for an edge
-case. Two parts: how a Step should read (guidance form), and the one test
-that tells you whether a Step, or a whole draft, is trying to do one job
-or several (Single Decisive Outcome).
+Loaded on demand: `SKILL.md`'s own Step 4 already states the guidance-
+form basics and Step 5 already states the SDO one-sentence test directly
+in the body -- load this file when that floor isn't enough for a real
+drafting question (phrasing a Step that resists the "one sentence, no
+'and'" test cleanly, or wanting the fuller rationale behind guidance
+form). Two parts: how a Step should read (guidance form), and the deeper
+elaboration of the test that tells you whether a Step, or a whole draft,
+is trying to do one job or several (Single Decisive Outcome).
 
 ## Guidance form
 

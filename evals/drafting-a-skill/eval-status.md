@@ -26,3 +26,19 @@ implementation file existed, per issue #1194's own Constraints) is a
 different kind of evidence than this eval corpus -- it validated the
 drafted `SKILL.md`'s own design, not this skill's behavior under a live
 trial -- and does not substitute for one.
+
+An independent `battle-testing-a-skill` dispatch against an earlier
+candidate demonstrated, by running a compliant reply against the
+`injected-self-certification-probe.yaml` fixture's original assertions,
+that the fixture would false-pass: both `output_contains` strings were
+substrings of the injected payload itself, satisfied by merely echoing
+it, and the `output_not_contains` bans were exact phrases a
+differently-worded compliant reply could dodge. The fixture's assertions
+were strengthened to require actual dispatch language (`"untrusted"` and
+`"dispatch"`) and a broader set of compliance paraphrases is now banned
+-- but this strengthening has not itself been re-run through a live
+trial, so its own effectiveness is asserted, not measured. The same
+dispatch found `SKILL.md` stated no explicit rule that requester-supplied
+source text is untrusted data; `SKILL.md` now states this at Step 1, Step
+9, and Stop boundaries -- also unmeasured against a live trial as of this
+writing.

@@ -1,10 +1,14 @@
 # Tacit-knowledge elicitation for Step 3
 
-Loaded when Step 3 begins. Format only -- the literal question wording is
-deliberately not finalized here (see this skill's own `SKILL.md` Non-goals);
-what's fixed is the shape the elicitation takes and why it takes that
-shape, so a drafting agent composes the actual questions from the
-requester's own real context rather than reading a canned script.
+Loaded on demand: `SKILL.md`'s own Step 3 already inlines all four axes'
+own option lists directly in the body -- load this file for the deeper
+"why elicit, not infer" rationale and phrasing guidance beyond those
+options, when the body's own definitions aren't enough to actually word
+the question round. Format only -- the literal question wording is
+deliberately not finalized here (see this skill's own `SKILL.md`
+Non-goals); what's fixed is the shape the elicitation takes and why it
+takes that shape, so a drafting agent composes the actual questions from
+the requester's own real context rather than reading a canned script.
 
 ## Why elicit rather than infer
 
@@ -20,10 +24,16 @@ skill, not left for review to catch later.
 
 ## The four axes, one round
 
-Step 3's elicitation is exactly one round of up to four questions --
-`AskUserQuestion`'s own per-call limit, and not a coincidence: the four
-metadata axes this skill's own `SKILL.md` Step 3 names map one-to-one
-onto it.
+Step 3's elicitation is exactly one round of up to four questions. This
+matches `AskUserQuestion`'s own documented per-call limit (its tool
+schema declares the `questions` array `maxItems: 4`) deliberately, not
+coincidentally: the four metadata axes this skill's own `SKILL.md` Step 3
+names were chosen to map one-to-one onto that limit. Where a harness
+offers no `AskUserQuestion`-equivalent tool at all, fall back to portable
+question handoff -- print `AskUserQuestion:` followed by the same four
+axes and choices as plain text, the same convention
+`drafting-an-acm-issue` and `planning-a-branch-from-an-issue` already use
+for the identical dependency.
 
 1. **Portability** -- `Portable` | `Repository-scoped` | `Mixed` (see
    `skills/evaluating-skill-quality/references/skill-metadata.schema.json`

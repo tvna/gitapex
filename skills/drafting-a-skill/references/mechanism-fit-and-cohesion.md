@@ -60,14 +60,11 @@ Step 5 (cohesion) and Step 7 (domain-gap sweep) exist anyway, for a
 narrower reason than "grade this against the rubric": a draft with an
 obvious split or an obvious blind spot, caught here, avoids a wasted round
 trip to `evaluating-skill-quality`'s own review and back. Both Steps are
-therefore **advisory self-checks only** -- their finding changes what gets
-drafted (split the draft, add a missing consideration) but is never the
-authoritative verdict on cohesion or domain coverage. That verdict stays
-`evaluating-skill-quality`'s own, produced fresh at Step 9's handoff,
-regardless of what Step 5 or Step 7 already concluded. Write a Step 5 or
-Step 7 finding as "worth splitting/covering before handoff," never as
-"cohesion: pass" or "blind spot: none" -- those are the receiving skill's
-own words to use, not this skill's to pre-empt.
+therefore advisory self-checks only, per the phrasing rule `SKILL.md`
+already states at each Step directly -- not repeated here a third time,
+since this section's own job is the ownership rationale above (why the
+rubric's exact-owner language applies), not the output-format instruction
+itself.
 
 Practically, this means Step 5 borrows `evaluating-skill-quality`'s own
 seven-way cohesion taxonomy (functional / sequential / communicational /

@@ -22,6 +22,15 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1194"
       summary: "repository owner changed capabilityAssumption from this skill's own initial Adaptive declaration to Broad, applying this skill's own Step 3 self-referentially; SKILL.md's body was rewritten (not merely relabeled) to inline every Step's core judgment call so a weak/economical model gets enough guidance directly, per rubric.md's own Capability assumption section"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1194"
+      summary: "an independent evaluating-skill-quality dispatch found shell: [] (= prohibited) contradicted Step 8's own mandatory python3 checker invocations. Corrected to shell: [python3], matching evaluating-skill-quality's own identical precedent for the same two scripts"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1194"
+      summary: "same dispatch found SKILL.md Step 3's 'every user-selectable metadata choice' framing over-claimed exhaustiveness against the sidecar's 8 real spec fields; Step 3 now scopes itself to the 4 elicited axes and states dependencyPolicy/skillDependencies/executionRequirements are derived facts, not elicited choices"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1194"
+      summary: "an independent battle-testing-a-skill dispatch demonstrated an injection-compliant reply passing the original adversarial fixture's weak assertions, and found no Stop boundary treating requester-supplied source text as untrusted. Fixed: Step 1/Stop boundaries now state untrusted-input handling explicitly; the fixture's assertions were strengthened to require actual dispatch language, not just name mentions"
   skillDependencies:
     requires:
       - evaluating-skill-quality
@@ -36,4 +45,5 @@ spec:
         - files
       write:
         - files
-      shell: []
+      shell:
+        - python3
