@@ -80,6 +80,22 @@ class TestParseClaudeArgv:
         with pytest.raises(ValueError, match="-p"):
             http_executor.parse_claude_argv(argv)
 
+    def test_non_utf8_system_prompt_file_raises_value_error_not_unicode_decode_error(self, tmp_path: Path) -> None:
+        # Defeat test (exception-handler-gaps finding): read_text(encoding="utf-8")
+        # raises UnicodeDecodeError on non-UTF-8 bytes -- this must be caught
+        # and converted, never left to propagate as a raw, unhandled failure.
+        skill_md = tmp_path / "SKILL.md"
+        skill_md.write_bytes(b"\xff\xfe\x00\x01not valid utf-8")
+        argv = ["claude", "-p", "hi", "--append-system-prompt-file", str(skill_md), "--model", "m"]
+        with pytest.raises(ValueError, match="cannot read --append-system-prompt-file"):
+            http_executor.parse_claude_argv(argv)
+
+    def test_missing_system_prompt_file_raises_value_error_not_os_error(self, tmp_path: Path) -> None:
+        missing = tmp_path / "does-not-exist.md"
+        argv = ["claude", "-p", "hi", "--append-system-prompt-file", str(missing), "--model", "m"]
+        with pytest.raises(ValueError, match="cannot read --append-system-prompt-file"):
+            http_executor.parse_claude_argv(argv)
+
 
 class TestHttpExecutorConfig:
     def test_valid_https_url_accepted(self) -> None:

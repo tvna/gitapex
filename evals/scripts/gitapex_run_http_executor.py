@@ -94,10 +94,13 @@ def parse_claude_argv(argv: Sequence[str]) -> ParsedInvocation:
     ``gitapex_run_ablation.build_command()``-shaped argv.
 
     Raises ``ValueError`` if ``-p`` (the prompt) or ``--model`` is absent --
-    both are required for this module's own HTTP call to mean anything.
-    Every other flag (``--bare``, ``--tools``, its ``""`` value, and any
-    flag this parser does not recognize) is silently skipped, not
-    rejected -- see module docstring.
+    both are required for this module's own HTTP call to mean anything --
+    or if the path following ``--append-system-prompt-file`` cannot be read
+    (missing, a directory, unreadable, or not valid UTF-8 -- every such
+    failure converts to ``ValueError``, never left to propagate as a raw
+    ``OSError``/``UnicodeDecodeError``). Every other flag (``--bare``,
+    ``--tools``, its ``""`` value, and any flag this parser does not
+    recognize) is silently skipped, not rejected -- see module docstring.
     """
     argv = list(argv)
     prompt: str | None = None
@@ -112,7 +115,11 @@ def parse_claude_argv(argv: Sequence[str]) -> ParsedInvocation:
             i += 2
             continue
         if flag == "--append-system-prompt-file" and i + 1 < len(argv):
-            system_prompt = Path(argv[i + 1]).read_text(encoding="utf-8")
+            system_prompt_path = argv[i + 1]
+            try:
+                system_prompt = Path(system_prompt_path).read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError) as exc:
+                raise ValueError(f"cannot read --append-system-prompt-file {system_prompt_path!r}: {exc}") from exc
             i += 2
             continue
         if flag == "--model" and i + 1 < len(argv):

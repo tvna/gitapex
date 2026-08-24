@@ -1246,6 +1246,26 @@ def test_main_executor_http_malformed_base_url_returns_2_and_never_prints_the_se
     assert sentinel_secret not in err
 
 
+def test_resolve_http_executor_config_malformed_url_clears_context(monkeypatch):
+    # Defeat test (not merely happy-path): a naive `raise ValueError(...)
+    # from None` directly inside `except ValidationError` clears __cause__/
+    # sets __suppress_context__ but does NOT stop CPython from
+    # auto-populating __context__ with the just-caught ValidationError --
+    # which embeds the raw invalid base_url value in its own str()/repr()/
+    # .errors(). This asserts __context__ is actually None (not merely that
+    # the printed message looks clean), the same live assertion
+    # .github/scripts/gitapex_check_copilot_endpoint_configured.py's own
+    # validate_base_url docstring describes verifying.
+    monkeypatch.setenv("HTTP_EXECUTOR_BASE_URL", "not-a-valid-url")
+    monkeypatch.setenv("HTTP_EXECUTOR_API_KEY", "irrelevant")
+
+    with pytest.raises(ValueError) as excinfo:
+        gitapex_run_eval_suite._resolve_http_executor_config()
+
+    assert excinfo.value.__context__ is None
+    assert excinfo.value.__cause__ is None
+
+
 def test_main_executor_http_valid_config_builds_http_executor_and_runs(tmp_path: Path, monkeypatch):
     eval_yaml = _write_suite(tmp_path, tasks={"a.yaml": TASK_A_TEXT})
     skill_md = _skill_md(tmp_path)

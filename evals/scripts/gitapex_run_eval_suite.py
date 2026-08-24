@@ -579,7 +579,18 @@ def _resolve_http_executor_config() -> gitapex_run_http_executor.HttpExecutorCon
     message never echoes either value, matching this repository's own
     never-print-the-secret convention
     (``.github/scripts/gitapex_check_copilot_endpoint_configured.py``'s
-    identical contract for the same class of preflight)."""
+    identical contract for the same class of preflight).
+
+    ``malformed`` is built inside ``except`` but raised only after control
+    has left that block -- not ``raise ... from None`` directly inside
+    ``except``, which clears ``__cause__``/sets ``__suppress_context__`` but
+    does NOT stop CPython from auto-populating ``__context__`` with the
+    just-caught ``ValidationError`` (which embeds the raw invalid
+    ``base_url`` value in its own ``str()``/``repr()``/``.errors()``).
+    Mirrors ``gitapex_check_copilot_endpoint_configured.validate_base_url``'s
+    own identical precaution and its docstring's explanation of why ``from
+    None`` alone is insufficient.
+    """
     base_url = os.environ.get("HTTP_EXECUTOR_BASE_URL", "")
     api_key = os.environ.get("HTTP_EXECUTOR_API_KEY", "")
     missing = [
@@ -587,12 +598,14 @@ def _resolve_http_executor_config() -> gitapex_run_http_executor.HttpExecutorCon
     ]
     if missing:
         raise ValueError(f"--executor http requires {' and '.join(missing)} to be set")
+    malformed: ValueError | None = None
     try:
         return gitapex_run_http_executor.HttpExecutorConfig(base_url=base_url, api_key=api_key)
     except ValidationError:
-        raise ValueError(
+        malformed = ValueError(
             "HTTP_EXECUTOR_BASE_URL is set but is not a valid absolute URL (needs a scheme and a host)"
-        ) from None
+        )
+    raise malformed from None
 
 
 def main(argv: list[str] | None = None) -> int:
