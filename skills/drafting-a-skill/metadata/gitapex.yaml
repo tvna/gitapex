@@ -31,6 +31,9 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1194"
       summary: "an independent battle-testing-a-skill dispatch demonstrated an injection-compliant reply passing the original adversarial fixture's weak assertions, and found no Stop boundary treating requester-supplied source text as untrusted. Fixed: Step 1/Stop boundaries now state untrusted-input handling explicitly; the fixture's assertions were strengthened to require actual dispatch language, not just name mentions"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1194"
+      summary: "a third-round evaluating-skill-quality dispatch found untrusted-input-triage, drafting-an-adr, and grounding-in-primary-sources each named mid-procedure in SKILL.md or references/ but absent from relatedTo -- Step 6's own reconciliation rule applied to itself. Added to relatedTo and named in Related skills"
   skillDependencies:
     requires:
       - evaluating-skill-quality
@@ -39,6 +42,9 @@ spec:
       - drafting-an-acm-issue
       - evaluating-deterministic-gate-quality
       - evaluating-context-channel-maturity
+      - untrusted-input-triage
+      - drafting-an-adr
+      - grounding-in-primary-sources
   executionRequirements:
     tools:
       read:

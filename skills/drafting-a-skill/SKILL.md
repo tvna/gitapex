@@ -110,21 +110,32 @@ judgment, route directly to `evaluating-skill-quality`/
      needs met by `references/` material it pulls on demand).
    - **Invocation mode** -- both model- and user-invocable (the default),
      or narrowed via the `disable-model-invocation`/`user-invocable`
-     frontmatter booleans when an irreversible-operation skill should
-     never trigger autonomously.
+     `SKILL.md` frontmatter booleans (not a `metadata/gitapex.yaml`
+     field) when an irreversible-operation skill should never trigger
+     autonomously.
    - **Lifecycle** -- `experimental` (name a `trackingIssue`, its full
      URL, and what graduating to `stable` requires), `stable`, or
      `deprecated` (name a `replacement`).
-   These four are the only `metadata/gitapex.yaml` fields this skill
-   elicits as a human choice. The sidecar's other fields --
-   `dependencyPolicy`, `skillDependencies`, `executionRequirements` --
-   are not elicited: they are *derived facts* about what the draft's own
-   Steps actually do, computed at Step 4 (from the drafted Steps' real
-   content) and re-verified at Step 8 (`gitapex_scan_execution_requirements_drift.py`
-   flags a mismatch between the declaration and the draft's own bundled
-   scripts, when it ships any). A drafting agent that leaves
-   `executionRequirements.tools.shell` empty while a Step mandates a
-   shell invocation has stated something the draft's own content
+   These four -- three sidecar fields (Portability, Capability
+   assumption, Lifecycle) plus one frontmatter pair (Invocation mode) --
+   are the only choices this skill elicits from a human. Every other
+   `metadata/gitapex.yaml` field (`dependencyPolicy`, `skillDependencies`,
+   `executionRequirements`, `references`, `externalCitations`) is filled
+   in as the draft itself takes shape, not elicited up front:
+   `dependencyPolicy`/`skillDependencies`/`executionRequirements` are
+   *derived facts* about what the draft's own Steps actually do (computed
+   at Step 4, re-verified at Step 8 -- `gitapex_scan_execution_requirements_drift.py`
+   flags a mismatch between the declaration and shell/network/file
+   behavior its own pattern-matching finds in `SKILL.md`'s text or a
+   bundled script, whichever the draft actually has); `references` is
+   this draft's own decision log, appended to at Step 4 as real
+   decisions get made (this skill's own `metadata/gitapex.yaml` is itself
+   the worked example -- every entry there was appended as its
+   corresponding decision or correction actually happened, never
+   backfilled at the end); `externalCitations` applies only if the draft
+   reads from or writes to `evals/` or `docs/`. A drafting agent that
+   leaves `executionRequirements.tools.shell` empty while a Step mandates
+   a shell invocation has stated something the draft's own content
    contradicts -- verify this pair before Step 8, not only after its
    drift scan flags it. See
    `references/tacit-knowledge-elicitation.md` for why the four elicited
@@ -166,13 +177,18 @@ judgment, route directly to `evaluating-skill-quality`/
    This is an **advisory self-check, not a second authoritative
    grading** -- `evaluating-skill-quality`'s own cohesion check "has
    exactly one owner ... it decides the whole-artifact boundary once,"
-   at Step 9's handoff. Write a Step 5 finding as "worth splitting before
-   handoff," never as a cohesion verdict ("cohesion: pass" is not this
-   skill's sentence to write).
+   at Step 9's handoff. This Step's own observable result: either "worth
+   splitting before handoff" (a finding, with the two-outcome sentence
+   named), or an explicit "no split found" recorded in the Output --
+   never a cohesion verdict either way ("cohesion: pass" is not this
+   skill's sentence to write; nor is silence, which reads as "not run"
+   rather than "run, nothing found").
 
 6. **Check for collision and reconcile dependencies.** Read every
-   existing skill's own frontmatter `description:` (finitely many; stop
-   once all are read) and compare each against the draft's own
+   description in this session's *actual skill inventory* -- every
+   native `skills/*/` directory and every other skill genuinely available
+   to invoke, vendored or separately installed (finitely many either way;
+   stop once all are read) -- and compare each against the draft's own
    description for invocation-timing collision: would a plausible,
    concretely-stated user request reasonably route to both? A collision
    found is resolved one of two ways -- narrow one of the two
@@ -181,16 +197,19 @@ judgment, route directly to `evaluating-skill-quality`/
    description naming the boundary (this skill's own frontmatter does
    this for `scorer-gated-skill-edits` and `evaluating-skill-quality`;
    see Related skills below for the same treatment applied to two
-   *installed-but-not-native* skills this skill also collides with
-   today). This Step's completion criterion: every existing skill's
-   description has been read once, and every real collision found either
-   has a resolving edit or an explicit deferral with a stated reason --
-   never left unaddressed silently. Separately, reconcile this draft's
-   own predecessor/successor relationships (which skills it hands off to
-   or receives work from) with the skills it actually names in its own
-   Related skills section. This whole Step is this skill's own job:
-   `evaluating-skill-quality` grades one target skill at a time and has
-   no cross-skill judgment of its own.
+   installed-but-not-native skills this skill also collides with today).
+   This Step's completion criterion: every skill in the inventory above
+   has been read once, and every real collision found either has a
+   resolving edit or an explicit deferral with a stated reason -- never
+   left unaddressed silently, and a deferred collision still counts as
+   addressed, not as a clean pass. Separately, reconcile this draft's own
+   predecessor/successor relationships (which skills it hands off to or
+   receives work from, including any named mid-procedure in its own
+   Steps or `references/`) with `skillDependencies.relatedTo` and the
+   Related skills section below -- a skill named in prose but absent from
+   both is an unreconciled dependency. This whole Step is this skill's
+   own job: `evaluating-skill-quality` grades one target skill at a time
+   and has no cross-skill judgment of its own.
 
 7. **Domain-gap sweep.** Ask explicitly: does this target's own specific
    domain expose a quality concern nothing else in the draft already
@@ -203,16 +222,25 @@ judgment, route directly to `evaluating-skill-quality`/
    Step 9's handoff will apply. Like Step 5, this is **advisory only**:
    `evaluating-skill-quality`'s own Blind spot pass runs as a
    precondition step of its own procedure regardless of what this Step
-   already found, and stays the authoritative pass. Write a Step 7
-   finding as "worth covering before handoff," never as "blind spot:
-   none."
+   already found, and stays the authoritative pass. This Step's own
+   observable result: either "worth covering before handoff" (a finding,
+   with the specific gap named), or an explicit "no domain gap found"
+   recorded in the Output -- never "blind spot: none" (that verdict
+   belongs to `evaluating-skill-quality`'s own Blind spot pass, not this
+   Step), and never silence.
 
-8. **Run this repository's own deterministic checkers** against the
-   draft directory: `gitapex_check_skill_shape.py` and
-   `gitapex_scan_execution_requirements_drift.py` (see
-   `references/gitapex-cross-links.md` for exact invocation, gitapex-repo
-   only). Fix every finding before Step 9 -- Step 9's handoff does not
-   run either checker itself.
+8. **Sweep the draft against `references/formative-quality-
+   dimensions.md`**'s nine formative dimensions -- a prose quality pass
+   the deterministic checkers below can't perform -- then **run this
+   repository's own deterministic checkers** against the draft directory,
+   gitapex-repo only (see `references/gitapex-cross-links.md` for the
+   exact flags): run
+   `python3 skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py`
+   and
+   `python3 skills/evaluating-skill-quality/scripts/gitapex_scan_execution_requirements_drift.py`.
+   Fix every finding before Step 9 -- Step 9's handoff does not run
+   either checker itself. A finding may not be deferred the way Step 5/7
+   findings can be: Step 8 has no deferral path, fix it or don't proceed.
 
 9. **Dispatch both `evaluating-skill-quality` and `battle-testing-a-skill`**,
    each as an independent, fresh dispatch, *regardless of what the
@@ -232,8 +260,12 @@ choice Step 3 elicited, none inferred; is structured as a real contract
 per Step 4; has no Step 5/7 finding left unresolved (either fixed, or
 explicitly deferred with a stated reason naming the specific concern and
 why fixing it now is not warranted -- "deferred" alone, with no reason,
-does not satisfy this); collides with no existing skill's own
-description per Step 6; and passes both Step 8 checkers clean. **A
+does not satisfy this); has every Step 6 collision either resolved or
+explicitly deferred with a stated reason (a deferred collision, like a
+fixed one, satisfies this -- "collides with nothing" is not the bar; "no
+collision left unaddressed" is); and passes both Step 8 checkers with
+zero findings -- Step 8 has no deferral path, so this one is a hard
+clean, not "clean or explained." **A
 self-granted deferral is not a self-granted pass**: Step 9's dispatch
 still runs against every deferred finding exactly as if it had never
 been raised -- deferring a Step 5/7 finding changes nothing about what
@@ -364,6 +396,17 @@ off to `evaluating-skill-quality` and `battle-testing-a-skill`.
   this is the authoring method either skill routes to whenever an
   Acceptance Criteria Map's planned ops include a new `SKILL.md` -- see
   each skill's own Related-skills section for its bullet naming this one.
+- **vs. `untrusted-input-triage`:** Step 1's untrusted-source handling
+  applies that skill's own Extract/Ignore/Flag/Tag discipline to
+  requester-supplied design text, rather than re-deriving it.
+- **vs. `drafting-an-adr`:** the shared-bundled-script-parent policy's
+  own last-resort escalation (`references/mechanism-fit-and-cohesion.md`)
+  records its decision through that skill, rather than placing a script
+  in a neutral location with no record.
+- **vs. `grounding-in-primary-sources`:** `references/guidance-form-and-
+  sdo.md`'s "cite primary sources" guidance-form rule applies that
+  skill's own discipline to a drafted Step's own claims about an external
+  tool, rather than re-deriving it.
 - **Live collision, until `obra/superpowers` is retired:** this
   repository's vendored `writing-skills` (`.claude/skills/writing-skills/`,
   not a native `skills/*/` sibling) and the separately-installed
@@ -381,15 +424,14 @@ off to `evaluating-skill-quality` and `battle-testing-a-skill`.
 
 Portability: **Mixed**. This body's own inlined content (Steps 1-7, 9)
 depends on no repository-specific tooling. The repository-specific part
-is not confined to Step 8 alone: `references/mechanism-fit-and-
+isn't confined to Step 8 alone: `references/mechanism-fit-and-
 cohesion.md`'s Step 2 redirect targets, `references/tacit-knowledge-
 elicitation.md`'s schema/decision-precedent citations, and
 `references/contract-structure.md`'s citation into `references/rubric.md`
-are all gitapex-specific -- named here explicitly rather than narrowed to
-Step 8, since each is a real dependency a vendoring consumer needs to
-know about and substitute, per `references/gitapex-cross-links.md`'s own
-opening note (which is that substitution's designated home, not the only
-place gitapex-specific content actually lives).
+are all gitapex-specific -- named here rather than narrowed to Step 8,
+since each is a real dependency a vendoring consumer needs to substitute,
+per `references/gitapex-cross-links.md`'s own opening note (that
+substitution's designated home, not the only place such content lives).
 
 Capability assumption: **Broad**, the repository owner's explicit choice,
 applying this skill's own Step 3 self-referentially. Every Step's core
@@ -400,13 +442,29 @@ concrete domain-gap example (Step 7) -- is stated directly in this body,
 satisfying dimension 9's Broad bar (`references/rubric.md`'s own
 Capability assumption section: "the skill must give a weak tier *enough*
 guidance, and failing to do so is a real, gradeable gap, not an
-unmeasured one"). The six `references/` files stay genuinely on-demand
-under this structure -- each carries elaboration, worked sub-examples, or
-deeper rationale beyond this body's own floor, loaded only when that
-floor isn't enough for a real drafting question, never as required
-reading for the ordinary path (dimension 5's own grading is unchanged by
-the Broad/Adaptive choice, so this split is not a Broad-specific
-concession).
+unmeasured one"). Five of the six `references/` files stay genuinely
+on-demand under this structure -- each carries elaboration, worked
+sub-examples, or deeper rationale beyond this body's own floor, loaded
+only when that floor isn't enough for a real drafting question, not as
+required reading for the ordinary path (dimension 5's own grading is
+unchanged by the Broad/Adaptive choice, so this split is not a
+Broad-specific concession). `references/gitapex-cross-links.md` is the
+one exception, by construction: it carries Step 8's own exact
+command-line flags, which live nowhere else, so it *is* required reading
+on the in-repo ordinary path -- correctly scoped to load only when this
+copy lives in gitapex itself, per its own opening note, rather than
+claimed as optional when it isn't.
+
+Declaration-vs-structure fit, disclosed per `references/rubric.md`'s own
+requirement once a Broad-declared body nears `gitapex_check_skill_shape.py`'s
+`BODY_MAX_LINES` ceiling: Adaptive was considered and rejected, not
+merely relabeled away from (see `metadata/gitapex.yaml`'s decision log).
+The near-ceiling content is not rare-path/schema material that would fit
+an Adaptive-style reference split better -- it's each Step's own
+load-bearing judgment call, exactly what Broad's weak-tier bar requires
+in the body. No rare-path fraction exists here to move out; margin
+against the ceiling, not the declaration, is what needs attention if this
+draft grows further.
 
 Lifecycle: **experimental**, tracking
 <https://github.com/tvna/gitapex/issues/1194> -- pending
@@ -414,18 +472,13 @@ Lifecycle: **experimental**, tracking
 before graduating to stable.
 
 Attribution, not a live dependency: Step 2's "Create when / Don't create
-for" list shape follows `writing-skills`' own established structure for
-this kind of gate. That skill is vendored from `obra/superpowers`, which
-this repository is retiring -- Step 2's shape is written out directly in
-this file rather than cited, so it survives that retirement unchanged;
-`writing-skills` is credited here for the shape's origin, not declared as
-a dependency (it isn't a native `skills/*/` skill, and a vendored,
-soon-removed file is not something this skill's own procedure can safely
-lean on). Anthropic's `skill-creator` is named in `SKILL.md`'s own
-frontmatter only as a rejected source for its benchmark loop, automated
-description-optimization loop, and `.skill`-file packaging -- understood
-from that skill's own installed description, not independently verified
-against its primary source from inside this repository, and not imported
-here regardless.
+for" list shape follows `writing-skills`' own established structure,
+written out directly here (not cited) so it survives that dependency's
+eventual retirement -- credited for the shape's origin, not declared as a
+dependency, since it isn't a native `skills/*/` skill. `skill-creator` is
+named in the frontmatter only as a rejected source for its benchmark
+loop, description-optimization loop, and `.skill`-packaging -- understood
+from its installed description, not independently verified, and not
+imported here regardless.
 
 [steering]: https://claude.com/blog/steering-claude-code-skills-hooks-rules-subagents-and-more "Anthropic -- Steering Claude Code: skills, hooks, subagents and more"

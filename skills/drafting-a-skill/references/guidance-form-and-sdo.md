@@ -33,9 +33,10 @@ under time pressure. Write it that way:
   reference file, not inline in the Step.
 - **Name the escalation path inline, not as an afterthought.** If a Step
   can fail in a way the rest of the procedure can't route around, say so
-  in the Step itself ("...; if no interpretation survives, escalate per
-  Step 7"), not only in a separate Stop-boundaries bullet a reader may
-  never reach.
+  in the Step itself -- this skill's own Step 2 does this directly ("When
+  the candidate genuinely fits neither list cleanly ... escalate to the
+  requester with the specific ambiguity named"), not only in a separate
+  Stop-boundaries bullet a reader may never reach.
 - **Cite primary sources for a claim about an external tool, library, or
   platform**, per this repository's own `grounding-in-primary-sources`
   discipline -- a Step asserting how something outside this repository

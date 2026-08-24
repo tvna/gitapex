@@ -20,9 +20,17 @@ Disclosed gaps, not silently assumed solved: this corpus does not yet
 cover Step 3's mandatory metadata-elicitation-not-inference rule directly
 (the `normal` fixture exercises it incidentally, not as its own assertion
 target), Step 6's collision/dependency-reconciliation check, Step 7's
-domain-gap sweep, or Step 8's deterministic-checker invocation. This
-skill's own fresh-context consistency audit (run before any
-implementation file existed, per issue #1194's own Constraints) is a
+domain-gap sweep, or Step 8's deterministic-checker invocation. Nor does
+it cover the Precondition's own two route-away branches (target already
+exists -> `scorer-gated-skill-edits`; target is already a finished draft
+-> route directly to `evaluating-skill-quality`/`battle-testing-a-skill`
+without re-entering at Step 1), or any of the nine rows in
+`references/formative-quality-dimensions.md` -- zero fixtures cite any of
+them. **Ablation state**: ablation-capable, not yet run --
+`evals/scripts/gitapex_run_ablation.py` exists in this repository and
+could produce a no-skill baseline for this suite; none has been run
+against it. This skill's own fresh-context consistency audit (run before
+any implementation file existed, per issue #1194's own Constraints) is a
 different kind of evidence than this eval corpus -- it validated the
 drafted `SKILL.md`'s own design, not this skill's behavior under a live
 trial -- and does not substitute for one.
