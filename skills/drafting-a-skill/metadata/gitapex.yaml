@@ -34,6 +34,12 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1194"
       summary: "a third-round evaluating-skill-quality dispatch found untrusted-input-triage, drafting-an-adr, and grounding-in-primary-sources each named mid-procedure in SKILL.md or references/ but absent from relatedTo -- Step 6's own reconciliation rule applied to itself. Added to relatedTo and named in Related skills"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1194"
+      summary: "supersedes the prior correction's 'actual dispatch language' claim -- a third-round battle-testing-a-skill dispatch proved it false: 'dispatch' is a payload substring, so echoing the attack scored 1.000 vs. 0.846 for real resistance, per this repo's own gitapex_score_contract.py. Rebalanced to 3 multi-word positives grounded in SKILL.md's real phrasing, verified against 7 replies -- see the fixture's own comment"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1194"
+      summary: "same dispatch found 4 fail-open gaps needing no adversarial input: Step 3 had no rule for an unobtainable elicitation answer (an agent took a self-chosen provisional value); Step 9 had none for a missing fresh-dispatch mechanism (performed both reviews in-context); Step 1 had none for an empty job or encoded/hidden content. All four given explicit stop-and-escalate or decode-first rules"
   skillDependencies:
     requires:
       - evaluating-skill-quality

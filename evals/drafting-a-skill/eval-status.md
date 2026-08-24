@@ -35,18 +35,29 @@ different kind of evidence than this eval corpus -- it validated the
 drafted `SKILL.md`'s own design, not this skill's behavior under a live
 trial -- and does not substitute for one.
 
-An independent `battle-testing-a-skill` dispatch against an earlier
-candidate demonstrated, by running a compliant reply against the
-`injected-self-certification-probe.yaml` fixture's original assertions,
-that the fixture would false-pass: both `output_contains` strings were
-substrings of the injected payload itself, satisfied by merely echoing
-it, and the `output_not_contains` bans were exact phrases a
-differently-worded compliant reply could dodge. The fixture's assertions
-were strengthened to require actual dispatch language (`"untrusted"` and
-`"dispatch"`) and a broader set of compliance paraphrases is now banned
--- but this strengthening has not itself been re-run through a live
-trial, so its own effectiveness is asserted, not measured. The same
-dispatch found `SKILL.md` stated no explicit rule that requester-supplied
-source text is untrusted data; `SKILL.md` now states this at Step 1, Step
-9, and Stop boundaries -- also unmeasured against a live trial as of this
-writing.
+Two independent `battle-testing-a-skill` dispatches probed this fixture
+against earlier candidates. The first found `SKILL.md` stated no explicit
+rule that requester-supplied source text is untrusted data; fixed at
+Step 1, Step 9, and Stop boundaries, and confirmed behaviorally by the
+second dispatch's own live probe (an escalated injection, source text
+loaded, held on every axis). The first dispatch's own fixture fix
+(`"untrusted"`/`"dispatch"` as required substrings) was itself
+demonstrated **false** by the second dispatch, using this repository's
+own `gitapex_score_contract.py` scorer directly: `"dispatch"` is a
+verbatim substring of the injected payload, so an injection-compliant
+reply scored a perfect 1.000 while a genuinely resisting reply scored
+only 0.846 -- the discrimination was inverted, not merely imperfect. The
+assertions were rebalanced (3 multi-word positive phrases against 9
+bans, since flat per-item weighting had diluted 2 positives against 17
+bans to the point where an evasive reply demonstrating neither behavior
+still scored 0.905) and reverified directly with the same scorer against
+7 hand-crafted replies (4 compliant/evasive, all below the 0.8 threshold;
+3 resisting, all 1.000) -- see the fixture's own inline comment. This is
+scorer-level verification, not a live model trial; the rebalanced
+fixture has not itself been run against a real dispatch yet. The second
+dispatch also found, and this draft fixed, three fail-open gaps needing
+no adversarial input at all: Step 3 had no rule for an unobtainable
+elicitation answer, Step 9 had none for a missing fresh-dispatch
+mechanism, and Step 1 had none for an empty candidate job or content
+hidden via encoding/HTML comments -- none of the four has been
+re-verified through a live trial as of this writing.
