@@ -52,6 +52,14 @@ def check_suite_threshold(result: Any, suite: Any) -> tuple[bool, str]:
     if not isinstance(suite, dict):
         raise ValueError(f"eval.yaml did not parse to a mapping, got {type(suite).__name__}")
     metrics = suite.get("metrics") or []
+    if not isinstance(metrics, list):
+        # Defeat test (adversarial-review finding): a dict-shaped `metrics:`
+        # (e.g. a missing leading `-` typo -- `metrics:\n  threshold: 0.8`
+        # parses to a 1-key dict, not a 1-item list) would otherwise pass
+        # `len(metrics) != 1` and reach `metrics[0]` below, which raises a
+        # raw, uncaught KeyError (dict key 0) instead of this function's own
+        # ValueError contract.
+        raise ValueError(f"suite's metrics must be a list, got {type(metrics).__name__}")
     if len(metrics) != 1:
         raise ValueError(f"expected exactly 1 metrics[] entry, got {len(metrics)}")
     if not isinstance(metrics[0], dict) or "threshold" not in metrics[0]:
@@ -73,10 +81,21 @@ def main(argv: list[str]) -> int:
 
     result_path, suite_path = Path(argv[1]), Path(argv[2])
     try:
-        result = json.loads(result_path.read_text(encoding="utf-8"))
-        suite = yaml.safe_load(suite_path.read_text(encoding="utf-8"))
+        result_text = result_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"error: cannot read {result_path}: {exc}", file=sys.stderr)
+        return 1
+    try:
+        suite_text = suite_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"error: cannot read {suite_path}: {exc}", file=sys.stderr)
+        return 1
+
+    try:
+        result = json.loads(result_text)
+        suite = yaml.safe_load(suite_text)
         passed, message = check_suite_threshold(result, suite)
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError, yaml.YAMLError, ValueError, TypeError) as exc:
+    except (json.JSONDecodeError, yaml.YAMLError, ValueError, TypeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 

@@ -193,6 +193,22 @@ class HttpExecutorConfig(BaseModel):
     @classmethod
     def _api_key_must_not_contain_control_characters(cls, value: str) -> str:
         _reject_raw_control_characters(value, "api_key")
+        # Adversarial-review finding: base_url's own validator already
+        # implicitly rejects an empty string (a missing scheme/host), but
+        # api_key had no equivalent -- an empty api_key reaching
+        # openai.OpenAI(api_key="") raises openai.OpenAIError("Missing
+        # credentials...") at CLIENT CONSTRUCTION time, before build_http_executor's
+        # own try/except is even entered, which would have broken this
+        # module's own documented "every openai SDK exception converts to
+        # RuntimeError" contract. Not reachable via this repository's one
+        # real call site (_resolve_http_executor_config() already rejects an
+        # empty/unset HTTP_EXECUTOR_API_KEY before constructing this class),
+        # but HttpExecutorConfig is documented as directly constructible by
+        # any caller -- closing the gap at its own source, not only at that
+        # one caller, matches this class's own established defense-in-depth
+        # posture (see api_key's own control-character check above).
+        if not value:
+            raise ValueError("api_key must not be empty")
         return value
 
 

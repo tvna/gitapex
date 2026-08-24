@@ -90,6 +90,16 @@ def test_check_suite_threshold_rejects_non_mapping_suite() -> None:
         check_threshold.check_suite_threshold({"mean_score": 0.9}, ["not", "a", "mapping"])
 
 
+def test_check_suite_threshold_rejects_dict_shaped_metrics() -> None:
+    # Defeat test (adversarial-review finding): a missing leading `-` typo
+    # (`metrics:\n  threshold: 0.8`) parses to a 1-key dict, which passes a
+    # naive `len(metrics) != 1` check and then raises a raw KeyError at
+    # `metrics[0]` (dict key 0, not index 0) instead of this function's own
+    # ValueError contract.
+    with pytest.raises(ValueError, match="must be a list"):
+        check_threshold.check_suite_threshold({"mean_score": 0.9}, {"metrics": {"threshold": 0.8}})
+
+
 # --- main() -------------------------------------------------------------
 
 
@@ -127,11 +137,26 @@ def test_main_exits_1_on_malformed_metrics_with_clear_message_not_a_traceback(
 
 def test_main_exits_1_on_missing_result_file(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     suite = _write_suite(tmp_path, [{"name": "quality", "threshold": 0.8}])
+    missing = tmp_path / "does-not-exist.json"
 
-    rc = check_threshold.main(["prog", str(tmp_path / "does-not-exist.json"), str(suite)])
+    rc = check_threshold.main(["prog", str(missing), str(suite)])
 
     assert rc == 1
-    assert "error:" in capsys.readouterr().err
+    assert f"error: cannot read {missing}" in capsys.readouterr().err
+
+
+def test_main_exits_1_on_missing_suite_file(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    # Convention-review finding: the two reads (result, suite) must each
+    # name their own path in a curated message -- not a bare, uncurated
+    # OSError str() -- matching gitapex_set_config_model.py's own
+    # established pattern for this class of error.
+    result = _write_result(tmp_path, mean_score=0.9)
+    missing = tmp_path / "does-not-exist.yaml"
+
+    rc = check_threshold.main(["prog", str(result), str(missing)])
+
+    assert rc == 1
+    assert f"error: cannot read {missing}" in capsys.readouterr().err
 
 
 def test_main_exits_1_on_invalid_json(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

@@ -180,6 +180,18 @@ def test_http_executor_config_api_key_without_control_characters_accepted() -> N
     assert config.api_key == "sk-a-normal-token-9f3a"
 
 
+def test_http_executor_config_empty_api_key_rejected() -> None:
+    # Defeat test (adversarial-review finding): base_url's own validator
+    # already implicitly rejects an empty string (missing scheme/host), but
+    # api_key had no equivalent -- an empty api_key would reach
+    # openai.OpenAI(api_key="") and raise a raw openai.OpenAIError at CLIENT
+    # CONSTRUCTION time, before build_http_executor's own try/except is even
+    # entered, breaking this module's documented "every openai SDK
+    # exception converts to RuntimeError" contract.
+    with pytest.raises(ValidationError, match="api_key must not be empty"):
+        http_executor.HttpExecutorConfig(base_url="https://example.com", api_key="")
+
+
 # ---------------------------------------------------------------------------
 # build_http_executor
 # ---------------------------------------------------------------------------
