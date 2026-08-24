@@ -46,7 +46,7 @@ The harness to *measure* the repo's cross-model consistency concept now
 exists; the measurement itself does not yet, for the repository's suites
 in aggregate. Concretely, as of issue #106:
 
-- 23 of 27 `evals/*/eval.yaml` declare
+- 24 of 28 `evals/*/eval.yaml` declare
   `trials_per_task: 3`, so each of those tasks is sampled 3 times per run
   rather than once. (waza's docs describe bootstrap confidence
   intervals at trials > 1; that behavior is not verified here, since this
@@ -145,6 +145,7 @@ suites still assert on final text only).
 | `auditing-agent-product-scope` | 3 | 9 | none | no | [evals/auditing-agent-product-scope/eval-status.md](../evals/auditing-agent-product-scope/eval-status.md) |
 | `battle-testing-a-skill` | 3 | 24 | `claude-sonnet-5` | yes | [evals/battle-testing-a-skill/eval-status.md](../evals/battle-testing-a-skill/eval-status.md) |
 | `drafting-a-pr-to-merge` | 3 | 24 | none | no | [evals/drafting-a-pr-to-merge/eval-status.md](../evals/drafting-a-pr-to-merge/eval-status.md) |
+| `drafting-a-skill` | 3 | 7 | none | no | [evals/drafting-a-skill/eval-status.md](../evals/drafting-a-skill/eval-status.md) |
 | `drafting-an-acm-issue` | 3 | 18 | none | no | [evals/drafting-an-acm-issue/eval-status.md](../evals/drafting-an-acm-issue/eval-status.md) |
 | `drafting-an-adr` | 3 | 18 | none | no | [evals/drafting-an-adr/eval-status.md](../evals/drafting-an-adr/eval-status.md) |
 | `eliciting-a-design` | 3 | 7 | none | no | [evals/eliciting-a-design/eval-status.md](../evals/eliciting-a-design/eval-status.md) |
