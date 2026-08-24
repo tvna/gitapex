@@ -540,21 +540,30 @@ def test_load_proposed_gate_requirements_raises_on_duplicate_tracking_issue(tmp_
         gate.load_proposed_gate_requirements(str(ssot))
 
 
-def test_load_proposed_gate_requirements_skips_malformed_entries(tmp_path):
+def test_load_proposed_gate_requirements_raises_on_non_dict_entry(tmp_path):
+    # Issue #1177 adversarial-gate-quality review: unlike gates[]'s tolerant
+    # skip of a malformed tracking_issue (safe -- under-counts a citation),
+    # silently skipping a malformed proposed_gates[] entry would fall its
+    # requirement back to the weaker default of 1, which can falsely
+    # resolve a multi-gate issue -- so a malformed entry raises instead.
     ssot = tmp_path / "ssot.json"
-    ssot.write_text(
-        json.dumps(
-            {
-                "proposed_gates": [
-                    "not-a-dict",
-                    {"tracking_issue": "1129", "proposals": ["a", "b"]},
-                    {"tracking_issue": 1130, "proposals": "not-a-list"},
-                    {"tracking_issue": 1131, "proposals": ["a", "b"]},
-                ]
-            }
-        )
-    )
-    assert gate.load_proposed_gate_requirements(str(ssot)) == {1131: 2}
+    ssot.write_text(json.dumps({"proposed_gates": ["not-a-dict", {"tracking_issue": 1131, "proposals": ["a", "b"]}]}))
+    with pytest.raises(gate.SsotLedgerError):
+        gate.load_proposed_gate_requirements(str(ssot))
+
+
+def test_load_proposed_gate_requirements_raises_on_non_integer_tracking_issue(tmp_path):
+    ssot = tmp_path / "ssot.json"
+    ssot.write_text(json.dumps({"proposed_gates": [{"tracking_issue": "1129", "proposals": ["a", "b"]}]}))
+    with pytest.raises(gate.SsotLedgerError):
+        gate.load_proposed_gate_requirements(str(ssot))
+
+
+def test_load_proposed_gate_requirements_raises_on_non_list_proposals(tmp_path):
+    ssot = tmp_path / "ssot.json"
+    ssot.write_text(json.dumps({"proposed_gates": [{"tracking_issue": 1130, "proposals": "not-a-list"}]}))
+    with pytest.raises(gate.SsotLedgerError):
+        gate.load_proposed_gate_requirements(str(ssot))
 
 
 def test_load_proposed_gate_requirements_raises_on_missing_file(tmp_path):

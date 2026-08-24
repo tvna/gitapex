@@ -227,7 +227,20 @@ def load_gate_tracking_issue_counts(path: str) -> dict[int, int]:
 def _proposed_gate_requirements_from_registry(path: str, data: dict[str, Any]) -> dict[int, int]:
     """Pure extraction half of `load_proposed_gate_requirements` below --
     see `_gate_tracking_issue_counts_from_registry`'s own docstring for
-    why this split exists."""
+    why this split exists.
+
+    Deliberately fail-closed per malformed entry, unlike
+    `_gate_tracking_issue_counts_from_registry`'s tolerant skip of a
+    malformed `gates[].tracking_issue`: an adversarial-gate-quality review
+    of this PR found the two skips, though structurally parallel, have
+    opposite risk directions. Skipping a malformed `gates[]` entry only
+    under-counts a citation, which can never falsely resolve an issue
+    (fail-closed, safe). Skipping a malformed `proposed_gates[]` entry
+    would silently fall the requirement back to the weaker default of 1,
+    which *can* falsely resolve a multi-gate issue on its first citation
+    -- exactly the false-clear this module exists to prevent. So a
+    malformed entry here raises instead of being dropped.
+    """
     proposed_gates = data.get("proposed_gates")
     if proposed_gates is None:
         return {}
@@ -237,13 +250,18 @@ def _proposed_gate_requirements_from_registry(path: str, data: dict[str, Any]) -
     requirements: dict[int, int] = {}
     for entry in proposed_gates:
         if not isinstance(entry, dict):
-            continue
+            raise SsotLedgerError(f"{path}: gate registry's 'proposed_gates' has a non-object entry: {entry!r}")
         tracking_issue = entry.get("tracking_issue")
         proposals = entry.get("proposals")
         if not (isinstance(tracking_issue, int) and not isinstance(tracking_issue, bool)):
-            continue
+            raise SsotLedgerError(
+                f"{path}: gate registry's 'proposed_gates' entry has a non-integer tracking_issue: {tracking_issue!r}"
+            )
         if not isinstance(proposals, list):
-            continue
+            raise SsotLedgerError(
+                f"{path}: gate registry's 'proposed_gates' entry for tracking_issue {tracking_issue} "
+                f"has a non-list 'proposals': {proposals!r}"
+            )
         if tracking_issue in requirements:
             raise SsotLedgerError(
                 f"{path}: gate registry's 'proposed_gates' has more than one entry for tracking_issue {tracking_issue}"
@@ -260,10 +278,12 @@ def load_proposed_gate_requirements(path: str) -> dict[int, int]:
     reader. A tracking_issue absent from the returned dict defaults to
     `required = 1` at the call site (`partition_resolved`). `proposed_gates`
     missing entirely, or present but empty, both yield `{}`. A malformed
-    individual entry is skipped rather than raised, matching this module's
-    existing per-entry-tolerant/whole-structure-fail-closed convention. A
-    duplicate `tracking_issue` across `proposed_gates` raises
-    `SsotLedgerError` rather than silently picking a winner."""
+    individual entry raises `SsotLedgerError` rather than being skipped --
+    see `_proposed_gate_requirements_from_registry`'s own docstring for
+    why this loader's per-entry tolerance is asymmetric with
+    `load_gate_tracking_issue_counts`'s. A duplicate `tracking_issue`
+    across `proposed_gates` raises `SsotLedgerError` rather than silently
+    picking a winner."""
     return _proposed_gate_requirements_from_registry(path, _load_ssot_registry(path))
 
 
