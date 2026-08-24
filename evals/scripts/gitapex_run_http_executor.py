@@ -238,7 +238,21 @@ def build_http_executor(config: HttpExecutorConfig) -> gitapex_run_ablation.Exec
     multiplier -- ``subprocess.run(..., timeout=timeout)`` is a single
     attempt, a hard bound. ``max_retries=0`` restores that same
     single-attempt, ``timeout``-is-a-hard-bound semantics here.
+
+    The ``openai.OpenAI`` client is constructed once here, not per call
+    inside the returned closure (adversarial-review finding): every
+    argument that determines it (``config.base_url``/``config.api_key``/
+    ``max_retries``) is already fixed at this function's own scope, and a
+    per-call client discards HTTP connection/TLS reuse for no benefit --
+    confirmed against the installed SDK's own source that omitting
+    ``http_client`` builds a fresh connection pool on every construction.
+    ``run_eval_suite()`` calls the returned ``Executor`` once per trial (up
+    to ``trials_per_task`` times per fixture), so this matters for real,
+    not just in theory. The per-call ``timeout`` argument still applies
+    per-request via ``create(..., timeout=timeout)`` below, unaffected by
+    building the client once.
     """
+    client = openai.OpenAI(base_url=config.base_url, api_key=config.api_key, max_retries=0)
 
     def _execute(argv: Sequence[str], timeout: int) -> str:
         parsed = parse_claude_argv(argv)
@@ -248,7 +262,6 @@ def build_http_executor(config: HttpExecutorConfig) -> gitapex_run_ablation.Exec
             messages.append({"role": "system", "content": parsed.system_prompt})
         messages.append({"role": "user", "content": parsed.prompt})
 
-        client = openai.OpenAI(base_url=config.base_url, api_key=config.api_key, max_retries=0)
         try:
             response = client.chat.completions.create(
                 model=parsed.model,

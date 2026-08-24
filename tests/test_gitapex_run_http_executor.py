@@ -294,3 +294,28 @@ def test_build_http_executor_constructs_openai_client_with_max_retries_zero(monk
 
     _, kwargs = mock_openai_class.call_args
     assert kwargs["max_retries"] == 0
+
+
+def test_build_http_executor_reuses_one_openai_client_across_multiple_calls(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Regression (adversarial-review finding): the openai.OpenAI client used
+    # to be constructed fresh inside _execute on every call, discarding
+    # HTTP connection/TLS reuse for no benefit -- run_eval_suite() calls the
+    # returned Executor once per trial, up to trials_per_task times per
+    # fixture, so a per-call client is a real, not just theoretical, cost.
+    # build_http_executor() now constructs the client once, outside the
+    # returned closure; openai.OpenAI() must therefore be called exactly
+    # once total, no matter how many times the returned executor is called.
+    mock_openai_class = MagicMock(return_value=MagicMock())
+    monkeypatch.setattr(http_executor.openai, "OpenAI", mock_openai_class)
+    mock_openai_class.return_value.chat.completions.create.return_value = MagicMock(
+        choices=[MagicMock(message=MagicMock(content="ok"))]
+    )
+
+    executor = http_executor.build_http_executor(_config())
+    argv = ["claude", "-p", "hi", "--bare", "--tools", "", "--model", "gemma-4"]
+    executor(argv, 30)
+    executor(argv, 30)
+    executor(argv, 30)
+
+    assert mock_openai_class.call_count == 1
+    assert mock_openai_class.return_value.chat.completions.create.call_count == 3
