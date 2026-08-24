@@ -56,13 +56,25 @@ never discarded), with the rejection disclosed via a
 
 ``config.executor`` (every real committed ``eval.yaml`` declares
 ``copilot-sdk``, waza's own executor concept) is read through
-``load_eval_suite`` but never enforced or dispatched on: this script always
-executes through the Claude Code CLI path
-(``gitapex_run_ablation.build_command``/``subprocess_executor``), an explicit,
-disclosed scope decision (issue #1132's own resolved "execution backend
-reach" question) rather than a silently ignored field. A future non-Claude
-backend can be plugged in behind the existing ``Executor`` DI type this
-script reuses unchanged, without a redesign.
+``load_eval_suite`` but never enforced or dispatched on -- it remains a
+disclosed, unconsulted field, unrelated to this module's own ``--executor``
+CLI flag (below) despite the name overlap.
+
+**Executor selection (issue #1259, extending issue #1132's own
+resolved "execution backend reach" scope decision, not reversing it).**
+``main()``'s ``--executor {claude-cli,http}`` flag (default ``claude-cli``,
+byte-for-byte unchanged behavior when omitted) selects which
+``gitapex_run_ablation.Executor``-typed callable ``run_eval_suite()``
+dispatches through: the original, still-default
+``gitapex_run_ablation.build_command``/``subprocess_executor`` Claude-CLI
+path, or ``gitapex_run_http_executor.build_http_executor``, an argv-adapter
+Executor reaching an OpenAI-Chat-Completions-compatible endpoint via the
+official ``openai`` SDK (``HTTP_EXECUTOR_BASE_URL``/``HTTP_EXECUTOR_API_KEY``,
+validated and required only when ``--executor http`` is actually selected).
+``run_eval_suite()`` itself takes no new parameter and dispatches identically
+regardless of which ``Executor`` it was handed -- exactly the "plugged in
+behind the existing ``Executor`` DI type... without a redesign" issue #1132
+anticipated.
 
 ``mcp_mocks`` (a top-level ``eval.yaml`` field waza's own schema still
 vendors) is rejected outright when non-empty: this script's executor grants
@@ -94,13 +106,14 @@ invocation outside this repository's ``uv``-managed virtualenv fails with
 ``ModuleNotFoundError``)::
 
     uv run python3 evals/scripts/gitapex_run_eval_suite.py --eval-yaml EVAL.yaml \\
-        --skill-md SKILL.md [--model-cli claude] [-o results.json]
+        --skill-md SKILL.md [--model-cli claude] [--executor {claude-cli,http}] [-o results.json]
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import statistics
 import subprocess
 import sys
@@ -108,6 +121,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from pydantic import ValidationError
 
 # gitapex_run_ablation.py lives in this same directory, resolved without a
 # bootstrap under both invocation styles (pytest's own pythonpath entry, and
@@ -135,6 +150,7 @@ def _ensure_importable(directory: Path) -> None:
 _ensure_importable(_SCORE_CONTRACT_DIR)
 
 import gitapex_run_ablation  # noqa: E402 -- path bootstrap above must run first
+import gitapex_run_http_executor  # noqa: E402 -- path bootstrap above must run first
 import gitapex_score_contract  # noqa: E402 -- path bootstrap above must run first
 
 DEFAULT_MODEL_CLI = gitapex_run_ablation.DEFAULT_MODEL_CLI
@@ -555,6 +571,30 @@ def to_eval_scores_json(result: SuiteResult) -> dict[str, Any]:
     }
 
 
+def _resolve_http_executor_config() -> gitapex_run_http_executor.HttpExecutorConfig:
+    """Build an ``HttpExecutorConfig`` from ``HTTP_EXECUTOR_BASE_URL``/
+    ``HTTP_EXECUTOR_API_KEY`` (issue #1259). Raises ``ValueError`` if either
+    is unset/empty, or if ``HTTP_EXECUTOR_BASE_URL`` fails
+    ``HttpExecutorConfig``'s own scheme+host validation -- in both cases the
+    message never echoes either value, matching this repository's own
+    never-print-the-secret convention
+    (``.github/scripts/gitapex_check_copilot_endpoint_configured.py``'s
+    identical contract for the same class of preflight)."""
+    base_url = os.environ.get("HTTP_EXECUTOR_BASE_URL", "")
+    api_key = os.environ.get("HTTP_EXECUTOR_API_KEY", "")
+    missing = [
+        name for name, value in (("HTTP_EXECUTOR_BASE_URL", base_url), ("HTTP_EXECUTOR_API_KEY", api_key)) if not value
+    ]
+    if missing:
+        raise ValueError(f"--executor http requires {' and '.join(missing)} to be set")
+    try:
+        return gitapex_run_http_executor.HttpExecutorConfig(base_url=base_url, api_key=api_key)
+    except ValidationError:
+        raise ValueError(
+            "HTTP_EXECUTOR_BASE_URL is set but is not a valid absolute URL (needs a scheme and a host)"
+        ) from None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Run every task fixture an eval.yaml's tasks: glob matches, "
@@ -563,8 +603,26 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--eval-yaml", required=True, type=Path, help="Path to an evals/<skill>/eval.yaml.")
     parser.add_argument("--skill-md", required=True, type=Path, help="Path to the skill's SKILL.md.")
     parser.add_argument("--model-cli", default=DEFAULT_MODEL_CLI)
+    parser.add_argument(
+        "--executor",
+        choices=["claude-cli", "http"],
+        default="claude-cli",
+        help="Execution backend: 'claude-cli' (default, unchanged Claude-CLI "
+        "subprocess_executor) or 'http' (an OpenAI-Chat-Completions-compatible "
+        "endpoint via HTTP_EXECUTOR_BASE_URL/HTTP_EXECUTOR_API_KEY -- issue #1259).",
+    )
     parser.add_argument("-o", "--output", type=Path, help="Write the aggregate JSON here; stdout when omitted.")
     args = parser.parse_args(argv)
+
+    if args.executor == "http":
+        try:
+            http_config = _resolve_http_executor_config()
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        executor = gitapex_run_http_executor.build_http_executor(http_config)
+    else:
+        executor = subprocess_executor
 
     try:
         if not args.skill_md.is_file():
@@ -572,7 +630,7 @@ def main(argv: list[str] | None = None) -> int:
         result = run_eval_suite(
             args.eval_yaml,
             args.skill_md,
-            executor=subprocess_executor,
+            executor=executor,
             model_cli=args.model_cli,
         )
     except ValueError as exc:

@@ -1167,3 +1167,113 @@ def test_main_executor_timeout_returns_1(tmp_path: Path, monkeypatch, capsys):
 
 def test_main_default_model_cli(tmp_path: Path):
     assert gitapex_run_eval_suite.DEFAULT_MODEL_CLI == "claude"
+
+
+# ---------------------------------------------------------------------------
+# main() -- --executor (issue #1259)
+# ---------------------------------------------------------------------------
+
+
+def test_main_omitting_executor_flag_still_uses_claude_cli_path(tmp_path: Path, monkeypatch):
+    # Regression check: the new --executor flag's default must not change
+    # any existing call site's behavior when the flag is not passed at all.
+    eval_yaml = _write_suite(tmp_path, tasks={"a.yaml": TASK_A_TEXT})
+    skill_md = _skill_md(tmp_path)
+    executor = _RecordingExecutor(["ok output"])
+    monkeypatch.setattr(gitapex_run_eval_suite, "subprocess_executor", executor)
+
+    rc = gitapex_run_eval_suite.main(["--eval-yaml", str(eval_yaml), "--skill-md", str(skill_md)])
+
+    assert rc == 0
+    assert len(executor.calls) > 0
+
+
+def test_main_executor_claude_cli_explicit_matches_default(tmp_path: Path, monkeypatch):
+    eval_yaml = _write_suite(tmp_path, tasks={"a.yaml": TASK_A_TEXT})
+    skill_md = _skill_md(tmp_path)
+    executor = _RecordingExecutor(["ok output"])
+    monkeypatch.setattr(gitapex_run_eval_suite, "subprocess_executor", executor)
+
+    rc = gitapex_run_eval_suite.main(
+        ["--eval-yaml", str(eval_yaml), "--skill-md", str(skill_md), "--executor", "claude-cli"]
+    )
+
+    assert rc == 0
+    assert len(executor.calls) > 0
+
+
+def test_main_executor_http_missing_both_env_vars_returns_2(tmp_path: Path, monkeypatch, capsys):
+    eval_yaml = _write_suite(tmp_path, tasks={"a.yaml": TASK_A_TEXT})
+    skill_md = _skill_md(tmp_path)
+    monkeypatch.delenv("HTTP_EXECUTOR_BASE_URL", raising=False)
+    monkeypatch.delenv("HTTP_EXECUTOR_API_KEY", raising=False)
+
+    rc = gitapex_run_eval_suite.main(["--eval-yaml", str(eval_yaml), "--skill-md", str(skill_md), "--executor", "http"])
+
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "error:" in err
+    assert "HTTP_EXECUTOR_BASE_URL" in err
+    assert "HTTP_EXECUTOR_API_KEY" in err
+
+
+def test_main_executor_http_missing_api_key_only_returns_2(tmp_path: Path, monkeypatch, capsys):
+    eval_yaml = _write_suite(tmp_path, tasks={"a.yaml": TASK_A_TEXT})
+    skill_md = _skill_md(tmp_path)
+    monkeypatch.setenv("HTTP_EXECUTOR_BASE_URL", "https://example.com")
+    monkeypatch.delenv("HTTP_EXECUTOR_API_KEY", raising=False)
+
+    rc = gitapex_run_eval_suite.main(["--eval-yaml", str(eval_yaml), "--skill-md", str(skill_md), "--executor", "http"])
+
+    assert rc == 2
+    assert "error:" in capsys.readouterr().err
+
+
+def test_main_executor_http_malformed_base_url_returns_2_and_never_prints_the_secret(
+    tmp_path: Path, monkeypatch, capsys
+):
+    eval_yaml = _write_suite(tmp_path, tasks={"a.yaml": TASK_A_TEXT})
+    skill_md = _skill_md(tmp_path)
+    sentinel_secret = "sentinel-value-must-never-leak-9f3a"
+    monkeypatch.setenv("HTTP_EXECUTOR_BASE_URL", "not-a-valid-url")
+    monkeypatch.setenv("HTTP_EXECUTOR_API_KEY", sentinel_secret)
+
+    rc = gitapex_run_eval_suite.main(["--eval-yaml", str(eval_yaml), "--skill-md", str(skill_md), "--executor", "http"])
+
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "error:" in err
+    assert sentinel_secret not in err
+
+
+def test_main_executor_http_valid_config_builds_http_executor_and_runs(tmp_path: Path, monkeypatch):
+    eval_yaml = _write_suite(tmp_path, tasks={"a.yaml": TASK_A_TEXT})
+    skill_md = _skill_md(tmp_path)
+    monkeypatch.setenv("HTTP_EXECUTOR_BASE_URL", "https://example.com")
+    monkeypatch.setenv("HTTP_EXECUTOR_API_KEY", "test-key")
+
+    recorded_configs = []
+
+    def fake_build_http_executor(config):
+        recorded_configs.append(config)
+        return _RecordingExecutor(["ok output"])
+
+    monkeypatch.setattr(
+        gitapex_run_eval_suite.gitapex_run_http_executor, "build_http_executor", fake_build_http_executor
+    )
+
+    rc = gitapex_run_eval_suite.main(["--eval-yaml", str(eval_yaml), "--skill-md", str(skill_md), "--executor", "http"])
+
+    assert rc == 0
+    assert len(recorded_configs) == 1
+    assert recorded_configs[0].base_url == "https://example.com"
+    assert recorded_configs[0].api_key == "test-key"
+
+
+def test_main_does_not_touch_gitapex_run_ablation_module():
+    # Constraint check (issue #1259): the new --executor flag must not
+    # require any change to gitapex_run_ablation.py's own hermetic-by-
+    # default surface -- confirmed indirectly by this module's own default
+    # executor still being gitapex_run_ablation.subprocess_executor
+    # unchanged.
+    assert gitapex_run_eval_suite.subprocess_executor is gitapex_run_eval_suite.gitapex_run_ablation.subprocess_executor
