@@ -4,7 +4,7 @@ metadata:
   name: drafting-a-skill
 spec:
   portability: Mixed
-  capabilityAssumption: Adaptive
+  capabilityAssumption: Broad
   lifecycle:
     experimental:
       reason: "First draft, pending evaluating-skill-quality and battle-testing-a-skill review verdicts before graduating to stable"
@@ -19,6 +19,9 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1194"
       summary: "an isolated pre-implementation audit found 3 defects, corrected before drafting: (1) Steps 5/7 reframed from authoritative checks into advisory self-checks, since evaluating-skill-quality's rubric.md already owns cohesion ('exactly one owner') and the Blind spot pass exclusively; (2) skillDependencies.requires corrected from [] to [evaluating-skill-quality], since Step 8 mandatorily invokes its checker scripts; (3) Step 2's redirect targets named concretely"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1194"
+      summary: "repository owner changed capabilityAssumption from this skill's own initial Adaptive declaration to Broad, applying this skill's own Step 3 self-referentially; SKILL.md's body was rewritten (not merely relabeled) to inline every Step's core judgment call so a weak/economical model gets enough guidance directly, per rubric.md's own Capability assumption section"
   skillDependencies:
     requires:
       - evaluating-skill-quality

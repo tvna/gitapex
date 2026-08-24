@@ -74,34 +74,66 @@ judgment, route directly to `evaluating-skill-quality`/
    This skill does not write hooks, and does not itself decide CLAUDE.md/
    subagent placement -- see Stop boundaries.
 
-3. **Elicit every user-selectable metadata choice.** Portability,
-   Capability assumption, Invocation mode, Lifecycle -- one
-   `AskUserQuestion` round of up to four questions, never inferred. See
-   `references/tacit-knowledge-elicitation.md` for why elicitation is
+3. **Elicit every user-selectable metadata choice.** One `AskUserQuestion`
+   round, up to four questions, never inferred:
+   - **Portability** -- `Portable` (works unmodified if vendored to
+     another repository), `Repository-scoped` (hardcodes this
+     repository's own conventions), or `Mixed` (partial dependency: some
+     Steps portable, one or two Steps name a repository-specific tool or
+     path).
+   - **Capability assumption** -- `Broad` (must give a weak/economical
+     model enough guidance directly, not only via on-demand references),
+     `Frontier` (assumes a strong-reasoning model; no weak-tier bar),
+     or `Adaptive` (a lean body for a strong model, with a weak tier's
+     needs met by `references/` material it pulls on demand).
+   - **Invocation mode** -- both model- and user-invocable (the default),
+     or narrowed via the `disable-model-invocation`/`user-invocable`
+     frontmatter booleans when an irreversible-operation skill should
+     never trigger autonomously.
+   - **Lifecycle** -- `experimental` (name a `trackingIssue`, its full
+     URL, and what graduating to `stable` requires), `stable`, or
+     `deprecated` (name a `replacement`).
+   See `references/tacit-knowledge-elicitation.md` for why elicitation is
    mandatory (a prior skill was once declared `Frontier` by reviewer
-   assumption with no pin anywhere to justify it) and for how to phrase
-   each of the four. A follow-up round runs only if a later Step's own
-   content contradicts an earlier answer -- see that same file's "Follow-
-   up round" section for the worked example.
+   assumption with no pin anywhere to justify it) and for phrasing
+   guidance beyond the options above. A follow-up round runs only if a
+   later Step's own content contradicts an earlier answer -- see that
+   same file's "Follow-up round" section for the worked example.
 
-4. **Draft using Design-by-Contract structure.** Precondition, Steps,
-   Postcondition -- see `references/contract-structure.md` for the shape,
-   the fault-attribution rule, and the "never both" rule against
-   duplicating a check between the Precondition and a Step body. Also
+4. **Draft using Design-by-Contract structure.** Three parts: a
+   **Precondition** (checkable facts that must hold before Step 1 of the
+   *drafted* skill begins -- a caller obligation, not scene-setting
+   prose), the **Steps** (the routine body -- each may assume the
+   Precondition already holds, and must never re-check it), and a
+   **Postcondition** (what the drafted skill guarantees once its Steps
+   finish, matching what its last Step actually hands off). Never state
+   the same condition in both the Precondition and a Step's own
+   `if`-guard -- pick exactly one owner for it. See
+   `references/contract-structure.md` for the fault-attribution rule
+   (a Precondition violation is the caller's bug; a Postcondition
+   violation is the drafted skill's own bug) and worked examples. Also
    load `references/guidance-form-and-sdo.md` (unconditional, alongside
    `references/formative-quality-dimensions.md`) for how each Step should
-   read and for the Single Decisive Outcome test Step 5 will apply next.
+   read.
 
-5. **Cohesion self-check.** Read the draft against the seven-way cohesion
-   taxonomy and the SDO test (`references/guidance-form-and-sdo.md`,
-   `references/mechanism-fit-and-cohesion.md`); if the draft's Steps
-   serve more than one decisive outcome, split it and route back to Step
-   1 for the second skill rather than forcing one `SKILL.md` to cover
-   both. This is an **advisory self-check, not a second authoritative
+5. **Cohesion self-check.** Ask, for the whole draft and for each Step:
+   *can its one outcome be named in one sentence, with no "and"?* A Step
+   doing two things ("extract the criteria and decide whether to
+   rebase") needs splitting into two Steps; a whole draft doing two
+   things ("summarize a diff" and, separately, "decide whether to
+   auto-merge it") needs splitting into two skills -- route back to Step
+   1 for the second one rather than forcing one `SKILL.md` to cover both.
+   `references/guidance-form-and-sdo.md` names this the Single Decisive
+   Outcome (SDO) test and `references/mechanism-fit-and-cohesion.md`
+   gives the deeper seven-way cohesion taxonomy (functional / sequential
+   / communicational / procedural / temporal / logical / coincidental)
+   for a borderline case the one-sentence test alone doesn't settle.
+   This is an **advisory self-check, not a second authoritative
    grading** -- `evaluating-skill-quality`'s own cohesion check "has
    exactly one owner ... it decides the whole-artifact boundary once,"
    at Step 9's handoff. Write a Step 5 finding as "worth splitting before
-   handoff," never as a cohesion verdict.
+   handoff," never as a cohesion verdict ("cohesion: pass" is not this
+   skill's sentence to write).
 
 6. **Check for collision and reconcile dependencies.** Compare the
    drafted `description:` against every existing skill's own description
@@ -111,15 +143,20 @@ judgment, route directly to `evaluating-skill-quality`/
    `evaluating-skill-quality` grades one target skill at a time and has
    no cross-skill judgment of its own.
 
-7. **Domain-gap sweep.** Ask explicitly whether the target's own specific
-   domain exposes a quality concern nothing else in the draft already
-   covers -- a targeted, domain-aware pass, distinct from the generic
-   dimensions Step 9's handoff will apply. Like Step 5, this is
-   **advisory only**: `evaluating-skill-quality`'s own Blind spot pass
-   runs as a precondition step of its own procedure regardless of what
-   this Step already found, and stays the authoritative pass. Write a
-   Step 7 finding as "worth covering before handoff," never as "blind
-   spot: none."
+7. **Domain-gap sweep.** Ask explicitly: does this target's own specific
+   domain expose a quality concern nothing else in the draft already
+   covers -- something a generic checklist wouldn't catch because it's
+   particular to *this* subject matter? (For example: a skill drafted to
+   summarize `curl` commands needs an explicit "never execute, only
+   explain" boundary that no generic Step already states -- the domain
+   itself, not a generic dimension, is what surfaces that gap.) This is a
+   targeted, domain-aware pass, distinct from the generic dimensions
+   Step 9's handoff will apply. Like Step 5, this is **advisory only**:
+   `evaluating-skill-quality`'s own Blind spot pass runs as a
+   precondition step of its own procedure regardless of what this Step
+   already found, and stays the authoritative pass. Write a Step 7
+   finding as "worth covering before handoff," never as "blind spot:
+   none."
 
 8. **Run this repository's own deterministic checkers** against the
    draft directory: `gitapex_check_skill_shape.py` and
@@ -158,6 +195,27 @@ that determination is `evaluating-skill-quality`'s and
 - Step 8's checker output (clean, or fixed and re-run clean).
 - **Next Move:** the concrete handoff -- which of `evaluating-skill-
   quality`/`battle-testing-a-skill` runs next, or both in parallel.
+
+## Worked example
+
+A requester wants a skill that reads a pasted `curl` command and explains
+what it does in plain English, no execution. Step 1: "given a pasted
+`curl` command, explain in one paragraph what request it makes -- no
+execution." Step 2: not an unconditionally-reliable action, not a
+prohibition, not an always-true fact, not a side task with unreferenced
+results -- passes the gate, drafting continues. Step 3: elicited
+Portable (no repository-specific dependency), Adaptive (a lean body
+covers this fully; no weak-tier bar concern for a single-paragraph
+explanation task), default invocation, experimental. Step 4: Precondition
+"a `curl` command is present in the request"; Steps parse flags, describe
+the method/URL/headers/body; Postcondition "one paragraph, no execution."
+Step 5: one outcome ("explain the request"), passes the SDO test, no
+split needed. Step 6: no existing skill's description collides. Step 7:
+domain gap found -- nothing yet states what to do with a flag that
+reads a secret from a file (`-H "Authorization: Bearer $(cat token)"`);
+added an explicit "never print a secret's own value, name only which
+flag reads one" boundary. Step 8: both checkers run clean. Step 9: handed
+off to `evaluating-skill-quality` and `battle-testing-a-skill`.
 
 ## Stop boundaries
 
@@ -222,9 +280,30 @@ repository-specific tooling; Step 8's checker invocations and Step 2's
 gitapex-specific (a vendored copy substitutes its own equivalents where
 they exist, per `references/gitapex-cross-links.md`'s own opening note).
 
-Capability assumption: **Adaptive**. The body stays lean (nine Steps, no
-inlined worked example) with five on-demand or environment-conditional
-reference files; no Step carries an explicit model/effort pin today.
+Capability assumption: **Broad**, the repository owner's explicit choice
+(over this skill's own initial `Adaptive` declaration) once this skill's
+own Step 3 was applied self-referentially. Every Step's core judgment
+call -- the four Mechanism-fit criteria (Step 2), the four metadata axes'
+own option lists (Step 3), the Design-by-Contract definitions (Step 4),
+the Single Decisive Outcome test (Step 5), and a concrete domain-gap
+example (Step 7) -- is stated directly in this body rather than left for
+a weak or economical model to find only by following a reference-file
+pointer, satisfying dimension 9's Broad bar ("the skill must give a weak
+tier *enough* guidance, and failing to do so is a real, gradeable gap,
+not an unmeasured one," `references/rubric.md`'s own Capability
+assumption section) directly rather than through Adaptive's alternate
+"met by references on demand" path. The five `references/` files still
+exist and are still loaded per the same progressive-disclosure structure
+(dimension 5's own grading is unchanged by the Broad/Adaptive choice) --
+they carry elaboration, worked sub-examples, and deeper rationale beyond
+this body's own floor, not the floor itself. This body's own length grew
+accordingly (from 249 to a still well-under-ceiling line count against
+`gitapex_check_skill_shape.py`'s `BODY_MAX_LINES`) -- dimension 2 grades
+this leniently under Broad ("explanation that would be redundant for a
+strong model is not automatically sprawl... when the declared target
+plausibly still needs it"), so long as no sentence above is a true
+duplicate of another rather than a genuinely new, weak-tier-necessary
+restatement.
 
 Lifecycle: **experimental**, tracking
 <https://github.com/tvna/gitapex/issues/1194> -- pending
