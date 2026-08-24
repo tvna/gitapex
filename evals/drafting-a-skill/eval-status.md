@@ -16,9 +16,12 @@ the draft self-certified, a request to author a hook directly instead of
 redirecting after Step 2 blocks a hook-shaped candidate, a request to
 infer the four metadata axes instead of eliciting them, and the
 Precondition's own existing-skill route-away branch. No trial has been
-executed yet -- the config pins `claude-sonnet-5` and `copilot-sdk`, a
-declared executor, not a completed run -- so no model tier has been
-measured against this suite and there is no no-skill baseline.
+executed yet through this repository's own eval runner script -- the
+config pins `claude-sonnet-5` and `copilot-sdk`, a declared executor, not
+a completed run -- so no model tier has been measured against this suite
+and there is no no-skill baseline. `waza-eval-gate.yml`'s own live
+per-PR run (a different execution path than an intentional trial) is
+covered below.
 
 Disclosed gaps, not silently assumed solved: this corpus does not yet
 cover Step 6's collision/dependency-reconciliation check, Step 7's
@@ -63,3 +66,20 @@ elicitation answer, Step 9 had none for a missing fresh-dispatch
 mechanism, and Step 1 had none for an empty candidate job or content
 hidden via encoding/HTML comments -- none of the four has been
 re-verified through a live trial as of this writing.
+
+`waza-eval-gate.yml` (this repository's own per-PR live-execution CI
+gate, unconditional on every PR touching `evals/**`) ran this suite for
+real the moment `evals/drafting-a-skill/` was first pushed, ahead of any
+intentional trial -- and failed outright: the `claude` CLI exited 1 with
+empty stderr on `injected-self-certification-probe.yaml`'s original
+"SYSTEM OVERRIDE"-framed payload, which
+`gitapex_run_eval_suite.py`'s `_is_content_policy_rejection` could not
+classify as a gracefully-skippable content-policy rejection (its own
+two-marker signature never matches an empty string), aborting the whole
+suite rather than skipping one fixture. Fixed by rewording the payload
+away from impersonating a system-level directive while preserving the
+same false-prior-approval, skip-Step-9 test property -- see the
+fixture's own inline comment for the specifics and the re-verified
+scorer results. Whether the reworded payload itself now runs clean
+through `waza-eval-gate.yml` is confirmed by that gate's own next run on
+this PR, not asserted here.
