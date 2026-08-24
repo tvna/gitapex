@@ -9,11 +9,12 @@
 # It cannot produce results until the owner provisions the credential each
 # job's own preflight step requires -- ANTHROPIC_API_KEY for `eval-matrix`
 # (issue #1134: it runs evals/scripts/gitapex_run_eval_suite.py, a `claude`
-# CLI subprocess, not waza) and the copilot-sdk endpoint secrets for
-# `eval-matrix-hf-gemma4` (still `nix run .#waza -- run`, see that job's own
-# header comment). Until then a dispatch fails loudly at preflight rather
-# than running against a missing endpoint -- no silent no-op, no fabricated
-# readiness (CLAUDE.md sections 1 and 4).
+# CLI subprocess, not waza) and the HF Inference Endpoint secrets for
+# `eval-matrix-hf-gemma4` (issue #1259: also gitapex_run_eval_suite.py, via
+# its own --executor http flag -- neither job shells out to waza anymore;
+# see that job's own header comment). Until then a dispatch fails loudly at
+# preflight rather than running against a missing endpoint -- no silent
+# no-op, no fabricated readiness (CLAUDE.md sections 1 and 4).
 #
 # `eval-matrix-hf-gemma4` (issue #317, sub-task of #310) is an additive,
 # independent lane, not a replacement of `eval-matrix` above: it answers a
@@ -24,16 +25,17 @@
 # weights are <=100GB -- confirmed 62.6GB total (49.8GB + 12.8GB across two
 # safetensors shards) at https://huggingface.co/google/gemma-4-31B-it, larger
 # than the other four Gemma 4 sizes (E2B, E4B, 12B, 26B-A4B). Serving
-# mechanism: a Hugging Face Inference Endpoint, reusing this repo's own
-# COPILOT_BASE_URL/COPILOT_PROVIDER_BASE_URL custom-provider override point
-# (same fail-loud-at-preflight, advisory-only, never-merge-gating posture) --
-# not a new self-hosted runner or GPU, avoiding the standing operational
-# burden Ollama would add to a single-maintainer public repo. See the PR body
-# for the full decision trail and an explicitly disclosed assumption this
-# lane rests on (unverified until a credentialed dispatch): that waza's
-# copilot-sdk executor, when pointed at a custom base URL, treats the target
-# as a generic OpenAI/Copilot-compatible chat endpoint reachable with the
-# same COPILOT_SDK_TOKEN auth waza's own docs name for that executor.
+# mechanism: a Hugging Face Inference Endpoint, reached directly over HTTP by
+# evals/scripts/gitapex_run_http_executor.py (issue #1259) via the official
+# openai SDK's own base-URL override -- not a new self-hosted runner or GPU,
+# avoiding the standing operational burden Ollama would add to a
+# single-maintainer public repo. See
+# docs/superpowers/specs/2026-08-23-hf-gemma4-http-executor-design.md for
+# the full decision trail and an explicitly disclosed assumption this lane
+# rests on (unverified in CI -- no live credentials in this repository's own
+# development environment): that the HF endpoint exposes an
+# OpenAI-Chat-Completions-compatible surface, reachable with the bearer
+# token this job passes as HTTP_EXECUTOR_API_KEY.
 name: Waza eval matrix (cross-model, advisory)
 
 on:
@@ -88,8 +90,8 @@ jobs:
       # Issue #1134: this job no longer needs waza/Nix at all -- the run step
       # below now calls evals/scripts/gitapex_run_eval_suite.py (#1132/#1157),
       # a repository-owned runner that never shells out to the waza binary.
-      # (The sibling eval-matrix-hf-gemma4 job below still needs Nix/waza --
-      # see its own header comment and issue #1259 for why.)
+      # (The sibling eval-matrix-hf-gemma4 job below made the identical
+      # cutover in issue #1259 -- see its own header comment.)
       #
       # Needed to run both the preflight check and the eval-suite runner
       # below via `uv run` -- bare-python3-invocation-gate.yml requires every
@@ -259,16 +261,24 @@ jobs:
   # self-hosted runner (see the header comment above for the model-size and
   # serving-mechanism decision trail and citations).
   #
-  # Deliberately still on `nix run .#waza -- run` below, unlike eval-matrix
-  # above (issue #1134): evals/scripts/gitapex_run_eval_suite.py executes
-  # exclusively through the `claude` CLI (its own hermetic env allowlist
-  # passes through only PATH/HOME/ANTHROPIC_API_KEY/TMPDIR/TMP/TEMP -- no
-  # COPILOT_BASE_URL/COPILOT_PROVIDER_BASE_URL-equivalent custom-endpoint
-  # passthrough), so it cannot reach this job's HF Inference Endpoint at
-  # all. Porting this one job needs a second, non-Claude Executor
-  # implementation that does not exist yet -- tracked as issue #1259, a
-  # sub-issue of #1130 -- rather than either silently leaving this job
-  # broken or quietly changing which model it evaluates.
+  # Issue #1259: this job no longer needs waza/Nix either -- it now calls
+  # evals/scripts/gitapex_run_eval_suite.py's own --executor http flag
+  # (evals/scripts/gitapex_run_http_executor.py, an argv-adapter Executor
+  # backed by the official openai SDK), matching the eval-matrix job's own
+  # cutover in #1134. This does not weaken gitapex_run_ablation.py's
+  # existing hermetic-by-default guarantee for its Claude-CLI path (that
+  # module is unchanged): --executor http is an additional, explicit
+  # opt-in surface this job selects deliberately, not a relaxation of the
+  # default. Primary-source finding backing this cutover (design doc
+  # docs/superpowers/specs/2026-08-23-hf-gemma4-http-executor-design.md):
+  # waza's own copilot-sdk executor does not make a bare HTTP call itself
+  # -- it launches an embedded GitHub Copilot CLI subprocess via the
+  # Copilot SDK, and that embedded CLI is what actually reaches a custom
+  # provider. This job's new executor calls the HF endpoint directly,
+  # resting on the same disclosed, unverified-in-CI assumption the prior
+  # revision of this comment already carried: that the endpoint exposes an
+  # OpenAI-Chat-Completions-compatible surface -- unchanged by this cutover,
+  # only which code path relies on it.
   eval-matrix-hf-gemma4:
     # Explicit opt-in only: a plain dispatch of this workflow (e.g. to run
     # the existing Claude-tier eval-matrix job) must not also silently
@@ -281,13 +291,15 @@ jobs:
     # (no parallel: true anywhere in this repo's suites), and as of this
     # writing that is 19 suites / 183 tasks (`ls evals/*/eval.yaml`,
     # `ls evals/*/tasks/*.yaml`) -- under 15s/task budget at 45m once
-    # checkout, Nix install, 19 separate `nix run` cold starts, and HF
-    # endpoint latency are subtracted. This 180m figure is a conservative,
-    # UNMEASURED estimate sized off that suite/task count, not a verified
-    # figure from a real timed dispatch (this environment cannot execute
-    # waza -- see the PR body's disclosed residual risk). Adjust down once
-    # a live dispatch (after secrets are provisioned) reports an actual
-    # runtime.
+    # checkout, uv setup, and HF endpoint latency are subtracted. This 180m
+    # figure is a conservative, UNMEASURED estimate sized off that
+    # suite/task count, not a verified figure from a real timed dispatch
+    # (this repository has no live HF credentials to execute one -- see the
+    # design doc's disclosed residual risk). Carried forward unchanged from
+    # this job's pre-#1259 (waza/Nix) revision -- the per-suite loop shape
+    # and HTTP latency profile this estimate was sized against have not
+    # materially changed with the executor cutover. Adjust down once a live
+    # dispatch (after secrets are provisioned) reports an actual runtime.
     timeout-minutes: 180
     permissions:
       contents: read
@@ -297,25 +309,35 @@ jobs:
       - name: Harden runner + checkout
         uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
 
-      # waza is provisioned from this repo's flake (SSoT), never re-installed
-      # by hand -- same rule eval-matrix and waza-check.yml follow. See
-      # flake.nix + #57.
-      - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25  # v22
+      # Issue #1259: this job no longer needs waza/Nix at all -- the run
+      # step below now calls evals/scripts/gitapex_run_eval_suite.py's own
+      # --executor http flag, a repository-owned runner that never shells
+      # out to the waza binary. Needed to run both the preflight check and
+      # the eval-suite runner below via `uv run` -- bare-python3-invocation-
+      # gate.yml requires every `.github/scripts/*.py` workflow call site to
+      # go through `uv run`, and gitapex_run_eval_suite.py's own module
+      # docstring requires the same for itself.
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
         with:
-          extra-conf: "experimental-features = nix-command flakes"
+          enable-cache: true
 
       # Fail loudly if the HF Inference Endpoint credentials are not
       # configured, before any run is attempted. Presence is checked; values
       # are never printed (CLAUDE.md section 4 -- secrets must not reach a
       # log). See the PR body for the exact issuance path (creation
-      # location, minimum scope, rotation).
+      # location, minimum scope, rotation). Checked variable names
+      # (HTTP_EXECUTOR_BASE_URL/HTTP_EXECUTOR_API_KEY) match what the run
+      # step below actually passes to gitapex_run_eval_suite.py --executor
+      # http -- the underlying repository secrets
+      # (HF_INFERENCE_ENDPOINT_URL/HF_API_TOKEN) are unchanged from before
+      # this cutover, only which internal env var name they populate.
       - name: Preflight -- require HF Inference Endpoint secrets
         env:
-          HF_INFERENCE_ENDPOINT_URL: ${{ secrets.HF_INFERENCE_ENDPOINT_URL }}
-          HF_API_TOKEN: ${{ secrets.HF_API_TOKEN }}
+          HTTP_EXECUTOR_BASE_URL: ${{ secrets.HF_INFERENCE_ENDPOINT_URL }}
+          HTTP_EXECUTOR_API_KEY: ${{ secrets.HF_API_TOKEN }}
         run: |
-          if [ -z "$HF_INFERENCE_ENDPOINT_URL" ] || [ -z "$HF_API_TOKEN" ]; then
+          if [ -z "$HTTP_EXECUTOR_BASE_URL" ] || [ -z "$HTTP_EXECUTOR_API_KEY" ]; then
             echo "::error::No Hugging Face Inference Endpoint configured. Set" \
               "repository secrets HF_INFERENCE_ENDPOINT_URL and HF_API_TOKEN" \
               "under Settings -> Secrets and variables -> Actions before" \
@@ -326,24 +348,26 @@ jobs:
 
       # For each committed suite: rewrite its config.model to the confirmed
       # Gemma 4 model id (same gitapex_set_config_model.py the eval-matrix job uses,
-      # unmodified), then run it against the HF Inference Endpoint. The edit
-      # lands only on this ephemeral checkout; committed suites stay pinned
-      # to their default. HF_INFERENCE_ENDPOINT_URL is passed as
-      # COPILOT_BASE_URL/COPILOT_PROVIDER_BASE_URL, this repo's own
-      # already-established custom-provider override point for the
-      # copilot-sdk executor (see this workflow's header comment); the token
-      # is passed as COPILOT_SDK_TOKEN, the auth environment variable
-      # waza's own docs name for that executor. This assumes the executor
-      # treats a custom base URL as a generic OpenAI/Copilot-compatible chat
-      # endpoint -- disclosed explicitly rather than asserted as confirmed,
-      # since this repository cannot execute waza to verify it, the same
-      # unexecuted status the eval-matrix job above has carried since #106.
+      # unmodified), then run it via evals/scripts/gitapex_run_eval_suite.py
+      # --executor http (issue #1259), not `nix run .#waza -- run`. The
+      # edit lands only on this ephemeral checkout; committed suites stay
+      # pinned to their default. HF_INFERENCE_ENDPOINT_URL is passed as
+      # HTTP_EXECUTOR_BASE_URL, the base-URL override
+      # evals/scripts/gitapex_run_http_executor.py's own HttpExecutorConfig
+      # reads; the token is passed as HTTP_EXECUTOR_API_KEY. This assumes
+      # the endpoint exposes an OpenAI-Chat-Completions-compatible surface
+      # -- disclosed explicitly rather than asserted as confirmed, since
+      # this repository has no live credentials to verify it, the same
+      # unexecuted status this lane has carried since #106. Mean-score-vs-
+      # threshold check reused verbatim from the eval-matrix job's own
+      # pattern above (see that job's own run step comment for the full
+      # rationale, including the two adversarial-review-caught defects that
+      # step's own logic already guards against).
       - name: Run suites against the HF Gemma 4 endpoint
         env:
           MODEL: ${{ env.HF_GEMMA4_MODEL }}
-          COPILOT_BASE_URL: ${{ secrets.HF_INFERENCE_ENDPOINT_URL }}
-          COPILOT_PROVIDER_BASE_URL: ${{ secrets.HF_INFERENCE_ENDPOINT_URL }}
-          COPILOT_SDK_TOKEN: ${{ secrets.HF_API_TOKEN }}
+          HTTP_EXECUTOR_BASE_URL: ${{ secrets.HF_INFERENCE_ENDPOINT_URL }}
+          HTTP_EXECUTOR_API_KEY: ${{ secrets.HF_API_TOKEN }}
         run: |
           set -u
           mkdir -p "results/${MODEL}"
@@ -358,18 +382,28 @@ jobs:
           # are excluded; the skill name is the suite directory's basename.
           for suite in evals/*/eval.yaml; do
             skill="$(basename "$(dirname "$suite")")"
-            # A failed override must not fall through to `waza run`: that would
-            # execute the suite at its committed default model yet record it
-            # under this lane -- a silently mislabelled result.
+            # A failed override must not fall through to the runner: that
+            # would execute the suite at its committed default model yet
+            # record it under this lane -- a silently mislabelled result.
             if ! python3 evals/scripts/gitapex_set_config_model.py "$suite" "$MODEL"; then
               echo "| ${skill} | FAIL (model override) |" >> "$GITHUB_STEP_SUMMARY"
               failed=1
               continue
             fi
-            if nix run .#waza -- run "$skill" -o "results/${MODEL}/${skill}.json"; then
+            out="results/${MODEL}/${skill}.json"
+            if ! uv run --frozen python3 evals/scripts/gitapex_run_eval_suite.py \
+                 --eval-yaml "$suite" \
+                 --skill-md "skills/${skill}/SKILL.md" \
+                 --executor http \
+                 -o "$out"; then
+              echo "| ${skill} | FAIL (execution error) |" >> "$GITHUB_STEP_SUMMARY"
+              failed=1
+              continue
+            fi
+            if uv run --frozen python3 -c "import json, sys, yaml; result = json.load(open(sys.argv[1], encoding='utf-8')); suite_data = yaml.safe_load(open(sys.argv[2], encoding='utf-8')); metrics = suite_data.get('metrics') or []; sys.exit(f'expected exactly 1 metrics[] entry in {sys.argv[2]!r}, got {len(metrics)}') if len(metrics) != 1 else None; threshold = metrics[0]['threshold']; mean_score = result['mean_score']; print(f'mean_score={mean_score!r} threshold={threshold!r}', file=sys.stderr); sys.exit(0 if mean_score >= threshold else 1)" "$out" "$suite"; then
               echo "| ${skill} | pass |" >> "$GITHUB_STEP_SUMMARY"
             else
-              echo "| ${skill} | FAIL |" >> "$GITHUB_STEP_SUMMARY"
+              echo "| ${skill} | FAIL (below threshold) |" >> "$GITHUB_STEP_SUMMARY"
               failed=1
             fi
           done
