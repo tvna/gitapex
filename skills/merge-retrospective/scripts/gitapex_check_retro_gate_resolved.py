@@ -11,9 +11,13 @@ divergence (issue #1176's own Facts section cites concrete examples).
 `.github/scripts/gitapex_scan_retrospective_gate_drift.py` already
 implements a stricter two-signal check (issue #709: a citing commit
 alone is not proof a gate was actually built -- it also needs a
-corroborating `.gitapex/ssot.json` `gates[].tracking_issue` entry). This
-script deliberately re-implements (never imports or subprocess-invokes)
-that same two-signal logic against a local `git log` and
+corroborating `.gitapex/ssot.json` `gates[].tracking_issue` entry), further
+widened by issue #1177 to per-gate-count granularity: an issue that
+proposed several distinct gates (registered in `.gitapex/ssot.json`'s
+`proposed_gates[]` manifest) only resolves once at least that many
+`gates[]` entries carry it as their own `tracking_issue`, not on the
+first one built. This script deliberately re-implements (never imports
+or subprocess-invokes) that same logic against a local `git log` and
 `.gitapex/ssot.json`, per this repository's own independent-self-
 containment convention (see that script's own docstring, and
 `skills/drafting-an-acm-issue/scripts/gitapex_check_acm_present.py` /
@@ -66,6 +70,7 @@ import re
 import subprocess
 import sys
 from collections.abc import Callable
+from typing import Any
 
 
 class GitLogError(RuntimeError):
@@ -106,15 +111,24 @@ def citation_count(commit_messages: list[str], issue_number: int) -> int:
 def partition_resolved(
     issue_numbers: list[int],
     commit_messages: list[str],
-    tracking_issues: set[int],
+    tracking_issue_gate_counts: dict[int, int],
+    proposed_gate_requirements: dict[int, int],
 ) -> tuple[list[int], list[int]]:
     """Partition every distinct entry in `issue_numbers` into `(unresolved,
     resolved)`. An issue number resolves only when both signals agree: at
-    least one commit cites it AND `tracking_issues` contains it (issue
-    #709's corroborating-signal rationale) -- mirrors
+    least one commit cites it AND at least `required` distinct `gates[]`
+    entries carry it as their own `tracking_issue` (issue #709's
+    corroborating-signal rationale) -- mirrors
     gitapex_scan_retrospective_gate_drift.py's own
     `find_no_citation_issues`, restated as a two-way partition rather
     than a single no-citation list.
+
+    Issue #1177: `required` is no longer always 1. A retrospective issue
+    whose own Repairs section proposed several distinct gates registers
+    that count in `.gitapex/ssot.json`'s `proposed_gates[]` manifest
+    (`proposed_gate_requirements`, `{tracking_issue: len(proposals)}`); an
+    issue absent from that manifest defaults to `required = 1`, preserving
+    the original single-citation behavior unchanged.
 
     Deduplicates `issue_numbers` first (first-occurrence order preserved):
     unlike the CI sibling's own `issue_numbers` (always a single label
@@ -124,7 +138,13 @@ def partition_resolved(
     fallback for pre-label issues) concatenated together -- an issue
     matching both would otherwise appear twice in the same output array."""
     deduped_issue_numbers = list(dict.fromkeys(issue_numbers))
-    resolved = [n for n in deduped_issue_numbers if citation_count(commit_messages, n) > 0 and n in tracking_issues]
+    resolved = []
+    for n in deduped_issue_numbers:
+        if citation_count(commit_messages, n) == 0:
+            continue
+        required = proposed_gate_requirements.get(n, 1)
+        if tracking_issue_gate_counts.get(n, 0) >= required:
+            resolved.append(n)
     resolved_set = set(resolved)
     unresolved = [n for n in deduped_issue_numbers if n not in resolved_set]
     return unresolved, resolved
@@ -156,8 +176,12 @@ def git_commit_messages(
     return messages
 
 
-def load_gate_tracking_issues(path: str) -> set[int]:
-    """Return every `.gitapex/ssot.json` `gates[].tracking_issue` value."""
+def _load_ssot_registry(path: str) -> dict[str, Any]:
+    """Read and JSON-decode `.gitapex/ssot.json`, raising `SsotLedgerError`
+    on any failure rather than returning a fallback. Shared by
+    `load_gate_tracking_issue_counts` and `load_proposed_gate_requirements`
+    below -- both need the same read-and-decode step before extracting
+    their own distinct key."""
     try:
         raw = pathlib.Path(path).read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as error:
@@ -169,19 +193,64 @@ def load_gate_tracking_issues(path: str) -> set[int]:
 
     if not isinstance(data, dict):
         raise SsotLedgerError(f"{path}: gate registry must be a JSON object, got {type(data).__name__}")
+    return data
+
+
+def load_gate_tracking_issue_counts(path: str) -> dict[int, int]:
+    """Return, for every `.gitapex/ssot.json` `gates[].tracking_issue`
+    value, how many `gates[]` entries carry it (issue #1177: widened from
+    a bare `set[int]` to a per-issue count)."""
+    data = _load_ssot_registry(path)
     gates = data.get("gates")
     if not isinstance(gates, list) or not gates:
         raise SsotLedgerError(f"{path}: gate registry has no usable 'gates' list")
 
-    tracking_issues: set[int] = set()
+    counts: dict[int, int] = {}
     for gate in gates:
         tracking_issue = gate.get("tracking_issue") if isinstance(gate, dict) else None
         # `bool` is an `int` subclass in Python -- without the extra
         # check, a stray `"tracking_issue": true` would silently
         # corroborate issue #1 instead of being skipped as malformed.
         if isinstance(tracking_issue, int) and not isinstance(tracking_issue, bool):
-            tracking_issues.add(tracking_issue)
-    return tracking_issues
+            counts[tracking_issue] = counts.get(tracking_issue, 0) + 1
+    return counts
+
+
+def load_proposed_gate_requirements(path: str) -> dict[int, int]:
+    """Return, for every `.gitapex/ssot.json` `proposed_gates[]` entry, how
+    many distinct gates its own retrospective issue requires
+    (`len(proposals)`). Issue #1177 -- mirrors
+    gitapex_scan_retrospective_gate_drift.py's own identically-named
+    reader. A tracking_issue absent from the returned dict defaults to
+    `required = 1` at the call site (`partition_resolved`). `proposed_gates`
+    missing entirely, or present but empty, both yield `{}`. A malformed
+    individual entry is skipped rather than raised, matching this module's
+    existing per-entry-tolerant/whole-structure-fail-closed convention. A
+    duplicate `tracking_issue` across `proposed_gates` raises
+    `SsotLedgerError` rather than silently picking a winner."""
+    data = _load_ssot_registry(path)
+    proposed_gates = data.get("proposed_gates")
+    if proposed_gates is None:
+        return {}
+    if not isinstance(proposed_gates, list):
+        raise SsotLedgerError(f"{path}: gate registry's 'proposed_gates' must be a list")
+
+    requirements: dict[int, int] = {}
+    for entry in proposed_gates:
+        if not isinstance(entry, dict):
+            continue
+        tracking_issue = entry.get("tracking_issue")
+        proposals = entry.get("proposals")
+        if not (isinstance(tracking_issue, int) and not isinstance(tracking_issue, bool)):
+            continue
+        if not isinstance(proposals, list):
+            continue
+        if tracking_issue in requirements:
+            raise SsotLedgerError(
+                f"{path}: gate registry's 'proposed_gates' has more than one entry for tracking_issue {tracking_issue}"
+            )
+        requirements[tracking_issue] = len(proposals)
+    return requirements
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -206,12 +275,16 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         commit_messages = git_commit_messages(args.ref, args.cwd)
-        tracking_issues = load_gate_tracking_issues(str(pathlib.Path(args.cwd) / args.ssot_path))
+        ssot_path = str(pathlib.Path(args.cwd) / args.ssot_path)
+        tracking_issue_gate_counts = load_gate_tracking_issue_counts(ssot_path)
+        proposed_gate_requirements = load_proposed_gate_requirements(ssot_path)
     except (GitLogError, SsotLedgerError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 
-    unresolved, resolved = partition_resolved(args.issue_numbers, commit_messages, tracking_issues)
+    unresolved, resolved = partition_resolved(
+        args.issue_numbers, commit_messages, tracking_issue_gate_counts, proposed_gate_requirements
+    )
     print(json.dumps({"unresolved": unresolved, "resolved": resolved}))
     return 0
 
