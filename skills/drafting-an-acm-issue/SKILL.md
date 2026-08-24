@@ -27,6 +27,15 @@ pre-verified (Step 9 states the full rule; it is not repeated here).
    in persisted memory or an earlier turn does not exempt it from this
    same scrutiny; re-derive Facts from what is actually stated now,
    never from a remembered summary of an earlier claim.
+
+   Also accept, when the caller supplies one, an optional parent
+   tracking-issue number -- for example from `eliciting-a-design`'s
+   own decomposition handling, which creates one parent tracking issue
+   per decomposed request and threads its number into each
+   sub-project's own terminal handoff. Record it if given; a request
+   with no such input proceeds exactly as every other step below
+   already describes. See Step 9 for what happens with a recorded
+   parent number once the drafted issue is created.
 2. Classify the change: feature, fix, or refactor. If the request is a
    chore, docs-only change, or a tracking/umbrella issue, stop here --
    see Stop boundaries; those issue types are out of this skill's
@@ -139,6 +148,22 @@ pre-verified (Step 9 states the full rule; it is not repeated here).
    issue body instead of dropping or merging it, and note the gap in
    the issue body itself.
 
+   When Step 1 recorded a parent tracking-issue number, link the newly
+   created issue under it once creation returns and the new issue's
+   own internal ID is known -- not its human-facing issue number, a
+   distinct identifier the creation response (or a follow-up
+   issue-read call) must supply: call the connected git hosting
+   server's sub-issue-linking tool (e.g. `github:sub_issue_write`
+   method `add`), passing the parent's issue number and that internal
+   ID. Check whether that connector is actually available in this
+   repository the same "checked, never assumed" way `eliciting-a-design`
+   already checks a sibling skill's availability, rather than assuming
+   it exists. When it is not available, fall back instead to recording
+   a plain cross-reference line -- `Parent tracking issue: #N`, with the
+   parent's own real issue number substituted for `N` -- in the drafted
+   body before creation, so the relationship stays visible even without
+   a platform-native link.
+
 ## Output
 
 - **Classification:** feature, fix, or refactor -- the Step 2 decision,
@@ -153,13 +178,19 @@ pre-verified (Step 9 states the full rule; it is not repeated here).
 - **Non-goals:** what this issue explicitly excludes.
 - **Dedup:** the search query run and result count, or `none found`
   (Step 6).
+- **Parent:** the supplied parent tracking-issue number and how the
+  relationship was recorded -- linked via the sub-issue tool, or a
+  plain cross-reference line when that connector was unavailable --
+  only when Step 1 received one (Step 9); omit otherwise.
 - **Human Decision:** only when Step 8 applies; omit otherwise.
 - **Next Move:** the concrete next action (draft ready to create, or the
   question blocking it).
 
 Pattern: **Classification** -> **Facts** -> **Requested outcome** ->
 **Acceptance Criteria Map** -> **Constraints** -> **Non-goals** ->
-**Dedup** -> **Next Move**. Insert **Human Decision** only when needed.
+**Dedup** -> **Parent** -> **Next Move**. Insert **Human Decision** only
+when needed; insert **Parent** only when Step 1 received a parent
+tracking-issue number.
 
 ## Stop boundaries
 
@@ -214,6 +245,10 @@ Pattern: **Classification** -> **Facts** -> **Requested outcome** ->
   raw pipe character, code-fence marker, or other Markdown/HTML
   control sequence in that content (Updating an existing ACM issue,
   step 2).
+- Do not silently drop a supplied parent tracking-issue number -- link
+  the newly created issue under it via the connected git hosting
+  server's sub-issue tool when available, or record a plain
+  cross-reference line in the drafted body when it is not (Step 9).
 
 ## Updating an existing ACM issue
 
@@ -246,7 +281,10 @@ git-hosting-specific detail, degrading the same way. Step 9's
 issue-template read is a conditional input-source check, not a control
 dependency on any specific repository's template file existing --
 degrading to the generic Output pattern is the explicit fallback when
-none is found.
+none is found. Step 1's optional parent-tracking-issue-number input and
+Step 9's sub-issue-linking call are the same kind of git-hosting-specific
+detail too, degrading to the plain-cross-reference-line fallback when no
+equivalent connector exists.
 
 Install/vendoring-time integrity (whether this SKILL.md and its
 bundled `scripts/gitapex_check_acm_present.py` are themselves the untampered,
