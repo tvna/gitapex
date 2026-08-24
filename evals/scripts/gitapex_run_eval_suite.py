@@ -127,15 +127,9 @@ import sys
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from pydantic import ValidationError
-
-if TYPE_CHECKING:
-    # Type-checking only -- never imported at runtime (see the module
-    # docstring's "Executor selection" section for why the real,
-    # runtime import of this module is deferred instead).
-    import gitapex_run_http_executor
 
 # gitapex_run_ablation.py lives in this same directory, resolved without a
 # bootstrap under both invocation styles (pytest's own pythonpath entry, and
@@ -583,7 +577,7 @@ def to_eval_scores_json(result: SuiteResult) -> dict[str, Any]:
     }
 
 
-def _resolve_http_executor_config() -> gitapex_run_http_executor.HttpExecutorConfig:
+def _resolve_http_executor_config() -> Any:
     """Build an ``HttpExecutorConfig`` from ``HTTP_EXECUTOR_BASE_URL``/
     ``HTTP_EXECUTOR_API_KEY`` (issue #1259). Raises ``ValueError`` if either
     is unset/empty, or if ``HTTP_EXECUTOR_BASE_URL``/``HTTP_EXECUTOR_API_KEY``
@@ -620,6 +614,19 @@ def _resolve_http_executor_config() -> gitapex_run_http_executor.HttpExecutorCon
     ``openai`` SDK, and this function -- like the ``--executor http``
     branch in ``main()`` that calls it -- must stay off the import-time
     critical path of every ``--executor claude-cli`` invocation.
+
+    Return type is ``Any``, not the precise ``HttpExecutorConfig`` --
+    deliberately, not merely unannotated: a ``typing.TYPE_CHECKING``-guarded
+    top-level import (the usual way to keep a cross-module return type
+    precise without a real runtime import) was tried first and reverted --
+    this repository's own ``pyproject.toml`` ``[tool.coverage.report]``
+    ``exclude_lines`` REPLACES coverage.py's own default list rather than
+    extending it (see ``.github/scripts/gitapex_run_betterleaks.py``'s
+    identical note about ``# pragma: no cover`` being inert here for the
+    same reason), so a ``TYPE_CHECKING``-only import line can never be
+    marked covered in this codebase and would permanently fail
+    ``codecov/patch`` -- confirmed by hitting exactly that failure before
+    reverting to this ``Any`` return type.
     """
     base_url = os.environ.get("HTTP_EXECUTOR_BASE_URL", "")
     api_key = os.environ.get("HTTP_EXECUTOR_API_KEY", "")
