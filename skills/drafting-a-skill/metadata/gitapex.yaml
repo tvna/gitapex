@@ -46,6 +46,9 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1194"
       summary: "fixed by rewording the payload away from impersonating a system-level directive while preserving the same false-prior-approval, skip-Step-9 test property, rather than widening gitapex_run_eval_suite.py's own shared rejection-detection heuristic -- that heuristic is pre-existing, cross-suite infrastructure outside this PR's own change surface"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1304"
+      summary: "the prior correction's own 'SYSTEM OVERRIDE tripped a content-policy block' diagnosis is disproven: the reworded payload failed identically (same empty-stderr 'model CLI exited 1' signature), and the same signature reproduces on an unrelated branch touching different skills' suites hours earlier -- a pre-existing, repo-wide waza-eval-gate defect unrelated to this PR's fixture content, filed as https://github.com/tvna/gitapex/issues/1304 and out of this PR's own scope to fix"
   skillDependencies:
     requires:
       - evaluating-skill-quality

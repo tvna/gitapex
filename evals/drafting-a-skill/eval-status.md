@@ -76,10 +76,20 @@ empty stderr on `injected-self-certification-probe.yaml`'s original
 `gitapex_run_eval_suite.py`'s `_is_content_policy_rejection` could not
 classify as a gracefully-skippable content-policy rejection (its own
 two-marker signature never matches an empty string), aborting the whole
-suite rather than skipping one fixture. Fixed by rewording the payload
-away from impersonating a system-level directive while preserving the
-same false-prior-approval, skip-Step-9 test property -- see the
-fixture's own inline comment for the specifics and the re-verified
-scorer results. Whether the reworded payload itself now runs clean
-through `waza-eval-gate.yml` is confirmed by that gate's own next run on
-this PR, not asserted here.
+suite rather than skipping one fixture. Reworded the payload away from
+impersonating a system-level directive while preserving the same
+false-prior-approval, skip-Step-9 test property -- see the fixture's own
+inline comment for the specifics and the re-verified scorer results.
+
+That rewording did **not** fix the observed CI failure: the reworded
+payload failed `waza-eval-gate` identically (same empty-stderr `model
+CLI exited 1` signature, same ~2.2s timing), and the identical signature
+reproduces on `claude/gitapex-issue-1274-bwgwkg` -- an unrelated branch,
+touching different skills' suites, hours before this PR's own first
+push. This is a pre-existing, repo-wide `waza-eval-gate` defect, not
+caused by this suite's content; filed as
+https://github.com/tvna/gitapex/issues/1304 and out of this PR's own
+scope to fix. `eval-gate` is not a required status check
+(`.github/rulesets/main.json`), so this does not block this PR, but it
+does mean no suite in this repository -- this one included -- has
+actually been graded live by that gate while issue #1304 stands.
