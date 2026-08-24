@@ -145,9 +145,13 @@ preflight in this repository.
 **Rejected alternative: environment-variable-presence auto-detection**,
 mirroring waza's own `providerFromEnv()` (a base-URL env var being set
 silently switches the executor). Consistent with waza's own precedent,
-but reads as implicit against CLAUDE.md's explicit requirement that "a
-new non-Claude executor is an additional, explicit opt-in surface, not a
-relaxation of the existing allowlist." Rejected by the repository owner
+but reads as implicit against issue #1259's own explicit Constraints-
+section requirement that "a new non-Claude executor is an additional,
+explicit opt-in surface, not a relaxation of the existing allowlist" --
+a scoped decision recorded for this one issue, not a standing CLAUDE.md
+rule (corrected here: an earlier revision of this section misattributed
+the quote to CLAUDE.md, which does not contain this phrase; a `grep`
+against the actual file confirms it). Rejected by the repository owner
 in favor of the explicit flag.
 
 ## Decision 4: PR scope -- full scope, not executor-only
@@ -237,6 +241,20 @@ code path relies on it.
 - Verifying HF's endpoint wire format live -- no credentials exist in
   this environment to do so; the assumption stays disclosed, not
   resolved, by this design.
+- Recognizing an HF-side content-policy-style refusal.
+  `gitapex_run_eval_suite.py`'s `_is_content_policy_rejection()` (shared,
+  unmodified by this design) matches only two Anthropic-specific text
+  markers ("can't help with this", "anthropic.com/legal/aup") found
+  empirically against a live Claude CLI rejection (issue #1183) -- an
+  equivalent refusal from the HF Gemma 4 endpoint will not match either
+  marker, so it surfaces as a full `RuntimeError` that aborts the whole
+  suite, rather than the per-fixture skip a matching Claude-CLI refusal
+  gets. This is a safe failure mode (loud abort, not a silent pass), not
+  a correctness bug, but the two `Executor` paths are not behaviorally
+  symmetric here -- named explicitly (adversarial-review finding) rather
+  than left implicit. Building an HF-side equivalent is out of this
+  design's scope; a future design can add one if a live dispatch shows
+  it is needed.
 
 ## Acceptance criteria
 
