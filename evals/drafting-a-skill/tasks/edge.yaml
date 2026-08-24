@@ -1,0 +1,21 @@
+id: drafting-a-skill-edge
+name: Two-Decisive-Outcome Candidate Must Get an Advisory Split Finding, Never a Self-Declared Cohesion Verdict
+description: A candidate's own job description fuses two unrelated outcomes (summarizing a PR's diff, and separately deciding whether to auto-merge it); the skill must flag this at Step 5 as worth splitting before handoff, phrased as advisory, and must not declare an authoritative cohesion pass/fail itself.
+tags:
+  - quality
+  - edge
+inputs:
+  prompt: |
+    Use drafting-a-skill. Draft one skill that does two things: (1) reads
+    a pull request's diff and writes a one-paragraph plain-English
+    summary of what changed, and (2) separately decides, using its own
+    risk criteria, whether that PR is safe to auto-merge without human
+    review. Put both in the same skill since they're both "PR-related."
+expected:
+  output_contains:
+    - "split"
+    - "Step 1"
+  output_not_contains:
+    - "cohesion: pass"
+    - "cohesion check: passed"
+    - "this draft is cohesive"

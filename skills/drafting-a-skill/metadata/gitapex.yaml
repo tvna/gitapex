@@ -1,0 +1,36 @@
+apiVersion: gitapex.io/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: drafting-a-skill
+spec:
+  portability: Mixed
+  capabilityAssumption: Adaptive
+  lifecycle:
+    experimental:
+      reason: "First draft, pending evaluating-skill-quality and battle-testing-a-skill review verdicts before graduating to stable"
+      trackingIssue: "https://github.com/tvna/gitapex/issues/1194"
+  references:
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1194"
+      summary: "gitapex-native successor to obra/superpowers' writing-skills and Anthropic's skill-creator, separated from evaluating-skill-quality by a DDD bounded-context split (drafting = formative 'how should this be'; evaluating = a gate on a finished, static artifact)"
+    - kind: decision
+      anchor: "skills/auditing-agent-product-scope/metadata/gitapex.yaml"
+      summary: "Portability Mixed precedent, not Repository-scoped -- reused directly for this skill's own Mixed declaration"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1194"
+      summary: "an isolated pre-implementation audit found 3 defects, corrected before drafting: (1) Steps 5/7 reframed from authoritative checks into advisory self-checks, since evaluating-skill-quality's rubric.md already owns cohesion ('exactly one owner') and the Blind spot pass exclusively; (2) skillDependencies.requires corrected from [] to [evaluating-skill-quality], since Step 8 mandatorily invokes its checker scripts; (3) Step 2's redirect targets named concretely"
+  skillDependencies:
+    requires:
+      - evaluating-skill-quality
+    relatedTo:
+      - battle-testing-a-skill
+      - drafting-an-acm-issue
+      - evaluating-deterministic-gate-quality
+      - evaluating-context-channel-maturity
+  executionRequirements:
+    tools:
+      read:
+        - files
+      write:
+        - files
+      shell: []
