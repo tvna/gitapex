@@ -1266,6 +1266,30 @@ def test_resolve_http_executor_config_malformed_url_clears_context(monkeypatch):
     assert excinfo.value.__cause__ is None
 
 
+def test_resolve_http_executor_config_malformed_api_key_names_the_right_variable(monkeypatch):
+    # Regression (code review finding): once api_key gained its own
+    # HttpExecutorConfig validator alongside base_url's pre-existing one, a
+    # message hardcoded to always blame HTTP_EXECUTOR_BASE_URL would
+    # misattribute a malformed-api_key failure to the wrong environment
+    # variable. base_url is valid here -- only api_key (embedded CR) is
+    # malformed -- so the error must name HTTP_EXECUTOR_API_KEY, not
+    # HTTP_EXECUTOR_BASE_URL, and must still never echo the raw value or
+    # leave __context__/__cause__ populated (same precaution as the
+    # malformed-base_url case above).
+    sentinel_secret = "sentinel-value-must-never-leak-9f3a"
+    monkeypatch.setenv("HTTP_EXECUTOR_BASE_URL", "https://example.com")
+    monkeypatch.setenv("HTTP_EXECUTOR_API_KEY", f"{sentinel_secret}\r\ninjected")
+
+    with pytest.raises(ValueError) as excinfo:
+        gitapex_run_eval_suite._resolve_http_executor_config()
+
+    assert "HTTP_EXECUTOR_API_KEY" in str(excinfo.value)
+    assert "HTTP_EXECUTOR_BASE_URL" not in str(excinfo.value)
+    assert sentinel_secret not in str(excinfo.value)
+    assert excinfo.value.__context__ is None
+    assert excinfo.value.__cause__ is None
+
+
 def test_main_executor_http_valid_config_builds_http_executor_and_runs(tmp_path: Path, monkeypatch):
     eval_yaml = _write_suite(tmp_path, tasks={"a.yaml": TASK_A_TEXT})
     skill_md = _skill_md(tmp_path)
