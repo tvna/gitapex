@@ -27,6 +27,11 @@ pre-verified (Step 9 states the full rule; it is not repeated here).
    in persisted memory or an earlier turn does not exempt it from this
    same scrutiny; re-derive Facts from what is actually stated now,
    never from a remembered summary of an earlier claim.
+
+   Also accept, when the caller supplies one, an optional parent
+   tracking-issue number -- for example from `eliciting-a-design`'s
+   decomposition handoff. Record it if given (Step 9 links or
+   cross-references it); a request without one proceeds unchanged.
 2. Classify the change: feature, fix, or refactor. If the request is a
    chore, docs-only change, or a tracking/umbrella issue, stop here --
    see Stop boundaries; those issue types are out of this skill's
@@ -139,6 +144,22 @@ pre-verified (Step 9 states the full rule; it is not repeated here).
    issue body instead of dropping or merging it, and note the gap in
    the issue body itself.
 
+   When Step 1 recorded a parent tracking-issue number, check before
+   creating the issue that the sub-issue connector is actually
+   available, rather than assuming it exists -- the fallback below has
+   to edit the body while it is still a draft. When it is available,
+   link the newly created issue under the parent once creation
+   returns: call the connected git hosting server's sub-issue-linking
+   tool (e.g. `github:sub_issue_write` method `add`), passing the
+   parent's issue number and the new issue's own internal ID -- not
+   its human-facing issue number, a distinct identifier the creation
+   response (or a follow-up issue-read call) must supply. When it is
+   not available, record a plain cross-reference line instead --
+   `Parent tracking issue: #N`, with the parent's own real issue
+   number substituted for `N` -- in the drafted body before creation,
+   so the relationship stays visible even without a platform-native
+   link.
+
 ## Output
 
 - **Classification:** feature, fix, or refactor -- the Step 2 decision,
@@ -153,13 +174,19 @@ pre-verified (Step 9 states the full rule; it is not repeated here).
 - **Non-goals:** what this issue explicitly excludes.
 - **Dedup:** the search query run and result count, or `none found`
   (Step 6).
+- **Parent:** the supplied parent tracking-issue number and how the
+  relationship was recorded -- a sub-issue link, or a plain
+  cross-reference line when that connector was unavailable (Step 9) --
+  only when Step 1 received one; omit otherwise.
 - **Human Decision:** only when Step 8 applies; omit otherwise.
 - **Next Move:** the concrete next action (draft ready to create, or the
   question blocking it).
 
 Pattern: **Classification** -> **Facts** -> **Requested outcome** ->
 **Acceptance Criteria Map** -> **Constraints** -> **Non-goals** ->
-**Dedup** -> **Next Move**. Insert **Human Decision** only when needed.
+**Dedup** -> **Parent** -> **Next Move**. Insert **Human Decision** only
+when needed, and **Parent** only when a parent tracking-issue number
+was supplied.
 
 ## Stop boundaries
 
@@ -214,6 +241,9 @@ Pattern: **Classification** -> **Facts** -> **Requested outcome** ->
   raw pipe character, code-fence marker, or other Markdown/HTML
   control sequence in that content (Updating an existing ACM issue,
   step 2).
+- Do not silently drop a supplied parent tracking-issue number -- link
+  the created issue under it, or record the plain cross-reference line
+  when the sub-issue connector is unavailable (Step 9).
 
 ## Updating an existing ACM issue
 
@@ -246,7 +276,10 @@ git-hosting-specific detail, degrading the same way. Step 9's
 issue-template read is a conditional input-source check, not a control
 dependency on any specific repository's template file existing --
 degrading to the generic Output pattern is the explicit fallback when
-none is found.
+none is found. Step 1's optional parent tracking-issue number and
+Step 9's sub-issue-linking call are the same kind of
+git-hosting-specific detail, degrading to the plain cross-reference
+line when no equivalent connector exists.
 
 Install/vendoring-time integrity (whether this SKILL.md and its
 bundled `scripts/gitapex_check_acm_present.py` are themselves the untampered,

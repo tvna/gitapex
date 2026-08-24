@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 import gitapex_run_eval_suite
+import gitapex_run_http_executor
 import jsonschema
 import pytest
 import yaml
@@ -1167,3 +1168,184 @@ def test_main_executor_timeout_returns_1(tmp_path: Path, monkeypatch, capsys):
 
 def test_main_default_model_cli(tmp_path: Path):
     assert gitapex_run_eval_suite.DEFAULT_MODEL_CLI == "claude"
+
+
+# ---------------------------------------------------------------------------
+# main() -- --executor (issue #1259)
+# ---------------------------------------------------------------------------
+
+
+def test_main_omitting_executor_flag_still_uses_claude_cli_path(tmp_path: Path, monkeypatch):
+    # Regression check: the new --executor flag's default must not change
+    # any existing call site's behavior when the flag is not passed at all.
+    eval_yaml = _write_suite(tmp_path, tasks={"a.yaml": TASK_A_TEXT})
+    skill_md = _skill_md(tmp_path)
+    executor = _RecordingExecutor(["ok output"])
+    monkeypatch.setattr(gitapex_run_eval_suite, "subprocess_executor", executor)
+
+    rc = gitapex_run_eval_suite.main(["--eval-yaml", str(eval_yaml), "--skill-md", str(skill_md)])
+
+    assert rc == 0
+    assert len(executor.calls) > 0
+
+
+def test_main_executor_claude_cli_explicit_matches_default(tmp_path: Path, monkeypatch):
+    eval_yaml = _write_suite(tmp_path, tasks={"a.yaml": TASK_A_TEXT})
+    skill_md = _skill_md(tmp_path)
+    executor = _RecordingExecutor(["ok output"])
+    monkeypatch.setattr(gitapex_run_eval_suite, "subprocess_executor", executor)
+
+    rc = gitapex_run_eval_suite.main(
+        ["--eval-yaml", str(eval_yaml), "--skill-md", str(skill_md), "--executor", "claude-cli"]
+    )
+
+    assert rc == 0
+    assert len(executor.calls) > 0
+
+
+def test_main_executor_http_missing_both_env_vars_returns_2(tmp_path: Path, monkeypatch, capsys):
+    eval_yaml = _write_suite(tmp_path, tasks={"a.yaml": TASK_A_TEXT})
+    skill_md = _skill_md(tmp_path)
+    monkeypatch.delenv("HTTP_EXECUTOR_BASE_URL", raising=False)
+    monkeypatch.delenv("HTTP_EXECUTOR_API_KEY", raising=False)
+
+    rc = gitapex_run_eval_suite.main(["--eval-yaml", str(eval_yaml), "--skill-md", str(skill_md), "--executor", "http"])
+
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "error:" in err
+    assert "HTTP_EXECUTOR_BASE_URL" in err
+    assert "HTTP_EXECUTOR_API_KEY" in err
+
+
+def test_main_executor_http_missing_api_key_only_returns_2(tmp_path: Path, monkeypatch, capsys):
+    eval_yaml = _write_suite(tmp_path, tasks={"a.yaml": TASK_A_TEXT})
+    skill_md = _skill_md(tmp_path)
+    monkeypatch.setenv("HTTP_EXECUTOR_BASE_URL", "https://example.com")
+    monkeypatch.delenv("HTTP_EXECUTOR_API_KEY", raising=False)
+
+    rc = gitapex_run_eval_suite.main(["--eval-yaml", str(eval_yaml), "--skill-md", str(skill_md), "--executor", "http"])
+
+    assert rc == 2
+    assert "error:" in capsys.readouterr().err
+
+
+def test_main_executor_http_malformed_base_url_returns_2_and_never_prints_the_secret(
+    tmp_path: Path, monkeypatch, capsys
+):
+    eval_yaml = _write_suite(tmp_path, tasks={"a.yaml": TASK_A_TEXT})
+    skill_md = _skill_md(tmp_path)
+    sentinel_secret = "sentinel-value-must-never-leak-9f3a"
+    monkeypatch.setenv("HTTP_EXECUTOR_BASE_URL", "not-a-valid-url")
+    monkeypatch.setenv("HTTP_EXECUTOR_API_KEY", sentinel_secret)
+
+    rc = gitapex_run_eval_suite.main(["--eval-yaml", str(eval_yaml), "--skill-md", str(skill_md), "--executor", "http"])
+
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "error:" in err
+    assert sentinel_secret not in err
+
+
+def test_resolve_http_executor_config_malformed_url_clears_context(monkeypatch):
+    # Defeat test (not merely happy-path): a naive `raise ValueError(...)
+    # from None` directly inside `except ValidationError` clears __cause__/
+    # sets __suppress_context__ but does NOT stop CPython from
+    # auto-populating __context__ with the just-caught ValidationError --
+    # which embeds the raw invalid base_url value in its own str()/repr()/
+    # .errors(). This asserts __context__ is actually None (not merely that
+    # the printed message looks clean), the same live assertion
+    # .github/scripts/gitapex_check_copilot_endpoint_configured.py's own
+    # validate_base_url docstring describes verifying.
+    monkeypatch.setenv("HTTP_EXECUTOR_BASE_URL", "not-a-valid-url")
+    monkeypatch.setenv("HTTP_EXECUTOR_API_KEY", "irrelevant")
+
+    with pytest.raises(ValueError) as excinfo:
+        gitapex_run_eval_suite._resolve_http_executor_config()
+
+    assert excinfo.value.__context__ is None
+    assert excinfo.value.__cause__ is None
+
+
+def test_resolve_http_executor_config_malformed_api_key_names_the_right_variable(monkeypatch):
+    # Regression (code review finding): once api_key gained its own
+    # HttpExecutorConfig validator alongside base_url's pre-existing one, a
+    # message hardcoded to always blame HTTP_EXECUTOR_BASE_URL would
+    # misattribute a malformed-api_key failure to the wrong environment
+    # variable. base_url is valid here -- only api_key (embedded CR) is
+    # malformed -- so the error must name HTTP_EXECUTOR_API_KEY, not
+    # HTTP_EXECUTOR_BASE_URL, and must still never echo the raw value or
+    # leave __context__/__cause__ populated (same precaution as the
+    # malformed-base_url case above).
+    sentinel_secret = "sentinel-value-must-never-leak-9f3a"
+    monkeypatch.setenv("HTTP_EXECUTOR_BASE_URL", "https://example.com")
+    monkeypatch.setenv("HTTP_EXECUTOR_API_KEY", f"{sentinel_secret}\r\ninjected")
+
+    with pytest.raises(ValueError) as excinfo:
+        gitapex_run_eval_suite._resolve_http_executor_config()
+
+    assert "HTTP_EXECUTOR_API_KEY" in str(excinfo.value)
+    assert "HTTP_EXECUTOR_BASE_URL" not in str(excinfo.value)
+    assert sentinel_secret not in str(excinfo.value)
+    assert excinfo.value.__context__ is None
+    assert excinfo.value.__cause__ is None
+
+
+def test_resolve_http_executor_config_both_fields_malformed_names_both_variables(monkeypatch):
+    # Defeat test (adversarial-review finding): an exact-set check
+    # (`failing_fields == {"api_key"}`) leaves the both-invalid case falling
+    # into the base_url-only branch, silently dropping the api_key problem
+    # from the message. Both env vars malformed here -- the message must
+    # name both, not just one, so an operator does not need a second failed
+    # run to discover the second problem.
+    sentinel_secret = "sentinel-value-must-never-leak-2b7c"
+    monkeypatch.setenv("HTTP_EXECUTOR_BASE_URL", "not-a-valid-url")
+    monkeypatch.setenv("HTTP_EXECUTOR_API_KEY", f"{sentinel_secret}\r\ninjected")
+
+    with pytest.raises(ValueError) as excinfo:
+        gitapex_run_eval_suite._resolve_http_executor_config()
+
+    assert "HTTP_EXECUTOR_BASE_URL" in str(excinfo.value)
+    assert "HTTP_EXECUTOR_API_KEY" in str(excinfo.value)
+    assert sentinel_secret not in str(excinfo.value)
+    assert excinfo.value.__context__ is None
+    assert excinfo.value.__cause__ is None
+
+
+def test_main_executor_http_valid_config_builds_http_executor_and_runs(tmp_path: Path, monkeypatch):
+    eval_yaml = _write_suite(tmp_path, tasks={"a.yaml": TASK_A_TEXT})
+    skill_md = _skill_md(tmp_path)
+    monkeypatch.setenv("HTTP_EXECUTOR_BASE_URL", "https://example.com")
+    monkeypatch.setenv("HTTP_EXECUTOR_API_KEY", "test-key")
+
+    recorded_configs = []
+
+    def fake_build_http_executor(config):
+        recorded_configs.append(config)
+        return _RecordingExecutor(["ok output"])
+
+    # gitapex_run_eval_suite.py imports gitapex_run_http_executor lazily
+    # (issue #1259 regression-review finding -- see that module's own
+    # "Executor selection" docstring section), so there is no
+    # gitapex_run_eval_suite.gitapex_run_http_executor module attribute to
+    # patch until main() itself performs that import; patch the real,
+    # already-imported module object directly instead -- Python's module
+    # cache (sys.modules) guarantees main()'s own later `import
+    # gitapex_run_http_executor` binds to this exact same object.
+    monkeypatch.setattr(gitapex_run_http_executor, "build_http_executor", fake_build_http_executor)
+
+    rc = gitapex_run_eval_suite.main(["--eval-yaml", str(eval_yaml), "--skill-md", str(skill_md), "--executor", "http"])
+
+    assert rc == 0
+    assert len(recorded_configs) == 1
+    assert recorded_configs[0].base_url == "https://example.com"
+    assert recorded_configs[0].api_key == "test-key"
+
+
+def test_main_does_not_touch_gitapex_run_ablation_module():
+    # Constraint check (issue #1259): the new --executor flag must not
+    # require any change to gitapex_run_ablation.py's own hermetic-by-
+    # default surface -- confirmed indirectly by this module's own default
+    # executor still being gitapex_run_ablation.subprocess_executor
+    # unchanged.
+    assert gitapex_run_eval_suite.subprocess_executor is gitapex_run_eval_suite.gitapex_run_ablation.subprocess_executor
