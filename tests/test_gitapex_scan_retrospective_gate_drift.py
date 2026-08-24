@@ -80,12 +80,13 @@ def test_citation_count_zero_when_no_commit_cites_it():
 
 def test_find_no_citation_issues_returns_only_uncited_numbers():
     messages = ["Refs #242", "Refs #187"]
-    assert gate.find_no_citation_issues([242, 187, 118], messages, {242, 187, 118}) == [118]
+    counts = {242: 1, 187: 1, 118: 1}
+    assert gate.find_no_citation_issues([242, 187, 118], messages, counts, {}) == [118]
 
 
 def test_find_no_citation_issues_empty_when_all_cited():
     messages = ["Refs #1", "Refs #2"]
-    assert gate.find_no_citation_issues([1, 2], messages, {1, 2}) == []
+    assert gate.find_no_citation_issues([1, 2], messages, {1: 1, 2: 1}, {}) == []
 
 
 # ---------------------------------------------------------------------------
@@ -98,7 +99,7 @@ def test_find_no_citation_issues_keeps_issue_314_shape_when_citing_commit_lacks_
     # changing an unrelated workflow comment/doc, and no ssot.json gate
     # was ever registered with tracking_issue == 314.
     messages = ["chore(gates): document budget caps and permanent human-review-of-merge (#318)"]
-    assert gate.find_no_citation_issues([314], ["Refs #314", *messages], set()) == [314]
+    assert gate.find_no_citation_issues([314], ["Refs #314", *messages], {}, {}) == [314]
 
 
 def test_find_no_citation_issues_keeps_multi_proposal_issue_665_shape_when_only_one_subproposal_has_a_tracking_entry():
@@ -108,14 +109,41 @@ def test_find_no_citation_issues_keeps_multi_proposal_issue_665_shape_when_only_
     # repairs (2, 3, 4) remain unimplemented. 665 itself must stay
     # uncleared even though a commit cites it.
     messages = ["feat(ci): add a repository-wide hidden-character gate (refs #665 repair 6)"]
-    assert gate.find_no_citation_issues([665], messages, {702}) == [665]
+    assert gate.find_no_citation_issues([665], messages, {702: 1}, {}) == [665]
 
 
 def test_find_no_citation_issues_clears_when_citation_and_tracking_issue_both_present():
     # Guards the opposite regression: a genuine single-proposal, citing +
     # registry-backed issue must still clear normally.
     messages = ["fix(gates): close gaps (Refs #650)"]
-    assert gate.find_no_citation_issues([650], messages, {650}) == []
+    assert gate.find_no_citation_issues([650], messages, {650: 1}, {}) == []
+
+
+# ---------------------------------------------------------------------------
+# find_no_citation_issues: per-gate granularity (issue #1177)
+# ---------------------------------------------------------------------------
+
+
+def test_find_no_citation_issues_stays_uncleared_when_multi_proposal_manifest_is_only_partially_built():
+    # Issue #1129 shape: 6 distinct gates proposed, only 1 registered and
+    # cited so far. Partial implementation must not clear the issue.
+    messages = ["fix(gates): close one of six gaps (Refs #1129)"]
+    requirements = {1129: 6}
+    assert gate.find_no_citation_issues([1129], messages, {1129: 1}, requirements) == [1129]
+
+
+def test_find_no_citation_issues_clears_when_multi_proposal_manifest_is_fully_built():
+    # The other direction: once the registered-and-cited count meets the
+    # manifest's declared requirement, the issue clears like any other.
+    messages = ["fix(gates): close the last of two gaps (Refs #1130)"]
+    requirements = {1130: 2}
+    assert gate.find_no_citation_issues([1130], messages, {1130: 2}, requirements) == []
+
+
+def test_find_no_citation_issues_stays_uncleared_when_gate_count_falls_one_short():
+    messages = ["fix(gates): close gaps (Refs #1131)"]
+    requirements = {1131: 3}
+    assert gate.find_no_citation_issues([1131], messages, {1131: 2}, requirements) == [1131]
 
 
 # ---------------------------------------------------------------------------
@@ -361,11 +389,11 @@ def test_git_commit_messages_raises_on_nonzero_exit():
 
 
 # ---------------------------------------------------------------------------
-# load_gate_tracking_issues
+# load_gate_tracking_issue_counts
 # ---------------------------------------------------------------------------
 
 
-def test_load_gate_tracking_issues_parses_ints_and_skips_null_or_missing(tmp_path):
+def test_load_gate_tracking_issue_counts_parses_ints_and_skips_null_or_missing(tmp_path):
     ssot = tmp_path / "ssot.json"
     ssot.write_text(
         json.dumps(
@@ -379,43 +407,62 @@ def test_load_gate_tracking_issues_parses_ints_and_skips_null_or_missing(tmp_pat
             }
         )
     )
-    assert gate.load_gate_tracking_issues(str(ssot)) == {650, 297}
+    assert gate.load_gate_tracking_issue_counts(str(ssot)) == {650: 1, 297: 1}
 
 
-def test_load_gate_tracking_issues_raises_on_missing_file(tmp_path):
+def test_load_gate_tracking_issue_counts_counts_multiple_gates_per_issue(tmp_path):
+    # Issue #1177's own motivating shape: several distinct gates[] entries
+    # already share one tracking_issue (e.g. real #520/#928/#439 today).
+    ssot = tmp_path / "ssot.json"
+    ssot.write_text(
+        json.dumps(
+            {
+                "gates": [
+                    {"id": "a", "tracking_issue": 520},
+                    {"id": "b", "tracking_issue": 520},
+                    {"id": "c", "tracking_issue": 520},
+                    {"id": "d", "tracking_issue": 650},
+                ]
+            }
+        )
+    )
+    assert gate.load_gate_tracking_issue_counts(str(ssot)) == {520: 3, 650: 1}
+
+
+def test_load_gate_tracking_issue_counts_raises_on_missing_file(tmp_path):
     with pytest.raises(gate.SsotLedgerError):
-        gate.load_gate_tracking_issues(str(tmp_path / "nonexistent.json"))
+        gate.load_gate_tracking_issue_counts(str(tmp_path / "nonexistent.json"))
 
 
-def test_load_gate_tracking_issues_raises_on_undecodable_file(tmp_path):
+def test_load_gate_tracking_issue_counts_raises_on_undecodable_file(tmp_path):
     ssot = tmp_path / "ssot.json"
     ssot.write_bytes(b"\xff\xfe bad")
     with pytest.raises(gate.SsotLedgerError):
-        gate.load_gate_tracking_issues(str(ssot))
+        gate.load_gate_tracking_issue_counts(str(ssot))
 
 
-def test_load_gate_tracking_issues_raises_on_malformed_json(tmp_path):
+def test_load_gate_tracking_issue_counts_raises_on_malformed_json(tmp_path):
     ssot = tmp_path / "ssot.json"
     ssot.write_text("{not valid json")
     with pytest.raises(gate.SsotLedgerError):
-        gate.load_gate_tracking_issues(str(ssot))
+        gate.load_gate_tracking_issue_counts(str(ssot))
 
 
-def test_load_gate_tracking_issues_raises_when_not_a_json_object(tmp_path):
+def test_load_gate_tracking_issue_counts_raises_when_not_a_json_object(tmp_path):
     ssot = tmp_path / "ssot.json"
     ssot.write_text("[]")
     with pytest.raises(gate.SsotLedgerError):
-        gate.load_gate_tracking_issues(str(ssot))
+        gate.load_gate_tracking_issue_counts(str(ssot))
 
 
-def test_load_gate_tracking_issues_raises_when_gates_list_missing_or_empty(tmp_path):
+def test_load_gate_tracking_issue_counts_raises_when_gates_list_missing_or_empty(tmp_path):
     ssot = tmp_path / "ssot.json"
     ssot.write_text(json.dumps({"gates": []}))
     with pytest.raises(gate.SsotLedgerError):
-        gate.load_gate_tracking_issues(str(ssot))
+        gate.load_gate_tracking_issue_counts(str(ssot))
 
 
-def test_load_gate_tracking_issues_excludes_non_int_and_bool_values(tmp_path):
+def test_load_gate_tracking_issue_counts_excludes_non_int_and_bool_values(tmp_path):
     # `bool` is an `int` subclass in Python -- a stray `true`/`false` must
     # not be silently coerced into corroborating issue #1/#0. Strings,
     # floats, and lists are equally malformed and must also be excluded
@@ -435,7 +482,84 @@ def test_load_gate_tracking_issues_excludes_non_int_and_bool_values(tmp_path):
             }
         )
     )
-    assert gate.load_gate_tracking_issues(str(ssot)) == {650}
+    assert gate.load_gate_tracking_issue_counts(str(ssot)) == {650: 1}
+
+
+# ---------------------------------------------------------------------------
+# load_proposed_gate_requirements (issue #1177)
+# ---------------------------------------------------------------------------
+
+
+def test_load_proposed_gate_requirements_returns_proposal_counts(tmp_path):
+    ssot = tmp_path / "ssot.json"
+    ssot.write_text(
+        json.dumps(
+            {
+                "proposed_gates": [
+                    {"tracking_issue": 1129, "proposals": ["a", "b", "c", "d", "e", "f"]},
+                    {"tracking_issue": 1130, "proposals": ["x", "y"]},
+                ]
+            }
+        )
+    )
+    assert gate.load_proposed_gate_requirements(str(ssot)) == {1129: 6, 1130: 2}
+
+
+def test_load_proposed_gate_requirements_empty_when_field_missing(tmp_path):
+    ssot = tmp_path / "ssot.json"
+    ssot.write_text(json.dumps({"gates": []}))
+    assert gate.load_proposed_gate_requirements(str(ssot)) == {}
+
+
+def test_load_proposed_gate_requirements_empty_when_field_empty(tmp_path):
+    ssot = tmp_path / "ssot.json"
+    ssot.write_text(json.dumps({"proposed_gates": []}))
+    assert gate.load_proposed_gate_requirements(str(ssot)) == {}
+
+
+def test_load_proposed_gate_requirements_raises_when_field_not_a_list(tmp_path):
+    ssot = tmp_path / "ssot.json"
+    ssot.write_text(json.dumps({"proposed_gates": "not-a-list"}))
+    with pytest.raises(gate.SsotLedgerError):
+        gate.load_proposed_gate_requirements(str(ssot))
+
+
+def test_load_proposed_gate_requirements_raises_on_duplicate_tracking_issue(tmp_path):
+    ssot = tmp_path / "ssot.json"
+    ssot.write_text(
+        json.dumps(
+            {
+                "proposed_gates": [
+                    {"tracking_issue": 1129, "proposals": ["a", "b"]},
+                    {"tracking_issue": 1129, "proposals": ["c", "d"]},
+                ]
+            }
+        )
+    )
+    with pytest.raises(gate.SsotLedgerError):
+        gate.load_proposed_gate_requirements(str(ssot))
+
+
+def test_load_proposed_gate_requirements_skips_malformed_entries(tmp_path):
+    ssot = tmp_path / "ssot.json"
+    ssot.write_text(
+        json.dumps(
+            {
+                "proposed_gates": [
+                    "not-a-dict",
+                    {"tracking_issue": "1129", "proposals": ["a", "b"]},
+                    {"tracking_issue": 1130, "proposals": "not-a-list"},
+                    {"tracking_issue": 1131, "proposals": ["a", "b"]},
+                ]
+            }
+        )
+    )
+    assert gate.load_proposed_gate_requirements(str(ssot)) == {1131: 2}
+
+
+def test_load_proposed_gate_requirements_raises_on_missing_file(tmp_path):
+    with pytest.raises(gate.SsotLedgerError):
+        gate.load_proposed_gate_requirements(str(tmp_path / "nonexistent.json"))
 
 
 # ---------------------------------------------------------------------------
@@ -447,7 +571,8 @@ def test_main_exits_zero_when_count_at_threshold(monkeypatch, capsys):
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
     monkeypatch.setattr(gate, "list_labelled_issues", lambda *a, **k: [1, 2])
     monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: ["Refs #1", "Refs #2"])
-    monkeypatch.setattr(gate, "load_gate_tracking_issues", lambda *a, **k: {1, 2})
+    monkeypatch.setattr(gate, "load_gate_tracking_issue_counts", lambda *a, **k: {1: 1, 2: 1})
+    monkeypatch.setattr(gate, "load_proposed_gate_requirements", lambda *a, **k: {})
     exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", "--threshold", "0"])
     assert exit_code == 0
     assert "PASS" in capsys.readouterr().out
@@ -457,7 +582,8 @@ def test_main_exits_one_when_count_exceeds_threshold(monkeypatch, capsys):
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
     monkeypatch.setattr(gate, "list_labelled_issues", lambda *a, **k: [1, 2, 3])
     monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: [])
-    monkeypatch.setattr(gate, "load_gate_tracking_issues", lambda *a, **k: set())
+    monkeypatch.setattr(gate, "load_gate_tracking_issue_counts", lambda *a, **k: {})
+    monkeypatch.setattr(gate, "load_proposed_gate_requirements", lambda *a, **k: {})
     exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", "--threshold", "1"])
     assert exit_code == 1
     assert "FAIL" in capsys.readouterr().out
@@ -497,7 +623,7 @@ def test_main_exits_one_on_ssot_ledger_error(monkeypatch):
     def raise_ssot_error(*a, **k):
         raise gate.SsotLedgerError("boom")
 
-    monkeypatch.setattr(gate, "load_gate_tracking_issues", raise_ssot_error)
+    monkeypatch.setattr(gate, "load_gate_tracking_issue_counts", raise_ssot_error)
     assert gate.main(["--owner", "tvna", "--repo", "gitapex"]) == 1
 
 
@@ -505,7 +631,8 @@ def test_main_uses_default_threshold_when_unspecified(monkeypatch, capsys):
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
     monkeypatch.setattr(gate, "list_labelled_issues", lambda *a, **k: list(range(18)))
     monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: [])
-    monkeypatch.setattr(gate, "load_gate_tracking_issues", lambda *a, **k: set())
+    monkeypatch.setattr(gate, "load_gate_tracking_issue_counts", lambda *a, **k: {})
+    monkeypatch.setattr(gate, "load_proposed_gate_requirements", lambda *a, **k: {})
     exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex"])
     assert exit_code == 0
     assert f"threshold: {gate.DEFAULT_THRESHOLD}" in capsys.readouterr().out
@@ -691,13 +818,14 @@ def test_main_keeps_invisible_padded_but_meaningful_values_unmutated(monkeypatch
         received["cwd"] = cwd
         return []
 
-    def fake_load_gate_tracking_issues(path):
+    def fake_load_gate_tracking_issue_counts(path):
         received["ssot_path_joined"] = path
-        return set()
+        return {}
 
     monkeypatch.setattr(gate, "list_labelled_issues", fake_list_labelled_issues)
     monkeypatch.setattr(gate, "git_commit_messages", fake_git_commit_messages)
-    monkeypatch.setattr(gate, "load_gate_tracking_issues", fake_load_gate_tracking_issues)
+    monkeypatch.setattr(gate, "load_gate_tracking_issue_counts", fake_load_gate_tracking_issue_counts)
+    monkeypatch.setattr(gate, "load_proposed_gate_requirements", lambda path: {})
     exit_code = gate.main(
         [
             "--owner",
@@ -741,13 +869,14 @@ def test_main_keeps_padded_but_meaningful_values_unmutated(monkeypatch, capsys):
         received["cwd"] = cwd
         return []
 
-    def fake_load_gate_tracking_issues(path):
+    def fake_load_gate_tracking_issue_counts(path):
         received["ssot_path_joined"] = path
-        return set()
+        return {}
 
     monkeypatch.setattr(gate, "list_labelled_issues", fake_list_labelled_issues)
     monkeypatch.setattr(gate, "git_commit_messages", fake_git_commit_messages)
-    monkeypatch.setattr(gate, "load_gate_tracking_issues", fake_load_gate_tracking_issues)
+    monkeypatch.setattr(gate, "load_gate_tracking_issue_counts", fake_load_gate_tracking_issue_counts)
+    monkeypatch.setattr(gate, "load_proposed_gate_requirements", lambda path: {})
     exit_code = gate.main(
         [
             "--owner",

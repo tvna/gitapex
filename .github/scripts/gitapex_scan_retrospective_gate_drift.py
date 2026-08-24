@@ -116,18 +116,38 @@ def citation_count(commit_messages: list[str], issue_number: int) -> int:
 def find_no_citation_issues(
     issue_numbers: list[int],
     commit_messages: list[str],
-    tracking_issues: set[int],
+    tracking_issue_gate_counts: dict[int, int],
+    proposed_gate_requirements: dict[int, int],
 ) -> list[int]:
     """Return the subset of `issue_numbers` that lack either a citing
-    commit or a corroborating `.gitapex/ssot.json` `tracking_issue` entry.
+    commit or enough corroborating `.gitapex/ssot.json` `gates[].tracking_issue`
+    entries.
 
     Issue #709: a bare citing commit is not sufficient on its own -- it is
     evidence someone touched *something related to* the issue, not proof
     its proposed gate was built. An issue number clears (is excluded from
     the returned list) only when both signals agree: at least one commit
-    cites it AND `tracking_issues` contains it.
+    cites it AND at least `required` distinct `gates[]` entries carry it as
+    their own `tracking_issue`.
+
+    Issue #1177: `required` is no longer always 1. A retrospective issue
+    whose own Repairs section proposed several distinct gates registers
+    that count in `.gitapex/ssot.json`'s `proposed_gates[]` manifest
+    (`proposed_gate_requirements`, `{tracking_issue: len(proposals)}`);
+    an issue absent from that manifest defaults to `required = 1`,
+    preserving the original single-citation behavior unchanged. This is
+    count-based, not slug-identity-based: which specific `gates[]` id
+    satisfies which proposal is never checked, only how many exist.
     """
-    return [n for n in issue_numbers if citation_count(commit_messages, n) == 0 or n not in tracking_issues]
+    result = []
+    for n in issue_numbers:
+        if citation_count(commit_messages, n) == 0:
+            result.append(n)
+            continue
+        required = proposed_gate_requirements.get(n, 1)
+        if tracking_issue_gate_counts.get(n, 0) < required:
+            result.append(n)
+    return result
 
 
 def evaluate(no_citation_count: int, threshold: int) -> bool:
@@ -248,16 +268,12 @@ def git_commit_messages(
     return messages
 
 
-def load_gate_tracking_issues(path: str) -> set[int]:
-    """Return every `.gitapex/ssot.json` `gates[].tracking_issue` value.
-
-    Issue #709's corroborating signal. Raises `SsotLedgerError` rather
-    than returning an empty set on a missing/malformed registry -- an
-    empty set here would silently widen the no-citation report back to
-    bare-citation-only behavior, the exact false-negative class this
-    check exists to close. Mirrors `gitapex_detect_changed_gate_scripts.py`'s
-    `registered_gate_paths()` fail-closed shape.
-    """
+def _load_ssot_registry(path: str) -> dict[str, Any]:
+    """Read and JSON-decode `.gitapex/ssot.json`, raising `SsotLedgerError`
+    on any failure rather than returning a fallback. Shared by
+    `load_gate_tracking_issue_counts` and `load_proposed_gate_requirements`
+    below -- both need the same read-and-decode step before extracting
+    their own distinct key."""
     try:
         raw = pathlib.Path(path).read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as error:
@@ -273,11 +289,31 @@ def load_gate_tracking_issues(path: str) -> set[int]:
     # SsotLedgerError.
     if not isinstance(data, dict):
         raise SsotLedgerError(f"{path}: gate registry must be a JSON object, got {type(data).__name__}")
+    return data
+
+
+def load_gate_tracking_issue_counts(path: str) -> dict[int, int]:
+    """Return, for every `.gitapex/ssot.json` `gates[].tracking_issue`
+    value, how many `gates[]` entries carry it.
+
+    Issue #709's corroborating signal, widened by issue #1177 from a bare
+    `set[int]` ("does at least one gate cite this issue") to a per-issue
+    count ("how many gates cite this issue"), so a multi-gate retrospective
+    issue's resolution can be compared against how many gates it actually
+    proposed rather than clearing on the first one built. Raises
+    `SsotLedgerError` rather than returning an empty dict on a
+    missing/malformed registry -- an empty dict here would silently widen
+    the no-citation report back to bare-citation-only behavior, the exact
+    false-negative class this check exists to close. Mirrors
+    `gitapex_detect_changed_gate_scripts.py`'s `registered_gate_paths()`
+    fail-closed shape.
+    """
+    data = _load_ssot_registry(path)
     gates = data.get("gates")
     if not isinstance(gates, list) or not gates:
         raise SsotLedgerError(f"{path}: gate registry has no usable 'gates' list")
 
-    tracking_issues: set[int] = set()
+    counts: dict[int, int] = {}
     for gate in gates:
         tracking_issue = gate.get("tracking_issue") if isinstance(gate, dict) else None
         # `bool` is an `int` subclass in Python, so `isinstance(True, int)`
@@ -285,8 +321,55 @@ def load_gate_tracking_issues(path: str) -> set[int]:
         # true` would silently corroborate issue #1 instead of being
         # skipped as the malformed value it is.
         if isinstance(tracking_issue, int) and not isinstance(tracking_issue, bool):
-            tracking_issues.add(tracking_issue)
-    return tracking_issues
+            counts[tracking_issue] = counts.get(tracking_issue, 0) + 1
+    return counts
+
+
+def load_proposed_gate_requirements(path: str) -> dict[int, int]:
+    """Return, for every `.gitapex/ssot.json` `proposed_gates[]` entry, how
+    many distinct gates its own retrospective issue requires
+    (`len(proposals)`).
+
+    Issue #1177. A tracking_issue absent from the returned dict defaults
+    to `required = 1` at the call site (`find_no_citation_issues`),
+    preserving this check's original single-citation behavior for every
+    issue that has not (yet) registered a manifest entry. `proposed_gates`
+    missing entirely, or present but empty, both yield `{}` -- this
+    manifest is additive and populated only going forward, unlike `gates`,
+    so its absence is not itself an error the way an empty/missing
+    `gates` list is (see `load_gate_tracking_issue_counts` above). A
+    malformed individual entry (non-dict, non-integer `tracking_issue`, or
+    non-list `proposals`) is skipped rather than raised, matching this
+    module's existing per-entry-tolerant/whole-structure-fail-closed
+    convention. A duplicate `tracking_issue` across `proposed_gates`
+    raises `SsotLedgerError` -- `.gitapex/ssot.schema.json`'s own
+    `find_duplicate_proposed_gate_tracking_issues` drift check is the
+    primary gate against this ever reaching `main`, but this loader does
+    not silently pick a winner if it somehow does.
+    """
+    data = _load_ssot_registry(path)
+    proposed_gates = data.get("proposed_gates")
+    if proposed_gates is None:
+        return {}
+    if not isinstance(proposed_gates, list):
+        raise SsotLedgerError(f"{path}: gate registry's 'proposed_gates' must be a list")
+
+    requirements: dict[int, int] = {}
+    for entry in proposed_gates:
+        if not isinstance(entry, dict):
+            continue
+        tracking_issue = entry.get("tracking_issue")
+        proposals = entry.get("proposals")
+        if not (isinstance(tracking_issue, int) and not isinstance(tracking_issue, bool)):
+            continue
+        if not isinstance(proposals, list):
+            continue
+        if tracking_issue in requirements:
+            raise SsotLedgerError(
+                f"{path}: gate registry's 'proposed_gates' has more than one entry for tracking_issue {tracking_issue}"
+            )
+        requirements[tracking_issue] = len(proposals)
+    return requirements
 
 
 # ---------------------------------------------------------------------------
@@ -405,12 +488,16 @@ def main(argv: list[str] | None = None) -> int:
     try:
         issue_numbers = list_labelled_issues(args.owner, args.repo, args.label, token)
         commit_messages = git_commit_messages(args.ref, args.cwd)
-        tracking_issues = load_gate_tracking_issues(str(pathlib.Path(args.cwd) / args.ssot_path))
+        ssot_path = str(pathlib.Path(args.cwd) / args.ssot_path)
+        tracking_issue_gate_counts = load_gate_tracking_issue_counts(ssot_path)
+        proposed_gate_requirements = load_proposed_gate_requirements(ssot_path)
     except (GitHubApiError, GitLogError, SsotLedgerError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 
-    no_citation_issues = find_no_citation_issues(issue_numbers, commit_messages, tracking_issues)
+    no_citation_issues = find_no_citation_issues(
+        issue_numbers, commit_messages, tracking_issue_gate_counts, proposed_gate_requirements
+    )
     print(format_report(no_citation_issues, len(issue_numbers), args.threshold))
     return 1 if evaluate(len(no_citation_issues), args.threshold) else 0
 
