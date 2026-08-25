@@ -42,7 +42,7 @@ pytestmark = pytest.mark.slow
 
 def run(
     *,
-    tool_name: str = "mcp__github__create_pull_request",
+    tool_name: object = "mcp__github__create_pull_request",
     owner: str = "tvna",
     repo: str = "gitapex",
     title: str = "x",
@@ -98,6 +98,28 @@ def assert_allowed(**kwargs) -> None:
 
 def test_non_matching_tool_name_is_ignored() -> None:
     assert_allowed(tool_name="Bash", body="irrelevant")
+
+
+@pytest.mark.parametrize(
+    "tool_name", [["mcp__github__create_pull_request"], {"x": 1}, 5, True], ids=["array", "object", "number", "bool"]
+)
+def test_denied_when_tool_name_is_not_a_string(tool_name: object) -> None:
+    """Issue #1217: `jq -r '.tool_name // empty'` never errors on a
+    non-string `.tool_name` -- it pretty-prints the JSON form across
+    multiple lines instead, which then never equals the plain string this
+    hook's own re-check compares against, silently falling through as "not
+    our tool" (exit 0) instead of failing closed. Live-confirmed before
+    this guard existed: an array-wrapped tool_name let a
+    create_pull_request call straight through this hook's own ACM/waiver
+    disclosure check. Must now deny."""
+    # body="Refs #1": a context-only citation, so this stays hermetic/
+    # network-free the same way test_allowed_when_only_a_context_only_
+    # citation_is_present does -- the guard under test fires before any
+    # citation parsing would matter anyway.
+    result = run(tool_name=tool_name, body="Refs #1")
+    assert result.returncode == 2, f"expected deny (exit 2) for tool_name={tool_name!r}, got {result.returncode}"
+    parsed = json.loads(result.stderr)
+    assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"
 
 
 def test_denied_when_body_and_title_cite_no_issue_at_all() -> None:
@@ -217,7 +239,7 @@ def test_denied_when_stdin_is_empty() -> None:
     assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
 
 
-@pytest.mark.parametrize("tool_input", ["[1,2,3]", '"oops"', "5", "true"])
+@pytest.mark.parametrize("tool_input", ["[1,2,3]", '"oops"', "5", "true", "false"])
 def test_denied_when_tool_input_is_not_an_object(tool_input: str) -> None:
     # A second round of issue #657's own adversarial review: the top-level
     # "is this an object" check alone missed that a well-formed object
@@ -225,6 +247,15 @@ def test_denied_when_tool_input_is_not_an_object(tool_input: str) -> None:
     # still crashes every `.tool_input.<field>` jq access below it with a
     # "Cannot index X with string" error, past deny(), the same fail-open
     # class as the top-level check guards against.
+    #
+    # `false` specifically (issue #1216): jq's `//` operator treats JSON
+    # `false` the same as `null` (both falsy), so the original
+    # `(.tool_input // {}) | type == "object"` predicate wrongly accepted
+    # it -- live-confirmed with `printf '%s'
+    # '{"tool_name":"mcp__github__create_pull_request","tool_input":false}'
+    # | bash hooks/check-pr-issue-acm-disclosure.sh` exiting 5 ("Cannot
+    # index boolean with string \"owner\"") instead of 2. Fixed by checking
+    # `.tool_input == null` directly, never true for `false`.
     raw = '{"tool_name":"mcp__github__create_pull_request","tool_input":' + tool_input + "}"
     result = _run_raw(raw)
     assert result.returncode == 2, f"tool_input={tool_input}: expected deny (exit 2), got {result.returncode}"
