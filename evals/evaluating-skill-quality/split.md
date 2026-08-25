@@ -35,7 +35,12 @@ Single ownership and boundary fit dimension-7 check (gitapex#1111), and a
 2:2:1 dependency-policy addition (gitapex#1124: the new
 `spec.dependencyPolicy` precondition axis), and a 1:1:0
 description-conciseness addition (gitapex#1142: the new Dimension 2
-Description-length trigger), for a resulting 31:34:14
+Description-length trigger), and a 4:4:4 addition for the four new
+dimension-7 bundled-script comment sub-rules (gitapex#1046, following
+#1045's own rubric.md/shape-checker draft: no-voodoo-constant,
+script-execution-intent-stated, Comment categorization, and Context
+economy, one train/selection/test fixture triple per sub-rule), for a
+resulting 35:38:18
 partition. This is
 named explicitly as a deviation from the 2:1:7 default. The
 honest minimal groundwork, per that same worked example, is a larger
@@ -45,9 +50,9 @@ Exclusion rule for this arithmetic, stated once so the figures above can be
 checked against the Assignment section below (gitapex#907): every listed
 fixture, in every split, is counted in exactly one of the additions above,
 except the one named on the declaration line below. Verified per split, not
-only for train: the Assignment section lists 32 unique train fixtures against
-the declared 31 (the single exclusion), and 34 selection and 14 test fixtures
-against the declared 34 and 14 exactly.
+only for train: the Assignment section lists 36 unique train fixtures against
+the declared 35 (the single exclusion), and 38 selection and 18 test fixtures
+against the declared 38 and 18 exactly.
 
 Split-arithmetic exclusions: `dispatch-required-negative-control.yaml` -- listed
 in train for split-listing consistency with `normal.yaml` rather than as a

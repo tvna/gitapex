@@ -1,0 +1,44 @@
+id: evaluating-skill-quality-script-execution-intent-selection
+name: Bundled Script Mentioned Twice, Neither Mention States Execution Intent
+description: Selection fixture for the script-execution-intent-stated dimension-7 check -- a different citation shape (two separate paragraphs each naming the script in passing) from the train fixture's single-paragraph mention, and a different domain (schema validation, not de-duplication). Gates whether the check generalizes across citation shapes rather than memorizing the train fixture's one-paragraph case.
+tags:
+  - quality
+  - bundled-scripts
+  - script-execution-intent-stated
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "schema-drift-checker". Is this a good skill?
+
+    ---
+    name: schema-drift-checker
+    description: Check whether a JSON payload has drifted from its declared schema. Use when the user asks to validate a payload against a schema.
+    ---
+
+    # Schema Drift Checker
+
+    ## Procedure
+
+    1. Load the payload and the schema file.
+    2. `scripts/check_drift.py` compares the two structures field by field.
+
+    ## Notes
+
+    `scripts/check_drift.py` was last updated to handle nested arrays
+    correctly.
+
+    `scripts/check_drift.py` (top of file):
+    ```python
+    import json
+    import sys
+
+    def check_drift(payload, schema):
+        return [k for k in schema if k not in payload]
+    ```
+expected:
+  output_contains:
+    - "execution intent"
+    - "check_drift.py"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

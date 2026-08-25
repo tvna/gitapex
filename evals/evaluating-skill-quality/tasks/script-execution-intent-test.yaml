@@ -1,0 +1,41 @@
+id: evaluating-skill-quality-script-execution-intent-test
+name: Bundled Script's Execution Intent Is Stated Plainly
+description: Restraint check for the script-execution-intent-stated dimension-7 check (test split, read once) -- the citing paragraph explicitly says "Run `x.py`", satisfying the check. Must not be false-positively flagged merely because a second, unrelated helper script exists in the same directory and is never mentioned anywhere (out of this check's own scope, per its "referenced from SKILL.md/references/" applicability).
+tags:
+  - quality
+  - bundled-scripts
+  - script-execution-intent-stated
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "port-scan-summarizer". Is this a good skill?
+
+    ---
+    name: port-scan-summarizer
+    description: Summarize an nmap scan's open ports into a short table. Use when the user asks to summarize scan results.
+    ---
+
+    # Port Scan Summarizer
+
+    ## Procedure
+
+    1. Run `scripts/summarize_scan.py <scan.xml>` to produce the table.
+
+    `scripts/summarize_scan.py` (top of file):
+    ```python
+    import sys
+    import xml.etree.ElementTree as ET
+
+    def summarize(path):
+        tree = ET.parse(path)
+        return [(h.get("addr"), p.get("portid")) for h in tree.iter("host") for p in h.iter("port")]
+    ```
+
+    `scripts/_xml_helpers.py` is a small internal helper the above script
+    imports; it is never mentioned anywhere else in this document.
+expected:
+  output_contains:
+    - "Run"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

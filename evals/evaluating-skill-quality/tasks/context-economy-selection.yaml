@@ -1,0 +1,49 @@
+id: evaluating-skill-quality-context-economy-selection
+name: Read-as-Reference Script Has Verbose Restated-the-Code Docstrings Per Function
+description: Selection fixture for the Context economy dimension-7 axis -- a different comment shape (a multi-line restating docstring on every helper function, not single-line inline comments) and a different domain (a text-wrapping utility, not a priority queue) from the train fixture. Gates whether the check generalizes across comment shapes rather than memorizing the train fixture's inline-comment case.
+tags:
+  - quality
+  - bundled-scripts
+  - context-economy
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "paragraph-wrap-explainer". Is this a good skill?
+
+    ---
+    name: paragraph-wrap-explainer
+    description: Explain how a paragraph-wrapping helper decides line breaks. Use when the user asks how the wrapping algorithm works.
+    ---
+
+    # Paragraph Wrap Explainer
+
+    ## Procedure
+
+    1. See `scripts/wrap_paragraph.py` for the wrapping algorithm.
+
+    `scripts/wrap_paragraph.py` (top of file):
+    ```python
+    def split_words(text):
+        """Splits text into words.
+
+        Takes the text parameter and calls .split() on it, which splits
+        the string on whitespace, and returns the resulting list of
+        words to the caller.
+        """
+        return text.split()
+
+    def join_line(words):
+        """Joins words into a line.
+
+        Takes the words parameter, which is a list, and calls " ".join()
+        on it to join the words with a single space between them, then
+        returns the resulting string.
+        """
+        return " ".join(words)
+    ```
+expected:
+  output_contains:
+    - "token cost"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

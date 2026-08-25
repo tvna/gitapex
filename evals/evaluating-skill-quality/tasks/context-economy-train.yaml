@@ -1,0 +1,51 @@
+id: evaluating-skill-quality-context-economy-train
+name: Read-as-Reference Script Has Line-by-Line Restated-the-Code Comments
+description: Train fixture for the Context economy (token cost) prose-only dimension-7 axis added by issue #1045 -- the skill tells the model to read the script for its algorithm (read-as-reference), so every comment line is a recurring token cost future reads pay, but nearly every line here restates exactly what the adjacent code already says with no added value.
+tags:
+  - quality
+  - bundled-scripts
+  - context-economy
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "priority-queue-walkthrough". Is this a good skill?
+
+    ---
+    name: priority-queue-walkthrough
+    description: Explain how a priority-queue dispatcher orders work items. Use when the user asks how the dispatcher's ordering algorithm works.
+    ---
+
+    # Priority Queue Walkthrough
+
+    ## Procedure
+
+    1. See `scripts/dispatch_order.py` for the ordering algorithm.
+
+    `scripts/dispatch_order.py` (top of file):
+    ```python
+    import heapq
+
+    def dispatch_order(items):
+        # Create an empty list called heap
+        heap = []
+        # Loop over each item in items
+        for item in items:
+            # Push the item onto the heap
+            heapq.heappush(heap, item)
+        # Create an empty list called result
+        result = []
+        # While the heap is not empty
+        while heap:
+            # Pop the smallest item from the heap
+            smallest = heapq.heappop(heap)
+            # Append the smallest item to result
+            result.append(smallest)
+        # Return the result list
+        return result
+    ```
+expected:
+  output_contains:
+    - "token cost"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

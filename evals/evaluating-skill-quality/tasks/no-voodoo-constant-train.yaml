@@ -1,0 +1,40 @@
+id: evaluating-skill-quality-no-voodoo-constant-train
+name: Bundled Script Has an Unjustified Numeric Threshold Constant
+description: Train fixture for the no-voodoo-constant dimension-7 check (issue #1045 ACM item A, mechanized in gitapex_check_skill_shape.py) -- a module-level ALL-CAPS numeric constant with no adjacent comment explaining why that value was chosen.
+tags:
+  - quality
+  - bundled-scripts
+  - no-voodoo-constant
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "invoice-line-flagger". Is this a good skill?
+
+    ---
+    name: invoice-line-flagger
+    description: Flag invoice line items whose amount exceeds a threshold. Use when the user asks to find outlier invoice line items.
+    ---
+
+    # Invoice Line Flagger
+
+    ## Procedure
+
+    1. Run `scripts/flag_lines.py <invoice.csv>`.
+
+    `scripts/flag_lines.py` (top of file):
+    ```python
+    import csv
+    import sys
+
+    THRESHOLD = 5000
+
+    def flag_lines(amounts):
+        return [a for a in amounts if a > THRESHOLD]
+    ```
+expected:
+  output_contains:
+    - "voodoo constant"
+    - "THRESHOLD"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

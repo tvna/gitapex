@@ -1,0 +1,46 @@
+id: evaluating-skill-quality-no-voodoo-constant-selection
+name: Bundled Script Has an Unjustified Dict-Literal Configuration Constant
+description: Selection fixture for the no-voodoo-constant dimension-7 check -- a different literal shape (a module-level ALL-CAPS dict, not a bare numeric scalar) and a different domain (retry policy, not an amount threshold) from the train fixture. Gates whether the check generalizes to a dict-shaped voodoo constant rather than memorizing the train fixture's scalar shape.
+tags:
+  - quality
+  - bundled-scripts
+  - no-voodoo-constant
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "flaky-api-retrier". Is this a good skill?
+
+    ---
+    name: flaky-api-retrier
+    description: Retry a flaky HTTP call with backoff. Use when the user asks to make a network call resilient to transient failures.
+    ---
+
+    # Flaky API Retrier
+
+    ## Procedure
+
+    1. Run `scripts/retry_call.py <url>`.
+
+    `scripts/retry_call.py` (top of file):
+    ```python
+    import sys
+    import time
+    import urllib.request
+
+    RETRY_POLICY = {"max_retries": 3, "backoff_seconds": 2}
+
+    def call_with_retry(url):
+        for attempt in range(RETRY_POLICY["max_retries"]):
+            try:
+                return urllib.request.urlopen(url)
+            except OSError:
+                time.sleep(RETRY_POLICY["backoff_seconds"])
+        raise SystemExit(f"error: {url} failed after {RETRY_POLICY['max_retries']} attempts")
+    ```
+expected:
+  output_contains:
+    - "voodoo constant"
+    - "RETRY_POLICY"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

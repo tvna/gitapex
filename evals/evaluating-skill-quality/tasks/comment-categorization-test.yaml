@@ -1,0 +1,55 @@
+id: evaluating-skill-quality-comment-categorization-test
+name: Execute-Only Script's Comments Are Properly Interface-First
+description: Restraint check for the Comment categorization dimension-7 axis (test split, read once) -- the skill tells the model to run the script (execute-only), and its top-of-file comment states exactly the Interface information a caller needs (inputs, outputs, exit codes), with no comment wandering into internal mechanism. Must not be flagged merely for lacking Implementation-style commentary the execute-only categorization never asked for.
+tags:
+  - quality
+  - bundled-scripts
+  - comment-categorization
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "csv-column-renamer". Is this a good skill?
+
+    ---
+    name: csv-column-renamer
+    description: Rename a CSV file's header columns per a mapping file. Use when the user asks to rename CSV headers in bulk.
+    ---
+
+    # CSV Column Renamer
+
+    ## Procedure
+
+    1. Run `scripts/rename_columns.py <input.csv> <mapping.json> <output.csv>`.
+
+    `scripts/rename_columns.py` (top of file):
+    ```python
+    import csv
+    import json
+    import sys
+
+    # Usage: rename_columns.py INPUT MAPPING OUTPUT
+    #   INPUT: path to a CSV file with a header row.
+    #   MAPPING: path to a JSON object mapping old header names to new ones;
+    #     any header not present in the mapping is kept unchanged.
+    #   OUTPUT: path to write the CSV with renamed headers.
+    # Exit code 1 if INPUT has no header row; 0 otherwise.
+
+    def rename_columns(input_path, mapping_path, output_path):
+        with open(mapping_path) as handle:
+            mapping = json.load(handle)
+        with open(input_path, newline="") as src, open(output_path, "w", newline="") as dst:
+            reader = csv.DictReader(src)
+            if reader.fieldnames is None:
+                raise SystemExit(1)
+            new_fields = [mapping.get(f, f) for f in reader.fieldnames]
+            writer = csv.DictWriter(dst, fieldnames=new_fields)
+            writer.writeheader()
+            for row in reader:
+                writer.writerow({mapping.get(k, k): v for k, v in row.items()})
+    ```
+expected:
+  output_contains:
+    - "Interface"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"
