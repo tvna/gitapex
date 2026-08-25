@@ -7,11 +7,13 @@ description: Use when about to push, post, or publish any outward-facing artifac
 
 This skill's checklist is general. Check 1's "agreed disclosure
 convention" and check 3's ASCII-only default illustrate gitapex's own
-policy; each states an inline fallback to substitute the calling
-repository's actual policy where it differs. The explaining-the-work
-coupling (Relationship to other skills) names a sibling skill gitapex
-happens to also install -- apply it where that sibling is installed,
-skip it otherwise.
+policy; check 2's raw-fetch hook is likewise gitapex's own illustration
+of that channel, not a required dependency. Each states an inline
+fallback to substitute the calling repository's actual policy or
+tooling where it differs. The explaining-the-work coupling
+(Relationship to other skills) names a sibling skill gitapex happens to
+also install -- apply it where that sibling is installed, skip it
+otherwise.
 
 This is an interim measure: a manual stand-in for the deterministic
 preflight or CI gate this repository has not built yet. Run this
@@ -69,39 +71,79 @@ destined for a public sink.
    is not enough: `create_pull_request` and `update_pull_request` can
    inject a session-URL trailer downstream of the submitted `body`,
    invisible to any scan run before the call. Immediately after either
-   call returns, re-fetch the PR (for example `pull_request_read` with
-   method `get`) and re-run check 1 against the text actually stored on
-   the platform, not the draft:
+   call returns, re-fetch the actually-stored body through a raw,
+   unsanitized channel and re-run check 1 against it, not the draft.
+
+   **Do not use an MCP read tool (`pull_request_read`, `issue_read`) for
+   this re-check.** A GitHub MCP server can sanitize the HTML/Markdown of
+   a body it returns (confirmed for `github/github-mcp-server`'s own
+   response-direction handler, which strips any element outside a fixed
+   allowlist -- `pkg/sanitize/sanitize.go`, allowlist introduced at commit
+   `6a39a39` and unchanged in this respect as of a direct clone's current
+   `HEAD` -- while its write path applies no such sanitizer). A legitimate
+   construct outside that allowlist -- a backtick-wrapped angle-bracket
+   placeholder, a bracket-wrapped-URL autolink -- can therefore come back
+   looking stripped from an MCP read even though storage still holds it
+   intact.
+   Reading a body back through an MCP tool call proves only that the read
+   channel's own sanitizer touched it, never that storage lost anything.
+
+   Re-check through a raw, unsanitized fetch instead: a direct HTTPS
+   `GET /repos/{owner}/{repo}/issues/{number}` (the one REST endpoint for
+   both issues and pull requests) bypasses that sanitizer entirely. This
+   repository's own default already automates this: a PostToolUse hook
+   (`hooks/check-post-write-provenance.sh` /
+   `hooks/gitapex_check_post_write_provenance.py`) re-fetches the stored
+   body this way after `create_pull_request` / `update_pull_request` /
+   `issue_write` returns and re-runs this checklist's check 1 and check 3
+   -- plus a submitted-vs-stored content-loss comparison -- against it.
+   Where it is installed, its verdict resolves this step for you, with
+   PASS / FLAGGED / CONTENT_LOSS each already a terminal answer (confirm
+   and act on it, never re-derive one by hand through an MCP read); an
+   INDETERMINATE verdict is not terminal -- it means the hook itself
+   could not verify the stored body (a missing token, an unreachable API),
+   so fall through to the manual raw-fetch re-check below rather than
+   treating INDETERMINATE as "check complete."
+
+   Where no such automation exists (or its verdict is INDETERMINATE),
+   issue that same `GET /repos/{owner}/{repo}/issues/{number}` call
+   yourself -- directly, or through the calling repository's own
+   equivalent raw-fetch helper if one exists (this repository's own is
+   `fetch_issue()` in `hooks/gitapex_check_pr_issue_acm_disclosure.py`,
+   which returns a `{"body": ..., "state": ...}` mapping) -- and feed the
+   returned `body` value into the scan below, assigned to a shell variable
+   however your environment does that (for example, printing just that
+   field and capturing it via command substitution). Never feed the scan
+   a body read back from `pull_request_read`/`issue_read`:
 
    ```bash
    python3 scripts/gitapex_scan_provenance.py <<< "$ACTUAL_STORED_BODY"
    ```
 
-   Pipe the body in on stdin and omit `--file` entirely. `--file -` does
-   *not* read stdin here -- the script only reads stdin when `--file` is
-   absent; passing `--file -` makes it look for a file literally named
-   `-` and fail with `FileNotFoundError`.
+   `$ACTUAL_STORED_BODY` here stands for that raw-fetched body text, not a
+   literal environment variable this skill sets for you. Pipe the body in
+   on stdin and omit `--file` entirely. `--file -` does *not* read stdin
+   here -- the script only reads stdin when `--file` is absent; passing
+   `--file -` makes it look for a file literally named `-` and fail with
+   `FileNotFoundError`.
 
    If the re-scan flags a candidate, call `update_pull_request` to strip
-   it, then re-fetch and re-run the scan once more to confirm it was not
+   it, then re-fetch (again through the raw channel above, never an MCP
+   read) and re-run the scan once more to confirm it was not
    force-reinjected before treating the artifact as clean.
 
    An issue body written through a create/update issue call needs the
    same treatment, with the issue-side equivalent at each step: re-fetch
-   the issue, scan its stored body, strip a flagged candidate via the
-   issue write call, then re-fetch and re-scan to confirm. Nothing about
-   this gap is PR-specific -- only the tool names differ.
+   the issue through the raw channel, scan its stored body, strip a
+   flagged candidate via the issue write call, then re-fetch and re-scan
+   to confirm. Nothing about this gap is PR-specific -- only the tool
+   names differ.
 
-   Some environments now back this check with a PostToolUse hook (this
-   repository's own `hooks/check-post-write-provenance.sh` is one
-   example: it re-fetches the stored body after `create_pull_request` /
-   `update_pull_request` / `issue_write` returns and re-runs this
-   checklist's check 1 and check 3 against it). Where that hook is
-   installed it reports the finding but cannot undo the write -- the
-   remediation above is still yours to perform -- and it covers only the
-   tool calls it matches, so a body edited afterwards through any other
-   path is still yours to re-check. Run this step by hand wherever no
-   such hook exists.
+   Where the PostToolUse hook is installed it reports the finding but
+   cannot undo the write -- the remediation above is still yours to
+   perform -- and it covers only the tool calls it matches, so a body
+   edited afterwards through any other path is still yours to re-check
+   through the raw channel by hand.
 3. **ASCII-only.** Default to no em dashes, en dashes, curly quotes,
    full-width punctuation, or any other non-ASCII character -- gitapex's
    own convention. If the calling repository documents a different
