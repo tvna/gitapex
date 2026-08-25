@@ -119,6 +119,76 @@ def test_find_no_citation_issues_clears_when_citation_and_tracking_issue_both_pr
 
 
 # ---------------------------------------------------------------------------
+# is_gate_less / partition_gate_less (issue #1297)
+# ---------------------------------------------------------------------------
+
+
+def test_is_gate_less_matches_ci_stub_marker():
+    body = "Automated stub opened by the post-merge-auto-retro gate for PR #42."
+    assert gate.is_gate_less(body) is True
+
+
+def test_is_gate_less_matches_zero_repair_fast_close_marker():
+    body = "PR #63 merged with zero repairs.\nRetrospective status: zero-repair-fast-close\nRefs #63."
+    assert gate.is_gate_less(body) is True
+
+
+def test_is_gate_less_false_when_neither_marker_present():
+    assert gate.is_gate_less("1. [Repair] ... Status: `missing-deterministic-gate`") is False
+
+
+def test_is_gate_less_false_for_empty_body():
+    assert gate.is_gate_less("") is False
+
+
+def test_is_gate_less_matches_zero_repair_marker_with_bullet_prefix():
+    body = "PR #63 merged with zero repairs.\n- Retrospective status: zero-repair-fast-close\nRefs #63."
+    assert gate.is_gate_less(body) is True
+
+
+def test_is_gate_less_matches_zero_repair_marker_with_crlf_line_endings():
+    # Defeat case: GitHub is known to deliver an issue body with CRLF
+    # endings for one authored or edited via the web UI -- the marker
+    # line's own `\r` must not defeat the standalone-line match.
+    body = "PR #63 merged with zero repairs.\r\nRetrospective status: zero-repair-fast-close\r\nRefs #63."
+    assert gate.is_gate_less(body) is True
+
+
+def test_is_gate_less_false_when_zero_repair_marker_only_quoted_mid_sentence():
+    # Defeat case (issue #1297): this repo's own retrospectives routinely
+    # re-quote an earlier issue's text verbatim inside a later, real
+    # retrospective's Carried-forward section -- a bare substring match
+    # would misclassify that later, real issue as gate-less merely for
+    # quoting a fast-closed one.
+    body = (
+        "1. [Carried-forward] Issue #63 was fast-closed "
+        "(`Retrospective status: zero-repair-fast-close`), but the real "
+        "gate proposed in this cycle remains unimplemented.\n"
+        "   Status: `missing-deterministic-gate`\n"
+        "   Proposed gate: add a pre-push hook."
+    )
+    assert gate.is_gate_less(body) is False
+
+
+def test_partition_gate_less_separates_records_preserving_order():
+    records = [
+        {"number": 118, "body": "Automated stub opened by the post-merge-auto-retro gate."},
+        {"number": 187, "body": "Retrospective status: zero-repair-fast-close"},
+        {"number": 242, "body": "Status: `missing-deterministic-gate`"},
+    ]
+    gate_less, remaining = gate.partition_gate_less(records)
+    assert gate_less == [118, 187]
+    assert remaining == [242]
+
+
+def test_partition_gate_less_treats_missing_or_null_body_as_not_gate_less():
+    records = [{"number": 1, "body": None}, {"number": 2}]
+    gate_less, remaining = gate.partition_gate_less(records)
+    assert gate_less == []
+    assert remaining == [1, 2]
+
+
+# ---------------------------------------------------------------------------
 # evaluate / format_report
 # ---------------------------------------------------------------------------
 
@@ -152,6 +222,16 @@ def test_format_report_empty_backlog_states_every_issue_cited():
     report = gate.format_report([], 4, 20)
     assert "Every" in report
     assert "PASS" in report
+
+
+def test_format_report_omits_gate_less_line_when_zero():
+    report = gate.format_report([118], 22, 20)
+    assert "excluded as gate-less" not in report
+
+
+def test_format_report_discloses_gate_less_exclusion_count():
+    report = gate.format_report([118], 22, 20, gate_less_count=3)
+    assert "3 of 22 were excluded as gate-less by construction" in report
 
 
 # ---------------------------------------------------------------------------
@@ -443,9 +523,13 @@ def test_load_gate_tracking_issues_excludes_non_int_and_bool_values(tmp_path):
 # ---------------------------------------------------------------------------
 
 
+def _records(*numbers, body=""):
+    return [{"number": n, "body": body} for n in numbers]
+
+
 def test_main_exits_zero_when_count_at_threshold(monkeypatch, capsys):
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
-    monkeypatch.setattr(gate, "list_labelled_issues", lambda *a, **k: [1, 2])
+    monkeypatch.setattr(gate, "list_labelled_issue_records", lambda *a, **k: _records(1, 2))
     monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: ["Refs #1", "Refs #2"])
     monkeypatch.setattr(gate, "load_gate_tracking_issues", lambda *a, **k: {1, 2})
     exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", "--threshold", "0"])
@@ -455,12 +539,32 @@ def test_main_exits_zero_when_count_at_threshold(monkeypatch, capsys):
 
 def test_main_exits_one_when_count_exceeds_threshold(monkeypatch, capsys):
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
-    monkeypatch.setattr(gate, "list_labelled_issues", lambda *a, **k: [1, 2, 3])
+    monkeypatch.setattr(gate, "list_labelled_issue_records", lambda *a, **k: _records(1, 2, 3))
     monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: [])
     monkeypatch.setattr(gate, "load_gate_tracking_issues", lambda *a, **k: set())
     exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", "--threshold", "1"])
     assert exit_code == 1
     assert "FAIL" in capsys.readouterr().out
+
+
+def test_main_excludes_gate_less_records_and_discloses_count(monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setattr(
+        gate,
+        "list_labelled_issue_records",
+        lambda *a, **k: [
+            {"number": 1, "body": "Automated stub opened by the post-merge-auto-retro gate."},
+            {"number": 2, "body": "Retrospective status: zero-repair-fast-close"},
+            {"number": 3, "body": "Status: `missing-deterministic-gate`"},
+        ],
+    )
+    monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: ["Refs #3"])
+    monkeypatch.setattr(gate, "load_gate_tracking_issues", lambda *a, **k: {3})
+    exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", "--threshold", "0"])
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "PASS" in out
+    assert "2 of 3 were excluded as gate-less by construction" in out
 
 
 def test_main_exits_one_on_missing_token(monkeypatch):
@@ -474,13 +578,13 @@ def test_main_exits_one_on_github_api_error(monkeypatch):
     def raise_api_error(*a, **k):
         raise gate.GitHubApiError("boom")
 
-    monkeypatch.setattr(gate, "list_labelled_issues", raise_api_error)
+    monkeypatch.setattr(gate, "list_labelled_issue_records", raise_api_error)
     assert gate.main(["--owner", "tvna", "--repo", "gitapex"]) == 1
 
 
 def test_main_exits_one_on_git_log_error(monkeypatch):
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
-    monkeypatch.setattr(gate, "list_labelled_issues", lambda *a, **k: [1])
+    monkeypatch.setattr(gate, "list_labelled_issue_records", lambda *a, **k: _records(1))
 
     def raise_git_error(*a, **k):
         raise gate.GitLogError("boom")
@@ -491,7 +595,7 @@ def test_main_exits_one_on_git_log_error(monkeypatch):
 
 def test_main_exits_one_on_ssot_ledger_error(monkeypatch):
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
-    monkeypatch.setattr(gate, "list_labelled_issues", lambda *a, **k: [1])
+    monkeypatch.setattr(gate, "list_labelled_issue_records", lambda *a, **k: _records(1))
     monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: ["Refs #1"])
 
     def raise_ssot_error(*a, **k):
@@ -503,7 +607,7 @@ def test_main_exits_one_on_ssot_ledger_error(monkeypatch):
 
 def test_main_uses_default_threshold_when_unspecified(monkeypatch, capsys):
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
-    monkeypatch.setattr(gate, "list_labelled_issues", lambda *a, **k: list(range(18)))
+    monkeypatch.setattr(gate, "list_labelled_issue_records", lambda *a, **k: _records(*range(18)))
     monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: [])
     monkeypatch.setattr(gate, "load_gate_tracking_issues", lambda *a, **k: set())
     exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex"])
@@ -680,7 +784,7 @@ def test_main_keeps_invisible_padded_but_meaningful_values_unmutated(monkeypatch
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
     received = {}
 
-    def fake_list_labelled_issues(owner, repo, label, token):
+    def fake_list_labelled_issue_records(owner, repo, label, token):
         received["owner"] = owner
         received["repo"] = repo
         received["label"] = label
@@ -695,7 +799,7 @@ def test_main_keeps_invisible_padded_but_meaningful_values_unmutated(monkeypatch
         received["ssot_path_joined"] = path
         return set()
 
-    monkeypatch.setattr(gate, "list_labelled_issues", fake_list_labelled_issues)
+    monkeypatch.setattr(gate, "list_labelled_issue_records", fake_list_labelled_issue_records)
     monkeypatch.setattr(gate, "git_commit_messages", fake_git_commit_messages)
     monkeypatch.setattr(gate, "load_gate_tracking_issues", fake_load_gate_tracking_issues)
     exit_code = gate.main(
@@ -730,7 +834,7 @@ def test_main_keeps_padded_but_meaningful_values_unmutated(monkeypatch, capsys):
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
     received = {}
 
-    def fake_list_labelled_issues(owner, repo, label, token):
+    def fake_list_labelled_issue_records(owner, repo, label, token):
         received["owner"] = owner
         received["repo"] = repo
         received["label"] = label
@@ -745,7 +849,7 @@ def test_main_keeps_padded_but_meaningful_values_unmutated(monkeypatch, capsys):
         received["ssot_path_joined"] = path
         return set()
 
-    monkeypatch.setattr(gate, "list_labelled_issues", fake_list_labelled_issues)
+    monkeypatch.setattr(gate, "list_labelled_issue_records", fake_list_labelled_issue_records)
     monkeypatch.setattr(gate, "git_commit_messages", fake_git_commit_messages)
     monkeypatch.setattr(gate, "load_gate_tracking_issues", fake_load_gate_tracking_issues)
     exit_code = gate.main(
@@ -798,3 +902,26 @@ def test_main_names_every_offending_flag_in_declaration_order(monkeypatch, capsy
         f"error: invalid arguments: --owner {blank}, --repo {blank}, --ref {blank}, "
         f"--cwd {blank}, --label {blank}, --ssot-path {blank}" in capsys.readouterr().err
     )
+
+
+# ---------------------------------------------------------------------------
+# Marker drift gate (issue #1297): _CI_STUB_MARKER and _ZERO_REPAIR_MARKER
+# are literal copies of two canonical sources, not imports (this repo keeps
+# .github/scripts/*.py files independent of one another) -- assert directly
+# against those sources' own text so the two cannot silently re-diverge,
+# per test_gitapex_stale_retro_stub_autoclose.py's own
+# test_stub_marker_matches_post_merge_retro_source precedent for the
+# identical drift risk on the CI-stub marker half of this pair.
+# ---------------------------------------------------------------------------
+
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+
+def test_ci_stub_marker_matches_post_merge_retro_source():
+    source = (REPO_ROOT / ".github" / "scripts" / "gitapex_post_merge_retro.py").read_text(encoding="utf-8")
+    assert gate._CI_STUB_MARKER in source
+
+
+def test_zero_repair_marker_matches_skill_md_source():
+    source = (REPO_ROOT / "skills" / "merge-retrospective" / "SKILL.md").read_text(encoding="utf-8")
+    assert gate._ZERO_REPAIR_MARKER in source

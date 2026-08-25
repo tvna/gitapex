@@ -29,6 +29,19 @@ report only when a citing commit AND a corroborating
 `.gitapex/ssot.json` `gates[].tracking_issue == N` entry both agree
 (`load_gate_tracking_issues`, wired into `find_no_citation_issues`).
 
+Issue #1297: a `retrospective` issue can legitimately close with no gate
+to ever propose -- a bare CI-opened stub, or a `merge-retrospective`
+Step 5 zero-repair fast-close -- and such an issue can never satisfy the
+two-signal check above by construction, inflating the no-citation report
+with backlog that was never real. `partition_gate_less` excludes any
+issue whose body carries either literal marker *before*
+`find_no_citation_issues` runs; `main` fetches full records (`body`
+included) via `list_labelled_issue_records` for this reason, and
+`format_report`'s new `gate_less_count` parameter discloses how many were
+excluded rather than silently shrinking the denominator. Mirrors
+`skills/merge-retrospective/scripts/gitapex_check_retro_gate_resolved.py`'s
+own identical `gate_less` bucket -- keep both in sync.
+
 Usage::
 
     uv run --frozen python3 .github/scripts/gitapex_scan_retrospective_gate_drift.py \\
@@ -93,6 +106,34 @@ class SsotLedgerError(RuntimeError):
     false-negative issue #709 exists to close."""
 
 
+# Issue #1297: a `retrospective` issue can legitimately close with no gate
+# to ever propose -- a bare CI-opened stub, or a zero-repair fast-close
+# (merge-retrospective/SKILL.md Step 5). Neither can ever satisfy the
+# two-signal check below by construction, so both are excluded from the
+# no-citation report entirely rather than counted as unresolved backlog.
+# Mirrors skills/merge-retrospective/scripts/gitapex_check_retro_gate_resolved.py's
+# own identical markers -- keep both in sync (per this repository's own
+# established independent-duplication convention for this script pair).
+_CI_STUB_MARKER = "Automated stub opened by the post-merge-auto-retro gate"
+_ZERO_REPAIR_MARKER = "Retrospective status: zero-repair-fast-close"
+
+# `_ZERO_REPAIR_MARKER` is checked as a standalone line, not a bare
+# substring like `_CI_STUB_MARKER` above: this repo's own retrospectives
+# routinely re-quote an earlier issue's text verbatim inside a later
+# issue's free-prose Repairs/Carried-forward section (issue #1297's own
+# investigation cites #1038 re-quoting a "Proposed gate:" line 63 times) --
+# a bare substring match would misclassify a later, real retrospective as
+# gate-less merely for quoting a fast-closed one. `_CI_STUB_MARKER` stays
+# a bare substring on purpose: `gitapex_post_merge_retro.py`'s own stub body
+# embeds it mid-paragraph, not on its own line, and
+# `gitapex_stale_retro_stub_autoclose.py`'s own `is_unenriched_stub` already
+# matches it the same way -- anchoring it here would silently stop
+# recognizing the real stub shape.
+_ZERO_REPAIR_MARKER_LINE_RE = re.compile(
+    r"^[ \t]*[-*]?[ \t]*" + re.escape(_ZERO_REPAIR_MARKER) + r"[ \t]*$", re.MULTILINE
+)
+
+
 # ---------------------------------------------------------------------------
 # Pure logic
 # ---------------------------------------------------------------------------
@@ -130,19 +171,65 @@ def find_no_citation_issues(
     return [n for n in issue_numbers if citation_count(commit_messages, n) == 0 or n not in tracking_issues]
 
 
+def is_gate_less(body: str) -> bool:
+    """Return `True` iff `body` carries either literal gate-less marker
+    (issue #1297): the CI-opened stub marker (bare substring), or the
+    zero-repair fast-close marker `merge-retrospective/SKILL.md`'s Step 5
+    requires (matched only as its own line -- see
+    `_ZERO_REPAIR_MARKER_LINE_RE`'s own comment for why the two markers
+    are checked differently). `body` is normalized to bare LF line
+    endings first: GitHub is known to deliver an issue body with CRLF
+    endings for one authored or edited via the web UI, and
+    `_ZERO_REPAIR_MARKER_LINE_RE` assumes bare LF -- the same
+    normalization `gitapex_gate_skill_audit_disclosure.py`'s own
+    `_normalize_body` already applies for the identical reason."""
+    normalized = body.replace("\r\n", "\n").replace("\r", "\n")
+    return _CI_STUB_MARKER in normalized or bool(_ZERO_REPAIR_MARKER_LINE_RE.search(normalized))
+
+
+def partition_gate_less(records: list[dict[str, Any]]) -> tuple[list[int], list[int]]:
+    """Partition full issue `records` (each carrying `number` and `body`)
+    into `(gate_less, remaining)` issue numbers, preserving order. Run
+    *before* `find_no_citation_issues` below -- a gate-less issue never
+    had a gate to cite or register, so it cannot clear that check by
+    construction and must not inflate the no-citation report. A missing
+    or `None` body (GitHub allows an empty issue body) is never treated as
+    gate-less -- absence of a body is not evidence of gate-less-ness."""
+    gate_less: list[int] = []
+    remaining: list[int] = []
+    for record in records:
+        number = record["number"]
+        if is_gate_less(record.get("body") or ""):
+            gate_less.append(number)
+        else:
+            remaining.append(number)
+    return gate_less, remaining
+
+
 def evaluate(no_citation_count: int, threshold: int) -> bool:
     """Return True iff `no_citation_count` exceeds `threshold`."""
     return no_citation_count > threshold
 
 
-def format_report(no_citation_issues: list[int], total_issues: int, threshold: int) -> str:
-    """Human-readable report, printed to stdout and captured in the CI step summary."""
+def format_report(no_citation_issues: list[int], total_issues: int, threshold: int, gate_less_count: int = 0) -> str:
+    """Human-readable report, printed to stdout and captured in the CI step summary.
+
+    `gate_less_count` (issue #1297) discloses how many of `total_issues`
+    were excluded from `no_citation_issues` before this report was built,
+    because they matched a gate-less marker -- printed only when nonzero,
+    so a caller not yet passing bodies (or a fixture predating this
+    parameter) sees the identical report as before this bucket existed."""
     no_citation_count = len(no_citation_issues)
     lines = [
         f"Retrospective gate-drift report: {no_citation_count} of {total_issues} "
         f"'{DEFAULT_LABEL}'-labelled issues have no citing commit on main "
         f"(threshold: {threshold}).",
     ]
+    if gate_less_count:
+        lines.append(
+            f"{gate_less_count} of {total_issues} were excluded as gate-less by construction "
+            "(CI-opened stub or zero-repair fast-close) and were never checked for a citation."
+        )
     if no_citation_issues:
         lines.append("Issues with no citing commit:")
         lines.extend(f"  #{n}" for n in sorted(no_citation_issues))
@@ -403,15 +490,16 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        issue_numbers = list_labelled_issues(args.owner, args.repo, args.label, token)
+        records = list_labelled_issue_records(args.owner, args.repo, args.label, token)
         commit_messages = git_commit_messages(args.ref, args.cwd)
         tracking_issues = load_gate_tracking_issues(str(pathlib.Path(args.cwd) / args.ssot_path))
     except (GitHubApiError, GitLogError, SsotLedgerError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 
-    no_citation_issues = find_no_citation_issues(issue_numbers, commit_messages, tracking_issues)
-    print(format_report(no_citation_issues, len(issue_numbers), args.threshold))
+    gate_less_numbers, remaining_numbers = partition_gate_less(records)
+    no_citation_issues = find_no_citation_issues(remaining_numbers, commit_messages, tracking_issues)
+    print(format_report(no_citation_issues, len(records), args.threshold, len(gate_less_numbers)))
     return 1 if evaluate(len(no_citation_issues), args.threshold) else 0
 
 
