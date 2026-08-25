@@ -701,10 +701,29 @@ def evaluate(
     clean, message = scan_body(body, scanner)
 
     if loss_reason is not None:
-        also_leaking = f" The stored body ALSO carries {message} -- both defects need remediation." if not clean else ""
+        # Deliberately does NOT say "both defects" or otherwise declare the
+        # co-occurring provenance/ASCII hit itself a defect: unlike content
+        # loss, that hit can legitimately be a ratified disclosure trailer
+        # (skills/outward-artifact-preflight/SKILL.md check 1 items 2 and
+        # 5), and this repository's own CONTRIBUTING.md names one concrete
+        # ratified example. The standalone FLAGGED path below already routes
+        # that judgment call correctly; this composition must not silently
+        # skip it just because content loss also fired. Found live by an
+        # adversarial gate-quality review of this issue's own change: the
+        # first version of this clause asserted "both defects need
+        # remediation" unconditionally, which would misdirect an operator
+        # into stripping an agreed, disclosed trailer.
+        also_leaking = (
+            f" The stored body's remaining content ALSO carries {message} -- unlike the content-loss "
+            "finding, that is a judgment call, not an automatic defect: per "
+            "skills/outward-artifact-preflight/SKILL.md check 1 items 2 and 5, first check whether each "
+            "hit is a disclosure trailer this repository has already ratified before treating it as a leak."
+            if not clean
+            else ""
+        )
         return "CONTENT_LOSS", (
-            f"{owner}/{repo}#{number}'s STORED body: {loss_reason}.{also_leaking} This is a defect, not a "
-            "judgment call: per issue #1327, do not re-check via an MCP read tool "
+            f"{owner}/{repo}#{number}'s STORED body: {loss_reason}.{also_leaking} The content-loss finding "
+            "itself is a defect, not a judgment call: per issue #1327, do not re-check via an MCP read tool "
             "(pull_request_read/issue_read), whose own response sanitizer can independently "
             "strip content that storage still holds intact and would misreport this as clean or "
             "as a different problem. Re-submit the missing content via update_pull_request / "
