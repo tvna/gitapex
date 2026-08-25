@@ -83,6 +83,28 @@ def test_fails_when_the_marker_is_only_quoted_inside_a_fenced_example() -> None:
     assert result.returncode == 1
 
 
+def test_fails_when_the_marker_is_only_quoted_via_4_space_indentation() -> None:
+    # Found by an adversarial review round (issue #1306): a 4+ space
+    # indented block is CommonMark/GFM's own "indented code block"
+    # convention (this file's own module docstring's "one example" uses
+    # exactly this style) -- an unbounded leading-whitespace match would
+    # let this illustrative-quoting path bypass _strip_fences entirely,
+    # even though the fenced-example case above is correctly caught.
+    body = f"Here's an example of the marker format:\n\n    {_VALID_MARKER}\n\nNot a real disclosure.\n"
+    result = run(body)
+    assert result.returncode == 1
+
+
+def test_fails_on_a_single_unpaired_backtick() -> None:
+    # Found by the same adversarial review round: the skill-name backticks
+    # must be a matched pair, not independently optional -- a stray
+    # opening-only or closing-only backtick must not still match.
+    result = run("Re-verified: `planning-a-branch-from-an-issue (2026-08-25T00:00:00Z)")
+    assert result.returncode == 1
+    result = run("Re-verified: planning-a-branch-from-an-issue` (2026-08-25T00:00:00Z)")
+    assert result.returncode == 1
+
+
 def test_fails_when_the_marker_names_a_different_skill() -> None:
     result = run("Re-verified: `some-other-skill` (2026-08-25T00:00:00Z)")
     assert result.returncode == 1
@@ -110,6 +132,16 @@ def test_body_flag_reports_error_for_a_missing_file(tmp_path: Path) -> None:
     result = run("", extra_args=["--body", str(missing)])
     assert result.returncode == 1
     assert "error: body file not found" in result.stderr
+
+
+def test_body_flag_reports_error_for_a_directory(tmp_path: Path) -> None:
+    # Found by an adversarial review round (issue #1306): --body pointed at
+    # a directory used to raise an uncaught IsADirectoryError traceback
+    # instead of this file's own established `error: ...` convention.
+    result = run("", extra_args=["--body", str(tmp_path)])
+    assert result.returncode == 1
+    assert "error: could not read body file" in result.stderr
+    assert "Traceback" not in result.stderr
 
 
 def test_body_flag_reports_error_for_non_utf8_file(tmp_path: Path) -> None:

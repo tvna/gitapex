@@ -73,16 +73,33 @@ def _strip_fences(text: str) -> str:
     return "\n".join(kept)
 
 
-# `^[ \t]*[-*]?[ \t]*` optional bullet prefix, `` `?...`? `` optional
-# backtick wrap around the skill name, non-empty (and not merely
-# whitespace) parenthesized timestamp required -- `(?P<timestamp>\S...)`
-# anchors the captured group to start on a non-whitespace character, so
-# `( )`/`(   )` cannot match, only `[ \t]*` immediately outside the group
-# absorbs surrounding padding. Same shape discipline as
+# `^(?:[-*][ \t]+)?` -- the line must start at column 0, optionally after a
+# single bullet marker (`- `/`* `); NO other leading whitespace is
+# accepted. A leading run of unbounded `[ \t]*` was tried first and
+# rejected: 4+ spaces of leading indentation is CommonMark/GFM's own
+# "indented code block" convention (renders as literal/preformatted text,
+# not prose), so an unbounded leading-whitespace match would let a
+# genuinely illustrative example -- quoted with indentation rather than a
+# ```/~~~ fence, this file's own module docstring's "one example" above
+# included -- misdetect as a real disclosure, defeating _strip_fences's
+# entire purpose via a path it doesn't cover (found by an adversarial
+# review round against this exact file, issue #1306). Anchoring to column
+# 0 closes that class outright rather than merely narrowing it to a
+# 0-3-space band, since neither this checker nor the Postcondition that
+# authors the marker (planning-a-branch-from-an-issue/SKILL.md) ever
+# writes it under nested indentation. `` (?:`NAME`|NAME) `` requires the
+# skill-name backticks to be a matched pair, not independently optional --
+# an earlier `` `?NAME`? `` shape let a single stray backtick (opening or
+# closing only) still match. Non-empty (and not merely whitespace)
+# parenthesized timestamp required -- `(?P<timestamp>\S...)` anchors the
+# captured group to start on a non-whitespace character, so `( )`/`(   )`
+# cannot match, only `[ \t]*` immediately outside the group absorbs
+# surrounding padding. Same shape discipline as
 # hooks/gitapex_check_acm_present_or_waiver.py's own _ACM_WAIVER_RE (fixed
 # prefix, required non-empty trailing content).
 _RE_VERIFIED_MARKER_RE = re.compile(
-    r"^[ \t]*[-*]?[ \t]*Re-verified[ \t]*:[ \t]*`?planning-a-branch-from-an-issue`?[ \t]*"
+    r"^(?:[-*][ \t]+)?Re-verified[ \t]*:[ \t]*"
+    r"(?:`planning-a-branch-from-an-issue`|planning-a-branch-from-an-issue)[ \t]*"
     r"\([ \t]*(?P<timestamp>\S[^)\r\n]*)\)[ \t]*$",
     re.IGNORECASE | re.MULTILINE,
 )
@@ -111,6 +128,14 @@ def main(argv: list[str] | None = None) -> int:
         )
     except FileNotFoundError:
         print(f"error: body file not found: {args.body}", file=sys.stderr)
+        return 1
+    except OSError as error:
+        # Broader than FileNotFoundError above -- IsADirectoryError (a
+        # directory passed to --body) and PermissionError both otherwise
+        # surfaced as an uncaught traceback instead of this file's own
+        # established `error: ...` convention (found by an adversarial
+        # review round, issue #1306).
+        print(f"error: could not read body file: {args.body} ({error})", file=sys.stderr)
         return 1
     except UnicodeDecodeError as error:
         source = args.body if args.body else "standard input"

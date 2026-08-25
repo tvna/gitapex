@@ -38,9 +38,9 @@ first, not skimmed.
    judgment's own; its presence only proves that skill's own Step 4
    re-verification ran, never that a human's approval comment genuinely
    refers to this specific Branch Plan -- that stays entirely this gate's
-   own judgment below, completely unchanged. Then check, via
-   `github:issue_read` method `get_comments` (or `get`), for a comment on
-   the parent issue whose `author_association` is
+   own judgment below, completely unchanged. Check, via `github:issue_read`
+   method `get_comments` (or `get`), for a comment on the parent issue
+   whose `author_association` is
    `OWNER`/`MEMBER`/`COLLABORATOR` and whose text approves this specific
    Branch Plan, or explicit human confirmation in the current interactive
    session. Absent either, stop and escalate --
