@@ -106,11 +106,13 @@ destined for a public sink.
    treating INDETERMINATE as "check complete."
 
    Where no such automation exists (or its verdict is INDETERMINATE),
-   call the calling repository's own equivalent raw-fetch helper directly
-   -- this repository's own is `fetch_issue()` in
-   `hooks/gitapex_check_pr_issue_acm_disclosure.py`, which returns a
-   `{"body": ..., "state": ...}` mapping -- and feed its `body` value into
-   the scan below, assigned to a shell variable however your environment
+   issue that same `GET /repos/{owner}/{repo}/issues/{number}` call
+   yourself -- directly, or through the calling repository's own
+   equivalent raw-fetch helper if one exists (this repository's own is
+   `fetch_issue()` in `hooks/gitapex_check_pr_issue_acm_disclosure.py`,
+   which returns a `{"body": ..., "state": ...}` mapping) -- and feed the
+   returned `body` value into the scan below, assigned to a shell variable
+   however your environment
    does that (for example, printing just that field and capturing it via
    command substitution). Never feed the scan a body read back from
    `pull_request_read`/`issue_read`:
