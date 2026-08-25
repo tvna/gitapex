@@ -1,0 +1,91 @@
+# Issue #1311 (Repair 5 of retrospective #1286): PR #1276 was merged
+# directly via the GitHub UI after `executing-a-branch-plan` opened it
+# already non-draft with clean CI, but before `drafting-a-pr-to-merge`'s
+# own mandatory Step 8 independent review had run against it at all. Four
+# confirmed defects Step 8 later found (see #1288) never landed on `main`.
+# This job is the required status check that closes that race: it starts
+# pending/failing for any not-yet-reviewed head commit and only turns
+# green once a `## Step 8 independent review verdict` section naming that
+# exact commit is present in the PR body (see
+# .github/scripts/gitapex_gate_independent_review_pending.py's own module
+# docstring for the verdict format and this gate's known limits).
+#
+# Trigger types, and why each is needed -- issue #1311's own drafted
+# Acceptance Criteria Map named only ready_for_review/synchronize;
+# repository inspection found two real gaps a narrower trigger set would
+# leave open:
+#   - opened: `executing-a-branch-plan` opens PRs already non-draft (no
+#     `draft: true` call found anywhere in that skill) -- so a PR that
+#     never needs a follow-up push (the golden path: clean on the first
+#     try) would otherwise never fire `ready_for_review` OR `synchronize`
+#     at all, leaving this required check permanently "Expected" with no
+#     status ever posted for that commit.
+#   - ready_for_review: the literal transition this issue's incident
+#     named, for a PR that *did* start as a draft.
+#   - synchronize: a new commit changes the head SHA a prior verdict was
+#     recorded against, which must re-open the check (a stale verdict is
+#     not a pass) until a fresh one is recorded.
+#   - edited: the Step 8 verdict is recorded via a PR body edit
+#     (`update_pull_request`), not a new commit -- without this trigger,
+#     recording a passing verdict would never itself cause the check to
+#     re-run and turn green, the same reason skill-audit-gate.yml already
+#     listens for `edited`.
+#   - reopened: matches this repository's own established convention
+#     (skill-audit-gate.yml, provenance-disclosure-gate.yml) for a status
+#     check whose pass condition can change independently of a new push.
+#
+# Deliberately no `paths:` filter -- same rationale already stated in
+# betterleaks-merge-gate.yml/hidden-characters-gate.yml: this is a
+# required check reading PR body content, applicable to every PR
+# regardless of which files it touches. A path-filtered trigger would
+# leave an unrelated PR's required check pending forever once this job is
+# registered in branch protection.
+name: Independent review pending
+
+on:
+  pull_request:
+    types: [opened, ready_for_review, synchronize, edited, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  independent-review-pending:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      # PR_BODY carries untrusted external text (anyone with PR-author
+      # access controls it) -- written to a file via env, never
+      # interpolated directly into the shell script, avoiding GitHub
+      # Actions expression/script injection (same rationale as
+      # skill-audit-gate.yml/provenance-disclosure-gate.yml's own PR_BODY
+      # handling).
+      - name: Write PR body to file
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$PR_BODY" > "$RUNNER_TEMP/pr_body.txt"
+
+      - name: Check independent-review verdict is recorded against the current head
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          uv run --frozen python3 .github/scripts/gitapex_gate_independent_review_pending.py \
+            --body "$RUNNER_TEMP/pr_body.txt" \
+            --head-sha "$HEAD_SHA"
