@@ -141,6 +141,27 @@ def test_is_gate_less_false_for_empty_body():
     assert gate.is_gate_less("") is False
 
 
+def test_is_gate_less_matches_zero_repair_marker_with_bullet_prefix():
+    body = "PR #63 merged with zero repairs.\n- Retrospective status: zero-repair-fast-close\nRefs #63."
+    assert gate.is_gate_less(body) is True
+
+
+def test_is_gate_less_false_when_zero_repair_marker_only_quoted_mid_sentence():
+    # Defeat case (issue #1297): this repo's own retrospectives routinely
+    # re-quote an earlier issue's text verbatim inside a later, real
+    # retrospective's Carried-forward section -- a bare substring match
+    # would misclassify that later, real issue as gate-less merely for
+    # quoting a fast-closed one.
+    body = (
+        "1. [Carried-forward] Issue #63 was fast-closed "
+        "(`Retrospective status: zero-repair-fast-close`), but the real "
+        "gate proposed in this cycle remains unimplemented.\n"
+        "   Status: `missing-deterministic-gate`\n"
+        "   Proposed gate: add a pre-push hook."
+    )
+    assert gate.is_gate_less(body) is False
+
+
 def test_partition_gate_less_separates_records_preserving_order():
     records = [
         {"number": 118, "body": "Automated stub opened by the post-merge-auto-retro gate."},
@@ -873,3 +894,26 @@ def test_main_names_every_offending_flag_in_declaration_order(monkeypatch, capsy
         f"error: invalid arguments: --owner {blank}, --repo {blank}, --ref {blank}, "
         f"--cwd {blank}, --label {blank}, --ssot-path {blank}" in capsys.readouterr().err
     )
+
+
+# ---------------------------------------------------------------------------
+# Marker drift gate (issue #1297): _CI_STUB_MARKER and _ZERO_REPAIR_MARKER
+# are literal copies of two canonical sources, not imports (this repo keeps
+# .github/scripts/*.py files independent of one another) -- assert directly
+# against those sources' own text so the two cannot silently re-diverge,
+# per test_gitapex_stale_retro_stub_autoclose.py's own
+# test_stub_marker_matches_post_merge_retro_source precedent for the
+# identical drift risk on the CI-stub marker half of this pair.
+# ---------------------------------------------------------------------------
+
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+
+def test_ci_stub_marker_matches_post_merge_retro_source():
+    source = (REPO_ROOT / ".github" / "scripts" / "gitapex_post_merge_retro.py").read_text(encoding="utf-8")
+    assert gate._CI_STUB_MARKER in source
+
+
+def test_zero_repair_marker_matches_skill_md_source():
+    source = (REPO_ROOT / "skills" / "merge-retrospective" / "SKILL.md").read_text(encoding="utf-8")
+    assert gate._ZERO_REPAIR_MARKER in source

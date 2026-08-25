@@ -117,6 +117,22 @@ class SsotLedgerError(RuntimeError):
 _CI_STUB_MARKER = "Automated stub opened by the post-merge-auto-retro gate"
 _ZERO_REPAIR_MARKER = "Retrospective status: zero-repair-fast-close"
 
+# `_ZERO_REPAIR_MARKER` is checked as a standalone line, not a bare
+# substring like `_CI_STUB_MARKER` above: this repo's own retrospectives
+# routinely re-quote an earlier issue's text verbatim inside a later
+# issue's free-prose Repairs/Carried-forward section (issue #1297's own
+# investigation cites #1038 re-quoting a "Proposed gate:" line 63 times) --
+# a bare substring match would misclassify a later, real retrospective as
+# gate-less merely for quoting a fast-closed one. `_CI_STUB_MARKER` stays
+# a bare substring on purpose: `gitapex_post_merge_retro.py`'s own stub body
+# embeds it mid-paragraph, not on its own line, and
+# `gitapex_stale_retro_stub_autoclose.py`'s own `is_unenriched_stub` already
+# matches it the same way -- anchoring it here would silently stop
+# recognizing the real stub shape.
+_ZERO_REPAIR_MARKER_LINE_RE = re.compile(
+    r"^[ \t]*[-*]?[ \t]*" + re.escape(_ZERO_REPAIR_MARKER) + r"[ \t]*$", re.MULTILINE
+)
+
 
 # ---------------------------------------------------------------------------
 # Pure logic
@@ -157,9 +173,12 @@ def find_no_citation_issues(
 
 def is_gate_less(body: str) -> bool:
     """Return `True` iff `body` carries either literal gate-less marker
-    (issue #1297): the CI-opened stub marker, or the zero-repair
-    fast-close marker `merge-retrospective/SKILL.md`'s Step 5 requires."""
-    return _CI_STUB_MARKER in body or _ZERO_REPAIR_MARKER in body
+    (issue #1297): the CI-opened stub marker (bare substring), or the
+    zero-repair fast-close marker `merge-retrospective/SKILL.md`'s Step 5
+    requires (matched only as its own line -- see
+    `_ZERO_REPAIR_MARKER_LINE_RE`'s own comment for why the two markers
+    are checked differently)."""
+    return _CI_STUB_MARKER in body or bool(_ZERO_REPAIR_MARKER_LINE_RE.search(body))
 
 
 def partition_gate_less(records: list[dict[str, Any]]) -> tuple[list[int], list[int]]:

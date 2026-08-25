@@ -10,10 +10,12 @@ implements (issue #709: a citing commit alone is not proof a gate was
 actually built), deliberately re-implemented -- not imported or
 subprocess-invoked -- against a local `git log` and `.gitapex/ssot.json`.
 
-No test in this file makes a real subprocess or filesystem call outside
-pytest's own tmp_path -- the git layer is exercised through an injected
-`runner`, mirroring test_gitapex_scan_retrospective_gate_drift.py's own
-fixture style.
+No test in this file makes a real subprocess call, or a real filesystem
+call outside pytest's own tmp_path, except the marker drift-gate tests
+near the bottom of this file, which deliberately read this repository's
+real canonical marker sources -- the git layer above that is exercised
+through an injected `runner`, mirroring
+test_gitapex_scan_retrospective_gate_drift.py's own fixture style.
 """
 
 from __future__ import annotations
@@ -76,6 +78,27 @@ def test_is_gate_less_false_when_neither_marker_present() -> None:
 
 def test_is_gate_less_false_for_empty_body() -> None:
     assert checker.is_gate_less("") is False
+
+
+def test_is_gate_less_matches_zero_repair_marker_with_bullet_prefix() -> None:
+    body = "PR #63 merged with zero repairs.\n- Retrospective status: zero-repair-fast-close\nRefs #63."
+    assert checker.is_gate_less(body) is True
+
+
+def test_is_gate_less_false_when_zero_repair_marker_only_quoted_mid_sentence() -> None:
+    # Defeat case (issue #1297): this repo's own retrospectives routinely
+    # re-quote an earlier issue's text verbatim inside a later, real
+    # retrospective's Carried-forward section -- a bare substring match
+    # would misclassify that later, real issue as gate-less merely for
+    # quoting a fast-closed one.
+    body = (
+        "1. [Carried-forward] Issue #63 was fast-closed "
+        "(`Retrospective status: zero-repair-fast-close`), but the real "
+        "gate proposed in this cycle remains unimplemented.\n"
+        "   Status: `missing-deterministic-gate`\n"
+        "   Proposed gate: add a pre-push hook."
+    )
+    assert checker.is_gate_less(body) is False
 
 
 # ---------------------------------------------------------------------------
@@ -433,3 +456,27 @@ def test_main_exits_one_on_bodies_input_error(
     exit_code = checker.main(["1", "--bodies", "/nonexistent/bodies.json"])
     assert exit_code == 1
     assert "error:" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# Marker drift gate (issue #1297): _CI_STUB_MARKER and _ZERO_REPAIR_MARKER
+# are literal copies of two canonical sources, not imports (this repo keeps
+# skill-bundled and .github/scripts/*.py files independent of one another)
+# -- assert directly against those sources' own text so the two cannot
+# silently re-diverge the way the title/query pair did before #341, per
+# tests/test_gitapex_stale_retro_stub_autoclose.py's own
+# test_stub_marker_matches_post_merge_retro_source precedent for the
+# identical drift risk on the CI-stub marker half of this pair.
+# ---------------------------------------------------------------------------
+
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
+
+
+def test_ci_stub_marker_matches_post_merge_retro_source() -> None:
+    source = (REPO_ROOT / ".github" / "scripts" / "gitapex_post_merge_retro.py").read_text(encoding="utf-8")
+    assert checker._CI_STUB_MARKER in source
+
+
+def test_zero_repair_marker_matches_skill_md_source() -> None:
+    source = (REPO_ROOT / "skills" / "merge-retrospective" / "SKILL.md").read_text(encoding="utf-8")
+    assert checker._ZERO_REPAIR_MARKER in source

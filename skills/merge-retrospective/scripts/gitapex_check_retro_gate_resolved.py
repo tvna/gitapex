@@ -69,6 +69,20 @@ identical pattern in
 deliberately mirrors is itself out of that gate's own scope by
 construction (its `gitapex_scan_` prefix, not `gitapex_check_`/
 `gitapex_gate_`).
+
+Same waiver, same reason, extended to `_ZERO_REPAIR_MARKER_LINE_RE` and
+`is_gate_less`'s own `.search()` call (issue #1297): standalone-line-vs-
+mid-sentence-quote boundary correctness is already covered by explicit
+example tests in the co-located test module
+(`test_is_gate_less_matches_zero_repair_marker_with_bullet_prefix`/
+`test_is_gate_less_false_when_zero_repair_marker_only_quoted_mid_sentence`),
+the same boundary a Hypothesis `@given` property test would probe. This
+skill's own scripts directory is still outside
+`[tool.pytest.ini_options]` `pythonpath`/`testpaths` (unlike
+`.github/scripts`), so a `tests/test_gitapex_check_retro_gate_resolved_properties.py`
+addition cannot import this module without a `pyproject.toml`
+pythonpath change -- out of scope for issue #1297, same architectural
+constraint issue #1176 already established above.
 """
 
 from __future__ import annotations
@@ -110,6 +124,22 @@ class BodiesInputError(RuntimeError):
 _CI_STUB_MARKER = "Automated stub opened by the post-merge-auto-retro gate"
 _ZERO_REPAIR_MARKER = "Retrospective status: zero-repair-fast-close"
 
+# `_ZERO_REPAIR_MARKER` is checked as a standalone line, not a bare
+# substring like `_CI_STUB_MARKER` above: this repo's own retrospectives
+# routinely re-quote an earlier issue's text verbatim inside a later
+# issue's free-prose Repairs/Carried-forward section (issue #1297's own
+# investigation cites #1038 re-quoting a "Proposed gate:" line 63 times) --
+# a bare substring match would misclassify a later, real retrospective as
+# gate-less merely for quoting a fast-closed one. `_CI_STUB_MARKER` stays
+# a bare substring on purpose: `gitapex_post_merge_retro.py`'s own stub body
+# embeds it mid-paragraph, not on its own line, and
+# `gitapex_stale_retro_stub_autoclose.py`'s own `is_unenriched_stub` already
+# matches it the same way -- anchoring it here would silently stop
+# recognizing the real stub shape.
+_ZERO_REPAIR_MARKER_LINE_RE = re.compile(  # detection-logic-property-coverage: WAIVED: see module docstring
+    r"^[ \t]*[-*]?[ \t]*" + re.escape(_ZERO_REPAIR_MARKER) + r"[ \t]*$", re.MULTILINE
+)
+
 
 # Record separator (0x1e) / unit separator (0x1f): see
 # gitapex_scan_retrospective_gate_drift.py's own identical comment -- these
@@ -136,9 +166,14 @@ def citation_count(commit_messages: list[str], issue_number: int) -> int:
 
 def is_gate_less(body: str) -> bool:
     """Return `True` iff `body` carries either literal gate-less marker
-    (issue #1297): the CI-opened stub marker, or the zero-repair
-    fast-close marker `merge-retrospective/SKILL.md`'s Step 5 requires."""
-    return _CI_STUB_MARKER in body or _ZERO_REPAIR_MARKER in body
+    (issue #1297): the CI-opened stub marker (bare substring), or the
+    zero-repair fast-close marker `merge-retrospective/SKILL.md`'s Step 5
+    requires (matched only as its own line -- see
+    `_ZERO_REPAIR_MARKER_LINE_RE`'s own comment for why the two markers
+    are checked differently)."""
+    return _CI_STUB_MARKER in body or bool(
+        _ZERO_REPAIR_MARKER_LINE_RE.search(body)  # detection-logic-property-coverage: WAIVED: see module docstring
+    )
 
 
 def partition_gate_less(issue_numbers: list[int], bodies: dict[int, str]) -> tuple[list[int], list[int]]:
