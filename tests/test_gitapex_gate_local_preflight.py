@@ -877,7 +877,7 @@ def test_only_deliberately_named_hooks_reach_the_push_path() -> None:
 
 def test_every_unwired_gate_records_why() -> None:
     """The drift-test branch of issue #876's third criterion: a gate with no
-    working-tree form must say so in prose, so the 29 exclusions stay
+    working-tree form must say so in prose, so the 30 exclusions stay
     readable as decisions rather than as coverage silently lost. The schema
     enforces the same invariant; this asserts it against the live registry
     so a schema regression cannot pass unnoticed."""
