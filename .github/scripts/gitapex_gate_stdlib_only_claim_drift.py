@@ -183,7 +183,7 @@ def parse_diff_added_third_party_imports(diff_text: str) -> set[str]:
     # `_TARGET_DIR_RE`'s `$`-anchored match and silently drops the file --
     # a false negative found by adversarial review (issue #1052's own PR).
     for line in diff_text.replace("\r\n", "\n").split("\n"):
-        if line.startswith("diff --git ") or line.startswith("--- "):
+        if not in_hunk and (line.startswith("diff --git ") or line.startswith("--- ")):
             in_hunk = False
             continue
         # A real `+++ b/<path>` header only ever appears before the first

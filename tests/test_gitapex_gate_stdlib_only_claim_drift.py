@@ -87,6 +87,29 @@ def test_added_line_colliding_with_a_file_header_does_not_hide_a_later_import() 
     assert gate.parse_diff_added_third_party_imports(diff_text) == {".github/scripts/gitapex_gate_foo.py"}
 
 
+def test_removed_line_colliding_with_a_source_header_does_not_hide_a_later_import() -> None:
+    # Issue #1316: the symmetric case of the "++ "/"+++ " finding directly
+    # above, never applied to this file's own `--- `/`diff --git ` check.
+    # A *removed* line whose own original content starts with "-- " is
+    # diff-prefixed to "--- ...", identical to a real `--- a/<path>`
+    # source header. Without gating that check on `not in_hunk`, this line
+    # is misread as a second file header mid-hunk, silently dropping every
+    # real added line after it in the same hunk -- including the import a
+    # few lines later.
+    diff_text = (
+        "diff --git a/.github/scripts/gitapex_gate_foo.py b/.github/scripts/gitapex_gate_foo.py\n"
+        "index 0000000..1111111 100644\n"
+        "--- a/.github/scripts/gitapex_gate_foo.py\n"
+        "+++ b/.github/scripts/gitapex_gate_foo.py\n"
+        "@@ -1,3 +1,3 @@\n"
+        " import os\n"
+        "--- old comment marker\n"
+        "+import pydantic\n"
+        " import sys\n"
+    )
+    assert gate.parse_diff_added_third_party_imports(diff_text) == {".github/scripts/gitapex_gate_foo.py"}
+
+
 # --- has_stale_claim: the two real defect shapes, and the two real false
 # positives found and fixed while measuring this gate against this
 # repository's own already-corrected text (defeat-test-disclosure) ---
