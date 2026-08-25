@@ -18,10 +18,14 @@ unknown field in a committed suite:
 - ``waza run`` logs ``level=WARN msg="unknown schema field ignored for
   same-major compatibility"`` and still passes the task.
 - ``waza check`` does report it (``/expected: additional properties ''
-  not allowed``) but exits 0, and .github/workflows/waza-check.yml sets
-  ``continue-on-error: true`` deliberately, describing itself in its own
-  comments as "a report, not a gate". Issue #862 explicitly forbids
-  changing that posture, so this scanner is the gate instead.
+  not allowed``) but exits 0, and .github/workflows/waza-check.yml used to
+  set ``continue-on-error: true`` deliberately, describing itself in its
+  own comments as "a report, not a gate". Issue #862 explicitly forbade
+  changing that posture, so this scanner was built as the gate instead.
+  Issue #1135 later dropped waza-check.yml entirely -- its schema-shape
+  content was already fully covered here, waza-independently -- so this
+  scanner is now the only check of this content, not merely a stricter
+  sibling of an advisory report.
 
 The repository-local consumers that read the extension keys below do so
 through pydantic models configured ``extra="allow"``, so a *misspelled*

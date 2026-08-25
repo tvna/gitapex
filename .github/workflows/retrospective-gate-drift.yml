@@ -43,8 +43,9 @@ jobs:
       # Issue #297 (refs #187, #242, #246): mechanizes merge-retrospective's
       # Step 0 (retrospective-labelled issues with no citing commit on
       # main) instead of leaving it a manual audit every cycle. No
-      # continue-on-error here -- unlike waza-check.yml, this job is meant
-      # to actually fail when the backlog grows past its threshold. See
+      # continue-on-error here -- unlike waza-check.yml (retired in issue
+      # #1135), this job is meant to actually fail when the backlog grows
+      # past its threshold. See
       # docs/superpowers/specs/2026-07-22-retrospective-gate-drift-design.md.
       - name: Scan for retrospective citation drift
         env:
