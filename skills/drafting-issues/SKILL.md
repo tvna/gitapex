@@ -43,8 +43,7 @@ pre-verified (Step 9 states the full rule; it is not repeated here).
    part of the tracking issue itself; defect (issue not yet filed)
    hands off to `planning-a-branch-from-an-issue`'s own bare-defect-report
    recognition path, which re-attempts live reproduction against the
-   issue this type anchors -- see
-   [Defect (issue not yet filed)](#defect-issue-not-yet-filed) below for
+   issue this type anchors -- see Defect (issue not yet filed) below for
    that seventh type's own scope and procedure, which replaces Steps
    3-8 rather than extending them. If the request is a chore,
    docs-only change, or a tracking/umbrella issue, stop here -- see
@@ -228,8 +227,7 @@ someone can reproduce it or new evidence narrows the failure.
   tracking, or defect (issue not yet filed) -- the Step 2 decision,
   stated explicitly before Facts are drafted (Step 2). The defect
   (issue not yet filed) type replaces Facts through Dedup below with
-  its own two-field shape -- see
-  [Defect (issue not yet filed)](#defect-issue-not-yet-filed).
+  its own two-field shape -- see Defect (issue not yet filed) above.
 - **Facts:** what the requester actually stated, cited to their words,
   with any secret/credential/PII redacted (Step 3).
 - **Requested outcome:** one to two sentences.
@@ -271,9 +269,9 @@ was supplied.
   those issue shapes do not carry one (a tracking issue has its own
   goal/sub-tasks/definition-of-done shape instead, and defect (issue
   not yet filed) has its own reproduction-notes-plus-waiver shape --
-  Defect (issue not yet filed)) -- classify and stop or redirect per
-  Step 2 rather than bending the request into a feature/fix/refactor
-  shape it is not.
+  see Defect (issue not yet filed) above) -- classify and stop or
+  redirect per Step 2 rather than bending the request into a
+  feature/fix/refactor shape it is not.
 - Do not blend an ACM column into a target-template field whose own
   declared meaning differs (Step 9's field-population rule).
 - Do not carry a secret, credential, token, or personal data from the
@@ -292,7 +290,8 @@ was supplied.
 - Do not create a feature/fix/refactor-type issue before
   `gitapex_check_acm_present.py` passes on the drafted body (this
   check does not apply to the defect (issue not yet filed) type, which
-  by design carries no ACM table -- Defect (issue not yet filed)).
+  by design carries no ACM table -- see Defect (issue not yet filed)
+  above).
 - Do not create a feature/fix/refactor-type issue without a `Dedup:`
   disclosure line (Step 6) -- a search that found nothing is still
   required to be disclosed as `Dedup: none found`, never silently
