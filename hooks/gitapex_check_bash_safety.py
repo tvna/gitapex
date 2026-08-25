@@ -208,6 +208,34 @@ skills/executing-a-branch-plan/scripts/gitapex_check_task_bash_safety.py
 (its own B1a/B1b, `_rule_gh_any`, and `_rule_git_push` all shared the
 same gap).
 
+Closed by tenth-round Step 8 independent review, a THIRD distinct bypass
+class (rounds 5-8: shlex's own quote removal; round 9: bash's default-
+value expansion; this one: bash's own `${!NAME}` indirect-reference
+syntax): `${!NAME}` is a TWO-LEVEL lookup -- NAME's own assigned value
+names a SECOND variable, and the whole expression evaluates to THAT
+variable's own assigned value (`TOOLREF=T; T=uv; ${!TOOLREF}` resolves,
+at real bash's own runtime, to a genuine `uv`). Before this fix, none of
+this module's indirection machinery recognized this syntax at all -- not
+merely mis-resolved, but contributing NOTHING to any rule's own
+referenced-name/value collection, so a tool/verb/write-method hidden this
+way was entirely invisible. Closed via `_resolve_indirect_ref` (used
+directly by B1a/B1b and the gh-api flag-name sub-passes, and folded into
+`_substitute_var_refs_candidates`'s own regex as a fourth alternative for
+the gh-api value path) plus a new `_assigned_raw_values` map: the
+first-level lookup needs NAME's assigned value as a CASE-PRESERVED key
+into the second lookup (bash variable names are case-sensitive), so it
+cannot reuse the existing `_assigned_literals`/`name_to_value` map, which
+intentionally lowercases every RHS for this module's other, case-
+insensitive tool/verb/write-method comparisons. The identical fix was
+ported to the self-contained duplicate at
+skills/executing-a-branch-plan/scripts/gitapex_check_task_bash_safety.py,
+which additionally had a fourth, unrelated tenth-round gap of its own:
+`_rule_npx`/`_rule_bare_install`/`_rule_fetch_exec` previously checked
+only a token's own literal text, with NO indirection handling of any
+kind (`N=npx; $N left-pad` bypassed npx detection entirely) -- closed
+there via a new unifying `_resolve_dynamic_token` helper (bare variable,
+default clause, or `${!NAME}`, in that order) shared by all three rules.
+
 Deliberately stdlib-only (shlex, re, json) -- no new third-party
 dependency, matching this repository's declarative module-management
 convention and python3's already-accepted-hook-dependency status (see
@@ -282,6 +310,49 @@ def _default_clause_literal(token: str) -> str | None:
     return match.group(2) if match else None
 
 
+# Matches a token that is EXACTLY bash's own `${!NAME}` indirect-reference
+# syntax (anchored) -- unlike every other reference shape this module
+# recognizes, bash requires the braces here; there is no unbraced `$!NAME`
+# form (that parses as `$!` -- the last background job's PID -- followed by
+# literal text "NAME"). See _resolve_indirect_ref below.
+_INDIRECT_REF_RE = re.compile(r"^\$\{!([A-Za-z_][A-Za-z0-9_]*)\}$")
+
+
+def _resolve_indirect_ref(token: str, name_to_value: dict[str, str], name_to_raw_value: dict[str, str]) -> str | None:
+    """Resolve TOKEN's value when TOKEN is EXACTLY bash's own `${!NAME}`
+    indirect-reference syntax -- a TWO-LEVEL lookup: NAME's own assigned
+    value names a SECOND variable, and this expression evaluates to THAT
+    variable's own assigned value. None if TOKEN is not this shape, or if
+    either lookup level is unresolvable.
+
+    The first-level lookup uses `name_to_raw_value` (case-preserved), not
+    `name_to_value` (lowercased) -- NAME's value must be used as a
+    case-correct KEY into the second lookup (bash variable names are
+    case-sensitive: `TOOLREF=T; T=uv` must resolve via the key `"T"`, not
+    a lowercased `"t"` that would miss it if no separate `t=` assignment
+    exists). The second-level lookup uses `name_to_value` as usual, so the
+    FINAL resolved value is still lowercased like every other resolution
+    in this module.
+
+    Found live by Step 8 independent review, tenth round (issue #1326):
+    none of this module's existing indirection machinery (bare-reference
+    lookup, default-clause extraction) ever recognized this bash syntax at
+    all -- `${!TOOLREF}` contributed NOTHING to any rule's own
+    referenced-name/value collection, so a tool/verb/write-method hidden
+    this way was entirely invisible, not merely mis-resolved. Confirmed
+    live via real bash argv expansion: `TOOLREF=T; T=uv; VERBREF=V;
+    V=install; ${!TOOLREF} ${!VERBREF} foo` resolves to a genuine `uv
+    install foo`, and `MREF=M; M=POST; gh api .../merge -X${!MREF}`
+    resolves to a real `-XPOST` write."""
+    match = _INDIRECT_REF_RE.match(token)
+    if not match:
+        return None
+    referenced_name = name_to_raw_value.get(match.group(1))
+    if referenced_name is None:
+        return None
+    return name_to_value.get(referenced_name)
+
+
 # Matches one `$NAME`/`${NAME}`/`${NAME:-default}` reference anywhere in a
 # token, capturing its full span (including the braces, when present) so
 # _substitute_var_refs_candidates below can replace exactly that span --
@@ -295,6 +366,7 @@ def _default_clause_literal(token: str) -> str | None:
 _VAR_REF_FULL_RE = re.compile(
     r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}"
     r"|\$\{([A-Za-z_][A-Za-z0-9_]*):?[-=]([^}]*)\}"
+    r"|\$\{!([A-Za-z_][A-Za-z0-9_]*)\}"
     r"|\$([A-Za-z_][A-Za-z0-9_]*)"
 )
 
@@ -316,7 +388,9 @@ def _unbraced_ref_options(name_run: str, name_to_value: dict[str, str]) -> list[
     ]
 
 
-def _substitute_var_refs_candidates(token: str, name_to_value: dict[str, str]) -> list[str] | None:
+def _substitute_var_refs_candidates(
+    token: str, name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
+) -> list[str] | None:
     """Every sound reconstruction of TOKEN with each `$NAME`/`${NAME}`
     reference replaced by its assigned (already-lowercased) value,
     preserving any literal text around or between references -- e.g.
@@ -372,13 +446,26 @@ def _substitute_var_refs_candidates(token: str, name_to_value: dict[str, str]) -
     further `$` references it might itself contain (e.g.
     `${UNSET:-$OTHER}`) -- a disclosed residual, the same "not the
     unbounded reconstruction problem" boundary this function already
-    draws elsewhere, not attempted here."""
+    draws elsewhere, not attempted here.
+
+    A `${!NAME}` reference (bash's own indirect reference -- see
+    `_resolve_indirect_ref`'s own docstring for the two-level lookup and
+    why it needs `name_to_raw_value` specifically) contributes NAME's
+    doubly-resolved value as its one candidate, or no candidate at all if
+    either lookup level fails. Found live by Step 8 independent review,
+    tenth round (issue #1326): `MREF=M; M=POST; gh api .../merge
+    -X${!MREF}` resolves (real bash, confirmed via argv expansion) to a
+    real `-XPOST` write -- the prior version of this function never
+    recognized this syntax at all, so the construct was left as untouched
+    literal text, same class of gap as the ninth round's default-clause
+    finding but a different bash feature."""
     partials = [""]
     pos = 0
     for match in _VAR_REF_FULL_RE.finditer(token):
         braced_name = match.group(1)
         default_name = match.group(2)
         default_text = match.group(3)
+        indirect_name = match.group(4)
         if braced_name is not None:
             if braced_name not in name_to_value:
                 return []
@@ -387,8 +474,12 @@ def _substitute_var_refs_candidates(token: str, name_to_value: dict[str, str]) -
             options = [default_text]
             if default_name in name_to_value:
                 options.append(name_to_value[default_name])
+        elif indirect_name is not None:
+            referenced_name = name_to_raw_value.get(indirect_name)
+            resolved = name_to_value.get(referenced_name) if referenced_name is not None else None
+            options = [resolved] if resolved is not None else []
         else:
-            options = _unbraced_ref_options(match.group(4), name_to_value)
+            options = _unbraced_ref_options(match.group(5), name_to_value)
         if not options:
             return []
         if len(partials) * len(options) > _MAX_SUBSTITUTION_CANDIDATES:
@@ -487,6 +578,25 @@ def _assigned_literals(tokens: list[str]) -> dict[str, str]:
         match = _ASSIGN_RE.match(token)
         if match:
             values[match.group(1)] = match.group(2).lower()
+    return values
+
+
+def _assigned_raw_values(tokens: list[str]) -> dict[str, str]:
+    """Like `_assigned_literals`, but preserves the ORIGINAL case of each
+    assignment's RHS value rather than lowercasing it -- needed for bash's
+    own `${!NAME}` indirect-reference resolution (see
+    `_resolve_indirect_ref`), where NAME's own assigned value must be used
+    as a case-correct KEY into a second variable lookup (bash variable
+    names are case-sensitive), not compared case-insensitively against a
+    known tool/verb/write-method literal the way `_assigned_literals`'s
+    own lowercased values are used everywhere else in this module."""
+    values: dict[str, str] = {}
+    for token in tokens:
+        if _is_dynamic(token):
+            continue
+        match = _ASSIGN_RE.match(token)
+        if match:
+            values[match.group(1)] = match.group(2)
     return values
 
 
@@ -688,7 +798,9 @@ def _write_method_candidate_hit(candidates: list[str] | None) -> bool:
     return any(candidate.lower().startswith(method) for candidate in candidates for method in _WRITE_METHODS)
 
 
-def _gh_api_method_dynamic_hit(seg: list[str], name_to_value: dict[str, str]) -> bool:
+def _gh_api_method_dynamic_hit(
+    seg: list[str], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
+) -> bool:
     """A `-X`/`--method` flag whose VALUE is itself dynamically
     constructed -- as a separate token (`-X $M`), fused with `=` (`-X=$M`,
     `--method=$M`), or fused directly (`-X$M`, `-X"$M"` -- shlex dequotes
@@ -723,17 +835,23 @@ def _gh_api_method_dynamic_hit(seg: list[str], name_to_value: dict[str, str]) ->
     unbraced reference immediately followed by more identifier-shaped
     literal text (`-X"$M"ST` with `M=PO`) is itself ambiguous once shlex
     has dequoted it, see `_substitute_var_refs_candidates`'s own
-    docstring."""
+    docstring. `name_to_raw_value` is threaded through purely to reach
+    that function's own `${!NAME}` indirect-reference support (found live
+    by Step 8 independent review, tenth round, issue #1326) -- this
+    function itself has no direct use for it."""
     for i, raw_tok in enumerate(seg):
         dynamic_value_part = _gh_api_method_dynamic_value(seg, i, raw_tok)
         if dynamic_value_part is None:
             continue
-        if _write_method_candidate_hit(_substitute_var_refs_candidates(dynamic_value_part, name_to_value)):
+        candidates = _substitute_var_refs_candidates(dynamic_value_part, name_to_value, name_to_raw_value)
+        if _write_method_candidate_hit(candidates):
             return True
     return False
 
 
-def _gh_api_method_flagname_dynamic_hit(seg: list[str], name_to_value: dict[str, str]) -> bool:
+def _gh_api_method_flagname_dynamic_hit(
+    seg: list[str], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
+) -> bool:
     """The -X/--method flag NAME ITSELF hidden behind a bare variable
     reference as its own token (`F=-X; gh api .../merge $F POST`), with
     the write-method value following as a separate token -- literal or
@@ -759,22 +877,33 @@ def _gh_api_method_flagname_dynamic_hit(seg: list[str], name_to_value: dict[str,
     checked (via `_write_method_candidate_hit`), for the same
     unbraced-reference-ambiguity reason as `_gh_api_method_dynamic_hit`
     above -- found live by Step 8 independent review, eighth round (issue
-    #1326)."""
+    #1326). The flag-name token is ALSO resolved via
+    `_resolve_indirect_ref` (bash's own `${!NAME}` syntax), not just
+    `_resolve_bare_var` -- found live by Step 8 independent review, tenth
+    round (issue #1326): `FREF=F; F=-X; gh api .../merge ${!FREF} POST`
+    resolves (real bash) to a real `-X POST` write and was invisible to
+    the bare-reference-only check."""
     for i, raw_tok in enumerate(seg):
-        if _resolve_bare_var(raw_tok, name_to_value) not in ("-x", "--method"):
+        flag = _resolve_bare_var(raw_tok, name_to_value)
+        if flag is None:
+            flag = _resolve_indirect_ref(raw_tok, name_to_value, name_to_raw_value)
+        if flag not in ("-x", "--method"):
             continue
         if i + 1 >= len(seg):
             continue
         value_tok = seg[i + 1]
         if _is_dynamic(value_tok):
-            if _write_method_candidate_hit(_substitute_var_refs_candidates(value_tok, name_to_value)):
+            candidates = _substitute_var_refs_candidates(value_tok, name_to_value, name_to_raw_value)
+            if _write_method_candidate_hit(candidates):
                 return True
         elif any(value_tok.lower().startswith(m) for m in _WRITE_METHODS):
             return True
     return False
 
 
-def _gh_api_method_fused_flagname_dynamic_hit(seg: list[str], name_to_value: dict[str, str]) -> bool:
+def _gh_api_method_fused_flagname_dynamic_hit(
+    seg: list[str], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
+) -> bool:
     """The -X/--method flag NAME hidden behind a variable reference FUSED
     directly with its own value in the SAME token -- e.g. `F=-X; gh api
     .../merge "$F"POST` dequotes (shlex, like real bash, drops which
@@ -800,7 +929,7 @@ def _gh_api_method_fused_flagname_dynamic_hit(seg: list[str], name_to_value: dic
     for raw_tok in seg:
         if not _is_dynamic(raw_tok):
             continue
-        candidates = _substitute_var_refs_candidates(raw_tok, name_to_value)
+        candidates = _substitute_var_refs_candidates(raw_tok, name_to_value, name_to_raw_value)
         if candidates is None:
             return True
         for candidate in candidates:
@@ -851,7 +980,9 @@ def _gh_api_field_dynamic_hit(seg: list[str]) -> bool:
     return False
 
 
-def _gh_api_field_flagname_dynamic_hit(seg: list[str], name_to_value: dict[str, str]) -> bool:
+def _gh_api_field_flagname_dynamic_hit(
+    seg: list[str], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
+) -> bool:
     """Same class as `_gh_api_method_flagname_dynamic_hit`, for
     -f/-F/--field/--raw-field: the flag NAME itself hidden behind a bare
     variable reference (`FF=--field; gh api ... $FF name=value`). Unlike
@@ -859,11 +990,23 @@ def _gh_api_field_flagname_dynamic_hit(seg: list[str], name_to_value: dict[str, 
     of the flag alone is denied, matching `_gh_api_field_literal_hit`'s
     own scope. `-F` is not listed separately: `name_to_value`'s own
     values are already lowercased (`_assigned_literals`), so `FF=-F`
-    resolves to `"-f"`, the same string `-f` itself lowercases to."""
-    return any(_resolve_bare_var(raw_tok, name_to_value) in ("-f", "--field", "--raw-field") for raw_tok in seg)
+    resolves to `"-f"`, the same string `-f` itself lowercases to. Also
+    resolved via `_resolve_indirect_ref` (bash's own `${!NAME}` syntax),
+    not just `_resolve_bare_var` -- found live by Step 8 independent
+    review, tenth round (issue #1326), the field-flag counterpart of
+    `_gh_api_method_flagname_dynamic_hit`'s own tenth-round fix."""
+    for raw_tok in seg:
+        flag = _resolve_bare_var(raw_tok, name_to_value)
+        if flag is None:
+            flag = _resolve_indirect_ref(raw_tok, name_to_value, name_to_raw_value)
+        if flag in ("-f", "--field", "--raw-field"):
+            return True
+    return False
 
 
-def _gh_api_field_fused_flagname_dynamic_hit(seg: list[str], name_to_value: dict[str, str]) -> bool:
+def _gh_api_field_fused_flagname_dynamic_hit(
+    seg: list[str], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
+) -> bool:
     """The field-flag counterpart of
     `_gh_api_method_fused_flagname_dynamic_hit`: the -f/--field/--raw-field
     flag NAME hidden behind a variable reference FUSED directly with its
@@ -878,7 +1021,7 @@ def _gh_api_field_fused_flagname_dynamic_hit(seg: list[str], name_to_value: dict
     for raw_tok in seg:
         if not _is_dynamic(raw_tok):
             continue
-        candidates = _substitute_var_refs_candidates(raw_tok, name_to_value)
+        candidates = _substitute_var_refs_candidates(raw_tok, name_to_value, name_to_raw_value)
         if candidates is None:
             return True
         for candidate in candidates:
@@ -890,7 +1033,9 @@ def _gh_api_field_fused_flagname_dynamic_hit(seg: list[str], name_to_value: dict
     return False
 
 
-def _rule_gh_api_write(segments: list[list[str]], lowered_command: str, name_to_value: dict[str, str]) -> str | None:
+def _rule_gh_api_write(
+    segments: list[list[str]], lowered_command: str, name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
+) -> str | None:
     """`literals` is already lowercased, matching the predecessor script's
     own case-insensitive match against its whole lowered command -- so
     `-F`/`-f` are indistinguishable here exactly as they were there.
@@ -908,11 +1053,11 @@ def _rule_gh_api_write(segments: list[list[str]], lowered_command: str, name_to_
 
         if _gh_api_method_literal_hit(literals):
             return _METHOD_FLAG_HIT
-        if _gh_api_method_dynamic_hit(seg, name_to_value):
+        if _gh_api_method_dynamic_hit(seg, name_to_value, name_to_raw_value):
             return _METHOD_FLAG_DYNAMIC_HIT
-        if _gh_api_method_flagname_dynamic_hit(seg, name_to_value):
+        if _gh_api_method_flagname_dynamic_hit(seg, name_to_value, name_to_raw_value):
             return _METHOD_FLAG_DYNAMIC_HIT
-        if _gh_api_method_fused_flagname_dynamic_hit(seg, name_to_value):
+        if _gh_api_method_fused_flagname_dynamic_hit(seg, name_to_value, name_to_raw_value):
             return _METHOD_FLAG_DYNAMIC_HIT
 
         if not has_graphql:
@@ -920,9 +1065,9 @@ def _rule_gh_api_write(segments: list[list[str]], lowered_command: str, name_to_
                 return _FIELD_FLAG_HIT
             if _gh_api_field_dynamic_hit(seg):
                 return _FIELD_FLAG_HIT
-            if _gh_api_field_flagname_dynamic_hit(seg, name_to_value):
+            if _gh_api_field_flagname_dynamic_hit(seg, name_to_value, name_to_raw_value):
                 return _FIELD_FLAG_HIT
-            if _gh_api_field_fused_flagname_dynamic_hit(seg, name_to_value):
+            if _gh_api_field_fused_flagname_dynamic_hit(seg, name_to_value, name_to_raw_value):
                 return _FIELD_FLAG_HIT
     return None
 
@@ -984,7 +1129,9 @@ def _is_git_push_segment(seg: list[str]) -> bool:
     return any("git push" in lit for lit in (t.lower() for t in seg if not _is_dynamic(t)))
 
 
-def _rule_b1a_dynamic_word_same_segment_verb(seg: list[str], verb_set: set[str]) -> bool:
+def _rule_b1a_dynamic_word_same_segment_verb(
+    seg: list[str], verb_set: set[str], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
+) -> bool:
     """A segment whose command word is dynamic, with a literal watched-verb
     token present anywhere else in that SAME segment (e.g.
     `$T install foo` -- `install` sits right there). Scoped to one segment
@@ -996,7 +1143,12 @@ def _rule_b1a_dynamic_word_same_segment_verb(seg: list[str], verb_set: set[str])
     literal token -- found live by Step 8 independent review, ninth round
     (issue #1326): `${NEVER_SET:-uv} ${NEVER_SET2:-install} foo` fully
     bypassed this rule (and B1b below) before this fix, needing NO
-    variable assignment anywhere in the command at all."""
+    variable assignment anywhere in the command at all. A verb hidden
+    behind bash's own `${!NAME}` indirect reference (via
+    `_resolve_indirect_ref`) counts too -- found live by Step 8
+    independent review, tenth round (issue #1326): `TOOLREF=T; T=uv;
+    VERBREF=V; V=install; ${!TOOLREF} ${!VERBREF} foo` fully bypassed
+    this rule (and B1b below) before this fix."""
     if not seg or not _is_dynamic(seg[0]):
         return False
     literals = {t.lower() for t in seg[1:] if not _is_dynamic(t)}
@@ -1004,11 +1156,14 @@ def _rule_b1a_dynamic_word_same_segment_verb(seg: list[str], verb_set: set[str])
         default_text = _default_clause_literal(tok)
         if default_text is not None:
             literals.add(default_text.lower())
+        indirect_value = _resolve_indirect_ref(tok, name_to_value, name_to_raw_value)
+        if indirect_value is not None:
+            literals.add(indirect_value.lower())
     return bool(literals & verb_set)
 
 
 def _rule_b1b_dynamic_word_assigned_tool_and_verb(
-    seg: list[str], name_to_value: dict[str, str], verb_set: set[str]
+    seg: list[str], name_to_value: dict[str, str], verb_set: set[str], name_to_raw_value: dict[str, str]
 ) -> bool:
     """A segment with at least one dynamic token, where a variable
     actually REFERENCED by one of this segment's own dynamic tokens (not
@@ -1041,7 +1196,11 @@ def _rule_b1b_dynamic_word_assigned_tool_and_verb(
     resolves (real bash) to a genuine `uv install foo` with no `NAME=`
     assignment anywhere in the command, and was wrongly allowed since
     neither `NEVER_SET` nor `NEVER_SET2` was ever assigned for the
-    prior, assignment-only version of this rule to look up."""
+    prior, assignment-only version of this rule to look up. A tool or
+    verb hidden behind bash's own `${!NAME}` indirect reference (via
+    `_resolve_indirect_ref`) counts too -- found live by Step 8
+    independent review, tenth round (issue #1326): see
+    `_rule_b1a_dynamic_word_same_segment_verb`'s own tenth-round fix."""
     if not seg or not _is_dynamic(seg[0]):
         return False
     referenced: set[str] = set()
@@ -1053,6 +1212,9 @@ def _rule_b1b_dynamic_word_assigned_tool_and_verb(
         default_text = _default_clause_literal(tok)
         if default_text is not None:
             values.add(default_text.lower())
+        indirect_value = _resolve_indirect_ref(tok, name_to_value, name_to_raw_value)
+        if indirect_value is not None:
+            values.add(indirect_value.lower())
     if not referenced and not values:
         return False
     values |= {name_to_value[name] for name in referenced if name in name_to_value}
@@ -1091,6 +1253,7 @@ def classify(command: str) -> Verdict:
 
     segments = segment_tokens(tokens)
     assigned = _assigned_literals(tokens)
+    raw_assigned = _assigned_raw_values(tokens)
     lowered_command = command.lower()
 
     is_git_push = any(_is_git_push_segment(seg) for seg in segments)
@@ -1099,19 +1262,19 @@ def classify(command: str) -> Verdict:
     if literal_hit:
         return Verdict(True, literal_hit, is_git_push)
 
-    gh_api_hit = _rule_gh_api_write(segments, lowered_command, assigned)
+    gh_api_hit = _rule_gh_api_write(segments, lowered_command, assigned, raw_assigned)
     if gh_api_hit:
         return Verdict(True, gh_api_hit, is_git_push)
 
     for seg in segments:
-        if _rule_b1a_dynamic_word_same_segment_verb(seg, _WATCHED_VERBS):
+        if _rule_b1a_dynamic_word_same_segment_verb(seg, _WATCHED_VERBS, assigned, raw_assigned):
             return Verdict(
                 True,
                 "a Bash command word is dynamically constructed, alongside a denied verb literally "
                 "present in the same command -- rewrite as a plain literal command so it can be checked",
                 is_git_push,
             )
-        if _rule_b1b_dynamic_word_assigned_tool_and_verb(seg, assigned, _WATCHED_VERBS):
+        if _rule_b1b_dynamic_word_assigned_tool_and_verb(seg, assigned, _WATCHED_VERBS, raw_assigned):
             return Verdict(
                 True,
                 "a Bash command word is dynamically constructed from variables whose assigned values "
@@ -1129,8 +1292,8 @@ def classify(command: str) -> Verdict:
             seg and not _is_dynamic(seg[0]) and seg[0].lower() == "git" and len(seg) > 1 and _is_dynamic(seg[1])
         )
         if (
-            _rule_b1a_dynamic_word_same_segment_verb(seg, {_GIT_PUSH_VERB})
-            or _rule_b1b_dynamic_word_assigned_tool_and_verb(seg, assigned, {_GIT_PUSH_VERB})
+            _rule_b1a_dynamic_word_same_segment_verb(seg, {_GIT_PUSH_VERB}, assigned, raw_assigned)
+            or _rule_b1b_dynamic_word_assigned_tool_and_verb(seg, assigned, {_GIT_PUSH_VERB}, raw_assigned)
             or obfuscated_git_push_second_token
         ):
             is_git_push = True

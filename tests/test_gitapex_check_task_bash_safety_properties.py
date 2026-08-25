@@ -88,7 +88,7 @@ def test_rule_bare_install_detects_a_bare_tool_with_flags_only(tool: str, flags:
     regardless of which or how many flags are present, including none at
     all (an empty ``rest`` list)."""
     segments = [[tool, *flags]]
-    assert checker._rule_bare_install(segments) is not None
+    assert checker._rule_bare_install(segments, {}, {}) is not None
 
 
 @_PROPERTIES
@@ -99,7 +99,7 @@ def test_rule_bare_install_allows_a_tool_with_a_positional_subcommand(tool: str,
     invocation -- ``yarn test``/``pnpm run build`` must never be
     flagged."""
     segments = [[tool, subcommand]]
-    assert checker._rule_bare_install(segments) is None
+    assert checker._rule_bare_install(segments, {}, {}) is None
 
 
 @_PROPERTIES
@@ -109,7 +109,7 @@ def test_rule_fetch_exec_detects_download_piped_into_a_shell_interpreter(tool: s
     directly into any of the four recognized shell interpreters (any
     casing) is always detected, regardless of the download URL."""
     segments = [[tool, "https://example.invalid/install.sh"], [interpreter]]
-    assert checker._rule_fetch_exec(segments) is not None
+    assert checker._rule_fetch_exec(segments, {}, {}) is not None
 
 
 @_PROPERTIES
@@ -119,7 +119,7 @@ def test_rule_fetch_exec_detects_download_piped_through_sudo_into_a_shell(tool: 
     not defeat detection -- ``interp_index`` is deliberately advanced past
     a literal ``sudo`` token before checking the interpreter name."""
     segments = [[tool, "https://example.invalid/install.sh"], ["sudo", interpreter]]
-    assert checker._rule_fetch_exec(segments) is not None
+    assert checker._rule_fetch_exec(segments, {}, {}) is not None
 
 
 @_PROPERTIES
@@ -129,7 +129,7 @@ def test_rule_fetch_exec_allows_a_download_piped_into_a_non_shell_program(tool: 
     one of the four recognized shell interpreters is never flagged by
     this rule."""
     segments = [[tool, "https://example.invalid/data.json"], [other]]
-    assert checker._rule_fetch_exec(segments) is None
+    assert checker._rule_fetch_exec(segments, {}, {}) is None
 
 
 _SHORT_FLAG_WITH_VALUE = st.tuples(st.sampled_from(["-c", "-C"]), st.sampled_from(["cfgkey=cfgval", "/tmp/some/repo"]))
@@ -200,7 +200,7 @@ def test_rule_b1b_ignores_unrelated_whole_command_assignments(unrelated_var: str
     dynamic segment's own tokens actually reference."""
     name_to_value = {"TOOL": "pip", "VERB": "install"}
     seg = [f"${unrelated_var}", "--help"]
-    assert not checker._rule_b1b_dynamic_word_assigned_tool_and_verb(seg, name_to_value, checker._WATCHED_VERBS)
+    assert not checker._rule_b1b_dynamic_word_assigned_tool_and_verb(seg, name_to_value, checker._WATCHED_VERBS, {})
 
 
 @_PROPERTIES
@@ -214,7 +214,7 @@ def test_rule_b1b_detects_when_segment_actually_references_assigned_tool_and_ver
         return
     name_to_value = {tool_var: "pip", verb_var: "install"}
     seg = [f"${tool_var}", f"${verb_var}", "foo"]
-    assert checker._rule_b1b_dynamic_word_assigned_tool_and_verb(seg, name_to_value, checker._WATCHED_VERBS)
+    assert checker._rule_b1b_dynamic_word_assigned_tool_and_verb(seg, name_to_value, checker._WATCHED_VERBS, {})
 
 
 @_PROPERTIES
@@ -229,7 +229,7 @@ def test_rule_git_push_ignores_unrelated_whole_command_assignments_named_git_and
     references neither GIT nor PUSH."""
     name_to_value = {"GIT": "git", "PUSH": "push"}
     segments = [[f"${unrelated_var}", "--help"]]
-    assert checker._rule_git_push(segments, name_to_value) is None
+    assert checker._rule_git_push(segments, name_to_value, {}) is None
 
 
 @_PROPERTIES
@@ -245,7 +245,7 @@ def test_rule_git_push_detects_when_segment_actually_references_assigned_git_and
         return
     name_to_value = {git_var: "git", push_var: "push"}
     segments = [[f"${git_var}", f"${push_var}", "origin", "main"]]
-    assert checker._rule_git_push(segments, name_to_value) is not None
+    assert checker._rule_git_push(segments, name_to_value, {}) is not None
 
 
 @_PROPERTIES
@@ -261,7 +261,7 @@ def test_rule_git_push_detects_dynamic_tool_word_with_literal_push_in_same_segme
     needs no indirection lookup at all."""
     name_to_value = {git_var: "git"}
     segments = [[f"${git_var}", "push", "origin", "main"]]
-    assert checker._rule_git_push(segments, name_to_value) is not None
+    assert checker._rule_git_push(segments, name_to_value, {}) is not None
 
 
 @_PROPERTIES
@@ -273,7 +273,7 @@ def test_rule_git_push_allows_dynamic_tool_word_with_an_unrelated_literal_argume
     argument that is NOT "push" is never flagged by this rule."""
     name_to_value = {unrelated_var: "somecmd"}
     segments = [[f"${unrelated_var}", subcommand]]
-    assert checker._rule_git_push(segments, name_to_value) is None
+    assert checker._rule_git_push(segments, name_to_value, {}) is None
 
 
 @_PROPERTIES
@@ -288,7 +288,7 @@ def test_rule_gh_any_detects_gh_hidden_behind_a_variable(gh_var: str) -> None:
     rule needed its own dedicated indirection check."""
     name_to_value = {gh_var: "gh"}
     segments = [[f"${gh_var}", "pr", "merge", "1"]]
-    assert checker._rule_gh_any(segments, name_to_value) is not None
+    assert checker._rule_gh_any(segments, name_to_value, {}) is not None
 
 
 @_PROPERTIES
@@ -298,7 +298,7 @@ def test_rule_gh_any_allows_an_unrelated_dynamic_command_word(unrelated_var: str
     "gh" is never flagged by this rule."""
     name_to_value = {unrelated_var: "somecmd"}
     segments = [[f"${unrelated_var}", "test"]]
-    assert checker._rule_gh_any(segments, name_to_value) is None
+    assert checker._rule_gh_any(segments, name_to_value, {}) is None
 
 
 @_PROPERTIES
@@ -360,7 +360,7 @@ def test_rule_b1a_detects_a_default_clause_verb(tool_var: str, verb_var: str) ->
     (with the command word itself also dynamic) is still caught, even
     though neither variable is ever assigned."""
     seg = [f"${{{tool_var}:-pip}}", f"${{{verb_var}:-install}}", "pkg"]
-    assert checker._rule_b1a_dynamic_word_same_segment_verb(seg, checker._WATCHED_VERBS)
+    assert checker._rule_b1a_dynamic_word_same_segment_verb(seg, checker._WATCHED_VERBS, {}, {})
 
 
 @_PROPERTIES
@@ -372,7 +372,7 @@ def test_rule_b1b_detects_a_default_clause_tool_and_verb(tool_var: str, verb_var
     assignment for either variable anywhere) are still caught."""
     assume(tool_var != verb_var)
     seg = [f"${{{tool_var}:-pip}}", f"${{{verb_var}:-install}}", "pkg"]
-    assert checker._rule_b1b_dynamic_word_assigned_tool_and_verb(seg, {}, checker._WATCHED_VERBS)
+    assert checker._rule_b1b_dynamic_word_assigned_tool_and_verb(seg, {}, checker._WATCHED_VERBS, {})
 
 
 @_PROPERTIES
@@ -382,7 +382,7 @@ def test_rule_b1a_allows_an_unrelated_default_clause_argument(tool_var: str) -> 
     argument that resolves to something unrelated to any watched verb
     must stay allowed."""
     seg = [f"${{{tool_var}:-cat}}", "${OTHER:-somefile.txt}"]
-    assert not checker._rule_b1a_dynamic_word_same_segment_verb(seg, checker._WATCHED_VERBS)
+    assert not checker._rule_b1a_dynamic_word_same_segment_verb(seg, checker._WATCHED_VERBS, {}, {})
 
 
 @_PROPERTIES
@@ -393,7 +393,7 @@ def test_rule_gh_any_detects_a_default_clause_gh(gh_var: str) -> None:
     `${NAME:-gh}` fallback command word, with no assignment for NAME
     anywhere, is still caught."""
     segments = [[f"${{{gh_var}:-gh}}", "pr", "merge", "1"]]
-    assert checker._rule_gh_any(segments, {}) is not None
+    assert checker._rule_gh_any(segments, {}, {}) is not None
 
 
 @_PROPERTIES
@@ -405,4 +405,94 @@ def test_rule_git_push_detects_a_default_clause_git_and_push(git_var: str, push_
     caught."""
     assume(git_var != push_var)
     segments = [[f"${{{git_var}:-git}}", f"${{{push_var}:-push}}", "origin", "main"]]
-    assert checker._rule_git_push(segments, {}) is not None
+    assert checker._rule_git_push(segments, {}, {}) is not None
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value=_VALUES)
+def test_resolve_bare_var_resolves_a_bare_reference(name: str, value: str) -> None:
+    """Model-based: `_resolve_bare_var` resolves both the unbraced `$NAME`
+    and braced `${NAME}` forms to NAME's own assigned (lowercased) value
+    -- ported from the sibling main-hook module in the tenth round (issue
+    #1326) so `_resolve_dynamic_token` has a bare-reference reading to
+    try first."""
+    name_to_value = {name: value.lower()}
+    assert checker._resolve_bare_var(f"${name}", name_to_value) == value.lower()
+    assert checker._resolve_bare_var(f"${{{name}}}", name_to_value) == value.lower()
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS)
+def test_resolve_bare_var_none_when_unassigned(name: str) -> None:
+    """A bare reference to a variable with no recorded assignment resolves
+    to None -- it must never be treated as some other reading."""
+    assert checker._resolve_bare_var(f"${name}", {}) is None
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value=_VALUES)
+def test_assigned_raw_values_captures_name_equals_value_rhs_case_preserved(name: str, value: str) -> None:
+    """Model-based: `_assigned_raw_values` maps a bare assignment token's
+    name to its RHS with the ORIGINAL case preserved -- unlike
+    `_assigned_literals`, which lowercases it. `${!NAME}` indirect
+    reference resolution needs a case-correct key for its first-level
+    lookup (issue #1326, tenth round; see `_resolve_indirect_ref`)."""
+    result = checker._assigned_raw_values([f"{name}={value}"])
+    assert result.get(name) == value
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value=_VALUES)
+def test_assigned_raw_values_ignores_a_dynamic_rhs_token(name: str, value: str) -> None:
+    """Same dynamic-RHS exclusion as `_assigned_literals` -- a token
+    containing `$` is skipped outright before `_ASSIGN_RE` is consulted."""
+    result = checker._assigned_raw_values([f"{name}=${value}"])
+    assert result == {}
+
+
+@_PROPERTIES
+@given(name1=_IDENTIFIERS, name2=_IDENTIFIERS, value=_VALUES)
+def test_resolve_indirect_ref_two_level_lookup(name1: str, name2: str, value: str) -> None:
+    """Model-based regression pin for the tenth-round finding: `${!NAME1}`
+    resolves via NAME1's own (case-preserved) value naming NAME2, whose
+    own (lowercased) assigned value is the final result -- confirmed live
+    against real bash argv expansion (`GREF=G; G=gh; ${!GREF} pr merge 1`
+    resolves to a genuine `gh pr merge 1`)."""
+    assume(name1 != name2)
+    name_to_raw_value = {name1: name2}
+    name_to_value = {name2: value.lower()}
+    assert checker._resolve_indirect_ref(f"${{!{name1}}}", name_to_value, name_to_raw_value) == value.lower()
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS)
+def test_resolve_indirect_ref_none_when_first_level_unresolved(name: str) -> None:
+    """When NAME was never assigned at all, the first-level lookup fails
+    and the whole indirect reference resolves to None."""
+    assert checker._resolve_indirect_ref(f"${{!{name}}}", {}, {}) is None
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS)
+def test_resolve_indirect_ref_none_for_a_bare_reference(name: str) -> None:
+    """A plain `${NAME}`/`$NAME` reference is not the `${!NAME}` indirect
+    shape at all -- `_resolve_indirect_ref` must return None rather than
+    (incorrectly) treating it as one."""
+    assert checker._resolve_indirect_ref(f"${{{name}}}", {name: "gh"}, {name: "gh"}) is None
+    assert checker._resolve_indirect_ref(f"${name}", {name: "gh"}, {name: "gh"}) is None
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value=_VALUES)
+def test_resolve_dynamic_token_tries_bare_var_then_default_clause_then_indirect_ref(name: str, value: str) -> None:
+    """Model-based regression pin for the tenth-round finding: this
+    unifying helper -- shared by `_rule_npx`/`_rule_bare_install`/
+    `_rule_fetch_exec`, which previously had NO indirection handling at
+    all -- resolves a bare reference, a `${NAME:-default}` default
+    clause, and bash's own `${!NAME}` indirect reference alike; a
+    non-dynamic literal token resolves to None (it is the rules' own
+    literal-text check that handles that case, not this helper)."""
+    name_to_value = {name: value.lower()}
+    assert checker._resolve_dynamic_token(f"${name}", name_to_value, {}) == value.lower()
+    assert checker._resolve_dynamic_token(f"${{{name}:-{value}}}", {}, {}) == value
+    assert checker._resolve_dynamic_token(value, {}, {}) is None

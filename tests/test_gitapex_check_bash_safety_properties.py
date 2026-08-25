@@ -79,7 +79,7 @@ def test_rule_gh_api_write_detects_every_write_method_case_insensitively(method:
     four HTTP write verbs, in any casing -- the whole point of
     pre-lowering ``literals`` before this comparison."""
     segments = [["gh", "api", "repos/x/y", "-X", method]]
-    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y -x {method.lower()}", {})
+    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y -x {method.lower()}", {}, {})
     assert result is not None
 
 
@@ -89,7 +89,7 @@ def test_rule_gh_api_write_does_not_flag_a_read_method(method: str) -> None:
     """No false positive: GET is a read, not a write, and must never be
     flagged by the method-flag branch."""
     segments = [["gh", "api", "repos/x/y", "-X", method]]
-    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y -x {method.lower()}", {})
+    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y -x {method.lower()}", {}, {})
     assert result is None
 
 
@@ -100,7 +100,7 @@ def test_rule_gh_api_write_detects_any_field_flag_payload(field: str, value: str
     ``field=value`` payload is always a write, regardless of the specific
     field name or value carried."""
     segments = [["gh", "api", "repos/x/y", "-f", f"{field}={value}"]]
-    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y -f {field}={value}", {})
+    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y -f {field}={value}", {}, {})
     assert result is not None
 
 
@@ -117,7 +117,7 @@ def test_rule_gh_api_write_detects_a_dynamic_method_value_resolved_from_an_assig
     method-flag scan ever ran. Detected now via ``name_to_value`` lookup
     of the variable the dynamic token actually references."""
     segments = [["gh", "api", "repos/x/y", "-X", f"${var}"]]
-    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y -x ${var}", {var: method})
+    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y -x ${var}", {var: method}, {})
     assert result is not None
 
 
@@ -128,7 +128,7 @@ def test_rule_gh_api_write_allows_a_dynamic_method_value_resolved_to_a_read(var:
     ``name_to_value``) to GET, not one of the four write methods, is
     never flagged."""
     segments = [["gh", "api", "repos/x/y", "-X", f"${var}"]]
-    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y -x ${var}", {var: "get"})
+    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y -x ${var}", {var: "get"}, {})
     assert result is None
 
 
@@ -151,7 +151,7 @@ def test_rule_gh_api_write_detects_a_dynamic_method_value_fused_with_the_flag(
     allowed until this second fix."""
     token = shape.format(f"${var}")
     segments = [["gh", "api", "repos/x/y", token]]
-    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y {token}", {var: method})
+    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y {token}", {var: method}, {})
     assert result is not None
 
 
@@ -162,7 +162,7 @@ def test_rule_gh_api_write_allows_a_fused_dynamic_method_value_resolved_to_a_rea
     ``name_to_value``, are never flagged."""
     token = shape.format(f"${var}")
     segments = [["gh", "api", "repos/x/y", token]]
-    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y {token}", {var: "get"})
+    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y {token}", {var: "get"}, {})
     assert result is None
 
 
@@ -180,7 +180,7 @@ def test_rule_gh_api_write_detects_a_field_flag_fused_with_a_dynamic_value(var: 
     like a field flag is denied outright."""
     token = shape.format(f"${var}")
     segments = [["gh", "api", "repos/x/y", token]]
-    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y {token}", {})
+    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y {token}", {}, {})
     assert result is not None
 
 
@@ -191,7 +191,7 @@ def test_rule_gh_api_write_allows_an_unrelated_dynamic_token_with_no_field_flag_
     with a field-flag prefix is never flagged by the fused-field-flag
     check."""
     segments = [["gh", "api", "repos/x/y", f"${var}"]]
-    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y ${var}", {})
+    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y ${var}", {}, {})
     assert result is None
 
 
@@ -349,7 +349,7 @@ def test_gh_api_method_flagname_dynamic_hit_detects_flagname_and_value_both_dyna
     assume(flag_var != value_var)  # distinct dict keys -- see the same guard below
     seg = ["gh", "api", "repos/x/y", f"${flag_var}", f"${value_var}"]
     name_to_value = {flag_var: flag_name, value_var: method}
-    assert checker._gh_api_method_flagname_dynamic_hit(seg, name_to_value)
+    assert checker._gh_api_method_flagname_dynamic_hit(seg, name_to_value, {})
 
 
 @_PROPERTIES
@@ -359,7 +359,7 @@ def test_gh_api_method_flagname_dynamic_hit_detects_dynamic_flagname_literal_val
     NAME is hidden behind a variable and the value stays a literal token
     (``F=-X; gh api .../merge $F POST``)."""
     seg = ["gh", "api", "repos/x/y", f"${flag_var}", method]
-    assert checker._gh_api_method_flagname_dynamic_hit(seg, {flag_var: "-x"})
+    assert checker._gh_api_method_flagname_dynamic_hit(seg, {flag_var: "-x"}, {})
 
 
 @_PROPERTIES
@@ -371,7 +371,7 @@ def test_gh_api_method_flagname_dynamic_hit_allows_a_dynamic_flagname_resolved_t
     -X/--method, followed by a value that resolves to GET (not one of the
     four write methods), is never flagged."""
     seg = ["gh", "api", "repos/x/y", f"${flag_var}", f"${value_var}"]
-    assert not checker._gh_api_method_flagname_dynamic_hit(seg, {flag_var: "-x", value_var: "get"})
+    assert not checker._gh_api_method_flagname_dynamic_hit(seg, {flag_var: "-x", value_var: "get"}, {})
 
 
 @_PROPERTIES
@@ -380,7 +380,7 @@ def test_gh_api_method_flagname_dynamic_hit_allows_an_unrelated_dynamic_token(va
     """No false positive: a bare variable reference that does not resolve
     to -X/--method at all is never treated as a flag."""
     seg = ["gh", "api", "repos/x/y", f"${var}", "POST"]
-    assert not checker._gh_api_method_flagname_dynamic_hit(seg, {var: "repos/x/y"})
+    assert not checker._gh_api_method_flagname_dynamic_hit(seg, {var: "repos/x/y"}, {})
 
 
 @_PROPERTIES
@@ -393,7 +393,7 @@ def test_gh_api_field_flagname_dynamic_hit_detects_every_flag_name(flag_var: str
     field VALUE, only the flag's presence -- matching
     ``_gh_api_field_literal_hit``'s own scope."""
     seg = ["gh", "api", "repos/x/y", f"${flag_var}", "name=value"]
-    assert checker._gh_api_field_flagname_dynamic_hit(seg, {flag_var: flag_name})
+    assert checker._gh_api_field_flagname_dynamic_hit(seg, {flag_var: flag_name}, {})
 
 
 @_PROPERTIES
@@ -402,7 +402,7 @@ def test_gh_api_field_flagname_dynamic_hit_allows_an_unrelated_dynamic_token(var
     """No false positive: a bare variable reference that does not resolve
     to a field flag at all is never treated as one."""
     seg = ["gh", "api", "repos/x/y", f"${var}"]
-    assert not checker._gh_api_field_flagname_dynamic_hit(seg, {var: "repos/x/y"})
+    assert not checker._gh_api_field_flagname_dynamic_hit(seg, {var: "repos/x/y"}, {})
 
 
 @_PROPERTIES
@@ -414,7 +414,7 @@ def test_rule_gh_api_write_detects_flagname_and_value_both_dynamic(method: str, 
     assume(flag_var != value_var)  # distinct dict keys, same guard as the sub-pass test above
     segments = [["gh", "api", "repos/x/y", f"${flag_var}", f"${value_var}"]]
     name_to_value = {flag_var: "-x", value_var: method}
-    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y ${flag_var} ${value_var}", name_to_value)
+    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y ${flag_var} ${value_var}", name_to_value, {})
     assert result is not None
 
 
@@ -426,7 +426,7 @@ def test_rule_gh_api_write_allows_flagname_dynamic_resolved_to_a_read(flag_var: 
     allowed."""
     segments = [["gh", "api", "repos/x/y", f"${flag_var}", f"${value_var}"]]
     name_to_value = {flag_var: "-x", value_var: "get"}
-    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y ${flag_var} ${value_var}", name_to_value)
+    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y ${flag_var} ${value_var}", name_to_value, {})
     assert result is None
 
 
@@ -457,7 +457,7 @@ def test_substitute_var_refs_candidates_includes_concatenated_reading(
     assume(name1 != name2)
     part1, part2 = parts
     token = f"${name1}${name2}"
-    candidates = checker._substitute_var_refs_candidates(token, {name1: part1, name2: part2})
+    candidates = checker._substitute_var_refs_candidates(token, {name1: part1, name2: part2}, {})
     assert candidates is not None
     assert part1 + part2 in candidates
 
@@ -472,7 +472,7 @@ def test_substitute_var_refs_candidates_preserves_surrounding_literal_text(
     quote-boundary ambiguity (the brace itself survives shlex's quote
     removal), so it always contributes exactly one candidate."""
     token = f"{prefix}${{{name}}}{suffix}"
-    candidates = checker._substitute_var_refs_candidates(token, {name: value.lower()})
+    candidates = checker._substitute_var_refs_candidates(token, {name: value.lower()}, {})
     assert candidates == [f"{prefix}{value.lower()}{suffix}"]
 
 
@@ -488,7 +488,7 @@ def test_substitute_var_refs_candidates_empty_for_an_unassigned_reference(
     assume(name != assigned_name)
     assume(not name.startswith(assigned_name))
     token = f"${assigned_name}${name}"
-    assert checker._substitute_var_refs_candidates(token, {assigned_name: value.lower()}) == []
+    assert checker._substitute_var_refs_candidates(token, {assigned_name: value.lower()}, {}) == []
 
 
 @_PROPERTIES
@@ -506,7 +506,7 @@ def test_gh_api_method_dynamic_hit_detects_a_value_split_across_two_variables(
     assume(var1 != var2)
     part1, part2 = parts
     seg = ["gh", "api", "repos/x/y", "-X", f"${var1}${var2}"]
-    assert checker._gh_api_method_dynamic_hit(seg, {var1: part1, var2: part2})
+    assert checker._gh_api_method_dynamic_hit(seg, {var1: part1, var2: part2}, {})
 
 
 @_PROPERTIES
@@ -522,7 +522,7 @@ def test_gh_api_method_flagname_dynamic_hit_detects_flagname_and_concatenated_va
     part1, part2 = parts
     seg = ["gh", "api", "repos/x/y", f"${flag_var}", f"${var1}${var2}"]
     name_to_value = {flag_var: "-x", var1: part1, var2: part2}
-    assert checker._gh_api_method_flagname_dynamic_hit(seg, name_to_value)
+    assert checker._gh_api_method_flagname_dynamic_hit(seg, name_to_value, {})
 
 
 @_PROPERTIES
@@ -532,7 +532,7 @@ def test_gh_api_method_dynamic_hit_allows_a_concatenated_value_resolved_to_a_rea
     one of the four write methods, is never flagged."""
     assume(var1 != var2)
     seg = ["gh", "api", "repos/x/y", "-X", f"${var1}${var2}"]
-    assert not checker._gh_api_method_dynamic_hit(seg, {var1: "ge", var2: "t"})
+    assert not checker._gh_api_method_dynamic_hit(seg, {var1: "ge", var2: "t"}, {})
 
 
 @_PROPERTIES
@@ -547,7 +547,7 @@ def test_rule_gh_api_write_detects_a_method_value_split_across_two_variables(
     part1, part2 = parts
     segments = [["gh", "api", "repos/x/y", "-X", f"${var1}${var2}"]]
     name_to_value = {var1: part1, var2: part2}
-    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y -x ${var1}${var2}", name_to_value)
+    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y -x ${var1}${var2}", name_to_value, {})
     assert result is not None
 
 
@@ -578,7 +578,7 @@ def test_gh_api_method_dynamic_hit_detects_uppercase_literal_fragment_fused_with
     lowercased."""
     literal, var_value = parts
     seg = ["gh", "api", "repos/x/y", "-X", f"{literal}${var}"]
-    assert checker._gh_api_method_dynamic_hit(seg, {var: var_value})
+    assert checker._gh_api_method_dynamic_hit(seg, {var: var_value}, {})
 
 
 @_PROPERTIES
@@ -587,7 +587,7 @@ def test_gh_api_method_dynamic_hit_allows_uppercase_literal_fragment_resolved_to
     """No false positive: an uppercase literal fragment fused with a
     variable that resolves to a read method (GET) must stay allowed."""
     seg = ["gh", "api", "repos/x/y", "-X", f"GE${var}"]
-    assert not checker._gh_api_method_dynamic_hit(seg, {var: "t"})
+    assert not checker._gh_api_method_dynamic_hit(seg, {var: "t"}, {})
 
 
 @_PROPERTIES
@@ -601,7 +601,7 @@ def test_gh_api_method_flagname_dynamic_hit_detects_uppercase_literal_fragment_f
     literal, var_value = parts
     seg = ["gh", "api", "repos/x/y", f"${flag_var}", f"{literal}${var}"]
     name_to_value = {flag_var: "-x", var: var_value}
-    assert checker._gh_api_method_flagname_dynamic_hit(seg, name_to_value)
+    assert checker._gh_api_method_flagname_dynamic_hit(seg, name_to_value, {})
 
 
 @_PROPERTIES
@@ -615,7 +615,7 @@ def test_rule_gh_api_write_detects_uppercase_literal_fragment_fused_with_variabl
     literal, var_value = parts
     segments = [["gh", "api", "repos/x/y", "-X", f"{literal}${var}"]]
     name_to_value = {var: var_value}
-    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y -x {literal}${var}", name_to_value)
+    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y -x {literal}${var}", name_to_value, {})
     assert result is not None
 
 
@@ -645,7 +645,7 @@ def test_substitute_var_refs_candidates_includes_the_bounded_prefix_reading(
     reading that treats the whole run as one (unassigned) variable name."""
     part1, part2 = parts
     token = f"${var}{part2}{suffix}"
-    candidates = checker._substitute_var_refs_candidates(token, {var: part1})
+    candidates = checker._substitute_var_refs_candidates(token, {var: part1}, {})
     assert candidates is not None
     assert part1 + part2 + suffix in candidates
 
@@ -661,7 +661,7 @@ def test_gh_api_method_dynamic_hit_detects_unbraced_reference_followed_by_more_i
     only the maximal-munch reading of an unbraced `$NAME` run."""
     part1, part2 = parts
     seg = ["gh", "api", "repos/x/y", "-X", f"${var}{part2}"]
-    assert checker._gh_api_method_dynamic_hit(seg, {var: part1})
+    assert checker._gh_api_method_dynamic_hit(seg, {var: part1}, {})
 
 
 @_PROPERTIES
@@ -670,7 +670,7 @@ def test_gh_api_method_dynamic_hit_allows_unbraced_reference_followed_by_more_id
     """No false positive: the bounded-reference reading resolving to a
     read method (GET) must stay allowed."""
     seg = ["gh", "api", "repos/x/y", "-X", f"${var}T"]
-    assert not checker._gh_api_method_dynamic_hit(seg, {var: "ge"})
+    assert not checker._gh_api_method_dynamic_hit(seg, {var: "ge"}, {})
 
 
 @_PROPERTIES
@@ -684,7 +684,7 @@ def test_gh_api_method_flagname_dynamic_hit_detects_unbraced_reference_followed_
     part1, part2 = parts
     seg = ["gh", "api", "repos/x/y", f"${flag_var}", f"${var}{part2}"]
     name_to_value = {flag_var: "-x", var: part1}
-    assert checker._gh_api_method_flagname_dynamic_hit(seg, name_to_value)
+    assert checker._gh_api_method_flagname_dynamic_hit(seg, name_to_value, {})
 
 
 @_PROPERTIES
@@ -698,7 +698,7 @@ def test_rule_gh_api_write_detects_unbraced_reference_followed_by_more_identifie
     part1, part2 = parts
     segments = [["gh", "api", "repos/x/y", "-X", f"${var}{part2}"]]
     name_to_value = {var: part1}
-    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y -x ${var}{part2}", name_to_value)
+    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y -x ${var}{part2}", name_to_value, {})
     assert result is not None
 
 
@@ -739,7 +739,7 @@ def test_gh_api_method_fused_flagname_dynamic_hit_detects_flagname_and_value_fus
     PURELY a variable reference resolving to "-x", immediately followed
     (in the same token) by a write-method value, is still caught."""
     seg = ["gh", "api", "repos/x/y", f"${var}{method.upper()}"]
-    assert checker._gh_api_method_fused_flagname_dynamic_hit(seg, {var: "-x"})
+    assert checker._gh_api_method_fused_flagname_dynamic_hit(seg, {var: "-x"}, {})
 
 
 @_PROPERTIES
@@ -748,7 +748,7 @@ def test_gh_api_method_fused_flagname_dynamic_hit_allows_a_read_method(var: str)
     """No false positive: the fused flag-plus-value reading resolving to a
     read method (GET) must stay allowed."""
     seg = ["gh", "api", "repos/x/y", f"${var}GET"]
-    assert not checker._gh_api_method_fused_flagname_dynamic_hit(seg, {var: "-x"})
+    assert not checker._gh_api_method_fused_flagname_dynamic_hit(seg, {var: "-x"}, {})
 
 
 @_PROPERTIES
@@ -757,7 +757,7 @@ def test_gh_api_method_fused_flagname_dynamic_hit_allows_an_unrelated_dynamic_to
     """No false positive: a dynamic token whose resolved value does not
     start with "-x"/"--method=" at all is never flagged."""
     seg = ["gh", "api", "repos/x/y", f"${var}issues"]
-    assert not checker._gh_api_method_fused_flagname_dynamic_hit(seg, {var: "repos/owner"})
+    assert not checker._gh_api_method_fused_flagname_dynamic_hit(seg, {var: "repos/owner"}, {})
 
 
 @_PROPERTIES
@@ -781,7 +781,7 @@ def test_gh_api_field_fused_flagname_dynamic_hit_detects_flagname_and_value_fuse
     real field write, so that shape is correctly not flagged."""
     flag_name, separator = flag_shape
     seg = ["gh", "api", "repos/x/y", f"${var}{separator}name=value"]
-    assert checker._gh_api_field_fused_flagname_dynamic_hit(seg, {var: flag_name})
+    assert checker._gh_api_field_fused_flagname_dynamic_hit(seg, {var: flag_name}, {})
 
 
 @_PROPERTIES
@@ -790,7 +790,7 @@ def test_gh_api_field_fused_flagname_dynamic_hit_allows_an_unrelated_dynamic_tok
     """No false positive: a dynamic token whose resolved value does not
     start with a field-flag shape at all is never flagged."""
     seg = ["gh", "api", "repos/x/y", f"${var}issues"]
-    assert not checker._gh_api_field_fused_flagname_dynamic_hit(seg, {var: "repos/owner"})
+    assert not checker._gh_api_field_fused_flagname_dynamic_hit(seg, {var: "repos/owner"}, {})
 
 
 @_PROPERTIES
@@ -802,7 +802,7 @@ def test_rule_gh_api_write_detects_fused_flagname_and_value_in_one_token(method:
     token = f"${var}{method.upper()}"
     segments = [["gh", "api", "repos/x/y", token]]
     name_to_value = {var: "-x"}
-    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y {token}", name_to_value)
+    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y {token}", name_to_value, {})
     assert result is not None
 
 
@@ -852,7 +852,7 @@ def test_gh_api_method_dynamic_hit_detects_a_default_clause_write_method(method:
     embedded as a `${NAME:-default}` fallback, with NO assignment for
     NAME anywhere, is still caught."""
     seg = ["gh", "api", "repos/x/y", f"-X${{{name}{op}{method.upper()}}}"]
-    assert checker._gh_api_method_dynamic_hit(seg, {})
+    assert checker._gh_api_method_dynamic_hit(seg, {}, {})
 
 
 @_PROPERTIES
@@ -861,7 +861,7 @@ def test_gh_api_method_dynamic_hit_allows_a_default_clause_read_method(name: str
     """No false positive: a default-clause value resolving to a read
     method (GET) must stay allowed."""
     seg = ["gh", "api", "repos/x/y", f"-X${{{name}-GET}}"]
-    assert not checker._gh_api_method_dynamic_hit(seg, {})
+    assert not checker._gh_api_method_dynamic_hit(seg, {}, {})
 
 
 @_PROPERTIES
@@ -872,7 +872,7 @@ def test_rule_gh_api_write_detects_a_default_clause_write_method(method: str, na
     caught at the orchestrator level too, not just the sub-pass level."""
     token = f"-X${{{name}-{method.upper()}}}"
     segments = [["gh", "api", "repos/x/y", token]]
-    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y {token}", {})
+    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y {token}", {}, {})
     assert result is not None
 
 
@@ -885,7 +885,7 @@ def test_rule_b1a_detects_a_default_clause_verb(tool_var: str, verb_var: str) ->
     (with the command word itself also dynamic) is still caught, even
     though neither variable is ever assigned."""
     seg = [f"${{{tool_var}:-uv}}", f"${{{verb_var}:-install}}", "pkg"]
-    assert checker._rule_b1a_dynamic_word_same_segment_verb(seg, checker._WATCHED_VERBS)
+    assert checker._rule_b1a_dynamic_word_same_segment_verb(seg, checker._WATCHED_VERBS, {}, {})
 
 
 @_PROPERTIES
@@ -897,7 +897,7 @@ def test_rule_b1b_detects_a_default_clause_tool_and_verb(tool_var: str, verb_var
     assignment for either variable anywhere) are still caught."""
     assume(tool_var != verb_var)
     seg = [f"${{{tool_var}:-uv}}", f"${{{verb_var}:-install}}", "pkg"]
-    assert checker._rule_b1b_dynamic_word_assigned_tool_and_verb(seg, {}, checker._WATCHED_VERBS)
+    assert checker._rule_b1b_dynamic_word_assigned_tool_and_verb(seg, {}, checker._WATCHED_VERBS, {})
 
 
 @_PROPERTIES
@@ -907,7 +907,7 @@ def test_rule_b1a_allows_an_unrelated_default_clause_argument(tool_var: str) -> 
     argument that resolves to something unrelated to any watched verb
     must stay allowed."""
     seg = [f"${{{tool_var}:-cat}}", "${OTHER:-somefile.txt}"]
-    assert not checker._rule_b1a_dynamic_word_same_segment_verb(seg, checker._WATCHED_VERBS)
+    assert not checker._rule_b1a_dynamic_word_same_segment_verb(seg, checker._WATCHED_VERBS, {}, {})
 
 
 @_PROPERTIES
@@ -996,7 +996,7 @@ def test_rule_b1b_ignores_unrelated_whole_command_assignments(unrelated_var: str
     dynamic segment's own tokens actually reference."""
     name_to_value = {"TOOL": "uv", "VERB": "install"}
     seg = [f"${unrelated_var}", "--help"]
-    assert not checker._rule_b1b_dynamic_word_assigned_tool_and_verb(seg, name_to_value, checker._WATCHED_VERBS)
+    assert not checker._rule_b1b_dynamic_word_assigned_tool_and_verb(seg, name_to_value, checker._WATCHED_VERBS, {})
 
 
 @_PROPERTIES
@@ -1010,7 +1010,7 @@ def test_rule_b1b_detects_when_segment_actually_references_assigned_tool_and_ver
         return
     name_to_value = {tool_var: "uv", verb_var: "install"}
     seg = [f"${tool_var}", f"${verb_var}", "foo"]
-    assert checker._rule_b1b_dynamic_word_assigned_tool_and_verb(seg, name_to_value, checker._WATCHED_VERBS)
+    assert checker._rule_b1b_dynamic_word_assigned_tool_and_verb(seg, name_to_value, checker._WATCHED_VERBS, {})
 
 
 @_PROPERTIES
@@ -1030,7 +1030,7 @@ def test_rule_b1b_detects_gh_api_indirection(gh_var: str, api_var: str) -> None:
         return
     name_to_value = {gh_var: "gh", api_var: "api"}
     seg = [f"${gh_var}", f"${api_var}", "repos/x/y", "-X", "POST"]
-    assert checker._rule_b1b_dynamic_word_assigned_tool_and_verb(seg, name_to_value, checker._WATCHED_VERBS)
+    assert checker._rule_b1b_dynamic_word_assigned_tool_and_verb(seg, name_to_value, checker._WATCHED_VERBS, {})
 
 
 @_PROPERTIES
@@ -1055,3 +1055,57 @@ def test_is_git_push_segment_true_for_long_flag_fused_equals_form(flag: str) -> 
     support alongside it."""
     seg = ["git", f"{flag}=/tmp/some/value", "push", "origin"]
     assert checker._is_git_push_segment(seg)
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value=_VALUES)
+def test_assigned_raw_values_captures_name_equals_value_rhs_case_preserved(name: str, value: str) -> None:
+    """Model-based: `_assigned_raw_values` maps a bare assignment token's
+    name to its RHS with the ORIGINAL case preserved -- unlike
+    `_assigned_literals`, which lowercases it. `${!NAME}` indirect
+    reference resolution needs a case-correct key for its first-level
+    lookup (issue #1326, tenth round; see `_resolve_indirect_ref`)."""
+    result = checker._assigned_raw_values([f"{name}={value}"])
+    assert result.get(name) == value
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value=_VALUES)
+def test_assigned_raw_values_ignores_a_dynamic_rhs_token(name: str, value: str) -> None:
+    """Same dynamic-RHS exclusion as `_assigned_literals` -- a token
+    containing `$` is skipped outright before `_ASSIGN_RE` is consulted."""
+    result = checker._assigned_raw_values([f"{name}=${value}"])
+    assert result == {}
+
+
+@_PROPERTIES
+@given(name1=_IDENTIFIERS, name2=_IDENTIFIERS, value=_VALUES)
+def test_resolve_indirect_ref_two_level_lookup(name1: str, name2: str, value: str) -> None:
+    """Model-based regression pin for the tenth-round finding: `${!NAME1}`
+    resolves via NAME1's own (case-preserved) value naming NAME2, whose
+    own (lowercased) assigned value is the final result -- confirmed live
+    against real bash argv expansion (`TOOLREF=T; T=uv; ${!TOOLREF}`
+    resolves to a genuine `uv`)."""
+    assume(name1 != name2)
+    name_to_raw_value = {name1: name2}
+    name_to_value = {name2: value.lower()}
+    assert checker._resolve_indirect_ref(f"${{!{name1}}}", name_to_value, name_to_raw_value) == value.lower()
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS)
+def test_resolve_indirect_ref_none_when_first_level_unresolved(name: str) -> None:
+    """When NAME was never assigned at all, the first-level lookup fails
+    and the whole indirect reference resolves to None -- it must never
+    silently fall through to some other reading."""
+    assert checker._resolve_indirect_ref(f"${{!{name}}}", {}, {}) is None
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS)
+def test_resolve_indirect_ref_none_for_a_bare_reference(name: str) -> None:
+    """A plain `${NAME}`/`$NAME` reference is not the `${!NAME}` indirect
+    shape at all -- `_resolve_indirect_ref` must return None rather than
+    (incorrectly) treating it as one."""
+    assert checker._resolve_indirect_ref(f"${{{name}}}", {name: "gh"}, {name: "gh"}) is None
+    assert checker._resolve_indirect_ref(f"${name}", {name: "gh"}, {name: "gh"}) is None

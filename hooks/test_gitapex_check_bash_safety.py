@@ -255,6 +255,14 @@ ALLOWED_DYNAMIC_COMMANDS = [
     ("echo ${NEVER_SET:-hello}", "default-clause-unrelated-text"),
     ("${NEVER_SET:-cat} file.txt", "default-clause-unwatched-tool"),
     ("echo ${NEVER_SET:-uv}", "default-clause-watched-tool-name-as-echo-argument"),
+    # False-positive guards for the `${!NAME}` indirect-reference fix
+    # added above in DENIED_INDIRECTION_COMMANDS (issue #1326, tenth
+    # round): an indirect reference resolving to something unrelated must
+    # stay allowed, and the two-level lookup must not itself misfire when
+    # the first level is unresolvable.
+    ("REF=R; R=cat; ${!REF} file.txt", "indirect-ref-unwatched-tool"),
+    ("REF=R; R=hello; echo ${!REF}", "indirect-ref-unrelated-text-as-echo-argument"),
+    ("echo ${!NEVER_ASSIGNED}", "indirect-ref-first-level-unresolved"),
 ]
 
 # --- Known, disclosed, unresolved regex/token-gate bypasses ----------------
@@ -479,6 +487,22 @@ DENIED_INDIRECTION_COMMANDS = [
         "${NEVER_SET:-gh} ${NEVER_SET2:-pr} ${NEVER_SET3:-merge} 1",
         "default-clause-gh-pr-merge-all-hidden",
     ),
+    # Found live by Step 8 independent review, tenth round (issue #1326):
+    # bash's own `${!NAME}` indirect-reference syntax (a TWO-LEVEL lookup
+    # -- NAME's own value names a second variable, whose value is the
+    # final result) contributed NOTHING to any rule's referenced-name/
+    # value collection before this round -- confirmed live via real bash
+    # argv expansion that each of these resolves to a genuine denied
+    # invocation.
+    (
+        "TOOLREF=T; T=uv; VERBREF=V; V=install; ${!TOOLREF} ${!VERBREF} foo",
+        "indirect-ref-tool-and-verb-both-hidden",
+    ),
+    ("GREF=G; G=gh; ${!GREF} pr merge 1", "indirect-ref-gh-hidden"),
+    (
+        "MREF=M; M=POST; gh api repos/x/y/merge -X${!MREF}",
+        "gh-api-method-value-indirect-ref",
+    ),
 ]
 
 
@@ -498,6 +522,14 @@ OBFUSCATED_GIT_PUSH_WARN_PATH_COMMANDS = [
     ('gi""t push origin HEAD', "quote-split-git-push-still-warn-path"),
     ("P=push; git $P origin main", "var-split-git-push-verb-still-warn-path"),
     ("A=git;B=push; $A $B origin main", "var-split-git-push-both-still-warn-path"),
+    # Found live by Step 8 independent review, tenth round (issue #1326):
+    # same `${!NAME}` indirect-reference class as DENIED_INDIRECTION_
+    # COMMANDS above, for git push specifically -- real bash resolves this
+    # to a genuine `git push origin main`.
+    (
+        "GITREF=G; G=git; PUSHREF=P; P=push; ${!GITREF} ${!PUSHREF} origin main",
+        "indirect-ref-git-push-both-hidden-still-warn-path",
+    ),
 ]
 
 
