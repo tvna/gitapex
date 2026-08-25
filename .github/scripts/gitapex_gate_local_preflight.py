@@ -78,7 +78,7 @@ reasons.
   (issue #890), which closes the "configured here but never actually
   installed" half; nothing closes the ``--no-verify`` half. CI remains the
   authoritative merge gate for every gate carrying a ``ci`` plane -- true
-  for 33 of the 35 wired gates. ``behind-base`` (issue #985) and
+  for 34 of the 36 wired gates. ``behind-base`` (issue #985) and
   ``real-checkout-git-write`` (issue #991) are the two exceptions: each
   carries only ``local``, so for those two gates specifically this
   pre-push hook -- bypassable the same way as any other -- is the *only*
@@ -87,7 +87,7 @@ reasons.
   Map; the same gap now applies to ``real-checkout-git-write`` too.
 - **Every wired gate runs through ``uv``.** CONTRIBUTING.md invokes this
   file with plain ``python3``, and so does the pre-push hook, because the
-  runner itself needs no dependencies -- but all 35 wired argvs begin with
+  runner itself needs no dependencies -- but all 36 wired argvs begin with
   ``uv``, since each gate carries its own pinned invocation. Without ``uv``
   on PATH every one of them reports ``FAIL ... failed to run``, which
   reads as a whole broken wired set rather than one missing tool. ``uv`` is
@@ -160,10 +160,9 @@ SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
 # own _GROUP_TIMEOUT_SECONDS = 600 -- so that one gate's own theoretical
 # worst case is ~4200 s, not 600 s. A ceiling matching that would be useless
 # as a hang guard (80 minutes of a silent pre-push), so this is a judgment
-# call in the other direction. For scale: a warm run of all 35 wired gates
-# combined measures roughly 13 s end to end (the prior 36-gate set measured
-# roughly 11 s, the 35-gate set before it measured roughly 13 s, the 34-gate
-# set before that measured roughly 11 s, up from ~7 s
+# call in the other direction. For scale: a warm run of all 36 wired gates
+# combined measures roughly 11 s end to end (the prior 35-gate set measured
+# roughly 13 s, the 34-gate set before it measured roughly 11 s, up from ~7 s
 # measured for the 31-gate set, 4-6 s measured for
 # the 24-gate set before issue #985's `behind-base` gate, and ~8-9 s measured
 # for the 26-gate set before issue #1028's two schema/manifest gates -- these

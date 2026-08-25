@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """Validate every committed waza eval suite against waza's own vendored schemas.
 
-ACTIVE (issue #862; its own .gitapex/ssot.json registration retired by
-issue #1136 alongside the rest of the waza binary's provisioning/
-verification bookkeeping). Enforced the way its siblings
+ACTIVE (issue #862): registered in .gitapex/ssot.json as
+eval-suite-schema-drift. Enforced exactly the way its two siblings
 .github/scripts/gitapex_scan_ssot_schema.py (ssot-schema-drift) and
 .github/scripts/gitapex_scan_skill_metadata_schema.py
-(skill-metadata-schema-drift) are -- no dedicated CI workflow step
+(skill-metadata-schema-drift) already are -- no dedicated CI workflow step
 and no pre-commit hook, only tests/test_gitapex_scan_eval_suite_schema.py's
 own test_real_repository_eval_suites_have_no_schema_drift calling find_drift()
 against the real evals/ tree with no fixture override, inside the pytest

@@ -501,15 +501,17 @@ def test_provision_tool_reinstalls_when_pin_changes(tmp_path: Path) -> None:
 
 def test_provision_all_continues_past_one_tool_failure(tmp_path: Path) -> None:
     """NOTE on a deviation from the plan brief's literal text: the brief's own
-    version of this test reused the REAL parsed `tools["rtk"]` spec (real
+    version of this test reused the REAL parsed `tools["waza"]` spec (real
     flake.nix sha256 pin) together with a locally-fabricated one-byte archive
-    body for rtk's response -- those can never match (verified: it raised
-    HashMismatchError for rtk too, the same failure mode as apm's 404, so
+    body for waza's response -- those can never match (verified: it raised
+    HashMismatchError for waza too, the same failure mode as apm's 404, so
     the test could not actually have exercised the "one tool fails, the other
-    still installs" behavior it claims to). Fixed by deriving rtk's pin from
-    the fabricated body's own hash (same pattern the brief's other two Step 1
-    tests already use for apm), while still resolving apm/rtk's owner/repo/
-    tag from the real flake.nix parse so the produced URLs are realistic."""
+    still installs" behavior it claims to). Fixed by deriving the second
+    tool's pin from the fabricated body's own hash (same pattern the brief's
+    other two Step 1 tests already use for apm), while still resolving that
+    tool's owner/repo/tag from the real flake.nix parse so the produced URLs
+    are realistic. Issue #1136 later retired waza; this test now uses rtk
+    (the other binary-kind Class B tool) in its place, keeping the same fix."""
     flake_text = (REPO_ROOT / "flake.nix").read_text(encoding="utf-8")
     real_tools = pcb.parse_flake_class_b_pins(flake_text)
     real_rtk_pin = real_tools["rtk"].systems["x86_64-linux"]

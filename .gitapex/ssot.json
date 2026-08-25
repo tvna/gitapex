@@ -55,6 +55,12 @@
       "authority": "Versioned, testable record of how faithfully each target agent-tool runtime can enforce the ten W2 execution-requirement dimensions (parent issue #307); authoritative source for a future W4 enforcement adapter, not yet consumed by any gate"
     },
     {
+      "id": "waza-suite-schemas",
+      "path": ".gitapex/waza-eval.schema.json",
+      "format": "json",
+      "authority": "waza's own eval/task JSON Schemas (draft-07, as upstream declares them), vendored verbatim at the release tag recorded in gitapex_scan_eval_suite_schema.py's VENDORED_WAZA_TAG (waza's own binary retired per issue #1130/#1136; this tag now records only the vendored schemas' provenance) -- authoritative shape for every committed evals/ suite, read by eval-suite-schema-drift. One entry stands in for the pair: .gitapex/waza-task.schema.json is vendored from the same tag by the same gate and carries the same authority"
+    },
+    {
       "id": "main-branch-ruleset",
       "path": ".github/rulesets/main.json",
       "format": "json",
@@ -781,6 +787,30 @@
       ]
     },
     {
+      "id": "waza-eval-gate",
+      "kind": "script",
+      "script": [
+        ".github/workflows/waza-eval-gate.yml",
+        ".github/scripts/gitapex_detect_touched_eval_skills.py",
+        "evals/scripts/gitapex_run_eval_suite.py"
+      ],
+      "rule": "Executes each PR-touched skill's own evals/<skill>/ suite via 'uv run --frozen python3 evals/scripts/gitapex_run_eval_suite.py --eval-yaml evals/<skill>/eval.yaml --skill-md skills/<skill>/SKILL.md' (issue #1134, replacing 'nix run .#waza -- run <skill>') and fails the job if any suite fails; not yet a required status check.",
+      "planes": ["ci"],
+      "local_exclusion": "Runs eval suites via a live model-CLI subprocess, which need ANTHROPIC_API_KEY plus model access rather than a working-tree read.",
+      "trigger": ".github/workflows/waza-eval-gate.yml on pull_request and workflow_dispatch",
+      "policy_refs": [],
+      "cluster": "skill-lifecycle",
+      "tracking_issue": 582,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "workflow-event", "ref": "waza-eval-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "waza-eval-gate.yml:workflow_dispatch"},
+        {"kind": "file-glob", "ref": "evals/*/eval.yaml"}
+      ]
+    },
+    {
       "id": "workflow-lint",
       "kind": "script",
       "script": ".github/workflows/lint.yml",
@@ -1144,6 +1174,32 @@
       ]
     },
     {
+      "id": "eval-suite-schema-drift",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_scan_eval_suite_schema.py",
+      "rule": "Every evals/*/eval.yaml and evals/*/tasks/*.yaml must validate against waza's own schemas vendored at VENDORED_WAZA_TAG (.gitapex/waza-eval.schema.json, .gitapex/waza-task.schema.json), extended only by the reviewed EXTENSION_KEYS allowlist -- so an approved repository-local key passes and a misspelling of it fails, where waza itself only warns and the local pydantic extra=\"allow\" consumers silently see nothing. Each allowlist row must name a consumer file that exists and still mentions the key, and must not shadow a property waza has since adopted natively. Each vendored file's sha256 must match its recorded digest; the opt-in --verify-upstream flag additionally compares both vendored files byte-for-byte against what microsoft/waza published at that tag. Its former flake.nix-pin cross-check (find_pin_drift) was removed by issue #1136 once flake.nix stopped pinning any waza version at all -- VENDORED_WAZA_TAG is now pure provenance metadata for the two vendored schema files, not a live flake.nix cross-reference.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_eval_suite_schema.py"],
+      "trigger": "tests/test_gitapex_scan_eval_suite_schema.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": ["waza-suite-schemas"],
+      "cluster": "test-integrity",
+      "tracking_issue": 862,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "evals/*/eval.yaml"},
+        {"kind": "file-glob", "ref": "evals/*/tasks/*.yaml"},
+        {"kind": "file-glob", "ref": "evals/*/tasks/*.yml"},
+        {"kind": "file-glob", "ref": ".gitapex/waza-eval.schema.json"},
+        {"kind": "file-glob", "ref": ".gitapex/waza-task.schema.json"},
+        {"kind": "cross-registry-consistency", "ref": ".gitapex/waza-eval.schema.json & .gitapex/waza-task.schema.json bytes <-> VENDORED_DIGESTS recorded sha256"},
+        {"kind": "cross-registry-consistency", "ref": "EXTENSION_KEYS allowlist rows <-> named consumer files' real content"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
+    },
+    {
       "id": "eval-results-schema-drift",
       "kind": "script",
       "script": ".github/scripts/gitapex_scan_eval_results_schema.py",
@@ -1429,7 +1485,7 @@
       "script": [
         ".github/scripts/gitapex_check_copilot_endpoint_configured.py"
       ],
-      "rule": "DEPRECATED (issue #1134): fails loudly unless COPILOT_BASE_URL or COPILOT_PROVIDER_BASE_URL resolves (waza's own envFirst() precedence) to a well-formed absolute URL (scheme + host, matching waza's own providerHost()) before a copilot-sdk-executor run; never prints the resolved value. Neither remaining real call site (waza-eval-gate.yml, waza-eval-matrix.yml's eval-matrix job) invokes this script anymore -- both switched to evals/scripts/gitapex_run_eval_suite.py, preflighted instead by that job's own inline ANTHROPIC_API_KEY check (waza-eval-gate.yml's own gitapex.ssot.json entry was retired by issue #1136). waza-eval-matrix.yml's eval-matrix-hf-gemma4 job never called this script either -- before issue #1259 it ran nix run .#waza -- run directly behind its own separate, inline HF_INFERENCE_ENDPOINT_URL/HF_API_TOKEN preflight; since #1259 it instead maps those same two repository secrets onto HTTP_EXECUTOR_BASE_URL/HTTP_EXECUTOR_API_KEY and preflights those before calling evals/scripts/gitapex_run_eval_suite.py --executor http (see evals/scripts/gitapex_run_http_executor.py's own HttpExecutorConfig validators for the base_url/api_key well-formedness checks that module mirrors, not imports, from this script's own _CopilotEndpointURL). The script and its test are kept, unmodified, as dead code pending an explicit decision to delete them -- not deleted in this same change, to keep that decision reversible and separately reviewable.",
+      "rule": "DEPRECATED (issue #1134): fails loudly unless COPILOT_BASE_URL or COPILOT_PROVIDER_BASE_URL resolves (waza's own envFirst() precedence) to a well-formed absolute URL (scheme + host, matching waza's own providerHost()) before a copilot-sdk-executor run; never prints the resolved value. Neither remaining real call site (waza-eval-gate.yml, waza-eval-matrix.yml's eval-matrix job) invokes this script anymore -- both switched to evals/scripts/gitapex_run_eval_suite.py, preflighted instead by that job's own inline ANTHROPIC_API_KEY check (see the 'waza-eval-gate' gate entry above). waza-eval-matrix.yml's eval-matrix-hf-gemma4 job never called this script either -- before issue #1259 it ran nix run .#waza -- run directly behind its own separate, inline HF_INFERENCE_ENDPOINT_URL/HF_API_TOKEN preflight; since #1259 it instead maps those same two repository secrets onto HTTP_EXECUTOR_BASE_URL/HTTP_EXECUTOR_API_KEY and preflights those before calling evals/scripts/gitapex_run_eval_suite.py --executor http (see evals/scripts/gitapex_run_http_executor.py's own HttpExecutorConfig validators for the base_url/api_key well-formedness checks that module mirrors, not imports, from this script's own _CopilotEndpointURL). The script and its test are kept, unmodified, as dead code pending an explicit decision to delete them -- not deleted in this same change, to keep that decision reversible and separately reviewable.",
       "planes": ["ci"],
       "local_exclusion": "Grades GitHub Actions repository secrets (COPILOT_BASE_URL / COPILOT_PROVIDER_BASE_URL); a local working tree has no equivalent secret to check, and failing every unrelated local pre-push on their absence would be a false-alarm regression.",
       "trigger": "No longer triggered from any workflow (issue #1134) -- retained only via tests/test_gitapex_check_copilot_endpoint_configured.py inside the pytest step of .github/workflows/test.yml, which exercises the script's own pure functions directly, not through either former call site.",

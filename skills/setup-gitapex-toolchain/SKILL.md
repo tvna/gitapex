@@ -1,6 +1,6 @@
 ---
 name: setup-gitapex-toolchain
-description: Provisions gitapex's flake.nix-pinned Class B toolchain binaries (waza, apm, rtk, betterleaks) and runs apm install, without Nix, for a fresh Claude Code web (ephemeral) session. Use when a session needs these tools and they are not yet on PATH, or to manually re-run/verify provisioning (--verify). Distinct from `nix develop`, which remains the provisioner for persistent surfaces (local CLI, CI) and is not invoked here.
+description: Provisions gitapex's flake.nix-pinned Class B toolchain binaries (apm, rtk, betterleaks) and runs apm install, without Nix, for a fresh Claude Code web (ephemeral) session. Use when a session needs these tools and they are not yet on PATH, or to manually re-run/verify provisioning (--verify). Distinct from `nix develop`, which remains the provisioner for persistent surfaces (local CLI, CI) and is not invoked here.
 compatibility: "Designed for Claude Code cloud (web) sessions; requires python3 >= 3.12, outbound network access to github.com release assets, and the SessionStart hook environment variables CLAUDE_CODE_REMOTE, CLAUDE_PROJECT_DIR, and CLAUDE_ENV_FILE."
 ---
 
