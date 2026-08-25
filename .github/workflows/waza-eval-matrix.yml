@@ -3,8 +3,8 @@
 # This is the harness that lets a credentialed run MEASURE the repo's
 # cross-model consistency concept instead of asserting it. It is advisory and
 # manual only (workflow_dispatch): it never runs on push/PR and never gates a
-# merge -- the same posture as waza-check.yml, which the repo already treats as
-# a report, not a gate.
+# merge -- the same advisory posture waza-check.yml held before its
+# retirement in issue #1135: a report, not a gate.
 #
 # It cannot produce results until the owner provisions the credential each
 # job's own preflight step requires -- ANTHROPIC_API_KEY for `eval-matrix`

@@ -96,12 +96,14 @@ four together with "shape is valid". Adopting a new GitHub rule type therefore
 means extending that union -- deliberately, since the same change has to update
 this runbook and `.gitapex/ssot.json` too.
 
-Two further exclusions, both for cause:
+One further exclusion, for cause:
 
 * `eval-gate` runs unconditionally but has failed on every evals-touching pull
   request for as long as its executor secret has been missing. Making a
   known-red check required would block all merges on day one.
-* `waza-check` is `continue-on-error` by its own design and never blocks.
+
+(`waza-check` was a second such exclusion -- `continue-on-error` by its own
+design, never blocking -- until issue #1135 retired the workflow entirely.)
 
 ### The code-owner review deadlock, stated plainly
 
