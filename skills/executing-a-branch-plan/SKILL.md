@@ -214,7 +214,7 @@ combined diff, then the draft PR converts to ready-for-review.
   explicitly does not implement. This skill starts exactly where that one
   stops -- it never re-derives an ACM, it consumes the one `planning-a-branch-from-an-issue`
   already produced (or independently re-verifies a stale one, per that
-  skill's own Step 4 draft-not-pre-verified rule).
+  skill's own Step 5 draft-not-pre-verified rule).
 - **vs. a single-task Branch Plan:** an ACM that decomposes into exactly
   one task -- no wave parallelism, no file-ownership or interface-
   dependency edges to compute against a sibling task -- is not a

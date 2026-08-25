@@ -28,7 +28,7 @@ _SCRIPT_PATH = (
     / "gitapex_check_acm_present.py"
 )
 
-_spec = importlib.util.spec_from_file_location("_drafting_an_acm_issue_check_acm_present", _SCRIPT_PATH)
+_spec = importlib.util.spec_from_file_location("_drafting_issues_check_acm_present", _SCRIPT_PATH)
 assert _spec is not None and _spec.loader is not None
 checker = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(checker)
