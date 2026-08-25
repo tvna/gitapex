@@ -69,9 +69,48 @@ destined for a public sink.
    is not enough: `create_pull_request` and `update_pull_request` can
    inject a session-URL trailer downstream of the submitted `body`,
    invisible to any scan run before the call. Immediately after either
-   call returns, re-fetch the PR (for example `pull_request_read` with
-   method `get`) and re-run check 1 against the text actually stored on
-   the platform, not the draft:
+   call returns, re-fetch the actually-stored body through a raw,
+   unsanitized channel and re-run check 1 against it, not the draft.
+
+   **Do not use an MCP read tool (`pull_request_read`, `issue_read`) for
+   this re-check.** The GitHub MCP server's own response-direction
+   handler runs every body it returns through an HTML sanitizer
+   (`bluemonday.StrictPolicy()` against a fixed element allowlist --
+   confirmed against `github/github-mcp-server`'s own
+   `pkg/sanitize/sanitize.go`, commit `884c791`; the write path,
+   `pkg/github/pullrequests.go`, calls no such sanitizer). A legitimate
+   Markdown construct not on that allowlist -- a backtick-wrapped
+   angle-bracket placeholder, a bracket-wrapped-URL autolink -- can come
+   back stripped from an MCP read even though GitHub's own storage still
+   holds it intact. Reading a body back through an MCP tool call
+   therefore does not prove content loss; it only proves the read
+   channel's own sanitizer touched it. Issues
+   https://github.com/tvna/gitapex/issues/1088,
+   https://github.com/tvna/gitapex/issues/1302, and
+   https://github.com/tvna/gitapex/issues/1313 each originally
+   misdiagnosed exactly this read-channel illusion as a storage defect
+   and rewrote already-correct content to work around it (see
+   https://github.com/tvna/gitapex/issues/1327 for the correction).
+
+   The authoritative raw-fetch channel is the same one this repository's
+   own post-write hook already uses:
+   `hooks/gitapex_check_post_write_provenance.py` (wired as a PostToolUse
+   hook by `hooks/check-post-write-provenance.sh`) re-fetches the stored
+   body via a direct HTTPS call to
+   `GET /repos/{owner}/{repo}/issues/{number}` -- the one REST endpoint
+   for both issues and pull requests, bypassing the MCP server's
+   read-side sanitizer entirely -- and re-runs this checklist's check 1
+   and check 3 (and, since
+   https://github.com/tvna/gitapex/issues/1327, a submitted-vs-stored
+   content-loss comparison) against what that call actually returns.
+   Where that hook is installed (this repository's own default), its
+   automatic re-check already satisfies this step: confirm its verdict
+   (PASS / FLAGGED / CONTENT_LOSS / INDETERMINATE, surfaced in-session)
+   rather than re-deriving it by hand through an MCP read. Where no such
+   hook is installed, call the same raw-fetch helper directly
+   (`fetch_issue()` in `hooks/gitapex_check_pr_issue_acm_disclosure.py`)
+   and pipe its `body` field into the scan below -- never a `body` read
+   back from `pull_request_read`/`issue_read`:
 
    ```bash
    python3 scripts/gitapex_scan_provenance.py <<< "$ACTUAL_STORED_BODY"
@@ -83,25 +122,22 @@ destined for a public sink.
    `-` and fail with `FileNotFoundError`.
 
    If the re-scan flags a candidate, call `update_pull_request` to strip
-   it, then re-fetch and re-run the scan once more to confirm it was not
+   it, then re-fetch (again through the raw channel above, never an MCP
+   read) and re-run the scan once more to confirm it was not
    force-reinjected before treating the artifact as clean.
 
    An issue body written through a create/update issue call needs the
    same treatment, with the issue-side equivalent at each step: re-fetch
-   the issue, scan its stored body, strip a flagged candidate via the
-   issue write call, then re-fetch and re-scan to confirm. Nothing about
-   this gap is PR-specific -- only the tool names differ.
+   the issue through the raw channel, scan its stored body, strip a
+   flagged candidate via the issue write call, then re-fetch and re-scan
+   to confirm. Nothing about this gap is PR-specific -- only the tool
+   names differ.
 
-   Some environments now back this check with a PostToolUse hook (this
-   repository's own `hooks/check-post-write-provenance.sh` is one
-   example: it re-fetches the stored body after `create_pull_request` /
-   `update_pull_request` / `issue_write` returns and re-runs this
-   checklist's check 1 and check 3 against it). Where that hook is
-   installed it reports the finding but cannot undo the write -- the
-   remediation above is still yours to perform -- and it covers only the
-   tool calls it matches, so a body edited afterwards through any other
-   path is still yours to re-check. Run this step by hand wherever no
-   such hook exists.
+   Where the PostToolUse hook is installed it reports the finding but
+   cannot undo the write -- the remediation above is still yours to
+   perform -- and it covers only the tool calls it matches, so a body
+   edited afterwards through any other path is still yours to re-check
+   through the raw channel by hand.
 3. **ASCII-only.** Default to no em dashes, en dashes, curly quotes,
    full-width punctuation, or any other non-ASCII character -- gitapex's
    own convention. If the calling repository documents a different

@@ -145,10 +145,30 @@ Usage (matches the JSON the .sh wrapper pipes in)::
 Exit codes:
     0  PASS (the stored body scanned clean), or SKIP (the payload names a
        tool this gate does not cover -- self-revalidation, dimension 3).
-    1  FLAGGED (a candidate marker or a non-ASCII character is in the
-       stored body) or INDETERMINATE (the body could not be verified at
-       all). Both carry a one-line reason on stderr; neither is ever a
-       raw traceback.
+    1  CONTENT_LOSS (the stored body is missing content the submitted
+       body had, beyond an append-only addition or CRLF/trailing-
+       whitespace normalization -- issue #1327), FLAGGED (a candidate
+       marker or a non-ASCII character is in the stored body), or
+       INDETERMINATE (the body could not be verified at all). All three
+       carry a one-line reason on stderr; none is ever a raw traceback.
+
+Issue #1327: this module's fetch already reads the true, unsanitized
+stored body (`fetch_issue()` hits the REST API directly, never an MCP
+read tool -- see that function's own module for why an MCP read is not
+authoritative here). What it did not do until this issue is compare that
+stored body against the body the same tool call actually submitted
+(`tool_input["body"]`, present in the same PostToolUse payload and
+previously unread by this module). `detect_content_loss()` closes that
+gap: a coarse, conservative comparison that flags only the shape
+#1088/#1302/#1313 actually hit before their own diagnosis was corrected
+-- content present in the submission that is simply absent from the
+stored body -- while staying silent on an append-only addition (the
+ratified-attribution-trailer case the provenance scan already owns as
+its own separate judgment call) and on CRLF/per-line-trailing-whitespace
+normalization. It is not a general diff: a body edited in the middle by
+a legitimate follow-up call between submission and this re-check is out
+of scope, since nothing about two bare strings can distinguish
+"downstream loss" from "deliberate follow-up edit" for that shape.
 """
 
 from __future__ import annotations
@@ -295,6 +315,51 @@ def scan_non_ascii(text: str) -> list[tuple[int, int, str]]:
             name = unicodedata.name(character, "unnamed character")
             hits.append((line_no, column, f"U+{ord(character):04X} {name}"))
     return hits
+
+
+def normalize_for_content_loss(text: str) -> str:
+    """Fold CRLF/LF and per-line trailing whitespace, so a cosmetic
+    normalization difference between the submitted body and the stored
+    body is never read as content loss (issue #1327's own tolerance
+    requirement). Trailing blank lines at the very end are folded too --
+    the same reason a diff tool ignores a trailing newline.
+    """
+    unified = text.replace("\r\n", "\n").replace("\r", "\n")
+    return "\n".join(line.rstrip() for line in unified.split("\n")).rstrip("\n")
+
+
+def detect_content_loss(submitted: str, stored: str) -> str | None:
+    """Return a one-line reason when `stored` is missing content that was
+    present in `submitted`, or None when no loss is detected.
+
+    Two shapes are tolerated, deliberately, and both fall through to
+    None:
+
+    - Trivial normalization (CRLF/LF, per-line trailing whitespace) --
+      not a defect this check exists to report.
+    - An append-only addition: `stored` still contains `submitted` as a
+      prefix, plus something after it. This is the ratified-attribution-
+      trailer shape `hooks/check-post-write-provenance.sh`'s own
+      provenance scan already owns as a separate, disclosure-aware
+      judgment call (skills/outward-artifact-preflight/SKILL.md check 1
+      item 5) -- this comparison must not re-flag it as loss.
+
+    Anything else -- `stored` not starting with `submitted` after
+    normalization -- is content loss: some or all of what was submitted
+    is simply not present in what got stored, the exact shape
+    #1088/#1302/#1313 originally (and, per issue #1327, incorrectly)
+    attributed to GitHub's storage layer stripping Markdown.
+    """
+    norm_submitted = normalize_for_content_loss(submitted)
+    norm_stored = normalize_for_content_loss(stored)
+    if norm_submitted == norm_stored:
+        return None
+    if norm_stored.startswith(norm_submitted):
+        return None
+    return (
+        "the STORED body is missing content present in the SUBMITTED body "
+        "(beyond an append-only addition or CRLF/trailing-whitespace normalization)"
+    )
 
 
 def _coerce_mapping(value: Any) -> dict[str, Any]:
@@ -514,8 +579,8 @@ def evaluate(
     fetcher: Any = None,
     scanner_path: Path | None = None,
 ) -> tuple[str, str]:
-    """Return ``(verdict, message)`` where verdict is SKIP, PASS, FLAGGED,
-    or INDETERMINATE.
+    """Return ``(verdict, message)`` where verdict is SKIP, PASS,
+    CONTENT_LOSS, FLAGGED, or INDETERMINATE.
 
     `fetcher` is the injection seam for the network call: it takes
     ``(owner, repo, number, token)`` and returns the fetched issue/PR
@@ -524,6 +589,7 @@ def evaluate(
     already-tested one, not a second copy.
     """
     tool_name = payload.get("tool_name")
+    tool_input = _coerce_mapping(payload.get("tool_input"))
 
     # Dimension 3 (self-revalidation): the hooks.json matcher already
     # restricts this hook to the three covered tools, but the matcher is
@@ -597,6 +663,25 @@ def evaluate(
         )
 
     body = fetched.get("body") or ""
+
+    # Issue #1327: compare against what this same tool call actually
+    # submitted, when it submitted a body at all. Some covered-tool calls
+    # (e.g. an issue_write method that only changes labels/state) carry no
+    # body field, and there is nothing to compare in that case -- silently
+    # skipped, not INDETERMINATE, since no submission means no possible loss.
+    submitted_body = tool_input.get("body")
+    if isinstance(submitted_body, str) and submitted_body:
+        loss_reason = detect_content_loss(submitted_body, body)
+        if loss_reason is not None:
+            return "CONTENT_LOSS", (
+                f"{owner}/{repo}#{number}'s STORED body: {loss_reason}. This is a defect, not a "
+                "judgment call: per issue #1327, do not re-check via an MCP read tool "
+                "(pull_request_read/issue_read), whose own response sanitizer can independently "
+                "strip content that storage still holds intact and would misreport this as clean or "
+                "as a different problem. Re-submit the missing content via update_pull_request / "
+                "issue_write, then re-fetch through this same raw channel to confirm."
+            )
+
     clean, message = scan_body(body, scanner)
     if clean:
         return "PASS", f"{owner}/{repo}#{number}'s stored body re-scanned clean -- {message}"
