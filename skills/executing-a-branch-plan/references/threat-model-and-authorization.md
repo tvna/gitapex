@@ -309,16 +309,19 @@ actual plugin-agent schema, not a plausible-sounding claim).
    all three bypasses named above, plus the broader `${IFS}`/quote-split/
    variable/array/positional-parameter indirection classes they represent,
    are now hard-denied; see `gitapex_check_task_bash_safety.py`'s own
-   module docstring for the full analysis. A narrower residual remains,
+   module docstring for the full analysis. Narrower residuals remain,
    disclosed there and pinned by that script's own test suite as
    `KNOWN_BYPASS_COMMANDS`: verb-token-splitting that never places the
    tool/verb name as its own literal token anywhere in the command, e.g.
    string-slice reconstruction (`cmd=pipinstall; eval "${cmd:0:3}
    ${cmd:3}"`) or array-literal-assignment indirection (`A=(pip);
-   V=(install); "${A[@]}" "${V[@]}"`) -- every "hard deny"/"empirically
-   verified" claim in this section should be read as bounded by that
-   narrower ceiling, not as complete coverage against a task agent acting
-   on an injected instruction that survived per-task screening. Stage 2
+   V=(install); "${A[@]}" "${V[@]}"`); and, in `_rule_fetch_exec`'s own
+   wrapper-skip logic specifically, a wrapper flag that takes a SEPARATE
+   value argument rather than being boolean (`sudo -u root bash`, `env
+   VAR=1 bash`) -- every "hard deny"/"empirically verified" claim in this
+   section should be read as bounded by those narrower ceilings, not as
+   complete coverage against a task agent acting on an injected
+   instruction that survived per-task screening. Stage 2
    (execution-boundary enforcement -- e.g. a git pre-push hook or
    network-egress blocking, independent of any source-text classifier) is
    tracked as a separate, owner-decision-requiring follow-up, not part of

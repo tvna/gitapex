@@ -1206,3 +1206,104 @@ def test_substitute_var_refs_candidates_resolves_a_flag_name_fused_indirect_ref(
     assert checker._substitute_var_refs_candidates(f"--${{!{prefix_var}}}", name_to_value, name_to_raw_value) == [
         "--" + value.lower()
     ]
+
+
+# --- Issue #1326 Stage 1, fourteenth round: command-substitution folding ----
+# and the recursive inner-content check this round added --------------------
+
+
+@_PROPERTIES
+@given(a=_IDENTIFIERS, b=_IDENTIFIERS)
+def test_command_substitution_token_span_finds_the_matching_close_paren(a: str, b: str) -> None:
+    """Model-based: a `$`-suffixed opener token immediately followed by a
+    `(` token returns the index one past the matching `)`, tracking
+    nesting depth across the intervening tokens -- shared by
+    ``_fold_command_substitution_spans`` and ``_rule_command_substitution_
+    content``, added by Step 8 independent review, fourteenth round (issue
+    #1326), ported from the task-scoped sibling module's own function of
+    the same name."""
+    tokens = ["x=$", "(", a, b, ")", "trailing"]
+    assert checker._command_substitution_token_span(tokens, 0) == 5
+
+
+@_PROPERTIES
+@given(a=_IDENTIFIERS)
+def test_command_substitution_token_span_none_for_a_non_opener(a: str) -> None:
+    """No false positive: a token that does not end with `$`, or is not
+    immediately followed by a `(` token, never starts a span."""
+    assert checker._command_substitution_token_span([a, "(", "y", ")"], 0) is None
+
+
+@_PROPERTIES
+@given(a=_IDENTIFIERS, inner=_IDENTIFIERS)
+def test_fold_command_substitution_spans_merges_into_one_dynamic_token(a: str, inner: str) -> None:
+    """Model-based: an unquoted `$(...)` span (split by shlex into
+    separate `$`/`(`/.../`)` tokens) folds into ONE opaque token that
+    ``_is_dynamic`` still recognizes, keeping any literal text before or
+    after it in its OWN, unmerged position."""
+    tokens = [a, "$", "(", inner, ")"]
+    folded = checker._fold_command_substitution_spans(tokens)
+    assert folded == [a, f"$( {inner})"]
+    assert checker._is_dynamic(folded[1])
+
+
+@_PROPERTIES
+@given(inner=_IDENTIFIERS)
+def test_find_fused_command_substitution_extracts_the_quoted_span(inner: str) -> None:
+    """Model-based: the QUOTED shape shlex leaves fused as one token
+    (`"prefix $(cmd) suffix"` dequotes to one token) is found via a
+    character-level scan, distinct from the unquoted, cross-token shape
+    ``_command_substitution_token_span`` handles."""
+    token = f"prefix $({inner}) suffix"
+    fused = checker._find_fused_command_substitution(token)
+    assert fused is not None
+    start, end = fused
+    assert token[start + 2 : end - 1] == inner
+
+
+@_PROPERTIES
+@given(verb=st.sampled_from(["install", "i", "add"]))
+def test_is_unresolvable_substitution_detects_command_substitution(verb: str) -> None:
+    """Model-based: a token containing `$(` (a command substitution) is
+    always flagged unresolvable -- the narrow, position-specific guard
+    used at the gh-api flag-name/flag-value checks, NOT inside the
+    shared, whole-segment `_substitute_var_refs_candidates` primitive
+    itself (see that function's own docstring for the false-positive
+    history behind this split)."""
+    assert checker._is_unresolvable_substitution(f"$( echo {verb})")
+
+
+@_PROPERTIES
+@given(value=_VALUES)
+def test_is_unresolvable_substitution_allows_an_ordinary_dynamic_token(value: str) -> None:
+    """No false positive: an ordinary `$NAME` reference (resolvable
+    through `_substitute_var_refs_candidates`'s own machinery) is never
+    flagged by this narrower check."""
+    assert not checker._is_unresolvable_substitution(f"${value}")
+
+
+@_PROPERTIES
+@given(tool=st.sampled_from(["pip", "uv"]))
+def test_rule_command_substitution_content_detects_an_embedded_install(tool: str) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, fourteenth round (issue #1326): a BARE,
+    unassigned, unquoted `$(...)` occupying the ENTIRE command position
+    has its own OUTPUT word-split and re-executed as a brand-new command
+    by bash -- bash genuinely RUNS a `$(...)` substitution's own inner
+    content the instant it is evaluated, so an install command embedded
+    inside one is just as dangerous as at the top level. `x=$` (not `x`,
+    `=`, `$` as separate tokens) matches real shlex output -- `=` is not
+    a punctuation character shlex breaks a word at, so an assignment's
+    `NAME=` prefix stays fused onto the leading `$` in the same token."""
+    tokens = ["x=$", "(", tool, "install", "evil-pkg", ")"]
+    assert checker._rule_command_substitution_content(tokens) is not None
+
+
+@_PROPERTIES
+@given(value=_VALUES)
+def test_rule_command_substitution_content_allows_harmless_inner_content(value: str) -> None:
+    """No false positive: a `$(...)` substitution whose own inner content
+    is an ordinary, harmless command (not itself a denied pattern) is
+    never flagged by this recursive check."""
+    tokens = ["echo", "$", "(", "date", value, ")"]
+    assert checker._rule_command_substitution_content(tokens) is None

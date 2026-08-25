@@ -271,6 +271,16 @@ ALLOWED_DYNAMIC_COMMANDS = [
     # `gh api` flag name fused with a literal prefix that resolves to
     # something other than a watched flag must stay allowed.
     ("X=x; gh api repos/o/r/issues --$X", "fused-flagname-unwatched-flag"),
+    # False-positive guards for the fourteenth-round command-substitution
+    # fixes: an ordinary, harmless `$(...)` used as plain argument text
+    # (not the command word, and embedding no denied command of its own)
+    # must stay allowed -- the root-cause analysis's own measured 28% FP
+    # rate is exactly what an over-broad "any unresolvable $(...) denies"
+    # policy would reproduce.
+    ('echo "today is $(date)"', "command-substitution-as-harmless-echo-argument"),
+    ("x=$(date +%s); echo $x", "assignment-from-harmless-command-substitution"),
+    ('git commit -m "fixed $(date)"', "command-substitution-in-commit-message-argument"),
+    ("gh api repos/o/r/pulls/1 -XGET", "gh-api-literal-get-stays-allowed"),
 ]
 
 # --- Known, disclosed, unresolved regex/token-gate bypasses ----------------
@@ -548,6 +558,26 @@ DENIED_INDIRECTION_COMMANDS = [
         "FF=field; gh api repos/o/r/issues --$FF name=value",
         "fused-flagname-field-with-literal-prefix",
     ),
+    # Found live by Step 8 independent review, fourteenth round (issue
+    # #1326): a general literal-token-adjacency bypass -- `segment_
+    # tokens` used to split a bare command word from whatever followed a
+    # `(`, so a tool/verb pair hidden behind a `$(...)` command-
+    # substitution wrapper evaded every literal-adjacency and B-rule
+    # indirection check, confirmed live via a real bash proxy that each
+    # substitution genuinely resolves to the plain literal invocation.
+    ("$(echo pip) install foo", "command-substitution-wrapped-pip-install"),
+    ("$(echo uv) install foo", "command-substitution-wrapped-uv-install"),
+    ("$(echo gh) pr merge 1", "command-substitution-wrapped-gh-pr-merge"),
+    # Found live by Step 8 independent review, fourteenth round (issue
+    # #1326), the gh-api flag-value counterpart: a `-X`/`--method` or
+    # `-f`/`--field` flag whose value is itself a `$(...)` command
+    # substitution resolving to a write method was invisible to the
+    # write-method literal-prefix comparison, since the folded
+    # substitution's own reconstructed text never itself starts with the
+    # write-method text.
+    ("gh api repos/o/r/pulls/1/merge -X$(echo POST)", "gh-api-method-value-command-substitution-fused"),
+    ("gh api repos/o/r/pulls/1/merge -X $(echo POST)", "gh-api-method-value-command-substitution-separate"),
+    ("gh api repos/o/r/pulls/1/merge $(echo -X) POST", "gh-api-method-flagname-command-substitution"),
 ]
 
 

