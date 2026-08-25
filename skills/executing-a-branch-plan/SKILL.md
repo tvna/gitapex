@@ -75,14 +75,14 @@ first, not skimmed.
    step 5 requires.
 5. **Open a draft PR and subscribe** (Decision 8). Open a draft PR
    carrying the ACM and a seeded `## Execution log` section (`PlanApproved`
-   event). Apply the `branch-plan-executing` label to the PR in this same
-   step -- an ownership-signal mirror of this skill's own in-flight
-   execution, letting `drafting-a-pr-to-merge` detect a mid-execution draft
-   before entering its own fix loop against it (that skill's own Step 7
-   `"draft"` branch checks for this label). Subscribe to the draft PR's own CI/review/comment activity in
-   this same step; this skill owns responding to it until step 9, not
-   `drafting-a-pr-to-merge`. Event vocabulary and log format: [domain events
-   reference](references/domain-events-and-failure-handling.md).
+   event). Apply the `branch-plan-executing` label to the PR -- an
+   ownership-signal mirror of this skill's own in-flight execution, letting
+   `drafting-a-pr-to-merge` detect a mid-execution draft before entering
+   its own fix loop against it (that skill's own Step 7 `"draft"` branch
+   checks for this label). Subscribe to the draft PR's own CI/review/comment
+   activity in this same step; this skill owns responding to it until step
+   9, not `drafting-a-pr-to-merge`. Event vocabulary and log format: [domain
+   events reference](references/domain-events-and-failure-handling.md).
 6. **Execute, one Workflow run per wave** (Decision 16, 4, 13, 14). For
    each wave from step 3: dispatch one Workflow run containing only that
    wave's task `agent()` calls, each with `agentType:
@@ -149,9 +149,8 @@ first, not skimmed.
 9. **On all tasks complete, step 8 clean, and the branch's remote state
    confirmed to match local** (a final `git status`/push-state check --
    not assumed from step 6/8's own per-step pushes alone), remove the
-   `branch-plan-executing` label applied at step 5 and mark the PR
-   ready for
-   review. This "ready for review" marking is a handoff signal, not a
+   `branch-plan-executing` label applied at step 5 and mark the PR ready
+   for review. This "ready for review" marking is a handoff signal, not a
    self-certifying guarantee `drafting-a-pr-to-merge` is expected to trust
    blindly: that skill's own step 6 ("verify `mergeable_state` directly
    ... never infer from green CI or 'LGTM'") already re-derives PR state

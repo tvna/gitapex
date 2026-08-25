@@ -53,11 +53,11 @@ session believes it contains.
 ## Read-modify-write discipline
 
 **"Append-only" names the convention, not the write primitive underneath
-it.** The PR-body write API this skill relies on (`github:update_pull_request`,
-or the calling repository's equivalent) has exactly one primitive: replace
-the whole body. There is no server-side append operation. Writing a new
-Execution log event is therefore always a three-step read-modify-write,
-never a bare append call:
+it.** The PR-body write API this skill relies on
+(`github:update_pull_request`, or the calling repository's equivalent) has
+exactly one primitive: replace the whole body. There is no server-side
+append operation. Writing a new Execution log event is therefore always a
+three-step read-modify-write, never a bare append call:
 
 1. **Fetch** the PR's current body (`github:pull_request_read` method
    `get`) immediately before writing -- never reuse a body fetched earlier
@@ -73,11 +73,11 @@ never a bare append call:
 described the mechanism invites a naive shortcut -- constructing a body
 from only what this run itself knows about (its own ACM, its own prior
 events) and writing that back, silently destroying any section a human or
-another process added between steps 1 and 3 (a review comment quoted into
-the body, a manually-added label note, a concurrent edit). The
-three-step sequence above is what prevents that: step 1's fetch is what
-step 3 writes back, modified only by step 2's own single addition, never
-reconstructed from memory.
+another process added between the fetch and the write-back (a review
+comment quoted into the body, a manually-added label note, a concurrent
+edit). The three-step sequence above is what prevents that: step 1's
+fetch is what step 3 writes back, modified only by step 2's own single
+addition, never reconstructed from memory.
 
 ## Event vocabulary (closed set, append-only, one line per event)
 
