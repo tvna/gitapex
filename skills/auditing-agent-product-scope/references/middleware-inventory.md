@@ -37,7 +37,7 @@ waza/apm/rtk/betterleaks)."
 | `python312` | A (nixpkgs) | Runtime for every Python script and test in this repository | Base interpreter only; `uv` manages the actual dependency versions on top of it | Dependabot `nix` ecosystem |
 | `bun` | A (nixpkgs) | A JS/TS runtime and package manager, per the toolchain's own stated scope | Provisioned in the dev shell; no `package.json` or JS/TS source exists in this repository, and no script or workflow invokes it beyond `toolchain-nix.yml`'s own build-and-version smoke test | Dependabot `nix` ecosystem |
 | `lychee` | A (nixpkgs) | A link checker, per its own project purpose | Same as `bun` -- provisioned and version-smoke-tested only; no link-checking workflow runs it against this repository's docs today | Dependabot `nix` ecosystem |
-| `waza` | B (SHA256-pinned release binary, `microsoft/waza`) | Microsoft's skill/eval-running CLI | Invoked as `nix run .#waza -- run` (its `check` invocation was retired by <https://github.com/tvna/gitapex/issues/1135>); see the dedicated [waza](#waza) section below for how CI actually wires it | Excluded from Dependabot -- see [Supply-chain coverage summary](#supply-chain-coverage-summary) |
+| `waza` | B (SHA256-pinned release binary, `microsoft/waza`) | Microsoft's skill/eval-running CLI | Invoked as `nix run .#waza -- run` (its `check` invocation was retired); see the dedicated [waza](#waza) section below for how CI actually wires it | Excluded from Dependabot -- see [Supply-chain coverage summary](#supply-chain-coverage-summary) |
 | `apm` | B (SHA256-pinned release binary, `microsoft/apm`) | Regenerates `CLAUDE.md`/`AGENTS.md` via `apm compile` | See the dedicated [apm](#apm) section below | Excluded from Dependabot -- see [Supply-chain coverage summary](#supply-chain-coverage-summary) |
 | `rtk` | B (SHA256-pinned release binary, `rtk-ai/rtk`) | "CLI proxy that reduces LLM token consumption by 60-90% on common dev commands" (the project's own README) | Provisioned and version-checked by `toolchain-nix.yml`'s own smoke test; no script, hook, or workflow in this repository invokes it today | Excluded from Dependabot -- see [Supply-chain coverage summary](#supply-chain-coverage-summary) |
 | `betterleaks` | B (SHA256-pinned release binary, `betterleaks/betterleaks`) | "A configurable, fast, and thorough secrets scanner" (the project's own README) | Consumed by three real wiring points: `.pre-commit-config.yaml`'s `betterleaks-staged` (pre-commit stage) and `betterleaks-history` (pre-push stage) hooks, both shelling out through `.github/scripts/gitapex_run_betterleaks.py` -- a local git-hook gate, not a CI workflow step; and `skills/scanning-leaked-secrets`, an on-demand, agent-invoked skill (not a hook) usable against any target repository | Excluded from Dependabot -- see [Supply-chain coverage summary](#supply-chain-coverage-summary) |
@@ -88,11 +88,11 @@ restating them here.
 ## waza
 
 Microsoft's eval-running CLI (`microsoft/waza`, pinned via the Nix
-Class B mechanism above), invoked as `nix run .#waza -- <check|run>`.
+Class B mechanism above), invoked as `nix run .#waza -- run` (its
+`check` invocation was retired).
 
 - `.github/workflows/waza-check.yml` (the advisory `waza check` report,
-  `continue-on-error: true`) was retired by
-  <https://github.com/tvna/gitapex/issues/1135>: its schema-shape content
+  `continue-on-error: true`) was retired: its schema-shape content
   was already fully covered, waza-independently, by
   `.github/scripts/gitapex_scan_eval_suite_schema.py`, and its
   heuristic-only content (token/word-count advisories, the link-checker)
