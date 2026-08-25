@@ -549,6 +549,24 @@ mechanism, not only the ones already recorded below.
 - **Dated**: 2026-08-15, same run as a `scorer-gated-skill-edits` held-out
   gate cycle for this skill's own `references/rubric.md`; re-run the
   Verification procedure if this entry looks stale.
+- **Reconfirmed 2026-08-25**: same identifying signals as above
+  (`CLAUDE_CODE_REMOTE=true`, `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=
+  cloud_default`), but `claude --version` now reports `2.1.241 (Claude
+  Code)`, newer than the `2.1.233` the entry above covers -- a fresh run of
+  the Verification procedure at a version that entry did not cover, run
+  ahead of a same-session round of `battle-testing-a-skill`/
+  `evaluating-skill-quality` dispatches that used this mechanism. Same
+  variant as the entry above (prompt passed as a single self-contained
+  CLI argument,
+  not via stdin; no permission-bypass flag, since the prompt needed no
+  Read/Bash/Write). Positive control (isolated cwd containing a synthetic
+  sentinel `CLAUDE.md`, never the real file): correctly quoted the sentinel
+  sentence verbatim. Negative control (isolated cwd, same prompt, no
+  `CLAUDE.md`/`AGENTS.md` anywhere in its ancestry, directly confirmed):
+  correctly reported none loaded. Both held at this version; the verified
+  alternative still isolates `CLAUDE.md`/`AGENTS.md` correctly with no
+  permission-bypass flag. Scratch directories deleted after recording the
+  outcome, per the Verification procedure's own step 1.
 
 ### Unlisted platform
 

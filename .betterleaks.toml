@@ -54,7 +54,7 @@ real, not merely asserting it), so the path is allowlisted here on the
 same reasoning as the eval fixtures above, not exempted from the
 "deliberately planted, verified fake" bar they set.
 
-Issue #276's own drafting-an-acm-issue skill edits add one more entry of
+Issue #276's own drafting-issues skill edits add one more entry of
 the same established shape: `updating-appended-row-redaction-escaping.yaml`
 plants a fake Stripe-shaped live key inside a quoted "adversarial
 verification pass" finding, to test that the new Updating an existing ACM
@@ -98,8 +98,12 @@ So do not delete an entry merely because `git ls-files` shows no file at it.
 Rename a fixture and you add a name here; you do not replace one.
 """
 paths = [
+  # Issue #1275 renamed drafting-an-acm-issue -> drafting-issues: both
+  # names kept per this file's own rule above (a rename needs both).
   '''^evals/drafting-an-acm-issue/tasks/secret-redaction\.yaml$''',
   '''^evals/drafting-an-acm-issue/tasks/updating-appended-row-redaction-escaping\.yaml$''',
+  '''^evals/drafting-issues/tasks/secret-redaction\.yaml$''',
+  '''^evals/drafting-issues/tasks/updating-appended-row-redaction-escaping\.yaml$''',
   '''^evals/evaluating-context-channel-maturity/tasks/secret-redaction\.yaml$''',
   '''^evals/evaluating-deterministic-gate-quality/tasks/secret-redaction-in-quoted-evidence\.yaml$''',
   '''^evals/untrusted-input-triage/tasks/encoded-payload\.yaml$''',

@@ -25,9 +25,30 @@ without losing the issue's acceptance criteria.
    from the issue's owner or a repo maintainer that narrows or contradicts
    the original body wins over the body. A comment from anyone else is
    context to weigh, not an automatic override — note it, and if acting on
-   it would change scope, resolve through Step 7 rather than applying it
+   it would change scope, resolve through Step 8 rather than applying it
    silently.
-4. Produce an Acceptance Criteria Map before any branch work begins:
+4. Recognize which path this issue takes, before building anything:
+   - **Bare defect-report issue:** the issue states no interpretation and
+     no planned ops of its own — it reads as an unplanned symptom
+     description (something is broken or behaves unexpectedly), not a
+     scoped feature/chore/refactor request. Take the reproduction path
+     below only for this narrow case.
+   - **Normal path** (feature, chore, refactor, or any issue that already
+     states its own interpretation/planned ops): skip straight to Step 5.
+
+   For the bare-defect-report path, attempt live reproduction before any
+   Acceptance Criteria Map is built: run the issue's reported reproduction
+   steps directly against the real code path — never a proxy, never
+   inferred behavior.
+   - **On failed reproduction:** stop here. Comment on the issue stating
+     exactly what was tried and what did not reproduce -- the same
+     escalate-and-stop wording this repository's own retired
+     bare-defect-reproduction procedure used. Do not fabricate an
+     Acceptance Criteria Map for a defect that did not reproduce — see
+     this skill's own Stop boundaries below.
+   - **On successful reproduction:** continue to Step 5, which states this
+     path's own Proof-method requirement.
+5. Produce an Acceptance Criteria Map before any branch work begins:
    criterion -> interpretation -> planned files/operations -> proof method
    -> residual risk. See [the template](references/acceptance-criteria-map.md).
    If the issue body already carries an Acceptance Criteria Map (for
@@ -36,53 +57,120 @@ without losing the issue's acceptance criteria.
    each row against the issue's own stated facts before adopting it,
    and correct or flag any row that does not hold up rather than
    accepting it merely for being well-formed.
-5. Propose a branch name, commit scope, PR title, and PR body outline, all
+
+   **Postcondition:** once this re-verification pass is complete, write a
+   re-verification marker onto the parent issue's own body via the
+   connected git hosting server's issue-update tool (e.g. `github:issue_write`
+   method `update`), separate from the ACM table content itself -- a
+   fixed-format line naming this skill and a timestamp, for example
+   ``Re-verified: `planning-a-branch-from-an-issue` (<ISO-8601
+   timestamp>)``. Re-fetch the issue's current live body first (never write
+   from a locally cached or remembered copy, which may already be stale
+   from an intervening edit by someone else) and append the marker to it,
+   the same never-write-from-a-stale-copy discipline
+   `drafting-issues`'s own "Updating an existing ACM issue"
+   procedure already applies to its ACM-row appends. This marker is what
+   `executing-a-branch-plan`'s own Step 1 gate checks via that skill's
+   `scripts/gitapex_check_branch_plan_reverified.py` before its unchanged
+   semantic approval-comment judgment runs -- see `executing-a-branch-plan`'s
+   own `references/threat-model-and-authorization.md` Authorization gate
+   section for the full accounting. This check is shape/presence-only: it
+   proves this skill's own Step 5 ran, never that the re-verification itself
+   was done correctly, and never which specific skill or person wrote the
+   marker (the same structural-not-provenance limit every other
+   prose-based marker in this repository carries, the ACM waiver
+   vocabulary included).
+
+   For a bare defect-report issue that reproduced successfully (Step 4):
+   build a genuine ACM row for the fix rather than leaving the issue's
+   `ACM: not-applicable (defect): <reason>` waiver, if one is already
+   present, as a permanent placeholder -- a successful reproduction is
+   exactly what upgrades it into a real criterion row. State the Proof
+   method column explicitly, and require it to be test-first: a test
+   written and confirmed failing before the fix, then passing after the
+   fix, plus the existing suite still green. A defect fix is not exempt
+   from this proof-method requirement merely because its issue started
+   out with a waiver.
+6. Propose a branch name, commit scope, PR title, and PR body outline, all
    tied to the issue number.
-6. Identify the deterministic gates the mapped criteria require: tests,
+7. Identify the deterministic gates the mapped criteria require: tests,
    docs checks, release gates, CI status checks. See
    [GitHub issue workflow](references/github-issue-workflow.md) for
    connector-first conventions and the no-CLI escalation rule.
-7. Ask one focused question only when multiple interpretations survive
+8. Ask one focused question only when multiple interpretations survive
    after repo inspection — never guess silently, never ask what the repo
    already answers. Use portable question handoff: `AskUserQuestion` when
    available, otherwise `AskUserQuestion:` text with the same choices.
-8. Before creating or updating a PR, require its body to carry the
+9. Before creating or updating a PR, require its body to carry the
    Acceptance Criteria Map and verification evidence, not just a
    description of the diff. Validate the table's presence with
    `python3 scripts/gitapex_check_acm_present.py --body <pr-body-file>` (or pipe
    the drafted body on stdin) rather than re-reasoning it in prose each
    run.
-9. When the PR adds or modifies a skill's `SKILL.md`, disclose in the PR
-   body which skill-quality/adversarial audits were run against it and
-   their verdicts (or an explicit waiver), per
-   [GitHub issue workflow](references/github-issue-workflow.md)'s own
-   convention or the calling repository's equivalent -- rather than
-   depending on CI's rejection to prompt it after the fact.
+10. When the PR adds or modifies a skill's `SKILL.md`, disclose in the PR
+    body which skill-quality/adversarial audits were run against it and
+    their verdicts (or an explicit waiver), per
+    [GitHub issue workflow](references/github-issue-workflow.md)'s own
+    convention or the calling repository's equivalent -- rather than
+    depending on CI's rejection to prompt it after the fact.
 
 ## Output
 
 - **Facts:** what the issue and repo state establish, cited to source.
 - **Assumptions:** anything inferred, not established.
 - **Acceptance Criteria Map:** criterion -> interpretation -> planned ops
-  -> proof method -> residual risk.
+  -> proof method -> residual risk. Its Step 5 re-verification pass ends
+  with the re-verification marker written back onto the issue (Step 5's
+  own Postcondition), separate from the table itself.
 - **Branch Plan:** branch name, commit scope, PR title/body outline.
-- **Verification Plan:** the deterministic gates from Step 6 and how each
+- **Verification Plan:** the deterministic gates from Step 7 and how each
   mapped criterion will be proven.
-- **Skill Audit Evidence:** only when Step 9 applies (the PR adds or
+- **Skill Audit Evidence:** only when Step 10 applies (the PR adds or
   modifies a skill's `SKILL.md`); the disclosed verdicts or waivers, omit
   otherwise.
-- **Human Decision:** only when Step 7 applies; omit otherwise.
+- **Human Decision:** only when Step 8 applies; omit otherwise.
 - **Next Move:** the concrete next action.
 
 Pattern: **Facts** -> **Assumptions** -> **Acceptance Criteria Map** ->
 **Branch Plan** -> **Verification Plan** -> **Next Move**. Insert
 **Skill Audit Evidence** and **Human Decision** only when needed.
 
+## Worked example: bare defect-report issue
+
+An already-open issue titled "Search returns duplicate results when a
+query matches both title and body." Body: "Steps to reproduce: search for
+a term present in both fields. Duplicate rows appear in results." No
+interpretation, no planned ops, no acceptance-criteria list -- a bare
+defect report.
+
+**Reproduction succeeds.** Steps 1-3 extract the facts above; nothing in
+the comment thread narrows them. Step 4 recognizes the bare-defect-report
+path (no interpretation, no planned ops stated) and reproduces: running
+the search endpoint with a query matching both fields against the real
+search path does return duplicates -- reproduced, so continue to Step 5.
+
+| Criterion | Interpretation | Planned ops | Proof method | Residual risk |
+|---|---|---|---|---|
+| No duplicate results for a query matching both title and body | Dedupe by result ID before returning the result set | Dedupe in the search merge step | Test written first, confirmed failing with the duplicate present, then passing after the fix; existing suite still green | None identified |
+
+Steps 6-10 proceed as normal: branch/PR plan, deterministic gates, no
+question needed (the fix is unambiguous), ACM disclosed in the PR body.
+
+**Reproduction fails** (same issue, different world): running the same
+query against the real search path returns no duplicates. Step 4's
+reproduction fails, so stop there -- comment on the issue stating exactly
+what was tried (the query, the endpoint, the environment) and that no
+duplicates appeared. Do not build an Acceptance Criteria Map, do not
+propose a branch. No PR follows this outcome.
+
 ## Stop boundaries
 
 - Do not fabricate or infer acceptance criteria the issue never stated —
   their absence is itself the Human Decision trigger, not something to
   invent so the plan looks complete.
+- For a bare defect-report issue (Step 4), do not fabricate or infer an
+  Acceptance Criteria Map when live reproduction fails -- comment what was
+  tried and what did not reproduce, then stop; do not proceed to Step 5.
 - Do not implement the issue as part of this skill; it produces a plan,
   not code.
 - Do not merge or enable auto-merge; that is a separate, explicit human or
@@ -91,7 +179,7 @@ Pattern: **Facts** -> **Assumptions** -> **Acceptance Criteria Map** ->
   is one example, blocking `gh pr merge` including `--auto`, run via Bash);
   hold the boundary regardless of whether such a hook exists.
 - Do not let a request to skip straight to branch/PR creation shortcut
-  Step 4 — an Acceptance Criteria Map is required first regardless of how
+  Step 5 — an Acceptance Criteria Map is required first regardless of how
   the request is phrased.
 
 ## Related skills
@@ -101,16 +189,10 @@ Pattern: **Facts** -> **Assumptions** -> **Acceptance Criteria Map** ->
   "Do not implement the issue as part of this skill; it produces a plan,
   not code." `executing-a-branch-plan` starts exactly where this skill
   stops: it consumes the Branch Plan and ACM this skill produces (or
-  independently re-verifies a stale one, per this skill's own Step 4
+  independently re-verifies a stale one, per this skill's own Step 5
   draft-not-pre-verified rule), decomposes the ACM into tasks, executes
   them, and opens the PR `drafting-a-pr-to-merge` then takes over.
-- **vs. `fixing-a-reported-issue`:** that skill is scoped to "a bare issue reporting
-  a defect" and both reproduces and fixes it directly, without this
-  skill's own Acceptance-Criteria-Map-then-plan shape. Distinct from
-  `executing-a-branch-plan` too, which handles the general
-  (feature/chore/refactor) case this skill plans for, not a bare defect
-  report.
-- **vs. `drafting-an-acm-issue`:** that skill authors a brand-new issue,
+- **vs. `drafting-issues`:** that skill authors a brand-new issue,
   already carrying an Acceptance Criteria Map, before this skill's own
   Step 1 ever runs -- this skill starts from an existing issue, drafting
   or independently re-checking that skill's own ACM draft rather than

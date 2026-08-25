@@ -6,7 +6,7 @@ pyproject.toml's [tool.pytest.ini_options] testpaths does not include that
 directory, so a bare `pytest` invocation (exactly what .github/workflows/
 test.yml runs) never discovers a test file placed there. tests/ is in
 testpaths, so this lives here instead, loaded by file path with a module
-name unique to this copy -- an identically-named skills/drafting-an-acm-issue/
+name unique to this copy -- an identically-named skills/drafting-issues/
 scripts/gitapex_check_acm_present.py exists, and a bare top-level import would
 collide with it -- the same technique tests/test_gitapex_check_acm_present_sync.py's
 own _load_module already uses for this exact pair of files.

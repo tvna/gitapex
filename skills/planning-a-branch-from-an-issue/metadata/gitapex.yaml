@@ -10,7 +10,7 @@ spec:
   skillDependencies:
     requires: []
     relatedTo:
-      - drafting-an-acm-issue
+      - drafting-issues
   executionRequirements:
     tools:
       read:

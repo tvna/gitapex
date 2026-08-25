@@ -19,7 +19,7 @@ Before building the row-to-task mapping, verify the ACM itself is
 well-formed: at least one row, and every row carries a non-empty
 Criterion, Interpretation, and Planned ops column (a Proof method or
 Residual risk column reading "unknown, pending X" is fine -- an
-`planning-a-branch-from-an-issue`/`drafting-an-acm-issue` convention, not malformed; a
+`planning-a-branch-from-an-issue`/`drafting-issues` convention, not malformed; a
 genuinely empty or missing column is). An ACM with zero rows, or any row
 missing a required column, is not decomposed -- stop and escalate the
 same way an absent step-1 authorization signal does (fail closed, not an

@@ -38,7 +38,7 @@ repository:
 
 | Realization | Domain | Trust/coverage property |
 |---|---|---|
-| `skills/drafting-an-acm-issue/SKILL.md` | (per-session, not domain-scoped) | Probabilistic -- depends on the agent choosing to invoke the skill |
+| `skills/drafting-issues/SKILL.md` | (per-session, not domain-scoped) | Probabilistic -- depends on the agent choosing to invoke the skill |
 | `hooks/check-issue-acm-disclosure.sh` | 2 (agent-harness hook) | Environment-scoped -- fires only where this repository's own hook harness is loaded |
 | `.github/scripts/gitapex_gate_acm_issue_disclosure.py` | 3 (CI/CD) | Environment-independent -- fires on the `issues` webhook regardless of which client created the issue |
 

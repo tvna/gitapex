@@ -122,7 +122,7 @@ def test_mypy_groups_check_every_skill_scripts_directory_named_in_ci() -> None:
     # Checked against every directory actually covered by some group, not
     # just top-level labels: a directory that bare-imports (or is
     # bare-imported by) something in the pythonpath-linked combined group
-    # -- skills/drafting-an-acm-issue/scripts, since issue #1197 added its
+    # -- skills/drafting-issues/scripts, since issue #1197 added its
     # own tests/test_gitapex_check_acm_present_properties.py importing it --
     # is correctly covered as a *member* of that group rather than its own
     # standalone label, and a label-only check would wrongly report it
@@ -133,7 +133,7 @@ def test_mypy_groups_check_every_skill_scripts_directory_named_in_ci() -> None:
         "skills/drafting-an-adr/scripts",
         "skills/scanning-attack-surfaces/scripts",
         "skills/outward-artifact-preflight/scripts",
-        "skills/drafting-an-acm-issue/scripts",
+        "skills/drafting-issues/scripts",
         "skills/planning-a-branch-from-an-issue/scripts",
         "skills/setup-gitapex-toolchain/scripts",
     ):

@@ -16,7 +16,7 @@ script deliberately re-implements (never imports or subprocess-invokes)
 that same two-signal logic against a local `git log` and
 `.gitapex/ssot.json`, per this repository's own independent-self-
 containment convention (see that script's own docstring, and
-`skills/drafting-an-acm-issue/scripts/gitapex_check_acm_present.py` /
+`skills/drafting-issues/scripts/gitapex_check_acm_present.py` /
 `skills/planning-a-branch-from-an-issue/scripts/gitapex_check_acm_present.py`
 for the identical, already-established pattern of two independently-
 duplicated, non-importing checker scripts). Unlike the CI script, this
