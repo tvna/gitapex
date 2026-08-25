@@ -114,6 +114,17 @@ _UV_RUN_MENTION_RE = re.compile(r"\buv\s+run\b", re.IGNORECASE)
 # a substring check without being a diff at all.
 _DIFF_STRUCTURE_MARKERS = ("diff --git ", "--- ", "+++ ", "@@")
 
+# Issue #1316: bounds `in_hunk` by a hunk's own declared pre-/post-image
+# line counts (mirroring `gitapex_gate_detection_logic_property_coverage.py`'s
+# own `_HUNK_RE`/`_reject_if_hunk_incomplete` pattern, issues #1184/#1193's
+# precedent), not only by the next `diff --git `/`--- ` line. Both counts
+# are tracked, not the post-image count alone, for the identical reason
+# that sibling file's own docstring records: a pure-deletion hunk
+# (`@@ -a,b +c,0 @@`, real `git diff -U0` output) would otherwise read
+# `new_remaining` as already exhausted on the `@@` line itself, before its
+# own `b` removal lines are consumed.
+_HUNK_RE = re.compile(r"@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@")
+
 
 def _looks_like_a_diff(diff_text: str) -> bool:
     return any(line.startswith(marker) for line in diff_text.split("\n") for marker in _DIFF_STRUCTURE_MARKERS)
@@ -172,10 +183,84 @@ def parse_diff_added_third_party_imports(diff_text: str) -> set[str]:
     relative paths whose diff adds a top-level import of a package not in
     the standard library. An empty diff, or a diff touching no such file,
     returns an empty set -- a legitimate "nothing to check" result, not an
-    error."""
+    error.
+
+    Issue #1316: this function now mirrors
+    `gitapex_gate_detection_logic_property_coverage.py`'s own
+    `parse_added_lines` state machine directly (issues #1184/#1193's
+    precedent), rather than a partial, independently-reasoned
+    reconstruction of it -- an earlier revision of this fix diverged from
+    that sibling in three ways, each a confirmed live defect found by a
+    dispatched adversarial review before landing:
+
+    1. `current_path` was never cleared on `diff --git `, so a file
+       contributing no third-party import of its own could still absorb a
+       later, unrelated file's real added import under its own path (a
+       false positive).
+    2. No `saw_source_header` tracking: a `+++ b/<path>` header with no
+       preceding `--- ` was accepted as genuine, letting a hand-fed patch
+       misattribute a real added import to an attacker-named path the
+       diff's own real headers never legitimately introduced.
+    3. An `if not in_hunk: continue` early-exit silently dropped a real
+       added import whenever a hunk's own declared post-image count
+       under-stated its real body (the mirror-image of issue #1193's
+       over-declaration case) -- exactly the kind of silent miss this
+       issue exists to close, reintroduced by that early-exit. The sibling
+       file processes every `+`/` `/`-` line unconditionally on `path is
+       not None`, never gated on `in_hunk`, for this reason.
+
+    `in_hunk` is still bounded by each hunk's own declared pre-/post-image
+    line counts (`old_remaining`/`new_remaining`), not only by the next
+    `diff --git `/`@@` line, via the same `_reject_if_hunk_incomplete`
+    pattern; `ScanError` (exit 2, fail-closed) on an over-declared hunk.
+    `diff --git ` and `@@` are unconditional boundaries even `in_hunk`
+    (neither literal prefix can appear as real hunk content -- every
+    content line always carries its own `+`/`-`/` ` prefix first); `--- `
+    is deliberately gated on `not in_hunk` instead, so a *removed* line
+    whose own content starts with `-- ` (diff-prefixed to `--- ...`,
+    indistinguishable from a real source header) falls through to normal
+    `-`-prefixed handling rather than being misread as a header or
+    aborting the scan -- an even earlier revision of this fix treated
+    `--- ` as an unconditional boundary too, which correctly closed the
+    misattribution risk but reintroduced a live false positive: an
+    ordinary, correctly-declared diff removing a real source line that
+    happens to start with `-- ` (13 such lines exist today under this
+    gate's own `.github/scripts/*.py`/`evals/scripts/*.py` scope, e.g.
+    `gitapex_scan_ruleset_drift.py`'s own line 6) aborted the whole scan.
+
+    Known, disclosed limitation shared with the sibling this function now
+    mirrors (issue #1200's own already-documented gap, not newly
+    introduced or newly closed here): once a hunk's declared counts are
+    honestly, exactly consumed by real content, `in_hunk` correctly
+    clears -- so a disguised `--- `/`+++ ` header pair immediately
+    following, naming a real in-scope path, is read as a genuine file
+    transition, and a later added import is misattributed to that path
+    instead of its own. Confirmed live against this implementation too.
+    Unreachable via this gate's real wired `git diff` invocation (which
+    never emits an inaccurate count); reachable only via this gate's own
+    `--diff` flag with a hand-constructed or foreign patch. Closing it
+    needs the same "structurally different mechanism" issue #1200 itself
+    calls for (a lookahead confirming a candidate header is genuinely
+    followed by a `@@` line, or a two-pass parse), not an incremental
+    extension of this state machine -- out of scope for issue #1316,
+    which does not re-propose or re-design a fix for #1200's own gap."""
     changed: set[str] = set()
     current_path: str | None = None
     in_hunk = False
+    old_remaining = 0
+    new_remaining = 0
+    saw_source_header = False
+
+    def _reject_if_hunk_incomplete(boundary: str) -> None:
+        if in_hunk:
+            raise ScanError(
+                f"hunk header for {current_path!r} declared more pre-/post-image line(s) than "
+                f"its body actually had ({old_remaining} pre-image, {new_remaining} post-image "
+                f"line(s) still unconsumed) before {boundary}. Real `git diff` output always "
+                "emits accurate counts; a hand-fed or foreign patch's inaccurate ones would "
+                "otherwise leak this hunk's state into whatever follows it."
+            )
+
     # Normalize CRLF before splitting: without this, a trailing "\r" stays
     # attached to a `+++ b/<path>` header's path (git's own local-plane
     # invocation, or a re-saved `--diff` file, can carry CRLF even though
@@ -183,8 +268,17 @@ def parse_diff_added_third_party_imports(diff_text: str) -> set[str]:
     # `_TARGET_DIR_RE`'s `$`-anchored match and silently drops the file --
     # a false negative found by adversarial review (issue #1052's own PR).
     for line in diff_text.replace("\r\n", "\n").split("\n"):
-        if line.startswith("diff --git ") or line.startswith("--- "):
+        if line.startswith("diff --git "):
+            _reject_if_hunk_incomplete(f"the next `diff --git ` line: {line!r}")
+            current_path = None
             in_hunk = False
+            saw_source_header = False
+            continue
+        # `not in_hunk` guard: see this function's own docstring for why
+        # `--- ` is deliberately not treated as an unconditional boundary
+        # the way `diff --git `/`@@` are.
+        if not in_hunk and line.startswith("--- "):
+            saw_source_header = True
             continue
         # A real `+++ b/<path>` header only ever appears before the first
         # `@@` of a file (never `in_hunk`). Gating on that -- rather than
@@ -196,28 +290,66 @@ def parse_diff_added_third_party_imports(diff_text: str) -> set[str]:
         # misread as a second file header mid-hunk, silently dropping every
         # real added line -- including the one this gate exists to catch --
         # for the rest of that hunk. Found by adversarial review (issue
-        # #1052's own PR).
+        # #1052's own PR). A `+++ ` with no preceding `--- ` fails closed
+        # instead of being accepted as genuine -- a hand-fed patch could
+        # otherwise misattribute a real added import to an attacker-named
+        # path (found by a dispatched adversarial review, issue #1316).
         if not in_hunk and line.startswith("+++ "):
+            if not saw_source_header:
+                raise ScanError(
+                    f"unified diff post-image header with no `--- ` source header before it: "
+                    f"{line!r}. This gate reads default `git diff` output, which always emits "
+                    "both; ignoring the header instead would drop every added line that follows "
+                    "it from grading."
+                )
             path = line[len("+++ ") :]
             if path.startswith("b/"):
                 path = path[2:]
             current_path = None if path == "/dev/null" else path
+            saw_source_header = False
             continue
         if line.startswith("@@"):
-            in_hunk = True
+            _reject_if_hunk_incomplete(f"the next hunk header: {line!r}")
+            match = _HUNK_RE.match(line)
+            if not match:
+                raise ScanError(f"unparseable hunk header: {line!r}")
+            old_remaining = 1 if match.group(1) is None else int(match.group(1))
+            new_remaining = 1 if match.group(2) is None else int(match.group(2))
+            in_hunk = old_remaining > 0 or new_remaining > 0
             continue
-        if not in_hunk or current_path is None:
-            continue
-        if not line.startswith("+"):
-            continue
-        content = line[1:]
-        if content != content.lstrip():
-            # Indented -- not a top-level (module-scope) import.
-            continue
-        if not _TARGET_DIR_RE.match(current_path):
-            continue
-        if any(not _is_stdlib(name) for name in _imported_root_modules(content)):
-            changed.add(current_path)
+        # Processed unconditionally on `current_path is not None`, never
+        # gated on `in_hunk` -- matches
+        # gitapex_gate_detection_logic_property_coverage.py's own
+        # `parse_added_lines` exactly. An under-declared hunk (its own
+        # counters already at zero while real hunk content continues)
+        # must still have its real added imports recorded, not silently
+        # dropped (issue #1316's own defeat-test finding).
+        if line.startswith("+"):
+            content = line[1:]
+            # Indented content is never a top-level (module-scope) import.
+            if (
+                current_path is not None
+                and content == content.lstrip()
+                and _TARGET_DIR_RE.match(current_path)
+                and any(not _is_stdlib(name) for name in _imported_root_modules(content))
+            ):
+                changed.add(current_path)
+            new_remaining -= 1
+        elif line.startswith(" "):
+            old_remaining -= 1
+            new_remaining -= 1
+        elif line.startswith("-"):
+            old_remaining -= 1
+        # `\ No newline at end of file` is a marker, not content, and
+        # advances neither counter -- matches
+        # gitapex_gate_detection_logic_property_coverage.py's own identical
+        # handling (its `parse_added_lines` docstring explains why: a
+        # deletion hunk's own removal lines must still be consumed via the
+        # pre-image counter, or `in_hunk` would stay true straight through
+        # whatever follows).
+        if old_remaining <= 0 and new_remaining <= 0:
+            in_hunk = False
+    _reject_if_hunk_incomplete("the diff ended")
     return changed
 
 

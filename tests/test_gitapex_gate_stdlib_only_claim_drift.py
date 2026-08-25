@@ -87,6 +87,179 @@ def test_added_line_colliding_with_a_file_header_does_not_hide_a_later_import() 
     assert gate.parse_diff_added_third_party_imports(diff_text) == {".github/scripts/gitapex_gate_foo.py"}
 
 
+def test_removed_line_colliding_with_a_source_header_does_not_hide_a_later_import() -> None:
+    # Issue #1316: the symmetric case of the "++ "/"+++ " finding directly
+    # above, never applied to this file's own `--- ` check. A *removed*
+    # line whose own original content starts with "-- " is diff-prefixed
+    # to "--- ...", identical to a real `--- a/<path>` source header.
+    # Gating this check on `not in_hunk` (rather than raising or
+    # unconditionally clearing `in_hunk` on it, the way `diff --git `/`@@`
+    # are handled) lets it fall through to the normal `-`-prefixed removal
+    # handling instead of being misread as a header -- so the real added
+    # import two lines later is still correctly detected.
+    #
+    # An earlier version of this fix instead treated `--- ` exactly like
+    # `diff --git `/`@@` (an unconditional boundary raising `ScanError`
+    # when `in_hunk`), which closed the misattribution risk but
+    # reintroduced a live false positive: an ordinary, correctly-declared
+    # diff removing a real source line that happens to start with "-- "
+    # (13 such lines exist today under this gate's own scope, e.g.
+    # gitapex_scan_ruleset_drift.py's own line 6) aborted the whole scan
+    # instead of being graded normally -- found by a dispatched
+    # refactor/simplify review before landing.
+    diff_text = (
+        "diff --git a/.github/scripts/gitapex_gate_foo.py b/.github/scripts/gitapex_gate_foo.py\n"
+        "index 0000000..1111111 100644\n"
+        "--- a/.github/scripts/gitapex_gate_foo.py\n"
+        "+++ b/.github/scripts/gitapex_gate_foo.py\n"
+        "@@ -1,3 +1,3 @@\n"
+        " import os\n"
+        "--- old comment marker\n"
+        "+import pydantic\n"
+        " import sys\n"
+    )
+    assert gate.parse_diff_added_third_party_imports(diff_text) == {".github/scripts/gitapex_gate_foo.py"}
+
+
+def test_removing_a_real_source_line_starting_with_double_dash_is_graded_normally() -> None:
+    # Real defeat case found live by a dispatched refactor/simplify review:
+    # .github/scripts/gitapex_scan_ruleset_drift.py's own line 6 starts
+    # "-- and differ only in..." -- an ordinary docstring line, not a diff
+    # header. Removing it (diff-prefixed to "--- and differ only in...")
+    # must not abort the whole scan; the diff's own real added import must
+    # still be detected.
+    diff_text = (
+        "diff --git a/.github/scripts/gitapex_scan_ruleset_drift.py b/.github/scripts/gitapex_scan_ruleset_drift.py\n"
+        "index 0000000..1111111 100644\n"
+        "--- a/.github/scripts/gitapex_scan_ruleset_drift.py\n"
+        "+++ b/.github/scripts/gitapex_scan_ruleset_drift.py\n"
+        "@@ -1,2 +1,2 @@\n"
+        " import os\n"
+        "-- and differ only in how much of the ruleset they look at\n"
+        "+import pydantic\n"
+    )
+    assert gate.parse_diff_added_third_party_imports(diff_text) == {".github/scripts/gitapex_scan_ruleset_drift.py"}
+
+
+def test_an_over_declared_hunk_before_the_next_diff_git_line_raises_scan_error() -> None:
+    # An over-declared hunk (its own header claims more post-image lines
+    # than its real body has) whose incompleteness is discovered at the
+    # next file's own `diff --git ` line, not only at end of input.
+    diff_text = (
+        "diff --git a/.github/scripts/gitapex_gate_a.py b/.github/scripts/gitapex_gate_a.py\n"
+        "index 0000000..1111111 100644\n"
+        "--- a/.github/scripts/gitapex_gate_a.py\n"
+        "+++ b/.github/scripts/gitapex_gate_a.py\n"
+        "@@ -1,1 +1,3 @@\n"
+        " import os\n"
+        "diff --git a/.github/scripts/gitapex_gate_b.py b/.github/scripts/gitapex_gate_b.py\n"
+        "index 0000000..1111111 100644\n"
+        "--- a/.github/scripts/gitapex_gate_b.py\n"
+        "+++ b/.github/scripts/gitapex_gate_b.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+import pydantic\n"
+    )
+    with pytest.raises(gate.ScanError, match="declared more pre-/post-image"):
+        gate.parse_diff_added_third_party_imports(diff_text)
+
+
+def test_an_unparseable_hunk_header_raises_scan_error() -> None:
+    # Issue #1316: `_HUNK_RE` (the declared-count tracker's own regex)
+    # fails to match a malformed `@@ ... @@` line -- fails closed rather
+    # than silently treating it as a hunk carrying no declared counts.
+    diff_text = (
+        "diff --git a/.github/scripts/gitapex_gate_foo.py b/.github/scripts/gitapex_gate_foo.py\n"
+        "index 0000000..1111111 100644\n"
+        "--- a/.github/scripts/gitapex_gate_foo.py\n"
+        "+++ b/.github/scripts/gitapex_gate_foo.py\n"
+        "@@ malformed hunk header @@\n"
+        "+import pydantic\n"
+    )
+    with pytest.raises(gate.ScanError, match="unparseable hunk header"):
+        gate.parse_diff_added_third_party_imports(diff_text)
+
+
+def test_current_path_is_reset_at_a_new_diff_git_line() -> None:
+    # Real defeat case found live by a dispatched adversarial review: a
+    # file adding only a stdlib import, followed by an out-of-scope file
+    # (notes.txt) adding a real third-party import, must not leak the
+    # first file's own path forward -- `current_path` has to be cleared
+    # at every `diff --git ` line, not only updated by the next `+++ `.
+    diff_text = (
+        "diff --git a/.github/scripts/gitapex_gate_a.py b/.github/scripts/gitapex_gate_a.py\n"
+        "index 0000000..1111111 100644\n"
+        "--- a/.github/scripts/gitapex_gate_a.py\n"
+        "+++ b/.github/scripts/gitapex_gate_a.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+import sys\n"
+        "diff --git a/notes.txt b/notes.txt\n"
+        "index 0000000..1111111 100644\n"
+        "--- a/notes.txt\n"
+        "+++ b/notes.txt\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+import requests\n"
+    )
+    assert gate.parse_diff_added_third_party_imports(diff_text) == set()
+
+
+def test_a_post_image_header_with_no_source_header_before_it_raises_scan_error() -> None:
+    # Real defeat case found live by a dispatched adversarial review: a
+    # `+++ b/<path>` header with no preceding `--- ` was accepted as
+    # genuine, letting a hand-fed patch misattribute a real added import
+    # to an attacker-named path the diff's own real headers never
+    # legitimately introduced. Mirrors
+    # gitapex_gate_detection_logic_property_coverage.py's own identical
+    # fail-closed check.
+    diff_text = (
+        "diff --git a/.github/scripts/gitapex_gate_victim.py b/.github/scripts/gitapex_gate_victim.py\n"
+        "index 0000000..1111111 100644\n"
+        "+++ b/.github/scripts/gitapex_gate_victim.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+import pydantic\n"
+    )
+    with pytest.raises(gate.ScanError, match="no `--- ` source header"):
+        gate.parse_diff_added_third_party_imports(diff_text)
+
+
+def test_an_under_declared_hunk_still_records_its_real_added_import() -> None:
+    # Real defeat case found live by a dispatched adversarial review: an
+    # earlier revision's `if not in_hunk: continue` early-exit silently
+    # dropped a real added import whenever a hunk's own declared
+    # post-image count under-stated its real body (a zero/zero declared
+    # hunk with a real "+" line still following) -- exactly the silent
+    # miss this issue exists to close. `current_path is not None` alone
+    # (no `in_hunk` gate) must still catch it, matching
+    # gitapex_gate_detection_logic_property_coverage.py's own
+    # unconditional recording.
+    diff_text = (
+        "diff --git a/.github/scripts/gitapex_gate_c.py b/.github/scripts/gitapex_gate_c.py\n"
+        "index 0000000..1111111 100644\n"
+        "--- a/.github/scripts/gitapex_gate_c.py\n"
+        "+++ b/.github/scripts/gitapex_gate_c.py\n"
+        "@@ -0,0 +0,0 @@\n"
+        "+import requests\n"
+    )
+    assert gate.parse_diff_added_third_party_imports(diff_text) == {".github/scripts/gitapex_gate_c.py"}
+
+
+def test_multi_file_diff_with_correctly_declared_hunks_attributes_each_import_to_its_own_file() -> None:
+    # Issue #1316: the actual regression a bare, uncounted `not in_hunk`
+    # guard on the `--- `/`diff --git ` check introduced -- an ordinary,
+    # correctly-declared multi-file diff left `in_hunk` never clearing at
+    # the second file's own real `+++ ` header, so its added import
+    # misattributed to the first file's path instead of its own. Found
+    # live by this issue's own differential-oracle property test
+    # (tests/test_gitapex_gate_stdlib_only_claim_drift_properties.py)
+    # before landing; this is the fixed regression's own direct proof.
+    diff_text = _diff(".github/scripts/gitapex_gate_a.py", ["import pydantic"]) + _diff(
+        ".github/scripts/gitapex_gate_b.py", ["import pydantic"]
+    )
+    assert gate.parse_diff_added_third_party_imports(diff_text) == {
+        ".github/scripts/gitapex_gate_a.py",
+        ".github/scripts/gitapex_gate_b.py",
+    }
+
+
 # --- has_stale_claim: the two real defect shapes, and the two real false
 # positives found and fixed while measuring this gate against this
 # repository's own already-corrected text (defeat-test-disclosure) ---
