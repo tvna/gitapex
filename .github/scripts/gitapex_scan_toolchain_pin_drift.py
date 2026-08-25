@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Guard the toolchain single-source-of-truth invariant.
 
-The external toolchain's Class B tools (waza, apm, rtk, betterleaks) are pinned
+The external toolchain's Class B tools (apm, rtk, betterleaks) are pinned
 and provisioned exactly once, in ``flake.nix``. A CI workflow must therefore
 obtain them from the flake (``nix run``/``nix develop``), never re-install them
 by hand -- a second install path would recreate the version drift that PR-2 of
-issue #57 removed (waza used to be pinned both in a workflow's ``go install``
-and in the flake).
+issue #57 removed (waza, since retired per issue #1130, used to be pinned both
+in a workflow's ``go install`` and in the flake).
 
 This scanner is the drift gate shipped alongside that invariant: it fails if any
 ``.github/workflows/*`` file references a Class B tool's upstream repository in
@@ -29,7 +29,6 @@ import sys
 # ``owner/repo`` strings so ordinary text (a step named "Run waza check") does
 # not trip the scan -- only a real repo reference does.
 CLASS_B_REPOS = (
-    "microsoft/waza",
     "microsoft/apm",
     "rtk-ai/rtk",
     "betterleaks/betterleaks",

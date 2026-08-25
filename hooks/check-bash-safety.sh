@@ -154,7 +154,20 @@ cmd_boundary='(^|[^[:alnum:]_.-])([[:alnum:]_.-]*/)*'
 # trailing boundary of its own) so the single outer ([[:space:]]|$) suffix
 # applies uniformly to every alternative, including short forms like
 # `npm i <pkg>`.
-install_re="${cmd_boundary}(pip3?[[:space:]]+install|npm[[:space:]]+install|npm[[:space:]]+i|yarn[[:space:]]+add|pnpm[[:space:]]+add|go[[:space:]]+install|brew[[:space:]]+install|apt(-get)?[[:space:]]+install|gem[[:space:]]+install|cargo[[:space:]]+install|uv[[:space:]]+pip[[:space:]]+install|uv[[:space:]]+install|uv[[:space:]]+add|plugin[[:space:]]+install)([[:space:]]|\$)"
+#
+# Issue #1320: `uv add`/`uv remove` are deliberately NOT in this list.
+# Unlike `uv pip install`/bare `uv install` (which install into the venv
+# with no diff trail), `uv add`/`uv remove` mutate pyproject.toml and
+# uv.lock -- a dependency change made this way shows up in the PR diff for
+# review, the same declarative-manifest pattern CLAUDE.md's own module-
+# management guidance endorses uv for. This does not eliminate the
+# execution-time risk (dependency resolution/build can still run arbitrary
+# code, e.g. an sdist's build backend) -- it only adds a post-hoc,
+# PR-review-based compensating control on top of the still-denied
+# `uv pip install`/`uv install` forms. `uv sync`/`uv lock` were already
+# outside this pattern before this change (lockfile-only operations, not
+# touched here).
+install_re="${cmd_boundary}(pip3?[[:space:]]+install|npm[[:space:]]+install|npm[[:space:]]+i|yarn[[:space:]]+add|pnpm[[:space:]]+add|go[[:space:]]+install|brew[[:space:]]+install|apt(-get)?[[:space:]]+install|gem[[:space:]]+install|cargo[[:space:]]+install|uv[[:space:]]+pip[[:space:]]+install|uv[[:space:]]+install|plugin[[:space:]]+install)([[:space:]]|\$)"
 
 if [[ "$lc_command" =~ $install_re ]]; then
   deny "Blocked by hooks/check-bash-safety.sh: command matches a package/plugin install pattern. Per evaluating-skill-quality/SKILL.md's stop boundary, installs require the operator's explicit go-ahead -- propose the install instead of running it."

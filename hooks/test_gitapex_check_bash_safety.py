@@ -85,8 +85,38 @@ DENIED_INSTALL_COMMANDS = [
     ("gem install rails", "gem-install"),
     ("cargo install ripgrep", "cargo-install"),
     ("uv pip install requests", "uv-pip-install"),
-    ("uv add requests", "uv-add"),
+    ("uv install requests", "uv-install"),
     ("plugin install foo", "plugin-install"),
+]
+
+# --- Issue #1320: declarative package-manager commands allowed -------------
+# `uv add`/`uv remove` mutate pyproject.toml/uv.lock, so a dependency change
+# made this way shows up in the PR diff for review -- unlike `uv pip
+# install`/bare `uv install` (still denied above), which install into the
+# venv with no diff trail. `apm install`/`apm uninstall` were never matched
+# by install_re at all (no "apm" pattern exists); these two pin that
+# already-allowed behavior as a regression test rather than relaxing an
+# actual block, so a future widened install_re (e.g. a broader "plugin
+# install" pattern) can't silently sweep `apm` back into deny unnoticed.
+ALLOWED_DECLARATIVE_PACKAGE_COMMANDS = [
+    ("uv add requests", "uv-add"),
+    ("uv remove requests", "uv-remove"),
+    ("apm install foo", "apm-install"),
+    ("apm uninstall foo", "apm-uninstall"),
+]
+
+# --- Issue #1320 defeat-test: chaining a newly-allowed uv add/remove ahead
+# of a still-denied uv pip install/uv install must NOT smuggle the denied
+# verb past this gate. install_re is a substring scan over the whole
+# command string (no anchoring to the first token), so a still-denied verb
+# appearing anywhere after a shell separator (&&, ;, |) must still be
+# caught -- this is the specific way the new carve-out could have been
+# exploited had it been implemented as a first-token/early-return check
+# instead of a shared substring pattern.
+DENIED_CHAINED_AFTER_ALLOWED_COMMANDS = [
+    ("uv add safe && uv pip install malicious", "uv-add-then-pip-install-chained"),
+    ("uv remove safe; uv install malicious", "uv-remove-then-install-chained"),
+    ("uv add safe | uv install malicious", "uv-add-then-install-piped"),
 ]
 
 # --- Findings 2 & 3: direct CLI GitHub write commands ----------------------
@@ -172,6 +202,24 @@ def test_allowed_gh(command: str, case_id: str) -> None:
 @pytest.mark.parametrize("command,case_id", ALLOWED_ORDINARY_COMMANDS, ids=[c[1] for c in ALLOWED_ORDINARY_COMMANDS])
 def test_allowed_ordinary(command: str, case_id: str) -> None:
     assert_allowed(command)
+
+
+@pytest.mark.parametrize(
+    "command,case_id",
+    ALLOWED_DECLARATIVE_PACKAGE_COMMANDS,
+    ids=[c[1] for c in ALLOWED_DECLARATIVE_PACKAGE_COMMANDS],
+)
+def test_allowed_declarative_package_commands(command: str, case_id: str) -> None:
+    assert_allowed(command)
+
+
+@pytest.mark.parametrize(
+    "command,case_id",
+    DENIED_CHAINED_AFTER_ALLOWED_COMMANDS,
+    ids=[c[1] for c in DENIED_CHAINED_AFTER_ALLOWED_COMMANDS],
+)
+def test_denied_chained_after_allowed(command: str, case_id: str) -> None:
+    assert_denied(command)
 
 
 @pytest.mark.parametrize("command,case_id", KNOWN_BYPASS_COMMANDS, ids=[c[1] for c in KNOWN_BYPASS_COMMANDS])

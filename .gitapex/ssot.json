@@ -58,7 +58,7 @@
       "id": "waza-suite-schemas",
       "path": ".gitapex/waza-eval.schema.json",
       "format": "json",
-      "authority": "waza's own eval/task JSON Schemas (draft-07, as upstream declares them), vendored verbatim at the release tag flake.nix pins -- authoritative shape for every committed evals/ suite, read by eval-suite-schema-drift. One entry stands in for the pair: .gitapex/waza-task.schema.json is vendored from the same tag by the same gate and carries the same authority"
+      "authority": "waza's own eval/task JSON Schemas (draft-07, as upstream declares them), vendored verbatim at the release tag recorded in gitapex_scan_eval_suite_schema.py's VENDORED_WAZA_TAG (waza's own binary retired per issue #1130/#1136; this tag now records only the vendored schemas' provenance) -- authoritative shape for every committed evals/ suite, read by eval-suite-schema-drift. One entry stands in for the pair: .gitapex/waza-task.schema.json is vendored from the same tag by the same gate and carries the same authority"
     },
     {
       "id": "main-branch-ruleset",
@@ -95,7 +95,7 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {"kind": "bash-pattern", "ref": "pip install|pip3 install|npm install|npm i|yarn add|pnpm add|go install|brew install|apt install|apt-get install|gem install|cargo install|uv pip install|uv install|uv add|plugin install"},
+        {"kind": "bash-pattern", "ref": "pip install|pip3 install|npm install|npm i|yarn add|pnpm add|go install|brew install|apt install|apt-get install|gem install|cargo install|uv pip install|uv install|plugin install"},
         {"kind": "bash-pattern", "ref": "gh issue create|edit|close|comment|delete|reopen|transfer|pin|unpin|lock|unlock|develop"},
         {"kind": "bash-pattern", "ref": "gh pr create|edit|close|comment|merge|review|ready|reopen|lock|unlock|update-branch"},
         {"kind": "bash-pattern", "ref": "gh api -X|--method POST|PUT|PATCH|DELETE"},
@@ -108,7 +108,7 @@
       "id": "post-write-provenance-recheck",
       "kind": "script",
       "script": ["hooks/check-post-write-provenance.sh", "hooks/gitapex_check_post_write_provenance.py"],
-      "rule": "After mcp__github__create_pull_request / update_pull_request / issue_write succeeds, re-fetches the body GitHub actually stored via the issues endpoint and re-runs skills/outward-artifact-preflight/scripts/gitapex_scan_provenance.py plus an ASCII-only scan against it; reports a hit, or any inability to verify, on both in-session channels (decision/reason to the agent, systemMessage to the operator) and never posts publicly. Detective only -- PostToolUse cannot block a write that already succeeded.",
+      "rule": "After mcp__github__create_pull_request / update_pull_request / issue_write succeeds, re-fetches the body GitHub actually stored via the issues endpoint and re-runs skills/outward-artifact-preflight/scripts/gitapex_scan_provenance.py plus an ASCII-only scan against it; reports a hit, or any inability to verify, on both in-session channels (decision/reason to the agent, systemMessage to the operator) and never posts publicly. Detective only -- PostToolUse cannot block a write that already succeeded. Since issue #1327, also compares the submitted tool_input body against this same already-fetched, already-unsanitized stored body and reports a distinct CONTENT_LOSS verdict when the stored body is missing content the submission had (beyond an append-only addition or CRLF/trailing-whitespace normalization) -- closing the gap where the two prior checks (provenance/ASCII) never verified 'is my submission still intact', which #1088/#1302/#1313 each misdiagnosed as this hook's own raw fetch being wrong when the actual cause was a since-corrected instruction to re-verify via the GitHub MCP server's own sanitizing read tools instead of this hook's raw channel.",
       "planes": ["posttooluse"],
       "local_exclusion": "PostToolUse-only: grades the body GitHub actually stored, re-fetched through the issues API after a write already succeeded. There is nothing to grade before the write, and no working-tree equivalent of a server-stored body.",
       "trigger": "PostToolUse matcher mcp__github__create_pull_request|mcp__github__update_pull_request|mcp__github__issue_write (hooks/hooks.json)",
@@ -255,7 +255,7 @@
         "hooks/gitapex_check_pr_issue_acm_disclosure.py",
         "hooks/gitapex_check_acm_present_or_waiver.py"
       ],
-      "rule": "Denies mcp__github__create_pull_request when the PR title/body cites no issue at all, or when any Closes/Fixes-cited issue lacks both an ACM table and a valid waiver, carries a 'tracking' waiver, or is already closed; fails closed on a missing GH_TOKEN/GITHUB_TOKEN or an unfetchable issue.",
+      "rule": "Denies mcp__github__create_pull_request when the PR title/body cites no issue at all, or when any Closes/Fixes-cited issue lacks both an ACM table and a valid waiver, carries a 'tracking' waiver, or is already closed; fails closed on a missing GH_TOKEN/GITHUB_TOKEN or an unfetchable issue. Fails closed (denies) rather than allowing the call through when jq is missing from PATH, the payload or tool_input is not a JSON object, or tool_name is present but not a string.",
       "planes": ["pretooluse"],
       "local_exclusion": "Grades a PR body against its cited issue's Acceptance Criteria Map; the body does not exist until the PR is opened.",
       "trigger": "PreToolUse matcher mcp__github__create_pull_request (hooks/hooks.json)",
@@ -287,6 +287,26 @@
       "target": [
         {"kind": "mcp-tool", "ref": "mcp__github__create_pull_request"},
         {"kind": "runtime-resolved-reference", "ref": "GET /repos/{owner}/{repo}/pulls?state=open"}
+      ]
+    },
+    {
+      "id": "independent-review-pending",
+      "kind": "script",
+      "script": [".github/workflows/independent-review-pending.yml", ".github/scripts/gitapex_gate_independent_review_pending.py"],
+      "rule": "Required status check: fails/pends from the moment a PR is opened (the workflow has no draft-state condition of its own -- it also runs, harmlessly, while a PR is still draft, since GitHub already blocks merging a draft regardless of check status) until a '## Step 8 independent review verdict' section naming the PR's exact current head commit as CLEAN is present in the PR body, per drafting-a-pr-to-merge/SKILL.md Step 8's own recorded-verdict format. Closes the race issue #1286 documented -- a PR merged directly via the GitHub UI after clean CI but before drafting-a-pr-to-merge's own mandatory Step 8 review had run against it at all. A structural presence/shape check mirroring the skill-audit-disclosure gate's own precedent, not a cryptographic guarantee: it cannot distinguish a genuine Step 8 run from PR-body text that merely mimics the required shape, a known, disclosed limitation (issue #1311's own residual risk) rather than one this gate resolves. DECLARED, NOT YET CONFIRMED LIVE as of this entry's own introduction: this row's own registration and the main.json required_status_checks entry below only take live effect on GitHub once a human dispatches the separate, human-gated apply-rulesets.yml workflow (deterministic-gate-quality review, issue #1311) -- until that dispatch happens and is confirmed (e.g. via ruleset-scan or a direct branch-protection read), this check does not yet block a direct merge, the exact incident this gate exists to close.",
+      "planes": ["ci"],
+      "local_exclusion": "Grades a PR body against the PR's own current head SHA, both only resolvable via the GitHub API at trigger time; no working-tree equivalent exists before the PR is opened.",
+      "trigger": ".github/workflows/independent-review-pending.yml on pull_request:[opened, ready_for_review, synchronize, edited, reopened]",
+      "policy_refs": ["main-branch-ruleset"],
+      "cluster": ["plan-integrity", "github-operations"],
+      "tracking_issue": 1311,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "workflow-event", "ref": "independent-review-pending.yml:pull_request"},
+        {"kind": "runtime-resolved-reference", "ref": "github.event.pull_request.body + github.event.pull_request.head.sha"},
+        {"kind": "cross-registry-consistency", "ref": ".github/rulesets/main.json required_status_checks[].context 'independent-review-pending' <-> this workflow's own job id"}
       ]
     },
     {
@@ -684,7 +704,7 @@
       "id": "toolchain-pin-drift",
       "kind": "script",
       "script": ".github/scripts/gitapex_scan_toolchain_pin_drift.py",
-      "rule": "No .github/workflows/*.yml/.yaml may reference a flake-owned Class B tool's (microsoft/waza, microsoft/apm, rtk-ai/rtk, betterleaks/betterleaks) upstream repo in an install context -- they must come from flake.nix only.",
+      "rule": "No .github/workflows/*.yml/.yaml may reference a flake-owned Class B tool's (microsoft/apm, rtk-ai/rtk, betterleaks/betterleaks) upstream repo in an install context -- they must come from flake.nix only.",
       "planes": ["ci", "local"],
       "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_toolchain_pin_drift.py"],
       "trigger": "tests/test_gitapex_scan_toolchain_pin_drift.py inside the pytest step of .github/workflows/test.yml",
@@ -697,7 +717,6 @@
       "target": [
         {"kind": "file-glob", "ref": ".github/workflows/*.yml"},
         {"kind": "file-glob", "ref": ".github/workflows/*.yaml"},
-        {"kind": "bash-pattern", "ref": "microsoft/waza"},
         {"kind": "bash-pattern", "ref": "microsoft/apm"},
         {"kind": "bash-pattern", "ref": "rtk-ai/rtk"},
         {"kind": "bash-pattern", "ref": "betterleaks/betterleaks"},
@@ -749,7 +768,7 @@
       "id": "retrospective-gate-drift-scan",
       "kind": "script",
       "script": ".github/scripts/gitapex_scan_retrospective_gate_drift.py",
-      "rule": "Lists every retrospective-labelled issue (any state) and fails the job if the count with zero commit on main citing it exceeds threshold 20.",
+      "rule": "Lists every retrospective-labelled issue (any state), excludes any whose body carries a gate-less marker (CI-opened stub or zero-repair fast-close -- issue #1297), and fails the job if the count of remaining issues with zero commit on main citing it exceeds threshold 20.",
       "planes": ["ci"],
       "local_exclusion": "Queries the GitHub issues API for retrospective-labelled issues; there is no offline equivalent.",
       "trigger": ".github/workflows/retrospective-gate-drift.yml, daily cron 07:00 UTC + workflow_dispatch",
@@ -1158,7 +1177,7 @@
       "id": "eval-suite-schema-drift",
       "kind": "script",
       "script": ".github/scripts/gitapex_scan_eval_suite_schema.py",
-      "rule": "Every evals/*/eval.yaml and evals/*/tasks/*.yaml must validate against waza's own schemas vendored at the flake.nix-pinned release tag (.gitapex/waza-eval.schema.json, .gitapex/waza-task.schema.json), extended only by the reviewed EXTENSION_KEYS allowlist -- so an approved repository-local key passes and a misspelling of it fails, where waza itself only warns and the local pydantic extra=\"allow\" consumers silently see nothing. Each allowlist row must name a consumer file that exists and still mentions the key, and must not shadow a property waza has since adopted natively. flake.nix must still pin VENDORED_WAZA_TAG, and each vendored file's sha256 must match its recorded digest; the opt-in --verify-upstream flag additionally compares both vendored files byte-for-byte against what microsoft/waza published at that tag.",
+      "rule": "Every evals/*/eval.yaml and evals/*/tasks/*.yaml must validate against waza's own schemas vendored at VENDORED_WAZA_TAG (.gitapex/waza-eval.schema.json, .gitapex/waza-task.schema.json), extended only by the reviewed EXTENSION_KEYS allowlist -- so an approved repository-local key passes and a misspelling of it fails, where waza itself only warns and the local pydantic extra=\"allow\" consumers silently see nothing. Each allowlist row must name a consumer file that exists and still mentions the key, and must not shadow a property waza has since adopted natively. Each vendored file's sha256 must match its recorded digest; the opt-in --verify-upstream flag additionally compares both vendored files byte-for-byte against what microsoft/waza published at that tag. Its former flake.nix-pin cross-check (find_pin_drift) was removed by issue #1136 once flake.nix stopped pinning any waza version at all -- VENDORED_WAZA_TAG is now pure provenance metadata for the two vendored schema files, not a live flake.nix cross-reference.",
       "planes": ["ci", "local"],
       "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_eval_suite_schema.py"],
       "trigger": "tests/test_gitapex_scan_eval_suite_schema.py inside the pytest step of .github/workflows/test.yml",
@@ -1174,7 +1193,6 @@
         {"kind": "file-glob", "ref": "evals/*/tasks/*.yml"},
         {"kind": "file-glob", "ref": ".gitapex/waza-eval.schema.json"},
         {"kind": "file-glob", "ref": ".gitapex/waza-task.schema.json"},
-        {"kind": "cross-registry-consistency", "ref": "flake.nix pinned waza release tag <-> VENDORED_WAZA_TAG (gitapex_scan_eval_suite_schema.py)"},
         {"kind": "cross-registry-consistency", "ref": ".gitapex/waza-eval.schema.json & .gitapex/waza-task.schema.json bytes <-> VENDORED_DIGESTS recorded sha256"},
         {"kind": "cross-registry-consistency", "ref": "EXTENSION_KEYS allowlist rows <-> named consumer files' real content"},
         {"kind": "workflow-event", "ref": "test.yml:pull_request"},
@@ -1444,7 +1462,7 @@
         ".github/scripts/gitapex_gate_pr_title_convention.py",
         ".github/workflows/pr-title-convention-gate.yml"
       ],
-      "rule": "A pull request's title must match Conventional Commits format: type(scope)!: description, type in feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert, scope and the breaking-change '!' optional, description 1-72 characters. The PreToolUse hook denies a create_pull_request call outright, and denies an update_pull_request call only when it carries a title field; the CI twin re-checks on pull_request:[opened, edited, synchronize] as a required status check, covering a PR opened or retitled via the GitHub web UI, the gh CLI, or another bot.",
+      "rule": "A pull request's title must match Conventional Commits format: type(scope)!: description, type in feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert, scope and the breaking-change '!' optional, description 1-72 characters. The PreToolUse hook denies a create_pull_request call outright, and denies an update_pull_request call only when it carries a title field; the CI twin re-checks on pull_request:[opened, edited, synchronize] as a required status check, covering a PR opened or retitled via the GitHub web UI, the gh CLI, or another bot. Fails closed (denies) rather than allowing the call through when jq is missing from PATH, the payload or tool_input is not a JSON object, or tool_name is present but not a string.",
       "planes": ["pretooluse", "ci"],
       "local_exclusion": "Grades a PR title against live GitHub PR state; no title exists locally before the PR is opened.",
       "trigger": "PreToolUse matcher mcp__github__create_pull_request and mcp__github__update_pull_request (hooks/hooks.json); .github/workflows/pr-title-convention-gate.yml on pull_request:[opened, edited, synchronize], registered as a required status check in .github/rulesets/main.json",

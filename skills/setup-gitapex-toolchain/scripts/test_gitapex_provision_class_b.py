@@ -50,7 +50,7 @@ def test_apm_is_wrapper_dir_kind() -> None:
     flake_text = (REPO_ROOT / "flake.nix").read_text(encoding="utf-8")
     pins = pcb.parse_flake_class_b_pins(flake_text)
     assert pins["apm"].kind == "wrapperDir"
-    assert pins["waza"].kind == "binary"
+    assert pins["rtk"].kind == "binary"
 
 
 def test_release_url_matches_flake_ghrelease_pattern() -> None:
@@ -506,32 +506,34 @@ def test_provision_all_continues_past_one_tool_failure(tmp_path: Path) -> None:
     body for waza's response -- those can never match (verified: it raised
     HashMismatchError for waza too, the same failure mode as apm's 404, so
     the test could not actually have exercised the "one tool fails, the other
-    still installs" behavior it claims to). Fixed by deriving waza's pin from
-    the fabricated body's own hash (same pattern the brief's other two Step 1
-    tests already use for apm), while still resolving apm/waza's owner/repo/
-    tag from the real flake.nix parse so the produced URLs are realistic."""
+    still installs" behavior it claims to). Fixed by deriving the second
+    tool's pin from the fabricated body's own hash (same pattern the brief's
+    other two Step 1 tests already use for apm), while still resolving that
+    tool's owner/repo/tag from the real flake.nix parse so the produced URLs
+    are realistic. Issue #1136 later retired waza; this test now uses rtk
+    (the other binary-kind Class B tool) in its place, keeping the same fix."""
     flake_text = (REPO_ROOT / "flake.nix").read_text(encoding="utf-8")
     real_tools = pcb.parse_flake_class_b_pins(flake_text)
-    real_waza_pin = real_tools["waza"].systems["x86_64-linux"]
-    waza_data = _make_tar_gz_bytes({real_waza_pin.bin_in_archive: b"x"})
-    fake_waza_pin = pcb.ClassBSystemPin(
-        asset=real_waza_pin.asset, sha256_sri=pcb.sha256_sri(waza_data), bin_in_archive=real_waza_pin.bin_in_archive
+    real_rtk_pin = real_tools["rtk"].systems["x86_64-linux"]
+    rtk_data = _make_tar_gz_bytes({real_rtk_pin.bin_in_archive: b"x"})
+    fake_rtk_pin = pcb.ClassBSystemPin(
+        asset=real_rtk_pin.asset, sha256_sri=pcb.sha256_sri(rtk_data), bin_in_archive=real_rtk_pin.bin_in_archive
     )
-    fake_waza_spec = pcb.ClassBToolSpec(
-        pname="waza",
-        version=real_tools["waza"].version,
+    fake_rtk_spec = pcb.ClassBToolSpec(
+        pname="rtk",
+        version=real_tools["rtk"].version,
         kind="binary",
-        owner=real_tools["waza"].owner,
-        repo=real_tools["waza"].repo,
-        tag=real_tools["waza"].tag,
-        systems={"x86_64-linux": fake_waza_pin},
+        owner=real_tools["rtk"].owner,
+        repo=real_tools["rtk"].repo,
+        tag=real_tools["rtk"].tag,
+        systems={"x86_64-linux": fake_rtk_pin},
     )
-    tools = {"apm": real_tools["apm"], "waza": fake_waza_spec}
+    tools = {"apm": real_tools["apm"], "rtk": fake_rtk_spec}
 
     def failing_opener(request: urllib.request.Request) -> _FakeResponse:
         if "apm" in request.full_url:
             raise urllib.error.HTTPError(request.full_url, 404, "not found", Message(), io.BytesIO(b""))
-        return _FakeResponse(200, waza_data)
+        return _FakeResponse(200, rtk_data)
 
     results = pcb.provision_all(
         tools,
@@ -542,8 +544,8 @@ def test_provision_all_continues_past_one_tool_failure(tmp_path: Path) -> None:
         runner=_fake_runner_success,
     )
     assert isinstance(results["apm"], Exception)
-    assert isinstance(results["waza"], pcb.ProvisionResult)
-    assert results["waza"].status == "installed"
+    assert isinstance(results["rtk"], pcb.ProvisionResult)
+    assert results["rtk"].status == "installed"
 
 
 # --- Task 5 supplemental: receipt/idempotency edge cases not in the brief's
@@ -674,18 +676,18 @@ def test_provision_tool_reinstalls_binary_kind_when_installed_bytes_are_corrupte
     tampering) must not be silently trusted and then executed -- including
     by `apm install`, which runs the apm binary directly as a subprocess."""
     flake_text = (REPO_ROOT / "flake.nix").read_text(encoding="utf-8")
-    waza_spec = pcb.parse_flake_class_b_pins(flake_text)["waza"]
-    data = _make_tar_gz_bytes({"waza-linux-amd64": b"#!/bin/sh\necho fake-waza\n"})
+    rtk_spec = pcb.parse_flake_class_b_pins(flake_text)["rtk"]
+    data = _make_tar_gz_bytes({"rtk-linux-amd64": b"#!/bin/sh\necho fake-rtk\n"})
     pin = pcb.ClassBSystemPin(
-        asset="waza-linux-amd64.tar.gz", sha256_sri=pcb.sha256_sri(data), bin_in_archive="waza-linux-amd64"
+        asset="rtk-linux-amd64.tar.gz", sha256_sri=pcb.sha256_sri(data), bin_in_archive="rtk-linux-amd64"
     )
     fake_spec = pcb.ClassBToolSpec(
-        pname="waza",
+        pname="rtk",
         version="1",
         kind="binary",
-        owner=waza_spec.owner,
-        repo=waza_spec.repo,
-        tag=waza_spec.tag,
+        owner=rtk_spec.owner,
+        repo=rtk_spec.repo,
+        tag=rtk_spec.tag,
         systems={"x86_64-linux": pin},
     )
 
@@ -699,7 +701,7 @@ def test_provision_tool_reinstalls_binary_kind_when_installed_bytes_are_corrupte
     )
     assert result1.status == "installed"
 
-    bin_path = tmp_path / "bin" / "waza"
+    bin_path = tmp_path / "bin" / "rtk"
     bin_path.write_bytes(b"corrupted-not-the-real-binary")
 
     result2 = pcb.provision_tool(
@@ -711,7 +713,7 @@ def test_provision_tool_reinstalls_binary_kind_when_installed_bytes_are_corrupte
         runner=_fake_runner_success,
     )
     assert result2.status == "installed"  # not "skipped" -- corruption must force a reinstall
-    assert bin_path.read_bytes() == b"#!/bin/sh\necho fake-waza\n"
+    assert bin_path.read_bytes() == b"#!/bin/sh\necho fake-rtk\n"
 
 
 def test_provision_tool_reinstalls_wrapper_dir_kind_when_installed_bytes_are_corrupted(tmp_path: Path) -> None:
@@ -1534,7 +1536,7 @@ def test_main_verify_mode_all_installed_and_passing_returns_zero(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.delenv("CLAUDE_ENV_FILE", raising=False)
-    _write_version_script(tmp_path / "bin" / "waza", "waza version 0.38.0", 0)
+    _write_version_script(tmp_path / "bin" / "rtk", "rtk version 0.43.0", 0)
     _write_version_script(tmp_path / "bin" / "apm", "apm version 0.25.0", 0)
 
     exit_code = pcb.main(
@@ -1546,7 +1548,7 @@ def test_main_verify_mode_all_installed_and_passing_returns_zero(
             "--system",
             "x86_64-linux",
             "--tool",
-            "waza",
+            "rtk",
             "--tool",
             "apm",
             "--verify",
@@ -1554,7 +1556,7 @@ def test_main_verify_mode_all_installed_and_passing_returns_zero(
     )
     assert exit_code == 0
     out = capsys.readouterr().out
-    assert "PASS: waza: waza version 0.38.0" in out
+    assert "PASS: rtk: rtk version 0.43.0" in out
     assert "PASS: apm: apm version 0.25.0" in out
 
 
@@ -1562,7 +1564,7 @@ def test_main_verify_mode_reports_failing_version_check(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.delenv("CLAUDE_ENV_FILE", raising=False)
-    _write_version_script(tmp_path / "bin" / "waza", "boom", 1)
+    _write_version_script(tmp_path / "bin" / "rtk", "boom", 1)
 
     exit_code = pcb.main(
         [
@@ -1573,13 +1575,13 @@ def test_main_verify_mode_reports_failing_version_check(
             "--system",
             "x86_64-linux",
             "--tool",
-            "waza",
+            "rtk",
             "--verify",
         ]
     )
     assert exit_code == 1
     out = capsys.readouterr().out
-    assert "FAIL: waza: --version exited 1" in out
+    assert "FAIL: rtk: --version exited 1" in out
 
 
 def test_main_verify_mode_sanitizes_version_output(
@@ -1589,7 +1591,7 @@ def test_main_verify_mode_sanitizes_version_output(
     output the same way provision_tool's ProvisionResult.version_output
     does -- both are raw third-party subprocess stdout."""
     monkeypatch.delenv("CLAUDE_ENV_FILE", raising=False)
-    _write_version_script(tmp_path / "bin" / "waza", "\x1b[31mfake-version\x1b[0m", 0)
+    _write_version_script(tmp_path / "bin" / "rtk", "\x1b[31mfake-version\x1b[0m", 0)
 
     exit_code = pcb.main(
         [
@@ -1600,14 +1602,14 @@ def test_main_verify_mode_sanitizes_version_output(
             "--system",
             "x86_64-linux",
             "--tool",
-            "waza",
+            "rtk",
             "--verify",
         ]
     )
     assert exit_code == 0
     out = capsys.readouterr().out
     assert "\x1b" not in out
-    assert "PASS: waza:" in out
+    assert "PASS: rtk:" in out
 
 
 def test_main_apm_provisioning_failure_skips_apm_install(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1646,7 +1648,7 @@ def test_main_tool_filter_excluding_apm_is_not_counted_as_apm_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Task review finding (093c065): a --tool filter that narrows selection
-    away from "apm" entirely (e.g. --tool waza, with no --skip-apm-install)
+    away from "apm" entirely (e.g. --tool rtk, with no --skip-apm-install)
     must NOT be treated as "apm failed to provision". apm was never
     requested at all, so provision_all's own `only` filter never attempts
     it and results.get("apm") is None (not a key in results) --
@@ -1654,12 +1656,12 @@ def test_main_tool_filter_excluding_apm_is_not_counted_as_apm_failure(
     apm failure. Pre-fix, main() could not tell these two cases apart, so it
     printed the misleading "apm itself was not successfully provisioned"
     message and counted a failure even though nothing the caller actually
-    requested (waza) failed -- contradicting SKILL.md's own "a non-zero exit
+    requested (rtk) failed -- contradicting SKILL.md's own "a non-zero exit
     code if anything failed" contract. This must return exit code 0 and
     must never invoke run_apm_install."""
     monkeypatch.delenv("CLAUDE_ENV_FILE", raising=False)
     fake_result: dict[str, pcb.ProvisionResult | Exception] = {
-        "waza": pcb.ProvisionResult(pname="waza", status="installed", version_output="0.38.0"),
+        "rtk": pcb.ProvisionResult(pname="rtk", status="installed", version_output="0.43.0"),
     }
     monkeypatch.setattr(pcb, "provision_all", lambda *args, **kwargs: fake_result)
 
@@ -1677,7 +1679,7 @@ def test_main_tool_filter_excluding_apm_is_not_counted_as_apm_failure(
             "--system",
             "x86_64-linux",
             "--tool",
-            "waza",
+            "rtk",
         ]
     )
     assert exit_code == 0
@@ -1944,7 +1946,7 @@ def test_main_treats_empty_env_file_string_as_not_provided(tmp_path: Path, monke
     from apm-install so this test exercises exactly one behavior."""
     monkeypatch.delenv("CLAUDE_ENV_FILE", raising=False)
     fake_result: dict[str, pcb.ProvisionResult | Exception] = {
-        "waza": pcb.ProvisionResult(pname="waza", status="installed", version_output="0.38.0"),
+        "rtk": pcb.ProvisionResult(pname="rtk", status="installed", version_output="0.43.0"),
     }
     monkeypatch.setattr(pcb, "provision_all", lambda *args, **kwargs: fake_result)
 
@@ -1957,7 +1959,7 @@ def test_main_treats_empty_env_file_string_as_not_provided(tmp_path: Path, monke
             "--system",
             "x86_64-linux",
             "--tool",
-            "waza",
+            "rtk",
             "--skip-apm-install",
             "--env-file",
             "",
@@ -2062,7 +2064,7 @@ def test_main_verify_mode_reports_subprocess_error_instead_of_crashing(
     writing this test; see the fix report for the transcript) -- produced a
     raw uncaught traceback instead of a FAIL: line."""
     monkeypatch.delenv("CLAUDE_ENV_FILE", raising=False)
-    bin_path = tmp_path / "bin" / "waza"
+    bin_path = tmp_path / "bin" / "rtk"
     bin_path.mkdir(parents=True)  # exists, but cannot be exec'd: not a file
 
     exit_code = pcb.main(
@@ -2074,13 +2076,13 @@ def test_main_verify_mode_reports_subprocess_error_instead_of_crashing(
             "--system",
             "x86_64-linux",
             "--tool",
-            "waza",
+            "rtk",
             "--verify",
         ]
     )
     assert exit_code == 1
     out = capsys.readouterr().out
-    assert "FAIL: waza:" in out
+    assert "FAIL: rtk:" in out
 
 
 def test_main_unknown_tool_flag_fails_closed_instead_of_silent_success(
