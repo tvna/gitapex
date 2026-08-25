@@ -478,9 +478,9 @@ pursued -- this issue only records the repairs and proposes it, per
 merge-retrospective's Stop boundary.
 ```
 
-For a zero-repair cycle, Step 5's fast-close path files a single-line
-issue body instead of the full shape above, then closes it in the same
-step -- for example:
+For a zero-repair cycle, Step 5's fast-close path files a single-
+paragraph issue body instead of the full shape above, then closes it
+in the same step -- for example:
 
 ```
 Title: Merge retrospective: PR #63

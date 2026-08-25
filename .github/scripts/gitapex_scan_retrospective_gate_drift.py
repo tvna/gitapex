@@ -177,8 +177,14 @@ def is_gate_less(body: str) -> bool:
     zero-repair fast-close marker `merge-retrospective/SKILL.md`'s Step 5
     requires (matched only as its own line -- see
     `_ZERO_REPAIR_MARKER_LINE_RE`'s own comment for why the two markers
-    are checked differently)."""
-    return _CI_STUB_MARKER in body or bool(_ZERO_REPAIR_MARKER_LINE_RE.search(body))
+    are checked differently). `body` is normalized to bare LF line
+    endings first: GitHub is known to deliver an issue body with CRLF
+    endings for one authored or edited via the web UI, and
+    `_ZERO_REPAIR_MARKER_LINE_RE` assumes bare LF -- the same
+    normalization `gitapex_gate_skill_audit_disclosure.py`'s own
+    `_normalize_body` already applies for the identical reason."""
+    normalized = body.replace("\r\n", "\n").replace("\r", "\n")
+    return _CI_STUB_MARKER in normalized or bool(_ZERO_REPAIR_MARKER_LINE_RE.search(normalized))
 
 
 def partition_gate_less(records: list[dict[str, Any]]) -> tuple[list[int], list[int]]:

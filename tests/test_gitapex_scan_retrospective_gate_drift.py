@@ -146,6 +146,14 @@ def test_is_gate_less_matches_zero_repair_marker_with_bullet_prefix():
     assert gate.is_gate_less(body) is True
 
 
+def test_is_gate_less_matches_zero_repair_marker_with_crlf_line_endings():
+    # Defeat case: GitHub is known to deliver an issue body with CRLF
+    # endings for one authored or edited via the web UI -- the marker
+    # line's own `\r` must not defeat the standalone-line match.
+    body = "PR #63 merged with zero repairs.\r\nRetrospective status: zero-repair-fast-close\r\nRefs #63."
+    assert gate.is_gate_less(body) is True
+
+
 def test_is_gate_less_false_when_zero_repair_marker_only_quoted_mid_sentence():
     # Defeat case (issue #1297): this repo's own retrospectives routinely
     # re-quote an earlier issue's text verbatim inside a later, real

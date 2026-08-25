@@ -170,9 +170,17 @@ def is_gate_less(body: str) -> bool:
     zero-repair fast-close marker `merge-retrospective/SKILL.md`'s Step 5
     requires (matched only as its own line -- see
     `_ZERO_REPAIR_MARKER_LINE_RE`'s own comment for why the two markers
-    are checked differently)."""
-    return _CI_STUB_MARKER in body or bool(
-        _ZERO_REPAIR_MARKER_LINE_RE.search(body)  # detection-logic-property-coverage: WAIVED: see module docstring
+    are checked differently). `body` is normalized to bare LF line
+    endings first: GitHub is known to deliver an issue body with CRLF
+    endings for one authored or edited via the web UI, and
+    `_ZERO_REPAIR_MARKER_LINE_RE` assumes bare LF -- the same
+    normalization `.github/scripts/gitapex_gate_skill_audit_disclosure.py`'s
+    own `_normalize_body` already applies for the identical reason."""
+    normalized = body.replace("\r\n", "\n").replace("\r", "\n")
+    return _CI_STUB_MARKER in normalized or bool(
+        _ZERO_REPAIR_MARKER_LINE_RE.search(  # detection-logic-property-coverage: WAIVED: see module docstring
+            normalized
+        )
     )
 
 
@@ -194,10 +202,13 @@ def load_issue_bodies(path: str | None) -> dict[int, str]:
     """Return a number-to-body mapping read from `path` (issue #1297).
     `path` of `None` returns an empty mapping -- the gate-less pre-check
     then simply finds nothing to exclude, identical to this script's
-    behavior before this mapping existed. `path == "-"` reads standard
-    input instead of a file, matching the file-or-stdin convention
+    behavior before this mapping existed. A three-way argument, not the
+    two-way file-or-stdin-on-omission convention
     `gitapex_check_acm_present.py`'s own `--body` argument already
-    established in this repository.
+    established in this repository: omitting `--bodies` here means "skip
+    the check" (there was nothing to omit-to-stdin before this mapping
+    existed), so a distinct `path == "-"` sentinel is required to opt
+    into reading standard input instead of a file.
 
     A key that does not parse as an integer, or a value that is not a
     string (for example JSON `null` for an issue with an empty body), is
