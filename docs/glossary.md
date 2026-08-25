@@ -24,10 +24,11 @@ that path is a dated design-record filename, out of scope for the
 `issue-to-fix` -> `fixing-a-reported-issue` rename per #281).
 
 Retirement note: `fixing-a-reported-issue` was later retired; its
-reproduce/fix procedure was absorbed into `planning-a-branch-from-an-issue`
-+ `executing-a-branch-plan`, per issue #1275. The "issue" vs. "bug report"
-naming resolution above is unaffected by the retirement -- it settled which
-term wins, not which skill implements it -- and stands unchanged.
+reproduce/fix procedure was absorbed into
+`planning-a-branch-from-an-issue` plus `executing-a-branch-plan`, per
+issue #1275. The "issue" vs. "bug report" naming resolution above is
+unaffected by the retirement -- it settled which term wins, not which
+skill implements it -- and stands unchanged.
 
 ## `Task`
 

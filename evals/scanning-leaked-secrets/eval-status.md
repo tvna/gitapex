@@ -103,9 +103,9 @@ per this repository's own established convention for a skill without
 one), reports 0 warnings against these 16 fixtures. Run repo-wide
 (auto-discovery mode), the only warnings reported are 3 pre-existing
 ones against `outward-artifact-preflight` and `scorer-gated-skill-edits`
--- confirmed identical, word for word,
-against a baseline with this skill's own `evals/scanning-leaked-secrets/`
-and `skills/scanning-leaked-secrets/` moved aside. This corpus introduces
+-- confirmed identical, word for word, against a baseline with this
+skill's own `evals/scanning-leaked-secrets/` and
+`skills/scanning-leaked-secrets/` moved aside. This corpus introduces
 zero new findings.
 
 ## What has and has not been executed

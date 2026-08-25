@@ -20,15 +20,15 @@
       "split": "selection"
     },
     {
-      "skill": "drafting-issues",
-      "skill_md": "skills/drafting-issues/SKILL.md",
-      "eval_yaml": "evals/drafting-issues/eval.yaml",
-      "split": "selection"
-    },
-    {
       "skill": "drafting-an-adr",
       "skill_md": "skills/drafting-an-adr/SKILL.md",
       "eval_yaml": "evals/drafting-an-adr/eval.yaml",
+      "split": "selection"
+    },
+    {
+      "skill": "drafting-issues",
+      "skill_md": "skills/drafting-issues/SKILL.md",
+      "eval_yaml": "evals/drafting-issues/eval.yaml",
       "split": "selection"
     },
     {

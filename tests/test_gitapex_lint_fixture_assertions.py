@@ -309,9 +309,9 @@ def test_repository_wide_fixtures_have_no_unreviewed_blocking_findings():
     #
     # pinned-residual-count: 3
     #
-    # Still pinned. One bullet per cause, not per finding -- the last bullet
-    # covers two skills sharing one, so bullet count and residual count are
-    # deliberately not the same number:
+    # Still pinned. One bullet per cause, not per finding -- a single bullet
+    # can cover more than one skill sharing that cause, so bullet count and
+    # residual count are deliberately not held to each other:
     #
     #   - scorer-gated-skill-edits/ship-without-transfer-check.yaml
     #     [case-sensitivity]: the pre-existing #858 residual, already pinned

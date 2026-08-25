@@ -113,11 +113,11 @@ def test_allowed_when_body_has_waiver_line() -> None:
 def test_allowed_when_body_has_defect_waiver_line() -> None:
     # Issue #657 adds `defect` to the waiver vocabulary for a bare
     # defect-report issue -- now handled via planning-a-branch-from-an-issue's
-    # own bare-defect path / drafting-issues's `defect (issue not yet
-    # filed)` type, per issue #1275. This hook
-    # doesn't distinguish waiver categories, so a *new* issue can now be
-    # created with a defect waiver too, not only posted via `update` on an
-    # existing one -- an accepted, named side effect, not a gap.
+    # own bare-defect path and drafting-issues's `defect (issue not yet
+    # filed)` type, per issue #1275. This hook doesn't distinguish waiver
+    # categories, so a *new* issue can now be created with a defect waiver
+    # too, not only posted via `update` on an existing one -- an accepted,
+    # named side effect, not a gap.
     assert_allowed(body=_VALID_DEFECT_WAIVER)
 
 

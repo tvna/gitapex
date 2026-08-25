@@ -20,11 +20,11 @@ explicit waiver line of the form
 ``ACM: not-applicable (chore|docs|tracking|defect): <reason>`` -- the
 `chore`/`docs`/`tracking` vocabulary named in issue #357's own Acceptance
 Criteria Map (the PreToolUse hook row), plus `defect` (issue #657, for a
-bare defect-report issue's own defect waiver -- its rationale now
-attributes to planning-a-branch-from-an-issue's own bare-defect path /
-drafting-issues's `defect (issue not yet filed)` type (issue #1275,
-retiring the skill that originally owned this case), neither of which
-carry an ACM table by design), reused here so this script never has to classify
+bare defect-report issue, which by design carries no ACM table; issue
+#1275 retired the skill that originally owned that case, so the waiver's
+rationale now attributes to planning-a-branch-from-an-issue's own
+bare-defect path and drafting-issues's `defect (issue not yet filed)`
+type), reused here so this script never has to classify
 feature/fix/refactor vs. chore/docs/tracking/defect itself; the requester
 makes that call by choosing the waiver line or the table. This
 mirrors .github/scripts/gitapex_gate_skill_audit_disclosure.py's own
@@ -134,13 +134,12 @@ _HEADER_RE = re.compile(
 
 # Issue #357's own named waiver vocabulary (`chore|docs|tracking`), plus
 # `defect` (issue #657): `ACM: not-applicable (chore|docs|tracking|defect): <reason>`.
-# `defect` covers a bare defect-report issue's own defect waiver -- its
-# rationale now attributes to planning-a-branch-from-an-issue's own
-# bare-defect path / drafting-issues's `defect (issue not yet filed)`
-# type (issue #1275, retiring the skill that originally owned this
-# case), neither of which carry an ACM table by design. A non-empty
-# trailing
-# reason is required, mirroring gitapex_gate_skill_audit_disclosure.py's own
+# `defect` covers a bare defect-report issue, which by design carries no
+# ACM table; issue #1275 retired the skill that originally owned that
+# case, so the waiver's rationale now attributes to
+# planning-a-branch-from-an-issue's own bare-defect path and
+# drafting-issues's `defect (issue not yet filed)` type. A non-empty
+# trailing reason is required, mirroring gitapex_gate_skill_audit_disclosure.py's own
 # `WAIVED: <reason>` requirement -- a bare "ACM: not-applicable (chore):" with
 # nothing after the colon does not satisfy this.
 #
