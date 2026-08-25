@@ -263,6 +263,10 @@ ALLOWED_DYNAMIC_COMMANDS = [
     ("REF=R; R=cat; ${!REF} file.txt", "indirect-ref-unwatched-tool"),
     ("REF=R; R=hello; echo ${!REF}", "indirect-ref-unrelated-text-as-echo-argument"),
     ("echo ${!NEVER_ASSIGNED}", "indirect-ref-first-level-unresolved"),
+    # False-positive guard for the eleventh-round fused-indirect-ref fix:
+    # a fused reconstruction resolving to something unrelated (not a
+    # watched tool/verb) must stay allowed.
+    ("REF=R; R=at; c${!REF} file.txt", "fused-indirect-ref-unwatched-tool"),
 ]
 
 # --- Known, disclosed, unresolved regex/token-gate bypasses ----------------
@@ -502,6 +506,28 @@ DENIED_INDIRECTION_COMMANDS = [
     (
         "MREF=M; M=POST; gh api repos/x/y/merge -X${!MREF}",
         "gh-api-method-value-indirect-ref",
+    ),
+    # Found live by Step 8 independent review, eleventh round (issue
+    # #1326): every one of the narrow, whole-token-anchored resolvers
+    # (default-clause extraction, `${!NAME}` indirect reference) requires
+    # the ENTIRE token to be exactly one recognized construct -- blind to
+    # that same construct FUSED with literal text in the same token.
+    # Real bash resolves each of these to a genuine denied invocation.
+    (
+        "T=uv; SUFNAME=SUFVAL; SUFVAL=stall; $T in${!SUFNAME} foo",
+        "fused-indirect-ref-verb-with-literal-prefix",
+    ),
+    (
+        "HSUF=HVAL; HVAL=h; g${!HSUF} pr merge 1",
+        "fused-indirect-ref-gh-with-literal-prefix",
+    ),
+    (
+        "HSUF=HVAL; HVAL=h; MSUF=MVAL; MVAL=erge; g${!HSUF} pr m${!MSUF} 1",
+        "fused-indirect-ref-tool-and-verb-both-with-literal-prefix",
+    ),
+    (
+        "T=uv; $T in${UNSETVAR:-stall} foo",
+        "fused-default-clause-verb-with-literal-prefix",
     ),
 ]
 

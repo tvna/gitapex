@@ -132,6 +132,58 @@ def test_rule_fetch_exec_allows_a_download_piped_into_a_non_shell_program(tool: 
     assert checker._rule_fetch_exec(segments, {}, {}) is None
 
 
+@_PROPERTIES
+@given(pkg=st.sampled_from(["left-pad", "some-installer", "@scope/pkg"]))
+def test_rule_npx_detects_a_literal_npx_invocation(pkg: str) -> None:
+    """Model-based: a plain literal ``npx`` command word, regardless of
+    which package it invokes, is always detected. Direct coverage for
+    ``_rule_npx`` -- found missing by Step 8 independent review, eleventh
+    round (issue #1326): round 10's own commit claimed direct property
+    coverage for this rule but never actually added any."""
+    segments = [["npx", pkg]]
+    assert checker._rule_npx(segments, {}, {}) is not None
+
+
+@_PROPERTIES
+@given(n_var=_IDENTIFIERS)
+def test_rule_npx_detects_npx_hidden_behind_a_bare_variable(n_var: str) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, tenth round (issue #1326): ``npx`` hidden
+    behind a bare variable reference (``N=npx; $N left-pad``, real bash:
+    ``npx left-pad``) is still caught."""
+    name_to_value = {n_var: "npx"}
+    segments = [[f"${n_var}", "left-pad"]]
+    assert checker._rule_npx(segments, name_to_value, {}) is not None
+
+
+@_PROPERTIES
+@given(n_ref=_IDENTIFIERS, n_var=_IDENTIFIERS)
+def test_rule_npx_detects_npx_fused_with_a_literal_prefix(n_ref: str, n_var: str) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, eleventh round (issue #1326): ``npx``
+    reconstructed by fusing a literal ``n`` prefix with an ``${!NAME}``
+    indirect reference in the SAME token (``n${!NSUF}`` where NSUF
+    resolves, two levels, to "px") is still caught -- confirmed live via
+    real bash argv expansion that this resolves to a genuine ``npx``.
+    The whole-token-anchored ``_resolve_dynamic_token`` this rule used
+    through the tenth round could never see this shape at all."""
+    assume(n_ref != n_var)
+    name_to_raw_value = {n_ref: n_var}
+    name_to_value = {n_var: "px"}
+    segments = [[f"n${{!{n_ref}}}", "left-pad"]]
+    assert checker._rule_npx(segments, name_to_value, name_to_raw_value) is not None
+
+
+@_PROPERTIES
+@given(unrelated=_VALUES)
+def test_rule_npx_allows_an_unrelated_literal_command_word(unrelated: str) -> None:
+    """No false positive: a plain literal command word that is not
+    ``npx`` is never flagged by this rule."""
+    assume(unrelated.lower() != "npx")
+    segments = [[unrelated, "arg"]]
+    assert checker._rule_npx(segments, {}, {}) is None
+
+
 _SHORT_FLAG_WITH_VALUE = st.tuples(st.sampled_from(["-c", "-C"]), st.sampled_from(["cfgkey=cfgval", "/tmp/some/repo"]))
 _LONG_FLAG_ALONE = st.sampled_from(["--git-dir=/tmp/x/.git", "--no-pager", "--work-tree=/tmp/y"])
 _GIT_GLOBAL_FLAG_GROUP = st.one_of(_SHORT_FLAG_WITH_VALUE.map(list), _LONG_FLAG_ALONE.map(lambda f: [f]))
@@ -337,18 +389,29 @@ _DEFAULT_CLAUSE_OPERATORS = st.sampled_from([":-", "-", ":=", "="])
 
 @_PROPERTIES
 @given(name=_IDENTIFIERS, op=_DEFAULT_CLAUSE_OPERATORS, default=_VALUES)
-def test_default_clause_literal_extracts_the_default_text(name: str, op: str, default: str) -> None:
-    """Model-based: every one of the four default-value operator shapes
-    yields the literal default text, unchanged."""
-    assert checker._default_clause_literal(f"${{{name}{op}{default}}}") == default
+def test_substitute_var_refs_candidates_extracts_the_default_text(name: str, op: str, default: str) -> None:
+    """Model-based: a whole-token `${NAME<op>default}` construct, for
+    every one of the four default-value operator shapes, yields the
+    literal default text as its sole candidate reading when NAME itself
+    is never assigned. Regression pin for the now-removed
+    `_default_clause_literal` helper's own coverage -- its behavior lives
+    on inside this function's own default-clause branch (round 11, issue
+    #1326: B1a/B1b/`_rule_gh_any`/`_rule_git_push`/`_rule_npx`/
+    `_rule_bare_install`/`_rule_fetch_exec` now all call this function
+    directly instead of that narrower, whole-token-anchored helper)."""
+    assert checker._substitute_var_refs_candidates(f"${{{name}{op}{default}}}", {}, {}) == [default]
 
 
 @_PROPERTIES
-@given(name=_IDENTIFIERS)
-def test_default_clause_literal_none_for_a_bare_braced_reference(name: str) -> None:
-    """No false positive: a bare `${NAME}` reference (no operator at all)
-    is not a default-clause construct."""
-    assert checker._default_clause_literal(f"${{{name}}}") is None
+@given(prefix=_IDENTIFIERS, name=_IDENTIFIERS, default=_VALUES)
+def test_substitute_var_refs_candidates_extracts_a_fused_default_clause(prefix: str, name: str, default: str) -> None:
+    """Model-based regression pin for the eleventh-round finding: a
+    default-clause construct FUSED with literal text in the SAME token
+    (e.g. `in${NAME:-stall}`) still contributes a reconstructed candidate
+    with the literal prefix preserved -- the whole-token-anchored
+    `_default_clause_literal` this replaced could never see this shape at
+    all."""
+    assert checker._substitute_var_refs_candidates(f"{prefix}${{{name}:-{default}}}", {}, {}) == [prefix + default]
 
 
 @_PROPERTIES
@@ -410,33 +473,13 @@ def test_rule_git_push_detects_a_default_clause_git_and_push(git_var: str, push_
 
 @_PROPERTIES
 @given(name=_IDENTIFIERS, value=_VALUES)
-def test_resolve_bare_var_resolves_a_bare_reference(name: str, value: str) -> None:
-    """Model-based: `_resolve_bare_var` resolves both the unbraced `$NAME`
-    and braced `${NAME}` forms to NAME's own assigned (lowercased) value
-    -- ported from the sibling main-hook module in the tenth round (issue
-    #1326) so `_resolve_dynamic_token` has a bare-reference reading to
-    try first."""
-    name_to_value = {name: value.lower()}
-    assert checker._resolve_bare_var(f"${name}", name_to_value) == value.lower()
-    assert checker._resolve_bare_var(f"${{{name}}}", name_to_value) == value.lower()
-
-
-@_PROPERTIES
-@given(name=_IDENTIFIERS)
-def test_resolve_bare_var_none_when_unassigned(name: str) -> None:
-    """A bare reference to a variable with no recorded assignment resolves
-    to None -- it must never be treated as some other reading."""
-    assert checker._resolve_bare_var(f"${name}", {}) is None
-
-
-@_PROPERTIES
-@given(name=_IDENTIFIERS, value=_VALUES)
 def test_assigned_raw_values_captures_name_equals_value_rhs_case_preserved(name: str, value: str) -> None:
     """Model-based: `_assigned_raw_values` maps a bare assignment token's
     name to its RHS with the ORIGINAL case preserved -- unlike
     `_assigned_literals`, which lowercases it. `${!NAME}` indirect
     reference resolution needs a case-correct key for its first-level
-    lookup (issue #1326, tenth round; see `_resolve_indirect_ref`)."""
+    lookup (issue #1326, tenth round; see
+    `_substitute_var_refs_candidates`'s own indirect-reference branch)."""
     result = checker._assigned_raw_values([f"{name}={value}"])
     assert result.get(name) == value
 
@@ -452,47 +495,123 @@ def test_assigned_raw_values_ignores_a_dynamic_rhs_token(name: str, value: str) 
 
 @_PROPERTIES
 @given(name1=_IDENTIFIERS, name2=_IDENTIFIERS, value=_VALUES)
-def test_resolve_indirect_ref_two_level_lookup(name1: str, name2: str, value: str) -> None:
+def test_substitute_var_refs_candidates_resolves_an_indirect_ref_two_level_lookup(
+    name1: str, name2: str, value: str
+) -> None:
     """Model-based regression pin for the tenth-round finding: `${!NAME1}`
     resolves via NAME1's own (case-preserved) value naming NAME2, whose
     own (lowercased) assigned value is the final result -- confirmed live
     against real bash argv expansion (`GREF=G; G=gh; ${!GREF} pr merge 1`
-    resolves to a genuine `gh pr merge 1`)."""
+    resolves to a genuine `gh pr merge 1`). Regression pin for the
+    now-removed `_resolve_indirect_ref` helper's own coverage -- its
+    behavior lives on inside this function's own indirect-reference
+    branch (round 11, issue #1326)."""
     assume(name1 != name2)
     name_to_raw_value = {name1: name2}
     name_to_value = {name2: value.lower()}
-    assert checker._resolve_indirect_ref(f"${{!{name1}}}", name_to_value, name_to_raw_value) == value.lower()
+    assert checker._substitute_var_refs_candidates(f"${{!{name1}}}", name_to_value, name_to_raw_value) == [
+        value.lower()
+    ]
 
 
 @_PROPERTIES
 @given(name=_IDENTIFIERS)
-def test_resolve_indirect_ref_none_when_first_level_unresolved(name: str) -> None:
+def test_substitute_var_refs_candidates_empty_when_indirect_ref_first_level_unresolved(name: str) -> None:
     """When NAME was never assigned at all, the first-level lookup fails
-    and the whole indirect reference resolves to None."""
-    assert checker._resolve_indirect_ref(f"${{!{name}}}", {}, {}) is None
+    and the whole `${!NAME}` token cannot be soundly resolved at all."""
+    assert checker._substitute_var_refs_candidates(f"${{!{name}}}", {}, {}) == []
 
 
 @_PROPERTIES
-@given(name=_IDENTIFIERS)
-def test_resolve_indirect_ref_none_for_a_bare_reference(name: str) -> None:
-    """A plain `${NAME}`/`$NAME` reference is not the `${!NAME}` indirect
-    shape at all -- `_resolve_indirect_ref` must return None rather than
-    (incorrectly) treating it as one."""
-    assert checker._resolve_indirect_ref(f"${{{name}}}", {name: "gh"}, {name: "gh"}) is None
-    assert checker._resolve_indirect_ref(f"${name}", {name: "gh"}, {name: "gh"}) is None
+@given(h_ref=_IDENTIFIERS, h_var=_IDENTIFIERS, suffix=_VALUES)
+def test_substitute_var_refs_candidates_resolves_a_fused_indirect_ref(h_ref: str, h_var: str, suffix: str) -> None:
+    """Model-based regression pin for the real bypass found live by Step 8
+    independent review, eleventh round (issue #1326): an `${!NAME}`
+    indirect reference FUSED with literal text in the SAME token (e.g.
+    `g${!HREF}`) still contributes a reconstructed candidate with the
+    literal prefix preserved -- confirmed live via real bash argv
+    expansion that `g${!HSUF}` resolves to a genuine `gh` when HSUF names
+    a variable assigned "h". The whole-token-anchored `_resolve_indirect_
+    ref` this replaced could never see this shape at all, since the token
+    as a whole is not exactly one `${!NAME}` construct."""
+    assume(h_ref != h_var)
+    name_to_raw_value = {h_ref: h_var}
+    name_to_value = {h_var: suffix.lower()}
+    assert checker._substitute_var_refs_candidates(f"g${{!{h_ref}}}", name_to_value, name_to_raw_value) == [
+        "g" + suffix.lower()
+    ]
 
 
 @_PROPERTIES
-@given(name=_IDENTIFIERS, value=_VALUES)
-def test_resolve_dynamic_token_tries_bare_var_then_default_clause_then_indirect_ref(name: str, value: str) -> None:
-    """Model-based regression pin for the tenth-round finding: this
-    unifying helper -- shared by `_rule_npx`/`_rule_bare_install`/
-    `_rule_fetch_exec`, which previously had NO indirection handling at
-    all -- resolves a bare reference, a `${NAME:-default}` default
-    clause, and bash's own `${!NAME}` indirect reference alike; a
-    non-dynamic literal token resolves to None (it is the rules' own
-    literal-text check that handles that case, not this helper)."""
-    name_to_value = {name: value.lower()}
-    assert checker._resolve_dynamic_token(f"${name}", name_to_value, {}) == value.lower()
-    assert checker._resolve_dynamic_token(f"${{{name}:-{value}}}", {}, {}) == value
-    assert checker._resolve_dynamic_token(value, {}, {}) is None
+@given(suf_ref=_IDENTIFIERS, suf_var=_IDENTIFIERS)
+def test_rule_b1a_detects_a_verb_fused_with_a_literal_prefix_via_indirect_ref(suf_ref: str, suf_var: str) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, eleventh round (issue #1326): a watched verb
+    reconstructed by fusing literal text with an `${!NAME}` indirect
+    reference in the SAME token (`in${!SUFREF}` where SUFREF resolves,
+    two levels, to "stall") is still caught -- confirmed via real bash
+    argv expansion that `$T in${!SUFREF} foo` resolves to a genuine `pip
+    install foo`. The whole-token-anchored helpers this rule used through
+    the tenth round could never see this shape at all."""
+    assume(suf_ref != suf_var)
+    name_to_raw_value = {suf_ref: suf_var}
+    name_to_value = {suf_var: "stall"}
+    seg = ["$T", f"in${{!{suf_ref}}}", "foo"]
+    assert checker._rule_b1a_dynamic_word_same_segment_verb(
+        seg, checker._WATCHED_VERBS, name_to_value, name_to_raw_value
+    )
+
+
+@_PROPERTIES
+@given(t_ref=_IDENTIFIERS, t_var=_IDENTIFIERS, v_ref=_IDENTIFIERS, v_var=_IDENTIFIERS)
+def test_rule_b1b_detects_a_tool_and_verb_each_fused_with_a_literal_prefix(
+    t_ref: str, t_var: str, v_ref: str, v_var: str
+) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, eleventh round (issue #1326): both the tool AND
+    the verb, each reconstructed by fusing literal text with a resolved
+    reference in its OWN token, are still caught. Neither "pip" nor
+    "install" is ever a plain literal token here -- B1b only ever
+    collects values from dynamic, resolved tokens, so both fused
+    reconstructions must succeed independently for this to fire."""
+    assume(len({t_ref, t_var, v_ref, v_var}) == 4)
+    name_to_raw_value = {t_ref: t_var, v_ref: v_var}
+    name_to_value = {t_var: "ip", v_var: "stall"}
+    seg = [f"p${{!{t_ref}}}", f"in${{!{v_ref}}}"]
+    assert checker._rule_b1b_dynamic_word_assigned_tool_and_verb(
+        seg, name_to_value, checker._WATCHED_VERBS, name_to_raw_value
+    )
+
+
+@_PROPERTIES
+@given(h_ref=_IDENTIFIERS, h_var=_IDENTIFIERS)
+def test_rule_gh_any_detects_gh_fused_with_a_literal_prefix(h_ref: str, h_var: str) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, eleventh round (issue #1326): `gh` reconstructed
+    by fusing a literal `g` prefix with an `${!NAME}` indirect reference
+    in the SAME token (`g${!HSUF}` where HSUF resolves, two levels, to
+    "h") is still caught -- confirmed live via real bash argv expansion
+    that `g${!HSUF} pr merge 1` resolves to a genuine `gh pr merge 1`."""
+    assume(h_ref != h_var)
+    name_to_raw_value = {h_ref: h_var}
+    name_to_value = {h_var: "h"}
+    segments = [[f"g${{!{h_ref}}}", "pr", "merge", "1"]]
+    assert checker._rule_gh_any(segments, name_to_value, name_to_raw_value) is not None
+
+
+@_PROPERTIES
+@given(g_ref=_IDENTIFIERS, g_var=_IDENTIFIERS, p_ref=_IDENTIFIERS, p_var=_IDENTIFIERS)
+def test_rule_git_push_detects_git_and_push_each_fused_with_a_literal_prefix(
+    g_ref: str, g_var: str, p_ref: str, p_var: str
+) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, eleventh round (issue #1326): both `git` AND
+    `push`, each reconstructed by fusing literal text with a resolved
+    reference in its OWN token, are still caught -- confirmed live via
+    real bash argv expansion that `gi${!GSUF} pu${!PSUF} origin main`
+    resolves to a genuine `git push origin main`."""
+    assume(len({g_ref, g_var, p_ref, p_var}) == 4)
+    name_to_raw_value = {g_ref: g_var, p_ref: p_var}
+    name_to_value = {g_var: "t", p_var: "sh"}
+    segments = [[f"gi${{!{g_ref}}}", f"pu${{!{p_ref}}}", "origin", "main"]]
+    assert checker._rule_git_push(segments, name_to_value, name_to_raw_value) is not None

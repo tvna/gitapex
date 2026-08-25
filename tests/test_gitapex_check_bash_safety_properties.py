@@ -252,7 +252,7 @@ def test_gh_api_method_dynamic_value_extracts_the_fused_or_separate_shape(var: s
         index = 3
     extracted = checker._gh_api_method_dynamic_value(seg, index, seg[index])
     assert extracted is not None
-    assert var in checker._VAR_REF_RE.findall(extracted)
+    assert f"${var}" in extracted
 
 
 @_PROPERTIES
@@ -822,26 +822,28 @@ _DEFAULT_CLAUSE_OPERATORS = st.sampled_from([":-", "-", ":=", "="])
 
 @_PROPERTIES
 @given(name=_IDENTIFIERS, op=_DEFAULT_CLAUSE_OPERATORS, default=_VALUES)
-def test_default_clause_literal_extracts_the_default_text(name: str, op: str, default: str) -> None:
-    """Model-based: every one of the four default-value operator shapes
-    yields the literal default text, unchanged."""
-    assert checker._default_clause_literal(f"${{{name}{op}{default}}}") == default
+def test_substitute_var_refs_candidates_extracts_the_default_text(name: str, op: str, default: str) -> None:
+    """Model-based: a whole-token `${NAME<op>default}` construct, for
+    every one of the four default-value operator shapes, yields the
+    literal default text as its sole candidate reading when NAME itself
+    is never assigned. Regression pin for the now-removed
+    `_default_clause_literal` helper's own coverage -- its behavior lives
+    on inside this function's own default-clause branch (round 11, issue
+    #1326: B1a/B1b now call this function directly instead of that
+    narrower, whole-token-anchored helper)."""
+    assert checker._substitute_var_refs_candidates(f"${{{name}{op}{default}}}", {}, {}) == [default]
 
 
 @_PROPERTIES
-@given(name=_IDENTIFIERS)
-def test_default_clause_literal_none_for_a_bare_braced_reference(name: str) -> None:
-    """No false positive: a bare `${NAME}` reference (no operator at all)
-    is not a default-clause construct."""
-    assert checker._default_clause_literal(f"${{{name}}}") is None
-
-
-@_PROPERTIES
-@given(var=_IDENTIFIERS)
-def test_default_clause_literal_none_for_a_bare_unbraced_reference(var: str) -> None:
-    """No false positive: an unbraced `$NAME` reference is not a
-    default-clause construct."""
-    assert checker._default_clause_literal(f"${var}") is None
+@given(prefix=_IDENTIFIERS, name=_IDENTIFIERS, default=_VALUES)
+def test_substitute_var_refs_candidates_extracts_a_fused_default_clause(prefix: str, name: str, default: str) -> None:
+    """Model-based regression pin for the eleventh-round finding: a
+    default-clause construct FUSED with literal text in the SAME token
+    (e.g. `in${NAME:-stall}`) still contributes a reconstructed candidate
+    with the literal prefix preserved -- the whole-token-anchored
+    `_default_clause_literal` this replaced could never see this shape at
+    all, since the token as a whole is not exactly one construct."""
+    assert checker._substitute_var_refs_candidates(f"{prefix}${{{name}:-{default}}}", {}, {}) == [prefix + default]
 
 
 @_PROPERTIES
@@ -908,6 +910,49 @@ def test_rule_b1a_allows_an_unrelated_default_clause_argument(tool_var: str) -> 
     must stay allowed."""
     seg = [f"${{{tool_var}:-cat}}", "${OTHER:-somefile.txt}"]
     assert not checker._rule_b1a_dynamic_word_same_segment_verb(seg, checker._WATCHED_VERBS, {}, {})
+
+
+@_PROPERTIES
+@given(suf_ref=_IDENTIFIERS, suf_var=_IDENTIFIERS)
+def test_rule_b1a_detects_a_verb_fused_with_a_literal_prefix_via_indirect_ref(suf_ref: str, suf_var: str) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, eleventh round (issue #1326): a watched verb
+    reconstructed by fusing literal text with an `${!NAME}` indirect
+    reference in the SAME token (`in${!SUFREF}` where SUFREF resolves,
+    two levels, to "stall") is still caught -- confirmed via real bash
+    argv expansion that `$T in${!SUFREF} foo` resolves to a genuine `uv
+    install foo`. The whole-token-anchored helpers this rule used through
+    the tenth round could never see this shape at all."""
+    assume(suf_ref != suf_var)
+    name_to_raw_value = {suf_ref: suf_var}
+    name_to_value = {suf_var: "stall"}
+    seg = ["$T", f"in${{!{suf_ref}}}", "foo"]
+    assert checker._rule_b1a_dynamic_word_same_segment_verb(
+        seg, checker._WATCHED_VERBS, name_to_value, name_to_raw_value
+    )
+
+
+@_PROPERTIES
+@given(h_ref=_IDENTIFIERS, h_var=_IDENTIFIERS, m_ref=_IDENTIFIERS, m_var=_IDENTIFIERS)
+def test_rule_b1b_detects_a_tool_and_verb_each_fused_with_a_literal_prefix(
+    h_ref: str, h_var: str, m_ref: str, m_var: str
+) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, eleventh round (issue #1326): both the tool AND
+    the verb, each reconstructed by fusing literal text with a resolved
+    reference in its OWN token, are still caught -- confirmed via real
+    bash argv expansion (`g${!HREF} pr m${!MREF} 1` resolves to a genuine
+    `gh pr merge 1`). Neither "gh" nor "merge" is ever a plain literal
+    token here -- B1b (unlike B1a) only ever collects values from
+    dynamic, resolved tokens, so both fused reconstructions must succeed
+    independently for this to fire."""
+    assume(len({h_ref, h_var, m_ref, m_var}) == 4)
+    name_to_raw_value = {h_ref: h_var, m_ref: m_var}
+    name_to_value = {h_var: "h", m_var: "erge"}
+    seg = [f"g${{!{h_ref}}}", "pr", f"m${{!{m_ref}}}"]
+    assert checker._rule_b1b_dynamic_word_assigned_tool_and_verb(
+        seg, name_to_value, checker._WATCHED_VERBS, name_to_raw_value
+    )
 
 
 @_PROPERTIES

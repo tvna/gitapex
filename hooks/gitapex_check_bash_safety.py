@@ -236,6 +236,50 @@ kind (`N=npx; $N left-pad` bypassed npx detection entirely) -- closed
 there via a new unifying `_resolve_dynamic_token` helper (bare variable,
 default clause, or `${!NAME}`, in that order) shared by all three rules.
 
+Closed by eleventh-round Step 8 independent review: rounds 9 and 10 each
+added a NARROW, whole-token-anchored resolver to B1a/B1b
+(`_default_clause_literal`, `_resolve_indirect_ref`) that requires the
+ENTIRE token to be exactly one recognized construct -- sound for that
+shape alone, but blind to the same construct FUSED with literal text in
+the same token (`in${!SUFREF}`, reconstructing to "install" once SUFREF
+resolves two levels to "stall"). `_substitute_var_refs_candidates`
+(the gh-api value path's own resolver since round 8) already handles
+every reference shape this module recognizes -- bare, default-clause, or
+`${!NAME}` -- FUSED or not, via its own non-anchored regex; B1a/B1b
+simply never called it, instead re-deriving a narrower subset of the
+same resolution logic through two anchored point-fixes. Confirmed live
+via real bash argv expansion: `T=uv; SUFNAME=SUFVAL; SUFVAL=stall; $T
+in${!SUFNAME} foo` resolves to a genuine `uv install foo`, and (fusing
+BOTH the tool and the verb, one per token) `HSUF=HVAL; HVAL=h; MSUF=MVAL;
+MVAL=erge; g${!HSUF} pr m${!MSUF} 1` resolves to a genuine `gh pr merge
+1` -- both fully bypassed B1a/B1b before this fix. Closed by having B1a
+and B1b call `_substitute_var_refs_candidates` directly for every dynamic
+token, the same primitive the gh-api rules already relied on, rather than
+maintaining a second, narrower resolution path. This made
+`_default_clause_literal` and the module-level `_VAR_REF_RE` (B1b's own
+prior bare-reference collector, superseded by the same call) fully
+unused, so both were removed rather than left as dead code --
+`_resolve_bare_var` and `_resolve_indirect_ref` remain in active use by
+the gh-api flag-NAME resolution path, which needs to test a token as a
+single whole-or-nothing shape (a flag name is never fused with other
+text the way a value can be), so neither was touched. The identical
+finding and fix were ported to the self-contained duplicate at
+skills/executing-a-branch-plan/scripts/gitapex_check_task_bash_safety.py,
+which additionally had NO general fused-token resolver of its own at all
+(only the tenth round's narrow `_resolve_dynamic_token`, itself built
+from the same kind of anchored point-fixes) -- `_substitute_var_refs_
+candidates` (and its own supporting `_VAR_REF_FULL_RE`/
+`_unbraced_ref_options`/`_MAX_SUBSTITUTION_CANDIDATES`) was ported there
+for the first time this round, and every rule that previously called
+`_resolve_dynamic_token` or inlined the default-clause-plus-indirect-ref
+pattern (`_rule_bare_install`, `_rule_fetch_exec`, `_rule_npx`,
+`_rule_gh_any`, `_rule_git_push`, B1a, B1b) now calls the ported function
+directly -- which also made `_resolve_dynamic_token`, `_resolve_bare_var`,
+`_default_clause_literal`, `_resolve_indirect_ref`, and `_VAR_REF_RE` all
+fully unused there (unlike this module, the task file's `gh`/git-push
+detection is a blanket deny with no flag-NAME-shaped sub-case that would
+still need a whole-token-only resolver), so all five were removed too.
+
 Deliberately stdlib-only (shlex, re, json) -- no new third-party
 dependency, matching this repository's declarative module-management
 convention and python3's already-accepted-hook-dependency status (see
@@ -257,12 +301,6 @@ from typing import NamedTuple
 _SINGLE_OPS = {";", "|", "&", "(", ")", "\n"}
 _MULTI_OPS = {"&&", "||"}
 _ASSIGN_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
-# Matches the variable name inside `$NAME`/`${NAME`/`${NAME:-default}`-style
-# references -- used to confirm a dynamic token actually references a
-# specific assigned variable, rather than merely testing whether some
-# unrelated assignment anywhere in the whole command happens to look like a
-# tool/verb (see _rule_b1b_dynamic_word_assigned_tool_and_verb's docstring).
-_VAR_REF_RE = re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)")
 # Matches a token that is PURELY a single variable reference with nothing
 # else fused onto it (`$F`, `${F}`) -- deliberately excludes every other
 # dynamic shape (`${F}x`, `$F$G`, `` `cmd` ``) so resolving it stays the
@@ -281,33 +319,6 @@ def _resolve_bare_var(token: str, name_to_value: dict[str, str]) -> str | None:
     if not match:
         return None
     return name_to_value.get(match.group(1))
-
-
-# Matches a token that is EXACTLY one bash `${NAME:-default}`/
-# `${NAME-default}`/`${NAME:=default}`/`${NAME=default}` construct
-# (anchored -- the same "exactly one reference, nothing else" scoping
-# `_BARE_VAR_RE` already applies to a bare reference) -- captures just the
-# literal DEFAULT text, group 2. See _default_clause_literal below.
-_DEFAULT_CLAUSE_RE = re.compile(r"^\$\{([A-Za-z_][A-Za-z0-9_]*):?[-=](.*)\}$")
-
-
-def _default_clause_literal(token: str) -> str | None:
-    """The literal DEFAULT-VALUE text of TOKEN, when TOKEN is EXACTLY one
-    bash `${NAME:-default}`/`${NAME-default}`/`${NAME:=default}`/
-    `${NAME=default}` construct -- None otherwise. Bash evaluates this
-    construct to DEFAULT whenever NAME is unset (or, for the
-    `:`-prefixed forms, empty): a zero-assignment mechanism for embedding
-    literal text directly in a token -- `${NEVER_SET:-uv}
-    ${NEVER_SET2:-install} foo` needs no `NAME=` assignment anywhere in
-    the command at all to resolve, at real bash's own runtime, to a real
-    `uv install foo`. Found live by Step 8 independent review, ninth
-    round (issue #1326): none of `_rule_b1a_dynamic_word_same_segment_
-    verb`/`_rule_b1b_dynamic_word_assigned_tool_and_verb` (both keyed off
-    either a literal token text or a referenced variable's OWN assigned
-    value) ever looked at a token's own embedded default-clause text, so
-    this fully bypassed even the most basic install-verb detection."""
-    match = _DEFAULT_CLAUSE_RE.match(token)
-    return match.group(2) if match else None
 
 
 # Matches a token that is EXACTLY bash's own `${!NAME}` indirect-reference
@@ -1132,92 +1143,100 @@ def _is_git_push_segment(seg: list[str]) -> bool:
 def _rule_b1a_dynamic_word_same_segment_verb(
     seg: list[str], verb_set: set[str], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
 ) -> bool:
-    """A segment whose command word is dynamic, with a literal watched-verb
-    token present anywhere else in that SAME segment (e.g.
-    `$T install foo` -- `install` sits right there). Scoped to one segment
-    on purpose, so it cannot combine with an unrelated verb-shaped word in
-    a different, unrelated segment.
+    """A segment whose command word is dynamic, with a watched-verb token
+    present anywhere else in that SAME segment (e.g. `$T install foo` --
+    `install` sits right there, and `$T in${!SUFNAME} foo` -- `install`
+    is a FUSED reconstruction of a literal prefix plus a resolved
+    reference). Scoped to one segment on purpose, so it cannot combine
+    with an unrelated verb-shaped word in a different, unrelated segment.
 
-    A verb hidden in a `${NEVER_SET:-install}`-shaped token's own DEFAULT
-    text counts too (via `_default_clause_literal`), not just a plain
-    literal token -- found live by Step 8 independent review, ninth round
-    (issue #1326): `${NEVER_SET:-uv} ${NEVER_SET2:-install} foo` fully
-    bypassed this rule (and B1b below) before this fix, needing NO
-    variable assignment anywhere in the command at all. A verb hidden
-    behind bash's own `${!NAME}` indirect reference (via
-    `_resolve_indirect_ref`) counts too -- found live by Step 8
-    independent review, tenth round (issue #1326): `TOOLREF=T; T=uv;
-    VERBREF=V; V=install; ${!TOOLREF} ${!VERBREF} foo` fully bypassed
-    this rule (and B1b below) before this fix."""
+    Resolves every dynamic token via `_substitute_var_refs_candidates`
+    (bare reference, default clause, or `${!NAME}` indirect reference,
+    including any of those FUSED with surrounding literal text in the
+    same token) rather than the narrower, whole-token-anchored
+    `_default_clause_literal`/`_resolve_indirect_ref` this rule used
+    directly through the ninth and tenth rounds. Found live by Step 8
+    independent review, eleventh round (issue #1326): both of those
+    anchored helpers require the ENTIRE token to be exactly one
+    construct, so a verb reconstructed by fusing literal text with a
+    default-clause or indirect reference in the SAME token --
+    `T=uv; $T in${!SUFNAME} foo` where `SUFNAME` resolves (two levels)
+    to `stall` -- resolves, at real bash's own runtime (confirmed via
+    `bash -c` argv expansion), to a genuine `uv install foo`, but
+    contributed NOTHING to this rule's own verb collection before this
+    fix, since neither helper's anchored `^...$` match could ever fire
+    on a token with extra literal text fused onto the construct. Any
+    candidate set too large to enumerate soundly (see
+    `_MAX_SUBSTITUTION_CANDIDATES`) is treated as an unresolved-but-
+    plausible match -- fail closed, the same posture
+    `_write_method_candidate_hit` already takes for the gh-api-write
+    path this same substitution primitive already served."""
     if not seg or not _is_dynamic(seg[0]):
         return False
     literals = {t.lower() for t in seg[1:] if not _is_dynamic(t)}
     for tok in seg[1:]:
-        default_text = _default_clause_literal(tok)
-        if default_text is not None:
-            literals.add(default_text.lower())
-        indirect_value = _resolve_indirect_ref(tok, name_to_value, name_to_raw_value)
-        if indirect_value is not None:
-            literals.add(indirect_value.lower())
+        if not _is_dynamic(tok):
+            continue
+        candidates = _substitute_var_refs_candidates(tok, name_to_value, name_to_raw_value)
+        if candidates is None:
+            return True
+        literals.update(candidate.lower() for candidate in candidates)
     return bool(literals & verb_set)
 
 
 def _rule_b1b_dynamic_word_assigned_tool_and_verb(
     seg: list[str], name_to_value: dict[str, str], verb_set: set[str], name_to_raw_value: dict[str, str]
 ) -> bool:
-    """A segment with at least one dynamic token, where a variable
-    actually REFERENCED by one of this segment's own dynamic tokens (not
-    plain arguments -- see _assigned_literals) was assigned a watched tool
-    name, and a variable referenced by one of this segment's own dynamic
-    tokens was assigned a watched verb name (e.g. `A=uv; B=install; $A $B
-    foo` -- both `$A` and `$B` are dynamic tokens in the SAME segment,
-    referencing A and B respectively).
+    """A segment with at least one dynamic token, where the segment's own
+    dynamic tokens, once resolved, together supply both a watched tool
+    name and a watched verb name (e.g. `A=uv; B=install; $A $B foo` --
+    both `$A` and `$B` are dynamic tokens in the SAME segment, resolving
+    to "uv" and "install" respectively).
 
-    Scoped to the variable names THIS segment's own dynamic tokens
-    actually reference -- not "some assignment anywhere in the whole
-    command happens to look like a tool and some unrelated assignment
-    happens to look like a verb," which is unsound: found live by Step 8
-    independent review (issue #1326), `TOOL=uv; VERB=install; echo done;
-    X=$(mktemp); "$X" --help` was wrongly denied even though `$X`
-    references neither TOOL nor VERB.
+    Resolves every dynamic token via `_substitute_var_refs_candidates`
+    (bare reference, default clause, or `${!NAME}` indirect reference,
+    including any of those FUSED with surrounding literal text in the
+    same token, e.g. `in${!SUFNAME}` reconstructing to "install") --
+    scoped to what THIS segment's own dynamic tokens actually resolve to,
+    not "some assignment anywhere in the whole command happens to look
+    like a tool and some unrelated assignment happens to look like a
+    verb," which is unsound: found live by Step 8 independent review
+    (issue #1326), `TOOL=uv; VERB=install; echo done; X=$(mktemp); "$X"
+    --help` was wrongly denied even though `$X` references neither TOOL
+    nor VERB.
 
-    `seg[0]` (the command word) must itself be dynamic -- unchanged from
-    before this fix -- or a dynamic argument to an otherwise-literal,
-    harmless command (e.g. `echo $A $B` where A=uv, B=install just prints
-    text, it does not invoke anything) would be denied for constructing
-    no dynamic command at all.
+    `seg[0]` (the command word) must itself be dynamic, or a dynamic
+    argument to an otherwise-literal, harmless command (e.g. `echo $A $B`
+    where A=uv, B=install just prints text, it does not invoke anything)
+    would be denied for constructing no dynamic command at all.
 
-    A tool or verb embedded directly as a `${NEVER_SET:-uv}`-shaped
-    token's own DEFAULT text (via `_default_clause_literal`) counts as a
-    "value" here too, alongside a referenced variable's own assigned
-    value -- found live by Step 8 independent review, ninth round (issue
-    #1326), the same finding as `_rule_b1a_dynamic_word_same_segment_
-    verb`'s own fix above: `${NEVER_SET:-uv} ${NEVER_SET2:-install} foo`
-    resolves (real bash) to a genuine `uv install foo` with no `NAME=`
-    assignment anywhere in the command, and was wrongly allowed since
-    neither `NEVER_SET` nor `NEVER_SET2` was ever assigned for the
-    prior, assignment-only version of this rule to look up. A tool or
-    verb hidden behind bash's own `${!NAME}` indirect reference (via
-    `_resolve_indirect_ref`) counts too -- found live by Step 8
-    independent review, tenth round (issue #1326): see
-    `_rule_b1a_dynamic_word_same_segment_verb`'s own tenth-round fix."""
+    Found live by Step 8 independent review, eleventh round (issue
+    #1326): the prior version's narrower, whole-token-anchored
+    `_default_clause_literal`/`_resolve_indirect_ref` calls (plus a
+    separate, similarly unanchored-but-narrower `_VAR_REF_RE`-based
+    bare-reference collection) each required the ENTIRE token to be
+    exactly one recognized construct -- a verb or tool reconstructed by
+    fusing literal text with a default-clause or indirect reference in
+    the SAME token (`T=uv; $T in${!SUFNAME} foo`, `SUFNAME` resolving two
+    levels to "stall") resolves, at real bash's own runtime (confirmed
+    via `bash -c` argv expansion), to a genuine `uv install foo`, but
+    contributed NOTHING to any of those three collection mechanisms.
+    `_substitute_var_refs_candidates` already handles every one of those
+    reference shapes -- fused or not -- uniformly, so this rule (like
+    B1a above) now calls it directly instead of re-deriving a narrower
+    subset of the same resolution logic. Any candidate set too large to
+    enumerate soundly is treated as an unresolved-but-plausible match --
+    fail closed, matching B1a's own posture."""
     if not seg or not _is_dynamic(seg[0]):
         return False
-    referenced: set[str] = set()
     values: set[str] = set()
     for tok in seg:
         if not _is_dynamic(tok):
             continue
-        referenced |= set(_VAR_REF_RE.findall(tok))
-        default_text = _default_clause_literal(tok)
-        if default_text is not None:
-            values.add(default_text.lower())
-        indirect_value = _resolve_indirect_ref(tok, name_to_value, name_to_raw_value)
-        if indirect_value is not None:
-            values.add(indirect_value.lower())
-    if not referenced and not values:
-        return False
-    values |= {name_to_value[name] for name in referenced if name in name_to_value}
+        candidates = _substitute_var_refs_candidates(tok, name_to_value, name_to_raw_value)
+        if candidates is None:
+            return True
+        values.update(candidate.lower() for candidate in candidates)
     return bool(values & _WATCHED_TOOLS) and bool(values & verb_set)
 
 
