@@ -333,7 +333,8 @@ not re-derived from scratch each time.
   -- always as a draft to re-check, not an unconditional read (Step 9).
 - **`fixing-a-reported-issue` (retired):** that skill used to start
   from a bare defect report and reproduce/fix it directly, authoring
-  no issues itself. It was retired per issue #1275; its reproduce/fix
+  no issues itself. It was retired per
+  https://github.com/tvna/gitapex/issues/1275; its reproduce/fix
   procedure now lives inside `planning-a-branch-from-an-issue`'s own
   bare-defect-report path. This skill's `defect (issue not yet filed)`
   type (see Defect (issue not yet filed) above) covers the one sliver

@@ -112,10 +112,11 @@ Pattern: **Facts** -> **Assumptions** -> **Acceptance Criteria Map** ->
 
 ## Worked example: bare defect-report issue
 
-Issue #501, titled "Search returns duplicate results when a query matches
-both title and body." Body: "Steps to reproduce: search for a term present
-in both fields. Duplicate rows appear in results." No interpretation, no
-planned ops, no acceptance-criteria list -- a bare defect report.
+An already-open issue titled "Search returns duplicate results when a
+query matches both title and body." Body: "Steps to reproduce: search for
+a term present in both fields. Duplicate rows appear in results." No
+interpretation, no planned ops, no acceptance-criteria list -- a bare
+defect report.
 
 **Reproduction succeeds.** Steps 1-3 extract the facts above; nothing in
 the comment thread narrows them. Step 4 recognizes the bare-defect-report
@@ -132,7 +133,7 @@ question needed (the fix is unambiguous), ACM disclosed in the PR body.
 
 **Reproduction fails** (same issue, different world): running the same
 query against the real search path returns no duplicates. Step 4's
-reproduction fails, so stop there -- comment on issue #501 stating exactly
+reproduction fails, so stop there -- comment on the issue stating exactly
 what was tried (the query, the endpoint, the environment) and that no
 duplicates appeared. Do not build an Acceptance Criteria Map, do not
 propose a branch. No PR follows this outcome.

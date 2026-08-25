@@ -10,7 +10,7 @@ spec:
   skillDependencies:
     requires: []
     relatedTo:
-      - drafting-an-acm-issue
+      - drafting-issues
   executionRequirements:
     tools:
       read:
@@ -28,4 +28,4 @@ spec:
       summary: "Declared spec.executionRequirements (W3 third slice, https://github.com/tvna/gitapex/issues/307): reads project context; writes the design doc and companion screen files; shells out to start-server.sh/stop-server.sh. No network field: unlike the vendored obra/superpowers companion this was derived from, this rewrite fetches no third-party host -- its HTTP listener is local-only and its page attribution is text-only."
     - kind: caveat
       anchor: "https://github.com/tvna/gitapex/issues/1163"
-      summary: "skillDependencies.relatedTo names only drafting-an-acm-issue, this skill's own terminal-step fallback target. clairvoyance and architecture-tradeoff are vendored under .claude/skills/ (a different apm package, tvna/clairvoyance) and drafting-issues does not exist yet -- neither resolves as a skills/*/ sibling."
+      summary: "skillDependencies.relatedTo names only drafting-issues (renamed from drafting-an-acm-issue per https://github.com/tvna/gitapex/issues/1275), this skill's own terminal-step preferred handoff target -- the SKILL.md body's own fallback name, drafting-an-acm-issue, no longer resolves as a sibling either, now that the rename has landed. clairvoyance and architecture-tradeoff are vendored under .claude/skills/ (a different apm package, tvna/clairvoyance) and do not resolve as a skills/*/ sibling."

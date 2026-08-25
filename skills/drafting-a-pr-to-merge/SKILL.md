@@ -478,13 +478,9 @@ up at its own step 9; a PR still mid-execution there can sit in draft
 for a different reason -- see that skill's own "vs.
 `drafting-a-pr-to-merge`" entry for the edge case.
 
-A bare defect report no longer has a dedicated skill of its own:
-`planning-a-branch-from-an-issue` (see
-`skills/planning-a-branch-from-an-issue/SKILL.md`) now recognizes and
-reproduces it directly, then hands off to `executing-a-branch-plan`
-(see `skills/executing-a-branch-plan/SKILL.md`) -- including that
-skill's single-task degenerate case -- which opens the PR this skill
-then takes over.
+A bare defect report has no dedicated skill anymore:
+`planning-a-branch-from-an-issue` reproduces it directly, then hands off
+to `executing-a-branch-plan` (its single-task case), which opens the PR.
 
 ## Notes
 

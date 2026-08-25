@@ -96,13 +96,13 @@
       "skill": "planning-a-branch-from-an-issue",
       "skill_md": "skills/planning-a-branch-from-an-issue/SKILL.md",
       "eval_yaml": "evals/planning-a-branch-from-an-issue/eval.yaml",
-      "split": "test"
+      "split": "selection"
     },
     {
       "skill": "ranking-the-open-queue",
       "skill_md": "skills/ranking-the-open-queue/SKILL.md",
       "eval_yaml": "evals/ranking-the-open-queue/eval.yaml",
-      "split": "selection"
+      "split": "test"
     },
     {
       "skill": "responding-to-a-fresh-arrival",
@@ -126,13 +126,13 @@
       "skill": "scorer-gated-skill-edits",
       "skill_md": "skills/scorer-gated-skill-edits/SKILL.md",
       "eval_yaml": "evals/scorer-gated-skill-edits/eval.yaml",
-      "split": "test"
+      "split": "selection"
     },
     {
       "skill": "screening-a-low-trust-contribution",
       "skill_md": "skills/screening-a-low-trust-contribution/SKILL.md",
       "eval_yaml": "evals/screening-a-low-trust-contribution/eval.yaml",
-      "split": "selection"
+      "split": "test"
     },
     {
       "skill": "setup-gitapex-toolchain",

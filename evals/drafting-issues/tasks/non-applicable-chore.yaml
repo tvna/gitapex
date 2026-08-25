@@ -9,7 +9,7 @@ inputs:
     version in pyproject.toml to the latest release. No behavior change.
 expected:
   output_contains:
-    - "out of this skill's scope"
+    - "out of this skill's ACM-building scope"
   output_not_contains:
     - "Acceptance Criteria Map"
     - "LGTM"
