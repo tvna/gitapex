@@ -112,6 +112,8 @@ in-memory input from scratch.
 
 from __future__ import annotations
 
+import os
+
 import gitapex_gate_detection_logic_property_coverage as gate
 import pytest
 import unidiff
@@ -120,7 +122,19 @@ from hypothesis import strategies as st
 
 # Applied per test, not registered as a global Hypothesis profile -- see the
 # module docstring's own "Reproducibility" section.
-_PROPERTIES = settings(derandomize=True, max_examples=200, deadline=None)
+#
+# Issue #1316: the PR-blocking gate's own invocation (this default branch)
+# stays pinned exactly as before -- fast and deterministic. A separate,
+# scheduled, non-PR-blocking workflow
+# (.github/workflows/diff-parsing-property-deep-scan.yml) sets
+# GITAPEX_HYPOTHESIS_DEEP_SCAN=1 to re-run these same properties with much
+# higher, randomized exploration instead, without touching this file's
+# own default settings object or requiring a duplicate test body.
+_PROPERTIES = (
+    settings(derandomize=False, max_examples=5000, deadline=None)
+    if os.environ.get("GITAPEX_HYPOTHESIS_DEEP_SCAN") == "1"
+    else settings(derandomize=True, max_examples=200, deadline=None)
+)
 
 
 def _unidiff_added_lines(diff_text: str) -> dict[str, set[int]]:

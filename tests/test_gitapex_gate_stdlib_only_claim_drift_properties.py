@@ -25,12 +25,25 @@ not repeated here beyond this pointer.
 
 from __future__ import annotations
 
+import os
+
 import gitapex_gate_stdlib_only_claim_drift as gate
 import unidiff
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-_PROPERTIES = settings(derandomize=True, max_examples=200, deadline=None)
+# Issue #1316: the PR-blocking gate's own invocation (this default branch)
+# stays pinned exactly as before -- fast and deterministic. A separate,
+# scheduled, non-PR-blocking workflow
+# (.github/workflows/diff-parsing-property-deep-scan.yml) sets
+# GITAPEX_HYPOTHESIS_DEEP_SCAN=1 to re-run these same properties with much
+# higher, randomized exploration instead, without touching this file's
+# own default settings object or requiring a duplicate test body.
+_PROPERTIES = (
+    settings(derandomize=False, max_examples=5000, deadline=None)
+    if os.environ.get("GITAPEX_HYPOTHESIS_DEEP_SCAN") == "1"
+    else settings(derandomize=True, max_examples=200, deadline=None)
+)
 
 
 def _unidiff_third_party_import_files(diff_text: str) -> set[str]:

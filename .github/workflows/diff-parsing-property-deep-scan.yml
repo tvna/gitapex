@@ -1,0 +1,57 @@
+name: Diff-parsing property deep scan
+
+# Issue #1316: the PR-blocking gate's own Hypothesis property suites for
+# the parse_added_lines-family diff parsers stay pinned to a fast,
+# deterministic settings((derandomize=True, max_examples=200)) so every PR
+# run is quick and reproducible. This scheduled, non-PR-blocking job
+# re-runs the same property test files with GITAPEX_HYPOTHESIS_DEEP_SCAN=1,
+# which each file's own _PROPERTIES settings object reads to switch to
+# (derandomize=False, max_examples=5000) instead -- substantially higher,
+# randomized exploration, at the cost of a much longer run, without ever
+# touching the PR-blocking gate's own default settings or duplicating any
+# test body.
+on:
+  schedule:
+    - cron: "0 8 * * *"  # daily 08:00 UTC, offset from retrospective-gate-drift.yml's 07:00
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  deep-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      # Pinned to main explicitly: workflow_dispatch checks out whatever
+      # ref the operator selected in the UI, which defaults to the
+      # currently-viewed branch, not necessarily main. Without this pin, a
+      # manual run from a feature branch would scan that branch's own
+      # (possibly stale or in-flight) parser code instead of main's.
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+        with:
+          ref: main
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Run diff-parsing property suites at higher exploration
+        env:
+          GITAPEX_HYPOTHESIS_DEEP_SCAN: "1"
+        run: |
+          set -o pipefail
+          uv run --frozen pytest \
+            tests/test_gitapex_gate_detection_logic_property_coverage_properties.py \
+            tests/test_gitapex_gate_exception_handler_gaps_properties.py \
+            tests/test_gitapex_gate_stdlib_only_claim_drift_properties.py \
+            --no-cov -v \
+            | tee -a "$GITHUB_STEP_SUMMARY"
