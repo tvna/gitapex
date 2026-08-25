@@ -438,3 +438,26 @@ def test_main_body_permission_error_reported_cleanly(
     exit_code = gate.main(["--body", "/some/path", "--head-sha", _SHA])
     assert exit_code == 1
     assert "could not read --body" in capsys.readouterr().err
+
+
+def test_old_step_8_heading_no_longer_passes_after_rename() -> None:
+    # issue #1343 (independent-review-pending PR-template feed-forward,
+    # scope expanded mid-session): the recorded-verdict heading was
+    # renamed from '## Step 8 independent review verdict' to '##
+    # Independent review verdict' to de-couple it from
+    # drafting-a-pr-to-merge's own internal step numbering. The rename
+    # deliberately does not dual-accept the old heading -- a live check
+    # found no currently-open PR had recorded a real verdict under it, and
+    # a silent fallback would recreate the "text mimicking the verdict's
+    # own phrasing" risk class issue #1311's own adversarial-review rounds
+    # already closed once. A body carrying only the OLD heading, otherwise
+    # a complete and well-formed verdict, must fail exactly like a body
+    # with no verdict section at all.
+    body = f"""## Step 8 independent review verdict
+
+- Verdict: CLEAN
+- Verified commit: {_SHA}
+"""
+    passed, message = gate.check(body, _SHA)
+    assert passed is False
+    assert "no '## Independent review verdict' section found" in message
