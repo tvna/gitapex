@@ -1,11 +1,11 @@
 """Hypothesis property-based layer for
-``skills/drafting-an-acm-issue/scripts/gitapex_check_acm_present.py``'s
+``skills/drafting-issues/scripts/gitapex_check_acm_present.py``'s
 ``has_dedup_disclosure`` (issue #1197, closing issue #1178's own
 ``detection-logic-property-coverage`` gap for this new module-level
 ``_DEDUP_RE`` compile and the ``has_dedup_disclosure`` function).
 
 This module resolves via `import gitapex_check_acm_present` against
-``skills/drafting-an-acm-issue/scripts`` specifically (that directory's own
+``skills/drafting-issues/scripts`` specifically (that directory's own
 new ``pyproject.toml`` ``pythonpath`` entry, issue #1197) -- the sibling
 copy at ``skills/planning-a-branch-from-an-issue/scripts/gitapex_check_acm_present.py``
 is not on ``pythonpath`` at all, so there is no module-name collision.

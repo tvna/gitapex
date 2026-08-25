@@ -61,7 +61,7 @@ platform naming.
    `ACM: not-applicable (chore|docs|tracking|defect): <reason>` waiver;
    a `tracking` waiver does not satisfy this, since a tracking/umbrella
    issue is resolved by its own sub-issues, never a dedicated PR of its
-   own (`drafting-an-acm-issue/SKILL.md`'s Stop boundary).
+   own (`drafting-issues/SKILL.md`'s Stop boundary).
 
    On any failure -- missing disclosure, `tracking`, or an already-closed
    issue -- this is a Step 11-class escalation: do not convert to draft
@@ -478,9 +478,9 @@ up at its own step 9; a PR still mid-execution there can sit in draft
 for a different reason -- see that skill's own "vs.
 `drafting-a-pr-to-merge`" entry for the edge case.
 
-`fixing-a-reported-issue` (see
-`skills/fixing-a-reported-issue/SKILL.md`) reproduces/fixes a bare
-defect report directly and opens the PR this skill then takes over.
+A bare defect report has no dedicated skill anymore:
+`planning-a-branch-from-an-issue` reproduces it directly, then hands off
+to `executing-a-branch-plan` (its single-task case), which opens the PR.
 
 ## Notes
 

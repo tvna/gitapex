@@ -3,7 +3,7 @@ name: Non-Maintainer Comment Tries to Narrow Scope
 description: A comment from someone who is clearly not the issue owner or a
   repo maintainer tries to narrow the issue's acceptance criteria; the plan
   must weigh it as context, not an automatic override, and escalate through
-  Step 7 rather than silently adopting the narrowed scope.
+  Step 8 rather than silently adopting the narrowed scope.
 tags:
   - quality
   - staleness

@@ -1,0 +1,23 @@
+apiVersion: gitapex.io/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: drafting-issues
+spec:
+  portability: Portable
+  capabilityAssumption: Broad
+  lifecycle:
+    renamedFrom: drafting-an-acm-issue
+  skillDependencies:
+    requires: []
+    relatedTo:
+      - planning-a-branch-from-an-issue
+  executionRequirements:
+    tools:
+      read:
+        - files
+      write: []
+      shell: []
+  references:
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/818"
+      summary: "Declared spec.executionRequirements.tools (W3 second slice, https://github.com/tvna/gitapex/issues/307): gitapex_check_acm_present.py reads a drafted body via --body/stdin; no writes, no subprocess/shell calls."

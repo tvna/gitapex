@@ -1,6 +1,6 @@
 ---
 name: drafting-an-adr
-description: Use when a decision affecting architecture (structure, non-functional characteristics, dependencies, interfaces, or construction techniques) needs to be recorded before or after it's made. Applies Nygard's architecturally-significant criteria to judge warrant, then drafts an ADR from a MADR-derived template. Distinct from explaining-the-work (cites an ADR, never authors one) and drafting-an-acm-issue (same drafted-artifact shape, different artifact).
+description: Use when a decision affecting architecture (structure, non-functional characteristics, dependencies, interfaces, or construction techniques) needs to be recorded before or after it's made. Applies Nygard's architecturally-significant criteria to judge warrant, then drafts an ADR from a MADR-derived template. Distinct from explaining-the-work (cites an ADR, never authors one) and drafting-issues (same drafted-artifact shape, different artifact).
 ---
 
 # Drafting an ADR
@@ -226,7 +226,7 @@ ADR** when not applicable.
   downstream consumer: a citer must still check the ADR's actual
   `Status` and content at the path it cites, not treat the file's mere
   existence as proof the decision is approved or still current.
-- **vs. `drafting-an-acm-issue`:** same shape (elicit, draft a structured
+- **vs. `drafting-issues`:** same shape (elicit, draft a structured
   artifact from a template, validate with a bundled checker before
   creating anything), different artifact and trigger -- that skill drafts
   a new GitHub issue's Acceptance Criteria Map; this one drafts an

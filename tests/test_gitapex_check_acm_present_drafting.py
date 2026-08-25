@@ -1,6 +1,6 @@
-"""Read-path tests for skills/drafting-an-acm-issue/scripts/gitapex_check_acm_present.py's main().
+"""Read-path tests for skills/drafting-issues/scripts/gitapex_check_acm_present.py's main().
 
-Colocating this test next to the script (as skills/drafting-an-acm-issue/
+Colocating this test next to the script (as skills/drafting-issues/
 scripts/test_check_acm_present.py) would not be collected by CI: pyproject.toml's
 [tool.pytest.ini_options] testpaths does not include that directory, so a bare
 `pytest` invocation (exactly what .github/workflows/test.yml runs) never
@@ -23,12 +23,12 @@ from conftest import FakeStdin as _FakeStdin
 _SCRIPT_PATH = (
     pathlib.Path(__file__).resolve().parents[1]
     / "skills"
-    / "drafting-an-acm-issue"
+    / "drafting-issues"
     / "scripts"
     / "gitapex_check_acm_present.py"
 )
 
-_spec = importlib.util.spec_from_file_location("_drafting_an_acm_issue_check_acm_present", _SCRIPT_PATH)
+_spec = importlib.util.spec_from_file_location("_drafting_issues_check_acm_present", _SCRIPT_PATH)
 assert _spec is not None and _spec.loader is not None
 checker = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(checker)

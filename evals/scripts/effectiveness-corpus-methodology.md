@@ -110,8 +110,8 @@ apply. Two splits only:
 cherry-picked after seeing any outcome):** sort every skill name
 alphabetically, zero-index it, and assign `test` to every 5th skill
 (index mod 5 == 0), `selection` to the rest -- a fixed 20%/80% split. With
-25 skills total this is 5 `test` / 20 `selection`. This is a small corpus
-either way (25 skills total, the same "roughly 25-26 skills" limitation
+24 skills total this is 5 `test` / 19 `selection`. This is a small corpus
+either way (24 skills total, the same "roughly 25-26 skills" limitation
 issue #1143's own residual-risk column already names) -- `SMALL_N_THRESHOLD`
 and `MODERATE_N_THRESHOLD` in `gitapex_compute_rank_correlation.py` disclose
 the resulting power caveat directly in that tool's own output, not only
@@ -170,7 +170,7 @@ switches step 3 to the real `subprocess_executor` -- the only thing that
 changes; the corpus, the split discipline, and the correlation tool are
 identical in both modes.
 
-**Failure handling.** Twenty-five real, independently-authored `eval.yaml`
+**Failure handling.** Twenty-four real, independently-authored `eval.yaml`
 suites vary in size and are maintained for their own skill's purposes, not
 for this corpus's -- a suite that `gitapex_run_eval_suite.py` cannot run
 (a malformed declaration, an empty `tasks:` glob) is a fact about that one

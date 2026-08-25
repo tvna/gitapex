@@ -119,7 +119,7 @@ scripts/ directory with another, so this ships its own copy of small
 generic helpers (a CheckResult record, a read-and-report main()) rather
 than importing across skill boundaries, the same convention
 `skills/drafting-an-adr/scripts/gitapex_check_adr_shape.py` and
-`skills/drafting-an-acm-issue/scripts/gitapex_check_acm_present.py` each state
+`skills/drafting-issues/scripts/gitapex_check_acm_present.py` each state
 for themselves.
 
 Known limitations, named rather than silently assumed away (an

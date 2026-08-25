@@ -21,7 +21,7 @@ find_drift() must run without raising against the real skills/ tree, but
 its result is deliberately NOT asserted to be empty: issue #1022's own
 Non-goals excludes retroactively auditing every existing skill for a
 pre-existing mismatch, and a live check found several already exist (e.g.
-planning-a-branch-from-an-issue declares shell: [] but its own Step 8
+planning-a-branch-from-an-issue declares shell: [] but its own Step 9
 invokes `python3 scripts/gitapex_check_acm_present.py`). This mirrors
 gitapex_check_skill_shape.py's own un-registered status: neither carries a
 .gitapex/ssot.json gate entry of its own; each is run deliberately against

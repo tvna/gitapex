@@ -1,0 +1,17 @@
+name: drafting-issues-eval
+description: Quality suite for the gitapex drafting-issues skill.
+skill: drafting-issues
+version: "0.1.0"
+config:
+  trials_per_task: 3
+  timeout_seconds: 300
+  parallel: false
+  executor: copilot-sdk
+  model: claude-sonnet-5
+metrics:
+  - name: drafting_acm_issue_quality
+    weight: 1.0
+    threshold: 0.8
+    description: Produces a full Acceptance Criteria Map from stated criteria only, recognizes when ACM does not apply, and never fabricates criteria or claims issue creation without validation.
+tasks:
+  - "tasks/*.yaml"
