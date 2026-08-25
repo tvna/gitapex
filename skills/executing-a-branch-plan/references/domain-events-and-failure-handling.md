@@ -7,7 +7,10 @@ mechanism), Decision 18 (rollback), Decision 19 (the `NeedsInput` event).
 ## Contents
 
 - [Where the log lives](#where-the-log-lives)
+- [Read-modify-write discipline](#read-modify-write-discipline)
 - [Event vocabulary](#event-vocabulary-closed-set-append-only-one-line-per-event)
+- [Loss and absence handling](#loss-and-absence-handling)
+- [Freshness and hang detection](#freshness-and-hang-detection)
 - [Failure dispatch](#failure-dispatch-step-7)
 - [Rollback](#rollback-offered-not-automatic)
 - [Draft-PR-first pattern](#draft-pr-first-pattern-step-5)
@@ -36,7 +39,7 @@ is editable by anyone with write access, and per the threat-model
 reference, this skill already treats issue/PR-body-sourced text as
 untrusted for the ACM; the same discipline applies to the Execution log
 it later reads back. Before resuming from it: for every `TaskCompleted{
-task_id, commit_sha}` event, verify that `commit_sha` actually exists on
+run_id, task_id, commit_sha}` event, verify that `commit_sha` actually exists on
 the branch and its diff is consistent with that task's own file-ownership
 assignment (task-decomposition.md) -- a `commit_sha` that does not
 resolve, or that touches files outside that task's own assignment, is
@@ -47,25 +50,69 @@ interruption, or a log entry edited after the fact, must not silently
 desynchronize what the branch actually contains from what a resumed
 session believes it contains.
 
+## Read-modify-write discipline
+
+**"Append-only" names the convention, not the write primitive underneath
+it.** The PR-body write API this skill relies on (`github:update_pull_request`,
+or the calling repository's equivalent) has exactly one primitive: replace
+the whole body. There is no server-side append operation. Writing a new
+Execution log event is therefore always a three-step read-modify-write,
+never a bare append call:
+
+1. **Fetch** the PR's current body (`github:pull_request_read` method
+   `get`) immediately before writing -- never reuse a body fetched earlier
+   in the same session, since another actor (a human editor, a bot, a
+   parallel process) may have changed it since.
+2. **Append** the new event line to the fetched `## Execution log`
+   section's own text, in memory, leaving every other section of the body
+   byte-for-byte unchanged.
+3. **Write back** the full, modified body via the one whole-body-replace
+   call.
+
+**The hazard this closes:** treating the convention's name as if it
+described the mechanism invites a naive shortcut -- constructing a body
+from only what this run itself knows about (its own ACM, its own prior
+events) and writing that back, silently destroying any section a human or
+another process added between steps 1 and 3 (a review comment quoted into
+the body, a manually-added label note, a concurrent edit). The
+three-step sequence above is what prevents that: step 1's fetch is what
+step 3 writes back, modified only by step 2's own single addition, never
+reconstructed from memory.
+
 ## Event vocabulary (closed set, append-only, one line per event)
 
-- `PlanApproved` -- written at step 5, when the draft PR opens.
-- `TaskStarted{task_id}`
-- `TaskCompleted{task_id, commit_sha}`
-- `TaskFailed{task_id, reason}` -- written once, when a task's proof
+Every event below carries a `run_id` field identifying the specific
+Branch Plan execution that wrote it: the step-4 task-list-file commit SHA
+(short form), already recorded as ground truth at branch-publish time --
+no separate random or UUID generator is introduced for this. A second
+execution of the same Branch Plan (a re-run after `stop-and-replan`, or a
+resumed session that re-publishes step 4) produces a different task-list
+commit and therefore a different `run_id`, so its own events cannot be
+mistaken for an earlier run's.
+
+- `PlanApproved{run_id}` -- written at step 5, when the draft PR opens.
+- `TaskStarted{run_id, task_id}`
+- `TaskCompleted{run_id, task_id, commit_sha}`
+- `TaskFailed{run_id, task_id, reason}` -- written once, when a task's proof
   method fails for the first time (before the one retry below runs).
   Distinct from the retry's own eventual outcome: a `TaskFailed` event
   can be followed by `TaskCompleted` (the retry succeeded) or by
   `StageDeviated` (the retry also failed); it is never itself the
   terminal event for a task, only the record that the first attempt did
   not pass.
-- `NeedsInput{task_id, question}` -- distinct from `TaskFailed`: a task
-  requesting missing information, answered from the ACM/Branch Plan's own
-  content when possible or escalated when not. Does not consume the
+- `NeedsInput{run_id, task_id, question}` -- distinct from `TaskFailed`: a
+  task requesting missing information, answered from the ACM/Branch Plan's
+  own content when possible or escalated when not. Does not consume the
   one-retry budget below, since asking for missing context is not the
   same event as an attempt that ran and failed.
-- `StageDeviated{task_id, reason, action}` where `action` is one of
-  `retry` / `stop-and-replan` / `escalate`.
+- `StageDeviated{run_id, task_id, reason, action}` where `action` is one
+  of `retry` / `stop-and-replan` / `escalate`. `task_id` is `null` when the
+  deviation is not scoped to a single task -- the Loss and absence
+  handling section below writes `task_id: null` for a log-wide loss with
+  no single task to attribute it to; the Freshness and hang detection
+  section below names the outstanding wave's own task ID(s) instead,
+  since a hang is scoped to whichever tasks the stalled wave was
+  dispatching.
 
 **Escape before interpolating.** Every event's free-text fields
 (`TaskFailed.reason`, `NeedsInput.question`, `StageDeviated.reason`), the
@@ -82,10 +129,58 @@ quoted into its own task record, cannot break the PR body's or task-list
 file's own table/heading rendering or forge an unintended heading or
 event line elsewhere in it.
 
+## Loss and absence handling
+
+A missing, truncated, or unparseable `## Execution log` section -- the PR
+body fetch fails outright, the section heading is not found, or the found
+section's text does not parse into the closed event vocabulary above --
+must fail loud. **Never treat any of these three as evidence that no
+tasks completed, and never silently restart the Branch Plan from step 3
+as if this were a fresh run.** A log that cannot be read is not a log that
+says "nothing happened" -- it is an absence of information about what
+happened, and the two are not interchangeable: the branch itself may
+already carry completed, pushed task commits the missing log simply
+failed to record.
+
+Each of the three loss modes dispatches the same way: write a
+`StageDeviated{run_id, task_id: null, reason, action: escalate}` event
+using this same read-modify-write discipline if the PR body write path
+itself is what is still working (a truncated or unparseable *section*
+inside an otherwise-writable body), or escalate directly to the human
+operator per step 11's own escalation channel when the body fetch itself
+is what failed. Before escalating, attempt the one recovery step ground
+truth already supports: read the branch's own commit history
+(`git log` on the shared branch) to check whether task commits exist
+despite the log's own loss, the same "trust the ground truth over your
+own record" precedence this skill's resume path already applies. Report
+what that check found (some commits exist / none exist / history itself
+could not be read) as part of the escalation, rather than leaving the
+human to re-derive it.
+
+## Freshness and hang detection
+
+The Execution log's own recency is a proxy for whether a dispatched wave
+is still making progress or has silently hung (a task `agent()` call that
+never returns, a Workflow run stuck mid-dispatch). Reusing the same
+freshness/re-read discipline this skill's own cross-session resume path
+already applies to the log's *content* (re-screen before trusting), apply
+it here to the log's *cadence*: while a wave is outstanding, re-read the
+Execution log on the same roughly-hourly polling cadence
+`drafting-a-pr-to-merge`'s own Step 10 fallback self-check-in already
+establishes elsewhere in this skill catalog, rather than inventing a
+second cadence. If 3 consecutive polls each find no new event since the
+prior poll, treat the run as hung: write a
+`StageDeviated{run_id, task_id: <outstanding wave's task ID(s)>,
+reason: "no new event after 3 consecutive polls", action: escalate}`
+event and escalate per step 11 -- never silently keep waiting past that
+threshold, and never re-dispatch the same wave as if the hang were a
+normal failure this skill's one-retry budget already covers (a hung
+dispatch never returned a result to retry against).
+
 ## Failure dispatch (step 7)
 
-A task's own proof method failing writes a `TaskFailed{task_id, reason}`
-event, then triggers exactly one retry, with the failure output folded
+A task's own proof method failing writes a `TaskFailed{run_id, task_id,
+reason}` event, then triggers exactly one retry, with the failure output folded
 into the retried task's own context -- bounded, not an open loop. If the
 retry succeeds, write `TaskCompleted` as normal; no further event is
 needed. If the retry also fails, dispatch on what actually failed:
