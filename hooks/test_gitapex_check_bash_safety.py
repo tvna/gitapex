@@ -184,6 +184,13 @@ ALLOWED_GH_COMMANDS = [
     # (never assigned) must not be treated as a hit either.
     ("F=-X; M=GET; gh api repos/o/r/pulls/1 $F $M", "gh-api-method-flagname-dynamic-value-read"),
     ("F=-X; gh api repos/o/r/pulls/1 $F", "gh-api-method-flagname-dynamic-no-value-token"),
+    # False-positive guard for the multi-variable-concatenation resolution
+    # added in DENIED_INDIRECTION_COMMANDS above (issue #1326, sixth
+    # round): a concatenated value that resolves to a read method (GET)
+    # must stay allowed, and a concatenation referencing an unassigned
+    # variable must not be treated as a hit either.
+    ('M1=GE; M2=T; gh api repos/o/r/pulls/1 -X "$M1$M2"', "gh-api-method-value-multi-var-concat-read"),
+    ('M1=PO; gh api repos/o/r/pulls/1 -X "$M1$M2"', "gh-api-method-value-concat-unassigned-var"),
 ]
 
 ALLOWED_ORDINARY_COMMANDS = [
@@ -348,6 +355,18 @@ DENIED_INDIRECTION_COMMANDS = [
     ("F=-X; M=POST; gh api repos/o/r/pulls/1/merge $F $M", "gh-api-method-flagname-and-value-both-dynamic"),
     ("F=-X; gh api repos/o/r/pulls/1/merge $F POST", "gh-api-method-flagname-dynamic-value-literal"),
     ("FF=--field; gh api repos/o/r/pulls/1 $FF name=value", "gh-api-field-flagname-dynamic"),
+    # Found live by Step 8 independent review, sixth round (issue #1326):
+    # a write-method value split across multiple concatenated variables
+    # (bash concatenates adjacent `$NAME` references with no separator)
+    # was never recognized, because the prior fix checked each referenced
+    # variable's resolved value separately -- neither "po" nor "st" alone
+    # is a write method, but bash resolves `"$M1$M2"` to the single word
+    # "POST".
+    ('M1=PO; M2=ST; gh api repos/o/r/pulls/1/merge -X "$M1$M2"', "gh-api-method-value-multi-var-concat"),
+    (
+        'F=-X; M1=PO; M2=ST; gh api repos/o/r/pulls/1/merge $F "$M1$M2"',
+        "gh-api-method-flagname-and-value-concat-both-dynamic",
+    ),
 ]
 
 

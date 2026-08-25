@@ -430,6 +430,117 @@ def test_rule_gh_api_write_allows_flagname_dynamic_resolved_to_a_read(flag_var: 
     assert result is None
 
 
+# --- Round 6: a write-method value split across multiple concatenated
+# variables (issue #1326, found live by Step 8 independent review, sixth
+# round). The round-5 fixes above resolved each referenced variable's
+# value SEPARATELY and checked whether any one of them alone was a write
+# method -- so `-X "$M1$M2"` with M1="po", M2="st" was never recognized,
+# even though bash concatenates them into the single word "post" with no
+# separator. `_substitute_var_refs` (reconstruct-then-check) closes this.
+
+_SPLIT_METHODS = st.sampled_from([("po", "st"), ("pos", "t"), ("p", "ost"), ("pu", "t"), ("pat", "ch"), ("del", "ete")])
+
+
+@_PROPERTIES
+@given(parts=_SPLIT_METHODS, name1=_IDENTIFIERS, name2=_IDENTIFIERS)
+def test_substitute_var_refs_reconstructs_concatenated_references(
+    parts: tuple[str, str], name1: str, name2: str
+) -> None:
+    """Model-based: a token made of two adjacent variable references
+    resolves to the concatenation of their assigned values, in order --
+    the exact reconstruction real bash performs with no separator between
+    adjacent `$NAME` expansions."""
+    assume(name1 != name2)
+    part1, part2 = parts
+    token = f"${name1}${name2}"
+    resolved = checker._substitute_var_refs(token, {name1: part1, name2: part2})
+    assert resolved == part1 + part2
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value=_VALUES, prefix=_VALUES, suffix=_VALUES)
+def test_substitute_var_refs_preserves_surrounding_literal_text(
+    name: str, value: str, prefix: str, suffix: str
+) -> None:
+    """Model-based: literal text around a reference is preserved verbatim
+    in the reconstructed string -- this is a targeted substitution, not a
+    reference-only reconstruction."""
+    token = f"{prefix}${{{name}}}{suffix}"
+    resolved = checker._substitute_var_refs(token, {name: value.lower()})
+    assert resolved == f"{prefix}{value.lower()}{suffix}"
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, assigned_name=_IDENTIFIERS, value=_VALUES)
+def test_substitute_var_refs_none_for_an_unassigned_reference(name: str, assigned_name: str, value: str) -> None:
+    """No false positive: a token referencing even one never-assigned
+    variable cannot be soundly resolved at all -- returns None rather than
+    silently substituting a placeholder or skipping the reference."""
+    assume(name != assigned_name)
+    token = f"${assigned_name}${name}"
+    assert checker._substitute_var_refs(token, {assigned_name: value.lower()}) is None
+
+
+@_PROPERTIES
+@given(parts=_SPLIT_METHODS, var1=_IDENTIFIERS, var2=_IDENTIFIERS)
+def test_gh_api_method_dynamic_hit_detects_a_value_split_across_two_variables(
+    parts: tuple[str, str], var1: str, var2: str
+) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, sixth round (issue #1326):
+    ``M1=PO; M2=ST; gh api .../merge -X "$M1$M2"`` resolves (via real bash
+    string concatenation) to a real ``POST`` write and was wrongly
+    allowed -- neither "po" nor "st" alone is a write method, so the
+    round-5-era per-variable value check never recognized the
+    concatenation."""
+    assume(var1 != var2)
+    part1, part2 = parts
+    seg = ["gh", "api", "repos/x/y", "-X", f"${var1}${var2}"]
+    assert checker._gh_api_method_dynamic_hit(seg, {var1: part1, var2: part2})
+
+
+@_PROPERTIES
+@given(parts=_SPLIT_METHODS, flag_var=_IDENTIFIERS, var1=_IDENTIFIERS, var2=_IDENTIFIERS)
+def test_gh_api_method_flagname_dynamic_hit_detects_flagname_and_concatenated_value(
+    parts: tuple[str, str], flag_var: str, var1: str, var2: str
+) -> None:
+    """Model-based: the same concatenation gap also holds when the flag
+    NAME is simultaneously hidden behind its own bare variable reference
+    (``F=-X; M1=PO; M2=ST; gh api .../merge $F "$M1$M2"``) -- the
+    combination of round 5's and round 6's own findings."""
+    assume(len({flag_var, var1, var2}) == 3)
+    part1, part2 = parts
+    seg = ["gh", "api", "repos/x/y", f"${flag_var}", f"${var1}${var2}"]
+    name_to_value = {flag_var: "-x", var1: part1, var2: part2}
+    assert checker._gh_api_method_flagname_dynamic_hit(seg, name_to_value)
+
+
+@_PROPERTIES
+@given(var1=_IDENTIFIERS, var2=_IDENTIFIERS)
+def test_gh_api_method_dynamic_hit_allows_a_concatenated_value_resolved_to_a_read(var1: str, var2: str) -> None:
+    """No false positive: a concatenated value that resolves to GET, not
+    one of the four write methods, is never flagged."""
+    assume(var1 != var2)
+    seg = ["gh", "api", "repos/x/y", "-X", f"${var1}${var2}"]
+    assert not checker._gh_api_method_dynamic_hit(seg, {var1: "ge", var2: "t"})
+
+
+@_PROPERTIES
+@given(parts=_SPLIT_METHODS, var1=_IDENTIFIERS, var2=_IDENTIFIERS)
+def test_rule_gh_api_write_detects_a_method_value_split_across_two_variables(
+    parts: tuple[str, str], var1: str, var2: str
+) -> None:
+    """End-to-end regression pin, matching the other ``_rule_gh_api_write``
+    end-to-end tests above: the sixth-round concatenation bypass is caught
+    at the orchestrator level too, not just the sub-pass level."""
+    assume(var1 != var2)
+    part1, part2 = parts
+    segments = [["gh", "api", "repos/x/y", "-X", f"${var1}${var2}"]]
+    name_to_value = {var1: part1, var2: part2}
+    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y -x ${var1}${var2}", name_to_value)
+    assert result is not None
+
+
 _SHORT_FLAG_WITH_VALUE = st.tuples(st.sampled_from(["-c", "-C"]), st.sampled_from(["cfgkey=cfgval", "/tmp/some/repo"]))
 _LONG_FLAG_ALONE = st.sampled_from(["--git-dir=/tmp/x/.git", "--no-pager", "--work-tree=/tmp/y"])
 _GIT_GLOBAL_FLAG_GROUP = st.one_of(_SHORT_FLAG_WITH_VALUE.map(list), _LONG_FLAG_ALONE.map(lambda f: [f]))

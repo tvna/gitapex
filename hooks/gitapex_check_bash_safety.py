@@ -95,6 +95,24 @@ single-level `name_to_value` lookup every other B-rule here already uses,
 not the unbounded recursive reconstruction the two residuals above would
 require.
 
+Closed by sixth-round Step 8 independent review: both `_gh_api_method_
+dynamic_hit` and `_gh_api_method_flagname_dynamic_hit` resolved a dynamic
+`-X`/`--method` VALUE by collecting every variable the value token
+referenced and checking whether any ONE of their individually-resolved
+values was itself a complete write method -- so a value split across
+multiple concatenated variables (`-X "$M1$M2"` with `M1=PO`, `M2=ST`)
+was never recognized, even though bash concatenates them into a real
+`POST` write with no separator. Closed via `_substitute_var_refs`, which
+replaces every `$NAME`/`${NAME}` reference in a token with its resolved
+value (preserving surrounding literal text) and checks the *reconstructed*
+string -- still a single, bounded substitution pass over `name_to_value`
+entries that are themselves already plain literal strings, not the
+unbounded recursive reconstruction the graphql-mutation-keyword residual
+above requires (that residual concatenates variables into a keyword
+buried in free-text search content; this one concatenates variables into
+a flag's own value, a small bounded comparison set of four write
+methods).
+
 Deliberately stdlib-only (shlex, re, json) -- no new third-party
 dependency, matching this repository's declarative module-management
 convention and python3's already-accepted-hook-dependency status (see
@@ -140,6 +158,46 @@ def _resolve_bare_var(token: str, name_to_value: dict[str, str]) -> str | None:
     if not match:
         return None
     return name_to_value.get(match.group(1))
+
+
+# Matches one `$NAME`/`${NAME}` reference anywhere in a token, capturing
+# its full span (including the braces, when present) so _substitute_var_refs
+# below can replace exactly that span -- unlike _VAR_REF_RE, which only
+# captures the name and is used solely to collect referenced names, never
+# to reconstruct token text.
+_VAR_REF_FULL_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)")
+
+
+def _substitute_var_refs(token: str, name_to_value: dict[str, str]) -> str | None:
+    """Reconstruct TOKEN with every `$NAME`/`${NAME}` reference replaced by
+    its assigned (already-lowercased) value, preserving any literal text
+    around or between references -- e.g. `$M1$M2` with M1="po", M2="st"
+    becomes "post". Returns None (cannot soundly resolve) if any
+    referenced variable was never assigned a literal value.
+
+    Bounded and sound, not the unbounded recursive reconstruction the
+    module docstring's graphql-mutation-keyword residual disclaims:
+    `name_to_value`'s own entries are themselves already plain literal
+    strings (a dynamic RHS is filtered out before ever entering
+    `name_to_value` -- see `_assigned_literals`), so this is exactly one
+    substitution pass over TOKEN, never a re-expansion of a substituted
+    value that might itself contain `$`. A reference to an unassigned
+    variable, or non-`$NAME` content such as a backtick command
+    substitution, is left as literal text in the result rather than
+    resolved -- it simply will not match a known value afterward, the
+    same fail-closed-to-"no match" posture `_resolve_bare_var` already
+    takes for an unassigned bare reference."""
+    pieces: list[str] = []
+    pos = 0
+    for match in _VAR_REF_FULL_RE.finditer(token):
+        name = match.group(1) or match.group(2)
+        if name not in name_to_value:
+            return None
+        pieces.append(token[pos : match.start()])
+        pieces.append(name_to_value[name])
+        pos = match.end()
+    pieces.append(token[pos:])
+    return "".join(pieces)
 
 
 class TokenizeError(Exception):
@@ -399,8 +457,17 @@ def _gh_api_method_dynamic_value(seg: list[str], index: int, raw_tok: str) -> st
     is not a `-X`/`--method` flag carrying a dynamic value at all."""
     if _is_dynamic(raw_tok):
         lowered_tok = raw_tok.lower()
+        # `.lstrip("=")`: `-x=$var` and `-x$var` both slice to a value part
+        # starting with the shape's own separator character (`=`) or none
+        # at all -- stripping it here matches `_gh_api_method_literal_hit`'s
+        # own established `.lstrip("=")` treatment for its separate-token
+        # case, and keeps the value part a clean comparand for
+        # `_substitute_var_refs`'s reconstructed-string check below, which
+        # (unlike the old per-variable-name lookup this replaced) preserves
+        # every character of surrounding literal text rather than ignoring
+        # a leading "=" incidentally.
         if lowered_tok.startswith("-x") and len(raw_tok) > 2:
-            return raw_tok[2:]
+            return raw_tok[2:].lstrip("=")
         if lowered_tok.startswith("--method="):
             return raw_tok[len("--method=") :]
         return None
@@ -421,14 +488,19 @@ def _gh_api_method_dynamic_hit(seg: list[str], name_to_value: dict[str, str]) ->
     independent review (issue #1326), in two rounds: the separate-token
     form first (`M=POST; gh api .../merge -X $M` resolved to a real
     write and was wrongly allowed), then the fused forms in a second
-    round after the first fix landed."""
+    round after the first fix landed. Resolved via `_substitute_var_refs`
+    (not a per-variable value set): found live by Step 8 independent
+    review, sixth round (issue #1326) -- `-X "$M1$M2"` with `M1=PO`,
+    `M2=ST` resolves to a real `POST` write once bash concatenates the two
+    references, but checking each referenced variable's value separately
+    (the prior approach) never recognized the concatenation, since
+    neither "po" nor "st" alone is a write method."""
     for i, raw_tok in enumerate(seg):
         dynamic_value_part = _gh_api_method_dynamic_value(seg, i, raw_tok)
         if dynamic_value_part is None:
             continue
-        referenced = set(_VAR_REF_RE.findall(dynamic_value_part))
-        values = {name_to_value[name] for name in referenced if name in name_to_value}
-        if values & _WRITE_METHODS:
+        resolved = _substitute_var_refs(dynamic_value_part, name_to_value)
+        if resolved is not None and any(resolved.startswith(m) for m in _WRITE_METHODS):
             return True
     return False
 
@@ -445,14 +517,19 @@ def _gh_api_method_flagname_dynamic_hit(seg: list[str], name_to_value: dict[str,
     (`_gh_api_method_literal_hit`) nor the fused-value dynamic scan
     (`_gh_api_method_dynamic_hit`) above ever recognized it as a flag at
     all -- both key off literal text inside the token, and this token has
-    none."""
+    none. The value token is resolved via `_substitute_var_refs` (not
+    `_resolve_bare_var`), so a write-method value split across multiple
+    concatenated variables (`$F "$M1$M2"`) is caught too -- the same gap
+    `_gh_api_method_dynamic_hit` above had, found live by Step 8
+    independent review, sixth round (issue #1326), against this
+    function's own flag-name-indirection case."""
     for i, raw_tok in enumerate(seg):
         if _resolve_bare_var(raw_tok, name_to_value) not in ("-x", "--method"):
             continue
         if i + 1 >= len(seg):
             continue
         value_tok = seg[i + 1]
-        value = value_tok.lower() if not _is_dynamic(value_tok) else _resolve_bare_var(value_tok, name_to_value)
+        value = value_tok.lower() if not _is_dynamic(value_tok) else _substitute_var_refs(value_tok, name_to_value)
         if value is not None and any(value.startswith(m) for m in _WRITE_METHODS):
             return True
     return False
