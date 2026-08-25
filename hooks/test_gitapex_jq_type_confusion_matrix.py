@@ -141,13 +141,17 @@ class GuardedField:
         return REJECTED_FOR_OBJECT_GUARD if self.expected_type == "object" else REJECTED_FOR_STRING_GUARD
 
     @property
-    def bad_shape_phrase(self) -> str:
-        if self.expected_type == "object":
-            return f"{self.field_label} in the payload is not a JSON object"
-        return f"{self.field_label} in the payload is not a string"
-
-    def __repr__(self) -> str:  # pytest test-id friendliness
-        return f"{self.hook_id}:{self.field_label}"
+    def bad_shape_phrases(self) -> tuple[str, str]:
+        """Both known deny-message phrasings for a shape-guard rejection
+        naming this field -- checked without branching on `expected_type`,
+        since every guard in this registry's own null/absent case falls
+        through to the hook's downstream logic (exit 0 or a real semantic
+        deny) rather than ever tripping *either* shape guard, so which
+        phrasing would have applied is not itself exercised here."""
+        return (
+            f"{self.field_label} in the payload is not a JSON object",
+            f"{self.field_label} in the payload is not a string",
+        )
 
 
 # Six hooks issue #1218 names: the four hooks PR #1213 already fixed, plus
@@ -346,7 +350,8 @@ def test_guard_does_not_misfire_on_null_or_absent(field: GuardedField, value: An
     )
     if result.returncode == 2:
         parsed = json.loads(result.stderr)
-        assert field.bad_shape_phrase not in parsed["systemMessage"], (
+        message = parsed["systemMessage"]
+        assert not any(phrase in message for phrase in field.bad_shape_phrases), (
             f"{field.hook_id}:{field.field_label}={value_label}: this guard wrongly rejected a "
-            f"null/absent value as a bad shape: {parsed['systemMessage']!r}"
+            f"null/absent value as a bad shape: {message!r}"
         )
