@@ -132,6 +132,40 @@ def test_rule_gh_api_write_allows_a_dynamic_method_value_resolved_to_a_read(var:
     assert result is None
 
 
+@_PROPERTIES
+@given(
+    method=st.sampled_from(["post", "put", "patch", "delete"]),
+    var=_IDENTIFIERS,
+    shape=st.sampled_from(["-x{}", "-x={}", "--method={}"]),
+)
+def test_rule_gh_api_write_detects_a_dynamic_method_value_fused_with_the_flag(
+    method: str, var: str, shape: str
+) -> None:
+    """Model-based, regression pin for a real bypass found live by Step 8
+    independent review, second round (issue #1326): the first fix for
+    this bypass only covered the flag-and-value-as-two-separate-tokens
+    shape (``-X $M``) -- ``-X=$M``, ``-X$M``/``-X"$M"`` (shlex dequotes
+    the quoted form to the same single fused token), and ``--method=$M``
+    are all semantically identical ways to pass a dynamic method value,
+    and all three still resolved to a real write while being wrongly
+    allowed until this second fix."""
+    token = shape.format(f"${var}")
+    segments = [["gh", "api", "repos/x/y", token]]
+    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y {token}", {var: method})
+    assert result is not None
+
+
+@_PROPERTIES
+@given(var=_IDENTIFIERS, shape=st.sampled_from(["-x{}", "-x={}", "--method={}"]))
+def test_rule_gh_api_write_allows_a_fused_dynamic_method_value_resolved_to_a_read(var: str, shape: str) -> None:
+    """No false positive: the same three fused shapes, resolved to GET via
+    ``name_to_value``, are never flagged."""
+    token = shape.format(f"${var}")
+    segments = [["gh", "api", "repos/x/y", token]]
+    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y {token}", {var: "get"})
+    assert result is None
+
+
 _SHORT_FLAG_WITH_VALUE = st.tuples(st.sampled_from(["-c", "-C"]), st.sampled_from(["cfgkey=cfgval", "/tmp/some/repo"]))
 _LONG_FLAG_ALONE = st.sampled_from(["--git-dir=/tmp/x/.git", "--no-pager", "--work-tree=/tmp/y"])
 _GIT_GLOBAL_FLAG_GROUP = st.one_of(_SHORT_FLAG_WITH_VALUE.map(list), _LONG_FLAG_ALONE.map(lambda f: [f]))

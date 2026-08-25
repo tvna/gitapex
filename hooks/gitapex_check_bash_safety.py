@@ -309,13 +309,17 @@ def _rule_gh_api_write(segments: list[list[str]], lowered_command: str, name_to_
     own case-insensitive match against its whole lowered command -- so
     `-F`/`-f` are indistinguishable here exactly as they were there.
 
-    A `-X`/`--method` flag whose VALUE token is itself dynamically
-    constructed (e.g. `-X $M`) is checked separately, against
-    `name_to_value`: `literals` above has already filtered every dynamic
-    token out, so the loop below can never see that a value token was
-    even present, let alone what it resolves to -- found live by Step 8
-    independent review (issue #1326): `M=POST; gh api .../merge -X $M`
-    resolved to a real write and was wrongly allowed."""
+    A `-X`/`--method` flag whose VALUE is itself dynamically constructed
+    -- as a separate token (`-X $M`), fused with `=` (`-X=$M`,
+    `--method=$M`), or fused directly (`-X$M`, `-X"$M"` -- shlex dequotes
+    the quoted form to the same single token as the unquoted one) -- is
+    checked separately, against `name_to_value`: `literals` above has
+    already filtered every dynamic token out, so the loop above can never
+    see that a value was even present, let alone what it resolves to --
+    found live by Step 8 independent review (issue #1326), in two rounds:
+    the separate-token form first (`M=POST; gh api .../merge -X $M`
+    resolved to a real write and was wrongly allowed), then the fused
+    forms in a second round after the first fix landed."""
     for seg in segments:
         literals = [t.lower() for t in seg if not _is_dynamic(t)]
         has_gh_api = any(literals[i : i + 2] == ["gh", "api"] for i in range(len(literals) - 1))
@@ -336,11 +340,18 @@ def _rule_gh_api_write(segments: list[list[str]], lowered_command: str, name_to_
                 return "a 'gh api' write call (-X/--method POST/PUT/PATCH/DELETE)"
 
         for i, raw_tok in enumerate(seg):
-            if _is_dynamic(raw_tok) or raw_tok.lower() not in ("-x", "--method"):
+            dynamic_value_part: str | None = None
+            if _is_dynamic(raw_tok):
+                lowered_tok = raw_tok.lower()
+                if lowered_tok.startswith("-x") and len(raw_tok) > 2:
+                    dynamic_value_part = raw_tok[2:]
+                elif lowered_tok.startswith("--method="):
+                    dynamic_value_part = raw_tok[len("--method=") :]
+            elif raw_tok.lower() in ("-x", "--method") and i + 1 < len(seg) and _is_dynamic(seg[i + 1]):
+                dynamic_value_part = seg[i + 1]
+            if dynamic_value_part is None:
                 continue
-            if i + 1 >= len(seg) or not _is_dynamic(seg[i + 1]):
-                continue
-            referenced = set(_VAR_REF_RE.findall(seg[i + 1]))
+            referenced = set(_VAR_REF_RE.findall(dynamic_value_part))
             values = {name_to_value[name] for name in referenced if name in name_to_value}
             if values & _WRITE_METHODS:
                 return "a 'gh api' write call with a dynamically constructed -X/--method value assigned from a denied write method"
