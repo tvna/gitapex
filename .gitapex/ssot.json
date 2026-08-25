@@ -95,7 +95,7 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {"kind": "bash-pattern", "ref": "pip install|pip3 install|npm install|npm i|yarn add|pnpm add|go install|brew install|apt install|apt-get install|gem install|cargo install|uv pip install|uv install|uv add|plugin install"},
+        {"kind": "bash-pattern", "ref": "pip install|pip3 install|npm install|npm i|yarn add|pnpm add|go install|brew install|apt install|apt-get install|gem install|cargo install|uv pip install|uv install|plugin install"},
         {"kind": "bash-pattern", "ref": "gh issue create|edit|close|comment|delete|reopen|transfer|pin|unpin|lock|unlock|develop"},
         {"kind": "bash-pattern", "ref": "gh pr create|edit|close|comment|merge|review|ready|reopen|lock|unlock|update-branch"},
         {"kind": "bash-pattern", "ref": "gh api -X|--method POST|PUT|PATCH|DELETE"},
