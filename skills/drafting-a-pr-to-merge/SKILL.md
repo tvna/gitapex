@@ -145,21 +145,12 @@ platform naming.
    - `"unknown"` -> GitHub has not finished computing mergeability yet
      (common immediately after a push); wait briefly before checking
      again.
-   - `"draft"` -> First, check whether the PR still carries the
-     `branch-plan-executing` label (`github:pull_request_read` method
-     `get`'s own `labels` field, or `github:issue_read` method
-     `get_labels`). Its presence means `executing-a-branch-plan` still
-     owns this PR's own CI/review/comment activity (that skill's own
-     step 5-9 window) -- defer rather than entering this skill's own fix
-     loop against a diff still being written, and re-check on the same
-     cadence as step 10's own monitoring rather than treating one
-     labeled check as a one-time skip; that skill's own step 9 releases
-     the label once its own execution is done. Once the label is absent,
-     `mergeable_state` collapses to this single draft-state value, so do
-     not stop at the draft label alone: check `mergeable` (a boolean
-     from `github:pull_request_read` method `get`, not gated by draft
-     status), `get_check_runs`, and `get_reviews` next. `mergeable:
-     false`, a failing check, or an unresolved thread -> loop back to
+   - `"draft"` -> Check `branch-plan-executing` first (present ->
+     `executing-a-branch-plan` owns this PR, defer). Otherwise
+     `mergeable_state` collapses to this single value while draft, so do
+     not stop at the label: check `mergeable` (a boolean, not gated by
+     draft status), `get_check_runs`, and `get_reviews` first, all via
+     `github:pull_request_read`. `mergeable: false`, a failing check, or an unresolved thread -> loop back to
      step 3 regardless of why the PR is draft -- a real blocker under a
      draft label is still a real blocker. Otherwise (`mergeable: true`,
      checks green, no unresolved threads): draft alone never proves
@@ -486,9 +477,8 @@ layer's raw response and how it records that verdict on the PR -- composed
 with here, not re-derived.
 
 `executing-a-branch-plan` (see `skills/executing-a-branch-plan/SKILL.md`)
-opens the PR this skill picks up at its own step 9; a PR still mid-execution
-there can sit in draft for a different reason -- see that skill's own "vs.
-`drafting-a-pr-to-merge`" entry for the edge case.
+opens the PR this skill picks up at its own step 9; step 7's label check
+keeps a mid-execution draft there from being misread as a terminal state.
 
 A bare defect report has no dedicated skill anymore:
 `planning-a-branch-from-an-issue` reproduces it directly, then hands off to
