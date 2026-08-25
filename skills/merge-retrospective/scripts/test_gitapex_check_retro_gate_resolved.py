@@ -55,6 +55,117 @@ def test_citation_count_sums_across_multiple_citing_commits() -> None:
 
 
 # ---------------------------------------------------------------------------
+# is_gate_less (issue #1297)
+# ---------------------------------------------------------------------------
+
+
+def test_is_gate_less_matches_ci_stub_marker() -> None:
+    body = "Automated stub opened by the post-merge-auto-retro gate for PR #42."
+    assert checker.is_gate_less(body) is True
+
+
+def test_is_gate_less_matches_zero_repair_fast_close_marker() -> None:
+    body = "PR #63 merged with zero repairs.\nRetrospective status: zero-repair-fast-close\nRefs #63."
+    assert checker.is_gate_less(body) is True
+
+
+def test_is_gate_less_false_when_neither_marker_present() -> None:
+    body = "1. [Failed CI rerun] ...\n   Status: `missing-deterministic-gate`\n   Proposed gate: add a pre-push hook."
+    assert checker.is_gate_less(body) is False
+
+
+def test_is_gate_less_false_for_empty_body() -> None:
+    assert checker.is_gate_less("") is False
+
+
+# ---------------------------------------------------------------------------
+# partition_gate_less (issue #1297)
+# ---------------------------------------------------------------------------
+
+
+def test_partition_gate_less_separates_matching_from_remaining() -> None:
+    bodies = {
+        118: "Automated stub opened by the post-merge-auto-retro gate.",
+        187: "Retrospective status: zero-repair-fast-close",
+        242: "1. [Repair] ... Status: `missing-deterministic-gate` Proposed gate: ...",
+    }
+    gate_less, remaining = checker.partition_gate_less([118, 187, 242], bodies)
+    assert gate_less == [118, 187]
+    assert remaining == [242]
+
+
+def test_partition_gate_less_missing_body_treated_as_not_gate_less() -> None:
+    # An issue number with no entry in the bodies mapping (caller supplied
+    # no body for it) must not be silently excluded -- absence of evidence
+    # is not evidence of gate-less-ness.
+    gate_less, remaining = checker.partition_gate_less([999], {})
+    assert gate_less == []
+    assert remaining == [999]
+
+
+def test_partition_gate_less_deduplicates_preserving_first_occurrence_order() -> None:
+    bodies = {118: "Automated stub opened by the post-merge-auto-retro gate.", 242: "no marker here"}
+    gate_less, remaining = checker.partition_gate_less([118, 242, 118, 242], bodies)
+    assert gate_less == [118]
+    assert remaining == [242]
+
+
+# ---------------------------------------------------------------------------
+# load_issue_bodies (issue #1297)
+# ---------------------------------------------------------------------------
+
+
+def test_load_issue_bodies_returns_empty_dict_when_path_is_none() -> None:
+    assert checker.load_issue_bodies(None) == {}
+
+
+def test_load_issue_bodies_reads_json_file(tmp_path: pathlib.Path) -> None:
+    bodies_path = tmp_path / "bodies.json"
+    bodies_path.write_text(json.dumps({"118": "Automated stub opened by the post-merge-auto-retro gate."}))
+    assert checker.load_issue_bodies(str(bodies_path)) == {
+        118: "Automated stub opened by the post-merge-auto-retro gate."
+    }
+
+
+def test_load_issue_bodies_reads_stdin_when_path_is_dash(monkeypatch: pytest.MonkeyPatch) -> None:
+    import io
+
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps({"242": "no marker here"})))
+    assert checker.load_issue_bodies("-") == {242: "no marker here"}
+
+
+def test_load_issue_bodies_skips_non_integer_keys(tmp_path: pathlib.Path) -> None:
+    bodies_path = tmp_path / "bodies.json"
+    bodies_path.write_text(json.dumps({"not-a-number": "text", "118": "real body"}))
+    assert checker.load_issue_bodies(str(bodies_path)) == {118: "real body"}
+
+
+def test_load_issue_bodies_skips_non_string_values(tmp_path: pathlib.Path) -> None:
+    bodies_path = tmp_path / "bodies.json"
+    bodies_path.write_text(json.dumps({"118": None, "242": 5, "999": "kept"}))
+    assert checker.load_issue_bodies(str(bodies_path)) == {999: "kept"}
+
+
+def test_load_issue_bodies_raises_on_missing_file() -> None:
+    with pytest.raises(checker.BodiesInputError):
+        checker.load_issue_bodies("/nonexistent/bodies.json")
+
+
+def test_load_issue_bodies_raises_on_malformed_json(tmp_path: pathlib.Path) -> None:
+    bodies_path = tmp_path / "bodies.json"
+    bodies_path.write_text("{not valid json")
+    with pytest.raises(checker.BodiesInputError):
+        checker.load_issue_bodies(str(bodies_path))
+
+
+def test_load_issue_bodies_raises_when_not_a_json_object(tmp_path: pathlib.Path) -> None:
+    bodies_path = tmp_path / "bodies.json"
+    bodies_path.write_text("[]")
+    with pytest.raises(checker.BodiesInputError):
+        checker.load_issue_bodies(str(bodies_path))
+
+
+# ---------------------------------------------------------------------------
 # partition_resolved
 # ---------------------------------------------------------------------------
 
@@ -243,7 +354,7 @@ def test_main_prints_json_partition_and_exits_zero(
     exit_code = checker.main(["1109", "1107"])
     assert exit_code == 0
     out = json.loads(capsys.readouterr().out)
-    assert out == {"unresolved": [1109], "resolved": [1107]}
+    assert out == {"unresolved": [1109], "resolved": [1107], "gate_less": []}
 
 
 def test_main_exits_one_on_git_log_error(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
@@ -286,3 +397,39 @@ def test_main_passes_default_ssot_path_joined_with_cwd(monkeypatch: pytest.Monke
 def test_main_requires_at_least_one_issue_number() -> None:
     with pytest.raises(SystemExit):
         checker.main([])
+
+
+def test_main_output_has_empty_gate_less_when_bodies_omitted(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Backward-compat: no --bodies means every candidate flows through the
+    # existing two-signal check exactly as before this batch.
+    monkeypatch.setattr(checker, "git_commit_messages", lambda *a, **k: ["Refs #1107"])
+    monkeypatch.setattr(checker, "load_gate_tracking_issues", lambda *a, **k: {1107})
+    exit_code = checker.main(["1109", "1107"])
+    assert exit_code == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out == {"unresolved": [1109], "resolved": [1107], "gate_less": []}
+
+
+def test_main_excludes_gate_less_issue_from_unresolved(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    bodies_path = tmp_path / "bodies.json"
+    bodies_path.write_text(json.dumps({"118": "Automated stub opened by the post-merge-auto-retro gate."}))
+    monkeypatch.setattr(checker, "git_commit_messages", lambda *a, **k: [])
+    monkeypatch.setattr(checker, "load_gate_tracking_issues", lambda *a, **k: set())
+    exit_code = checker.main(["118", "242", "--bodies", str(bodies_path)])
+    assert exit_code == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out == {"unresolved": [242], "resolved": [], "gate_less": [118]}
+
+
+def test_main_exits_one_on_bodies_input_error(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(checker, "git_commit_messages", lambda *a, **k: [])
+    monkeypatch.setattr(checker, "load_gate_tracking_issues", lambda *a, **k: set())
+    exit_code = checker.main(["1", "--bodies", "/nonexistent/bodies.json"])
+    assert exit_code == 1
+    assert "error:" in capsys.readouterr().err

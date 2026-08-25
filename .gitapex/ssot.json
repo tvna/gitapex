@@ -769,7 +769,7 @@
       "id": "retrospective-gate-drift-scan",
       "kind": "script",
       "script": ".github/scripts/gitapex_scan_retrospective_gate_drift.py",
-      "rule": "Lists every retrospective-labelled issue (any state) and fails the job if the count with zero commit on main citing it exceeds threshold 20.",
+      "rule": "Lists every retrospective-labelled issue (any state), excludes any whose body carries a gate-less marker (CI-opened stub or zero-repair fast-close -- issue #1297), and fails the job if the count of remaining issues with zero commit on main citing it exceeds threshold 20.",
       "planes": ["ci"],
       "local_exclusion": "Queries the GitHub issues API for retrospective-labelled issues; there is no offline equivalent.",
       "trigger": ".github/workflows/retrospective-gate-drift.yml, daily cron 07:00 UTC + workflow_dispatch",

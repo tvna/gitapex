@@ -30,16 +30,30 @@ Usage::
         skills/merge-retrospective/scripts/gitapex_check_retro_gate_resolved.py \\
         1109 1107 1108 1114
 
-Prints one JSON object to stdout, partitioning every input issue number
-into exactly one of two arrays::
+    # With issue bodies (issue #1297), to also populate the `gate_less`
+    # bucket below -- a JSON object mapping issue number to body text:
+    uv run --frozen python3 \\
+        skills/merge-retrospective/scripts/gitapex_check_retro_gate_resolved.py \\
+        1109 1107 --bodies -  <<< '{"1109": "...", "1107": "..."}'
 
-    {"unresolved": [1109], "resolved": [1107, 1108, 1114]}
+Prints one JSON object to stdout, partitioning every input issue number
+into exactly one of three arrays::
+
+    {"unresolved": [1109], "resolved": [1107, 1108, 1114], "gate_less": []}
+
+Issue #1297: a candidate whose body carries either the CI-opened-stub
+marker or the zero-repair fast-close marker (`is_gate_less`) is routed to
+`gate_less` by a pre-check that runs *before* the two-signal partition
+below -- such an issue never had a gate to cite or register, so it cannot
+satisfy that check by construction and must not inflate `unresolved`.
+`gate_less` is always empty when `--bodies` is omitted, identical to this
+script's behavior before this bucket existed.
 
 Exit codes:
     0  The partition was computed and printed.
-    1  A local `git log` or `.gitapex/ssot.json` read error prevented the
-       check from completing (never silently reported as "nothing
-       resolved").
+    1  A local `git log`, `.gitapex/ssot.json`, or `--bodies` read error
+       prevented the check from completing (never silently reported as
+       "nothing resolved").
 
 detection-logic-property-coverage waiver (issue #1178 gate, on
 `_citation_pattern` and `citation_count`'s own `.search()` call):
@@ -80,6 +94,23 @@ class SsotLedgerError(RuntimeError):
     gitapex_scan_retrospective_gate_drift.py's own identical rationale)."""
 
 
+class BodiesInputError(RuntimeError):
+    """Raised when `--bodies` points at a file/stdin payload that cannot be
+    read as a usable number-to-body mapping (issue #1297). Only the
+    file-or-JSON-shape failure raises -- a malformed individual entry
+    (non-integer key, non-string value) is skipped instead, mirroring
+    `load_gate_tracking_issues`'s own per-entry leniency below."""
+
+
+# Issue #1297: a `retrospective` issue can legitimately close with no gate
+# to ever propose -- a bare CI-opened stub, or a zero-repair fast-close
+# (merge-retrospective/SKILL.md Step 5). Neither can ever satisfy the
+# two-signal check below by construction, so both are excluded from
+# consideration entirely rather than counted as unresolved backlog.
+_CI_STUB_MARKER = "Automated stub opened by the post-merge-auto-retro gate"
+_ZERO_REPAIR_MARKER = "Retrospective status: zero-repair-fast-close"
+
+
 # Record separator (0x1e) / unit separator (0x1f): see
 # gitapex_scan_retrospective_gate_drift.py's own identical comment -- these
 # delimit `git log` entries/fields without risk of an attacker-controlled
@@ -101,6 +132,65 @@ def citation_count(commit_messages: list[str], issue_number: int) -> int:
         for message in commit_messages
         if pattern.search(message)  # detection-logic-property-coverage: WAIVED: see docstring
     )
+
+
+def is_gate_less(body: str) -> bool:
+    """Return `True` iff `body` carries either literal gate-less marker
+    (issue #1297): the CI-opened stub marker, or the zero-repair
+    fast-close marker `merge-retrospective/SKILL.md`'s Step 5 requires."""
+    return _CI_STUB_MARKER in body or _ZERO_REPAIR_MARKER in body
+
+
+def partition_gate_less(issue_numbers: list[int], bodies: dict[int, str]) -> tuple[list[int], list[int]]:
+    """Partition every distinct entry in `issue_numbers` into `(gate_less,
+    remaining)`, run *before* `partition_resolved` below. An issue number
+    with no entry in `bodies` is never treated as gate-less -- absence of
+    a supplied body is not evidence of gate-less-ness, it just means the
+    caller had nothing to check. Deduplicates first, same first-occurrence
+    order guarantee as `partition_resolved`."""
+    deduped_issue_numbers = list(dict.fromkeys(issue_numbers))
+    gate_less = [n for n in deduped_issue_numbers if is_gate_less(bodies.get(n, ""))]
+    gate_less_set = set(gate_less)
+    remaining = [n for n in deduped_issue_numbers if n not in gate_less_set]
+    return gate_less, remaining
+
+
+def load_issue_bodies(path: str | None) -> dict[int, str]:
+    """Return a number-to-body mapping read from `path` (issue #1297).
+    `path` of `None` returns an empty mapping -- the gate-less pre-check
+    then simply finds nothing to exclude, identical to this script's
+    behavior before this mapping existed. `path == "-"` reads standard
+    input instead of a file, matching the file-or-stdin convention
+    `gitapex_check_acm_present.py`'s own `--body` argument already
+    established in this repository.
+
+    A key that does not parse as an integer, or a value that is not a
+    string (for example JSON `null` for an issue with an empty body), is
+    skipped rather than raised on -- mirrors `load_gate_tracking_issues`'s
+    own per-entry leniency. Only a file-or-JSON-shape failure raises
+    `BodiesInputError`."""
+    if path is None:
+        return {}
+    try:
+        raw = sys.stdin.read() if path == "-" else pathlib.Path(path).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        raise BodiesInputError(f"{path}: bodies mapping cannot be read: {error}") from error
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise BodiesInputError(f"{path}: bodies mapping is not valid JSON: {error}") from error
+    if not isinstance(data, dict):
+        raise BodiesInputError(f"{path}: bodies mapping must be a JSON object, got {type(data).__name__}")
+
+    bodies: dict[int, str] = {}
+    for key, value in data.items():
+        try:
+            number = int(key)
+        except (TypeError, ValueError):
+            continue
+        if isinstance(value, str):
+            bodies[number] = value
+    return bodies
 
 
 def partition_resolved(
@@ -202,17 +292,27 @@ def main(argv: list[str] | None = None) -> int:
         default=".gitapex/ssot.json",
         help="Path (relative to --cwd) to the gate registry (default: .gitapex/ssot.json)",
     )
+    parser.add_argument(
+        "--bodies",
+        default=None,
+        help="Path to a JSON file mapping issue numbers to their body text (e.g. from "
+        "mcp__github__list_issues with 'body' in fields), used to pre-check for the "
+        "gate-less markers before the two-signal partition runs. Pass '-' to read from "
+        "standard input. Omit to skip the gate-less pre-check entirely (default).",
+    )
     args = parser.parse_args(argv)
 
     try:
         commit_messages = git_commit_messages(args.ref, args.cwd)
         tracking_issues = load_gate_tracking_issues(str(pathlib.Path(args.cwd) / args.ssot_path))
-    except (GitLogError, SsotLedgerError) as error:
+        bodies = load_issue_bodies(args.bodies)
+    except (GitLogError, SsotLedgerError, BodiesInputError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 
-    unresolved, resolved = partition_resolved(args.issue_numbers, commit_messages, tracking_issues)
-    print(json.dumps({"unresolved": unresolved, "resolved": resolved}))
+    gate_less, remaining = partition_gate_less(args.issue_numbers, bodies)
+    unresolved, resolved = partition_resolved(remaining, commit_messages, tracking_issues)
+    print(json.dumps({"unresolved": unresolved, "resolved": resolved, "gate_less": gate_less}))
     return 0
 
 

@@ -186,10 +186,11 @@ such taxonomy applies only `retrospective`, unchanged from before.
    got implemented, so a proposed gate cannot silently rot across cycles
    unnoticed.
    - **Find prior retrospective issues:** `mcp__github__list_issues`
-     with `labels: ["retrospective"]` -- deliberately unfiltered by
-     state (omit the `state` parameter; it returns both open and closed
-     issues when omitted). Do not use `mcp__github__search_issues` for
-     the labeled query: that tool performs natural-language semantic
+     with `labels: ["retrospective"]` and `fields: ["number", "body"]` --
+     deliberately unfiltered by state (omit the `state` parameter; it
+     returns both open and closed issues when omitted). Do not use
+     `mcp__github__search_issues` for the labeled query: that tool
+     performs natural-language semantic
      matching, not an exact label filter, and is itself a source of
      cross-session divergence, upstream of the citation-only weakness
      the next bullet below replaces. Closing an issue is not proof its
@@ -208,7 +209,8 @@ such taxonomy applies only `retrospective`, unchanged from before.
      expected convention before adding its issue number -- a
      semantically-similar but non-matching title (for example, an issue
      merely discussing retrospectives rather than being one) must not
-     enter the candidate batch.
+     enter the candidate batch. Pair each `body` with its number for the
+     next bullet (a legacy-title-fallback hit has none; stays unpaired).
    - **Check whether each hit's proposed gate was implemented:** collect
      every candidate issue number found above into one list. If that
      list is empty (no retrospective-labelled issues and no legacy-title
@@ -216,20 +218,21 @@ such taxonomy applies only `retrospective`, unchanged from before.
      invocation entirely rather than calling it with zero arguments (its
      `issue_numbers` CLI argument requires at least one, per its own
      `nargs="+"`, and rejects a zero-argument call before the script's
-     own logic ever runs). Otherwise, run a single batch invocation of
+     own logic ever runs). Otherwise, run
      `uv run --frozen python3
      skills/merge-retrospective/scripts/gitapex_check_retro_gate_resolved.py
-     <every candidate issue number>` (never `mcp__github__search_commits`
-     or a bare citation check directly -- a citing commit alone is not
-     proof a gate was actually built, only that someone touched
-     something related to the issue). This script re-implements the same
-     two-signal check `.github/scripts/gitapex_scan_retrospective_gate_drift.py`
-     already runs in CI: an issue number only clears as resolved when
-     both a commit on `HEAD` cites it AND `.gitapex/ssot.json`
-     `gates[].tracking_issue` names it. It prints one JSON object to
-     stdout partitioning every *distinct* input issue number (the script
-     deduplicates first) into exactly one of two arrays:
-     `{"unresolved": [...], "resolved": [...]}`. This
+     <every candidate issue number> --bodies -`, piping the collected
+     number-to-body pairs as one JSON object on stdin (never
+     `mcp__github__search_commits` or a bare citation check directly --
+     a citing commit alone is not proof a gate was built). This script
+     re-implements the same two-signal check
+     `.github/scripts/gitapex_scan_retrospective_gate_drift.py` already
+     runs in CI: an issue clears as resolved only when a commit on
+     `HEAD` cites it AND `.gitapex/ssot.json` `gates[].tracking_issue`
+     names it -- except a gate-less issue (`#1297`: body carries the
+     CI-opener's stub marker or Step 5's zero-repair marker), excluded
+     first. It prints one JSON object (deduplicated first):
+     `{"unresolved": [...], "resolved": [...], "gate_less": [...]}`. This
      script's `.gitapex/ssot.json` dependency is a gitapex-specific gate
      registry, not a portable convention every calling repository has --
      unlike the CI-opener check above, this step has no repository-
@@ -237,18 +240,19 @@ such taxonomy applies only `retrospective`, unchanged from before.
      equivalent one pointed at via `--ssot-path`) cannot run the
      two-signal check as written, a known limitation, not silently
      papered over. The script fails loudly (exit 1, on stderr) rather
-     than silently reporting an empty result when the registry or
-     `git log` itself is unreadable -- treat that exit code as "the
-     check could not run," never as "nothing is unresolved," and
-     escalate rather than silently falling back to a citation-only read
-     of the same repair.
+     than silently reporting an empty result when the registry,
+     `--bodies`, or `git log` itself is unreadable -- treat that exit
+     code as "the check could not run," never as "nothing is
+     unresolved," and escalate rather than silently falling back to a
+     citation-only read of the same repair.
    - **Report, don't implement:** for each issue number in the script's
      own `unresolved` array, hand it to Step 5 below as a
      **"Carried-forward gate"** entry, kept in its own subsection
      separate from this cycle's own Repairs (do not merge the two lists
      -- a carried-forward gate was not a repair in *this* cycle). Never
      post it as a comment on the old issue, which would fragment
-     visibility instead of concentrating it.
+     visibility instead of concentrating it. A `gate_less` number is
+     dropped entirely -- no Carried-forward entry, never `resolved`.
 2. **Enumerate every repair** between PR open and merge. Use
    `mcp__github__pull_request_read` (`get_commits`, `get_reviews`,
    `get_review_comments`, `get_check_runs`) to reconstruct the history.
@@ -309,7 +313,8 @@ such taxonomy applies only `retrospective`, unchanged from before.
      **and** Step 1 found nothing to carry forward, file a single-line
      issue body instead of the full Repairs shape above -- state the PR
      number, that zero repairs occurred, and that this is being recorded
-     as evidence the process worked this cycle. Confirm the zero-repair
+     as evidence the process worked this cycle, and include the fixed
+     line `Retrospective status: zero-repair-fast-close` verbatim (`#1297`). Confirm the zero-repair
      conclusion before the close call fires, rather than closing on it
      unchecked: when an operator is present to respond (an interactive
      session), preview the exact drafted body and the zero-repair
@@ -485,6 +490,7 @@ passed on the first push, no review comment needed a follow-up commit,
 no force-pushes happened). Filing this retrospective and closing it
 immediately as evidence the process worked this cycle -- an immediate
 close, not a silent skip. Refs #63.
+Retrospective status: zero-repair-fast-close
 ```
 
 This still carries the `retrospective` label (and any secondary
