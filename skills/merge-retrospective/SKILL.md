@@ -229,9 +229,8 @@ such taxonomy applies only `retrospective`, unchanged from before.
      `.github/scripts/gitapex_scan_retrospective_gate_drift.py` already
      runs in CI: an issue clears as resolved only when a commit on
      `HEAD` cites it AND `.gitapex/ssot.json` `gates[].tracking_issue`
-     names it -- except a gate-less issue (`#1297`: body carries the
-     CI-opener's stub marker or Step 5's zero-repair marker), excluded
-     first. It prints one JSON object (deduplicated first):
+     names it -- except a gate-less issue (body carries the CI-opener's
+     stub marker or Step 5's zero-repair marker below), excluded first; it prints one deduplicated JSON object:
      `{"unresolved": [...], "resolved": [...], "gate_less": [...]}`. This
      script's `.gitapex/ssot.json` dependency is a gitapex-specific gate
      registry, not a portable convention every calling repository has --
@@ -310,12 +309,13 @@ such taxonomy applies only `retrospective`, unchanged from before.
      from this cycle's Repairs section -- omit the subsection entirely
      when Step 1 found nothing to carry forward.
    - **Zero-repair fast-close.** When Step 2 finds no repairs at all
-     **and** Step 1 found nothing to carry forward, file a single-line
-     issue body instead of the full Repairs shape above -- state the PR
-     number, that zero repairs occurred, and that this is being recorded
-     as evidence the process worked this cycle, and include the fixed
-     line `Retrospective status: zero-repair-fast-close` verbatim (`#1297`). Confirm the zero-repair
-     conclusion before the close call fires, rather than closing on it
+     **and** Step 1 found nothing to carry forward, file a single-
+     paragraph issue body instead of the full Repairs shape above --
+     state the PR number, that zero repairs occurred, and that this is
+     recorded as evidence the process worked this cycle, plus the fixed
+     line `Retrospective status: zero-repair-fast-close` verbatim on its
+     own line. Confirm the zero-repair conclusion before the close call
+     fires, rather than closing on it
      unchecked: when an operator is present to respond (an interactive
      session), preview the exact drafted body and the zero-repair
      conclusion it rests on, and wait for an explicit go-ahead before
