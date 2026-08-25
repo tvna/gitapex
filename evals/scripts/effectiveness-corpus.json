@@ -20,15 +20,15 @@
       "split": "selection"
     },
     {
-      "skill": "drafting-an-acm-issue",
-      "skill_md": "skills/drafting-an-acm-issue/SKILL.md",
-      "eval_yaml": "evals/drafting-an-acm-issue/eval.yaml",
-      "split": "selection"
-    },
-    {
       "skill": "drafting-an-adr",
       "skill_md": "skills/drafting-an-adr/SKILL.md",
       "eval_yaml": "evals/drafting-an-adr/eval.yaml",
+      "split": "selection"
+    },
+    {
+      "skill": "drafting-issues",
+      "skill_md": "skills/drafting-issues/SKILL.md",
+      "eval_yaml": "evals/drafting-issues/eval.yaml",
       "split": "selection"
     },
     {
@@ -75,12 +75,6 @@
       "split": "test"
     },
     {
-      "skill": "fixing-a-reported-issue",
-      "skill_md": "skills/fixing-a-reported-issue/SKILL.md",
-      "eval_yaml": "evals/fixing-a-reported-issue/eval.yaml",
-      "split": "selection"
-    },
-    {
       "skill": "grounding-in-primary-sources",
       "skill_md": "skills/grounding-in-primary-sources/SKILL.md",
       "eval_yaml": "evals/grounding-in-primary-sources/eval.yaml",
@@ -102,13 +96,13 @@
       "skill": "planning-a-branch-from-an-issue",
       "skill_md": "skills/planning-a-branch-from-an-issue/SKILL.md",
       "eval_yaml": "evals/planning-a-branch-from-an-issue/eval.yaml",
-      "split": "test"
+      "split": "selection"
     },
     {
       "skill": "ranking-the-open-queue",
       "skill_md": "skills/ranking-the-open-queue/SKILL.md",
       "eval_yaml": "evals/ranking-the-open-queue/eval.yaml",
-      "split": "selection"
+      "split": "test"
     },
     {
       "skill": "responding-to-a-fresh-arrival",
@@ -132,13 +126,13 @@
       "skill": "scorer-gated-skill-edits",
       "skill_md": "skills/scorer-gated-skill-edits/SKILL.md",
       "eval_yaml": "evals/scorer-gated-skill-edits/eval.yaml",
-      "split": "test"
+      "split": "selection"
     },
     {
       "skill": "screening-a-low-trust-contribution",
       "skill_md": "skills/screening-a-low-trust-contribution/SKILL.md",
       "eval_yaml": "evals/screening-a-low-trust-contribution/eval.yaml",
-      "split": "selection"
+      "split": "test"
     },
     {
       "skill": "setup-gitapex-toolchain",

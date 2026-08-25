@@ -5,11 +5,12 @@ lacks ACM/waiver disclosure, carries a 'tracking' waiver, or is closed.
 Issue #657: hooks/check-issue-acm-disclosure.sh guards issue *creation*
 (mcp__github__issue_write method=="create") but nothing guarded PR
 *creation* -- a PR could be opened against an issue that never carried an
-ACM/waiver (pre-hook issues, web-UI-created issues, and specifically
-fixing-a-reported-issue's bare defect issues, which by design carry
-neither until its own new step posts a `defect` waiver). This hook
-closes that gap: "an Issue's ACM (or waiver) is the sole authority for
-what should be solved; a PR is the act of solving it."
+ACM/waiver (pre-hook issues, web-UI-created issues, and specifically bare
+defect-report issues -- handled via planning-a-branch-from-an-issue's own
+bare-defect path / drafting-issues's `defect (issue not yet filed)` type,
+per issue #1275 -- which by design carry neither until a `defect` waiver
+is posted). This hook closes that gap: "an Issue's ACM (or waiver) is the
+sole authority for what should be solved; a PR is the act of solving it."
 
 Reuses hooks/gitapex_check_acm_present_or_waiver.py directly (`has_acm_disclosure`,
 `waiver_category`, both built on the one `_ACM_WAIVER_RE` this module does

@@ -7,7 +7,7 @@ plugin -- .github/ is dev-only CI tooling and is never installed into a
 consumer repository.
 
 This is a copy of the same header-table regex duplicated across
-skills/drafting-an-acm-issue/scripts/gitapex_check_acm_present.py,
+skills/drafting-issues/scripts/gitapex_check_acm_present.py,
 skills/planning-a-branch-from-an-issue/scripts/gitapex_check_acm_present.py, and
 .github/scripts/gitapex_gate_acm_issue_disclosure.py -- kept in sync by
 tests/test_gitapex_check_acm_present_sync.py's explicit extras list. The
@@ -84,9 +84,12 @@ _HEADER_RE = re.compile(
 
 # Same waiver vocabulary as .github/scripts/gitapex_gate_acm_issue_disclosure.py:
 # `ACM: not-applicable (chore|docs|tracking|defect): <reason>`, a
-# non-empty trailing reason required. `defect` (issue #657) covers
-# fixing-a-reported-issue's bare defect-report issues, which by design
-# never carry an ACM table. The category group is capturing (not `(?:...)`)
+# non-empty trailing reason required. `defect` (issue #657) covers a bare
+# defect-report issue, which by design carries no ACM table; issue #1275
+# retired the skill that originally owned that case, so the waiver's
+# rationale now attributes to planning-a-branch-from-an-issue's own
+# bare-defect path and drafting-issues's `defect (issue not yet filed)`
+# type. The category group is capturing (not `(?:...)`)
 # so callers -- specifically hooks/gitapex_check_pr_issue_acm_disclosure.py, which
 # must distinguish a `tracking` waiver from the other three categories --
 # can read which category matched via `waiver_category()` below without a

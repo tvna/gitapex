@@ -23,7 +23,7 @@ repository's equivalent handoff skill) already reads, so no second file
 needs to be kept in sync with the PR at handoff time, and (b) durably
 readable back across sessions. gitapex's own default matches two
 already-shipped precedents in this repository: the Acceptance Criteria
-Map already lives in the PR body (`planning-a-branch-from-an-issue` step 8), and the
+Map already lives in the PR body (`planning-a-branch-from-an-issue` step 9), and the
 `## Skill audit evidence` section already lives there too. Cross-session
 resume becomes a direct read: a fresh session reopening the same PR calls
 `github:pull_request_read` method `get`/`get_comments` and reads the
@@ -75,7 +75,7 @@ sourced from, or generated in response to, untrusted issue-body text.
 Before writing any of it into the task-list file (step 3), the PR body,
 or a comment, neutralize a raw pipe character, a code-fence marker, or
 another Markdown/HTML control sequence it might carry -- the same
-escaping rule `drafting-an-acm-issue` Step 4 already applies to ACM
+escaping rule `drafting-issues` Step 4 already applies to ACM
 cells, extended here to every Execution-log field and to a task record's
 own verbatim-quoted text, so a task's own failure reason, or an ACM row
 quoted into its own task record, cannot break the PR body's or task-list

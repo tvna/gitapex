@@ -248,7 +248,7 @@ def test_battle_testing_waiver_rejected_when_description_changed():
 - battle-testing-a-skill: WAIVED: docs-only rewording, no behavioral change
 - evaluating-skill-quality: WELL-FORMED-AND-MATURE
 """
-    assert gate.find_disallowed_battle_testing_waiver(body, ["drafting-an-acm-issue"]) == ["drafting-an-acm-issue"]
+    assert gate.find_disallowed_battle_testing_waiver(body, ["drafting-issues"]) == ["drafting-issues"]
 
 
 def test_battle_testing_waiver_allowed_when_description_unchanged():
@@ -262,7 +262,7 @@ def test_battle_testing_waiver_allowed_when_description_unchanged():
 
 
 def test_battle_testing_real_verdict_accepted_even_when_description_changed():
-    assert gate.find_disallowed_battle_testing_waiver(_VALID_SECTION, ["drafting-an-acm-issue"]) == []
+    assert gate.find_disallowed_battle_testing_waiver(_VALID_SECTION, ["drafting-issues"]) == []
 
 
 def test_battle_testing_waiver_check_is_no_op_with_no_evidence_section():

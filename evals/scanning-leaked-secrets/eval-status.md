@@ -101,11 +101,11 @@ own `SKILL.md` as the anchor corpus (it has no dedicated
 `references/rubric.md`, so `SKILL.md` serves as both rubric and skill
 per this repository's own established convention for a skill without
 one), reports 0 warnings against these 16 fixtures. Run repo-wide
-(auto-discovery mode), the only warnings reported are 4 pre-existing
-ones against `fixing-a-reported-issue`, `outward-artifact-preflight`,
-and `scorer-gated-skill-edits` -- confirmed identical, word for word,
-against a baseline with this skill's own `evals/scanning-leaked-secrets/`
-and `skills/scanning-leaked-secrets/` moved aside. This corpus introduces
+(auto-discovery mode), the only warnings reported are 3 pre-existing
+ones against `outward-artifact-preflight` and `scorer-gated-skill-edits`
+-- confirmed identical, word for word, against a baseline with this
+skill's own `evals/scanning-leaked-secrets/` and
+`skills/scanning-leaked-secrets/` moved aside. This corpus introduces
 zero new findings.
 
 ## What has and has not been executed

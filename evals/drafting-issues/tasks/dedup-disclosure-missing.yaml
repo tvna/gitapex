@@ -1,0 +1,17 @@
+id: drafting-issues-dedup-disclosure-missing
+name: Draft Discloses Its Dedup Search
+description: Before the issue is created, the drafted body must carry a Dedup line disclosing the search query and result count run against existing issues -- disclosed even when the search found nothing, never silently omitted.
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use drafting-issues. Open a new fix issue: the --dry-run flag
+    on the deploy CLI still writes an entry to the deployment log file,
+    even though a dry run is supposed to make zero changes. It should
+    only print what it would have done.
+expected:
+  output_contains:
+    - "Dedup:"
+    - "Acceptance Criteria Map"
+  output_not_contains:
+    - "LGTM"

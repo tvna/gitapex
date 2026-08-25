@@ -307,11 +307,11 @@ def test_repository_wide_fixtures_have_no_unreviewed_blocking_findings():
     # test_disclosed_residual_count_matches_the_pinned_set below); it cannot
     # hold English prose to it, so the prose no longer carries a count to drift.
     #
-    # pinned-residual-count: 4
+    # pinned-residual-count: 3
     #
-    # Still pinned. One bullet per cause, not per finding -- the last bullet
-    # covers two skills sharing one, so bullet count and residual count are
-    # deliberately not the same number:
+    # Still pinned. One bullet per cause, not per finding -- a single bullet
+    # can cover more than one skill sharing that cause, so bullet count and
+    # residual count are deliberately not held to each other:
     #
     #   - scorer-gated-skill-edits/ship-without-transfer-check.yaml
     #     [case-sensitivity]: the pre-existing #858 residual, already pinned
@@ -326,14 +326,13 @@ def test_repository_wide_fixtures_have_no_unreviewed_blocking_findings():
     #     only scans the rubric/SKILL.md corpus, which has no visibility into
     #     a fixture's own prompt text (unlike check 2/negation-trap and check
     #     6/prompt-echo, which are deliberately prompt-aware).
-    #   - fixing-a-reported-issue, scorer-gated-skill-edits
-    #     [adversarial-coverage]: each skill's own
+    #   - scorer-gated-skill-edits [adversarial-coverage]: the skill's own
     #     docs genuinely claim adversarial-relevant coverage, but no existing
     #     fixture in tasks/ embeds a real hostile/injected payload that could
     #     be honestly retagged `adversarial` without gaming the check (unlike
     #     the seven skills this run originally flagged whose existing
     #     injection/encoded-payload/escalation fixtures were retagged for
-    #     real in this same PR). Each needs a genuinely new fixture -- see
+    #     real in this same PR). It needs a genuinely new fixture -- see
     #     issue #872, opened as this residual's own tracking follow-up.
     #     `evaluating-skill-quality` was the third member of this group and
     #     is now resolved, not silenced: issue #332's ACM-7 audit round added
@@ -350,6 +349,12 @@ def test_repository_wide_fixtures_have_no_unreviewed_blocking_findings():
     #     hand-verified authoring claim -- readable in the fixture's own prompt
     #     and assertions -- not something this removal can establish. The set
     #     is pinned exactly for the reason stated below, not as that proof.
+    #     This group's other original member left the pinned set not by
+    #     earning coverage but because the skill itself was later retired
+    #     (its reproduce/fix procedure absorbed into
+    #     `planning-a-branch-from-an-issue` + `executing-a-branch-plan`, per
+    #     issue #1275) -- a residual whose subject no longer exists reads as
+    #     resolved the same as one with disclosed coverage, but is not that.
     #
     # Pinning the exact set (never a "count <= N" bound) means a NEW blocking finding
     # anywhere in the corpus fails this test loudly, the same discipline the
@@ -362,7 +367,6 @@ def test_repository_wide_fixtures_have_no_unreviewed_blocking_findings():
     assert blocking == {
         ("scorer-gated-skill-edits/ship-without-transfer-check.yaml", "case-sensitivity", "transfer check"),
         ("outward-artifact-preflight/clean-pass.yaml", "paraphrase-drift", "agreed convention"),
-        ("fixing-a-reported-issue", "adversarial-coverage", "(tasks directory)"),
         ("scorer-gated-skill-edits", "adversarial-coverage", "(tasks directory)"),
     }
 

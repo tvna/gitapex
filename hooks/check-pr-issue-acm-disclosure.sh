@@ -7,8 +7,10 @@
 # Issue #657: hooks/check-issue-acm-disclosure.sh already guards issue
 # *creation*; nothing guarded the PR side, so a PR could be opened
 # against an issue that never carried an ACM/waiver at all (pre-hook
-# issues, web-UI-created issues, and fixing-a-reported-issue's bare
-# defect issues specifically). This hook closes that gap.
+# issues, web-UI-created issues, and bare defect-report issues
+# specifically -- handled via planning-a-branch-from-an-issue's own
+# bare-defect path / drafting-issues's `defect (issue not yet filed)`
+# type, per issue #1275). This hook closes that gap.
 #
 # Checks via hooks/gitapex_check_pr_issue_acm_disclosure.py, a self-contained
 # sibling script bundled beside this hook (not .github/scripts/ --
@@ -130,7 +132,7 @@ fi
 
 if printf '%s' "$check_output" | grep -q '^FAIL:'; then
   reason=$(printf '%s' "$check_output" | sed -n 's/^FAIL: //p')
-  deny "Blocked by hooks/check-pr-issue-acm-disclosure.sh (issue #657): $reason (see drafting-an-acm-issue/SKILL.md's Issue<->PR ACM contract)."
+  deny "Blocked by hooks/check-pr-issue-acm-disclosure.sh (issue #657): $reason (see drafting-issues/SKILL.md's Issue<->PR ACM contract)."
 fi
 
 # gitapex_check_pr_issue_acm_disclosure.py only ever exits 0 (PASS) or 1 with a

@@ -1,7 +1,7 @@
 """CI gate: every script that checks for the Acceptance Criteria Map
 header shares the same regex for it.
 
-drafting-an-acm-issue and planning-a-branch-from-an-issue each ship an independent copy of
+drafting-issues and planning-a-branch-from-an-issue each ship an independent copy of
 gitapex_check_acm_present.py (no skill in this repository shares a scripts/
 directory with another). Both copies' own docstrings say the ACM table's
 header regex must be updated together, but nothing enforced that until
@@ -69,7 +69,7 @@ _EXTRA_ACM_CHECKER_SCRIPTS = (
 
 # Guards against discovery silently finding nothing (a moved skills/
 # directory, a renamed script) and this test then vacuously passing.
-# There are 4 known copies today (drafting-an-acm-issue,
+# There are 4 known copies today (drafting-issues,
 # planning-a-branch-from-an-issue, gitapex_gate_acm_issue_disclosure.py, and
 # hooks/gitapex_check_acm_present_or_waiver.py); the floor matches that exactly so
 # a copy going missing is caught, not just a wholesale discovery failure.
