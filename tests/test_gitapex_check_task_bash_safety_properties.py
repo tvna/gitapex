@@ -103,13 +103,41 @@ def test_rule_bare_install_allows_a_tool_with_a_positional_subcommand(tool: str,
 
 
 @_PROPERTIES
+@given(a=_IDENTIFIERS, b=_IDENTIFIERS, c=_IDENTIFIERS)
+def test_pipe_chains_keeps_pipe_connected_segments_in_the_same_chain(a: str, b: str, c: str) -> None:
+    """Model-based: three simple commands connected by literal ``|``
+    tokens land in ONE chain, as three separate segments within it --
+    added by Step 8 independent review, twelfth round (issue #1326),
+    the primitive ``_rule_fetch_exec`` needs to tell a real pipe from an
+    unrelated, merely-sequenced statement (see that function's own
+    docstring)."""
+    tokens = [a, "|", b, "|", c]
+    assert checker._pipe_chains(tokens) == [[[a], [b], [c]]]
+
+
+@_PROPERTIES
+@given(a=_IDENTIFIERS, b=_IDENTIFIERS, op=st.sampled_from([";", "&", "&&", "||"]))
+def test_pipe_chains_breaks_a_new_chain_at_every_other_operator(a: str, b: str, op: str) -> None:
+    """No false positive: any control operator OTHER than a literal ``|``
+    (``;``, ``&``, ``&&``, ``||``) starts a genuinely NEW, unrelated
+    chain -- two commands merely sequenced, not piped, must never be
+    treated as connected."""
+    tokens = [a, op, b]
+    assert checker._pipe_chains(tokens) == [[[a]], [[b]]]
+
+
+@_PROPERTIES
 @given(tool=st.sampled_from(["curl", "wget"]), interpreter=st.sampled_from(["sh", "bash", "zsh", "dash", "SH", "Bash"]))
 def test_rule_fetch_exec_detects_download_piped_into_a_shell_interpreter(tool: str, interpreter: str) -> None:
     """Model-based: curl/wget (any casing tolerated via lowering) piped
     directly into any of the four recognized shell interpreters (any
-    casing) is always detected, regardless of the download URL."""
-    segments = [[tool, "https://example.invalid/install.sh"], [interpreter]]
-    assert checker._rule_fetch_exec(segments, {}, {}) is not None
+    casing) is always detected, regardless of the download URL. Takes a
+    ``_pipe_chains``-shaped argument (one chain containing both
+    segments) -- round 12, issue #1326: ``_rule_fetch_exec`` now operates
+    on pipe chains, not plain ``segment_tokens`` segments, so it can tell
+    a real pipe from an unrelated, merely-sequenced statement."""
+    pipe_chains = [[[tool, "https://example.invalid/install.sh"], [interpreter]]]
+    assert checker._rule_fetch_exec(pipe_chains, {}, {}) is not None
 
 
 @_PROPERTIES
@@ -118,8 +146,8 @@ def test_rule_fetch_exec_detects_download_piped_through_sudo_into_a_shell(tool: 
     """Model-based: an intervening ``sudo`` before the interpreter does
     not defeat detection -- ``interp_index`` is deliberately advanced past
     a literal ``sudo`` token before checking the interpreter name."""
-    segments = [[tool, "https://example.invalid/install.sh"], ["sudo", interpreter]]
-    assert checker._rule_fetch_exec(segments, {}, {}) is not None
+    pipe_chains = [[[tool, "https://example.invalid/install.sh"], ["sudo", interpreter]]]
+    assert checker._rule_fetch_exec(pipe_chains, {}, {}) is not None
 
 
 @_PROPERTIES
@@ -128,8 +156,39 @@ def test_rule_fetch_exec_allows_a_download_piped_into_a_non_shell_program(tool: 
     """No false positive: piping a download into a program that is not
     one of the four recognized shell interpreters is never flagged by
     this rule."""
-    segments = [[tool, "https://example.invalid/data.json"], [other]]
-    assert checker._rule_fetch_exec(segments, {}, {}) is None
+    pipe_chains = [[[tool, "https://example.invalid/data.json"], [other]]]
+    assert checker._rule_fetch_exec(pipe_chains, {}, {}) is None
+
+
+@_PROPERTIES
+@given(tool=st.sampled_from(["curl", "wget"]), passthrough=st.sampled_from(["cat", "tee", "grep foo"]))
+def test_rule_fetch_exec_detects_download_piped_through_a_passthrough_into_a_shell(tool: str, passthrough: str) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, twelfth round (issue #1326): a
+    content-preserving passthrough stage between the fetch and the
+    interpreter (``curl <url> | cat | bash``) still carries the fetched
+    payload through unmodified -- confirmed live via real bash
+    (``cat <script> | cat | bash`` genuinely executes the script). The
+    pre-fix version stopped scanning after the ONE segment immediately
+    following the fetch command, so any passthrough command defeated it
+    entirely."""
+    pipe_chains = [[[tool, "https://example.invalid/install.sh"], passthrough.split(), ["bash"]]]
+    assert checker._rule_fetch_exec(pipe_chains, {}, {}) is not None
+
+
+@_PROPERTIES
+@given(tool=st.sampled_from(["curl", "wget"]), other=st.sampled_from(["npm", "bash"]))
+def test_rule_fetch_exec_allows_a_sequenced_unrelated_statement_after_a_fetch(tool: str, other: str) -> None:
+    """No false positive, regression pin for the real bypass found live by
+    Step 8 independent review, twelfth round (issue #1326): a plain
+    SEQUENCED statement after a fetch (separated by ``;``, not piped at
+    all) must stay allowed, even when that later statement happens to
+    invoke a shell interpreter -- ``curl <url>; bash unrelated.sh`` never
+    pipes the download into anything. Modeled here as two SEPARATE
+    chains (the caller's own job, via ``_pipe_chains``, to keep `;`
+    -separated statements apart), not two segments in the same chain."""
+    pipe_chains = [[[tool, "https://example.invalid/data.json"]], [[other, "unrelated.sh"]]]
+    assert checker._rule_fetch_exec(pipe_chains, {}, {}) is None
 
 
 @_PROPERTIES
@@ -540,6 +599,29 @@ def test_substitute_var_refs_candidates_resolves_a_fused_indirect_ref(h_ref: str
     assert checker._substitute_var_refs_candidates(f"g${{!{h_ref}}}", name_to_value, name_to_raw_value) == [
         "g" + suffix.lower()
     ]
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value=_VALUES, other=_VALUES)
+def test_resolve_seg_tokens_candidates_ignores_literal_tokens(name: str, value: str, other: str) -> None:
+    """Model-based: only DYNAMIC tokens contribute a candidate reading --
+    a plain literal token is skipped outright, matching every direct
+    caller's own pre-seeded-literals convention (B1a) or empty-start
+    convention (B1b, `_rule_git_push`). Direct coverage for the helper
+    factored out of B1a/B1b/`_rule_git_push`'s own byte-identical loop
+    (round 12, issue #1326)."""
+    name_to_value = {name: value.lower()}
+    result = checker._resolve_seg_tokens_candidates([other, f"${name}"], name_to_value, {})
+    assert result == {value.lower()}
+
+
+@_PROPERTIES
+@given(literals=st.lists(_VALUES, max_size=3))
+def test_resolve_seg_tokens_candidates_empty_set_for_all_literal_tokens(literals: list[str]) -> None:
+    """No false positive: a token list with no dynamic tokens at all
+    resolves to an empty set, not None -- there is nothing unresolved to
+    fail closed on."""
+    assert checker._resolve_seg_tokens_candidates(literals, {}, {}) == set()
 
 
 @_PROPERTIES

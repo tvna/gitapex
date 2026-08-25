@@ -301,32 +301,41 @@ def test_gh_api_field_dynamic_hit_allows_an_unrelated_dynamic_token(var: str) ->
 # review, fifth round). Every check above assumes the flag token carries a
 # literal "-x"/"--method"/"-f"/"--field" text prefix somewhere in itself --
 # a token that is PURELY `$F` has none, so none of them ever recognized it
-# as a flag at all until `_resolve_bare_var` and the two
-# `*_flagname_dynamic_hit` passes below closed this.
+# as a flag at all until the two `*_flagname_dynamic_hit` passes below
+# closed this.
 
 
 @_PROPERTIES
-@given(name=_IDENTIFIERS, value=_VALUES, braced=st.booleans())
-def test_resolve_bare_var_resolves_a_bare_or_braced_reference(name: str, value: str, braced: bool) -> None:
-    """Model-based: a token that is *exactly* one variable reference,
-    ``$NAME`` or ``${NAME}``, resolves to that variable's assigned
-    (lowercased) value via ``name_to_value`` -- both bracing shapes are
-    equivalent references to the same variable."""
-    token = f"${{{name}}}" if braced else f"${name}"
-    assert checker._resolve_bare_var(token, {name: value.lower()}) == value.lower()
+@given(suffix_var=_IDENTIFIERS, method=st.sampled_from(["post", "put", "patch", "delete"]))
+def test_gh_api_method_flagname_dynamic_hit_detects_a_flag_name_fused_with_a_literal_prefix(
+    suffix_var: str, method: str
+) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, twelfth round (issue #1326): a flag NAME
+    reconstructed by fusing a literal ``--`` prefix with a bare variable
+    reference in the SAME token (``--$M``) is still caught -- confirmed
+    live via real bash argv expansion that ``--$M`` resolves to a genuine
+    ``--method`` write. Round eleven's own claim that "a flag name is
+    never fused with other text the way a value can be" was wrong; this
+    is the regression pin for that fix, using ``_substitute_var_refs_
+    candidates`` directly instead of the now-removed, whole-token-only
+    ``_resolve_bare_or_indirect``."""
+    name_to_value = {suffix_var: "method"}
+    seg = ["gh", "api", "repos/x/y", f"--${suffix_var}", method]
+    assert checker._gh_api_method_flagname_dynamic_hit(seg, name_to_value, {})
 
 
 @_PROPERTIES
-@given(name=_IDENTIFIERS, suffix=_VALUES)
-def test_resolve_bare_var_none_for_a_fused_or_unassigned_token(name: str, suffix: str) -> None:
-    """No false positive: a token carrying anything beyond the bare
-    reference (e.g. ``${NAME}suffix``) is deliberately NOT resolved --
-    narrower than a full expansion, matching the "specific, checked
-    structural pattern" discipline the other B-rules already follow, not
-    "this token is dynamic somehow." A bare reference to a name that was
-    never assigned also resolves to None."""
-    assert checker._resolve_bare_var(f"${{{name}}}{suffix}", {name: "post"}) is None
-    assert checker._resolve_bare_var(f"${name}", {}) is None
+@given(suffix_var=_IDENTIFIERS)
+def test_gh_api_field_flagname_dynamic_hit_detects_a_flag_name_fused_with_a_literal_prefix(suffix_var: str) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, twelfth round (issue #1326): the field-flag
+    counterpart of the method-flag fix above -- ``--$FF`` (a literal
+    ``--`` prefix fused with a bare variable reference) resolving to a
+    genuine ``--field`` write is still caught."""
+    name_to_value = {suffix_var: "field"}
+    seg = ["gh", "api", "repos/x/y", f"--${suffix_var}", "name=value"]
+    assert checker._gh_api_field_flagname_dynamic_hit(seg, name_to_value, {})
 
 
 @_PROPERTIES
@@ -913,6 +922,29 @@ def test_rule_b1a_allows_an_unrelated_default_clause_argument(tool_var: str) -> 
 
 
 @_PROPERTIES
+@given(name=_IDENTIFIERS, value=_VALUES, other=_VALUES)
+def test_resolve_seg_tokens_candidates_ignores_literal_tokens(name: str, value: str, other: str) -> None:
+    """Model-based: only DYNAMIC tokens contribute a candidate reading --
+    a plain literal token is skipped outright, matching every direct
+    caller's own pre-seeded-literals convention (B1a) or empty-start
+    convention (B1b, `_rule_git_push`). Direct coverage for the helper
+    factored out of B1a/B1b/`_rule_git_push`'s own byte-identical loop
+    (round 12, issue #1326)."""
+    name_to_value = {name: value.lower()}
+    result = checker._resolve_seg_tokens_candidates([other, f"${name}"], name_to_value, {})
+    assert result == {value.lower()}
+
+
+@_PROPERTIES
+@given(literals=st.lists(_VALUES, max_size=3))
+def test_resolve_seg_tokens_candidates_empty_set_for_all_literal_tokens(literals: list[str]) -> None:
+    """No false positive: a token list with no dynamic tokens at all
+    resolves to an empty set, not None -- there is nothing unresolved to
+    fail closed on."""
+    assert checker._resolve_seg_tokens_candidates(literals, {}, {}) == set()
+
+
+@_PROPERTIES
 @given(suf_ref=_IDENTIFIERS, suf_var=_IDENTIFIERS)
 def test_rule_b1a_detects_a_verb_fused_with_a_literal_prefix_via_indirect_ref(suf_ref: str, suf_var: str) -> None:
     """Model-based, regression pin for the real bypass found live by Step
@@ -1125,56 +1157,52 @@ def test_assigned_raw_values_ignores_a_dynamic_rhs_token(name: str, value: str) 
 
 @_PROPERTIES
 @given(name1=_IDENTIFIERS, name2=_IDENTIFIERS, value=_VALUES)
-def test_resolve_indirect_ref_two_level_lookup(name1: str, name2: str, value: str) -> None:
+def test_substitute_var_refs_candidates_resolves_an_indirect_ref_two_level_lookup(
+    name1: str, name2: str, value: str
+) -> None:
     """Model-based regression pin for the tenth-round finding: `${!NAME1}`
     resolves via NAME1's own (case-preserved) value naming NAME2, whose
     own (lowercased) assigned value is the final result -- confirmed live
     against real bash argv expansion (`TOOLREF=T; T=uv; ${!TOOLREF}`
-    resolves to a genuine `uv`)."""
+    resolves to a genuine `uv`). Regression pin for the now-removed
+    `_resolve_indirect_ref` helper's own coverage -- its behavior lives on
+    inside this function's own indirect-reference branch (round 12, issue
+    #1326: `_resolve_indirect_ref`, `_resolve_bare_var`, and
+    `_resolve_bare_or_indirect` were all removed once
+    `_substitute_var_refs_candidates` became the flag-NAME resolver too,
+    leaving them with zero remaining callers)."""
     assume(name1 != name2)
     name_to_raw_value = {name1: name2}
     name_to_value = {name2: value.lower()}
-    assert checker._resolve_indirect_ref(f"${{!{name1}}}", name_to_value, name_to_raw_value) == value.lower()
+    assert checker._substitute_var_refs_candidates(f"${{!{name1}}}", name_to_value, name_to_raw_value) == [
+        value.lower()
+    ]
 
 
 @_PROPERTIES
 @given(name=_IDENTIFIERS)
-def test_resolve_indirect_ref_none_when_first_level_unresolved(name: str) -> None:
+def test_substitute_var_refs_candidates_empty_when_indirect_ref_first_level_unresolved(name: str) -> None:
     """When NAME was never assigned at all, the first-level lookup fails
-    and the whole indirect reference resolves to None -- it must never
-    silently fall through to some other reading."""
-    assert checker._resolve_indirect_ref(f"${{!{name}}}", {}, {}) is None
+    and the whole `${!NAME}` token cannot be soundly resolved at all."""
+    assert checker._substitute_var_refs_candidates(f"${{!{name}}}", {}, {}) == []
 
 
 @_PROPERTIES
-@given(name=_IDENTIFIERS)
-def test_resolve_indirect_ref_none_for_a_bare_reference(name: str) -> None:
-    """A plain `${NAME}`/`$NAME` reference is not the `${!NAME}` indirect
-    shape at all -- `_resolve_indirect_ref` must return None rather than
-    (incorrectly) treating it as one."""
-    assert checker._resolve_indirect_ref(f"${{{name}}}", {name: "gh"}, {name: "gh"}) is None
-    assert checker._resolve_indirect_ref(f"${name}", {name: "gh"}, {name: "gh"}) is None
-
-
-@_PROPERTIES
-@given(name=_IDENTIFIERS, value=_VALUES)
-def test_resolve_bare_or_indirect_prefers_the_bare_reading(name: str, value: str) -> None:
-    """Model-based: `_resolve_bare_or_indirect` -- factored out of
-    `_gh_api_method_flagname_dynamic_hit`/`_gh_api_field_flagname_
-    dynamic_hit`'s own byte-identical duplicated fallback, found by Step 8
-    independent review, eleventh round (issue #1326) -- resolves a bare
-    reference directly, without needing the indirect-reference fallback
-    at all."""
-    name_to_value = {name: value.lower()}
-    assert checker._resolve_bare_or_indirect(f"${name}", name_to_value, {}) == value.lower()
-
-
-@_PROPERTIES
-@given(name1=_IDENTIFIERS, name2=_IDENTIFIERS, value=_VALUES)
-def test_resolve_bare_or_indirect_falls_back_to_indirect_ref(name1: str, name2: str, value: str) -> None:
-    """Model-based: when TOKEN is not a bare reference, `_resolve_bare_or_
-    indirect` falls back to the `${!NAME}` indirect-reference reading."""
-    assume(name1 != name2)
-    name_to_raw_value = {name1: name2}
-    name_to_value = {name2: value.lower()}
-    assert checker._resolve_bare_or_indirect(f"${{!{name1}}}", name_to_value, name_to_raw_value) == value.lower()
+@given(prefix_var=_IDENTIFIERS, suffix_var=_IDENTIFIERS, value=_VALUES)
+def test_substitute_var_refs_candidates_resolves_a_flag_name_fused_indirect_ref(
+    prefix_var: str, suffix_var: str, value: str
+) -> None:
+    """Model-based regression pin for the real bypass found live by Step 8
+    independent review, twelfth round (issue #1326): a flag NAME
+    reconstructed by fusing a literal `--` prefix with an `${!NAME}`
+    indirect reference in the SAME token still resolves correctly through
+    the general primitive -- the same class of fusion round eleven closed
+    for B1a/B1b/etc. but round eleven's own dedup left open for the
+    gh-api flag-NAME path specifically, under the (wrong) premise that a
+    flag name is never fused with other text."""
+    assume(prefix_var != suffix_var)
+    name_to_raw_value = {prefix_var: suffix_var}
+    name_to_value = {suffix_var: value.lower()}
+    assert checker._substitute_var_refs_candidates(f"--${{!{prefix_var}}}", name_to_value, name_to_raw_value) == [
+        "--" + value.lower()
+    ]

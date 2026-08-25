@@ -259,11 +259,12 @@ maintaining a second, narrower resolution path. This made
 `_default_clause_literal` and the module-level `_VAR_REF_RE` (B1b's own
 prior bare-reference collector, superseded by the same call) fully
 unused, so both were removed rather than left as dead code --
-`_resolve_bare_var` and `_resolve_indirect_ref` remain in active use by
-the gh-api flag-NAME resolution path, which needs to test a token as a
-single whole-or-nothing shape (a flag name is never fused with other
-text the way a value can be), so neither was touched. The identical
-finding and fix were ported to the self-contained duplicate at
+`_resolve_bare_var` and `_resolve_indirect_ref` were kept, on the
+reasoning that the gh-api flag-NAME resolution path only needs to test a
+token as a single whole-or-nothing shape, since (this round's own claim)
+"a flag name is never fused with other text the way a value can be."
+Round twelve found that claim wrong -- see below. The identical finding
+and fix were ported to the self-contained duplicate at
 skills/executing-a-branch-plan/scripts/gitapex_check_task_bash_safety.py,
 which additionally had NO general fused-token resolver of its own at all
 (only the tenth round's narrow `_resolve_dynamic_token`, itself built
@@ -279,6 +280,39 @@ directly -- which also made `_resolve_dynamic_token`, `_resolve_bare_var`,
 fully unused there (unlike this module, the task file's `gh`/git-push
 detection is a blanket deny with no flag-NAME-shaped sub-case that would
 still need a whole-token-only resolver), so all five were removed too.
+
+Closed by twelfth-round Step 8 independent review: round eleven's own
+premise for leaving the gh-api flag-NAME path on the narrower
+`_resolve_bare_or_indirect`/`_resolve_bare_var`/`_resolve_indirect_ref`
+resolvers -- "a flag name is never fused with other text the way a value
+can be" -- was wrong. Confirmed live via real bash argv expansion:
+`M=method; gh api .../issues --$M POST` resolves to a genuine `--method
+POST` write, and the field-flag counterpart `FF=field; gh api ...
+--$FF name=value` resolves to a genuine `--field name=value` write --
+both fully bypassed `_gh_api_method_flagname_dynamic_hit`/
+`_gh_api_field_flagname_dynamic_hit`, since the literal `--` prefix fused
+onto the reference defeats every one of those resolvers' anchored
+`^...$` matches, the exact same fusion class round eleven closed for
+B1a/B1b/`_rule_gh_any`/etc. -- left open here under an incorrect premise
+about this one specific token position. Closed by having both
+flag-NAME-resolution functions call `_substitute_var_refs_candidates`
+directly instead, checking every candidate reading against the known
+flag-name set rather than a single whole-or-nothing resolution. This
+made `_resolve_bare_or_indirect` (introduced this same round, in the
+immediately preceding commit, specifically to deduplicate those two
+functions' shared narrower-resolver call) -- and, in turn,
+`_resolve_bare_var`/`_BARE_VAR_RE` and `_resolve_indirect_ref`/
+`_INDIRECT_REF_RE` themselves, once `_resolve_bare_or_indirect` was their
+only remaining caller -- fully unused, so all five were removed. Every
+token/reference resolution in this module now goes through the single
+`_substitute_var_refs_candidates` primitive (or, for the two-level
+`${!NAME}` lookup specifically, its own inlined equivalent of the same
+logic that function's docstring already documents) -- no narrower,
+whole-token-anchored resolver remains anywhere in the file. The task
+file was not exposed to this specific finding: its `gh`/`git push`
+detection is a blanket deny with no flag-NAME sub-case at all, so it
+never had an equivalent narrower resolver to leave behind in the first
+place.
 
 Deliberately stdlib-only (shlex, re, json) -- no new third-party
 dependency, matching this repository's declarative module-management
@@ -301,95 +335,14 @@ from typing import NamedTuple
 _SINGLE_OPS = {";", "|", "&", "(", ")", "\n"}
 _MULTI_OPS = {"&&", "||"}
 _ASSIGN_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
-# Matches a token that is PURELY a single variable reference with nothing
-# else fused onto it (`$F`, `${F}`) -- deliberately excludes every other
-# dynamic shape (`${F}x`, `$F$G`, `` `cmd` ``) so resolving it stays the
-# same narrow, adversarially-tested heuristic class as the other B-rules:
-# denies only a specific, checked structural pattern, never "this token is
-# dynamic somehow." See _resolve_bare_var below.
-_BARE_VAR_RE = re.compile(r"^\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?$")
 
-
-def _resolve_bare_var(token: str, name_to_value: dict[str, str]) -> str | None:
-    """Resolve TOKEN to its assigned (already-lowercased) value only when
-    TOKEN is a bare single variable reference -- None otherwise, including
-    when the reference exists but the variable was never assigned a
-    literal value (e.g. assigned from a command substitution)."""
-    match = _BARE_VAR_RE.match(token)
-    if not match:
-        return None
-    return name_to_value.get(match.group(1))
-
-
-# Matches a token that is EXACTLY bash's own `${!NAME}` indirect-reference
-# syntax (anchored) -- unlike every other reference shape this module
-# recognizes, bash requires the braces here; there is no unbraced `$!NAME`
-# form (that parses as `$!` -- the last background job's PID -- followed by
-# literal text "NAME"). See _resolve_indirect_ref below.
-_INDIRECT_REF_RE = re.compile(r"^\$\{!([A-Za-z_][A-Za-z0-9_]*)\}$")
-
-
-def _resolve_indirect_ref(token: str, name_to_value: dict[str, str], name_to_raw_value: dict[str, str]) -> str | None:
-    """Resolve TOKEN's value when TOKEN is EXACTLY bash's own `${!NAME}`
-    indirect-reference syntax -- a TWO-LEVEL lookup: NAME's own assigned
-    value names a SECOND variable, and this expression evaluates to THAT
-    variable's own assigned value. None if TOKEN is not this shape, or if
-    either lookup level is unresolvable.
-
-    The first-level lookup uses `name_to_raw_value` (case-preserved), not
-    `name_to_value` (lowercased) -- NAME's value must be used as a
-    case-correct KEY into the second lookup (bash variable names are
-    case-sensitive: `TOOLREF=T; T=uv` must resolve via the key `"T"`, not
-    a lowercased `"t"` that would miss it if no separate `t=` assignment
-    exists). The second-level lookup uses `name_to_value` as usual, so the
-    FINAL resolved value is still lowercased like every other resolution
-    in this module.
-
-    Found live by Step 8 independent review, tenth round (issue #1326):
-    none of this module's existing indirection machinery (bare-reference
-    lookup, default-clause extraction) ever recognized this bash syntax at
-    all -- `${!TOOLREF}` contributed NOTHING to any rule's own
-    referenced-name/value collection, so a tool/verb/write-method hidden
-    this way was entirely invisible, not merely mis-resolved. Confirmed
-    live via real bash argv expansion: `TOOLREF=T; T=uv; VERBREF=V;
-    V=install; ${!TOOLREF} ${!VERBREF} foo` resolves to a genuine `uv
-    install foo`, and `MREF=M; M=POST; gh api .../merge -X${!MREF}`
-    resolves to a real `-XPOST` write."""
-    match = _INDIRECT_REF_RE.match(token)
-    if not match:
-        return None
-    referenced_name = name_to_raw_value.get(match.group(1))
-    if referenced_name is None:
-        return None
-    return name_to_value.get(referenced_name)
-
-
-def _resolve_bare_or_indirect(
-    token: str, name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
-) -> str | None:
-    """Resolve TOKEN as a bare `$NAME`/`${NAME}` reference first, falling
-    back to bash's own `${!NAME}` indirect reference -- the exact
-    resolution order both `_gh_api_method_flagname_dynamic_hit` and
-    `_gh_api_field_flagname_dynamic_hit` need for a flag NAME token (never
-    fused with other text, unlike a flag's own value), factored out here
-    since both had grown a byte-identical inline copy of it. Found by
-    Step 8 independent review, eleventh round (issue #1326)."""
-    flag = _resolve_bare_var(token, name_to_value)
-    if flag is not None:
-        return flag
-    return _resolve_indirect_ref(token, name_to_value, name_to_raw_value)
-
-
-# Matches one `$NAME`/`${NAME}`/`${NAME:-default}` reference anywhere in a
-# token, capturing its full span (including the braces, when present) so
-# _substitute_var_refs_candidates below can replace exactly that span --
-# unlike _VAR_REF_RE, which only captures the name and is used solely to
-# collect referenced names, never to reconstruct token text. The third
-# alternative (default-clause) mirrors _DEFAULT_CLAUSE_RE above but is
-# NOT anchored (`[^}]*` instead of `.*$`) -- it must stop at the first
-# unescaped `}` so it can be found anywhere within a larger fused token
-# (e.g. `-X${NEVER_SET-POST}`), not just when the construct is the whole
-# token.
+# Matches one `$NAME`/`${NAME}`/`${NAME:-default}`/`${!NAME}` reference
+# anywhere in a token, capturing its full span (including the braces, when
+# present) so _substitute_var_refs_candidates below can replace exactly
+# that span. The third alternative (default-clause) is NOT anchored
+# (`[^}]*` instead of `.*$`) -- it must stop at the first unescaped `}` so
+# it can be found anywhere within a larger fused token (e.g.
+# `-X${NEVER_SET-POST}`), not just when the construct is the whole token.
 _VAR_REF_FULL_RE = re.compile(
     r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}"
     r"|\$\{([A-Za-z_][A-Za-z0-9_]*):?[-=]([^}]*)\}"
@@ -475,9 +428,11 @@ def _substitute_var_refs_candidates(
     unbounded reconstruction problem" boundary this function already
     draws elsewhere, not attempted here.
 
-    A `${!NAME}` reference (bash's own indirect reference -- see
-    `_resolve_indirect_ref`'s own docstring for the two-level lookup and
-    why it needs `name_to_raw_value` specifically) contributes NAME's
+    A `${!NAME}` reference (bash's own indirect reference -- a TWO-LEVEL
+    lookup: NAME's own assigned value, read via `name_to_raw_value`
+    case-preserved since bash variable names are case-sensitive, names a
+    SECOND variable, whose own `name_to_value` entry is the final,
+    lowercased result) contributes NAME's
     doubly-resolved value as its one candidate, or no candidate at all if
     either lookup level fails. Found live by Step 8 independent review,
     tenth round (issue #1326): `MREF=M; M=POST; gh api .../merge
@@ -612,7 +567,8 @@ def _assigned_raw_values(tokens: list[str]) -> dict[str, str]:
     """Like `_assigned_literals`, but preserves the ORIGINAL case of each
     assignment's RHS value rather than lowercasing it -- needed for bash's
     own `${!NAME}` indirect-reference resolution (see
-    `_resolve_indirect_ref`), where NAME's own assigned value must be used
+    `_substitute_var_refs_candidates`'s own indirect-reference branch),
+    where NAME's own assigned value must be used
     as a case-correct KEY into a second variable lookup (bash variable
     names are case-sensitive), not compared case-insensitively against a
     known tool/verb/write-method literal the way `_assigned_literals`'s
@@ -909,10 +865,30 @@ def _gh_api_method_flagname_dynamic_hit(
     `_resolve_bare_var` -- found live by Step 8 independent review, tenth
     round (issue #1326): `FREF=F; F=-X; gh api .../merge ${!FREF} POST`
     resolves (real bash) to a real `-X POST` write and was invisible to
-    the bare-reference-only check."""
+    the bare-reference-only check.
+
+    The flag-name token is resolved via `_substitute_var_refs_candidates`
+    (every sound reconstruction, fusion-aware), not the narrower
+    `_resolve_bare_or_indirect` (whole-token bare/indirect reference
+    only) -- found live by Step 8 independent review, twelfth round
+    (issue #1326): round eleven's own claim that "a flag name is never
+    fused with other text the way a value can be" was wrong. `M=method;
+    gh api .../issues --$M POST` (real bash: resolves to a genuine
+    `--method POST` write) was invisible to `_resolve_bare_or_indirect`,
+    since the literal `--` prefix fused onto `$M` defeats its anchored
+    `^...$` match -- the exact same fusion class round eleven closed for
+    B1a/B1b/`_rule_gh_any`/etc., left open here under an incorrect
+    premise. Any candidate set too large to enumerate soundly is treated
+    as an unresolved-but-plausible match -- fail closed, matching
+    `_gh_api_method_fused_flagname_dynamic_hit`'s own established
+    posture."""
     for i, raw_tok in enumerate(seg):
-        flag = _resolve_bare_or_indirect(raw_tok, name_to_value, name_to_raw_value)
-        if flag not in ("-x", "--method"):
+        if not _is_dynamic(raw_tok):
+            continue
+        flag_candidates = _substitute_var_refs_candidates(raw_tok, name_to_value, name_to_raw_value)
+        if flag_candidates is None:
+            return True
+        if not any(candidate.lower() in ("-x", "--method") for candidate in flag_candidates):
             continue
         if i + 1 >= len(seg):
             continue
@@ -1019,10 +995,24 @@ def _gh_api_field_flagname_dynamic_hit(
     resolved via `_resolve_indirect_ref` (bash's own `${!NAME}` syntax),
     not just `_resolve_bare_var` -- found live by Step 8 independent
     review, tenth round (issue #1326), the field-flag counterpart of
-    `_gh_api_method_flagname_dynamic_hit`'s own tenth-round fix."""
+    `_gh_api_method_flagname_dynamic_hit`'s own tenth-round fix.
+
+    Resolved via `_substitute_var_refs_candidates` (fusion-aware), not
+    the narrower `_resolve_bare_or_indirect` -- found live by Step 8
+    independent review, twelfth round (issue #1326), the field-flag
+    counterpart of `_gh_api_method_flagname_dynamic_hit`'s own
+    twelfth-round fix: `FF=field; gh api ... --$FF name=value` (real
+    bash: resolves to a genuine `--field name=value` write) was
+    invisible to the whole-token-only resolver. Any candidate set too
+    large to enumerate soundly is treated as an unresolved-but-plausible
+    match -- fail closed."""
     for raw_tok in seg:
-        flag = _resolve_bare_or_indirect(raw_tok, name_to_value, name_to_raw_value)
-        if flag in ("-f", "--field", "--raw-field"):
+        if not _is_dynamic(raw_tok):
+            continue
+        candidates = _substitute_var_refs_candidates(raw_tok, name_to_value, name_to_raw_value)
+        if candidates is None:
+            return True
+        if any(candidate.lower() in ("-f", "--field", "--raw-field") for candidate in candidates):
             return True
     return False
 
@@ -1152,6 +1142,31 @@ def _is_git_push_segment(seg: list[str]) -> bool:
     return any("git push" in lit for lit in (t.lower() for t in seg if not _is_dynamic(t)))
 
 
+def _resolve_seg_tokens_candidates(
+    tokens: list[str], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
+) -> set[str] | None:
+    """Resolve every DYNAMIC token in TOKENS via
+    `_substitute_var_refs_candidates`, collecting every candidate reading
+    (lowercased) into one set -- a literal token contributes nothing here;
+    a caller that wants literal tokens included seeds its own set with
+    them first. Returns `None` if any dynamic token's own candidate set is
+    too large to enumerate soundly -- fail closed, the same posture every
+    caller of `_substitute_var_refs_candidates` already takes
+    individually. Factored out here since B1a and B1b below (and the
+    self-contained duplicate's own B1a/B1b/`_rule_git_push`) had each
+    grown a byte-identical copy of this loop. Found by Step 8 independent
+    review, twelfth round (issue #1326)."""
+    values: set[str] = set()
+    for tok in tokens:
+        if not _is_dynamic(tok):
+            continue
+        candidates = _substitute_var_refs_candidates(tok, name_to_value, name_to_raw_value)
+        if candidates is None:
+            return None
+        values.update(candidate.lower() for candidate in candidates)
+    return values
+
+
 def _rule_b1a_dynamic_word_same_segment_verb(
     seg: list[str], verb_set: set[str], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
 ) -> bool:
@@ -1186,14 +1201,10 @@ def _rule_b1a_dynamic_word_same_segment_verb(
     if not seg or not _is_dynamic(seg[0]):
         return False
     literals = {t.lower() for t in seg[1:] if not _is_dynamic(t)}
-    for tok in seg[1:]:
-        if not _is_dynamic(tok):
-            continue
-        candidates = _substitute_var_refs_candidates(tok, name_to_value, name_to_raw_value)
-        if candidates is None:
-            return True
-        literals.update(candidate.lower() for candidate in candidates)
-    return bool(literals & verb_set)
+    resolved = _resolve_seg_tokens_candidates(seg[1:], name_to_value, name_to_raw_value)
+    if resolved is None:
+        return True
+    return bool((literals | resolved) & verb_set)
 
 
 def _rule_b1b_dynamic_word_assigned_tool_and_verb(
@@ -1241,14 +1252,9 @@ def _rule_b1b_dynamic_word_assigned_tool_and_verb(
     fail closed, matching B1a's own posture."""
     if not seg or not _is_dynamic(seg[0]):
         return False
-    values: set[str] = set()
-    for tok in seg:
-        if not _is_dynamic(tok):
-            continue
-        candidates = _substitute_var_refs_candidates(tok, name_to_value, name_to_raw_value)
-        if candidates is None:
-            return True
-        values.update(candidate.lower() for candidate in candidates)
+    values = _resolve_seg_tokens_candidates(seg, name_to_value, name_to_raw_value)
+    if values is None:
+        return True
     return bool(values & _WATCHED_TOOLS) and bool(values & verb_set)
 
 

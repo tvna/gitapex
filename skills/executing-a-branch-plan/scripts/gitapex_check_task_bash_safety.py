@@ -305,6 +305,40 @@ def segment_tokens(tokens: list[str]) -> list[list[str]]:
     return [seg for seg in segments if seg]
 
 
+def _pipe_chains(tokens: list[str]) -> list[list[list[str]]]:
+    """Like `segment_tokens`, but keeps segments still connected to each
+    other by a literal `|` grouped into the same chain -- broken apart
+    only at every OTHER control operator (; & && || ( ) newline). Needed
+    by `_rule_fetch_exec` specifically: piping a download through an
+    intermediate content-preserving passthrough command (`curl <url> |
+    cat | bash`, `| tee /dev/null | bash`) still runs the fetched payload
+    unmodified through to the interpreter one hop further down the SAME
+    pipe -- `segment_tokens`'s own flat, operator-blind segment list
+    cannot express "still the same pipe" versus "a new, unrelated
+    statement," which is exactly the distinction that rule needs.
+
+    Found live by Step 8 independent review, twelfth round (issue
+    #1326): the pre-fix `_rule_fetch_exec` iterated `segment_tokens`'s
+    flat list and unconditionally stopped after checking only the ONE
+    segment immediately following the fetch command, regardless of which
+    operator separated them -- confirmed live via real bash (`cat
+    <script> | cat | bash` genuinely executes the script; `curl <url> |
+    cat | bash` is functionally identical) that a passthrough stage
+    defeated detection entirely, while the SAME operator-blind design
+    also produced a false positive in the other direction: `curl <url>;
+    bash unrelated.sh` -- a plain SEQUENCED statement, not a pipe at all
+    -- was wrongly denied, since `;` and `|` were never distinguished."""
+    chains: list[list[list[str]]] = [[[]]]
+    for tok in tokens:
+        if tok == "|":
+            chains[-1].append([])
+        elif tok in _SINGLE_OPS or tok in _MULTI_OPS:
+            chains.append([[]])
+        else:
+            chains[-1][-1].append(tok)
+    return [[seg for seg in chain if seg] for chain in chains if any(seg for seg in chain)]
+
+
 def _assigned_literals(tokens: list[str]) -> dict[str, str]:
     """Map each NAME=value assignment token's variable name to its
     (lowercased) RHS value. Keyed by variable name (not a flat set of
@@ -460,10 +494,13 @@ def _rule_bare_install(
 
 
 def _rule_fetch_exec(
-    segments: list[list[str]], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
+    pipe_chains: list[list[list[str]]], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
 ) -> str | None:
     """curl/wget piped directly into a shell interpreter installs and
     runs unreviewed code just as directly as a package-manager verb.
+    Operates on `_pipe_chains` (not plain `segment_tokens` segments) so it
+    can tell a real pipe from an unrelated, merely-sequenced statement --
+    see that function's own docstring.
 
     Both the fetch tool (`seg[0]`) and the piped-to interpreter can be
     hidden behind indirection (`_substitute_var_refs_candidates`,
@@ -473,33 +510,45 @@ def _rule_fetch_exec(
     `bash`) and eleventh round (fused indirection: see `_substitute_var_
     refs_candidates`'s own docstring), issue #1326. Any candidate set too
     large to enumerate soundly is treated as an unresolved-but-plausible
-    match -- fail closed."""
-    for i, seg in enumerate(segments):
-        if not seg:
-            continue
-        if _is_dynamic(seg[0]):
-            candidates = _substitute_var_refs_candidates(seg[0], name_to_value, name_to_raw_value)
-            if candidates is None:
-                return "piping a download directly into a shell interpreter"
-            tools = {candidate.lower() for candidate in candidates}
-        else:
-            tools = {seg[0].lower()}
-        if not tools & {"curl", "wget"}:
-            continue
-        for later in segments[i + 1 :]:
-            if not later:
+    match -- fail closed.
+
+    EVERY later segment in the SAME pipe chain is checked, not just the
+    one immediately following the fetch command -- found live by Step 8
+    independent review, twelfth round (issue #1326): a content-preserving
+    passthrough stage (`curl <url> | cat | bash`, `| tee /dev/null |
+    bash`) still carries the fetched payload through to the interpreter
+    one hop further down the pipe; the pre-fix version stopped scanning
+    after the first non-match, so any passthrough command defeated it
+    entirely -- confirmed live via real bash that `cat <script> | cat |
+    bash` genuinely executes the script unmodified."""
+    for chain in pipe_chains:
+        for i, seg in enumerate(chain):
+            if not seg:
                 continue
-            candidate = later[0].lower() if not _is_dynamic(later[0]) else None
-            interp_index = 1 if candidate == "sudo" else 0
-            if len(later) > interp_index:
-                cand = later[interp_index]
-                if _is_dynamic(cand):
-                    cand_candidates = _substitute_var_refs_candidates(cand, name_to_value, name_to_raw_value)
-                    if cand_candidates is None or any(c.lower() in _FETCH_EXEC_INTERPRETERS for c in cand_candidates):
-                        return "piping a download directly into a shell interpreter"
-                elif cand.lower() in _FETCH_EXEC_INTERPRETERS:
+            if _is_dynamic(seg[0]):
+                candidates = _substitute_var_refs_candidates(seg[0], name_to_value, name_to_raw_value)
+                if candidates is None:
                     return "piping a download directly into a shell interpreter"
-            break
+                tools = {candidate.lower() for candidate in candidates}
+            else:
+                tools = {seg[0].lower()}
+            if not tools & {"curl", "wget"}:
+                continue
+            for later in chain[i + 1 :]:
+                if not later:
+                    continue
+                candidate = later[0].lower() if not _is_dynamic(later[0]) else None
+                interp_index = 1 if candidate == "sudo" else 0
+                if len(later) > interp_index:
+                    cand = later[interp_index]
+                    if _is_dynamic(cand):
+                        cand_candidates = _substitute_var_refs_candidates(cand, name_to_value, name_to_raw_value)
+                        if cand_candidates is None or any(
+                            c.lower() in _FETCH_EXEC_INTERPRETERS for c in cand_candidates
+                        ):
+                            return "piping a download directly into a shell interpreter"
+                    elif cand.lower() in _FETCH_EXEC_INTERPRETERS:
+                        return "piping a download directly into a shell interpreter"
     return None
 
 
@@ -618,6 +667,32 @@ def _is_git_push_segment(seg: list[str]) -> bool:
     return any("git push" in lit for lit in (t.lower() for t in seg if not _is_dynamic(t)))
 
 
+def _resolve_seg_tokens_candidates(
+    tokens: list[str], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
+) -> set[str] | None:
+    """Resolve every DYNAMIC token in TOKENS via
+    `_substitute_var_refs_candidates`, collecting every candidate reading
+    (lowercased) into one set -- a literal token contributes nothing here;
+    a caller that wants literal tokens included seeds its own set with
+    them first. Returns `None` if any dynamic token's own candidate set is
+    too large to enumerate soundly -- fail closed, the same posture every
+    caller of `_substitute_var_refs_candidates` already takes
+    individually. Factored out here since `_rule_git_push` and B1a/B1b
+    below (and the sibling module's own equivalents) had each grown a
+    byte-identical copy of this loop. Found by Step 8 independent review,
+    twelfth round (issue #1326). Ported from
+    hooks/gitapex_check_bash_safety.py's own function of the same name."""
+    values: set[str] = set()
+    for tok in tokens:
+        if not _is_dynamic(tok):
+            continue
+        candidates = _substitute_var_refs_candidates(tok, name_to_value, name_to_raw_value)
+        if candidates is None:
+            return None
+        values.update(candidate.lower() for candidate in candidates)
+    return values
+
+
 def _rule_git_push(
     segments: list[list[str]], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
 ) -> str | None:
@@ -662,14 +737,9 @@ def _rule_git_push(
             # fused with literal text in the same token), issue #1326.
             # Any candidate set too large to enumerate soundly is treated
             # as an unresolved-but-plausible match -- fail closed.
-            values: set[str] = set()
-            for tok in seg:
-                if not _is_dynamic(tok):
-                    continue
-                candidates = _substitute_var_refs_candidates(tok, name_to_value, name_to_raw_value)
-                if candidates is None:
-                    return "git push, not permitted inside a task-level agent (worktree merge-back is main-thread-only)"
-                values.update(candidate.lower() for candidate in candidates)
+            values = _resolve_seg_tokens_candidates(seg, name_to_value, name_to_raw_value)
+            if values is None:
+                return "git push, not permitted inside a task-level agent (worktree merge-back is main-thread-only)"
             if "git" in values and "push" in values:
                 return "git push, not permitted inside a task-level agent (worktree merge-back is main-thread-only)"
         if len(seg) > 1 and not _is_dynamic(seg[0]) and seg[0].lower() == "git" and _is_dynamic(seg[1]):
@@ -699,14 +769,10 @@ def _rule_b1a_dynamic_word_same_segment_verb(
     if not seg or not _is_dynamic(seg[0]):
         return False
     literals = {t.lower() for t in seg[1:] if not _is_dynamic(t)}
-    for tok in seg[1:]:
-        if not _is_dynamic(tok):
-            continue
-        candidates = _substitute_var_refs_candidates(tok, name_to_value, name_to_raw_value)
-        if candidates is None:
-            return True
-        literals.update(candidate.lower() for candidate in candidates)
-    return bool(literals & verb_set)
+    resolved = _resolve_seg_tokens_candidates(seg[1:], name_to_value, name_to_raw_value)
+    if resolved is None:
+        return True
+    return bool((literals | resolved) & verb_set)
 
 
 def _rule_b1b_dynamic_word_assigned_tool_and_verb(
@@ -742,14 +808,9 @@ def _rule_b1b_dynamic_word_assigned_tool_and_verb(
     match -- fail closed."""
     if not seg or not _is_dynamic(seg[0]):
         return False
-    values: set[str] = set()
-    for tok in seg:
-        if not _is_dynamic(tok):
-            continue
-        candidates = _substitute_var_refs_candidates(tok, name_to_value, name_to_raw_value)
-        if candidates is None:
-            return True
-        values.update(candidate.lower() for candidate in candidates)
+    values = _resolve_seg_tokens_candidates(seg, name_to_value, name_to_raw_value)
+    if values is None:
+        return True
     return bool(values & _WATCHED_TOOLS) and bool(values & verb_set)
 
 
@@ -777,6 +838,7 @@ def classify(command: str) -> Verdict:
         return Verdict(True, f"the command could not be parsed as shell syntax ({error}). Failing closed")
 
     segments = segment_tokens(tokens)
+    pipe_chains = _pipe_chains(tokens)
     assigned = _assigned_literals(tokens)
     raw_assigned = _assigned_raw_values(tokens)
 
@@ -788,7 +850,7 @@ def classify(command: str) -> Verdict:
     if bare_install_hit:
         return Verdict(True, bare_install_hit)
 
-    fetch_exec_hit = _rule_fetch_exec(segments, assigned, raw_assigned)
+    fetch_exec_hit = _rule_fetch_exec(pipe_chains, assigned, raw_assigned)
     if fetch_exec_hit:
         return Verdict(True, fetch_exec_hit)
 

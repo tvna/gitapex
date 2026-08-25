@@ -267,6 +267,10 @@ ALLOWED_DYNAMIC_COMMANDS = [
     # a fused reconstruction resolving to something unrelated (not a
     # watched tool/verb) must stay allowed.
     ("REF=R; R=at; c${!REF} file.txt", "fused-indirect-ref-unwatched-tool"),
+    # False-positive guard for the twelfth-round fused-flagname fix: a
+    # `gh api` flag name fused with a literal prefix that resolves to
+    # something other than a watched flag must stay allowed.
+    ("X=x; gh api repos/o/r/issues --$X", "fused-flagname-unwatched-flag"),
 ]
 
 # --- Known, disclosed, unresolved regex/token-gate bypasses ----------------
@@ -528,6 +532,21 @@ DENIED_INDIRECTION_COMMANDS = [
     (
         "T=uv; $T in${UNSETVAR:-stall} foo",
         "fused-default-clause-verb-with-literal-prefix",
+    ),
+    # Found live by Step 8 independent review, twelfth round (issue
+    # #1326): round eleven's own claim that "a flag name is never fused
+    # with other text the way a value can be" was wrong -- a `gh api`
+    # flag NAME reconstructed by fusing a literal `--` prefix with a
+    # variable reference in the SAME token was invisible to the
+    # whole-token-only flag-NAME resolver. Real bash resolves each of
+    # these to a genuine denied write.
+    (
+        "M=method; gh api repos/o/r/issues --$M POST",
+        "fused-flagname-method-with-literal-prefix",
+    ),
+    (
+        "FF=field; gh api repos/o/r/issues --$FF name=value",
+        "fused-flagname-field-with-literal-prefix",
     ),
 ]
 
