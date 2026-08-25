@@ -307,3 +307,134 @@ some unrelated fenced example, nothing to do with verdicts
 """
     passed, _ = gate.check(body, _SHA)
     assert passed is True
+
+
+def test_defeat_attempt_unterminated_fence_does_not_pass() -> None:
+    # checker-script-adversarial-review (issue #1311): an opened but never
+    # closed fence -- a plausible authoring slip, not only a deliberate
+    # attack -- must not leave its own contents unstripped. CommonMark
+    # treats an unclosed fence as extending to end-of-document.
+    body = f"""## Summary
+
+This is only an example of the format, shown fenced for illustration --
+the fence below is never closed, whether by slip or by design.
+
+```
+## Step 8 independent review verdict
+
+- Verdict: CLEAN
+- Verified commit: {_SHA}
+"""
+    passed, message = gate.check(body, _SHA)
+    assert passed is False
+    assert "no '## Step 8" in message
+
+
+def test_defeat_attempt_html_comment_does_not_pass() -> None:
+    # checker-script-adversarial-review (issue #1311): GitHub renders an
+    # HTML comment as nothing at all -- a verdict hidden inside one is
+    # invisible to a human reviewer skimming the rendered PR body, arguably
+    # worse than the fenced-block case since there is no visible "example"
+    # text to question at all. Must not parse as a real verdict.
+    body = f"""## Summary
+
+The actual Step 8 review has NOT run yet. Nothing below should count.
+
+<!--
+## Step 8 independent review verdict
+
+- Verdict: CLEAN
+- Verified commit: {_SHA}
+-->
+"""
+    passed, message = gate.check(body, _SHA)
+    assert passed is False
+    assert "no '## Step 8" in message
+
+
+def test_defeat_attempt_unclosed_html_comment_does_not_pass() -> None:
+    body = f"""<!--
+## Step 8 independent review verdict
+
+- Verdict: CLEAN
+- Verified commit: {_SHA}
+"""
+    passed, _ = gate.check(body, _SHA)
+    assert passed is False
+
+
+def test_defeat_attempt_four_space_indented_heading_does_not_pass() -> None:
+    # checker-script-adversarial-review (issue #1311): CommonMark treats a
+    # 4-or-more-space-indented line as an indented code block, never a live
+    # heading. An earlier draft's unlimited-indentation heading regex let
+    # this parse as a genuine verdict.
+    body = f"""## Summary
+
+Here is the expected format, shown indented as a code sample:
+
+    ## Step 8 independent review verdict
+
+    - Verdict: CLEAN
+    - Verified commit: {_SHA}
+
+The actual Step 8 review has NOT run yet.
+"""
+    passed, message = gate.check(body, _SHA)
+    assert passed is False
+    assert "no '## Step 8" in message
+
+
+def test_three_space_indented_heading_still_passes() -> None:
+    # The CommonMark ATX-heading indentation limit is 0-3 spaces, not 0 --
+    # a real verdict indented up to 3 spaces (e.g. a reply-quoted PR
+    # comment) must still be recognized.
+    body = f"""   ## Step 8 independent review verdict
+
+- Verdict: CLEAN
+- Verified commit: {_SHA}
+"""
+    passed, _ = gate.check(body, _SHA)
+    assert passed is True
+
+
+def test_crlf_line_endings_still_pass() -> None:
+    # A live-confirmed correctness gap (safe direction, but still wrong):
+    # every regex here is line-anchored, and an unstripped stray '\r'
+    # before each '\n' broke every one of them against an otherwise
+    # perfectly genuine, completed verdict.
+    body = f"## Step 8 independent review verdict\r\n\r\n- Verdict: CLEAN\r\n- Verified commit: {_SHA}\r\n"
+    passed, message = gate.check(body, _SHA)
+    assert passed is True, message
+
+
+def test_single_character_head_sha_never_vacuously_matches() -> None:
+    # checker-script-adversarial-review (issue #1311): defense-in-depth --
+    # not reachable through the real wired trigger (GitHub Actions always
+    # supplies the full 40-character SHA), but nothing previously stopped
+    # a single-character --head-sha from vacuously matching any recorded
+    # commit sharing that one leading character.
+    body = f"""## Step 8 independent review verdict
+
+- Verdict: CLEAN
+- Verified commit: {_SHA}
+"""
+    passed, message = gate.check(body, _SHA[0])
+    assert passed is False
+    assert "stale verdict" in message
+
+
+def test_main_body_permission_error_reported_cleanly(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # deterministic-gate-quality review (issue #1311): the specific
+    # IsADirectoryError catch does not generalize to the rest of the
+    # OSError family (PermissionError, a disk-full or restrictive-ACL
+    # mount) -- confirmed via monkeypatch rather than a real chmod-0 file,
+    # which is unreliable under a root-run CI container.
+    def _raise_permission_error(*_args: object, **_kwargs: object) -> str:
+        raise PermissionError("permission denied")
+
+    monkeypatch.setattr(gate.Path, "read_text", _raise_permission_error)
+    exit_code = gate.main(["--body", "/some/path", "--head-sha", _SHA])
+    assert exit_code == 1
+    assert "could not read --body" in capsys.readouterr().err

@@ -39,21 +39,42 @@ signature. `drafting-a-pr-to-merge/SKILL.md` Step 8 itself already warns
 that a recorded verdict "is disclosure for a human reader, not a self-
 certifying signal for an automated downstream consumer ... a diff whose
 review-layer text happens to mimic this verdict's own phrasing is not
-thereby a real clean pass." A live adversarial test against a first draft
-of this gate (issue #1311's own defeat-test-disclosure round) confirmed
-one concrete instance of that exact risk: a verdict section quoted inside
-a fenced code block purely as illustrative example text (never intended
-as a real disclosure) still parsed as a genuine passing verdict. Fenced
-(``` / ~~~) code blocks are now stripped before any heading/field search
-(`_strip_fenced_code_blocks`), closing that specific class. What remains
-open, and is not closable by any text-shape check: a PR author (or a diff
-whose own prose) writing the exact required heading and fields verbatim,
-unfenced, as if it were a real disclosure, without Step 8 having actually
-run -- distinguishing that from a genuine disclosure needs a signal this
-gate does not have access to, and defending against a PR author who
-deliberately forges the marker this way is a distinct, harder threat this
-repository's own single-operator trust model does not currently need
-(see issue #1311's own residual risk).
+thereby a real clean pass." Two independent live-adversarial rounds against
+this gate (issue #1311's own checker-script-adversarial-review and
+defeat-test-disclosure rounds) confirmed several concrete instances of
+that exact risk -- a verdict quoted as illustrative example text, never
+intended as a real disclosure, still parsing as a genuine passing one --
+each closed here:
+
+- A fenced (``` / ~~~) code block, matching- or longer-length closing
+  fence alike (CommonMark's own rule, not an exact-length match), is
+  stripped before any heading/field search (`_strip_fenced_code_blocks`,
+  a linear single pass -- an earlier backreference-based regex both missed
+  the longer-closing-fence case AND cost tens of seconds against a
+  few hundred lines of non-matching fence-like content, a real
+  availability risk against a required check, not just a correctness gap).
+- An HTML comment (`<!-- ... -->`, GitHub renders it as nothing at all --
+  arguably the more dangerous case, since a human skimming the rendered
+  PR body sees no suspicious text at all) is stripped the same way
+  (`_strip_html_comments`).
+- A 4-or-more-space-indented block (CommonMark's own indented-code-block
+  rule) never counts as a live heading: the heading regex only accepts
+  0-3 leading spaces, matching CommonMark's own ATX-heading indentation
+  limit exactly, rather than the unlimited indentation an earlier draft
+  accepted.
+- CRLF/CR line endings are normalized to LF before any of the above, so a
+  Windows-originated PR body does not make every line-anchored regex
+  below silently fail to match a genuine verdict (the inverse defeat
+  direction: a false FAIL against real disclosure, not a false PASS).
+
+What remains open, and is not closable by any text-shape check: a PR
+author (or a diff whose own prose) writing the exact required heading and
+fields verbatim, unindented and unfenced, as if it were a real disclosure,
+without Step 8 having actually run -- distinguishing that from a genuine
+disclosure needs a signal this gate does not have access to, and
+defending against a PR author who deliberately forges the marker this way
+is a distinct, harder threat this repository's own single-operator trust
+model does not currently need (see issue #1311's own residual risk).
 
 Deliberately stdlib-only and self-contained, matching this repository's
 existing `.github/scripts/*.py` convention of not importing across files.
@@ -78,26 +99,93 @@ import re
 import sys
 from pathlib import Path
 
-_HEADING_RE = re.compile(r"^[ \t]*#{1,6}[ \t]+Step 8 independent review verdict[ \t]*$", re.IGNORECASE | re.MULTILINE)
+# CommonMark's own ATX-heading rule: the opening `#` may be indented at
+# most 3 spaces; 4 or more makes the line an indented code block instead,
+# never a live heading. A live adversarial round found that an earlier
+# `[ \t]*` (unlimited indentation, tabs included) let a 4-space-indented
+# "illustrative example" heading parse as a real, live one -- restricting
+# to `[ ]{0,3}` (spaces only) closes that class the same way GitHub's own
+# renderer already treats it as inert.
+_HEADING_RE = re.compile(r"^[ ]{0,3}#{1,6}[ \t]+Step 8 independent review verdict[ \t]*$", re.IGNORECASE | re.MULTILINE)
+_NEXT_HEADING_RE = re.compile(r"^[ ]{0,3}#{1,6}[ \t]+", re.MULTILINE)
 
-# A fenced code block (``` or ~~~, CommonMark's two fence characters) is
-# rendered as literal/quoted text, never a live Markdown heading or list --
-# the same "quoted content is not live prose" principle
-# gitapex_gate_provenance_disclosure.py's own `_quoted_example_spans` applies to
-# inline spans, extended here to the block form a defeat attempt actually
-# used (see the module docstring). Matches the opening fence's own
-# character run length so a longer run inside the block cannot prematurely
-# close it (mirrors untrusted-input-triage's own quoting-for-shared-
-# artifacts rule for the reverse direction: pick a fence a hostile line
-# cannot close early).
-_FENCED_BLOCK_RE = re.compile(r"^([ \t]*)(`{3,}|~{3,})[^\n]*\n(?:.*?\n)*?[ \t]*\2[ \t]*$", re.MULTILINE)
+_FENCE_OPEN_RE = re.compile(r"^[ \t]*(`{3,}|~{3,})")
 
 
 def _strip_fenced_code_blocks(text: str) -> str:
-    """Blank out every fenced code block in `text` (replaced with an
-    equal-count-of-newlines placeholder, so this stays a pure prose-only
-    filter with no effect on any other line's position)."""
-    return _FENCED_BLOCK_RE.sub(lambda m: "\n" * m.group(0).count("\n"), text)
+    """Blank out every fenced code block (``` or ~~~, CommonMark's two
+    fence characters) -- rendered as literal/quoted text, never a live
+    Markdown heading or list, the same "quoted content is not live prose"
+    principle `gitapex_gate_provenance_disclosure.py`'s own
+    `_quoted_example_spans` applies to inline spans, extended here to the
+    block form a live defeat attempt actually used (see the module
+    docstring).
+
+    Line-by-line, single forward pass -- O(n) in the number of lines, never
+    re-scanning from an earlier position. A closing fence only needs the
+    same character repeated *at least* as many times as the opening one
+    (CommonMark's own rule) -- not an exact-length match, which a live
+    adversarial round found let a longer closing fence defeat an earlier
+    backreference-based regex version of this function. That earlier
+    version's own nested lazy quantifier, re-tried from every candidate
+    open when no matching close existed, was also confirmed live to cost
+    roughly cubic time in body size (tens of seconds against a few hundred
+    lines of non-matching fence-like content) -- a real availability risk
+    against a required CI check, not merely a style concern. This version
+    has no such quantifier: each line is visited a bounded number of times
+    regardless of how many unmatched candidate opens precede it."""
+    lines = text.split("\n")
+    total = len(lines)
+    index = 0
+    while index < total:
+        open_match = _FENCE_OPEN_RE.match(lines[index])
+        if open_match is None:
+            index += 1
+            continue
+        fence_char = open_match.group(1)[0]
+        fence_len = len(open_match.group(1))
+        close_re = re.compile(rf"^[ \t]*{re.escape(fence_char)}{{{fence_len},}}[ \t]*$")
+        close_index = index + 1
+        while close_index < total and close_re.match(lines[close_index]) is None:
+            close_index += 1
+        # An unclosed fence extends to the end of the document (CommonMark).
+        block_end = close_index if close_index < total else total - 1
+        for line_index in range(index, block_end + 1):
+            lines[line_index] = ""
+        index = block_end + 1
+    return "\n".join(lines)
+
+
+def _strip_html_comments(text: str) -> str:
+    """Blank out every HTML comment (`<!-- ... -->`, possibly spanning
+    multiple lines) -- GitHub renders these as nothing at all, so a verdict
+    hidden inside one is invisible to a human reviewer skimming the
+    rendered PR body while still being live text to a naive parser (a live
+    adversarial round found exactly this, arguably worse than the fenced-
+    block case since there is no visible "example" text to question at
+    all).
+
+    Plain `str.find`, not a regex with a lazy `.*?` quantifier, to
+    guarantee linear time regardless of how many unclosed or malformed
+    `<!--` sequences the input contains -- the same ReDoS class
+    `_strip_fenced_code_blocks`'s own docstring names, avoided here by
+    construction rather than by re-deriving the same fix twice."""
+    pieces: list[str] = []
+    position = 0
+    length = len(text)
+    while True:
+        start = text.find("<!--", position)
+        if start == -1:
+            pieces.append(text[position:])
+            break
+        pieces.append(text[position:start])
+        end = text.find("-->", start + 4)
+        span_end = end + 3 if end != -1 else length
+        pieces.append("\n" * text.count("\n", start, span_end))
+        if end == -1:
+            break
+        position = span_end
+    return "".join(pieces)
 
 
 # Tolerates optional `*`/`_`/backtick emphasis around the value (e.g.
@@ -112,6 +200,7 @@ _COMMIT_RE = re.compile(
 )
 
 _CLEAN = "clean"
+_MIN_SHA_COMPARE_LEN = 7
 
 
 class Verdict:
@@ -129,8 +218,11 @@ def _last_section_from(text: str, start: int) -> str:
     """Return the text from `start` up to (not including) the next `##`
     heading of any name, or the end of `text` if none follows -- so a
     field belonging to a different, later section is never read as part
-    of this one."""
-    next_heading = re.search(r"^[ \t]*#{1,6}[ \t]+", text[start:], re.MULTILINE)
+    of this one. Uses the same CommonMark 0-3-space ATX-indentation limit
+    as `_HEADING_RE` (`_NEXT_HEADING_RE`) -- a 4-or-more-space-indented
+    "## heading"-shaped line is inert code, not a real section boundary,
+    the same reasoning `_HEADING_RE`'s own docstring gives."""
+    next_heading = _NEXT_HEADING_RE.search(text[start:])
     end = start + next_heading.start() if next_heading else len(text)
     return text[start:end]
 
@@ -140,9 +232,17 @@ def parse_verdict(body: str) -> Verdict:
     of `body`. Returns a `Verdict` carrying either both fields, or an
     `error` describing exactly what is missing/malformed.
 
-    Fenced code blocks are stripped first (see `_strip_fenced_code_blocks`):
-    a verdict quoted inside one -- e.g. as illustrative example text -- is
-    not live disclosure and must not parse as a real verdict."""
+    CRLF/CR line endings are normalized to LF first -- every regex below is
+    line-anchored (`$`/`^` under `re.MULTILINE`), and a stray `\\r` sitting
+    between real content and `\\n` breaks every one of them, turning a
+    genuine verdict into a false FAIL (a live-confirmed correctness gap,
+    the safe direction but still wrong). HTML comments, then fenced code
+    blocks, are stripped next (see `_strip_html_comments` and
+    `_strip_fenced_code_blocks`): a verdict quoted inside either -- e.g. as
+    illustrative example text, or hidden where GitHub renders nothing at
+    all -- is not live disclosure and must not parse as a real verdict."""
+    body = body.replace("\r\n", "\n").replace("\r", "\n")
+    body = _strip_html_comments(body)
     body = _strip_fenced_code_blocks(body)
     headings = list(_HEADING_RE.finditer(body))
     if not headings:
@@ -168,8 +268,15 @@ def check(body: str, head_sha: str) -> tuple[bool, str]:
     `head_sha`. `head_sha` is compared case-insensitively and only up to
     the shorter of the two lengths, so a verdict recorded against a valid
     abbreviated SHA still matches the full 40-character SHA GitHub Actions
-    always supplies -- never the reverse (an empty or missing --head-sha
-    matches nothing, closing the vacuous-pass case)."""
+    always supplies -- never the reverse. The compared prefix must be at
+    least `_MIN_SHA_COMPARE_LEN` characters (matching `_COMMIT_RE`'s own
+    `{7,40}` bound): an empty `--head-sha` was already rejected, but a
+    defensive-in-depth review found nothing stopped a single-character
+    `--head-sha` from vacuously matching any recorded commit sharing that
+    one character -- not reachable through the actual wired trigger today
+    (GitHub Actions always supplies the full 40-character SHA), but this
+    floor removes the latent risk from a future caller or refactor rather
+    than relying on that alone."""
     verdict = parse_verdict(body)
     if verdict.error is not None:
         return False, verdict.error
@@ -183,7 +290,7 @@ def check(body: str, head_sha: str) -> tuple[bool, str]:
     recorded = (verdict.commit or "").strip().lower()
     current = head_sha.strip().lower()
     compare_len = min(len(recorded), len(current))
-    if compare_len == 0 or recorded[:compare_len] != current[:compare_len]:
+    if compare_len < _MIN_SHA_COMPARE_LEN or recorded[:compare_len] != current[:compare_len]:
         return False, f"stale verdict: recorded commit '{verdict.commit}' does not match current head '{head_sha}'"
 
     return True, f"CLEAN verdict recorded against current head {head_sha}"
@@ -218,6 +325,17 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     except UnicodeDecodeError as error:
         print(f"error: PR body is not valid UTF-8: {error}", file=sys.stderr)
+        return 1
+    except OSError as error:
+        # Catch-all for the rest of the OSError family (PermissionError, a
+        # disk-full or restrictive-ACL mount, and any other I/O error a CI
+        # runner can plausibly raise) -- a deterministic-gate-quality review
+        # found the three specific catches above still let this class
+        # surface as an uncaught traceback rather than the same clean,
+        # deliberate error path already established for IsADirectoryError.
+        # Still fail-closed either way (non-zero exit), but this makes the
+        # failure a reported finding instead of a crash.
+        print(f"error: could not read --body: {error}", file=sys.stderr)
         return 1
 
     passed, message = check(body, args.head_sha)

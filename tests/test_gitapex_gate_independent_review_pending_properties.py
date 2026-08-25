@@ -117,6 +117,53 @@ def test_a_verdict_inside_a_fenced_code_block_is_never_detected(sha: str, fence:
     assert passed is False
 
 
+@_PROPERTIES
+@given(
+    open_len=st.integers(min_value=3, max_value=6),
+    extra_close_len=st.integers(min_value=0, max_value=4),
+    fence_char=st.sampled_from(("`", "~")),
+    inner=st.text(alphabet=st.characters(blacklist_categories=("Cc", "Cs"), blacklist_characters="`~"), max_size=100),
+)
+def test_strip_fenced_code_blocks_direct_call_handles_any_valid_close_length(
+    open_len: int, extra_close_len: int, fence_char: str, inner: str
+) -> None:
+    """Direct call into `_strip_fenced_code_blocks` itself: CommonMark's own
+    rule is that a closing fence needs the same character repeated *at
+    least* as many times as the opening one, not an exact-length match --
+    a live adversarial round found an earlier backreference-based version
+    only recognized an exact-length close, letting a longer one defeat it.
+    `close_len` is always `>= open_len` by construction (`extra_close_len`
+    is a non-negative offset), so every generated example is a valid
+    CommonMark close, never filtered away by an `assume`/early-return that
+    would leave this property under-exercised."""
+    close_len = open_len + extra_close_len
+    open_fence = fence_char * open_len
+    close_fence = fence_char * close_len
+    marker = f"MARKER_START{inner}MARKER_END"  # a sentinel `inner` alone can't coincidentally match "before"/"after"
+    text = f"before\n{open_fence}\n{marker}\n{close_fence}\nafter\n"
+    stripped = gate._strip_fenced_code_blocks(text)
+    assert "before" in stripped
+    assert "after" in stripped
+    assert marker not in stripped
+
+
+@_PROPERTIES
+@given(
+    fence_char=st.sampled_from(("`", "~")), inner=st.text(max_size=100).filter(lambda s: "`" not in s and "~" not in s)
+)
+def test_strip_fenced_code_blocks_direct_call_unclosed_fence_extends_to_eof(fence_char: str, inner: str) -> None:
+    """Direct call: an opened but never-closed fence (a plausible authoring
+    slip, not only a deliberate attack -- a live adversarial round found
+    this defeated an earlier version) extends to end-of-document, per
+    CommonMark, rather than leaving its own contents unstripped."""
+    fence = fence_char * 3
+    marker = f"MARKER_START{inner}MARKER_END"  # a sentinel `inner` alone can't coincidentally match "before"
+    text = f"before\n{fence}\n{marker}"
+    stripped = gate._strip_fenced_code_blocks(text)
+    assert "before" in stripped
+    assert marker not in stripped
+
+
 _TRAILING_TEXT = st.text(alphabet=st.characters(blacklist_categories=("Cc", "Cs")), max_size=200).filter(
     lambda s: "step 8 independent review verdict" not in s.lower()
 )
