@@ -13,6 +13,30 @@ skills and this task's scope is tests only.
 
 Runs the shipped script via subprocess with the same PreToolUse JSON shape
 Claude Code sends on stdin, rather than re-deriving the regexes in Python.
+
+Issue #1320: `uv add`/`uv remove` are declarative, PR-diff-visible
+dependency changes (mutate pyproject.toml/uv.lock) and are allowed, unlike
+`uv pip install`/bare `uv install`, which install into the venv with no
+diff trail. `apm install`/`apm uninstall` were already unmatched by
+install_re before that change (no "apm" pattern exists at all) -- pinned
+here as an explicit allow regression test, not a relaxed block.
+
+Issue #1326 (Stage 1): the predecessor implementation matched a bash
+extended regex against the raw, unexpanded shell source text of
+tool_input.command -- a substring scan over source text, not a check
+against what bash actually executes. Live-verified bypassable by
+quote-splitting, ${IFS} substitution, and several classes of
+variable/array/positional-parameter indirection, all of which still
+resolved to the exact denied invocation once bash actually expanded them,
+and the identical techniques defeated `pip install`, `gh pr merge`, and
+`git push` just as easily -- a property of the whole regex-substring
+design, not one pattern. `hooks/check-bash-safety.sh` now shells out to
+`hooks/gitapex_check_bash_safety.py`, a token-based classifier (shlex,
+stdlib-only) -- see that module's own docstring for the full root-cause
+analysis, what Stage 1 closes, and its own disclosed residual limitation
+(verb-token-splitting via string-slice reconstruction or array-literal
+assignment indirection, neither of which places the tool/verb name as its
+own literal token anywhere in the command).
 """
 
 from __future__ import annotations
@@ -85,8 +109,16 @@ DENIED_INSTALL_COMMANDS = [
     ("gem install rails", "gem-install"),
     ("cargo install ripgrep", "cargo-install"),
     ("uv pip install requests", "uv-pip-install"),
-    ("uv add requests", "uv-add"),
+    ("uv install requests", "uv-install"),
     ("plugin install foo", "plugin-install"),
+]
+
+# --- Issue #1320: declarative package-manager commands allowed -------------
+ALLOWED_DECLARATIVE_PACKAGE_COMMANDS = [
+    ("uv add requests", "uv-add"),
+    ("uv remove requests", "uv-remove"),
+    ("apm install foo", "apm-install"),
+    ("apm uninstall foo", "apm-uninstall"),
 ]
 
 # --- Findings 2 & 3: direct CLI GitHub write commands ----------------------
@@ -133,7 +165,30 @@ ALLOWED_ORDINARY_COMMANDS = [
     ("pytest", "pytest"),
 ]
 
-# --- Known, disclosed, unresolved regex-gate bypasses ----------------------
+# --- Issue #1326 Stage 1: legitimate dynamic bash commands must never ------
+# regress to denied, even though they contain `$`/backtick expansion --
+# this is the false-positive guard the root-cause analysis's own measured
+# 28% FP rate (for a "deny every dynamic command" policy) was bounding
+# against. Each of these was independently confirmed allowed both before
+# and after this module's own adversarial self-test iteration.
+ALLOWED_DYNAMIC_COMMANDS = [
+    ("git log --oneline -5 $BRANCH", "git-log-dynamic-arg"),
+    ("make -j$(nproc)", "make-command-sub"),
+    ("tar cf out.tar $(git ls-files)", "tar-nested-git-ls-files"),
+    ("$VENV/bin/python script.py", "dynamic-interpreter-path"),
+    ("export PATH=$PATH:/usr/local/bin", "export-path-append"),
+    ("result=$(pip --version)", "assign-from-pip-version-readonly"),
+    ("echo $HOME", "echo-dynamic-var"),
+    ("cd $REPO_ROOT && pytest", "cd-dynamic-then-pytest"),
+    ("for f in $(ls); do echo $f; done", "for-loop-command-sub"),
+    ('git add -A && git commit -m "$(cat msg.txt)"', "git-add-commit-dynamic-message"),
+    ("git add file1.txt file2.txt; result=$(date)", "git-add-then-unrelated-dynamic-assign"),
+    ("gh pr list; x=$(date)", "gh-pr-list-then-unrelated-dynamic-assign"),
+    ("npm run build; deploy=$(get_target)", "npm-run-build-then-unrelated-dynamic-assign"),
+    ("GOFLAGS=-mod=mod go build ./...", "goflags-assign-then-go-build"),
+]
+
+# --- Known, disclosed, unresolved regex/token-gate bypasses ----------------
 # This script shares the same cmd_boundary/whitespace-anchored regex
 # construction that skills/executing-a-branch-plan/scripts/
 # check_task_bash_safety.sh was adapted from -- its own KNOWN_BYPASS_COMMANDS
@@ -147,16 +202,29 @@ ALLOWED_ORDINARY_COMMANDS = [
 # exit 2, the gap closed -- update this test (and consider whether the
 # disclosure convention now needs to name this script too).
 KNOWN_BYPASS_COMMANDS = [
-    ("git${IFS}push origin HEAD", "ifs-substitution-git-push"),
-    ('gi""t push origin HEAD', "empty-quote-split-git"),
-    ("pip${IFS}install foo", "ifs-substitution-pip-install"),
-    (r"p\ip install foo", "backslash-escape-pip"),
+    (
+        'cmd=uvinstall; eval "${cmd:0:2} ${cmd:2}" foo',
+        "string-slice-reconstruction-uv-install",
+    ),
+    (
+        'A=(uv); V=(install); "${A[@]}" "${V[@]}" foo',
+        "array-literal-assignment-indirection",
+    ),
 ]
 
 
 @pytest.mark.parametrize("command,case_id", DENIED_INSTALL_COMMANDS, ids=[c[1] for c in DENIED_INSTALL_COMMANDS])
 def test_denied_install(command: str, case_id: str) -> None:
     assert_denied(command)
+
+
+@pytest.mark.parametrize(
+    "command,case_id",
+    ALLOWED_DECLARATIVE_PACKAGE_COMMANDS,
+    ids=[c[1] for c in ALLOWED_DECLARATIVE_PACKAGE_COMMANDS],
+)
+def test_allowed_declarative_package_commands(command: str, case_id: str) -> None:
+    assert_allowed(command)
 
 
 @pytest.mark.parametrize("command,case_id", DENIED_GH_COMMANDS, ids=[c[1] for c in DENIED_GH_COMMANDS])
@@ -174,14 +242,81 @@ def test_allowed_ordinary(command: str, case_id: str) -> None:
     assert_allowed(command)
 
 
+@pytest.mark.parametrize("command,case_id", ALLOWED_DYNAMIC_COMMANDS, ids=[c[1] for c in ALLOWED_DYNAMIC_COMMANDS])
+def test_allowed_dynamic_false_positive_guard(command: str, case_id: str) -> None:
+    assert_allowed(command)
+
+
 @pytest.mark.parametrize("command,case_id", KNOWN_BYPASS_COMMANDS, ids=[c[1] for c in KNOWN_BYPASS_COMMANDS])
 def test_known_bypass_still_unblocked(command: str, case_id: str) -> None:
     result = run(command)
     assert result.returncode == 0, (
         f"documented bypass {case_id!r} ({command!r}) is now blocked (exit {result.returncode}); "
-        "if this is an intentional fix, update this test and consider whether the disclosure "
-        "convention now needs to name this script specifically"
+        "if this is an intentional fix, update this test and gitapex_check_bash_safety.py's own "
+        "module docstring together"
     )
+
+
+# --- Issue #1326 Stage 1: the bypass techniques this module actually -------
+# closes -- pinned as DENIED, the inverse of the KNOWN_BYPASS_COMMANDS
+# above. Each was live-confirmed, before this module existed, to bypass
+# the predecessor's raw-regex scan while still resolving (via a stand-in
+# `uv` binary echoing its own argv) to the real denied invocation.
+# git-push's own obfuscated forms are deliberately NOT here -- git push is
+# warn, not deny, even in its plain literal form (Finding 4 below), so an
+# obfuscated one stays on that same warn path; see
+# OBFUSCATED_GIT_PUSH_WARN_PATH_COMMANDS further down.
+DENIED_INDIRECTION_COMMANDS = [
+    ("A=uv; B=install; $A $B foo", "var-split-tool-and-verb"),
+    ("x=install; uv $x foo", "var-split-verb-only"),
+    ("T=uv; $T install foo", "var-split-tool-only"),
+    ('V="in""stall"; uv $V foo', "var-concat-verb-pieces"),
+    ('set -- install foo; uv "$@"', "positional-params-indirection"),
+    ('uv $(printf "\\151\\156\\163\\164\\141\\154\\154") foo', "printf-octal-verb-reconstruction"),
+    ('u""v install foo', "quote-split-uv"),
+    ('uv in""stall foo', "quote-split-install-verb"),
+    ("u\\v install foo", "backslash-escape-uv"),
+    ("uv${IFS}install foo", "ifs-uv-install"),
+    ("pip${IFS}install foo", "ifs-substitution-pip-install"),
+    (r"p\ip install foo", "backslash-escape-pip"),
+    ("A=gh;B=pr;C=merge; $A $B $C 1", "var-split-gh-pr-merge"),
+    ('echo "uv install foo" | bash', "echo-literal-piped-to-bash"),
+    ('$(echo "uv install foo")', "command-sub-wrapped-full-text"),
+]
+
+
+@pytest.mark.parametrize(
+    "command,case_id", DENIED_INDIRECTION_COMMANDS, ids=[c[1] for c in DENIED_INDIRECTION_COMMANDS]
+)
+def test_denied_indirection(command: str, case_id: str) -> None:
+    assert_denied(command)
+
+
+# --- Issue #1326 Stage 1: obfuscated git push is treated as git push, ------
+# warn (not deny) not a hard deny, and the provenance scan still runs
+# against it -- consistent with a literal `git push`'s own existing
+# warn-not-deny treatment (Finding 4 below), not a new asymmetry.
+OBFUSCATED_GIT_PUSH_WARN_PATH_COMMANDS = [
+    ("git${IFS}push origin HEAD", "ifs-git-push-still-warn-path"),
+    ('gi""t push origin HEAD', "quote-split-git-push-still-warn-path"),
+    ("P=push; git $P origin main", "var-split-git-push-verb-still-warn-path"),
+    ("A=git;B=push; $A $B origin main", "var-split-git-push-both-still-warn-path"),
+]
+
+
+@pytest.mark.parametrize(
+    "command,case_id",
+    OBFUSCATED_GIT_PUSH_WARN_PATH_COMMANDS,
+    ids=[c[1] for c in OBFUSCATED_GIT_PUSH_WARN_PATH_COMMANDS],
+)
+def test_obfuscated_git_push_goes_through_warn_path_not_denied(command: str, case_id: str) -> None:
+    # Not assert_allowed(): with no real provenance-flagged commit in this
+    # test's own git history, the scan should stay silent, but this
+    # specifically asserts "not denied" (exit != 2) is the property that
+    # matters -- assert_allowed's stricter silence check is exercised by
+    # test_allowed_ordinary's own plain `git status`/`git commit` cases.
+    result = run(command)
+    assert result.returncode != 2, f"expected obfuscated git push to warn, not deny; got exit {result.returncode}"
 
 
 def test_non_bash_tool_name_is_ignored() -> None:
@@ -213,6 +348,20 @@ def _no_jq_path(tmp_path: Path) -> str:
     return str(bin_dir)
 
 
+def _no_python3_path(tmp_path: Path) -> str:
+    """A PATH directory holding every tool this script needs except
+    python3, so the classifier invocation genuinely fails to launch the
+    way it would in an environment missing python3 -- issue #1326's own
+    new dependency, mirroring _no_jq_path's existing approach for jq."""
+    bin_dir = tmp_path / "no-python3-path"
+    bin_dir.mkdir()
+    for tool in ("bash", "cat", "tr", "grep", "sed", "git", "jq", "dirname"):
+        real = shutil.which(tool)
+        if real:
+            (bin_dir / tool).symlink_to(real)
+    return str(bin_dir)
+
+
 def test_denied_when_jq_missing(tmp_path: Path) -> None:
     """Live-reproduced before this fix: with jq absent, the very first jq
     call (extracting tool_name) crashed under `set -e` with exit 127
@@ -225,6 +374,17 @@ def test_denied_when_jq_missing(tmp_path: Path) -> None:
     payload = json.loads(result.stderr)
     assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
     assert "jq is not available" in payload["systemMessage"]
+
+
+def test_denied_when_python3_missing(tmp_path: Path) -> None:
+    """Issue #1326: the classifier invocation itself now depends on
+    python3 (in addition to jq, still checked first, above). A broken
+    environment missing python3 must fail closed the same way a missing
+    jq does, not silently let the Bash command through unchecked."""
+    result = run("gh pr merge 1", extra_env={"PATH": _no_python3_path(tmp_path)})
+    assert result.returncode == 2, f"expected deny (exit 2), got {result.returncode}: stderr={result.stderr!r}"
+    payload = json.loads(result.stderr)
+    assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
 
 
 def test_denied_on_malformed_json_stdin() -> None:
@@ -261,7 +421,10 @@ def test_denied_when_tool_input_is_not_an_object(tool_input: object) -> None:
     code review (PR #1213) after the array/string cases above already
     passed -- jq's `//` operator treats JSON `false` the same as `null`
     (both are falsy), so `(.tool_input // {}) | type == "object"` wrongly
-    accepted it, and the crash happened one line later, past deny()."""
+    accepted it, and the crash happened one line later, past deny(). Now
+    validated inside gitapex_check_bash_safety.py's own main() via an
+    explicit isinstance(..., dict) check (never a falsy-or shortcut), the
+    same discipline ported to Python."""
     payload = json.dumps({"tool_name": "Bash", "tool_input": tool_input})
     env = dict(os.environ)
     env.pop("CLAUDE_PROJECT_DIR", None)
@@ -325,15 +488,13 @@ def test_denied_when_tool_name_is_not_a_string(tool_name: object) -> None:
     ids=["array", "object", "number", "bool"],
 )
 def test_denied_when_tool_input_command_is_not_a_string(command: object) -> None:
-    """Found by code review (PR #1213, round 4): jq -r never errors on a
-    non-string `.tool_input.command` -- for an array/object it pretty-
-    prints the JSON form across multiple lines, which splits a dangerous
-    substring across JSON punctuation (quotes, commas, brackets) and
-    breaks every `[[:space:]]`-anchored danger-pattern regex below,
-    silently letting a genuinely dangerous command through (exit 0)
-    instead of failing closed. Live-confirmed before this guard existed:
-    an array-wrapped `["gh","pr","merge","1"]` command let a real merge
-    call straight through. Must now deny."""
+    """jq -r never errors on a non-string `.tool_input.command` -- for an
+    array/object it pretty-prints the JSON form across multiple lines,
+    which would split a dangerous substring across JSON punctuation
+    (quotes, commas, brackets) and break a whitespace-anchored regex,
+    silently letting a genuinely dangerous command through instead of
+    failing closed. Now validated in gitapex_check_bash_safety.py's own
+    main() via isinstance(command, str)."""
     payload = json.dumps({"tool_name": "Bash", "tool_input": {"command": command}})
     env = dict(os.environ)
     env.pop("CLAUDE_PROJECT_DIR", None)
