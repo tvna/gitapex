@@ -114,11 +114,33 @@ DENIED_INSTALL_COMMANDS = [
 ]
 
 # --- Issue #1320: declarative package-manager commands allowed -------------
+# `uv add`/`uv remove` mutate pyproject.toml/uv.lock, so a dependency change
+# made this way shows up in the PR diff for review -- unlike `uv pip
+# install`/bare `uv install` (still denied above), which install into the
+# venv with no diff trail. `apm install`/`apm uninstall` were never matched
+# by `_DENIED_ADJACENT` at all (no "apm" pattern exists); these two pin that
+# already-allowed behavior as a regression test rather than relaxing an
+# actual block, so a future widened denylist (e.g. a broader "plugin
+# install" pattern) can't silently sweep `apm` back into deny unnoticed.
 ALLOWED_DECLARATIVE_PACKAGE_COMMANDS = [
     ("uv add requests", "uv-add"),
     ("uv remove requests", "uv-remove"),
     ("apm install foo", "apm-install"),
     ("apm uninstall foo", "apm-uninstall"),
+]
+
+# --- Issue #1320 defeat-test: chaining a newly-allowed uv add/remove ahead
+# of a still-denied uv pip install/uv install must NOT smuggle the denied
+# verb past this gate. The token-based classifier (issue #1326) segments a
+# command at shell operator boundaries (;, &&, |, ...) and checks each
+# segment independently against `_DENIED_ADJACENT` -- a still-denied verb
+# appearing in a LATER segment after an allowed `uv add`/`uv remove` must
+# still be caught by that later segment's own check, never short-circuited
+# by the earlier segment's allow.
+DENIED_CHAINED_AFTER_ALLOWED_COMMANDS = [
+    ("uv add safe && uv pip install malicious", "uv-add-then-pip-install-chained"),
+    ("uv remove safe; uv install malicious", "uv-remove-then-install-chained"),
+    ("uv add safe | uv install malicious", "uv-add-then-install-piped"),
 ]
 
 # --- Findings 2 & 3: direct CLI GitHub write commands ----------------------
@@ -262,6 +284,15 @@ def test_allowed_ordinary(command: str, case_id: str) -> None:
 @pytest.mark.parametrize("command,case_id", ALLOWED_DYNAMIC_COMMANDS, ids=[c[1] for c in ALLOWED_DYNAMIC_COMMANDS])
 def test_allowed_dynamic_false_positive_guard(command: str, case_id: str) -> None:
     assert_allowed(command)
+
+
+@pytest.mark.parametrize(
+    "command,case_id",
+    DENIED_CHAINED_AFTER_ALLOWED_COMMANDS,
+    ids=[c[1] for c in DENIED_CHAINED_AFTER_ALLOWED_COMMANDS],
+)
+def test_denied_chained_after_allowed(command: str, case_id: str) -> None:
+    assert_denied(command)
 
 
 @pytest.mark.parametrize("command,case_id", KNOWN_BYPASS_COMMANDS, ids=[c[1] for c in KNOWN_BYPASS_COMMANDS])
