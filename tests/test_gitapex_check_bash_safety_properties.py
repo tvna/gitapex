@@ -436,49 +436,59 @@ def test_rule_gh_api_write_allows_flagname_dynamic_resolved_to_a_read(flag_var: 
 # value SEPARATELY and checked whether any one of them alone was a write
 # method -- so `-X "$M1$M2"` with M1="po", M2="st" was never recognized,
 # even though bash concatenates them into the single word "post" with no
-# separator. `_substitute_var_refs` (reconstruct-then-check) closes this.
+# separator. `_substitute_var_refs_candidates` (reconstruct-then-check,
+# possibly multiple readings -- see round 8 below) closes this.
 
 _SPLIT_METHODS = st.sampled_from([("po", "st"), ("pos", "t"), ("p", "ost"), ("pu", "t"), ("pat", "ch"), ("del", "ete")])
 
 
 @_PROPERTIES
 @given(parts=_SPLIT_METHODS, name1=_IDENTIFIERS, name2=_IDENTIFIERS)
-def test_substitute_var_refs_reconstructs_concatenated_references(
+def test_substitute_var_refs_candidates_includes_concatenated_reading(
     parts: tuple[str, str], name1: str, name2: str
 ) -> None:
     """Model-based: a token made of two adjacent variable references
-    resolves to the concatenation of their assigned values, in order --
-    the exact reconstruction real bash performs with no separator between
-    adjacent `$NAME` expansions."""
+    always includes, among its readings, the concatenation of their
+    assigned values in order -- the exact reconstruction real bash
+    performs with no separator between adjacent `$NAME` expansions.
+    (Other readings may also appear, e.g. if one name happens to be a
+    string-prefix of the other -- see round 8 below -- so this checks
+    membership, not exact equality.)"""
     assume(name1 != name2)
     part1, part2 = parts
     token = f"${name1}${name2}"
-    resolved = checker._substitute_var_refs(token, {name1: part1, name2: part2})
-    assert resolved == part1 + part2
+    candidates = checker._substitute_var_refs_candidates(token, {name1: part1, name2: part2})
+    assert candidates is not None
+    assert part1 + part2 in candidates
 
 
 @_PROPERTIES
 @given(name=_IDENTIFIERS, value=_VALUES, prefix=_VALUES, suffix=_VALUES)
-def test_substitute_var_refs_preserves_surrounding_literal_text(
+def test_substitute_var_refs_candidates_preserves_surrounding_literal_text(
     name: str, value: str, prefix: str, suffix: str
 ) -> None:
-    """Model-based: literal text around a reference is preserved verbatim
-    in the reconstructed string -- this is a targeted substitution, not a
-    reference-only reconstruction."""
+    """Model-based: literal text around a BRACED reference is preserved
+    verbatim in the reconstructed reading -- a braced reference carries no
+    quote-boundary ambiguity (the brace itself survives shlex's quote
+    removal), so it always contributes exactly one candidate."""
     token = f"{prefix}${{{name}}}{suffix}"
-    resolved = checker._substitute_var_refs(token, {name: value.lower()})
-    assert resolved == f"{prefix}{value.lower()}{suffix}"
+    candidates = checker._substitute_var_refs_candidates(token, {name: value.lower()})
+    assert candidates == [f"{prefix}{value.lower()}{suffix}"]
 
 
 @_PROPERTIES
 @given(name=_IDENTIFIERS, assigned_name=_IDENTIFIERS, value=_VALUES)
-def test_substitute_var_refs_none_for_an_unassigned_reference(name: str, assigned_name: str, value: str) -> None:
-    """No false positive: a token referencing even one never-assigned
-    variable cannot be soundly resolved at all -- returns None rather than
-    silently substituting a placeholder or skipping the reference."""
+def test_substitute_var_refs_candidates_empty_for_an_unassigned_reference(
+    name: str, assigned_name: str, value: str
+) -> None:
+    """No false positive: a token whose second reference has no
+    assigned-and-in-range reading at all (not even via a shorter prefix)
+    cannot be soundly resolved -- returns `[]` rather than silently
+    substituting a placeholder or skipping the reference."""
     assume(name != assigned_name)
+    assume(not name.startswith(assigned_name))
     token = f"${assigned_name}${name}"
-    assert checker._substitute_var_refs(token, {assigned_name: value.lower()}) is None
+    assert checker._substitute_var_refs_candidates(token, {assigned_name: value.lower()}) == []
 
 
 @_PROPERTIES
@@ -543,8 +553,8 @@ def test_rule_gh_api_write_detects_a_method_value_split_across_two_variables(
 
 # --- Round 7: an uppercase literal fragment fused with a variable in the
 # SAME token (issue #1326, found live by Step 8 independent review,
-# seventh round). `_substitute_var_refs` preserves a token's literal text
-# exactly as typed -- only the substituted variable values are
+# seventh round). `_substitute_var_refs_candidates` preserves a token's
+# literal text exactly as typed -- only the substituted variable values are
 # already-lowercased -- so `-X "PO$M"` with `M=ST` (lowered to "st")
 # reconstructs to "POst", not "post". Every round-6 test above used a
 # whole-variable-per-fragment split (`M1=PO; M2=ST`), which happens to
@@ -607,6 +617,106 @@ def test_rule_gh_api_write_detects_uppercase_literal_fragment_fused_with_variabl
     name_to_value = {var: var_value}
     result = checker._rule_gh_api_write(segments, f"gh api repos/x/y -x {literal}${var}", name_to_value)
     assert result is not None
+
+
+# --- Round 8: an unbraced reference immediately followed by more
+# identifier-shaped literal text (issue #1326, found live by Step 8
+# independent review, eighth round). shlex's own quote removal discards
+# WHICH characters were originally inside quotes -- `"$M"ST` (a quoted,
+# bounded reference to `M` followed by literal `ST`) and `$MST` (a bare,
+# unquoted reference to a variable literally named `MST`) both dequote to
+# the identical raw token text `$MST`. The prior single-greedy-match
+# resolution always assumed the maximal-munch (unquoted) reading, so
+# `M=PO; gh api .../merge -X"$M"ST` -- a real `-XPOST` write, confirmed
+# via `bash -c` argv expansion -- was wrongly allowed. Closed by trying
+# every non-empty prefix of an unbraced identifier run as a candidate
+# variable name.
+
+
+@_PROPERTIES
+@given(parts=_SPLIT_METHODS, var=_IDENTIFIERS, suffix=_VALUES)
+def test_substitute_var_refs_candidates_includes_the_bounded_prefix_reading(
+    parts: tuple[str, str], var: str, suffix: str
+) -> None:
+    """Model-based: for an unbraced reference immediately followed by more
+    identifier-shaped text, the reading that treats the reference as
+    BOUNDED at the assigned variable name (with the trailing text kept as
+    a literal suffix) is always among the candidates -- not just the
+    reading that treats the whole run as one (unassigned) variable name."""
+    part1, part2 = parts
+    token = f"${var}{part2}{suffix}"
+    candidates = checker._substitute_var_refs_candidates(token, {var: part1})
+    assert candidates is not None
+    assert part1 + part2 + suffix in candidates
+
+
+@_PROPERTIES
+@given(parts=_SPLIT_METHODS, var=_IDENTIFIERS)
+def test_gh_api_method_dynamic_hit_detects_unbraced_reference_followed_by_more_identifier_text(
+    parts: tuple[str, str], var: str
+) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, eighth round (issue #1326): the classifier must
+    catch a write method hidden behind the bounded-reference reading, not
+    only the maximal-munch reading of an unbraced `$NAME` run."""
+    part1, part2 = parts
+    seg = ["gh", "api", "repos/x/y", "-X", f"${var}{part2}"]
+    assert checker._gh_api_method_dynamic_hit(seg, {var: part1})
+
+
+@_PROPERTIES
+@given(var=_IDENTIFIERS)
+def test_gh_api_method_dynamic_hit_allows_unbraced_reference_followed_by_more_identifier_text_read(var: str) -> None:
+    """No false positive: the bounded-reference reading resolving to a
+    read method (GET) must stay allowed."""
+    seg = ["gh", "api", "repos/x/y", "-X", f"${var}T"]
+    assert not checker._gh_api_method_dynamic_hit(seg, {var: "ge"})
+
+
+@_PROPERTIES
+@given(parts=_SPLIT_METHODS, flag_var=_IDENTIFIERS, var=_IDENTIFIERS)
+def test_gh_api_method_flagname_dynamic_hit_detects_unbraced_reference_followed_by_more_identifier_text(
+    parts: tuple[str, str], flag_var: str, var: str
+) -> None:
+    """Same regression pin at the flag-name-indirection sub-pass level
+    (round 5's finding combined with round 8's)."""
+    assume(flag_var != var)
+    part1, part2 = parts
+    seg = ["gh", "api", "repos/x/y", f"${flag_var}", f"${var}{part2}"]
+    name_to_value = {flag_var: "-x", var: part1}
+    assert checker._gh_api_method_flagname_dynamic_hit(seg, name_to_value)
+
+
+@_PROPERTIES
+@given(parts=_SPLIT_METHODS, var=_IDENTIFIERS)
+def test_rule_gh_api_write_detects_unbraced_reference_followed_by_more_identifier_text(
+    parts: tuple[str, str], var: str
+) -> None:
+    """End-to-end regression pin, matching the other ``_rule_gh_api_write``
+    end-to-end tests above: the eighth-round quote-boundary bypass is
+    caught at the orchestrator level too, not just the sub-pass level."""
+    part1, part2 = parts
+    segments = [["gh", "api", "repos/x/y", "-X", f"${var}{part2}"]]
+    name_to_value = {var: part1}
+    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y -x ${var}{part2}", name_to_value)
+    assert result is not None
+
+
+@_PROPERTIES
+@given(var=_IDENTIFIERS)
+def test_write_method_candidate_hit_true_for_none_candidates(var: str) -> None:
+    """Direct coverage of the fail-closed branch: `_write_method_candidate_
+    hit` treats `None` (too many candidate readings to enumerate) as a
+    hit, not a silently-dropped possibility."""
+    assert checker._write_method_candidate_hit(None)
+
+
+@_PROPERTIES
+@given(var=_IDENTIFIERS)
+def test_write_method_candidate_hit_false_for_empty_candidates(var: str) -> None:
+    """No false positive: an empty candidate list (nothing resolvable at
+    all) is never treated as a hit."""
+    assert not checker._write_method_candidate_hit([])
 
 
 _SHORT_FLAG_WITH_VALUE = st.tuples(st.sampled_from(["-c", "-C"]), st.sampled_from(["cfgkey=cfgval", "/tmp/some/repo"]))

@@ -128,6 +128,29 @@ went unexercised until this round. Closed by lowercasing the
 both call sites, matching the lowercasing convention every literal-token
 comparison in this module already follows.
 
+Closed by eighth-round Step 8 independent review, a more fundamental gap
+than rounds 6-7: shlex's own quote removal (tokenize's whole reason for
+existing) discards WHICH characters were originally inside quotes. A
+quoted, bounded reference immediately followed by more identifier-shaped
+literal text (`"$M"ST`) and a bare, unquoted reference whose name simply
+happens to be longer (`$MST`) both dequote to the *identical* raw token
+text -- there is no way to recover, from the token alone, which reading
+bash actually used. The prior single-greedy-match version of what is now
+`_substitute_var_refs_candidates` always assumed the maximal-munch
+(unquoted) reading, so `M=PO; gh api .../merge -X"$M"ST` -- a real
+`-XPOST` write, confirmed via `bash -c` argv expansion -- was wrongly
+allowed, since "MST" itself was never assigned. Closed not by picking a
+different single guess, but by trying every non-empty prefix of an
+unbraced identifier run as a candidate variable name (`_unbraced_ref_
+options`) and checking every resulting reading (`_write_method_candidate_
+hit`) -- a real write hidden behind either interpretation is now caught.
+Still bounded, not the graphql residual's unbounded recursion: the
+branching factor is the length of one already-fixed identifier run, not
+re-expansion of a value that might itself contain `$` -- and an explicit
+cap (`_MAX_SUBSTITUTION_CANDIDATES`) fails closed (treats the token as an
+unresolved-but-plausible match) rather than silently truncating if a
+pathological token's combinatorial expansion would exceed it.
+
 Deliberately stdlib-only (shlex, re, json) -- no new third-party
 dependency, matching this repository's declarative module-management
 convention and python3's already-accepted-hook-dependency status (see
@@ -176,43 +199,86 @@ def _resolve_bare_var(token: str, name_to_value: dict[str, str]) -> str | None:
 
 
 # Matches one `$NAME`/`${NAME}` reference anywhere in a token, capturing
-# its full span (including the braces, when present) so _substitute_var_refs
-# below can replace exactly that span -- unlike _VAR_REF_RE, which only
-# captures the name and is used solely to collect referenced names, never
-# to reconstruct token text.
+# its full span (including the braces, when present) so
+# _substitute_var_refs_candidates below can replace exactly that span --
+# unlike _VAR_REF_RE, which only captures the name and is used solely to
+# collect referenced names, never to reconstruct token text.
 _VAR_REF_FULL_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)")
 
+# Safety valve for _substitute_var_refs_candidates' own combinatorial
+# expansion (see its docstring) -- a bounded cap, not a silent truncation:
+# exceeding it makes the caller treat the token as an unresolved-but-
+# plausible match (fail closed), never as a quietly-dropped possibility.
+_MAX_SUBSTITUTION_CANDIDATES = 64
 
-def _substitute_var_refs(token: str, name_to_value: dict[str, str]) -> str | None:
-    """Reconstruct TOKEN with every `$NAME`/`${NAME}` reference replaced by
-    its assigned (already-lowercased) value, preserving any literal text
-    around or between references -- e.g. `$M1$M2` with M1="po", M2="st"
-    becomes "post". Returns None (cannot soundly resolve) if any
-    referenced variable was never assigned a literal value.
 
-    Bounded and sound, not the unbounded recursive reconstruction the
-    module docstring's graphql-mutation-keyword residual disclaims:
-    `name_to_value`'s own entries are themselves already plain literal
-    strings (a dynamic RHS is filtered out before ever entering
-    `name_to_value` -- see `_assigned_literals`), so this is exactly one
-    substitution pass over TOKEN, never a re-expansion of a substituted
-    value that might itself contain `$`. A reference to an unassigned
-    variable, or non-`$NAME` content such as a backtick command
-    substitution, is left as literal text in the result rather than
-    resolved -- it simply will not match a known value afterward, the
-    same fail-closed-to-"no match" posture `_resolve_bare_var` already
-    takes for an unassigned bare reference."""
-    pieces: list[str] = []
+def _unbraced_ref_options(name_run: str, name_to_value: dict[str, str]) -> list[str]:
+    """Every sound reading of an UNBRACED `$NAME_RUN` reference, as a list
+    of (resolved-value + leftover-literal-suffix) strings -- one per
+    non-empty prefix of NAME_RUN that is actually assigned, longest
+    prefix first. See _substitute_var_refs_candidates' own docstring for
+    why more than the single longest-prefix reading is needed here."""
+    return [
+        name_to_value[name_run[:i]] + name_run[i:] for i in range(len(name_run), 0, -1) if name_run[:i] in name_to_value
+    ]
+
+
+def _substitute_var_refs_candidates(token: str, name_to_value: dict[str, str]) -> list[str] | None:
+    """Every sound reconstruction of TOKEN with each `$NAME`/`${NAME}`
+    reference replaced by its assigned (already-lowercased) value,
+    preserving any literal text around or between references -- e.g.
+    `$M1$M2` with M1="po", M2="st" becomes "post". Returns `[]` (cannot
+    resolve at all) if some reference has no assigned-and-in-range
+    reading; returns `None` (too many readings to enumerate -- treat as
+    unresolved but plausible, i.e. fail closed) if the combinatorial
+    expansion below would exceed `_MAX_SUBSTITUTION_CANDIDATES`.
+
+    A BRACED reference (`${M}`) is unambiguous -- the brace itself
+    survives shlex's quote removal and unambiguously bounds the name --
+    and contributes exactly one reading, same as the single-reading
+    version this replaces. An UNBRACED reference (`$M`) is NOT
+    unambiguous once shlex has already dequoted the token: `"$M"ST` (a
+    quoted, bounded reference to `M` followed by literal `ST`) and
+    `$MST` (a bare, unquoted reference to a variable literally named
+    `MST`, bash's own maximal-munch parse) both dequote to the identical
+    raw token text `$MST` -- shlex does not preserve which characters
+    were inside the quotes. Found live by Step 8 independent review,
+    eighth round (issue #1326): the prior single-greedy-match version of
+    this function always assumed the maximal-munch (unquoted) reading,
+    so `M=PO; gh api .../merge -X"$M"ST` -- a real `-XPOST` write once
+    bash resolves it, confirmed via `bash -c` argv expansion -- was
+    wrongly allowed, since "MST" was never itself assigned. Every
+    non-empty prefix of an unbraced run that IS assigned is now tried as
+    a candidate reading (`_unbraced_ref_options`), so a real write
+    hidden behind either interpretation is still caught.
+
+    Still bounded, not the unbounded recursive reconstruction the module
+    docstring's graphql-mutation-keyword residual disclaims: `name_to_
+    value`'s own entries are themselves already plain literal strings (a
+    dynamic RHS is filtered out before ever entering `name_to_value` --
+    see `_assigned_literals`), so this never re-expands a substituted
+    value that might itself contain `$` -- it only branches over where
+    one already-fixed identifier run might have been quote-bounded, a
+    small, explicitly-capped enumeration."""
+    partials = [""]
     pos = 0
     for match in _VAR_REF_FULL_RE.finditer(token):
-        name = match.group(1) or match.group(2)
-        if name not in name_to_value:
+        braced_name = match.group(1)
+        if braced_name is not None:
+            if braced_name not in name_to_value:
+                return []
+            options = [name_to_value[braced_name]]
+        else:
+            options = _unbraced_ref_options(match.group(2), name_to_value)
+        if not options:
+            return []
+        if len(partials) * len(options) > _MAX_SUBSTITUTION_CANDIDATES:
             return None
-        pieces.append(token[pos : match.start()])
-        pieces.append(name_to_value[name])
+        literal_before = token[pos : match.start()]
+        partials = [p + literal_before + opt for p in partials for opt in options]
         pos = match.end()
-    pieces.append(token[pos:])
-    return "".join(pieces)
+    tail = token[pos:]
+    return [p + tail for p in partials]
 
 
 class TokenizeError(Exception):
@@ -477,7 +543,7 @@ def _gh_api_method_dynamic_value(seg: list[str], index: int, raw_tok: str) -> st
         # at all -- stripping it here matches `_gh_api_method_literal_hit`'s
         # own established `.lstrip("=")` treatment for its separate-token
         # case, and keeps the value part a clean comparand for
-        # `_substitute_var_refs`'s reconstructed-string check below, which
+        # `_substitute_var_refs_candidates`'s reconstructed-string check below, which
         # (unlike the old per-variable-name lookup this replaced) preserves
         # every character of surrounding literal text rather than ignoring
         # a leading "=" incidentally.
@@ -489,6 +555,18 @@ def _gh_api_method_dynamic_value(seg: list[str], index: int, raw_tok: str) -> st
     if raw_tok.lower() in ("-x", "--method") and index + 1 < len(seg) and _is_dynamic(seg[index + 1]):
         return seg[index + 1]
     return None
+
+
+def _write_method_candidate_hit(candidates: list[str] | None) -> bool:
+    """True if any reading in CANDIDATES (from
+    `_substitute_var_refs_candidates`) is a write method, OR CANDIDATES is
+    None -- too many readings to enumerate soundly, so treated as an
+    unresolved-but-plausible match rather than silently dropped (fail
+    closed, matching this module's own established posture for a
+    cannot-confidently-classify case)."""
+    if candidates is None:
+        return True
+    return any(candidate.lower().startswith(method) for candidate in candidates for method in _WRITE_METHODS)
 
 
 def _gh_api_method_dynamic_hit(seg: list[str], name_to_value: dict[str, str]) -> bool:
@@ -503,29 +581,35 @@ def _gh_api_method_dynamic_hit(seg: list[str], name_to_value: dict[str, str]) ->
     independent review (issue #1326), in two rounds: the separate-token
     form first (`M=POST; gh api .../merge -X $M` resolved to a real
     write and was wrongly allowed), then the fused forms in a second
-    round after the first fix landed. Resolved via `_substitute_var_refs`
-    (not a per-variable value set): found live by Step 8 independent
-    review, sixth round (issue #1326) -- `-X "$M1$M2"` with `M1=PO`,
-    `M2=ST` resolves to a real `POST` write once bash concatenates the two
-    references, but checking each referenced variable's value separately
-    (the prior approach) never recognized the concatenation, since
-    neither "po" nor "st" alone is a write method. The reconstructed
-    string is lowercased before comparison -- `_substitute_var_refs`
-    preserves a token's literal text exactly as typed (only the
-    substituted variable values are already-lowercased), so a literal
-    fragment fused with a variable in the SAME token (`-X "PO$M"` with
-    `M=ST`) reconstructs to "POst", not "post" -- found live by Step 8
-    independent review, seventh round (issue #1326): every existing test
-    for this fix used a whole-variable-per-fragment split (`M1=PO;
-    M2=ST`), which happens to already be all-lowercase after
-    `_assigned_literals`'s own lowercasing, so this literal-fragment gap
-    went unexercised."""
+    round after the first fix landed. Resolved via
+    `_substitute_var_refs_candidates` (not a per-variable value set):
+    found live by Step 8 independent review, sixth round (issue #1326) --
+    `-X "$M1$M2"` with `M1=PO`, `M2=ST` resolves to a real `POST` write
+    once bash concatenates the two references, but checking each
+    referenced variable's value separately (the prior approach) never
+    recognized the concatenation, since neither "po" nor "st" alone is a
+    write method. The reconstructed string is lowercased before
+    comparison -- `_substitute_var_refs_candidates` preserves a token's
+    literal text exactly as typed (only the substituted variable values
+    are already-lowercased), so a literal fragment fused with a variable
+    in the SAME token (`-X "PO$M"` with `M=ST`) reconstructs to "POst",
+    not "post" -- found live by Step 8 independent review, seventh round
+    (issue #1326): every existing test for this fix used a
+    whole-variable-per-fragment split (`M1=PO; M2=ST`), which happens to
+    already be all-lowercase after `_assigned_literals`'s own
+    lowercasing, so this literal-fragment gap went unexercised. Every
+    candidate reading `_substitute_var_refs_candidates` returns is
+    checked (via `_write_method_candidate_hit`), not just one -- found
+    live by Step 8 independent review, eighth round (issue #1326): an
+    unbraced reference immediately followed by more identifier-shaped
+    literal text (`-X"$M"ST` with `M=PO`) is itself ambiguous once shlex
+    has dequoted it, see `_substitute_var_refs_candidates`'s own
+    docstring."""
     for i, raw_tok in enumerate(seg):
         dynamic_value_part = _gh_api_method_dynamic_value(seg, i, raw_tok)
         if dynamic_value_part is None:
             continue
-        resolved = _substitute_var_refs(dynamic_value_part, name_to_value)
-        if resolved is not None and any(resolved.lower().startswith(m) for m in _WRITE_METHODS):
+        if _write_method_candidate_hit(_substitute_var_refs_candidates(dynamic_value_part, name_to_value)):
             return True
     return False
 
@@ -542,25 +626,31 @@ def _gh_api_method_flagname_dynamic_hit(seg: list[str], name_to_value: dict[str,
     (`_gh_api_method_literal_hit`) nor the fused-value dynamic scan
     (`_gh_api_method_dynamic_hit`) above ever recognized it as a flag at
     all -- both key off literal text inside the token, and this token has
-    none. The value token is resolved via `_substitute_var_refs` (not
-    `_resolve_bare_var`), so a write-method value split across multiple
-    concatenated variables (`$F "$M1$M2"`) is caught too -- the same gap
-    `_gh_api_method_dynamic_hit` above had, found live by Step 8
+    none. The value token is resolved via `_substitute_var_refs_candidates`
+    (not `_resolve_bare_var`), so a write-method value split across
+    multiple concatenated variables (`$F "$M1$M2"`) is caught too -- the
+    same gap `_gh_api_method_dynamic_hit` above had, found live by Step 8
     independent review, sixth round (issue #1326), against this
     function's own flag-name-indirection case. The resolved value is
     lowercased before comparison for the same reason as
     `_gh_api_method_dynamic_hit` above -- found live by Step 8
     independent review, seventh round (issue #1326): a literal fragment
     fused with a variable in the same value token (`$F "PO$M"` with
-    `M=ST`) reconstructs to "POst", not "post"."""
+    `M=ST`) reconstructs to "POst", not "post". Every candidate reading is
+    checked (via `_write_method_candidate_hit`), for the same
+    unbraced-reference-ambiguity reason as `_gh_api_method_dynamic_hit`
+    above -- found live by Step 8 independent review, eighth round (issue
+    #1326)."""
     for i, raw_tok in enumerate(seg):
         if _resolve_bare_var(raw_tok, name_to_value) not in ("-x", "--method"):
             continue
         if i + 1 >= len(seg):
             continue
         value_tok = seg[i + 1]
-        value = value_tok.lower() if not _is_dynamic(value_tok) else _substitute_var_refs(value_tok, name_to_value)
-        if value is not None and any(value.lower().startswith(m) for m in _WRITE_METHODS):
+        if _is_dynamic(value_tok):
+            if _write_method_candidate_hit(_substitute_var_refs_candidates(value_tok, name_to_value)):
+                return True
+        elif any(value_tok.lower().startswith(m) for m in _WRITE_METHODS):
             return True
     return False
 

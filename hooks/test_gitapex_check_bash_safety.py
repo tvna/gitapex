@@ -195,6 +195,18 @@ ALLOWED_GH_COMMANDS = [
     # (issue #1326, seventh round): an uppercase literal fragment fused
     # with a variable that resolves to a READ method must stay allowed.
     ('M=T; gh api repos/o/r/pulls/1 -X "GE$M"', "gh-api-method-value-literal-fragment-plus-var-read-uppercase"),
+    # False-positive guard for the unbraced-reference-ambiguity fix added
+    # above (issue #1326, eighth round): the bounded-reference reading
+    # resolving to a READ method must stay allowed.
+    (
+        'M=GE; gh api repos/o/r/pulls/1 -X"$M"T',
+        "gh-api-method-value-unbraced-ref-followed-by-more-identifier-text-read",
+    ),
+    # An ordinary, totally unrelated variable adjacent to literal text
+    # with no assigned-variable-name collision at all must stay allowed
+    # -- the unbraced-reference-ambiguity fix must not overreach into
+    # denying every dynamic token shaped like a longer identifier.
+    ("REPO=owner-repo; gh api repos/$REPOissues", "gh-api-unrelated-unbraced-var-adjacent-to-literal-text"),
 ]
 
 ALLOWED_ORDINARY_COMMANDS = [
@@ -390,6 +402,27 @@ DENIED_INDIRECTION_COMMANDS = [
     (
         'F=-X; M=ST; gh api repos/o/r/pulls/1/merge $F "PO$M"',
         "gh-api-method-flagname-dynamic-value-literal-fragment-plus-var-uppercase",
+    ),
+    # Found live by Step 8 independent review, eighth round (issue
+    # #1326): shlex's own quote removal discards WHICH characters were
+    # originally inside quotes. `-X"$M"ST` (a quoted, bounded reference
+    # to `M` followed by literal `ST`) and `-X$MST` (a bare, unquoted
+    # reference to a variable literally named `MST`) both dequote to the
+    # identical raw token text `-X$MST` -- there is no way to recover,
+    # from the token alone, which reading bash actually used. Real bash
+    # (confirmed via `bash -c` argv expansion) resolves `-X"$M"ST` with
+    # `M=PO` to a real `-XPOST` write.
+    (
+        'M=PO; gh api repos/o/r/pulls/1/merge -X"$M"ST',
+        "gh-api-method-value-unbraced-ref-followed-by-more-identifier-text",
+    ),
+    (
+        'M=PO; gh api repos/o/r/pulls/1/merge --method="$M"ST',
+        "gh-api-method-value-method-eq-unbraced-ref-followed-by-more-identifier-text",
+    ),
+    (
+        'F=-X; M=PO; gh api repos/o/r/pulls/1/merge $F "$M"ST',
+        "gh-api-method-flagname-dynamic-value-unbraced-ref-followed-by-more-identifier-text",
     ),
 ]
 
