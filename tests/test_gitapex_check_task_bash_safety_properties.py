@@ -25,7 +25,7 @@ from __future__ import annotations
 import string
 
 import gitapex_check_task_bash_safety as checker
-from hypothesis import given, settings
+from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
 _PROPERTIES = settings(derandomize=True, max_examples=200, deadline=None)
@@ -322,3 +322,87 @@ def test_is_git_push_segment_true_for_long_flag_fused_equals_form(flag: str) -> 
     support alongside it."""
     seg = ["git", f"{flag}=/tmp/some/value", "push", "origin"]
     assert checker._is_git_push_segment(seg)
+
+
+# --- Round 9: bash's own `${NAME:-default}`/`${NAME-default}`/
+# `${NAME:=default}`/`${NAME=default}` parameter-expansion (issue #1326,
+# found live by Step 8 independent review, ninth round). This embeds
+# literal text directly in a token with NO variable assignment anywhere
+# in the command at all -- `${NEVER_SET:-uv} ${NEVER_SET2:-install} foo`
+# resolves (real bash) to a genuine `uv install foo`, fully bypassing
+# even the most basic install-verb detection.
+
+_DEFAULT_CLAUSE_OPERATORS = st.sampled_from([":-", "-", ":=", "="])
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, op=_DEFAULT_CLAUSE_OPERATORS, default=_VALUES)
+def test_default_clause_literal_extracts_the_default_text(name: str, op: str, default: str) -> None:
+    """Model-based: every one of the four default-value operator shapes
+    yields the literal default text, unchanged."""
+    assert checker._default_clause_literal(f"${{{name}{op}{default}}}") == default
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS)
+def test_default_clause_literal_none_for_a_bare_braced_reference(name: str) -> None:
+    """No false positive: a bare `${NAME}` reference (no operator at all)
+    is not a default-clause construct."""
+    assert checker._default_clause_literal(f"${{{name}}}") is None
+
+
+@_PROPERTIES
+@given(tool_var=_IDENTIFIERS, verb_var=_IDENTIFIERS)
+def test_rule_b1a_detects_a_default_clause_verb(tool_var: str, verb_var: str) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, ninth round (issue #1326): a watched verb
+    embedded as a `${NAME:-default}` fallback in a later segment token
+    (with the command word itself also dynamic) is still caught, even
+    though neither variable is ever assigned."""
+    seg = [f"${{{tool_var}:-pip}}", f"${{{verb_var}:-install}}", "pkg"]
+    assert checker._rule_b1a_dynamic_word_same_segment_verb(seg, checker._WATCHED_VERBS)
+
+
+@_PROPERTIES
+@given(tool_var=_IDENTIFIERS, verb_var=_IDENTIFIERS)
+def test_rule_b1b_detects_a_default_clause_tool_and_verb(tool_var: str, verb_var: str) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, ninth round (issue #1326): both the tool AND
+    the verb hidden behind their own `${NAME:-default}` fallback (NO
+    assignment for either variable anywhere) are still caught."""
+    assume(tool_var != verb_var)
+    seg = [f"${{{tool_var}:-pip}}", f"${{{verb_var}:-install}}", "pkg"]
+    assert checker._rule_b1b_dynamic_word_assigned_tool_and_verb(seg, {}, checker._WATCHED_VERBS)
+
+
+@_PROPERTIES
+@given(tool_var=_IDENTIFIERS)
+def test_rule_b1a_allows_an_unrelated_default_clause_argument(tool_var: str) -> None:
+    """No false positive: a dynamic command word with a default-clause
+    argument that resolves to something unrelated to any watched verb
+    must stay allowed."""
+    seg = [f"${{{tool_var}:-cat}}", "${OTHER:-somefile.txt}"]
+    assert not checker._rule_b1a_dynamic_word_same_segment_verb(seg, checker._WATCHED_VERBS)
+
+
+@_PROPERTIES
+@given(gh_var=_IDENTIFIERS)
+def test_rule_gh_any_detects_a_default_clause_gh(gh_var: str) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, ninth round (issue #1326): `gh` hidden as a
+    `${NAME:-gh}` fallback command word, with no assignment for NAME
+    anywhere, is still caught."""
+    segments = [[f"${{{gh_var}:-gh}}", "pr", "merge", "1"]]
+    assert checker._rule_gh_any(segments, {}) is not None
+
+
+@_PROPERTIES
+@given(git_var=_IDENTIFIERS, push_var=_IDENTIFIERS)
+def test_rule_git_push_detects_a_default_clause_git_and_push(git_var: str, push_var: str) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, ninth round (issue #1326): both `git` AND
+    `push` hidden behind their own `${NAME:-default}` fallback are still
+    caught."""
+    assume(git_var != push_var)
+    segments = [[f"${{{git_var}:-git}}", f"${{{push_var}:-push}}", "origin", "main"]]
+    assert checker._rule_git_push(segments, {}) is not None

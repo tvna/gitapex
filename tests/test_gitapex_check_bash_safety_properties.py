@@ -806,6 +806,119 @@ def test_rule_gh_api_write_detects_fused_flagname_and_value_in_one_token(method:
     assert result is not None
 
 
+# --- Round 9: bash's own `${NAME:-default}`/`${NAME-default}`/
+# `${NAME:=default}`/`${NAME=default}` parameter-expansion (issue #1326,
+# found live by Step 8 independent review, ninth round). This embeds
+# literal text directly in a token with NO variable assignment anywhere
+# in the command at all -- `gh api .../merge -X${TOTALLY_NEVER_MENTIONED-
+# POST}` resolves (real bash, confirmed via argv expansion) to a real
+# `-XPOST` write, and `${NEVER_SET:-uv} ${NEVER_SET2:-install} foo`
+# resolves to a real `uv install foo`, fully bypassing even the most
+# basic install-verb detection (B1a/B1b), not just the gh-api-specific
+# checks every round 5-8 fix closed.
+
+_DEFAULT_CLAUSE_OPERATORS = st.sampled_from([":-", "-", ":=", "="])
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, op=_DEFAULT_CLAUSE_OPERATORS, default=_VALUES)
+def test_default_clause_literal_extracts_the_default_text(name: str, op: str, default: str) -> None:
+    """Model-based: every one of the four default-value operator shapes
+    yields the literal default text, unchanged."""
+    assert checker._default_clause_literal(f"${{{name}{op}{default}}}") == default
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS)
+def test_default_clause_literal_none_for_a_bare_braced_reference(name: str) -> None:
+    """No false positive: a bare `${NAME}` reference (no operator at all)
+    is not a default-clause construct."""
+    assert checker._default_clause_literal(f"${{{name}}}") is None
+
+
+@_PROPERTIES
+@given(var=_IDENTIFIERS)
+def test_default_clause_literal_none_for_a_bare_unbraced_reference(var: str) -> None:
+    """No false positive: an unbraced `$NAME` reference is not a
+    default-clause construct."""
+    assert checker._default_clause_literal(f"${var}") is None
+
+
+@_PROPERTIES
+@given(method=st.sampled_from(["post", "put", "patch", "delete"]), name=_IDENTIFIERS, op=_DEFAULT_CLAUSE_OPERATORS)
+def test_gh_api_method_dynamic_hit_detects_a_default_clause_write_method(method: str, name: str, op: str) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, ninth round (issue #1326): a write method
+    embedded as a `${NAME:-default}` fallback, with NO assignment for
+    NAME anywhere, is still caught."""
+    seg = ["gh", "api", "repos/x/y", f"-X${{{name}{op}{method.upper()}}}"]
+    assert checker._gh_api_method_dynamic_hit(seg, {})
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS)
+def test_gh_api_method_dynamic_hit_allows_a_default_clause_read_method(name: str) -> None:
+    """No false positive: a default-clause value resolving to a read
+    method (GET) must stay allowed."""
+    seg = ["gh", "api", "repos/x/y", f"-X${{{name}-GET}}"]
+    assert not checker._gh_api_method_dynamic_hit(seg, {})
+
+
+@_PROPERTIES
+@given(method=st.sampled_from(["post", "put", "patch", "delete"]), name=_IDENTIFIERS)
+def test_rule_gh_api_write_detects_a_default_clause_write_method(method: str, name: str) -> None:
+    """End-to-end regression pin, matching the other ``_rule_gh_api_write``
+    end-to-end tests above: the ninth-round default-clause bypass is
+    caught at the orchestrator level too, not just the sub-pass level."""
+    token = f"-X${{{name}-{method.upper()}}}"
+    segments = [["gh", "api", "repos/x/y", token]]
+    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y {token}", {})
+    assert result is not None
+
+
+@_PROPERTIES
+@given(tool_var=_IDENTIFIERS, verb_var=_IDENTIFIERS)
+def test_rule_b1a_detects_a_default_clause_verb(tool_var: str, verb_var: str) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, ninth round (issue #1326): a watched verb
+    embedded as a `${NAME:-default}` fallback in a later segment token
+    (with the command word itself also dynamic) is still caught, even
+    though neither variable is ever assigned."""
+    seg = [f"${{{tool_var}:-uv}}", f"${{{verb_var}:-install}}", "pkg"]
+    assert checker._rule_b1a_dynamic_word_same_segment_verb(seg, checker._WATCHED_VERBS)
+
+
+@_PROPERTIES
+@given(tool_var=_IDENTIFIERS, verb_var=_IDENTIFIERS)
+def test_rule_b1b_detects_a_default_clause_tool_and_verb(tool_var: str, verb_var: str) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, ninth round (issue #1326): both the tool AND
+    the verb hidden behind their own `${NAME:-default}` fallback (NO
+    assignment for either variable anywhere) are still caught."""
+    assume(tool_var != verb_var)
+    seg = [f"${{{tool_var}:-uv}}", f"${{{verb_var}:-install}}", "pkg"]
+    assert checker._rule_b1b_dynamic_word_assigned_tool_and_verb(seg, {}, checker._WATCHED_VERBS)
+
+
+@_PROPERTIES
+@given(tool_var=_IDENTIFIERS)
+def test_rule_b1a_allows_an_unrelated_default_clause_argument(tool_var: str) -> None:
+    """No false positive: a dynamic command word with a default-clause
+    argument that resolves to something unrelated to any watched verb
+    must stay allowed."""
+    seg = [f"${{{tool_var}:-cat}}", "${OTHER:-somefile.txt}"]
+    assert not checker._rule_b1a_dynamic_word_same_segment_verb(seg, checker._WATCHED_VERBS)
+
+
+@_PROPERTIES
+@given(command=st.sampled_from(["${NEVER_SET:-uv} install foo", "${NEVER_SET:-uv} ${NEVER_SET2:-install} foo"]))
+def test_classify_denies_default_clause_tool_verb_bypass(command: str) -> None:
+    """End-to-end regression pin at the classify() level: the exact
+    zero-assignment bypass reported live, confirmed via real bash to
+    resolve to a genuine ``uv install foo``."""
+    assert checker.classify(command).deny
+
+
 _SHORT_FLAG_WITH_VALUE = st.tuples(st.sampled_from(["-c", "-C"]), st.sampled_from(["cfgkey=cfgval", "/tmp/some/repo"]))
 _LONG_FLAG_ALONE = st.sampled_from(["--git-dir=/tmp/x/.git", "--no-pager", "--work-tree=/tmp/y"])
 _GIT_GLOBAL_FLAG_GROUP = st.one_of(_SHORT_FLAG_WITH_VALUE.map(list), _LONG_FLAG_ALONE.map(lambda f: [f]))

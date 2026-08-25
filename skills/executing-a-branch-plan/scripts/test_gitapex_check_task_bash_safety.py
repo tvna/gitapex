@@ -107,6 +107,16 @@ DENIED_COMMANDS = [
     ('set -- push origin HEAD; git "$@"', "positional-params-git-push"),
     ('u""v install foo', "quote-split-uv-install"),
     ('echo "pip install foo" | cat', "echo-literal-piped"),
+    # --- Issue #1326 Stage 1, ninth round: bash's own
+    # `${NAME:-default}`/`${NAME-default}` parameter-expansion embeds
+    # literal text directly in a token with NO variable assignment
+    # anywhere in the command at all -- confirmed via real bash argv
+    # expansion to resolve to a genuine install/gh/push invocation.
+    ("${NEVER_SET:-uv} install foo", "default-clause-tool-only"),
+    ("${NEVER_SET:-pip} ${NEVER_SET2:-install} foo", "default-clause-tool-and-verb-both"),
+    ("pip ${NEVER_SET:-install} foo", "default-clause-verb-only"),
+    ("${NEVER_SET:-gh} pr merge 1", "default-clause-gh-hidden"),
+    ("${NEVER_SET:-git} ${NEVER_SET2:-push} origin main", "default-clause-git-push-both-hidden"),
 ]
 
 # --- Allowed: ordinary git/test/build commands that must never regress ----
@@ -131,6 +141,11 @@ ALLOWED_COMMANDS = [
     ("result=$(pip --version)", "assign-from-pip-version-readonly"),
     ("git add file1.txt file2.txt; result=$(date)", "git-add-then-unrelated-dynamic-assign"),
     ("npm run build; deploy=$(get_target)", "npm-run-build-then-unrelated-dynamic-assign"),
+    # False-positive guards for the `${NAME:-default}` fix added above
+    # (issue #1326, ninth round): an ordinary default-value fallback with
+    # no watched-tool/verb text at all must stay allowed.
+    ("echo ${NEVER_SET:-hello}", "default-clause-unrelated-text"),
+    ("${NEVER_SET:-cat} file.txt", "default-clause-unwatched-tool"),
 ]
 
 # --- Known, disclosed, unresolved token-gate bypasses -----------------------

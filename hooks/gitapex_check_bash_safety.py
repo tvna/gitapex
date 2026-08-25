@@ -170,6 +170,44 @@ fused-flag shapes already recognized for a literal token -- not a new
 detection rule, only extending an existing one to a token whose resolved
 reading was not knowable until substitution.
 
+Closed by ninth-round Step 8 independent review, a DIFFERENT bypass class
+than rounds 5-8 (those all shared one root cause -- shlex's own quote
+removal; this one is bash's own default-value expansion): bash's
+`${NAME:-default}`/`${NAME-default}`/`${NAME:=default}`/`${NAME=default}`
+parameter expansion evaluates to the literal DEFAULT text whenever NAME
+is unset (or, for the `:`-prefixed forms, empty) -- a zero-assignment
+mechanism for embedding literal text directly in a token. Before this
+fix, `_substitute_var_refs_candidates` only ever recognized `$NAME`/
+`${NAME}`, so the entire `${...}` construct was left as untouched literal
+text and never matched any write-method comparison
+(`gh api .../merge -X${TOTALLY_NEVER_MENTIONED-POST}` -- confirmed via
+real bash argv expansion to resolve to an actual `-XPOST` write -- was
+wrongly allowed). More severely, the SAME construct also fully bypassed
+`_rule_b1a_dynamic_word_same_segment_verb`/`_rule_b1b_dynamic_word_
+assigned_tool_and_verb` -- the most basic install-verb/gh-pr-merge
+detection, not just the gh-api-specific checks rounds 5-8 closed --
+since neither rule ever looked at a token's own embedded default-clause
+text, only a literal token's own text or a referenced variable's
+assigned value: `${NEVER_SET:-uv} ${NEVER_SET2:-install} foo` (confirmed
+via real bash to resolve to a genuine `uv install foo`) needed NO
+variable assignment anywhere in the command at all. Closed via
+`_default_clause_literal` (an anchored, whole-token extraction used by
+the B-rules) and a third alternative added to `_substitute_var_refs_
+candidates`'s own regex (a non-anchored form, so it can also be found
+fused within a larger token, e.g. `-X${NAME-POST}`) -- both contribute
+the literal DEFAULT text as a candidate reading, PLUS NAME's own resolved
+value if it also happens to be assigned (an extra safety-margin
+candidate, since this classifier cannot know at gate time whether NAME
+will actually be unset/empty at bash's own real runtime). The DEFAULT
+text itself is not recursively re-scanned for further `$` references it
+might contain (e.g. `${UNSET:-$OTHER}`) -- a disclosed residual, the same
+"not the unbounded reconstruction problem" boundary already drawn
+elsewhere in this module. The identical fix was ported to the
+self-contained duplicate at
+skills/executing-a-branch-plan/scripts/gitapex_check_task_bash_safety.py
+(its own B1a/B1b, `_rule_gh_any`, and `_rule_git_push` all shared the
+same gap).
+
 Deliberately stdlib-only (shlex, re, json) -- no new third-party
 dependency, matching this repository's declarative module-management
 convention and python3's already-accepted-hook-dependency status (see
@@ -217,12 +255,48 @@ def _resolve_bare_var(token: str, name_to_value: dict[str, str]) -> str | None:
     return name_to_value.get(match.group(1))
 
 
-# Matches one `$NAME`/`${NAME}` reference anywhere in a token, capturing
-# its full span (including the braces, when present) so
+# Matches a token that is EXACTLY one bash `${NAME:-default}`/
+# `${NAME-default}`/`${NAME:=default}`/`${NAME=default}` construct
+# (anchored -- the same "exactly one reference, nothing else" scoping
+# `_BARE_VAR_RE` already applies to a bare reference) -- captures just the
+# literal DEFAULT text, group 2. See _default_clause_literal below.
+_DEFAULT_CLAUSE_RE = re.compile(r"^\$\{([A-Za-z_][A-Za-z0-9_]*):?[-=](.*)\}$")
+
+
+def _default_clause_literal(token: str) -> str | None:
+    """The literal DEFAULT-VALUE text of TOKEN, when TOKEN is EXACTLY one
+    bash `${NAME:-default}`/`${NAME-default}`/`${NAME:=default}`/
+    `${NAME=default}` construct -- None otherwise. Bash evaluates this
+    construct to DEFAULT whenever NAME is unset (or, for the
+    `:`-prefixed forms, empty): a zero-assignment mechanism for embedding
+    literal text directly in a token -- `${NEVER_SET:-uv}
+    ${NEVER_SET2:-install} foo` needs no `NAME=` assignment anywhere in
+    the command at all to resolve, at real bash's own runtime, to a real
+    `uv install foo`. Found live by Step 8 independent review, ninth
+    round (issue #1326): none of `_rule_b1a_dynamic_word_same_segment_
+    verb`/`_rule_b1b_dynamic_word_assigned_tool_and_verb` (both keyed off
+    either a literal token text or a referenced variable's OWN assigned
+    value) ever looked at a token's own embedded default-clause text, so
+    this fully bypassed even the most basic install-verb detection."""
+    match = _DEFAULT_CLAUSE_RE.match(token)
+    return match.group(2) if match else None
+
+
+# Matches one `$NAME`/`${NAME}`/`${NAME:-default}` reference anywhere in a
+# token, capturing its full span (including the braces, when present) so
 # _substitute_var_refs_candidates below can replace exactly that span --
 # unlike _VAR_REF_RE, which only captures the name and is used solely to
-# collect referenced names, never to reconstruct token text.
-_VAR_REF_FULL_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)")
+# collect referenced names, never to reconstruct token text. The third
+# alternative (default-clause) mirrors _DEFAULT_CLAUSE_RE above but is
+# NOT anchored (`[^}]*` instead of `.*$`) -- it must stop at the first
+# unescaped `}` so it can be found anywhere within a larger fused token
+# (e.g. `-X${NEVER_SET-POST}`), not just when the construct is the whole
+# token.
+_VAR_REF_FULL_RE = re.compile(
+    r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}"
+    r"|\$\{([A-Za-z_][A-Za-z0-9_]*):?[-=]([^}]*)\}"
+    r"|\$([A-Za-z_][A-Za-z0-9_]*)"
+)
 
 # Safety valve for _substitute_var_refs_candidates' own combinatorial
 # expansion (see its docstring) -- a bounded cap, not a silent truncation:
@@ -278,17 +352,43 @@ def _substitute_var_refs_candidates(token: str, name_to_value: dict[str, str]) -
     see `_assigned_literals`), so this never re-expands a substituted
     value that might itself contain `$` -- it only branches over where
     one already-fixed identifier run might have been quote-bounded, a
-    small, explicitly-capped enumeration."""
+    small, explicitly-capped enumeration.
+
+    A `${NAME:-default}`/`${NAME-default}`/`${NAME:=default}`/
+    `${NAME=default}` reference contributes the literal DEFAULT text as a
+    candidate, PLUS NAME's own resolved value if NAME also happens to be
+    assigned in this command (an extra safety-margin candidate: this
+    classifier cannot know, at gate time, whether NAME will actually be
+    unset/empty at bash's own real runtime -- an inherited environment
+    variable is one example outside this classifier's own tracking).
+    Found live by Step 8 independent review, ninth round (issue #1326):
+    `gh api .../merge -X${TOTALLY_NEVER_MENTIONED-POST}` resolves (real
+    bash, confirmed via argv expansion) to a real `-XPOST` write with NO
+    variable assignment anywhere in the command at all -- the prior
+    version of this function only ever recognized `$NAME`/`${NAME}`,
+    never bash's own default-value expansion, so the entire construct was
+    left as untouched literal text and never matched the write-method
+    comparison. The DEFAULT text itself is not recursively re-scanned for
+    further `$` references it might itself contain (e.g.
+    `${UNSET:-$OTHER}`) -- a disclosed residual, the same "not the
+    unbounded reconstruction problem" boundary this function already
+    draws elsewhere, not attempted here."""
     partials = [""]
     pos = 0
     for match in _VAR_REF_FULL_RE.finditer(token):
         braced_name = match.group(1)
+        default_name = match.group(2)
+        default_text = match.group(3)
         if braced_name is not None:
             if braced_name not in name_to_value:
                 return []
             options = [name_to_value[braced_name]]
+        elif default_name is not None:
+            options = [default_text]
+            if default_name in name_to_value:
+                options.append(name_to_value[default_name])
         else:
-            options = _unbraced_ref_options(match.group(2), name_to_value)
+            options = _unbraced_ref_options(match.group(4), name_to_value)
         if not options:
             return []
         if len(partials) * len(options) > _MAX_SUBSTITUTION_CANDIDATES:
@@ -889,10 +989,21 @@ def _rule_b1a_dynamic_word_same_segment_verb(seg: list[str], verb_set: set[str])
     token present anywhere else in that SAME segment (e.g.
     `$T install foo` -- `install` sits right there). Scoped to one segment
     on purpose, so it cannot combine with an unrelated verb-shaped word in
-    a different, unrelated segment."""
+    a different, unrelated segment.
+
+    A verb hidden in a `${NEVER_SET:-install}`-shaped token's own DEFAULT
+    text counts too (via `_default_clause_literal`), not just a plain
+    literal token -- found live by Step 8 independent review, ninth round
+    (issue #1326): `${NEVER_SET:-uv} ${NEVER_SET2:-install} foo` fully
+    bypassed this rule (and B1b below) before this fix, needing NO
+    variable assignment anywhere in the command at all."""
     if not seg or not _is_dynamic(seg[0]):
         return False
     literals = {t.lower() for t in seg[1:] if not _is_dynamic(t)}
+    for tok in seg[1:]:
+        default_text = _default_clause_literal(tok)
+        if default_text is not None:
+            literals.add(default_text.lower())
     return bool(literals & verb_set)
 
 
@@ -919,16 +1030,32 @@ def _rule_b1b_dynamic_word_assigned_tool_and_verb(
     before this fix -- or a dynamic argument to an otherwise-literal,
     harmless command (e.g. `echo $A $B` where A=uv, B=install just prints
     text, it does not invoke anything) would be denied for constructing
-    no dynamic command at all."""
+    no dynamic command at all.
+
+    A tool or verb embedded directly as a `${NEVER_SET:-uv}`-shaped
+    token's own DEFAULT text (via `_default_clause_literal`) counts as a
+    "value" here too, alongside a referenced variable's own assigned
+    value -- found live by Step 8 independent review, ninth round (issue
+    #1326), the same finding as `_rule_b1a_dynamic_word_same_segment_
+    verb`'s own fix above: `${NEVER_SET:-uv} ${NEVER_SET2:-install} foo`
+    resolves (real bash) to a genuine `uv install foo` with no `NAME=`
+    assignment anywhere in the command, and was wrongly allowed since
+    neither `NEVER_SET` nor `NEVER_SET2` was ever assigned for the
+    prior, assignment-only version of this rule to look up."""
     if not seg or not _is_dynamic(seg[0]):
         return False
     referenced: set[str] = set()
+    values: set[str] = set()
     for tok in seg:
-        if _is_dynamic(tok):
-            referenced |= set(_VAR_REF_RE.findall(tok))
-    if not referenced:
+        if not _is_dynamic(tok):
+            continue
+        referenced |= set(_VAR_REF_RE.findall(tok))
+        default_text = _default_clause_literal(tok)
+        if default_text is not None:
+            values.add(default_text.lower())
+    if not referenced and not values:
         return False
-    values = {name_to_value[name] for name in referenced if name in name_to_value}
+    values |= {name_to_value[name] for name in referenced if name in name_to_value}
     return bool(values & _WATCHED_TOOLS) and bool(values & verb_set)
 
 

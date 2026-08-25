@@ -211,6 +211,10 @@ ALLOWED_GH_COMMANDS = [
     # above (issue #1326, eighth round): a fused flag-name-hidden token
     # resolving to a read method must stay allowed.
     ('F=-X; gh api repos/o/r/pulls/1 "$F"GET', "gh-api-method-fused-flagname-and-value-quote-collapsed-read"),
+    # False-positive guard for the `${NAME:-default}` fix added above
+    # (issue #1326, ninth round): a default-clause value resolving to a
+    # read method must stay allowed.
+    ("gh api repos/x/y -X${UNSET_VAR-GET}", "gh-api-method-value-default-clause-read"),
 ]
 
 ALLOWED_ORDINARY_COMMANDS = [
@@ -243,6 +247,14 @@ ALLOWED_DYNAMIC_COMMANDS = [
     ("gh pr list; x=$(date)", "gh-pr-list-then-unrelated-dynamic-assign"),
     ("npm run build; deploy=$(get_target)", "npm-run-build-then-unrelated-dynamic-assign"),
     ("GOFLAGS=-mod=mod go build ./...", "goflags-assign-then-go-build"),
+    # False-positive guards for the `${NAME:-default}` fix added below in
+    # DENIED_INDIRECTION_COMMANDS (issue #1326, ninth round): an ordinary
+    # default-value fallback with no watched-tool/verb text at all, or as
+    # a harmless argument to a command that doesn't invoke it, must stay
+    # allowed.
+    ("echo ${NEVER_SET:-hello}", "default-clause-unrelated-text"),
+    ("${NEVER_SET:-cat} file.txt", "default-clause-unwatched-tool"),
+    ("echo ${NEVER_SET:-uv}", "default-clause-watched-tool-name-as-echo-argument"),
 ]
 
 # --- Known, disclosed, unresolved regex/token-gate bypasses ----------------
@@ -440,6 +452,33 @@ DENIED_INDIRECTION_COMMANDS = [
     # dequotes to `$FFname=value`; real bash resolves it to a real
     # `-fname=value` field write.
     ('FF=-f; gh api repos/o/r/pulls/1 "$FF"name=value', "gh-api-field-fused-flagname-and-value-quote-collapsed"),
+    # Found live by Step 8 independent review, ninth round (issue #1326):
+    # bash's own `${NAME:-default}`/`${NAME-default}` parameter-expansion
+    # embeds literal text directly in a token with NO variable assignment
+    # anywhere in the command at all. Real bash resolves
+    # `-X${TOTALLY_NEVER_MENTIONED-POST}` to a real `-XPOST` write.
+    (
+        "gh api repos/x/y/merge -X${TOTALLY_NEVER_MENTIONED-POST}",
+        "gh-api-method-value-default-clause-fused",
+    ),
+    (
+        "gh api repos/x/y/merge --method=${UNSET_VAR:-POST}",
+        "gh-api-method-value-method-eq-default-clause-fused",
+    ),
+    (
+        'gh api repos/x/y/merge -X "${UNSET_VAR:-POST}"',
+        "gh-api-method-value-default-clause-separate-token",
+    ),
+    # Same mechanism, but defeating the much more basic install-verb
+    # detection (not gh-api-specific) with zero variable assignment at
+    # all -- real bash resolves this to a genuine `uv install foo`.
+    ("${NEVER_SET:-uv} install foo", "default-clause-tool-only"),
+    ("${NEVER_SET:-uv} ${NEVER_SET2:-install} foo", "default-clause-tool-and-verb-both"),
+    ("uv ${NEVER_SET:-install} foo", "default-clause-verb-only"),
+    (
+        "${NEVER_SET:-gh} ${NEVER_SET2:-pr} ${NEVER_SET3:-merge} 1",
+        "default-clause-gh-pr-merge-all-hidden",
+    ),
 ]
 
 

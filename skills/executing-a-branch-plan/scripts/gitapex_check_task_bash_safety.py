@@ -39,6 +39,24 @@ fused variable, or an array-literal-assignment indirection) still
 evades Stage 1. Full closure requires Stage 2 (execution-boundary
 enforcement), tracked separately per #1326's own stated scope boundary.
 
+Closed by Step 8 independent review, ninth round (issue #1326), ported
+from the sibling module's own fix of the same finding: bash's own
+`${NAME:-default}`/`${NAME-default}`/`${NAME:=default}`/`${NAME=default}`
+parameter expansion evaluates to the literal DEFAULT text whenever NAME
+is unset (or, for the `:`-prefixed forms, empty) -- a zero-assignment
+mechanism for embedding literal text directly in a token. Before this
+fix, `_rule_b1a_dynamic_word_same_segment_verb`/`_rule_b1b_dynamic_word_
+assigned_tool_and_verb`/`_rule_gh_any`/`_rule_git_push` all only ever
+looked at a literal token's own text or a referenced variable's assigned
+value, never a token's own embedded default-clause text --
+`${NEVER_SET:-uv} ${NEVER_SET2:-install} foo` (confirmed via real bash
+argv expansion to resolve to a genuine `uv install foo`) and
+`${NEVER_SET:-git} ${NEVER_SET2:-push} origin main` needed NO variable
+assignment anywhere in the command at all. Closed via
+`_default_clause_literal` (an anchored, whole-token extraction), wired
+into all four rules above as an additional source of "value" alongside a
+referenced variable's own assigned value.
+
 Deliberately stdlib-only (shlex, re, json).
 """
 
@@ -59,6 +77,31 @@ _ASSIGN_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
 # unrelated assignment anywhere in the whole command happens to look like a
 # tool/verb (see _rule_b1b_dynamic_word_assigned_tool_and_verb's docstring).
 _VAR_REF_RE = re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)")
+
+# Matches a token that is EXACTLY one bash `${NAME:-default}`/
+# `${NAME-default}`/`${NAME:=default}`/`${NAME=default}` construct
+# (anchored) -- captures just the literal DEFAULT text, group 2. See
+# _default_clause_literal below. Ported from
+# hooks/gitapex_check_bash_safety.py's own fix of the same finding.
+_DEFAULT_CLAUSE_RE = re.compile(r"^\$\{([A-Za-z_][A-Za-z0-9_]*):?[-=](.*)\}$")
+
+
+def _default_clause_literal(token: str) -> str | None:
+    """The literal DEFAULT-VALUE text of TOKEN, when TOKEN is EXACTLY one
+    bash `${NAME:-default}`/`${NAME-default}`/`${NAME:=default}`/
+    `${NAME=default}` construct -- None otherwise. Bash evaluates this
+    construct to DEFAULT whenever NAME is unset (or, for the
+    `:`-prefixed forms, empty): a zero-assignment mechanism for embedding
+    literal text directly in a token -- `${NEVER_SET:-uv}
+    ${NEVER_SET2:-install} foo` needs no `NAME=` assignment anywhere in
+    the command at all to resolve, at real bash's own runtime, to a real
+    `uv install foo`. Found live by Step 8 independent review, ninth
+    round (issue #1326), against the sibling module's own B1a/B1b rules
+    this file's own copies below are adapted from -- neither ever looked
+    at a token's own embedded default-clause text, so this fully
+    bypassed even the most basic install-verb detection."""
+    match = _DEFAULT_CLAUSE_RE.match(token)
+    return match.group(2) if match else None
 
 
 class TokenizeError(Exception):
@@ -253,7 +296,13 @@ def _rule_gh_any(segments: list[list[str]], name_to_value: dict[str, str]) -> st
     independent review, fourth round (issue #1326). Only `seg[0]` (the
     command word) is checked -- `gh` referenced anywhere else in the
     segment is not this rule's concern -- and no verb pairing is needed,
-    since every `gh` subcommand is denied regardless of which one it is."""
+    since every `gh` subcommand is denied regardless of which one it is.
+
+    `seg[0]`'s own embedded `${NEVER_SET:-gh}`-shaped default-clause text
+    (via `_default_clause_literal`) counts as a "value" here too,
+    alongside a referenced variable's own assigned value -- found live by
+    Step 8 independent review, ninth round (issue #1326): see
+    `_default_clause_literal`'s own docstring."""
     for seg in segments:
         if not seg:
             continue
@@ -262,6 +311,9 @@ def _rule_gh_any(segments: list[list[str]], name_to_value: dict[str, str]) -> st
         if _is_dynamic(seg[0]):
             referenced = set(_VAR_REF_RE.findall(seg[0]))
             values = {name_to_value[name] for name in referenced if name in name_to_value}
+            default_text = _default_clause_literal(seg[0])
+            if default_text is not None:
+                values.add(default_text.lower())
             if "gh" in values:
                 return "the gh CLI, not permitted inside a task-level agent (read or write)"
     return None
@@ -345,11 +397,23 @@ def _rule_git_push(segments: list[list[str]], name_to_value: dict[str, str]) -> 
             # (found live by Step 8 independent review, issue #1326: the
             # earlier flat-set version denied
             # `GIT=x; PUSH=y; echo done; Z=$(mktemp); "$Z" --help`).
+            #
+            # A tool or verb embedded directly as a
+            # `${NEVER_SET:-git}`-shaped token's own DEFAULT text (via
+            # _default_clause_literal) counts as a "value" here too,
+            # alongside a referenced variable's own assigned value --
+            # found live by Step 8 independent review, ninth round (issue
+            # #1326): see _default_clause_literal's own docstring.
             referenced: set[str] = set()
+            values: set[str] = set()
             for tok in seg:
-                if _is_dynamic(tok):
-                    referenced |= set(_VAR_REF_RE.findall(tok))
-            values = {name_to_value[name] for name in referenced if name in name_to_value}
+                if not _is_dynamic(tok):
+                    continue
+                referenced |= set(_VAR_REF_RE.findall(tok))
+                default_text = _default_clause_literal(tok)
+                if default_text is not None:
+                    values.add(default_text.lower())
+            values |= {name_to_value[name] for name in referenced if name in name_to_value}
             if "git" in values and "push" in values:
                 return "git push, not permitted inside a task-level agent (worktree merge-back is main-thread-only)"
         if len(seg) > 1 and not _is_dynamic(seg[0]) and seg[0].lower() == "git" and _is_dynamic(seg[1]):
@@ -358,9 +422,17 @@ def _rule_git_push(segments: list[list[str]], name_to_value: dict[str, str]) -> 
 
 
 def _rule_b1a_dynamic_word_same_segment_verb(seg: list[str], verb_set: set[str]) -> bool:
+    """A verb hidden in a `${NEVER_SET:-install}`-shaped token's own
+    DEFAULT text counts too (via `_default_clause_literal`), not just a
+    plain literal token -- found live by Step 8 independent review, ninth
+    round (issue #1326): see `_default_clause_literal`'s own docstring."""
     if not seg or not _is_dynamic(seg[0]):
         return False
     literals = {t.lower() for t in seg[1:] if not _is_dynamic(t)}
+    for tok in seg[1:]:
+        default_text = _default_clause_literal(tok)
+        if default_text is not None:
+            literals.add(default_text.lower())
     return bool(literals & verb_set)
 
 
@@ -376,16 +448,27 @@ def _rule_b1b_dynamic_word_assigned_tool_and_verb(
     references neither TOOL nor VERB. `seg[0]` (the command word) must
     itself be dynamic, or a dynamic argument to an otherwise-literal,
     harmless command would be denied for constructing no dynamic command
-    at all."""
+    at all.
+
+    A tool or verb embedded directly as a `${NEVER_SET:-uv}`-shaped
+    token's own DEFAULT text (via `_default_clause_literal`) counts as a
+    "value" here too, alongside a referenced variable's own assigned
+    value -- found live by Step 8 independent review, ninth round (issue
+    #1326): see `_default_clause_literal`'s own docstring."""
     if not seg or not _is_dynamic(seg[0]):
         return False
     referenced: set[str] = set()
+    values: set[str] = set()
     for tok in seg:
-        if _is_dynamic(tok):
-            referenced |= set(_VAR_REF_RE.findall(tok))
-    if not referenced:
+        if not _is_dynamic(tok):
+            continue
+        referenced |= set(_VAR_REF_RE.findall(tok))
+        default_text = _default_clause_literal(tok)
+        if default_text is not None:
+            values.add(default_text.lower())
+    if not referenced and not values:
         return False
-    values = {name_to_value[name] for name in referenced if name in name_to_value}
+    values |= {name_to_value[name] for name in referenced if name in name_to_value}
     return bool(values & _WATCHED_TOOLS) and bool(values & verb_set)
 
 
