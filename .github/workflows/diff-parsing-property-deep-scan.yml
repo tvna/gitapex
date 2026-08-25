@@ -12,7 +12,7 @@ name: Diff-parsing property deep scan
 # test body.
 on:
   schedule:
-    - cron: "0 8 * * *"  # daily 08:00 UTC, offset from retrospective-gate-drift.yml's 07:00
+    - cron: "0 10 * * *"  # daily 10:00 UTC, offset from the 06:00/07:00/08:00/09:00 scans
   workflow_dispatch: {}
 
 permissions:
@@ -49,9 +49,17 @@ jobs:
           GITAPEX_HYPOTHESIS_DEEP_SCAN: "1"
         run: |
           set -o pipefail
+          rc=0
           uv run --frozen pytest \
             tests/test_gitapex_gate_detection_logic_property_coverage_properties.py \
             tests/test_gitapex_gate_exception_handler_gaps_properties.py \
             tests/test_gitapex_gate_stdlib_only_claim_drift_properties.py \
-            --no-cov -v \
-            | tee -a "$GITHUB_STEP_SUMMARY"
+            --no-cov -v > pytest-output.txt 2>&1 || rc=$?
+          {
+            echo "## Diff-parsing property deep scan"
+            echo '```'
+            cat pytest-output.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat pytest-output.txt
+          exit "$rc"
