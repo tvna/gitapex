@@ -32,8 +32,8 @@ first, not skimmed.
    method `get`) for `planning-a-branch-from-an-issue`'s own re-verification
    marker via `python3 scripts/gitapex_check_branch_plan_reverified.py --body <issue-body-file>`
    (or pipe the fetched body on stdin) -- a
-   structural precondition, additive to and run before the semantic
-   judgment, never a replacement for it (issue `#1306`). Its absence is a
+   structural precondition, additive to the semantic judgment, never a
+   replacement for it (issue `#1306`). Its absence is a
    stop and escalate, the same fail-closed default as the semantic
    judgment's own; its presence only proves that skill's own Step 4
    re-verification ran, never that a human's approval comment genuinely
