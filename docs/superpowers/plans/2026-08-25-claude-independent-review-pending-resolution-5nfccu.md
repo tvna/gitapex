@@ -100,7 +100,9 @@ rounds, issue #1311/PR #1318, already closed once):
 ## Verification
 
 - `uv run --frozen python3 -m pytest tests/test_gitapex_gate_independent_review_pending.py tests/test_gitapex_gate_independent_review_pending_properties.py -q`:
-  43 passed (35 example-based + 8 Hypothesis property tests).
+  46 passed (38 example-based + 8 Hypothesis property tests). Was 43 at
+  task 2's own completion; the independent adversarial review below added
+  three regression tests.
 - Live defeat-check: a body carrying the new `## Independent review
   verdict` heading with a CLEAN verdict against a matching SHA -> PASS; a
   body carrying the OLD `## Step 8 independent review verdict` heading,
@@ -109,6 +111,24 @@ rounds, issue #1311/PR #1318, already closed once):
   The old-heading half of that check is now codified as the regression
   test `test_old_step_8_heading_no_longer_passes_after_rename`, so it is
   re-run by CI rather than resting on this one-off manual observation.
+- Independent adversarial review (step 8's own deterministic gate/check
+  script scrutiny, `refactor-and-review-gate.md`): mutation-tested
+  `_HEADING_RE` against the suite -- reverting the rename to a dual-accept
+  form and dropping the 0-3-space indent limit were each caught by an
+  existing test, but three CommonMark-fidelity protections the rename made
+  more load-bearing survived unpinned. The new literal is a strict prefix
+  of plausible longer headings in a way `Step 8 independent review
+  verdict` was not, so a lost end-of-line anchor would newly admit
+  `## Independent review verdict (illustrative example)` as a live
+  verdict; likewise an optional space after the `#` run
+  (`##Independent review verdict`, literal paragraph text on GitHub) and a
+  7-hash line (past CommonMark's 6-level ATX cap). Each defeat case is now
+  committed as a regression test --
+  `test_heading_with_trailing_text_does_not_pass`,
+  `test_heading_without_space_after_hashes_does_not_pass`, and
+  `test_seven_hash_heading_does_not_pass` -- and each is confirmed to kill
+  its mutant. The gate script's own detection logic was NOT changed: all
+  three cases already behaved correctly, nothing pinned them.
 - `gitapex_check_skill_shape.py --allowed-root skills skills/drafting-a-pr-to-merge`:
   45/45 checks pass.
 - `gitapex_check_skill_shape.py --allowed-root skills skills/executing-a-branch-plan`:

@@ -461,3 +461,56 @@ def test_old_step_8_heading_no_longer_passes_after_rename() -> None:
     passed, message = gate.check(body, _SHA)
     assert passed is False
     assert "no '## Independent review verdict' section found" in message
+
+
+def test_heading_with_trailing_text_does_not_pass() -> None:
+    # issue #1343, independent adversarial review of the rename itself:
+    # `_HEADING_RE`'s end-of-line anchor became materially more load-bearing
+    # here. The old literal ('Step 8 independent review verdict') was not a
+    # plausible prefix of anything else; the new, shorter one is a strict
+    # prefix of ordinary headings a PR author might really write. Dropping
+    # the `$` anchor was confirmed by mutation to leave all 43 pre-existing
+    # tests green, so nothing pinned this. A heading that merely STARTS with
+    # the verdict phrase is not the recorded verdict section.
+    for suffix in (" (illustrative example)", " notes", "s", " -- pending"):
+        body = f"""## Independent review verdict{suffix}
+
+- Verdict: CLEAN
+- Verified commit: {_SHA}
+"""
+        passed, message = gate.check(body, _SHA)
+        assert passed is False, f"heading suffix {suffix!r} must not parse as the verdict section"
+        assert "no '## Independent review verdict' section found" in message
+
+
+def test_heading_without_space_after_hashes_does_not_pass() -> None:
+    # issue #1343, independent adversarial review: CommonMark requires
+    # whitespace (or end of line) after an ATX heading's `#` run -- GitHub
+    # renders `##Independent review verdict` as literal paragraph text, not
+    # a heading, so it is not live disclosure. Making that space optional
+    # was confirmed by mutation to leave all 43 pre-existing tests green.
+    body = f"""##Independent review verdict
+
+- Verdict: CLEAN
+- Verified commit: {_SHA}
+"""
+    passed, message = gate.check(body, _SHA)
+    assert passed is False
+    assert "no '## Independent review verdict' section found" in message
+
+
+def test_seven_hash_heading_does_not_pass() -> None:
+    # issue #1343, independent adversarial review: CommonMark caps ATX
+    # headings at six `#`; a seven-hash line renders as literal paragraph
+    # text, the same "quoted/inert content is not live prose" class the
+    # 4-space-indent and fenced-block cases above already close. Widening
+    # `#{1,6}` to `#+` was confirmed by mutation to leave all 43
+    # pre-existing tests green.
+    body = f"""####### Independent review verdict
+
+- Verdict: CLEAN
+- Verified commit: {_SHA}
+"""
+    passed, message = gate.check(body, _SHA)
+    assert passed is False
+    assert "no '## Independent review verdict' section found" in message
