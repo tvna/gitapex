@@ -1296,7 +1296,8 @@ def test_rule_command_substitution_content_detects_an_embedded_install(tool: str
     a punctuation character shlex breaks a word at, so an assignment's
     `NAME=` prefix stays fused onto the leading `$` in the same token."""
     tokens = ["x=$", "(", tool, "install", "evil-pkg", ")"]
-    assert checker._rule_command_substitution_content(tokens) is not None
+    reason, _ = checker._rule_command_substitution_content(tokens)
+    assert reason is not None
 
 
 @_PROPERTIES
@@ -1304,6 +1305,85 @@ def test_rule_command_substitution_content_detects_an_embedded_install(tool: str
 def test_rule_command_substitution_content_allows_harmless_inner_content(value: str) -> None:
     """No false positive: a `$(...)` substitution whose own inner content
     is an ordinary, harmless command (not itself a denied pattern) is
-    never flagged by this recursive check."""
+    never flagged by this recursive check. Returns a `(None, is_git_push)`
+    tuple, not a bare `None`, when nothing is found -- found live by Step
+    8 independent review, fifteenth round (issue #1326): an earlier
+    version of this function returned a bare reason string or `None`,
+    silently dropping a non-denying inner `is_git_push=True` signal (see
+    the function's own docstring)."""
     tokens = ["echo", "$", "(", "date", value, ")"]
-    assert checker._rule_command_substitution_content(tokens) is None
+    assert checker._rule_command_substitution_content(tokens) == (None, False)
+
+
+# --- Issue #1326 Stage 1, fifteenth round: bash's own leading-assignment ----
+# prefix and array-literal syntax, both found to defeat every seg[0]-anchored
+# rule with no indirection technique at all -------------------------------
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value=_VALUES, tail=st.lists(_IDENTIFIERS, max_size=3))
+def test_strip_leading_assignments_removes_one_prefix(name: str, value: str, tail: list[str]) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, fifteenth round (issue #1326): a leading
+    `NAME=value` environment-assignment token is stripped, revealing the
+    REAL command word at `seg[0]` for every rule that indexes it --
+    confirmed live via a real bash proxy that `X=foo $T install foo`
+    (T=uv) and `X=foo uv $x foo` (x=install) both fully bypassed B1a/
+    B1b's own indirection detection before this fix."""
+    seg = [f"{name}={value}", *tail]
+    assert checker._strip_leading_assignments(seg) == tail
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value=_VALUES)
+def test_strip_leading_assignments_empty_for_assignment_only_segment(name: str, value: str) -> None:
+    """Robustness: a segment consisting ENTIRELY of assignment tokens (no
+    command word at all, e.g. a bare `X=1` statement) strips to an empty
+    list, not a crash or a stray leftover token."""
+    assert checker._strip_leading_assignments([f"{name}={value}"]) == []
+
+
+@_PROPERTIES
+@given(tool=_IDENTIFIERS, tail=st.lists(_IDENTIFIERS, min_size=1, max_size=3))
+def test_strip_leading_assignments_no_op_without_a_leading_assignment(tool: str, tail: list[str]) -> None:
+    """No false positive: a segment whose own first token is NOT
+    assignment-shaped is returned unchanged."""
+    seg = [tool, *tail]
+    assert checker._strip_leading_assignments(seg) == seg
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, inner=_IDENTIFIERS)
+def test_array_literal_token_span_finds_the_matching_close_paren(name: str, inner: str) -> None:
+    """Model-based: a bare `NAME=` (empty-value) assignment token
+    immediately followed by `(` -- bash's own array-literal syntax --
+    returns the index one past the matching `)`."""
+    tokens = [f"{name}=", "(", inner, ")", "trailing"]
+    assert checker._array_literal_token_span(tokens, 0) == 4
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value=_VALUES, inner=_IDENTIFIERS)
+def test_array_literal_token_span_none_for_a_non_empty_assignment(name: str, value: str, inner: str) -> None:
+    """No false positive: an ordinary `NAME=value` assignment (non-empty
+    value) immediately followed by `(` is NOT array-literal syntax."""
+    assume(value)
+    tokens = [f"{name}={value}", "(", inner, ")"]
+    assert checker._array_literal_token_span(tokens, 0) is None
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, inner=_IDENTIFIERS)
+def test_fold_array_literal_spans_merges_into_one_dynamic_free_token(name: str, inner: str) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, fifteenth round (issue #1326), ported from the
+    task-scoped sibling module's own fifteenth-round fix of the same
+    finding: an array literal's own element list folds into ONE token
+    still matching `_ASSIGN_RE`, so `_strip_leading_assignments` removes
+    it entirely as an ordinary assignment -- confirmed live that
+    `declare -a arr=($(seq 1 5))` was wrongly denied before this fix,
+    once the array's own content became `seg[0]` of its own segment."""
+    tokens = [f"{name}=", "(", inner, ")", "trailing"]
+    folded = checker._fold_array_literal_spans(tokens)
+    assert folded == [f"{name}=({inner})", "trailing"]
+    assert checker._strip_leading_assignments(folded[:1]) == []

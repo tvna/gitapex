@@ -227,6 +227,53 @@ dashc_fetch_exec`, a new, narrow check recognizing only a LITERAL
 full-parsing residual, consistent with this module's own scoping
 elsewhere) followed by a `$(...)` argument headed by curl/wget.
 
+Closed by fifteenth-round Step 8 independent review, four further
+findings, all severe (each needs no indirection technique at all -- the
+denied tool name is present as its own untouched literal token in the
+command): (1) Bash's own simple-command grammar lets zero or more
+`NAME=value` environment-assignment tokens precede the actual command
+word (`X=foo gh pr merge 1`, ordinary syntax, not a technique) -- every
+`seg[0]`-anchored rule (`_rule_gh_any`, `_rule_bare_install`, `_rule_
+fetch_exec`, `_rule_process_sub_fetch_exec`, `_rule_eval_or_dashc_fetch_
+exec`, B1a/B1b's own `_is_dynamic(seg[0])` gate, B2) implicitly assumed
+`seg[0]` always IS the command word, and this predates this round's own
+work entirely (confirmed via `git show fab856a:...` against the very
+first Stage 1 commit). Closed by `_strip_leading_assignments`, applied
+ONCE, uniformly, to every segment in `_classify_tokens` before any rule
+runs. (2) A token with TWO fused `$(...)` substitutions (`"$(echo ok)
+$(curl <url> | bash)"`, one token after shlex's own quote removal) only
+ever had its FIRST span scanned -- the second's genuinely dangerous
+content was never recursively classified at all. Closed by threading a
+`search_from` parameter through `_find_fused_command_substitution` so
+`_rule_command_substitution_content` loops until no more spans remain in
+the same token, not just once. (3) The main hook's own `is_git_push`
+warn-only signal was silently dropped for a `$(...)`-wrapped git push
+(`x=$(git push origin main)`) -- `_rule_command_substitution_content`
+only ever propagated `is_git_push` alongside a hard DENY, but `git push`
+alone is warn-only there, so the recursive check's own early-return-
+only-on-deny discarded the signal whenever the inner verdict wasn't
+itself denied. Closed by scanning unconditionally and OR-ing every
+span's own `is_git_push` into a running total (task-file-specific: this
+module has no `is_git_push` field at all, so this finding did not apply
+here). (4) Bash's own array-literal syntax (`NAME=(elem1 elem2)`) is
+indistinguishable, from the token stream alone, from an empty assignment
+immediately followed by an unrelated subshell -- `files=($(ls *.txt))`,
+an ordinary idiom capturing a command's output into an array, was wrongly
+denied once the array's own element list became `seg[0]` of its own
+segment. Closed by `_fold_array_literal_spans`, folding the whole span
+into one token (still `NAME=`-shaped, so `_strip_leading_assignments`
+removes it entirely) BEFORE segmenting -- an earlier version tried to
+reconcile this AFTER segmenting/pipe-chain-building instead, which
+`_pipe_chains`'s own transparent-parens treatment of `(` (never splitting
+the array apart in the first place) defeated from a second angle.
+Separately, `_rule_eval_or_dashc_fetch_exec` was rewritten to operate on
+the RAW, un-folded token stream via a new `_command_spans` helper: the
+prior version re-`tokenize`d a folded token's own space-joined
+reconstruction to recover a `$(...)` argument's inner tokens, and a
+quote character inside that argument (`eval $(echo "it's fine")`,
+confirmed live: harmless) became, once reconstructed, an unterminated
+quote -- wrongly denied with a misleading reason.
+
 Deliberately stdlib-only (shlex, re, json).
 """
 
@@ -420,20 +467,32 @@ def _command_substitution_token_span(tokens: list[str], i: int) -> int | None:
     return j
 
 
-def _find_fused_command_substitution(token: str) -> tuple[int, int] | None:
-    """If TOKEN itself contains a self-contained `$(...)` span -- the
-    shape shlex leaves fused as ONE token when the substitution appears
-    inside double quotes (`"prefix $(cmd) suffix"` dequotes to one token
-    with the substitution embedded in its own text, unlike the unquoted
-    case `_command_substitution_token_span` handles, split across
-    multiple tokens by shlex's own punctuation-aware splitting) -- return
-    its (start, end) character span within TOKEN: `token[start + 2:
-    end - 1]` is the inner command text, `end` is the index one past the
-    matching `)`. Returns `None` if TOKEN has no `$(` at all, or if what
-    follows is not itself closed within this SAME token (the unquoted,
-    cross-token case is `_command_substitution_token_span`'s own
-    concern, not this function's)."""
-    start = token.find("$(")
+def _find_fused_command_substitution(token: str, search_from: int = 0) -> tuple[int, int] | None:
+    """If TOKEN itself contains a self-contained `$(...)` span STARTING AT
+    OR AFTER `search_from` -- the shape shlex leaves fused as ONE token
+    when the substitution appears inside double quotes (`"prefix $(cmd)
+    suffix"` dequotes to one token with the substitution embedded in its
+    own text, unlike the unquoted case `_command_substitution_token_span`
+    handles, split across multiple tokens by shlex's own punctuation-
+    aware splitting) -- return its (start, end) character span within
+    TOKEN: `token[start + 2: end - 1]` is the inner command text, `end`
+    is the index one past the matching `)`. Returns `None` if TOKEN has
+    no `$(` at or after `search_from`, or if what follows is not itself
+    closed within this SAME token (the unquoted, cross-token case is
+    `_command_substitution_token_span`'s own concern, not this
+    function's).
+
+    `search_from` lets a caller find EVERY fused span in a token with
+    more than one, not just the first -- found live by Step 8
+    independent review, fifteenth round (issue #1326): a token with TWO
+    fused substitutions (`"$(echo ok)$(curl <url> | bash)"`, one token
+    after shlex's own quote removal) only ever had its FIRST span
+    scanned by `_rule_command_substitution_content`'s own per-token loop,
+    which called this function once per token then moved on -- the
+    second substitution's genuinely dangerous content (confirmed live
+    via a real bash proxy that both spans execute regardless of quoting)
+    was never recursively classified at all."""
+    start = token.find("$(", search_from)
     if start == -1:
         return None
     depth = 1
@@ -563,14 +622,21 @@ def _rule_command_substitution_content(tokens: list[str]) -> str | None:
     i = 0
     n = len(tokens)
     while i < n:
-        fused = _find_fused_command_substitution(tokens[i])
-        if fused is not None:
+        search_from = 0
+        found_fused = False
+        while True:
+            fused = _find_fused_command_substitution(tokens[i], search_from)
+            if fused is None:
+                break
+            found_fused = True
             start, end = fused
             inner_text = tokens[i][start + 2 : end - 1]
             if inner_text.strip():
                 inner_verdict = classify(inner_text)
                 if inner_verdict.deny:
                     return f"a command substitution $(...) embeds a denied command -- {inner_verdict.reason}"
+            search_from = end
+        if found_fused:
             i += 1
             continue
         span_end = _command_substitution_token_span(tokens, i)
@@ -765,6 +831,148 @@ def _assigned_raw_values(tokens: list[str]) -> dict[str, str]:
         if match:
             values[match.group(1)] = match.group(2)
     return values
+
+
+def _strip_leading_assignments(seg: list[str]) -> list[str]:
+    """Bash's own simple-command grammar lets zero or more `NAME=value`
+    environment-assignment tokens precede the actual command word (`X=foo
+    gh pr merge 1` runs `gh pr merge 1` with `X=foo` set only in that one
+    invocation's environment -- ordinary, widely-used syntax, not a
+    technique). Every rule in this module that indexes `seg[0]` (or,
+    after `_skip_fetch_exec_wrapper`'s own sudo/env/command/exec skip,
+    the resulting interpreter-candidate position) to mean "the command
+    word" implicitly assumed `seg[0]` always IS that word -- applying
+    this strip ONCE, uniformly, to every segment before any rule runs
+    (see `_classify_tokens`) makes that assumption correct everywhere at
+    once, rather than requiring each `seg[0]`-anchored rule to duplicate
+    its own skip.
+
+    A DYNAMIC assignment (`X=$(evil) gh pr merge 1`) is skipped too --
+    the assignment SHAPE (`NAME=...`), not whether the value is static or
+    dynamic, is what makes bash treat it as an environment prefix rather
+    than the command word; `_ASSIGN_RE`'s own `(.*)$` capture already
+    matches a `$`-containing RHS just as readily as a literal one.
+
+    Found live by Step 8 independent review, fifteenth round (issue
+    #1326): NONE of `_rule_gh_any`, `_rule_bare_install`, `_rule_fetch_
+    exec`, `_rule_process_sub_fetch_exec`, `_rule_eval_or_dashc_fetch_
+    exec`, `_rule_b1a_dynamic_word_same_segment_verb`/`_rule_b1b_dynamic_
+    word_assigned_tool_and_verb` (both gated on `_is_dynamic(seg[0])` as
+    their own first check), or `_rule_b2_watched_tool_dynamic_verb_
+    position` accounted for this at all -- `X=foo gh pr merge 1`, `X=foo
+    pnpm`, `X=foo curl <url> | bash`, `X=foo bash <(curl <url>)`, and
+    `X=foo eval $(curl <url>)` (every one confirmed live via a real bash
+    proxy with a stand-in binary on PATH, capturing its own argv and
+    environment) all fully bypassed this module's own absolute `gh`/
+    fetch-exec detection with NO indirection technique at all -- the
+    denied tool name is present as its own untouched literal token in the
+    command, simply not at index 0. This is NOT the module's own
+    disclosed Stage 1 ceiling ("verb reconstruction that never places the
+    tool or verb name as its own literal token anywhere in the command")
+    -- it contradicts that closure claim rather than falling within its
+    stated boundary, and predates this round's own work entirely
+    (confirmed via `git show fab856a:...` against the very first Stage 1
+    commit: `X=foo gh pr merge 1` was never denied).
+
+    Rules that instead scan a WHOLE segment for a literal match
+    regardless of position (`_rule_a_literal`'s adjacency scan, `_rule_
+    npx`'s literal branch, `_is_git_push_segment`'s own literal-`git`-
+    anywhere scan) were never affected by this gap -- confirmed live
+    that `X=foo pip install foo`, `X=foo git push origin main`, and
+    `X=foo npx left-pad` were ALREADY correctly denied before this fix,
+    which is why this strip is applied via `segments`/`pipe_chains`
+    (feeding every rule uniformly) rather than requiring those
+    already-correct rules to change."""
+    i = 0
+    n = len(seg)
+    while i < n and _ASSIGN_RE.match(seg[i]):
+        i += 1
+    return seg[i:]
+
+
+def _array_literal_token_span(tokens: list[str], i: int) -> int | None:
+    """If `tokens[i]` is a bare `NAME=` (EMPTY-value) assignment token
+    immediately followed by `tokens[i + 1] == "("` -- bash's own array-
+    literal syntax (`NAME=(elem1 elem2)`, also `declare -a NAME=(...)`)
+    -- return the index one past the matching `)`, tracking paren-nesting
+    depth the same way `_command_substitution_token_span` does. Returns
+    `None` otherwise, including for an ordinary `NAME=value` assignment
+    (non-empty value) immediately followed by `(` -- that shape is not
+    valid array-literal syntax in real bash, and this function makes no
+    claim about what it means.
+
+    Shared by `_fold_array_literal_spans` below."""
+    match = _ASSIGN_RE.match(tokens[i])
+    if not (match and match.group(2) == "" and i + 1 < len(tokens) and tokens[i + 1] == "("):
+        return None
+    depth = 1
+    j = i + 2
+    n = len(tokens)
+    while j < n and depth > 0:
+        if tokens[j] == "(":
+            depth += 1
+        elif tokens[j] == ")":
+            depth -= 1
+        j += 1
+    return j
+
+
+def _fold_array_literal_spans(tokens: list[str]) -> list[str]:
+    """Fold each `NAME=(...)` array-literal span (found via `_array_
+    literal_token_span`) into a single token -- the same "make the span's
+    boundary visible as one atomic unit before segmenting" strategy
+    `_fold_command_substitution_spans` already uses for `$(...)`, applied
+    here for the identical underlying reason: `NAME=(elem1 elem2)` is
+    indistinguishable, from the token stream alone, from an empty
+    assignment immediately followed by an UNRELATED subshell (`NAME=;
+    (cmd)`) -- shlex breaks a word at `(` regardless of whether real bash
+    source had a space there, discarding the one detail (adjacency)
+    bash's own grammar actually depends on. Left un-folded, `segment_
+    tokens`/`_pipe_chains` would put the array's own element list in its
+    own segment, separate from the `NAME=` token that actually explains
+    it -- indistinguishable, to every `seg[0]`-anchored rule, from an
+    attempted command invocation.
+
+    The folded token is still `NAME=`-prefixed and so still matches
+    `_ASSIGN_RE` with a NON-empty value (the array's own content) --
+    `_strip_leading_assignments` therefore strips it away entirely as an
+    ordinary (if unusually-shaped) assignment, the same treatment a
+    genuine `NAME=value` prefix already gets, requiring no separate
+    "is this actually an array literal" case anywhere downstream.
+
+    Found live by Step 8 independent review, fifteenth round (issue
+    #1326): `files=($(ls *.txt))` -- an ordinary, common idiom capturing
+    a command's word-split output into an array, confirmed live via the
+    real shell wrapper to have been allowed before this fix -- was wrongly
+    denied by `_rule_bare_install`'s own `_is_unresolvable_substitution`
+    guard once the array's own `$(...)`-folded element became segment[0]
+    of its own segment, indistinguishable from an attempted bare-install-
+    tool invocation; `_rule_fetch_exec` (via `_pipe_chains`'s own
+    transparent-parens treatment of `(`, which never segment-broke this
+    case the way `segment_tokens` did) reproduced the identical false
+    positive from a different structural path, even with no `|` anywhere
+    in the command. `declare -a arr=($(seq 1 5))` and `x=("$(date)"
+    "$(whoami)")` reproduced the same false positive. An earlier version
+    of this fix tried to reconcile this AFTER segmenting/pipe-chain-
+    building (merging a wrongly-split-off segment back, or skipping
+    `_strip_leading_assignments` for it) -- `_pipe_chains`'s own paren-
+    transparency meant the array literal was NEVER split apart there in
+    the first place, so the same reconciliation logic that correctly
+    fixed `segments` left `pipe_chains` still broken. Folding the span at
+    the TOKEN level, before either `segment_tokens` or `_pipe_chains`
+    runs, fixes both uniformly with no separate case for either."""
+    folded: list[str] = []
+    i = 0
+    n = len(tokens)
+    while i < n:
+        end = _array_literal_token_span(tokens, i)
+        if end is not None:
+            folded.append("".join(tokens[i:end]))
+            i = end
+        else:
+            folded.append(tokens[i])
+            i += 1
+    return folded
 
 
 # uv add/remove absent (PR #1323/#1320): declarative, PR-diff-visible.
@@ -976,13 +1184,30 @@ def _skip_fetch_exec_wrapper(seg: list[str]) -> int:
     live via real bash argv expansion to genuinely run `bash`) all bypassed
     this rule while the equivalent `sudo bash` form was already caught.
     Only a SINGLE leading wrapper token is skipped (not a stacked run of
-    several) and no flags specific to `env`/`command`/`exec` themselves
-    are modeled (e.g. `env VAR=1 bash`, `command -v bash`) -- a disclosed,
-    narrower-than-full-parsing residual, consistent with this module's own
-    "specific, checked structural pattern, not a general expression
-    evaluator" scoping elsewhere."""
+    several) and `command`'s own flags (`-v`, `-p`) are not distinguished
+    from a generic boolean flag -- a disclosed, narrower-than-full-parsing
+    residual, consistent with this module's own "specific, checked
+    structural pattern, not a general expression evaluator" scoping
+    elsewhere.
+
+    Also skips any number of `NAME=value`-shaped ENVIRONMENT-ASSIGNMENT
+    tokens after the wrapper -- found live by Step 8 independent review,
+    fourteenth round (issue #1326): `env`'s own leading assignments
+    (`env VAR=1 bash`, confirmed live via real bash argv expansion to
+    genuinely run `bash`) are not flag-shaped, so the boolean-flag-skip
+    loop alone stopped at `VAR=1` and never reached `bash`. Uses the SAME
+    `_ASSIGN_RE` shape-match `_strip_leading_assignments` uses for a
+    segment's OWN leading assignments (see that function's own
+    docstring) -- the identical bash grammar rule, just applying to
+    assignments positioned AFTER a wrapper word rather than at the very
+    start of the segment, which `_strip_leading_assignments` alone does
+    not reach."""
     interp_index = 1 if (not _is_dynamic(seg[0]) and seg[0].lower() in _FETCH_EXEC_WRAPPERS) else 0
-    while interp_index < len(seg) and not _is_dynamic(seg[interp_index]) and seg[interp_index].startswith("-"):
+    while (
+        interp_index < len(seg)
+        and not _is_dynamic(seg[interp_index])
+        and (seg[interp_index].startswith("-") or _ASSIGN_RE.match(seg[interp_index]))
+    ):
         interp_index += 1
     return interp_index
 
@@ -1097,7 +1322,101 @@ def _fetch_tool_head(tokens: list[str]) -> bool:
     return candidates is None or any(c.lower() in {"curl", "wget"} for c in candidates)
 
 
-def _rule_eval_or_dashc_fetch_exec(segments: list[list[str]]) -> str | None:
+def _command_spans(tokens: list[str]) -> list[list[str]]:
+    """Like `segment_tokens`, but treats a `$(...)` span (found via
+    `_command_substitution_token_span`) as fully TRANSPARENT to
+    segmentation -- every token inside it, INCLUDING its own `$`/`(`/`)`
+    boundary tokens, stays in the CURRENT segment untouched, rather than
+    the span's own internal `(`/`)` wrongly triggering a new segment the
+    way plain `segment_tokens` would. Lets a caller still locate and
+    extract a span's REAL, ORIGINAL inner tokens later via `_command_
+    substitution_token_span` applied to the returned segment's own
+    sub-list -- no text reconstruction or re-`tokenize` round trip
+    needed, unlike going through `_fold_command_substitution_spans`'s own
+    opaque, space-joined token text.
+
+    Used ONLY by `_rule_eval_or_dashc_fetch_exec` below -- found live by
+    Step 8 independent review, fifteenth round (issue #1326): that rule
+    used to operate on already-FOLDED segments and re-`tokenize` a folded
+    token's own reconstructed text to recover a `$(...)` argument's inner
+    tokens -- `eval $(echo "it's fine")` (confirmed live: harmless) was
+    wrongly denied, with a misleading reason, because the fold's own
+    space-joined reconstruction discards the original quoting: the
+    apostrophe in "it's fine", no longer inside its own quotes once
+    dequoted-then-rejoined, reads to a fresh `tokenize()` call as an
+    unterminated quote, raising `TokenizeError` -- which the rule's own
+    fail-closed handling then treated as a fetch-exec match. This
+    function sidesteps the whole reconstruction step: it operates on the
+    RAW, UN-folded token stream, so the caller slices a span's inner
+    tokens directly out of the original list, never re-parsing text at
+    all for the unquoted, cross-token shape (the quoted, single-fused-
+    token shape was never affected -- see `_rule_eval_or_dashc_fetch_
+    exec`'s own docstring)."""
+    segments: list[list[str]] = [[]]
+    i = 0
+    n = len(tokens)
+    while i < n:
+        span_end = _command_substitution_token_span(tokens, i)
+        if span_end is not None:
+            segments[-1].extend(tokens[i:span_end])
+            i = span_end
+            continue
+        tok = tokens[i]
+        if tok in _SINGLE_OPS or tok in _MULTI_OPS:
+            segments.append([])
+        else:
+            segments[-1].append(tok)
+        i += 1
+    return [seg for seg in segments if seg]
+
+
+def _rest_has_fetch_tool_substitution(rest: list[str]) -> bool:
+    """Whether REST (the tokens after an eval/interpreter's own command
+    word, from `_command_spans` -- so still the ORIGINAL, un-folded
+    tokens) contains a `$(...)` span whose own first token is, or could
+    resolve to, curl/wget. Handles both shapes directly from the original
+    tokens: the unquoted, cross-token span (`_command_substitution_
+    token_span`, sliced directly, no reconstruction) and the quoted,
+    single-fused-token span (`_find_fused_command_substitution`, on that
+    token's own un-mangled text -- sound here since, unlike the folded
+    shape, this token was never reconstructed). Factored out of `_rule_
+    eval_or_dashc_fetch_exec` to keep that function's own cyclomatic
+    complexity within this module's xenon gate."""
+    j = 0
+    m = len(rest)
+    while j < m:
+        span_end = _command_substitution_token_span(rest, j)
+        if span_end is not None:
+            inner_tokens = rest[j + 2 : span_end - 1]
+            if inner_tokens and _fetch_tool_head(inner_tokens):
+                return True
+            j = span_end
+            continue
+        search_from = 0
+        found_fused = False
+        while True:
+            fused = _find_fused_command_substitution(rest[j], search_from)
+            if fused is None:
+                break
+            found_fused = True
+            start, end = fused
+            inner_text = rest[j][start + 2 : end - 1]
+            if inner_text.strip():
+                try:
+                    inner_tokens = tokenize(inner_text)
+                except TokenizeError:
+                    return True
+                if _fetch_tool_head(inner_tokens):
+                    return True
+            search_from = end
+        if found_fused:
+            j += 1
+            continue
+        j += 1
+    return False
+
+
+def _rule_eval_or_dashc_fetch_exec(tokens: list[str]) -> str | None:
     """`eval $(curl <url>)` and `bash -c "$(curl <url>)"` fetch a payload
     and feed its OUTPUT directly to `eval`/an interpreter's `-c` flag as
     the command text to run -- just as direct an exec of fetched content
@@ -1108,6 +1427,12 @@ def _rule_eval_or_dashc_fetch_exec(segments: list[list[str]]) -> str | None:
     segment head or a process-substitution's own head, but the FIRST
     command inside a `$(...)` substitution given as an ARGUMENT to eval or
     to an interpreter's `-c` flag.
+
+    Takes the RAW (un-folded) token stream and segments it itself via
+    `_command_spans`, NOT this module's usual post-fold `segments` -- see
+    `_command_spans`'s own docstring for why: this rule needs a `$(...)`
+    span's ORIGINAL inner tokens, not `_fold_command_substitution_spans`'s
+    reconstructed text.
 
     Deliberately narrow, matching this module's own "specific, checked
     structural pattern, not a general expression evaluator" scoping
@@ -1126,7 +1451,7 @@ def _rule_eval_or_dashc_fetch_exec(segments: list[list[str]]) -> str | None:
     "$(curl <url>)"` have HARMLESS inner content (`curl <url>` alone only
     fetches, it does not execute) -- the danger is entirely in how the
     OUTER command uses the substitution's output."""
-    for seg in segments:
+    for seg in _command_spans(tokens):
         if not seg:
             continue
         interp_index = _skip_fetch_exec_wrapper(seg)
@@ -1143,20 +1468,8 @@ def _rule_eval_or_dashc_fetch_exec(segments: list[list[str]]) -> str | None:
         )
         if not (is_eval or is_dashc_interp):
             continue
-        for tok in rest:
-            fused = _find_fused_command_substitution(tok)
-            if fused is None:
-                continue
-            start, end = fused
-            inner_text = tok[start + 2 : end - 1]
-            if not inner_text.strip():
-                continue
-            try:
-                inner_tokens = tokenize(inner_text)
-            except TokenizeError:
-                return "an eval/-c interpreter fed fetched content via command substitution"
-            if _fetch_tool_head(inner_tokens):
-                return "an eval/-c interpreter fed fetched content via command substitution"
+        if _rest_has_fetch_tool_substitution(rest):
+            return "an eval/-c interpreter fed fetched content via command substitution"
     return None
 
 
@@ -1457,9 +1770,12 @@ def _classify_tokens(tokens: list[str]) -> Verdict:
     if content_hit:
         return Verdict(True, content_hit)
 
-    tokens = _fold_command_substitution_spans(tokens)
-    segments = segment_tokens(tokens)
-    pipe_chains = _pipe_chains(tokens)
+    raw_tokens = tokens
+    tokens = _fold_array_literal_spans(_fold_command_substitution_spans(tokens))
+    segments = [s for s in (_strip_leading_assignments(seg) for seg in segment_tokens(tokens)) if s]
+    pipe_chains = [
+        [s for s in (_strip_leading_assignments(seg) for seg in chain) if s] for chain in _pipe_chains(tokens)
+    ]
     assigned = _assigned_literals(tokens)
     raw_assigned = _assigned_raw_values(tokens)
 
@@ -1479,7 +1795,7 @@ def _classify_tokens(tokens: list[str]) -> Verdict:
     if process_sub_hit:
         return Verdict(True, process_sub_hit)
 
-    eval_dashc_hit = _rule_eval_or_dashc_fetch_exec(segments)
+    eval_dashc_hit = _rule_eval_or_dashc_fetch_exec(raw_tokens)
     if eval_dashc_hit:
         return Verdict(True, eval_dashc_hit)
 

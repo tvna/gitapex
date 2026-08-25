@@ -350,6 +350,31 @@ used only at the exact gh-api flag-name/flag-value resolution call
 sites that check ONE security-relevant token position, never inside
 the shared, whole-segment-scanning primitives themselves.
 
+Closed by fifteenth-round Step 8 independent review, ported from the
+task-scoped sibling module's own fifteenth-round fix of the same four
+findings (see that module's own docstring for the full root-cause
+analysis and live-verification detail): (1) a leading `NAME=value`
+environment-assignment prefix (`X=foo $T install foo`) defeated B1a/
+B1b's own `_is_dynamic(seg[0])` gate and B2's literal-tool check --
+closed by `_strip_leading_assignments`, applied once to every segment
+in `_classify_tokens`. (2) A token with TWO fused `$(...)` substitutions
+only ever had its first span scanned -- closed by threading a `search_
+from` parameter through `_find_fused_command_substitution`. (3) This
+module's own `is_git_push` warn-only field was silently dropped for a
+`$(...)`-wrapped git push (`x=$(git push origin main)`), since `git
+push` alone is warn-only here (not a hard deny the recursive check's
+own early-return-only-on-deny would have propagated) -- closed by
+scanning `_rule_command_substitution_content` unconditionally and
+OR-ing every span's own `is_git_push` into a running total, returned
+regardless of whether any span was itself denied. (4) Bash's own
+array-literal syntax (`NAME=(elem1 elem2)`) is indistinguishable, from
+the token stream alone, from an empty assignment immediately followed
+by an unrelated subshell -- `declare -a arr=($(seq 1 5))` was wrongly
+denied once the array's own element list became `seg[0]` of its own
+segment (via B1a/B1b's own gate). Closed by `_fold_array_literal_spans`,
+folding the whole span into one still-`NAME=`-shaped token (so `_strip_
+leading_assignments` removes it entirely) BEFORE segmenting.
+
 Deliberately stdlib-only (shlex, re, json) -- no new third-party
 dependency, matching this repository's declarative module-management
 convention and python3's already-accepted-hook-dependency status (see
@@ -488,7 +513,7 @@ def _substitute_var_refs_candidates(
     (confirmed live: harmless) was wrongly denied, since the lone
     assignment segment `x=$(date +%s)` -- a single dynamic token, no
     separate tool/verb structure at all -- fail-closed on its own
-    unresolvable RHS. `_rule_recursive_command_substitution` and the
+    unresolvable RHS. `_rule_command_substitution_content` and the
     narrow, position-specific `_is_unresolvable_substitution` guards at
     each rule that checks ONE security-relevant token position (not a
     whole segment) close the real bypasses this would have closed,
@@ -591,20 +616,34 @@ def _command_substitution_token_span(tokens: list[str], i: int) -> int | None:
     return j
 
 
-def _find_fused_command_substitution(token: str) -> tuple[int, int] | None:
-    """If TOKEN itself contains a self-contained `$(...)` span -- the
-    shape shlex leaves fused as ONE token when the substitution appears
-    inside double quotes (`"prefix $(cmd) suffix"` dequotes to one token
-    with the substitution embedded in its own text, unlike the unquoted
-    case `_command_substitution_token_span` handles, split across
-    multiple tokens by shlex's own punctuation-aware splitting) -- return
-    its (start, end) character span within TOKEN: `token[start + 2:
-    end - 1]` is the inner command text, `end` is the index one past the
-    matching `)`. Returns `None` if TOKEN has no `$(` at all, or if what
-    follows is not itself closed within this SAME token (the unquoted,
-    cross-token case is `_command_substitution_token_span`'s own
-    concern, not this function's)."""
-    start = token.find("$(")
+def _find_fused_command_substitution(token: str, search_from: int = 0) -> tuple[int, int] | None:
+    """If TOKEN itself contains a self-contained `$(...)` span STARTING AT
+    OR AFTER `search_from` -- the shape shlex leaves fused as ONE token
+    when the substitution appears inside double quotes (`"prefix $(cmd)
+    suffix"` dequotes to one token with the substitution embedded in its
+    own text, unlike the unquoted case `_command_substitution_token_span`
+    handles, split across multiple tokens by shlex's own punctuation-
+    aware splitting) -- return its (start, end) character span within
+    TOKEN: `token[start + 2: end - 1]` is the inner command text, `end`
+    is the index one past the matching `)`. Returns `None` if TOKEN has
+    no `$(` at or after `search_from`, or if what follows is not itself
+    closed within this SAME token (the unquoted, cross-token case is
+    `_command_substitution_token_span`'s own concern, not this
+    function's).
+
+    `search_from` lets a caller find EVERY fused span in a token with
+    more than one, not just the first -- found live by Step 8
+    independent review, fifteenth round (issue #1326), ported from the
+    task-scoped sibling module's own fifteenth-round fix of the same
+    finding: a token with TWO fused substitutions (`"$(echo ok)$(pip
+    install evil-pkg)"`, one token after shlex's own quote removal) only
+    ever had its FIRST span scanned by `_rule_command_substitution_
+    content`'s own per-token loop, which called this function once per
+    token then moved on -- the second substitution's genuinely dangerous
+    content (confirmed live via a real bash proxy that both spans
+    execute regardless of quoting) was never recursively classified at
+    all."""
+    start = token.find("$(", search_from)
     if start == -1:
         return None
     depth = 1
@@ -704,7 +743,7 @@ def _is_unresolvable_substitution(token: str) -> bool:
     return "$(" in token or "`" in token
 
 
-def _rule_command_substitution_content(tokens: list[str]) -> tuple[str, bool] | None:
+def _rule_command_substitution_content(tokens: list[str]) -> tuple[str | None, bool]:
     """Recursively classify each `$(...)` command-substitution span's OWN
     inner content through this module's full rule set -- bash genuinely
     RUNS that inner text as a complete command the instant the
@@ -739,25 +778,48 @@ def _rule_command_substitution_content(tokens: list[str]) -> tuple[str, bool] | 
     classifying the span's own inner content directly, instead of
     requiring the outer, now-opaque token to itself carry the phrase.
 
-    Returns `(reason, is_git_push)` rather than a bare reason string --
-    this module's own `Verdict` carries a THIRD, warn-only `is_git_push`
-    field the task-scoped sibling module's `Verdict` does not; a denied
-    inner command substitution embedding a git-push (`$(git push origin
-    main)`) must still propagate that signal outward, not silently drop
-    it just because the deny itself came from this recursive check rather
-    than the top-level dispatch."""
+    Returns `(reason_or_None, is_git_push)` -- ALWAYS a tuple, never a
+    bare `None` -- this module's own `Verdict` carries a THIRD, warn-only
+    `is_git_push` field the task-scoped sibling module's `Verdict` does
+    not, and `git push` alone is WARN-only here (`deny=False,
+    is_git_push=True`), not a hard deny. An earlier version of this
+    function only returned `is_git_push` alongside a DENY, discarding it
+    whenever the inner substitution's own verdict was `deny=False` --
+    found live by Step 8 independent review, fifteenth round (issue
+    #1326): `x=$(git push origin main)` (confirmed live end-to-end
+    through the real hook entrypoint) silently dropped the warn signal
+    entirely, since folding made `git`/`push`/`origin`/`main` one opaque
+    token invisible to `_is_git_push_segment`'s own scan, and the
+    recursive check's own early-return-only-on-deny never propagated the
+    inner `classify()`/`_classify_tokens()` call's OWN `is_git_push=True`
+    result outward. This gated the outward-artifact-preflight provenance
+    scan (`hooks/check-bash-safety.sh`'s own downstream consumer of
+    `is_git_push`) on a push this classifier itself already knew about
+    but silently declined to report. Closed by scanning every span
+    unconditionally (not stopping at the first denied one) and OR-ing
+    each inner verdict's own `is_git_push` into a running total,
+    returned regardless of whether any span was itself denied."""
+    is_git_push = False
     i = 0
     n = len(tokens)
     while i < n:
-        fused = _find_fused_command_substitution(tokens[i])
-        if fused is not None:
+        search_from = 0
+        found_fused = False
+        while True:
+            fused = _find_fused_command_substitution(tokens[i], search_from)
+            if fused is None:
+                break
+            found_fused = True
             start, end = fused
             inner_text = tokens[i][start + 2 : end - 1]
             if inner_text.strip():
                 inner_verdict = classify(inner_text)
+                is_git_push = is_git_push or inner_verdict.is_git_push
                 if inner_verdict.deny:
                     reason = f"a command substitution $(...) embeds a denied command -- {inner_verdict.reason}"
-                    return reason, inner_verdict.is_git_push
+                    return reason, is_git_push
+            search_from = end
+        if found_fused:
             i += 1
             continue
         span_end = _command_substitution_token_span(tokens, i)
@@ -765,13 +827,14 @@ def _rule_command_substitution_content(tokens: list[str]) -> tuple[str, bool] | 
             inner_tokens = tokens[i + 2 : span_end - 1]
             if inner_tokens:
                 inner_verdict = _classify_tokens(inner_tokens)
+                is_git_push = is_git_push or inner_verdict.is_git_push
                 if inner_verdict.deny:
                     reason = f"a command substitution $(...) embeds a denied command -- {inner_verdict.reason}"
-                    return reason, inner_verdict.is_git_push
+                    return reason, is_git_push
             i = span_end
             continue
         i += 1
-    return None
+    return None, is_git_push
 
 
 def tokenize(command: str) -> list[str]:
@@ -853,6 +916,123 @@ def _assigned_raw_values(tokens: list[str]) -> dict[str, str]:
         if match:
             values[match.group(1)] = match.group(2)
     return values
+
+
+def _strip_leading_assignments(seg: list[str]) -> list[str]:
+    """Bash's own simple-command grammar lets zero or more `NAME=value`
+    environment-assignment tokens precede the actual command word (`X=foo
+    uv install foo` runs `uv install foo` with `X=foo` set only in that
+    one invocation's environment -- ordinary, widely-used syntax, not a
+    technique). `_rule_b1a_dynamic_word_same_segment_verb`/`_rule_b1b_
+    dynamic_word_assigned_tool_and_verb` (both gated on `_is_dynamic(
+    seg[0])` as their own first check) and `_rule_b2_watched_tool_
+    dynamic_verb_position` (requires a literal watched tool at `seg[0]`)
+    implicitly assumed `seg[0]` always IS that word -- applying this
+    strip ONCE, uniformly, to every segment before any rule runs (see
+    `_classify_tokens`) makes that assumption correct everywhere at once.
+
+    A DYNAMIC assignment (`X=$(evil) uv $x foo`) is skipped too -- the
+    assignment SHAPE (`NAME=...`), not whether the value is static or
+    dynamic, is what makes bash treat it as an environment prefix rather
+    than the command word; `_ASSIGN_RE`'s own `(.*)$` capture already
+    matches a `$`-containing RHS just as readily as a literal one.
+
+    Found live by Step 8 independent review, fifteenth round (issue
+    #1326), ported from the task-scoped sibling module's own fifteenth-
+    round fix of the same finding: `X=foo $T install foo` (T=uv) and
+    `X=foo uv $x foo` (x=install) both fully bypassed B1a/B1b's own
+    indirection detection (confirmed live via a real bash proxy with a
+    stand-in `uv` binary on PATH, capturing its own argv and environment)
+    with NO indirection technique needed for the ASSIGNMENT prefix itself
+    -- see the sibling module's own docstring for the fuller root-cause
+    analysis and live-verification detail, which applies identically
+    here.
+
+    Rules that instead scan a WHOLE segment for a literal match
+    regardless of position (`_rule_a_literal`'s adjacency scan, `_rule_
+    gh_api_write`'s own sliding-window `gh`+`api` scan, `_is_git_push_
+    segment`'s own literal-`git`-anywhere scan) were never affected by
+    this gap -- confirmed live that `X=foo pip install foo`, `X=foo gh
+    api repos/o/r/pulls/1/merge -XPOST`, and `X=foo git push origin
+    main` were ALREADY correctly denied before this fix, which is why
+    this strip is applied via `segments` (feeding every rule uniformly)
+    rather than requiring those already-correct rules to change."""
+    i = 0
+    n = len(seg)
+    while i < n and _ASSIGN_RE.match(seg[i]):
+        i += 1
+    return seg[i:]
+
+
+def _array_literal_token_span(tokens: list[str], i: int) -> int | None:
+    """If `tokens[i]` is a bare `NAME=` (EMPTY-value) assignment token
+    immediately followed by `tokens[i + 1] == "("` -- bash's own array-
+    literal syntax (`NAME=(elem1 elem2)`, also `declare -a NAME=(...)`)
+    -- return the index one past the matching `)`, tracking paren-nesting
+    depth the same way `_command_substitution_token_span` does. Returns
+    `None` otherwise, including for an ordinary `NAME=value` assignment
+    (non-empty value) immediately followed by `(` -- that shape is not
+    valid array-literal syntax in real bash, and this function makes no
+    claim about what it means.
+
+    Shared by `_fold_array_literal_spans` below."""
+    match = _ASSIGN_RE.match(tokens[i])
+    if not (match and match.group(2) == "" and i + 1 < len(tokens) and tokens[i + 1] == "("):
+        return None
+    depth = 1
+    j = i + 2
+    n = len(tokens)
+    while j < n and depth > 0:
+        if tokens[j] == "(":
+            depth += 1
+        elif tokens[j] == ")":
+            depth -= 1
+        j += 1
+    return j
+
+
+def _fold_array_literal_spans(tokens: list[str]) -> list[str]:
+    """Fold each `NAME=(...)` array-literal span (found via `_array_
+    literal_token_span`) into a single token -- the same "make the span's
+    boundary visible as one atomic unit before segmenting" strategy
+    `_fold_command_substitution_spans` already uses for `$(...)`, applied
+    here for the identical underlying reason: `NAME=(elem1 elem2)` is
+    indistinguishable, from the token stream alone, from an empty
+    assignment immediately followed by an UNRELATED subshell (`NAME=;
+    (cmd)`) -- shlex breaks a word at `(` regardless of whether real bash
+    source had a space there, discarding the one detail (adjacency)
+    bash's own grammar actually depends on. Left un-folded, `segment_
+    tokens` would put the array's own element list in its own segment,
+    separate from the `NAME=` token that actually explains it --
+    indistinguishable, to every `seg[0]`-anchored rule, from an attempted
+    command invocation.
+
+    The folded token is still `NAME=`-prefixed and so still matches
+    `_ASSIGN_RE` with a NON-empty value (the array's own content) --
+    `_strip_leading_assignments` therefore strips it away entirely as an
+    ordinary (if unusually-shaped) assignment, the same treatment a
+    genuine `NAME=value` prefix already gets, requiring no separate
+    "is this actually an array literal" case anywhere downstream.
+
+    Found live by Step 8 independent review, fifteenth round (issue
+    #1326), ported from the task-scoped sibling module's own fifteenth-
+    round fix of the same finding: `files=($(ls *.txt))` -- an ordinary,
+    common idiom capturing a command's word-split output into an array --
+    is (via B1a/B1b's own `_is_dynamic(seg[0])` gate) exposed to the
+    identical false positive once the array's own `$(...)`-folded element
+    becomes segment[0] of its own segment."""
+    folded: list[str] = []
+    i = 0
+    n = len(tokens)
+    while i < n:
+        end = _array_literal_token_span(tokens, i)
+        if end is not None:
+            folded.append("".join(tokens[i:end]))
+            i = end
+        else:
+            folded.append(tokens[i])
+            i += 1
+    return folded
 
 
 # --- Denylists -----------------------------------------------------------
@@ -1589,18 +1769,17 @@ def _classify_tokens(tokens: list[str]) -> Verdict:
     mutation-keyword check this feeds is already a disclosed, best-effort
     substring residual (see `_rule_gh_api_write`'s own docstring), not a
     sound one this reconstruction could meaningfully weaken further."""
-    content_hit = _rule_command_substitution_content(tokens)
-    if content_hit:
-        reason, inner_is_git_push = content_hit
-        return Verdict(True, reason, inner_is_git_push)
+    content_reason, content_is_git_push = _rule_command_substitution_content(tokens)
+    if content_reason:
+        return Verdict(True, content_reason, content_is_git_push)
 
-    tokens = _fold_command_substitution_spans(tokens)
-    segments = segment_tokens(tokens)
+    tokens = _fold_array_literal_spans(_fold_command_substitution_spans(tokens))
+    segments = [s for s in (_strip_leading_assignments(seg) for seg in segment_tokens(tokens)) if s]
     assigned = _assigned_literals(tokens)
     raw_assigned = _assigned_raw_values(tokens)
     lowered_command = " ".join(tokens).lower()
 
-    is_git_push = any(_is_git_push_segment(seg) for seg in segments)
+    is_git_push = content_is_git_push or any(_is_git_push_segment(seg) for seg in segments)
 
     literal_hit = _rule_a_literal(segments)
     if literal_hit:
