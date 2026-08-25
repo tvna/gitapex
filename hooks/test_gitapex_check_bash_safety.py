@@ -210,6 +210,23 @@ KNOWN_BYPASS_COMMANDS = [
         'A=(uv); V=(install); "${A[@]}" "${V[@]}" foo',
         "array-literal-assignment-indirection",
     ),
+    (
+        # Found live by Step 8 independent review, fourth round (issue
+        # #1326): the `gh api graphql` "mutation" keyword check is a raw
+        # substring scan over the whole command text (see
+        # _rule_gh_api_write's own docstring) -- sound against a literal
+        # "mutation" keyword, but not against one reconstructed at
+        # runtime by concatenating two separately-assigned variables.
+        # Soundly closing this requires resolving nested `${NAME}`
+        # references through recursive variable substitution -- the same
+        # unbounded-reconstruction problem issue #1326 itself already
+        # scopes out of Stage 1 ("verb reconstruction that never places
+        # the tool/verb name as its own literal token anywhere in the
+        # command"), manifesting here for the mutation keyword instead of
+        # a tool/verb token. Deliberately not attempted in Stage 1.
+        'A=muta; B=tion; Q="${A}${B} { x }"; gh api graphql -f query="$Q"',
+        "graphql-mutation-keyword-variable-concatenation",
+    ),
 ]
 
 

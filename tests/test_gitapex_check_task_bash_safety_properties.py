@@ -274,3 +274,51 @@ def test_rule_git_push_allows_dynamic_tool_word_with_an_unrelated_literal_argume
     name_to_value = {unrelated_var: "somecmd"}
     segments = [[f"${unrelated_var}", subcommand]]
     assert checker._rule_git_push(segments, name_to_value) is None
+
+
+@_PROPERTIES
+@given(gh_var=_IDENTIFIERS)
+def test_rule_gh_any_detects_gh_hidden_behind_a_variable(gh_var: str) -> None:
+    """Model-based, regression pin for a real bypass found live by Step 8
+    independent review, fourth round (issue #1326): `G=gh; $G pr merge 1`
+    was wrongly allowed. `_WATCHED_TOOLS` in this file never includes
+    "gh" at all -- it is denied entirely via this dedicated blanket rule
+    instead of the adjacent-verb table B1a/B1b serve -- so neither
+    generic indirection rule ever considered `gh` a watched tool. This
+    rule needed its own dedicated indirection check."""
+    name_to_value = {gh_var: "gh"}
+    segments = [[f"${gh_var}", "pr", "merge", "1"]]
+    assert checker._rule_gh_any(segments, name_to_value) is not None
+
+
+@_PROPERTIES
+@given(unrelated_var=_IDENTIFIERS)
+def test_rule_gh_any_allows_an_unrelated_dynamic_command_word(unrelated_var: str) -> None:
+    """No false positive: a dynamic command word that does not resolve to
+    "gh" is never flagged by this rule."""
+    name_to_value = {unrelated_var: "somecmd"}
+    segments = [[f"${unrelated_var}", "test"]]
+    assert checker._rule_gh_any(segments, name_to_value) is None
+
+
+@_PROPERTIES
+@given(flag=st.sampled_from(["--git-dir", "--work-tree", "--namespace", "--super-prefix", "--config-env"]))
+def test_is_git_push_segment_true_for_long_flag_separate_token_form(flag: str) -> None:
+    """Model-based, regression pin for a real bypass found live by Step 8
+    independent review, fourth round (issue #1326): only the fused `=`
+    form of git's value-taking long global options was ever handled --
+    the separate-token form (`git --git-dir /tmp/repo push origin
+    master`, confirmed to actually push with real git) went undetected,
+    bypassing this task-agent hard-deny rule entirely."""
+    seg = ["git", flag, "/tmp/some/value", "push", "origin"]
+    assert checker._is_git_push_segment(seg)
+
+
+@_PROPERTIES
+@given(flag=st.sampled_from(["--git-dir", "--work-tree", "--namespace", "--super-prefix", "--config-env"]))
+def test_is_git_push_segment_true_for_long_flag_fused_equals_form(flag: str) -> None:
+    """No regression: the fused `=` form these long flags already
+    handled correctly continues to work after adding separate-token
+    support alongside it."""
+    seg = ["git", f"{flag}=/tmp/some/value", "push", "origin"]
+    assert checker._is_git_push_segment(seg)

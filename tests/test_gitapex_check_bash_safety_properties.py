@@ -388,3 +388,47 @@ def test_rule_b1b_detects_when_segment_actually_references_assigned_tool_and_ver
     name_to_value = {tool_var: "uv", verb_var: "install"}
     seg = [f"${tool_var}", f"${verb_var}", "foo"]
     assert checker._rule_b1b_dynamic_word_assigned_tool_and_verb(seg, name_to_value, checker._WATCHED_VERBS)
+
+
+@_PROPERTIES
+@given(gh_var=_IDENTIFIERS, api_var=_IDENTIFIERS)
+def test_rule_b1b_detects_gh_api_indirection(gh_var: str, api_var: str) -> None:
+    """Model-based, regression pin for a real bypass found live by Step 8
+    independent review, fourth round (issue #1326): `G=gh; A=api; $G $A
+    ... -X POST` was wrongly allowed, since "api" was never in
+    `_WATCHED_VERBS` -- `gh api` write detection lived entirely in the
+    separately-dispatched `_rule_gh_api_write`, never wired into the
+    B-rule indirection machinery B1a/B1b already use for `gh issue`/
+    `gh pr` write-subcommand indirection. Once BOTH `gh` and `api` are
+    hidden behind variables, this is denied outright -- without
+    inspecting whether the resolved call would have been a read or a
+    write."""
+    if gh_var == api_var:
+        return
+    name_to_value = {gh_var: "gh", api_var: "api"}
+    seg = [f"${gh_var}", f"${api_var}", "repos/x/y", "-X", "POST"]
+    assert checker._rule_b1b_dynamic_word_assigned_tool_and_verb(seg, name_to_value, checker._WATCHED_VERBS)
+
+
+@_PROPERTIES
+@given(flag=st.sampled_from(["--git-dir", "--work-tree", "--namespace", "--super-prefix", "--config-env"]))
+def test_is_git_push_segment_true_for_long_flag_separate_token_form(flag: str) -> None:
+    """Model-based, regression pin for a real bypass found live by Step 8
+    independent review, fourth round (issue #1326): only the fused `=`
+    form of git's value-taking long global options was ever handled --
+    the separate-token form (`git --git-dir /tmp/repo push origin
+    master`, confirmed to actually push with real git) went undetected,
+    silently skipping the mandatory outward-artifact-preflight
+    provenance scan this flag gates."""
+    seg = ["git", flag, "/tmp/some/value", "push", "origin"]
+    assert checker._is_git_push_segment(seg)
+
+
+@_PROPERTIES
+@given(flag=st.sampled_from(["--git-dir", "--work-tree", "--namespace", "--super-prefix", "--config-env"]))
+def test_is_git_push_segment_true_for_long_flag_fused_equals_form(flag: str) -> None:
+    """No regression: the fused `=` form these long flags already
+    handled correctly continues to work after adding separate-token
+    support alongside it."""
+    seg = ["git", f"{flag}=/tmp/some/value", "push", "origin"]
+    assert checker._is_git_push_segment(seg)

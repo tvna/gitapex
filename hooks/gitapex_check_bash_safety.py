@@ -64,6 +64,21 @@ git pre-push hook, package-registry network-egress blocking, and gh
 token re-scoping), tracked separately per #1326's own stated scope
 boundary, not attempted here.
 
+A second, distinct instance of the same underlying class (found live by
+Step 8 independent review, fourth round): `_rule_gh_api_write`'s own
+`gh api graphql` "mutation" keyword check is a raw substring scan over
+the whole command text, not a token match -- sound against a literal
+"mutation" keyword, but not against one reconstructed at runtime by
+concatenating two or more separately-assigned variables
+(`A=muta; B=tion; Q="${A}${B} { ... }"; gh api graphql -f query="$Q"`).
+Soundly closing this would require resolving nested `${NAME}` references
+through recursive variable substitution -- the same unbounded-
+reconstruction problem as the verb-reconstruction residual above,
+manifesting here for a keyword embedded in a free-text query value
+instead of a command/verb token. Deliberately not attempted in Stage 1;
+pinned as `graphql-mutation-keyword-variable-concatenation` in
+hooks/test_gitapex_check_bash_safety.py's own `KNOWN_BYPASS_COMMANDS`.
+
 Deliberately stdlib-only (shlex, re, json) -- no new third-party
 dependency, matching this repository's declarative module-management
 convention and python3's already-accepted-hook-dependency status (see
@@ -271,6 +286,23 @@ _WATCHED_VERBS = {
     "review",
     "ready",
     "update-branch",
+    # "api" is not a denied-adjacent verb on its own (a plain `gh api
+    # <read-path>` is legitimate) -- it is included here only so the B1a/
+    # B1b indirection rules recognize `gh`+`api` as a suspicious pairing
+    # when BOTH are hidden behind variables (`G=gh; A=api; $G $A ... -X
+    # POST`), the same way they already recognize `gh`+`merge` for
+    # `gh pr merge` indirection. Found live by Step 8 independent review,
+    # fourth round (issue #1326): a literal `gh` with a dynamic
+    # subcommand was already caught by Rule B2, but BOTH tool and
+    # subcommand dynamic evaded every existing rule, since `_rule_gh_api_
+    # write`'s own write-detection logic (the -X/-f flag checks) is not
+    # wired into the B-rule indirection machinery at all. Once indirection
+    # is detected this way the whole `gh api` invocation is denied
+    # outright, without inspecting whether it would have been a read or a
+    # write once resolved -- the same "cannot confidently classify a
+    # resolved-only-at-runtime command, so deny" posture the other B-rules
+    # already take.
+    "api",
 }
 _GIT_PUSH_VERB = "push"
 
@@ -429,6 +461,18 @@ def _rule_gh_api_write(segments: list[list[str]], lowered_command: str, name_to_
     return None
 
 
+# git's own value-taking global options that can appear as a SEPARATE
+# following token (not just fused with "="): the two short options -c/-C
+# (both collapse to lowered "-c") plus every long option from git's own
+# usage synopsis that takes a value. `--exec-path`/`--html-path`/
+# `--man-path`/`--info-path` are deliberately excluded: confirmed against
+# git's own usage synopsis, `--exec-path` takes an OPTIONAL value only in
+# the fused `--exec-path=<path>` form, and the other three take no value
+# at all -- none of the three ever separates a `push` token from `git`
+# the way a genuine separate-token value would.
+_GIT_LONG_VALUE_FLAGS = {"--git-dir", "--work-tree", "--namespace", "--super-prefix", "--config-env"}
+
+
 def _is_git_push_segment(seg: list[str]) -> bool:
     literals = [(t.lower() if not _is_dynamic(t) else None) for t in seg]
     for i, tok in enumerate(literals):
@@ -444,21 +488,28 @@ def _is_git_push_segment(seg: list[str]) -> bool:
                 break
             flag = candidate
             j += 1
-            # `-c <name>=<value>` and `-C <path>` are git's only two
-            # value-taking short global options -- both collapse to the
-            # same lowered "-c" token here -- and take their value as a
-            # separate following token; a long option (`--git-dir=<path>`)
-            # attaches its value with `=` instead. Skip that value token
-            # too, or `git -C /tmp/repo push` would stop scanning at the
-            # non-flag-shaped path argument and miss the `push` after it.
-            # Every OTHER short global option (-v, -h, -p, -P) is boolean
-            # and takes no argument, confirmed against git's own usage
-            # synopsis -- originally this treated ANY 2-char flag as
-            # value-taking, which wrongly swallowed the "push" token
-            # itself as a boolean flag's "value" (`git -p push origin
-            # main` was never detected as git push) -- found live by
-            # Step 8 independent review, issue #1326.
-            if flag == "-c" and j < len(literals):
+            # `-c <name>=<value>` and `-C <path>` are git's own value-
+            # taking short global options -- both collapse to the same
+            # lowered "-c" token here -- and `--git-dir <path>`,
+            # `--work-tree <path>`, `--namespace <name>`,
+            # `--super-prefix <path>`, `--config-env <name>=<envvar>` are
+            # git's own value-taking LONG global options, all of which
+            # also accept the value as a separate following token, not
+            # only fused with "=" (`--git-dir=<path>`). Skip that value
+            # token too, or `git -C /tmp/repo push` / `git --git-dir
+            # /tmp/repo push` would stop scanning at the non-flag-shaped
+            # path argument and miss the `push` after it. The long-option
+            # separate-token form was found live by Step 8 independent
+            # review, fourth round (issue #1326): only the fused `=` form
+            # was ever tested, so `git --git-dir /tmp/repo push origin
+            # master` -- confirmed to actually push with real git --
+            # went undetected. Every OTHER short global option (-v, -h,
+            # -p, -P) is boolean and takes no argument, confirmed against
+            # git's own usage synopsis -- originally this treated ANY
+            # 2-char flag as value-taking, which wrongly swallowed the
+            # "push" token itself as a boolean flag's "value" (found live
+            # by Step 8, second round).
+            if (flag == "-c" or flag in _GIT_LONG_VALUE_FLAGS) and j < len(literals):
                 next_tok = literals[j]
                 if next_tok is not None and not next_tok.startswith("-"):
                     j += 1

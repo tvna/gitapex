@@ -243,13 +243,40 @@ def _rule_npx(segments: list[list[str]]) -> str | None:
     return None
 
 
-def _rule_gh_any(segments: list[list[str]]) -> str | None:
+def _rule_gh_any(segments: list[list[str]], name_to_value: dict[str, str]) -> str | None:
+    """`gh` itself hidden behind a variable (`G=gh; $G pr merge 1`) needs
+    its own indirection check, distinct from `_rule_b1a`/`_rule_b1b`
+    above: `_WATCHED_TOOLS` in this file never includes "gh" at all (it
+    is denied entirely, any subcommand, via this dedicated blanket rule
+    instead of the adjacent-verb table those B-rules serve), so neither
+    generic rule ever considers `gh` a watched tool. Found live by Step 8
+    independent review, fourth round (issue #1326). Only `seg[0]` (the
+    command word) is checked -- `gh` referenced anywhere else in the
+    segment is not this rule's concern -- and no verb pairing is needed,
+    since every `gh` subcommand is denied regardless of which one it is."""
     for seg in segments:
         if not seg:
             continue
         if not _is_dynamic(seg[0]) and seg[0].lower() == "gh":
             return "the gh CLI, not permitted inside a task-level agent (read or write)"
+        if _is_dynamic(seg[0]):
+            referenced = set(_VAR_REF_RE.findall(seg[0]))
+            values = {name_to_value[name] for name in referenced if name in name_to_value}
+            if "gh" in values:
+                return "the gh CLI, not permitted inside a task-level agent (read or write)"
     return None
+
+
+# git's own value-taking global options that can appear as a SEPARATE
+# following token (not just fused with "="): the two short options -c/-C
+# (both collapse to lowered "-c") plus every long option from git's own
+# usage synopsis that takes a value. `--exec-path`/`--html-path`/
+# `--man-path`/`--info-path` are deliberately excluded: confirmed against
+# git's own usage synopsis, `--exec-path` takes an OPTIONAL value only in
+# the fused `--exec-path=<path>` form, and the other three take no value
+# at all -- none of the three ever separates a `push` token from `git`
+# the way a genuine separate-token value would.
+_GIT_LONG_VALUE_FLAGS = {"--git-dir", "--work-tree", "--namespace", "--super-prefix", "--config-env"}
 
 
 def _is_git_push_segment(seg: list[str]) -> bool:
@@ -267,17 +294,22 @@ def _is_git_push_segment(seg: list[str]) -> bool:
                 break
             flag = candidate
             j += 1
-            # Only -c/-C (git's own value-taking short global options --
-            # `-c <name>=<value>`, `-C <path>` -- collapse to the same
-            # lowered "-c" token) consume a following value token. Every
-            # other 2-char short global option (-v, -h, -p, -P) is
+            # -c/-C and git's own value-taking LONG global options
+            # (--git-dir, --work-tree, --namespace, --super-prefix,
+            # --config-env) all accept the value as a separate following
+            # token, not only fused with "=" (`--git-dir=<path>`). Skip
+            # that value token too, or `git --git-dir /tmp/repo push`
+            # would stop scanning at the non-flag-shaped path argument
+            # and miss the `push` after it -- the long-option
+            # separate-token form was found live by Step 8 independent
+            # review, fourth round (issue #1326): only the fused `=` form
+            # was ever tested, so `git --git-dir /tmp/repo push origin
+            # master` -- confirmed to actually push with real git --
+            # went undetected by this task-agent hard-deny rule. Every
+            # OTHER 2-char short global option (-v, -h, -p, -P) is
             # boolean and takes no argument, confirmed against git's own
-            # usage synopsis -- originally treated ANY 2-char flag as
-            # value-taking, which wrongly swallowed the "push" token
-            # itself as a boolean flag's "value" (`git -p push origin
-            # main` was never detected) -- found live by Step 8
-            # independent review, issue #1326.
-            if flag == "-c" and j < len(literals):
+            # usage synopsis -- found live by Step 8, second round.
+            if (flag == "-c" or flag in _GIT_LONG_VALUE_FLAGS) and j < len(literals):
                 next_tok = literals[j]
                 if next_tok is not None and not next_tok.startswith("-"):
                     j += 1
@@ -391,7 +423,7 @@ def classify(command: str) -> Verdict:
     if npx_hit:
         return Verdict(True, npx_hit)
 
-    gh_hit = _rule_gh_any(segments)
+    gh_hit = _rule_gh_any(segments, assigned)
     if gh_hit:
         return Verdict(True, gh_hit)
 
