@@ -19,7 +19,6 @@ Reproducibility: ``derandomize=True`` with an explicit ``max_examples`` and
 
 from __future__ import annotations
 
-import io
 import json
 import string
 import sys
@@ -27,6 +26,7 @@ from typing import cast
 
 import gitapex_check_bash_safety as checker
 import pytest
+from conftest import FakeStdin as _FakeStdin
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
@@ -39,6 +39,14 @@ _IDENTIFIERS = st.builds(
     st.text(alphabet=_IDENT_ALPHABET, max_size=10),
 )
 _VALUES = st.text(alphabet=string.ascii_letters + string.digits, min_size=1, max_size=12)
+
+# A token whose `_substitute_var_refs_candidates` combinatorial expansion
+# exceeds `_MAX_SUBSTITUTION_CANDIDATES` (64): 7 default-clause references,
+# each contributing 2 candidates (default text + the variable's own
+# resolved value), 2**7=128 > 64 -- shared by every fail-closed-on-overflow
+# test below, read-only (never mutated by any of them).
+_OVERFLOW_TOKEN = "".join(f"${{V{i}:-d}}" for i in range(7))
+_OVERFLOW_NAME_TO_VALUE = {f"V{i}": "x" for i in range(7)}
 
 
 @_PROPERTIES
@@ -1391,6 +1399,7 @@ def test_fold_array_literal_spans_merges_into_one_dynamic_free_token(name: str, 
     tokens = [f"{name}=", "(", inner, ")", "trailing"]
     folded = checker._fold_array_literal_spans(tokens)
     assert folded == [f"{name}=({inner})", "trailing"]
+    assert checker._strip_leading_assignments(folded[:1]) == []
 
 
 # --- codecov/patch coverage gate: branches this PR's diff added but no ----
@@ -1418,9 +1427,7 @@ def test_substitute_var_refs_candidates_default_clause_also_yields_named_value()
 def test_substitute_var_refs_candidates_returns_none_over_cap() -> None:
     """Combinatorial expansion past `_MAX_SUBSTITUTION_CANDIDATES` fails
     closed (`None`), not a silent truncation of the candidate set."""
-    token = "".join(f"${{V{i}:-d}}" for i in range(7))
-    name_to_value = {f"V{i}": "x" for i in range(7)}
-    assert checker._substitute_var_refs_candidates(token, name_to_value, {}) is None
+    assert checker._substitute_var_refs_candidates(_OVERFLOW_TOKEN, _OVERFLOW_NAME_TO_VALUE, {}) is None
 
 
 def test_ifs_split_splits_on_braced_marker() -> None:
@@ -1471,9 +1478,12 @@ def test_find_fused_command_substitution_none_when_unbalanced() -> None:
 
 
 def test_rule_command_substitution_content_scans_second_fused_span_in_same_token() -> None:
-    """Regression pin: a token with TWO fused `$(...)` spans has BOTH
-    scanned, not just the first -- see `_find_fused_command_substitution`'s
-    own `search_from` docstring for the real bypass this closed."""
+    """Coverage pin for the second-fused-span case: a token with TWO fused
+    `$(...)` spans has BOTH scanned, not just the first -- the fix itself
+    (and the real bypass it closed) is `_find_fused_command_substitution`'s
+    own `search_from` parameter, already covered by its own tests above;
+    this test only proves that fix reached end-to-end through
+    `_rule_command_substitution_content`'s own scan loop."""
     tokens = ["echo", "$(echo ok)$(pip install evil-pkg)"]
     reason, _ = checker._rule_command_substitution_content(tokens)
     assert reason is not None
@@ -1536,10 +1546,8 @@ def test_gh_api_method_flagname_dynamic_hit_unresolvable_flag_token() -> None:
 
 
 def test_gh_api_method_flagname_dynamic_hit_overflow_flag_token() -> None:
-    token = "".join(f"${{V{i}:-d}}" for i in range(7))
-    name_to_value = {f"V{i}": "x" for i in range(7)}
-    seg = ["gh", "api", "repos/o/r/pulls/1", token, "POST"]
-    assert checker._gh_api_method_flagname_dynamic_hit(seg, name_to_value, {}) is True
+    seg = ["gh", "api", "repos/o/r/pulls/1", _OVERFLOW_TOKEN, "POST"]
+    assert checker._gh_api_method_flagname_dynamic_hit(seg, _OVERFLOW_NAME_TO_VALUE, {}) is True
 
 
 def test_gh_api_method_flagname_dynamic_hit_flag_is_last_token() -> None:
@@ -1570,10 +1578,8 @@ def test_gh_api_method_fused_flagname_dynamic_hit_unresolvable() -> None:
 
 
 def test_gh_api_method_fused_flagname_dynamic_hit_overflow() -> None:
-    token = "".join(f"${{V{i}:-d}}" for i in range(7))
-    name_to_value = {f"V{i}": "x" for i in range(7)}
-    seg = ["gh", "api", "repos/o/r/pulls/1", token]
-    assert checker._gh_api_method_fused_flagname_dynamic_hit(seg, name_to_value, {}) is True
+    seg = ["gh", "api", "repos/o/r/pulls/1", _OVERFLOW_TOKEN]
+    assert checker._gh_api_method_fused_flagname_dynamic_hit(seg, _OVERFLOW_NAME_TO_VALUE, {}) is True
 
 
 def test_gh_api_method_fused_flagname_dynamic_hit_method_equals_form() -> None:
@@ -1587,10 +1593,8 @@ def test_gh_api_field_flagname_dynamic_hit_unresolvable() -> None:
 
 
 def test_gh_api_field_flagname_dynamic_hit_overflow() -> None:
-    token = "".join(f"${{V{i}:-d}}" for i in range(7))
-    name_to_value = {f"V{i}": "x" for i in range(7)}
-    seg = ["gh", "api", "repos/o/r/1", token]
-    assert checker._gh_api_field_flagname_dynamic_hit(seg, name_to_value, {}) is True
+    seg = ["gh", "api", "repos/o/r/1", _OVERFLOW_TOKEN]
+    assert checker._gh_api_field_flagname_dynamic_hit(seg, _OVERFLOW_NAME_TO_VALUE, {}) is True
 
 
 def test_gh_api_field_fused_flagname_dynamic_hit_unresolvable() -> None:
@@ -1599,10 +1603,8 @@ def test_gh_api_field_fused_flagname_dynamic_hit_unresolvable() -> None:
 
 
 def test_gh_api_field_fused_flagname_dynamic_hit_overflow() -> None:
-    token = "".join(f"${{V{i}:-d}}" for i in range(7))
-    name_to_value = {f"V{i}": "x" for i in range(7)}
-    seg = ["gh", "api", "repos/o/r/1", token]
-    assert checker._gh_api_field_fused_flagname_dynamic_hit(seg, name_to_value, {}) is True
+    seg = ["gh", "api", "repos/o/r/1", _OVERFLOW_TOKEN]
+    assert checker._gh_api_field_fused_flagname_dynamic_hit(seg, _OVERFLOW_NAME_TO_VALUE, {}) is True
 
 
 def test_rule_gh_api_write_graphql_mutation_keyword() -> None:
@@ -1652,23 +1654,23 @@ def test_is_git_push_segment_value_flag_followed_by_another_flag() -> None:
 
 
 def test_resolve_seg_tokens_candidates_overflow_returns_none() -> None:
-    token = "".join(f"${{V{i}:-d}}" for i in range(7))
-    name_to_value = {f"V{i}": "x" for i in range(7)}
-    assert checker._resolve_seg_tokens_candidates([token], name_to_value, {}) is None
+    assert checker._resolve_seg_tokens_candidates([_OVERFLOW_TOKEN], _OVERFLOW_NAME_TO_VALUE, {}) is None
 
 
 def test_rule_b1a_fails_closed_on_tail_overflow() -> None:
-    token = "".join(f"${{V{i}:-d}}" for i in range(7))
-    name_to_value = {f"V{i}": "x" for i in range(7)}
-    seg = ["$T", token]
-    assert checker._rule_b1a_dynamic_word_same_segment_verb(seg, checker._WATCHED_VERBS, name_to_value, {}) is True
+    seg = ["$T", _OVERFLOW_TOKEN]
+    assert (
+        checker._rule_b1a_dynamic_word_same_segment_verb(seg, checker._WATCHED_VERBS, _OVERFLOW_NAME_TO_VALUE, {})
+        is True
+    )
 
 
 def test_rule_b1b_fails_closed_on_overflow() -> None:
-    token = "".join(f"${{V{i}:-d}}" for i in range(7))
-    name_to_value = {f"V{i}": "x" for i in range(7)}
-    seg = ["$T", token]
-    assert checker._rule_b1b_dynamic_word_assigned_tool_and_verb(seg, name_to_value, checker._WATCHED_VERBS, {}) is True
+    seg = ["$T", _OVERFLOW_TOKEN]
+    assert (
+        checker._rule_b1b_dynamic_word_assigned_tool_and_verb(seg, _OVERFLOW_NAME_TO_VALUE, checker._WATCHED_VERBS, {})
+        is True
+    )
 
 
 def test_rule_b2_false_for_short_segment() -> None:
@@ -1716,15 +1718,6 @@ def test_classify_flags_git_push_via_dynamic_second_token() -> None:
     verdict = checker.classify("git $x")
     assert verdict.deny is False
     assert verdict.is_git_push is True
-
-
-class _FakeStdin:
-    """A minimal stand-in for `sys.stdin` exposing only the `.buffer`
-    attribute `main()` reads -- a real `TextIOWrapper`'s own `.buffer` is
-    read-only and cannot be monkeypatched directly."""
-
-    def __init__(self, payload_bytes: bytes) -> None:
-        self.buffer = io.BytesIO(payload_bytes)
 
 
 def _run_main(
