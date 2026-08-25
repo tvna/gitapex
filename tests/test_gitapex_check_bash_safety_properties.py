@@ -19,9 +19,14 @@ Reproducibility: ``derandomize=True`` with an explicit ``max_examples`` and
 
 from __future__ import annotations
 
+import io
+import json
 import string
+import sys
+from typing import cast
 
 import gitapex_check_bash_safety as checker
+import pytest
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
@@ -1386,4 +1391,403 @@ def test_fold_array_literal_spans_merges_into_one_dynamic_free_token(name: str, 
     tokens = [f"{name}=", "(", inner, ")", "trailing"]
     folded = checker._fold_array_literal_spans(tokens)
     assert folded == [f"{name}=({inner})", "trailing"]
-    assert checker._strip_leading_assignments(folded[:1]) == []
+
+
+# --- codecov/patch coverage gate: branches this PR's diff added but no ----
+# existing DENIED/ALLOWED end-to-end fixture or property test happened to
+# exercise -- each test below targets one specific line/branch named in the
+# PR's own `codecov/patch` report against commit 95def74, not a Step 8
+# independent-review finding.
+
+
+def test_substitute_var_refs_candidates_unassigned_braced_returns_empty() -> None:
+    """`${NAME}` with NAME not itself assigned resolves to no candidates at
+    all -- distinct from the default-clause/indirect-reference cases, which
+    always contribute at least one reading."""
+    assert checker._substitute_var_refs_candidates("${UNSET}", {}, {}) == []
+
+
+def test_substitute_var_refs_candidates_default_clause_also_yields_named_value() -> None:
+    """`${NAME:-default}` contributes both the literal default text AND
+    NAME's own resolved value, when NAME also happens to be assigned."""
+    candidates = checker._substitute_var_refs_candidates("${VAR:-fallback}", {"VAR": "actual"}, {})
+    assert candidates is not None
+    assert set(candidates) == {"fallback", "actual"}
+
+
+def test_substitute_var_refs_candidates_returns_none_over_cap() -> None:
+    """Combinatorial expansion past `_MAX_SUBSTITUTION_CANDIDATES` fails
+    closed (`None`), not a silent truncation of the candidate set."""
+    token = "".join(f"${{V{i}:-d}}" for i in range(7))
+    name_to_value = {f"V{i}": "x" for i in range(7)}
+    assert checker._substitute_var_refs_candidates(token, name_to_value, {}) is None
+
+
+def test_ifs_split_splits_on_braced_marker() -> None:
+    assert checker._ifs_split("a${IFS}b") == ["a", "b"]
+
+
+def test_ifs_split_splits_on_bare_marker() -> None:
+    assert checker._ifs_split("a$IFSb") == ["a", "b"]
+
+
+def test_ifs_split_braced_marker_found_but_no_productive_split_tries_next_marker() -> None:
+    """`${IFS}` alone splits to only empty pieces (filtered away), so the
+    loop must fall through and try the bare `$IFS` marker next rather than
+    returning at the braced marker's own unproductive split."""
+    assert checker._ifs_split("${IFS}") == ["${IFS}"]
+
+
+def test_split_punct_run_keeps_multi_op_token_whole() -> None:
+    assert checker._split_punct_run("&&") == ["&&"]
+    assert checker._split_punct_run("||") == ["||"]
+
+
+def test_split_punct_run_splits_single_op_run() -> None:
+    assert checker._split_punct_run(");") == [")", ";"]
+
+
+def test_command_substitution_token_span_tracks_nested_depth() -> None:
+    """An unquoted `$(...)` span containing its OWN nested `$(...)` must
+    track paren depth past the first close, not stop at it."""
+    tokens = checker.tokenize("echo $(echo $(date))")
+    i = tokens.index("$")
+    span_end = checker._command_substitution_token_span(tokens, i)
+    assert span_end is not None
+    assert tokens[i:span_end].count("(") == tokens[i:span_end].count(")") == 2
+
+
+def test_find_fused_command_substitution_tracks_nested_depth() -> None:
+    """The fused/quoted-span counterpart of the nested-depth case above."""
+    fused_text = "$(echo $(date))"
+    fused = checker._find_fused_command_substitution(fused_text)
+    assert fused is not None
+    start, end = fused
+    assert fused_text[start:end] == fused_text
+
+
+def test_find_fused_command_substitution_none_when_unbalanced() -> None:
+    assert checker._find_fused_command_substitution("prefix $(echo unclosed") is None
+
+
+def test_rule_command_substitution_content_scans_second_fused_span_in_same_token() -> None:
+    """Regression pin: a token with TWO fused `$(...)` spans has BOTH
+    scanned, not just the first -- see `_find_fused_command_substitution`'s
+    own `search_from` docstring for the real bypass this closed."""
+    tokens = ["echo", "$(echo ok)$(pip install evil-pkg)"]
+    reason, _ = checker._rule_command_substitution_content(tokens)
+    assert reason is not None
+
+
+def test_rule_command_substitution_content_skips_blank_fused_span_then_finds_denial() -> None:
+    """A blank/whitespace-only fused span contributes nothing and is
+    skipped without denying by itself, but scanning continues to the next
+    fused span in the same token."""
+    tokens = ["echo", "$( )$(pip install evil-pkg)"]
+    reason, _ = checker._rule_command_substitution_content(tokens)
+    assert reason is not None
+
+
+def test_rule_command_substitution_content_both_fused_spans_harmless() -> None:
+    tokens = ["echo", "$(echo ok)$(echo also-ok)"]
+    assert checker._rule_command_substitution_content(tokens) == (None, False)
+
+
+def test_rule_command_substitution_content_empty_unquoted_span_skipped() -> None:
+    """An empty, unquoted `$()` substitution has no inner tokens to
+    recurse into -- distinct from the fused/quoted empty-span case above."""
+    tokens = ["$", "(", ")"]
+    assert checker._rule_command_substitution_content(tokens) == (None, False)
+
+
+def test_tokenize_raises_on_unbalanced_quote() -> None:
+    with pytest.raises(checker.TokenizeError):
+        checker.tokenize('echo "unclosed')
+
+
+def test_segment_tokens_splits_at_control_operator() -> None:
+    assert checker.segment_tokens(["a", ";", "b"]) == [["a"], ["b"]]
+
+
+def test_array_literal_token_span_tracks_nested_depth() -> None:
+    tokens = ["x=", "(", "(", "a", ")", ")"]
+    assert checker._array_literal_token_span(tokens, 0) == 6
+
+
+def test_rule_a_literal_detects_denied_phrase_substring() -> None:
+    """The same-token literal-phrase fallback (distinct from the adjacent-
+    pair n-gram scan above it) catches a denied phrase embedded anywhere
+    inside one otherwise-unrelated literal token."""
+    phrase = next(iter(checker._DENIED_PHRASES))
+    segments = [[f"echo-{phrase}-suffix"]]
+    reason = checker._rule_a_literal(segments)
+    assert reason is not None
+    assert phrase in reason
+
+
+def test_gh_api_method_dynamic_hit_unresolvable_value() -> None:
+    seg = ["gh", "api", "repos/o/r/pulls/1", "-X$(echo POST)"]
+    assert checker._gh_api_method_dynamic_hit(seg, {}, {}) is True
+
+
+def test_gh_api_method_flagname_dynamic_hit_unresolvable_flag_token() -> None:
+    seg = ["gh", "api", "repos/o/r/pulls/1", "$(echo -X)", "POST"]
+    assert checker._gh_api_method_flagname_dynamic_hit(seg, {}, {}) is True
+
+
+def test_gh_api_method_flagname_dynamic_hit_overflow_flag_token() -> None:
+    token = "".join(f"${{V{i}:-d}}" for i in range(7))
+    name_to_value = {f"V{i}": "x" for i in range(7)}
+    seg = ["gh", "api", "repos/o/r/pulls/1", token, "POST"]
+    assert checker._gh_api_method_flagname_dynamic_hit(seg, name_to_value, {}) is True
+
+
+def test_gh_api_method_flagname_dynamic_hit_flag_is_last_token() -> None:
+    """No false positive: a resolved `-X`/`--method` flag with no
+    following token at all has no value to inspect."""
+    seg = ["gh", "api", "repos/o/r/pulls/1", "$F"]
+    assert checker._gh_api_method_flagname_dynamic_hit(seg, {"F": "-x"}, {}) is False
+
+
+def test_gh_api_method_flagname_dynamic_hit_unresolvable_value_token() -> None:
+    seg = ["gh", "api", "repos/o/r/pulls/1", "$F", "$(echo POST)"]
+    assert checker._gh_api_method_flagname_dynamic_hit(seg, {"F": "-x"}, {}) is True
+
+
+def test_gh_api_method_flagname_dynamic_hit_literal_write_value() -> None:
+    seg = ["gh", "api", "repos/o/r/pulls/1", "$F", "POST"]
+    assert checker._gh_api_method_flagname_dynamic_hit(seg, {"F": "-x"}, {}) is True
+
+
+def test_gh_api_method_flagname_dynamic_hit_literal_non_write_value() -> None:
+    seg = ["gh", "api", "repos/o/r/pulls/1", "$F", "GET"]
+    assert checker._gh_api_method_flagname_dynamic_hit(seg, {"F": "-x"}, {}) is False
+
+
+def test_gh_api_method_fused_flagname_dynamic_hit_unresolvable() -> None:
+    seg = ["gh", "api", "repos/o/r/pulls/1", "$(echo -XPOST)"]
+    assert checker._gh_api_method_fused_flagname_dynamic_hit(seg, {}, {}) is True
+
+
+def test_gh_api_method_fused_flagname_dynamic_hit_overflow() -> None:
+    token = "".join(f"${{V{i}:-d}}" for i in range(7))
+    name_to_value = {f"V{i}": "x" for i in range(7)}
+    seg = ["gh", "api", "repos/o/r/pulls/1", token]
+    assert checker._gh_api_method_fused_flagname_dynamic_hit(seg, name_to_value, {}) is True
+
+
+def test_gh_api_method_fused_flagname_dynamic_hit_method_equals_form() -> None:
+    seg = ["gh", "api", "repos/o/r/pulls/1", "$F"]
+    assert checker._gh_api_method_fused_flagname_dynamic_hit(seg, {"F": "--method=post"}, {}) is True
+
+
+def test_gh_api_field_flagname_dynamic_hit_unresolvable() -> None:
+    seg = ["gh", "api", "repos/o/r/1", "$(echo -f)"]
+    assert checker._gh_api_field_flagname_dynamic_hit(seg, {}, {}) is True
+
+
+def test_gh_api_field_flagname_dynamic_hit_overflow() -> None:
+    token = "".join(f"${{V{i}:-d}}" for i in range(7))
+    name_to_value = {f"V{i}": "x" for i in range(7)}
+    seg = ["gh", "api", "repos/o/r/1", token]
+    assert checker._gh_api_field_flagname_dynamic_hit(seg, name_to_value, {}) is True
+
+
+def test_gh_api_field_fused_flagname_dynamic_hit_unresolvable() -> None:
+    seg = ["gh", "api", "repos/o/r/1", "$(echo -fname=value)"]
+    assert checker._gh_api_field_fused_flagname_dynamic_hit(seg, {}, {}) is True
+
+
+def test_gh_api_field_fused_flagname_dynamic_hit_overflow() -> None:
+    token = "".join(f"${{V{i}:-d}}" for i in range(7))
+    name_to_value = {f"V{i}": "x" for i in range(7)}
+    seg = ["gh", "api", "repos/o/r/1", token]
+    assert checker._gh_api_field_fused_flagname_dynamic_hit(seg, name_to_value, {}) is True
+
+
+def test_rule_gh_api_write_graphql_mutation_keyword() -> None:
+    segments = [["gh", "api", "graphql", "-f", "query=mutation{addComment}"]]
+    lowered = "gh api graphql -f query=mutation{addcomment}"
+    reason = checker._rule_gh_api_write(segments, lowered, {}, {})
+    assert reason is not None
+    assert "mutation" in reason
+
+
+def test_rule_gh_api_write_graphql_without_mutation_allowed() -> None:
+    """No false positive: a graphql call with no `mutation` keyword skips
+    the (graphql-exempt) field-flag checks entirely, not just the
+    mutation-keyword check."""
+    segments = [["gh", "api", "graphql", "-f", "query=allthingsquery"]]
+    lowered = "gh api graphql -f query=allthingsquery"
+    assert checker._rule_gh_api_write(segments, lowered, {}, {}) is None
+
+
+def test_rule_gh_api_write_field_flagname_dynamic() -> None:
+    """The field-flagname-dynamic pass reached through the orchestrator
+    itself (`_rule_gh_api_write`), not just as a standalone unit call."""
+    segments = [["gh", "api", "repos/o/r/1", "$FF", "name=value"]]
+    lowered = "gh api repos/o/r/1 $ff name=value"
+    reason = checker._rule_gh_api_write(segments, lowered, {"FF": "--field"}, {})
+    assert reason == checker._FIELD_FLAG_HIT
+
+
+def test_rule_gh_api_write_field_fused_flagname_dynamic() -> None:
+    segments = [["gh", "api", "repos/o/r/1", "$FFsuffix"]]
+    lowered = "gh api repos/o/r/1 $ffsuffix"
+    reason = checker._rule_gh_api_write(segments, lowered, {"FF": "-f"}, {})
+    assert reason == checker._FIELD_FLAG_HIT
+
+
+def test_is_git_push_segment_git_alone_no_trailing_tokens() -> None:
+    """ "git" as the segment's only token: the flag-skip loop's own
+    condition fails immediately, nothing after "git" to scan."""
+    assert checker._is_git_push_segment(["git"]) is False
+
+
+def test_is_git_push_segment_value_flag_followed_by_another_flag() -> None:
+    """ "-C" is a value-taking short flag; when the NEXT token itself looks
+    like a flag ("-v", starts with "-"), it must NOT be consumed as -C's
+    own value -- the loop re-examines it as its own flag instead."""
+    assert checker._is_git_push_segment(["git", "-C", "-v", "push"]) is True
+
+
+def test_resolve_seg_tokens_candidates_overflow_returns_none() -> None:
+    token = "".join(f"${{V{i}:-d}}" for i in range(7))
+    name_to_value = {f"V{i}": "x" for i in range(7)}
+    assert checker._resolve_seg_tokens_candidates([token], name_to_value, {}) is None
+
+
+def test_rule_b1a_fails_closed_on_tail_overflow() -> None:
+    token = "".join(f"${{V{i}:-d}}" for i in range(7))
+    name_to_value = {f"V{i}": "x" for i in range(7)}
+    seg = ["$T", token]
+    assert checker._rule_b1a_dynamic_word_same_segment_verb(seg, checker._WATCHED_VERBS, name_to_value, {}) is True
+
+
+def test_rule_b1b_fails_closed_on_overflow() -> None:
+    token = "".join(f"${{V{i}:-d}}" for i in range(7))
+    name_to_value = {f"V{i}": "x" for i in range(7)}
+    seg = ["$T", token]
+    assert checker._rule_b1b_dynamic_word_assigned_tool_and_verb(seg, name_to_value, checker._WATCHED_VERBS, {}) is True
+
+
+def test_rule_b2_false_for_short_segment() -> None:
+    assert checker._rule_b2_watched_tool_dynamic_verb_position(["uv"]) is False
+
+
+def test_rule_b2_true_for_dynamic_verb_position() -> None:
+    assert checker._rule_b2_watched_tool_dynamic_verb_position(["uv", "$x"]) is True
+
+
+def test_classify_fails_closed_on_unparseable_command() -> None:
+    verdict = checker.classify('echo "unclosed')
+    assert verdict.deny is True
+    assert "parsed as shell syntax" in verdict.reason
+
+
+def test_classify_denies_bare_top_level_command_substitution() -> None:
+    """`_classify_tokens`'s own early-return on a denying
+    `_rule_command_substitution_content` verdict, reached end-to-end
+    through `classify()` -- not just the recursive rule's own unit tests
+    above."""
+    verdict = checker.classify("$(pip install evil-pkg)")
+    assert verdict.deny is True
+
+
+def test_classify_denies_gh_api_write_end_to_end() -> None:
+    verdict = checker.classify("gh api repos/o/r/pulls/1 -X POST")
+    assert verdict.deny is True
+
+
+def test_classify_denies_b1b_tool_and_verb_split_end_to_end() -> None:
+    """B1b's own tool+verb-in-whole-segment resolution, reached end-to-end
+    with a command shaped so B1a's narrower tail-only resolution does not
+    already intercept it first."""
+    verdict = checker.classify("X=install; Y=uv; $X $Y")
+    assert verdict.deny is True
+
+
+def test_classify_denies_b2_dynamic_verb_position_end_to_end() -> None:
+    verdict = checker.classify("uv $x foo")
+    assert verdict.deny is True
+
+
+def test_classify_flags_git_push_via_dynamic_second_token() -> None:
+    verdict = checker.classify("git $x")
+    assert verdict.deny is False
+    assert verdict.is_git_push is True
+
+
+class _FakeStdin:
+    """A minimal stand-in for `sys.stdin` exposing only the `.buffer`
+    attribute `main()` reads -- a real `TextIOWrapper`'s own `.buffer` is
+    read-only and cannot be monkeypatched directly."""
+
+    def __init__(self, payload_bytes: bytes) -> None:
+        self.buffer = io.BytesIO(payload_bytes)
+
+
+def _run_main(
+    payload: object, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> dict[str, object]:
+    payload_bytes = payload if isinstance(payload, bytes) else json.dumps(payload).encode()
+    monkeypatch.setattr(sys, "stdin", _FakeStdin(payload_bytes))
+    checker.main()
+    return cast("dict[str, object]", json.loads(capsys.readouterr().out))
+
+
+def test_main_fails_closed_on_malformed_json(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert _run_main(b"not json", monkeypatch, capsys)["decision"] == "deny"
+
+
+def test_main_fails_closed_on_non_object_json(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert _run_main(b"[1, 2, 3]", monkeypatch, capsys)["decision"] == "deny"
+
+
+def test_main_fails_closed_on_non_string_tool_name(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert _run_main({"tool_name": 123}, monkeypatch, capsys)["decision"] == "deny"
+
+
+def test_main_allows_non_bash_tool(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    assert _run_main({"tool_name": "Read"}, monkeypatch, capsys)["decision"] == "allow"
+
+
+def test_main_fails_closed_on_non_object_tool_input(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    payload = {"tool_name": "Bash", "tool_input": "nope"}
+    assert _run_main(payload, monkeypatch, capsys)["decision"] == "deny"
+
+
+def test_main_fails_closed_on_non_string_command(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    payload = {"tool_name": "Bash", "tool_input": {"command": 42}}
+    assert _run_main(payload, monkeypatch, capsys)["decision"] == "deny"
+
+
+def test_main_allows_empty_command(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    payload = {"tool_name": "Bash", "tool_input": {"command": ""}}
+    assert _run_main(payload, monkeypatch, capsys)["decision"] == "allow"
+
+
+def test_main_allows_missing_tool_input(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    assert _run_main({"tool_name": "Bash"}, monkeypatch, capsys)["decision"] == "allow"
+
+
+def test_main_denies_a_real_denied_command(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    payload = {"tool_name": "Bash", "tool_input": {"command": "pip install evil-pkg"}}
+    out = _run_main(payload, monkeypatch, capsys)
+    assert out["decision"] == "deny"
+    assert "is_git_push" in out
+
+
+def test_main_allows_a_harmless_command(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    payload = {"tool_name": "Bash", "tool_input": {"command": "echo hi"}}
+    assert _run_main(payload, monkeypatch, capsys)["decision"] == "allow"
