@@ -5,6 +5,8 @@ metadata:
 spec:
   portability: Portable
   capabilityAssumption: Broad
+  lifecycle:
+    renamedFrom: drafting-an-acm-issue
   skillDependencies:
     requires: []
     relatedTo:

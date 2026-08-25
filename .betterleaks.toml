@@ -98,6 +98,10 @@ So do not delete an entry merely because `git ls-files` shows no file at it.
 Rename a fixture and you add a name here; you do not replace one.
 """
 paths = [
+  # Issue #1275 renamed drafting-an-acm-issue -> drafting-issues: both
+  # names kept per this file's own rule above (a rename needs both).
+  '''^evals/drafting-an-acm-issue/tasks/secret-redaction\.yaml$''',
+  '''^evals/drafting-an-acm-issue/tasks/updating-appended-row-redaction-escaping\.yaml$''',
   '''^evals/drafting-issues/tasks/secret-redaction\.yaml$''',
   '''^evals/drafting-issues/tasks/updating-appended-row-redaction-escaping\.yaml$''',
   '''^evals/evaluating-context-channel-maturity/tasks/secret-redaction\.yaml$''',
