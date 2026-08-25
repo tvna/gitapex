@@ -35,7 +35,7 @@ first, not skimmed.
    structural precondition, additive to the semantic judgment, never a
    replacement for it (issue `#1306`). Its absence is a
    stop and escalate, the same fail-closed default as the semantic
-   judgment's own; its presence only proves that skill's own Step 4
+   judgment's own; its presence only proves that skill's own Step 5
    re-verification ran, never that a human's approval comment genuinely
    refers to this specific Branch Plan -- that stays entirely this gate's
    own judgment below, completely unchanged. Check, via `github:issue_read`

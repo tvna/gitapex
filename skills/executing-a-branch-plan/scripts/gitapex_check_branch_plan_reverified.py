@@ -4,19 +4,19 @@ Issue #1306: `executing-a-branch-plan`'s step 1 (Authorization gate) checks
 only whether a human approved *some* Branch Plan -- nothing verifies that
 `planning-a-branch-from-an-issue` itself ever ran, or that the target
 issue's Acceptance Criteria Map was ever re-verified by that skill's own
-step 4 ("independently re-check each row against the issue's own stated
+step 5 ("independently re-check each row against the issue's own stated
 facts ... and correct or flag any row that does not hold up"). An issue's
 ACM can already exist in still-draft form before that skill ever touches
-it (`drafting-an-acm-issue` states plainly its own ACM is "a draft, not a
+it (`drafting-issues` states plainly its own ACM is "a draft, not a
 pre-verified result"), and nothing distinguished that draft state from a
-state where step 4 actually re-verified it.
+state where step 5 actually re-verified it.
 
 This script mechanizes only the shape/presence check -- does the issue
 body carry a marker line naming `planning-a-branch-from-an-issue` and a
 non-empty timestamp -- mirroring
 skills/planning-a-branch-from-an-issue/scripts/gitapex_check_acm_present.py's own
 regex-based, shape-only approach. It does not, and structurally cannot,
-verify that step 4's re-verification was actually done correctly, or that
+verify that step 5's re-verification was actually done correctly, or that
 this specific skill (rather than a human or another mechanism) wrote the
 marker -- same as every other prose-based marker in this repository (the
 ACM waiver vocabulary, for example), this is a structural presence check,
@@ -30,7 +30,7 @@ The parenthesized value is required to be non-empty but is otherwise
 unconstrained -- this script does not parse or validate it as a real
 timestamp, matching its own shape-only scope; the marker's exact prose
 (what precedes the skill name, and the timestamp format itself) is a
-`planning-a-branch-from-an-issue` Step 4 authoring choice, not something
+`planning-a-branch-from-an-issue` Step 5 authoring choice, not something
 this checker fixes further than "some non-empty parenthesized value is
 present."
 
