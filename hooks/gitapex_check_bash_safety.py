@@ -113,6 +113,21 @@ buried in free-text search content; this one concatenates variables into
 a flag's own value, a small bounded comparison set of four write
 methods).
 
+Closed by seventh-round Step 8 independent review, against the sixth
+round's own fix: `_substitute_var_refs` preserves a token's literal text
+exactly as typed -- only the substituted variable *values* are
+already-lowercased (per `_assigned_literals`'s own convention) -- so an
+uppercase literal fragment fused with a variable in the SAME token
+(`-X "PO$M"` with `M=ST`) reconstructed to "POst", which the
+case-sensitive `.startswith()` comparison never matched against the
+lowercase `_WRITE_METHODS` set. Every round-6 test exercised only a
+whole-variable-per-fragment split (`M1=PO; M2=ST`), which happens to
+already be all-lowercase after resolution, so this case-normalization gap
+went unexercised until this round. Closed by lowercasing the
+*reconstructed* string immediately before the write-method comparison at
+both call sites, matching the lowercasing convention every literal-token
+comparison in this module already follows.
+
 Deliberately stdlib-only (shlex, re, json) -- no new third-party
 dependency, matching this repository's declarative module-management
 convention and python3's already-accepted-hook-dependency status (see
@@ -494,13 +509,23 @@ def _gh_api_method_dynamic_hit(seg: list[str], name_to_value: dict[str, str]) ->
     `M2=ST` resolves to a real `POST` write once bash concatenates the two
     references, but checking each referenced variable's value separately
     (the prior approach) never recognized the concatenation, since
-    neither "po" nor "st" alone is a write method."""
+    neither "po" nor "st" alone is a write method. The reconstructed
+    string is lowercased before comparison -- `_substitute_var_refs`
+    preserves a token's literal text exactly as typed (only the
+    substituted variable values are already-lowercased), so a literal
+    fragment fused with a variable in the SAME token (`-X "PO$M"` with
+    `M=ST`) reconstructs to "POst", not "post" -- found live by Step 8
+    independent review, seventh round (issue #1326): every existing test
+    for this fix used a whole-variable-per-fragment split (`M1=PO;
+    M2=ST`), which happens to already be all-lowercase after
+    `_assigned_literals`'s own lowercasing, so this literal-fragment gap
+    went unexercised."""
     for i, raw_tok in enumerate(seg):
         dynamic_value_part = _gh_api_method_dynamic_value(seg, i, raw_tok)
         if dynamic_value_part is None:
             continue
         resolved = _substitute_var_refs(dynamic_value_part, name_to_value)
-        if resolved is not None and any(resolved.startswith(m) for m in _WRITE_METHODS):
+        if resolved is not None and any(resolved.lower().startswith(m) for m in _WRITE_METHODS):
             return True
     return False
 
@@ -522,7 +547,12 @@ def _gh_api_method_flagname_dynamic_hit(seg: list[str], name_to_value: dict[str,
     concatenated variables (`$F "$M1$M2"`) is caught too -- the same gap
     `_gh_api_method_dynamic_hit` above had, found live by Step 8
     independent review, sixth round (issue #1326), against this
-    function's own flag-name-indirection case."""
+    function's own flag-name-indirection case. The resolved value is
+    lowercased before comparison for the same reason as
+    `_gh_api_method_dynamic_hit` above -- found live by Step 8
+    independent review, seventh round (issue #1326): a literal fragment
+    fused with a variable in the same value token (`$F "PO$M"` with
+    `M=ST`) reconstructs to "POst", not "post"."""
     for i, raw_tok in enumerate(seg):
         if _resolve_bare_var(raw_tok, name_to_value) not in ("-x", "--method"):
             continue
@@ -530,7 +560,7 @@ def _gh_api_method_flagname_dynamic_hit(seg: list[str], name_to_value: dict[str,
             continue
         value_tok = seg[i + 1]
         value = value_tok.lower() if not _is_dynamic(value_tok) else _substitute_var_refs(value_tok, name_to_value)
-        if value is not None and any(value.startswith(m) for m in _WRITE_METHODS):
+        if value is not None and any(value.lower().startswith(m) for m in _WRITE_METHODS):
             return True
     return False
 

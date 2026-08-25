@@ -541,6 +541,74 @@ def test_rule_gh_api_write_detects_a_method_value_split_across_two_variables(
     assert result is not None
 
 
+# --- Round 7: an uppercase literal fragment fused with a variable in the
+# SAME token (issue #1326, found live by Step 8 independent review,
+# seventh round). `_substitute_var_refs` preserves a token's literal text
+# exactly as typed -- only the substituted variable values are
+# already-lowercased -- so `-X "PO$M"` with `M=ST` (lowered to "st")
+# reconstructs to "POst", not "post". Every round-6 test above used a
+# whole-variable-per-fragment split (`M1=PO; M2=ST`), which happens to
+# already be all-lowercase after `_assigned_literals`'s own lowercasing,
+# so this gap went unexercised until this round.
+
+_UPPER_LITERAL_SPLIT_METHODS = st.sampled_from(
+    [("PO", "st"), ("POS", "t"), ("P", "ost"), ("PU", "t"), ("PAT", "ch"), ("DEL", "ete")]
+)
+
+
+@_PROPERTIES
+@given(parts=_UPPER_LITERAL_SPLIT_METHODS, var=_IDENTIFIERS)
+def test_gh_api_method_dynamic_hit_detects_uppercase_literal_fragment_fused_with_variable(
+    parts: tuple[str, str], var: str
+) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, seventh round (issue #1326): the write-method
+    comparison must lowercase the reconstructed string before comparing,
+    not rely on the substituted variable values alone already being
+    lowercased."""
+    literal, var_value = parts
+    seg = ["gh", "api", "repos/x/y", "-X", f"{literal}${var}"]
+    assert checker._gh_api_method_dynamic_hit(seg, {var: var_value})
+
+
+@_PROPERTIES
+@given(var=_IDENTIFIERS)
+def test_gh_api_method_dynamic_hit_allows_uppercase_literal_fragment_resolved_to_a_read(var: str) -> None:
+    """No false positive: an uppercase literal fragment fused with a
+    variable that resolves to a read method (GET) must stay allowed."""
+    seg = ["gh", "api", "repos/x/y", "-X", f"GE${var}"]
+    assert not checker._gh_api_method_dynamic_hit(seg, {var: "t"})
+
+
+@_PROPERTIES
+@given(parts=_UPPER_LITERAL_SPLIT_METHODS, flag_var=_IDENTIFIERS, var=_IDENTIFIERS)
+def test_gh_api_method_flagname_dynamic_hit_detects_uppercase_literal_fragment_fused_with_variable(
+    parts: tuple[str, str], flag_var: str, var: str
+) -> None:
+    """Same regression pin at the flag-name-indirection sub-pass level
+    (round 5's finding combined with round 7's)."""
+    assume(flag_var != var)
+    literal, var_value = parts
+    seg = ["gh", "api", "repos/x/y", f"${flag_var}", f"{literal}${var}"]
+    name_to_value = {flag_var: "-x", var: var_value}
+    assert checker._gh_api_method_flagname_dynamic_hit(seg, name_to_value)
+
+
+@_PROPERTIES
+@given(parts=_UPPER_LITERAL_SPLIT_METHODS, var=_IDENTIFIERS)
+def test_rule_gh_api_write_detects_uppercase_literal_fragment_fused_with_variable(
+    parts: tuple[str, str], var: str
+) -> None:
+    """End-to-end regression pin, matching the other ``_rule_gh_api_write``
+    end-to-end tests above: the seventh-round case-normalization bypass is
+    caught at the orchestrator level too, not just the sub-pass level."""
+    literal, var_value = parts
+    segments = [["gh", "api", "repos/x/y", "-X", f"{literal}${var}"]]
+    name_to_value = {var: var_value}
+    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y -x {literal}${var}", name_to_value)
+    assert result is not None
+
+
 _SHORT_FLAG_WITH_VALUE = st.tuples(st.sampled_from(["-c", "-C"]), st.sampled_from(["cfgkey=cfgval", "/tmp/some/repo"]))
 _LONG_FLAG_ALONE = st.sampled_from(["--git-dir=/tmp/x/.git", "--no-pager", "--work-tree=/tmp/y"])
 _GIT_GLOBAL_FLAG_GROUP = st.one_of(_SHORT_FLAG_WITH_VALUE.map(list), _LONG_FLAG_ALONE.map(lambda f: [f]))

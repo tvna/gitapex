@@ -191,6 +191,10 @@ ALLOWED_GH_COMMANDS = [
     # variable must not be treated as a hit either.
     ('M1=GE; M2=T; gh api repos/o/r/pulls/1 -X "$M1$M2"', "gh-api-method-value-multi-var-concat-read"),
     ('M1=PO; gh api repos/o/r/pulls/1 -X "$M1$M2"', "gh-api-method-value-concat-unassigned-var"),
+    # False-positive guard for the case-normalization fix added above
+    # (issue #1326, seventh round): an uppercase literal fragment fused
+    # with a variable that resolves to a READ method must stay allowed.
+    ('M=T; gh api repos/o/r/pulls/1 -X "GE$M"', "gh-api-method-value-literal-fragment-plus-var-read-uppercase"),
 ]
 
 ALLOWED_ORDINARY_COMMANDS = [
@@ -366,6 +370,26 @@ DENIED_INDIRECTION_COMMANDS = [
     (
         'F=-X; M1=PO; M2=ST; gh api repos/o/r/pulls/1/merge $F "$M1$M2"',
         "gh-api-method-flagname-and-value-concat-both-dynamic",
+    ),
+    # Found live by Step 8 independent review, seventh round (issue
+    # #1326): `_substitute_var_refs` preserves a token's literal text
+    # exactly as typed -- only the substituted variable values are
+    # already-lowercased -- so a literal fragment fused with a variable
+    # in the SAME token (`-X "PO$M"` with `M=ST`) reconstructed to
+    # "POst", which the write-method comparison (case-sensitive
+    # `.startswith`) never matched. Every existing concatenation test
+    # used a whole-variable-per-fragment split (`M1=PO; M2=ST`), which
+    # happens to already be all-lowercase after `_assigned_literals`'s
+    # own lowercasing, so this literal-fragment gap went unexercised.
+    ('M=ST; gh api repos/o/r/pulls/1/merge -X "PO$M"', "gh-api-method-value-literal-fragment-plus-var-uppercase"),
+    ("M=ST; gh api repos/o/r/pulls/1/merge -XPO$M", "gh-api-method-value-fused-literal-fragment-plus-var-uppercase"),
+    (
+        "M=ST; gh api repos/o/r/pulls/1/merge --method=PO$M",
+        "gh-api-method-value-method-eq-literal-fragment-plus-var-uppercase",
+    ),
+    (
+        'F=-X; M=ST; gh api repos/o/r/pulls/1/merge $F "PO$M"',
+        "gh-api-method-flagname-dynamic-value-literal-fragment-plus-var-uppercase",
     ),
 ]
 
