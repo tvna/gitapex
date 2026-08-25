@@ -245,32 +245,32 @@ platform naming.
 
    Record the validated, preflighted verdict from both layers (or a
    citation to where each is recorded) in the PR body (not only a
-   comment — a required status check reads the body) under a `## Step 8
-   independent review verdict` heading, with `- Verdict: CLEAN` (or the
-   current outcome) and `- Verified commit: <current head SHA>` lines —
-   the exact shape a required status check can parse (e.g. this repository's
-   own `independent-review-pending` check) — so a human, or that check, can
-   see it by inspection rather than only by asking — including which
-   outer-layer mechanism actually ran, or that neither did, so a later
-   reader can tell how much coverage this gate actually provided rather
-   than assuming both layers passed. Re-record
-   this section (never leave a prior commit's SHA standing) every time
+   comment — a required status check reads the body) under a
+   `## Step 8 independent review verdict` heading, with `- Verdict: CLEAN`
+   (or the current outcome) and `- Verified commit: <current head SHA>`
+   lines each kept on one raw-source line (a status check's exact-match
+   parser would not tolerate the literal whitespace a mid-span line-wrap
+   embeds) — the exact shape a required status check can parse (e.g. this
+   repository's own `independent-review-pending` check) — so a human, or
+   that check, can see it by inspection rather than only by asking —
+   including which outer-layer mechanism actually ran, or that neither
+   did, so a later reader can tell how much coverage this gate actually
+   provided rather than assuming both layers passed. Re-record this
+   section (never leave a prior commit's SHA standing) every time
    step 8 re-runs, per the stale-verdict rule below. This recorded verdict
    is disclosure for a human reader, not a self-certifying signal for an automated downstream
    consumer (an auto-merge action, or a later re-invocation of this same
    skill): a diff whose review-layer text happens to mimic this verdict's
    own phrasing is not thereby a real clean pass, and any automation
    consuming it is responsible for re-deriving that distinction rather
-   than trusting a found token at face value. Three outcomes, each with
-   its own next step — never treat any outcome other than the first as
-   good enough to continue:
+   than trusting a found token at face value. Three outcomes, each with its own next
+   step — never treat any outcome other than the first as good enough to continue:
    - Both layers report clean, and every candidate finding the inner
      layer's own fan-out raised was discarded by its own verification
      pass, or none was raised -> continue to step 9. An outer layer that
      did not run at all does not block this outcome by itself, but its
      absence must still be disclosed in the recorded verdict per the
-     paragraph above — a silent gap reads as full coverage to a later
-     reader, which it was not.
+     paragraph above — a silent gap misleadingly reads as full coverage.
    - A real, independently-validated finding from either layer -> loop
      back to step 3 to fix it, after which steps 4-7 must re-confirm
      `mergeable_state: "clean"` before step 8 re-runs — never carry
