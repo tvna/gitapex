@@ -111,11 +111,51 @@ Every rule above now calls it directly instead of a narrower, anchored
 subset of the same resolution logic, which made `_default_clause_
 literal`, `_resolve_indirect_ref`, `_resolve_bare_var`,
 `_resolve_dynamic_token`, and the module-level `_VAR_REF_RE` all fully
-unused -- unlike the sibling module (which keeps `_resolve_bare_var`/
-`_resolve_indirect_ref` in active use for its own gh-api flag-NAME
-resolution, a whole-token-only case with no fused-value counterpart),
-this file has no such remaining use, so all five were removed rather than
-left as dead code.
+unused, so all five were removed rather than left as dead code. (The
+sibling module kept `_resolve_bare_var`/`_resolve_indirect_ref` in active
+use a little longer, for its own gh-api flag-NAME resolution -- see that
+module's own twelfth-round paragraph below for why even that narrower
+use turned out to be unsound, and was itself removed.)
+
+Closed by twelfth-round Step 8 independent review, a finding exclusive
+to this file (the sibling module has no `_rule_fetch_exec`/curl-wget
+detection at all): `_rule_fetch_exec` only ever checked the ONE segment
+immediately following a curl/wget segment, then unconditionally stopped
+scanning -- a content-preserving passthrough stage between the fetch and
+the interpreter (`curl <url> | cat | bash`, `| tee /dev/null | bash`)
+still carries the payload through unmodified, confirmed live via real
+bash that `cat <script> | cat | bash` genuinely executes the script, but
+was invisible to this rule entirely. The SAME operator-blind design also
+produced a false positive in the other direction: `curl <url>; bash
+unrelated.sh` -- a plain SEQUENCED statement, not a pipe -- was wrongly
+denied, since `;` and `|` were never distinguished by `segment_tokens`'s
+own flat, operator-blind segment list. Closed by adding `_pipe_chains`, a
+new tokenizer-level grouping that keeps `|`-connected segments in the
+same chain while breaking apart at every other STATEMENT-separating
+operator, and rewriting `_rule_fetch_exec` to check every later segment
+within the same chain (not just the first) while never crossing into an
+unrelated chain.
+
+Closed by thirteenth-round Step 8 independent review, two further
+findings in this same area: (1) `_pipe_chains` initially lumped `(`/`)`
+in with the statement-separator operators too, but they are bash's own
+SUBSHELL grouping syntax, not a separator -- a subshell's combined
+stdout still flows onward through a `|` that follows its closing `)`, so
+`(curl <url> | cat) | bash` (confirmed live via a real bash proxy) is one
+continuous pipe, not two unconnected ones; treating `(`/`)` as
+STATEMENT-breaking silently split that one real chain in two, so
+`_rule_fetch_exec` never saw the interpreter as part of the same chain as
+`curl` at all -- closed by treating `(`/`)` as fully transparent instead
+(skipped, never starting or breaking a chain). (2) `_rule_fetch_exec`'s
+own `sudo`-skip only ever recognized a BARE `sudo` token, so `curl <url>
+| sudo -E bash` (confirmed live via real bash argv expansion to
+genuinely run `bash` under `sudo`) bypassed detection while plain `curl
+<url> | sudo bash` was already caught -- closed by also skipping any
+number of boolean (no-separate-value) flag-shaped tokens after `sudo`; a
+sudo flag taking a separate value argument (`-u root`) is a disclosed,
+narrower-than-full-parsing residual. Also consolidated `_rule_npx`,
+which had not yet been converted to the `_resolve_seg_tokens_candidates`
+helper introduced the round before, onto that same shared primitive.
 
 Deliberately stdlib-only (shlex, re, json).
 """
@@ -308,14 +348,15 @@ def segment_tokens(tokens: list[str]) -> list[list[str]]:
 def _pipe_chains(tokens: list[str]) -> list[list[list[str]]]:
     """Like `segment_tokens`, but keeps segments still connected to each
     other by a literal `|` grouped into the same chain -- broken apart
-    only at every OTHER control operator (; & && || ( ) newline). Needed
-    by `_rule_fetch_exec` specifically: piping a download through an
-    intermediate content-preserving passthrough command (`curl <url> |
-    cat | bash`, `| tee /dev/null | bash`) still runs the fetched payload
-    unmodified through to the interpreter one hop further down the SAME
-    pipe -- `segment_tokens`'s own flat, operator-blind segment list
-    cannot express "still the same pipe" versus "a new, unrelated
-    statement," which is exactly the distinction that rule needs.
+    only at every OTHER statement-separating control operator (; & && ||
+    newline). Needed by `_rule_fetch_exec` specifically: piping a
+    download through an intermediate content-preserving passthrough
+    command (`curl <url> | cat | bash`, `| tee /dev/null | bash`) still
+    runs the fetched payload unmodified through to the interpreter one
+    hop further down the SAME pipe -- `segment_tokens`'s own flat,
+    operator-blind segment list cannot express "still the same pipe"
+    versus "a new, unrelated statement," which is exactly the
+    distinction that rule needs.
 
     Found live by Step 8 independent review, twelfth round (issue
     #1326): the pre-fix `_rule_fetch_exec` iterated `segment_tokens`'s
@@ -327,9 +368,27 @@ def _pipe_chains(tokens: list[str]) -> list[list[list[str]]]:
     defeated detection entirely, while the SAME operator-blind design
     also produced a false positive in the other direction: `curl <url>;
     bash unrelated.sh` -- a plain SEQUENCED statement, not a pipe at all
-    -- was wrongly denied, since `;` and `|` were never distinguished."""
+    -- was wrongly denied, since `;` and `|` were never distinguished.
+
+    `(`/`)` are treated as TRANSPARENT -- skipped outright, never
+    breaking a chain -- not lumped in with the statement-separator
+    operators above, even though `segment_tokens` itself does group them
+    that way for its own, different purpose. Found live by Step 8
+    independent review, thirteenth round (issue #1326): `(`/`)` are
+    bash's own SUBSHELL grouping syntax, not a statement separator -- a
+    subshell's combined stdout still flows to whatever follows its
+    closing `)` piped onward, so `(curl <url> | cat) | bash` (confirmed
+    live via a real bash proxy: `(echo payload | cat) | bash` genuinely
+    runs the piped-through payload) is one continuous pipe from `curl`'s
+    own perspective, not two separate, unconnected ones. Treating `(`/`)`
+    the same as `;`/`&`/`&&`/`||` (the pre-fix version's own mistake)
+    silently split that one real chain into two, so `_rule_fetch_exec`
+    never saw `bash` as a later segment of the chain containing `curl`
+    at all."""
     chains: list[list[list[str]]] = [[[]]]
     for tok in tokens:
+        if tok in ("(", ")"):
+            continue
         if tok == "|":
             chains[-1].append([])
         elif tok in _SINGLE_OPS or tok in _MULTI_OPS:
@@ -520,7 +579,20 @@ def _rule_fetch_exec(
     one hop further down the pipe; the pre-fix version stopped scanning
     after the first non-match, so any passthrough command defeated it
     entirely -- confirmed live via real bash that `cat <script> | cat |
-    bash` genuinely executes the script unmodified."""
+    bash` genuinely executes the script unmodified.
+
+    A literal `sudo` before the interpreter is skipped, along with any
+    number of BOOLEAN (no-separate-value) flag-shaped tokens after it
+    (`-E`, `-H`, etc.) -- found live by Step 8 independent review,
+    thirteenth round (issue #1326): the pre-fix version only ever skipped
+    a bare `sudo` token alone, so `curl <url> | sudo -E bash` (confirmed
+    via real bash argv expansion to genuinely run `bash` under `sudo`)
+    was invisible to this rule, while plain `curl <url> | sudo bash`
+    was already caught. A sudo flag that takes a SEPARATE value argument
+    (`-u root`, not itself flag-shaped) is not skipped -- a disclosed,
+    narrower-than-full-parsing residual, consistent with this module's
+    own "specific, checked structural pattern, not a general expression
+    evaluator" scoping elsewhere."""
     for chain in pipe_chains:
         for i, seg in enumerate(chain):
             if not seg:
@@ -537,8 +609,13 @@ def _rule_fetch_exec(
             for later in chain[i + 1 :]:
                 if not later:
                     continue
-                candidate = later[0].lower() if not _is_dynamic(later[0]) else None
-                interp_index = 1 if candidate == "sudo" else 0
+                interp_index = 1 if (not _is_dynamic(later[0]) and later[0].lower() == "sudo") else 0
+                while (
+                    interp_index < len(later)
+                    and not _is_dynamic(later[interp_index])
+                    and later[interp_index].startswith("-")
+                ):
+                    interp_index += 1
                 if len(later) > interp_index:
                     cand = later[interp_index]
                     if _is_dynamic(cand):
@@ -555,24 +632,22 @@ def _rule_fetch_exec(
 def _rule_npx(
     segments: list[list[str]], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
 ) -> str | None:
-    """`npx` hidden behind indirection (`_substitute_var_refs_candidates`,
-    including FUSED with literal text in the same token) counts too, not
-    just a plain literal token -- found live by Step 8 independent
-    review, tenth round (bare indirection: `N=npx; $N left-pad`, real
-    bash: `npx left-pad`) and eleventh round (fused indirection:
-    `NSUF=NVAL; NVAL=px; n${!NSUF} left-pad`, real bash: `npx left-pad`;
-    see `_substitute_var_refs_candidates`'s own docstring), issue #1326.
-    Any candidate set too large to enumerate soundly is treated as an
-    unresolved-but-plausible match -- fail closed."""
+    """`npx` hidden behind indirection (`_resolve_seg_tokens_candidates`
+    -> `_substitute_var_refs_candidates`, including FUSED with literal
+    text in the same token) counts too, not just a plain literal token --
+    found live by Step 8 independent review, tenth round (bare
+    indirection: `N=npx; $N left-pad`, real bash: `npx left-pad`) and
+    eleventh round (fused indirection: `NSUF=NVAL; NVAL=px; n${!NSUF}
+    left-pad`, real bash: `npx left-pad`; see `_substitute_var_refs_
+    candidates`'s own docstring), issue #1326. Any candidate set too
+    large to enumerate soundly is treated as an unresolved-but-plausible
+    match -- fail closed."""
     for seg in segments:
-        for tok in seg:
-            if not _is_dynamic(tok):
-                if tok.lower() == "npx":
-                    return "npx, which downloads and runs a package on demand"
-                continue
-            candidates = _substitute_var_refs_candidates(tok, name_to_value, name_to_raw_value)
-            if candidates is None or any(candidate.lower() == "npx" for candidate in candidates):
-                return "npx, which downloads and runs a package on demand"
+        if any((not _is_dynamic(t)) and t.lower() == "npx" for t in seg):
+            return "npx, which downloads and runs a package on demand"
+        resolved = _resolve_seg_tokens_candidates(seg, name_to_value, name_to_raw_value)
+        if resolved is None or "npx" in resolved:
+            return "npx, which downloads and runs a package on demand"
     return None
 
 

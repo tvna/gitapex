@@ -1052,9 +1052,12 @@ def _rule_gh_api_write(
     """`literals` is already lowercased, matching the predecessor script's
     own case-insensitive match against its whole lowered command -- so
     `-F`/`-f` are indistinguishable here exactly as they were there.
-    Orchestrates the four independent scanning passes above; kept
-    deliberately thin (each pass owns its own branching) so this
-    function's own cyclomatic complexity stays low."""
+    Orchestrates the eight independent scanning passes above (four for
+    the -X/--method write-method flag, four for the -f/-F/--field/
+    --raw-field field flag -- literal, dynamic-value, dynamic-flag-name,
+    and fused-flag-name-and-value, per side); kept deliberately thin
+    (each pass owns its own branching) so this function's own cyclomatic
+    complexity stays low."""
     for seg in segments:
         literals = [t.lower() for t in seg if not _is_dynamic(t)]
         has_gh_api = any(literals[i : i + 2] == ["gh", "api"] for i in range(len(literals) - 1))

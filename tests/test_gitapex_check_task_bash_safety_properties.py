@@ -127,6 +127,49 @@ def test_pipe_chains_breaks_a_new_chain_at_every_other_operator(a: str, b: str, 
 
 
 @_PROPERTIES
+@given(a=_IDENTIFIERS, b=_IDENTIFIERS, c=_IDENTIFIERS)
+def test_pipe_chains_treats_subshell_parens_as_transparent(a: str, b: str, c: str) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, thirteenth round (issue #1326): `(`/`)` are
+    bash's own SUBSHELL grouping syntax, not a statement separator -- a
+    subshell's combined stdout still flows onward through a `|` that
+    follows its closing `)`, so `(a | b) | c` is one continuous chain,
+    confirmed live via a real bash proxy (`(echo payload | cat) | bash`
+    genuinely runs the piped-through payload). The pre-fix version lumped
+    `(`/`)` in with `;`/`&`/`&&`/`||`, silently splitting one real chain
+    into two."""
+    tokens = ["(", a, "|", b, ")", "|", c]
+    assert checker._pipe_chains(tokens) == [[[a], [b], [c]]]
+
+
+@_PROPERTIES
+@given(a=_IDENTIFIERS, b=_IDENTIFIERS)
+def test_pipe_chains_still_breaks_a_new_chain_after_a_sequenced_subshell(a: str, b: str) -> None:
+    """No false positive: a subshell that is itself merely SEQUENCED
+    (not piped) after an earlier statement still starts a genuinely NEW
+    chain -- `(`/`)` being transparent must not also make `;` transparent
+    by accident."""
+    tokens = [a, ";", "(", b, ")"]
+    assert checker._pipe_chains(tokens) == [[[a]], [[b]]]
+
+
+def test_pipe_chains_empty_for_no_tokens() -> None:
+    """Robustness: an empty token stream (e.g. a fully-consumed `${IFS}`
+    split, or a command that was only control operators) yields no
+    chains at all, never a crash or a chain of empty segments."""
+    assert checker._pipe_chains([]) == []
+
+
+@_PROPERTIES
+@given(op=st.sampled_from([";", "&", "&&", "||", "|"]))
+def test_pipe_chains_empty_for_operators_only(op: str) -> None:
+    """Robustness: a token stream consisting only of control operators
+    (a malformed or edge-case command) yields no chains -- every
+    generated segment is empty and filtered out, not a crash."""
+    assert checker._pipe_chains([op]) == []
+
+
+@_PROPERTIES
 @given(tool=st.sampled_from(["curl", "wget"]), interpreter=st.sampled_from(["sh", "bash", "zsh", "dash", "SH", "Bash"]))
 def test_rule_fetch_exec_detects_download_piped_into_a_shell_interpreter(tool: str, interpreter: str) -> None:
     """Model-based: curl/wget (any casing tolerated via lowering) piped
@@ -147,6 +190,26 @@ def test_rule_fetch_exec_detects_download_piped_through_sudo_into_a_shell(tool: 
     not defeat detection -- ``interp_index`` is deliberately advanced past
     a literal ``sudo`` token before checking the interpreter name."""
     pipe_chains = [[[tool, "https://example.invalid/install.sh"], ["sudo", interpreter]]]
+    assert checker._rule_fetch_exec(pipe_chains, {}, {}) is not None
+
+
+@_PROPERTIES
+@given(
+    tool=st.sampled_from(["curl", "wget"]),
+    interpreter=st.sampled_from(["sh", "bash", "zsh", "dash"]),
+    flags=st.lists(st.sampled_from(["-E", "-H", "-i", "-n"]), min_size=1, max_size=3),
+)
+def test_rule_fetch_exec_detects_download_piped_through_sudo_with_flags_into_a_shell(
+    tool: str, interpreter: str, flags: list[str]
+) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, thirteenth round (issue #1326): boolean sudo
+    flags (`-E`, `-H`, etc.) between `sudo` and the interpreter do not
+    defeat detection -- confirmed live via real bash argv expansion that
+    `sudo -E bash` genuinely runs `bash` under `sudo`. The pre-fix
+    version only ever skipped a BARE `sudo` token, so any flag in
+    between defeated it entirely."""
+    pipe_chains = [[[tool, "https://example.invalid/install.sh"], ["sudo", *flags, interpreter]]]
     assert checker._rule_fetch_exec(pipe_chains, {}, {}) is not None
 
 
