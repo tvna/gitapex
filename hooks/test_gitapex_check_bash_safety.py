@@ -105,6 +105,20 @@ ALLOWED_DECLARATIVE_PACKAGE_COMMANDS = [
     ("apm uninstall foo", "apm-uninstall"),
 ]
 
+# --- Issue #1320 defeat-test: chaining a newly-allowed uv add/remove ahead
+# of a still-denied uv pip install/uv install must NOT smuggle the denied
+# verb past this gate. install_re is a substring scan over the whole
+# command string (no anchoring to the first token), so a still-denied verb
+# appearing anywhere after a shell separator (&&, ;, |) must still be
+# caught -- this is the specific way the new carve-out could have been
+# exploited had it been implemented as a first-token/early-return check
+# instead of a shared substring pattern.
+DENIED_CHAINED_AFTER_ALLOWED_COMMANDS = [
+    ("uv add safe && uv pip install malicious", "uv-add-then-pip-install-chained"),
+    ("uv remove safe; uv install malicious", "uv-remove-then-install-chained"),
+    ("uv add safe | uv install malicious", "uv-add-then-install-piped"),
+]
+
 # --- Findings 2 & 3: direct CLI GitHub write commands ----------------------
 DENIED_GH_COMMANDS = [
     ("gh issue create --title x", "gh-issue-create"),
@@ -197,6 +211,15 @@ def test_allowed_ordinary(command: str, case_id: str) -> None:
 )
 def test_allowed_declarative_package_commands(command: str, case_id: str) -> None:
     assert_allowed(command)
+
+
+@pytest.mark.parametrize(
+    "command,case_id",
+    DENIED_CHAINED_AFTER_ALLOWED_COMMANDS,
+    ids=[c[1] for c in DENIED_CHAINED_AFTER_ALLOWED_COMMANDS],
+)
+def test_denied_chained_after_allowed(command: str, case_id: str) -> None:
+    assert_denied(command)
 
 
 @pytest.mark.parametrize("command,case_id", KNOWN_BYPASS_COMMANDS, ids=[c[1] for c in KNOWN_BYPASS_COMMANDS])
