@@ -1,7 +1,7 @@
 ---
 name: drafting-a-skill
 description: Use when authoring a brand-new Claude Code skill from a blank page. Gates on Mechanism fit before drafting begins, mandatorily elicits the four human-only metadata axes (Portability, Capability assumption, Invocation mode, Lifecycle) from the requester, drafts using Design-by-Contract structure, runs advisory cohesion and domain-gap self-checks, passes this repository's own deterministic shape and execution-requirements-drift checkers, and hands off to evaluating-skill-quality and battle-testing-a-skill for the authoritative review. gitapex-native successor to obra/superpowers' writing-skills and to Anthropic's skill-creator. Distinct from scorer-gated-skill-edits (iterates an existing SKILL.md across measured trials; never authors a new one) and evaluating-skill-quality (grades a finished, static artifact; this skill owns the formative decisions made while the draft is still being written).
-compatibility: "Step 3 prefers the AskUserQuestion tool where the harness offers it; where it does not, use portable question handoff -- print 'AskUserQuestion:' followed by the same four axes and choices as plain text (the same convention drafting-an-acm-issue and planning-a-branch-from-an-issue already use for the identical dependency). Step 8's checkers require python3 on PATH."
+compatibility: "Step 3 prefers the AskUserQuestion tool where the harness offers it; where it does not, use portable question handoff -- print 'AskUserQuestion:' followed by the same four axes and choices as plain text (the same convention drafting-issues and planning-a-branch-from-an-issue already use for the identical dependency). Step 8's checkers require python3 on PATH."
 ---
 
 # Drafting a Skill
@@ -403,7 +403,7 @@ off to `evaluating-skill-quality` and `battle-testing-a-skill`.
   targets, for a hook/CI-gate-shaped need and a CLAUDE.md/subagent/
   output-style/system-prompt-append/Auto-memory-shaped need respectively
   -- see `references/mechanism-fit-and-cohesion.md`.
-- **vs. `drafting-an-acm-issue`:** a related but separate authoring
+- **vs. `drafting-issues`:** a related but separate authoring
   skill, for a GitHub issue carrying an Acceptance Criteria Map rather
   than a skill directory; named in `skillDependencies.relatedTo` because
   a design session that produces a skill's own drafted content often

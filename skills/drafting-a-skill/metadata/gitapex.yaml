@@ -54,7 +54,7 @@ spec:
       - evaluating-skill-quality
     relatedTo:
       - battle-testing-a-skill
-      - drafting-an-acm-issue
+      - drafting-issues
       - evaluating-deterministic-gate-quality
       - evaluating-context-channel-maturity
       - untrusted-input-triage

@@ -32,7 +32,7 @@ names were chosen to map one-to-one onto that limit. Where a harness
 offers no `AskUserQuestion`-equivalent tool at all, fall back to portable
 question handoff -- print `AskUserQuestion:` followed by the same four
 axes and choices as plain text, the same convention
-`drafting-an-acm-issue` and `planning-a-branch-from-an-issue` already use
+`drafting-issues` and `planning-a-branch-from-an-issue` already use
 for the identical dependency.
 
 1. **Portability** -- `Portable` | `Repository-scoped` | `Mixed` (see
