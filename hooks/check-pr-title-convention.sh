@@ -50,6 +50,22 @@ if ! printf '%s' "$input" | jq -e 'if type == "object" then . else empty end' >/
   deny "Blocked by hooks/check-pr-title-convention.sh: the tool-call payload on stdin is not a JSON object. Failing closed."
 fi
 
+# Found by code review (PR #1213), the same gap independently tracked as
+# issue #1217 against this hook specifically: `jq -r` never errors on a
+# non-string `.tool_name` (e.g. `["mcp__github__create_pull_request"]`, or
+# a bare number/bool) -- it pretty-prints a non-scalar JSON form across
+# multiple lines, and a scalar (number/bool) still never equals the plain
+# string(s) the check below compares against. Either way this silently
+# falls through as "not our tool" (exit 0) instead of failing closed on a
+# malformed field this gate structurally depends on -- live-confirmed: a
+# `tool_name: 0` payload let a non-conventional PR title straight through
+# this hook's own convention check. `.tool_name == null` covers both absent
+# and explicit null (an absent key indexes as null in jq); only a present
+# non-string, non-null value denies.
+if ! printf '%s' "$input" | jq -e '(.tool_name == null) or (.tool_name | type == "string")' >/dev/null 2>&1; then
+  deny "Blocked by hooks/check-pr-title-convention.sh: tool_name in the payload is not a string. Failing closed."
+fi
+
 tool_name=$(printf '%s' "$input" | jq -r '.tool_name // empty')
 
 # Defense in depth: the hooks.json matchers already restrict this hook to
@@ -58,7 +74,16 @@ if [ "$tool_name" != "mcp__github__create_pull_request" ] && [ "$tool_name" != "
   exit 0
 fi
 
-if ! printf '%s' "$input" | jq -e '(.tool_input // {}) | type == "object"' >/dev/null 2>&1; then
+# `(.tool_input // {})` alone is not enough: jq's `//` treats JSON `false`
+# the same as `null` (both are falsy), so a `tool_input: false` payload
+# slips past that form and crashes the `has("title")` access below instead
+# of denying -- found by code review (PR #1213), independently tracked as
+# issue #1216 against this hook specifically, and live-confirmed with
+# `jq -e '(.tool_input // {}) | type == "object"' <<< '{"tool_input":false}'`,
+# which wrongly reports true. Checking `.tool_input == null` directly (true
+# for both absent and explicit null, never for `false`) closes that gap;
+# null/absent are fine since jq indexes `null` as `null`, not an error.
+if ! printf '%s' "$input" | jq -e '(.tool_input == null) or (.tool_input | type == "object")' >/dev/null 2>&1; then
   deny "Blocked by hooks/check-pr-title-convention.sh: tool_input in the payload is not a JSON object. Failing closed."
 fi
 

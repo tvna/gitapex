@@ -17,6 +17,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import pytest
+
 SCRIPT = Path(__file__).parent / "check-pr-title-convention.sh"
 CHECKER = Path(__file__).parent / "gitapex_check_pr_title_convention.py"
 REPO_ROOT = Path(__file__).parent.parent
@@ -127,6 +129,102 @@ def test_allowed_when_update_omits_title_entirely() -> None:
 
 def test_non_matching_tool_name_is_ignored() -> None:
     assert_allowed(run({"command": "ls"}, tool_name="Bash"))
+
+
+@pytest.mark.parametrize(
+    "tool_name", [["mcp__github__create_pull_request"], {"x": 1}, 5, True], ids=["array", "object", "number", "bool"]
+)
+def test_denied_when_tool_name_is_not_a_string(tool_name: object) -> None:
+    """Issue #1217: `jq -r '.tool_name // empty'` never errors on a
+    non-string `.tool_name` -- a pretty-printed multi-line array/object, or
+    a bare number/bool, never equals either target string this hook
+    compares against, silently falling through as "not our tool" (exit 0)
+    instead of failing closed. Live-confirmed before this guard existed:
+    `tool_name: 0` let a non-conventional title straight through. Must now
+    deny."""
+    payload = json.dumps(
+        {
+            "tool_name": tool_name,
+            "tool_input": {"owner": "tvna", "repo": "gitapex", "title": _INVALID_TITLE, "body": "x"},
+        }
+    )
+    env = dict(os.environ)
+    env.pop("CLAUDE_PROJECT_DIR", None)
+    env.pop("CLAUDE_PLUGIN_ROOT", None)
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        input=payload,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env=env,
+        cwd=str(REPO_ROOT),
+    )
+    assert result.returncode == 2, f"expected deny (exit 2) for tool_name={tool_name!r}, got {result.returncode}"
+    parsed = json.loads(result.stderr)
+    assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+@pytest.mark.parametrize(
+    "tool_input", [["not", "an", "object"], "text", False, True, 0], ids=["array", "string", "false", "true", "zero"]
+)
+def test_denied_when_tool_input_is_not_an_object(tool_input: object) -> None:
+    """Issue #1216: a well-formed top-level payload whose tool_input is
+    itself a non-object would otherwise crash the `has("title")` access
+    with jq's own runtime error. Must deny.
+
+    `false` is the case that actually escaped the original guard: jq's `//`
+    operator treats JSON `false` the same as `null` (both are falsy), so
+    `(.tool_input // {}) | type == "object"` wrongly accepted it, and the
+    crash happened one line later, past deny() -- live-confirmed with
+    `printf '%s'
+    '{"tool_name":"mcp__github__create_pull_request","tool_input":false}'
+    | bash hooks/check-pr-title-convention.sh` exiting 5 ("Cannot check
+    whether boolean has a string key") instead of 2."""
+    payload = json.dumps({"tool_name": "mcp__github__create_pull_request", "tool_input": tool_input})
+    env = dict(os.environ)
+    env.pop("CLAUDE_PROJECT_DIR", None)
+    env.pop("CLAUDE_PLUGIN_ROOT", None)
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        input=payload,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env=env,
+        cwd=str(REPO_ROOT),
+    )
+    assert result.returncode == 2, f"expected deny (exit 2) for tool_input={tool_input!r}, got {result.returncode}"
+    parsed = json.loads(result.stderr)
+    assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_allowed_when_tool_input_is_absent_or_null() -> None:
+    """jq indexes `null`/a missing key as `null`, not a runtime error, so
+    these fall through to the hook's own downstream logic rather than being
+    wrongly caught by the shape guard -- unlike the non-object shapes
+    above."""
+    env = dict(os.environ)
+    env.pop("CLAUDE_PROJECT_DIR", None)
+    env.pop("CLAUDE_PLUGIN_ROOT", None)
+    for payload in (
+        json.dumps({"tool_name": "mcp__github__create_pull_request"}),
+        json.dumps({"tool_name": "mcp__github__create_pull_request", "tool_input": None}),
+    ):
+        result = subprocess.run(
+            ["bash", str(SCRIPT)],
+            input=payload,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            env=env,
+            cwd=str(REPO_ROOT),
+        )
+        # Both fall through to the existing "no title field" deny -- a real
+        # verdict, not a shape-guard crash.
+        assert result.returncode == 2, f"payload={payload!r}: expected deny (exit 2), got {result.returncode}"
+        parsed = json.loads(result.stderr)
+        assert "carries no title field" in parsed["systemMessage"]
 
 
 def test_denied_when_payload_is_not_json() -> None:

@@ -81,6 +81,21 @@ if ! printf '%s' "$input" | jq -e 'if type == "object" then . else empty end' >/
   deny "Blocked by hooks/check-pr-issue-acm-disclosure.sh: the tool-call payload on stdin is not a JSON object. Failing closed."
 fi
 
+# Found by code review (PR #1213), the same gap independently tracked as
+# issue #1217 against this hook specifically: `jq -r` never errors on a
+# non-string `.tool_name` (e.g. `["mcp__github__create_pull_request"]`) --
+# it pretty-prints the JSON form across multiple lines instead, which then
+# never equals the plain string the check below compares against. That
+# silently falls through as "not our tool" (exit 0) instead of failing
+# closed on a malformed field this gate structurally depends on --
+# live-confirmed: an array-wrapped tool_name let a create_pull_request call
+# straight through this hook's own ACM/waiver disclosure check. `.tool_name
+# == null` covers both absent and explicit null (an absent key indexes as
+# null in jq); only a present non-string, non-null value denies.
+if ! printf '%s' "$input" | jq -e '(.tool_name == null) or (.tool_name | type == "string")' >/dev/null 2>&1; then
+  deny "Blocked by hooks/check-pr-issue-acm-disclosure.sh: tool_name in the payload is not a string. Failing closed."
+fi
+
 tool_name=$(printf '%s' "$input" | jq -r '.tool_name // empty')
 
 # Defense in depth: the hooks.json matcher already restricts this hook to
@@ -94,10 +109,17 @@ fi
 # well-formed object payload with `tool_input` set to an array/string/
 # number/bool still crashes every `.tool_input.<field>` access below with
 # jq's own "Cannot index X with string" runtime error, the same fail-open
-# class as the top-level check guards against. `null`/absent are fine (the
-# `// {}` default below tolerates both) since jq indexes `null` as `null`,
-# not an error.
-if ! printf '%s' "$input" | jq -e '(.tool_input // {}) | type == "object"' >/dev/null 2>&1; then
+# class as the top-level check guards against. `null`/absent are fine since
+# jq indexes `null` as `null`, not an error. `(.tool_input // {})` alone is
+# not enough: jq's `//` treats JSON `false` the same as `null` (both are
+# falsy), so a `tool_input: false` payload slipped past that form and
+# crashed the extraction below anyway -- found by code review (PR #1213),
+# independently tracked as issue #1216 against this hook specifically, and
+# live-confirmed with `jq -e '(.tool_input // {}) | type == "object"' <<<
+# '{"tool_input":false}'`, which wrongly reports true. Checking
+# `.tool_input == null` directly (true for both absent and explicit null,
+# never for `false`) closes that gap.
+if ! printf '%s' "$input" | jq -e '(.tool_input == null) or (.tool_input | type == "object")' >/dev/null 2>&1; then
   deny "Blocked by hooks/check-pr-issue-acm-disclosure.sh: tool_input in the payload is not a JSON object. Failing closed."
 fi
 
