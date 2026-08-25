@@ -4,7 +4,7 @@
   "title": "gitapex gate registry (SSOT)",
   "description": "Schema for .gitapex/ssot.json -- issue #123's self-referential registry of gitapex's own deterministic gates (hooks/CI checks) and the policy-source files they read. Holds references and routing only, never policy values (mirrors the upstream tvna/claude-md precedent's own stated constraint). label_routing/label_consumers are deliberately absent -- gitapex has no .github/label-policy.toml yet, so they are not-yet-applicable per issue #123, not an oversight. Adding a field is a schema_version bump, never a silent addition (additionalProperties is false throughout).",
   "type": "object",
-  "required": ["meta", "policy_sources", "gates", "clusters"],
+  "required": ["meta", "policy_sources", "gates", "clusters", "proposed_gates"],
   "additionalProperties": false,
   "properties": {
     "meta": {
@@ -15,7 +15,7 @@
         "schema_version": {
           "type": "string",
           "pattern": "^\\d+\\.\\d+\\.\\d+$",
-          "description": "Semver of this schema file itself. Bump on any required/additionalProperties change."
+          "description": "Semver of this schema file itself. Bump on any required/additionalProperties change. 1.4.0: added proposed_gates (issue #1177)."
         },
         "tracking_issue": {
           "type": "integer",
@@ -48,6 +48,11 @@
       "description": "cluster id -> one-line description of what the cluster groups. Every gates[].cluster value must name a key here (see gitapex_scan_ssot_schema.py's drift check).",
       "minProperties": 1,
       "additionalProperties": { "type": "string", "minLength": 1 }
+    },
+    "proposed_gates": {
+      "type": "array",
+      "description": "Issue #1177: per-retrospective-issue manifest of how many distinct new gates that issue's own \"## Repairs\" section proposed (merge-retrospective/SKILL.md's Repair record format \"Proposed gate:\" lines), so gitapex_scan_retrospective_gate_drift.py and gitapex_check_retro_gate_resolved.py can tell partial from full resolution instead of clearing a multi-gate issue on its first citation. A tracking_issue value absent from this array is assumed to have proposed at most one gate and is corroborated by the pre-existing single-citation rule unchanged -- this array is populated going forward, not backfilled for every already-registered gates[].tracking_issue value.",
+      "items": { "$ref": "#/$defs/proposedGateManifestEntry" }
     }
   },
   "$defs": {
@@ -219,6 +224,28 @@
           }
         }
       ]
+    },
+    "proposedGateManifestEntry": {
+      "type": "object",
+      "required": ["tracking_issue", "proposals"],
+      "additionalProperties": false,
+      "properties": {
+        "tracking_issue": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The retrospective issue this manifest entry describes. Must be unique across proposed_gates -- both gitapex_scan_retrospective_gate_drift.py's and gitapex_check_retro_gate_resolved.py's own loaders reject a duplicate at load time rather than silently picking one."
+        },
+        "proposals": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+            "minLength": 1
+          },
+          "description": "One short kebab-case slug per distinct new gate this issue's own Repairs section proposed, for human-readable traceability in the manifest itself. Resolution is count-based, not slug-identity-based: a proposal is fulfilled once ANY gates[] entry citing this tracking_issue is corroborated, regardless of whether that gate's own id matches a listed slug. minItems: 2 because an issue proposing exactly one gate needs no manifest entry at all -- its absence from proposed_gates already gets the pre-existing single-citation rule."
+        }
+      }
     }
   }
 }

@@ -224,9 +224,10 @@ such taxonomy applies only `retrospective`, unchanged from before.
      proof a gate was actually built, only that someone touched
      something related to the issue). This script re-implements the same
      two-signal check `.github/scripts/gitapex_scan_retrospective_gate_drift.py`
-     already runs in CI: an issue number only clears as resolved when
-     both a commit on `HEAD` cites it AND `.gitapex/ssot.json`
-     `gates[].tracking_issue` names it. It prints one JSON object to
+     already runs in CI: an issue clears when a commit on `HEAD` cites
+     it AND `gates[].tracking_issue` names it as often as its
+     `proposed_gates[]` entry requires (default 1). It prints one JSON
+     object to
      stdout partitioning every *distinct* input issue number (the script
      deduplicates first) into exactly one of two arrays:
      `{"unresolved": [...], "resolved": [...]}`. This
@@ -305,6 +306,10 @@ such taxonomy applies only `retrospective`, unchanged from before.
      the same record format (`Status` set to `carried-forward`), distinct
      from this cycle's Repairs section -- omit the subsection entirely
      when Step 1 found nothing to carry forward.
+   - **Multi-gate manifest registration.** A 2+-new-gate cycle also
+     adds `{"tracking_issue": N, "proposals": [<slug>, ...]}` to
+     `.gitapex/ssot.json`'s `proposed_gates[]` (small PR, before Step
+     6) -- else Step 1's own script resolves on the first built gate.
    - **Zero-repair fast-close.** When Step 2 finds no repairs at all
      **and** Step 1 found nothing to carry forward, file a single-line
      issue body instead of the full Repairs shape above -- state the PR
@@ -355,7 +360,8 @@ such taxonomy applies only `retrospective`, unchanged from before.
    once; if it is still open after that retry, stop treating the cycle
    as fast-closed, report the stuck-open issue number, and leave it for a
    human to close rather than silently retrying indefinitely or
-   pretending the fast-close succeeded.
+   pretending the fast-close succeeded. Re-fetch any Step 5 manifest PR
+   to confirm it landed, same as a stuck-open close.
 
 ## Stop boundary
 

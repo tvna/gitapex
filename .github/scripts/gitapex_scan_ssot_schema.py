@@ -178,6 +178,18 @@ class SsotMeta(BaseModel):
     phase: str
 
 
+class ProposedGateManifestEntry(BaseModel):
+    """.gitapex/ssot.json ``proposed_gates[]`` entry (issue #1177): how many
+    distinct new gates one retrospective issue's own Repairs section
+    proposed, so the per-issue resolution checks can tell partial from full
+    resolution instead of clearing on the first citation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    tracking_issue: int
+    proposals: list[str]
+
+
 class SsotRegistry(BaseModel):
     """The full, already-jsonschema-checked ``.gitapex/ssot.json`` document,
     typed for the reference-drift checks below."""
@@ -188,6 +200,7 @@ class SsotRegistry(BaseModel):
     policy_sources: list[PolicySource]
     gates: list[Gate]
     clusters: dict[str, str]
+    proposed_gates: list[ProposedGateManifestEntry]
 
 
 def _get_list(d: Any, key: str) -> list[Any]:
@@ -489,6 +502,26 @@ def find_cluster_drift(registry: SsotRegistry | None) -> list[str]:
     return findings
 
 
+def find_duplicate_proposed_gate_tracking_issues(registry: SsotRegistry | None) -> list[str]:
+    """Return one message per tracking_issue value used more than once
+    across proposed_gates[] (issue #1177). A duplicate would leave the
+    per-issue gate-count requirement ambiguous for both
+    gitapex_scan_retrospective_gate_drift.py's and
+    gitapex_check_retro_gate_resolved.py's own proposed_gates readers,
+    which assume exactly one manifest entry per retrospective issue."""
+    if registry is None:
+        return []
+    seen: dict[int, int] = {}
+    findings: list[str] = []
+    for entry in registry.proposed_gates:
+        seen[entry.tracking_issue] = seen.get(entry.tracking_issue, 0) + 1
+        if seen[entry.tracking_issue] == 2:
+            findings.append(
+                f"proposed-gates-drift: tracking_issue {entry.tracking_issue} appears more than once in proposed_gates"
+            )
+    return findings
+
+
 def find_duplicate_ids(instance: Any) -> list[str]:
     """Return one message per id used more than once across gates[] or
     across policy_sources[] (checked as two separate namespaces -- a gate
@@ -556,6 +589,7 @@ def find_drift(
     findings.extend(find_local_invocation_identity_drift(registry))
     findings.extend(find_policy_ref_drift(registry))
     findings.extend(find_cluster_drift(registry))
+    findings.extend(find_duplicate_proposed_gate_tracking_issues(registry))
     findings.extend(find_duplicate_ids(instance))
     return findings
 
