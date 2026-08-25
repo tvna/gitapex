@@ -145,21 +145,21 @@ platform naming.
    - `"unknown"` -> GitHub has not finished computing mergeability yet
      (common immediately after a push); wait briefly before checking
      again.
-   - `"draft"` -> Check `branch-plan-executing` first (present ->
-     `executing-a-branch-plan` owns this PR, defer). Otherwise
+   - `"draft"` -> Check for the `branch-plan-executing` label first
+     (present -> `executing-a-branch-plan` owns this PR, defer). Otherwise
      `mergeable_state` collapses to this single value while draft, so do
-     not stop at the label: check `mergeable` (a boolean, not gated by
+     not stop at the state name: check `mergeable` (a boolean, not gated by
      draft status), `get_check_runs`, and `get_reviews` first, all via
-     `github:pull_request_read`. `mergeable: false`, a failing check, or an unresolved thread -> loop back to
-     step 3 regardless of why the PR is draft -- a real blocker under a
-     draft label is still a real blocker. Otherwise (`mergeable: true`,
-     checks green, no unresolved threads): draft alone never proves
-     step 8 already ran against this exact head commit -- a PR opened
-     as a draft, or left draft by a different skill (see Related
-     skills), has not had step 8's review no matter how clean it looks.
-     Absent your own direct memory of running step 9 on this head
-     commit -> treat this the same as `mergeable_state: "clean"` for
-     step 8's own gate, and run step 8; only skip straight to step 10's
+     `github:pull_request_read`. `mergeable: false`, a failing check, or an
+     unresolved thread -> loop back to step 3 regardless of why the PR is
+     draft -- a real blocker under a draft label is still a real blocker.
+     Otherwise (`mergeable: true`, checks green, no unresolved threads):
+     draft alone never proves step 8 already ran against this exact head
+     commit -- a PR opened as a draft, or left draft by a different skill
+     (see Related skills), has not had step 8's review no matter how clean
+     it looks. Absent your own direct memory of running step 9 on this head
+     commit -> treat this the same as `mergeable_state: "clean"` for step
+     8's own gate, and run step 8; only skip straight to step 10's
      monitoring when you do hold that memory.
 8. **Run this skill's own two-layer independent-review mechanism**
    against the PR's current diff, only once step 7 has confirmed
@@ -367,6 +367,7 @@ flowchart TD
     step7 -->|"unstable/blocked: failed/rejected"| step3
     step7 -->|"dirty: real conflict -- resolve,<br/>then ALWAYS post PR comment"| step3
     step7 -->|"pending / behind / unknown /<br/>missing required workflow file"| step6
+    step7 -->|"draft: branch-plan-executing<br/>label"| defer(("defer to<br/>executing-a-branch-plan"))
     step7 -->|"draft: mergeable=false/<br/>failing/open thread"| step3
     step7 -->|"draft: mergeable=true, green,<br/>no threads, step 9 unconfirmed"| step8
     step7 -->|"draft: mergeable=true, green,<br/>no threads, step 9 confirmed"| step10
@@ -379,14 +380,14 @@ flowchart TD
     step10 -->|"merged: true"| retro
 ```
 
-**`step11`'s `closed` and `retro` are this graph's only two sinks --**
-not Step 9 (DRAFT), which flows on into Step 10's monitoring but is
-still this skill's own completed action, never a bug to escalate.
+**`step11`'s `closed`, `defer`, and `retro` are this graph's only three
+sinks --** not Step 9 (DRAFT), which flows on into Step 10's monitoring but
+is still this skill's own completed action, never a bug to escalate.
 `merge_pull_request` never appears here. This diagram is the source of
-truth for Step 7's own dispatch (Step 7 says so); everywhere else it
-is a map, not a substitute for the Exact sequence prose -- the `dirty`
-comment rule, stale-verdict re-confirmation, untrusted-input handling,
-and every other Stop boundary live there, not here.
+truth for Step 7's own dispatch (Step 7 says so); everywhere else it is a
+map, not a substitute for the Exact sequence prose -- the `dirty` comment
+rule, stale-verdict re-confirmation, untrusted-input handling, and every
+other Stop boundary live there, not here.
 
 ## Worked example
 
@@ -412,11 +413,10 @@ via a resolving `Closes`, has just been opened.
    `draft: true` -- never `merge_pull_request`. (A step-7 failure or a
    real step-8 finding would instead loop back to step 3, then
    re-confirm steps 4-7 before step 8 re-runs.)
-8. Step 10: the subscription stays active. Three days later the base
-   branch advances; `mergeable_state` still reads `"draft"` but
-   `mergeable` returns `false` -- treated like `"dirty"`: resolve
-   without leaving draft, push, comment, then re-confirm the terminal
-   state.
+8. Step 10: the subscription stays active. Three days later the base branch
+   advances; `mergeable_state` still reads `"draft"` but `mergeable`
+   returns `false` -- treated like `"dirty"`: resolve without leaving
+   draft, push, comment, then re-confirm the terminal state.
 ## Stop boundaries
 
 Two rules below are non-negotiable enough that they stay written out in

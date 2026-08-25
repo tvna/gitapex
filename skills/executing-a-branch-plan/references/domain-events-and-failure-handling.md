@@ -147,15 +147,17 @@ Each of the three loss modes dispatches the same way: write a
 using this same read-modify-write discipline if the PR body write path
 itself is what is still working (a truncated or unparseable *section*
 inside an otherwise-writable body), or escalate directly to the human
-operator per step 11's own escalation channel when the body fetch itself
-is what failed. Before escalating, attempt the one recovery step ground
-truth already supports: read the branch's own commit history
-(`git log` on the shared branch) to check whether task commits exist
-despite the log's own loss, the same "trust the ground truth over your
-own record" precedence this skill's resume path already applies. Report
-what that check found (some commits exist / none exist / history itself
-could not be read) as part of the escalation, rather than leaving the
-human to re-derive it.
+operator per `drafting-a-pr-to-merge`'s own Step 11 (escalate to the
+owner) when the body fetch itself is what failed -- this skill's own
+sequence stops at step 9, so the escalate-to-the-owner channel is that
+skill's, the same one the Failure dispatch section below already cites.
+Before escalating, attempt the one recovery step ground truth already
+supports: read the branch's own commit history (`git log` on the shared
+branch) to check whether task commits exist despite the log's own loss,
+the same "trust the ground truth over your own record" precedence this
+skill's resume path already applies. Report what that check found (some
+commits exist / none exist / history itself could not be read) as part
+of the escalation, rather than leaving the human to re-derive it.
 
 ## Freshness and hang detection
 
@@ -172,10 +174,12 @@ second cadence. If 3 consecutive polls each find no new event since the
 prior poll, treat the run as hung: write a
 `StageDeviated{run_id, task_id: <outstanding wave's task ID(s)>,
 reason: "no new event after 3 consecutive polls", action: escalate}`
-event and escalate per step 11 -- never silently keep waiting past that
-threshold, and never re-dispatch the same wave as if the hang were a
-normal failure this skill's one-retry budget already covers (a hung
-dispatch never returned a result to retry against).
+event and escalate per `drafting-a-pr-to-merge`'s own Step 11, the same
+channel the Loss and absence handling section above uses -- never
+silently keep waiting past that threshold, and never re-dispatch the
+same wave as if the hang were a normal failure this skill's one-retry
+budget already covers (a hung dispatch never returned a result to retry
+against).
 
 ## Failure dispatch (step 7)
 
@@ -210,14 +214,20 @@ needed. If the retry also fails, dispatch on what actually failed:
 
 When `stop-and-replan` fires, before closing the draft PR: offer, via the
 escalation comment already being written, a revert of every
-`TaskCompleted` commit back to the branch's own first commit (the step-4
-task-list-file commit), using the Execution log's own `commit_sha` values
-as the dependency-ordered manifest. This is offered, not automatic --
-matching this repository's own "keep confirmations for any irreversible
+`TaskCompleted` commit carrying the *current* `run_id` -- not every
+`TaskCompleted` in the log -- back to that same run's own step-4
+task-list-file commit, which is the `run_id` value itself. That commit is
+the branch's own first commit only while this is the branch's only run;
+once a re-run has published a second task-list commit onto the same
+branch, reverting to the branch's *first* commit would also undo an
+earlier run's work this `stop-and-replan` never covered. The Execution
+log's own `commit_sha` values, filtered to that same `run_id`, are the
+dependency-ordered manifest. This is offered, not automatic -- matching
+this repository's own "keep confirmations for any irreversible
 operation" rule, since a revert is itself a git history change on a
 branch a human may already be inspecting. No new artifact is required:
-the Execution log's own `TaskCompleted{commit_sha}` events already are
-the manifest a revert needs.
+the Execution log's own `TaskCompleted{run_id, commit_sha}` events
+already are the manifest a revert needs.
 
 ## Draft-PR-first pattern (step 5)
 

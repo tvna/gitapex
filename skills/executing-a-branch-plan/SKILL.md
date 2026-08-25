@@ -250,14 +250,20 @@ combined diff, then the draft PR converts to ready-for-review.
   through ready-for-review (step 5-9); ownership passes to
   `drafting-a-pr-to-merge` only at step 9. If that skill is ever invoked
   standalone against a PR this skill has not yet marked ready for review
-  (execution still mid-flight), its own step 7 `"draft"` branch checks the
-  mergeable field/checks/reviews directly rather than escalating on the
-  label alone -- a mid-execution draft that happens to look clean at that exact
-  instant could be misread as that skill's own terminal state and left
-  alone rather than flagged. In practice this skill's own step-5
-  subscribe-and-own-activity boundary is what prevents that (this skill,
-  not `drafting-a-pr-to-merge`, is the one watching and acting during
-  steps 5-9); the edge case is recorded here rather than assumed away.
+  (execution still mid-flight), its own step 7 `"draft"` branch checks
+  first for the ownership-signal label step 5 applies and step 9 removes
+  (named in step 5): present -> that skill defers to this one rather than
+  entering its own fix loop. That label is what closes the edge case
+  directly. Without it the two drafts are genuinely indistinguishable at
+  that moment -- step 7's other draft-branch checks (the mergeable field,
+  check runs, reviews) all read the same on a mid-execution draft that
+  happens to look clean at that exact instant as on that skill's own
+  terminal state, so it would run its own step-8 review against a diff
+  still being written, or hand the PR to its step-10 monitoring, instead
+  of deferring. This skill's own step-5 subscribe-and-own-activity
+  boundary (this skill, not `drafting-a-pr-to-merge`, is the one watching
+  and acting during steps 5-9) now sits behind the label as a second
+  layer, no longer the only thing preventing the misread.
 - **vs. `stop-and-replan`:** not a sibling with a distinct trigger --
   step 7's plan-was-wrong dispatch reuses that skill's own Stop action
   (close the PR, comment rationale, re-plan), extended to a new trigger
