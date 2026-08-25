@@ -87,15 +87,24 @@ def test_added_line_colliding_with_a_file_header_does_not_hide_a_later_import() 
     assert gate.parse_diff_added_third_party_imports(diff_text) == {".github/scripts/gitapex_gate_foo.py"}
 
 
-def test_removed_line_colliding_with_a_source_header_does_not_hide_a_later_import() -> None:
+def test_removed_line_colliding_with_a_source_header_fails_closed_not_silently() -> None:
     # Issue #1316: the symmetric case of the "++ "/"+++ " finding directly
     # above, never applied to this file's own `--- `/`diff --git ` check.
     # A *removed* line whose own original content starts with "-- " is
     # diff-prefixed to "--- ...", identical to a real `--- a/<path>`
-    # source header. Without gating that check on `not in_hunk`, this line
-    # is misread as a second file header mid-hunk, silently dropping every
-    # real added line after it in the same hunk -- including the import a
-    # few lines later.
+    # source header -- indistinguishable from one while this hunk's own
+    # declared counts (`@@ -1,3 +1,3 @@`) still have 2 pre-/2 post-image
+    # line(s) unconsumed. Bounding `in_hunk` by those declared counts
+    # (this issue's own fix, mirroring
+    # gitapex_gate_detection_logic_property_coverage.py's own
+    # `_reject_if_hunk_incomplete`) means this ambiguous case now fails
+    # closed (`ScanError`, exit 2) rather than either silently dropping
+    # the later import (the pre-fix bug) or silently misattributing a
+    # later file's own added lines to this one (a regression a bare,
+    # uncounted `not in_hunk` guard alone would introduce -- see this
+    # file's own differential-oracle property test,
+    # tests/test_gitapex_gate_stdlib_only_claim_drift_properties.py,
+    # which caught that regression live before it landed).
     diff_text = (
         "diff --git a/.github/scripts/gitapex_gate_foo.py b/.github/scripts/gitapex_gate_foo.py\n"
         "index 0000000..1111111 100644\n"
@@ -107,7 +116,42 @@ def test_removed_line_colliding_with_a_source_header_does_not_hide_a_later_impor
         "+import pydantic\n"
         " import sys\n"
     )
-    assert gate.parse_diff_added_third_party_imports(diff_text) == {".github/scripts/gitapex_gate_foo.py"}
+    with pytest.raises(gate.ScanError):
+        gate.parse_diff_added_third_party_imports(diff_text)
+
+
+def test_an_unparseable_hunk_header_raises_scan_error() -> None:
+    # Issue #1316: `_HUNK_RE` (the declared-count tracker's own regex)
+    # fails to match a malformed `@@ ... @@` line -- fails closed rather
+    # than silently treating it as a hunk carrying no declared counts.
+    diff_text = (
+        "diff --git a/.github/scripts/gitapex_gate_foo.py b/.github/scripts/gitapex_gate_foo.py\n"
+        "index 0000000..1111111 100644\n"
+        "--- a/.github/scripts/gitapex_gate_foo.py\n"
+        "+++ b/.github/scripts/gitapex_gate_foo.py\n"
+        "@@ malformed hunk header @@\n"
+        "+import pydantic\n"
+    )
+    with pytest.raises(gate.ScanError, match="unparseable hunk header"):
+        gate.parse_diff_added_third_party_imports(diff_text)
+
+
+def test_multi_file_diff_with_correctly_declared_hunks_attributes_each_import_to_its_own_file() -> None:
+    # Issue #1316: the actual regression a bare, uncounted `not in_hunk`
+    # guard on the `--- `/`diff --git ` check introduced -- an ordinary,
+    # correctly-declared multi-file diff left `in_hunk` never clearing at
+    # the second file's own real `+++ ` header, so its added import
+    # misattributed to the first file's path instead of its own. Found
+    # live by this issue's own differential-oracle property test
+    # (tests/test_gitapex_gate_stdlib_only_claim_drift_properties.py)
+    # before landing; this is the fixed regression's own direct proof.
+    diff_text = _diff(".github/scripts/gitapex_gate_a.py", ["import pydantic"]) + _diff(
+        ".github/scripts/gitapex_gate_b.py", ["import pydantic"]
+    )
+    assert gate.parse_diff_added_third_party_imports(diff_text) == {
+        ".github/scripts/gitapex_gate_a.py",
+        ".github/scripts/gitapex_gate_b.py",
+    }
 
 
 # --- has_stale_claim: the two real defect shapes, and the two real false

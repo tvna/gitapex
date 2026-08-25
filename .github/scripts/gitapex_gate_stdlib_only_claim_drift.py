@@ -114,6 +114,17 @@ _UV_RUN_MENTION_RE = re.compile(r"\buv\s+run\b", re.IGNORECASE)
 # a substring check without being a diff at all.
 _DIFF_STRUCTURE_MARKERS = ("diff --git ", "--- ", "+++ ", "@@")
 
+# Issue #1316: bounds `in_hunk` by a hunk's own declared pre-/post-image
+# line counts (mirroring `gitapex_gate_detection_logic_property_coverage.py`'s
+# own `_HUNK_RE`/`_reject_if_hunk_incomplete` pattern, issues #1184/#1193's
+# precedent), not only by the next `diff --git `/`--- ` line. Both counts
+# are tracked, not the post-image count alone, for the identical reason
+# that sibling file's own docstring records: a pure-deletion hunk
+# (`@@ -a,b +c,0 @@`, real `git diff -U0` output) would otherwise read
+# `new_remaining` as already exhausted on the `@@` line itself, before its
+# own `b` removal lines are consumed.
+_HUNK_RE = re.compile(r"@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@")
+
 
 def _looks_like_a_diff(diff_text: str) -> bool:
     return any(line.startswith(marker) for line in diff_text.split("\n") for marker in _DIFF_STRUCTURE_MARKERS)
@@ -172,10 +183,41 @@ def parse_diff_added_third_party_imports(diff_text: str) -> set[str]:
     relative paths whose diff adds a top-level import of a package not in
     the standard library. An empty diff, or a diff touching no such file,
     returns an empty set -- a legitimate "nothing to check" result, not an
-    error."""
+    error.
+
+    Issue #1316: `in_hunk` is bounded by each hunk's own declared pre-/
+    post-image line counts (`old_remaining`/`new_remaining`), not only by
+    the next `diff --git `/`--- ` line, mirroring
+    `gitapex_gate_detection_logic_property_coverage.py`'s own
+    `_reject_if_hunk_incomplete` pattern (issues #1184/#1193's precedent).
+    A prior fix here that gated the `--- `/`diff --git ` check on
+    `not in_hunk` (closing the adversarial-header misattribution this
+    issue's own "What happened" describes) without also tracking declared
+    counts silently broke every ordinary multi-file diff instead: without
+    a declared-count bound, `in_hunk` never clears at a real file
+    boundary either, so a second file's own real `+++ ` header is read as
+    hunk content and its added imports misattribute to the first file's
+    path -- found live by this issue's own differential-oracle property
+    test (`tests/test_gitapex_gate_stdlib_only_claim_drift_properties.py`)
+    before landing. `ScanError` (exit 2, fail-closed) on an over-declared
+    hunk -- ordinary `git diff` output always emits accurate counts; only
+    a hand-fed or foreign `--diff` patch could disagree."""
     changed: set[str] = set()
     current_path: str | None = None
     in_hunk = False
+    old_remaining = 0
+    new_remaining = 0
+
+    def _reject_if_hunk_incomplete(boundary: str) -> None:
+        if in_hunk:
+            raise ScanError(
+                f"hunk header for {current_path!r} declared more pre-/post-image line(s) than "
+                f"its body actually had ({old_remaining} pre-image, {new_remaining} post-image "
+                f"line(s) still unconsumed) before {boundary}. Real `git diff` output always "
+                "emits accurate counts; a hand-fed or foreign patch's inaccurate ones would "
+                "otherwise leak this hunk's state into whatever follows it."
+            )
+
     # Normalize CRLF before splitting: without this, a trailing "\r" stays
     # attached to a `+++ b/<path>` header's path (git's own local-plane
     # invocation, or a re-saved `--diff` file, can carry CRLF even though
@@ -183,7 +225,8 @@ def parse_diff_added_third_party_imports(diff_text: str) -> set[str]:
     # `_TARGET_DIR_RE`'s `$`-anchored match and silently drops the file --
     # a false negative found by adversarial review (issue #1052's own PR).
     for line in diff_text.replace("\r\n", "\n").split("\n"):
-        if not in_hunk and (line.startswith("diff --git ") or line.startswith("--- ")):
+        if line.startswith("diff --git ") or line.startswith("--- "):
+            _reject_if_hunk_incomplete(f"the next file/source header: {line!r}")
             in_hunk = False
             continue
         # A real `+++ b/<path>` header only ever appears before the first
@@ -204,20 +247,34 @@ def parse_diff_added_third_party_imports(diff_text: str) -> set[str]:
             current_path = None if path == "/dev/null" else path
             continue
         if line.startswith("@@"):
-            in_hunk = True
+            _reject_if_hunk_incomplete(f"the next hunk header: {line!r}")
+            match = _HUNK_RE.match(line)
+            if not match:
+                raise ScanError(f"unparseable hunk header: {line!r}")
+            old_remaining = 1 if match.group(1) is None else int(match.group(1))
+            new_remaining = 1 if match.group(2) is None else int(match.group(2))
+            in_hunk = old_remaining > 0 or new_remaining > 0
             continue
-        if not in_hunk or current_path is None:
-            continue
-        if not line.startswith("+"):
-            continue
-        content = line[1:]
-        if content != content.lstrip():
-            # Indented -- not a top-level (module-scope) import.
-            continue
-        if not _TARGET_DIR_RE.match(current_path):
-            continue
-        if any(not _is_stdlib(name) for name in _imported_root_modules(content)):
+        # Indented content is never a top-level (module-scope) import.
+        if (
+            in_hunk
+            and current_path is not None
+            and line.startswith("+")
+            and (content := line[1:]) == content.lstrip()
+            and _TARGET_DIR_RE.match(current_path)
+            and any(not _is_stdlib(name) for name in _imported_root_modules(content))
+        ):
             changed.add(current_path)
+        if line.startswith("+"):
+            new_remaining -= 1
+        elif line.startswith(" "):
+            old_remaining -= 1
+            new_remaining -= 1
+        elif line.startswith("-"):
+            old_remaining -= 1
+        if old_remaining <= 0 and new_remaining <= 0:
+            in_hunk = False
+    _reject_if_hunk_incomplete("the diff ended")
     return changed
 
 
