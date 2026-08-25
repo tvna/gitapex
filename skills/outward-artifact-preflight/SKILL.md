@@ -7,11 +7,13 @@ description: Use when about to push, post, or publish any outward-facing artifac
 
 This skill's checklist is general. Check 1's "agreed disclosure
 convention" and check 3's ASCII-only default illustrate gitapex's own
-policy; each states an inline fallback to substitute the calling
-repository's actual policy where it differs. The explaining-the-work
-coupling (Relationship to other skills) names a sibling skill gitapex
-happens to also install -- apply it where that sibling is installed,
-skip it otherwise.
+policy; check 2's raw-fetch hook is likewise gitapex's own illustration
+of that channel, not a required dependency. Each states an inline
+fallback to substitute the calling repository's actual policy or
+tooling where it differs. The explaining-the-work coupling
+(Relationship to other skills) names a sibling skill gitapex happens to
+also install -- apply it where that sibling is installed, skip it
+otherwise.
 
 This is an interim measure: a manual stand-in for the deterministic
 preflight or CI gate this repository has not built yet. Run this
@@ -73,43 +75,33 @@ destined for a public sink.
    unsanitized channel and re-run check 1 against it, not the draft.
 
    **Do not use an MCP read tool (`pull_request_read`, `issue_read`) for
-   this re-check.** The GitHub MCP server's own response-direction
-   handler runs every body it returns through an HTML sanitizer
-   (`bluemonday.StrictPolicy()` against a fixed element allowlist --
-   confirmed against `github/github-mcp-server`'s own
-   `pkg/sanitize/sanitize.go`, commit `884c791`; the write path,
-   `pkg/github/pullrequests.go`, calls no such sanitizer). A legitimate
-   Markdown construct not on that allowlist -- a backtick-wrapped
-   angle-bracket placeholder, a bracket-wrapped-URL autolink -- can come
-   back stripped from an MCP read even though GitHub's own storage still
-   holds it intact. Reading a body back through an MCP tool call
-   therefore does not prove content loss; it only proves the read
-   channel's own sanitizer touched it. Issues
-   https://github.com/tvna/gitapex/issues/1088,
-   https://github.com/tvna/gitapex/issues/1302, and
-   https://github.com/tvna/gitapex/issues/1313 each originally
-   misdiagnosed exactly this read-channel illusion as a storage defect
-   and rewrote already-correct content to work around it (see
-   https://github.com/tvna/gitapex/issues/1327 for the correction).
+   this re-check.** A GitHub MCP server can sanitize the HTML/Markdown of
+   a body it returns (confirmed for `github/github-mcp-server`'s own
+   response-direction handler, which strips any element outside a fixed
+   allowlist -- `pkg/sanitize/sanitize.go`, commit `884c791` -- while its
+   write path applies no such sanitizer). A legitimate construct outside
+   that allowlist -- a backtick-wrapped angle-bracket placeholder, a
+   bracket-wrapped-URL autolink -- can therefore come back looking
+   stripped from an MCP read even though storage still holds it intact.
+   Reading a body back through an MCP tool call proves only that the read
+   channel's own sanitizer touched it, never that storage lost anything.
 
-   The authoritative raw-fetch channel is the same one this repository's
-   own post-write hook already uses:
-   `hooks/gitapex_check_post_write_provenance.py` (wired as a PostToolUse
-   hook by `hooks/check-post-write-provenance.sh`) re-fetches the stored
-   body via a direct HTTPS call to
-   `GET /repos/{owner}/{repo}/issues/{number}` -- the one REST endpoint
-   for both issues and pull requests, bypassing the MCP server's
-   read-side sanitizer entirely -- and re-runs this checklist's check 1
-   and check 3 (and, since
-   https://github.com/tvna/gitapex/issues/1327, a submitted-vs-stored
-   content-loss comparison) against what that call actually returns.
-   Where that hook is installed (this repository's own default), its
-   automatic re-check already satisfies this step: confirm its verdict
-   (PASS / FLAGGED / CONTENT_LOSS / INDETERMINATE, surfaced in-session)
-   rather than re-deriving it by hand through an MCP read. Where no such
-   hook is installed, call the same raw-fetch helper directly
-   (`fetch_issue()` in `hooks/gitapex_check_pr_issue_acm_disclosure.py`)
-   and pipe its `body` field into the scan below -- never a `body` read
+   Re-check through a raw, unsanitized fetch instead: a direct HTTPS
+   `GET /repos/{owner}/{repo}/issues/{number}` (the one REST endpoint for
+   both issues and pull requests) bypasses that sanitizer entirely. This
+   repository's own default already automates this: a PostToolUse hook
+   (`hooks/check-post-write-provenance.sh` /
+   `hooks/gitapex_check_post_write_provenance.py`) re-fetches the stored
+   body this way after `create_pull_request` / `update_pull_request` /
+   `issue_write` returns and re-runs this checklist's check 1 and check 3
+   -- plus a submitted-vs-stored content-loss comparison -- against it;
+   where it is installed, confirm its verdict (PASS / FLAGGED /
+   CONTENT_LOSS / INDETERMINATE, surfaced in-session) rather than
+   re-deriving one by hand through an MCP read. Where no such automation
+   exists, call the calling repository's own equivalent raw-fetch helper
+   directly and pipe its returned body into the scan below -- this
+   repository's own is `fetch_issue()` in
+   `hooks/gitapex_check_pr_issue_acm_disclosure.py` -- never a body read
    back from `pull_request_read`/`issue_read`:
 
    ```bash

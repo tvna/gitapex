@@ -662,7 +662,23 @@ def evaluate(
             "confirmed to be the artifact just written; the artifact this call just published is unverified"
         )
 
-    body = fetched.get("body") or ""
+    # `or ""` alone only coerces a *falsy* value (None, ""); a truthy
+    # non-string body (a dict/list/int from a malformed or unexpected 2xx
+    # response) would sail through unguarded and crash the first `.replace()`
+    # call inside detect_content_loss()/scan_non_ascii() with a raw
+    # AttributeError -- contradicting this module's own documented "never a
+    # raw traceback" contract, which every other resolution step in this
+    # function already upholds. Found live by an adversarial gate-quality
+    # review of this issue's own change: a fetcher returning
+    # {"body": {"unexpected": "shape"}, "state": "open"} reproduced the crash
+    # before this guard existed.
+    raw_body = fetched.get("body")
+    if raw_body is not None and not isinstance(raw_body, str):
+        return "INDETERMINATE", (
+            f"the API response for {owner}/{repo}#{number} carries a non-string body "
+            f"({type(raw_body).__name__}), so it cannot be verified"
+        )
+    body = raw_body or ""
 
     # Issue #1327: compare against what this same tool call actually
     # submitted, when it submitted a body at all. Some covered-tool calls
@@ -670,19 +686,31 @@ def evaluate(
     # body field, and there is nothing to compare in that case -- silently
     # skipped, not INDETERMINATE, since no submission means no possible loss.
     submitted_body = tool_input.get("body")
+    loss_reason = None
     if isinstance(submitted_body, str) and submitted_body:
         loss_reason = detect_content_loss(submitted_body, body)
-        if loss_reason is not None:
-            return "CONTENT_LOSS", (
-                f"{owner}/{repo}#{number}'s STORED body: {loss_reason}. This is a defect, not a "
-                "judgment call: per issue #1327, do not re-check via an MCP read tool "
-                "(pull_request_read/issue_read), whose own response sanitizer can independently "
-                "strip content that storage still holds intact and would misreport this as clean or "
-                "as a different problem. Re-submit the missing content via update_pull_request / "
-                "issue_write, then re-fetch through this same raw channel to confirm."
-            )
 
+    # The provenance/ASCII scan always runs, even when content loss already
+    # fired: a truncated-and-still-leaking body (a stored body that lost
+    # content AND still carries a provenance marker or non-ASCII character in
+    # what remains) must not have the leak silently masked just because loss
+    # is reported first. Found live by the same adversarial gate-quality
+    # review: a fetcher returning a truncated body that still carried an
+    # em dash and a candidate marker reported only CONTENT_LOSS before this
+    # combination existed, with the co-occurring leak never surfaced.
     clean, message = scan_body(body, scanner)
+
+    if loss_reason is not None:
+        also_leaking = f" The stored body ALSO carries {message} -- both defects need remediation." if not clean else ""
+        return "CONTENT_LOSS", (
+            f"{owner}/{repo}#{number}'s STORED body: {loss_reason}.{also_leaking} This is a defect, not a "
+            "judgment call: per issue #1327, do not re-check via an MCP read tool "
+            "(pull_request_read/issue_read), whose own response sanitizer can independently "
+            "strip content that storage still holds intact and would misreport this as clean or "
+            "as a different problem. Re-submit the missing content via update_pull_request / "
+            "issue_write, then re-fetch through this same raw channel to confirm."
+        )
+
     if clean:
         return "PASS", f"{owner}/{repo}#{number}'s stored body re-scanned clean -- {message}"
     return "FLAGGED", (
