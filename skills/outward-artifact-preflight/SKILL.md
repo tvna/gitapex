@@ -78,8 +78,10 @@ destined for a public sink.
    this re-check.** A GitHub MCP server can sanitize the HTML/Markdown of
    a body it returns (confirmed for `github/github-mcp-server`'s own
    response-direction handler, which strips any element outside a fixed
-   allowlist -- `pkg/sanitize/sanitize.go`, commit `884c791` -- while its
-   write path applies no such sanitizer). A legitimate construct outside
+   allowlist -- `pkg/sanitize/sanitize.go`, allowlist introduced at commit
+   `6a39a39` and unchanged in this respect as of a direct clone's current
+   `HEAD` -- while its write path applies no such sanitizer). A legitimate
+   construct outside
    that allowlist -- a backtick-wrapped angle-bracket placeholder, a
    bracket-wrapped-URL autolink -- can therefore come back looking
    stripped from an MCP read even though storage still holds it intact.
