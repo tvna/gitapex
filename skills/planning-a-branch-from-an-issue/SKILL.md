@@ -36,6 +36,29 @@ without losing the issue's acceptance criteria.
    each row against the issue's own stated facts before adopting it,
    and correct or flag any row that does not hold up rather than
    accepting it merely for being well-formed.
+
+   **Postcondition:** once this re-verification pass is complete, write a
+   re-verification marker onto the parent issue's own body via the
+   connected git hosting server's issue-update tool (e.g. `github:issue_write`
+   method `update`), separate from the ACM table content itself -- a
+   fixed-format line naming this skill and a timestamp, for example
+   ``Re-verified: `planning-a-branch-from-an-issue` (<ISO-8601
+   timestamp>)``. Re-fetch the issue's current live body first (never write
+   from a locally cached or remembered copy, which may already be stale
+   from an intervening edit by someone else) and append the marker to it,
+   the same never-write-from-a-stale-copy discipline
+   `drafting-an-acm-issue`'s own "Updating an existing ACM issue"
+   procedure already applies to its ACM-row appends. This marker is what
+   `executing-a-branch-plan`'s own Step 1 gate checks via that skill's
+   `scripts/gitapex_check_branch_plan_reverified.py` before its unchanged
+   semantic approval-comment judgment runs -- see `executing-a-branch-plan`'s
+   own `references/threat-model-and-authorization.md` Authorization gate
+   section for the full accounting. This check is shape/presence-only: it
+   proves this skill's own Step 4 ran, never that the re-verification itself
+   was done correctly, and never which specific skill or person wrote the
+   marker (the same structural-not-provenance limit every other
+   prose-based marker in this repository carries, the ACM waiver
+   vocabulary included).
 5. Propose a branch name, commit scope, PR title, and PR body outline, all
    tied to the issue number.
 6. Identify the deterministic gates the mapped criteria require: tests,
@@ -64,7 +87,9 @@ without losing the issue's acceptance criteria.
 - **Facts:** what the issue and repo state establish, cited to source.
 - **Assumptions:** anything inferred, not established.
 - **Acceptance Criteria Map:** criterion -> interpretation -> planned ops
-  -> proof method -> residual risk.
+  -> proof method -> residual risk. Its Step 4 re-verification pass ends
+  with the re-verification marker written back onto the issue (Step 4's
+  own Postcondition), separate from the table itself.
 - **Branch Plan:** branch name, commit scope, PR title/body outline.
 - **Verification Plan:** the deterministic gates from Step 6 and how each
   mapped criterion will be proven.
