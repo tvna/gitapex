@@ -94,24 +94,35 @@ destined for a public sink.
    `hooks/gitapex_check_post_write_provenance.py`) re-fetches the stored
    body this way after `create_pull_request` / `update_pull_request` /
    `issue_write` returns and re-runs this checklist's check 1 and check 3
-   -- plus a submitted-vs-stored content-loss comparison -- against it;
-   where it is installed, confirm its verdict (PASS / FLAGGED /
-   CONTENT_LOSS / INDETERMINATE, surfaced in-session) rather than
-   re-deriving one by hand through an MCP read. Where no such automation
-   exists, call the calling repository's own equivalent raw-fetch helper
-   directly and pipe its returned body into the scan below -- this
-   repository's own is `fetch_issue()` in
-   `hooks/gitapex_check_pr_issue_acm_disclosure.py` -- never a body read
-   back from `pull_request_read`/`issue_read`:
+   -- plus a submitted-vs-stored content-loss comparison -- against it.
+   Where it is installed, its verdict resolves this step for you, with
+   PASS / FLAGGED / CONTENT_LOSS each already a terminal answer (confirm
+   and act on it, never re-derive one by hand through an MCP read); an
+   INDETERMINATE verdict is not terminal -- it means the hook itself
+   could not verify the stored body (a missing token, an unreachable API),
+   so fall through to the manual raw-fetch re-check below rather than
+   treating INDETERMINATE as "check complete."
+
+   Where no such automation exists (or its verdict is INDETERMINATE),
+   call the calling repository's own equivalent raw-fetch helper directly
+   -- this repository's own is `fetch_issue()` in
+   `hooks/gitapex_check_pr_issue_acm_disclosure.py`, which returns a
+   `{"body": ..., "state": ...}` mapping -- and feed its `body` value into
+   the scan below, assigned to a shell variable however your environment
+   does that (for example, printing just that field and capturing it via
+   command substitution). Never feed the scan a body read back from
+   `pull_request_read`/`issue_read`:
 
    ```bash
    python3 scripts/gitapex_scan_provenance.py <<< "$ACTUAL_STORED_BODY"
    ```
 
-   Pipe the body in on stdin and omit `--file` entirely. `--file -` does
-   *not* read stdin here -- the script only reads stdin when `--file` is
-   absent; passing `--file -` makes it look for a file literally named
-   `-` and fail with `FileNotFoundError`.
+   `$ACTUAL_STORED_BODY` here stands for that raw-fetched body text, not a
+   literal environment variable this skill sets for you. Pipe the body in
+   on stdin and omit `--file` entirely. `--file -` does *not* read stdin
+   here -- the script only reads stdin when `--file` is absent; passing
+   `--file -` makes it look for a file literally named `-` and fail with
+   `FileNotFoundError`.
 
    If the re-scan flags a candidate, call `update_pull_request` to strip
    it, then re-fetch (again through the raw channel above, never an MCP
