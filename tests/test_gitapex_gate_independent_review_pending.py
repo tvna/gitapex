@@ -22,7 +22,7 @@ _CLEAN_BODY = f"""## Summary
 
 Some PR body text.
 
-## Step 8 independent review verdict
+## Independent review verdict
 
 - Verdict: CLEAN
 - Verified commit: {_SHA}
@@ -34,54 +34,54 @@ Some PR body text.
 
 _NO_SECTION_BODY = "## Summary\n\nJust a normal PR body, no verdict section at all.\n"
 
-_MISSING_VERDICT_FIELD_BODY = f"""## Step 8 independent review verdict
+_MISSING_VERDICT_FIELD_BODY = f"""## Independent review verdict
 
 - Verified commit: {_SHA}
 """
 
-_MISSING_COMMIT_FIELD_BODY = """## Step 8 independent review verdict
+_MISSING_COMMIT_FIELD_BODY = """## Independent review verdict
 
 - Verdict: CLEAN
 """
 
-_NOT_CLEAN_BODY = f"""## Step 8 independent review verdict
+_NOT_CLEAN_BODY = f"""## Independent review verdict
 
 - Verdict: FINDING-PENDING
 - Verified commit: {_SHA}
 """
 
-_STALE_BODY = f"""## Step 8 independent review verdict
+_STALE_BODY = f"""## Independent review verdict
 
 - Verdict: CLEAN
 - Verified commit: {_OTHER_SHA}
 """
 
-_EMPHASIS_BODY = f"""## Step 8 independent review verdict
+_EMPHASIS_BODY = f"""## Independent review verdict
 
 - Verdict: **CLEAN**
 - Verified commit: `{_SHA}`
 """
 
-_TWO_SECTIONS_BODY = f"""## Step 8 independent review verdict
+_TWO_SECTIONS_BODY = f"""## Independent review verdict
 
 - Verdict: FINDING-PENDING
 - Verified commit: {_OTHER_SHA}
 
 ## Fixed and re-reviewed
 
-## Step 8 independent review verdict
+## Independent review verdict
 
 - Verdict: CLEAN
 - Verified commit: {_SHA}
 """
 
-_HEADING_DIFFERENT_LEVEL_BODY = f"""### Step 8 independent review verdict
+_HEADING_DIFFERENT_LEVEL_BODY = f"""### Independent review verdict
 
 - Verdict: CLEAN
 - Verified commit: {_SHA}
 """
 
-_SECTION_FOLLOWED_BY_ANOTHER_HEADING_BODY = f"""## Step 8 independent review verdict
+_SECTION_FOLLOWED_BY_ANOTHER_HEADING_BODY = f"""## Independent review verdict
 
 - Verdict: CLEAN
 - Verified commit: {_SHA}
@@ -101,7 +101,7 @@ def test_parse_verdict_finds_clean_section() -> None:
 
 def test_parse_verdict_no_section() -> None:
     verdict = gate.parse_verdict(_NO_SECTION_BODY)
-    assert verdict.error == "no '## Step 8 independent review verdict' section found"
+    assert verdict.error == "no '## Independent review verdict' section found"
 
 
 def test_parse_verdict_missing_verdict_field() -> None:
@@ -115,7 +115,7 @@ def test_parse_verdict_missing_commit_field() -> None:
 
 
 def test_parse_verdict_missing_both_fields() -> None:
-    verdict = gate.parse_verdict("## Step 8 independent review verdict\n\nNothing here.\n")
+    verdict = gate.parse_verdict("## Independent review verdict\n\nNothing here.\n")
     assert verdict.error == "verdict section found but has neither a 'Verdict:' nor a 'Verified commit:' line"
 
 
@@ -154,7 +154,7 @@ def test_check_passes_on_matching_clean_verdict() -> None:
 def test_check_fails_on_no_section() -> None:
     passed, message = gate.check(_NO_SECTION_BODY, _SHA)
     assert passed is False
-    assert "no '## Step 8" in message
+    assert "no '## Independent" in message
 
 
 def test_check_fails_on_non_clean_verdict() -> None:
@@ -176,7 +176,7 @@ def test_check_fails_on_empty_head_sha() -> None:
 
 
 def test_check_is_case_insensitive_on_verdict_and_commit() -> None:
-    body = f"""## Step 8 independent review verdict
+    body = f"""## Independent review verdict
 
 - verdict: clean
 - verified commit: {_SHA.upper()}
@@ -186,7 +186,7 @@ def test_check_is_case_insensitive_on_verdict_and_commit() -> None:
 
 
 def test_check_matches_abbreviated_recorded_sha_against_full_head_sha() -> None:
-    body = f"""## Step 8 independent review verdict
+    body = f"""## Independent review verdict
 
 - Verdict: CLEAN
 - Verified commit: {_SHA[:12]}
@@ -256,7 +256,7 @@ This PR is not actually reviewed yet. Here is an example of the format,
 quoted for illustration only, NOT a real disclosure:
 
 ```
-## Step 8 independent review verdict
+## Independent review verdict
 
 - Verdict: CLEAN
 - Verified commit: {_SHA}
@@ -266,7 +266,7 @@ Do not treat the above as a real verdict.
 """
     passed, message = gate.check(body, _SHA)
     assert passed is False
-    assert "no '## Step 8" in message
+    assert "no '## Independent" in message
 
 
 def test_defeat_attempt_tilde_fenced_example_verdict_does_not_pass() -> None:
@@ -274,7 +274,7 @@ def test_defeat_attempt_tilde_fenced_example_verdict_does_not_pass() -> None:
     body = f"""## Summary
 
 ~~~
-## Step 8 independent review verdict
+## Independent review verdict
 
 - Verdict: CLEAN
 - Verified commit: {_SHA}
@@ -300,7 +300,7 @@ def test_real_verdict_outside_fence_still_passes_with_unrelated_fenced_block_pre
 some unrelated fenced example, nothing to do with verdicts
 ```
 
-## Step 8 independent review verdict
+## Independent review verdict
 
 - Verdict: CLEAN
 - Verified commit: {_SHA}
@@ -320,14 +320,14 @@ This is only an example of the format, shown fenced for illustration --
 the fence below is never closed, whether by slip or by design.
 
 ```
-## Step 8 independent review verdict
+## Independent review verdict
 
 - Verdict: CLEAN
 - Verified commit: {_SHA}
 """
     passed, message = gate.check(body, _SHA)
     assert passed is False
-    assert "no '## Step 8" in message
+    assert "no '## Independent" in message
 
 
 def test_defeat_attempt_html_comment_does_not_pass() -> None:
@@ -341,7 +341,7 @@ def test_defeat_attempt_html_comment_does_not_pass() -> None:
 The actual Step 8 review has NOT run yet. Nothing below should count.
 
 <!--
-## Step 8 independent review verdict
+## Independent review verdict
 
 - Verdict: CLEAN
 - Verified commit: {_SHA}
@@ -349,12 +349,12 @@ The actual Step 8 review has NOT run yet. Nothing below should count.
 """
     passed, message = gate.check(body, _SHA)
     assert passed is False
-    assert "no '## Step 8" in message
+    assert "no '## Independent" in message
 
 
 def test_defeat_attempt_unclosed_html_comment_does_not_pass() -> None:
     body = f"""<!--
-## Step 8 independent review verdict
+## Independent review verdict
 
 - Verdict: CLEAN
 - Verified commit: {_SHA}
@@ -372,7 +372,7 @@ def test_defeat_attempt_four_space_indented_heading_does_not_pass() -> None:
 
 Here is the expected format, shown indented as a code sample:
 
-    ## Step 8 independent review verdict
+    ## Independent review verdict
 
     - Verdict: CLEAN
     - Verified commit: {_SHA}
@@ -381,14 +381,14 @@ The actual Step 8 review has NOT run yet.
 """
     passed, message = gate.check(body, _SHA)
     assert passed is False
-    assert "no '## Step 8" in message
+    assert "no '## Independent" in message
 
 
 def test_three_space_indented_heading_still_passes() -> None:
     # The CommonMark ATX-heading indentation limit is 0-3 spaces, not 0 --
     # a real verdict indented up to 3 spaces (e.g. a reply-quoted PR
     # comment) must still be recognized.
-    body = f"""   ## Step 8 independent review verdict
+    body = f"""   ## Independent review verdict
 
 - Verdict: CLEAN
 - Verified commit: {_SHA}
@@ -402,7 +402,7 @@ def test_crlf_line_endings_still_pass() -> None:
     # every regex here is line-anchored, and an unstripped stray '\r'
     # before each '\n' broke every one of them against an otherwise
     # perfectly genuine, completed verdict.
-    body = f"## Step 8 independent review verdict\r\n\r\n- Verdict: CLEAN\r\n- Verified commit: {_SHA}\r\n"
+    body = f"## Independent review verdict\r\n\r\n- Verdict: CLEAN\r\n- Verified commit: {_SHA}\r\n"
     passed, message = gate.check(body, _SHA)
     assert passed is True, message
 
@@ -413,7 +413,7 @@ def test_single_character_head_sha_never_vacuously_matches() -> None:
     # supplies the full 40-character SHA), but nothing previously stopped
     # a single-character --head-sha from vacuously matching any recorded
     # commit sharing that one leading character.
-    body = f"""## Step 8 independent review verdict
+    body = f"""## Independent review verdict
 
 - Verdict: CLEAN
 - Verified commit: {_SHA}

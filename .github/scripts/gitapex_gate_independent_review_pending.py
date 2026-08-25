@@ -17,7 +17,7 @@ Verdict format (drafting-a-pr-to-merge/SKILL.md Step 8's own recorded-
 verdict requirement, amended by this issue to add the second field this
 gate reads):
 
-    ## Step 8 independent review verdict
+    ## Independent review verdict
 
     - Verdict: CLEAN
     - Verified commit: <40-hex-character head SHA the review ran against>
@@ -106,7 +106,7 @@ from pathlib import Path
 # "illustrative example" heading parse as a real, live one -- restricting
 # to `[ ]{0,3}` (spaces only) closes that class the same way GitHub's own
 # renderer already treats it as inert.
-_HEADING_RE = re.compile(r"^[ ]{0,3}#{1,6}[ \t]+Step 8 independent review verdict[ \t]*$", re.IGNORECASE | re.MULTILINE)
+_HEADING_RE = re.compile(r"^[ ]{0,3}#{1,6}[ \t]+Independent review verdict[ \t]*$", re.IGNORECASE | re.MULTILINE)
 _NEXT_HEADING_RE = re.compile(r"^[ ]{0,3}#{1,6}[ \t]+", re.MULTILINE)
 
 _FENCE_OPEN_RE = re.compile(r"^[ \t]*(`{3,}|~{3,})")
@@ -204,8 +204,8 @@ _MIN_SHA_COMPARE_LEN = 7
 
 
 class Verdict:
-    """The parsed contents of the last `## Step 8 independent review
-    verdict` section in a PR body, or the specific reason none usable was
+    """The parsed contents of the last `## Independent review verdict`
+    section in a PR body, or the specific reason none usable was
     found."""
 
     def __init__(self, status: str | None, commit: str | None, error: str | None) -> None:
@@ -228,7 +228,7 @@ def _last_section_from(text: str, start: int) -> str:
 
 
 def parse_verdict(body: str) -> Verdict:
-    """Parse the last `## Step 8 independent review verdict` section out
+    """Parse the last `## Independent review verdict` section out
     of `body`. Returns a `Verdict` carrying either both fields, or an
     `error` describing exactly what is missing/malformed.
 
@@ -246,7 +246,7 @@ def parse_verdict(body: str) -> Verdict:
     body = _strip_fenced_code_blocks(body)
     headings = list(_HEADING_RE.finditer(body))
     if not headings:
-        return Verdict(None, None, "no '## Step 8 independent review verdict' section found")
+        return Verdict(None, None, "no '## Independent review verdict' section found")
 
     section = _last_section_from(body, headings[-1].end())
 
@@ -345,7 +345,7 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"FAIL: {message}", file=sys.stderr)
     print(
-        "Record a '## Step 8 independent review verdict' section in the PR body with "
+        "Record a '## Independent review verdict' section in the PR body with "
         "'- Verdict: CLEAN' and '- Verified commit: <current head SHA>' once "
         "drafting-a-pr-to-merge's Step 8 review completes clean against this exact commit.",
         file=sys.stderr,

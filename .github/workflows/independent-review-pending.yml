@@ -5,7 +5,7 @@
 # confirmed defects Step 8 later found (see #1288) never landed on `main`.
 # This job is the required status check that closes that race: it starts
 # pending/failing for any not-yet-reviewed head commit and only turns
-# green once a `## Step 8 independent review verdict` section naming that
+# green once a `## Independent review verdict` section naming that
 # exact commit is present in the PR body (see
 # .github/scripts/gitapex_gate_independent_review_pending.py's own module
 # docstring for the verdict format and this gate's known limits).

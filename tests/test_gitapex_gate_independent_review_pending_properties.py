@@ -55,7 +55,7 @@ def test_arbitrary_text_never_raises_and_is_deterministic(text: str) -> None:
 
 
 @_PROPERTIES
-@given(text=st.text(max_size=300).filter(lambda s: "step 8 independent review verdict" not in s.lower()))
+@given(text=st.text(max_size=300).filter(lambda s: "independent review verdict" not in s.lower()))
 def test_text_never_containing_the_heading_phrase_never_parses(text: str) -> None:
     """No false positive: text that never contains the heading phrase at all
     (case-insensitively) never yields a usable verdict, regardless of what
@@ -71,9 +71,7 @@ def test_text_never_containing_the_heading_phrase_never_parses(text: str) -> Non
     verdict_emphasis=st.sampled_from(_EMPHASIS),
     commit_emphasis=st.sampled_from(_EMPHASIS),
     bullet=st.sampled_from(_BULLETS),
-    casing=st.sampled_from(
-        ("Step 8 independent review verdict", "STEP 8 INDEPENDENT REVIEW VERDICT", "step 8 independent review verdict")
-    ),
+    casing=st.sampled_from(("Independent review verdict", "INDEPENDENT REVIEW VERDICT", "independent review verdict")),
 )
 def test_a_real_clean_verdict_is_always_detected_and_passes(
     level: str, sha: str, verdict_emphasis: str, commit_emphasis: str, bullet: str, casing: str
@@ -112,7 +110,7 @@ def test_a_verdict_inside_a_fenced_code_block_is_never_detected(sha: str, fence:
     from `parse_verdict` makes this property FAIL on every generated
     example, since the unstripped fenced section still matches
     `_HEADING_RE`/`_VERDICT_RE`/`_COMMIT_RE` directly."""
-    body = f"Example usage:\n{fence}\n## Step 8 independent review verdict\n\n- Verdict: CLEAN\n- Verified commit: {sha}\n{fence}\n"
+    body = f"Example usage:\n{fence}\n## Independent review verdict\n\n- Verdict: CLEAN\n- Verified commit: {sha}\n{fence}\n"
     passed, _ = gate.check(body, sha)
     assert passed is False
 
@@ -165,7 +163,7 @@ def test_strip_fenced_code_blocks_direct_call_unclosed_fence_extends_to_eof(fenc
 
 
 _TRAILING_TEXT = st.text(alphabet=st.characters(blacklist_categories=("Cc", "Cs")), max_size=200).filter(
-    lambda s: "step 8 independent review verdict" not in s.lower()
+    lambda s: "independent review verdict" not in s.lower()
 )
 
 
@@ -178,7 +176,7 @@ def test_last_section_from_never_crosses_the_next_heading(sha: str, other_sha: s
     generated trailing content that itself might coincidentally contain
     `##`-shaped text or verdict-field-shaped lines."""
     body = (
-        f"## Step 8 independent review verdict\n\n"
+        f"## Independent review verdict\n\n"
         f"- Verdict: CLEAN\n- Verified commit: {sha}\n\n"
         f"## Some later section\n\n"
         f"- Verdict: CLEAN\n- Verified commit: {other_sha}\n{trailing}\n"
