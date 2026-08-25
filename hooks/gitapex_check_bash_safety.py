@@ -304,22 +304,109 @@ def _rule_a_literal(segments: list[list[str]]) -> str | None:
     return None
 
 
+_METHOD_FLAG_HIT = "a 'gh api' write call (-X/--method POST/PUT/PATCH/DELETE)"
+_METHOD_FLAG_DYNAMIC_HIT = (
+    "a 'gh api' write call with a dynamically constructed -X/--method value assigned from a denied write method"
+)
+_FIELD_FLAG_HIT = "a 'gh api' call with a field flag (-f/-F/--field/--raw-field)"
+
+
+def _gh_api_method_literal_hit(literals: list[str]) -> bool:
+    """Literal `-X`/`--method` flag, as a separate token, fused with `=`,
+    or fused directly, whose value is itself a literal write method."""
+    for i, tok in enumerate(literals):
+        if tok in ("-x", "--method") and i + 1 < len(literals):
+            value = literals[i + 1].lstrip("=")
+            if any(value.startswith(m) for m in _WRITE_METHODS):
+                return True
+        if tok.startswith("-x") and len(tok) > 2 and any(tok[2:].startswith(m) for m in _WRITE_METHODS):
+            return True
+        if tok.startswith("--method=") and any(tok[len("--method=") :].startswith(m) for m in _WRITE_METHODS):
+            return True
+    return False
+
+
+def _gh_api_method_dynamic_value(seg: list[str], index: int, raw_tok: str) -> str | None:
+    """The dynamically constructed value part of a `-X`/`--method` flag at
+    `seg[index]`, in whichever of the three shapes it takes (separate
+    token, fused with `=`, or fused directly) -- or None if `raw_tok`
+    is not a `-X`/`--method` flag carrying a dynamic value at all."""
+    if _is_dynamic(raw_tok):
+        lowered_tok = raw_tok.lower()
+        if lowered_tok.startswith("-x") and len(raw_tok) > 2:
+            return raw_tok[2:]
+        if lowered_tok.startswith("--method="):
+            return raw_tok[len("--method=") :]
+        return None
+    if raw_tok.lower() in ("-x", "--method") and index + 1 < len(seg) and _is_dynamic(seg[index + 1]):
+        return seg[index + 1]
+    return None
+
+
+def _gh_api_method_dynamic_hit(seg: list[str], name_to_value: dict[str, str]) -> bool:
+    """A `-X`/`--method` flag whose VALUE is itself dynamically
+    constructed -- as a separate token (`-X $M`), fused with `=` (`-X=$M`,
+    `--method=$M`), or fused directly (`-X$M`, `-X"$M"` -- shlex dequotes
+    the quoted form to the same single token as the unquoted one) --
+    resolved via `name_to_value`. Checked separately from
+    `_gh_api_method_literal_hit`: the literal-token scan there filters
+    every dynamic token out first, so it can never see that a value was
+    even present, let alone what it resolves to -- found live by Step 8
+    independent review (issue #1326), in two rounds: the separate-token
+    form first (`M=POST; gh api .../merge -X $M` resolved to a real
+    write and was wrongly allowed), then the fused forms in a second
+    round after the first fix landed."""
+    for i, raw_tok in enumerate(seg):
+        dynamic_value_part = _gh_api_method_dynamic_value(seg, i, raw_tok)
+        if dynamic_value_part is None:
+            continue
+        referenced = set(_VAR_REF_RE.findall(dynamic_value_part))
+        values = {name_to_value[name] for name in referenced if name in name_to_value}
+        if values & _WRITE_METHODS:
+            return True
+    return False
+
+
+def _gh_api_field_literal_hit(literals: list[str]) -> bool:
+    """A literal `-f`/`-F`/`--field`/`--raw-field` token, as a separate
+    token or fused with a literal value -- this rule never cares about
+    the field VALUE, only the flag's presence."""
+    for tok in literals:
+        if tok in ("-f", "--field", "--raw-field"):
+            return True
+        if tok.startswith("-f") and len(tok) > 2:
+            return True
+        if tok.startswith("--field=") or tok.startswith("--raw-field="):
+            return True
+    return False
+
+
+def _gh_api_field_dynamic_hit(seg: list[str]) -> bool:
+    """A `-f`/`--field`/`--raw-field` flag fused directly with a dynamic
+    value (`-f$X`, `--field=$X`, `--raw-field=$X`) makes the WHOLE token
+    dynamic, so it never reaches `_gh_api_field_literal_hit`'s
+    literal-token scan at all -- found live by Step 8 independent review,
+    third round (issue #1326), the same fused-token gap the -X/--method
+    fix had to close separately. No `name_to_value` lookup needed here:
+    unlike the method flag, this rule never inspects the field value."""
+    for raw_tok in seg:
+        if not _is_dynamic(raw_tok):
+            continue
+        lowered_tok = raw_tok.lower()
+        if lowered_tok.startswith("-f") and len(raw_tok) > 2:
+            return True
+        if lowered_tok.startswith("--field=") or lowered_tok.startswith("--raw-field="):
+            return True
+    return False
+
+
 def _rule_gh_api_write(segments: list[list[str]], lowered_command: str, name_to_value: dict[str, str]) -> str | None:
     """`literals` is already lowercased, matching the predecessor script's
     own case-insensitive match against its whole lowered command -- so
     `-F`/`-f` are indistinguishable here exactly as they were there.
-
-    A `-X`/`--method` flag whose VALUE is itself dynamically constructed
-    -- as a separate token (`-X $M`), fused with `=` (`-X=$M`,
-    `--method=$M`), or fused directly (`-X$M`, `-X"$M"` -- shlex dequotes
-    the quoted form to the same single token as the unquoted one) -- is
-    checked separately, against `name_to_value`: `literals` above has
-    already filtered every dynamic token out, so the loop above can never
-    see that a value was even present, let alone what it resolves to --
-    found live by Step 8 independent review (issue #1326), in two rounds:
-    the separate-token form first (`M=POST; gh api .../merge -X $M`
-    resolved to a real write and was wrongly allowed), then the fused
-    forms in a second round after the first fix landed."""
+    Orchestrates the four independent scanning passes above; kept
+    deliberately thin (each pass owns its own branching) so this
+    function's own cyclomatic complexity stays low."""
     for seg in segments:
         literals = [t.lower() for t in seg if not _is_dynamic(t)]
         has_gh_api = any(literals[i : i + 2] == ["gh", "api"] for i in range(len(literals) - 1))
@@ -329,58 +416,16 @@ def _rule_gh_api_write(segments: list[list[str]], lowered_command: str, name_to_
         if has_graphql and "mutation" in lowered_command:
             return "a 'gh api graphql' call containing a 'mutation' keyword"
 
-        for i, tok in enumerate(literals):
-            if tok in ("-x", "--method") and i + 1 < len(literals):
-                value = literals[i + 1].lstrip("=")
-                if any(value.startswith(m) for m in _WRITE_METHODS):
-                    return "a 'gh api' write call (-X/--method POST/PUT/PATCH/DELETE)"
-            if tok.startswith("-x") and len(tok) > 2 and any(tok[2:].startswith(m) for m in _WRITE_METHODS):
-                return "a 'gh api' write call (-X/--method POST/PUT/PATCH/DELETE)"
-            if tok.startswith("--method=") and any(tok[len("--method=") :].startswith(m) for m in _WRITE_METHODS):
-                return "a 'gh api' write call (-X/--method POST/PUT/PATCH/DELETE)"
-
-        for i, raw_tok in enumerate(seg):
-            dynamic_value_part: str | None = None
-            if _is_dynamic(raw_tok):
-                lowered_tok = raw_tok.lower()
-                if lowered_tok.startswith("-x") and len(raw_tok) > 2:
-                    dynamic_value_part = raw_tok[2:]
-                elif lowered_tok.startswith("--method="):
-                    dynamic_value_part = raw_tok[len("--method=") :]
-            elif raw_tok.lower() in ("-x", "--method") and i + 1 < len(seg) and _is_dynamic(seg[i + 1]):
-                dynamic_value_part = seg[i + 1]
-            if dynamic_value_part is None:
-                continue
-            referenced = set(_VAR_REF_RE.findall(dynamic_value_part))
-            values = {name_to_value[name] for name in referenced if name in name_to_value}
-            if values & _WRITE_METHODS:
-                return "a 'gh api' write call with a dynamically constructed -X/--method value assigned from a denied write method"
+        if _gh_api_method_literal_hit(literals):
+            return _METHOD_FLAG_HIT
+        if _gh_api_method_dynamic_hit(seg, name_to_value):
+            return _METHOD_FLAG_DYNAMIC_HIT
 
         if not has_graphql:
-            for tok in literals:
-                if tok in ("-f", "--field", "--raw-field"):
-                    return "a 'gh api' call with a field flag (-f/-F/--field/--raw-field)"
-                if tok.startswith("-f") and len(tok) > 2:
-                    return "a 'gh api' call with a field flag (-f/-F/--field/--raw-field)"
-                if tok.startswith("--field=") or tok.startswith("--raw-field="):
-                    return "a 'gh api' call with a field flag (-f/-F/--field/--raw-field)"
-            # A separate literal "-f"/"--field"/"--raw-field" token is already
-            # caught above regardless of what follows it -- this rule never
-            # cared about the field VALUE, only the flag's presence. But a
-            # flag fused directly with a dynamic value (`-f$X`,
-            # `--field=$X`, `--raw-field=$X`) makes the WHOLE token dynamic,
-            # so it never reaches `literals` above at all -- found live by
-            # Step 8 independent review, third round (issue #1326), the
-            # same fused-token gap the -X/--method fix above had to close
-            # separately.
-            for raw_tok in seg:
-                if not _is_dynamic(raw_tok):
-                    continue
-                lowered_tok = raw_tok.lower()
-                if lowered_tok.startswith("-f") and len(raw_tok) > 2:
-                    return "a 'gh api' call with a field flag (-f/-F/--field/--raw-field)"
-                if lowered_tok.startswith("--field=") or lowered_tok.startswith("--raw-field="):
-                    return "a 'gh api' call with a field flag (-f/-F/--field/--raw-field)"
+            if _gh_api_field_literal_hit(literals):
+                return _FIELD_FLAG_HIT
+            if _gh_api_field_dynamic_hit(seg):
+                return _FIELD_FLAG_HIT
     return None
 
 

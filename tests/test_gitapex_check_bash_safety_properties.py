@@ -195,6 +195,107 @@ def test_rule_gh_api_write_allows_an_unrelated_dynamic_token_with_no_field_flag_
     assert result is None
 
 
+# --- Direct coverage of _rule_gh_api_write's own extracted sub-passes
+# (issue #1178 detection-logic-property-coverage: each pass is its own
+# named function now, kept small deliberately to hold this module's own
+# per-function cyclomatic complexity down after xenon flagged the
+# monolithic version -- these exercise each pass directly, in addition
+# to the end-to-end _rule_gh_api_write tests above).
+
+
+@_PROPERTIES
+@given(
+    method=st.sampled_from(["POST", "PUT", "PATCH", "DELETE", "post", "PoSt"]),
+    shape=st.sampled_from(["-x{}", "-xdirect{}", "--method={}"]),
+)
+def test_gh_api_method_literal_hit_detects_every_fused_or_separate_literal_shape(method: str, shape: str) -> None:
+    """Model-based: a literal write method is detected regardless of
+    which of the three real flag shapes carries it -- separate token
+    (``["-x", METHOD]``), fused directly with no separator
+    (``-xmethod``, the real short-flag shorthand pflag -- gh's own CLI
+    flag library -- supports), or a single fused long token
+    (``--method=method``). ``-x=method`` is deliberately excluded here:
+    pflag's short-flag parsing does not support ``=`` as a separator, so
+    a literal ``-X=POST`` is not real gh syntax and
+    ``_gh_api_method_literal_hit`` correctly does not treat it as one
+    (the dynamic-value pass is intentionally more permissive for this
+    exact shape as a safety margin -- see the fused-dynamic-value tests
+    above)."""
+    if shape == "-x{}":
+        literals = ["-x", method.lower()]
+    elif shape == "-xdirect{}":
+        literals = [f"-x{method.lower()}"]
+    else:
+        literals = [f"--method={method.lower()}"]
+    assert checker._gh_api_method_literal_hit(literals)
+
+
+@_PROPERTIES
+@given(method=st.sampled_from(["GET", "get"]))
+def test_gh_api_method_literal_hit_allows_a_read_method(method: str) -> None:
+    """No false positive: GET is never flagged."""
+    assert not checker._gh_api_method_literal_hit(["-x", method.lower()])
+
+
+@_PROPERTIES
+@given(var=_IDENTIFIERS, shape=st.sampled_from(["separate", "-x={}", "--method={}"]))
+def test_gh_api_method_dynamic_value_extracts_the_fused_or_separate_shape(var: str, shape: str) -> None:
+    """Model-based: whichever of the three shapes carries the dynamic
+    value (separate token, fused with ``=``, or a fused long token), the
+    extracted value part references the same variable the original
+    dynamic token did."""
+    if shape == "separate":
+        seg = ["gh", "api", "x", "-x", f"${var}"]
+        index = 3
+    else:
+        seg = ["gh", "api", "x", shape.format(f"${var}")]
+        index = 3
+    extracted = checker._gh_api_method_dynamic_value(seg, index, seg[index])
+    assert extracted is not None
+    assert var in checker._VAR_REF_RE.findall(extracted)
+
+
+@_PROPERTIES
+@given(var=_IDENTIFIERS)
+def test_gh_api_method_dynamic_value_none_for_an_unrelated_token(var: str) -> None:
+    """No false positive: a token that is neither a -X/--method flag nor
+    immediately follows one yields no extracted value."""
+    seg = ["gh", "api", "x", f"${var}"]
+    assert checker._gh_api_method_dynamic_value(seg, 3, seg[3]) is None
+
+
+@_PROPERTIES
+@given(shape=st.sampled_from(["-f", "-fvalue", "--field=value", "--raw-field=value"]))
+def test_gh_api_field_literal_hit_detects_every_literal_shape(shape: str) -> None:
+    """Model-based: every literal field-flag shape is detected."""
+    assert checker._gh_api_field_literal_hit([shape])
+
+
+@_PROPERTIES
+@given(tok=st.sampled_from(["-x", "post", "repos/x/y", "gh", "api"]))
+def test_gh_api_field_literal_hit_allows_unrelated_tokens(tok: str) -> None:
+    """No false positive: tokens unrelated to the field flag are never
+    flagged."""
+    assert not checker._gh_api_field_literal_hit([tok])
+
+
+@_PROPERTIES
+@given(var=_IDENTIFIERS, shape=st.sampled_from(["-f{}", "--field={}", "--raw-field={}"]))
+def test_gh_api_field_dynamic_hit_detects_every_fused_shape(var: str, shape: str) -> None:
+    """Model-based: every fused-with-a-dynamic-value field-flag shape is
+    detected, directly at the sub-pass level."""
+    token = shape.format(f"${var}")
+    assert checker._gh_api_field_dynamic_hit([token])
+
+
+@_PROPERTIES
+@given(var=_IDENTIFIERS)
+def test_gh_api_field_dynamic_hit_allows_an_unrelated_dynamic_token(var: str) -> None:
+    """No false positive: an ordinary dynamic token with no field-flag
+    prefix is never flagged."""
+    assert not checker._gh_api_field_dynamic_hit([f"${var}"])
+
+
 _SHORT_FLAG_WITH_VALUE = st.tuples(st.sampled_from(["-c", "-C"]), st.sampled_from(["cfgkey=cfgval", "/tmp/some/repo"]))
 _LONG_FLAG_ALONE = st.sampled_from(["--git-dir=/tmp/x/.git", "--no-pager", "--work-tree=/tmp/y"])
 _GIT_GLOBAL_FLAG_GROUP = st.one_of(_SHORT_FLAG_WITH_VALUE.map(list), _LONG_FLAG_ALONE.map(lambda f: [f]))
