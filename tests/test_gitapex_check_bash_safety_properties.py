@@ -719,6 +719,93 @@ def test_write_method_candidate_hit_false_for_empty_candidates(var: str) -> None
     assert not checker._write_method_candidate_hit([])
 
 
+# --- Round 8 (continued): the flag NAME itself hidden behind a variable
+# FUSED directly with its own value in the SAME token (issue #1326, found
+# live by Step 8 independent review, eighth round, immediately after the
+# plain quote-boundary-ambiguity case above). `F=-X; gh api ... "$F"POST`
+# dequotes to the single token `$FPOST` -- neither the bare-anchored
+# flag-name check (round 5) nor the literal-"-x"-prefix dynamic-value
+# check (round 2/6/7/8) recognizes this shape, since the flag character
+# itself is not literally present anywhere in the token's own text.
+
+
+@_PROPERTIES
+@given(method=st.sampled_from(["post", "put", "patch", "delete"]), var=_IDENTIFIERS)
+def test_gh_api_method_fused_flagname_dynamic_hit_detects_flagname_and_value_fused_in_one_token(
+    method: str, var: str
+) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, eighth round (issue #1326): a token that is
+    PURELY a variable reference resolving to "-x", immediately followed
+    (in the same token) by a write-method value, is still caught."""
+    seg = ["gh", "api", "repos/x/y", f"${var}{method.upper()}"]
+    assert checker._gh_api_method_fused_flagname_dynamic_hit(seg, {var: "-x"})
+
+
+@_PROPERTIES
+@given(var=_IDENTIFIERS)
+def test_gh_api_method_fused_flagname_dynamic_hit_allows_a_read_method(var: str) -> None:
+    """No false positive: the fused flag-plus-value reading resolving to a
+    read method (GET) must stay allowed."""
+    seg = ["gh", "api", "repos/x/y", f"${var}GET"]
+    assert not checker._gh_api_method_fused_flagname_dynamic_hit(seg, {var: "-x"})
+
+
+@_PROPERTIES
+@given(var=_IDENTIFIERS)
+def test_gh_api_method_fused_flagname_dynamic_hit_allows_an_unrelated_dynamic_token(var: str) -> None:
+    """No false positive: a dynamic token whose resolved value does not
+    start with "-x"/"--method=" at all is never flagged."""
+    seg = ["gh", "api", "repos/x/y", f"${var}issues"]
+    assert not checker._gh_api_method_fused_flagname_dynamic_hit(seg, {var: "repos/owner"})
+
+
+@_PROPERTIES
+@given(flag_shape=st.sampled_from([("-f", ""), ("--field", "="), ("--raw-field", "=")]), var=_IDENTIFIERS)
+def test_gh_api_field_fused_flagname_dynamic_hit_detects_flagname_and_value_fused_in_one_token(
+    flag_shape: tuple[str, str], var: str
+) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, eighth round (issue #1326), the field-flag
+    counterpart of the method-flag finding above: a token that is PURELY
+    a variable reference resolving to a field flag, immediately followed
+    (in the same token) by a field payload, is still caught. This rule
+    never inspects the field VALUE, only the flag's presence.
+
+    ``flag_shape``'s own separator mirrors real gh/pflag syntax exactly
+    the way ``_gh_api_field_literal_hit``'s three shapes already do: the
+    short flag ``-f`` fuses directly onto its value with no separator,
+    while the long flags ``--field``/``--raw-field`` require the literal
+    ``=`` -- fusing ``--field`` directly onto ``name=value`` with no
+    ``=`` produces a DIFFERENT (invalid, gh-rejected) flag name, not a
+    real field write, so that shape is correctly not flagged."""
+    flag_name, separator = flag_shape
+    seg = ["gh", "api", "repos/x/y", f"${var}{separator}name=value"]
+    assert checker._gh_api_field_fused_flagname_dynamic_hit(seg, {var: flag_name})
+
+
+@_PROPERTIES
+@given(var=_IDENTIFIERS)
+def test_gh_api_field_fused_flagname_dynamic_hit_allows_an_unrelated_dynamic_token(var: str) -> None:
+    """No false positive: a dynamic token whose resolved value does not
+    start with a field-flag shape at all is never flagged."""
+    seg = ["gh", "api", "repos/x/y", f"${var}issues"]
+    assert not checker._gh_api_field_fused_flagname_dynamic_hit(seg, {var: "repos/owner"})
+
+
+@_PROPERTIES
+@given(method=st.sampled_from(["post", "put", "patch", "delete"]), var=_IDENTIFIERS)
+def test_rule_gh_api_write_detects_fused_flagname_and_value_in_one_token(method: str, var: str) -> None:
+    """End-to-end regression pin, matching the other ``_rule_gh_api_write``
+    end-to-end tests above: the eighth-round fused-flagname bypass is
+    caught at the orchestrator level too, not just the sub-pass level."""
+    token = f"${var}{method.upper()}"
+    segments = [["gh", "api", "repos/x/y", token]]
+    name_to_value = {var: "-x"}
+    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y {token}", name_to_value)
+    assert result is not None
+
+
 _SHORT_FLAG_WITH_VALUE = st.tuples(st.sampled_from(["-c", "-C"]), st.sampled_from(["cfgkey=cfgval", "/tmp/some/repo"]))
 _LONG_FLAG_ALONE = st.sampled_from(["--git-dir=/tmp/x/.git", "--no-pager", "--work-tree=/tmp/y"])
 _GIT_GLOBAL_FLAG_GROUP = st.one_of(_SHORT_FLAG_WITH_VALUE.map(list), _LONG_FLAG_ALONE.map(lambda f: [f]))

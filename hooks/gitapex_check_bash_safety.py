@@ -151,6 +151,25 @@ cap (`_MAX_SUBSTITUTION_CANDIDATES`) fails closed (treats the token as an
 unresolved-but-plausible match) rather than silently truncating if a
 pathological token's combinatorial expansion would exceed it.
 
+Closed by the same eighth-round Step 8 independent review, immediately
+after the fix above: the identical quote-boundary ambiguity also applies
+when the -X/--method/-f/--field flag NAME itself (not just its value) is
+fused directly with its own value in the SAME token -- `F=-X; gh api
+.../merge "$F"POST` dequotes to the single token `$FPOST`, and
+`FF=-f; gh api ... "$FF"name=value` dequotes to `$FFname=value`. Neither
+the bare-anchored flag-name check (round 5, requires the flag token to be
+*exactly* `$NAME`, nothing fused after it) nor the literal-text-prefix
+dynamic-value check (round 2/6/7/8, requires the token to already start
+with literal "-x"/"--method"/"-f"/"--field"/"--raw-field" text) recognizes
+this shape, since the flag character itself is not literally present
+anywhere in the token's own text before substitution. Closed by
+`_gh_api_method_fused_flagname_dynamic_hit`/`_gh_api_field_fused_
+flagname_dynamic_hit`, which check every candidate reconstruction of the
+WHOLE token (via `_substitute_var_refs_candidates`) against the same
+fused-flag shapes already recognized for a literal token -- not a new
+detection rule, only extending an existing one to a token whose resolved
+reading was not knowable until substitution.
+
 Deliberately stdlib-only (shlex, re, json) -- no new third-party
 dependency, matching this repository's declarative module-management
 convention and python3's already-accepted-hook-dependency status (see
@@ -655,6 +674,50 @@ def _gh_api_method_flagname_dynamic_hit(seg: list[str], name_to_value: dict[str,
     return False
 
 
+def _gh_api_method_fused_flagname_dynamic_hit(seg: list[str], name_to_value: dict[str, str]) -> bool:
+    """The -X/--method flag NAME hidden behind a variable reference FUSED
+    directly with its own value in the SAME token -- e.g. `F=-X; gh api
+    .../merge "$F"POST` dequotes (shlex, like real bash, drops which
+    characters were quoted) to the single token `$FPOST`. Neither prior
+    fix's own shape recognizes this: `_gh_api_method_flagname_dynamic_hit`
+    above requires the flag token to be a BARE, anchored single reference
+    (`$F` alone, nothing fused after it); `_gh_api_method_dynamic_hit`
+    requires a literal "-x"/"--method" TEXT prefix already present in the
+    token before it ever looks for a dynamic value -- `$FPOST` starts
+    with `$`, not that literal text. Found live by Step 8 independent
+    review, eighth round (issue #1326), immediately after closing the
+    plain quote-boundary-ambiguity case above: real bash (confirmed via
+    `bash -c` argv expansion) resolves `F=-X; gh api .../merge "$F"POST`
+    to a real `-XPOST` write.
+
+    Every candidate reconstruction of the WHOLE token (via
+    `_substitute_var_refs_candidates`, which already tries every sound
+    quote-boundary reading) is checked against the same fused-flag shapes
+    `_gh_api_method_literal_hit` already recognizes for a literal
+    token -- this is not a new detection rule, only extending an existing
+    one to dynamic tokens whose resolved reading was not knowable until
+    substitution."""
+    for raw_tok in seg:
+        if not _is_dynamic(raw_tok):
+            continue
+        candidates = _substitute_var_refs_candidates(raw_tok, name_to_value)
+        if candidates is None:
+            return True
+        for candidate in candidates:
+            lowered = candidate.lower()
+            if (
+                lowered.startswith("-x")
+                and len(candidate) > 2
+                and any(lowered[2:].startswith(m) for m in _WRITE_METHODS)
+            ):
+                return True
+            if lowered.startswith("--method=") and any(
+                lowered[len("--method=") :].startswith(m) for m in _WRITE_METHODS
+            ):
+                return True
+    return False
+
+
 def _gh_api_field_literal_hit(literals: list[str]) -> bool:
     """A literal `-f`/`-F`/`--field`/`--raw-field` token, as a separate
     token or fused with a literal value -- this rule never cares about
@@ -700,6 +763,33 @@ def _gh_api_field_flagname_dynamic_hit(seg: list[str], name_to_value: dict[str, 
     return any(_resolve_bare_var(raw_tok, name_to_value) in ("-f", "--field", "--raw-field") for raw_tok in seg)
 
 
+def _gh_api_field_fused_flagname_dynamic_hit(seg: list[str], name_to_value: dict[str, str]) -> bool:
+    """The field-flag counterpart of
+    `_gh_api_method_fused_flagname_dynamic_hit`: the -f/--field/--raw-field
+    flag NAME hidden behind a variable reference FUSED directly with its
+    own value in the SAME token -- e.g. `FF=-f; gh api ... "$FF"name=value`
+    dequotes to the single token `$FFname=value`. Found live by Step 8
+    independent review, eighth round (issue #1326), immediately after the
+    method-flag sibling above: real bash resolves
+    `FF=-f; gh api .../1 "$FF"name=value` to a real `-fname=value` field
+    write. Unlike the method flag, this rule never inspects the field
+    value -- presence of the flag alone is denied, matching
+    `_gh_api_field_literal_hit`'s own scope."""
+    for raw_tok in seg:
+        if not _is_dynamic(raw_tok):
+            continue
+        candidates = _substitute_var_refs_candidates(raw_tok, name_to_value)
+        if candidates is None:
+            return True
+        for candidate in candidates:
+            lowered = candidate.lower()
+            if lowered.startswith("-f") and len(candidate) > 2:
+                return True
+            if lowered.startswith("--field=") or lowered.startswith("--raw-field="):
+                return True
+    return False
+
+
 def _rule_gh_api_write(segments: list[list[str]], lowered_command: str, name_to_value: dict[str, str]) -> str | None:
     """`literals` is already lowercased, matching the predecessor script's
     own case-insensitive match against its whole lowered command -- so
@@ -722,6 +812,8 @@ def _rule_gh_api_write(segments: list[list[str]], lowered_command: str, name_to_
             return _METHOD_FLAG_DYNAMIC_HIT
         if _gh_api_method_flagname_dynamic_hit(seg, name_to_value):
             return _METHOD_FLAG_DYNAMIC_HIT
+        if _gh_api_method_fused_flagname_dynamic_hit(seg, name_to_value):
+            return _METHOD_FLAG_DYNAMIC_HIT
 
         if not has_graphql:
             if _gh_api_field_literal_hit(literals):
@@ -729,6 +821,8 @@ def _rule_gh_api_write(segments: list[list[str]], lowered_command: str, name_to_
             if _gh_api_field_dynamic_hit(seg):
                 return _FIELD_FLAG_HIT
             if _gh_api_field_flagname_dynamic_hit(seg, name_to_value):
+                return _FIELD_FLAG_HIT
+            if _gh_api_field_fused_flagname_dynamic_hit(seg, name_to_value):
                 return _FIELD_FLAG_HIT
     return None
 

@@ -207,6 +207,10 @@ ALLOWED_GH_COMMANDS = [
     # -- the unbraced-reference-ambiguity fix must not overreach into
     # denying every dynamic token shaped like a longer identifier.
     ("REPO=owner-repo; gh api repos/$REPOissues", "gh-api-unrelated-unbraced-var-adjacent-to-literal-text"),
+    # False-positive guard for the fused-flagname-plus-value fix added
+    # above (issue #1326, eighth round): a fused flag-name-hidden token
+    # resolving to a read method must stay allowed.
+    ('F=-X; gh api repos/o/r/pulls/1 "$F"GET', "gh-api-method-fused-flagname-and-value-quote-collapsed-read"),
 ]
 
 ALLOWED_ORDINARY_COMMANDS = [
@@ -424,6 +428,18 @@ DENIED_INDIRECTION_COMMANDS = [
         'F=-X; M=PO; gh api repos/o/r/pulls/1/merge $F "$M"ST',
         "gh-api-method-flagname-dynamic-value-unbraced-ref-followed-by-more-identifier-text",
     ),
+    # Found live by Step 8 independent review, eighth round (issue
+    # #1326), immediately after the plain quote-boundary-ambiguity case
+    # above: the SAME shlex quote-removal ambiguity applies when the flag
+    # NAME itself (not just its value) is hidden behind a variable fused
+    # directly with its own value in the SAME token. `F=-X; gh api ...
+    # "$F"POST` dequotes to the single token `$FPOST`; real bash resolves
+    # it to a real `-XPOST` write.
+    ('F=-X; gh api repos/o/r/pulls/1/merge "$F"POST', "gh-api-method-fused-flagname-and-value-quote-collapsed"),
+    # Same class for the field flag: `FF=-f; gh api ... "$FF"name=value`
+    # dequotes to `$FFname=value`; real bash resolves it to a real
+    # `-fname=value` field write.
+    ('FF=-f; gh api repos/o/r/pulls/1 "$FF"name=value', "gh-api-field-fused-flagname-and-value-quote-collapsed"),
 ]
 
 
