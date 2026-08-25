@@ -1095,7 +1095,7 @@ def test_related_skill_reference_body_prose_mention_also_checked(tmp_path):
     # checked too, not just the "vs. `name`:" header itself -- a skill
     # can be named only in body prose with no header bullet of its own
     # elsewhere in the file, exactly as `drafting-a-pr-to-merge` is inside
-    # `fixing-a-reported-issue`'s own Related-skills section.
+    # `planning-a-branch-from-an-issue`'s own Related-skills section.
     (tmp_path / "sibling-a").mkdir()
     d = _write_raw(
         tmp_path,

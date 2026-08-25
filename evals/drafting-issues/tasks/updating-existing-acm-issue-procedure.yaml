@@ -1,0 +1,18 @@
+id: drafting-issues-updating-existing-acm-issue-procedure
+name: Appends a New Finding Through the Updating Procedure, Not Ad Hoc
+description: Exercises the Updating an existing ACM issue procedure (references/updating-an-existing-acm-issue.md) -- a new finding on an already-drafted ACM issue gets re-fetched, appended with a Source label, and re-validated, rather than the skill inventing its own ad hoc update shape.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use drafting-issues. Issue #501 already has an Acceptance Criteria
+    Map this skill drafted earlier. A follow-up review pass just found one
+    more criterion: every error response must include a request-id header
+    so it can be traced in logs. Update issue #501's ACM with this new
+    finding.
+expected:
+  output_contains:
+    - "Source:"
+  output_not_contains:
+    - "LGTM"

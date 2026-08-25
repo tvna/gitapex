@@ -2,7 +2,7 @@ name: ACM issue disclosure gate
 
 # Issue #414 (sub-issue of #357): CI-side backstop for missing Acceptance
 # Criteria Map (ACM) disclosure on issue bodies -- the shape
-# skills/drafting-an-acm-issue/SKILL.md exists to produce. No workflow
+# skills/drafting-issues/SKILL.md exists to produce. No workflow
 # under .github/workflows/ previously triggered on `issues:` events
 # (grep-confirmed during #357's own investigation), so this catches what
 # #413's PreToolUse hook (a sibling sub-issue) cannot: a session working

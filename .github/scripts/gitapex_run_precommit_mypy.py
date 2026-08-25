@@ -4,7 +4,7 @@
 `.github/workflows/test.yml`'s own `mypy` job deliberately runs mypy as
 several separate per-directory-group invocations, not one repo-wide sweep:
 two files share the literal basename ``gitapex_check_acm_present.py`` in unrelated
-directories (``skills/drafting-an-acm-issue/scripts`` and
+directories (``skills/drafting-issues/scripts`` and
 ``skills/planning-a-branch-from-an-issue/scripts``), and with no
 ``__init__.py`` anywhere in this repo, mypy resolves a bare module name the
 same way pytest's own ``pythonpath`` does -- combining both into one
@@ -50,7 +50,7 @@ MYPY_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "skills/evaluating-skill-quality/scripts",
             "skills/auditing-agent-product-scope/scripts",
             "skills/evaluating-deterministic-gate-quality/scripts",
-            "skills/drafting-an-acm-issue/scripts",
+            "skills/drafting-issues/scripts",
         ),
     ),
     ("skills/executing-a-branch-plan/scripts", ("skills/executing-a-branch-plan/scripts",)),

@@ -1,6 +1,6 @@
 ---
 name: executing-a-branch-plan
-description: Use when a Branch Plan and Acceptance Criteria Map (from planning-a-branch-from-an-issue) are approved and ready to execute -- decomposes the ACM into tasks, dispatches them (Workflow tool per wave, or a sequential fallback), and opens the PR drafting-a-pr-to-merge then takes over. Distinct from planning-a-branch-from-an-issue (produces the Branch Plan, explicitly does not implement) and fixing-a-reported-issue (reproduces and fixes a bare defect report, not a decomposed multi-task Branch Plan).
+description: Use when a Branch Plan and Acceptance Criteria Map (from planning-a-branch-from-an-issue) are approved and ready to execute -- decomposes the ACM into tasks, dispatches them (Workflow tool per wave, or a sequential fallback), and opens the PR drafting-a-pr-to-merge then takes over. Distinct from planning-a-branch-from-an-issue (produces the Branch Plan, explicitly does not implement); a single-task, no-decomposition-needed Branch Plan is a valid degenerate case this skill already executes.
 ---
 
 # Executing a Branch Plan
@@ -215,11 +215,16 @@ combined diff, then the draft PR converts to ready-for-review.
   stops -- it never re-derives an ACM, it consumes the one `planning-a-branch-from-an-issue`
   already produced (or independently re-verifies a stale one, per that
   skill's own Step 4 draft-not-pre-verified rule).
-- **vs. `fixing-a-reported-issue`:** that skill is scoped to "a bare issue reporting
-  a defect" -- live reproduction, one failing test, one minimal fix, no
-  task decomposition or wave parallelism. This skill is the general
-  (feature/chore/refactor) case, for a Branch Plan whose ACM may have many
-  rows needing decomposition into many tasks.
+- **vs. a single-task Branch Plan:** an ACM that decomposes into exactly
+  one task -- no wave parallelism, no file-ownership or interface-
+  dependency edges to compute against a sibling task -- is not a
+  different mode this skill declines; it is the degenerate case of step
+  3's own decomposition (one task, one wave) and every other step (1, 2,
+  4-9) runs unchanged. A bare-defect issue with no stated Planned ops
+  still goes through `planning-a-branch-from-an-issue`'s own bare-defect
+  reproduction path first, upstream of this skill, exactly like any other
+  issue; this skill starts once that skill's Branch Plan/ACM exists,
+  regardless of how many tasks it decomposes into.
 - **vs. `drafting-a-pr-to-merge`:** that skill starts from "a PR has just
   been opened" and drives it to a terminal state -- also DRAFT, but for a
   different reason: this skill's own draft (step 5) is a WIP marker during
@@ -276,7 +281,7 @@ content trust the threat-model reference covers -- a step-1 PASS says
 nothing about whether the copy that produced it was the one actually
 intended for installation. Verify that through the calling repository's
 own vendoring/install process, not this skill's own output, matching
-`drafting-an-acm-issue/SKILL.md`'s own identical note for its bundled
+`drafting-issues/SKILL.md`'s own identical note for its bundled
 script.
 
 Each of these bundled scripts can also be run directly, independent of

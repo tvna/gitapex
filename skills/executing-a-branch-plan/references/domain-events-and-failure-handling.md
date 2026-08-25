@@ -75,7 +75,7 @@ sourced from, or generated in response to, untrusted issue-body text.
 Before writing any of it into the task-list file (step 3), the PR body,
 or a comment, neutralize a raw pipe character, a code-fence marker, or
 another Markdown/HTML control sequence it might carry -- the same
-escaping rule `drafting-an-acm-issue` Step 4 already applies to ACM
+escaping rule `drafting-issues` Step 4 already applies to ACM
 cells, extended here to every Execution-log field and to a task record's
 own verbatim-quoted text, so a task's own failure reason, or an ACM row
 quoted into its own task record, cannot break the PR body's or task-list

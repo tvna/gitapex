@@ -10,7 +10,6 @@ spec:
       - planning-a-branch-from-an-issue
     relatedTo:
       - planning-a-branch-from-an-issue
-      - fixing-a-reported-issue
       - drafting-a-pr-to-merge
       - stop-and-replan
       - untrusted-input-triage

@@ -259,7 +259,7 @@ report at all, listed so a reader is never surprised by one later.
 * **Two in-scope source files sharing a basename share one properties
   file too.** ``_stem`` and ``_properties_path`` key on the file's own
   basename alone, not its full path, so
-  ``skills/drafting-an-acm-issue/scripts/gitapex_check_acm_present.py``
+  ``skills/drafting-issues/scripts/gitapex_check_acm_present.py``
   and ``skills/planning-a-branch-from-an-issue/scripts/gitapex_check_acm_present.py``
   -- a real, already-present basename collision in this repository's own
   in-scope set, confirmed live rather than hypothesised -- both resolve to

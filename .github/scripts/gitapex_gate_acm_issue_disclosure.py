@@ -4,7 +4,7 @@ Map (ACM) nor an explicit waiver.
 
 Issue #414 (sub-issue of #357): #357's own investigation found that no
 workflow in this repository triggers on `issues:` events, so a missing
-ACM on an issue body (the shape drafting-an-acm-issue/SKILL.md exists to
+ACM on an issue body (the shape drafting-issues/SKILL.md exists to
 prevent) had no universal, environment-independent backstop -- only a
 per-session skill-trigger (probabilistic) and a PreToolUse hook (#413,
 which only fires where this repo's own hook harness is loaded). This
@@ -14,14 +14,17 @@ repo, and issue number.
 
 Disclosure vocabulary: an issue body passes when it contains either the
 Acceptance Criteria Map table (same header shape as
-skills/drafting-an-acm-issue/scripts/gitapex_check_acm_present.py and
+skills/drafting-issues/scripts/gitapex_check_acm_present.py and
 skills/planning-a-branch-from-an-issue/scripts/gitapex_check_acm_present.py) or an
 explicit waiver line of the form
 ``ACM: not-applicable (chore|docs|tracking|defect): <reason>`` -- the
 `chore`/`docs`/`tracking` vocabulary named in issue #357's own Acceptance
-Criteria Map (the PreToolUse hook row), plus `defect` (issue #657, for
-fixing-a-reported-issue's bare defect-report issues, which never carry an
-ACM table by design), reused here so this script never has to classify
+Criteria Map (the PreToolUse hook row), plus `defect` (issue #657, for a
+bare defect-report issue's own defect waiver -- its rationale now
+attributes to planning-a-branch-from-an-issue's own bare-defect path /
+drafting-issues's `defect (issue not yet filed)` type (issue #1275,
+retiring the skill that originally owned this case), neither of which
+carry an ACM table by design), reused here so this script never has to classify
 feature/fix/refactor vs. chore/docs/tracking/defect itself; the requester
 makes that call by choosing the waiver line or the table. This
 mirrors .github/scripts/gitapex_gate_skill_audit_disclosure.py's own
@@ -113,7 +116,7 @@ _ACM_LABEL_COLOR = "fbca04"
 _ACM_LABEL_DESCRIPTION = "Missing an Acceptance Criteria Map (or an explicit waiver) -- see issue #357"
 _MARKER = "<!-- acm-issue-gate:414 -->"
 
-# Same table header shape as skills/drafting-an-acm-issue/scripts/gitapex_check_acm_present.py
+# Same table header shape as skills/drafting-issues/scripts/gitapex_check_acm_present.py
 # and skills/planning-a-branch-from-an-issue/scripts/gitapex_check_acm_present.py. Match loosely
 # (any whitespace around pipes) so reasonable Markdown re-formatting still passes.
 #
@@ -131,8 +134,12 @@ _HEADER_RE = re.compile(
 
 # Issue #357's own named waiver vocabulary (`chore|docs|tracking`), plus
 # `defect` (issue #657): `ACM: not-applicable (chore|docs|tracking|defect): <reason>`.
-# `defect` covers fixing-a-reported-issue's bare defect-report
-# issues, which by design never carry an ACM table. A non-empty trailing
+# `defect` covers a bare defect-report issue's own defect waiver -- its
+# rationale now attributes to planning-a-branch-from-an-issue's own
+# bare-defect path / drafting-issues's `defect (issue not yet filed)`
+# type (issue #1275, retiring the skill that originally owned this
+# case), neither of which carry an ACM table by design. A non-empty
+# trailing
 # reason is required, mirroring gitapex_gate_skill_audit_disclosure.py's own
 # `WAIVED: <reason>` requirement -- a bare "ACM: not-applicable (chore):" with
 # nothing after the colon does not satisfy this.
@@ -356,7 +363,7 @@ def post_comment(
     body = (
         f"{_MARKER}\n"
         "This issue's body does not disclose an Acceptance Criteria Map "
-        "(ACM) or an explicit waiver. Per `skills/drafting-an-acm-issue/SKILL.md` "
+        "(ACM) or an explicit waiver. Per `skills/drafting-issues/SKILL.md` "
         "(see issue #357), add either:\n\n"
         "- an ACM table (criterion -> interpretation -> planned ops -> proof "
         "method -> residual risk), or\n"

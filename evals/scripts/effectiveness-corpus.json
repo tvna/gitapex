@@ -20,9 +20,9 @@
       "split": "selection"
     },
     {
-      "skill": "drafting-an-acm-issue",
-      "skill_md": "skills/drafting-an-acm-issue/SKILL.md",
-      "eval_yaml": "evals/drafting-an-acm-issue/eval.yaml",
+      "skill": "drafting-issues",
+      "skill_md": "skills/drafting-issues/SKILL.md",
+      "eval_yaml": "evals/drafting-issues/eval.yaml",
       "split": "selection"
     },
     {
@@ -73,12 +73,6 @@
       "skill_md": "skills/explaining-the-work/SKILL.md",
       "eval_yaml": "evals/explaining-the-work/eval.yaml",
       "split": "test"
-    },
-    {
-      "skill": "fixing-a-reported-issue",
-      "skill_md": "skills/fixing-a-reported-issue/SKILL.md",
-      "eval_yaml": "evals/fixing-a-reported-issue/eval.yaml",
-      "split": "selection"
     },
     {
       "skill": "grounding-in-primary-sources",
