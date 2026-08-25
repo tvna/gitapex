@@ -86,7 +86,7 @@ fi
 # non-string `.tool_name` (e.g. `["mcp__github__create_pull_request"]`) --
 # it pretty-prints the JSON form across multiple lines instead, which then
 # never equals the plain string the check below compares against. That
-# silently falls through as "not our tool" (exit 0) instead of failing
+# silently falls through as "not our tool" (exit 0) rather than failing
 # closed on a malformed field this gate structurally depends on --
 # live-confirmed: an array-wrapped tool_name let a create_pull_request call
 # straight through this hook's own ACM/waiver disclosure check. `.tool_name

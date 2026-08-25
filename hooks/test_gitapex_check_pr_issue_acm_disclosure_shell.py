@@ -42,7 +42,7 @@ pytestmark = pytest.mark.slow
 
 def run(
     *,
-    tool_name: str = "mcp__github__create_pull_request",
+    tool_name: object = "mcp__github__create_pull_request",
     owner: str = "tvna",
     repo: str = "gitapex",
     title: str = "x",
@@ -112,23 +112,11 @@ def test_denied_when_tool_name_is_not_a_string(tool_name: object) -> None:
     this guard existed: an array-wrapped tool_name let a
     create_pull_request call straight through this hook's own ACM/waiver
     disclosure check. Must now deny."""
-    payload = json.dumps(
-        {"tool_name": tool_name, "tool_input": {"owner": "tvna", "repo": "gitapex", "title": "x", "body": "Refs #1"}}
-    )
-    env = dict(os.environ)
-    env.pop("CLAUDE_PROJECT_DIR", None)
-    env.pop("CLAUDE_PLUGIN_ROOT", None)
-    env.pop("GH_TOKEN", None)
-    env.pop("GITHUB_TOKEN", None)
-    result = subprocess.run(
-        ["bash", str(SCRIPT)],
-        input=payload,
-        capture_output=True,
-        text=True,
-        timeout=10,
-        env=env,
-        cwd=str(REPO_ROOT),
-    )
+    # body="Refs #1": a context-only citation, so this stays hermetic/
+    # network-free the same way test_allowed_when_only_a_context_only_
+    # citation_is_present does -- the guard under test fires before any
+    # citation parsing would matter anyway.
+    result = run(tool_name=tool_name, body="Refs #1")
     assert result.returncode == 2, f"expected deny (exit 2) for tool_name={tool_name!r}, got {result.returncode}"
     parsed = json.loads(result.stderr)
     assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"

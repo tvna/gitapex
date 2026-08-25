@@ -30,7 +30,7 @@ _INVALID_TITLE = "Add PR title convention gate"
 def run(
     tool_input: dict[str, object],
     *,
-    tool_name: str = "mcp__github__create_pull_request",
+    tool_name: object = "mcp__github__create_pull_request",
     script: Path = SCRIPT,
 ) -> subprocess.CompletedProcess[str]:
     payload = json.dumps({"tool_name": tool_name, "tool_input": tool_input})
@@ -142,24 +142,7 @@ def test_denied_when_tool_name_is_not_a_string(tool_name: object) -> None:
     instead of failing closed. Live-confirmed before this guard existed:
     `tool_name: 0` let a non-conventional title straight through. Must now
     deny."""
-    payload = json.dumps(
-        {
-            "tool_name": tool_name,
-            "tool_input": {"owner": "tvna", "repo": "gitapex", "title": _INVALID_TITLE, "body": "x"},
-        }
-    )
-    env = dict(os.environ)
-    env.pop("CLAUDE_PROJECT_DIR", None)
-    env.pop("CLAUDE_PLUGIN_ROOT", None)
-    result = subprocess.run(
-        ["bash", str(SCRIPT)],
-        input=payload,
-        capture_output=True,
-        text=True,
-        timeout=10,
-        env=env,
-        cwd=str(REPO_ROOT),
-    )
+    result = run({"owner": "tvna", "repo": "gitapex", "title": _INVALID_TITLE, "body": "x"}, tool_name=tool_name)
     assert result.returncode == 2, f"expected deny (exit 2) for tool_name={tool_name!r}, got {result.returncode}"
     parsed = json.loads(result.stderr)
     assert parsed["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -181,6 +164,13 @@ def test_denied_when_tool_input_is_not_an_object(tool_input: object) -> None:
     '{"tool_name":"mcp__github__create_pull_request","tool_input":false}'
     | bash hooks/check-pr-title-convention.sh` exiting 5 ("Cannot check
     whether boolean has a string key") instead of 2."""
+    # Hand-rolled rather than via run(), matching the established
+    # convention for this specific test shape across every sibling that
+    # has one (test_gitapex_check_pr_duplicate_issue_shell.py's and
+    # test_gitapex_check_pr_skill_audit_disclosure_shell.py's own
+    # equivalents): each hook's own run() helper types tool_input as
+    # dict[str, object] to match its everyday callers, and a
+    # non-dict tool_input is exactly the malformed shape under test here.
     payload = json.dumps({"tool_name": "mcp__github__create_pull_request", "tool_input": tool_input})
     env = dict(os.environ)
     env.pop("CLAUDE_PROJECT_DIR", None)

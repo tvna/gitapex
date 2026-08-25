@@ -56,7 +56,7 @@ fi
 # a bare number/bool) -- it pretty-prints a non-scalar JSON form across
 # multiple lines, and a scalar (number/bool) still never equals the plain
 # string(s) the check below compares against. Either way this silently
-# falls through as "not our tool" (exit 0) instead of failing closed on a
+# falls through as "not our tool" (exit 0) rather than failing closed on a
 # malformed field this gate structurally depends on -- live-confirmed: a
 # `tool_name: 0` payload let a non-conventional PR title straight through
 # this hook's own convention check. `.tool_name == null` covers both absent
@@ -74,11 +74,15 @@ if [ "$tool_name" != "mcp__github__create_pull_request" ] && [ "$tool_name" != "
   exit 0
 fi
 
+# tool_input could be a non-object (array/string/number/bool) in an
+# otherwise well-formed payload, which would crash the `has("title")`
+# access below with jq's own "Cannot check whether X has a string key"
+# runtime error -- same fail-open class as the top-level check above.
 # `(.tool_input // {})` alone is not enough: jq's `//` treats JSON `false`
 # the same as `null` (both are falsy), so a `tool_input: false` payload
-# slips past that form and crashes the `has("title")` access below instead
-# of denying -- found by code review (PR #1213), independently tracked as
-# issue #1216 against this hook specifically, and live-confirmed with
+# slips past that form and crashes the `has("title")` access below anyway
+# -- found by code review (PR #1213), independently tracked as issue #1216
+# against this hook specifically, and live-confirmed with
 # `jq -e '(.tool_input // {}) | type == "object"' <<< '{"tool_input":false}'`,
 # which wrongly reports true. Checking `.tool_input == null` directly (true
 # for both absent and explicit null, never for `false`) closes that gap;
