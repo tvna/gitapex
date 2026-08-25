@@ -81,10 +81,10 @@ destined for a public sink.
    allowlist -- `pkg/sanitize/sanitize.go`, allowlist introduced at commit
    `6a39a39` and unchanged in this respect as of a direct clone's current
    `HEAD` -- while its write path applies no such sanitizer). A legitimate
-   construct outside
-   that allowlist -- a backtick-wrapped angle-bracket placeholder, a
-   bracket-wrapped-URL autolink -- can therefore come back looking
-   stripped from an MCP read even though storage still holds it intact.
+   construct outside that allowlist -- a backtick-wrapped angle-bracket
+   placeholder, a bracket-wrapped-URL autolink -- can therefore come back
+   looking stripped from an MCP read even though storage still holds it
+   intact.
    Reading a body back through an MCP tool call proves only that the read
    channel's own sanitizer touched it, never that storage lost anything.
 
@@ -112,10 +112,9 @@ destined for a public sink.
    `fetch_issue()` in `hooks/gitapex_check_pr_issue_acm_disclosure.py`,
    which returns a `{"body": ..., "state": ...}` mapping) -- and feed the
    returned `body` value into the scan below, assigned to a shell variable
-   however your environment
-   does that (for example, printing just that field and capturing it via
-   command substitution). Never feed the scan a body read back from
-   `pull_request_read`/`issue_read`:
+   however your environment does that (for example, printing just that
+   field and capturing it via command substitution). Never feed the scan
+   a body read back from `pull_request_read`/`issue_read`:
 
    ```bash
    python3 scripts/gitapex_scan_provenance.py <<< "$ACTUAL_STORED_BODY"
