@@ -227,7 +227,23 @@ def parse_diff_added_third_party_imports(diff_text: str) -> set[str]:
     happens to start with `-- ` (13 such lines exist today under this
     gate's own `.github/scripts/*.py`/`evals/scripts/*.py` scope, e.g.
     `gitapex_scan_ruleset_drift.py`'s own line 6) aborted the whole scan.
-    """
+
+    Known, disclosed limitation shared with the sibling this function now
+    mirrors (issue #1200's own already-documented gap, not newly
+    introduced or newly closed here): once a hunk's declared counts are
+    honestly, exactly consumed by real content, `in_hunk` correctly
+    clears -- so a disguised `--- `/`+++ ` header pair immediately
+    following, naming a real in-scope path, is read as a genuine file
+    transition, and a later added import is misattributed to that path
+    instead of its own. Confirmed live against this implementation too.
+    Unreachable via this gate's real wired `git diff` invocation (which
+    never emits an inaccurate count); reachable only via this gate's own
+    `--diff` flag with a hand-constructed or foreign patch. Closing it
+    needs the same "structurally different mechanism" issue #1200 itself
+    calls for (a lookahead confirming a candidate header is genuinely
+    followed by a `@@` line, or a two-pass parse), not an incremental
+    extension of this state machine -- out of scope for issue #1316,
+    which does not re-propose or re-design a fix for #1200's own gap."""
     changed: set[str] = set()
     current_path: str | None = None
     in_hunk = False
