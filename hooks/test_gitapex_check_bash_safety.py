@@ -281,6 +281,16 @@ ALLOWED_DYNAMIC_COMMANDS = [
     ("x=$(date +%s); echo $x", "assignment-from-harmless-command-substitution"),
     ('git commit -m "fixed $(date)"', "command-substitution-in-commit-message-argument"),
     ("gh api repos/o/r/pulls/1 -XGET", "gh-api-literal-get-stays-allowed"),
+    # False-positive guards for the fifteenth-round array-literal-folding
+    # fix, re-pinned end to end after the sixteenth round's own
+    # conditional-fold redesign (issue #1326): an array literal whose own
+    # elements are harmless -- dynamic (a command substitution's output)
+    # or plain literal text matching no denied pattern -- must stay
+    # allowed either way.
+    ("declare -a arr=($(seq 1 5))", "array-literal-dynamic-element-stays-allowed"),
+    ("files=($(ls *.txt))", "array-literal-leading-dynamic-element-stays-allowed"),
+    ("arr=(a b c)", "array-literal-leading-harmless-literal-stays-allowed"),
+    ("declare -a arr=(a b c)", "array-literal-non-leading-harmless-literal-stays-allowed"),
 ]
 
 # --- Known, disclosed, unresolved regex/token-gate bypasses ----------------
@@ -578,6 +588,28 @@ DENIED_INDIRECTION_COMMANDS = [
     ("gh api repos/o/r/pulls/1/merge -X$(echo POST)", "gh-api-method-value-command-substitution-fused"),
     ("gh api repos/o/r/pulls/1/merge -X $(echo POST)", "gh-api-method-value-command-substitution-separate"),
     ("gh api repos/o/r/pulls/1/merge $(echo -X) POST", "gh-api-method-flagname-command-substitution"),
+    # Found live by Step 8 independent review, sixteenth round (issue
+    # #1326): a fully literal, undisguised denied verb sequence hidden
+    # inside bash's own array-literal syntax, invisible to every rule
+    # once an earlier version of `_fold_array_literal_spans` folded the
+    # array's own element list into one opaque, space-free token that
+    # `_strip_leading_assignments` then discarded whole as an ordinary
+    # (inert) assignment -- confirmed live that pre-round-15 (before
+    # array-literal folding existed at all) the identical construction
+    # was correctly denied, and that a stub tool on PATH genuinely runs
+    # via `bash -c` once `"${A[@]}"` expands the array.
+    ('declare -a A=(pip install foo); "${A[@]}"', "array-literal-non-leading-hides-pip-install"),
+    ('A=(gh pr merge 1); "${A[@]}"', "array-literal-leading-hides-gh-pr-merge"),
+    # Found live by Step 8 independent review, sixteenth round (issue
+    # #1326): `-X`/`--method` fused directly with `=` in ONE token
+    # (`-X=POST`) was invisible to `_gh_api_method_literal_hit`'s own
+    # fused-directly branch, which checked the raw suffix without first
+    # stripping a leading `=` the way its sibling `_gh_api_method_
+    # dynamic_value` already did for the identical shape -- confirmed
+    # against `gh`'s own flag-parsing library (pflag) that a single
+    # fused argv token `-X=POST` genuinely parses to a real write.
+    ("gh api repos/o/r/issues/1 -X=POST", "gh-api-method-fused-equals-literal"),
+    ('F=-X; gh api repos/o/r/issues/1 "$F"=POST', "gh-api-method-fused-equals-dynamic-flagname"),
 ]
 
 
@@ -605,6 +637,13 @@ OBFUSCATED_GIT_PUSH_WARN_PATH_COMMANDS = [
         "GITREF=G; G=git; PUSHREF=P; P=push; ${!GITREF} ${!PUSHREF} origin main",
         "indirect-ref-git-push-both-hidden-still-warn-path",
     ),
+    # Found live by Step 8 independent review, sixteenth round (issue
+    # #1326): the array-literal counterpart of DENIED_INDIRECTION_
+    # COMMANDS's own array-literal cases above, for git push specifically
+    # -- `_is_git_push_segment`'s own literal-`git push`-anywhere
+    # substring scan already sees it once the array literal is left
+    # unfolded (see `_fold_array_literal_spans`'s own docstring).
+    ('A=(git push origin main); "${A[@]}"', "array-literal-hides-git-push-still-warn-path"),
 ]
 
 

@@ -956,7 +956,18 @@ def _strip_leading_assignments(seg: list[str]) -> list[str]:
     api repos/o/r/pulls/1/merge -XPOST`, and `X=foo git push origin
     main` were ALREADY correctly denied before this fix, which is why
     this strip is applied via `segments` (feeding every rule uniformly)
-    rather than requiring those already-correct rules to change."""
+    rather than requiring those already-correct rules to change.
+
+    A folded array-literal token (see `_fold_array_literal_spans`) only
+    ever reaches this function already `NAME=`-prefixed when its own
+    inner content is DYNAMIC -- `_fold_array_literal_spans` deliberately
+    leaves a FULLY LITERAL array literal's tokens unfolded (see its own
+    docstring for why), so this function never has to distinguish "is
+    this genuinely inert" from "this array's own elements are about to
+    become real argv" itself: an unfolded literal array's `NAME=` opener
+    is exactly as inert as any other bare, empty-value assignment, and
+    its own elements arrive here as ordinary, separately-scannable
+    tokens, not fused into this one."""
     i = 0
     n = len(seg)
     while i < n and _ASSIGN_RE.match(seg[i]):
@@ -993,7 +1004,8 @@ def _array_literal_token_span(tokens: list[str], i: int) -> int | None:
 
 def _fold_array_literal_spans(tokens: list[str]) -> list[str]:
     """Fold each `NAME=(...)` array-literal span (found via `_array_
-    literal_token_span`) into a single token -- the same "make the span's
+    literal_token_span`) whose own inner elements include at least one
+    DYNAMIC token into a single token -- the same "make the span's
     boundary visible as one atomic unit before segmenting" strategy
     `_fold_command_substitution_spans` already uses for `$(...)`, applied
     here for the identical underlying reason: `NAME=(elem1 elem2)` is
@@ -1007,27 +1019,72 @@ def _fold_array_literal_spans(tokens: list[str]) -> list[str]:
     indistinguishable, to every `seg[0]`-anchored rule, from an attempted
     command invocation.
 
-    The folded token is still `NAME=`-prefixed and so still matches
-    `_ASSIGN_RE` with a NON-empty value (the array's own content) --
-    `_strip_leading_assignments` therefore strips it away entirely as an
-    ordinary (if unusually-shaped) assignment, the same treatment a
-    genuine `NAME=value` prefix already gets, requiring no separate
-    "is this actually an array literal" case anywhere downstream.
+    A FULLY LITERAL array-literal span (no dynamic element at all) is
+    deliberately left UNFOLDED -- passed through as its own original,
+    separate tokens (`NAME=`, `(`, each element, `)`), unchanged. Found
+    live by Step 8 independent review, sixteenth round (issue #1326): an
+    earlier version of this function folded EVERY array-literal span
+    unconditionally, joining a NON-empty value into one `NAME=`-prefixed
+    token that `_strip_leading_assignments` then discarded entirely as an
+    ordinary (inert) assignment -- correct for a genuinely inert scalar
+    RHS, but NOT for an array literal's own elements, which become real
+    argv the moment `"${NAME[@]}"` expands it later in the same command.
+    `declare -a A=(pip install foo); "${A[@]}"` and `A=(gh pr merge 1);
+    "${A[@]}"` were both wrongly ALLOWED this way -- `pip`, `install`,
+    `gh`, `pr`, and `merge` sit right there as fully literal, undisguised
+    tokens, no indirection technique at all (unlike this module's own
+    disclosed array-literal INDIRECTION limitation elsewhere in this
+    file's docstring, where the tool/verb name is never a literal token
+    anywhere), and pre-round-15 (before array-literal folding existed at
+    all) the identical construction was correctly denied -- a genuine
+    regression, not the disclosed limitation. Leaving a literal span
+    unfolded restores that pre-round-15 behavior exactly: `segment_
+    tokens` splits it at the literal `(`/`)` tokens into its own segment
+    (`NAME=` stripped away by `_strip_leading_assignments` as the
+    ordinary empty-value assignment it genuinely is, the array's own
+    elements landing in a SEPARATE segment as ordinary, individually-
+    scannable literal tokens), so `_rule_a_literal`'s adjacent-pair scan,
+    `_rule_gh_any`, and every other existing whole-segment or `seg[0]`-
+    anchored rule sees this exactly as if the array wrapper had never
+    been there, with no rule needing to learn a new "array literal"
+    shape of its own.
 
-    Found live by Step 8 independent review, fifteenth round (issue
-    #1326), ported from the task-scoped sibling module's own fifteenth-
-    round fix of the same finding: `files=($(ls *.txt))` -- an ordinary,
-    common idiom capturing a command's word-split output into an array --
-    is (via B1a/B1b's own `_is_dynamic(seg[0])` gate) exposed to the
-    identical false positive once the array's own `$(...)`-folded element
-    becomes segment[0] of its own segment."""
+    A DYNAMIC span still folds exactly as before -- `_is_dynamic`
+    correctly filters the resulting opaque token out of `_rule_a_
+    literal`'s literal-only scan, and B1a/B1b/B2 each independently fail
+    to resolve it to any watched tool or verb (confirmed live), so
+    round fifteen's own motivating false positive (`declare -a
+    arr=($(seq 1 5))`, `files=($(ls *.txt))`) stays fixed unchanged.
+    A MIXED span (some elements dynamic, some literal, e.g. `A=(uv
+    $(echo install))`) folds too, the same as an all-dynamic span --
+    the literal element's own text is preserved (space-joined) inside
+    the folded token for a reader, but is not separately scanned by
+    `_rule_a_literal` once fused into an overall-dynamic token; this
+    narrower residual (not itself demonstrated live) is the same class
+    of gap `_substitute_var_refs_candidates`'s own docstring already
+    discloses for a literal fragment fused with an unresolvable dynamic
+    one in the SAME token, not a new one introduced here.
+
+    The array's own inner elements are joined WITH spaces, the opener
+    (`NAME=` plus `(`) and closer (`)`) joined with NO separator, when
+    folded -- mirroring `_fold_command_substitution_spans`'s own
+    established opener/inner/closer split, for the identical reason
+    given there: a plain `"".join` of the whole span fuses adjacent
+    words together."""
     folded: list[str] = []
     i = 0
     n = len(tokens)
     while i < n:
         end = _array_literal_token_span(tokens, i)
         if end is not None:
-            folded.append("".join(tokens[i:end]))
+            inner = tokens[i + 2 : end - 1]
+            if any(_is_dynamic(t) for t in inner):
+                prefix = tokens[i] + tokens[i + 1]
+                suffix = tokens[end - 1]
+                middle = (" " + " ".join(inner)) if inner else ""
+                folded.append(prefix + middle + suffix)
+            else:
+                folded.extend(tokens[i:end])
             i = end
         else:
             folded.append(tokens[i])
@@ -1182,13 +1239,27 @@ _FIELD_FLAG_HIT = "a 'gh api' call with a field flag (-f/-F/--field/--raw-field)
 
 def _gh_api_method_literal_hit(literals: list[str]) -> bool:
     """Literal `-X`/`--method` flag, as a separate token, fused with `=`,
-    or fused directly, whose value is itself a literal write method."""
+    or fused directly, whose value is itself a literal write method.
+
+    The fused-directly case (`-X`+value in ONE token, e.g. `-XPOST`) also
+    covers the fused-directly-WITH-`=`-separator shape (`-X=POST`) via
+    its own `.lstrip("=")` -- found live by Step 8 independent review,
+    sixteenth round (issue #1326): `gh api repos/o/r/issues/1 -X=POST`
+    was wrongly ALLOWED, since `tok[2:]` on `-x=post` is `=post`, which
+    does not itself start with any write method -- confirmed against
+    `gh`'s own flag-parsing library (pflag, the same library `gh api`
+    registers `-X`/`--method` through) that a single fused argv token
+    `-X=POST` genuinely parses to `method=POST`, a real write (unlike
+    `-X` and `=POST` as two SEPARATE argv tokens, which pflag does not
+    treat as the flag's value at all -- not exploitable, not changed
+    here). The separate-token case above already had this exact
+    `.lstrip("=")` treatment; this was the one shape missing it."""
     for i, tok in enumerate(literals):
         if tok in ("-x", "--method") and i + 1 < len(literals):
             value = literals[i + 1].lstrip("=")
             if any(value.startswith(m) for m in _WRITE_METHODS):
                 return True
-        if tok.startswith("-x") and len(tok) > 2 and any(tok[2:].startswith(m) for m in _WRITE_METHODS):
+        if tok.startswith("-x") and len(tok) > 2 and any(tok[2:].lstrip("=").startswith(m) for m in _WRITE_METHODS):
             return True
         if tok.startswith("--method=") and any(tok[len("--method=") :].startswith(m) for m in _WRITE_METHODS):
             return True
@@ -1384,7 +1455,10 @@ def _gh_api_method_fused_flagname_dynamic_hit(
     `_gh_api_method_literal_hit` already recognizes for a literal
     token -- this is not a new detection rule, only extending an existing
     one to dynamic tokens whose resolved reading was not knowable until
-    substitution."""
+    substitution, including that function's own sixteenth-round
+    `.lstrip("=")` fix for the `-X=POST`-shaped fused-with-`=` case (see
+    its own docstring) -- this function had the identical gap on a
+    resolved candidate string, closed the same way."""
     for raw_tok in seg:
         if not _is_dynamic(raw_tok):
             continue
@@ -1398,7 +1472,7 @@ def _gh_api_method_fused_flagname_dynamic_hit(
             if (
                 lowered.startswith("-x")
                 and len(candidate) > 2
-                and any(lowered[2:].startswith(m) for m in _WRITE_METHODS)
+                and any(lowered[2:].lstrip("=").startswith(m) for m in _WRITE_METHODS)
             ):
                 return True
             if lowered.startswith("--method=") and any(

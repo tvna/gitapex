@@ -882,7 +882,18 @@ def _strip_leading_assignments(seg: list[str]) -> list[str]:
     `X=foo npx left-pad` were ALREADY correctly denied before this fix,
     which is why this strip is applied via `segments`/`pipe_chains`
     (feeding every rule uniformly) rather than requiring those
-    already-correct rules to change."""
+    already-correct rules to change.
+
+    A folded array-literal token (see `_fold_array_literal_spans`) only
+    ever reaches this function already `NAME=`-prefixed when its own
+    inner content is DYNAMIC -- `_fold_array_literal_spans` deliberately
+    leaves a FULLY LITERAL array literal's tokens unfolded (see its own
+    docstring for why), so this function never has to distinguish "is
+    this genuinely inert" from "this array's own elements are about to
+    become real argv" itself: an unfolded literal array's `NAME=` opener
+    is exactly as inert as any other bare, empty-value assignment, and
+    its own elements arrive here as ordinary, separately-scannable
+    tokens, not fused into this one."""
     i = 0
     n = len(seg)
     while i < n and _ASSIGN_RE.match(seg[i]):
@@ -919,7 +930,8 @@ def _array_literal_token_span(tokens: list[str], i: int) -> int | None:
 
 def _fold_array_literal_spans(tokens: list[str]) -> list[str]:
     """Fold each `NAME=(...)` array-literal span (found via `_array_
-    literal_token_span`) into a single token -- the same "make the span's
+    literal_token_span`) whose own inner elements include at least one
+    DYNAMIC token into a single token -- the same "make the span's
     boundary visible as one atomic unit before segmenting" strategy
     `_fold_command_substitution_spans` already uses for `$(...)`, applied
     here for the identical underlying reason: `NAME=(elem1 elem2)` is
@@ -933,41 +945,79 @@ def _fold_array_literal_spans(tokens: list[str]) -> list[str]:
     it -- indistinguishable, to every `seg[0]`-anchored rule, from an
     attempted command invocation.
 
-    The folded token is still `NAME=`-prefixed and so still matches
-    `_ASSIGN_RE` with a NON-empty value (the array's own content) --
-    `_strip_leading_assignments` therefore strips it away entirely as an
-    ordinary (if unusually-shaped) assignment, the same treatment a
-    genuine `NAME=value` prefix already gets, requiring no separate
-    "is this actually an array literal" case anywhere downstream.
+    A FULLY LITERAL array-literal span (no dynamic element at all) is
+    deliberately left UNFOLDED -- passed through as its own original,
+    separate tokens (`NAME=`, `(`, each element, `)`), unchanged. Found
+    live by Step 8 independent review, sixteenth round (issue #1326),
+    ported from the main hook's own sixteenth-round fix of the same
+    finding: an earlier version of this function folded EVERY
+    array-literal span unconditionally, joining a NON-empty value into
+    one `NAME=`-prefixed token that `_strip_leading_assignments` then
+    discarded entirely as an ordinary (inert) assignment -- correct for
+    a genuinely inert scalar RHS, but NOT for an array literal's own
+    elements, which become real argv the moment `"${NAME[@]}"` expands
+    it later in the same command. `A=(gh pr merge 1); "${A[@]}"` was
+    wrongly ALLOWED this way -- `gh`, `pr`, and `merge` sit right there
+    as fully literal, undisguised tokens, no indirection technique at
+    all (unlike this module's own disclosed array-literal INDIRECTION
+    limitation, where the tool/verb name is never a literal token
+    anywhere), and pre-round-15 (before array-literal folding existed at
+    all) the identical construction was correctly denied -- a genuine
+    regression, not the disclosed limitation. Confirmed live that a stub
+    `gh` on `PATH` genuinely runs via `bash -c` for this exact
+    construction. Leaving a literal span unfolded restores that
+    pre-round-15 behavior exactly: `segment_tokens`/`_pipe_chains` split
+    it at the literal `(`/`)` tokens into its own segment (`NAME=`
+    stripped away by `_strip_leading_assignments` as the ordinary
+    empty-value assignment it genuinely is, the array's own elements
+    landing in a SEPARATE segment as ordinary, individually-scannable
+    literal tokens), so `_rule_gh_any`'s own `seg[0]` check, `_rule_a_
+    literal`'s adjacent-pair scan, and every other existing whole-segment
+    or `seg[0]`-anchored rule in this module sees this exactly as if the
+    array wrapper had never been there, with no rule needing to learn a
+    new "array literal" shape of its own.
 
-    Found live by Step 8 independent review, fifteenth round (issue
-    #1326): `files=($(ls *.txt))` -- an ordinary, common idiom capturing
-    a command's word-split output into an array, confirmed live via the
-    real shell wrapper to have been allowed before this fix -- was wrongly
+    A DYNAMIC span still folds exactly as before -- `files=($(ls
+    *.txt))` (an ordinary, common idiom capturing a command's word-split
+    output into an array, confirmed live via the real shell wrapper to
+    have been allowed) was, before array-literal folding existed at all
+    (Step 8 independent review, fifteenth round, issue #1326), wrongly
     denied by `_rule_bare_install`'s own `_is_unresolvable_substitution`
     guard once the array's own `$(...)`-folded element became segment[0]
-    of its own segment, indistinguishable from an attempted bare-install-
-    tool invocation; `_rule_fetch_exec` (via `_pipe_chains`'s own
+    of its own segment; `_rule_fetch_exec` (via `_pipe_chains`'s own
     transparent-parens treatment of `(`, which never segment-broke this
     case the way `segment_tokens` did) reproduced the identical false
     positive from a different structural path, even with no `|` anywhere
     in the command. `declare -a arr=($(seq 1 5))` and `x=("$(date)"
-    "$(whoami)")` reproduced the same false positive. An earlier version
-    of this fix tried to reconcile this AFTER segmenting/pipe-chain-
-    building (merging a wrongly-split-off segment back, or skipping
-    `_strip_leading_assignments` for it) -- `_pipe_chains`'s own paren-
-    transparency meant the array literal was NEVER split apart there in
-    the first place, so the same reconciliation logic that correctly
-    fixed `segments` left `pipe_chains` still broken. Folding the span at
-    the TOKEN level, before either `segment_tokens` or `_pipe_chains`
-    runs, fixes both uniformly with no separate case for either."""
+    "$(whoami)")` reproduced the same false positive. Folding a DYNAMIC
+    span at the TOKEN level, before either `segment_tokens` or
+    `_pipe_chains` runs, still fixes both uniformly, unchanged by this
+    round's own literal-span carve-out: the resulting opaque token is
+    filtered out of `_rule_a_literal`'s literal-only scan by
+    `_is_dynamic`, and every `seg[0]`-anchored rule in this module fails
+    to resolve it to any watched tool, fetch-exec interpreter, or verb
+    (confirmed live).
+
+    The array's own inner elements are joined WITH spaces, the opener
+    (`NAME=` plus `(`) and closer (`)`) joined with NO separator, when
+    folded -- mirroring `_fold_command_substitution_spans`'s own
+    established opener/inner/closer split, for the identical reason
+    given there: a plain `"".join` of the whole span fuses adjacent
+    words together."""
     folded: list[str] = []
     i = 0
     n = len(tokens)
     while i < n:
         end = _array_literal_token_span(tokens, i)
         if end is not None:
-            folded.append("".join(tokens[i:end]))
+            inner = tokens[i + 2 : end - 1]
+            if any(_is_dynamic(t) for t in inner):
+                prefix = tokens[i] + tokens[i + 1]
+                suffix = tokens[end - 1]
+                middle = (" " + " ".join(inner)) if inner else ""
+                folded.append(prefix + middle + suffix)
+            else:
+                folded.extend(tokens[i:end])
             i = end
         else:
             folded.append(tokens[i])

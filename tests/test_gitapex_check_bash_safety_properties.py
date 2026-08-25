@@ -1387,19 +1387,38 @@ def test_array_literal_token_span_none_for_a_non_empty_assignment(name: str, val
 
 @_PROPERTIES
 @given(name=_IDENTIFIERS, inner=_IDENTIFIERS)
-def test_fold_array_literal_spans_merges_into_one_dynamic_free_token(name: str, inner: str) -> None:
+def test_fold_array_literal_spans_merges_a_dynamic_element_into_one_token(name: str, inner: str) -> None:
     """Model-based, regression pin for the real bypass found live by Step
     8 independent review, fifteenth round (issue #1326), ported from the
     task-scoped sibling module's own fifteenth-round fix of the same
-    finding: an array literal's own element list folds into ONE token
+    finding: an array literal with a DYNAMIC element folds into ONE token
     still matching `_ASSIGN_RE`, so `_strip_leading_assignments` removes
     it entirely as an ordinary assignment -- confirmed live that
     `declare -a arr=($(seq 1 5))` was wrongly denied before this fix,
     once the array's own content became `seg[0]` of its own segment."""
+    dynamic_inner = f"${inner}"
+    tokens = [f"{name}=", "(", dynamic_inner, ")", "trailing"]
+    folded = checker._fold_array_literal_spans(tokens)
+    assert folded == [f"{name}=( {dynamic_inner})", "trailing"]
+    assert checker._strip_leading_assignments(folded[:1]) == []
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, inner=_IDENTIFIERS)
+def test_fold_array_literal_spans_leaves_a_fully_literal_element_unfolded(name: str, inner: str) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, sixteenth round (issue #1326): a FULLY LITERAL
+    array element must NOT fold into one token -- `A=(gh pr merge 1);
+    "${A[@]}"` was wrongly ALLOWED when this span folded unconditionally,
+    since the resulting `NAME=(...)`-shaped token was then discarded
+    whole by `_strip_leading_assignments` as an ordinary (inert)
+    assignment, hiding fully literal, undisguised denied-verb tokens from
+    every downstream rule. Leaving the span's own tokens unfolded lets
+    `segment_tokens` split it exactly as pre-round-15, restoring every
+    existing rule's coverage with no rule needing to learn a new shape."""
     tokens = [f"{name}=", "(", inner, ")", "trailing"]
     folded = checker._fold_array_literal_spans(tokens)
-    assert folded == [f"{name}=({inner})", "trailing"]
-    assert checker._strip_leading_assignments(folded[:1]) == []
+    assert folded == tokens
 
 
 # --- codecov/patch coverage gate: branches this PR's diff added but no ----
