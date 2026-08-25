@@ -554,9 +554,10 @@ mechanism, not only the ones already recorded below.
   cloud_default`), but `claude --version` now reports `2.1.241 (Claude
   Code)`, newer than the `2.1.233` the entry above covers -- a fresh run of
   the Verification procedure at a version that entry did not cover, run
-  ahead of the three `battle-testing-a-skill`/`evaluating-skill-quality`
-  dispatches issue #1275's own PR used this mechanism for. Same variant as
-  the entry above (prompt passed as a single self-contained CLI argument,
+  ahead of a same-session round of `battle-testing-a-skill`/
+  `evaluating-skill-quality` dispatches that used this mechanism. Same
+  variant as the entry above (prompt passed as a single self-contained
+  CLI argument,
   not via stdin; no permission-bypass flag, since the prompt needed no
   Read/Bash/Write). Positive control (isolated cwd containing a synthetic
   sentinel `CLAUDE.md`, never the real file): correctly quoted the sentinel
