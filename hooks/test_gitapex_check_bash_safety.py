@@ -85,8 +85,24 @@ DENIED_INSTALL_COMMANDS = [
     ("gem install rails", "gem-install"),
     ("cargo install ripgrep", "cargo-install"),
     ("uv pip install requests", "uv-pip-install"),
-    ("uv add requests", "uv-add"),
+    ("uv install requests", "uv-install"),
     ("plugin install foo", "plugin-install"),
+]
+
+# --- Issue #1320: declarative package-manager commands allowed -------------
+# `uv add`/`uv remove` mutate pyproject.toml/uv.lock, so a dependency change
+# made this way shows up in the PR diff for review -- unlike `uv pip
+# install`/bare `uv install` (still denied above), which install into the
+# venv with no diff trail. `apm install`/`apm uninstall` were never matched
+# by install_re at all (no "apm" pattern exists); these two pin that
+# already-allowed behavior as a regression test rather than relaxing an
+# actual block, so a future widened install_re (e.g. a broader "plugin
+# install" pattern) can't silently sweep `apm` back into deny unnoticed.
+ALLOWED_DECLARATIVE_PACKAGE_COMMANDS = [
+    ("uv add requests", "uv-add"),
+    ("uv remove requests", "uv-remove"),
+    ("apm install foo", "apm-install"),
+    ("apm uninstall foo", "apm-uninstall"),
 ]
 
 # --- Findings 2 & 3: direct CLI GitHub write commands ----------------------
@@ -171,6 +187,15 @@ def test_allowed_gh(command: str, case_id: str) -> None:
 
 @pytest.mark.parametrize("command,case_id", ALLOWED_ORDINARY_COMMANDS, ids=[c[1] for c in ALLOWED_ORDINARY_COMMANDS])
 def test_allowed_ordinary(command: str, case_id: str) -> None:
+    assert_allowed(command)
+
+
+@pytest.mark.parametrize(
+    "command,case_id",
+    ALLOWED_DECLARATIVE_PACKAGE_COMMANDS,
+    ids=[c[1] for c in ALLOWED_DECLARATIVE_PACKAGE_COMMANDS],
+)
+def test_allowed_declarative_package_commands(command: str, case_id: str) -> None:
     assert_allowed(command)
 
 
