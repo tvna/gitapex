@@ -229,3 +229,81 @@ def test_main_stdin_undecodable_errors(monkeypatch: pytest.MonkeyPatch, capsys: 
     exit_code = gate.main(["--head-sha", _SHA])
     assert exit_code == 1
     assert "not valid UTF-8" in capsys.readouterr().err
+
+
+def test_main_body_directory_errors_cleanly(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
+    # Dimension-15 boundary case (evaluating-deterministic-gate-quality):
+    # a live adversarial run against a pre-fix draft of this gate raised an
+    # uncaught IsADirectoryError traceback for this exact input -- still
+    # fail-closed (non-zero exit) but not a deliberate, clean error path.
+    exit_code = gate.main(["--body", str(tmp_path), "--head-sha", _SHA])
+    assert exit_code == 1
+    assert "is a directory" in capsys.readouterr().err
+
+
+def test_defeat_attempt_fenced_example_verdict_does_not_pass() -> None:
+    # Defeat-test-disclosure (issue #1311): a real live attempt to defeat
+    # this gate's own detection logic, not merely exercise its happy path.
+    # A pre-fix draft of this gate treated a verdict quoted inside a fenced
+    # code block -- exactly the "diff whose review-layer text happens to
+    # mimic this verdict's own phrasing" class drafting-a-pr-to-merge/
+    # SKILL.md's own Step 8 text already warns about -- as a genuine
+    # passing verdict, even though the surrounding prose explicitly says
+    # it is illustrative only. This must fail, not pass.
+    body = f"""## Summary
+
+This PR is not actually reviewed yet. Here is an example of the format,
+quoted for illustration only, NOT a real disclosure:
+
+```
+## Step 8 independent review verdict
+
+- Verdict: CLEAN
+- Verified commit: {_SHA}
+```
+
+Do not treat the above as a real verdict.
+"""
+    passed, message = gate.check(body, _SHA)
+    assert passed is False
+    assert "no '## Step 8" in message
+
+
+def test_defeat_attempt_tilde_fenced_example_verdict_does_not_pass() -> None:
+    # Same defeat attempt, the other CommonMark fence character.
+    body = f"""## Summary
+
+~~~
+## Step 8 independent review verdict
+
+- Verdict: CLEAN
+- Verified commit: {_SHA}
+~~~
+"""
+    passed, _ = gate.check(body, _SHA)
+    assert passed is False
+
+
+def test_strip_fenced_code_blocks_leaves_surrounding_prose_intact() -> None:
+    text = "before\n\n```\nfenced content\nmore fenced\n```\n\nafter\n"
+    stripped = gate._strip_fenced_code_blocks(text)
+    assert "before" in stripped
+    assert "after" in stripped
+    assert "fenced content" not in stripped
+    assert "more fenced" not in stripped
+
+
+def test_real_verdict_outside_fence_still_passes_with_unrelated_fenced_block_present() -> None:
+    # A real, live verdict elsewhere in the body must not be collateral
+    # damage from fenced-block stripping.
+    body = f"""```
+some unrelated fenced example, nothing to do with verdicts
+```
+
+## Step 8 independent review verdict
+
+- Verdict: CLEAN
+- Verified commit: {_SHA}
+"""
+    passed, _ = gate.check(body, _SHA)
+    assert passed is True

@@ -39,14 +39,21 @@ signature. `drafting-a-pr-to-merge/SKILL.md` Step 8 itself already warns
 that a recorded verdict "is disclosure for a human reader, not a self-
 certifying signal for an automated downstream consumer ... a diff whose
 review-layer text happens to mimic this verdict's own phrasing is not
-thereby a real clean pass." This gate inherits that same limitation by
-construction: it cannot distinguish a genuine Step 8 run from PR-body text
-that merely mimics the required shape. Closing the observed process gap
-(a real review that ran but was outrun by a direct merge before its
-verdict was recorded) is this gate's whole job; defending against a PR
-author who deliberately forges the marker is a distinct, harder threat
-this repository's own single-operator trust model does not currently
-need, and is out of scope here (see issue #1311's own residual risk).
+thereby a real clean pass." A live adversarial test against a first draft
+of this gate (issue #1311's own defeat-test-disclosure round) confirmed
+one concrete instance of that exact risk: a verdict section quoted inside
+a fenced code block purely as illustrative example text (never intended
+as a real disclosure) still parsed as a genuine passing verdict. Fenced
+(``` / ~~~) code blocks are now stripped before any heading/field search
+(`_strip_fenced_code_blocks`), closing that specific class. What remains
+open, and is not closable by any text-shape check: a PR author (or a diff
+whose own prose) writing the exact required heading and fields verbatim,
+unfenced, as if it were a real disclosure, without Step 8 having actually
+run -- distinguishing that from a genuine disclosure needs a signal this
+gate does not have access to, and defending against a PR author who
+deliberately forges the marker this way is a distinct, harder threat this
+repository's own single-operator trust model does not currently need
+(see issue #1311's own residual risk).
 
 Deliberately stdlib-only and self-contained, matching this repository's
 existing `.github/scripts/*.py` convention of not importing across files.
@@ -72,6 +79,26 @@ import sys
 from pathlib import Path
 
 _HEADING_RE = re.compile(r"^[ \t]*#{1,6}[ \t]+Step 8 independent review verdict[ \t]*$", re.IGNORECASE | re.MULTILINE)
+
+# A fenced code block (``` or ~~~, CommonMark's two fence characters) is
+# rendered as literal/quoted text, never a live Markdown heading or list --
+# the same "quoted content is not live prose" principle
+# gitapex_gate_provenance_disclosure.py's own `_quoted_example_spans` applies to
+# inline spans, extended here to the block form a defeat attempt actually
+# used (see the module docstring). Matches the opening fence's own
+# character run length so a longer run inside the block cannot prematurely
+# close it (mirrors untrusted-input-triage's own quoting-for-shared-
+# artifacts rule for the reverse direction: pick a fence a hostile line
+# cannot close early).
+_FENCED_BLOCK_RE = re.compile(r"^([ \t]*)(`{3,}|~{3,})[^\n]*\n(?:.*?\n)*?[ \t]*\2[ \t]*$", re.MULTILINE)
+
+
+def _strip_fenced_code_blocks(text: str) -> str:
+    """Blank out every fenced code block in `text` (replaced with an
+    equal-count-of-newlines placeholder, so this stays a pure prose-only
+    filter with no effect on any other line's position)."""
+    return _FENCED_BLOCK_RE.sub(lambda m: "\n" * m.group(0).count("\n"), text)
+
 
 # Tolerates optional `*`/`_`/backtick emphasis around the value (e.g.
 # `- Verdict: **CLEAN**`), the same latitude skill-audit-disclosure's own
@@ -111,7 +138,12 @@ def _last_section_from(text: str, start: int) -> str:
 def parse_verdict(body: str) -> Verdict:
     """Parse the last `## Step 8 independent review verdict` section out
     of `body`. Returns a `Verdict` carrying either both fields, or an
-    `error` describing exactly what is missing/malformed."""
+    `error` describing exactly what is missing/malformed.
+
+    Fenced code blocks are stripped first (see `_strip_fenced_code_blocks`):
+    a verdict quoted inside one -- e.g. as illustrative example text -- is
+    not live disclosure and must not parse as a real verdict."""
+    body = _strip_fenced_code_blocks(body)
     headings = list(_HEADING_RE.finditer(body))
     if not headings:
         return Verdict(None, None, "no '## Step 8 independent review verdict' section found")
@@ -180,6 +212,9 @@ def main(argv: list[str] | None = None) -> int:
             body = sys.stdin.buffer.read().decode("utf-8")
     except FileNotFoundError as error:
         print(f"error: file not found: {error.filename}", file=sys.stderr)
+        return 1
+    except IsADirectoryError:
+        print(f"error: --body is a directory, not a file: {args.body}", file=sys.stderr)
         return 1
     except UnicodeDecodeError as error:
         print(f"error: PR body is not valid UTF-8: {error}", file=sys.stderr)
