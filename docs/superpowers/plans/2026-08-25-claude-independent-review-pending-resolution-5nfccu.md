@@ -76,11 +76,13 @@ rounds, issue #1311/PR #1318, already closed once):
   pass/fail logic or its explanatory prose).
 - `tests/test_gitapex_gate_independent_review_pending.py` +
   `tests/test_gitapex_gate_independent_review_pending_properties.py`: all
-  26 literal-heading occurrences (24 + 1 `###`-level variant in the
-  example-based suite, plus the casing tuple, two body-templates, and two
-  Hypothesis `.filter()` exclusion phrases in the property suite) renamed
-  to match; four purely-explanatory "Step 8" mentions in code comments
-  left unchanged.
+  31 literal-heading occurrences (24 in the example-based suite, including
+  its one `###`-level variant; 7 in the property suite -- three in the
+  casing tuple, two body templates, and two Hypothesis `.filter()`
+  exclusion phrases) renamed to match; four purely-explanatory "Step 8"
+  mentions in code comments left unchanged. One regression test,
+  `test_old_step_8_heading_no_longer_passes_after_rename`, added to the
+  example-based suite to pin the no-dual-accept decision.
 - `skills/drafting-a-pr-to-merge/SKILL.md` Step 8: renamed the one
   literal-heading occurrence (line ~249) via a like-for-like string swap
   (net-zero line count -- confirmed still exactly 500 lines after the
@@ -98,13 +100,15 @@ rounds, issue #1311/PR #1318, already closed once):
 ## Verification
 
 - `uv run --frozen python3 -m pytest tests/test_gitapex_gate_independent_review_pending.py tests/test_gitapex_gate_independent_review_pending_properties.py -q`:
-  42 passed (40 example-based + 2 grouped Hypothesis property runs covering
-  13 properties).
+  43 passed (35 example-based + 8 Hypothesis property tests).
 - Live defeat-check: a body carrying the new `## Independent review
   verdict` heading with a CLEAN verdict against a matching SHA -> PASS; a
   body carrying the OLD `## Step 8 independent review verdict` heading,
   otherwise identical -> FAIL with `no '## Independent review verdict'
   section found` (confirms no silent dual-acceptance of the old heading).
+  The old-heading half of that check is now codified as the regression
+  test `test_old_step_8_heading_no_longer_passes_after_rename`, so it is
+  re-run by CI rather than resting on this one-off manual observation.
 - `gitapex_check_skill_shape.py --allowed-root skills skills/drafting-a-pr-to-merge`:
   45/45 checks pass.
 - `gitapex_check_skill_shape.py --allowed-root skills skills/executing-a-branch-plan`:
@@ -122,11 +126,13 @@ rounds, issue #1311/PR #1318, already closed once):
 - `TaskStarted{task_1}` -- feed-forward the gate in the PR template and
   `executing-a-branch-plan/SKILL.md`.
 - `TaskCompleted{task_1}` -- both files edited; shape checks pass.
-- `TaskStarted{task_2}` -- rename the recorded-verdict heading across all
-  eight files that read or write it.
-- `TaskCompleted{task_2}` -- all eight files updated; gate test suite (42
-  tests), shape checks, ssot schema-drift check, ruff, and mypy all pass;
-  live defeat-check confirms the old heading no longer parses.
+- `TaskStarted{task_2}` -- rename the recorded-verdict heading across the
+  six files that already carried the old literal (the PR template's own
+  mention of the heading was authored new, with the new name, in task 1).
+- `TaskCompleted{task_2}` -- all six files updated and the regression test
+  added; gate test suite (43 tests), shape checks, ssot schema-drift
+  check, ruff, and mypy all pass; live defeat-check confirms the old
+  heading no longer parses.
 
 ## Next Move
 
