@@ -5,7 +5,7 @@ Two layers, kept apart on purpose:
 - **Fixture-registry tests** build their own tiny ``ssot.json`` pointing at
   purpose-built pass/fail scripts, so the runner's own aggregation,
   discovery, error handling and exit-code logic are exercised in under a
-  second with no dependence on this repository's real 36 wired gates. Issue
+  second with no dependence on this repository's real 35 wired gates. Issue
   #876's first acceptance criterion asks for an integration test running
   the consolidated command "with one deliberately-broken instance of each
   wired check, asserting all are reported in one run" --
@@ -877,7 +877,7 @@ def test_only_deliberately_named_hooks_reach_the_push_path() -> None:
 
 def test_every_unwired_gate_records_why() -> None:
     """The drift-test branch of issue #876's third criterion: a gate with no
-    working-tree form must say so in prose, so the 30 exclusions stay
+    working-tree form must say so in prose, so the 29 exclusions stay
     readable as decisions rather than as coverage silently lost. The schema
     enforces the same invariant; this asserts it against the live registry
     so a schema regression cannot pass unnoticed."""

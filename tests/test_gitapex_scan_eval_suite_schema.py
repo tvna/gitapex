@@ -2,9 +2,9 @@
 
 The gate itself is `test_real_repository_eval_suites_have_no_schema_drift`:
 it calls `find_drift()` with no fixture override, so the repository's real
-`evals/` tree, real vendored schemas, real flake.nix pin, and real allowlist
-consumers are what CI grades. Everything else here unit-tests one detector
-against a temp-directory fixture.
+`evals/` tree, real vendored schemas, and real allowlist consumers are what
+CI grades. Everything else here unit-tests one detector against a
+temp-directory fixture.
 
 Deliberately NOT tested against the network: `find_upstream_drift` is
 exercised through an injected opener, because a test that reached
@@ -344,36 +344,6 @@ def test_native_properties_returns_none_for_a_non_mapping_schema() -> None:
     assert drift._native_properties(["not", "a", "mapping"], "expected") is None
 
 
-# --- pin drift --------------------------------------------------------------
-
-
-def test_real_flake_pin_matches_the_vendored_tag() -> None:
-    assert drift.find_pin_drift() == []
-
-
-def test_pin_drift_reported_when_flake_pins_another_tag(tmp_path: pathlib.Path) -> None:
-    flake = tmp_path / "flake.nix"
-    flake.write_text('url = ghRelease "microsoft" "waza" "azd-ext-microsoft-azd-waza_0.99.0" asset;\n')
-    findings = drift.find_pin_drift(flake)
-    assert len(findings) == 1
-    assert "0.99.0" in findings[0]
-    assert drift.VENDORED_WAZA_TAG in findings[0]
-
-
-def test_pin_drift_reported_when_flake_pins_no_waza_tag_at_all(tmp_path: pathlib.Path) -> None:
-    flake = tmp_path / "flake.nix"
-    flake.write_text('{ description = "no waza here"; }\n')
-    assert drift.find_pin_drift(flake) == ["pin-drift: flake.nix pins no recognizable waza release tag"]
-
-
-def test_pin_drift_ignores_other_class_b_version_literals(tmp_path: pathlib.Path) -> None:
-    """flake.nix carries a `version = "0.25.0";` line for apm too; matching a
-    bare version assignment would grade the wrong tool's pin."""
-    flake = tmp_path / "flake.nix"
-    flake.write_text(f'version = "0.25.0";\nurl = ghRelease "microsoft" "waza" "{drift.VENDORED_WAZA_TAG}" a;\n')
-    assert drift.find_pin_drift(flake) == []
-
-
 # --- vendored digests -------------------------------------------------------
 
 
@@ -472,11 +442,11 @@ def test_main_returns_zero_on_the_real_repository(capsys: pytest.CaptureFixture[
 def test_main_reports_findings_and_returns_one(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr(drift, "find_drift", lambda: ["pin-drift: fixture finding"])
+    monkeypatch.setattr(drift, "find_drift", lambda: ["vendor-digest-drift: fixture finding"])
     assert drift.main([]) == 1
     out = capsys.readouterr().out
     assert "eval suite schema drift:" in out
-    assert "pin-drift: fixture finding" in out
+    assert "vendor-digest-drift: fixture finding" in out
 
 
 def test_main_reports_a_read_error_without_a_traceback(

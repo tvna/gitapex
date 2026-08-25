@@ -108,10 +108,8 @@ def test_convention_matches_a_brand_new_unregistered_gate(tmp_path):
         ".github/scripts/gitapex_skill_security_relevance.py",
         ".github/scripts/gitapex_skill_description_diff.py",
         ".github/scripts/gitapex_extract_diff_added_lines.py",
-        ".github/scripts/gitapex_detect_touched_eval_skills.py",
         ".github/workflows/lint.yml",
         ".github/workflows/toolchain-nix.yml",
-        ".github/workflows/waza-eval-gate.yml",
     ],
 )
 def test_registered_gate_paths_outside_the_convention_are_in_scope(path, registered):

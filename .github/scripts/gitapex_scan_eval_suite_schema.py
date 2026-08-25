@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Validate every committed waza eval suite against waza's own vendored schemas.
 
-ACTIVE (issue #862): registered in .gitapex/ssot.json as
-eval-suite-schema-drift. Enforced exactly the way its two siblings
+ACTIVE (issue #862; its own .gitapex/ssot.json registration retired by
+issue #1136 alongside the rest of the waza binary's provisioning/
+verification bookkeeping). Enforced the way its siblings
 .github/scripts/gitapex_scan_ssot_schema.py (ssot-schema-drift) and
 .github/scripts/gitapex_scan_skill_metadata_schema.py
-(skill-metadata-schema-drift) already are -- no dedicated CI workflow step
+(skill-metadata-schema-drift) are -- no dedicated CI workflow step
 and no pre-commit hook, only tests/test_gitapex_scan_eval_suite_schema.py's
 own test_real_repository_eval_suites_have_no_schema_drift calling find_drift()
 against the real evals/ tree with no fixture override, inside the pytest
@@ -40,10 +41,9 @@ Three layers, one findings list:
 1. Schema validation. Each evals/*/eval.yaml is validated against
    .gitapex/waza-eval.schema.json and each evals/*/tasks/*.yaml against
    .gitapex/waza-task.schema.json, both vendored verbatim from waza's own
-   published ``schemas/`` at the release tag flake.nix pins -- not from
-   ``main``, which has already drifted ahead of the pinned tag (it adds
-   ``$defs.jsonSchemaGraderConfig.properties.extract_json``). The vendored
-   copy is the one matching the binary that actually runs here. Before
+   published ``schemas/`` at VENDORED_WAZA_TAG -- not from ``main``, which
+   has already drifted ahead of that tag (it adds
+   ``$defs.jsonSchemaGraderConfig.properties.extract_json``). Before
    validating, each vendored schema is *extended* by EXTENSION_KEYS, which
    re-opens exactly the named repository-local keys that the upstream
    ``expected`` object's own ``"additionalProperties": false`` would
@@ -71,12 +71,8 @@ Three layers, one findings list:
    adopts as a native property is also reported, so the row is deleted
    rather than left shadowing a field waza now owns.
 
-3. Vendor-pin drift. Two offline checks plus one opt-in network check:
+3. Vendor-digest drift. One offline check plus one opt-in network check:
 
-   - ``pin-drift``: flake.nix's own pinned waza release tag must equal
-     VENDORED_WAZA_TAG. This is the check that catches the scenario issue
-     #862 names -- a future waza version bump silently desynchronizing the
-     vendored copies from the binary that runs.
    - ``vendor-digest-drift``: each vendored file's sha256 must equal the
      digest recorded here, so editing a vendored copy in place fails
      instead of quietly becoming the new baseline.
@@ -85,7 +81,7 @@ Three layers, one findings list:
      checks above must stay deterministic in a network-less checkout, and
      this repository's pytest gate runs without any guarantee of egress.
      It is the only check that proves the vendored bytes match what
-     upstream actually published, so run it when bumping the pin.
+     upstream actually published, so run it when re-vendoring.
 
 Known limitations, stated rather than implied (dimensions 9 and 11 of
 skills/evaluating-deterministic-gate-quality/references/dimensions.md):
@@ -101,11 +97,6 @@ skills/evaluating-deterministic-gate-quality/references/dimensions.md):
   for ``requires_fresh_dispatch``, gitapex_lint_fixture_assertions.py's
   own dispatch-declaration check). A well-spelled key carrying a
   nonsense value passes this gate.
-- ``find_pin_drift`` reads flake.nix as text, anchored on the waza tag's
-  own literal prefix. A future flake.nix that stops spelling the tag
-  literally (composing it from a version variable, say) would report
-  "pins no recognizable waza release tag" rather than silently passing --
-  fail-closed, but it would need this pattern updated.
 - A suite directory holding an eval.yaml but no tasks/ files is not
   itself reported by the empty-corpus check; only a wholly empty evals/
   tree is. Such a suite is still caught from the other direction, by
@@ -133,7 +124,6 @@ import copy
 import hashlib
 import http.client
 import pathlib
-import re
 import sys
 import urllib.request
 from typing import Any, NamedTuple
@@ -147,12 +137,12 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 EVALS_DIR = REPO_ROOT / "evals"
 EVAL_SCHEMA_PATH = REPO_ROOT / ".gitapex" / "waza-eval.schema.json"
 TASK_SCHEMA_PATH = REPO_ROOT / ".gitapex" / "waza-task.schema.json"
-FLAKE_PATH = REPO_ROOT / "flake.nix"
 
-# The waza release tag both vendored schemas were copied from, and the tag
-# flake.nix must still pin for those copies to describe the binary that
-# runs. Bumping waza means re-vendoring both files, re-recording both
-# digests below, and re-running this script with --verify-upstream.
+# The waza release tag both vendored schemas were copied from (issue #1130
+# retired the waza binary and its flake.nix pin; this tag now records only
+# provenance for the two vendored schema files). Bumping the vendored
+# schemas means re-vendoring both files, re-recording both digests below,
+# and re-running this script with --verify-upstream.
 VENDORED_WAZA_TAG = "azd-ext-microsoft-azd-waza_0.38.0"
 _UPSTREAM_RAW = "https://raw.githubusercontent.com/microsoft/waza/{tag}/schemas/{name}"
 
@@ -163,20 +153,14 @@ VENDORED_DIGESTS: dict[str, str] = {
     "task.schema.json": "0981881ecfd93b081b2ecfce31aeb14467f68db4b424ede64d23aa50af465e55",
 }
 
-# flake.nix pins waza by the full release tag inside its ghRelease call.
-# Anchored on the tag's own literal prefix rather than on a `version = `
-# assignment: the same file carries a `version = "0.38.0"` line for every
-# Class B tool, and matching the wrong one would grade apm's pin as waza's.
-_FLAKE_WAZA_TAG_RE = re.compile(r'"(azd-ext-microsoft-azd-waza_[0-9][^"]*)"')
-
 _HTTP_TIMEOUT_SECONDS = 30
 
 
 class SuiteReadError(Exception):
-    """A vendored schema, a flake.nix, or a committed suite file could not be
-    read or parsed at all -- exit 1 with a message, never a traceback.
-    Distinct from a parseable-but-drifted file, which find_drift reports as
-    an ordinary finding."""
+    """A vendored schema or a committed suite file could not be read or
+    parsed at all -- exit 1 with a message, never a traceback. Distinct
+    from a parseable-but-drifted file, which find_drift reports as an
+    ordinary finding."""
 
 
 class ExtensionKey(NamedTuple):
@@ -465,22 +449,6 @@ def find_allowlist_drift(
     return findings
 
 
-def find_pin_drift(flake_path: pathlib.Path = FLAKE_PATH) -> list[str]:
-    """Return a finding when flake.nix no longer pins VENDORED_WAZA_TAG. This
-    is the check that stops a waza version bump from silently leaving the
-    vendored schemas describing a binary that no longer runs."""
-    text = _read_text_or_raise(flake_path)
-    tags = sorted(set(_FLAKE_WAZA_TAG_RE.findall(text)))
-    if not tags:
-        return [f"pin-drift: {flake_path.name} pins no recognizable waza release tag"]
-    if tags != [VENDORED_WAZA_TAG]:
-        return [
-            f"pin-drift: {flake_path.name} pins waza at {', '.join(tags)} but the vendored schemas were taken from "
-            f"{VENDORED_WAZA_TAG} -- re-vendor both .gitapex/waza-*.schema.json and re-record their digests"
-        ]
-    return []
-
-
 def find_vendor_digest_drift(
     eval_schema_path: pathlib.Path = EVAL_SCHEMA_PATH,
     task_schema_path: pathlib.Path = TASK_SCHEMA_PATH,
@@ -548,13 +516,11 @@ def find_drift(
     eval_schema_path: pathlib.Path = EVAL_SCHEMA_PATH,
     task_schema_path: pathlib.Path = TASK_SCHEMA_PATH,
     repo_root: pathlib.Path = REPO_ROOT,
-    flake_path: pathlib.Path = FLAKE_PATH,
 ) -> list[str]:
     """Every offline finding, in one list. Empty means the committed corpus,
-    the allowlist, and the vendored pin are all clean. The network check is
-    deliberately not part of this: see the module docstring."""
+    the allowlist, and the vendored digests are all clean. The network check
+    is deliberately not part of this: see the module docstring."""
     findings: list[str] = []
-    findings.extend(find_pin_drift(flake_path))
     findings.extend(find_vendor_digest_drift(eval_schema_path, task_schema_path))
     findings.extend(find_allowlist_drift(EXTENSION_KEYS, task_schema_path, repo_root))
     findings.extend(find_suite_violations(evals_dir, eval_schema_path, task_schema_path))
@@ -566,8 +532,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Validate every committed evals/ suite against waza's own vendored schemas plus this "
-            "repository's reviewed extension-key allowlist, and check the vendored copies against "
-            "the release tag flake.nix pins."
+            "repository's reviewed extension-key allowlist, and check the vendored copies' own digests."
         )
     )
     parser.add_argument(
@@ -575,7 +540,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         action="store_true",
         help=(
             "Additionally fetch both schemas from microsoft/waza at "
-            f"{VENDORED_WAZA_TAG} and compare bytes. Requires network access; run this when bumping the pin."
+            f"{VENDORED_WAZA_TAG} and compare bytes. Requires network access; run this when re-vendoring."
         ),
     )
     return parser.parse_args(argv)

@@ -30,13 +30,13 @@ def test_clean_workflow_has_no_drift(tmp_path):
 def test_go_install_of_class_b_tool_is_drift(tmp_path):
     _write(
         tmp_path,
-        "waza-check.yml",
-        "      - run: go install github.com/microsoft/waza/cmd/waza@abc123\n",
+        "apm-check.yml",
+        "      - run: go install github.com/microsoft/apm/cmd/apm@abc123\n",
     )
     findings = drift.find_drift(tmp_path)
     assert len(findings) == 1
-    assert findings[0][0].endswith("waza-check.yml")
-    assert "microsoft/waza" in findings[0][2]
+    assert findings[0][0].endswith("apm-check.yml")
+    assert "microsoft/apm" in findings[0][2]
 
 
 def test_release_download_url_of_class_b_tool_is_drift(tmp_path):
@@ -49,12 +49,12 @@ def test_release_download_url_of_class_b_tool_is_drift(tmp_path):
 
 
 def test_plain_mention_of_tool_name_is_not_drift(tmp_path):
-    # A step named "Run waza check" mentions the tool but not its owner/repo,
+    # A step named "Run apm check" mentions the tool but not its owner/repo,
     # so it must NOT trip the scan.
     _write(
         tmp_path,
-        "waza-check.yml",
-        "      - name: Run waza check (advisory report, not a merge gate)\n",
+        "apm-check.yml",
+        "      - name: Run apm check (advisory report, not a merge gate)\n",
     )
     assert drift.find_drift(tmp_path) == []
 
@@ -71,7 +71,7 @@ def test_undecodable_workflow_file_is_skipped_not_crashed(tmp_path):
     # as a finding, and clean files in the same directory must still be
     # scanned.
     (tmp_path / "bad.yml").write_bytes(b"\xff\xfe bad")
-    _write(tmp_path, "ok.yml", "      - run: go install microsoft/waza@latest\n")
+    _write(tmp_path, "ok.yml", "      - run: go install microsoft/apm@latest\n")
     findings = drift.find_drift(tmp_path)
     assert len(findings) == 2
     paths = {path for path, _, _ in findings}
@@ -85,7 +85,7 @@ def test_undecodable_workflow_file_fails_closed_even_when_it_is_the_only_file(tm
     # drift -- an inability to verify is a finding, not a silent pass, even
     # when the corrupted file is the only one that would have carried the
     # real violation.
-    (tmp_path / "bad.yml").write_bytes(b"      - run: go install microsoft/waza@latest\n\xff\xfe")
+    (tmp_path / "bad.yml").write_bytes(b"      - run: go install microsoft/apm@latest\n\xff\xfe")
     findings = drift.find_drift(tmp_path)
     assert findings != []
     assert findings[0][0].endswith("bad.yml")
@@ -111,10 +111,10 @@ def test_main_prints_findings_and_returns_one_on_drift(capsys, monkeypatch):
     monkeypatch.setattr(
         drift,
         "find_drift",
-        lambda: [(".github/workflows/waza-check.yml", 3, "go install microsoft/waza")],
+        lambda: [(".github/workflows/apm-check.yml", 3, "go install microsoft/apm")],
     )
     rc = drift.main()
     out = capsys.readouterr().out
     assert rc == 1
     assert "Toolchain pin drift" in out
-    assert ".github/workflows/waza-check.yml:3: go install microsoft/waza" in out
+    assert ".github/workflows/apm-check.yml:3: go install microsoft/apm" in out
