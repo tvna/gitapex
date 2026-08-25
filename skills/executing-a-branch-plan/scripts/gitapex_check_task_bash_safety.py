@@ -293,6 +293,19 @@ def _rule_git_push(segments: list[list[str]], name_to_value: dict[str, str]) -> 
         if not seg:
             continue
         if _is_dynamic(seg[0]):
+            # A dynamic command word with a literal "push" token already
+            # present elsewhere in the SAME segment (`$G push origin
+            # main`) needs no indirection lookup at all -- "push" is
+            # right there. Found live by Step 8 independent review, third
+            # round (issue #1326): the indirection-only check below never
+            # fires here, since "push" is a plain literal argument, not
+            # referenced by any dynamic token, so it never entered
+            # `values`. Mirrors what the sibling
+            # hooks/gitapex_check_bash_safety.py module already does for
+            # git-push detection via its own
+            # _rule_b1a_dynamic_word_same_segment_verb call.
+            if any((not _is_dynamic(t)) and t.lower() == "push" for t in seg[1:]):
+                return "git push, not permitted inside a task-level agent (worktree merge-back is main-thread-only)"
             # Scoped to the variable names THIS segment's own dynamic
             # tokens actually reference -- not "some assignment anywhere
             # in the whole command happens to be named git/push,"

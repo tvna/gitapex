@@ -364,6 +364,23 @@ def _rule_gh_api_write(segments: list[list[str]], lowered_command: str, name_to_
                     return "a 'gh api' call with a field flag (-f/-F/--field/--raw-field)"
                 if tok.startswith("--field=") or tok.startswith("--raw-field="):
                     return "a 'gh api' call with a field flag (-f/-F/--field/--raw-field)"
+            # A separate literal "-f"/"--field"/"--raw-field" token is already
+            # caught above regardless of what follows it -- this rule never
+            # cared about the field VALUE, only the flag's presence. But a
+            # flag fused directly with a dynamic value (`-f$X`,
+            # `--field=$X`, `--raw-field=$X`) makes the WHOLE token dynamic,
+            # so it never reaches `literals` above at all -- found live by
+            # Step 8 independent review, third round (issue #1326), the
+            # same fused-token gap the -X/--method fix above had to close
+            # separately.
+            for raw_tok in seg:
+                if not _is_dynamic(raw_tok):
+                    continue
+                lowered_tok = raw_tok.lower()
+                if lowered_tok.startswith("-f") and len(raw_tok) > 2:
+                    return "a 'gh api' call with a field flag (-f/-F/--field/--raw-field)"
+                if lowered_tok.startswith("--field=") or lowered_tok.startswith("--raw-field="):
+                    return "a 'gh api' call with a field flag (-f/-F/--field/--raw-field)"
     return None
 
 

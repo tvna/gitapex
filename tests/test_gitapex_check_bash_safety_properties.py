@@ -166,6 +166,35 @@ def test_rule_gh_api_write_allows_a_fused_dynamic_method_value_resolved_to_a_rea
     assert result is None
 
 
+@_PROPERTIES
+@given(var=_IDENTIFIERS, shape=st.sampled_from(["-f{}", "--field={}", "--raw-field={}"]))
+def test_rule_gh_api_write_detects_a_field_flag_fused_with_a_dynamic_value(var: str, shape: str) -> None:
+    """Model-based, regression pin for a real bypass found live by Step 8
+    independent review, third round (issue #1326): a field flag fused
+    directly with a dynamic value (``-f$X``, ``--field=$X``,
+    ``--raw-field=$X``) makes the WHOLE token dynamic, so it never
+    reaches the literal-token field-flag check at all -- the same
+    fused-token gap the -X/--method fix had to close separately. This
+    rule never inspects the field VALUE, only the flag's presence, so no
+    ``name_to_value`` lookup is needed here -- any dynamic token shaped
+    like a field flag is denied outright."""
+    token = shape.format(f"${var}")
+    segments = [["gh", "api", "repos/x/y", token]]
+    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y {token}", {})
+    assert result is not None
+
+
+@_PROPERTIES
+@given(var=_IDENTIFIERS)
+def test_rule_gh_api_write_allows_an_unrelated_dynamic_token_with_no_field_flag_shape(var: str) -> None:
+    """No false positive: an ordinary dynamic token that does not start
+    with a field-flag prefix is never flagged by the fused-field-flag
+    check."""
+    segments = [["gh", "api", "repos/x/y", f"${var}"]]
+    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y ${var}", {})
+    assert result is None
+
+
 _SHORT_FLAG_WITH_VALUE = st.tuples(st.sampled_from(["-c", "-C"]), st.sampled_from(["cfgkey=cfgval", "/tmp/some/repo"]))
 _LONG_FLAG_ALONE = st.sampled_from(["--git-dir=/tmp/x/.git", "--no-pager", "--work-tree=/tmp/y"])
 _GIT_GLOBAL_FLAG_GROUP = st.one_of(_SHORT_FLAG_WITH_VALUE.map(list), _LONG_FLAG_ALONE.map(lambda f: [f]))

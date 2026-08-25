@@ -246,3 +246,31 @@ def test_rule_git_push_detects_when_segment_actually_references_assigned_git_and
     name_to_value = {git_var: "git", push_var: "push"}
     segments = [[f"${git_var}", f"${push_var}", "origin", "main"]]
     assert checker._rule_git_push(segments, name_to_value) is not None
+
+
+@_PROPERTIES
+@given(git_var=_IDENTIFIERS)
+def test_rule_git_push_detects_dynamic_tool_word_with_literal_push_in_same_segment(git_var: str) -> None:
+    """Model-based, regression pin for a real bypass found live by Step 8
+    independent review, third round (issue #1326): ``G=git; $G push
+    origin main`` was wrongly allowed. Only the tool word was dynamic --
+    ``push`` was already a plain literal token in the same segment, never
+    referenced by any dynamic token, so it never entered the
+    indirection-lookup ``values`` set the prior fix relied on exclusively.
+    A dynamic command word with a literal "push" token already present
+    needs no indirection lookup at all."""
+    name_to_value = {git_var: "git"}
+    segments = [[f"${git_var}", "push", "origin", "main"]]
+    assert checker._rule_git_push(segments, name_to_value) is not None
+
+
+@_PROPERTIES
+@given(unrelated_var=_IDENTIFIERS, subcommand=st.sampled_from(["test", "build", "status"]))
+def test_rule_git_push_allows_dynamic_tool_word_with_an_unrelated_literal_argument(
+    unrelated_var: str, subcommand: str
+) -> None:
+    """No false positive: a dynamic command word followed by a literal
+    argument that is NOT "push" is never flagged by this rule."""
+    name_to_value = {unrelated_var: "somecmd"}
+    segments = [[f"${unrelated_var}", subcommand]]
+    assert checker._rule_git_push(segments, name_to_value) is None
