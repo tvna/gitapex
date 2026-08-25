@@ -1154,3 +1154,27 @@ def test_resolve_indirect_ref_none_for_a_bare_reference(name: str) -> None:
     (incorrectly) treating it as one."""
     assert checker._resolve_indirect_ref(f"${{{name}}}", {name: "gh"}, {name: "gh"}) is None
     assert checker._resolve_indirect_ref(f"${name}", {name: "gh"}, {name: "gh"}) is None
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value=_VALUES)
+def test_resolve_bare_or_indirect_prefers_the_bare_reading(name: str, value: str) -> None:
+    """Model-based: `_resolve_bare_or_indirect` -- factored out of
+    `_gh_api_method_flagname_dynamic_hit`/`_gh_api_field_flagname_
+    dynamic_hit`'s own byte-identical duplicated fallback, found by Step 8
+    independent review, eleventh round (issue #1326) -- resolves a bare
+    reference directly, without needing the indirect-reference fallback
+    at all."""
+    name_to_value = {name: value.lower()}
+    assert checker._resolve_bare_or_indirect(f"${name}", name_to_value, {}) == value.lower()
+
+
+@_PROPERTIES
+@given(name1=_IDENTIFIERS, name2=_IDENTIFIERS, value=_VALUES)
+def test_resolve_bare_or_indirect_falls_back_to_indirect_ref(name1: str, name2: str, value: str) -> None:
+    """Model-based: when TOKEN is not a bare reference, `_resolve_bare_or_
+    indirect` falls back to the `${!NAME}` indirect-reference reading."""
+    assume(name1 != name2)
+    name_to_raw_value = {name1: name2}
+    name_to_value = {name2: value.lower()}
+    assert checker._resolve_bare_or_indirect(f"${{!{name1}}}", name_to_value, name_to_raw_value) == value.lower()

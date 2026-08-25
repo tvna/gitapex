@@ -364,6 +364,22 @@ def _resolve_indirect_ref(token: str, name_to_value: dict[str, str], name_to_raw
     return name_to_value.get(referenced_name)
 
 
+def _resolve_bare_or_indirect(
+    token: str, name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
+) -> str | None:
+    """Resolve TOKEN as a bare `$NAME`/`${NAME}` reference first, falling
+    back to bash's own `${!NAME}` indirect reference -- the exact
+    resolution order both `_gh_api_method_flagname_dynamic_hit` and
+    `_gh_api_field_flagname_dynamic_hit` need for a flag NAME token (never
+    fused with other text, unlike a flag's own value), factored out here
+    since both had grown a byte-identical inline copy of it. Found by
+    Step 8 independent review, eleventh round (issue #1326)."""
+    flag = _resolve_bare_var(token, name_to_value)
+    if flag is not None:
+        return flag
+    return _resolve_indirect_ref(token, name_to_value, name_to_raw_value)
+
+
 # Matches one `$NAME`/`${NAME}`/`${NAME:-default}` reference anywhere in a
 # token, capturing its full span (including the braces, when present) so
 # _substitute_var_refs_candidates below can replace exactly that span --
@@ -895,9 +911,7 @@ def _gh_api_method_flagname_dynamic_hit(
     resolves (real bash) to a real `-X POST` write and was invisible to
     the bare-reference-only check."""
     for i, raw_tok in enumerate(seg):
-        flag = _resolve_bare_var(raw_tok, name_to_value)
-        if flag is None:
-            flag = _resolve_indirect_ref(raw_tok, name_to_value, name_to_raw_value)
+        flag = _resolve_bare_or_indirect(raw_tok, name_to_value, name_to_raw_value)
         if flag not in ("-x", "--method"):
             continue
         if i + 1 >= len(seg):
@@ -1007,9 +1021,7 @@ def _gh_api_field_flagname_dynamic_hit(
     review, tenth round (issue #1326), the field-flag counterpart of
     `_gh_api_method_flagname_dynamic_hit`'s own tenth-round fix."""
     for raw_tok in seg:
-        flag = _resolve_bare_var(raw_tok, name_to_value)
-        if flag is None:
-            flag = _resolve_indirect_ref(raw_tok, name_to_value, name_to_raw_value)
+        flag = _resolve_bare_or_indirect(raw_tok, name_to_value, name_to_raw_value)
         if flag in ("-f", "--field", "--raw-field"):
             return True
     return False
