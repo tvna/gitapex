@@ -84,7 +84,13 @@ from typing import NamedTuple
 # shlex's own default punctuation set under punctuation_chars=True.
 _SINGLE_OPS = {";", "|", "&", "(", ")", "\n"}
 _MULTI_OPS = {"&&", "||"}
-_ASSIGN_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=(.*)$")
+_ASSIGN_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
+# Matches the variable name inside `$NAME`/`${NAME`/`${NAME:-default}`-style
+# references -- used to confirm a dynamic token actually references a
+# specific assigned variable, rather than merely testing whether some
+# unrelated assignment anywhere in the whole command happens to look like a
+# tool/verb (see _rule_b1b_dynamic_word_assigned_tool_and_verb's docstring).
+_VAR_REF_RE = re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)")
 
 
 class TokenizeError(Exception):
@@ -151,21 +157,29 @@ def segment_tokens(tokens: list[str]) -> list[list[str]]:
     return [seg for seg in segments if seg]
 
 
-def _assigned_literals(tokens: list[str]) -> set[str]:
-    """Only the RHS values of NAME=value assignment tokens -- deliberately
-    NOT every literal token in the command. An ordinary command argument
-    (e.g. `add` in `git add file.txt`) must never count here, or an
-    unrelated dynamic segment elsewhere in the same command
-    (`git add f1 f2; result=$(date)`) would false-positive against it --
-    found live during this module's own adversarial self-test and fixed by
-    this scoping."""
-    values: set[str] = set()
+def _assigned_literals(tokens: list[str]) -> dict[str, str]:
+    """Map each NAME=value assignment token's variable name to its
+    (lowercased) RHS value -- deliberately NOT every literal token in the
+    command. An ordinary command argument (e.g. `add` in `git add
+    file.txt`) must never count here, or an unrelated dynamic segment
+    elsewhere in the same command (`git add f1 f2; result=$(date)`) would
+    false-positive against it -- found live during this module's own
+    adversarial self-test and fixed by this scoping.
+
+    Keyed by variable name (not a flat set of values) so a caller can
+    confirm a dynamic token *actually references* the specific variable
+    supplying a value, rather than merely testing whether some assignment
+    anywhere in the whole command happens to supply a matching value --
+    see _rule_b1b_dynamic_word_assigned_tool_and_verb's own docstring for
+    the false positive this closes (found live by Step 8 independent
+    review, issue #1326)."""
+    values: dict[str, str] = {}
     for token in tokens:
         if _is_dynamic(token):
             continue
         match = _ASSIGN_RE.match(token)
         if match:
-            values.add(match.group(1).lower())
+            values[match.group(1)] = match.group(2).lower()
     return values
 
 
@@ -290,10 +304,18 @@ def _rule_a_literal(segments: list[list[str]]) -> str | None:
     return None
 
 
-def _rule_gh_api_write(segments: list[list[str]], lowered_command: str) -> str | None:
+def _rule_gh_api_write(segments: list[list[str]], lowered_command: str, name_to_value: dict[str, str]) -> str | None:
     """`literals` is already lowercased, matching the predecessor script's
     own case-insensitive match against its whole lowered command -- so
-    `-F`/`-f` are indistinguishable here exactly as they were there."""
+    `-F`/`-f` are indistinguishable here exactly as they were there.
+
+    A `-X`/`--method` flag whose VALUE token is itself dynamically
+    constructed (e.g. `-X $M`) is checked separately, against
+    `name_to_value`: `literals` above has already filtered every dynamic
+    token out, so the loop below can never see that a value token was
+    even present, let alone what it resolves to -- found live by Step 8
+    independent review (issue #1326): `M=POST; gh api .../merge -X $M`
+    resolved to a real write and was wrongly allowed."""
     for seg in segments:
         literals = [t.lower() for t in seg if not _is_dynamic(t)]
         has_gh_api = any(literals[i : i + 2] == ["gh", "api"] for i in range(len(literals) - 1))
@@ -312,6 +334,16 @@ def _rule_gh_api_write(segments: list[list[str]], lowered_command: str) -> str |
                 return "a 'gh api' write call (-X/--method POST/PUT/PATCH/DELETE)"
             if tok.startswith("--method=") and any(tok[len("--method=") :].startswith(m) for m in _WRITE_METHODS):
                 return "a 'gh api' write call (-X/--method POST/PUT/PATCH/DELETE)"
+
+        for i, raw_tok in enumerate(seg):
+            if _is_dynamic(raw_tok) or raw_tok.lower() not in ("-x", "--method"):
+                continue
+            if i + 1 >= len(seg) or not _is_dynamic(seg[i + 1]):
+                continue
+            referenced = set(_VAR_REF_RE.findall(seg[i + 1]))
+            values = {name_to_value[name] for name in referenced if name in name_to_value}
+            if values & _WRITE_METHODS:
+                return "a 'gh api' write call with a dynamically constructed -X/--method value assigned from a denied write method"
 
         if not has_graphql:
             for tok in literals:
@@ -339,13 +371,21 @@ def _is_git_push_segment(seg: list[str]) -> bool:
                 break
             flag = candidate
             j += 1
-            # A short global option (`-C <path>`) takes its value as a
+            # `-c <name>=<value>` and `-C <path>` are git's only two
+            # value-taking short global options -- both collapse to the
+            # same lowered "-c" token here -- and take their value as a
             # separate following token; a long option (`--git-dir=<path>`)
-            # attaches its value with `=` -- matching git's own usage
-            # convention for these global options. Skip that value token
+            # attaches its value with `=` instead. Skip that value token
             # too, or `git -C /tmp/repo push` would stop scanning at the
             # non-flag-shaped path argument and miss the `push` after it.
-            if len(flag) == 2 and "=" not in flag and j < len(literals):
+            # Every OTHER short global option (-v, -h, -p, -P) is boolean
+            # and takes no argument, confirmed against git's own usage
+            # synopsis -- originally this treated ANY 2-char flag as
+            # value-taking, which wrongly swallowed the "push" token
+            # itself as a boolean flag's "value" (`git -p push origin
+            # main` was never detected as git push) -- found live by
+            # Step 8 independent review, issue #1326.
+            if flag == "-c" and j < len(literals):
                 next_tok = literals[j]
                 if next_tok is not None and not next_tok.startswith("-"):
                     j += 1
@@ -366,14 +406,40 @@ def _rule_b1a_dynamic_word_same_segment_verb(seg: list[str], verb_set: set[str])
     return bool(literals & verb_set)
 
 
-def _rule_b1b_dynamic_word_assigned_tool_and_verb(seg: list[str], assigned: set[str], verb_set: set[str]) -> bool:
-    """A segment whose command word is dynamic, where the whole command's
-    own NAME=value assignments (not plain arguments -- see
-    _assigned_literals) supply both a watched tool name and a watched verb
-    name (e.g. `A=uv; B=install; $A $B foo`)."""
+def _rule_b1b_dynamic_word_assigned_tool_and_verb(
+    seg: list[str], name_to_value: dict[str, str], verb_set: set[str]
+) -> bool:
+    """A segment with at least one dynamic token, where a variable
+    actually REFERENCED by one of this segment's own dynamic tokens (not
+    plain arguments -- see _assigned_literals) was assigned a watched tool
+    name, and a variable referenced by one of this segment's own dynamic
+    tokens was assigned a watched verb name (e.g. `A=uv; B=install; $A $B
+    foo` -- both `$A` and `$B` are dynamic tokens in the SAME segment,
+    referencing A and B respectively).
+
+    Scoped to the variable names THIS segment's own dynamic tokens
+    actually reference -- not "some assignment anywhere in the whole
+    command happens to look like a tool and some unrelated assignment
+    happens to look like a verb," which is unsound: found live by Step 8
+    independent review (issue #1326), `TOOL=uv; VERB=install; echo done;
+    X=$(mktemp); "$X" --help` was wrongly denied even though `$X`
+    references neither TOOL nor VERB.
+
+    `seg[0]` (the command word) must itself be dynamic -- unchanged from
+    before this fix -- or a dynamic argument to an otherwise-literal,
+    harmless command (e.g. `echo $A $B` where A=uv, B=install just prints
+    text, it does not invoke anything) would be denied for constructing
+    no dynamic command at all."""
     if not seg or not _is_dynamic(seg[0]):
         return False
-    return bool(assigned & _WATCHED_TOOLS) and bool(assigned & verb_set)
+    referenced: set[str] = set()
+    for tok in seg:
+        if _is_dynamic(tok):
+            referenced |= set(_VAR_REF_RE.findall(tok))
+    if not referenced:
+        return False
+    values = {name_to_value[name] for name in referenced if name in name_to_value}
+    return bool(values & _WATCHED_TOOLS) and bool(values & verb_set)
 
 
 def _rule_b2_watched_tool_dynamic_verb_position(seg: list[str]) -> bool:
@@ -416,7 +482,7 @@ def classify(command: str) -> Verdict:
     if literal_hit:
         return Verdict(True, literal_hit, is_git_push)
 
-    gh_api_hit = _rule_gh_api_write(segments, lowered_command)
+    gh_api_hit = _rule_gh_api_write(segments, lowered_command, assigned)
     if gh_api_hit:
         return Verdict(True, gh_api_hit, is_git_push)
 

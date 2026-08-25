@@ -52,7 +52,13 @@ from typing import NamedTuple
 
 _SINGLE_OPS = {";", "|", "&", "(", ")", "\n"}
 _MULTI_OPS = {"&&", "||"}
-_ASSIGN_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=(.*)$")
+_ASSIGN_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
+# Matches the variable name inside `$NAME`/`${NAME`/`${NAME:-default}`-style
+# references -- used to confirm a dynamic token actually references a
+# specific assigned variable, rather than merely testing whether some
+# unrelated assignment anywhere in the whole command happens to look like a
+# tool/verb (see _rule_b1b_dynamic_word_assigned_tool_and_verb's docstring).
+_VAR_REF_RE = re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)")
 
 
 class TokenizeError(Exception):
@@ -105,14 +111,23 @@ def segment_tokens(tokens: list[str]) -> list[list[str]]:
     return [seg for seg in segments if seg]
 
 
-def _assigned_literals(tokens: list[str]) -> set[str]:
-    values: set[str] = set()
+def _assigned_literals(tokens: list[str]) -> dict[str, str]:
+    """Map each NAME=value assignment token's variable name to its
+    (lowercased) RHS value. Keyed by variable name (not a flat set of
+    values) so a caller can confirm a dynamic token *actually references*
+    the specific variable supplying a value, rather than merely testing
+    whether some assignment anywhere in the whole command happens to
+    supply a matching value -- see
+    _rule_b1b_dynamic_word_assigned_tool_and_verb's own docstring for the
+    false positive this closes (found live by Step 8 independent review,
+    issue #1326)."""
+    values: dict[str, str] = {}
     for token in tokens:
         if _is_dynamic(token):
             continue
         match = _ASSIGN_RE.match(token)
         if match:
-            values.add(match.group(1).lower())
+            values[match.group(1)] = match.group(2).lower()
     return values
 
 
@@ -252,7 +267,17 @@ def _is_git_push_segment(seg: list[str]) -> bool:
                 break
             flag = candidate
             j += 1
-            if len(flag) == 2 and "=" not in flag and j < len(literals):
+            # Only -c/-C (git's own value-taking short global options --
+            # `-c <name>=<value>`, `-C <path>` -- collapse to the same
+            # lowered "-c" token) consume a following value token. Every
+            # other 2-char short global option (-v, -h, -p, -P) is
+            # boolean and takes no argument, confirmed against git's own
+            # usage synopsis -- originally treated ANY 2-char flag as
+            # value-taking, which wrongly swallowed the "push" token
+            # itself as a boolean flag's "value" (`git -p push origin
+            # main` was never detected) -- found live by Step 8
+            # independent review, issue #1326.
+            if flag == "-c" and j < len(literals):
                 next_tok = literals[j]
                 if next_tok is not None and not next_tok.startswith("-"):
                     j += 1
@@ -261,14 +286,27 @@ def _is_git_push_segment(seg: list[str]) -> bool:
     return any("git push" in lit for lit in (t.lower() for t in seg if not _is_dynamic(t)))
 
 
-def _rule_git_push(segments: list[list[str]], assigned: set[str]) -> str | None:
+def _rule_git_push(segments: list[list[str]], name_to_value: dict[str, str]) -> str | None:
     for seg in segments:
         if _is_git_push_segment(seg):
             return "git push, not permitted inside a task-level agent (worktree merge-back is main-thread-only)"
         if not seg:
             continue
-        if _is_dynamic(seg[0]) and "git" in assigned and "push" in assigned:
-            return "git push, not permitted inside a task-level agent (worktree merge-back is main-thread-only)"
+        if _is_dynamic(seg[0]):
+            # Scoped to the variable names THIS segment's own dynamic
+            # tokens actually reference -- not "some assignment anywhere
+            # in the whole command happens to be named git/push,"
+            # regardless of whether this segment references it at all
+            # (found live by Step 8 independent review, issue #1326: the
+            # earlier flat-set version denied
+            # `GIT=x; PUSH=y; echo done; Z=$(mktemp); "$Z" --help`).
+            referenced: set[str] = set()
+            for tok in seg:
+                if _is_dynamic(tok):
+                    referenced |= set(_VAR_REF_RE.findall(tok))
+            values = {name_to_value[name] for name in referenced if name in name_to_value}
+            if "git" in values and "push" in values:
+                return "git push, not permitted inside a task-level agent (worktree merge-back is main-thread-only)"
         if len(seg) > 1 and not _is_dynamic(seg[0]) and seg[0].lower() == "git" and _is_dynamic(seg[1]):
             return "git push, not permitted inside a task-level agent (worktree merge-back is main-thread-only)"
     return None
@@ -281,10 +319,29 @@ def _rule_b1a_dynamic_word_same_segment_verb(seg: list[str], verb_set: set[str])
     return bool(literals & verb_set)
 
 
-def _rule_b1b_dynamic_word_assigned_tool_and_verb(seg: list[str], assigned: set[str], verb_set: set[str]) -> bool:
+def _rule_b1b_dynamic_word_assigned_tool_and_verb(
+    seg: list[str], name_to_value: dict[str, str], verb_set: set[str]
+) -> bool:
+    """Scoped to the variable names THIS segment's own dynamic tokens
+    actually reference -- not "some assignment anywhere in the whole
+    command happens to look like a tool and some unrelated assignment
+    happens to look like a verb," which is unsound: found live by Step 8
+    independent review (issue #1326), `TOOL=uv; VERB=install; echo done;
+    X=$(mktemp); "$X" --help` was wrongly denied even though `$X`
+    references neither TOOL nor VERB. `seg[0]` (the command word) must
+    itself be dynamic, or a dynamic argument to an otherwise-literal,
+    harmless command would be denied for constructing no dynamic command
+    at all."""
     if not seg or not _is_dynamic(seg[0]):
         return False
-    return bool(assigned & _WATCHED_TOOLS) and bool(assigned & verb_set)
+    referenced: set[str] = set()
+    for tok in seg:
+        if _is_dynamic(tok):
+            referenced |= set(_VAR_REF_RE.findall(tok))
+    if not referenced:
+        return False
+    values = {name_to_value[name] for name in referenced if name in name_to_value}
+    return bool(values & _WATCHED_TOOLS) and bool(values & verb_set)
 
 
 def _rule_b2_watched_tool_dynamic_verb_position(seg: list[str]) -> bool:
