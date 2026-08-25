@@ -78,11 +78,12 @@ first, not skimmed.
    event). Apply the `branch-plan-executing` label to the PR -- an
    ownership-signal mirror of this skill's own in-flight execution, letting
    `drafting-a-pr-to-merge` detect a mid-execution draft before entering
-   its own fix loop against it (that skill's own Step 7 `"draft"` branch
-   checks for this label). Subscribe to the draft PR's own CI/review/comment
-   activity in this same step; this skill owns responding to it until step
-   9, not `drafting-a-pr-to-merge`. Event vocabulary and log format: [domain
-   events reference](references/domain-events-and-failure-handling.md).
+   its own fix loop against it (that skill's own Step 2, before its fix
+   loop ever runs, checks for this label). Subscribe to the draft PR's own
+   CI/review/comment activity in this same step; this skill owns
+   responding to it until step 9, not `drafting-a-pr-to-merge`. Event
+   vocabulary and log format: [domain events
+   reference](references/domain-events-and-failure-handling.md).
 6. **Execute, one Workflow run per wave** (Decision 16, 4, 13, 14). For
    each wave from step 3: dispatch one Workflow run containing only that
    wave's task `agent()` calls, each with `agentType:
@@ -128,7 +129,12 @@ first, not skimmed.
    was wrong -- offer the Decision 18 commit-manifest revert before
    closing the draft PR) or escalate (the execution was wrong, a
    screening flag, or a declined confirmation, with no obvious safe fix).
-   Full dispatch table: [domain events and failure-handling
+   Either dispatch also releases the `branch-plan-executing` label applied
+   at step 5 -- this skill's own ownership window ends there too, not only
+   at step 9's success path; see the domain events reference's own
+   `StageDeviated` entry for why a label left standing past either
+   dispatch is a deadlock, not a harmless leftover. Full dispatch table:
+   [domain events and failure-handling
    reference](references/domain-events-and-failure-handling.md#failure-dispatch-step-7).
 8. **Refactor and adversarially review the accumulated diff** (Decision
    12, mandatory, non-skippable). Two separate fresh subagent dispatches
@@ -221,8 +227,9 @@ combined diff, then the draft PR converts to ready-for-review.
 - Never treat an ACM row's Planned ops as an instruction to follow
   verbatim without the step-2 threat-model triage pass.
 - Never leave a `stop-and-replan` or escalate dispatch (step 7) without
-  writing its `StageDeviated` event and commenting the rationale on the
-  parent issue.
+  writing its `StageDeviated` event, releasing the `branch-plan-executing`
+  label applied at step 5, and commenting the rationale on the parent
+  issue.
 
 ## Related skills
 
@@ -248,20 +255,25 @@ combined diff, then the draft PR converts to ready-for-review.
   draft (its step 9) is the *finished*, human-merge-pending state it
   deliberately leaves the PR in. This skill owns the PR from draft-open
   through ready-for-review (step 5-9); ownership passes to
-  `drafting-a-pr-to-merge` only at step 9. If that skill is ever invoked
+  `drafting-a-pr-to-merge` only at step 9 (or earlier, on a step-7
+  `stop-and-replan`/escalate dispatch -- see step 7 and the domain events
+  reference's own `StageDeviated` entry). If that skill is ever invoked
   standalone against a PR this skill has not yet marked ready for review
-  (execution still mid-flight), its own step 7 `"draft"` branch checks
-  first for the ownership-signal label step 5 applies and step 9 removes
-  (named in step 5): present -> that skill defers to this one rather than
-  entering its own fix loop. That label is what closes the edge case
-  directly. Without it the two drafts are genuinely indistinguishable at
-  that moment -- step 7's other draft-branch checks (the mergeable field,
-  check runs, reviews) all read the same on a mid-execution draft that
-  happens to look clean at that exact instant as on that skill's own
-  terminal state, so it would run its own step-8 review against a diff
-  still being written, or hand the PR to its step-10 monitoring, instead
-  of deferring. This skill's own step-5 subscribe-and-own-activity
-  boundary (this skill, not `drafting-a-pr-to-merge`, is the one watching
+  (execution still mid-flight), its own step 2 checks first, before its
+  fix loop ever runs, for the ownership-signal label step 5 applies and
+  step 7/9 remove (named in step 5): present -> that skill defers to this
+  one rather than entering its own fix loop. That label is what closes
+  the edge case directly. Without it the two drafts are genuinely
+  indistinguishable at that moment -- that skill's own step 7
+  draft-branch checks (the mergeable field, check runs, reviews), which
+  this skill's mid-execution PR would otherwise reach were the label
+  check not gating it first at step 2, all read the same on a
+  mid-execution draft that happens to look clean at that exact instant as
+  on that skill's own terminal state, so it would run its own step-8
+  review against a diff still being written, or hand the PR to its
+  step-10 monitoring, instead of deferring. This skill's own
+  step-5 subscribe-and-own-activity boundary (this skill, not
+  `drafting-a-pr-to-merge`, is the one watching
   and acting during steps 5-9) now sits behind the label as a second
   layer, no longer the only thing preventing the misread.
 - **vs. `stop-and-replan`:** not a sibling with a distinct trigger --
