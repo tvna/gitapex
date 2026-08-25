@@ -1,5 +1,5 @@
 lockfile_version: '1'
-generated_at: '2026-08-22T13:12:19.643723+00:00'
+generated_at: '2026-08-25T10:36:37.505831+00:00'
 apm_version: 0.25.0
 dependencies:
 - repo_url: cathrynlavery/diagram-design
@@ -9,6 +9,9 @@ dependencies:
   version: 2.4.3
   package_type: marketplace_plugin
   deployed_files:
+  - .claude/commands/export-diagram.md
+  - .claude/commands/import-drawio.md
+  - .claude/commands/import-mermaid.md
   - .claude/skills/diagram-design
   - .claude/skills/diagram-design/SKILL.md
   - .claude/skills/diagram-design/assets/example-architecture-dark.html
@@ -159,6 +162,9 @@ dependencies:
   - .claude/skills/diagram-design/scripts/mermaid_extract.py
   - .claude/skills/diagram-design/scripts/self_check.py
   deployed_file_hashes:
+    .claude/commands/export-diagram.md: sha256:b97bcdc2bfe1cd0e52434a2b1cff9ee8253ab36a6eb9c10c18906bbca07ee6de
+    .claude/commands/import-drawio.md: sha256:c7799ecc4c4cf94ed37748f7fd00b27a9ff4602ed93a4a5aa02c28168fb63b0a
+    .claude/commands/import-mermaid.md: sha256:29d065a40e9b953803ff83c34fc1d636f8d08cde4cdfac64cb3d64799aafb834
     .claude/skills/diagram-design/SKILL.md: sha256:8366ef4d11c3a9591556deb55320ea3521c138ccdad834eb087b8062f41d93a1
     .claude/skills/diagram-design/assets/example-architecture-dark.html: sha256:3767f518519dc7b6fc98066cc76c70937446ea9e71e380cf7c6064dc6ed6f5ba
     .claude/skills/diagram-design/assets/example-architecture-full.html: sha256:84425acb29b181a165e8c07fad268304f77223a92797a7f58679f51c3dd47502
@@ -521,6 +527,33 @@ dependencies:
   is_dev: true
   declared_license: MIT
 deployments:
+- kind: project-relative
+  target: claude
+  value: .claude/commands/export-diagram.md
+  runtime: null
+  scope: project
+  owners:
+  - cathrynlavery/diagram-design
+  active_owner: cathrynlavery/diagram-design
+  content_hash: sha256:b97bcdc2bfe1cd0e52434a2b1cff9ee8253ab36a6eb9c10c18906bbca07ee6de
+- kind: project-relative
+  target: claude
+  value: .claude/commands/import-drawio.md
+  runtime: null
+  scope: project
+  owners:
+  - cathrynlavery/diagram-design
+  active_owner: cathrynlavery/diagram-design
+  content_hash: sha256:c7799ecc4c4cf94ed37748f7fd00b27a9ff4602ed93a4a5aa02c28168fb63b0a
+- kind: project-relative
+  target: claude
+  value: .claude/commands/import-mermaid.md
+  runtime: null
+  scope: project
+  owners:
+  - cathrynlavery/diagram-design
+  active_owner: cathrynlavery/diagram-design
+  content_hash: sha256:29d065a40e9b953803ff83c34fc1d636f8d08cde4cdfac64cb3d64799aafb834
 - kind: project-relative
   target: claude
   value: .claude/hooks/clairvoyance/hooks/adaptive-store.sh
