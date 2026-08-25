@@ -176,6 +176,14 @@ ALLOWED_GH_COMMANDS = [
     ("gh pr checks 1", "gh-pr-checks"),
     ("gh api repos/o/r/issues", "gh-api-get-no-method"),
     ("gh api graphql -f query=query{viewer{login}}", "gh-api-graphql-query"),
+    # False-positive guard for the flag-name-as-bare-variable rule added in
+    # DENIED_INDIRECTION_COMMANDS above (issue #1326, fifth round): a bare
+    # variable token that resolves to -X/--method must only deny when its
+    # own following value resolves to a denied write method -- a read
+    # method (GET/HEAD) must stay allowed, and an unresolvable variable
+    # (never assigned) must not be treated as a hit either.
+    ("F=-X; M=GET; gh api repos/o/r/pulls/1 $F $M", "gh-api-method-flagname-dynamic-value-read"),
+    ("F=-X; gh api repos/o/r/pulls/1 $F", "gh-api-method-flagname-dynamic-no-value-token"),
 ]
 
 ALLOWED_ORDINARY_COMMANDS = [
@@ -330,6 +338,16 @@ DENIED_INDIRECTION_COMMANDS = [
     ("A=gh;B=pr;C=merge; $A $B $C 1", "var-split-gh-pr-merge"),
     ('echo "uv install foo" | bash', "echo-literal-piped-to-bash"),
     ('$(echo "uv install foo")', "command-sub-wrapped-full-text"),
+    # Found live by Step 8 independent review, fifth round (issue #1326):
+    # not just the -X/--method or -f/--field VALUE hidden behind a
+    # variable (already covered by the gh-api-* cases in DENIED_GH_COMMANDS
+    # above), but the flag NAME itself as a bare variable token -- every
+    # prior fix assumed the flag token carried a literal "-x"/"--method"/
+    # "-f"/"--field" text prefix somewhere in itself, which a pure `$F`
+    # token never has.
+    ("F=-X; M=POST; gh api repos/o/r/pulls/1/merge $F $M", "gh-api-method-flagname-and-value-both-dynamic"),
+    ("F=-X; gh api repos/o/r/pulls/1/merge $F POST", "gh-api-method-flagname-dynamic-value-literal"),
+    ("FF=--field; gh api repos/o/r/pulls/1 $FF name=value", "gh-api-field-flagname-dynamic"),
 ]
 
 

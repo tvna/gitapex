@@ -79,6 +79,22 @@ instead of a command/verb token. Deliberately not attempted in Stage 1;
 pinned as `graphql-mutation-keyword-variable-concatenation` in
 hooks/test_gitapex_check_bash_safety.py's own `KNOWN_BYPASS_COMMANDS`.
 
+Closed by fifth-round Step 8 independent review: `_gh_api_method_dynamic_
+value`/`_gh_api_field_dynamic_hit` (and the earlier literal-token scans)
+only ever recognized a dynamic VALUE fused onto a literal `-X`/`--method`/
+`-f`/`--field`/`--raw-field` flag prefix -- none of them handled the flag
+NAME ITSELF being a bare variable reference as its own token
+(`F=-X; M=POST; gh api .../merge $F $M`), since a token that is purely
+`$F` carries no literal flag-shaped text at all for those scans to match
+against. Unlike the graphql residual above, this one IS closed in Stage
+1: `_resolve_bare_var` narrowly resolves a token only when it is *exactly*
+one bare `$NAME`/`${NAME}` reference (no other shape), then
+`_gh_api_method_flagname_dynamic_hit`/`_gh_api_field_flagname_dynamic_hit`
+check whether that resolves to a known flag name -- the same bounded,
+single-level `name_to_value` lookup every other B-rule here already uses,
+not the unbounded recursive reconstruction the two residuals above would
+require.
+
 Deliberately stdlib-only (shlex, re, json) -- no new third-party
 dependency, matching this repository's declarative module-management
 convention and python3's already-accepted-hook-dependency status (see
@@ -106,6 +122,24 @@ _ASSIGN_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
 # unrelated assignment anywhere in the whole command happens to look like a
 # tool/verb (see _rule_b1b_dynamic_word_assigned_tool_and_verb's docstring).
 _VAR_REF_RE = re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)")
+# Matches a token that is PURELY a single variable reference with nothing
+# else fused onto it (`$F`, `${F}`) -- deliberately excludes every other
+# dynamic shape (`${F}x`, `$F$G`, `` `cmd` ``) so resolving it stays the
+# same narrow, adversarially-tested heuristic class as the other B-rules:
+# denies only a specific, checked structural pattern, never "this token is
+# dynamic somehow." See _resolve_bare_var below.
+_BARE_VAR_RE = re.compile(r"^\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?$")
+
+
+def _resolve_bare_var(token: str, name_to_value: dict[str, str]) -> str | None:
+    """Resolve TOKEN to its assigned (already-lowercased) value only when
+    TOKEN is a bare single variable reference -- None otherwise, including
+    when the reference exists but the variable was never assigned a
+    literal value (e.g. assigned from a command substitution)."""
+    match = _BARE_VAR_RE.match(token)
+    if not match:
+        return None
+    return name_to_value.get(match.group(1))
 
 
 class TokenizeError(Exception):
@@ -399,6 +433,31 @@ def _gh_api_method_dynamic_hit(seg: list[str], name_to_value: dict[str, str]) ->
     return False
 
 
+def _gh_api_method_flagname_dynamic_hit(seg: list[str], name_to_value: dict[str, str]) -> bool:
+    """The -X/--method flag NAME ITSELF hidden behind a bare variable
+    reference as its own token (`F=-X; gh api .../merge $F POST`), with
+    the write-method value following as a separate token -- literal or
+    itself a bare variable reference. Found live by Step 8 independent
+    review, fifth round (issue #1326): every prior fix here assumed the
+    flag token itself carried a literal "-x"/"--method" text prefix
+    somewhere in it; a token that is PURELY a variable reference has no
+    such prefix, so neither the literal-token scan
+    (`_gh_api_method_literal_hit`) nor the fused-value dynamic scan
+    (`_gh_api_method_dynamic_hit`) above ever recognized it as a flag at
+    all -- both key off literal text inside the token, and this token has
+    none."""
+    for i, raw_tok in enumerate(seg):
+        if _resolve_bare_var(raw_tok, name_to_value) not in ("-x", "--method"):
+            continue
+        if i + 1 >= len(seg):
+            continue
+        value_tok = seg[i + 1]
+        value = value_tok.lower() if not _is_dynamic(value_tok) else _resolve_bare_var(value_tok, name_to_value)
+        if value is not None and any(value.startswith(m) for m in _WRITE_METHODS):
+            return True
+    return False
+
+
 def _gh_api_field_literal_hit(literals: list[str]) -> bool:
     """A literal `-f`/`-F`/`--field`/`--raw-field` token, as a separate
     token or fused with a literal value -- this rule never cares about
@@ -432,6 +491,18 @@ def _gh_api_field_dynamic_hit(seg: list[str]) -> bool:
     return False
 
 
+def _gh_api_field_flagname_dynamic_hit(seg: list[str], name_to_value: dict[str, str]) -> bool:
+    """Same class as `_gh_api_method_flagname_dynamic_hit`, for
+    -f/-F/--field/--raw-field: the flag NAME itself hidden behind a bare
+    variable reference (`FF=--field; gh api ... $FF name=value`). Unlike
+    the method flag, this rule never inspects the field value -- presence
+    of the flag alone is denied, matching `_gh_api_field_literal_hit`'s
+    own scope. `-F` is not listed separately: `name_to_value`'s own
+    values are already lowercased (`_assigned_literals`), so `FF=-F`
+    resolves to `"-f"`, the same string `-f` itself lowercases to."""
+    return any(_resolve_bare_var(raw_tok, name_to_value) in ("-f", "--field", "--raw-field") for raw_tok in seg)
+
+
 def _rule_gh_api_write(segments: list[list[str]], lowered_command: str, name_to_value: dict[str, str]) -> str | None:
     """`literals` is already lowercased, matching the predecessor script's
     own case-insensitive match against its whole lowered command -- so
@@ -452,11 +523,15 @@ def _rule_gh_api_write(segments: list[list[str]], lowered_command: str, name_to_
             return _METHOD_FLAG_HIT
         if _gh_api_method_dynamic_hit(seg, name_to_value):
             return _METHOD_FLAG_DYNAMIC_HIT
+        if _gh_api_method_flagname_dynamic_hit(seg, name_to_value):
+            return _METHOD_FLAG_DYNAMIC_HIT
 
         if not has_graphql:
             if _gh_api_field_literal_hit(literals):
                 return _FIELD_FLAG_HIT
             if _gh_api_field_dynamic_hit(seg):
+                return _FIELD_FLAG_HIT
+            if _gh_api_field_flagname_dynamic_hit(seg, name_to_value):
                 return _FIELD_FLAG_HIT
     return None
 

@@ -22,7 +22,7 @@ from __future__ import annotations
 import string
 
 import gitapex_check_bash_safety as checker
-from hypothesis import given, settings
+from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
 _PROPERTIES = settings(derandomize=True, max_examples=200, deadline=None)
@@ -294,6 +294,140 @@ def test_gh_api_field_dynamic_hit_allows_an_unrelated_dynamic_token(var: str) ->
     """No false positive: an ordinary dynamic token with no field-flag
     prefix is never flagged."""
     assert not checker._gh_api_field_dynamic_hit([f"${var}"])
+
+
+# --- Round 5: the -X/--method/-f/--field flag NAME itself hidden behind a
+# bare variable reference (issue #1326, found live by Step 8 independent
+# review, fifth round). Every check above assumes the flag token carries a
+# literal "-x"/"--method"/"-f"/"--field" text prefix somewhere in itself --
+# a token that is PURELY `$F` has none, so none of them ever recognized it
+# as a flag at all until `_resolve_bare_var` and the two
+# `*_flagname_dynamic_hit` passes below closed this.
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value=_VALUES, braced=st.booleans())
+def test_resolve_bare_var_resolves_a_bare_or_braced_reference(name: str, value: str, braced: bool) -> None:
+    """Model-based: a token that is *exactly* one variable reference,
+    ``$NAME`` or ``${NAME}``, resolves to that variable's assigned
+    (lowercased) value via ``name_to_value`` -- both bracing shapes are
+    equivalent references to the same variable."""
+    token = f"${{{name}}}" if braced else f"${name}"
+    assert checker._resolve_bare_var(token, {name: value.lower()}) == value.lower()
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, suffix=_VALUES)
+def test_resolve_bare_var_none_for_a_fused_or_unassigned_token(name: str, suffix: str) -> None:
+    """No false positive: a token carrying anything beyond the bare
+    reference (e.g. ``${NAME}suffix``) is deliberately NOT resolved --
+    narrower than a full expansion, matching the "specific, checked
+    structural pattern" discipline the other B-rules already follow, not
+    "this token is dynamic somehow." A bare reference to a name that was
+    never assigned also resolves to None."""
+    assert checker._resolve_bare_var(f"${{{name}}}{suffix}", {name: "post"}) is None
+    assert checker._resolve_bare_var(f"${name}", {}) is None
+
+
+@_PROPERTIES
+@given(
+    method=st.sampled_from(["post", "put", "patch", "delete"]),
+    flag_var=_IDENTIFIERS,
+    value_var=_IDENTIFIERS,
+    flag_name=st.sampled_from(["-x", "--method"]),
+)
+def test_gh_api_method_flagname_dynamic_hit_detects_flagname_and_value_both_dynamic(
+    method: str, flag_var: str, value_var: str, flag_name: str
+) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, fifth round (issue #1326):
+    ``F=-X; M=POST; gh api .../merge $F $M`` resolved to a real write and
+    was wrongly allowed -- neither the flag nor its value carried any
+    literal flag-shaped text in its own token, so every prior scan (which
+    all key off a literal text prefix somewhere in the token) missed it
+    entirely."""
+    assume(flag_var != value_var)  # distinct dict keys -- see the same guard below
+    seg = ["gh", "api", "repos/x/y", f"${flag_var}", f"${value_var}"]
+    name_to_value = {flag_var: flag_name, value_var: method}
+    assert checker._gh_api_method_flagname_dynamic_hit(seg, name_to_value)
+
+
+@_PROPERTIES
+@given(method=st.sampled_from(["post", "put", "patch", "delete"]), flag_var=_IDENTIFIERS)
+def test_gh_api_method_flagname_dynamic_hit_detects_dynamic_flagname_literal_value(method: str, flag_var: str) -> None:
+    """Model-based: the same bypass class also holds when only the flag
+    NAME is hidden behind a variable and the value stays a literal token
+    (``F=-X; gh api .../merge $F POST``)."""
+    seg = ["gh", "api", "repos/x/y", f"${flag_var}", method]
+    assert checker._gh_api_method_flagname_dynamic_hit(seg, {flag_var: "-x"})
+
+
+@_PROPERTIES
+@given(flag_var=_IDENTIFIERS, value_var=_IDENTIFIERS)
+def test_gh_api_method_flagname_dynamic_hit_allows_a_dynamic_flagname_resolved_to_a_read(
+    flag_var: str, value_var: str
+) -> None:
+    """No false positive: a dynamic flag-name token that resolves to
+    -X/--method, followed by a value that resolves to GET (not one of the
+    four write methods), is never flagged."""
+    seg = ["gh", "api", "repos/x/y", f"${flag_var}", f"${value_var}"]
+    assert not checker._gh_api_method_flagname_dynamic_hit(seg, {flag_var: "-x", value_var: "get"})
+
+
+@_PROPERTIES
+@given(var=_IDENTIFIERS)
+def test_gh_api_method_flagname_dynamic_hit_allows_an_unrelated_dynamic_token(var: str) -> None:
+    """No false positive: a bare variable reference that does not resolve
+    to -X/--method at all is never treated as a flag."""
+    seg = ["gh", "api", "repos/x/y", f"${var}", "POST"]
+    assert not checker._gh_api_method_flagname_dynamic_hit(seg, {var: "repos/x/y"})
+
+
+@_PROPERTIES
+@given(flag_var=_IDENTIFIERS, flag_name=st.sampled_from(["-f", "--field", "--raw-field"]))
+def test_gh_api_field_flagname_dynamic_hit_detects_every_flag_name(flag_var: str, flag_name: str) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, fifth round (issue #1326):
+    ``FF=--field; gh api repos/o/r/pulls/1 $FF name=value`` resolved to a
+    real write and was wrongly allowed. This rule never inspects the
+    field VALUE, only the flag's presence -- matching
+    ``_gh_api_field_literal_hit``'s own scope."""
+    seg = ["gh", "api", "repos/x/y", f"${flag_var}", "name=value"]
+    assert checker._gh_api_field_flagname_dynamic_hit(seg, {flag_var: flag_name})
+
+
+@_PROPERTIES
+@given(var=_IDENTIFIERS)
+def test_gh_api_field_flagname_dynamic_hit_allows_an_unrelated_dynamic_token(var: str) -> None:
+    """No false positive: a bare variable reference that does not resolve
+    to a field flag at all is never treated as one."""
+    seg = ["gh", "api", "repos/x/y", f"${var}"]
+    assert not checker._gh_api_field_flagname_dynamic_hit(seg, {var: "repos/x/y"})
+
+
+@_PROPERTIES
+@given(method=st.sampled_from(["post", "put", "patch", "delete"]), flag_var=_IDENTIFIERS, value_var=_IDENTIFIERS)
+def test_rule_gh_api_write_detects_flagname_and_value_both_dynamic(method: str, flag_var: str, value_var: str) -> None:
+    """End-to-end regression pin, matching the other ``_rule_gh_api_write``
+    end-to-end tests above: the fifth-round bypass is caught at the
+    orchestrator level, not just the sub-pass level."""
+    assume(flag_var != value_var)  # distinct dict keys, same guard as the sub-pass test above
+    segments = [["gh", "api", "repos/x/y", f"${flag_var}", f"${value_var}"]]
+    name_to_value = {flag_var: "-x", value_var: method}
+    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y ${flag_var} ${value_var}", name_to_value)
+    assert result is not None
+
+
+@_PROPERTIES
+@given(flag_var=_IDENTIFIERS, value_var=_IDENTIFIERS)
+def test_rule_gh_api_write_allows_flagname_dynamic_resolved_to_a_read(flag_var: str, value_var: str) -> None:
+    """No false positive at the orchestrator level: a dynamic flag-name
+    token resolved to -X, with its value resolved to GET, must stay
+    allowed."""
+    segments = [["gh", "api", "repos/x/y", f"${flag_var}", f"${value_var}"]]
+    name_to_value = {flag_var: "-x", value_var: "get"}
+    result = checker._rule_gh_api_write(segments, f"gh api repos/x/y ${flag_var} ${value_var}", name_to_value)
+    assert result is None
 
 
 _SHORT_FLAG_WITH_VALUE = st.tuples(st.sampled_from(["-c", "-C"]), st.sampled_from(["cfgkey=cfgval", "/tmp/some/repo"]))
