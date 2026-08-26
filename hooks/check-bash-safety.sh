@@ -13,6 +13,20 @@
 #      if it flags anything -- the script surfaces candidates, it does not
 #      decide, so a hit does not stop the push.
 #
+# Issue #1326 (Stage 1): the actual command-classification logic moved to
+# hooks/gitapex_check_bash_safety.py, a token-based classifier (shlex,
+# stdlib-only) that matches against bash's own dequoted token stream
+# instead of a raw-text regex substring scan. The predecessor, purely
+# regex-based version was live-confirmed bypassable by quote-splitting,
+# ${IFS} substitution, and several classes of variable/array/positional-
+# parameter indirection that still resolved to the exact denied
+# invocation once bash actually expanded them -- see that module's own
+# docstring for the full analysis and its own disclosed residual
+# limitation. This script is now a thin bash+jq wrapper: payload-shape
+# validation and the final PreToolUse JSON envelope stay in bash (jq is
+# already a hard dependency here), the actual classification is
+# delegated to python3.
+#
 # Denies via the PreToolUse hookSpecificOutput JSON on stdout AND exit 2 /
 # stderr (both conventions, for defense in depth -- see plugin-dev's
 # hook-development skill, examples/validate-bash.sh).
@@ -96,140 +110,49 @@ if [ "$tool_name" != "Bash" ]; then
   exit 0
 fi
 
-# Issue #1208: tool_input could be a non-object (array/string/number/bool)
-# in an otherwise well-formed payload, which would crash the
-# `.tool_input.command` access below with jq's own "Cannot index X with
-# string" runtime error -- same fail-open class as the top-level check
-# above. `(.tool_input // {})` alone is not enough: jq's `//` treats JSON
-# `false` the same as `null` (both are falsy), so a `tool_input: false`
-# payload slipped past that form and crashed the extraction below anyway
-# -- found by code review (PR #1213), live-confirmed with
-# `jq -e '(.tool_input // {}) | type == "object"' <<< '{"tool_input":false}'`,
-# which wrongly reports true. Checking `.tool_input == null` directly
-# (true for both absent and explicit null, never for `false`) closes
-# that gap.
-if ! printf '%s' "$input" | jq -e '(.tool_input == null) or (.tool_input | type == "object")' >/dev/null 2>&1; then
-  deny "Blocked by hooks/check-bash-safety.sh: tool_input in the payload is not a JSON object. Failing closed."
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+classifier="$script_dir/gitapex_check_bash_safety.py"
+
+if [ ! -f "$classifier" ]; then
+  deny "Blocked by hooks/check-bash-safety.sh: gitapex_check_bash_safety.py was not found at $classifier (corrupted or incomplete plugin bundle). Failing closed."
 fi
 
-# Issue #1208 (round 4): a well-formed, object-shaped tool_input can still
-# carry `.tool_input.command` as a JSON array or object (e.g.
-# `["gh","pr","merge","1"]`) instead of a string. `jq -r` never errors on
-# this -- it pretty-prints the value across multiple lines, which splits
-# the dangerous substring across JSON punctuation (quotes, commas,
-# brackets) and breaks every `[[:space:]]`-anchored danger-pattern regex
-# below, silently letting a genuinely dangerous command through with
-# exit 0 instead of exit 2 -- found by code review (PR #1213),
-# live-confirmed against `gh pr merge`, `pip install`, and `gh api -X
-# POST` payloads wrapped as arrays. Must deny before extraction.
-if ! printf '%s' "$input" | jq -e '(.tool_input.command == null) or (.tool_input.command | type == "string")' >/dev/null 2>&1; then
-  deny "Blocked by hooks/check-bash-safety.sh: tool_input.command in the payload is not a string. Failing closed."
+# $input is piped on stdin the whole way through, never re-passed as a
+# command-line argument -- same ARG_MAX rationale as deny()/warn() above.
+# The classifier re-validates tool_input/tool_input.command's own shape
+# independently (defense in depth -- same convention
+# hooks/check-post-write-provenance.sh already established for its own
+# python companion script) rather than trusting this script's own
+# tool_name-only validation above.
+classifier_exit=0
+# python3's own stderr (e.g. bash's own "python3: command not found" launch
+# failure when the interpreter is missing) is discarded here, not left to
+# leak into this hook's own stderr channel -- deny()'s JSON envelope below
+# is the only thing this hook itself ever writes there, and a stray extra
+# line ahead of it would break Claude Code's own JSON parse of that stream.
+classifier_output=$(printf '%s' "$input" | python3 "$classifier" 2>/dev/null) || classifier_exit=$?
+if [ "$classifier_exit" -ne 0 ]; then
+  deny "Blocked by hooks/check-bash-safety.sh: gitapex_check_bash_safety.py exited non-zero ($classifier_exit) instead of returning a decision. Failing closed."
 fi
 
-command=$(printf '%s' "$input" | jq -r '.tool_input.command // empty')
-
-if [ -z "$command" ]; then
-  exit 0
+if ! printf '%s' "$classifier_output" | jq -e 'type == "object"' >/dev/null 2>&1; then
+  deny "Blocked by hooks/check-bash-safety.sh: gitapex_check_bash_safety.py did not return a JSON object. Failing closed."
 fi
 
-lc_command=$(printf '%s' "$command" | tr '[:upper:]' '[:lower:]')
+decision=$(printf '%s' "$classifier_output" | jq -r '.decision // empty')
+reason=$(printf '%s' "$classifier_output" | jq -r '.reason // empty')
+is_git_push=$(printf '%s' "$classifier_output" | jq -r '.is_git_push // false')
 
-# --- Shared boundary: pre-command anchor that also swallows an absolute or
-# relative path prefix -----------------------------------------------------
-# The boundary is "start of string, or any character that cannot be part of a
-# command-name token" -- i.e. anything outside [[:alnum:]_.-]. A negated
-# command-token class anchors regardless of what precedes the verb (quote,
-# paren, backtick, space, etc.), so shell-indirection wrappers like
-# `bash -c "pip install x"` or `eval 'gh pr merge 1'` still match. The
-# optional path-prefix group then lets the anchor land right before the bare
-# verb name regardless of a leading directory, so `/usr/bin/pip install`,
-# `./pip install`, etc. still match. (Obfuscation that hides the verb itself
-# -- base64-piped-to-sh and the like -- is out of reach of any regex gate.)
-cmd_boundary='(^|[^[:alnum:]_.-])([[:alnum:]_.-]*/)*'
-
-# --- Finding 1: package/plugin install verbs -------------------------------
-# Case-insensitive, word/space-boundary anchored so `pipx install`, a path
-# containing "install", or `cargo install-update` do not false-positive.
-# Each alternative ends exactly at the verb/subcommand token (no baked-in
-# trailing boundary of its own) so the single outer ([[:space:]]|$) suffix
-# applies uniformly to every alternative, including short forms like
-# `npm i <pkg>`.
-#
-# Issue #1320: `uv add`/`uv remove` are deliberately NOT in this list.
-# Unlike `uv pip install`/bare `uv install` (which install into the venv
-# with no diff trail), `uv add`/`uv remove` mutate pyproject.toml and
-# uv.lock -- a dependency change made this way shows up in the PR diff for
-# review, the same declarative-manifest pattern CLAUDE.md's own module-
-# management guidance endorses uv for. This does not eliminate the
-# execution-time risk (dependency resolution/build can still run arbitrary
-# code, e.g. an sdist's build backend) -- it only adds a post-hoc,
-# PR-review-based compensating control on top of the still-denied
-# `uv pip install`/`uv install` forms. `uv sync`/`uv lock` were already
-# outside this pattern before this change (lockfile-only operations, not
-# touched here).
-install_re="${cmd_boundary}(pip3?[[:space:]]+install|npm[[:space:]]+install|npm[[:space:]]+i|yarn[[:space:]]+add|pnpm[[:space:]]+add|go[[:space:]]+install|brew[[:space:]]+install|apt(-get)?[[:space:]]+install|gem[[:space:]]+install|cargo[[:space:]]+install|uv[[:space:]]+pip[[:space:]]+install|uv[[:space:]]+install|plugin[[:space:]]+install)([[:space:]]|\$)"
-
-if [[ "$lc_command" =~ $install_re ]]; then
-  deny "Blocked by hooks/check-bash-safety.sh: command matches a package/plugin install pattern. Per evaluating-skill-quality/SKILL.md's stop boundary, installs require the operator's explicit go-ahead -- propose the install instead of running it."
+if [ "$decision" = "deny" ]; then
+  deny "Blocked by hooks/check-bash-safety.sh: $reason. Per evaluating-skill-quality/SKILL.md's stop boundary and planning-a-branch-from-an-issue/references/github-issue-workflow.md, propose the change instead of running it, or use the platform-integrated tool call for GitHub writes."
 fi
 
-# --- Findings 2 & 3: direct CLI GitHub write commands ----------------------
-# Denylist the write/mutating subcommands, not just create|edit|close|
-# comment|merge. Read subcommands (list, view, status, diff, checks,
-# checkout) stay allowed; delete, reopen, transfer, pin/unpin, lock/unlock,
-# develop (issue), review, and ready (pr) are mutating and denied too.
-gh_issue_re="${cmd_boundary}gh[[:space:]]+issue[[:space:]]+(create|edit|close|comment|delete|reopen|transfer|pin|unpin|lock|unlock|develop)([[:space:]]|\$)"
-gh_pr_re="${cmd_boundary}gh[[:space:]]+pr[[:space:]]+(create|edit|close|comment|merge|review|ready|reopen|lock|unlock|update-branch)([[:space:]]|\$)"
-gh_api_re="${cmd_boundary}gh[[:space:]]+api([[:space:]]|\$)"
-# Matches -X/--method (any case, already lowercased upstream) followed by
-# POST/PUT/PATCH/DELETE in any of the three flag syntaxes gh/getopt accept:
-#   - whitespace-separated:  -X POST      / --method POST
-#   - equals-form long flag:              --method=POST
-#   - attached short flag:   -XPOST
-gh_api_write_method_re='(-x[[:space:]]*=?[[:space:]]*|--method[[:space:]=]+)(post|put|patch|delete)([[:space:]]|$)'
-# Finding: `gh api graphql` has no -X/--method flag at all (GraphQL uses a
-# single POST endpoint regardless of query vs. mutation), so the method-flag
-# check above can never catch a graphql mutation. Heuristically flag any
-# `gh api graphql` invocation whose argument string contains the literal
-# "mutation" keyword (case-insensitive via lc_command) -- a plain `query{...}`
-# read has no reason to contain that word. This cannot fully parse GraphQL in
-# bash, but it catches the common `-f query='mutation{...}'` write pattern.
-gh_api_graphql_re="${cmd_boundary}gh[[:space:]]+api[[:space:]]+graphql([[:space:]]|\$)"
-
-if [[ "$lc_command" =~ $gh_issue_re ]]; then
-  deny "Blocked by hooks/check-bash-safety.sh: direct 'gh issue' write command. Per planning-a-branch-from-an-issue/references/github-issue-workflow.md, prefer the platform-integrated tool call (connected GitHub app/MCP) instead of shelling out to the gh CLI for writes."
-fi
-
-if [[ "$lc_command" =~ $gh_pr_re ]]; then
-  deny "Blocked by hooks/check-bash-safety.sh: direct 'gh pr' write command (create/edit/close/comment/merge, including auto-merge via 'gh pr merge --auto'). Per planning-a-branch-from-an-issue/SKILL.md, drafting-a-pr-to-merge/SKILL.md, and references/github-issue-workflow.md, merging (including enabling auto-merge) and other PR writes are a separate, explicit human or CI decision. Non-merge PR writes should use the platform-integrated tool call instead of the gh CLI; merging is blocked in both forms -- hooks/check-merge-pull-request-block.sh blocks the platform-integrated mcp__github__merge_pull_request call the same way this rule blocks 'gh pr merge'."
-fi
-
-if [[ "$lc_command" =~ $gh_api_re ]] && [[ "$lc_command" =~ $gh_api_write_method_re ]]; then
-  deny "Blocked by hooks/check-bash-safety.sh: 'gh api' write call (-X/--method POST/PUT/PATCH/DELETE). Per planning-a-branch-from-an-issue/references/github-issue-workflow.md, never shell out to a command-line GitHub tool directly for writes -- use the platform-integrated tool call or an approved read-only wrapper."
-fi
-
-if [[ "$lc_command" =~ $gh_api_graphql_re ]] && [[ "$lc_command" == *mutation* ]]; then
-  deny "Blocked by hooks/check-bash-safety.sh: 'gh api graphql' call containing a 'mutation' keyword. GraphQL mutations are writes regardless of the missing -X/--method flag. Per planning-a-branch-from-an-issue/references/github-issue-workflow.md, never shell out to a command-line GitHub tool directly for writes -- use the platform-integrated tool call or an approved read-only wrapper."
-fi
-
-# Finding: `gh api <endpoint> -f key=val` (or -F/--field/--raw-field) performs
-# an implicit POST whenever field flags are present -- no -X/--method flag is
-# required, so the write-method check above never sees it. gh's own
-# convention is that field flags mean a write; a GET-only call has no reason
-# to carry one. Scoped to non-graphql `gh api` calls -- `gh api graphql -f
-# query='query{...}'` legitimately uses -f to pass a plain read query as a
-# variable, and that case is handled by the mutation-keyword check above,
-# not this one.
-gh_api_field_flag_re='(^|[[:space:]])(-f|--field|--raw-field)([[:space:]=]|[a-z_]|$)'
-
-if [[ "$lc_command" =~ $gh_api_re ]] && ! [[ "$lc_command" =~ $gh_api_graphql_re ]] && [[ "$lc_command" =~ $gh_api_field_flag_re ]]; then
-  deny "Blocked by hooks/check-bash-safety.sh: 'gh api' call with a field flag (-f/-F/--field/--raw-field). Field flags imply an implicit POST/write in gh's own convention, with no -X/--method flag required. Per planning-a-branch-from-an-issue/references/github-issue-workflow.md, never shell out to a command-line GitHub tool directly for writes -- use the platform-integrated tool call or an approved read-only wrapper."
+if [ "$decision" != "allow" ]; then
+  deny "Blocked by hooks/check-bash-safety.sh: gitapex_check_bash_safety.py returned an unrecognized decision '$decision'. Failing closed."
 fi
 
 # --- Finding 4: git push gated on gitapex_scan_provenance.py -----------------------
-push_re="${cmd_boundary}git[[:space:]]+push([[:space:]]|\$)"
-
-if [[ "$lc_command" =~ $push_re ]]; then
+if [ "$is_git_push" = "true" ]; then
   project_dir="${CLAUDE_PROJECT_DIR:-$(pwd)}"
   scan_script="$project_dir/skills/outward-artifact-preflight/scripts/gitapex_scan_provenance.py"
 

@@ -5,6 +5,18 @@ this new module's ``_HEADING_RE``/``_FENCED_BLOCK_RE``/``_VERDICT_RE``/
 ``_COMMIT_RE`` module-level compiles and the ``_last_section_from``/
 ``parse_verdict`` functions).
 
+Issue #1343 briefly extended this file with property tests for a public
+``heading_pattern()`` function, added to this module so
+``gitapex_scan_independent_review_heading_drift.py`` could reuse its
+ATX-heading regex shape for arbitrary text -- reverted (both the
+function and these tests) once a reuse/simplification review found the
+call that justified making it public never actually happened (see that
+module's own history), leaving a public function with no caller. One
+property survives, adapted to exercise ``_HEADING_RE`` directly instead:
+case-insensitivity of the heading text itself, which no pre-existing
+test covered (only the Verdict/commit field values' own casing was
+pinned).
+
 Reproducibility: ``derandomize=True`` with an explicit ``max_examples`` and
 ``deadline=None``, matching
 ``tests/test_gitapex_check_pr_duplicate_issue_properties.py``'s own
@@ -55,7 +67,7 @@ def test_arbitrary_text_never_raises_and_is_deterministic(text: str) -> None:
 
 
 @_PROPERTIES
-@given(text=st.text(max_size=300).filter(lambda s: "step 8 independent review verdict" not in s.lower()))
+@given(text=st.text(max_size=300).filter(lambda s: "independent review verdict" not in s.lower()))
 def test_text_never_containing_the_heading_phrase_never_parses(text: str) -> None:
     """No false positive: text that never contains the heading phrase at all
     (case-insensitively) never yields a usable verdict, regardless of what
@@ -71,9 +83,7 @@ def test_text_never_containing_the_heading_phrase_never_parses(text: str) -> Non
     verdict_emphasis=st.sampled_from(_EMPHASIS),
     commit_emphasis=st.sampled_from(_EMPHASIS),
     bullet=st.sampled_from(_BULLETS),
-    casing=st.sampled_from(
-        ("Step 8 independent review verdict", "STEP 8 INDEPENDENT REVIEW VERDICT", "step 8 independent review verdict")
-    ),
+    casing=st.sampled_from(("Independent review verdict", "INDEPENDENT REVIEW VERDICT", "independent review verdict")),
 )
 def test_a_real_clean_verdict_is_always_detected_and_passes(
     level: str, sha: str, verdict_emphasis: str, commit_emphasis: str, bullet: str, casing: str
@@ -108,11 +118,11 @@ def test_a_verdict_inside_a_fenced_code_block_is_never_detected(sha: str, fence:
     and issue #1311's own defeat-test-disclosure round), not a theoretical
     one.
 
-    Confirmed to have teeth: removing `_strip_fenced_code_blocks`'s call
+    Confirmed to have teeth: removing `strip_fenced_code_blocks`'s call
     from `parse_verdict` makes this property FAIL on every generated
     example, since the unstripped fenced section still matches
     `_HEADING_RE`/`_VERDICT_RE`/`_COMMIT_RE` directly."""
-    body = f"Example usage:\n{fence}\n## Step 8 independent review verdict\n\n- Verdict: CLEAN\n- Verified commit: {sha}\n{fence}\n"
+    body = f"Example usage:\n{fence}\n## Independent review verdict\n\n- Verdict: CLEAN\n- Verified commit: {sha}\n{fence}\n"
     passed, _ = gate.check(body, sha)
     assert passed is False
 
@@ -127,7 +137,7 @@ def test_a_verdict_inside_a_fenced_code_block_is_never_detected(sha: str, fence:
 def test_strip_fenced_code_blocks_direct_call_handles_any_valid_close_length(
     open_len: int, extra_close_len: int, fence_char: str, inner: str
 ) -> None:
-    """Direct call into `_strip_fenced_code_blocks` itself: CommonMark's own
+    """Direct call into `strip_fenced_code_blocks` itself: CommonMark's own
     rule is that a closing fence needs the same character repeated *at
     least* as many times as the opening one, not an exact-length match --
     a live adversarial round found an earlier backreference-based version
@@ -141,7 +151,7 @@ def test_strip_fenced_code_blocks_direct_call_handles_any_valid_close_length(
     close_fence = fence_char * close_len
     marker = f"MARKER_START{inner}MARKER_END"  # a sentinel `inner` alone can't coincidentally match "before"/"after"
     text = f"before\n{open_fence}\n{marker}\n{close_fence}\nafter\n"
-    stripped = gate._strip_fenced_code_blocks(text)
+    stripped = gate.strip_fenced_code_blocks(text)
     assert "before" in stripped
     assert "after" in stripped
     assert marker not in stripped
@@ -159,13 +169,13 @@ def test_strip_fenced_code_blocks_direct_call_unclosed_fence_extends_to_eof(fenc
     fence = fence_char * 3
     marker = f"MARKER_START{inner}MARKER_END"  # a sentinel `inner` alone can't coincidentally match "before"
     text = f"before\n{fence}\n{marker}"
-    stripped = gate._strip_fenced_code_blocks(text)
+    stripped = gate.strip_fenced_code_blocks(text)
     assert "before" in stripped
     assert marker not in stripped
 
 
 _TRAILING_TEXT = st.text(alphabet=st.characters(blacklist_categories=("Cc", "Cs")), max_size=200).filter(
-    lambda s: "step 8 independent review verdict" not in s.lower()
+    lambda s: "independent review verdict" not in s.lower()
 )
 
 
@@ -178,7 +188,7 @@ def test_last_section_from_never_crosses_the_next_heading(sha: str, other_sha: s
     generated trailing content that itself might coincidentally contain
     `##`-shaped text or verdict-field-shaped lines."""
     body = (
-        f"## Step 8 independent review verdict\n\n"
+        f"## Independent review verdict\n\n"
         f"- Verdict: CLEAN\n- Verified commit: {sha}\n\n"
         f"## Some later section\n\n"
         f"- Verdict: CLEAN\n- Verified commit: {other_sha}\n{trailing}\n"
@@ -205,3 +215,26 @@ def test_last_section_from_direct_call_stops_at_next_heading(before: str, after:
     section = gate._last_section_from(text, start)
     assert "Next heading here" not in section
     assert "unreachable content" not in section
+
+
+_HEADING_LEVEL_MARKS = ("#", "##", "###", "####", "#####", "######")
+
+
+@_PROPERTIES
+@given(level=st.sampled_from(_HEADING_LEVEL_MARKS))
+def test_heading_re_is_case_insensitive(level: str) -> None:
+    """`_HEADING_RE` is case-insensitive (module docstring); no
+    pre-existing test exercised case-insensitivity of the heading text
+    itself, only of the Verdict/commit field values' own casing (see
+    `test_check_is_case_insensitive_on_verdict_and_commit` in
+    tests/test_gitapex_gate_independent_review_pending.py). Confirmed to
+    have teeth: dropping `re.IGNORECASE` from `_HEADING_RE`'s own
+    `re.compile` call makes this property FAIL for every generated level.
+
+    `CANONICAL_HEADING_TEXT` ("Independent review verdict") is plain
+    ASCII, so `str.swapcase()` is safe here -- unlike arbitrary Unicode
+    text, it maps every character to exactly one character, with no
+    length-changing special case (e.g. German sharp-S `'ß'` swapcasing to
+    the two-character `'SS'`) to work around."""
+    body = f"{level} {gate.CANONICAL_HEADING_TEXT.swapcase()}\n"
+    assert gate._HEADING_RE.search(body) is not None
