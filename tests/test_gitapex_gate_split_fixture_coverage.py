@@ -1025,7 +1025,7 @@ def test_real_split_json_partition_declarations_are_pinned_exactly():
         declared[path.parent.name] = gate.parse_declared_partition(data)
     assert declared == {
         "battle-testing-a-skill": None,
-        "evaluating-skill-quality": (31, 34, 14),
+        "evaluating-skill-quality": (31, 36, 14),
         "explaining-the-work": (3, 2, 9),
         "merge-retrospective": (10, 6, 4),
         "scorer-gated-skill-edits": None,

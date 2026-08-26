@@ -293,7 +293,7 @@ Checks (the canonical list -- the manual fallback is to apply these):
     also covers the metadata sidecar's own spec.references entries and
     lifecycle.experimental/deprecated.reason text -- a bare number there
     loses its meaning once the sidecar travels with its skill directory
-    to another repository. A full ``https://github.com/tvna/gitapex/issues/149``-style
+    to another repository. A full ``https://github.com/OWNER/REPO/issues/149``-style
     URL contains no bare ``#N`` and so is never flagged by this scan --
     that is the only sanctioned way left to cite an issue from the
     sidecar. Other repo-specific content -- sibling-skill names,
@@ -804,17 +804,22 @@ LIFECYCLE_SCALAR_KEYS = ("renamedFrom",)
 # lenient ISO-variant parsing in Python 3.11+ never gets a chance to
 # accept an off-shape string.
 LIFECYCLE_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-# A full GitHub issue/PR URL anchoring the whole string: this repository's
-# own host only (metadata/gitapex.yaml is maintainer-facing provenance for
-# THIS repository, never something a portable skill body depends on), an
-# "issues" or "pull" segment, then a digit run. Deliberately a full URL,
-# not a bare "#123"/"owner/repo#123" shape: a bare
-# issue number means nothing once this sidecar travels with its skill
-# directory to another repository (e.g. plugin vendoring); a full URL still
-# resolves to the right place wherever it lands. Shape-only -- never
-# resolved against a live GitHub API call, since this checker is
+# A full GitHub issue/PR URL anchoring the whole string: any owner/repo
+# segment (metadata/gitapex.yaml is maintainer-facing provenance for
+# whichever repository actually hosts the skill directory at the time --
+# this repository today, a different one once vendored -- never something
+# a portable skill body depends on), an "issues" or "pull" segment, then a
+# digit run. Deliberately a full URL, not a bare "#123"/"owner/repo#123"
+# shape: a bare issue number means nothing once this sidecar travels with
+# its skill directory to another repository (e.g. plugin vendoring); a
+# full URL still resolves to the right place wherever it lands -- but only
+# if the owner/repo segment itself is not hardcoded to this repository's
+# own name, which would defeat that same vendoring case. Shape-only --
+# never resolved against a live GitHub API call, since this checker is
 # offline/read-only by design.
-LIFECYCLE_ISSUE_REF_RE = re.compile(r"^https://github\.com/tvna/gitapex/(?:issues|pull)/\d+$")
+LIFECYCLE_ISSUE_REF_RE = re.compile(
+    r"^https://github\.com/[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?/[A-Za-z0-9._-]+/(?:issues|pull)/\d+$"
+)
 
 # A YAML mapping key at a given indent, however it was written: a bare
 # scalar key (any run of characters up to the first unquoted ":" that
@@ -5710,9 +5715,10 @@ def _valid_lifecycle_date(value: object) -> bool:
 
 def _valid_tracking_issue(value: object) -> bool:
     """Shape-only check for spec.lifecycle.experimental.trackingIssue: a
-    full ``https://github.com/tvna/gitapex/issues/123`` (or ``/pull/123``)
-    URL. Never resolved against a live GitHub API call -- this checker is
-    offline/read-only by design.
+    full ``https://github.com/OWNER/REPO/issues/123`` (or ``/pull/123``)
+    URL -- any owner/repo, not only this repository's own. Never resolved
+    against a live GitHub API call -- this checker is offline/read-only
+    by design.
     """
     return isinstance(value, str) and bool(LIFECYCLE_ISSUE_REF_RE.match(value))
 
@@ -5758,7 +5764,7 @@ def _lifecycle_checks(
         "since/removeAfter, if present, must be real YYYY-MM-DD dates; "
         "reason, if present, is <= "
         f"{REFERENCES_ENTRY_MAX_CHARS} chars; trackingIssue, if present, a "
-        "full https://github.com/tvna/gitapex/issues/<N> (or /pull/<N>) "
+        "full https://github.com/OWNER/REPO/issues/<N> (or /pull/<N>) "
         "URL; compatibilityGuarantee, if present, one of "
         f"{COMPATIBILITY_GUARANTEE_LEVELS}"
     )
@@ -5839,7 +5845,7 @@ def _lifecycle_checks(
         if key == "experimental" and "trackingIssue" in block and not _valid_tracking_issue(block["trackingIssue"]):
             problems.append(
                 f"experimental.trackingIssue is not a full "
-                f"https://github.com/tvna/gitapex/issues/<N> (or /pull/<N>) "
+                f"https://github.com/OWNER/REPO/issues/<N> (or /pull/<N>) "
                 f"URL: {block['trackingIssue']!r}"
             )
         if (

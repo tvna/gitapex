@@ -3349,6 +3349,75 @@ def test_lifecycle_tracking_issue_pull_url_passes_well_formed(tmp_path):
     assert css.main([str(d)]) == 0
 
 
+def test_lifecycle_tracking_issue_non_origin_repo_url_passes_well_formed(tmp_path):
+    # dimension-6 NOT-MATURE fix: LIFECYCLE_ISSUE_REF_RE must validate any
+    # owner/repo GitHub issue/PR URL, not only this repository's own --
+    # otherwise a repository this skill is vendored into can never
+    # declare a passing trackingIssue for its own tracking issue.
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    experimental:\n"
+        "      reason: not yet proven\n"
+        '      trackingIssue: "https://github.com/other-org/other-repo/issues/456"\n',
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is True
+    assert css.main([str(d)]) == 0
+
+
+@pytest.mark.parametrize(
+    "tracking_issue",
+    [
+        "https://github.com/-owner/repo/issues/1",  # owner starting with hyphen
+        "https://github.com/owner-/repo/issues/1",  # owner ending with hyphen
+        "https://github.com/owner//issues/1",  # empty repo segment
+        "https://github.com/owner/repo/issues/",  # missing issue number
+        "https://github.com/owner/repo/issues/1x",  # non-digit suffix
+        "https://github.com/owner/repo/discussions/1",  # wrong path segment
+        "https://github.com/owner/repo/issues/1/",  # trailing slash
+        "https://GITHUB.com/owner/repo/issues/1",  # wrong-case host
+    ],
+)
+def test_lifecycle_tracking_issue_generalized_pattern_still_rejects_malformed_urls(tmp_path, tracking_issue):
+    # Defeat test for the generalized LIFECYCLE_ISSUE_REF_RE (dimension-6
+    # NOT-MATURE fix): loosening the pattern from a literal "tvna/gitapex"
+    # to an owner/repo shape must not accidentally also accept a
+    # malformed URL that the old, narrower pattern would have rejected on
+    # shape alone.
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        f'  lifecycle:\n    experimental:\n      reason: not yet proven\n      trackingIssue: "{tracking_issue}"\n',
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is False
+    assert css.main([str(d)]) == 1
+
+
+def test_lifecycle_issue_ref_pattern_matches_schema():
+    # Cross-file drift guard (this module's OWN established precedent:
+    # test_execution_requirement_packages_key_pattern_matches_schema below
+    # asserts the same thing for EXEC_REQ_PACKAGES_KEY_RE/
+    # executionRequirementsPackages.propertyNames.pattern) -- issue #1347
+    # hand-duplicated LIFECYCLE_ISSUE_REF_RE's generalized owner/repo shape
+    # into skill-metadata.schema.json's trackingIssue.pattern as a second,
+    # independently-enforced copy (this checker's own Python regex, and
+    # the JSON Schema gitapex_scan_skill_metadata_schema.py validates every
+    # committed metadata/gitapex.yaml against in CI). Nothing before this
+    # test compared the two literal pattern strings, so a future edit to
+    # either copy alone (a narrowing fix, a copy-paste typo) could silently
+    # desync which trackingIssue URLs each enforcement path accepts.
+    schema_path = _SCRIPT_PATH.parent.parent / "references" / "skill-metadata.schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    schema_pattern = schema["$defs"]["lifecycleExperimental"]["properties"]["trackingIssue"]["pattern"]
+    assert schema_pattern == css.LIFECYCLE_ISSUE_REF_RE.pattern, (
+        f"skill-metadata.schema.json's lifecycleExperimental.properties."
+        f"trackingIssue.pattern is {schema_pattern!r}, but "
+        f"LIFECYCLE_ISSUE_REF_RE is {css.LIFECYCLE_ISSUE_REF_RE.pattern!r} "
+        "-- the schema and the hand-rolled checker regex have drifted."
+    )
+
+
 def test_manifest_parser_parses_spec_references_list():
     text = (
         "apiVersion: gitapex.io/v1alpha1\n"

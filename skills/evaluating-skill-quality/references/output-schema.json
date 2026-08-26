@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/tvna/gitapex/blob/main/skills/evaluating-skill-quality/references/output-schema.json",
+  "$id": "https://gitapex.io/schemas/evaluating-skill-quality/output-schema.json",
   "title": "SkillQualityReviewResult",
   "description": "Structured output contract for evaluating-skill-quality's Procedure step 6 verdict, from this repository's own design record (see this skill's tracking issue). Consumed by a companion schema-conformance checker script, never by the PR-body disclosure gate (gitapex_gate_skill_audit_disclosure.py), which keeps checking its own free-text WELL-FORMED-AND-MATURE-style tokens unmodified.",
   "type": "object",

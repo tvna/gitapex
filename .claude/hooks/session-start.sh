@@ -57,10 +57,22 @@ except (OSError, ValueError):
     # GIT_TERMINAL_PROMPT=0: never block session start on a credential
     # prompt. timeout: bound a stalled transport the same way, rather than
     # hanging indefinitely. Both fail into the same non-fatal warning as
-    # every other failure mode here. refs/heads/ prefix: fetch exactly the
-    # branch just validated, not whatever ref resolution would otherwise
-    # pick for a same-named tag.
-    GIT_TERMINAL_PROMPT=0 timeout 30s git -C "${CLAUDE_PROJECT_DIR:-.}" fetch origin "refs/heads/${default_branch}" \
+    # every other failure mode here. Destination refspec
+    # (+refs/heads/<branch>:refs/remotes/origin/<branch>), not a
+    # source-only "refs/heads/<branch>" fetch (issue #1345): a source-only
+    # fetch exits 0 in a restricted-refspec checkout (one produced by
+    # `git clone --single-branch --branch`) without ever materializing
+    # refs/remotes/origin/<branch>, because git only auto-creates a
+    # remote-tracking ref when the fetched source matches the checkout's
+    # own *configured* remote.origin.fetch refspec pattern -- a
+    # restricted-refspec checkout's configured refspec only covers the one
+    # branch it was cloned with. Live-verified, not assumed. The
+    # destination-refspec form also fetches exactly the branch just
+    # validated (never a same-named tag) and is a no-op-safe,
+    # no-regression replacement in the already-working wildcard-refspec
+    # case.
+    GIT_TERMINAL_PROMPT=0 timeout 30s git -C "${CLAUDE_PROJECT_DIR:-.}" fetch origin \
+      "+refs/heads/${default_branch}:refs/remotes/origin/${default_branch}" \
       || echo "gitapex: could not fetch default branch '${default_branch}' from origin this session (non-fatal)." >&2
   fi
 else

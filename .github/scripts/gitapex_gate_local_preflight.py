@@ -78,7 +78,7 @@ reasons.
   (issue #890), which closes the "configured here but never actually
   installed" half; nothing closes the ``--no-verify`` half. CI remains the
   authoritative merge gate for every gate carrying a ``ci`` plane -- true
-  for 34 of the 36 wired gates. ``behind-base`` (issue #985) and
+  for 35 of the 37 wired gates. ``behind-base`` (issue #985) and
   ``real-checkout-git-write`` (issue #991) are the two exceptions: each
   carries only ``local``, so for those two gates specifically this
   pre-push hook -- bypassable the same way as any other -- is the *only*
@@ -87,7 +87,7 @@ reasons.
   Map; the same gap now applies to ``real-checkout-git-write`` too.
 - **Every wired gate runs through ``uv``.** CONTRIBUTING.md invokes this
   file with plain ``python3``, and so does the pre-push hook, because the
-  runner itself needs no dependencies -- but all 36 wired argvs begin with
+  runner itself needs no dependencies -- but all 37 wired argvs begin with
   ``uv``, since each gate carries its own pinned invocation. Without ``uv``
   on PATH every one of them reports ``FAIL ... failed to run``, which
   reads as a whole broken wired set rather than one missing tool. ``uv`` is
@@ -98,21 +98,32 @@ reasons.
   the wall clock; parallelism was not added because interleaved failure
   output from eight concurrent subprocesses is the thing this runner exists
   to avoid.
-- ``local_stdin`` producers that reference ``origin/main`` (today:
-  ``exception-handler-gap``) need that ref to exist locally. In a checkout
-  without it the producer fails and that one gate reports FAIL with git's
-  own message; the other gates still run and still report. A *stale*
-  ``origin/main`` widens the diff rather than narrowing it, so it errs
-  toward grading more than the branch changed, never less. ``behind-base``
-  (issue #985) falsifies this staleness assumption for its own case
-  instead of inheriting it: it fetches ``origin/main`` itself before
-  comparing, rather than reading whatever local ref this checkout last
-  pulled, because for a behind-base comparison specifically a stale ref
-  errs the other way -- it makes a genuinely behind branch read as
-  up to date. That fetch is this runner's first network call; a failed
-  fetch fails that one gate closed (a distinct message from an ordinary
-  behind-base FAIL) rather than falling back to the stale ref it exists to
-  avoid.
+- ``local_stdin`` producers that need ``origin/main`` to exist locally
+  (today: ``exception-handler-gap``, ``stdlib-only-claim-drift``, and
+  ``detection-logic-property-coverage`` -- every gate whose ``local_stdin``
+  computes a merge-base diff, not just the first one added) no longer read
+  a raw ``git diff`` directly. Each is wired at
+  ``.github/scripts/gitapex_run_base_diff.py`` (issue #1345), which probes
+  ``origin/main^{commit}`` first and, only if that peeled probe fails (a
+  restricted-refspec clone -- ``git clone --single-branch --branch`` --
+  never populates ``refs/remotes/origin/main`` at all, even from a
+  source-only ``git fetch``), fetches it itself with a destination-refspec
+  ``git fetch`` before re-verifying and handing off to the real ``git
+  diff``. In a checkout where the ref is already present this is a no-op
+  probe, no behavior change from before. A checkout where the fetch itself
+  fails still reports that one gate FAIL with a message distinct from an
+  ordinary diff failure; the other gates still run and still report, same
+  as always. A *stale* local ``origin/main`` (present, but behind the real
+  remote) still widens the diff rather than narrowing it in the common
+  case -- except when the branch itself reverts a change ``main`` made
+  after the local ref went stale, which narrows it instead; that caveat is
+  pre-existing and named here, not solved by issue #1345, which only fixes
+  the missing-ref case. ``behind-base`` (issue #985) never had this
+  staleness problem for its own comparison, because unlike these three
+  gates it fetches ``origin/main`` unconditionally on every run rather than
+  only when the ref is missing -- see its own module docstring. Both this
+  runner's diff-gate producers and ``behind-base`` now make network calls;
+  neither is "the runner's first" any more.
 - This grades **committed** state (``HEAD`` and the working tree as it is on
   disk), not a staged index -- which is exactly why it is wired at
   ``pre-push`` and not ``pre-commit``. ``.pre-commit-config.yaml``'s
@@ -160,22 +171,24 @@ SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
 # own _GROUP_TIMEOUT_SECONDS = 600 -- so that one gate's own theoretical
 # worst case is ~4200 s, not 600 s. A ceiling matching that would be useless
 # as a hang guard (80 minutes of a silent pre-push), so this is a judgment
-# call in the other direction. For scale: a warm run of all 36 wired gates
-# combined measures roughly 11 s end to end (the prior 35-gate set measured
-# roughly 13 s, the 34-gate set before it measured roughly 11 s, up from ~7 s
-# measured for the 31-gate set, 4-6 s measured for
-# the 24-gate set before issue #985's `behind-base` gate, and ~8-9 s measured
-# for the 26-gate set before issue #1028's two schema/manifest gates -- these
-# are warm-run measurements on different hardware, not a strict per-gate cost
-# trend), so 1800 s is a hang guard rather than a budget, and it comfortably
-# clears a cold mypy
-# cache while still failing
-# loudly rather than blocking a push indefinitely. The residual risk is named rather than hidden: a genuinely
-# cold cache on a slow machine can exceed this and report a timeout FAIL on
-# a gate CI would pass. `--timeout-seconds` raises it for that case.
+# call in the other direction. For scale: a warm run of all 37 wired gates
+# combined measures roughly 11 s end to end (the prior 36-gate set measured
+# roughly 11 s, the 35-gate set before that measured roughly 13 s, the 34-gate
+# set before that measured roughly 11 s, up from ~7 s measured for the 31-gate
+# set, 4-6 s measured for the 24-gate set before issue #985's `behind-base`
+# gate, and ~8-9 s measured for the 26-gate set before issue #1028's two
+# schema/manifest gates -- these are warm-run measurements on different
+# hardware, not a strict per-gate cost trend), so 1800 s is a hang guard rather
+# than a budget, and it comfortably clears a cold mypy cache while still
+# failing loudly rather than blocking a push indefinitely. The residual risk is
+# named rather than hidden: a genuinely cold cache on a slow machine can exceed
+# this and report a timeout FAIL on a gate CI would pass. `--timeout-seconds`
+# raises it for that case.
 #
 # Issue #985 added `behind-base`, this runner's first gate that makes a
-# network call (it fetches `origin/main` before comparing). Measured
+# network call (it fetches `origin/main` before comparing); issue #1345
+# added three more, each fetching only when the ref is missing rather than
+# unconditionally on every run. Measured
 # directly rather than assumed: three warm standalone runs of that one
 # gate averaged under a second (~0.6 s), and the ~8-9 s combined figure
 # above is a real but small addition against a ceiling roughly two orders
