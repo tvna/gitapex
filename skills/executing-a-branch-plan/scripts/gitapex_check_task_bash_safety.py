@@ -1044,15 +1044,33 @@ def _fold_array_literal_spans(tokens: list[str]) -> list[str]:
 # array-element subscript (`${NAME[0]}`, `${NAME[@]}`, `${NAME[$i]}`).
 # Deliberately excludes a default-clause (`${NAME:-default}`) or indirect
 # (`${!NAME}`) reference -- see `_token_is_all_unassigned_refs`'s own
-# docstring for why those must NOT be treated as vanishing.
-_ONE_REF_RE = r"\$[A-Za-z_][A-Za-z0-9_]*|\$\{[A-Za-z_][A-Za-z0-9_]*(?:\[[^][]*\])?\}"
+# docstring for why those must NOT be treated as vanishing. NAMED groups
+# (`bare`/`braced`), not positional -- `_REF_RUN_NAME_RE` below is this
+# SAME pattern, unquantified, so its own two alternatives can never
+# silently drift out of sync with `_REF_RUN_TOKEN_RE`'s (a future round
+# extending one and forgetting the other, found live by Step 8
+# independent review, twenty-first round, issue #1326) -- there is only
+# ever one definition to extend. Named `_SRC`, not `_RE` (found live by
+# the same round's own independent review): this is regex SOURCE TEXT, a
+# plain `str` interpolated into `_REF_RUN_TOKEN_RE` below, never itself
+# compiled or called -- every OTHER `_RE`-suffixed name in this module
+# (`_ASSIGN_RE`, `_VAR_REF_FULL_RE`, `_REF_RUN_TOKEN_RE`/`_REF_RUN_NAME_RE`
+# themselves) is an already-compiled `re.Pattern`, callable via `.match()`/
+# `.search()`/`.finditer()` directly; naming this the same way would wrongly
+# suggest it is too.
+_ONE_REF_SRC = r"\$(?P<bare>[A-Za-z_][A-Za-z0-9_]*)|\$\{(?P<braced>[A-Za-z_][A-Za-z0-9_]*)(?:\[[^][]*\])?\}"
 # The whole token must be nothing BUT one or more back-to-back references
-# of the shape above -- no other character anywhere in the token.
-_REF_RUN_TOKEN_RE = re.compile(rf"^(?:{_ONE_REF_RE})+$")
+# of the shape above -- no other character anywhere in the token. A named
+# group repeated under a quantifier is valid Python `re` syntax (the name
+# is defined once, syntactically, regardless of how many times `+`
+# repeats it at match time) -- confirmed live that this matches/finditers
+# identically to the pre-unification two-regex form across every shape
+# `_token_is_all_unassigned_refs`'s own tests exercise.
+_REF_RUN_TOKEN_RE = re.compile(rf"^(?:{_ONE_REF_SRC})+$")
 # The individual references within such a token, captured for the
-# unassigned-name check -- group(1) for the bare form, group(2) for the
-# braced (optionally subscripted) form.
-_REF_RUN_NAME_RE = re.compile(r"\$([A-Za-z_][A-Za-z0-9_]*)|\$\{([A-Za-z_][A-Za-z0-9_]*)(?:\[[^][]*\])?\}")
+# unassigned-name check -- group("bare") for the bare form, group(
+# "braced") for the braced (optionally subscripted) form.
+_REF_RUN_NAME_RE = re.compile(_ONE_REF_SRC)
 
 
 def _token_is_all_unassigned_refs(token: str, name_to_value: dict[str, str]) -> bool:
@@ -1078,7 +1096,7 @@ def _token_is_all_unassigned_refs(token: str, name_to_value: dict[str, str]) -> 
     subscript reference does; an indirect (`${!NAME}`) reference resolves
     through a second lookup this classifier cannot rule out succeeding,
     so it is not SOUND to treat as vanishing either -- neither shape is
-    matched by `_ONE_REF_RE`, so neither is ever treated as a vanishing
+    matched by `_ONE_REF_SRC`, so neither is ever treated as a vanishing
     element here.
 
     Found live by Step 8 independent review, twentieth round (issue
@@ -1105,14 +1123,14 @@ def _token_is_all_unassigned_refs(token: str, name_to_value: dict[str, str]) -> 
     (`$NAME}`, a stray trailing `}` fused onto an otherwise-bare
     reference; `${NAME`, an unterminated opening brace) as if it were a
     clean single reference, contradicting its own docstring's "nothing
-    else fused into the same token" claim. `_ONE_REF_RE`'s two
+    else fused into the same token" claim. `_ONE_REF_SRC`'s two
     alternatives each pair their own opening and closing brace, so a
     mismatched brace now falls through to neither alternative and is
     correctly left unstripped, as fused-on literal text that does not
     vanish to nothing."""
     if not _REF_RUN_TOKEN_RE.match(token):
         return False
-    return all((m.group(1) or m.group(2)) not in name_to_value for m in _REF_RUN_NAME_RE.finditer(token))
+    return all((m.group("bare") or m.group("braced")) not in name_to_value for m in _REF_RUN_NAME_RE.finditer(token))
 
 
 def _strip_leading_unassigned_bare_refs(tokens: list[str], name_to_value: dict[str, str]) -> list[str]:

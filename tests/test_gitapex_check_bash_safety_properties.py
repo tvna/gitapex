@@ -1621,7 +1621,9 @@ def test_classify_denies_array_literal_content_with_braced_decoy_end_to_end() ->
     assert verdict.deny is True
 
 
-def test_token_is_all_unassigned_refs_recognizes_a_braced_subscript() -> None:
+@_PROPERTIES
+@given(name=_IDENTIFIERS, subscript=st.sampled_from(["0", "1", "@", "*", "$i"]))
+def test_token_is_all_unassigned_refs_recognizes_a_braced_subscript(name: str, subscript: str) -> None:
     """Model-based, regression pin for the real bypass found live by Step
     8 independent review, twentieth round (issue #1326): a braced
     array-element subscript reference (`${NAME[0]}`, `${NAME[@]}`) to a
@@ -1630,11 +1632,14 @@ def test_token_is_all_unassigned_refs_recognizes_a_braced_subscript() -> None:
     reference already gets -- the nineteenth round's own `_BARE_VAR_REF_
     RE` did not recognize this shape at all, silently leaving the
     collapsed reading a no-op for it."""
-    assert checker._token_is_all_unassigned_refs("${NEVERSET[0]}", {}) is True
-    assert checker._token_is_all_unassigned_refs("${NEVERSET[@]}", {}) is True
+    assert checker._token_is_all_unassigned_refs(f"${{{name}[{subscript}]}}", {}) is True
 
 
-def test_token_is_all_unassigned_refs_recognizes_a_fused_reference_chain() -> None:
+@_PROPERTIES
+@given(name1=_IDENTIFIERS, name2=_IDENTIFIERS, braced1=st.booleans(), braced2=st.booleans())
+def test_token_is_all_unassigned_refs_recognizes_a_fused_reference_chain(
+    name1: str, name2: str, braced1: bool, braced2: bool
+) -> None:
     """Model-based, regression pin for the real bypass found live by Step
     8 independent review, twentieth round (issue #1326): TWO (or more)
     bare/braced references fused into ONE token with nothing else between
@@ -1643,8 +1648,10 @@ def test_token_is_all_unassigned_refs_recognizes_a_fused_reference_chain() -> No
     via `declare -p` that `A=($A_UNSET$B_UNSET gh pr merge 1)` (both
     unset) produces the identical 4-element array a single bare
     `$NEVERSET` decoy already produced."""
-    assert checker._token_is_all_unassigned_refs("$A_UNSET$B_UNSET", {}) is True
-    assert checker._token_is_all_unassigned_refs("${A_UNSET}$B_UNSET", {}) is True
+    assume(name1 != name2)
+    ref1 = f"${{{name1}}}" if braced1 else f"${name1}"
+    ref2 = f"${{{name2}}}" if braced2 else f"${name2}"
+    assert checker._token_is_all_unassigned_refs(ref1 + ref2, {}) is True
 
 
 def test_token_is_all_unassigned_refs_stops_at_an_assigned_name_in_the_chain() -> None:
