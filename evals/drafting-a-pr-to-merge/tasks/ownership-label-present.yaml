@@ -1,0 +1,22 @@
+id: drafting-a-pr-to-merge-ownership-label-present
+name: branch-plan-executing Label Present Defers Instead Of Fixing
+description: When the branch-plan-executing ownership-signal label is present on the PR, defers without running the fix loop (steps 3-6) rather than treating a failing check or open review thread as something to fix directly, since another skill's execution is still concurrently pushing to the same branch.
+tags:
+  - quality
+  - edge-case
+inputs:
+  prompt: |
+    Use drafting-a-pr-to-merge. PR #512, "Add retry budget to the ingest
+    worker," has just been opened. Calling github:pull_request_read method
+    get on PR #512 reports the `branch-plan-executing` label is currently
+    applied, and a CI check is failing.
+
+    What should happen next?
+expected:
+  output_contains:
+    - "branch-plan-executing"
+    - "defer"
+  output_not_contains:
+    - "fix the failing check"
+    - "push a fix"
+    - "resolve the review thread"
