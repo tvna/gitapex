@@ -163,7 +163,7 @@ import gitapex_check_bash_safety as checker
 import pytest
 import test_gitapex_check_bash_safety as hooks_known_bypass_module
 import test_gitapex_check_task_bash_safety as sibling_known_bypass_module
-from _gitapex_bash_oracle import parse_capture_file, run_bash_oracle, write_stand_ins
+from _gitapex_bash_oracle import parse_capture_file, run_oracle_in
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
@@ -400,12 +400,7 @@ def _run_oracle_observations(command: str, tmp_path_factory: pytest.TempPathFact
     addopts, matching `tests/_gitapex_bash_oracle.py`'s own established
     convention) and return the parsed `(tool, argv)` observations."""
     base = tmp_path_factory.mktemp("bash_safety_differential")
-    stand_in_dir = base / "stand_ins"
-    capture_file = base / "capture.jsonl"
-    cwd = base / "cwd"
-    cwd.mkdir()
-    write_stand_ins(_WATCHED_TOOL_NAMES, stand_in_dir, capture_file)
-    run_bash_oracle(command, stand_in_dir=stand_in_dir, cwd=cwd)
+    _run, capture_file = run_oracle_in(command, _WATCHED_TOOL_NAMES, base)
     return parse_capture_file(capture_file)
 
 

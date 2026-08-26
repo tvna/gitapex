@@ -67,7 +67,7 @@ from typing import NamedTuple
 
 import gitapex_check_bash_safety as checker
 import pytest
-from _gitapex_bash_oracle import parse_capture_file, run_bash_oracle, write_stand_ins
+from _gitapex_bash_oracle import parse_capture_file, run_oracle_in
 
 # Every external tool name any pinned command below can resolve to, once
 # real bash actually expands it -- read directly off `_WATCHED_TOOLS`
@@ -432,13 +432,7 @@ def test_pinned_case(case: PinnedCase, tmp_path: pathlib.Path) -> None:
     citation already claims the module does. Asserting only (1) would be
     exactly the vacuous-regression-pin gap issue #1359's own Repair 24
     named."""
-    stand_in_dir = tmp_path / "stand_ins"
-    capture_file = tmp_path / "capture.jsonl"
-    cwd = tmp_path / "cwd"
-    cwd.mkdir()
-    write_stand_ins(_TOOL_NAMES, stand_in_dir, capture_file)
-
-    run = run_bash_oracle(case.command, stand_in_dir=stand_in_dir, cwd=cwd)
+    run, capture_file = run_oracle_in(case.command, _TOOL_NAMES, tmp_path)
     assert not run.timed_out, f"{case.case_id}: oracle timed out running {case.command!r}"
     assert run.returncode == 0, (
         f"{case.case_id}: real bash exited {run.returncode} running {case.command!r}: {run.stderr!r}"

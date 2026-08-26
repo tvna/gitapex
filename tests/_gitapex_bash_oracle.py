@@ -28,11 +28,12 @@ handed to ``pytest`` on the command line -- only *directory* recursion
 consults that glob). ``uv run --frozen pytest tests/_gitapex_bash_oracle.py
 -v`` therefore runs real, green tests; a whole-``tests/`` directory sweep
 never auto-discovers this file (by the same glob rule), which is expected
-and intentional, not a gap -- callers needing this harness import its three
-functions below directly.
+and intentional, not a gap -- callers needing this harness import its four
+public functions below directly.
 
-Three building blocks, used together by every future consumer (task-2,
-task-3, task-5, task-6 of the branch plan this belongs to):
+Three building blocks, used together by every consumer (task-2, task-3,
+task-5, task-6 of the branch plan this belongs to), plus one composer over
+them:
 
 * :func:`write_stand_ins` -- the "fixture/helper": given a list of watched
   tool names and a directory (always ``tmp_path``/``tmp_path_factory``-
@@ -46,6 +47,15 @@ task-3, task-5, task-6 of the branch plan this belongs to):
 * :func:`parse_capture_file` -- the "parser": turns the capture file's
   contents back into an ordered ``list[tuple[str, list[str]]]`` of
   ``(tool_name, args)`` observations.
+* :func:`run_oracle_in` -- the "composer": the one scaffold-then-run idiom
+  all four consumer test files were independently written around (carve a
+  ``stand_ins``/``capture.jsonl``/``cwd`` layout out of one caller-supplied
+  work directory, write the stand-ins, run the command), owned here once
+  instead of re-derived four times. It deliberately stops short of parsing:
+  it returns the capture file rather than the observations, because whether
+  parsing happens at all is a real per-caller decision (a caller that
+  returns early on ``timed_out`` legitimately never parses a capture file a
+  ``killpg`` may have truncated mid-line).
 
 Capture-file format (binding for every future consumer of this module --
 task-2/3/5/6 all depend on this exact shape)
@@ -390,6 +400,26 @@ def parse_capture_file(capture_file: pathlib.Path) -> list[tuple[str, list[str]]
         tool_name = pathlib.PurePath(str(argv[0])).name
         observations.append((tool_name, [str(item) for item in argv[1:]]))
     return observations
+
+
+def run_oracle_in(command: str, tool_names: Iterable[str], work_dir: pathlib.Path) -> tuple[OracleRun, pathlib.Path]:
+    """Compose the three building blocks above over one caller-supplied
+    ``work_dir``: write ``tool_names``' stand-ins into ``work_dir/stand_ins``
+    (capturing to ``work_dir/capture.jsonl``), then run ``command`` through
+    the real-bash oracle with ``work_dir/cwd`` as its own disposable working
+    directory. Returns the :class:`OracleRun` plus the capture file, for the
+    caller to hand to :func:`parse_capture_file` when (and only if) it
+    chooses to -- see this module's own docstring for why parsing is left
+    out of this composer rather than folded into it. ``work_dir`` inherits
+    both callees' own per-test requirement unchanged (``tmp_path``,
+    ``tmp_path_factory.mktemp``, or a fresh subdirectory of one -- never a
+    fixed or shared path)."""
+    stand_in_dir = work_dir / "stand_ins"
+    capture_file = work_dir / "capture.jsonl"
+    cwd = work_dir / "cwd"
+    cwd.mkdir(parents=True, exist_ok=True)
+    write_stand_ins(tool_names, stand_in_dir, capture_file)
+    return run_bash_oracle(command, stand_in_dir=stand_in_dir, cwd=cwd), capture_file
 
 
 # --- Proof-method tests -----------------------------------------------------

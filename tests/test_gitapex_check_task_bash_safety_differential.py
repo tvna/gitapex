@@ -136,7 +136,7 @@ from typing import NamedTuple
 import gitapex_check_task_bash_safety as checker
 import pytest
 import test_gitapex_check_task_bash_safety as _known_bypass_module
-from _gitapex_bash_oracle import parse_capture_file, run_bash_oracle, write_stand_ins
+from _gitapex_bash_oracle import parse_capture_file, run_oracle_in
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
@@ -433,13 +433,7 @@ def test_oracle_denied_shape_implies_classify_denies(
     assume(command not in _KNOWN_BYPASS_COMMAND_STRINGS)
 
     work_dir = Path(tempfile.mkdtemp(dir=_oracle_base_dir))
-    stand_in_dir = work_dir / "stand_ins"
-    capture_file = work_dir / "capture.jsonl"
-    cwd = work_dir / "cwd"
-    cwd.mkdir()
-    write_stand_ins(_STAND_IN_TOOL_NAMES, stand_in_dir, capture_file)
-
-    result = run_bash_oracle(command, stand_in_dir=stand_in_dir, cwd=cwd)
+    result, capture_file = run_oracle_in(command, _STAND_IN_TOOL_NAMES, work_dir)
     if result.timed_out:
         # The oracle's own minimal environment diverging from a real
         # session's is not a classifier failure -- never asserted either
