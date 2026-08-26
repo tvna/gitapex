@@ -57,6 +57,17 @@ Every other checklist item in this template still relies on reviewer
 discipline alone; no CI gate covers them.
 -->
 
+## Merge gate: independent review
+
+This PR is also subject to the `independent-review-pending` required
+status check (see `.github/workflows/independent-review-pending.yml` /
+`.github/scripts/gitapex_gate_independent_review_pending.py`). It stays
+pending/failing until a `## Independent review verdict` section naming
+this PR's current head commit is recorded in this body --
+`drafting-a-pr-to-merge`'s own Step 8 records it once its independent
+review completes. There is nothing for you to do here now: do not
+pre-fill this section yourself, and do not remove this note.
+
 ## Related Issue
 
 Closes #

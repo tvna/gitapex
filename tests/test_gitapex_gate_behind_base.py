@@ -55,6 +55,24 @@ def _synced_head(tmp_path: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
     return origin, head
 
 
+def _restricted_refspec_head(tmp_path: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
+    """An ``origin`` repo with ``main`` plus a ``feature`` branch one
+    commit ahead, and a ``head`` repo produced by
+    ``git clone --single-branch --branch feature`` -- the shape whose
+    configured ``remote.origin.fetch`` refspec only covers ``feature``, so
+    ``origin/main`` never resolves locally and a source-only
+    ``git fetch origin main`` cannot populate it either (issue #1345's own
+    repro). Parallels :func:`_synced_head` for the wildcard-refspec case."""
+    origin = _init_repo(tmp_path / "origin")
+    _commit(origin, "a.txt", "initial")
+    _run(["git", "checkout", "-q", "-b", "feature"], origin)
+    _commit(origin, "b.txt", "feature work")
+
+    head = tmp_path / "head"
+    _run(["git", "clone", "-q", "--single-branch", "--branch", "feature", str(origin), str(head)], tmp_path)
+    return origin, head
+
+
 # --- count_behind / fetch_base -----------------------------------------
 
 
@@ -98,6 +116,30 @@ def test_behind_and_ahead_both_nonzero_when_diverged(tmp_path: pathlib.Path) -> 
 
 
 @pytest.mark.slow
+def test_count_behind_is_not_shadowed_by_a_same_named_local_tag(tmp_path: pathlib.Path) -> None:
+    """Regression, issue #1345 follow-up review (live-reproduced, not
+    theoretical): a bare `origin/main` string is ambiguous when a local
+    tag also happens to be named `origin/main` -- git's own
+    disambiguation order checks `refs/tags/<name>` before
+    `refs/remotes/<name>`, so the stale tag would silently win over the
+    freshly fetched remote-tracking ref. Before this fix, `count_behind`
+    built exactly this bare, ambiguous string and handed it to
+    `merge-base`/`rev-list` directly, reproducibly reporting a false
+    zero-behind PASS in this exact scenario."""
+    origin, head = _synced_head(tmp_path)
+    # A tag literally named "origin/main", pointing at the same commit
+    # `head` is currently synced to -- plausible if a contributor (or a
+    # prior tool run) tagged a release using the same string a remote-
+    # tracking ref would use.
+    _run(["git", "tag", "origin/main"], head)
+    _commit(origin, "c.txt", "new base commit")
+
+    gate.fetch_base(head)
+    result = gate.count_behind(head)
+    assert result == gate.BehindBaseCount(behind=1, ahead=0)
+
+
+@pytest.mark.slow
 def test_fetch_base_fails_closed_on_unreachable_remote(tmp_path: pathlib.Path) -> None:
     head = _init_repo(tmp_path / "head")
     _commit(head, "a.txt", "initial")
@@ -134,7 +176,9 @@ def test_subprocess_output_is_never_strictly_utf8_decoded(
     documented exit-1 "behind base" FAIL. Reproduced with a real fake
     `git` executable emitting invalid UTF-8 on PATH, not a mock of
     subprocess.run, so the actual errors="replace" decoding path in
-    _run_git is exercised for real rather than asserted about a stub."""
+    _gitapex_base_ref.run_git (issue #1345; this gate's own git calls
+    delegate there now) is exercised for real rather than asserted about
+    a stub."""
     fake_bin = tmp_path / "fakebin"
     fake_bin.mkdir()
     fake_git = fake_bin / "git"
@@ -320,6 +364,53 @@ def test_main_default_root_checks_the_real_repository(tmp_path: pathlib.Path, mo
     _origin, head = _synced_head(tmp_path)
     monkeypatch.setattr(gate, "REPO_ROOT", head)
     assert gate.main([]) == 0
+
+
+# --- issue #1345: restricted-refspec clone -------------------------------
+
+
+@pytest.mark.slow
+def test_fetch_base_materializes_ref_in_restricted_refspec_clone(tmp_path: pathlib.Path) -> None:
+    """Issue #1345's own core regression test for this gate: before this
+    fix, fetch_base's source-only `git fetch origin main` exited 0 in a
+    restricted-refspec clone without ever creating `refs/remotes/origin/main`,
+    so count_behind's own merge-base check then failed closed permanently.
+    A destination-refspec fetch must actually materialize the ref."""
+    _origin, head = _restricted_refspec_head(tmp_path)
+    before = subprocess.run(
+        ["git", "-C", str(head), "rev-parse", "--verify", "--quiet", "origin/main"],
+        capture_output=True,
+        check=False,
+    )
+    assert before.returncode != 0
+
+    gate.fetch_base(head)
+
+    after = subprocess.run(
+        ["git", "-C", str(head), "rev-parse", "--verify", "--quiet", "origin/main"],
+        capture_output=True,
+        check=False,
+    )
+    assert after.returncode == 0
+
+
+@pytest.mark.slow
+def test_main_still_works_after_refspec_change_on_a_restricted_refspec_clone(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """End-to-end, via the CLI: a restricted-refspec clone whose `main` has
+    since moved reports an ordinary FAIL, not a permanent GateError -- the
+    exact outcome issue #1345 fixes for this gate. `head`'s own `feature`
+    branch already diverged from `main` at one commit (the fixture's own
+    shape), so `main` is advanced here to also put it genuinely behind."""
+    origin, head = _restricted_refspec_head(tmp_path)
+    _run(["git", "checkout", "-q", "main"], origin)
+    _commit(origin, "c.txt", "new base commit")
+
+    assert gate.main(["--root", str(head)]) == 1
+    stderr = capsys.readouterr().err
+    assert "FAIL" in stderr
+    assert "1 commit(s) behind origin/main" in stderr
 
 
 # --- GateBehindBaseArgs validation ---------------------------------------

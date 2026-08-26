@@ -114,6 +114,7 @@ mypy_path = [
     "skills/scorer-gated-skill-edits/scripts",
     "skills/evaluating-skill-quality/scripts",
     "skills/auditing-agent-product-scope/scripts",
+    "skills/executing-a-branch-plan/scripts",
     "evals/scripts",
     "hooks",
 ]

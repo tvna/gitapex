@@ -252,7 +252,7 @@ truth for the procedure regardless of platform naming.
    Record the validated, preflighted verdict from both layers (or a
    citation to where each is recorded) in the PR body (not only a
    comment — a required status check reads the body) under a
-   `## Step 8 independent review verdict` heading, with `- Verdict: CLEAN`
+   `## Independent review verdict` heading, with `- Verdict: CLEAN`
    (or the current outcome) and `- Verified commit: <current head SHA>`
    lines each kept on one raw-source line (a status check's exact-match
    parser would not tolerate the literal whitespace a mid-span line-wrap

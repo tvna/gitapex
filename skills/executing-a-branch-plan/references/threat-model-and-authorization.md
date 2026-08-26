@@ -292,22 +292,42 @@ actual plugin-agent schema, not a plausible-sounding claim).
 
    **What "empirically verified" and "hard deny" above do NOT cover,
    stated explicitly rather than left for a reader to assume completeness
-   (found by a fourth battle-testing-a-skill trial, confirmed live):**
-   `check_task_bash_safety.sh` is a regex gate, and a regex gate cannot
-   see through ordinary shell obfuscation that hides the verb itself --
-   `git${IFS}push origin HEAD`, `gi""t push origin HEAD`, and
-   `p\ip install foo` (bash parameter expansion and character-splitting,
-   nothing exotic) all ran unblocked when tested directly against the
-   shipped script. `hooks/check-bash-safety.sh`, the file this script is
-   explicitly adapted from, already discloses this identical ceiling for
-   itself ("Obfuscation that hides the verb itself... is out of reach of
-   any regex gate," tracked there as its own open follow-up item, cited
-   by number in that file's own comment -- not repeated here, since the
-   citation is specific to this repository, not portable to a consuming
-   deployment) -- the disclosure above and every "hard deny"/"empirically
-   verified" claim in this section should be read as bounded by that
-   same ceiling, not as complete coverage against a task agent acting on
-   an injected instruction that survived per-task screening.
+   (found by a fourth battle-testing-a-skill trial, confirmed live; since
+   closed for the specific bypasses named below -- issue `#1326`, Stage 1):**
+   `check_task_bash_safety.sh` was originally a raw-text regex gate, and a
+   regex gate cannot see through ordinary shell obfuscation that hides the
+   verb itself -- `git${IFS}push origin HEAD`, `gi""t push origin HEAD`,
+   and `p\ip install foo` (bash parameter expansion and character-
+   splitting, nothing exotic) all ran unblocked when tested directly
+   against the shipped script at the time. `hooks/check-bash-safety.sh`,
+   the file this script is explicitly adapted from, disclosed this
+   identical ceiling for itself at the time.
+
+   Issue `#1326` (Stage 1) closed this specific bypass class in both
+   scripts: `check_task_bash_safety.sh` now shells out to
+   `gitapex_check_task_bash_safety.py`, a token-based classifier (Python
+   stdlib `shlex`, POSIX mode) that matches against bash's own dequoted,
+   operator-segmented token stream instead of scanning raw source text --
+   all three bypasses named above, plus the broader `${IFS}`/quote-split/
+   variable/array/positional-parameter indirection classes they represent,
+   are now hard-denied; see `gitapex_check_task_bash_safety.py`'s own
+   module docstring for the full analysis. Narrower residuals remain,
+   disclosed there and pinned by that script's own test suite as
+   `KNOWN_BYPASS_COMMANDS`: verb-token-splitting that never places the
+   tool/verb name as its own literal token anywhere in the command, e.g.
+   string-slice reconstruction (`cmd=pipinstall; eval "${cmd:0:3}
+   ${cmd:3}"`) or array-literal-assignment indirection (`A=(pip);
+   V=(install); "${A[@]}" "${V[@]}"`); and, in `_rule_fetch_exec`'s own
+   wrapper-skip logic specifically, a wrapper flag that takes a SEPARATE
+   value argument rather than being boolean (`sudo -u root bash`, `env
+   VAR=1 bash`) -- every "hard deny"/"empirically verified" claim in this
+   section should be read as bounded by those narrower ceilings, not as
+   complete coverage against a task agent acting on an injected
+   instruction that survived per-task screening. Stage 2
+   (execution-boundary enforcement -- e.g. a git pre-push hook or
+   network-egress blocking, independent of any source-text classifier) is
+   tracked as a separate, owner-decision-requiring follow-up, not part of
+   this issue's own scope.
 
    Incidentally, a second, distinct Claude-Code-native guard was also
    observed during this probe (not part of this skill's own mechanism,
@@ -338,10 +358,12 @@ actual plugin-agent schema, not a plausible-sounding claim).
    enforce any of it inside that context") plus whatever session-wide
    PreToolUse hook the calling session independently has registered --
    for a session with gitapex's own plugin hooks active, that is
-   `hooks/check-bash-safety.sh`, which hard-denies installs
-   unconditionally (session-wide, not task-scoped), denies `gh issue`/
-   `gh pr` *write* subcommands specifically (not every `gh` invocation),
-   and only warns (does not deny) on `git push`. This is real,
+   `hooks/check-bash-safety.sh`, which hard-denies package/plugin
+   installs unconditionally (session-wide, not task-scoped) -- except
+   `uv add`/`uv remove` and `apm install`/`apm uninstall`, carved out as
+   declarative, visibly-mutating commands (issue `#1320`, `#1326`) -- denies
+   `gh issue`/`gh pr` *write* subcommands specifically (not every `gh`
+   invocation), and only warns (does not deny) on `git push`. This is real,
    structural, defense-in-depth coverage, but it is neither task-scoped
    nor as strict as the project-local variant, and this reference does
    not overstate it as equivalent.

@@ -74,9 +74,13 @@ first, not skimmed.
    task-list file as its first commit, and push -- publishing the head ref
    step 5 requires.
 5. **Open a draft PR and subscribe** (Decision 8). Open a draft PR
-   carrying the ACM and a seeded `## Execution log` section (`PlanApproved`
-   event). Apply the `branch-plan-executing` label to the PR (per the
-   fetch-modify-write-back sequence in the [domain events
+   carrying the ACM, a seeded `## Execution log` section (`PlanApproved`
+   event), and `.github/PULL_REQUEST_TEMPLATE.md`'s own `## Merge gate:
+   independent review` note verbatim -- carry it forward rather than
+   dropping it, the same way the ACM and `## Execution log` sections are
+   carried into the opened body. Apply the `branch-plan-executing` label
+   to the PR (per the fetch-modify-write-back sequence in the [domain
+   events
    reference](references/domain-events-and-failure-handling.md#read-modify-write-discipline),
    not a naive single-label set) -- an ownership-signal mirror of this
    skill's own in-flight execution, letting `drafting-a-pr-to-merge`
