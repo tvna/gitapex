@@ -161,6 +161,79 @@ def test_run_diff_raises_distinctly_on_fetch_failure(tmp_path: pathlib.Path) -> 
         producer.run_diff(head, "origin", "main", ["*.txt"])
 
 
+@pytest.mark.slow
+def test_run_diff_raises_distinctly_when_git_diff_itself_times_out(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The real `git diff` subprocess call's own timeout/OSError handling
+    (distinct from the fetch/probe/common-ancestor calls, which delegate
+    to _gitapex_base_ref) -- exercised in-process, unlike the black-box
+    CLI tests below, so this path is actually covered rather than only
+    exercised in a child process coverage cannot see."""
+    origin = _init_repo(tmp_path / "origin")
+    _commit(origin, "a.txt", "initial")
+    head = _init_repo(tmp_path / "head")
+    _run(["git", "remote", "add", "origin", str(origin)], head)
+    _run(["git", "fetch", "-q", "origin", "main"], head)
+    _run(["git", "checkout", "-q", "-b", "main", "origin/main"], head)
+
+    real_run = producer.subprocess.run
+
+    def _timeout_on_diff(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        argv = args[0]
+        assert isinstance(argv, list)
+        if "diff" in argv:
+            raise subprocess.TimeoutExpired(cmd="git", timeout=5)
+        return real_run(*args, **kwargs)  # type: ignore[no-any-return, call-overload]
+
+    monkeypatch.setattr(producer.subprocess, "run", _timeout_on_diff)
+    with pytest.raises(producer.DiffProducerError, match="git diff timed out"):
+        producer.run_diff(head, "origin", "main", ["*.txt"])
+
+
+@pytest.mark.slow
+def test_run_diff_raises_distinctly_when_git_diff_itself_cannot_run(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    origin = _init_repo(tmp_path / "origin")
+    _commit(origin, "a.txt", "initial")
+    head = _init_repo(tmp_path / "head")
+    _run(["git", "remote", "add", "origin", str(origin)], head)
+    _run(["git", "fetch", "-q", "origin", "main"], head)
+    _run(["git", "checkout", "-q", "-b", "main", "origin/main"], head)
+
+    real_run = producer.subprocess.run
+
+    def _no_git_for_diff(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        argv = args[0]
+        assert isinstance(argv, list)
+        if "diff" in argv:
+            raise OSError("No such file or directory: 'git'")
+        return real_run(*args, **kwargs)  # type: ignore[no-any-return, call-overload]
+
+    monkeypatch.setattr(producer.subprocess, "run", _no_git_for_diff)
+    with pytest.raises(producer.DiffProducerError, match="cannot run git diff"):
+        producer.run_diff(head, "origin", "main", ["*.txt"])
+
+
+# --- CLI: main (in-process, exercising the try/except branches coverage
+# tooling can't see through the black-box subprocess calls below) ---------
+
+
+@pytest.mark.slow
+def test_main_in_process_returns_two_and_names_the_fetch_failure_distinctly(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    head = _init_repo(tmp_path / "head")
+    _commit(head, "a.txt", "initial")
+    _run(["git", "remote", "add", "origin", str(tmp_path / "does-not-exist")], head)
+
+    assert producer.main(["--root", str(head), "--", "*.txt"]) == 2
+    stderr = capsys.readouterr().err
+    assert "error:" in stderr
+    assert "git fetch" in stderr
+
+
 # --- CLI: main (black-box, exercising the real stdout-inheritance path) ----
 
 

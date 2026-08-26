@@ -5,7 +5,8 @@
 Three registered ``local``-plane gates in ``.gitapex/ssot.json``
 (``exception-handler-gap``, ``stdlib-only-claim-drift``,
 ``detection-logic-property-coverage``) each declare a ``local_stdin``
-producer that, before this issue, ran a raw ``git diff -U0 --no-renames
+producer -- this script, run via ``uv run``, is that producer as of this
+issue -- that, before this issue, ran a raw ``git diff -U0 --no-renames
 --merge-base origin/main HEAD -- <globs>`` directly. In a restricted-refspec
 clone (``git clone --single-branch --branch``, the shape any tooling that
 clones only one branch produces), ``origin/main`` never resolves locally,

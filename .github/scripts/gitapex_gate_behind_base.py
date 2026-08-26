@@ -40,10 +40,10 @@ recorded decision in issue #985, chosen over reading a possibly-stale
 local ref or checking a freshness TTL. That posture change was, at the
 time, the first network call in an otherwise fully offline local-preflight
 runner (`gitapex_gate_local_preflight.py`); issue #1345 ended that
-distinction by giving `gitapex_run_base_diff.py` (the shared `local_stdin`
-producer for `exception-handler-gap`, `stdlib-only-claim-drift`, and
-`detection-logic-property-coverage`) a network call of its own, so this
-gate is no longer the only one. The two fetches still differ in *when*
+distinction by giving `gitapex_run_base_diff.py` (run via `uv run`, the
+shared `local_stdin` producer for `exception-handler-gap`,
+`stdlib-only-claim-drift`, and `detection-logic-property-coverage`) a
+network call of its own, so this gate is no longer the only one. The two fetches still differ in *when*
 they run, deliberately: a stale local `origin/main` is exactly the failure
 mode this gate exists to catch (PR #961's session had one four commits
 stale until fetched), so this gate fetches on every run regardless of
