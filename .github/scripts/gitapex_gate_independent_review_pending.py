@@ -17,7 +17,7 @@ Verdict format (drafting-a-pr-to-merge/SKILL.md Step 8's own recorded-
 verdict requirement, amended by this issue to add the second field this
 gate reads):
 
-    ## Step 8 independent review verdict
+    ## Independent review verdict
 
     - Verdict: CLEAN
     - Verified commit: <40-hex-character head SHA the review ran against>
@@ -48,7 +48,7 @@ each closed here:
 
 - A fenced (``` / ~~~) code block, matching- or longer-length closing
   fence alike (CommonMark's own rule, not an exact-length match), is
-  stripped before any heading/field search (`_strip_fenced_code_blocks`,
+  stripped before any heading/field search (`strip_fenced_code_blocks`,
   a linear single pass -- an earlier backreference-based regex both missed
   the longer-closing-fence case AND cost tens of seconds against a
   few hundred lines of non-matching fence-like content, a real
@@ -56,7 +56,7 @@ each closed here:
 - An HTML comment (`<!-- ... -->`, GitHub renders it as nothing at all --
   arguably the more dangerous case, since a human skimming the rendered
   PR body sees no suspicious text at all) is stripped the same way
-  (`_strip_html_comments`).
+  (`strip_html_comments`).
 - A 4-or-more-space-indented block (CommonMark's own indented-code-block
   rule) never counts as a live heading: the heading regex only accepts
   0-3 leading spaces, matching CommonMark's own ATX-heading indentation
@@ -99,6 +99,27 @@ import re
 import sys
 from pathlib import Path
 
+# Issue #1343: the single source of truth for the recorded-verdict heading
+# text. Every runtime-facing use of it in this file (below) reads this
+# constant rather than re-declaring the literal -- the drift that gate
+# exists to catch (issue #1311's own "Step 8" numbering once baked
+# directly into this heading, duplicated by hand across five files with
+# nothing keeping them in sync, later found by a deterministic-gate-
+# quality review to still have unbound runtime copies even after the
+# rename -- see this issue's own follow-up commit) cannot recur for this
+# file's own copies if there are no second copies left to drift from it.
+# gitapex_scan_independent_review_heading_drift.py -- the drift gate that
+# closed that gap -- reads this constant too, but does its own text-
+# presence matching rather than reusing `_HEADING_RE` below: a reuse/
+# simplification review found an earlier revision made `_HEADING_RE`'s
+# own pattern-building logic a public `heading_pattern()` function
+# specifically for that gate to call, but the call never actually
+# happened (none of the drift gate's own targets carry this text as a
+# live heading, only as quoted prose/JSON/YAML -- see that gate's own
+# module docstring) -- a public function built for one caller that
+# never materializes is unjustified surface area, reverted here.
+CANONICAL_HEADING_TEXT = "Independent review verdict"
+
 # CommonMark's own ATX-heading rule: the opening `#` may be indented at
 # most 3 spaces; 4 or more makes the line an indented code block instead,
 # never a live heading. A live adversarial round found that an earlier
@@ -106,13 +127,15 @@ from pathlib import Path
 # "illustrative example" heading parse as a real, live one -- restricting
 # to `[ ]{0,3}` (spaces only) closes that class the same way GitHub's own
 # renderer already treats it as inert.
-_HEADING_RE = re.compile(r"^[ ]{0,3}#{1,6}[ \t]+Step 8 independent review verdict[ \t]*$", re.IGNORECASE | re.MULTILINE)
+_HEADING_RE = re.compile(
+    r"^[ ]{0,3}#{1,6}[ \t]+" + re.escape(CANONICAL_HEADING_TEXT) + r"[ \t]*$", re.IGNORECASE | re.MULTILINE
+)
 _NEXT_HEADING_RE = re.compile(r"^[ ]{0,3}#{1,6}[ \t]+", re.MULTILINE)
 
 _FENCE_OPEN_RE = re.compile(r"^[ \t]*(`{3,}|~{3,})")
 
 
-def _strip_fenced_code_blocks(text: str) -> str:
+def strip_fenced_code_blocks(text: str) -> str:
     """Blank out every fenced code block (``` or ~~~, CommonMark's two
     fence characters) -- rendered as literal/quoted text, never a live
     Markdown heading or list, the same "quoted content is not live prose"
@@ -133,7 +156,13 @@ def _strip_fenced_code_blocks(text: str) -> str:
     lines of non-matching fence-like content) -- a real availability risk
     against a required CI check, not merely a style concern. This version
     has no such quantifier: each line is visited a bounded number of times
-    regardless of how many unmatched candidate opens precede it."""
+    regardless of how many unmatched candidate opens precede it.
+
+    Public (issue #1343): `gitapex_scan_independent_review_heading_drift.py`
+    needs this exact "is this text live, not fenced-off as an example"
+    definition for its own Markdown targets, and reaching into another
+    script's underscore-prefixed function is not a pattern used anywhere
+    else in this repository's own cross-script imports."""
     lines = text.split("\n")
     total = len(lines)
     index = 0
@@ -156,7 +185,7 @@ def _strip_fenced_code_blocks(text: str) -> str:
     return "\n".join(lines)
 
 
-def _strip_html_comments(text: str) -> str:
+def strip_html_comments(text: str) -> str:
     """Blank out every HTML comment (`<!-- ... -->`, possibly spanning
     multiple lines) -- GitHub renders these as nothing at all, so a verdict
     hidden inside one is invisible to a human reviewer skimming the
@@ -168,8 +197,11 @@ def _strip_html_comments(text: str) -> str:
     Plain `str.find`, not a regex with a lazy `.*?` quantifier, to
     guarantee linear time regardless of how many unclosed or malformed
     `<!--` sequences the input contains -- the same ReDoS class
-    `_strip_fenced_code_blocks`'s own docstring names, avoided here by
-    construction rather than by re-deriving the same fix twice."""
+    `strip_fenced_code_blocks`'s own docstring names, avoided here by
+    construction rather than by re-deriving the same fix twice.
+
+    Public for the same reason `strip_fenced_code_blocks` is (see its own
+    docstring) -- issue #1343's drift gate reuses this one too."""
     pieces: list[str] = []
     position = 0
     length = len(text)
@@ -204,8 +236,8 @@ _MIN_SHA_COMPARE_LEN = 7
 
 
 class Verdict:
-    """The parsed contents of the last `## Step 8 independent review
-    verdict` section in a PR body, or the specific reason none usable was
+    """The parsed contents of the last `## Independent review verdict`
+    section in a PR body, or the specific reason none usable was
     found."""
 
     def __init__(self, status: str | None, commit: str | None, error: str | None) -> None:
@@ -228,7 +260,7 @@ def _last_section_from(text: str, start: int) -> str:
 
 
 def parse_verdict(body: str) -> Verdict:
-    """Parse the last `## Step 8 independent review verdict` section out
+    """Parse the last `## Independent review verdict` section out
     of `body`. Returns a `Verdict` carrying either both fields, or an
     `error` describing exactly what is missing/malformed.
 
@@ -237,16 +269,16 @@ def parse_verdict(body: str) -> Verdict:
     between real content and `\\n` breaks every one of them, turning a
     genuine verdict into a false FAIL (a live-confirmed correctness gap,
     the safe direction but still wrong). HTML comments, then fenced code
-    blocks, are stripped next (see `_strip_html_comments` and
-    `_strip_fenced_code_blocks`): a verdict quoted inside either -- e.g. as
+    blocks, are stripped next (see `strip_html_comments` and
+    `strip_fenced_code_blocks`): a verdict quoted inside either -- e.g. as
     illustrative example text, or hidden where GitHub renders nothing at
     all -- is not live disclosure and must not parse as a real verdict."""
     body = body.replace("\r\n", "\n").replace("\r", "\n")
-    body = _strip_html_comments(body)
-    body = _strip_fenced_code_blocks(body)
+    body = strip_html_comments(body)
+    body = strip_fenced_code_blocks(body)
     headings = list(_HEADING_RE.finditer(body))
     if not headings:
-        return Verdict(None, None, "no '## Step 8 independent review verdict' section found")
+        return Verdict(None, None, f"no '## {CANONICAL_HEADING_TEXT}' section found")
 
     section = _last_section_from(body, headings[-1].end())
 
@@ -345,7 +377,7 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"FAIL: {message}", file=sys.stderr)
     print(
-        "Record a '## Step 8 independent review verdict' section in the PR body with "
+        f"Record a '## {CANONICAL_HEADING_TEXT}' section in the PR body with "
         "'- Verdict: CLEAN' and '- Verified commit: <current head SHA>' once "
         "drafting-a-pr-to-merge's Step 8 review completes clean against this exact commit.",
         file=sys.stderr,
