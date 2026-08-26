@@ -98,10 +98,8 @@ def test_denied_when_tool_name_is_not_a_string(tool_name: object) -> None:
     this guard existed: an array-wrapped tool_name let a
     create_pull_request call straight through this hook's own
     duplicate-citation check. Must now deny."""
-    # body="Refs #1": a context-only citation, so this stays hermetic/
-    # network-free the same way test_allowed_when_only_a_context_only_
-    # citation_is_present does -- the guard under test fires before any
-    # citation parsing would matter anyway.
+    # body="Refs #1": mirrors the sibling test's own argument; the guard
+    # under test fires before this file's default body would matter anyway.
     result = run(tool_name=tool_name, body="Refs #1")
     assert result.returncode == 2, f"expected deny (exit 2) for tool_name={tool_name!r}, got {result.returncode}"
     payload = json.loads(result.stderr)

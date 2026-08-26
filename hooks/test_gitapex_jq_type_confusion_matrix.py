@@ -14,13 +14,17 @@ four.
 This file is that gate: one canonical 8-value matrix (see
 `REJECTED_FOR_OBJECT_GUARD`/`REJECTED_FOR_STRING_GUARD`/
 `ACCEPTED_SHAPE_ONLY` below), applied via subprocess against every
-currently-known guarded field across the six hooks issue #1218 names (the
-four hooks PR #1213 touched, plus the two "origin" hooks
-`check-pr-issue-acm-disclosure.sh`/`check-pr-title-convention.sh` that
-issue #1218 found the proven fix had "twice failed to reach" -- tracked
-separately as #1216/#1217 and fixed in the same change as this test, since
-this test cannot honestly claim to "pass against current main" while two of
-its six target hooks still fail closed on only 4 of the matrix's 8 values).
+currently-known guarded field carrying this shape, starting from the six
+hooks issue #1218 names (the four hooks PR #1213 touched, plus the two
+"origin" hooks `check-pr-issue-acm-disclosure.sh`/
+`check-pr-title-convention.sh` that issue #1218 found the proven fix had
+"twice failed to reach" -- tracked separately as #1216/#1217 and fixed in
+the same change as this test, since this test cannot honestly claim to
+"pass against current main" while two of its six target hooks still fail
+closed on only 4 of the matrix's 8 values) and extended since as further
+hooks gained the same guard shape (see `GUARDED_FIELDS` below for the
+current, authoritative registry -- this docstring's own hook count is not
+kept in sync with it).
 
 Scope (per issue #1312's own Constraints): `(.field == null) or (.field |
 type == "X")`-shaped guards only. Does not re-derive each hook's own
@@ -154,9 +158,11 @@ class GuardedField:
         )
 
 
-# Six hooks issue #1218 names: the four hooks PR #1213 already fixed, plus
-# the two origin hooks (#1216/#1217) fixed alongside this test. One entry
-# per currently-known guarded field (per #1237's own repair records).
+# Starting from the six hooks issue #1218 names: the four hooks PR #1213
+# already fixed, plus the two origin hooks (#1216/#1217) fixed alongside
+# this test. One entry per currently-known guarded field (per #1237's own
+# repair records) -- extended since as further hooks gained the same
+# guard shape; this is the authoritative, current registry.
 GUARDED_FIELDS: list[GuardedField] = [
     # --- check-bash-safety.sh (PR #1213) ------------------------------
     GuardedField(
@@ -296,14 +302,13 @@ GUARDED_FIELDS: list[GuardedField] = [
             "tool_input": {"owner": "tvna", "repo": "gitapex", "title": "feat(x): valid title", "body": "x"},
         },
     ),
-    # --- check-pr-duplicate-issue.sh (seventh hook, #1315) ------------
-    # `body: "Refs #1"` is a context-only citation, same hermetic
-    # convention the pr-issue-acm-disclosure entries above use: this
-    # field's own guard fires before any citation parsing (and any
-    # network fetch) would matter anyway. `tool_input` is deliberately
-    # NOT registered here: issue #1315's own Constraints scope this fix
-    # to the `tool_name` guard only (that hook's `tool_input` guard was
-    # already fixed under issue #1197, before this matrix file existed).
+    # --- check-pr-duplicate-issue.sh (#1315) --------------------------
+    # body: "Refs #1": same hermetic context-only-citation convention as
+    # the pr-issue-acm-disclosure entries above. `tool_input` is
+    # deliberately NOT registered here: issue #1315's own Constraints
+    # scope this fix to the `tool_name` guard only (that hook's
+    # `tool_input` guard was already fixed under issue #1197, before this
+    # matrix file existed).
     GuardedField(
         hook_id="pr-duplicate-issue",
         script_name="check-pr-duplicate-issue.sh",
