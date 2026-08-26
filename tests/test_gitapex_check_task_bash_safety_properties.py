@@ -606,6 +606,20 @@ def test_token_is_all_unassigned_refs_true_for_a_plain_braced_ref_assigned_the_e
     assert checker._token_is_all_unassigned_refs("${CFG}", {"CFG": ""}) is True
 
 
+def test_token_is_all_unassigned_refs_false_for_a_plain_braced_ref_assigned_a_real_value() -> None:
+    """No false positive / branch-coverage pin: a plain, UN-subscripted
+    braced reference assigned a genuinely non-empty, non-whitespace
+    value is NOT vanishing -- the twenty-fifth-round fix's own
+    `.strip()`-truthiness check must still correctly decline to treat a
+    real assignment as vanishing. Found live by Step 8 independent
+    review, twenty-sixth round (issue #1326): this specific branch had
+    no direct coverage in this file (only in the main hook's own
+    properties file), confirmed via mutation testing that a broken
+    version of this branch (`elif False:`) passed this file's own full
+    suite unchanged before this test was added."""
+    assert checker._token_is_all_unassigned_refs("${CFG}", {"CFG": "real"}) is False
+
+
 def test_token_is_all_unassigned_refs_true_for_a_bare_ref_assigned_all_ifs_whitespace() -> None:
     """Regression pin for the real bypass found live by Step 8
     independent review, twenty-fifth round (issue #1326), ported from
@@ -614,6 +628,35 @@ def test_token_is_all_unassigned_refs_true_for_a_bare_ref_assigned_all_ifs_white
     runtime -- confirmed live via real bash that `CFG=" "; git -v $CFG
     push origin main` real-expands to `git -v push origin main`."""
     assert checker._token_is_all_unassigned_refs("$CFG", {"CFG": " "}) is True
+
+
+def test_token_is_all_unassigned_refs_true_for_a_plain_braced_ref_assigned_all_ifs_whitespace() -> None:
+    """Regression pin for the real bypass found live by Step 8
+    independent review, twenty-sixth round (issue #1326): the
+    twenty-fifth round's own IFS-whitespace fix was pinned for the bare
+    form only -- the identical `.strip()`-truthiness check on the
+    plain-braced arm had no whitespace-specific regression test in
+    either file, confirmed via mutation testing that reverting just the
+    braced arm's `.strip()` call passed both files' full suites
+    unchanged before these tests were added. Confirmed live via real
+    bash that `CFG=" "; git -v ${CFG} push origin main` real-expands to
+    `git -v push origin main`, identically to the bare form."""
+    assert checker._token_is_all_unassigned_refs("${CFG}", {"CFG": " "}) is True
+
+
+def test_token_is_all_unassigned_refs_false_for_a_bare_ref_assigned_only_a_carriage_return() -> None:
+    """No false negative avoidance / correctness pin: a value consisting
+    ENTIRELY of a carriage return (`\\r`) is NOT IFS whitespace in bash
+    (the default `$IFS` is exactly space/tab/newline) and does NOT
+    word-split away at real bash runtime -- found live by Step 8
+    independent review, twenty-sixth round (issue #1326), ported from
+    the main hook's own identical fix: confirmed live via real bash
+    that `CFG=$'\\r'; git -v $CFG push origin main` keeps `$'\\r'` as
+    its own argv element, NOT word-splitting away, unlike Python's own
+    broader `str.strip()` default whitespace set would wrongly suggest.
+    `_BASH_DEFAULT_IFS` scopes the stripping to exactly bash's own three
+    IFS characters to avoid this."""
+    assert checker._token_is_all_unassigned_refs("$CFG", {"CFG": "\r"}) is False
 
 
 def test_is_git_push_segment_true_for_an_empty_assigned_variable_in_boolean_flag_position() -> None:

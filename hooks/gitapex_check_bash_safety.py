@@ -1136,6 +1136,21 @@ _REF_RUN_TOKEN_RE = re.compile(rf"^(?:{_ONE_REF_SRC})+$")
 # unassigned-name check -- group("bare") for the bare form, group(
 # "braced") for the braced (optionally subscripted) form.
 _REF_RUN_NAME_RE = re.compile(_ONE_REF_SRC)
+# Bash's own DEFAULT $IFS characters -- used by `_token_is_all_unassigned_
+# refs` to decide whether an assigned-but-all-whitespace value word-splits
+# away to nothing the same way an assigned-empty one does. Deliberately
+# NARROWER than Python's own `str.strip()` default whitespace set (which
+# also strips `\r`/`\f`/`\v`/`\x1c`-`\x1d` and more) -- found live by Step
+# 8 independent review, twenty-sixth round (issue #1326): confirmed live
+# via real bash (`set -x`) that `CFG=$'\r'; git -v $CFG push origin main`
+# does NOT word-split `$CFG` away (`\r` alone survives as its own argv
+# element, `+ git -v $'\r' push origin main`), contradicting `_token_is_
+# all_unassigned_refs`'s own docstring, which explicitly names "space/
+# tab/newline" as the default IFS this check relies on -- a real
+# docstring/implementation contract mismatch (safe-direction: it only
+# ever caused OVER-detection at every traced call site, never a missed
+# bypass, but a mismatch nonetheless).
+_BASH_DEFAULT_IFS = " \t\n"
 
 
 def _token_is_all_unassigned_refs(token: str, name_to_value: dict[str, str]) -> bool:
@@ -1300,22 +1315,26 @@ def _token_is_all_unassigned_refs(token: str, name_to_value: dict[str, str]) -> 
     that `CFG=" "; git -v $CFG push origin main` real-expands to `git
     -v push origin main` identically to the empty-string case, yet
     `" ".strip()` is falsy while `" "` itself is truthy in Python, so
-    the un-stripped check missed it. Closed by checking
-    `.strip()`-truthiness instead of raw truthiness for both the bare
-    and the now-also-covered plain-braced forms."""
+    the un-stripped check missed it. Closed by checking whitespace-
+    truthiness instead of raw truthiness for both the bare and the
+    now-also-covered plain-braced forms -- stripping only
+    `_BASH_DEFAULT_IFS`'s own three characters, NOT Python's own
+    broader `str.strip()` default (see that constant's own module-level
+    comment for the twenty-sixth-round finding this narrower stripping
+    closes)."""
     if not _REF_RUN_TOKEN_RE.match(token):
         return False
     for match in _REF_RUN_NAME_RE.finditer(token):
         bare_name = match.group("bare")
         if bare_name is not None:
-            if name_to_value.get(bare_name, "").strip():
+            if name_to_value.get(bare_name, "").strip(_BASH_DEFAULT_IFS):
                 return False
         else:
             braced_name = match.group("braced")
             if "[" in match.group(0):
                 if braced_name in name_to_value:
                     return False
-            elif name_to_value.get(braced_name, "").strip():
+            elif name_to_value.get(braced_name, "").strip(_BASH_DEFAULT_IFS):
                 return False
     return True
 

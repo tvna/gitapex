@@ -1071,6 +1071,18 @@ _REF_RUN_TOKEN_RE = re.compile(rf"^(?:{_ONE_REF_SRC})+$")
 # unassigned-name check -- group("bare") for the bare form, group(
 # "braced") for the braced (optionally subscripted) form.
 _REF_RUN_NAME_RE = re.compile(_ONE_REF_SRC)
+# Bash's own DEFAULT $IFS characters -- used by `_token_is_all_unassigned_
+# refs` to decide whether an assigned-but-all-whitespace value word-splits
+# away to nothing the same way an assigned-empty one does. Deliberately
+# NARROWER than Python's own `str.strip()` default whitespace set (which
+# also strips `\r`/`\f`/`\v`/`\x1c`-`\x1d` and more) -- found live by Step
+# 8 independent review, twenty-sixth round (issue #1326), ported from the
+# main hook's own identical fix: confirmed live via real bash that
+# `CFG=$'\r'; git -v $CFG push origin main` does NOT word-split `$CFG`
+# away, contradicting `_token_is_all_unassigned_refs`'s own docstring,
+# which explicitly names "space/tab/newline" as the default IFS this
+# check relies on.
+_BASH_DEFAULT_IFS = " \t\n"
 
 
 def _token_is_all_unassigned_refs(token: str, name_to_value: dict[str, str]) -> bool:
@@ -1233,21 +1245,23 @@ def _token_is_all_unassigned_refs(token: str, name_to_value: dict[str, str]) -> 
     ENTIRELY of IFS whitespace ALSO word-splits away to nothing at real
     bash runtime, confirmed live that `CFG=" "; git -v $CFG push origin
     main` real-expands identically to the empty-string case -- another
-    hard deny bypass, closed by checking `.strip()`-truthiness instead
-    of raw truthiness."""
+    hard deny bypass, closed by checking whitespace-truthiness instead
+    of raw truthiness, stripping only `_BASH_DEFAULT_IFS`'s own three
+    characters (see that constant's own module-level comment for the
+    twenty-sixth-round refinement of this same fix)."""
     if not _REF_RUN_TOKEN_RE.match(token):
         return False
     for match in _REF_RUN_NAME_RE.finditer(token):
         bare_name = match.group("bare")
         if bare_name is not None:
-            if name_to_value.get(bare_name, "").strip():
+            if name_to_value.get(bare_name, "").strip(_BASH_DEFAULT_IFS):
                 return False
         else:
             braced_name = match.group("braced")
             if "[" in match.group(0):
                 if braced_name in name_to_value:
                     return False
-            elif name_to_value.get(braced_name, "").strip():
+            elif name_to_value.get(braced_name, "").strip(_BASH_DEFAULT_IFS):
                 return False
     return True
 
