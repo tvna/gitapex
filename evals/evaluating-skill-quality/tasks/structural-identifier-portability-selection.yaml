@@ -1,0 +1,47 @@
+id: evaluating-skill-quality-structural-identifier-portability-selection
+name: Bundled Schema's $id Hardcodes the Origin Repository
+description: The target skill's bundled JSON Schema has an $id hardcoding the origin repository's own path, and a validation pattern anchored to that same repository's owner/repo string -- a structural-identifier defect distinct from a narrative citation. Tests whether the review distinguishes this from the bare-issue-citation rule and flags it as a durability/portability defect specific to a schema's own structural fields.
+tags:
+  - quality
+  - durability
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    Portable skill called "ticket-triager", which bundles a JSON Schema
+    at references/ticket-metadata.schema.json to validate its own sidecar
+    metadata file.
+
+    ---
+    name: ticket-triager
+    description: Triage an inbound support ticket into a priority and category. Use when a new ticket needs classification before routing.
+    ---
+
+    # Ticket Triager
+
+    ## Procedure
+
+    1. Read `references/ticket-metadata.schema.json` for the sidecar
+       contract.
+    2. Classify the ticket and write the result to the sidecar, validated
+       against that schema.
+
+    `references/ticket-metadata.schema.json` (excerpt):
+    ```json
+    {
+      "$id": "https://github.com/acme-corp/acme-internal-skills/blob/main/skills/ticket-triager/references/ticket-metadata.schema.json",
+      "properties": {
+        "trackingIssue": {
+          "type": "string",
+          "pattern": "^https://github\\.com/acme-corp/acme-internal-skills/(?:issues|pull)/\\d+$"
+        }
+      }
+    }
+    ```
+expected:
+  output_contains:
+    - "structural identifier"
+    - "vendor"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"
+    - "correctly repo-independent"

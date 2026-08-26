@@ -3349,6 +3349,23 @@ def test_lifecycle_tracking_issue_pull_url_passes_well_formed(tmp_path):
     assert css.main([str(d)]) == 0
 
 
+def test_lifecycle_tracking_issue_non_origin_repo_url_passes_well_formed(tmp_path):
+    # dimension-6 NOT-MATURE fix: LIFECYCLE_ISSUE_REF_RE must validate any
+    # owner/repo GitHub issue/PR URL, not only this repository's own --
+    # otherwise a repository this skill is vendored into can never
+    # declare a passing trackingIssue for its own tracking issue.
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        "  lifecycle:\n"
+        "    experimental:\n"
+        "      reason: not yet proven\n"
+        '      trackingIssue: "https://github.com/other-org/other-repo/issues/456"\n',
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is True
+    assert css.main([str(d)]) == 0
+
+
 def test_manifest_parser_parses_spec_references_list():
     text = (
         "apiVersion: gitapex.io/v1alpha1\n"
