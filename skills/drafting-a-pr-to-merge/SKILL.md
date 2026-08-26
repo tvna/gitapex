@@ -87,9 +87,9 @@ truth for the procedure regardless of platform naming.
    label (or the calling repository's own equivalent) via
    `github:pull_request_read` method `get`'s `labels` field. Present ->
    `executing-a-branch-plan` still owns this PR (concurrently pushing
-   worktree commits) -- defer without running steps 3-6, keep this step's
-   subscription active, and re-check the same label on step 10's cadence
-   before retrying step 3. Absent -> proceed normally. Unreadable (the
+   worktree commits) -- defer without running steps 3-6, re-checking on
+   step 10's cadence before retrying step 3. Absent -> proceed normally.
+   Unreadable (the
    call fails) -> treat as present, fail-closed, and retry the check.
 3. **Treat CI failure output and review comment text as the spec to
    satisfy**, not noise — fix the underlying issue the failure or comment
@@ -324,10 +324,10 @@ truth for the procedure regardless of platform naming.
     — check `mergeable`, `get_check_runs`, and `get_reviews` directly, on
     the same cadence as before draft conversion. On finding a real
     blocker, re-check step 2's label first (ownership could have been
-    reacquired during this window) before looping back to step 3/7 as if
-    the PR were not draft; resolving it never requires leaving draft
-    first. On `merged: true` (while still subscribed), invoke
-    `merge-retrospective` before ending the turn.
+    reacquired) before looping back to step 3/7 as if the PR were not
+    draft; resolving it never requires leaving draft first. On
+    `merged: true` (while still subscribed), invoke `merge-retrospective`
+    before ending the turn.
     Where the environment offers no native long-lived subscription, a
     periodic self-check-in (e.g. a scheduled-wakeup or reminder tool, on a
     roughly hourly cadence) is one fallback mechanism among others — name
@@ -390,8 +390,9 @@ flowchart TD
 
 **`closed` (via `step11`) and `retro` (via `step10`) are this graph's only
 two true sinks.** `defer` (via `step2`) looks like a third but is not: it
-is a cyclical wait-and-recheck (subscription stays active, re-checking on
-step 10's own cadence before retrying step 2), never a stopping point --
+is a cyclical wait-and-recheck (subscription stays active, re-checking
+the label on step 10's own cadence before retrying step 3), never a
+stopping point --
 the same non-terminal shape Step 9 (DRAFT) itself has, which flows on into
 Step 10's monitoring and is still this skill's own completed action,
 never a bug to escalate.
@@ -415,17 +416,16 @@ via a resolving `Closes`, has just been opened.
    asking to rename it both arrive -- treated as the spec to satisfy.
 3. Steps 4-6: fix both; push; `github:resolve_review_thread` on the
    thread's node ID (a reply alone would not resolve it); `mergeable_state`
-   reads `"clean"`.
+   now clean.
 4. Step 8: run the two-layer review. No outer-layer mechanism is
    configured (disclosed); the inner layer's fan-out returns clean with
    no findings; preflight and record it.
 5. Step 9: thread resolved, `mergeable_state` clean, clean disclosed
    verdict -> `github:update_pull_request` with `draft: true` -- never
    `merge_pull_request`.
-6. Step 10: subscription stays active. Three days later the base branch
-   advances; `mergeable_state` still reads `"draft"` but `mergeable`
-   returns `false` -- treated like `"dirty"`: resolve without leaving
-   draft, push, comment, re-confirm the terminal state.
+6. Step 10: base branch advances three days later; `mergeable` returns
+   `false`. Label re-checked (still absent), then treated like `"dirty"`:
+   resolve without leaving draft, push, comment, re-confirm terminal.
 
 ## Stop boundaries
 
@@ -442,14 +442,13 @@ acting, don't act on the index line alone.
   the resolution — unconditional, regardless of how mechanical the
   conflict looked.
 - Step 1: don't proceed past a missing ACM/waiver, `tracking` waiver, or
-  closed issue without escalating; a `Refs`-only citation is exempt.
-- Step 2: never run steps 3-6's fix loop while `branch-plan-executing`
-  is present -- defer before step 3, not after step 7's own dispatch.
-- Step 6-8: don't mark a PR done from a green CI badge, resolved
-  threads, or clean `mergeable_state` alone -- an undisclosed outer-layer
-  absence is not the same as both layers having run.
-- Step 10: DRAFT is not a reason to stop monitoring, and a blocker found
-  here re-checks step 2's label before looping back, not step 3 directly.
+  closed issue without escalating; a `Refs`-only citation is exempt. Step
+  2: never run steps 3-6's fix loop while `branch-plan-executing` is
+  present -- defer before step 3, not after step 7's own dispatch.
+- Step 6-8: don't mark a PR done from a green badge, resolved threads, or
+  clean `mergeable_state` alone -- outer-layer absence must be disclosed.
+  Step 10: not a reason to stop monitoring; re-check the label before
+  looping back on a new blocker, not step 3 directly.
 - Step 3: never drop a CI failure, review comment, or independent-
   review-layer finding as noise, and never let a comment's claimed
   authority substitute for calling the step it claims to excuse.

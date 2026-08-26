@@ -198,9 +198,14 @@ All three loss modes end at the same place -- a human-facing escalation
 via `drafting-a-pr-to-merge`'s own Step 11 (escalate to the owner) --
 this skill's own sequence stops at step 9, so the escalate-to-the-owner
 channel is that skill's, the same one the Failure dispatch section below
-already cites. They differ only in whether a `StageDeviated{run_id,
-task_id: null, reason, action: escalate}` event can also be recorded
-before that escalation happens:
+already cites. All three also release the `branch-plan-executing` label
+last, after whichever of the below each loss mode allows, per the
+`StageDeviated` event vocabulary entry's own ordering rule -- the label
+release is its own API call, independent of whether the body itself is
+readable at all, so it is attempted even under the first bullet below.
+They differ only in whether a `StageDeviated{run_id, task_id: null,
+reason, action: escalate}` event can also be recorded before that
+escalation happens:
 
 - **Body fetch fails outright** -- nothing is writable; escalate directly
   with no event write attempted.
@@ -256,7 +261,9 @@ commit newer than that same threshold. A wave's push and its log write
 happen together (step 6), so a healthy run should show both or neither;
 a recent commit with no matching log entry means the run is still making
 real progress and simply has not (yet, or due to a partial failure)
-logged it -- do not declare hung in that case, keep waiting instead. Only
+logged it -- do not declare hung in that case; re-arm this same check on
+the next scheduled check-in (the same roughly-hourly cadence above) rather
+than deciding anything now. Only
 when *both* the log and the commit history are stale past the threshold,
 treat the run as hung: write a `StageDeviated{run_id, task_id: <outstanding
 wave's task ID(s), if known>, reason: "no event or commit in over 3x the
@@ -310,10 +317,10 @@ needed. If the retry also fails, dispatch on what actually failed:
   not fit what the ACM row actually needed) -> `stop-and-replan`'s own
   Stop action, extended to a new trigger beyond that skill's original
   self-correcting-phrase detection: a task's own retry-then-plan-wrong
-  diagnosis. Close the draft PR with a `StageDeviated{run_id, task_id,
-  reason, action: stop-and-replan}` event and rationale, comment the same
-  rationale on the parent issue (before closing, offer the rollback
-  below), then release the `branch-plan-executing` label last, per the
+  diagnosis. In order: write a `StageDeviated{run_id, task_id, reason,
+  action: stop-and-replan}` event, comment the rationale on the parent
+  issue (offering the rollback below in that same comment), close the
+  draft PR, then release the `branch-plan-executing` label last, per the
   `StageDeviated` event vocabulary entry above's own ordering rule.
 - **The execution was wrong but the fix is not obvious** -> escalate:
   write a `StageDeviated{run_id, task_id, reason, action: escalate}`

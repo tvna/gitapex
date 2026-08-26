@@ -156,7 +156,9 @@ itself grounds to skip the model's own full review below.
   hook/script changes, dependency additions, and instruction-bearing
   content are each an independent hard flag regardless of how
   "reasonable" the surrounding change looks. A flagged diff never
-  proceeds to commit -- it dispatches as `StageDeviated{action: escalate}`
+  proceeds to commit -- it dispatches as `StageDeviated{run_id, task_id,
+  reason, action: escalate}` (the same closed-set schema [domain events
+  and failure-handling](domain-events-and-failure-handling.md) defines)
   regardless of whether the task's own proof method would otherwise have
   passed.
 - **Dependency-identity verification.** When a dependency addition is
