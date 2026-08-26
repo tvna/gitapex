@@ -74,10 +74,14 @@ first, not skimmed.
    task-list file as its first commit, and push -- publishing the head ref
    step 5 requires.
 5. **Open a draft PR and subscribe** (Decision 8). Open a draft PR
-   carrying the ACM and a seeded `## Execution log` section (`PlanApproved`
-   event). Subscribe to the draft PR's own CI/review/comment activity in
-   this same step; this skill owns responding to it until step 9, not
-   `drafting-a-pr-to-merge`. Event vocabulary and log format: [domain events
+   carrying the ACM, a seeded `## Execution log` section (`PlanApproved`
+   event), and `.github/PULL_REQUEST_TEMPLATE.md`'s own `## Merge gate:
+   independent review` note verbatim -- carry it forward rather than
+   dropping it, the same way the ACM and `## Execution log` sections are
+   carried into the opened body. Subscribe to the draft PR's own
+   CI/review/comment activity in this same step; this skill owns
+   responding to it until step 9, not `drafting-a-pr-to-merge`. Event
+   vocabulary and log format: [domain events
    reference](references/domain-events-and-failure-handling.md).
 6. **Execute, one Workflow run per wave** (Decision 16, 4, 13, 14). For
    each wave from step 3: dispatch one Workflow run containing only that

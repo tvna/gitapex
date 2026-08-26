@@ -10,10 +10,12 @@ implements (issue #709: a citing commit alone is not proof a gate was
 actually built), deliberately re-implemented -- not imported or
 subprocess-invoked -- against a local `git log` and `.gitapex/ssot.json`.
 
-No test in this file makes a real subprocess or filesystem call outside
-pytest's own tmp_path -- the git layer is exercised through an injected
-`runner`, mirroring test_gitapex_scan_retrospective_gate_drift.py's own
-fixture style.
+No test in this file makes a real subprocess call, or a real filesystem
+call outside pytest's own tmp_path, except the marker drift-gate tests
+near the bottom of this file, which deliberately read this repository's
+real canonical marker sources -- the git layer above that is exercised
+through an injected `runner`, mirroring
+test_gitapex_scan_retrospective_gate_drift.py's own fixture style.
 """
 
 from __future__ import annotations
@@ -52,6 +54,146 @@ def test_citation_count_does_not_match_longer_number_containing_target_as_suffix
 def test_citation_count_sums_across_multiple_citing_commits() -> None:
     messages = ["feat: a (Refs #242)", "fix: b (Refs #242)", "chore: c"]
     assert checker.citation_count(messages, 242) == 2
+
+
+# ---------------------------------------------------------------------------
+# is_gate_less (issue #1297)
+# ---------------------------------------------------------------------------
+
+
+def test_is_gate_less_matches_ci_stub_marker() -> None:
+    body = "Automated stub opened by the post-merge-auto-retro gate for PR #42."
+    assert checker.is_gate_less(body) is True
+
+
+def test_is_gate_less_matches_zero_repair_fast_close_marker() -> None:
+    body = "PR #63 merged with zero repairs.\nRetrospective status: zero-repair-fast-close\nRefs #63."
+    assert checker.is_gate_less(body) is True
+
+
+def test_is_gate_less_false_when_neither_marker_present() -> None:
+    body = "1. [Failed CI rerun] ...\n   Status: `missing-deterministic-gate`\n   Proposed gate: add a pre-push hook."
+    assert checker.is_gate_less(body) is False
+
+
+def test_is_gate_less_false_for_empty_body() -> None:
+    assert checker.is_gate_less("") is False
+
+
+def test_is_gate_less_matches_zero_repair_marker_with_bullet_prefix() -> None:
+    body = "PR #63 merged with zero repairs.\n- Retrospective status: zero-repair-fast-close\nRefs #63."
+    assert checker.is_gate_less(body) is True
+
+
+def test_is_gate_less_matches_zero_repair_marker_with_crlf_line_endings() -> None:
+    # Defeat case: GitHub is known to deliver an issue body with CRLF
+    # endings for one authored or edited via the web UI -- the marker
+    # line's own `\r` must not defeat the standalone-line match.
+    body = "PR #63 merged with zero repairs.\r\nRetrospective status: zero-repair-fast-close\r\nRefs #63."
+    assert checker.is_gate_less(body) is True
+
+
+def test_is_gate_less_false_when_zero_repair_marker_only_quoted_mid_sentence() -> None:
+    # Defeat case (issue #1297): this repo's own retrospectives routinely
+    # re-quote an earlier issue's text verbatim inside a later, real
+    # retrospective's Carried-forward section -- a bare substring match
+    # would misclassify that later, real issue as gate-less merely for
+    # quoting a fast-closed one.
+    body = (
+        "1. [Carried-forward] Issue #63 was fast-closed "
+        "(`Retrospective status: zero-repair-fast-close`), but the real "
+        "gate proposed in this cycle remains unimplemented.\n"
+        "   Status: `missing-deterministic-gate`\n"
+        "   Proposed gate: add a pre-push hook."
+    )
+    assert checker.is_gate_less(body) is False
+
+
+# ---------------------------------------------------------------------------
+# partition_gate_less (issue #1297)
+# ---------------------------------------------------------------------------
+
+
+def test_partition_gate_less_separates_matching_from_remaining() -> None:
+    bodies = {
+        118: "Automated stub opened by the post-merge-auto-retro gate.",
+        187: "Retrospective status: zero-repair-fast-close",
+        242: "1. [Repair] ... Status: `missing-deterministic-gate` Proposed gate: ...",
+    }
+    gate_less, remaining = checker.partition_gate_less([118, 187, 242], bodies)
+    assert gate_less == [118, 187]
+    assert remaining == [242]
+
+
+def test_partition_gate_less_missing_body_treated_as_not_gate_less() -> None:
+    # An issue number with no entry in the bodies mapping (caller supplied
+    # no body for it) must not be silently excluded -- absence of evidence
+    # is not evidence of gate-less-ness.
+    gate_less, remaining = checker.partition_gate_less([999], {})
+    assert gate_less == []
+    assert remaining == [999]
+
+
+def test_partition_gate_less_deduplicates_preserving_first_occurrence_order() -> None:
+    bodies = {118: "Automated stub opened by the post-merge-auto-retro gate.", 242: "no marker here"}
+    gate_less, remaining = checker.partition_gate_less([118, 242, 118, 242], bodies)
+    assert gate_less == [118]
+    assert remaining == [242]
+
+
+# ---------------------------------------------------------------------------
+# load_issue_bodies (issue #1297)
+# ---------------------------------------------------------------------------
+
+
+def test_load_issue_bodies_returns_empty_dict_when_path_is_none() -> None:
+    assert checker.load_issue_bodies(None) == {}
+
+
+def test_load_issue_bodies_reads_json_file(tmp_path: pathlib.Path) -> None:
+    bodies_path = tmp_path / "bodies.json"
+    bodies_path.write_text(json.dumps({"118": "Automated stub opened by the post-merge-auto-retro gate."}))
+    assert checker.load_issue_bodies(str(bodies_path)) == {
+        118: "Automated stub opened by the post-merge-auto-retro gate."
+    }
+
+
+def test_load_issue_bodies_reads_stdin_when_path_is_dash(monkeypatch: pytest.MonkeyPatch) -> None:
+    import io
+
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps({"242": "no marker here"})))
+    assert checker.load_issue_bodies("-") == {242: "no marker here"}
+
+
+def test_load_issue_bodies_skips_non_integer_keys(tmp_path: pathlib.Path) -> None:
+    bodies_path = tmp_path / "bodies.json"
+    bodies_path.write_text(json.dumps({"not-a-number": "text", "118": "real body"}))
+    assert checker.load_issue_bodies(str(bodies_path)) == {118: "real body"}
+
+
+def test_load_issue_bodies_skips_non_string_values(tmp_path: pathlib.Path) -> None:
+    bodies_path = tmp_path / "bodies.json"
+    bodies_path.write_text(json.dumps({"118": None, "242": 5, "999": "kept"}))
+    assert checker.load_issue_bodies(str(bodies_path)) == {999: "kept"}
+
+
+def test_load_issue_bodies_raises_on_missing_file() -> None:
+    with pytest.raises(checker.BodiesInputError):
+        checker.load_issue_bodies("/nonexistent/bodies.json")
+
+
+def test_load_issue_bodies_raises_on_malformed_json(tmp_path: pathlib.Path) -> None:
+    bodies_path = tmp_path / "bodies.json"
+    bodies_path.write_text("{not valid json")
+    with pytest.raises(checker.BodiesInputError):
+        checker.load_issue_bodies(str(bodies_path))
+
+
+def test_load_issue_bodies_raises_when_not_a_json_object(tmp_path: pathlib.Path) -> None:
+    bodies_path = tmp_path / "bodies.json"
+    bodies_path.write_text("[]")
+    with pytest.raises(checker.BodiesInputError):
+        checker.load_issue_bodies(str(bodies_path))
 
 
 # ---------------------------------------------------------------------------
@@ -243,7 +385,7 @@ def test_main_prints_json_partition_and_exits_zero(
     exit_code = checker.main(["1109", "1107"])
     assert exit_code == 0
     out = json.loads(capsys.readouterr().out)
-    assert out == {"unresolved": [1109], "resolved": [1107]}
+    assert out == {"unresolved": [1109], "resolved": [1107], "gate_less": []}
 
 
 def test_main_exits_one_on_git_log_error(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
@@ -286,3 +428,63 @@ def test_main_passes_default_ssot_path_joined_with_cwd(monkeypatch: pytest.Monke
 def test_main_requires_at_least_one_issue_number() -> None:
     with pytest.raises(SystemExit):
         checker.main([])
+
+
+def test_main_output_has_empty_gate_less_when_bodies_omitted(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Backward-compat: no --bodies means every candidate flows through the
+    # existing two-signal check exactly as before this batch.
+    monkeypatch.setattr(checker, "git_commit_messages", lambda *a, **k: ["Refs #1107"])
+    monkeypatch.setattr(checker, "load_gate_tracking_issues", lambda *a, **k: {1107})
+    exit_code = checker.main(["1109", "1107"])
+    assert exit_code == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out == {"unresolved": [1109], "resolved": [1107], "gate_less": []}
+
+
+def test_main_excludes_gate_less_issue_from_unresolved(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    bodies_path = tmp_path / "bodies.json"
+    bodies_path.write_text(json.dumps({"118": "Automated stub opened by the post-merge-auto-retro gate."}))
+    monkeypatch.setattr(checker, "git_commit_messages", lambda *a, **k: [])
+    monkeypatch.setattr(checker, "load_gate_tracking_issues", lambda *a, **k: set())
+    exit_code = checker.main(["118", "242", "--bodies", str(bodies_path)])
+    assert exit_code == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out == {"unresolved": [242], "resolved": [], "gate_less": [118]}
+
+
+def test_main_exits_one_on_bodies_input_error(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(checker, "git_commit_messages", lambda *a, **k: [])
+    monkeypatch.setattr(checker, "load_gate_tracking_issues", lambda *a, **k: set())
+    exit_code = checker.main(["1", "--bodies", "/nonexistent/bodies.json"])
+    assert exit_code == 1
+    assert "error:" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# Marker drift gate (issue #1297): _CI_STUB_MARKER and _ZERO_REPAIR_MARKER
+# are literal copies of two canonical sources, not imports (this repo keeps
+# skill-bundled and .github/scripts/*.py files independent of one another)
+# -- assert directly against those sources' own text so the two cannot
+# silently re-diverge the way the title/query pair did before #341, per
+# tests/test_gitapex_stale_retro_stub_autoclose.py's own
+# test_stub_marker_matches_post_merge_retro_source precedent for the
+# identical drift risk on the CI-stub marker half of this pair.
+# ---------------------------------------------------------------------------
+
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
+
+
+def test_ci_stub_marker_matches_post_merge_retro_source() -> None:
+    source = (REPO_ROOT / ".github" / "scripts" / "gitapex_post_merge_retro.py").read_text(encoding="utf-8")
+    assert checker._CI_STUB_MARKER in source
+
+
+def test_zero_repair_marker_matches_skill_md_source() -> None:
+    source = (REPO_ROOT / "skills" / "merge-retrospective" / "SKILL.md").read_text(encoding="utf-8")
+    assert checker._ZERO_REPAIR_MARKER in source

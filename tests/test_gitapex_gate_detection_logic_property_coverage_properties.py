@@ -112,14 +112,54 @@ in-memory input from scratch.
 
 from __future__ import annotations
 
+import os
+
 import gitapex_gate_detection_logic_property_coverage as gate
 import pytest
+import unidiff
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
 # Applied per test, not registered as a global Hypothesis profile -- see the
 # module docstring's own "Reproducibility" section.
-_PROPERTIES = settings(derandomize=True, max_examples=200, deadline=None)
+#
+# Issue #1316: the PR-blocking gate's own invocation (this default branch)
+# stays pinned exactly as before -- fast and deterministic. A separate,
+# scheduled, non-PR-blocking workflow
+# (.github/workflows/diff-parsing-property-deep-scan.yml) sets
+# GITAPEX_HYPOTHESIS_DEEP_SCAN=1 to re-run these same properties with much
+# higher, randomized exploration instead, without touching this file's
+# own default settings object or requiring a duplicate test body.
+_PROPERTIES = (
+    settings(derandomize=False, max_examples=5000, deadline=None)
+    if os.environ.get("GITAPEX_HYPOTHESIS_DEEP_SCAN") == "1"
+    else settings(derandomize=True, max_examples=200, deadline=None)
+)
+
+
+def _unidiff_added_lines(diff_text: str) -> dict[str, set[int]]:
+    """Issue #1316: an independent oracle for `parse_added_lines`'s own
+    `{path: added-lines}` contract, computed by `unidiff`'s own parser --
+    a genuinely different mechanism from this file's hand-rolled
+    header/hunk state machine, unlike `_expected_added_for_hunk` below
+    (which re-derives the same counting *rule* `parse_added_lines` must
+    itself implement, not an independent parse). A file whose hunk body
+    adds nothing is dropped, matching `parse_added_lines`'s own documented
+    shape (`added.setdefault` is only reached from the "+" branch)."""
+    result: dict[str, set[int]] = {}
+    for patched_file in unidiff.PatchSet(diff_text):
+        # `target_line_no` is `int | None` per unidiff's own stub, but is
+        # always a real int for an added line -- only a removed line ever
+        # carries `target_line_no is None`.
+        added = {
+            line.target_line_no
+            for hunk in patched_file
+            for line in hunk
+            if line.is_added and line.target_line_no is not None
+        }
+        if added:
+            result[patched_file.path] = added
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -400,6 +440,50 @@ def test_parse_added_lines_matches_an_independently_computed_line_count(
     }
     expected = {path: lines for path, lines in expected.items() if lines}
     assert added == expected
+
+
+# unidiff's own hunk parser cannot handle a zero/zero declared hunk with an
+# empty body (`@@ -1,0 +1,0 @@` followed immediately by the next file's own
+# `diff --git ` line) -- confirmed directly against the installed unidiff
+# 1.0.0 (`UnidiffParseError: Hunk diff line expected: diff --git a/...`).
+# Real `git diff` output never emits a hunk with nothing in it, so this is
+# not a gap in the oracle's real-world coverage; the differential property
+# below uses a non-empty-hunk-body variant of the shared strategy above so
+# every generated diff stays within unidiff's own parseable shape. The
+# empty-hunk-body case stays covered by the self-consistency property
+# above, which needs no external parser.
+_NON_EMPTY_HUNK_BODY = st.lists(_LINE_KIND, min_size=1, max_size=20)
+_NON_EMPTY_FILE_DIFF = st.tuples(_START_LINE, _NON_EMPTY_HUNK_BODY)
+_NON_EMPTY_MULTI_FILE_DIFFS = st.lists(_NON_EMPTY_FILE_DIFF, min_size=1, max_size=3)
+
+
+@_PROPERTIES
+@given(file_diffs=_NON_EMPTY_MULTI_FILE_DIFFS)
+def test_parse_added_lines_matches_unidiffs_independent_parse(
+    file_diffs: list[tuple[int, list[str]]],
+) -> None:
+    """Differential-oracle property (issue #1316). Compares
+    `parse_added_lines`'s own `{path: added-lines}` output against
+    `unidiff`'s own independent parse of the identical generated diff
+    text -- a genuinely independent parser, catching a misattribution-
+    class defect the sibling property above cannot, since that property
+    recomputes the same post-image-counting *rule* `parse_added_lines`
+    must itself implement, never an independent parse of the diff text
+    itself. True-negative coverage across many well-formed generated
+    diffs; the corresponding true-positive check (does this oracle catch
+    the real header-misattribution defect class issue #1184/#1193 fixed)
+    is recorded as a fixed regression case rather than a Hypothesis
+    property, since it needs a specific adversarial input shape (a
+    disguised header mid-hunk) this property's own generator does not
+    construct -- see this file's own regression suite
+    (`tests/test_gitapex_gate_detection_logic_property_coverage.py`) and
+    this task's own commit message for that proof.
+    """
+    paths = [f"module_{index}.py" for index in range(len(file_diffs))]
+    diff_text = "\n".join(
+        _file_diff_text(path, start, kinds) for path, (start, kinds) in zip(paths, file_diffs, strict=True)
+    )
+    assert gate.parse_added_lines(diff_text) == _unidiff_added_lines(diff_text)
 
 
 # ---------------------------------------------------------------------------

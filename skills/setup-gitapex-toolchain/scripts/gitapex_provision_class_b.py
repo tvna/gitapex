@@ -1,5 +1,5 @@
-"""Provision gitapex's flake.nix-pinned Class B toolchain binaries (waza,
-apm, rtk, betterleaks) for a Claude Code web (ephemeral) session, without
+"""Provision gitapex's flake.nix-pinned Class B toolchain binaries (apm,
+rtk, betterleaks) for a Claude Code web (ephemeral) session, without
 Nix. See SKILL.md for the full description; see the module-level CLI at
 the bottom of this file for the entry point.
 
@@ -33,9 +33,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-# The four Class B toolchain binaries this module provisions -- see the
+# The three Class B toolchain binaries this module provisions -- see the
 # module docstring's own list, kept in sync with flake.nix's inventory.
-CLASS_B_TOOL_NAMES: tuple[str, ...] = ("waza", "apm", "rtk", "betterleaks")
+CLASS_B_TOOL_NAMES: tuple[str, ...] = ("apm", "rtk", "betterleaks")
 
 _NIX_SYSTEMS: tuple[str, ...] = (
     "aarch64-linux",

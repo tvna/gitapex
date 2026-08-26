@@ -1,5 +1,5 @@
 {
-  description = "gitapex external toolchain (SSoT for uv/gh/actionlint/zizmor/python/bun/lychee + waza/apm/rtk/betterleaks)";
+  description = "gitapex external toolchain (SSoT for uv/gh/actionlint/zizmor/python/bun/lychee + apm/rtk/betterleaks)";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
 
@@ -67,16 +67,6 @@
       # asset + sha256 (+ bin where the in-archive name is not the pname) are
       # STATIC string literals so a regex updater can bump them in place.
       classBData = {
-        # waza 0.38.0 -- tag azd-ext-microsoft-azd-waza_0.38.0. Linux assets
-        # are bare .tar.gz (exec bit preserved); darwin assets are bare .zip
-        # (exec bit dropped -> install -Dm755 restores it). Binary name = asset
-        # basename without extension; an extension.yaml at root is ignored.
-        waza = {
-          aarch64-linux  = { asset = "microsoft-azd-waza-linux-arm64.tar.gz";  bin = "microsoft-azd-waza-linux-arm64";  sha256 = "sha256-mMvXJj4SWp0eHmePe1oiPxkNK8WHgdtO9vr+1dtca8Y="; };
-          x86_64-linux   = { asset = "microsoft-azd-waza-linux-amd64.tar.gz";  bin = "microsoft-azd-waza-linux-amd64";  sha256 = "sha256-wTSCyGVSPVkBaLBCoLLtGh6f02O+ZQPt7GWaR0Np6Dk="; };
-          aarch64-darwin = { asset = "microsoft-azd-waza-darwin-arm64.zip";    bin = "microsoft-azd-waza-darwin-arm64"; sha256 = "sha256-EemENS67eo03UpMVT63qPvFUenS0WqT0KO9IiUqf/G4="; };
-          x86_64-darwin  = { asset = "microsoft-azd-waza-darwin-amd64.zip";    bin = "microsoft-azd-waza-darwin-amd64"; sha256 = "sha256-Os9aVBbvRjgZaH0hN50lhXFEmCf0UmJjl4NafcBeX+0="; };
-        };
         # apm 0.25.0 -- tag v0.25.0. Each asset unpacks to a single dir
         # apm-<os>-<arch>/ holding `apm` (thin PyInstaller loader) + _internal/.
         apm = {
@@ -111,14 +101,6 @@
           d = classBData;
         in
         {
-          waza = mkReleaseBinary pkgs {
-            pname = "waza";
-            version = "0.38.0";
-            kind = "binary";
-            url = ghRelease "microsoft" "waza" "azd-ext-microsoft-azd-waza_0.38.0" d.waza.${sys}.asset;
-            sha256 = d.waza.${sys}.sha256;
-            binInArchive = d.waza.${sys}.bin;
-          };
           apm = mkReleaseBinary pkgs {
             pname = "apm";
             version = "0.25.0";
@@ -150,7 +132,7 @@
     {
       packages = forAllSystems (system:
         let inherit (perSystem.${system}) classB; in {
-          inherit (classB) waza apm rtk betterleaks;
+          inherit (classB) apm rtk betterleaks;
         });
 
       devShells = forAllSystems (system:
@@ -169,7 +151,7 @@
               pkgs.python312
               pkgs.bun
               pkgs.lychee
-            ] ++ (with classB; [ waza apm rtk betterleaks ]);
+            ] ++ (with classB; [ apm rtk betterleaks ]);
 
             # Issue #725: `prek` is a pinned dev dependency
             # (pyproject.toml) but installs no git hook by itself --
