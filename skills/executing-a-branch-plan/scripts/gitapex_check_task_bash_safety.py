@@ -1145,7 +1145,45 @@ def _token_is_all_unassigned_refs(token: str, name_to_value: dict[str, str]) -> 
     tracking this module has no data model for at all today (NAME_TO_
     VALUE tracks one scalar value per variable NAME, never per-index
     array contents) -- a materially larger change than a token-shape
-    regex extension, left as a disclosed gap rather than attempted here."""
+    regex extension, left as a disclosed gap rather than attempted here.
+
+    Considered, and REJECTED, during Step 8 independent review, twenty-
+    second round (issue #1326): the main hook's own sibling function
+    gained an extra check that treats an unbraced bare name as
+    POSSIBLY-not-vanishing whenever some SHORTER prefix of it is a real
+    assigned name (`_unbraced_ref_options`), to close a gap in its own
+    `_gh_api_method_dynamic_value`/`_gh_api_method_flagname_dynamic_hit`
+    value-position reads (neither of which exists in this module -- this
+    file's `gh` handling is an unconditional absolute deny via
+    `_rule_gh_any`, with no write/read distinction to resolve a value
+    for at all). Porting that same check here regressed a round-18
+    fixture LIVE: `A=($A_UNSET$B_UNSET gh pr merge 1); "${A[@]}"` -- the
+    outer `A=(` assignment itself populates NAME_TO_VALUE with `{"A":
+    ""}` (an `_assigned_literals` parsing artifact of `A=` immediately
+    followed by the array's own opening paren as a separate punctuation
+    token, not a real scalar value for `A`), which is a prefix of the
+    UNRELATED inner name `A_UNSET` purely by coincidence of spelling --
+    triggering the new check and wrongly reporting the whole
+    `$A_UNSET$B_UNSET` token as possibly-not-vanishing. That silently
+    disabled `_strip_leading_unassigned_bare_refs`'s own stripping for
+    this token, which `_rule_gh_any`'s position-anchored `seg[0]` check
+    depends on entirely to see `gh` once the leading decoy is gone --
+    unlike the main hook, this file has no `_rule_a_literal`-style
+    whole-segment adjacency scan for `gh`+`pr`+`merge` to fall back on
+    (`gh` is absolute-denied here, not phrase-matched), so there was no
+    safety net once the strip stopped firing. Left UNCHANGED here: this
+    function's every actual caller in this file (`_strip_leading_
+    unassigned_bare_refs`, `_is_git_push_segment`, `_process_sub_feeds_
+    fetch_tool`, `_skip_fetch_exec_wrapper`, `_fetch_tool_head`) uses
+    "vanishes" to mean "safe to skip past, or safe to strip and try the
+    collapsed reading too" -- the fail-closed direction for THOSE
+    callers is to keep trying the stripped/skipped reading, not to
+    refuse it -- the opposite of the main hook's own two callers, where
+    the fail-closed direction is to STOP at the token and treat it as
+    the value. Porting a fix across the two files' otherwise-identical
+    helper name without checking that its callers want the SAME
+    fail-closed direction is exactly the mistake this paragraph
+    documents so a future round does not repeat it."""
     if not _REF_RUN_TOKEN_RE.match(token):
         return False
     return all((m.group("bare") or m.group("braced")) not in name_to_value for m in _REF_RUN_NAME_RE.finditer(token))
@@ -1581,7 +1619,21 @@ def _skip_fetch_exec_wrapper(seg: list[str], name_to_value: dict[str, str] | Non
     trying to enumerate every interior position a caller might need a
     collapsed reading for. Confirmed live via a real bash proxy (stand-in
     `bash` binary on PATH, capturing its own argv) that this genuinely
-    invokes `bash` once `$NEVERSET` word-splits away."""
+    invokes `bash` once `$NEVERSET` word-splits away.
+
+    All THREE call sites now pass NAME_TO_VALUE -- `_rule_fetch_exec` and
+    `_rule_process_sub_fetch_exec` from the twenty-first round above, and
+    `_rule_eval_or_dashc_fetch_exec` from a twenty-second-round fix of the
+    identical gap this function's own docstring left that third call site
+    exposed to: `$NEVERSET eval "$(curl <url>)"` was wrongly ALLOWED by
+    the same mechanism (an unresolvable-because-vanishing candidate at
+    this function's own returned position, the caller giving up rather
+    than looking past it) until that call site was updated too -- see
+    `_rule_eval_or_dashc_fetch_exec`'s own docstring for the live
+    verification. NAME_TO_VALUE stays optional (`None` default) not
+    because a caller is exempt today, but so a FUTURE caller that
+    genuinely has no name_to_value in scope is not forced to fabricate
+    one."""
     interp_index = 1 if (not _is_dynamic(seg[0]) and seg[0].lower() in _FETCH_EXEC_WRAPPERS) else 0
     while interp_index < len(seg) and (
         (
@@ -1657,7 +1709,17 @@ def _process_sub_feeds_fetch_tool(
     contains a `<(`/`>(` process-substitution span whose own first token
     is, or could resolve to, curl/wget -- factored out of `_rule_process_
     sub_fetch_exec` to keep that function's own cyclomatic complexity
-    within this module's xenon gate."""
+    within this module's xenon gate.
+
+    Found live by Step 8 independent review, twenty-second round (issue
+    #1326): HEAD_INDEX used to be read directly, assuming the process
+    substitution's own fetch-tool candidate always sits immediately after
+    its `<(`/`>(` opener -- a leading decoy interposed there (`bash
+    <($NEVERSET curl <url>)`, NEVERSET never assigned) made this function
+    read the decoy itself as "the head," missing the real, genuinely-
+    fetching `curl` one position further. Closed the same way as this
+    module's other twenty-second-round fixes: skip (don't stop at) a
+    vanishing token when looking for the head position."""
     for j, tok in enumerate(rest):
         if tok in ("<(", ">("):
             head_index = j + 1
@@ -1665,6 +1727,8 @@ def _process_sub_feeds_fetch_tool(
             head_index = j + 2
         else:
             continue
+        while head_index < len(rest) and _token_is_all_unassigned_refs(rest[head_index], name_to_value):
+            head_index += 1
         if head_index >= len(rest):
             continue
         head = rest[head_index]
@@ -1689,17 +1753,33 @@ def _fetch_tool_head(tokens: list[str]) -> bool:
     consistent with `_rule_command_substitution_content`'s own recursive-
     classification boundary). Used by `_rule_eval_or_dashc_fetch_exec`
     below to check a substitution's own inner head without duplicating
-    `_rule_fetch_exec`'s own curl/wget-detection logic."""
+    `_rule_fetch_exec`'s own curl/wget-detection logic.
+
+    Found live by Step 8 independent review, twenty-second round (issue
+    #1326): `head` used to be read as `segs[0][0]` directly -- a leading
+    decoy there (`eval $($NEVERSET curl <url>)`, NEVERSET never assigned
+    anywhere, including inside the substitution's own self-contained
+    text) made this function read the decoy itself as "the head," even
+    though the substitution's own real first surviving element (`curl`)
+    is exactly what a `seg[0]`-anchored check would need to see once bash
+    actually runs it. Closed the same way `_rule_array_literal_content`'s
+    own leading-decoy collapse works: strip the segment's own leading run
+    of vanishing references (per `_strip_leading_unassigned_bare_refs`,
+    against this function's OWN self-contained NAME_TO_VALUE) before
+    reading its first element."""
     segs = segment_tokens(tokens)
     if not segs or not segs[0]:
         return False
-    head = segs[0][0]
+    name_to_value = _assigned_literals(tokens)
+    name_to_raw_value = _assigned_raw_values(tokens)
+    collapsed = _strip_leading_unassigned_bare_refs(segs[0], name_to_value)
+    if not collapsed:
+        return False
+    head = collapsed[0]
     if not _is_dynamic(head):
         return head.lower() in {"curl", "wget"}
     if _is_unresolvable_substitution(head):
         return True
-    name_to_value = _assigned_literals(tokens)
-    name_to_raw_value = _assigned_raw_values(tokens)
     candidates = _substitute_var_refs_candidates(head, name_to_value, name_to_raw_value)
     return candidates is None or any(c.lower() in {"curl", "wget"} for c in candidates)
 
@@ -1798,7 +1878,7 @@ def _rest_has_fetch_tool_substitution(rest: list[str]) -> bool:
     return False
 
 
-def _rule_eval_or_dashc_fetch_exec(tokens: list[str]) -> str | None:
+def _rule_eval_or_dashc_fetch_exec(tokens: list[str], name_to_value: dict[str, str]) -> str | None:
     """`eval $(curl <url>)` and `bash -c "$(curl <url>)"` fetch a payload
     and feed its OUTPUT directly to `eval`/an interpreter's `-c` flag as
     the command text to run -- just as direct an exec of fetched content
@@ -1819,10 +1899,13 @@ def _rule_eval_or_dashc_fetch_exec(tokens: list[str]) -> str | None:
     Deliberately narrow, matching this module's own "specific, checked
     structural pattern, not a general expression evaluator" scoping
     elsewhere: only a LITERAL `eval`/interpreter command word is
-    recognized (not one hidden behind indirection -- a disclosed,
-    narrower-than-full-parsing residual), and only fires when a later
-    `$(...)` argument's own first token is curl/wget (possibly resolved
-    via indirection using that substitution's own self-contained
+    recognized (not one hidden behind an ASSIGNED variable, e.g. `I=eval;
+    $I "$(curl <url>)"` -- a disclosed, narrower-than-full-parsing
+    residual: `cand` is checked for `_is_dynamic` and skipped outright,
+    never resolved via `_substitute_var_refs_candidates` the way other
+    rules' own interpreter-position checks do), and only fires when a
+    later `$(...)` argument's own first token is curl/wget (possibly
+    resolved via indirection using that substitution's own self-contained
     assignments, via `_fetch_tool_head`).
 
     Found live by Step 8 independent review, fourteenth round (issue
@@ -1832,11 +1915,30 @@ def _rule_eval_or_dashc_fetch_exec(tokens: list[str]) -> str | None:
     is INSIDE the substitution), but `eval $(curl <url>)` and `bash -c
     "$(curl <url>)"` have HARMLESS inner content (`curl <url>` alone only
     fetches, it does not execute) -- the danger is entirely in how the
-    OUTER command uses the substitution's output."""
+    OUTER command uses the substitution's output.
+
+    Found live by Step 8 independent review, twenty-second round (issue
+    #1326): round twenty-first's own `_skip_fetch_exec_wrapper` fix
+    (skip a token that vanishes to nothing at real bash runtime, per
+    `_token_is_all_unassigned_refs`, when NAME_TO_VALUE is given) was
+    threaded into `_rule_fetch_exec`/`_rule_process_sub_fetch_exec`'s own
+    call sites but NOT into this one -- `$NEVERSET eval "$(curl <url>)"`
+    and `$NEVERSET bash -c "$(curl <url>)"` were both wrongly ALLOWED,
+    since the interpreter candidate this rule resolved landed ON the
+    decoy itself (`_is_dynamic(cand)` true, so the rule gave up entirely
+    rather than looking past it to the LITERAL `eval`/`bash` sitting
+    right after). Distinct from the residual disclosed two paragraphs
+    above: a VANISHING reference (never assigned anywhere) is a SOUND
+    thing to skip past, unlike an ASSIGNED variable this rule still
+    deliberately does not try to resolve. Confirmed live via a real bash
+    proxy (stand-in `eval`/`bash` behavior via real bash itself, since
+    both are shell builtins/the shell itself, not external binaries) that
+    both genuinely execute the fetched payload once the decoy word-splits
+    away."""
     for seg in _command_spans(tokens):
         if not seg:
             continue
-        interp_index = _skip_fetch_exec_wrapper(seg)
+        interp_index = _skip_fetch_exec_wrapper(seg, name_to_value)
         if interp_index >= len(seg):
             continue
         cand = seg[interp_index]
@@ -1931,7 +2033,22 @@ def _rule_gh_any(
 _GIT_LONG_VALUE_FLAGS = {"--git-dir", "--work-tree", "--namespace", "--super-prefix", "--config-env"}
 
 
-def _is_git_push_segment(seg: list[str]) -> bool:
+def _is_git_push_segment(seg: list[str], name_to_value: dict[str, str]) -> bool:
+    """Found live by Step 8 independent review, twenty-second round (issue
+    #1326): the flag-skip loop below used to `break` the instant it met
+    ANY dynamic-shaped token, abandoning the scan rather than looking
+    past a token that vanishes to nothing at real bash runtime (per
+    `_token_is_all_unassigned_refs`) -- `git -v $NEVERSET push origin
+    main` (NEVERSET never assigned) was wrongly NOT recognized as a git
+    push, since the loop broke at the decoy sitting after the literal
+    `-v` flag, one position past where the fallback `seg[1]` checks at
+    this rule's own call site (`_rule_git_push`/the obfuscated-git-push
+    check in `_classify_tokens`) look. Confirmed live via a real bash
+    proxy (stand-in `git` binary on PATH, capturing its own argv) that
+    this genuinely runs `git push origin main` once the decoy word-splits
+    away. Closed by skipping (not breaking on) a vanishing token here
+    too, the same primitive `_skip_fetch_exec_wrapper`'s own twenty-
+    first-round fix already uses for an analogous position."""
     literals = [(t.lower() if not _is_dynamic(t) else None) for t in seg]
     for i, tok in enumerate(literals):
         if tok != "git":
@@ -1942,7 +2059,12 @@ def _is_git_push_segment(seg: list[str]) -> bool:
             # narrow a repeated `literals[j]` subscript the way it narrows
             # a plain variable.
             candidate = literals[j]
-            if candidate is None or not candidate.startswith("-"):
+            if candidate is None:
+                if _token_is_all_unassigned_refs(seg[j], name_to_value):
+                    j += 1
+                    continue
+                break
+            if not candidate.startswith("-"):
                 break
             flag = candidate
             j += 1
@@ -2000,7 +2122,7 @@ def _rule_git_push(
     segments: list[list[str]], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
 ) -> str | None:
     for seg in segments:
-        if _is_git_push_segment(seg):
+        if _is_git_push_segment(seg, name_to_value):
             return "git push, not permitted inside a task-level agent (worktree merge-back is main-thread-only)"
         if not seg:
             continue
@@ -2144,19 +2266,24 @@ def _position_anchored_rules_hit(
     -- `seg[0]` directly (`_rule_bare_install`, `_rule_gh_any`, B2), or an
     interpreter/wrapper position `_skip_fetch_exec_wrapper` resolves FROM
     `seg[0]` (`_rule_fetch_exec`, `_rule_process_sub_fetch_exec`). Unlike
-    `_rule_a_literal`/`_rule_npx`/`_rule_git_push`/B1a/B1b (each a
-    whole-segment literal-content or whole-segment-candidate scan,
-    confirmed live immune to a leading decoy by construction -- included
-    here anyway for uniformity, since re-running an already-immune rule a
-    second time changes nothing), a position-anchored rule can be
-    defeated by a leading token that word-splits away to nothing at real
-    bash runtime -- exactly the fact `_rule_array_literal_content` (see
-    its own docstring) already accounts for INSIDE an array literal.
-    `_classify_tokens` calls this function TWICE: once against SEGMENTS/
-    PIPE_CHAINS as-is, once against a COLLAPSED reading with each
-    segment's own leading run of vanishing references additionally
-    stripped -- see `_classify_tokens`'s own docstring for the live
-    bypass this closes.
+    `_rule_a_literal`/`_rule_npx`/`_rule_git_push` (each a whole-segment-
+    LIST literal-content or whole-segment-candidate scan, confirmed live
+    immune to a leading decoy by construction) -- deliberately NOT
+    included here, called once, separately, in `_classify_tokens` instead
+    of paying to re-run an already-immune rule a second time for nothing
+    -- a position-anchored rule can be defeated by a leading token that
+    word-splits away to nothing at real bash runtime, exactly the fact
+    `_rule_array_literal_content` (see its own docstring) already
+    accounts for INSIDE an array literal. B1a/B1b are ALSO confirmed
+    immune the identical way, but stay INSIDE this function's own loop
+    below (interleaved with B2, which IS position-anchored, in the SAME
+    per-segment scan) -- splitting one loop into two to spare two already-
+    cheap, already-immune checks a harmless second pass is not a
+    simplification, it is a second loop. `_classify_tokens` calls this
+    function TWICE: once against SEGMENTS/PIPE_CHAINS as-is, once against
+    a COLLAPSED reading with each segment's own leading run of vanishing
+    references additionally stripped -- see `_classify_tokens`'s own
+    docstring for the live bypass this closes.
 
     Found live by Step 8 independent review, twenty-first round (issue
     #1326): `$NEVERSET gh pr merge 1` and `$NEVERSET pnpm` (both
@@ -2173,17 +2300,26 @@ def _position_anchored_rules_hit(
     real bash proxy (stand-in `gh`/`pnpm`/`bash` binaries on PATH,
     capturing their own argv) that all four genuinely invoke the denied
     tool once the decoy word-splits away. `_rule_a_literal`/`_rule_npx`/
-    `_rule_git_push`/B1a were each confirmed NOT vulnerable to the
+    `_rule_git_push`/B1a/B1b were each confirmed NOT vulnerable to the
     identical construction (each already scans a segment's own literal
-    content as a whole, not one fixed position), so this closes exactly
-    the position-anchored gap, not a broader one. Ported to the main
+    content, or every dynamic token in the segment, as a whole -- not one
+    fixed position), so this closes exactly the position-anchored gap,
+    not a broader one. Ported to the main
     hook's own sibling fix (`_segment_loop_hit`) for its own, narrower
     equivalent (B2 only -- the main hook has no fetch-exec/bare-install/
-    gh-any-shaped rule at all)."""
-    literal_hit = _rule_a_literal(segments)
-    if literal_hit:
-        return literal_hit
+    gh-any-shaped rule at all); that fix's own docstring makes the
+    identical whole-list-scan-stays-outside choice for its own two immune
+    rules (`_rule_a_literal`/`_rule_gh_api_write`), confirming this is not
+    a one-off simplification specific to this file.
 
+    Found live by Step 8 independent review, twenty-second round (issue
+    #1326): the twenty-first round's own first version of this function
+    included `_rule_a_literal`/`_rule_npx`/`_rule_git_push` anyway, "for
+    uniformity" -- paying to re-run three already-immune, whole-list
+    scans a second time on every command that reaches the collapsed pass,
+    for zero behavioral benefit, while the main hook's own sibling fix
+    (in the SAME commit) already demonstrated the leaner alternative costs
+    nothing. Moved out to match."""
     bare_install_hit = _rule_bare_install(segments, name_to_value, name_to_raw_value)
     if bare_install_hit:
         return bare_install_hit
@@ -2196,17 +2332,9 @@ def _position_anchored_rules_hit(
     if process_sub_hit:
         return process_sub_hit
 
-    npx_hit = _rule_npx(segments, name_to_value, name_to_raw_value)
-    if npx_hit:
-        return npx_hit
-
     gh_hit = _rule_gh_any(segments, name_to_value, name_to_raw_value)
     if gh_hit:
         return gh_hit
-
-    git_push_hit = _rule_git_push(segments, name_to_value, name_to_raw_value)
-    if git_push_hit:
-        return git_push_hit
 
     for seg in segments:
         if _rule_b1a_dynamic_word_same_segment_verb(seg, _WATCHED_VERBS, name_to_value, name_to_raw_value):
@@ -2286,9 +2414,25 @@ def _classify_tokens(
     assigned = {**outer_literals, **_assigned_literals(tokens)}
     raw_assigned = {**outer_raw, **_assigned_raw_values(tokens)}
 
-    eval_dashc_hit = _rule_eval_or_dashc_fetch_exec(raw_tokens)
+    eval_dashc_hit = _rule_eval_or_dashc_fetch_exec(raw_tokens, assigned)
     if eval_dashc_hit:
         return Verdict(True, eval_dashc_hit)
+
+    # Whole-segment-LIST scans, confirmed immune to a leading vanishing-
+    # reference decoy (see `_position_anchored_rules_hit`'s own docstring)
+    # -- called ONCE here, not inside that twice-invoked function, since
+    # re-running an already-immune rule a second time changes nothing.
+    literal_hit = _rule_a_literal(segments)
+    if literal_hit:
+        return Verdict(True, literal_hit)
+
+    npx_hit = _rule_npx(segments, assigned, raw_assigned)
+    if npx_hit:
+        return Verdict(True, npx_hit)
+
+    git_push_hit = _rule_git_push(segments, assigned, raw_assigned)
+    if git_push_hit:
+        return Verdict(True, git_push_hit)
 
     position_hit = _position_anchored_rules_hit(segments, pipe_chains, assigned, raw_assigned)
     if position_hit:

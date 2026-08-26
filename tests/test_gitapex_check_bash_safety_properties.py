@@ -263,7 +263,7 @@ def test_gh_api_method_dynamic_value_extracts_the_fused_or_separate_shape(var: s
     else:
         seg = ["gh", "api", "x", shape.format(f"${var}")]
         index = 3
-    extracted = checker._gh_api_method_dynamic_value(seg, index, seg[index])
+    extracted = checker._gh_api_method_dynamic_value(seg, index, seg[index], {})
     assert extracted is not None
     assert f"${var}" in extracted
 
@@ -274,7 +274,7 @@ def test_gh_api_method_dynamic_value_none_for_an_unrelated_token(var: str) -> No
     """No false positive: a token that is neither a -X/--method flag nor
     immediately follows one yields no extracted value."""
     seg = ["gh", "api", "x", f"${var}"]
-    assert checker._gh_api_method_dynamic_value(seg, 3, seg[3]) is None
+    assert checker._gh_api_method_dynamic_value(seg, 3, seg[3], {}) is None
 
 
 @_PROPERTIES
@@ -1026,7 +1026,7 @@ def test_is_git_push_segment_true_for_git_push_regardless_of_leading_global_flag
     for group in flag_groups:
         seg.extend(group)
     seg += ["push", "origin"]
-    assert checker._is_git_push_segment(seg)
+    assert checker._is_git_push_segment(seg, {})
 
 
 @_PROPERTIES
@@ -1036,7 +1036,7 @@ def test_is_git_push_segment_false_for_a_non_push_subcommand(subcommand: str) ->
     with no literal 'git push' substring anywhere in the segment, is
     never misdetected."""
     seg = ["git", subcommand, "--short"]
-    assert not checker._is_git_push_segment(seg)
+    assert not checker._is_git_push_segment(seg, {})
 
 
 @_PROPERTIES
@@ -1045,7 +1045,7 @@ def test_is_git_push_segment_never_raises_on_arbitrary_tokens(tokens: list[str])
     """Robustness: arbitrary token content (including tokens containing
     ``$``/backtick, empty strings, or unicode) never raises -- this
     function classifies untrusted, attacker-shaped Bash tokens."""
-    result = checker._is_git_push_segment(tokens)
+    result = checker._is_git_push_segment(tokens, {})
     assert isinstance(result, bool)
 
 
@@ -1060,7 +1060,7 @@ def test_is_git_push_segment_true_for_boolean_short_flags_before_push(flag: str)
     git's own boolean, no-argument short global options (confirmed
     against git's usage synopsis) -- push must still be found right after
     one."""
-    assert checker._is_git_push_segment(["git", flag, "push", "origin"])
+    assert checker._is_git_push_segment(["git", flag, "push", "origin"], {})
 
 
 @_PROPERTIES
@@ -1070,7 +1070,7 @@ def test_is_git_push_segment_false_for_boolean_short_flag_before_non_push_subcom
 ) -> None:
     """No false positive: a boolean short flag before an ordinary,
     non-push subcommand is never misdetected as git push."""
-    assert not checker._is_git_push_segment(["git", flag, subcommand])
+    assert not checker._is_git_push_segment(["git", flag, subcommand], {})
 
 
 @_PROPERTIES
@@ -1134,7 +1134,7 @@ def test_is_git_push_segment_true_for_long_flag_separate_token_form(flag: str) -
     silently skipping the mandatory outward-artifact-preflight
     provenance scan this flag gates."""
     seg = ["git", flag, "/tmp/some/value", "push", "origin"]
-    assert checker._is_git_push_segment(seg)
+    assert checker._is_git_push_segment(seg, {})
 
 
 @_PROPERTIES
@@ -1144,7 +1144,7 @@ def test_is_git_push_segment_true_for_long_flag_fused_equals_form(flag: str) -> 
     handled correctly continues to work after adding separate-token
     support alongside it."""
     seg = ["git", f"{flag}=/tmp/some/value", "push", "origin"]
-    assert checker._is_git_push_segment(seg)
+    assert checker._is_git_push_segment(seg, {})
 
 
 @_PROPERTIES
@@ -1997,14 +1997,36 @@ def test_rule_gh_api_write_field_fused_flagname_dynamic() -> None:
 def test_is_git_push_segment_git_alone_no_trailing_tokens() -> None:
     """ "git" as the segment's only token: the flag-skip loop's own
     condition fails immediately, nothing after "git" to scan."""
-    assert checker._is_git_push_segment(["git"]) is False
+    assert checker._is_git_push_segment(["git"], {}) is False
 
 
 def test_is_git_push_segment_value_flag_followed_by_another_flag() -> None:
     """ "-C" is a value-taking short flag; when the NEXT token itself looks
     like a flag ("-v", starts with "-"), it must NOT be consumed as -C's
     own value -- the loop re-examines it as its own flag instead."""
-    assert checker._is_git_push_segment(["git", "-C", "-v", "push"]) is True
+    assert checker._is_git_push_segment(["git", "-C", "-v", "push"], {}) is True
+
+
+def test_is_git_push_segment_true_once_a_vanishing_decoy_is_skipped() -> None:
+    """The positive case of the twenty-second-round fix: a leading decoy
+    that vanishes to nothing at real bash runtime (NEVERSET never
+    assigned) sits between a literal flag and "push" -- confirmed live via
+    a real bash proxy (stand-in `git` binary on PATH) that `git -v
+    $NEVERSET push origin main` genuinely runs `git push origin main`
+    once the decoy word-splits away."""
+    assert checker._is_git_push_segment(["git", "-v", "$NEVERSET", "push", "origin", "main"], {}) is True
+
+
+def test_is_git_push_segment_false_for_a_non_vanishing_dynamic_token() -> None:
+    """A dynamic token that does NOT vanish (its name IS assigned, so
+    `_token_is_all_unassigned_refs` returns False) stops the flag-skip
+    loop's scan via its own `break`, the same as any other non-flag,
+    non-"push" token -- this function only looks PAST a token confirmed
+    to vanish to nothing; resolving whether an assigned dynamic token's
+    own VALUE happens to equal "push" is out of its scope (handled, if at
+    all, by the separate obfuscated-git-push-second-token check in
+    `_classify_tokens`, which this deliberately does not duplicate)."""
+    assert checker._is_git_push_segment(["git", "$M", "push", "origin", "main"], {"M": "foo"}) is False
 
 
 def test_resolve_seg_tokens_candidates_overflow_returns_none() -> None:
@@ -2055,6 +2077,27 @@ def test_classify_denies_gh_api_write_end_to_end() -> None:
     assert verdict.deny is True
 
 
+def test_classify_denies_gh_api_write_past_a_vanishing_decoy_in_value_position_end_to_end() -> None:
+    """Found live by Step 8 independent review, twenty-second round (issue
+    #1326): `_gh_api_method_dynamic_value` used to read `seg[index + 1]`
+    directly for the -X/--method flag's value, assuming it always sits
+    immediately after the flag -- a leading decoy interposed there (`-X
+    $NEVERSET $M`, NEVERSET never assigned) made it return the decoy
+    itself as "the value," which resolved unresolvable and silently
+    missed the real write method one position further."""
+    verdict = checker.classify("M=POST; gh api repos/o/r/pulls/1 -X $NEVERSET $M")
+    assert verdict.deny is True
+
+
+def test_classify_denies_gh_api_write_flagname_past_a_vanishing_decoy_in_value_position_end_to_end() -> None:
+    """Same twenty-second-round fix as above, for `_gh_api_method_
+    flagname_dynamic_hit`'s own value-position read instead: `$F
+    $NEVERSET $M` (the flag NAME itself indirected through `$F`, with a
+    vanishing decoy between it and the real write-method value)."""
+    verdict = checker.classify("F=-X; M=POST; gh api repos/o/r/pulls/1 $F $NEVERSET $M")
+    assert verdict.deny is True
+
+
 def test_classify_denies_array_literal_content_end_to_end() -> None:
     """`_classify_tokens`'s own early-return on a denying `_rule_array_
     literal_content` verdict, reached end-to-end through `classify()` --
@@ -2080,6 +2123,19 @@ def test_classify_denies_b2_dynamic_verb_position_end_to_end() -> None:
 
 def test_classify_flags_git_push_via_dynamic_second_token() -> None:
     verdict = checker.classify("git $x")
+    assert verdict.deny is False
+    assert verdict.is_git_push is True
+
+
+def test_classify_flags_git_push_past_a_vanishing_leading_decoy_end_to_end() -> None:
+    """Found live by Step 8 independent review, twenty-second round (issue
+    #1326): `git -v $NEVERSET push origin main` (NEVERSET never assigned)
+    used to stop `_is_git_push_segment`'s own flag-skip loop AT the decoy
+    instead of skipping past it, so `is_git_push` was wrongly False --
+    confirmed live via a real bash proxy (stand-in `git` binary on PATH,
+    capturing its own argv) that this genuinely runs `git push origin
+    main` once the decoy word-splits away."""
+    verdict = checker.classify("git -v $NEVERSET push origin main")
     assert verdict.deny is False
     assert verdict.is_git_push is True
 
