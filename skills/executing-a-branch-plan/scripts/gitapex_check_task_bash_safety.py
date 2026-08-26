@@ -1341,35 +1341,35 @@ def _token_is_all_unassigned_refs(token: str, name_to_raw_value: dict[str, str])
     reopening any prior round's fix.
 
     Still disclosed, not fixed, as a narrower residual than the blanket
-    rule it replaces: this reads `name_to_value["IFS"]` from the SAME
-    flat, order-and-scope-blind assignment map every other lookup in
-    this function already uses -- a command that reassigns `$IFS` more
-    than once, or that references a decoy BEFORE the `$IFS` reassignment
+    rule it replaces: this reads `name_to_raw_value["IFS"]` from the
+    SAME flat, order-and-scope-blind assignment map every other lookup
+    in this function already uses -- a command that reassigns `$IFS`
+    more than once, or that references a decoy BEFORE the `$IFS` reassignment
     that would apply to it in real execution order, still only ever sees
     ONE captured value regardless of position, the same pre-existing
     scoping limitation every other name-to-value lookup in this module
     already accepts, not a new gap this fix introduces.
 
-    A second, related disclosed residual found live the same (twenty-
-    eighth) round, also ported from the main hook: the `-c`/
-    `_GIT_LONG_VALUE_FLAGS`
-    value-consumption block inside `_is_git_push_segment` below now
-    correctly determines a value like `\r` does NOT vanish and consumes
-    it as the flag's own value -- but never validates whether the
-    consumed text is a WELL-FORMED git config value; real git rejects a
-    malformed one before ever reaching a subcommand, so this can now
-    report (and HARD DENY) a push that real git would never actually
-    perform. A NEW instance of the SAME accepted trade-off the `-c`
-    block's own twenty-third-round fix already makes deliberately: fail
-    closed (a spurious deny) over fail open (a missed real push).
-    Re-examined by Step 8 independent review, twenty-eighth round
-    (issue #1326), ported from the main hook's own identical re-
-    examination, specifically hunting for an UNDER-detection direction
-    here -- none found: real git always consumes exactly one following
-    token as `-c`'s value regardless of well-formedness, so this can
-    only ever find a `push` real git's own argv construction also
-    reaches -- confirmed still safe-direction-only, left as a disclosed
-    residual rather than fixed.
+    A second, related disclosed residual found live the same
+    (twenty-eighth) round, also ported from the main hook: the `-c`/
+    `_GIT_LONG_VALUE_FLAGS` value-consumption block inside
+    `_is_git_push_segment` below now correctly determines a value like
+    `\r` does NOT vanish and consumes it as the flag's own value -- but
+    never validates whether the consumed text is a WELL-FORMED git
+    config value; real git rejects a malformed one before ever reaching
+    a subcommand, so this can now report (and HARD DENY) a push that
+    real git would never actually perform. A NEW instance of the SAME
+    accepted trade-off the `-c` block's own twenty-third-round fix
+    already makes deliberately: fail closed (a spurious deny) over fail
+    open (a missed real push). Re-examined by Step 8 independent
+    review, twenty-eighth round (issue #1326), ported from the main
+    hook's own identical re-examination, specifically hunting for an
+    UNDER-detection direction here -- none found: real git always
+    consumes exactly one following token as `-c`'s value regardless of
+    well-formedness, so this can only ever find a `push` real git's own
+    argv construction also reaches -- confirmed still
+    safe-direction-only, left as a disclosed residual rather than
+    fixed.
 
     Found live by Step 8 independent review, thirtieth round (issue
     #1326), ported from the main hook's own identical fix: the twenty-
@@ -2008,7 +2008,8 @@ def _fetch_tool_head(tokens: list[str]) -> bool:
     actually runs it. Closed the same way `_rule_array_literal_content`'s
     own leading-decoy collapse works: strip the segment's own leading run
     of vanishing references (per `_strip_leading_unassigned_bare_refs`,
-    against this function's OWN self-contained NAME_TO_VALUE) before
+    against this function's OWN self-contained NAME_TO_RAW_VALUE, per
+    that function's own thirtieth-round case-preserving fix) before
     reading its first element."""
     segs = segment_tokens(tokens)
     if not segs or not segs[0]:

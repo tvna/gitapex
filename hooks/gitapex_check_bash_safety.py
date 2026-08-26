@@ -1441,9 +1441,9 @@ def _token_is_all_unassigned_refs(token: str, name_to_raw_value: dict[str, str])
     reopening any prior round's fix.
 
     Still disclosed, not fixed, as a narrower residual than the blanket
-    rule it replaces: this reads `name_to_value["IFS"]` from the SAME
-    flat, order-and-scope-blind assignment map every other lookup in
-    this function already uses (see `_assigned_literals`'s own
+    rule it replaces: this reads `name_to_raw_value["IFS"]` from the
+    SAME flat, order-and-scope-blind assignment map every other lookup
+    in this function already uses (see `_assigned_raw_values`'s own
     docstring) -- a command that reassigns `$IFS` more than once, or
     that references a decoy BEFORE the `$IFS` reassignment that would
     apply to it in real execution order, still only ever sees ONE
@@ -1451,37 +1451,37 @@ def _token_is_all_unassigned_refs(token: str, name_to_raw_value: dict[str, str])
     limitation every other name-to-value lookup in this module already
     accepts, not a new gap this fix introduces.
 
-    A second, related disclosed residual found live the same (twenty-
-    eighth) round: the `-c`/`_GIT_LONG_VALUE_FLAGS` value-consumption
-    block inside
-    `_is_git_push_segment` below now correctly determines that a value
-    like `\r` does NOT vanish (per this fixed check) and so consumes it
-    as the flag's own value -- but that block never validates whether
-    the consumed text is actually a WELL-FORMED git config value
-    (`section.key=value`); real git rejects a malformed one before ever
-    reaching a subcommand (confirmed live: `git -c $'\r' push origin
-    main` fails with `error: key does not contain a section: ...`,
-    exit 128, never reaching push) -- so this can now report a push
-    that real git would never actually perform. This is a NEW instance
-    of the SAME accepted trade-off the `-c` block's own twenty-third-
-    round fix already makes deliberately (see that block's own
-    docstring): assume a surviving, non-flag-shaped token occupies the
-    value slot so a real push sitting past it is never missed, rather
-    than parsing git's own config-key grammar to rule out malformed
-    values -- fail closed (a spurious warn/deny) over fail open (a
-    missed real push), consistent with this module's own established
-    posture throughout. Re-examined by Step 8 independent review,
-    twenty-eighth round (issue #1326), specifically hunting for an
-    UNDER-detection direction here (the same direction the `$IFS`
-    residual above turned out to have) -- none found: real git always
-    consumes exactly one following token as `-c`'s value regardless of
-    that token's own well-formedness (confirmed live, including a
-    flag-shaped decoy: `git -c -v push origin main` genuinely has `-c`
-    swallow `-v` itself as a malformed config key, never reaching
-    `push` either), so this block's own "assume consumed, keep
-    scanning" logic can only ever find a `push` that real git's own
-    argv construction also reaches -- confirmed still safe-direction-
-    only, left as a disclosed residual rather than fixed.
+    A second, related disclosed residual found live the same
+    (twenty-eighth) round: the `-c`/`_GIT_LONG_VALUE_FLAGS`
+    value-consumption block inside `_is_git_push_segment` below now
+    correctly determines that a value like `\r` does NOT vanish (per
+    this fixed check) and so consumes it as the flag's own value -- but
+    that block never validates whether the consumed text is actually a
+    WELL-FORMED git config value (`section.key=value`); real git
+    rejects a malformed one before ever reaching a subcommand
+    (confirmed live: `git -c $'\r' push origin main` fails with `error:
+    key does not contain a section: ...`, exit 128, never reaching
+    push) -- so this can now report a push that real git would never
+    actually perform. This is a NEW instance of the SAME accepted
+    trade-off the `-c` block's own twenty-third-round fix already makes
+    deliberately (see that block's own docstring): assume a surviving,
+    non-flag-shaped token occupies the value slot so a real push
+    sitting past it is never missed, rather than parsing git's own
+    config-key grammar to rule out malformed values -- fail closed (a
+    spurious warn/deny) over fail open (a missed real push), consistent
+    with this module's own established posture throughout. Re-examined
+    by Step 8 independent review, twenty-eighth round (issue #1326),
+    specifically hunting for an UNDER-detection direction here (the
+    same direction the `$IFS` residual above turned out to have) --
+    none found: real git always consumes exactly one following token as
+    `-c`'s value regardless of that token's own well-formedness
+    (confirmed live, including a flag-shaped decoy: `git -c -v push
+    origin main` genuinely has `-c` swallow `-v` itself as a malformed
+    config key, never reaching `push` either), so this block's own
+    "assume consumed, keep scanning" logic can only ever find a `push`
+    that real git's own argv construction also reaches -- confirmed
+    still safe-direction-only, left as a disclosed residual rather than
+    fixed.
 
     Found live by Step 8 independent review, thirtieth round (issue
     #1326): the twenty-ninth round's own `effective_ifs` fix computed it

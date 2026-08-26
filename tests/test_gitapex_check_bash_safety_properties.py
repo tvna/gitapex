@@ -2338,16 +2338,26 @@ def test_classify_denies_gh_api_dynamic_write_method_despite_ifs_reassignment_en
 
 
 def test_token_is_all_unassigned_refs_false_for_a_case_mismatched_ifs_and_value() -> None:
-    """Regression pin for the real hard-deny bypass found live by Step 8
-    independent review, thirtieth round (issue #1326): the twenty-ninth
-    round's own `effective_ifs` fix computed it (and every per-name
-    value stripped against it) from the LOWERCASED `name_to_value` map --
-    real bash `$IFS` word-splitting is case-SENSITIVE, so a value whose
-    real (mixed-case) characters do NOT overlap the real (differently-
-    cased) `$IFS` must not read as vanishing just because both happen to
-    fold to the same case. Confirmed live via real bash that `IFS=post;
-    DECOY=POST; ...${DECOY}...` leaves `${DECOY}` intact (`POST`'s own
-    uppercase letters are untouched by a lowercase-only `$IFS`)."""
+    """Direct characterization of this function's own case-SENSITIVE
+    semantics, confirmed live via real bash that `IFS=post; DECOY=POST;
+    ...${DECOY}...` leaves `${DECOY}` intact (`POST`'s own uppercase
+    letters are untouched by a lowercase-only `$IFS`). NOT itself a
+    regression pin for the thirtieth-round hard-deny bypass (issue
+    #1326) -- this function's own internal `.strip(effective_ifs)` logic
+    never changed that round; the bug lived entirely in which map its
+    CALLERS passed it (the lowercased `name_to_value` instead of the
+    case-preserving `name_to_raw_value`), so calling it directly with an
+    already-correctly-cased dict, as this test does, passes identically
+    whether or not that round's caller-level rewiring fix is present --
+    confirmed live by Step 8 independent review, thirty-first round
+    (issue #1326), which found this test (and its `_skip_fetch_exec_
+    wrapper` counterpart in the task-scoped sibling module) vacuous
+    against the pre-fix code for exactly this reason. The REAL
+    regression pins for that round's fix are the caller-level test
+    (`test_value_position_after_returns_the_real_value_despite_a_case_
+    folded_ifs_collision`) and the end-to-end `classify()` test below,
+    both of which route through the actual caller wiring that was
+    broken and are confirmed to fail against the pre-fix code."""
     assert checker._token_is_all_unassigned_refs("${DECOY}", {"IFS": "post", "DECOY": "POST"}) is False
 
 
