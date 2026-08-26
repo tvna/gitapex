@@ -825,6 +825,18 @@ def _rule_command_substitution_content(tokens: list[str]) -> tuple[str | None, b
             found_fused = True
             start, end = fused
             inner_text = tokens[i][start + 2 : end - 1]
+            # Deliberately plain `.strip()`, NOT `.strip(_BASH_DEFAULT_IFS)`
+            # -- considered during Step 8 independent review, twenty-
+            # seventh round (issue #1326), and left as-is: this asks a
+            # DIFFERENT question than `_token_is_all_unassigned_refs`'s own
+            # IFS-based word-splitting check (whether a REFERENCE vanishes
+            # at runtime) -- here it is "is there any source text worth
+            # recursively classifying at all," a shell-lexing/optimization
+            # question, not a runtime-value-vanishing one. Any non-empty
+            # residue (`\r`, `\v`, etc. included) is inert as an actual
+            # command by itself either way, so narrowing this particular
+            # check would only change how often an empty-content recursive
+            # `classify()` call is skipped, never a real verdict.
             if inner_text.strip():
                 inner_verdict = classify(inner_text)
                 is_git_push = is_git_push or inner_verdict.is_git_push
@@ -1140,7 +1152,7 @@ _REF_RUN_NAME_RE = re.compile(_ONE_REF_SRC)
 # refs` to decide whether an assigned-but-all-whitespace value word-splits
 # away to nothing the same way an assigned-empty one does. Deliberately
 # NARROWER than Python's own `str.strip()` default whitespace set (which
-# also strips `\r`/`\f`/`\v`/`\x1c`-`\x1d` and more) -- found live by Step
+# also strips `\r`/`\f`/`\v`/`\x1c`-`\x1f` and more) -- found live by Step
 # 8 independent review, twenty-sixth round (issue #1326): confirmed live
 # via real bash (`set -x`) that `CFG=$'\r'; git -v $CFG push origin main`
 # does NOT word-split `$CFG` away (`\r` alone survives as its own argv
@@ -1160,10 +1172,11 @@ def _token_is_all_unassigned_refs(token: str, name_to_value: dict[str, str]) -> 
     SIMPLE array-element subscript (`${NAME[0]}`, `${NAME[@]}`). For the
     bare and plain-braced (no subscript) forms, this covers a NAME
     never assigned anywhere in this command AND a NAME assigned a value
-    that is itself empty or ALL IFS whitespace (see the twenty-fourth/
-    twenty-fifth-round paragraphs below for why); the subscripted form
-    stays narrower (never-assigned only -- see that same discussion for
-    why). Confirmed live via `declare -p` against real bash for both
+    that is itself empty or ALL of bash's own (not Python's broader)
+    IFS whitespace (see the twenty-fourth/twenty-fifth/twenty-sixth-
+    round paragraphs below for why); the subscripted form stays
+    narrower (never-assigned only -- see that same discussion for why).
+    Confirmed live via `declare -p` against real bash for both
     shapes this generalizes over: `A=($NEVERSET gh pr merge 1)` (a single
     bare reference) and `A=(${NEVERSET[0]} gh pr merge 1)` (a braced
     subscript reference) both produce the identical 4-element array `(gh
@@ -1321,7 +1334,51 @@ def _token_is_all_unassigned_refs(token: str, name_to_value: dict[str, str]) -> 
     `_BASH_DEFAULT_IFS`'s own three characters, NOT Python's own
     broader `str.strip()` default (see that constant's own module-level
     comment for the twenty-sixth-round finding this narrower stripping
-    closes)."""
+    closes).
+
+    Disclosed residual (found live by Step 8 independent review,
+    twenty-seventh round, issue #1326), NOT fixed here: this check
+    always assumes bash's own DEFAULT `$IFS` (`_BASH_DEFAULT_IFS`) --
+    it has no awareness that the COMMAND ITSELF can reassign `$IFS`
+    before a decoy reference is used (`IFS=$'\r'; CFG=$'\r'; git -v
+    $CFG push origin main`), which real bash genuinely honors (`$CFG`
+    word-splits away under the REASSIGNED IFS, confirmed live). This
+    round's own narrowing from Python's broader `str.strip()` to
+    exactly `_BASH_DEFAULT_IFS` happens to make this ONE specific
+    character (`\r`) a live miss again after round 25 happened to
+    (accidentally, not by design) cover it -- but the underlying gap
+    (`$IFS` reassignment is not tracked at all) already existed for
+    every OTHER possible IFS character (`,`, `x`, ...) in every prior
+    round too, confirmed live that round 25's own code missed those
+    identically. Closing this soundly needs tracking a `IFS=` assignment
+    the same way `_assigned_literals` tracks every other variable, then
+    threading that dynamic character set through every vanishing check
+    in this module instead of the one fixed `_BASH_DEFAULT_IFS` -- a
+    materially larger change than a whitespace-set adjustment, left as
+    a disclosed gap rather than attempted here, the same posture
+    `_rule_array_literal_content`'s own per-index array-element
+    residual (see that function's docstring) already takes for an
+    analogous "this needs a genuinely new tracking dimension" gap.
+
+    A second, related disclosed residual found live the SAME round: the
+    `-c`/`_GIT_LONG_VALUE_FLAGS` value-consumption block inside
+    `_is_git_push_segment` below now correctly determines that a value
+    like `\r` does NOT vanish (per this fixed check) and so consumes it
+    as the flag's own value -- but that block never validates whether
+    the consumed text is actually a WELL-FORMED git config value
+    (`section.key=value`); real git rejects a malformed one before ever
+    reaching a subcommand (confirmed live: `git -c $'\r' push origin
+    main` fails with `error: key does not contain a section: ...`,
+    exit 128, never reaching push) -- so this can now report a push
+    that real git would never actually perform. This is a NEW instance
+    of the SAME accepted trade-off the `-c` block's own twenty-third-
+    round fix already makes deliberately (see that block's own
+    docstring): assume a surviving, non-flag-shaped token occupies the
+    value slot so a real push sitting past it is never missed, rather
+    than parsing git's own config-key grammar to rule out malformed
+    values -- fail closed (a spurious warn/deny) over fail open (a
+    missed real push), consistent with this module's own established
+    posture throughout."""
     if not _REF_RUN_TOKEN_RE.match(token):
         return False
     for match in _REF_RUN_NAME_RE.finditer(token):

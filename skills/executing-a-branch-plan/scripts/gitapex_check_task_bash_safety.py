@@ -644,6 +644,10 @@ def _rule_command_substitution_content(tokens: list[str]) -> str | None:
             found_fused = True
             start, end = fused
             inner_text = tokens[i][start + 2 : end - 1]
+            # Deliberately plain `.strip()`, NOT `.strip(_BASH_DEFAULT_IFS)`
+            # -- considered during Step 8 independent review, twenty-
+            # seventh round (issue #1326), and left as-is: see the main
+            # hook's own identical decision, ported here for consistency.
             if inner_text.strip():
                 inner_verdict = classify(inner_text)
                 if inner_verdict.deny:
@@ -1075,7 +1079,7 @@ _REF_RUN_NAME_RE = re.compile(_ONE_REF_SRC)
 # refs` to decide whether an assigned-but-all-whitespace value word-splits
 # away to nothing the same way an assigned-empty one does. Deliberately
 # NARROWER than Python's own `str.strip()` default whitespace set (which
-# also strips `\r`/`\f`/`\v`/`\x1c`-`\x1d` and more) -- found live by Step
+# also strips `\r`/`\f`/`\v`/`\x1c`-`\x1f` and more) -- found live by Step
 # 8 independent review, twenty-sixth round (issue #1326), ported from the
 # main hook's own identical fix: confirmed live via real bash that
 # `CFG=$'\r'; git -v $CFG push origin main` does NOT word-split `$CFG`
@@ -1092,9 +1096,10 @@ def _token_is_all_unassigned_refs(token: str, name_to_value: dict[str, str]) -> 
     SIMPLE array-element subscript (`${NAME[0]}`, `${NAME[@]}`). For the
     bare and plain-braced (no subscript) forms, this covers a NAME
     never assigned anywhere in this command AND a NAME assigned a value
-    that is itself empty or ALL IFS whitespace (see the twenty-fourth/
-    twenty-fifth-round paragraphs below for why); the subscripted form
-    stays narrower (never-assigned only -- see that same discussion for
+    that is itself empty or ALL of bash's own (not Python's broader)
+    IFS whitespace (see the twenty-fourth/twenty-fifth/twenty-sixth-
+    round paragraphs below for why); the subscripted form stays
+    narrower (never-assigned only -- see that same discussion for
     why). Confirmed live via `declare -p` against real bash for both
     shapes this generalizes over: `A=($NEVERSET gh pr merge 1)` (a single
     bare reference) and `A=(${NEVERSET[0]} gh pr merge 1)` (a braced
@@ -1248,7 +1253,33 @@ def _token_is_all_unassigned_refs(token: str, name_to_value: dict[str, str]) -> 
     hard deny bypass, closed by checking whitespace-truthiness instead
     of raw truthiness, stripping only `_BASH_DEFAULT_IFS`'s own three
     characters (see that constant's own module-level comment for the
-    twenty-sixth-round refinement of this same fix)."""
+    twenty-sixth-round refinement of this same fix).
+
+    Disclosed residual (found live by Step 8 independent review,
+    twenty-seventh round, issue #1326), ported from the main hook's own
+    identical disclosure, NOT fixed here: this check always assumes
+    bash's own DEFAULT `$IFS` (`_BASH_DEFAULT_IFS`) -- it has no
+    awareness that the COMMAND ITSELF can reassign `$IFS` before a
+    decoy reference is used, which real bash genuinely honors. Closing
+    this soundly needs tracking an `IFS=` assignment the same way
+    `_assigned_literals` tracks every other variable, then threading
+    that dynamic character set through every vanishing check in this
+    module -- a materially larger change than a whitespace-set
+    adjustment, left as a disclosed gap, the same posture this file's
+    own `KNOWN_BYPASS_COMMANDS` residuals already take for an analogous
+    "needs a genuinely new tracking dimension" gap.
+
+    A second, related disclosed residual found live the SAME round,
+    also ported from the main hook: the `-c`/`_GIT_LONG_VALUE_FLAGS`
+    value-consumption block inside `_is_git_push_segment` below now
+    correctly determines a value like `\r` does NOT vanish and consumes
+    it as the flag's own value -- but never validates whether the
+    consumed text is a WELL-FORMED git config value; real git rejects a
+    malformed one before ever reaching a subcommand, so this can now
+    report (and HARD DENY) a push that real git would never actually
+    perform. A NEW instance of the SAME accepted trade-off the `-c`
+    block's own twenty-third-round fix already makes deliberately: fail
+    closed (a spurious deny) over fail open (a missed real push)."""
     if not _REF_RUN_TOKEN_RE.match(token):
         return False
     for match in _REF_RUN_NAME_RE.finditer(token):
@@ -1940,6 +1971,12 @@ def _rest_has_fetch_tool_substitution(rest: list[str]) -> bool:
             found_fused = True
             start, end = fused
             inner_text = rest[j][start + 2 : end - 1]
+            # Deliberately plain `.strip()`, NOT `.strip(_BASH_DEFAULT_IFS)`
+            # -- considered during Step 8 independent review, twenty-
+            # seventh round (issue #1326), and left as-is: see the main
+            # hook's own identical decision (near its own equivalent
+            # command-substitution-content check), ported here for
+            # consistency.
             if inner_text.strip():
                 try:
                     inner_tokens = tokenize(inner_text)
