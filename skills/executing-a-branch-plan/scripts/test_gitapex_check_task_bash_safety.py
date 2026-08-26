@@ -340,6 +340,50 @@ DENIED_COMMANDS = [
     # too, since it hides the array's real content from `_rule_git_push`'s
     # own segment scan the same way it hides it from `_rule_gh_any`.
     ('A=($NEVERSET git push origin main); "${A[@]}"', "array-literal-unassigned-leading-ref-hides-git-push"),
+    # Found live by Step 8 independent review, nineteenth round (issue
+    # #1326): the eighteenth round's own recursive `_rule_array_literal_
+    # content` check dropped the OUTER command's own assigned variables
+    # entirely when classifying an array literal's inner content -- a
+    # tool/verb built from a variable assigned OUTSIDE the array literal's
+    # own span was invisible to it, even though it resolves at real bash
+    # runtime the same as it would at the top level (confirmed live via
+    # `declare -p` that `A=($T $V)` genuinely expands to `pip install`/
+    # `git push` once T/V are assigned earlier in the same command).
+    # Closed by threading the outer scope through the recursive
+    # `_classify_tokens` call.
+    ('G=gh; P=pr; M=merge; A=($G $P $M); "${A[@]}" 1', "array-literal-outer-scope-vars-hide-gh-pr-merge"),
+    ('T=pip; V=install; A=($T $V); "${A[@]}"', "array-literal-outer-scope-vars-hide-pip-install"),
+    (
+        'T=git; V=push; ARR=($T $V origin main); "${ARR[@]}"',
+        "array-literal-outer-scope-vars-hide-git-push",
+    ),
+    # A braced `${NAME}` decoy is the same word-splitting-collapse shape
+    # as an unbraced `$NAME` decoy (both word-split away to nothing when
+    # NAME is never assigned) -- `_BARE_VAR_REF_RE` only matched the
+    # unbraced form until this round, so the collapsed reading never ran
+    # for this shape. Uniquely exploitable in this file (unlike the main
+    # hook's own `_rule_a_literal`, whose literal-adjacency scan does not
+    # depend on the collapse step at all), since `_rule_gh_any` is
+    # entirely position-anchored. Confirmed live via `declare -p`.
+    ('A=(${NEVERSET} gh pr merge 1); "${A[@]}"', "array-literal-braced-unassigned-leading-ref-hides-gh-pr-merge"),
+    # Found live by Step 8 independent review, nineteenth round (issue
+    # #1326): the eighteenth round's own "has literal content" recursion
+    # guard compared every folded inner token against `_is_dynamic` (any
+    # `$`-containing token), not the narrower `_is_unresolvable_
+    # substitution` (specifically `$(...)`/backtick) that actually
+    # motivates it -- an array literal whose every element is a `${NAME:-
+    # default}` default clause (staticly resolvable, zero assignments
+    # needed) skipped the recursive check entirely, even though none of
+    # its elements is `$(...)`-shaped. Confirmed live via `declare -p`
+    # that this genuinely expands to a real `gh pr merge`/`pip install`.
+    (
+        'ARR=(${NEVERSET:-gh} ${NEVERSET2:-pr} ${NEVERSET3:-merge} ${NEVERSET4:-1}); "${ARR[@]}"',
+        "array-literal-default-clause-only-content-hides-gh-pr-merge",
+    ),
+    (
+        'ARR=(${NEVERSET:-pip} ${NEVERSET2:-install}); "${ARR[@]}"',
+        "array-literal-default-clause-only-content-hides-pip-install",
+    ),
 ]
 
 # --- Allowed: ordinary git/test/build commands that must never regress ----

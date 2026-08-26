@@ -1091,13 +1091,14 @@ def _fold_array_literal_spans(tokens: list[str]) -> list[str]:
     return folded
 
 
-_BARE_VAR_REF_RE = re.compile(r"^\$([A-Za-z_][A-Za-z0-9_]*)$")
+_BARE_VAR_REF_RE = re.compile(r"^\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?$")
 
 
 def _strip_leading_unassigned_bare_refs(tokens: list[str], name_to_value: dict[str, str]) -> list[str]:
-    """A leading run of tokens that are EACH entirely one bare `$NAME`
-    reference (nothing else fused into the same token) to a NAME never
-    assigned anywhere in this command word-splits away to NOTHING,
+    """A leading run of tokens that are EACH entirely one bare `$NAME` or
+    `${NAME}` reference (nothing else fused into the same token, and no
+    `:-default`/`:=default`-style clause inside the braces) to a NAME
+    never assigned anywhere in this command word-splits away to NOTHING,
     unquoted, at real bash runtime -- confirmed live via `declare -p`
     against real bash that `A=($NEVERSET gh pr merge 1)` (NEVERSET never
     assigned) produces a 4-element array `(gh pr merge 1)`, NEVERSET
@@ -1110,11 +1111,21 @@ def _strip_leading_unassigned_bare_refs(tokens: list[str], name_to_value: dict[s
     the raw token stream shows in that position. Deliberately narrower
     than `_substitute_var_refs_candidates`'s own general candidate
     enumeration: this only strips a token that is ENTIRELY one bare
-    reference with nothing fused (`$NEVERSET`, not `-X$NEVERSET` or
-    `${NEVERSET}`), matching the specific word-splitting-collapse shape
+    reference with nothing fused (`$NEVERSET` or `${NEVERSET}`, not
+    `-X$NEVERSET`), matching the specific word-splitting-collapse shape
     this exists for -- a token with anything else fused onto the
     reference does not word-split away to nothing even when the
-    reference itself is unset."""
+    reference itself is unset.
+
+    Found live by Step 8 independent review, nineteenth round (issue
+    #1326): the eighteenth round's own version of `_BARE_VAR_REF_RE`
+    matched only the UNBRACED `$NAME` shape, never `${NAME}` -- both
+    word-split away identically at real bash runtime when NAME is unset,
+    but the braced decoy left the collapsed reading a no-op (`collapsed
+    == inner`), silently degrading `_rule_array_literal_content` to only
+    its as-is reading. Confirmed live (real bash, `declare -p`) that
+    `A=(${NEVERSET} gh pr merge 1); "${A[@]}"` genuinely expands to `gh
+    pr merge 1` the same way the unbraced form does."""
     i = 0
     n = len(tokens)
     while i < n:
@@ -1139,8 +1150,19 @@ def _rule_array_literal_content(
     token-list-to-string-and-back round trip), and treat this as fully
     independent of whatever `_fold_array_literal_spans` later does to the
     SAME span for its own, unrelated false-positive-avoidance purpose
-    (see that function's own docstring) -- this function is now the SOLE
-    guarantor of array-literal content-safety, run BEFORE any folding.
+    (see that function's own docstring) -- this function is the guarantor
+    of array-literal content-safety, run BEFORE any folding, WITHIN the
+    scope described below (a disclosed residual remains -- see the
+    nineteenth-round paragraph).
+
+    NAME_TO_VALUE/NAME_TO_RAW_VALUE are the OUTER command's own assigned
+    variables (the same dicts `_classify_tokens` already computes for its
+    own top-level rules) -- passed through to the recursive `_classify_
+    tokens` call below as that call's own OUTER_SCOPE, since a bare `$G`
+    inside the array literal genuinely resolves against the SAME shell
+    scope as the rest of the command at real bash runtime (an array
+    literal is not a subshell), not just against whatever the array's own
+    inner tokens happen to assign (ordinarily nothing).
 
     Every candidate span's inner content is checked TWICE: once as-is,
     and once with any leading run of unassigned bare `$NAME` references
@@ -1169,7 +1191,25 @@ def _rule_array_literal_content(
     the fold has no way to know, from token shape alone, whether a
     dynamic-looking first element will actually SURVIVE to occupy that
     position at real bash runtime -- so this recursive, fold-independent
-    check replaces trying to further narrow the fold condition."""
+    check replaces trying to further narrow the fold condition.
+
+    Found live by Step 8 independent review, nineteenth round (issue
+    #1326): the eighteenth round's own recursive `_classify_tokens` call
+    dropped the OUTER scope entirely, re-deriving `name_to_value`/`name_
+    to_raw_value` from the array's own inner tokens alone -- `G=gh; P=pr;
+    M=merge; A=($G $P $M); "${A[@]}" 1` was wrongly ALLOWED, even though
+    `$G`/`$P`/`$M` resolve to a denied `gh pr merge` at real bash runtime
+    (confirmed live via `declare -p`) the SAME way they would if `$G $P
+    $M` appeared directly at the top level of the command instead of
+    inside an array literal. Closed by threading OUTER_SCOPE through.
+    Disclosed residual: `_rule_command_substitution_content`'s own,
+    pre-existing (since the fourteenth round) recursive checks have the
+    identical outer-scope gap and are NOT fixed by this round -- a tool/
+    verb built from a variable assigned outside a `$(...)` span's own
+    text is still invisible to that recursive check. Not closed here:
+    closing it needs `classify()`'s own string-based entry point (used
+    for the quoted/fused `$(...)` shape) to also accept an outer scope,
+    a larger change than this round's own confirmed finding warranted."""
     is_git_push = False
     i = 0
     n = len(tokens)
@@ -1180,20 +1220,15 @@ def _rule_array_literal_content(
             continue
         inner = tokens[i + 2 : end - 1]
         if inner:
-            inner_verdict = _classify_tokens(inner)
-            is_git_push = is_git_push or inner_verdict.is_git_push
-            if inner_verdict.deny:
-                reason = f"an array literal NAME=(...) embeds a denied command -- {inner_verdict.reason}"
-                return reason, is_git_push
+            readings = [(inner, "")]
             collapsed = _strip_leading_unassigned_bare_refs(inner, name_to_value)
             if collapsed and collapsed != inner:
-                collapsed_verdict = _classify_tokens(collapsed)
-                is_git_push = is_git_push or collapsed_verdict.is_git_push
-                if collapsed_verdict.deny:
-                    reason = (
-                        "an array literal NAME=(...) embeds a denied command once its own leading "
-                        f"unassigned reference(s) word-split away -- {collapsed_verdict.reason}"
-                    )
+                readings.append((collapsed, " once its own leading unassigned reference(s) word-split away"))
+            for reading, suffix in readings:
+                reading_verdict = _classify_tokens(reading, outer_scope=(name_to_value, name_to_raw_value))
+                is_git_push = is_git_push or reading_verdict.is_git_push
+                if reading_verdict.deny:
+                    reason = f"an array literal NAME=(...) embeds a denied command{suffix} -- {reading_verdict.reason}"
                     return reason, is_git_push
         i = end
     return None, is_git_push
@@ -1938,7 +1973,7 @@ def classify(command: str) -> Verdict:
     return _classify_tokens(tokens)
 
 
-def _classify_tokens(tokens: list[str]) -> Verdict:
+def _classify_tokens(tokens: list[str], outer_scope: tuple[dict[str, str], dict[str, str]] | None = None) -> Verdict:
     """The token-level core of `classify` -- split out so `_rule_command_
     substitution_content` can recurse into a `$(...)` span's own inner
     tokens directly, without a lossy token-list-to-string-and-back round
@@ -1949,13 +1984,29 @@ def _classify_tokens(tokens: list[str]) -> Verdict:
     original string, only the inner span's own tokens; the graphql-
     mutation-keyword check this feeds is already a disclosed, best-effort
     substring residual (see `_rule_gh_api_write`'s own docstring), not a
-    sound one this reconstruction could meaningfully weaken further."""
+    sound one this reconstruction could meaningfully weaken further.
+
+    OUTER_SCOPE, when given, is a caller-supplied (name_to_value,
+    name_to_raw_value) pair MERGED into whatever TOKENS's own assignments
+    resolve to (TOKENS's own assignments win on a name collision -- an
+    inner-scope reassignment does shadow the outer one). Used only by
+    `_rule_array_literal_content`'s own recursive call, to give an array
+    literal's own inner content access to the SAME shell scope as the
+    rest of the command (see that function's own docstring, nineteenth-
+    round paragraph, for the live bypass this closes) -- `None` (every
+    other caller, including the top-level `classify` and `_rule_command_
+    substitution_content`'s own recursive calls) preserves this
+    function's prior, scope-free behavior exactly."""
+    outer_literals, outer_raw = outer_scope if outer_scope is not None else ({}, {})
+
     content_reason, content_is_git_push = _rule_command_substitution_content(tokens)
     if content_reason:
         return Verdict(True, content_reason, content_is_git_push)
 
     array_content_reason, array_content_is_git_push = _rule_array_literal_content(
-        tokens, _assigned_literals(tokens), _assigned_raw_values(tokens)
+        tokens,
+        {**outer_literals, **_assigned_literals(tokens)},
+        {**outer_raw, **_assigned_raw_values(tokens)},
     )
     is_git_push = content_is_git_push or array_content_is_git_push
     if array_content_reason:
@@ -1963,8 +2014,8 @@ def _classify_tokens(tokens: list[str]) -> Verdict:
 
     tokens = _fold_array_literal_spans(_fold_command_substitution_spans(tokens))
     segments = [s for s in (_strip_leading_assignments(seg) for seg in segment_tokens(tokens)) if s]
-    assigned = _assigned_literals(tokens)
-    raw_assigned = _assigned_raw_values(tokens)
+    assigned = {**outer_literals, **_assigned_literals(tokens)}
+    raw_assigned = {**outer_raw, **_assigned_raw_values(tokens)}
     lowered_command = " ".join(tokens).lower()
 
     is_git_push = is_git_push or any(_is_git_push_segment(seg) for seg in segments)

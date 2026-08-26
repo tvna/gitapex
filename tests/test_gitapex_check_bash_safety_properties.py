@@ -1546,6 +1546,80 @@ def test_rule_array_literal_content_denies_only_on_the_collapsed_reading() -> No
     assert "unassigned reference" in reason
 
 
+@_PROPERTIES
+@given(name1=_IDENTIFIERS, value1=_VALUES, name2=_IDENTIFIERS, value2=_VALUES, tail=st.lists(_IDENTIFIERS, max_size=2))
+def test_classify_tokens_outer_scope_merges_with_the_recursed_tokens_own_assignments(
+    name1: str, value1: str, name2: str, value2: str, tail: list[str]
+) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, nineteenth round (issue #1326): OUTER_SCOPE's
+    own entries are visible to a recursive `_classify_tokens` call's
+    internal `assigned`/`raw_assigned` computation, alongside (not
+    instead of) whatever TOKENS itself assigns -- a name TOKENS itself
+    assigns must still win over an outer entry of the same name (ordinary
+    shadowing), while a name only OUTER_SCOPE assigns must still resolve.
+    `A=($NEVERSET uv install); "${A[@]}" foo`-style outer-scope threading
+    is exercised end to end elsewhere; this pins the merge/shadow
+    semantics of the parameter itself directly."""
+    assume(name1 != name2)
+    outer_literals = {name1: "outer-value-should-be-shadowed", name2: value2}
+    outer_raw = {name1: "Outer-Value-Should-Be-Shadowed", name2: value2}
+    tokens = [f"{name1}={value1}", *tail]
+    verdict = checker._classify_tokens(tokens, outer_scope=(outer_literals, outer_raw))
+    assert verdict.reason == "no denied pattern matched"
+
+
+@_PROPERTIES
+@given(unset_name=_IDENTIFIERS, verb_a=st.sampled_from(["uv", "gh"]))
+def test_rule_array_literal_content_collapses_a_leading_unassigned_braced_bare_ref(
+    unset_name: str, verb_a: str
+) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, nineteenth round (issue #1326): a BRACED
+    `${NAME}` decoy word-splits away to nothing at real bash runtime
+    exactly the same as an unbraced `$NAME` decoy, once NAME is never
+    assigned -- `_BARE_VAR_REF_RE` only matched the unbraced shape before
+    this round, silently degrading the collapsed reading to a no-op for
+    this shape."""
+    tokens = ["dummy=", "(", f"${{{unset_name}}}", verb_a, "install", ")"]
+    reason, _ = checker._rule_array_literal_content(tokens, {}, {})
+    assert reason is not None
+
+
+def test_rule_array_literal_content_detects_an_outer_scope_resolved_pair() -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, nineteenth round (issue #1326): a tool/verb
+    pair built from variables assigned OUTSIDE the array literal's own
+    span (name_to_value's own entries, not anything `_assigned_literals`
+    would find by re-scanning the array's own inner tokens alone) must
+    still be caught -- `G=gh; P=pr; M=merge; A=($G $P $M); "${A[@]}" 1`
+    was wrongly ALLOWED before OUTER_SCOPE was threaded into the
+    recursive `_classify_tokens` call."""
+    tokens = ["dummy=", "(", "$G", "$P", "$M", ")"]
+    outer = {"G": "gh", "P": "pr", "M": "merge"}
+    reason, _ = checker._rule_array_literal_content(tokens, outer, outer)
+    assert reason is not None
+
+
+def test_classify_denies_array_literal_content_with_outer_scope_end_to_end() -> None:
+    """`_classify_tokens`'s own early-return on a denying `_rule_array_
+    literal_content` verdict, reached end-to-end through `classify()` --
+    not just the recursive rule's own unit tests above. Regression pin
+    for the real bypass found live by Step 8 independent review,
+    nineteenth round (issue #1326)."""
+    verdict = checker.classify('G=gh; P=pr; M=merge; A=($G $P $M); "${A[@]}" 1')
+    assert verdict.deny is True
+
+
+def test_classify_denies_array_literal_content_with_braced_decoy_end_to_end() -> None:
+    """End-to-end companion to `test_rule_array_literal_content_collapses_
+    a_leading_unassigned_braced_bare_ref` above, reached through
+    `classify()`. Regression pin for the real bypass found live by Step 8
+    independent review, nineteenth round (issue #1326)."""
+    verdict = checker.classify('A=(${NEVERSET} gh pr merge 1); "${A[@]}"')
+    assert verdict.deny is True
+
+
 # --- codecov/patch coverage gate: branches this PR's diff added but no ----
 # existing DENIED/ALLOWED end-to-end fixture or property test happened to
 # exercise -- each test below targets one specific line/branch named in the

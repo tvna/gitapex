@@ -1026,13 +1026,14 @@ def _fold_array_literal_spans(tokens: list[str]) -> list[str]:
     return folded
 
 
-_BARE_VAR_REF_RE = re.compile(r"^\$([A-Za-z_][A-Za-z0-9_]*)$")
+_BARE_VAR_REF_RE = re.compile(r"^\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?$")
 
 
 def _strip_leading_unassigned_bare_refs(tokens: list[str], name_to_value: dict[str, str]) -> list[str]:
-    """A leading run of tokens that are EACH entirely one bare `$NAME`
-    reference (nothing else fused into the same token) to a NAME never
-    assigned anywhere in this command word-splits away to NOTHING,
+    """A leading run of tokens that are EACH entirely one bare `$NAME` or
+    `${NAME}` reference (nothing else fused into the same token, and no
+    `:-default`/`:=default`-style clause inside the braces) to a NAME
+    never assigned anywhere in this command word-splits away to NOTHING,
     unquoted, at real bash runtime -- confirmed live via `declare -p`
     against real bash that `A=($NEVERSET gh pr merge 1)` (NEVERSET never
     assigned) produces a 4-element array `(gh pr merge 1)`, NEVERSET
@@ -1045,12 +1046,28 @@ def _strip_leading_unassigned_bare_refs(tokens: list[str], name_to_value: dict[s
     the raw token stream shows in that position. Deliberately narrower
     than `_substitute_var_refs_candidates`'s own general candidate
     enumeration: this only strips a token that is ENTIRELY one bare
-    reference with nothing fused (`$NEVERSET`, not `-X$NEVERSET` or
-    `${NEVERSET}`), matching the specific word-splitting-collapse shape
+    reference with nothing fused (`$NEVERSET` or `${NEVERSET}`, not
+    `-X$NEVERSET`), matching the specific word-splitting-collapse shape
     this exists for -- a token with anything else fused onto the
     reference does not word-split away to nothing even when the
     reference itself is unset. Ported from the main hook's own
-    eighteenth-round fix of the same finding."""
+    eighteenth-round fix of the same finding.
+
+    Found live by Step 8 independent review, nineteenth round (issue
+    #1326), ported from the main hook's own nineteenth-round fix of the
+    same finding: the eighteenth round's own version of `_BARE_VAR_REF_RE`
+    matched only the UNBRACED `$NAME` shape, never `${NAME}` -- both
+    word-split away identically at real bash runtime when NAME is unset,
+    but the braced decoy left the collapsed reading a no-op (`collapsed
+    == inner`). Uniquely exploitable in THIS file (unlike the main hook,
+    whose own `_rule_a_literal` catches the same content via a position-
+    independent literal-adjacency scan that does not depend on the
+    collapse step at all): this file's `gh` handling is entirely
+    position-anchored (`_rule_gh_any`, `seg[0]` only), so it depends on
+    the collapse step to move a decoy out of position 0. Confirmed live
+    (real bash, `declare -p`) that `A=(${NEVERSET} gh pr merge 1);
+    "${A[@]}"` genuinely expands to `gh pr merge 1` the same way the
+    unbraced form does."""
     i = 0
     n = len(tokens)
     while i < n:
@@ -1075,12 +1092,23 @@ def _rule_array_literal_content(
     token-list-to-string-and-back round trip), and treat this as fully
     independent of whatever `_fold_array_literal_spans` later does to the
     SAME span for its own, unrelated false-positive-avoidance purpose
-    (see that function's own docstring) -- this function is now the SOLE
-    guarantor of array-literal content-safety, run BEFORE any folding.
-    Returns a bare `str | None`, not a tuple -- this module's own
-    `Verdict` has no `is_git_push` field the way the main hook's does, so
-    there is nothing extra to propagate (unlike `_rule_command_
-    substitution_content`'s own tuple return in this same module).
+    (see that function's own docstring) -- this function is the guarantor
+    of array-literal content-safety, run BEFORE any folding, WITHIN the
+    scope described below (a disclosed residual remains -- see the
+    nineteenth-round paragraph). Returns a bare `str | None`, not a
+    tuple -- this module's own `Verdict` has no `is_git_push` field the
+    way the main hook's does, so there is nothing extra to propagate
+    (unlike `_rule_command_substitution_content`'s own tuple return in
+    this same module).
+
+    NAME_TO_VALUE/NAME_TO_RAW_VALUE are the OUTER command's own assigned
+    variables (the same dicts `_classify_tokens` already computes for its
+    own top-level rules) -- passed through to the recursive `_classify_
+    tokens` call below as that call's own OUTER_SCOPE, since a bare `$G`
+    inside the array literal genuinely resolves against the SAME shell
+    scope as the rest of the command at real bash runtime (an array
+    literal is not a subshell), not just against whatever the array's own
+    inner tokens happen to assign (ordinarily nothing).
 
     Every candidate span's inner content is checked TWICE: once as-is,
     and once with any leading run of unassigned bare `$NAME` references
@@ -1116,46 +1144,82 @@ def _rule_array_literal_content(
     at real bash runtime -- so this recursive, fold-independent check
     replaces trying to further narrow the fold condition.
 
-    A span whose inner content is ENTIRELY dynamic (no literal token
-    anywhere -- `declare -a arr=($(seq 1 5))`, `files=($(ls *.txt))`)
-    skips the recursive `_classify_tokens` call, checked and left this
-    way DELIBERATELY. This check runs on `inner` folded through `_fold_
-    command_substitution_spans` FIRST, not the raw pre-fold tokens --
-    `inner` (extracted BEFORE any folding happens at all) still has an
+    A span whose inner content is ENTIRELY an unresolvable substitution
+    (`_is_unresolvable_substitution` -- `$(...)`/backtick, no literal
+    token anywhere -- `declare -a arr=($(seq 1 5))`, `files=($(ls
+    *.txt))`) skips the recursive `_classify_tokens` call, checked and
+    left this way DELIBERATELY. This check runs on `inner` folded through
+    `_fold_command_substitution_spans` FIRST, not the raw pre-fold tokens
+    -- `inner` (extracted BEFORE any folding happens at all) still has an
     unquoted `$(seq 1 5)` as SEPARATE raw tokens (`$`, `(`, `seq`, `1`,
-    `5`, `)`), and `seq`/`1`/`5` are not themselves `$`-prefixed, so an
-    un-folded literal-content check would misread the substitution's own
-    internal text as independent literal array elements, defeating this
-    exemption for exactly the cases it exists to cover. This module's own
-    `_rule_bare_install`/`_rule_
-    fetch_exec` both fail closed on ANY unresolvable dynamic `seg[0]`,
-    which is sound at the TOP level (an unresolvable command word
-    genuinely could be anything) but a CATEGORY ERROR when recursing
-    into array-CONSTRUCTION content specifically -- `arr=($(seq 1 5))`
-    is capturing `seq`'s OUTPUT as plain DATA, not invoking anything;
-    treating its sole dynamic element as if it were "the command word
-    being invoked" reproduced the exact false positive this module's
-    own fifteenth round already fixed once, now inside this new
-    recursive check instead of the top-level path. Skipping is safe
-    here specifically because whatever a dynamic element's OWN `$(...)`
-    content might embed is ALREADY independently covered by `_rule_
-    command_substitution_content` (run separately, over the raw token
-    stream, before this function ever runs) -- there is no OTHER
-    literal content in a fully-dynamic span for `_rule_a_literal`/
+    `5`, `)`), and `seq`/`1`/`5` are not themselves `$(`-prefixed, so an
+    un-folded check would misread the substitution's own internal text as
+    independent array elements, defeating this exemption for exactly the
+    cases it exists to cover. This module's own `_rule_bare_install`/
+    `_rule_fetch_exec` both fail closed specifically when a command word
+    is `_is_unresolvable_substitution`-shaped (see each rule's own `if
+    _is_unresolvable_substitution(seg[0])` branch), sound at the TOP
+    level (an unresolvable command word genuinely could be anything) but
+    a CATEGORY ERROR when recursing into array-CONSTRUCTION content
+    specifically -- `arr=($(seq 1 5))` is capturing `seq`'s OUTPUT as
+    plain DATA, not invoking anything; treating its sole `$(...)` element
+    as if it were "the command word being invoked" reproduced the exact
+    false positive this module's own fifteenth round already fixed once,
+    now inside this new recursive check instead of the top-level path.
+    Skipping is safe here specifically because whatever a `$(...)`
+    element's OWN content might embed is ALREADY independently covered by
+    `_rule_command_substitution_content` (run separately, over the raw
+    token stream, before this function ever runs) -- there is no OTHER
+    literal content in a fully-`$(...)` span for `_rule_a_literal`/
     `_rule_gh_any`/etc. to possibly match against anyway. A span with AT
-    LEAST ONE literal element (the shapes this function actually exists
-    to catch) always recurses -- `_rule_a_literal`'s own adjacent-pair
-    scan already runs BEFORE `_rule_bare_install`/`_rule_fetch_exec` in
-    `_classify_tokens`'s own rule order, so a genuine denied pattern is
-    caught with its own correct reason before either fail-closed rule
-    ever gets a chance to fire on an unrelated dynamic decoy sitting
-    elsewhere in the same span. The main hook's own port of this
-    function needs no equivalent exemption: it has no `_rule_bare_
-    install`/`_rule_fetch_exec`-shaped rule at all (B1a/B1b/B2 only
-    fail closed on genuine combinatorial candidate-set overflow, never
-    merely on `$(...)`'s own presence), confirmed live that its own
-    round-fifteen motivating cases stay correctly allowed with no
-    "any literal token present" gate needed there."""
+    LEAST ONE non-`$(...)`-shaped element (the shapes this function
+    actually exists to catch, including a bare `$NAME`, a `${NAME:-
+    default}` default clause, or a `${!NAME}` indirect reference -- none
+    of which `_rule_bare_install`/`_rule_fetch_exec` fail closed on
+    merely for being present, per each rule's own resolution path via
+    `_substitute_var_refs_candidates`) always recurses -- `_rule_a_
+    literal`'s own adjacent-pair scan already runs BEFORE `_rule_bare_
+    install`/`_rule_fetch_exec` in `_classify_tokens`'s own rule order,
+    so a genuine denied pattern is caught with its own correct reason
+    before either fail-closed rule ever gets a chance to fire on an
+    unrelated `$(...)` decoy sitting elsewhere in the same span. The main
+    hook's own port of this function needs no equivalent exemption: it
+    has no `_rule_bare_install`/`_rule_fetch_exec`-shaped rule at all
+    (B1a/B1b/B2 only fail closed on genuine combinatorial candidate-set
+    overflow, never merely on `$(...)`'s own presence), confirmed live
+    that its own round-fifteen motivating cases stay correctly allowed
+    with no "any literal token present" gate needed there.
+
+    Found live by Step 8 independent review, nineteenth round (issue
+    #1326): two independent bugs in the eighteenth round's own version of
+    this function, both live-verified and both closed here. First, the
+    recursive `_classify_tokens` call dropped the OUTER scope entirely,
+    re-deriving `name_to_value`/`name_to_raw_value` from the array's own
+    inner tokens alone -- `T=pip; V=install; A=($T $V); "${A[@]}"` was
+    wrongly ALLOWED, even though `$T`/`$V` resolve to a denied `pip
+    install` at real bash runtime (confirmed live via `declare -p`) the
+    SAME way they would if `$T $V` appeared directly at the top level of
+    the command instead of inside an array literal. Closed by threading
+    OUTER_SCOPE through, mirroring the main hook's own nineteenth-round
+    fix. Second, the "has literal content" guard above compared every
+    folded inner token against `_is_dynamic` (any `$`-containing token),
+    not the narrower `_is_unresolvable_substitution` (specifically
+    `$(...)`/backtick) that actually motivates it -- `ARR=(${NEVERSET:-gh}
+    ${NEVERSET2:-pr} ${NEVERSET3:-merge}); "${ARR[@]}"` was wrongly
+    ALLOWED, since every element being `$`-prefixed skipped the recursive
+    check entirely even though NONE of them is `$(...)`-shaped and all
+    three resolve staticly (zero assignments needed) via `_substitute_
+    var_refs_candidates`'s own default-clause handling to a real, denied
+    `gh pr merge` (confirmed live via `declare -p`). Closed by narrowing
+    the guard to `_is_unresolvable_substitution`, the exact condition
+    `_rule_bare_install`/`_rule_fetch_exec` themselves fail closed on --
+    not a broader or narrower proxy for their own condition, the same
+    one. Disclosed residual, NOT closed by either fix above:
+    `_rule_command_substitution_content`'s own, pre-existing (since the
+    fourteenth round) recursive checks have the identical outer-scope
+    gap and are not fixed by this round -- a tool/verb built from a
+    variable assigned outside a `$(...)` span's own text is still
+    invisible to that recursive check."""
     i = 0
     n = len(tokens)
     while i < n:
@@ -1164,18 +1228,15 @@ def _rule_array_literal_content(
             i += 1
             continue
         inner = tokens[i + 2 : end - 1]
-        if inner and any(not _is_dynamic(t) for t in _fold_command_substitution_spans(inner)):
-            inner_verdict = _classify_tokens(inner)
-            if inner_verdict.deny:
-                return f"an array literal NAME=(...) embeds a denied command -- {inner_verdict.reason}"
+        if inner and any(not _is_unresolvable_substitution(t) for t in _fold_command_substitution_spans(inner)):
+            readings = [(inner, "")]
             collapsed = _strip_leading_unassigned_bare_refs(inner, name_to_value)
             if collapsed and collapsed != inner:
-                collapsed_verdict = _classify_tokens(collapsed)
-                if collapsed_verdict.deny:
-                    return (
-                        "an array literal NAME=(...) embeds a denied command once its own leading "
-                        f"unassigned reference(s) word-split away -- {collapsed_verdict.reason}"
-                    )
+                readings.append((collapsed, " once its own leading unassigned reference(s) word-split away"))
+            for reading, suffix in readings:
+                reading_verdict = _classify_tokens(reading, outer_scope=(name_to_value, name_to_raw_value))
+                if reading_verdict.deny:
+                    return f"an array literal NAME=(...) embeds a denied command{suffix} -- {reading_verdict.reason}"
         i = end
     return None
 
@@ -1965,17 +2026,36 @@ def classify(command: str) -> Verdict:
     return _classify_tokens(tokens)
 
 
-def _classify_tokens(tokens: list[str]) -> Verdict:
+def _classify_tokens(tokens: list[str], outer_scope: tuple[dict[str, str], dict[str, str]] | None = None) -> Verdict:
     """The token-level core of `classify` -- split out so `_rule_command_
     substitution_content` can recurse into a `$(...)` span's own inner
     tokens directly, without a lossy token-list-to-string-and-back round
     trip through `tokenize` again. `classify` (the module's public,
-    string-based entry point) is a thin wrapper around this."""
+    string-based entry point) is a thin wrapper around this.
+
+    OUTER_SCOPE, when given, is a caller-supplied (name_to_value,
+    name_to_raw_value) pair MERGED into whatever TOKENS's own assignments
+    resolve to (TOKENS's own assignments win on a name collision -- an
+    inner-scope reassignment does shadow the outer one). Used only by
+    `_rule_array_literal_content`'s own recursive call, to give an array
+    literal's own inner content access to the SAME shell scope as the
+    rest of the command (see that function's own docstring, nineteenth-
+    round paragraph, for the live bypass this closes) -- `None` (every
+    other caller, including the top-level `classify` and `_rule_command_
+    substitution_content`'s own recursive calls) preserves this
+    function's prior, scope-free behavior exactly. Ported from the main
+    hook's own nineteenth-round fix of the same finding."""
+    outer_literals, outer_raw = outer_scope if outer_scope is not None else ({}, {})
+
     content_hit = _rule_command_substitution_content(tokens)
     if content_hit:
         return Verdict(True, content_hit)
 
-    array_content_hit = _rule_array_literal_content(tokens, _assigned_literals(tokens), _assigned_raw_values(tokens))
+    array_content_hit = _rule_array_literal_content(
+        tokens,
+        {**outer_literals, **_assigned_literals(tokens)},
+        {**outer_raw, **_assigned_raw_values(tokens)},
+    )
     if array_content_hit:
         return Verdict(True, array_content_hit)
 
@@ -1985,8 +2065,8 @@ def _classify_tokens(tokens: list[str]) -> Verdict:
     pipe_chains = [
         [s for s in (_strip_leading_assignments(seg) for seg in chain) if s] for chain in _pipe_chains(tokens)
     ]
-    assigned = _assigned_literals(tokens)
-    raw_assigned = _assigned_raw_values(tokens)
+    assigned = {**outer_literals, **_assigned_literals(tokens)}
+    raw_assigned = {**outer_raw, **_assigned_raw_values(tokens)}
 
     literal_hit = _rule_a_literal(segments)
     if literal_hit:

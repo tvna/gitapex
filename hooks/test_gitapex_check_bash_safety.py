@@ -643,6 +643,25 @@ DENIED_INDIRECTION_COMMANDS = [
     # fold-independent check (run before any folding) closes this.
     ('A=($NEVERSET uv install); "${A[@]}" foo', "array-literal-unassigned-leading-ref-hides-uv-install"),
     ('A=($NEVERSET gh pr merge 1); "${A[@]}"', "array-literal-unassigned-leading-ref-hides-gh-pr-merge"),
+    # Found live by Step 8 independent review, nineteenth round (issue
+    # #1326): the eighteenth round's own recursive `_rule_array_literal_
+    # content` check dropped the OUTER command's own assigned variables
+    # entirely when classifying an array literal's inner content, since
+    # the recursive call re-derived name_to_value/name_to_raw_value from
+    # the array's own inner tokens alone -- a tool/verb built from a
+    # variable assigned OUTSIDE the array literal's own span was
+    # invisible to it, even though it resolves at real bash runtime the
+    # same as it would at the top level (confirmed live via `declare -p`
+    # that `A=($G $P $M)` genuinely expands to `gh pr merge` once G/P/M
+    # are assigned earlier in the same command). Closed by threading the
+    # outer scope through the recursive `_classify_tokens` call.
+    ('G=gh; P=pr; M=merge; A=($G $P $M); "${A[@]}" 1', "array-literal-outer-scope-vars-hide-gh-pr-merge"),
+    # A braced `${NAME}` decoy is the same word-splitting-collapse shape
+    # as an unbraced `$NAME` decoy (both word-split away to nothing when
+    # NAME is never assigned) -- `_BARE_VAR_REF_RE` only matched the
+    # unbraced form until this round, so the collapsed reading never ran
+    # for this shape. Confirmed live via `declare -p`.
+    ('A=(${NEVERSET} gh pr merge 1); "${A[@]}"', "array-literal-braced-unassigned-leading-ref-hides-gh-pr-merge"),
 ]
 
 
@@ -686,6 +705,15 @@ OBFUSCATED_GIT_PUSH_WARN_PATH_COMMANDS = [
     (
         'A=($NEVERSET git push origin main); "${A[@]}"',
         "array-literal-unassigned-leading-ref-hides-git-push-still-warn-path",
+    ),
+    # Found live by Step 8 independent review, nineteenth round (issue
+    # #1326): the git-push counterpart of DENIED_INDIRECTION_COMMANDS's
+    # own outer-scope-variable case above -- a tool/verb built from a
+    # variable assigned OUTSIDE the array literal's own span, for git
+    # push specifically.
+    (
+        'T=git; V=push; ARR=($T $V origin main); "${ARR[@]}"',
+        "array-literal-outer-scope-vars-hide-git-push-still-warn-path",
     ),
 ]
 
