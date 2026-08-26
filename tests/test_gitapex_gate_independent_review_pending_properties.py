@@ -3,7 +3,13 @@
 closing issue #1178's own ``detection-logic-property-coverage`` gap for
 this new module's ``_HEADING_RE``/``_FENCED_BLOCK_RE``/``_VERDICT_RE``/
 ``_COMMIT_RE`` module-level compiles and the ``_last_section_from``/
-``parse_verdict`` functions).
+``parse_verdict`` functions), extended (issue #1343) to also cover the
+public ``heading_pattern()`` function directly -- added so
+``gitapex_scan_independent_review_heading_drift.py`` could reuse this
+module's own ATX-heading regex shape for arbitrary text, then flagged by
+the same ``detection-logic-property-coverage`` gate this module's own
+docstring cites as a new regex-compiling call site with no property
+coverage of its own.
 
 Reproducibility: ``derandomize=True`` with an explicit ``max_examples`` and
 ``deadline=None``, matching
@@ -18,7 +24,7 @@ from __future__ import annotations
 import re
 
 import gitapex_gate_independent_review_pending as gate
-from hypothesis import given, settings
+from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
 _ANY_HEADING_RE = re.compile(r"^[ \t]*#{1,6}[ \t]+", re.MULTILINE)
@@ -203,3 +209,86 @@ def test_last_section_from_direct_call_stops_at_next_heading(before: str, after:
     section = gate._last_section_from(text, start)
     assert "Next heading here" not in section
     assert "unreachable content" not in section
+
+
+_ARBITRARY_HEADING_TEXT = (
+    st.text(
+        alphabet=st.characters(blacklist_categories=("Cc", "Cs"), blacklist_characters="\n\r"), min_size=1, max_size=60
+    )
+    .map(str.strip)
+    .filter(lambda s: len(s) > 0)
+)
+_HEADING_LEVEL_MARKS = ("#", "##", "###", "####", "#####", "######")
+
+
+@_PROPERTIES
+@given(
+    text=_ARBITRARY_HEADING_TEXT,
+    level=st.sampled_from(_HEADING_LEVEL_MARKS),
+    indent=st.integers(min_value=0, max_value=3),
+)
+def test_heading_pattern_matches_a_live_heading_using_that_exact_text(text: str, level: str, indent: int) -> None:
+    """`gitapex_scan_independent_review_heading_drift.py` calls
+    `heading_pattern(text)` for text it does not control the shape of
+    (this gate's own canonical/retired marker strings) -- across
+    generated heading text, level (1-6 `#`), and CommonMark's own 0-3-
+    space indentation allowance, a well-formed live heading using exactly
+    that text is always matched."""
+    body = f"{' ' * indent}{level} {text}\n"
+    assert gate.heading_pattern(text).search(body) is not None
+
+
+_CASE_STABLE_HEADING_TEXT = _ARBITRARY_HEADING_TEXT.filter(lambda s: all(len(c.swapcase()) == 1 for c in s))
+
+
+@_PROPERTIES
+@given(text=_CASE_STABLE_HEADING_TEXT, level=st.sampled_from(_HEADING_LEVEL_MARKS))
+def test_heading_pattern_is_case_insensitive(text: str, level: str) -> None:
+    """The sibling gate's own `_HEADING_RE` is case-insensitive (module
+    docstring); `heading_pattern` builds that same shape for arbitrary
+    text, so a same-meaning casing change to the live heading must still
+    match -- confirmed to have teeth: dropping `re.IGNORECASE` from
+    `heading_pattern`'s own `re.compile` call makes this property FAIL on
+    every generated example whose text contains a cased letter.
+
+    Restricted to case-stable text (`str.swapcase()` maps each character
+    to exactly one character): Python's `str.swapcase()` is not
+    length-preserving for every character (e.g. German sharp-S `'ß'`
+    swapcases to the two-character `'SS'`), where `re.IGNORECASE`
+    matches per-character and cannot follow a multi-character case
+    fold -- confirmed live generating this exact failure -- a property of
+    `str.swapcase()`, not a `heading_pattern` defect."""
+    body = f"{level} {text.swapcase()}\n"
+    assert gate.heading_pattern(text).search(body) is not None
+
+
+@_PROPERTIES
+@given(
+    text=_ARBITRARY_HEADING_TEXT, level=st.sampled_from(_HEADING_LEVEL_MARKS), trailing=st.text(min_size=1, max_size=20)
+)
+def test_heading_pattern_end_anchor_rejects_trailing_prose(text: str, level: str, trailing: str) -> None:
+    """End-anchored (module docstring's own CommonMark rationale): a live
+    heading line carrying `text` plus *more* text after it (an
+    illustrative example referencing the phrase, not a genuine heading
+    consisting of exactly that phrase) is never matched -- confirmed to
+    have teeth: relaxing `heading_pattern`'s own trailing `[ \\t]*$` to
+    `.*$` makes this property FAIL on every generated example."""
+    assume("\n" not in trailing)
+    body = f"{level} {text} {trailing}\n"
+    assert gate.heading_pattern(text).search(body) is None
+
+
+@_PROPERTIES
+@given(
+    text=_ARBITRARY_HEADING_TEXT,
+    level=st.sampled_from(_HEADING_LEVEL_MARKS),
+    extra_indent=st.integers(min_value=1, max_value=6),
+)
+def test_heading_pattern_rejects_four_or_more_spaces_of_indentation(text: str, level: str, extra_indent: int) -> None:
+    """CommonMark: 4+ leading spaces makes the line an indented code
+    block, never a live heading, regardless of the text `heading_pattern`
+    was built for -- confirmed to have teeth: widening
+    `heading_pattern`'s own `[ ]{0,3}` to `[ \\t]*` makes this property
+    FAIL on every generated example."""
+    body = f"{' ' * (3 + extra_indent)}{level} {text}\n"
+    assert gate.heading_pattern(text).search(body) is None
