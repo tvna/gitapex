@@ -440,89 +440,31 @@ def test_main_body_permission_error_reported_cleanly(
     assert "could not read --body" in capsys.readouterr().err
 
 
-def test_old_step_8_heading_no_longer_passes_after_rename() -> None:
-    # issue #1343 (independent-review-pending PR-template feed-forward,
-    # scope expanded mid-session): the recorded-verdict heading was
-    # renamed from '## Step 8 independent review verdict' to '##
-    # Independent review verdict' to de-couple it from
-    # drafting-a-pr-to-merge's own internal step numbering. The rename
-    # deliberately does not dual-accept the old heading -- a live check
-    # found no currently-open PR had recorded a real verdict under it, and
-    # a silent fallback would recreate the "text mimicking the verdict's
-    # own phrasing" risk class issue #1311's own adversarial-review rounds
-    # already closed once. A body carrying only the OLD heading, otherwise
-    # a complete and well-formed verdict, must fail exactly like a body
-    # with no verdict section at all.
-    body = f"""## Step 8 independent review verdict
+_MALFORMED_HEADING_CASES = [
+    # issue #1343: each is a heading line superficially close to the real
+    # '## Independent review verdict' heading that must never pass -- one
+    # per specific relaxation of `_HEADING_RE` a live adversarial/
+    # deterministic-gate-quality review round confirmed by mutation would
+    # otherwise leave the pre-existing 43-test suite green (i.e. nothing
+    # else pinned it).
+    "## Step 8 independent review verdict",  # retired pre-#1343 heading -- rename does not dual-accept it
+    "## Independent review verdict (illustrative example)",  # trailing prose -- exercises the `$` end anchor
+    "## Independent review verdict notes",  # same end-anchor class, a trailing word
+    "## Independent review verdicts",  # same end-anchor class, a one-character suffix
+    "## Independent review verdict -- pending",  # same end-anchor class, an em-dash-led suffix
+    "##Independent review verdict",  # no space after the hashes -- CommonMark requires one
+    "####### Independent review verdict",  # seven hashes -- CommonMark caps ATX headings at six
+    "\t## Independent review verdict",  # tab indentation -- CommonMark counts only spaces, not tabs
+]
+
+
+@pytest.mark.parametrize("heading_line", _MALFORMED_HEADING_CASES)
+def test_malformed_heading_variant_does_not_pass(heading_line: str) -> None:
+    body = f"""{heading_line}
 
 - Verdict: CLEAN
 - Verified commit: {_SHA}
 """
     passed, message = gate.check(body, _SHA)
-    assert passed is False
-    assert "no '## Independent review verdict' section found" in message
-
-
-def test_heading_with_trailing_text_does_not_pass() -> None:
-    # issue #1343, independent adversarial review of the rename itself:
-    # `_HEADING_RE`'s end-of-line anchor became materially more load-bearing
-    # here. The old literal ('Step 8 independent review verdict') was not a
-    # plausible prefix of anything else; the new, shorter one is a strict
-    # prefix of ordinary headings a PR author might really write. Dropping
-    # the `$` anchor was confirmed by mutation to leave all 43 pre-existing
-    # tests green, so nothing pinned this. A heading that merely STARTS with
-    # the verdict phrase is not the recorded verdict section.
-    for suffix in (" (illustrative example)", " notes", "s", " -- pending"):
-        body = f"""## Independent review verdict{suffix}
-
-- Verdict: CLEAN
-- Verified commit: {_SHA}
-"""
-        passed, message = gate.check(body, _SHA)
-        assert passed is False, f"heading suffix {suffix!r} must not parse as the verdict section"
-        assert "no '## Independent review verdict' section found" in message
-
-
-def test_heading_without_space_after_hashes_does_not_pass() -> None:
-    # issue #1343, independent adversarial review: CommonMark requires
-    # whitespace (or end of line) after an ATX heading's `#` run -- GitHub
-    # renders `##Independent review verdict` as literal paragraph text, not
-    # a heading, so it is not live disclosure. Making that space optional
-    # was confirmed by mutation to leave all 43 pre-existing tests green.
-    body = f"""##Independent review verdict
-
-- Verdict: CLEAN
-- Verified commit: {_SHA}
-"""
-    passed, message = gate.check(body, _SHA)
-    assert passed is False
-    assert "no '## Independent review verdict' section found" in message
-
-
-def test_seven_hash_heading_does_not_pass() -> None:
-    # issue #1343, independent adversarial review: CommonMark caps ATX
-    # headings at six `#`; a seven-hash line renders as literal paragraph
-    # text, the same "quoted/inert content is not live prose" class the
-    # 4-space-indent and fenced-block cases above already close. Widening
-    # `#{1,6}` to `#+` was confirmed by mutation to leave all 43
-    # pre-existing tests green.
-    body = f"""####### Independent review verdict
-
-- Verdict: CLEAN
-- Verified commit: {_SHA}
-"""
-    passed, message = gate.check(body, _SHA)
-    assert passed is False
-    assert "no '## Independent review verdict' section found" in message
-
-
-def test_tab_indented_heading_does_not_pass() -> None:
-    # issue #1343, deterministic-gate-quality review: `_HEADING_RE`'s
-    # `[ ]{0,3}` indentation prefix already rejects tab indentation
-    # correctly (CommonMark's own ATX-indentation rule counts only
-    # spaces, not tabs), but no test pinned it -- an independent mutation
-    # (`[ ]{0,3}` -> `[ \t]{0,3}`) left the pre-existing suite green.
-    body = "\t## Independent review verdict\n\n- Verdict: CLEAN\n- Verified commit: " + _SHA + "\n"
-    passed, message = gate.check(body, _SHA)
-    assert passed is False
+    assert passed is False, f"heading line {heading_line!r} must not parse as the verdict section"
     assert "no '## Independent review verdict' section found" in message

@@ -35,11 +35,13 @@ in its own Facts section (explaining why it deliberately deferred its own
 Step 8 review) -- it has not recorded a real verdict section. No live PR
 needed migration as of this check.
 
-**Architecture:** No new files besides this plan; eight existing files
-edited, all in a single task (no file-ownership or interface-dependency
-edges needing a multi-task split -- every edit below is either an
-independent single-file change or a like-for-like string swap of the
-same literal, done in one pass across all eight files for consistency).
+**Architecture:** Tasks 1-2 below matched the original plan: no new files
+besides this one, eight existing files edited in a single task each (no
+file-ownership or interface-dependency edges needing a multi-task split).
+Task 3, added mid-session (see its own header for why), introduces two
+new files -- `.github/scripts/gitapex_scan_independent_review_heading_drift.py`
+and its test file -- registered as a new `.gitapex/ssot.json` gate,
+`independent-review-heading-drift`.
 
 ## Task list
 
@@ -97,12 +99,123 @@ rounds, issue #1311/PR #1318, already closed once):
   explanatory "Step 8" mentions in the same field left alone. Re-verified
   as valid JSON and drift-clean via `gitapex_scan_ssot_schema.py`.
 
+**Task 3 -- close the drift gap Task 2's own rename left open, and fix
+what independent review then found in that gate itself.** Scope
+expansion, mid-session: the operator pointed out that the recorded-verdict
+heading text (and, once found by a live review of this PR's own diff, the
+PR-template feed-forward note's own section name) is hand-duplicated
+across several files with nothing binding them together -- a future rename
+could silently re-diverge them exactly as issue #1343's own rename risked.
+Per CLAUDE.md's "ship its drift gate in the same change, not a
+follow-up" principle, the operator approved adding one here rather than
+filing a separate issue.
+
+- `.github/scripts/gitapex_scan_independent_review_heading_drift.py`
+  (new): a `_MarkerSpec`-driven gate. Two specs today --
+  `_INDEPENDENT_REVIEW_HEADING` (the recorded-verdict heading text, across
+  `skills/drafting-a-pr-to-merge/SKILL.md`, `.github/PULL_REQUEST_TEMPLATE.md`,
+  `.gitapex/ssot.json`, `.github/workflows/independent-review-pending.yml`)
+  and `_MERGE_GATE_NOTE` (the PR-template note's own section name, across
+  `.github/PULL_REQUEST_TEMPLATE.md` and
+  `skills/executing-a-branch-plan/SKILL.md`) -- checked via case-
+  insensitive, whitespace-normalized substring matching, with HTML-
+  comment/fenced-code-block stripping on Markdown targets reused directly
+  from `gitapex_gate_independent_review_pending`'s own (now public)
+  `strip_html_comments`/`strip_fenced_code_blocks`, so "is this text live"
+  can never independently drift between the two gates.
+- Four independent review rounds (three deterministic-gate-quality/
+  adversarial passes plus one final 4-way parallel review -- correctness,
+  regression/blast-radius, reuse/simplification, convention-adherence),
+  each run against the current draft, each finding real defects the next
+  draft closed; three were caught by running the gate live against the
+  real repository, not by review alone:
+  1. First draft checked marker presence only, not absence of a retired
+     form -- an incomplete migration (both texts present) read as clean.
+  2. First draft accepted a marker hidden inside an HTML comment or a
+     fenced code block (dead text on GitHub) as "live."
+  3. Second draft's substring search was case-sensitive where the sibling
+     gate's own detection regex is not.
+  4. A third draft tried matching each target as a live ATX heading (via
+     a new public `gitapex_gate_independent_review_pending.heading_pattern()`)
+     to track the sibling gate's regex more closely than a bare substring
+     -- reverted after a live run produced 3 false positives: none of the
+     targets actually carry the tracked text as a live heading, only as
+     quoted prose/JSON/YAML.
+  5. The same round found the new gate itself was not registered against
+     the pytest workflow event the way its 34 sibling `*-drift`/scan gates
+     sharing that trigger are; `.gitapex/ssot.json`'s `target[]` fixed.
+  6. A live review of this PR's own diff (not the gate's design) found
+     the second hand-duplicated literal (the PR-template note) it never
+     covered -- added as `_MERGE_GATE_NOTE`.
+  7. The gate's own first live run against the real repository
+     false-flagged `skills/executing-a-branch-plan/SKILL.md`: a Markdown
+     line-wrap splits the tracked phrase across two source lines inside a
+     code span. Fixed by whitespace-normalizing both sides of the
+     comparison rather than requiring every target to stay hand-
+     reformatted onto one physical line.
+  8. The final 4-way review's convention-adherence pass found the drift
+     gate was the only cross-script import anywhere in `.github/scripts/`
+     reaching into another module's private (`_`-prefixed) attributes.
+     Fixed by making `strip_html_comments`/`strip_fenced_code_blocks`
+     public, matching the treatment `CANONICAL_HEADING_TEXT`/
+     `heading_pattern()` already got for the same reason.
+- `gitapex_gate_independent_review_pending.py`: gained the public
+  `CANONICAL_HEADING_TEXT` constant and `heading_pattern()`/
+  `strip_html_comments`/`strip_fenced_code_blocks` functions (all
+  previously private or inline) so the drift gate has one canonical
+  source for each, never a re-derived copy.
+- `detection-logic-property-coverage` (issue #1178) flagged
+  `heading_pattern()` as a new regex-compiling call site with no
+  Hypothesis `@given` coverage; four properties added to
+  `tests/test_gitapex_gate_independent_review_pending_properties.py`,
+  each confirmed to have teeth via a live mutation check (temporarily
+  broken, ran the property, restored, diffed clean).
+- Reuse/simplification review also flagged 5 near-duplicate malformed-
+  heading regression tests in `tests/test_gitapex_gate_independent_review_pending.py`;
+  collapsed into one `@pytest.mark.parametrize`d test over 8 cases, and a
+  ragged line-wrap in `gitapex_gate_local_preflight.py`'s own wired-gate-
+  count comment (introduced by this same session's earlier 36->37 count
+  fix) reflowed to consistent width.
+- This branch was 11 commits behind `origin/main` by the time Task 3
+  finished; merged (not rebased, to avoid rewriting already-pushed PR
+  history) rather than left to fail the `behind-base` gate.
+
 ## Verification
 
-- `uv run --frozen python3 -m pytest tests/test_gitapex_gate_independent_review_pending.py tests/test_gitapex_gate_independent_review_pending_properties.py -q`:
+- Task 2 completion snapshot (superseded by Task 3's own numbers below,
+  kept as historical record): `uv run --frozen python3 -m pytest
+  tests/test_gitapex_gate_independent_review_pending.py
+  tests/test_gitapex_gate_independent_review_pending_properties.py -q`:
   46 passed (38 example-based + 8 Hypothesis property tests). Was 43 at
   task 2's own completion; the independent adversarial review below added
   three regression tests.
+- Task 3 completion: `uv run --frozen python3 -m pytest
+  tests/test_gitapex_gate_independent_review_pending.py
+  tests/test_gitapex_gate_independent_review_pending_properties.py
+  tests/test_gitapex_scan_independent_review_heading_drift.py -q`: 72
+  passed (the 5 near-duplicate malformed-heading tests collapsed into 8
+  parametrized cases, net +3 over Task 2's 46 across the two
+  pre-existing files; the 18-test new drift-gate file is additional).
+  `uv run --frozen python3 -m pytest -q` (full repository suite): 5752
+  passed, 0 failed attributable to this branch (the one failure this
+  sandbox reports, `test_gitapex_scan_harden_checkout_pin_drift.py
+  ::test_repository_workflows_are_drift_free`, is a pre-existing shallow-
+  clone artifact of this specific sandbox checkout, unrelated to this
+  diff -- confirmed via `git rev-parse --is-shallow-repository` = `true`
+  and the failure's own error message naming exactly that condition).
+- `uv run --frozen python3 .github/scripts/gitapex_scan_independent_review_heading_drift.py`:
+  `No independent-review-pending marker drift found.`, exit 0.
+- `uv run --frozen python3 .github/scripts/gitapex_gate_local_preflight.py`:
+  36/37 gates PASS; the one failure is the same pre-existing
+  harden-checkout-pin-drift sandbox artifact above (confirmed not present
+  before this branch's own changes, i.e. not introduced by this diff).
+  `behind-base` PASS after merging `origin/main` (11 commits, no overlap
+  with this branch's own changed files).
+- Mutation testing on `heading_pattern()`'s three new property tests
+  (case-insensitivity, end-anchor, indentation limit): each temporarily
+  broken (dropping `re.IGNORECASE`, relaxing `[ \t]*$` to `.*$`, widening
+  `[ ]{0,3}` to `[ \t]*`) and confirmed to fail the corresponding
+  property before the source was restored.
 - Live defeat-check: a body carrying the new `## Independent review
   verdict` heading with a CLEAN verdict against a matching SHA -> PASS; a
   body carrying the OLD `## Step 8 independent review verdict` heading,
@@ -153,9 +266,39 @@ rounds, issue #1311/PR #1318, already closed once):
   added; gate test suite (43 tests), shape checks, ssot schema-drift
   check, ruff, and mypy all pass; live defeat-check confirms the old
   heading no longer parses.
+- `TaskStarted{task_3}` -- operator-approved scope expansion: add the
+  drift gate binding the recorded-verdict heading (and, once found, the
+  PR-template note) together across their hand-duplicated targets.
+- Three successive drafts of the new gate, each closing defects an
+  independent deterministic-gate-quality/adversarial review round found
+  in the previous one (marker-presence-only checking, dead-text
+  acceptance, case-sensitivity) -- see Task 3's own numbered history
+  above for the full account, including the two false starts (heading-
+  pattern matching, then a whitespace-blind substring search) each
+  caught by running the gate live against the real repository before
+  committing.
+- A final 4-way parallel review (correctness, regression/blast-radius,
+  reuse/simplification, convention-adherence) found: a missing
+  `workflow-event` registration, a private-function cross-script import
+  with no precedent elsewhere in the repository, a property-coverage gap
+  on the new `heading_pattern()` function, 5 near-duplicate regression
+  tests, and one unrelated ragged comment line-wrap this same session's
+  earlier count fix had introduced. All fixed; each fix independently
+  verified (ruff, ruff format, mypy, pytest, the local-preflight gate
+  runner) before the next.
+- `TaskCompleted{task_3}` -- new gate registered and passing against the
+  live repository; property coverage, parametrization, and the private-
+  import convention issue all closed; branch merged with `origin/main`
+  (11 commits, no file overlap) to clear `behind-base`; full repository
+  suite green except the pre-existing, unrelated shallow-clone sandbox
+  artifact.
 
 ## Next Move
 
 Step 8 (this skill's own mandatory refactor + adversarial-review gate)
 runs next against the accumulated diff, then the draft PR converts to
-ready-for-review and ownership passes to `drafting-a-pr-to-merge`.
+ready-for-review and ownership passes to `drafting-a-pr-to-merge`. The
+`## Independent review verdict` section itself (naming PR #1348's exact
+current head commit) gets recorded in the PR body only once that review
+completes clean -- not before, per the PR template's own `## Merge gate:
+independent review` note this same plan added in Task 1.

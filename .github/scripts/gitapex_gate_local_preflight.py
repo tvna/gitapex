@@ -162,18 +162,17 @@ SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
 # as a hang guard (80 minutes of a silent pre-push), so this is a judgment
 # call in the other direction. For scale: a warm run of all 37 wired gates
 # combined measures roughly 11 s end to end (the prior 36-gate set measured
-# roughly 11 s, the 35-gate set before that measured
-# roughly 13 s, the 34-gate set before that measured roughly 11 s, up from ~7 s
-# measured for the 31-gate set, 4-6 s measured for
-# the 24-gate set before issue #985's `behind-base` gate, and ~8-9 s measured
-# for the 26-gate set before issue #1028's two schema/manifest gates -- these
-# are warm-run measurements on different hardware, not a strict per-gate cost
-# trend), so 1800 s is a hang guard rather than a budget, and it comfortably
-# clears a cold mypy
-# cache while still failing
-# loudly rather than blocking a push indefinitely. The residual risk is named rather than hidden: a genuinely
-# cold cache on a slow machine can exceed this and report a timeout FAIL on
-# a gate CI would pass. `--timeout-seconds` raises it for that case.
+# roughly 11 s, the 35-gate set before that measured roughly 13 s, the 34-gate
+# set before that measured roughly 11 s, up from ~7 s measured for the 31-gate
+# set, 4-6 s measured for the 24-gate set before issue #985's `behind-base`
+# gate, and ~8-9 s measured for the 26-gate set before issue #1028's two
+# schema/manifest gates -- these are warm-run measurements on different
+# hardware, not a strict per-gate cost trend), so 1800 s is a hang guard rather
+# than a budget, and it comfortably clears a cold mypy cache while still
+# failing loudly rather than blocking a push indefinitely. The residual risk is
+# named rather than hidden: a genuinely cold cache on a slow machine can exceed
+# this and report a timeout FAIL on a gate CI would pass. `--timeout-seconds`
+# raises it for that case.
 #
 # Issue #985 added `behind-base`, this runner's first gate that makes a
 # network call (it fetches `origin/main` before comparing). Measured
