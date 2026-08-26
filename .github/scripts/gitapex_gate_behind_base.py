@@ -206,9 +206,13 @@ def count_behind(root: pathlib.Path, remote: str = BASE_REMOTE, branch: str = BA
     shadowing gap ``_gitapex_base_ref.peeled_ref_exists``'s own peeled
     probe already closes for existence checks, closed here for the
     actual comparison too. ``base_ref`` itself stays bare and is used
-    only in this function's own messages, so this repository's
-    pre-#1345 message-text-stability test suite keeps matching
-    unmodified."""
+    only in this function's own two messages (the ``rev-list`` failure
+    and its ``label=``), so this repository's pre-#1345
+    message-text-stability test suite keeps matching unmodified --
+    :func:`_gitapex_base_ref.require_common_ancestor` is called with
+    ``qualified_ref``, not ``base_ref``, so *its* own raised message (if
+    any) embeds the qualified form instead; no test pins that exact
+    text, only the "cannot find a common ancestor" substring."""
     base_ref = f"{remote}/{branch}"
     qualified_ref = f"refs/remotes/{remote}/{branch}"
     _gitapex_base_ref.require_common_ancestor(root, qualified_ref, timeout=GIT_TIMEOUT_SECONDS, error_cls=GateError)
