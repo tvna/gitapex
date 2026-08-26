@@ -786,6 +786,25 @@ OBFUSCATED_GIT_PUSH_WARN_PATH_COMMANDS = [
     # that `git -v $CFG push origin main` (CFG assigned "") real-expands
     # to `git -v push origin main`.
     ("CFG=; git -v $CFG push origin main", "git-push-empty-assigned-variable-still-warn-path"),
+    # Found live by Step 8 independent review, twenty-fifth round (issue
+    # #1326): the twenty-fourth round's own empty-string fix was scoped
+    # too narrowly to the BARE form only -- a plain, UN-subscripted
+    # braced reference (`${CFG}`) has no array-content ambiguity at all
+    # (it is exactly the braced spelling of the same bare scalar
+    # reference) and was STILL wrongly left undetected purely because
+    # of the `{}` spelling. Confirmed live via real bash that `git -v
+    # ${CFG} push origin main` (CFG assigned "") real-expands to `git -v
+    # push origin main` identically to the bare form.
+    ("CFG=; git -v ${CFG} push origin main", "git-push-plain-braced-empty-assigned-variable-still-warn-path"),
+    # Found live by Step 8 independent review, twenty-fifth round (issue
+    # #1326): a value consisting ENTIRELY of IFS whitespace (default IFS
+    # is space/tab/newline) ALSO word-splits away to nothing at real
+    # bash runtime, identically to a literally empty value -- the
+    # twenty-fourth round's own fix used raw Python truthiness, which
+    # `" "` passes (only `" ".strip()` is falsy). Confirmed live via
+    # real bash that `CFG=" "; git -v $CFG push origin main` real-
+    # expands to `git -v push origin main`.
+    ('CFG=" "; git -v $CFG push origin main', "git-push-all-ifs-whitespace-assigned-variable-still-warn-path"),
 ]
 
 

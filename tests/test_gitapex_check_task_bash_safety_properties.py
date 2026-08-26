@@ -587,11 +587,33 @@ def test_token_is_all_unassigned_refs_true_for_a_bare_ref_assigned_the_empty_str
 
 def test_token_is_all_unassigned_refs_false_for_a_braced_subscript_ref_to_an_empty_mapped_name() -> None:
     """No regression: the empty-string fix is deliberately scoped to the
-    BARE form only, preserving this module's own disclosed
-    `array-literal-subscript-of-a-real-array-whose-own-element-is-empty`
-    residual exactly as-is -- a braced/subscript reference to a name
-    mapped to the empty string stays on the ORIGINAL, narrower check."""
+    BARE and plain-braced (no subscript) forms only, preserving this
+    module's own disclosed `array-literal-subscript-of-a-real-array-
+    whose-own-element-is-empty` residual exactly as-is -- a genuinely
+    SUBSCRIPTED braced reference to a name mapped to the empty string
+    stays on the ORIGINAL, narrower check."""
     assert checker._token_is_all_unassigned_refs("${NEVERSET[0]}", {"NEVERSET": ""}) is False
+
+
+def test_token_is_all_unassigned_refs_true_for_a_plain_braced_ref_assigned_the_empty_string() -> None:
+    """Regression pin for the real bypass found live by Step 8
+    independent review, twenty-fifth round (issue #1326), ported from
+    the main hook's own identical fix: a plain, UN-subscripted braced
+    reference (`${NAME}`) has no array-content ambiguity at all, so it
+    must get the SAME empty-value-counts-as-vanishing treatment as the
+    bare form -- confirmed live via real bash that `CFG=; git -v ${CFG}
+    push origin main` real-expands to `git -v push origin main`."""
+    assert checker._token_is_all_unassigned_refs("${CFG}", {"CFG": ""}) is True
+
+
+def test_token_is_all_unassigned_refs_true_for_a_bare_ref_assigned_all_ifs_whitespace() -> None:
+    """Regression pin for the real bypass found live by Step 8
+    independent review, twenty-fifth round (issue #1326), ported from
+    the main hook's own identical fix: a value consisting ENTIRELY of
+    IFS whitespace ALSO word-splits away to nothing at real bash
+    runtime -- confirmed live via real bash that `CFG=" "; git -v $CFG
+    push origin main` real-expands to `git -v push origin main`."""
+    assert checker._token_is_all_unassigned_refs("$CFG", {"CFG": " "}) is True
 
 
 def test_is_git_push_segment_true_for_an_empty_assigned_variable_in_boolean_flag_position() -> None:
@@ -609,6 +631,22 @@ def test_classify_denies_git_push_via_empty_assigned_variable_end_to_end() -> No
     empty_assigned_variable_in_boolean_flag_position` above, reached
     through `classify()`."""
     verdict = checker.classify("CFG=; git -v $CFG push origin main")
+    assert verdict.deny is True
+
+
+def test_classify_denies_git_push_via_plain_braced_empty_assigned_variable_end_to_end() -> None:
+    """End-to-end companion to `test_token_is_all_unassigned_refs_true_
+    for_a_plain_braced_ref_assigned_the_empty_string` above, reached
+    through `classify()`."""
+    verdict = checker.classify("CFG=; git -v ${CFG} push origin main")
+    assert verdict.deny is True
+
+
+def test_classify_denies_git_push_via_all_ifs_whitespace_assigned_variable_end_to_end() -> None:
+    """End-to-end companion to `test_token_is_all_unassigned_refs_true_
+    for_a_bare_ref_assigned_all_ifs_whitespace` above, reached through
+    `classify()`."""
+    verdict = checker.classify('CFG=" "; git -v $CFG push origin main')
     assert verdict.deny is True
 
 

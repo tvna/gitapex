@@ -1077,9 +1077,13 @@ def _token_is_all_unassigned_refs(token: str, name_to_value: dict[str, str]) -> 
     """TOKEN word-splits away to NOTHING, unquoted, at real bash runtime,
     because it is composed ENTIRELY of one or more back-to-back variable
     references -- bare (`$NAME`), braced (`${NAME}`), or braced with a
-    SIMPLE array-element subscript (`${NAME[0]}`, `${NAME[@]}`) -- every
-    one of which points to a NAME never assigned anywhere in this
-    command. Confirmed live via `declare -p` against real bash for both
+    SIMPLE array-element subscript (`${NAME[0]}`, `${NAME[@]}`). For the
+    bare and plain-braced (no subscript) forms, this covers a NAME
+    never assigned anywhere in this command AND a NAME assigned a value
+    that is itself empty or ALL IFS whitespace (see the twenty-fourth/
+    twenty-fifth-round paragraphs below for why); the subscripted form
+    stays narrower (never-assigned only -- see that same discussion for
+    why). Confirmed live via `declare -p` against real bash for both
     shapes this generalizes over: `A=($NEVERSET gh pr merge 1)` (a single
     bare reference) and `A=(${NEVERSET[0]} gh pr merge 1)` (a braced
     subscript reference) both produce the identical 4-element array `(gh
@@ -1198,30 +1202,53 @@ def _token_is_all_unassigned_refs(token: str, name_to_value: dict[str, str]) -> 
     push once `-c` swallowed the empty-then-vanished value's own
     SUCCESSOR token instead).
 
-    Deliberately scoped to the BARE form only, NOT the braced form
-    (`${NAME}`/`${NAME[0]}`) -- ported from the main hook's own
+    Originally (twenty-fourth round) scoped to the BARE form only, not
+    ANY braced reference at all -- ported from the main hook's own
     identical scoping decision: `_ONE_REF_SRC`'s own "braced" group
-    cannot distinguish a plain `${NAME}` from a subscripted
-    `${NAME[0]}`, and `_assigned_literals` records EVERY array
+    matches a plain `${NAME}` and a subscripted `${NAME[0]}` under the
+    SAME capture, and `_assigned_literals` records EVERY array
     declaration's own NAME as mapped to the empty string regardless of
-    the array's real element contents. Applying this same empty-value
-    logic to the braced form was tried and REVERTED after it silently
+    the array's real element contents. Applying the empty-value logic
+    to EVERY braced reference was tried and REVERTED after it silently
     changed the behavior of this module's own disclosed, deliberately-
     left-open `KNOWN_BYPASS_COMMANDS` residual (`array-literal-
     subscript-of-a-real-array-whose-own-element-is-empty`) -- this
     module has no per-index array-element tracking to soundly
-    generalize that case, so the braced/subscript form stays on the
-    ORIGINAL, narrower check; only the unambiguous bare-scalar case is
-    closed here."""
+    generalize that case.
+
+    Found live by Step 8 independent review, twenty-fifth round (issue
+    #1326), ported from the main hook's own identical fix: excluding
+    EVERY braced reference over-corrected -- a plain, UN-subscripted
+    `${NAME}` has no array-content ambiguity at all, so `CFG=; git -v
+    ${CFG} push origin main` was STILL wrongly left undetected purely
+    because of the `{}` spelling -- a hard deny bypass, confirmed live
+    via real bash that this real-expands to `git -v push origin main`
+    identically to the already-fixed bare form. Closed by checking
+    `match.group(0)` for a literal `[` to tell a subscripted reference
+    from a plain braced one; only the genuinely subscripted form stays
+    on the original, narrower check.
+
+    ALSO found live the same round: this check's own empty-string test
+    only ever caught a LITERALLY empty value -- a value consisting
+    ENTIRELY of IFS whitespace ALSO word-splits away to nothing at real
+    bash runtime, confirmed live that `CFG=" "; git -v $CFG push origin
+    main` real-expands identically to the empty-string case -- another
+    hard deny bypass, closed by checking `.strip()`-truthiness instead
+    of raw truthiness."""
     if not _REF_RUN_TOKEN_RE.match(token):
         return False
     for match in _REF_RUN_NAME_RE.finditer(token):
         bare_name = match.group("bare")
         if bare_name is not None:
-            if name_to_value.get(bare_name, ""):
+            if name_to_value.get(bare_name, "").strip():
                 return False
-        elif match.group("braced") in name_to_value:
-            return False
+        else:
+            braced_name = match.group("braced")
+            if "[" in match.group(0):
+                if braced_name in name_to_value:
+                    return False
+            elif name_to_value.get(braced_name, "").strip():
+                return False
     return True
 
 

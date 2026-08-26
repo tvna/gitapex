@@ -507,6 +507,24 @@ DENIED_COMMANDS = [
     # treated as NOT vanishing -- a hard deny bypass for this
     # task-agent rule before this fix.
     ("CFG=; git -v $CFG push origin main", "git-push-empty-assigned-variable"),
+    # Found live by Step 8 independent review, twenty-fifth round (issue
+    # #1326), ported from the main hook's own identical fix: the
+    # twenty-fourth round's own empty-string fix was scoped too
+    # narrowly to the BARE form only -- a plain, UN-subscripted braced
+    # reference (`${CFG}`) has no array-content ambiguity at all and was
+    # STILL wrongly left undetected purely because of the `{}` spelling
+    # -- a hard deny bypass, confirmed live via real bash that `git -v
+    # ${CFG} push origin main` (CFG assigned "") real-expands to `git -v
+    # push origin main` identically to the bare form.
+    ("CFG=; git -v ${CFG} push origin main", "git-push-plain-braced-empty-assigned-variable"),
+    # Found live by Step 8 independent review, twenty-fifth round (issue
+    # #1326), ported from the main hook's own identical fix: a value
+    # consisting ENTIRELY of IFS whitespace ALSO word-splits away to
+    # nothing at real bash runtime, identically to a literally empty
+    # value -- a hard deny bypass, confirmed live via real bash that
+    # `CFG=" "; git -v $CFG push origin main` real-expands to `git -v
+    # push origin main`.
+    ('CFG=" "; git -v $CFG push origin main', "git-push-all-ifs-whitespace-assigned-variable"),
 ]
 
 # --- Allowed: ordinary git/test/build commands that must never regress ----
