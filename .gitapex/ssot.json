@@ -1004,12 +1004,14 @@
       "kind": "script",
       "script": [
         ".github/scripts/gitapex_gate_exception_handler_gaps.py",
+        ".github/scripts/gitapex_run_base_diff.py",
+        ".github/scripts/_gitapex_base_ref.py",
         ".github/workflows/exception-handler-gap-gate.yml"
       ],
       "rule": "A decoded read (read_text, or open in a text read mode), or a .get() on a json.loads result, added by a PR diff to .github/scripts/*.py, hooks/*.py, evals/scripts/*.py or skills/*/scripts/*.py must handle what it can actually raise: an enclosing try covering UnicodeDecodeError or an ancestor for the read, an isinstance() against a mapping type for the .get(). Scope is the diff, not the repository. An inline exception-handler-gap WAIVED comment carrying a reason discloses a read whose caller owns the handling, and every honoured waiver is printed. Exits 2 rather than pass silently on input it cannot grade. See the script docstring for the measurement behind the scoping decision and for the known misses and over-reports.",
       "planes": ["ci", "local"],
       "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_exception_handler_gaps.py"],
-      "local_stdin": ["git", "-c", "core.quotePath=false", "diff", "-U0", "--no-renames", "--merge-base", "origin/main", "HEAD", "--", "*.py"],
+      "local_stdin": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_run_base_diff.py", "--", "*.py"],
       "trigger": ".github/workflows/exception-handler-gap-gate.yml on pull_request, plus tests/test_gitapex_gate_exception_handler_gaps.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "test-integrity",
@@ -1457,12 +1459,14 @@
       "kind": "script",
       "script": [
         ".github/scripts/gitapex_gate_stdlib_only_claim_drift.py",
+        ".github/scripts/gitapex_run_base_diff.py",
+        ".github/scripts/_gitapex_base_ref.py",
         ".github/workflows/stdlib-only-claim-drift-gate.yml"
       ],
       "rule": "A diff adding a top-level third-party import to a .github/scripts/*.py or evals/scripts/*.py file must not leave a stale 'standard library only'/'stdlib-only' claim, or a bare python3 <file>.py invocation example, in that file's own content, in any other script that imports it directly, or in any .github/workflows/*.yml file referencing it by name (issue #1047, #1049). A negated claim ('no longer stdlib-only') or an accurate disclosure with a nearby 'uv run' mention is not flagged. Deliberately not exhaustive -- a paraphrased or reformatted claim can still false-negative; see the script's own docstring.",
       "planes": ["ci", "local"],
       "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_stdlib_only_claim_drift.py"],
-      "local_stdin": ["git", "-c", "core.quotePath=false", "diff", "-U0", "--no-renames", "--merge-base", "origin/main", "HEAD", "--", ".github/scripts/*.py", "evals/scripts/*.py"],
+      "local_stdin": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_run_base_diff.py", "--", ".github/scripts/*.py", "evals/scripts/*.py"],
       "trigger": ".github/workflows/stdlib-only-claim-drift-gate.yml on pull_request, plus tests/test_gitapex_gate_stdlib_only_claim_drift.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "test-integrity",
@@ -1580,12 +1584,14 @@
       "kind": "script",
       "script": [
         ".github/scripts/gitapex_gate_detection_logic_property_coverage.py",
+        ".github/scripts/gitapex_run_base_diff.py",
+        ".github/scripts/_gitapex_base_ref.py",
         ".github/workflows/detection-logic-property-coverage-gate.yml"
       ],
       "rule": "A regex call (a .compile() on a bare name the graded file's own imports bind to the re module, including an 'import re as <alias>' alias, or a receiver-agnostic .match()/.search()/.fullmatch()), a path-resolution call (receiver-agnostic .resolve()/.is_symlink()/.relative_to(), or os.path.realpath()/os.path.abspath() matched on the call's final two attribute segments), or a string-comparison allowlist/denylist construct (receiver-agnostic .startswith()/.endswith(), an in/not in comparison against an inline list/tuple/set literal, or a frozenset()/set() call over one), newly added by a PR diff inside skills/*/scripts/gitapex_check_*.py, .github/scripts/gitapex_gate_*.py or hooks/gitapex_check_*.py (test_*.py and conftest.py excluded) must be covered by a co-located tests/test_<source-stem>_properties.py that imports the source module and defines an @given(...) property test whose own body references the trigger's enclosing function name, or any @given test in the file for a module-level trigger. Scope is the diff, not the repository. An inline '# detection-logic-property-coverage: WAIVED: <reason>' comment waives findings on that exact line. Exits 2 rather than pass silently on a malformed diff (an unparseable @@ hunk header, a post-image path that is neither /dev/null nor b/-prefixed, or a '+++ ' post-image header outside a hunk with no '--- ' source header before it) or an in-scope file that cannot be read or parsed. See the script's own module docstring for the disclosed known misses and over-reports.",
       "planes": ["ci", "local"],
       "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_detection_logic_property_coverage.py"],
-      "local_stdin": ["git", "-c", "core.quotePath=false", "diff", "-U0", "--no-renames", "--merge-base", "origin/main", "HEAD", "--", "*.py"],
+      "local_stdin": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_run_base_diff.py", "--", "*.py"],
       "trigger": ".github/workflows/detection-logic-property-coverage-gate.yml on pull_request, plus tests/test_gitapex_gate_detection_logic_property_coverage.py and tests/test_gitapex_gate_detection_logic_property_coverage_properties.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "test-integrity",
