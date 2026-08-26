@@ -568,6 +568,28 @@ mechanism, not only the ones already recorded below.
   permission-bypass flag. Scratch directories deleted after recording the
   outcome, per the Verification procedure's own step 1.
 
+- **Reconfirmed 2026-08-25 (later run, same day), at a newer CLI version.**
+  Same identifying signals as the entry immediately above
+  (`CLAUDE_CODE_REMOTE=true`, `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=
+  cloud_default`), but `claude --version` now reports `2.1.245 (Claude
+  Code)`, newer than the `2.1.241` that entry covers -- a fresh run of the
+  Verification procedure at a version that entry did not cover, run ahead
+  of a same-session `battle-testing-a-skill`/`evaluating-skill-quality`
+  round for this repository's own `executing-a-branch-plan` and
+  `drafting-a-pr-to-merge` skills. Positive control (isolated cwd
+  containing a synthetic sentinel `CLAUDE.md`, never the real file, prompt
+  passed as a single self-contained CLI argument, no permission-bypass
+  flag): correctly quoted the sentinel sentence verbatim. Negative control
+  (isolated cwd, same prompt, no `CLAUDE.md`/`AGENTS.md` anywhere in its
+  ancestry, directly confirmed via a filesystem walk from `/`): correctly
+  reported none loaded. Both held at this version; the verified
+  alternative still isolates `CLAUDE.md`/`AGENTS.md` correctly with no
+  permission-bypass flag. Scratch directories retained under this
+  session's own scratchpad for the remainder of the same audit round
+  (target snapshots reused across dispatches), not deleted immediately
+  after the two controls as the Verification procedure's step 1 default
+  describes -- deleted once the round's dispatches completed.
+
 ### Unlisted platform
 
 If the current platform is not represented above, do not assume either

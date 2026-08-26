@@ -1,0 +1,24 @@
+id: drafting-a-pr-to-merge-ownership-label-recheck-on-loopback
+name: Step 10 Re-checks The Ownership Label Before Looping Back On A New Blocker
+description: When step 10's monitoring finds a new blocker on a PR already converted to draft, re-checks the branch-plan-executing label before looping back into the fix loop, rather than assuming the label state from when step 2 last ran still holds days into monitoring.
+tags:
+  - quality
+  - edge-case
+inputs:
+  prompt: |
+    Use drafting-a-pr-to-merge. PR #640, "Add circuit breaker to the
+    payments client," was already converted to draft: true after a clean
+    step 8 review. Step 10's own monitoring subscription has stayed active
+    since. Four days later, calling github:pull_request_read method get on
+    PR #640 reports mergeable: false -- the base branch advanced and
+    created a real conflict.
+
+    Before resolving this and looping back into the fix loop, what should
+    happen first?
+expected:
+  output_contains:
+    - "branch-plan-executing"
+    - "re-check"
+  output_not_contains:
+    - "resolve without checking"
+    - "no need to check the label"
