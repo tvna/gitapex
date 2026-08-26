@@ -930,6 +930,8 @@ def test_real_repository_nonstandard_score_files_are_all_declared() -> None:
         "evaluating-skill-quality/2026-07-29-issue-537-confidentiality-gates",
         "evaluating-skill-quality/2026-08-15-issue-1124-dependency-policy",
         "evaluating-skill-quality/2026-08-17-issue-1142-description-conciseness",
+        "evaluating-skill-quality/2026-08-26-issue-1346-dispatch-self-guard-boundary",
+        "evaluating-skill-quality/2026-08-26-issue-1347-structural-identifier-portability",
     }
 
 
@@ -1068,6 +1070,8 @@ def test_real_repository_discovers_every_committed_run_directory() -> None:
         "evaluating-skill-quality/2026-07-30-issue-584-dispatch-trace",
         "evaluating-skill-quality/2026-08-15-issue-1124-dependency-policy",
         "evaluating-skill-quality/2026-08-17-issue-1142-description-conciseness",
+        "evaluating-skill-quality/2026-08-26-issue-1346-dispatch-self-guard-boundary",
+        "evaluating-skill-quality/2026-08-26-issue-1347-structural-identifier-portability",
         "untrusted-input-triage/2026-08-01-issue-645-battle-test",
         "untrusted-input-triage/2026-08-01-issue-645-behavioral-eval",
         "untrusted-input-triage/2026-08-01-issue-646-behavioral-gate2",

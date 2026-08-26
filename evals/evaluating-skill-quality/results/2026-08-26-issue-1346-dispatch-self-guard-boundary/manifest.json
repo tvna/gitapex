@@ -1,0 +1,62 @@
+{
+  "date": "2026-08-26",
+  "issue": "https://github.com/tvna/gitapex/issues/1346",
+  "commit": "7d4e6d293cf6ac022e4c274605982396de739e7f",
+  "record_contract": "gate-run",
+  "runner": {
+    "name": "evals/scripts/gitapex_run_eval_suite.py",
+    "version": "2ef0ee226499cb79a6f2055c01298468843ef5a7"
+  },
+  "fixture_set": "1 new selection fixture under evals/evaluating-skill-quality/tasks/: dispatch-self-guard-boundary-selection.yaml, gating dimension 5's (Progressive disclosure) new content-independent-dispatch-self-guard boundary. Formally gated (before/after, strict improve-or-reject, ordinary class -- a new rule addition, not pruning).",
+  "trials_per_fixture": 1,
+  "models": {
+    "default": "claude-sonnet-5"
+  },
+  "dispatch_mechanism": "Isolated `claude -p` subprocess (CLI 2.1.246 (Claude Code)), prompt passed as a single self-contained CLI argument, run from a scratch working directory outside any repository's CLAUDE.md/AGENTS.md ancestry, with an isolated $HOME (per adversarial-self-audit.md's Isolation verification recipe -- new Same-run entry recorded for this exact platform/version). Two additional contamination sources were found and fixed live during this run, neither previously named in adversarial-self-audit.md's registry: (1) a `claude -p` subprocess sharing the caller's real $HOME leaks not only TaskCreate/TaskUpdate task-list state (the already-documented leak) but, in this multi-agent-messaging-capable harness, also inherits enough ambient session state (CLAUDE_CODE_MESSAGING_SOCKET, CLAUDE_CODE_WEBSOCKET_AUTH_FILE_DESCRIPTOR, CLAUDE_CODE_REMOTE_SESSION_ID, CLAUDE_CODE_CHILD_SESSION) that the dispatched process sometimes returned a bare 'waiting for the background dispatch to complete' non-answer instead of performing the review -- fixed by additionally unsetting those variables, on top of the isolated-$HOME copy. (2) Independently, a prompt instructing the dispatch to follow SKILL.md's own Subagent-dispatch Procedure caused the dispatch to attempt satisfying that instruction literally (shelling out to a nested claude -p via Bash, matching the already-known 'too slow, background polling' pattern the issue #619 split.md entry recorded) even with the tool allowed -- fixed by an explicit prompt instruction to perform the entire review synchronously in one response with no nested dispatch, and by dropping Bash from --allowedTools entirely (Read/Glob/Grep only) so no nested invocation is possible. Both fixes are disclosed here as a candidate addition to adversarial-self-audit.md's own registry, not yet made (out of scope for this gate run; a separate rubric-maintenance edit).",
+  "scorer": "skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py, scoring the fixture's own output_contains/output_not_contains assertions deterministically. `gitapex_score_contract.py --compare-to 0.666667`, score 1.000000 -> `1.000000 KEEP`.",
+  "run_shape": "before/after (pre-edit references/rubric.md at commit 7d4e6d2 vs. the edited working tree, later committed as fedbfd4) for the one gated selection fixture -- deviates from this directory's README schema, written for a fixed-rubric/multi-model run; the deviation is intentional and disclosed here, matching this same directory's 2026-07-29/2026-08-15/2026-08-17 records' own precedent. `score_files[]` points at a standard eval-scores.schema.json-shaped summary of the fixture's AFTER-edit score only; `nonstandard_score_files[]` carries the richer before/after detail the `gate` verdict below was actually computed from.",
+  "iterations": [
+    {
+      "label": "dispatch-self-guard-boundary-selection",
+      "rubric_change": "Added a new dimension-5 (Progressive disclosure) bullet to references/rubric.md distinguishing a content-grading reference from a content-independent dispatch self-guard, with a narrow two-part qualifying condition (applies uniformly regardless of the reviewed target's own content; isolated in its own dedicated file) so it cannot become a blanket exemption for any bundled reference. Did not exist before this run at all.",
+      "before_commit": "7d4e6d293cf6ac022e4c274605982396de739e7f",
+      "after_commit": "a41edbd0d3c4321a83ddda21060990d0637cbcf1",
+      "fixture_id": "evaluating-skill-quality-dispatch-self-guard-boundary-selection",
+      "before_score": 0.666667,
+      "after_score": 1.0
+    }
+  ],
+  "score_files": [
+    {
+      "model_id": "claude-sonnet-5",
+      "file": "claude-sonnet-5-after.json"
+    }
+  ],
+  "gate": {
+    "verdict": "KEEP",
+    "candidate_class": "ordinary",
+    "split": "selection",
+    "prior_mean": "0.666667",
+    "candidate_mean": "1.000000"
+  },
+  "artifacts": [
+    "claude-sonnet-5-after.json",
+    "claude-sonnet-5-before-after-detail.json",
+    "artifacts/dispatch-self-guard-boundary-selection-before.md",
+    "artifacts/dispatch-self-guard-boundary-selection-after.md"
+  ],
+  "nonstandard_score_files": [
+    {
+      "file": "claude-sonnet-5-before-after-detail.json",
+      "deviation": "Scored by the same scorer a standard record uses, but before/after per-iteration (before_commit/after_commit, before_score/after_score) rather than eval-scores.schema.json's flat one-score-per-fixture_id shape -- same declared deviation as this directory's 2026-07-29/2026-08-15/2026-08-17 records. This is the file the gate[] verdict above was actually computed from; claude-sonnet-5-after.json (score_files[]) is a same-run, standard-shape derivative summarizing only the AFTER-edit score."
+    }
+  ],
+  "known_gaps": [
+    "Only this one new selection fixture was live-dispatched; the pre-existing selection fixtures were not re-scored on both sides. This edit's diff (a pure rubric.md bullet addition to dimension 5, no reword of existing text) was reasoned content-disjoint from the pre-existing corpus by direct inspection rather than confirmed by live re-dispatch -- the same disclosed methodology this skill's own split.md log has used for a pure-insertion edit in multiple prior iterations (issues #537, #1124, #1142).",
+    "trials_per_fixture=1 -- no repeat-run variance data; a single sample generalizing correctly is not proof a weaker tier or a different sample would.",
+    "No transfer check (an adjacent model/harness re-run) was performed before this record was written -- deferred as a same-class disclosed gap to prior iterations in this same directory that also did not complete one inline.",
+    "This run also surfaced (and worked around) two contamination sources not yet reflected as their own Known entries in adversarial-self-audit.md's Isolation verification registry -- see dispatch_mechanism above for the full description. Recording that gap here rather than silently folding the workaround into 'business as usual', per this skill's own Contaminated-dispatch disclosure norm; adding the formal registry entries is separate follow-up work, not done as part of this gate run.",
+    "substring-scorer only. The pre-edit (before) transcript already reached a correct Fail verdict on this target through a different, independently valid argument (the target skill has no dispatch mechanism at all, so a 'dispatch self-guard' label is a category error on its face) rather than the two-part condition the new rubric text states; the after-edit transcript additionally grounds the same verdict in the new rubric text's own quoted vocabulary ('branches on', \"target's own content\"). The 0.667 -> 1.0 delta reflects the after-edit review citing the new rubric section verbatim, not a change in the surface Pass/Fail conclusion, which was already correct before the edit for this particular fixture -- disclosed per the same convention issue #1142's manifest.json used for an analogous finding."
+  ],
+  "headline_pattern": "The dimension-5 NOT-MATURE finding from the 2026-07-26 self-review (eval-status.md issue #332 entry) is addressed by a new rubric.md boundary distinguishing a content-grading reference from a content-independent dispatch self-guard. The new selection fixture gated KEEP under strict improve-or-reject (0.667->1.0). The fixture's surface Pass/Fail verdict did not change between before and after -- a strong tier (Sonnet 5) already reached the correct conclusion through generic reasoning in both cases -- but only the after-edit transcript grounds that conclusion in the new rubric text's own citable vocabulary, the same axis-did-not-exist-yet improvement shape several prior iterations in this skill's own split.md log (confidentiality-awareness, dependency-policy, description-conciseness) already established."
+}
