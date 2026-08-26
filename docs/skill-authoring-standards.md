@@ -111,9 +111,27 @@ corrupting the surrounding text (for example a raw `skills/<NAME>/scripts/`
 renders as `skills//scripts/`, not the intended placeholder). A code
 span or fenced code block renders its contents literally, so
 `` `skills/<NAME>/scripts/` `` (backtick-wrapped, as used throughout this
-document) is safe as written; a bracket-free placeholder
-(`skills/NAME/scripts/`) is the fallback for a placeholder that must
-appear in raw prose with no code formatting at all.
+document) is safe as written *on GitHub's own Markdown renderer*; a
+bracket-free placeholder (`skills/NAME/scripts/`) is the fallback for a
+placeholder that must appear in raw prose with no code formatting at
+all.
+
+Backtick-wrapping does **not** protect a PR/issue body from a second,
+distinct hazard: an agent that reads its own already-published body back
+through the GitHub MCP server (`pull_request_read`, `issue_read`) can see
+the same placeholder stripped even though GitHub's own storage and its
+own renderer both hold and render the backtick-wrapped span correctly.
+That server's response-direction handler runs every returned body
+through an HTML sanitizer with a fixed element allowlist that does not
+exempt inline code spans, so a `<NAME>`-shaped token inside a backtick
+span still reads as a disallowed tag on that one read channel. Issues
+#1302 (repair 11) and #1313 (repair 1) each observed exactly this --
+backtick-wrapping "did not protect" their occurrence -- and, before issue
+#1327's own correction, both misread it as this rule's storage-level
+claim being wrong, rather than as a separate read-channel effect this
+rule never covered. See `skills/outward-artifact-preflight/SKILL.md`
+check 2 for the raw-fetch channel that verifies actual stored content
+without going through that sanitizer.
 
 Found via: PR #35's PR body used a `skills/<NAME>/scripts/` placeholder in
 prose; GitHub's rendering dropped the `<NAME>` tag, producing
