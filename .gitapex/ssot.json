@@ -1366,6 +1366,33 @@
       ]
     },
     {
+      "id": "contract-discipline-drift",
+      "kind": "script",
+      "script": [
+        ".github/scripts/gitapex_scan_contract_discipline_drift.py",
+        ".github/workflows/contract-discipline-drift-gate.yml"
+      ],
+      "rule": "drafting-a-skill's own references/contract-structure.md restates evaluating-skill-quality/references/rubric.md's Contract discipline section (its Fault-attribution and Never-both rules) and must not silently diverge from it: both files must keep the literal terms 'Fault attribution' and 'Never both', contract-structure.md must keep citing the Contract discipline section by name, and a PR diff that edits rubric.md inside the Contract-discipline section's own line span must also touch contract-structure.md or carry a '<!-- contract-discipline-ack: <reason> -->' comment in the diff. A missing or unreadable file, a missing/duplicated/empty Contract-discipline heading, or an unparseable diff fails closed rather than passing.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_contract_discipline_drift.py", "--diff", "-"],
+      "local_stdin": ["git", "-c", "core.quotePath=false", "diff", "-U0", "--no-renames", "--merge-base", "origin/main", "HEAD", "--", "skills/evaluating-skill-quality/references/rubric.md", "skills/drafting-a-skill/references/contract-structure.md"],
+      "trigger": ".github/workflows/contract-discipline-drift-gate.yml on pull_request (diff-awareness half), plus tests/test_gitapex_scan_contract_discipline_drift.py inside the pytest step of .github/workflows/test.yml (always-on content-lock half)",
+      "policy_refs": [],
+      "cluster": "self-governance",
+      "tracking_issue": 1194,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "skills/evaluating-skill-quality/references/rubric.md"},
+        {"kind": "file-glob", "ref": "skills/drafting-a-skill/references/contract-structure.md"},
+        {"kind": "cross-registry-consistency", "ref": "rubric.md '## Contract discipline' section (Fault attribution, Never both) <-> drafting-a-skill/references/contract-structure.md's own restatement of the same two rules"},
+        {"kind": "workflow-event", "ref": "contract-discipline-drift-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
+    },
+    {
       "id": "skill-quality-rubric-vocabulary-drift",
       "kind": "script",
       "script": ".github/scripts/gitapex_scan_skill_quality_rubric_vocabulary_drift.py",

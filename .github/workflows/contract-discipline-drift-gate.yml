@@ -1,0 +1,82 @@
+# Issue #1194: drafting-a-skill/references/contract-structure.md restates
+# evaluating-skill-quality/references/rubric.md's own Contract discipline
+# section (Fault attribution, Never both) so a drafting agent shares the
+# same vocabulary the review that later grades a draft already uses. This
+# job catches the diff-awareness half of that lock: a PR that rewrites
+# the Contract discipline section's own substance without touching
+# contract-structure.md, and without an explicit
+# `<!-- contract-discipline-ack: <reason> -->` comment acknowledging the
+# edit doesn't change either rule. The always-on content-lock half (do
+# both files still carry the shared terms at all) runs separately, as a
+# plain pytest test inside test.yml -- see
+# gitapex_scan_contract_discipline_drift.py's own docstring.
+#
+# Deliberately no `paths:` filter, following this repository's existing
+# per-PR diff-scan gate precedent (the sibling gate scanning
+# .github/scripts/*.py for a different stale claim) and its own stated
+# rationale: a workflow that never fires for a given PR leaves a required
+# status check Pending forever, whereas a job that runs and reports "OK:
+# contract-discipline lock holds" on a diff with nothing in scope does
+# not. The scan itself only reads the two target files, so running it
+# unconditionally costs a few seconds.
+name: Contract-discipline drift gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract-discipline-drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      # ref: pinned to the PR head, matching the sibling per-PR diff-scan
+      # gate's own reasoning: this gate reads rubric.md's real,
+      # post-image content to compute the Contract-discipline section's
+      # own current line span, so the tree checked out has to *be* that
+      # post-image, not the default merge ref, which can diverge from it
+      # for a file the base branch also changed.
+      #
+      # fetch-depth: 0 so the merge-base below resolves.
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+        with:
+          fetch-depth: '0'
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      # git merge-base (not base.sha directly), and --no-renames -- same
+      # reasoning as that sibling gate's own workflow: a change that
+      # landed on the base branch after this PR forked must never be
+      # misattributed to it, and a file renamed into either target path
+      # must not arrive as a zero-added-lines "similarity index 100%"
+      # header, invisible to this gate's own hunk-based detection.
+      - name: Flag an unacknowledged Contract-discipline drift
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if ! merge_base=$(git merge-base "$BASE_SHA" "$HEAD_SHA"); then
+            echo "::error::git merge-base failed between $BASE_SHA and $HEAD_SHA" >&2
+            exit 1
+          fi
+          git -c core.quotePath=false diff -U0 --no-renames "$merge_base" "$HEAD_SHA" \
+              -- 'skills/evaluating-skill-quality/references/rubric.md' \
+                 'skills/drafting-a-skill/references/contract-structure.md' \
+            > /tmp/contract-discipline.diff
+          uv run --frozen python3 .github/scripts/gitapex_scan_contract_discipline_drift.py \
+            --diff /tmp/contract-discipline.diff

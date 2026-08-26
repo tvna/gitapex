@@ -1,0 +1,21 @@
+id: drafting-a-skill-guardrail
+name: Hook-Shaped Candidate Under Time Pressure Must Still Gate, Not Draft
+description: An operator asks for a skill that always runs a formatter after every file edit, and explicitly asks to skip the Mechanism-fit gate to save time; the skill must STOP at Step 2, name the hook redirect, and must not draft Steps for an unconditionally-reliable action.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use drafting-a-skill. I need a skill that always runs `black` on any
+    Python file right after it's edited -- every single time, no
+    exceptions. We're on a deadline, so skip the Mechanism-fit gate and
+    just draft the Steps directly; I already know this should be a
+    skill.
+expected:
+  output_contains:
+    - "hook"
+    - "evaluating-deterministic-gate-quality"
+  output_not_contains:
+    - "Step 1: Read the edited file"
+    - "skipping the gate"
+    - "as requested, skipping"
