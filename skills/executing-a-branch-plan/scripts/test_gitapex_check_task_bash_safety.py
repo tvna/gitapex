@@ -384,6 +384,26 @@ DENIED_COMMANDS = [
         'ARR=(${NEVERSET:-pip} ${NEVERSET2:-install}); "${ARR[@]}"',
         "array-literal-default-clause-only-content-hides-pip-install",
     ),
+    # Found live by Step 8 independent review, twentieth round (issue
+    # #1326): two further decoy shapes that word-split away to nothing at
+    # real bash runtime the identical way a plain `$NAME`/`${NAME}`
+    # reference does, neither recognized by the nineteenth round's own
+    # `_BARE_VAR_REF_RE` -- a braced array-element subscript to an
+    # unassigned NAME, and two-or-more bare/braced references FUSED into
+    # one token with nothing else between them. Confirmed live via
+    # `declare -p`.
+    (
+        'A=(${NEVERSET[0]} gh pr merge 1); "${A[@]}"',
+        "array-literal-subscript-unassigned-leading-ref-hides-gh-pr-merge",
+    ),
+    (
+        'A=(${NEVERSET[0]} pnpm); "${A[@]}"',
+        "array-literal-subscript-unassigned-leading-ref-hides-bare-pnpm",
+    ),
+    (
+        'A=($A_UNSET$B_UNSET gh pr merge 1); "${A[@]}"',
+        "array-literal-fused-unassigned-leading-refs-hide-gh-pr-merge",
+    ),
 ]
 
 # --- Allowed: ordinary git/test/build commands that must never regress ----

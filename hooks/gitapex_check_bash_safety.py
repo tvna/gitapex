@@ -798,7 +798,20 @@ def _rule_command_substitution_content(tokens: list[str]) -> tuple[str | None, b
     but silently declined to report. Closed by scanning every span
     unconditionally (not stopping at the first denied one) and OR-ing
     each inner verdict's own `is_git_push` into a running total,
-    returned regardless of whether any span was itself denied."""
+    returned regardless of whether any span was itself denied.
+
+    Disclosed residual (found live by Step 8 independent review,
+    nineteenth round, issue #1326): unlike `_rule_array_literal_content`'s
+    own nineteenth-round fix, the recursive `_classify_tokens(inner_
+    tokens)`/`classify(inner_text)` calls below pass no outer scope, so a
+    tool/verb built from a variable assigned OUTSIDE a `$(...)` span's own
+    text (e.g. `T=pip; V=install; x=$($T $V foo)`) is still invisible to
+    this recursive check, even though it resolves to a real denied
+    invocation at bash runtime. Not fixed here: closing it needs the
+    string-based `classify()` entry point (used for the quoted/fused
+    `$(...)` shape) to also accept an outer scope, a larger change than
+    the finding that prompted `_rule_array_literal_content`'s own fix
+    warranted."""
     is_git_push = False
     i = 0
     n = len(tokens)
@@ -1091,47 +1104,93 @@ def _fold_array_literal_spans(tokens: list[str]) -> list[str]:
     return folded
 
 
-_BARE_VAR_REF_RE = re.compile(r"^\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?$")
+# One reference, either the plain form (`$NAME`/`${NAME}`) or a braced
+# form with a SIMPLE (no further brackets -- no nested dynamic subscript)
+# array-element subscript (`${NAME[0]}`, `${NAME[@]}`, `${NAME[$i]}`).
+# Deliberately excludes a default-clause (`${NAME:-default}`) or indirect
+# (`${!NAME}`) reference -- see `_token_is_all_unassigned_refs`'s own
+# docstring for why those must NOT be treated as vanishing.
+_ONE_REF_RE = r"\$[A-Za-z_][A-Za-z0-9_]*|\$\{[A-Za-z_][A-Za-z0-9_]*(?:\[[^][]*\])?\}"
+# The whole token must be nothing BUT one or more back-to-back references
+# of the shape above -- no other character anywhere in the token.
+_REF_RUN_TOKEN_RE = re.compile(rf"^(?:{_ONE_REF_RE})+$")
+# The individual references within such a token, captured for the
+# unassigned-name check -- group(1) for the bare form, group(2) for the
+# braced (optionally subscripted) form.
+_REF_RUN_NAME_RE = re.compile(r"\$([A-Za-z_][A-Za-z0-9_]*)|\$\{([A-Za-z_][A-Za-z0-9_]*)(?:\[[^][]*\])?\}")
+
+
+def _token_is_all_unassigned_refs(token: str, name_to_value: dict[str, str]) -> bool:
+    """TOKEN word-splits away to NOTHING, unquoted, at real bash runtime,
+    because it is composed ENTIRELY of one or more back-to-back variable
+    references -- bare (`$NAME`), braced (`${NAME}`), or braced with a
+    SIMPLE array-element subscript (`${NAME[0]}`, `${NAME[@]}`) -- every
+    one of which points to a NAME never assigned anywhere in this
+    command. Confirmed live via `declare -p` against real bash for both
+    shapes this generalizes over: `A=($NEVERSET gh pr merge 1)` (a single
+    bare reference) and `A=(${NEVERSET[0]} gh pr merge 1)` (a braced
+    subscript reference) both produce the identical 4-element array `(gh
+    pr merge 1)`, the reference contributing zero elements either way --
+    and `A=($A_UNSET$B_UNSET gh pr merge 1)` (TWO fused bare references,
+    each independently unset) produces the same 4-element array too, the
+    whole fused token collapsing to nothing as a unit.
+
+    Deliberately narrower than `_substitute_var_refs_candidates`'s own
+    general candidate enumeration: a default-clause (`${NAME:-default}`)
+    reference supplies REAL substitute text regardless of whether NAME is
+    assigned, so it never vanishes to nothing the way a bare/braced/
+    subscript reference does; an indirect (`${!NAME}`) reference resolves
+    through a second lookup this classifier cannot rule out succeeding,
+    so it is not SOUND to treat as vanishing either -- neither shape is
+    matched by `_ONE_REF_RE`, so neither is ever treated as a vanishing
+    element here.
+
+    Found live by Step 8 independent review, twentieth round (issue
+    #1326): the nineteenth round's own `_BARE_VAR_REF_RE` matched only a
+    SINGLE bare-or-braced reference occupying the WHOLE token, missing
+    two other shapes that word-split away to nothing the identical way --
+    a braced array-element subscript to an unassigned NAME (`${NEVERSET
+    [0]}`), and two-or-more bare/braced references FUSED into one token
+    with nothing else between them (`$A$B`, both unassigned). Either
+    shape defeated the eighteenth/nineteenth-round collapse entirely,
+    hiding fully literal denied-tool content sitting right after the
+    decoy from every `seg[0]`-anchored rule (the task file's `_rule_gh_
+    any`/`_rule_bare_install` in particular, both purely position-
+    anchored with no literal-adjacency fallback the way `_rule_a_literal`
+    has). Replaces the prior single-reference-shaped `_BARE_VAR_REF_RE`
+    with this general "whole token is a run of one or more vanishing
+    references" check, closing both shapes (and any further fusion of
+    the same two reference forms) with one mechanism instead of chasing
+    each new decoy shape with a narrower regex extension.
+
+    ALSO fixes a bug the twentieth round's own independent review found
+    in the prior regex: `_BARE_VAR_REF_RE`'s independently-optional
+    opening/closing brace (`\\{?`/`\\}?`) accepted a MISMATCHED brace
+    (`$NAME}`, a stray trailing `}` fused onto an otherwise-bare
+    reference; `${NAME`, an unterminated opening brace) as if it were a
+    clean single reference, contradicting
+    its own docstring's "nothing else fused into the same token" claim.
+    `_ONE_REF_RE`'s two alternatives each pair their own opening and
+    closing brace, so a mismatched brace now falls through to neither
+    alternative and is correctly left unstripped, as fused-on literal
+    text that does not vanish to nothing."""
+    if not _REF_RUN_TOKEN_RE.match(token):
+        return False
+    return all((m.group(1) or m.group(2)) not in name_to_value for m in _REF_RUN_NAME_RE.finditer(token))
 
 
 def _strip_leading_unassigned_bare_refs(tokens: list[str], name_to_value: dict[str, str]) -> list[str]:
-    """A leading run of tokens that are EACH entirely one bare `$NAME` or
-    `${NAME}` reference (nothing else fused into the same token, and no
-    `:-default`/`:=default`-style clause inside the braces) to a NAME
-    never assigned anywhere in this command word-splits away to NOTHING,
-    unquoted, at real bash runtime -- confirmed live via `declare -p`
-    against real bash that `A=($NEVERSET gh pr merge 1)` (NEVERSET never
-    assigned) produces a 4-element array `(gh pr merge 1)`, NEVERSET
-    contributing zero elements, not an empty-string one. Used by
-    `_rule_array_literal_content` to additionally check an array
-    literal's own content AS IF such a leading decoy reference had
-    already collapsed away, since the REAL first surviving element
-    (here, `gh`) is what a `seg[0]`-anchored rule would actually see once
-    `"${NAME[@]}"` expands the array for real -- not the decoy reference
-    the raw token stream shows in that position. Deliberately narrower
-    than `_substitute_var_refs_candidates`'s own general candidate
-    enumeration: this only strips a token that is ENTIRELY one bare
-    reference with nothing fused (`$NEVERSET` or `${NEVERSET}`, not
-    `-X$NEVERSET`), matching the specific word-splitting-collapse shape
-    this exists for -- a token with anything else fused onto the
-    reference does not word-split away to nothing even when the
-    reference itself is unset.
-
-    Found live by Step 8 independent review, nineteenth round (issue
-    #1326): the eighteenth round's own version of `_BARE_VAR_REF_RE`
-    matched only the UNBRACED `$NAME` shape, never `${NAME}` -- both
-    word-split away identically at real bash runtime when NAME is unset,
-    but the braced decoy left the collapsed reading a no-op (`collapsed
-    == inner`), silently degrading `_rule_array_literal_content` to only
-    its as-is reading. Confirmed live (real bash, `declare -p`) that
-    `A=(${NEVERSET} gh pr merge 1); "${A[@]}"` genuinely expands to `gh
-    pr merge 1` the same way the unbraced form does."""
+    """A leading run of tokens that each vanish to nothing at real bash
+    runtime (per `_token_is_all_unassigned_refs`, see its own docstring)
+    is stripped away -- used by `_rule_array_literal_content` to
+    additionally check an array literal's own content AS IF such a
+    leading decoy had already collapsed away, since the REAL first
+    surviving element is what a `seg[0]`-anchored rule would actually see
+    once `"${NAME[@]}"` expands the array for real, not the decoy
+    reference the raw token stream shows in that position."""
     i = 0
     n = len(tokens)
-    while i < n:
-        match = _BARE_VAR_REF_RE.match(tokens[i])
-        if match is None or match.group(1) in name_to_value:
-            break
+    while i < n and _token_is_all_unassigned_refs(tokens[i], name_to_value):
         i += 1
     return tokens[i:]
 
@@ -1158,11 +1217,12 @@ def _rule_array_literal_content(
     NAME_TO_VALUE/NAME_TO_RAW_VALUE are the OUTER command's own assigned
     variables (the same dicts `_classify_tokens` already computes for its
     own top-level rules) -- passed through to the recursive `_classify_
-    tokens` call below as that call's own OUTER_SCOPE, since a bare `$G`
-    inside the array literal genuinely resolves against the SAME shell
-    scope as the rest of the command at real bash runtime (an array
-    literal is not a subshell), not just against whatever the array's own
-    inner tokens happen to assign (ordinarily nothing).
+    tokens` call below as that call's own OUTER_NAME_TO_VALUE/OUTER_NAME_
+    TO_RAW_VALUE, since a bare `$G` inside the array literal genuinely
+    resolves against the SAME shell scope as the rest of the command at
+    real bash runtime (an array literal is not a subshell), not just
+    against whatever the array's own inner tokens happen to assign
+    (ordinarily nothing).
 
     Every candidate span's inner content is checked TWICE: once as-is,
     and once with any leading run of unassigned bare `$NAME` references
@@ -1201,7 +1261,7 @@ def _rule_array_literal_content(
     `$G`/`$P`/`$M` resolve to a denied `gh pr merge` at real bash runtime
     (confirmed live via `declare -p`) the SAME way they would if `$G $P
     $M` appeared directly at the top level of the command instead of
-    inside an array literal. Closed by threading OUTER_SCOPE through.
+    inside an array literal. Closed by threading the outer scope through.
     Disclosed residual: `_rule_command_substitution_content`'s own,
     pre-existing (since the fourteenth round) recursive checks have the
     identical outer-scope gap and are NOT fixed by this round -- a tool/
@@ -1225,7 +1285,7 @@ def _rule_array_literal_content(
             if collapsed and collapsed != inner:
                 readings.append((collapsed, " once its own leading unassigned reference(s) word-split away"))
             for reading, suffix in readings:
-                reading_verdict = _classify_tokens(reading, outer_scope=(name_to_value, name_to_raw_value))
+                reading_verdict = _classify_tokens(reading, name_to_value, name_to_raw_value)
                 is_git_push = is_git_push or reading_verdict.is_git_push
                 if reading_verdict.deny:
                     reason = f"an array literal NAME=(...) embeds a denied command{suffix} -- {reading_verdict.reason}"
@@ -1973,7 +2033,11 @@ def classify(command: str) -> Verdict:
     return _classify_tokens(tokens)
 
 
-def _classify_tokens(tokens: list[str], outer_scope: tuple[dict[str, str], dict[str, str]] | None = None) -> Verdict:
+def _classify_tokens(
+    tokens: list[str],
+    outer_name_to_value: dict[str, str] | None = None,
+    outer_name_to_raw_value: dict[str, str] | None = None,
+) -> Verdict:
     """The token-level core of `classify` -- split out so `_rule_command_
     substitution_content` can recurse into a `$(...)` span's own inner
     tokens directly, without a lossy token-list-to-string-and-back round
@@ -1986,18 +2050,23 @@ def _classify_tokens(tokens: list[str], outer_scope: tuple[dict[str, str], dict[
     substring residual (see `_rule_gh_api_write`'s own docstring), not a
     sound one this reconstruction could meaningfully weaken further.
 
-    OUTER_SCOPE, when given, is a caller-supplied (name_to_value,
-    name_to_raw_value) pair MERGED into whatever TOKENS's own assignments
+    OUTER_NAME_TO_VALUE/OUTER_NAME_TO_RAW_VALUE, when given, are a
+    caller-supplied pair MERGED into whatever TOKENS's own assignments
     resolve to (TOKENS's own assignments win on a name collision -- an
-    inner-scope reassignment does shadow the outer one). Used only by
-    `_rule_array_literal_content`'s own recursive call, to give an array
-    literal's own inner content access to the SAME shell scope as the
-    rest of the command (see that function's own docstring, nineteenth-
-    round paragraph, for the live bypass this closes) -- `None` (every
-    other caller, including the top-level `classify` and `_rule_command_
-    substitution_content`'s own recursive calls) preserves this
-    function's prior, scope-free behavior exactly."""
-    outer_literals, outer_raw = outer_scope if outer_scope is not None else ({}, {})
+    inner-scope reassignment does shadow the outer one). Named to match
+    every other function in this module that takes this same pair
+    (`name_to_value`/`name_to_raw_value`), not a new vocabulary of their
+    own. Used only by `_rule_array_literal_content`'s own recursive call,
+    to give an array literal's own inner content access to the SAME
+    shell scope as the rest of the command (see that function's own
+    docstring, nineteenth-round paragraph, for the live bypass this
+    closes) -- `None` (every other caller, including the top-level
+    `classify` and `_rule_command_substitution_content`'s own recursive
+    calls -- see that function's own docstring for the disclosed residual
+    this leaves there) preserves this function's prior, scope-free
+    behavior exactly."""
+    outer_literals = outer_name_to_value or {}
+    outer_raw = outer_name_to_raw_value or {}
 
     content_reason, content_is_git_push = _rule_command_substitution_content(tokens)
     if content_reason:

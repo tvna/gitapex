@@ -1244,18 +1244,18 @@ def test_classify_tokens_outer_scope_merges_with_the_recursed_tokens_own_assignm
 ) -> None:
     """Model-based, regression pin for the real bypass found live by Step
     8 independent review, nineteenth round (issue #1326), ported from the
-    main hook's own nineteenth-round fix of the same finding: OUTER_
-    SCOPE's own entries are visible to a recursive `_classify_tokens`
-    call's internal `assigned`/`raw_assigned` computation, alongside (not
-    instead of) whatever TOKENS itself assigns -- a name TOKENS itself
-    assigns must still win over an outer entry of the same name (ordinary
-    shadowing), while a name only OUTER_SCOPE assigns must still
-    resolve."""
+    main hook's own nineteenth-round fix of the same finding: OUTER_NAME_
+    TO_VALUE/OUTER_NAME_TO_RAW_VALUE's own entries are visible to a
+    recursive `_classify_tokens` call's internal `assigned`/`raw_assigned`
+    computation, alongside (not instead of) whatever TOKENS itself
+    assigns -- a name TOKENS itself assigns must still win over an outer
+    entry of the same name (ordinary shadowing), while a name only the
+    outer scope assigns must still resolve."""
     assume(name1 != name2)
     outer_literals = {name1: "outer-value-should-be-shadowed", name2: value2}
     outer_raw = {name1: "Outer-Value-Should-Be-Shadowed", name2: value2}
     tokens = [f"{name1}={value1}", *tail]
-    verdict = checker._classify_tokens(tokens, outer_scope=(outer_literals, outer_raw))
+    verdict = checker._classify_tokens(tokens, outer_literals, outer_raw)
     assert verdict.reason == "no denied pattern matched"
 
 
@@ -1336,4 +1336,100 @@ def test_classify_denies_array_literal_default_clause_only_content_end_to_end() 
     Regression pin for the real bypass found live by Step 8 independent
     review, nineteenth round (issue #1326)."""
     verdict = checker.classify('ARR=(${NEVERSET:-gh} ${NEVERSET2:-pr} ${NEVERSET3:-merge}); "${ARR[@]}"')
+    assert verdict.deny is True
+
+
+def test_token_is_all_unassigned_refs_recognizes_a_braced_subscript() -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, twentieth round (issue #1326), ported from the
+    main hook's own twentieth-round fix of the same finding: a braced
+    array-element subscript reference (`${NAME[0]}`, `${NAME[@]}`) to a
+    NAME never assigned anywhere in this command word-splits away to
+    NOTHING at real bash runtime, the identical collapse a plain
+    `${NAME}` reference already gets."""
+    assert checker._token_is_all_unassigned_refs("${NEVERSET[0]}", {}) is True
+    assert checker._token_is_all_unassigned_refs("${NEVERSET[@]}", {}) is True
+
+
+def test_token_is_all_unassigned_refs_recognizes_a_fused_reference_chain() -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, twentieth round (issue #1326), ported from the
+    main hook's own twentieth-round fix of the same finding: TWO (or
+    more) bare/braced references fused into ONE token with nothing else
+    between them (`$A$B`) word-split away to nothing as a unit at real
+    bash runtime, when EVERY referenced name is unassigned."""
+    assert checker._token_is_all_unassigned_refs("$A_UNSET$B_UNSET", {}) is True
+    assert checker._token_is_all_unassigned_refs("${A_UNSET}$B_UNSET", {}) is True
+
+
+def test_token_is_all_unassigned_refs_stops_at_an_assigned_name_in_the_chain() -> None:
+    """No false positive: a fused reference chain where at least ONE
+    referenced name IS assigned elsewhere in the command does not vanish
+    to nothing -- the assigned reference keeps its own real value's
+    position, so the whole token must NOT be treated as collapsing
+    away."""
+    assert checker._token_is_all_unassigned_refs("$A_SET$B_UNSET", {"A_SET": "x"}) is False
+
+
+def test_token_is_all_unassigned_refs_rejects_a_mismatched_brace() -> None:
+    """Model-based, regression pin for the bug found live by Step 8
+    independent review, twentieth round (issue #1326), ported from the
+    main hook's own twentieth-round fix of the same finding: the
+    nineteenth round's own `_BARE_VAR_REF_RE`
+    (`^\\$\\{?([A-Za-z_][A-Za-z0-9_]*)\\}?$`) had independently-optional
+    opening/closing braces, so a MISMATCHED brace (`$NAME}`, a stray
+    trailing `}` fused onto an otherwise-bare reference; `${NAME`, an
+    unterminated opening brace) wrongly matched as if it were a clean
+    single reference. Neither shape actually vanishes to nothing at real
+    bash runtime, so `_token_is_all_unassigned_refs` must reject both."""
+    assert checker._token_is_all_unassigned_refs("$NEVERSET}", {}) is False
+    assert checker._token_is_all_unassigned_refs("${NEVERSET", {}) is False
+
+
+def test_token_is_all_unassigned_refs_rejects_a_default_clause() -> None:
+    """No false positive: a `${NAME:-default}` default-clause reference
+    supplies REAL substitute text regardless of whether NAME is assigned
+    -- it never vanishes to nothing the way a bare/braced/subscript
+    reference does, so it must not be treated as one."""
+    assert checker._token_is_all_unassigned_refs("${NEVERSET:-fallback}", {}) is False
+
+
+def test_rule_array_literal_content_detects_a_braced_subscript_decoy() -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, twentieth round (issue #1326): `A=(${NEVERSET
+    [0]} gh pr merge 1); "${A[@]}"` was wrongly ALLOWED before the
+    array-subscript shape was recognized as vanishing -- `_rule_gh_any`
+    is purely position-anchored (`seg[0]` only), with no literal-
+    adjacency fallback."""
+    tokens = ["dummy=", "(", "${NEVERSET[0]}", "gh", "pr", "merge", "1", ")"]
+    reason = checker._rule_array_literal_content(tokens, {}, {})
+    assert reason is not None
+
+
+def test_rule_array_literal_content_detects_a_fused_reference_chain_decoy() -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, twentieth round (issue #1326): `A=($A_UNSET
+    $B_UNSET gh pr merge 1); "${A[@]}"` (both unset) was wrongly ALLOWED
+    before a fused chain of two bare references was recognized as
+    vanishing as a unit."""
+    tokens = ["dummy=", "(", "$A_UNSET$B_UNSET", "gh", "pr", "merge", "1", ")"]
+    reason = checker._rule_array_literal_content(tokens, {}, {})
+    assert reason is not None
+
+
+def test_classify_denies_array_literal_content_with_subscript_decoy_end_to_end() -> None:
+    """End-to-end companion to `test_rule_array_literal_content_detects_a_
+    braced_subscript_decoy` above, reached through `classify()`.
+    Regression pin for the real bypass found live by Step 8 independent
+    review, twentieth round (issue #1326)."""
+    verdict = checker.classify('A=(${NEVERSET[0]} gh pr merge 1); "${A[@]}"')
+    assert verdict.deny is True
+
+
+def test_classify_denies_array_literal_content_with_fused_chain_decoy_end_to_end() -> None:
+    """End-to-end companion to `test_rule_array_literal_content_detects_a_
+    fused_reference_chain_decoy` above, reached through `classify()`.
+    Regression pin for the real bypass found live by Step 8 independent
+    review, twentieth round (issue #1326)."""
+    verdict = checker.classify('A=($A_UNSET$B_UNSET gh pr merge 1); "${A[@]}"')
     assert verdict.deny is True

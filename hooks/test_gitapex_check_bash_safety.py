@@ -662,6 +662,16 @@ DENIED_INDIRECTION_COMMANDS = [
     # unbraced form until this round, so the collapsed reading never ran
     # for this shape. Confirmed live via `declare -p`.
     ('A=(${NEVERSET} gh pr merge 1); "${A[@]}"', "array-literal-braced-unassigned-leading-ref-hides-gh-pr-merge"),
+    # Found live by Step 8 independent review, twentieth round (issue
+    # #1326): two further decoy shapes that word-split away to nothing at
+    # real bash runtime the identical way a plain `$NAME`/`${NAME}`
+    # reference does, neither recognized by the nineteenth round's own
+    # `_BARE_VAR_REF_RE` -- a braced array-element subscript to an
+    # unassigned NAME, and two-or-more bare/braced references FUSED into
+    # one token with nothing else between them. Confirmed live via
+    # `declare -p`.
+    ('A=(${NEVERSET[0]} uv "$1"); "${A[@]}"', "array-literal-subscript-unassigned-leading-ref-hides-uv"),
+    ('A=($A_UNSET$B_UNSET gh pr merge 1); "${A[@]}"', "array-literal-fused-unassigned-leading-refs-hide-gh-pr-merge"),
 ]
 
 
