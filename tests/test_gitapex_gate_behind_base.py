@@ -116,6 +116,30 @@ def test_behind_and_ahead_both_nonzero_when_diverged(tmp_path: pathlib.Path) -> 
 
 
 @pytest.mark.slow
+def test_count_behind_is_not_shadowed_by_a_same_named_local_tag(tmp_path: pathlib.Path) -> None:
+    """Regression, issue #1345 follow-up review (live-reproduced, not
+    theoretical): a bare `origin/main` string is ambiguous when a local
+    tag also happens to be named `origin/main` -- git's own
+    disambiguation order checks `refs/tags/<name>` before
+    `refs/remotes/<name>`, so the stale tag would silently win over the
+    freshly fetched remote-tracking ref. Before this fix, `count_behind`
+    built exactly this bare, ambiguous string and handed it to
+    `merge-base`/`rev-list` directly, reproducibly reporting a false
+    zero-behind PASS in this exact scenario."""
+    origin, head = _synced_head(tmp_path)
+    # A tag literally named "origin/main", pointing at the same commit
+    # `head` is currently synced to -- plausible if a contributor (or a
+    # prior tool run) tagged a release using the same string a remote-
+    # tracking ref would use.
+    _run(["git", "tag", "origin/main"], head)
+    _commit(origin, "c.txt", "new base commit")
+
+    gate.fetch_base(head)
+    result = gate.count_behind(head)
+    assert result == gate.BehindBaseCount(behind=1, ahead=0)
+
+
+@pytest.mark.slow
 def test_fetch_base_fails_closed_on_unreachable_remote(tmp_path: pathlib.Path) -> None:
     head = _init_repo(tmp_path / "head")
     _commit(head, "a.txt", "initial")

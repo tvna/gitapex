@@ -100,6 +100,40 @@ def test_run_diff_is_a_noop_safe_replacement_on_a_normal_clone(tmp_path: pathlib
 
 
 @pytest.mark.slow
+def test_run_diff_is_not_shadowed_by_a_same_named_local_tag(tmp_path: pathlib.Path) -> None:
+    """Regression, issue #1345 follow-up review (live-reproduced, not
+    theoretical): a bare `origin/main` string is ambiguous when a local
+    tag also happens to be named `origin/main` -- git's own
+    disambiguation order checks `refs/tags/<name>` before
+    `refs/remotes/<name>`. Here the shadowing tag points at a commit with
+    NO shared history with `HEAD` at all, so before this fix,
+    `require_common_ancestor` resolved the ambiguous name onto that
+    unrelated commit and raised a false "cannot find a common ancestor"
+    -- even though a real, valid common ancestor exists via the
+    correctly fetched `refs/remotes/origin/main`."""
+    unrelated = _init_repo(tmp_path / "unrelated", branch="trunk")
+    _commit(unrelated, "z.txt", "unrelated history, no shared parent")
+
+    origin = _init_repo(tmp_path / "origin")
+    _commit(origin, "a.txt", "initial")
+    _run(["git", "checkout", "-q", "-b", "feature"], origin)
+    _commit(origin, "b.txt", "feature work")
+
+    work = tmp_path / "work"
+    _run(["git", "clone", "-q", "--single-branch", "--branch", "feature", str(origin), str(work)], tmp_path)
+
+    # A local tag named "origin/main", pointing at a commit that shares
+    # no history with `work`'s own HEAD -- fetched in under a throwaway
+    # branch name first (git can only tag an object already in the local
+    # store), then that throwaway branch is deleted, leaving only the tag.
+    _run(["git", "fetch", "-q", str(unrelated), "trunk:refs/heads/__tmp_unrelated"], work)
+    _run(["git", "tag", "origin/main", "__tmp_unrelated"], work)
+    _run(["git", "branch", "-D", "__tmp_unrelated"], work)
+
+    assert producer.run_diff(work, "origin", "main", ["*.txt"]) == 0
+
+
+@pytest.mark.slow
 def test_ensure_base_ref_is_a_noop_when_ref_already_resolves(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -212,7 +246,7 @@ def test_run_diff_raises_distinctly_when_git_diff_itself_cannot_run(
         return real_run(*args, **kwargs)  # type: ignore[no-any-return, call-overload]
 
     monkeypatch.setattr(producer.subprocess, "run", _no_git_for_diff)
-    with pytest.raises(producer.DiffProducerError, match="cannot run git diff"):
+    with pytest.raises(producer.DiffProducerError, match="cannot run git to diff"):
         producer.run_diff(head, "origin", "main", ["*.txt"])
 
 

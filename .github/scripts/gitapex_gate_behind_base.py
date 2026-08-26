@@ -43,8 +43,9 @@ runner (`gitapex_gate_local_preflight.py`); issue #1345 ended that
 distinction by giving `gitapex_run_base_diff.py` (run via `uv run`, the
 shared `local_stdin` producer for `exception-handler-gap`,
 `stdlib-only-claim-drift`, and `detection-logic-property-coverage`) a
-network call of its own, so this gate is no longer the only one. The two fetches still differ in *when*
-they run, deliberately: a stale local `origin/main` is exactly the failure
+network call of its own, so this gate is no longer the only one. The two
+fetches still differ in *when* they run, deliberately: a stale local
+`origin/main` is exactly the failure
 mode this gate exists to catch (PR #961's session had one four commits
 stale until fetched), so this gate fetches on every run regardless of
 whether a local ref already exists -- comparing against anything less than
@@ -193,12 +194,27 @@ def count_behind(root: pathlib.Path, remote: str = BASE_REMOTE, branch: str = BA
     there verbatim -- message text included -- in issue #1345 so
     ``gitapex_run_base_diff.py`` shares the identical shallow-clone-aware
     check rather than duplicating it), a ``rev-list`` failure, or
-    unparseable ``rev-list`` output."""
+    unparseable ``rev-list`` output.
+
+    Every actual git command below targets ``qualified_ref``
+    (``refs/remotes/{remote}/{branch}``), never the bare ``base_ref`` --
+    a same-named local tag (``refs/tags/{remote}/{branch}``) can shadow
+    the bare form under git's own disambiguation order (tags resolve
+    before remote-tracking refs), silently steering ``merge-base``/
+    ``rev-list`` onto the wrong commit and producing a false "up to
+    date" PASS. Live-reproduced (issue #1345 follow-up review), the same
+    shadowing gap ``_gitapex_base_ref.peeled_ref_exists``'s own peeled
+    probe already closes for existence checks, closed here for the
+    actual comparison too. ``base_ref`` itself stays bare and is used
+    only in this function's own messages, so this repository's
+    pre-#1345 message-text-stability test suite keeps matching
+    unmodified."""
     base_ref = f"{remote}/{branch}"
-    _gitapex_base_ref.require_common_ancestor(root, base_ref, timeout=GIT_TIMEOUT_SECONDS, error_cls=GateError)
+    qualified_ref = f"refs/remotes/{remote}/{branch}"
+    _gitapex_base_ref.require_common_ancestor(root, qualified_ref, timeout=GIT_TIMEOUT_SECONDS, error_cls=GateError)
     result = _gitapex_base_ref.run_git(
         root,
-        ["rev-list", "--left-right", "--count", f"{base_ref}...HEAD"],
+        ["rev-list", "--left-right", "--count", f"{qualified_ref}...HEAD"],
         label=f"compare against {base_ref}",
         timeout=GIT_TIMEOUT_SECONDS,
         error_cls=GateError,

@@ -140,9 +140,19 @@ def run_diff(
     descriptors, so the diff bytes reaching a caller are exactly what git
     itself wrote (see the module docstring's own note on why this matters
     and why it does not change ``gitapex_gate_local_preflight.py``'s own,
-    separate, unaffected capture one level up)."""
+    separate, unaffected capture one level up).
+
+    Uses the fully-qualified ``refs/remotes/<remote>/<branch>`` for both
+    the common-ancestor check and the diff's own ``--merge-base``
+    argument -- never the bare ``<remote>/<branch>`` form, which a
+    same-named local tag can shadow under git's own disambiguation order
+    (``refs/tags/<name>`` resolves before ``refs/remotes/<name>``),
+    silently steering either check onto the wrong commit. Matches
+    ``_gitapex_base_ref.peeled_ref_exists``'s own qualified probe target
+    and ``gitapex_gate_behind_base.py``'s own ``count_behind`` fix for
+    the identical shadowing gap (issue #1345 follow-up review)."""
     ensure_base_ref(root, remote, branch, timeout=timeout)
-    base_ref = f"{remote}/{branch}"
+    base_ref = f"refs/remotes/{remote}/{branch}"
     _gitapex_base_ref.require_common_ancestor(root, base_ref, timeout=timeout, error_cls=DiffProducerError)
 
     try:
@@ -171,7 +181,12 @@ def run_diff(
     except subprocess.TimeoutExpired as error:
         raise DiffProducerError(f"git diff timed out after {timeout}s") from error
     except (OSError, subprocess.SubprocessError) as error:
-        raise DiffProducerError(f"cannot run git diff: {error}") from error
+        # Message shape matches _gitapex_base_ref.run_git's own
+        # "cannot run git to {label}: ..." convention (label="diff")
+        # rather than diverging from it -- this call can't reuse run_git
+        # itself, since run_git always captures output and this call
+        # deliberately does not (see this function's own docstring).
+        raise DiffProducerError(f"cannot run git to diff: {error}") from error
     return completed.returncode
 
 

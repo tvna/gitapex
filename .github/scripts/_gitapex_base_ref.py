@@ -63,13 +63,28 @@ that gate's own accepted treatment of the identical risk class. This is a
 disclosure, not a detection: a contributor who does not read stderr still
 gets the wrong verdict silently -- named here rather than solved.
 
-**The peeled-ref probe.** ``git rev-parse --verify --quiet <ref>`` alone
-reports a dangling ref (the object it points at is missing) or a
-same-named tag shadowing a missing branch ref as "resolves" -- a
-pre-existing gap in the raw command this issue's fix already replaces, not
-a regression it introduces. ``peeled_ref_exists`` uses the peeled
-``<ref>^{commit}`` form instead, which fails to resolve in both of those
-cases, closing this gap since the fix already touches this exact probe.
+**The peeled-ref probe, and the same shadowing gap in actual usage.**
+``git rev-parse --verify --quiet <ref>`` alone reports a dangling ref
+(the object it points at is missing) or a same-named tag shadowing a
+missing branch ref as "resolves" -- a pre-existing gap in the raw
+command this issue's fix already replaces, not a regression it
+introduces. ``peeled_ref_exists`` uses the peeled ``<ref>^{commit}``
+form instead, which fails to resolve in both of those cases, closing
+this gap for the existence check itself. That alone does not protect a
+caller's later ``merge-base``/``rev-list``/``diff`` invocation, though:
+this module's own :func:`require_common_ancestor` resolves whatever
+``base_ref`` string a caller passes using git's ordinary, non-peeled
+disambiguation order, which checks ``refs/tags/<name>`` before
+``refs/remotes/<name>`` for a bare, ambiguous name -- a same-named local
+tag can still silently win there even though ``peeled_ref_exists``
+correctly reported the real branch ref as present, producing a
+plausible-looking but wrong comparison (live-reproduced: a false "up to
+date" verdict from ``gitapex_gate_behind_base.py``'s own
+``count_behind``, issue #1345 follow-up review). Both of this module's
+callers close this the same way :func:`peeled_ref_exists` does: passing
+the fully-qualified ``refs/remotes/<remote>/<branch>`` -- never the bare
+``<remote>/<branch>`` form -- to every git command that actually walks
+history, not only to the existence probe.
 
 **The shallow-clone case.** A shallow clone (``--depth N``, as opposed to
 a restricted-refspec clone) can fetch a base branch correctly and still
