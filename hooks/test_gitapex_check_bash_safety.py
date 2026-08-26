@@ -805,6 +805,20 @@ OBFUSCATED_GIT_PUSH_WARN_PATH_COMMANDS = [
     # real bash that `CFG=" "; git -v $CFG push origin main` real-
     # expands to `git -v push origin main`.
     ('CFG=" "; git -v $CFG push origin main', "git-push-all-ifs-whitespace-assigned-variable-still-warn-path"),
+    # Found live by Step 8 independent review, twenty-eighth round
+    # (issue #1326): once the command itself reassigns `IFS`, a value
+    # like `\r` -- which does NOT vanish under bash's own DEFAULT `$IFS`
+    # -- must fail closed and be treated as possibly vanishing anyway,
+    # since this module cannot know the reassigned `$IFS` doesn't
+    # include `\r`. Confirmed live via real bash that `IFS="\r";
+    # CFG="\r"; git -v $CFG push origin main` (double-quoted so the
+    # carriage return survives shlex's own tokenization -- an unquoted
+    # `\r` is absorbed as ordinary whitespace before this code ever
+    # runs) genuinely word-splits `$CFG` away under the reassigned IFS.
+    (
+        'IFS="\r"; CFG="\r"; git -v $CFG push origin main',
+        "git-push-carriage-return-decoy-with-ifs-reassigned-still-warn-path",
+    ),
 ]
 
 

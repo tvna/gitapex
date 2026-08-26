@@ -1255,19 +1255,37 @@ def _token_is_all_unassigned_refs(token: str, name_to_value: dict[str, str]) -> 
     characters (see that constant's own module-level comment for the
     twenty-sixth-round refinement of this same fix).
 
-    Disclosed residual (found live by Step 8 independent review,
-    twenty-seventh round, issue #1326), ported from the main hook's own
-    identical disclosure, NOT fixed here: this check always assumes
-    bash's own DEFAULT `$IFS` (`_BASH_DEFAULT_IFS`) -- it has no
-    awareness that the COMMAND ITSELF can reassign `$IFS` before a
-    decoy reference is used, which real bash genuinely honors. Closing
-    this soundly needs tracking an `IFS=` assignment the same way
-    `_assigned_literals` tracks every other variable, then threading
-    that dynamic character set through every vanishing check in this
-    module -- a materially larger change than a whitespace-set
-    adjustment, left as a disclosed gap, the same posture this file's
-    own `KNOWN_BYPASS_COMMANDS` residuals already take for an analogous
-    "needs a genuinely new tracking dimension" gap.
+    Found live by Step 8 independent review, twenty-seventh round
+    (issue #1326), ported from the main hook's own identical fix, and
+    INITIALLY (mis)judged safe-direction-only and merely disclosed
+    rather than fixed: this check always assumed bash's own DEFAULT
+    `$IFS` (`_BASH_DEFAULT_IFS`) -- it had no awareness that the
+    COMMAND ITSELF can reassign `$IFS` before a decoy reference is
+    used. Found live by Step 8 independent review, twenty-eighth round
+    (issue #1326), ported from the main hook's own identical fix, that
+    this is actually a live HARD-DENY-BYPASS gap, not merely a safe-
+    direction one: `IFS="<CR>"; CFG="<CR>"; git -v $CFG push origin
+    main` (a literal carriage-return byte, DOUBLE-QUOTED so it survives
+    shlex's own tokenization intact -- an UNQUOTED `\r` is absorbed as
+    ordinary shell whitespace by `tokenize()` itself before this code
+    ever runs) reaches `_is_git_push_segment`'s own flag-skip loop with
+    `$CFG` wrongly judged NOT-vanishing, so the loop `break`s at the
+    literal `-v` flag's own decoy instead of skipping past it, and
+    genuinely MISSES the `push` sitting one position further --
+    confirmed live end-to-end via `classify()` wrongly returning
+    `deny=False` where the identical-ARGV default-IFS control (`CFG="
+    "; ...`) correctly returns `deny=True`.
+
+    Closed here, NARROWLY, ported from the main hook's own identical
+    fix, rather than by fully tracking `$IFS`'s dynamic value:
+    whenever the command itself assigns ANYTHING to `IFS`, this
+    function fails closed by treating EVERY bare/plain-braced
+    reference as POSSIBLY vanishing regardless of its own value --
+    correct for every caller of this function in this module too
+    (`_strip_leading_unassigned_bare_refs`, `_is_git_push_segment`,
+    `_skip_fetch_exec_wrapper`, `_process_sub_feeds_fetch_tool`,
+    `_fetch_tool_head` all use "vanishes" to mean "safe to skip past,
+    or safe to try the collapsed reading too").
 
     A second, related disclosed residual found live the SAME round,
     also ported from the main hook: the `-c`/`_GIT_LONG_VALUE_FLAGS`
@@ -1279,9 +1297,19 @@ def _token_is_all_unassigned_refs(token: str, name_to_value: dict[str, str]) -> 
     report (and HARD DENY) a push that real git would never actually
     perform. A NEW instance of the SAME accepted trade-off the `-c`
     block's own twenty-third-round fix already makes deliberately: fail
-    closed (a spurious deny) over fail open (a missed real push)."""
+    closed (a spurious deny) over fail open (a missed real push).
+    Re-examined by Step 8 independent review, twenty-eighth round
+    (issue #1326), ported from the main hook's own identical re-
+    examination, specifically hunting for an UNDER-detection direction
+    here -- none found: real git always consumes exactly one following
+    token as `-c`'s value regardless of well-formedness, so this can
+    only ever find a `push` real git's own argv construction also
+    reaches -- confirmed still safe-direction-only, left as a disclosed
+    residual rather than fixed."""
     if not _REF_RUN_TOKEN_RE.match(token):
         return False
+    if "IFS" in name_to_value:
+        return True
     for match in _REF_RUN_NAME_RE.finditer(token):
         bare_name = match.group("bare")
         if bare_name is not None:

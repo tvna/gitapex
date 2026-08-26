@@ -1336,29 +1336,45 @@ def _token_is_all_unassigned_refs(token: str, name_to_value: dict[str, str]) -> 
     comment for the twenty-sixth-round finding this narrower stripping
     closes).
 
-    Disclosed residual (found live by Step 8 independent review,
-    twenty-seventh round, issue #1326), NOT fixed here: this check
-    always assumes bash's own DEFAULT `$IFS` (`_BASH_DEFAULT_IFS`) --
-    it has no awareness that the COMMAND ITSELF can reassign `$IFS`
-    before a decoy reference is used (`IFS=$'\r'; CFG=$'\r'; git -v
-    $CFG push origin main`), which real bash genuinely honors (`$CFG`
-    word-splits away under the REASSIGNED IFS, confirmed live). This
-    round's own narrowing from Python's broader `str.strip()` to
-    exactly `_BASH_DEFAULT_IFS` happens to make this ONE specific
-    character (`\r`) a live miss again after round 25 happened to
-    (accidentally, not by design) cover it -- but the underlying gap
-    (`$IFS` reassignment is not tracked at all) already existed for
-    every OTHER possible IFS character (`,`, `x`, ...) in every prior
-    round too, confirmed live that round 25's own code missed those
-    identically. Closing this soundly needs tracking a `IFS=` assignment
-    the same way `_assigned_literals` tracks every other variable, then
-    threading that dynamic character set through every vanishing check
-    in this module instead of the one fixed `_BASH_DEFAULT_IFS` -- a
-    materially larger change than a whitespace-set adjustment, left as
-    a disclosed gap rather than attempted here, the same posture
-    `_rule_array_literal_content`'s own per-index array-element
-    residual (see that function's docstring) already takes for an
-    analogous "this needs a genuinely new tracking dimension" gap.
+    Found live by Step 8 independent review, twenty-seventh round
+    (issue #1326), and INITIALLY (mis)judged safe-direction-only and
+    merely disclosed rather than fixed: this check always assumed
+    bash's own DEFAULT `$IFS` (`_BASH_DEFAULT_IFS`) -- it had no
+    awareness that the COMMAND ITSELF can reassign `$IFS` before a
+    decoy reference is used. Found live by Step 8 independent review,
+    twenty-eighth round (issue #1326), that this is actually a live
+    HARD-DENY-BYPASS-CAPABLE gap, not merely a safe-direction one:
+    `IFS="<CR>"; CFG="<CR>"; git -v $CFG push origin main` (a literal
+    carriage-return byte, DOUBLE-QUOTED so it survives shlex's own
+    tokenization intact -- an UNQUOTED `\r` is absorbed as ordinary
+    shell whitespace by `tokenize()` itself before this code ever runs,
+    which is why the twenty-seventh round's own example command did
+    not actually reach this check through the real `classify()`
+    pipeline and wrongly read as safe) reaches `_is_git_push_segment`'s
+    own flag-skip loop with `$CFG` wrongly judged NOT-vanishing (since
+    `\r` is not in `_BASH_DEFAULT_IFS`) -- the loop then `break`s at
+    the literal `-v` flag's own decoy instead of skipping past it, and
+    genuinely MISSES the `push` sitting one position further, confirmed
+    live end-to-end via `classify()` returning `is_git_push=False`
+    where the identical-ARGV default-IFS control (`CFG=" "; ...`)
+    correctly returns `True`.
+
+    Closed here, NARROWLY, rather than by fully tracking `$IFS`'s
+    dynamic value (a materially larger change -- threading a per-
+    command character set through every vanishing check in this module
+    instead of the one fixed `_BASH_DEFAULT_IFS`, left as a disclosed
+    gap for a future round if ever needed): whenever the command itself
+    assigns ANYTHING to `IFS` (`"IFS" in name_to_value`), this function
+    can no longer trust `_BASH_DEFAULT_IFS` to be the actual word-
+    splitting character set in effect, so it fails closed by treating
+    EVERY bare/plain-braced reference as POSSIBLY vanishing regardless
+    of its own value -- correct for every caller of this function
+    (`_strip_leading_unassigned_bare_refs`, `_is_git_push_segment`,
+    `_value_position_after`'s own skip-loop, and the array-literal-
+    content recursion all use "vanishes" to mean "safe to skip past, or
+    safe to try the collapsed reading too," so erring toward MORE
+    tokens reading as vanishing when `$IFS` is unpredictable is the
+    fail-closed direction for every one of them, not a mixed bag).
 
     A second, related disclosed residual found live the SAME round: the
     `-c`/`_GIT_LONG_VALUE_FLAGS` value-consumption block inside
@@ -1378,9 +1394,22 @@ def _token_is_all_unassigned_refs(token: str, name_to_value: dict[str, str]) -> 
     than parsing git's own config-key grammar to rule out malformed
     values -- fail closed (a spurious warn/deny) over fail open (a
     missed real push), consistent with this module's own established
-    posture throughout."""
+    posture throughout. Re-examined by Step 8 independent review,
+    twenty-eighth round (issue #1326), specifically hunting for an
+    UNDER-detection direction here (the same direction the `$IFS`
+    residual above turned out to have) -- none found: real git always
+    consumes exactly one following token as `-c`'s value regardless of
+    that token's own well-formedness (confirmed live, including a
+    flag-shaped decoy: `git -c -v push origin main` genuinely has `-c`
+    swallow `-v` itself as a malformed config key, never reaching
+    `push` either), so this block's own "assume consumed, keep
+    scanning" logic can only ever find a `push` that real git's own
+    argv construction also reaches -- confirmed still safe-direction-
+    only, left as a disclosed residual rather than fixed."""
     if not _REF_RUN_TOKEN_RE.match(token):
         return False
+    if "IFS" in name_to_value:
+        return True
     for match in _REF_RUN_NAME_RE.finditer(token):
         bare_name = match.group("bare")
         if bare_name is not None:

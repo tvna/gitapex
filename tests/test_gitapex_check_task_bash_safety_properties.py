@@ -659,6 +659,41 @@ def test_token_is_all_unassigned_refs_false_for_a_bare_ref_assigned_only_a_carri
     assert checker._token_is_all_unassigned_refs("$CFG", {"CFG": "\r"}) is False
 
 
+def test_token_is_all_unassigned_refs_true_for_a_carriage_return_when_ifs_is_reassigned() -> None:
+    """Regression pin for the real HARD-DENY-BYPASS bug found live by
+    Step 8 independent review, twenty-eighth round (issue #1326),
+    ported from the main hook's own identical fix: once the COMMAND
+    ITSELF assigns anything to `IFS`, a value like `\\r` -- which does
+    NOT vanish under bash's own DEFAULT `$IFS` -- must fail closed and
+    be treated as POSSIBLY vanishing anyway, since this module has no
+    way to know the command's own reassigned `$IFS` doesn't include
+    `\\r`. Confirmed live via real bash that `IFS="\\r"; CFG="\\r"; git
+    -v $CFG push origin main` (double-quoted so it survives shlex's own
+    tokenization) genuinely word-splits `$CFG` away under the
+    reassigned IFS."""
+    assert checker._token_is_all_unassigned_refs("$CFG", {"IFS": "\r", "CFG": "\r"}) is True
+
+
+def test_is_git_push_segment_true_for_a_flag_skip_decoy_when_ifs_is_reassigned() -> None:
+    """Regression pin for the same twenty-eighth-round bug: with `IFS`
+    reassigned, a decoy sitting behind a literal boolean flag (`-v`)
+    that previously stopped the flag-skip loop cold must now be
+    skipped, so a real `push` past it is not missed -- a HARD DENY
+    bypass for this task-agent rule before this fix."""
+    seg = ["git", "-v", "$CFG", "push", "origin", "main"]
+    assert checker._is_git_push_segment(seg, {"IFS": "\r", "CFG": "\r"}) is True
+
+
+def test_classify_denies_git_push_via_ifs_reassignment_end_to_end() -> None:
+    """End-to-end companion to the two unit tests above, reached through
+    `classify()`: the identical-ARGV default-IFS control (`CFG=" ";
+    ...`) already correctly returns `deny=True` -- this confirms the
+    reassigned-IFS case now matches it instead of being silently
+    missed."""
+    verdict = checker.classify('IFS="\r"; CFG="\r"; git -v $CFG push origin main')
+    assert verdict.deny is True
+
+
 def test_is_git_push_segment_true_for_an_empty_assigned_variable_in_boolean_flag_position() -> None:
     """Regression pin for the real bypass found live by Step 8
     independent review, twenty-fourth round (issue #1326), ported from

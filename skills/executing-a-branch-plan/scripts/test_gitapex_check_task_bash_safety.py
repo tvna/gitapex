@@ -525,6 +525,17 @@ DENIED_COMMANDS = [
     # `CFG=" "; git -v $CFG push origin main` real-expands to `git -v
     # push origin main`.
     ('CFG=" "; git -v $CFG push origin main', "git-push-all-ifs-whitespace-assigned-variable"),
+    # Found live by Step 8 independent review, twenty-eighth round
+    # (issue #1326), ported from the main hook's own identical fix:
+    # once the command itself reassigns `IFS`, a value like `\r` --
+    # which does NOT vanish under bash's own DEFAULT `$IFS` -- must
+    # fail closed and be treated as possibly vanishing anyway, since
+    # this module cannot know the reassigned `$IFS` doesn't include
+    # `\r` -- a hard deny bypass, confirmed live via real bash that
+    # `IFS="\r"; CFG="\r"; git -v $CFG push origin main` (double-quoted
+    # so the carriage return survives shlex's own tokenization)
+    # genuinely word-splits `$CFG` away under the reassigned IFS.
+    ('IFS="\r"; CFG="\r"; git -v $CFG push origin main', "git-push-carriage-return-decoy-with-ifs-reassigned"),
 ]
 
 # --- Allowed: ordinary git/test/build commands that must never regress ----
