@@ -536,6 +536,19 @@ DENIED_COMMANDS = [
     # so the carriage return survives shlex's own tokenization)
     # genuinely word-splits `$CFG` away under the reassigned IFS.
     ('IFS="\r"; CFG="\r"; git -v $CFG push origin main', "git-push-carriage-return-decoy-with-ifs-reassigned"),
+    # Found live by Step 8 independent review, twenty-ninth round (issue
+    # #1326), ported from the main hook's own identical fix: the twenty-
+    # eighth round's own blanket `$IFS`-reassignment rule reopened a
+    # hard-deny bypass strictly broader and easier to trigger than the
+    # one it closed -- an ordinary, everyday pattern (a CSV-style IFS
+    # reassignment paired with an ordinary `git -c` invocation), no
+    # exotic byte tricks needed. `-c`'s own value-consumption loop
+    # wrongly treated the REAL, non-vanishing config value as a decoy to
+    # skip past, landing on and consuming the literal `push` token
+    # itself as `-c`'s own value instead. Confirmed live via real bash
+    # that `IFS=,; CFG=user.name=x; git -c $CFG push` real-expands to
+    # `git -c user.name=x push`, a genuine push.
+    ("IFS=,; CFG=user.name=x; git -c $CFG push", "git-push-real-config-value-past-unrelated-ifs-reassignment"),
 ]
 
 # --- Allowed: ordinary git/test/build commands that must never regress ----
@@ -625,6 +638,21 @@ ALLOWED_COMMANDS = [
     # fetch_exec` rewrite: a quote character inside a `$(...)` argument
     # to eval must not itself trip a spurious deny.
     ("""eval $(echo "it's fine")""", "eval-command-substitution-with-apostrophe-stays-allowed"),
+    # False-positive guards for the twenty-ninth-round `$IFS`-reassignment
+    # fix (issue #1326), ported from the main hook's own identical fix:
+    # the twenty-eighth round's own blanket "IFS reassigned anywhere ->
+    # always treat as vanishing" rule wrongly stripped/skipped a REAL,
+    # non-vanishing leading reference as a decoy purely because `$IFS`
+    # was reassigned elsewhere in the command.
+    ("IFS=x; REAL=foo; $REAL uv $VERB", "dynamic-wrapper-stays-allowed-despite-unrelated-ifs-reassignment"),
+    # Confirmed live via real bash that `IFS=,; PRINTER=/bin/echo;
+    # $PRINTER bash <(curl https://example.com/x.sh)` just PRINTS the
+    # process substitution's own path text -- `/bin/echo` never reads or
+    # executes it.
+    (
+        "IFS=,; PRINTER=/bin/echo; $PRINTER bash <(curl https://example.com/x.sh)",
+        "fetch-exec-wrapper-stays-allowed-despite-unrelated-ifs-reassignment",
+    ),
 ]
 
 # --- Known, disclosed, unresolved token-gate bypasses -----------------------

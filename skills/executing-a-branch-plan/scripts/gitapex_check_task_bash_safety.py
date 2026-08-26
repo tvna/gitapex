@@ -1287,7 +1287,71 @@ def _token_is_all_unassigned_refs(token: str, name_to_value: dict[str, str]) -> 
     `_fetch_tool_head` all use "vanishes" to mean "safe to skip past,
     or safe to try the collapsed reading too").
 
-    A second, related disclosed residual found live the SAME round,
+    Found live by Step 8 independent review, twenty-ninth round (issue
+    #1326), ported from the main hook's own identical fix: the twenty-
+    eighth round's own blanket rule above -- and its claim that it was
+    "correct for every caller ... " -- was ITSELF wrong, confirmed live
+    via two independent adversarial reviews finding real regressions.
+    Most consequential: `_is_git_push_segment`'s own `-c`/
+    `_GIT_LONG_VALUE_FLAGS` value-consumption block uses "vanishing" to
+    decide whether to SKIP PAST a token while hunting for the real
+    config value -- treating a token that does NOT actually vanish as if
+    it does makes that block skip past the REAL config value and consume
+    the WRONG later token (often the literal `push` itself) as `-c`'s
+    own value instead, hiding the genuine `push` from the scan entirely.
+    Confirmed live end-to-end with a thoroughly ordinary pattern, no
+    exotic byte tricks needed -- just an everyday CSV-style IFS
+    reassignment paired with an everyday `git -c` invocation: `IFS=,;
+    CFG=user.name=x; git -c $CFG push` real-expands (confirmed via real
+    bash `set -x`) to `git -c user.name=x push`, a genuine push, but the
+    twenty-eighth round's own blanket rule made `classify()` wrongly
+    return `deny=False` -- a NEW hard-deny bypass strictly broader and
+    easier to trigger than the one that round set out to close. Also
+    found, lower severity but real: the SAME blanket rule made
+    `_strip_leading_unassigned_bare_refs` and `_skip_fetch_exec_wrapper`
+    wrongly treat an ordinary, non-vanishing leading reference (a real
+    wrapper path assigned to a variable) as a decoy to strip/skip purely
+    because `$IFS` was reassigned anywhere in the command -- e.g. `IFS=,;
+    PRINTER=/bin/echo; $PRINTER bash <(curl https://example.com/x.sh)`
+    (real bash: `/bin/echo` just PRINTS the process-substitution's own
+    path text, never reads or executes it) was wrongly denied.
+
+    All traced to the same root defect: the twenty-eighth round's fix
+    THREW AWAY information it already had. `_assigned_literals` already
+    records `$IFS`'s own literal reassigned value in `name_to_value[
+    "IFS"]` whenever the reassignment itself is a plain literal (not
+    itself dynamic) -- the blanket rule ignored that known value
+    entirely and substituted a maximally-pessimistic "anything might
+    vanish" assumption instead of just USING it. Closed here, ported
+    from the main hook's own identical fix, by consulting the actual
+    reassigned value when present, falling back to `_BASH_DEFAULT_IFS`
+    exactly as before when `$IFS` was never reassigned (or was
+    reassigned only dynamically, so `_assigned_literals` never recorded
+    it): `effective_ifs = name_to_value.get("IFS", _BASH_DEFAULT_IFS)`,
+    used everywhere this function previously stripped `_BASH_DEFAULT_
+    IFS` specifically. Re-verified live against the regressions above
+    (now correctly resolved) AND against the original twenty-eighth-
+    round target (still correctly denied, since `effective_ifs` is now
+    the actual reassigned value and a genuinely-vanishing decoy still
+    strips to nothing) AND against the twenty-third/twenty-fourth-round
+    decoy scenarios that motivated the `-c` block's own skip-loop in the
+    first place (a NAME never assigned anywhere, or assigned the empty
+    string, still vanishes regardless of `$IFS`). This retracts the
+    "correct for every caller" claim above -- it was wrong -- without
+    reopening any prior round's fix.
+
+    Still disclosed, not fixed, as a narrower residual than the blanket
+    rule it replaces: this reads `name_to_value["IFS"]` from the SAME
+    flat, order-and-scope-blind assignment map every other lookup in
+    this function already uses -- a command that reassigns `$IFS` more
+    than once, or that references a decoy BEFORE the `$IFS` reassignment
+    that would apply to it in real execution order, still only ever sees
+    ONE captured value regardless of position, the same pre-existing
+    scoping limitation every other name-to-value lookup in this module
+    already accepts, not a new gap this fix introduces.
+
+    A second, related disclosed residual found live the same (twenty-
+    eighth) round,
     also ported from the main hook: the `-c`/`_GIT_LONG_VALUE_FLAGS`
     value-consumption block inside `_is_git_push_segment` below now
     correctly determines a value like `\r` does NOT vanish and consumes
@@ -1308,19 +1372,18 @@ def _token_is_all_unassigned_refs(token: str, name_to_value: dict[str, str]) -> 
     residual rather than fixed."""
     if not _REF_RUN_TOKEN_RE.match(token):
         return False
-    if "IFS" in name_to_value:
-        return True
+    effective_ifs = name_to_value.get("IFS", _BASH_DEFAULT_IFS)
     for match in _REF_RUN_NAME_RE.finditer(token):
         bare_name = match.group("bare")
         if bare_name is not None:
-            if name_to_value.get(bare_name, "").strip(_BASH_DEFAULT_IFS):
+            if name_to_value.get(bare_name, "").strip(effective_ifs):
                 return False
         else:
             braced_name = match.group("braced")
             if "[" in match.group(0):
                 if braced_name in name_to_value:
                     return False
-            elif name_to_value.get(braced_name, "").strip(_BASH_DEFAULT_IFS):
+            elif name_to_value.get(braced_name, "").strip(effective_ifs):
                 return False
     return True
 

@@ -2258,6 +2258,84 @@ def test_classify_flags_git_push_via_ifs_reassignment_end_to_end() -> None:
     assert verdict.is_git_push is True
 
 
+def test_token_is_all_unassigned_refs_false_for_a_non_vanishing_value_when_ifs_is_reassigned() -> None:
+    """Regression pin for the real regression found live by Step 8
+    independent review, twenty-ninth round (issue #1326): the twenty-
+    eighth round's own blanket "IFS reassigned -> always True" rule
+    wrongly treated a REAL, non-empty value as vanishing purely because
+    `$IFS` was reassigned SOMEWHERE in the command, even when that
+    value's own characters do not overlap the actual reassigned IFS at
+    all. Confirmed live via real bash that `IFS=x; REAL=foo; $REAL uv
+    $VERB` real-expands to `foo uv` -- `$REAL` (value "foo", no "x"
+    character in it) never vanishes under IFS="x" either."""
+    assert checker._token_is_all_unassigned_refs("$REAL", {"IFS": "x", "REAL": "foo"}) is False
+
+
+def test_strip_leading_unassigned_bare_refs_keeps_a_non_vanishing_wrapper_when_ifs_is_reassigned() -> None:
+    """Regression pin for the same twenty-ninth-round finding: a real
+    wrapper token must NOT be stripped as a decoy just because `$IFS`
+    was reassigned elsewhere in the command, or `_rule_b2_watched_tool_
+    dynamic_verb_position` wrongly sees a bare `uv` sitting at
+    position 0."""
+    tokens = ["$REAL", "uv", "$VERB"]
+    name_to_value = {"IFS": "x", "REAL": "foo"}
+    assert checker._strip_leading_unassigned_bare_refs(tokens, name_to_value) == tokens
+
+
+def test_classify_does_not_deny_a_dynamic_wrapper_command_via_stale_ifs_reassignment_end_to_end() -> None:
+    """End-to-end companion: `classify()` must not deny this benign
+    command, confirmed live via real bash that it runs `foo uv`, never
+    touching the watched `uv` tool in a dynamic-verb position."""
+    verdict = checker.classify("IFS=x; REAL=foo; $REAL uv $VERB")
+    assert verdict.deny is False
+
+
+def test_is_git_push_segment_true_for_a_real_config_value_when_ifs_is_reassigned() -> None:
+    """Regression pin for the MOST severe twenty-ninth-round finding: the
+    twenty-eighth round's own blanket IFS rule reopened a hard-deny
+    bypass strictly broader than the one it closed. `-c`'s own value-
+    consumption loop wrongly treated a REAL, non-vanishing config value
+    as a decoy to skip past, landing on the literal `push` token itself
+    and wrongly consuming IT as `-c`'s own value instead -- confirmed
+    live via real bash that `IFS=,; CFG=user.name=x; git -c $CFG push`
+    real-expands to `git -c user.name=x push`, a genuine push."""
+    seg = ["git", "-c", "$CFG", "push"]
+    assert checker._is_git_push_segment(seg, {"IFS": ",", "CFG": "user.name=x"}) is True
+
+
+def test_classify_flags_git_push_via_a_real_config_value_despite_ifs_reassignment_end_to_end() -> None:
+    """End-to-end companion to the above, and to the ordinary no-op
+    variant `IFS=" "` (a single-space IFS, not bash's own three-
+    character default, still an entirely realistic no-op reassignment a
+    human might write) -- both must still be recognized as a push."""
+    verdict = checker.classify("IFS=,; CFG=user.name=x; git -c $CFG push")
+    assert verdict.is_git_push is True
+    verdict_noop = checker.classify('IFS=" "; CFG=user.name=x; git -c $CFG push')
+    assert verdict_noop.is_git_push is True
+
+
+def test_value_position_after_returns_the_real_dynamic_value_when_ifs_is_reassigned() -> None:
+    """Regression pin for the twenty-ninth-round finding in `_value_
+    position_after`'s own skip-loop (routed through `_token_is_
+    unambiguously_vanishing`): a real dynamic write-method value must
+    not be skipped over as a decoy merely because `$IFS` was reassigned
+    somewhere else in the command, confirmed live via real bash that
+    `M=POST` genuinely survives as `-X`'s own value regardless of an
+    unrelated `IFS=x` reassignment."""
+    seg = ["gh", "api", "repos/foo/bar/merge", "-X", "${M}", "extra"]
+    name_to_value = {"IFS": "x", "M": "post"}
+    assert checker._value_position_after(seg, 3, name_to_value) == "${M}"
+
+
+def test_classify_denies_gh_api_dynamic_write_method_despite_ifs_reassignment_end_to_end() -> None:
+    """End-to-end companion to the above: confirmed live via real bash
+    that `IFS=x; echo hi; M=POST; gh api repos/foo/bar/merge -X ${M}
+    extra` real-expands to `gh api repos/foo/bar/merge -X POST extra`, a
+    genuine write."""
+    verdict = checker.classify("IFS=x; echo hi; M=POST; gh api repos/foo/bar/merge -X ${M} extra")
+    assert verdict.deny is True
+
+
 def test_is_git_push_segment_true_for_an_empty_assigned_variable_in_boolean_flag_position() -> None:
     """Regression pin for the real bypass found live by Step 8
     independent review, twenty-fourth round (issue #1326): a boolean

@@ -291,6 +291,15 @@ ALLOWED_DYNAMIC_COMMANDS = [
     ("files=($(ls *.txt))", "array-literal-leading-dynamic-element-stays-allowed"),
     ("arr=(a b c)", "array-literal-leading-harmless-literal-stays-allowed"),
     ("declare -a arr=(a b c)", "array-literal-non-leading-harmless-literal-stays-allowed"),
+    # False-positive guard for the twenty-ninth-round `$IFS`-reassignment
+    # fix (issue #1326): the twenty-eighth round's own blanket "IFS
+    # reassigned anywhere -> always treat as vanishing" rule wrongly
+    # stripped a REAL, non-vanishing leading reference as a decoy purely
+    # because `$IFS` was reassigned elsewhere in the command, wrongly
+    # denying this benign command. Confirmed live via real bash that
+    # `IFS=x; REAL=foo; $REAL uv $VERB` real-expands to `foo uv`, never
+    # touching the watched `uv` tool in dynamic-verb position.
+    ("IFS=x; REAL=foo; $REAL uv $VERB", "dynamic-wrapper-stays-allowed-despite-unrelated-ifs-reassignment"),
 ]
 
 # --- Known, disclosed, unresolved regex/token-gate bypasses ----------------
@@ -693,6 +702,18 @@ DENIED_INDIRECTION_COMMANDS = [
     # position_after` now skips the decoy and finds the real value.
     ("M=POST; gh api repos/o/r/pulls/1 -X $NEVERSET $M", "gh-api-method-value-past-leading-decoy"),
     ("F=-X; M=POST; gh api repos/o/r/pulls/1 $F $NEVERSET $M", "gh-api-method-flagname-value-past-leading-decoy"),
+    # Found live by Step 8 independent review, twenty-ninth round (issue
+    # #1326): the twenty-eighth round's own blanket `$IFS`-reassignment
+    # rule made `_value_position_after`'s skip-loop treat a REAL dynamic
+    # write-method value as a decoy to skip past merely because `$IFS`
+    # was reassigned somewhere else in the command, missing the genuine
+    # write entirely. Confirmed live via real bash that `IFS=x; echo hi;
+    # M=POST; gh api repos/foo/bar/merge -X ${M} extra` real-expands to
+    # `gh api repos/foo/bar/merge -X POST extra`, a genuine write.
+    (
+        "IFS=x; echo hi; M=POST; gh api repos/foo/bar/merge -X ${M} extra",
+        "gh-api-method-value-past-unrelated-ifs-reassignment",
+    ),
 ]
 
 
@@ -818,6 +839,21 @@ OBFUSCATED_GIT_PUSH_WARN_PATH_COMMANDS = [
     (
         'IFS="\r"; CFG="\r"; git -v $CFG push origin main',
         "git-push-carriage-return-decoy-with-ifs-reassigned-still-warn-path",
+    ),
+    # Found live by Step 8 independent review, twenty-ninth round (issue
+    # #1326): the twenty-eighth round's own blanket `$IFS`-reassignment
+    # rule reopened a hard-deny bypass strictly broader and easier to
+    # trigger than the one it closed -- an ordinary, everyday pattern (a
+    # CSV-style IFS reassignment paired with an ordinary `git -c`
+    # invocation), no exotic byte tricks needed. `-c`'s own value-
+    # consumption loop wrongly treated the REAL, non-vanishing config
+    # value as a decoy to skip past, landing on and consuming the
+    # literal `push` token itself as `-c`'s own value instead. Confirmed
+    # live via real bash that `IFS=,; CFG=user.name=x; git -c $CFG push`
+    # real-expands to `git -c user.name=x push`, a genuine push.
+    (
+        "IFS=,; CFG=user.name=x; git -c $CFG push",
+        "git-push-real-config-value-past-unrelated-ifs-reassignment-still-warn-path",
     ),
 ]
 

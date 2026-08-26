@@ -694,6 +694,62 @@ def test_classify_denies_git_push_via_ifs_reassignment_end_to_end() -> None:
     assert verdict.deny is True
 
 
+def test_token_is_all_unassigned_refs_false_for_a_non_vanishing_value_when_ifs_is_reassigned() -> None:
+    """Regression pin for the real regression found live by Step 8
+    independent review, twenty-ninth round (issue #1326), ported from
+    the main hook's own identical fix: the twenty-eighth round's own
+    blanket "IFS reassigned -> always True" rule wrongly treated a REAL,
+    non-empty value as vanishing purely because `$IFS` was reassigned
+    SOMEWHERE in the command, even when that value's own characters do
+    not overlap the actual reassigned IFS at all. Confirmed live via
+    real bash that `IFS=x; REAL=foo; $REAL uv $VERB` real-expands to
+    `foo uv` -- `$REAL` (value "foo", no "x" character in it) never
+    vanishes under IFS="x" either."""
+    assert checker._token_is_all_unassigned_refs("$REAL", {"IFS": "x", "REAL": "foo"}) is False
+
+
+def test_is_git_push_segment_true_for_a_real_config_value_when_ifs_is_reassigned() -> None:
+    """Regression pin for the MOST severe twenty-ninth-round finding,
+    ported from the main hook's own identical fix: the twenty-eighth
+    round's own blanket IFS rule reopened a hard-deny bypass strictly
+    broader than the one it closed. `-c`'s own value-consumption loop
+    wrongly treated a REAL, non-vanishing config value as a decoy to
+    skip past, landing on the literal `push` token itself and wrongly
+    consuming IT as `-c`'s own value instead -- confirmed live via real
+    bash that `IFS=,; CFG=user.name=x; git -c $CFG push` real-expands to
+    `git -c user.name=x push`, a genuine push."""
+    seg = ["git", "-c", "$CFG", "push"]
+    assert checker._is_git_push_segment(seg, {"IFS": ",", "CFG": "user.name=x"}) is True
+
+
+def test_classify_denies_git_push_via_a_real_config_value_despite_ifs_reassignment_end_to_end() -> None:
+    """End-to-end companion to the above: must still be recognized (and
+    HARD DENIED, this being the task-scoped file) as a push."""
+    verdict = checker.classify("IFS=,; CFG=user.name=x; git -c $CFG push")
+    assert verdict.deny is True
+
+
+def test_skip_fetch_exec_wrapper_does_not_skip_a_non_vanishing_wrapper_when_ifs_is_reassigned() -> None:
+    """Regression pin for the same twenty-ninth-round finding: a real
+    (non-vanishing) leading token must not be skipped as a decoy wrapper
+    just because `$IFS` was reassigned elsewhere in the command, or a
+    benign command like `/bin/echo bash <(...)` (which never reads or
+    executes the process substitution) is wrongly treated as if `bash`
+    itself were the interpreter actually invoked."""
+    seg = ["$PRINTER", "bash"]
+    name_to_value = {"IFS": ",", "PRINTER": "/bin/echo"}
+    assert checker._skip_fetch_exec_wrapper(seg, name_to_value) == 0
+
+
+def test_classify_does_not_deny_a_dynamic_printer_wrapper_via_stale_ifs_reassignment_end_to_end() -> None:
+    """End-to-end companion to the above: confirmed live via real bash
+    that `IFS=,; PRINTER=/bin/echo; $PRINTER bash <(curl
+    https://example.com/x.sh)` just PRINTS the process substitution's
+    own path text -- `/bin/echo` never reads or executes it."""
+    verdict = checker.classify("IFS=,; PRINTER=/bin/echo; $PRINTER bash <(curl https://example.com/x.sh)")
+    assert verdict.deny is False
+
+
 def test_is_git_push_segment_true_for_an_empty_assigned_variable_in_boolean_flag_position() -> None:
     """Regression pin for the real bypass found live by Step 8
     independent review, twenty-fourth round (issue #1326), ported from
