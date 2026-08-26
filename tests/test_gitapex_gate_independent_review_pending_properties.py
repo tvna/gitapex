@@ -112,7 +112,7 @@ def test_a_verdict_inside_a_fenced_code_block_is_never_detected(sha: str, fence:
     and issue #1311's own defeat-test-disclosure round), not a theoretical
     one.
 
-    Confirmed to have teeth: removing `_strip_fenced_code_blocks`'s call
+    Confirmed to have teeth: removing `strip_fenced_code_blocks`'s call
     from `parse_verdict` makes this property FAIL on every generated
     example, since the unstripped fenced section still matches
     `_HEADING_RE`/`_VERDICT_RE`/`_COMMIT_RE` directly."""
@@ -131,7 +131,7 @@ def test_a_verdict_inside_a_fenced_code_block_is_never_detected(sha: str, fence:
 def test_strip_fenced_code_blocks_direct_call_handles_any_valid_close_length(
     open_len: int, extra_close_len: int, fence_char: str, inner: str
 ) -> None:
-    """Direct call into `_strip_fenced_code_blocks` itself: CommonMark's own
+    """Direct call into `strip_fenced_code_blocks` itself: CommonMark's own
     rule is that a closing fence needs the same character repeated *at
     least* as many times as the opening one, not an exact-length match --
     a live adversarial round found an earlier backreference-based version
@@ -145,7 +145,7 @@ def test_strip_fenced_code_blocks_direct_call_handles_any_valid_close_length(
     close_fence = fence_char * close_len
     marker = f"MARKER_START{inner}MARKER_END"  # a sentinel `inner` alone can't coincidentally match "before"/"after"
     text = f"before\n{open_fence}\n{marker}\n{close_fence}\nafter\n"
-    stripped = gate._strip_fenced_code_blocks(text)
+    stripped = gate.strip_fenced_code_blocks(text)
     assert "before" in stripped
     assert "after" in stripped
     assert marker not in stripped
@@ -163,7 +163,7 @@ def test_strip_fenced_code_blocks_direct_call_unclosed_fence_extends_to_eof(fenc
     fence = fence_char * 3
     marker = f"MARKER_START{inner}MARKER_END"  # a sentinel `inner` alone can't coincidentally match "before"
     text = f"before\n{fence}\n{marker}"
-    stripped = gate._strip_fenced_code_blocks(text)
+    stripped = gate.strip_fenced_code_blocks(text)
     assert "before" in stripped
     assert marker not in stripped
 

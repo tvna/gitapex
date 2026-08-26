@@ -27,7 +27,7 @@ gate, found real defects; the current design closes all of them:
    nothing) satisfied a bare substring search on the two Markdown
    targets. ``_searchable_text`` now strips both, reusing
    ``gitapex_gate_independent_review_pending``'s own
-   ``_strip_html_comments``/``_strip_fenced_code_blocks`` rather than
+   ``strip_html_comments``/``strip_fenced_code_blocks`` rather than
    re-deriving them -- this gate's own definition of "live text" can
    never independently drift from the sibling gate's.
 3. **Second draft's substring search was case-sensitive, where the
@@ -111,7 +111,7 @@ from dataclasses import dataclass
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-import gitapex_gate_independent_review_pending as gate
+import gitapex_gate_independent_review_pending as gate  # sys.path bootstrap above must run first
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 
@@ -165,8 +165,8 @@ def _searchable_text(content: str, *, is_markdown: bool) -> str:
     plain text, unchanged; neither construct is part of its own syntax."""
     if not is_markdown:
         return content
-    stripped = gate._strip_html_comments(content)
-    return gate._strip_fenced_code_blocks(stripped)
+    stripped = gate.strip_html_comments(content)
+    return gate.strip_fenced_code_blocks(stripped)
 
 
 def _normalize_whitespace(text: str) -> str:

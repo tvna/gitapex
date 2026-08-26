@@ -286,7 +286,7 @@ def test_defeat_attempt_tilde_fenced_example_verdict_does_not_pass() -> None:
 
 def test_strip_fenced_code_blocks_leaves_surrounding_prose_intact() -> None:
     text = "before\n\n```\nfenced content\nmore fenced\n```\n\nafter\n"
-    stripped = gate._strip_fenced_code_blocks(text)
+    stripped = gate.strip_fenced_code_blocks(text)
     assert "before" in stripped
     assert "after" in stripped
     assert "fenced content" not in stripped

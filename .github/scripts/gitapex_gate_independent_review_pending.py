@@ -48,7 +48,7 @@ each closed here:
 
 - A fenced (``` / ~~~) code block, matching- or longer-length closing
   fence alike (CommonMark's own rule, not an exact-length match), is
-  stripped before any heading/field search (`_strip_fenced_code_blocks`,
+  stripped before any heading/field search (`strip_fenced_code_blocks`,
   a linear single pass -- an earlier backreference-based regex both missed
   the longer-closing-fence case AND cost tens of seconds against a
   few hundred lines of non-matching fence-like content, a real
@@ -56,7 +56,7 @@ each closed here:
 - An HTML comment (`<!-- ... -->`, GitHub renders it as nothing at all --
   arguably the more dangerous case, since a human skimming the rendered
   PR body sees no suspicious text at all) is stripped the same way
-  (`_strip_html_comments`).
+  (`strip_html_comments`).
 - A 4-or-more-space-indented block (CommonMark's own indented-code-block
   rule) never counts as a live heading: the heading regex only accepts
   0-3 leading spaces, matching CommonMark's own ATX-heading indentation
@@ -141,7 +141,7 @@ _NEXT_HEADING_RE = re.compile(r"^[ ]{0,3}#{1,6}[ \t]+", re.MULTILINE)
 _FENCE_OPEN_RE = re.compile(r"^[ \t]*(`{3,}|~{3,})")
 
 
-def _strip_fenced_code_blocks(text: str) -> str:
+def strip_fenced_code_blocks(text: str) -> str:
     """Blank out every fenced code block (``` or ~~~, CommonMark's two
     fence characters) -- rendered as literal/quoted text, never a live
     Markdown heading or list, the same "quoted content is not live prose"
@@ -162,7 +162,14 @@ def _strip_fenced_code_blocks(text: str) -> str:
     lines of non-matching fence-like content) -- a real availability risk
     against a required CI check, not merely a style concern. This version
     has no such quantifier: each line is visited a bounded number of times
-    regardless of how many unmatched candidate opens precede it."""
+    regardless of how many unmatched candidate opens precede it.
+
+    Public (issue #1343, matching `heading_pattern`'s own rationale above):
+    `gitapex_scan_independent_review_heading_drift.py` needs this exact
+    "is this text live, not fenced-off as an example" definition for its
+    own Markdown targets, and reaching into another script's
+    underscore-prefixed function is not a pattern used anywhere else in
+    this repository's own cross-script imports."""
     lines = text.split("\n")
     total = len(lines)
     index = 0
@@ -185,7 +192,7 @@ def _strip_fenced_code_blocks(text: str) -> str:
     return "\n".join(lines)
 
 
-def _strip_html_comments(text: str) -> str:
+def strip_html_comments(text: str) -> str:
     """Blank out every HTML comment (`<!-- ... -->`, possibly spanning
     multiple lines) -- GitHub renders these as nothing at all, so a verdict
     hidden inside one is invisible to a human reviewer skimming the
@@ -197,8 +204,11 @@ def _strip_html_comments(text: str) -> str:
     Plain `str.find`, not a regex with a lazy `.*?` quantifier, to
     guarantee linear time regardless of how many unclosed or malformed
     `<!--` sequences the input contains -- the same ReDoS class
-    `_strip_fenced_code_blocks`'s own docstring names, avoided here by
-    construction rather than by re-deriving the same fix twice."""
+    `strip_fenced_code_blocks`'s own docstring names, avoided here by
+    construction rather than by re-deriving the same fix twice.
+
+    Public for the same reason `strip_fenced_code_blocks` is (see its own
+    docstring) -- issue #1343's drift gate reuses this one too."""
     pieces: list[str] = []
     position = 0
     length = len(text)
@@ -266,13 +276,13 @@ def parse_verdict(body: str) -> Verdict:
     between real content and `\\n` breaks every one of them, turning a
     genuine verdict into a false FAIL (a live-confirmed correctness gap,
     the safe direction but still wrong). HTML comments, then fenced code
-    blocks, are stripped next (see `_strip_html_comments` and
-    `_strip_fenced_code_blocks`): a verdict quoted inside either -- e.g. as
+    blocks, are stripped next (see `strip_html_comments` and
+    `strip_fenced_code_blocks`): a verdict quoted inside either -- e.g. as
     illustrative example text, or hidden where GitHub renders nothing at
     all -- is not live disclosure and must not parse as a real verdict."""
     body = body.replace("\r\n", "\n").replace("\r", "\n")
-    body = _strip_html_comments(body)
-    body = _strip_fenced_code_blocks(body)
+    body = strip_html_comments(body)
+    body = strip_fenced_code_blocks(body)
     headings = list(_HEADING_RE.finditer(body))
     if not headings:
         return Verdict(None, None, f"no '## {CANONICAL_HEADING_TEXT}' section found")
