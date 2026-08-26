@@ -708,6 +708,27 @@ def test_token_is_all_unassigned_refs_false_for_a_non_vanishing_value_when_ifs_i
     assert checker._token_is_all_unassigned_refs("$REAL", {"IFS": "x", "REAL": "foo"}) is False
 
 
+def test_strip_leading_unassigned_bare_refs_keeps_a_non_vanishing_wrapper_when_ifs_is_reassigned() -> None:
+    """Regression pin for the same twenty-ninth-round finding, ported
+    from the main hook's own identical fix: a real wrapper token must
+    NOT be stripped as a decoy just because `$IFS` was reassigned
+    elsewhere in the command -- confirmed via the direct caller this
+    codebase's own convention pins alongside `_token_is_all_unassigned_
+    refs` itself, not only through the shared primitive above."""
+    tokens = ["$REAL", "uv", "$VERB"]
+    name_to_value = {"IFS": "x", "REAL": "foo"}
+    assert checker._strip_leading_unassigned_bare_refs(tokens, name_to_value) == tokens
+
+
+def test_classify_does_not_deny_a_dynamic_wrapper_command_via_stale_ifs_reassignment_end_to_end() -> None:
+    """End-to-end companion to the above, ported from the main hook's
+    own identical fix: `classify()` must not deny this benign command,
+    confirmed live via real bash that it runs `foo uv`, never touching
+    the watched `uv` tool in a dynamic-verb position."""
+    verdict = checker.classify("IFS=x; REAL=foo; $REAL uv $VERB")
+    assert verdict.deny is False
+
+
 def test_is_git_push_segment_true_for_a_real_config_value_when_ifs_is_reassigned() -> None:
     """Regression pin for the MOST severe twenty-ninth-round finding,
     ported from the main hook's own identical fix: the twenty-eighth

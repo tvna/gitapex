@@ -1351,8 +1351,8 @@ def _token_is_all_unassigned_refs(token: str, name_to_value: dict[str, str]) -> 
     already accepts, not a new gap this fix introduces.
 
     A second, related disclosed residual found live the same (twenty-
-    eighth) round,
-    also ported from the main hook: the `-c`/`_GIT_LONG_VALUE_FLAGS`
+    eighth) round, also ported from the main hook: the `-c`/
+    `_GIT_LONG_VALUE_FLAGS`
     value-consumption block inside `_is_git_push_segment` below now
     correctly determines a value like `\r` does NOT vanish and consumes
     it as the flag's own value -- but never validates whether the
