@@ -310,6 +310,28 @@
       ]
     },
     {
+      "id": "independent-review-heading-drift",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_scan_independent_review_heading_drift.py",
+      "rule": "The independent-review-pending gate's own recorded-verdict heading text (owned as gitapex_gate_independent_review_pending.CANONICAL_HEADING_TEXT) must be present, marker-prefixed as '## ' + that text, in each of skills/drafting-a-pr-to-merge/SKILL.md, .github/PULL_REQUEST_TEMPLATE.md, .gitapex/ssot.json (this file's own independent-review-pending rule field), and .github/workflows/independent-review-pending.yml -- a hand-duplicated literal in four places besides its one canonical source, with nothing previously binding them together (found by a deterministic-gate-quality review, issue #1343).",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_independent_review_heading_drift.py"],
+      "trigger": "tests/test_gitapex_scan_independent_review_heading_drift.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": ["plan-integrity", "github-operations"],
+      "tracking_issue": 1343,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "skills/drafting-a-pr-to-merge/SKILL.md"},
+        {"kind": "file-glob", "ref": ".github/PULL_REQUEST_TEMPLATE.md"},
+        {"kind": "file-glob", "ref": ".gitapex/ssot.json"},
+        {"kind": "file-glob", "ref": ".github/workflows/independent-review-pending.yml"},
+        {"kind": "cross-registry-consistency", "ref": ".github/scripts/gitapex_gate_independent_review_pending.py CANONICAL_HEADING_TEXT <-> the four target files above"}
+      ]
+    },
+    {
       "id": "gitignore-pattern-test-coverage",
       "kind": "script",
       "script": ".github/scripts/gitapex_gate_gitignore_pattern_coverage.py",

@@ -514,3 +514,15 @@ def test_seven_hash_heading_does_not_pass() -> None:
     passed, message = gate.check(body, _SHA)
     assert passed is False
     assert "no '## Independent review verdict' section found" in message
+
+
+def test_tab_indented_heading_does_not_pass() -> None:
+    # issue #1343, deterministic-gate-quality review: `_HEADING_RE`'s
+    # `[ ]{0,3}` indentation prefix already rejects tab indentation
+    # correctly (CommonMark's own ATX-indentation rule counts only
+    # spaces, not tabs), but no test pinned it -- an independent mutation
+    # (`[ ]{0,3}` -> `[ \t]{0,3}`) left the pre-existing suite green.
+    body = "\t## Independent review verdict\n\n- Verdict: CLEAN\n- Verified commit: " + _SHA + "\n"
+    passed, message = gate.check(body, _SHA)
+    assert passed is False
+    assert "no '## Independent review verdict' section found" in message

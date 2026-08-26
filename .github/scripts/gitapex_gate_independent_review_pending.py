@@ -99,6 +99,15 @@ import re
 import sys
 from pathlib import Path
 
+# Issue #1343: the single source of truth for the recorded-verdict heading
+# text, imported directly by gitapex_scan_independent_review_heading_drift.py
+# rather than re-declared there -- the drift that gate exists to catch
+# (issue #1311's own "Step 8" numbering once baked directly into this
+# heading, duplicated by hand across five files with nothing keeping them in
+# sync) cannot recur for this file's own copy if there is no second copy to
+# drift from it, only importers of it.
+CANONICAL_HEADING_TEXT = "Independent review verdict"
+
 # CommonMark's own ATX-heading rule: the opening `#` may be indented at
 # most 3 spaces; 4 or more makes the line an indented code block instead,
 # never a live heading. A live adversarial round found that an earlier
@@ -106,7 +115,9 @@ from pathlib import Path
 # "illustrative example" heading parse as a real, live one -- restricting
 # to `[ ]{0,3}` (spaces only) closes that class the same way GitHub's own
 # renderer already treats it as inert.
-_HEADING_RE = re.compile(r"^[ ]{0,3}#{1,6}[ \t]+Independent review verdict[ \t]*$", re.IGNORECASE | re.MULTILINE)
+_HEADING_RE = re.compile(
+    r"^[ ]{0,3}#{1,6}[ \t]+" + re.escape(CANONICAL_HEADING_TEXT) + r"[ \t]*$", re.IGNORECASE | re.MULTILINE
+)
 _NEXT_HEADING_RE = re.compile(r"^[ ]{0,3}#{1,6}[ \t]+", re.MULTILINE)
 
 _FENCE_OPEN_RE = re.compile(r"^[ \t]*(`{3,}|~{3,})")
