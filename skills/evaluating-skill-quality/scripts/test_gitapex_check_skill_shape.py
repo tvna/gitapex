@@ -3366,6 +3366,34 @@ def test_lifecycle_tracking_issue_non_origin_repo_url_passes_well_formed(tmp_pat
     assert css.main([str(d)]) == 0
 
 
+@pytest.mark.parametrize(
+    "tracking_issue",
+    [
+        "https://github.com/-owner/repo/issues/1",  # owner starting with hyphen
+        "https://github.com/owner-/repo/issues/1",  # owner ending with hyphen
+        "https://github.com/owner//issues/1",  # empty repo segment
+        "https://github.com/owner/repo/issues/",  # missing issue number
+        "https://github.com/owner/repo/issues/1x",  # non-digit suffix
+        "https://github.com/owner/repo/discussions/1",  # wrong path segment
+        "https://github.com/owner/repo/issues/1/",  # trailing slash
+        "https://GITHUB.com/owner/repo/issues/1",  # wrong-case host
+    ],
+)
+def test_lifecycle_tracking_issue_generalized_pattern_still_rejects_malformed_urls(tmp_path, tracking_issue):
+    # Defeat test for the generalized LIFECYCLE_ISSUE_REF_RE (dimension-6
+    # NOT-MATURE fix): loosening the pattern from a literal "tvna/gitapex"
+    # to an owner/repo shape must not accidentally also accept a
+    # malformed URL that the old, narrower pattern would have rejected on
+    # shape alone.
+    d = _write_lifecycle_sidecar(
+        _write_skill(tmp_path),
+        f'  lifecycle:\n    experimental:\n      reason: not yet proven\n      trackingIssue: "{tracking_issue}"\n',
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["lifecycle-well-formed"].passed is False
+    assert css.main([str(d)]) == 1
+
+
 def test_manifest_parser_parses_spec_references_list():
     text = (
         "apiVersion: gitapex.io/v1alpha1\n"
