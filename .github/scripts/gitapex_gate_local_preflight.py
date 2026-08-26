@@ -98,21 +98,32 @@ reasons.
   the wall clock; parallelism was not added because interleaved failure
   output from eight concurrent subprocesses is the thing this runner exists
   to avoid.
-- ``local_stdin`` producers that reference ``origin/main`` (today:
-  ``exception-handler-gap``) need that ref to exist locally. In a checkout
-  without it the producer fails and that one gate reports FAIL with git's
-  own message; the other gates still run and still report. A *stale*
-  ``origin/main`` widens the diff rather than narrowing it, so it errs
-  toward grading more than the branch changed, never less. ``behind-base``
-  (issue #985) falsifies this staleness assumption for its own case
-  instead of inheriting it: it fetches ``origin/main`` itself before
-  comparing, rather than reading whatever local ref this checkout last
-  pulled, because for a behind-base comparison specifically a stale ref
-  errs the other way -- it makes a genuinely behind branch read as
-  up to date. That fetch is this runner's first network call; a failed
-  fetch fails that one gate closed (a distinct message from an ordinary
-  behind-base FAIL) rather than falling back to the stale ref it exists to
-  avoid.
+- ``local_stdin`` producers that need ``origin/main`` to exist locally
+  (today: ``exception-handler-gap``, ``stdlib-only-claim-drift``, and
+  ``detection-logic-property-coverage`` -- every gate whose ``local_stdin``
+  computes a merge-base diff, not just the first one added) no longer read
+  a raw ``git diff`` directly. Each is wired at
+  ``.github/scripts/gitapex_run_base_diff.py`` (issue #1345), which probes
+  ``origin/main^{commit}`` first and, only if that peeled probe fails (a
+  restricted-refspec clone -- ``git clone --single-branch --branch`` --
+  never populates ``refs/remotes/origin/main`` at all, even from a
+  source-only ``git fetch``), fetches it itself with a destination-refspec
+  ``git fetch`` before re-verifying and handing off to the real ``git
+  diff``. In a checkout where the ref is already present this is a no-op
+  probe, no behavior change from before. A checkout where the fetch itself
+  fails still reports that one gate FAIL with a message distinct from an
+  ordinary diff failure; the other gates still run and still report, same
+  as always. A *stale* local ``origin/main`` (present, but behind the real
+  remote) still widens the diff rather than narrowing it in the common
+  case -- except when the branch itself reverts a change ``main`` made
+  after the local ref went stale, which narrows it instead; that caveat is
+  pre-existing and named here, not solved by issue #1345, which only fixes
+  the missing-ref case. ``behind-base`` (issue #985) never had this
+  staleness problem for its own comparison, because unlike these three
+  gates it fetches ``origin/main`` unconditionally on every run rather than
+  only when the ref is missing -- see its own module docstring. Both this
+  runner's diff-gate producers and ``behind-base`` now make network calls;
+  neither is "the runner's first" any more.
 - This grades **committed** state (``HEAD`` and the working tree as it is on
   disk), not a staged index -- which is exactly why it is wired at
   ``pre-push`` and not ``pre-commit``. ``.pre-commit-config.yaml``'s
@@ -175,7 +186,9 @@ SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
 # raises it for that case.
 #
 # Issue #985 added `behind-base`, this runner's first gate that makes a
-# network call (it fetches `origin/main` before comparing). Measured
+# network call (it fetches `origin/main` before comparing); issue #1345
+# added three more, each fetching only when the ref is missing rather than
+# unconditionally on every run. Measured
 # directly rather than assumed: three warm standalone runs of that one
 # gate averaged under a second (~0.6 s), and the ~8-9 s combined figure
 # above is a real but small addition against a ceiling roughly two orders

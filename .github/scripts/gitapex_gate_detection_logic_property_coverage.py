@@ -321,10 +321,15 @@ This gate's own ``.gitapex/ssot.json`` registration gives it a
 ``local_invocation``/``local_stdin`` pair matching
 ``gitapex_gate_exception_handler_gaps.py``'s own entry exactly:
 ``local_stdin`` is
-``["git", "-c", "core.quotePath=false", "diff", "-U0", "--no-renames",
-"--merge-base", "origin/main", "HEAD", "--", "*.py"]``. This script therefore
-accepts the identical ``--root``/stdin-diff CLI shape that gate accepts, so
-the same invocation wires either one.
+``["uv", "run", "--frozen", "python3",
+".github/scripts/gitapex_run_base_diff.py", "--", "*.py"]`` (issue #1345;
+before that issue it was a raw ``git diff --merge-base origin/main HEAD``
+invocation, which failed outright in a restricted-refspec clone --
+``gitapex_run_base_diff.py`` self-heals a missing ``origin/main`` by
+fetching it, then execs the same ``git diff`` this gate always received,
+byte-for-byte). This script therefore accepts the identical
+``--root``/stdin-diff CLI shape that gate accepts, so the same invocation
+wires either one.
 
 Usage::
 
