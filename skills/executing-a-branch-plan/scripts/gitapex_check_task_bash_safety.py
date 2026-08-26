@@ -1127,7 +1127,25 @@ def _token_is_all_unassigned_refs(token: str, name_to_value: dict[str, str]) -> 
     alternatives each pair their own opening and closing brace, so a
     mismatched brace now falls through to neither alternative and is
     correctly left unstripped, as fused-on literal text that does not
-    vanish to nothing."""
+    vanish to nothing.
+
+    Disclosed residual (found live by Step 8 independent review,
+    twenty-first round, issue #1326), NOT fixed here: a braced subscript
+    reference to a NAME that genuinely IS assigned (as a real array,
+    elsewhere in the command) correctly does NOT collapse here -- NAME is
+    in NAME_TO_VALUE, so this function correctly returns `False` -- but
+    that correctness is hollow if the array's OWN element at that
+    specific index is itself an empty string: `NEVERSET=("" b c);
+    A=(${NEVERSET[0]} gh pr merge 1); "${A[@]}"` still genuinely reveals
+    `gh` at that position (confirmed live via `declare -p`), yet neither
+    this collapse nor `_substitute_var_refs_candidates` (which does not
+    understand `[...]` subscript syntax at all, and returns the token's
+    own raw, unresolved text as its sole "candidate" instead of failing
+    closed) catches it. Closing this needs per-INDEX array-element value
+    tracking this module has no data model for at all today (NAME_TO_
+    VALUE tracks one scalar value per variable NAME, never per-index
+    array contents) -- a materially larger change than a token-shape
+    regex extension, left as a disclosed gap rather than attempted here."""
     if not _REF_RUN_TOKEN_RE.match(token):
         return False
     return all((m.group("bare") or m.group("braced")) not in name_to_value for m in _REF_RUN_NAME_RE.finditer(token))
@@ -1487,7 +1505,7 @@ def _rule_fetch_exec(
             for later in chain[i + 1 :]:
                 if not later:
                     continue
-                interp_index = _skip_fetch_exec_wrapper(later)
+                interp_index = _skip_fetch_exec_wrapper(later, name_to_value)
                 if len(later) > interp_index:
                     cand = later[interp_index]
                     if _is_dynamic(cand):
@@ -1503,10 +1521,13 @@ def _rule_fetch_exec(
     return None
 
 
-def _skip_fetch_exec_wrapper(seg: list[str]) -> int:
+def _skip_fetch_exec_wrapper(seg: list[str], name_to_value: dict[str, str] | None = None) -> int:
     """Return the index of SEG's own interpreter candidate, skipping past
-    a single leading wrapper token (`sudo`/`env`/`command`/`exec`) and any
-    number of BOOLEAN (no-separate-value) flag-shaped tokens after it.
+    a single leading wrapper token (`sudo`/`env`/`command`/`exec`), any
+    number of BOOLEAN (no-separate-value) flag-shaped tokens after it, and
+    -- when NAME_TO_VALUE is given -- any number of tokens that vanish to
+    nothing at real bash runtime (per `_token_is_all_unassigned_refs`, see
+    its own docstring).
 
     Factored out of `_rule_fetch_exec`'s own inline loop -- Step 8
     independent review, fourteenth round (issue #1326) -- so
@@ -1539,12 +1560,35 @@ def _skip_fetch_exec_wrapper(seg: list[str]) -> int:
     docstring) -- the identical bash grammar rule, just applying to
     assignments positioned AFTER a wrapper word rather than at the very
     start of the segment, which `_strip_leading_assignments` alone does
-    not reach."""
+    not reach.
+
+    Found live by Step 8 independent review, twenty-first round (issue
+    #1326): `curl <url> | sudo $NEVERSET bash` (NEVERSET never assigned)
+    was wrongly ALLOWED -- the interpreter candidate this function
+    returns landed ON `$NEVERSET` itself (past the literal `sudo` wrapper,
+    correctly not a flag/assignment so the OLD skip loop stopped there),
+    and the caller's own `_substitute_var_refs_candidates` resolution of
+    that candidate returned `[]` ("cannot resolve"), which the caller
+    treated as "resolved, and not a match" rather than looking past the
+    decoy to what real bash actually runs at that position -- the SAME
+    class of gap `_position_anchored_rules_hit`'s own docstring describes
+    for `_rule_gh_any`/`_rule_bare_install`'s OWN `seg[0]` position,
+    except here the decoy sits at an INTERIOR position this function
+    itself resolves, past a literal wrapper -- `_position_anchored_
+    rules_hit`'s own segment-leading collapsed-reading pass never reaches
+    it, since `seg[0]` (`sudo`) is not itself a vanishing reference.
+    Closed here, at the source of the position resolution, rather than by
+    trying to enumerate every interior position a caller might need a
+    collapsed reading for. Confirmed live via a real bash proxy (stand-in
+    `bash` binary on PATH, capturing its own argv) that this genuinely
+    invokes `bash` once `$NEVERSET` word-splits away."""
     interp_index = 1 if (not _is_dynamic(seg[0]) and seg[0].lower() in _FETCH_EXEC_WRAPPERS) else 0
-    while (
-        interp_index < len(seg)
-        and not _is_dynamic(seg[interp_index])
-        and (seg[interp_index].startswith("-") or _ASSIGN_RE.match(seg[interp_index]))
+    while interp_index < len(seg) and (
+        (
+            not _is_dynamic(seg[interp_index])
+            and (seg[interp_index].startswith("-") or _ASSIGN_RE.match(seg[interp_index]))
+        )
+        or (name_to_value is not None and _token_is_all_unassigned_refs(seg[interp_index], name_to_value))
     ):
         interp_index += 1
     return interp_index
@@ -1583,7 +1627,7 @@ def _rule_process_sub_fetch_exec(
     for seg in segments:
         if not seg:
             continue
-        interp_index = _skip_fetch_exec_wrapper(seg)
+        interp_index = _skip_fetch_exec_wrapper(seg, name_to_value)
         if interp_index >= len(seg):
             continue
         if not _fetch_exec_cand_is_interp(seg[interp_index], name_to_value, name_to_raw_value):
@@ -2090,6 +2134,99 @@ def _rule_b2_watched_tool_dynamic_verb_position(seg: list[str]) -> bool:
     return _is_dynamic(seg[1])
 
 
+def _position_anchored_rules_hit(
+    segments: list[list[str]],
+    pipe_chains: list[list[list[str]]],
+    name_to_value: dict[str, str],
+    name_to_raw_value: dict[str, str],
+) -> str | None:
+    """Every rule below is anchored to a fixed POSITION within a segment
+    -- `seg[0]` directly (`_rule_bare_install`, `_rule_gh_any`, B2), or an
+    interpreter/wrapper position `_skip_fetch_exec_wrapper` resolves FROM
+    `seg[0]` (`_rule_fetch_exec`, `_rule_process_sub_fetch_exec`). Unlike
+    `_rule_a_literal`/`_rule_npx`/`_rule_git_push`/B1a/B1b (each a
+    whole-segment literal-content or whole-segment-candidate scan,
+    confirmed live immune to a leading decoy by construction -- included
+    here anyway for uniformity, since re-running an already-immune rule a
+    second time changes nothing), a position-anchored rule can be
+    defeated by a leading token that word-splits away to nothing at real
+    bash runtime -- exactly the fact `_rule_array_literal_content` (see
+    its own docstring) already accounts for INSIDE an array literal.
+    `_classify_tokens` calls this function TWICE: once against SEGMENTS/
+    PIPE_CHAINS as-is, once against a COLLAPSED reading with each
+    segment's own leading run of vanishing references additionally
+    stripped -- see `_classify_tokens`'s own docstring for the live
+    bypass this closes.
+
+    Found live by Step 8 independent review, twenty-first round (issue
+    #1326): `$NEVERSET gh pr merge 1` and `$NEVERSET pnpm` (both
+    NEVERSET never assigned) were wrongly ALLOWED -- `_rule_gh_any`/
+    `_rule_bare_install` each resolve `seg[0]` via `_substitute_var_refs_
+    candidates`, which returns `[]` ("cannot resolve to any sound literal
+    reading") for an unassigned bare/braced reference; both rules treated
+    an empty candidate list the same as "resolved, and it is not a
+    match," never failing closed OR looking past the decoy to what real
+    bash would actually see at that position. `curl <url> | $NEVERSET
+    bash` and `curl <url> | sudo $NEVERSET bash` (the interpreter
+    position, past `_skip_fetch_exec_wrapper`'s own wrapper skip)
+    defeated `_rule_fetch_exec` the identical way. Confirmed live via a
+    real bash proxy (stand-in `gh`/`pnpm`/`bash` binaries on PATH,
+    capturing their own argv) that all four genuinely invoke the denied
+    tool once the decoy word-splits away. `_rule_a_literal`/`_rule_npx`/
+    `_rule_git_push`/B1a were each confirmed NOT vulnerable to the
+    identical construction (each already scans a segment's own literal
+    content as a whole, not one fixed position), so this closes exactly
+    the position-anchored gap, not a broader one. Ported to the main
+    hook's own sibling fix (`_segment_loop_hit`) for its own, narrower
+    equivalent (B2 only -- the main hook has no fetch-exec/bare-install/
+    gh-any-shaped rule at all)."""
+    literal_hit = _rule_a_literal(segments)
+    if literal_hit:
+        return literal_hit
+
+    bare_install_hit = _rule_bare_install(segments, name_to_value, name_to_raw_value)
+    if bare_install_hit:
+        return bare_install_hit
+
+    fetch_exec_hit = _rule_fetch_exec(pipe_chains, name_to_value, name_to_raw_value)
+    if fetch_exec_hit:
+        return fetch_exec_hit
+
+    process_sub_hit = _rule_process_sub_fetch_exec(segments, name_to_value, name_to_raw_value)
+    if process_sub_hit:
+        return process_sub_hit
+
+    npx_hit = _rule_npx(segments, name_to_value, name_to_raw_value)
+    if npx_hit:
+        return npx_hit
+
+    gh_hit = _rule_gh_any(segments, name_to_value, name_to_raw_value)
+    if gh_hit:
+        return gh_hit
+
+    git_push_hit = _rule_git_push(segments, name_to_value, name_to_raw_value)
+    if git_push_hit:
+        return git_push_hit
+
+    for seg in segments:
+        if _rule_b1a_dynamic_word_same_segment_verb(seg, _WATCHED_VERBS, name_to_value, name_to_raw_value):
+            return (
+                "a Bash command word is dynamically constructed, alongside a denied verb literally "
+                "present in the same command -- rewrite as a plain literal command so it can be checked"
+            )
+        if _rule_b1b_dynamic_word_assigned_tool_and_verb(seg, name_to_value, _WATCHED_VERBS, name_to_raw_value):
+            return (
+                "a Bash command word is dynamically constructed from variables whose assigned values "
+                "include both a denied tool and a denied verb -- rewrite as a plain literal command"
+            )
+        if _rule_b2_watched_tool_dynamic_verb_position(seg):
+            return (
+                "a watched tool is invoked with a dynamically constructed subcommand/verb argument -- "
+                "rewrite as a plain literal command so it can be checked"
+            )
+    return None
+
+
 def classify(command: str) -> Verdict:
     try:
         tokens = tokenize(command)
@@ -2149,57 +2286,25 @@ def _classify_tokens(
     assigned = {**outer_literals, **_assigned_literals(tokens)}
     raw_assigned = {**outer_raw, **_assigned_raw_values(tokens)}
 
-    literal_hit = _rule_a_literal(segments)
-    if literal_hit:
-        return Verdict(True, literal_hit)
-
-    bare_install_hit = _rule_bare_install(segments, assigned, raw_assigned)
-    if bare_install_hit:
-        return Verdict(True, bare_install_hit)
-
-    fetch_exec_hit = _rule_fetch_exec(pipe_chains, assigned, raw_assigned)
-    if fetch_exec_hit:
-        return Verdict(True, fetch_exec_hit)
-
-    process_sub_hit = _rule_process_sub_fetch_exec(segments, assigned, raw_assigned)
-    if process_sub_hit:
-        return Verdict(True, process_sub_hit)
-
     eval_dashc_hit = _rule_eval_or_dashc_fetch_exec(raw_tokens)
     if eval_dashc_hit:
         return Verdict(True, eval_dashc_hit)
 
-    npx_hit = _rule_npx(segments, assigned, raw_assigned)
-    if npx_hit:
-        return Verdict(True, npx_hit)
+    position_hit = _position_anchored_rules_hit(segments, pipe_chains, assigned, raw_assigned)
+    if position_hit:
+        return Verdict(True, position_hit)
 
-    gh_hit = _rule_gh_any(segments, assigned, raw_assigned)
-    if gh_hit:
-        return Verdict(True, gh_hit)
-
-    git_push_hit = _rule_git_push(segments, assigned, raw_assigned)
-    if git_push_hit:
-        return Verdict(True, git_push_hit)
-
-    for seg in segments:
-        if _rule_b1a_dynamic_word_same_segment_verb(seg, _WATCHED_VERBS, assigned, raw_assigned):
-            return Verdict(
-                True,
-                "a Bash command word is dynamically constructed, alongside a denied verb literally "
-                "present in the same command -- rewrite as a plain literal command so it can be checked",
-            )
-        if _rule_b1b_dynamic_word_assigned_tool_and_verb(seg, assigned, _WATCHED_VERBS, raw_assigned):
-            return Verdict(
-                True,
-                "a Bash command word is dynamically constructed from variables whose assigned values "
-                "include both a denied tool and a denied verb -- rewrite as a plain literal command",
-            )
-        if _rule_b2_watched_tool_dynamic_verb_position(seg):
-            return Verdict(
-                True,
-                "a watched tool is invoked with a dynamically constructed subcommand/verb argument -- "
-                "rewrite as a plain literal command so it can be checked",
-            )
+    collapsed_segments = [
+        collapsed for seg in segments if (collapsed := _strip_leading_unassigned_bare_refs(seg, assigned))
+    ]
+    collapsed_pipe_chains = [
+        [collapsed for seg in chain if (collapsed := _strip_leading_unassigned_bare_refs(seg, assigned))]
+        for chain in pipe_chains
+    ]
+    if collapsed_segments != segments or collapsed_pipe_chains != pipe_chains:
+        collapsed_hit = _position_anchored_rules_hit(collapsed_segments, collapsed_pipe_chains, assigned, raw_assigned)
+        if collapsed_hit:
+            return Verdict(True, f"{collapsed_hit}, once a leading unassigned reference word-split away")
 
     return Verdict(False, "no denied pattern matched")
 

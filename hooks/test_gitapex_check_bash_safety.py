@@ -672,6 +672,15 @@ DENIED_INDIRECTION_COMMANDS = [
     # `declare -p`.
     ('A=(${NEVERSET[0]} uv "$1"); "${A[@]}"', "array-literal-subscript-unassigned-leading-ref-hides-uv"),
     ('A=($A_UNSET$B_UNSET gh pr merge 1); "${A[@]}"', "array-literal-fused-unassigned-leading-refs-hide-gh-pr-merge"),
+    # Found live by Step 8 independent review, twenty-first round (issue
+    # #1326): B2 (`_rule_b2_watched_tool_dynamic_verb_position`) requires
+    # a LITERAL `seg[0]` naming a watched tool -- a leading unassigned
+    # reference at `seg[0]`, with NO array literal required at all,
+    # blocked it from ever firing regardless of what followed. Confirmed
+    # live via a real bash proxy (stand-in `uv` binary on PATH) that
+    # `$NEVERSET uv install` genuinely invokes `uv install` once the
+    # decoy word-splits away.
+    ("$NEVERSET uv $VERB", "bare-unassigned-leading-ref-hides-b2-watched-tool"),
 ]
 
 

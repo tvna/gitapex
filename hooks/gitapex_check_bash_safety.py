@@ -2039,6 +2039,65 @@ def _rule_b2_watched_tool_dynamic_verb_position(seg: list[str]) -> bool:
     return _is_dynamic(seg[1])
 
 
+def _segment_loop_hit(
+    segments: list[list[str]], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
+) -> tuple[str | None, bool]:
+    """The B1a/B1b/B2/obfuscated-git-push-second-token loop -- factored
+    out of `_classify_tokens` so it can be run TWICE: once against
+    SEGMENTS as-is, once against a COLLAPSED reading with each segment's
+    own leading run of vanishing references additionally stripped (see
+    `_classify_tokens`'s own docstring for why). Every check inside this
+    loop is anchored to a fixed POSITION within a segment -- `seg[0]`
+    (B2, the obfuscated-git-push check) or, for B1a/B1b, `seg[0]` must
+    itself be dynamic before either even runs -- unlike `_rule_a_literal`/
+    `_rule_gh_api_write` (each a whole-segment/whole-command literal-
+    content scan, confirmed live immune to a leading decoy by
+    construction, so neither needs this second pass), a position-anchored
+    check can be defeated by a leading token that word-splits away to
+    nothing at real bash runtime.
+
+    Found live by Step 8 independent review, twenty-first round (issue
+    #1326): `$NEVERSET uv $VERB` (NEVERSET never assigned) was wrongly
+    ALLOWED -- B2 requires a LITERAL `seg[0]` naming a watched tool, and
+    `$NEVERSET` sitting there blocked it from ever firing, regardless of
+    what followed. `curl <url> | $NEVERSET bash`-shaped constructions were
+    considered too, but this module has no fetch-exec-piped-to-interpreter
+    rule at all (confirmed live: even a plain `curl <url> | bash` with no
+    decoy already classifies "no denied pattern matched" here), so there
+    is no equivalent gap for that shape in this file specifically -- only
+    B2's own literal-`seg[0]` requirement is affected."""
+    is_git_push = False
+    for seg in segments:
+        if _rule_b1a_dynamic_word_same_segment_verb(seg, _WATCHED_VERBS, name_to_value, name_to_raw_value):
+            return (
+                "a Bash command word is dynamically constructed, alongside a denied verb literally "
+                "present in the same command -- rewrite as a plain literal command so it can be checked",
+                is_git_push,
+            )
+        if _rule_b1b_dynamic_word_assigned_tool_and_verb(seg, name_to_value, _WATCHED_VERBS, name_to_raw_value):
+            return (
+                "a Bash command word is dynamically constructed from variables whose assigned values "
+                "include both a denied tool and a denied verb -- rewrite as a plain literal command",
+                is_git_push,
+            )
+        if _rule_b2_watched_tool_dynamic_verb_position(seg):
+            return (
+                "a watched tool is invoked with a dynamically constructed subcommand/verb argument -- "
+                "rewrite as a plain literal command so it can be checked",
+                is_git_push,
+            )
+        obfuscated_git_push_second_token = (
+            seg and not _is_dynamic(seg[0]) and seg[0].lower() == "git" and len(seg) > 1 and _is_dynamic(seg[1])
+        )
+        if (
+            _rule_b1a_dynamic_word_same_segment_verb(seg, {_GIT_PUSH_VERB}, name_to_value, name_to_raw_value)
+            or _rule_b1b_dynamic_word_assigned_tool_and_verb(seg, name_to_value, {_GIT_PUSH_VERB}, name_to_raw_value)
+            or obfuscated_git_push_second_token
+        ):
+            is_git_push = True
+    return None, is_git_push
+
+
 def classify(command: str) -> Verdict:
     """Classify one Bash tool_input.command string. Fails closed (deny) on
     anything shlex cannot tokenize -- an unparseable command is exactly the
@@ -2115,37 +2174,19 @@ def _classify_tokens(
     if gh_api_hit:
         return Verdict(True, gh_api_hit, is_git_push)
 
-    for seg in segments:
-        if _rule_b1a_dynamic_word_same_segment_verb(seg, _WATCHED_VERBS, assigned, raw_assigned):
-            return Verdict(
-                True,
-                "a Bash command word is dynamically constructed, alongside a denied verb literally "
-                "present in the same command -- rewrite as a plain literal command so it can be checked",
-                is_git_push,
-            )
-        if _rule_b1b_dynamic_word_assigned_tool_and_verb(seg, assigned, _WATCHED_VERBS, raw_assigned):
-            return Verdict(
-                True,
-                "a Bash command word is dynamically constructed from variables whose assigned values "
-                "include both a denied tool and a denied verb -- rewrite as a plain literal command",
-                is_git_push,
-            )
-        if _rule_b2_watched_tool_dynamic_verb_position(seg):
-            return Verdict(
-                True,
-                "a watched tool is invoked with a dynamically constructed subcommand/verb argument -- "
-                "rewrite as a plain literal command so it can be checked",
-                is_git_push,
-            )
-        obfuscated_git_push_second_token = (
-            seg and not _is_dynamic(seg[0]) and seg[0].lower() == "git" and len(seg) > 1 and _is_dynamic(seg[1])
-        )
-        if (
-            _rule_b1a_dynamic_word_same_segment_verb(seg, {_GIT_PUSH_VERB}, assigned, raw_assigned)
-            or _rule_b1b_dynamic_word_assigned_tool_and_verb(seg, assigned, {_GIT_PUSH_VERB}, raw_assigned)
-            or obfuscated_git_push_second_token
-        ):
-            is_git_push = True
+    loop_hit, loop_is_git_push = _segment_loop_hit(segments, assigned, raw_assigned)
+    is_git_push = is_git_push or loop_is_git_push
+    if loop_hit:
+        return Verdict(True, loop_hit, is_git_push)
+
+    collapsed_segments = [
+        collapsed for seg in segments if (collapsed := _strip_leading_unassigned_bare_refs(seg, assigned))
+    ]
+    if collapsed_segments != segments:
+        collapsed_hit, collapsed_is_git_push = _segment_loop_hit(collapsed_segments, assigned, raw_assigned)
+        is_git_push = is_git_push or collapsed_is_git_push
+        if collapsed_hit:
+            return Verdict(True, f"{collapsed_hit}, once a leading unassigned reference word-split away", is_git_push)
 
     return Verdict(False, "no denied pattern matched", is_git_push)
 

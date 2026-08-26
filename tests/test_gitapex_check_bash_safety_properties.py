@@ -1728,6 +1728,34 @@ def test_classify_denies_array_literal_content_with_fused_chain_decoy_end_to_end
     assert verdict.deny is True
 
 
+@_PROPERTIES
+@given(unset_name=_IDENTIFIERS, verb=_IDENTIFIERS)
+def test_segment_loop_hit_detects_b2_once_a_leading_decoy_is_collapsed(unset_name: str, verb: str) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, twenty-first round (issue #1326): B2 (`_rule_
+    b2_watched_tool_dynamic_verb_position`) requires a LITERAL `seg[0]`
+    naming a watched tool -- `$NEVERSET uv $VERB` was wrongly ALLOWED,
+    since a leading decoy at `seg[0]` blocked B2 from ever firing
+    regardless of what followed. `_classify_tokens` closes this by
+    additionally checking `_segment_loop_hit` against a COLLAPSED reading
+    (via `_strip_leading_unassigned_bare_refs`) when the as-is reading
+    finds nothing -- this pins that collapsed reading itself is denied."""
+    as_is = [f"${unset_name}", "uv", f"${verb}"]
+    collapsed = checker._strip_leading_unassigned_bare_refs(as_is, {})
+    assert collapsed == ["uv", f"${verb}"]
+    hit, _ = checker._segment_loop_hit([collapsed], {}, {})
+    assert hit is not None
+
+
+def test_classify_denies_b2_leading_decoy_end_to_end() -> None:
+    """End-to-end companion to `test_segment_loop_hit_detects_b2_once_a_
+    leading_decoy_is_collapsed` above, reached through `classify()`.
+    Regression pin for the real bypass found live by Step 8 independent
+    review, twenty-first round (issue #1326)."""
+    verdict = checker.classify("$NEVERSET uv $VERB")
+    assert verdict.deny is True
+
+
 # --- codecov/patch coverage gate: branches this PR's diff added but no ----
 # existing DENIED/ALLOWED end-to-end fixture or property test happened to
 # exercise -- each test below targets one specific line/branch named in the
