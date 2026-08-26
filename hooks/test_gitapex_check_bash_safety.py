@@ -714,6 +714,20 @@ DENIED_INDIRECTION_COMMANDS = [
         "IFS=x; echo hi; M=POST; gh api repos/foo/bar/merge -X ${M} extra",
         "gh-api-method-value-past-unrelated-ifs-reassignment",
     ),
+    # Found live by Step 8 independent review, thirtieth round (issue
+    # #1326): the twenty-ninth round's own `effective_ifs` fix computed
+    # it (and every per-name value stripped against it) from the
+    # LOWERCASED name-to-value map -- real bash `$IFS` word-splitting is
+    # case-SENSITIVE, so a value whose real (mixed-case) characters do
+    # NOT overlap the real (differently-cased) reassigned `$IFS` was
+    # wrongly read as vanishing once both were folded to the same case.
+    # Confirmed live via real bash that `IFS=post; DECOY=POST; gh api
+    # repos/foo/bar/merge -X ${DECOY} extra` real-expands to `gh api
+    # repos/foo/bar/merge -X POST extra`, a genuine write.
+    (
+        "IFS=post; DECOY=POST; gh api repos/foo/bar/merge -X ${DECOY} extra",
+        "gh-api-method-value-past-case-folded-ifs-collision",
+    ),
 ]
 
 

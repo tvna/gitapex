@@ -1165,7 +1165,7 @@ _REF_RUN_NAME_RE = re.compile(_ONE_REF_SRC)
 _BASH_DEFAULT_IFS = " \t\n"
 
 
-def _token_is_all_unassigned_refs(token: str, name_to_value: dict[str, str]) -> bool:
+def _token_is_all_unassigned_refs(token: str, name_to_raw_value: dict[str, str]) -> bool:
     """TOKEN word-splits away to NOTHING, unquoted, at real bash runtime,
     because it is composed ENTIRELY of one or more back-to-back variable
     references -- bare (`$NAME`), braced (`${NAME}`), or braced with a
@@ -1481,26 +1481,66 @@ def _token_is_all_unassigned_refs(token: str, name_to_value: dict[str, str]) -> 
     `push` either), so this block's own "assume consumed, keep
     scanning" logic can only ever find a `push` that real git's own
     argv construction also reaches -- confirmed still safe-direction-
-    only, left as a disclosed residual rather than fixed."""
+    only, left as a disclosed residual rather than fixed.
+
+    Found live by Step 8 independent review, thirtieth round (issue
+    #1326): the twenty-ninth round's own `effective_ifs` fix computed it
+    (and every per-name value it stripped against `effective_ifs`) from
+    NAME_TO_VALUE -- the LOWERCASED map `_assigned_literals` builds for
+    case-INSENSITIVE comparisons elsewhere in this module (matching a
+    literal tool name or write-method keyword regardless of how a human
+    typed it). Real bash's own `$IFS` word-splitting is case-SENSITIVE:
+    reusing the lowercased map here silently case-folded BOTH sides of
+    the vanishing check, so a token whose real (mixed-case) value does
+    NOT actually overlap the real (differently-cased) `$IFS` could still
+    read as "vanishes" once both were folded to the same case --
+    confirmed live end-to-end via real bash (`set -x`) that `IFS=post;
+    DECOY=POST; gh api repos/foo/bar/merge -X ${DECOY} extra`
+    real-expands to `gh api repos/foo/bar/merge -X POST extra` (a
+    genuine write -- `POST`'s own uppercase letters are untouched by a
+    lowercase-only `$IFS`), yet `classify()` wrongly returned
+    `deny=False`: `${DECOY}` read as "vanishes" only because `_assigned_
+    literals` had already folded both `POST` and the reassigned `$IFS`
+    to `"post"`, at which point `"post".strip("post")` is empty. A NEW
+    hard-deny bypass this round's own fix introduced, not a pre-existing
+    one -- `_BASH_DEFAULT_IFS` (space/tab/newline) has no letters, so
+    case-folding was inert before this round made `effective_ifs`
+    capable of holding arbitrary reassigned characters.
+
+    Closed by using `_assigned_raw_values`'s own case-PRESERVING map for
+    every lookup this function makes (both `effective_ifs` itself and
+    each per-name value strip-checked against it) instead of the
+    lowercased one -- this module already carries a case-preserving map
+    for exactly this class of problem (built for `${!NAME}` indirect-
+    reference resolution, see `_assigned_raw_values`'s own docstring),
+    and it was already threaded through to every caller of this
+    function by the time this round started, so wiring it one level
+    deeper here needed no new plumbing. Re-verified live that the
+    original bypass command above is now correctly denied, and that
+    every prior round's own pinned scenario (the round 27/28 carriage-
+    return decoy, the round 23/24 never-assigned/empty-string decoys,
+    the round 29 `git -c`/gh-api/wrapper-stripping scenarios) still
+    resolves identically under the case-preserving map, since none of
+    them depend on case-folding at all."""
     if not _REF_RUN_TOKEN_RE.match(token):
         return False
-    effective_ifs = name_to_value.get("IFS", _BASH_DEFAULT_IFS)
+    effective_ifs = name_to_raw_value.get("IFS", _BASH_DEFAULT_IFS)
     for match in _REF_RUN_NAME_RE.finditer(token):
         bare_name = match.group("bare")
         if bare_name is not None:
-            if name_to_value.get(bare_name, "").strip(effective_ifs):
+            if name_to_raw_value.get(bare_name, "").strip(effective_ifs):
                 return False
         else:
             braced_name = match.group("braced")
             if "[" in match.group(0):
-                if braced_name in name_to_value:
+                if braced_name in name_to_raw_value:
                     return False
-            elif name_to_value.get(braced_name, "").strip(effective_ifs):
+            elif name_to_raw_value.get(braced_name, "").strip(effective_ifs):
                 return False
     return True
 
 
-def _strip_leading_unassigned_bare_refs(tokens: list[str], name_to_value: dict[str, str]) -> list[str]:
+def _strip_leading_unassigned_bare_refs(tokens: list[str], name_to_raw_value: dict[str, str]) -> list[str]:
     """A leading run of tokens that each vanish to nothing at real bash
     runtime (per `_token_is_all_unassigned_refs`, see its own docstring)
     is stripped away -- used by `_rule_array_literal_content` to
@@ -1508,10 +1548,17 @@ def _strip_leading_unassigned_bare_refs(tokens: list[str], name_to_value: dict[s
     leading decoy had already collapsed away, since the REAL first
     surviving element is what a `seg[0]`-anchored rule would actually see
     once `"${NAME[@]}"` expands the array for real, not the decoy
-    reference the raw token stream shows in that position."""
+    reference the raw token stream shows in that position.
+
+    Takes NAME_TO_RAW_VALUE (case-preserving), not the lowercased
+    NAME_TO_VALUE -- ported from `_token_is_all_unassigned_refs`'s own
+    thirtieth-round fix (see its own docstring): this function's caller
+    already has the case-preserving map in scope, and passing the
+    lowercased one here would silently reintroduce that same round's own
+    case-fold bug at this call site too."""
     i = 0
     n = len(tokens)
-    while i < n and _token_is_all_unassigned_refs(tokens[i], name_to_value):
+    while i < n and _token_is_all_unassigned_refs(tokens[i], name_to_raw_value):
         i += 1
     return tokens[i:]
 
@@ -1602,7 +1649,7 @@ def _rule_array_literal_content(
         inner = tokens[i + 2 : end - 1]
         if inner:
             readings = [(inner, "")]
-            collapsed = _strip_leading_unassigned_bare_refs(inner, name_to_value)
+            collapsed = _strip_leading_unassigned_bare_refs(inner, name_to_raw_value)
             if collapsed and collapsed != inner:
                 readings.append((collapsed, " once its own leading unassigned reference(s) word-split away"))
             for reading, suffix in readings:
@@ -1789,7 +1836,9 @@ def _gh_api_method_literal_hit(literals: list[str]) -> bool:
     return False
 
 
-def _token_is_unambiguously_vanishing(token: str, name_to_value: dict[str, str]) -> bool:
+def _token_is_unambiguously_vanishing(
+    token: str, name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
+) -> bool:
     """Stricter than `_token_is_all_unassigned_refs`: TRUE only when TOKEN
     vanishes to nothing under EVERY possible original-quoting reading, not
     just the maximal-munch one `_token_is_all_unassigned_refs` itself
@@ -1811,8 +1860,18 @@ def _token_is_unambiguously_vanishing(token: str, name_to_value: dict[str, str])
 
     Found live by Step 8 independent review, twenty-second round (issue
     #1326), as the fix that replaces the rejected broader version of
-    this same idea."""
-    if not _token_is_all_unassigned_refs(token, name_to_value):
+    this same idea.
+
+    Takes BOTH NAME_TO_VALUE and NAME_TO_RAW_VALUE, unlike most of this
+    module's other internal helpers that take only one -- ported from
+    `_token_is_all_unassigned_refs`'s own thirtieth-round fix (see its
+    own docstring): the vanishing check below now needs the case-
+    preserving map (real bash `$IFS` word-splitting is case-sensitive),
+    but `_unbraced_ref_options` above still needs the lowercased one,
+    since its own candidate strings feed a case-INSENSITIVE write-method
+    keyword comparison downstream -- the two uses are genuinely
+    different questions, not a redundant pair."""
+    if not _token_is_all_unassigned_refs(token, name_to_raw_value):
         return False
     for match in _REF_RUN_NAME_RE.finditer(token):
         bare_name = match.group("bare")
@@ -1821,7 +1880,9 @@ def _token_is_unambiguously_vanishing(token: str, name_to_value: dict[str, str])
     return True
 
 
-def _value_position_after(seg: list[str], flag_index: int, name_to_value: dict[str, str]) -> str | None:
+def _value_position_after(
+    seg: list[str], flag_index: int, name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
+) -> str | None:
     """The token following a flag at `seg[flag_index]`, skipping PAST any
     leading run of vanishing-reference decoys first -- falls back to the
     token immediately adjacent to the flag when skipping finds nothing
@@ -1844,7 +1905,7 @@ def _value_position_after(seg: list[str], flag_index: int, name_to_value: dict[s
     callers -- and any future one needing the same "skip a decoy, but
     never lose the one real candidate" shape -- stay in sync."""
     j = flag_index + 1
-    while j < len(seg) and _token_is_unambiguously_vanishing(seg[j], name_to_value):
+    while j < len(seg) and _token_is_unambiguously_vanishing(seg[j], name_to_value, name_to_raw_value):
         j += 1
     if j < len(seg):
         return seg[j]
@@ -1853,7 +1914,9 @@ def _value_position_after(seg: list[str], flag_index: int, name_to_value: dict[s
     return None
 
 
-def _gh_api_method_dynamic_value(seg: list[str], index: int, raw_tok: str, name_to_value: dict[str, str]) -> str | None:
+def _gh_api_method_dynamic_value(
+    seg: list[str], index: int, raw_tok: str, name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
+) -> str | None:
     """The dynamically constructed value part of a `-X`/`--method` flag at
     `seg[index]`, in whichever of the three shapes it takes (separate
     token, fused with `=`, or fused directly) -- or None if `raw_tok`
@@ -1891,7 +1954,7 @@ def _gh_api_method_dynamic_value(seg: list[str], index: int, raw_tok: str, name_
             return raw_tok[len("--method=") :]
         return None
     if raw_tok.lower() in ("-x", "--method"):
-        value_tok = _value_position_after(seg, index, name_to_value)
+        value_tok = _value_position_after(seg, index, name_to_value, name_to_raw_value)
         if value_tok is not None and _is_dynamic(value_tok):
             return value_tok
     return None
@@ -1946,12 +2009,15 @@ def _gh_api_method_dynamic_hit(
     unbraced reference immediately followed by more identifier-shaped
     literal text (`-X"$M"ST` with `M=PO`) is itself ambiguous once shlex
     has dequoted it, see `_substitute_var_refs_candidates`'s own
-    docstring. `name_to_raw_value` is threaded through purely to reach
-    that function's own `${!NAME}` indirect-reference support (found live
-    by Step 8 independent review, tenth round, issue #1326) -- this
-    function itself has no direct use for it."""
+    docstring. `name_to_raw_value` was originally threaded through
+    purely to reach that function's own `${!NAME}` indirect-reference
+    support (found live by Step 8 independent review, tenth round, issue
+    #1326) -- as of the thirtieth round it is ALSO passed to `_gh_api_
+    method_dynamic_value` below, which needs it for `_value_position_
+    after`'s own case-preserving vanishing check (see `_token_is_all_
+    unassigned_refs`'s own docstring)."""
     for i, raw_tok in enumerate(seg):
-        dynamic_value_part = _gh_api_method_dynamic_value(seg, i, raw_tok, name_to_value)
+        dynamic_value_part = _gh_api_method_dynamic_value(seg, i, raw_tok, name_to_value, name_to_raw_value)
         if dynamic_value_part is None:
             continue
         if _is_unresolvable_substitution(dynamic_value_part):
@@ -2032,7 +2098,7 @@ def _gh_api_method_flagname_dynamic_hit(
             return True
         if not any(candidate.lower() in ("-x", "--method") for candidate in flag_candidates):
             continue
-        value_tok = _value_position_after(seg, i, name_to_value)
+        value_tok = _value_position_after(seg, i, name_to_value, name_to_raw_value)
         if value_tok is None:
             continue
         if _is_dynamic(value_tok):
@@ -2253,7 +2319,7 @@ def _rule_gh_api_write(
 _GIT_LONG_VALUE_FLAGS = {"--git-dir", "--work-tree", "--namespace", "--super-prefix", "--config-env"}
 
 
-def _is_git_push_segment(seg: list[str], name_to_value: dict[str, str]) -> bool:
+def _is_git_push_segment(seg: list[str], name_to_raw_value: dict[str, str]) -> bool:
     """Found live by Step 8 independent review, twenty-second round (issue
     #1326): the flag-skip loop below used to `break` the instant it met
     ANY dynamic-shaped token, abandoning the scan rather than looking
@@ -2330,7 +2396,14 @@ def _is_git_push_segment(seg: list[str], name_to_value: dict[str, str]) -> bool:
     malformed config key/path in that specific shape means no push
     actually reaches this scenario either way, and flagging it as a
     possible push anyway is the conservative, already-accepted choice
-    for that literal case specifically."""
+    for that literal case specifically.
+
+    Takes NAME_TO_RAW_VALUE (case-preserving), not the lowercased
+    NAME_TO_VALUE -- ported from `_token_is_all_unassigned_refs`'s own
+    thirtieth-round fix (see its own docstring): this function's caller
+    already has the case-preserving map in scope, and passing the
+    lowercased one here would silently reintroduce that same round's own
+    case-fold bug at this call site too."""
     literals = [(t.lower() if not _is_dynamic(t) else None) for t in seg]
     for i, tok in enumerate(literals):
         if tok != "git":
@@ -2342,7 +2415,7 @@ def _is_git_push_segment(seg: list[str], name_to_value: dict[str, str]) -> bool:
             # a plain variable.
             candidate = literals[j]
             if candidate is None:
-                if _token_is_all_unassigned_refs(seg[j], name_to_value):
+                if _token_is_all_unassigned_refs(seg[j], name_to_raw_value):
                     j += 1
                     continue
                 break
@@ -2375,7 +2448,9 @@ def _is_git_push_segment(seg: list[str], name_to_value: dict[str, str]) -> bool:
                 value_j = j
                 while value_j < len(literals):
                     value_candidate = literals[value_j]
-                    if value_candidate is not None or not _token_is_all_unassigned_refs(seg[value_j], name_to_value):
+                    if value_candidate is not None or not _token_is_all_unassigned_refs(
+                        seg[value_j], name_to_raw_value
+                    ):
                         break
                     value_j += 1
                 if value_j < len(literals) and (value_candidate is None or not value_candidate.startswith("-")):
@@ -2646,7 +2721,7 @@ def _classify_tokens(
     raw_assigned = {**outer_raw, **_assigned_raw_values(tokens)}
     lowered_command = " ".join(tokens).lower()
 
-    is_git_push = is_git_push or any(_is_git_push_segment(seg, assigned) for seg in segments)
+    is_git_push = is_git_push or any(_is_git_push_segment(seg, raw_assigned) for seg in segments)
 
     literal_hit = _rule_a_literal(segments)
     if literal_hit:
@@ -2662,7 +2737,7 @@ def _classify_tokens(
         return Verdict(True, loop_hit, is_git_push)
 
     collapsed_segments = [
-        collapsed for seg in segments if (collapsed := _strip_leading_unassigned_bare_refs(seg, assigned))
+        collapsed for seg in segments if (collapsed := _strip_leading_unassigned_bare_refs(seg, raw_assigned))
     ]
     if collapsed_segments != segments:
         collapsed_hit, collapsed_is_git_push = _segment_loop_hit(collapsed_segments, assigned, raw_assigned)

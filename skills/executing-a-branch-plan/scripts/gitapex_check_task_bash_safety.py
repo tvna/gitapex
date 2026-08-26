@@ -1089,7 +1089,7 @@ _REF_RUN_NAME_RE = re.compile(_ONE_REF_SRC)
 _BASH_DEFAULT_IFS = " \t\n"
 
 
-def _token_is_all_unassigned_refs(token: str, name_to_value: dict[str, str]) -> bool:
+def _token_is_all_unassigned_refs(token: str, name_to_raw_value: dict[str, str]) -> bool:
     """TOKEN word-splits away to NOTHING, unquoted, at real bash runtime,
     because it is composed ENTIRELY of one or more back-to-back variable
     references -- bare (`$NAME`), braced (`${NAME}`), or braced with a
@@ -1369,26 +1369,56 @@ def _token_is_all_unassigned_refs(token: str, name_to_value: dict[str, str]) -> 
     token as `-c`'s value regardless of well-formedness, so this can
     only ever find a `push` real git's own argv construction also
     reaches -- confirmed still safe-direction-only, left as a disclosed
-    residual rather than fixed."""
+    residual rather than fixed.
+
+    Found live by Step 8 independent review, thirtieth round (issue
+    #1326), ported from the main hook's own identical fix: the twenty-
+    ninth round's own `effective_ifs` fix computed it (and every per-
+    name value it stripped against `effective_ifs`) from NAME_TO_VALUE
+    -- the LOWERCASED map `_assigned_literals` builds for case-
+    INSENSITIVE comparisons elsewhere in this module. Real bash's own
+    `$IFS` word-splitting is case-SENSITIVE: reusing the lowercased map
+    here silently case-folded BOTH sides of the vanishing check, so a
+    token whose real (mixed-case) value does NOT actually overlap the
+    real (differently-cased) `$IFS` could still read as "vanishes" once
+    both were folded to the same case -- a live hard-deny bypass in
+    this module's own `_is_git_push_segment`/`_skip_fetch_exec_wrapper`/
+    `_process_sub_feeds_fetch_tool` (any of this function's callers that
+    use "vanishes" to mean "skip past me while hunting for the real
+    value/position" can have the real value or head token wrongly
+    skipped this way, not only the gh-api write-method case the main
+    hook's own sibling finding was confirmed against there).
+
+    Closed by using `_assigned_raw_values`'s own case-PRESERVING map for
+    every lookup this function makes (both `effective_ifs` itself and
+    each per-name value strip-checked against it) instead of the
+    lowercased one -- this module already carries a case-preserving map
+    for exactly this class of problem (built for `${!NAME}` indirect-
+    reference resolution), already threaded to every caller of this
+    function by the time this round started, so wiring it one level
+    deeper here needed no new plumbing. Re-verified live that every
+    prior round's own pinned scenario still resolves identically under
+    the case-preserving map, since none of them depend on case-folding
+    at all."""
     if not _REF_RUN_TOKEN_RE.match(token):
         return False
-    effective_ifs = name_to_value.get("IFS", _BASH_DEFAULT_IFS)
+    effective_ifs = name_to_raw_value.get("IFS", _BASH_DEFAULT_IFS)
     for match in _REF_RUN_NAME_RE.finditer(token):
         bare_name = match.group("bare")
         if bare_name is not None:
-            if name_to_value.get(bare_name, "").strip(effective_ifs):
+            if name_to_raw_value.get(bare_name, "").strip(effective_ifs):
                 return False
         else:
             braced_name = match.group("braced")
             if "[" in match.group(0):
-                if braced_name in name_to_value:
+                if braced_name in name_to_raw_value:
                     return False
-            elif name_to_value.get(braced_name, "").strip(effective_ifs):
+            elif name_to_raw_value.get(braced_name, "").strip(effective_ifs):
                 return False
     return True
 
 
-def _strip_leading_unassigned_bare_refs(tokens: list[str], name_to_value: dict[str, str]) -> list[str]:
+def _strip_leading_unassigned_bare_refs(tokens: list[str], name_to_raw_value: dict[str, str]) -> list[str]:
     """A leading run of tokens that each vanish to nothing at real bash
     runtime (per `_token_is_all_unassigned_refs`, see its own docstring)
     is stripped away -- used by `_rule_array_literal_content` to
@@ -1396,10 +1426,17 @@ def _strip_leading_unassigned_bare_refs(tokens: list[str], name_to_value: dict[s
     leading decoy had already collapsed away, since the REAL first
     surviving element is what a `seg[0]`-anchored rule would actually see
     once `"${NAME[@]}"` expands the array for real, not the decoy
-    reference the raw token stream shows in that position."""
+    reference the raw token stream shows in that position.
+
+    Takes NAME_TO_RAW_VALUE (case-preserving), not the lowercased
+    NAME_TO_VALUE -- ported from `_token_is_all_unassigned_refs`'s own
+    thirtieth-round fix (see its own docstring): this function's caller
+    already has the case-preserving map in scope, and passing the
+    lowercased one here would silently reintroduce that same round's own
+    case-fold bug at this call site too."""
     i = 0
     n = len(tokens)
-    while i < n and _token_is_all_unassigned_refs(tokens[i], name_to_value):
+    while i < n and _token_is_all_unassigned_refs(tokens[i], name_to_raw_value):
         i += 1
     return tokens[i:]
 
@@ -1557,7 +1594,7 @@ def _rule_array_literal_content(
         inner = tokens[i + 2 : end - 1]
         if inner and any(not _is_unresolvable_substitution(t) for t in _fold_command_substitution_spans(inner)):
             readings = [(inner, "")]
-            collapsed = _strip_leading_unassigned_bare_refs(inner, name_to_value)
+            collapsed = _strip_leading_unassigned_bare_refs(inner, name_to_raw_value)
             if collapsed and collapsed != inner:
                 readings.append((collapsed, " once its own leading unassigned reference(s) word-split away"))
             for reading, suffix in readings:
@@ -1742,7 +1779,7 @@ def _rule_fetch_exec(
             for later in chain[i + 1 :]:
                 if not later:
                     continue
-                interp_index = _skip_fetch_exec_wrapper(later, name_to_value)
+                interp_index = _skip_fetch_exec_wrapper(later, name_to_raw_value)
                 if len(later) > interp_index:
                     cand = later[interp_index]
                     if _is_dynamic(cand):
@@ -1758,13 +1795,13 @@ def _rule_fetch_exec(
     return None
 
 
-def _skip_fetch_exec_wrapper(seg: list[str], name_to_value: dict[str, str] | None = None) -> int:
+def _skip_fetch_exec_wrapper(seg: list[str], name_to_raw_value: dict[str, str] | None = None) -> int:
     """Return the index of SEG's own interpreter candidate, skipping past
     a single leading wrapper token (`sudo`/`env`/`command`/`exec`), any
     number of BOOLEAN (no-separate-value) flag-shaped tokens after it, and
-    -- when NAME_TO_VALUE is given -- any number of tokens that vanish to
-    nothing at real bash runtime (per `_token_is_all_unassigned_refs`, see
-    its own docstring).
+    -- when NAME_TO_RAW_VALUE is given -- any number of tokens that vanish
+    to nothing at real bash runtime (per `_token_is_all_unassigned_refs`,
+    see its own docstring).
 
     Factored out of `_rule_fetch_exec`'s own inline loop -- Step 8
     independent review, fourteenth round (issue #1326) -- so
@@ -1820,26 +1857,33 @@ def _skip_fetch_exec_wrapper(seg: list[str], name_to_value: dict[str, str] | Non
     `bash` binary on PATH, capturing its own argv) that this genuinely
     invokes `bash` once `$NEVERSET` word-splits away.
 
-    All THREE call sites now pass NAME_TO_VALUE -- `_rule_fetch_exec` and
-    `_rule_process_sub_fetch_exec` from the twenty-first round above, and
-    `_rule_eval_or_dashc_fetch_exec` from a twenty-second-round fix of the
-    identical gap this function's own docstring left that third call site
-    exposed to: `$NEVERSET eval "$(curl <url>)"` was wrongly ALLOWED by
-    the same mechanism (an unresolvable-because-vanishing candidate at
+    All THREE call sites now pass NAME_TO_RAW_VALUE -- `_rule_fetch_exec`
+    and `_rule_process_sub_fetch_exec` from the twenty-first round above,
+    and `_rule_eval_or_dashc_fetch_exec` from a twenty-second-round fix of
+    the identical gap this function's own docstring left that third call
+    site exposed to: `$NEVERSET eval "$(curl <url>)"` was wrongly ALLOWED
+    by the same mechanism (an unresolvable-because-vanishing candidate at
     this function's own returned position, the caller giving up rather
     than looking past it) until that call site was updated too -- see
     `_rule_eval_or_dashc_fetch_exec`'s own docstring for the live
-    verification. NAME_TO_VALUE stays optional (`None` default) not
+    verification. NAME_TO_RAW_VALUE stays optional (`None` default) not
     because a caller is exempt today, but so a FUTURE caller that
-    genuinely has no name_to_value in scope is not forced to fabricate
-    one."""
+    genuinely has no name-to-value map in scope is not forced to
+    fabricate one.
+
+    Renamed from NAME_TO_VALUE to NAME_TO_RAW_VALUE by Step 8 independent
+    review, thirtieth round (issue #1326), ported from the main hook's
+    own identical fix: this parameter feeds `_token_is_all_unassigned_
+    refs`'s own vanishing check, which as of that same round needs the
+    case-PRESERVING map, not the lowercased one -- see that function's
+    own docstring for the live case-fold bypass this closes."""
     interp_index = 1 if (not _is_dynamic(seg[0]) and seg[0].lower() in _FETCH_EXEC_WRAPPERS) else 0
     while interp_index < len(seg) and (
         (
             not _is_dynamic(seg[interp_index])
             and (seg[interp_index].startswith("-") or _ASSIGN_RE.match(seg[interp_index]))
         )
-        or (name_to_value is not None and _token_is_all_unassigned_refs(seg[interp_index], name_to_value))
+        or (name_to_raw_value is not None and _token_is_all_unassigned_refs(seg[interp_index], name_to_raw_value))
     ):
         interp_index += 1
     return interp_index
@@ -1878,7 +1922,7 @@ def _rule_process_sub_fetch_exec(
     for seg in segments:
         if not seg:
             continue
-        interp_index = _skip_fetch_exec_wrapper(seg, name_to_value)
+        interp_index = _skip_fetch_exec_wrapper(seg, name_to_raw_value)
         if interp_index >= len(seg):
             continue
         if not _fetch_exec_cand_is_interp(seg[interp_index], name_to_value, name_to_raw_value):
@@ -1926,7 +1970,7 @@ def _process_sub_feeds_fetch_tool(
             head_index = j + 2
         else:
             continue
-        while head_index < len(rest) and _token_is_all_unassigned_refs(rest[head_index], name_to_value):
+        while head_index < len(rest) and _token_is_all_unassigned_refs(rest[head_index], name_to_raw_value):
             head_index += 1
         if head_index >= len(rest):
             continue
@@ -1971,7 +2015,7 @@ def _fetch_tool_head(tokens: list[str]) -> bool:
         return False
     name_to_value = _assigned_literals(tokens)
     name_to_raw_value = _assigned_raw_values(tokens)
-    collapsed = _strip_leading_unassigned_bare_refs(segs[0], name_to_value)
+    collapsed = _strip_leading_unassigned_bare_refs(segs[0], name_to_raw_value)
     if not collapsed:
         return False
     head = collapsed[0]
@@ -2083,7 +2127,7 @@ def _rest_has_fetch_tool_substitution(rest: list[str]) -> bool:
     return False
 
 
-def _rule_eval_or_dashc_fetch_exec(tokens: list[str], name_to_value: dict[str, str]) -> str | None:
+def _rule_eval_or_dashc_fetch_exec(tokens: list[str], name_to_raw_value: dict[str, str]) -> str | None:
     """`eval $(curl <url>)` and `bash -c "$(curl <url>)"` fetch a payload
     and feed its OUTPUT directly to `eval`/an interpreter's `-c` flag as
     the command text to run -- just as direct an exec of fetched content
@@ -2143,7 +2187,7 @@ def _rule_eval_or_dashc_fetch_exec(tokens: list[str], name_to_value: dict[str, s
     for seg in _command_spans(tokens):
         if not seg:
             continue
-        interp_index = _skip_fetch_exec_wrapper(seg, name_to_value)
+        interp_index = _skip_fetch_exec_wrapper(seg, name_to_raw_value)
         if interp_index >= len(seg):
             continue
         cand = seg[interp_index]
@@ -2238,7 +2282,7 @@ def _rule_gh_any(
 _GIT_LONG_VALUE_FLAGS = {"--git-dir", "--work-tree", "--namespace", "--super-prefix", "--config-env"}
 
 
-def _is_git_push_segment(seg: list[str], name_to_value: dict[str, str]) -> bool:
+def _is_git_push_segment(seg: list[str], name_to_raw_value: dict[str, str]) -> bool:
     """Found live by Step 8 independent review, twenty-second round (issue
     #1326): the flag-skip loop below used to `break` the instant it met
     ANY dynamic-shaped token, abandoning the scan rather than looking
@@ -2300,7 +2344,14 @@ def _is_git_push_segment(seg: list[str], name_to_value: dict[str, str]) -> bool:
     outer-loop iteration -- unchanged, matching the main hook's own
     identical reasoning (real git's own fatal-error path on a malformed
     config key/path in that specific literal shape means no push
-    actually reaches this scenario either way)."""
+    actually reaches this scenario either way).
+
+    Takes NAME_TO_RAW_VALUE (case-preserving), not the lowercased
+    NAME_TO_VALUE -- ported from `_token_is_all_unassigned_refs`'s own
+    thirtieth-round fix (see its own docstring): this function's caller
+    already has the case-preserving map in scope, and passing the
+    lowercased one here would silently reintroduce that same round's own
+    case-fold bug at this call site too."""
     literals = [(t.lower() if not _is_dynamic(t) else None) for t in seg]
     for i, tok in enumerate(literals):
         if tok != "git":
@@ -2312,7 +2363,7 @@ def _is_git_push_segment(seg: list[str], name_to_value: dict[str, str]) -> bool:
             # a plain variable.
             candidate = literals[j]
             if candidate is None:
-                if _token_is_all_unassigned_refs(seg[j], name_to_value):
+                if _token_is_all_unassigned_refs(seg[j], name_to_raw_value):
                     j += 1
                     continue
                 break
@@ -2339,7 +2390,9 @@ def _is_git_push_segment(seg: list[str], name_to_value: dict[str, str]) -> bool:
                 value_j = j
                 while value_j < len(literals):
                     value_candidate = literals[value_j]
-                    if value_candidate is not None or not _token_is_all_unassigned_refs(seg[value_j], name_to_value):
+                    if value_candidate is not None or not _token_is_all_unassigned_refs(
+                        seg[value_j], name_to_raw_value
+                    ):
                         break
                     value_j += 1
                 if value_j < len(literals) and (value_candidate is None or not value_candidate.startswith("-")):
@@ -2379,7 +2432,7 @@ def _rule_git_push(
     segments: list[list[str]], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
 ) -> str | None:
     for seg in segments:
-        if _is_git_push_segment(seg, name_to_value):
+        if _is_git_push_segment(seg, name_to_raw_value):
             return "git push, not permitted inside a task-level agent (worktree merge-back is main-thread-only)"
         if not seg:
             continue
@@ -2671,7 +2724,7 @@ def _classify_tokens(
     assigned = {**outer_literals, **_assigned_literals(tokens)}
     raw_assigned = {**outer_raw, **_assigned_raw_values(tokens)}
 
-    eval_dashc_hit = _rule_eval_or_dashc_fetch_exec(raw_tokens, assigned)
+    eval_dashc_hit = _rule_eval_or_dashc_fetch_exec(raw_tokens, raw_assigned)
     if eval_dashc_hit:
         return Verdict(True, eval_dashc_hit)
 
@@ -2696,10 +2749,10 @@ def _classify_tokens(
         return Verdict(True, position_hit)
 
     collapsed_segments = [
-        collapsed for seg in segments if (collapsed := _strip_leading_unassigned_bare_refs(seg, assigned))
+        collapsed for seg in segments if (collapsed := _strip_leading_unassigned_bare_refs(seg, raw_assigned))
     ]
     collapsed_pipe_chains = [
-        [collapsed for seg in chain if (collapsed := _strip_leading_unassigned_bare_refs(seg, assigned))]
+        [collapsed for seg in chain if (collapsed := _strip_leading_unassigned_bare_refs(seg, raw_assigned))]
         for chain in pipe_chains
     ]
     if collapsed_segments != segments or collapsed_pipe_chains != pipe_chains:

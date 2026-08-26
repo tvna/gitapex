@@ -263,7 +263,7 @@ def test_gh_api_method_dynamic_value_extracts_the_fused_or_separate_shape(var: s
     else:
         seg = ["gh", "api", "x", shape.format(f"${var}")]
         index = 3
-    extracted = checker._gh_api_method_dynamic_value(seg, index, seg[index], {})
+    extracted = checker._gh_api_method_dynamic_value(seg, index, seg[index], {}, {})
     assert extracted is not None
     assert f"${var}" in extracted
 
@@ -275,7 +275,7 @@ def test_value_position_after_skips_a_vanishing_decoy_to_find_the_real_value() -
     right after the flag is skipped, landing on the real, assigned
     value one position further."""
     seg = ["gh", "api", "repos/o/r/pulls/1", "-X", "$NEVERSET", "$M"]
-    assert checker._value_position_after(seg, 3, {"M": "post"}) == "$M"
+    assert checker._value_position_after(seg, 3, {"M": "post"}, {"M": "post"}) == "$M"
 
 
 def test_value_position_after_falls_back_to_the_adjacent_token_when_nothing_survives() -> None:
@@ -284,21 +284,21 @@ def test_value_position_after_falls_back_to_the_adjacent_token_when_nothing_surv
     with a real value beyond it) is still returned rather than silently
     dropped when skipping runs off the end of the segment."""
     seg = ["gh", "api", "x", "-x", "$a"]
-    assert checker._value_position_after(seg, 3, {}) == "$a"
+    assert checker._value_position_after(seg, 3, {}, {}) == "$a"
 
 
 def test_value_position_after_returns_none_with_no_token_past_the_flag() -> None:
     """No token at all past the flag -> None, matching every prior
     caller's own established behavior for that case."""
     seg = ["gh", "api", "x", "-x"]
-    assert checker._value_position_after(seg, 3, {}) is None
+    assert checker._value_position_after(seg, 3, {}, {}) is None
 
 
 def test_token_is_unambiguously_vanishing_true_for_a_genuinely_unassigned_bare_ref() -> None:
     """The straightforward case: an unbraced bare reference to a name
     never assigned anywhere, with no shorter-prefix ambiguity, is
     unambiguously vanishing."""
-    assert checker._token_is_unambiguously_vanishing("$NEVERSET", {}) is True
+    assert checker._token_is_unambiguously_vanishing("$NEVERSET", {}, {}) is True
 
 
 def test_token_is_unambiguously_vanishing_false_when_a_shorter_prefix_is_assigned() -> None:
@@ -307,13 +307,13 @@ def test_token_is_unambiguously_vanishing_false_when_a_shorter_prefix_is_assigne
     -- shlex has already lost whether the raw token `$aost` was
     originally bare (`$aost`) or a quoted `$ao` fused with literal "st"
     -- so this must NOT be treated as unambiguously vanishing."""
-    assert checker._token_is_unambiguously_vanishing("$aost", {"ao": "po"}) is False
+    assert checker._token_is_unambiguously_vanishing("$aost", {"ao": "po"}, {"ao": "po"}) is False
 
 
 def test_token_is_unambiguously_vanishing_false_for_an_assigned_name() -> None:
     """A token whose own name IS directly assigned is not vanishing at
     all, let alone unambiguously so."""
-    assert checker._token_is_unambiguously_vanishing("$M", {"M": "post"}) is False
+    assert checker._token_is_unambiguously_vanishing("$M", {"M": "post"}, {"M": "post"}) is False
 
 
 @_PROPERTIES
@@ -322,7 +322,7 @@ def test_gh_api_method_dynamic_value_none_for_an_unrelated_token(var: str) -> No
     """No false positive: a token that is neither a -X/--method flag nor
     immediately follows one yields no extracted value."""
     seg = ["gh", "api", "x", f"${var}"]
-    assert checker._gh_api_method_dynamic_value(seg, 3, seg[3], {}) is None
+    assert checker._gh_api_method_dynamic_value(seg, 3, seg[3], {}, {}) is None
 
 
 @_PROPERTIES
@@ -2324,7 +2324,8 @@ def test_value_position_after_returns_the_real_dynamic_value_when_ifs_is_reassig
     unrelated `IFS=x` reassignment."""
     seg = ["gh", "api", "repos/foo/bar/merge", "-X", "${M}", "extra"]
     name_to_value = {"IFS": "x", "M": "post"}
-    assert checker._value_position_after(seg, 3, name_to_value) == "${M}"
+    name_to_raw_value = {"IFS": "x", "M": "POST"}
+    assert checker._value_position_after(seg, 3, name_to_value, name_to_raw_value) == "${M}"
 
 
 def test_classify_denies_gh_api_dynamic_write_method_despite_ifs_reassignment_end_to_end() -> None:
@@ -2333,6 +2334,42 @@ def test_classify_denies_gh_api_dynamic_write_method_despite_ifs_reassignment_en
     extra` real-expands to `gh api repos/foo/bar/merge -X POST extra`, a
     genuine write."""
     verdict = checker.classify("IFS=x; echo hi; M=POST; gh api repos/foo/bar/merge -X ${M} extra")
+    assert verdict.deny is True
+
+
+def test_token_is_all_unassigned_refs_false_for_a_case_mismatched_ifs_and_value() -> None:
+    """Regression pin for the real hard-deny bypass found live by Step 8
+    independent review, thirtieth round (issue #1326): the twenty-ninth
+    round's own `effective_ifs` fix computed it (and every per-name
+    value stripped against it) from the LOWERCASED `name_to_value` map --
+    real bash `$IFS` word-splitting is case-SENSITIVE, so a value whose
+    real (mixed-case) characters do NOT overlap the real (differently-
+    cased) `$IFS` must not read as vanishing just because both happen to
+    fold to the same case. Confirmed live via real bash that `IFS=post;
+    DECOY=POST; ...${DECOY}...` leaves `${DECOY}` intact (`POST`'s own
+    uppercase letters are untouched by a lowercase-only `$IFS`)."""
+    assert checker._token_is_all_unassigned_refs("${DECOY}", {"IFS": "post", "DECOY": "POST"}) is False
+
+
+def test_value_position_after_returns_the_real_value_despite_a_case_folded_ifs_collision() -> None:
+    """Regression pin for the same thirtieth-round finding, at the
+    `_value_position_after` call site the bypass actually reached: a
+    dynamic write-method value must not be skipped as a decoy merely
+    because its LOWERCASED reading happens to coincide with the
+    LOWERCASED reassigned `$IFS` -- real bash compares case-sensitively,
+    so `${DECOY}` (value "POST") genuinely survives past `IFS=post`."""
+    seg = ["gh", "api", "repos/foo/bar/merge", "-X", "${DECOY}", "extra"]
+    name_to_value = {"IFS": "post", "DECOY": "post"}
+    name_to_raw_value = {"IFS": "post", "DECOY": "POST"}
+    assert checker._value_position_after(seg, 3, name_to_value, name_to_raw_value) == "${DECOY}"
+
+
+def test_classify_denies_gh_api_dynamic_write_method_despite_a_case_folded_ifs_collision_end_to_end() -> None:
+    """End-to-end companion to the above: confirmed live via real bash
+    that `IFS=post; DECOY=POST; gh api repos/foo/bar/merge -X ${DECOY}
+    extra` real-expands to `gh api repos/foo/bar/merge -X POST extra`, a
+    genuine write."""
+    verdict = checker.classify("IFS=post; DECOY=POST; gh api repos/foo/bar/merge -X ${DECOY} extra")
     assert verdict.deny is True
 
 
