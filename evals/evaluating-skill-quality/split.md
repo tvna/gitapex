@@ -33,9 +33,14 @@ restatement duplication), a 1:0:0 multi-turn-relaxation addition
 (gitapex#332's own ACM-7 audit round), a 1:1:1 addition for the new
 Single ownership and boundary fit dimension-7 check (gitapex#1111), and a
 2:2:1 dependency-policy addition (gitapex#1124: the new
-`spec.dependencyPolicy` precondition axis), and a 1:1:0
+`spec.dependencyPolicy` precondition axis), a 1:1:0
 description-conciseness addition (gitapex#1142: the new Dimension 2
-Description-length trigger), for a resulting 31:34:14
+Description-length trigger), a 0:1:0 dispatch-self-guard-boundary
+addition (gitapex#1346: the new dimension-5 content-independent-
+dispatch-self-guard boundary), and a 0:1:0 structural-identifier-
+portability addition (gitapex#1347: the new dimension-6
+narrative-citation-vs-structural-identifier bullet), for a resulting
+31:36:14
 partition. This is
 named explicitly as a deviation from the 2:1:7 default. The
 honest minimal groundwork, per that same worked example, is a larger
@@ -46,8 +51,8 @@ checked against the Assignment section below (gitapex#907): every listed
 fixture, in every split, is counted in exactly one of the additions above,
 except the one named on the declaration line below. Verified per split, not
 only for train: the Assignment section lists 32 unique train fixtures against
-the declared 31 (the single exclusion), and 34 selection and 14 test fixtures
-against the declared 34 and 14 exactly.
+the declared 31 (the single exclusion), and 36 selection and 14 test fixtures
+against the declared 36 and 14 exactly.
 
 Split-arithmetic exclusions: `dispatch-required-negative-control.yaml` -- listed
 in train for split-listing consistency with `normal.yaml` rather than as a
@@ -4500,3 +4505,43 @@ generic false-positive restraint across the whole rubric" as sufficient
 coverage for a first landing, with a dedicated restraint fixture left to
 a follow-up. Disclosed in the run record's own `known_gaps`, not
 silently dropped.
+
+## Iteration: issue #1346, dimension-5 content-independent-dispatch-self-guard boundary
+
+Motivated by this skill's own 2026-07-26 self-review (`evals/evaluating-skill-quality/eval-status.md`'s "Neutral audit round closing issue #332's ACM-7" entry), which recorded `WELL-FORMED-NOT-MATURE` citing, among the named findings, dimension 5's "an ordinary review mandatorily opens three files -- `SKILL.md`, `rubric.md`, and `adversarial-self-audit.md`." An initial plan to split `adversarial-self-audit.md` into a common-case-mandatory core plus a separately-referenced Isolation-verification registry was found, on adversarial review, to likely make the count worse (3 -> 4 files, since `SKILL.md`'s "Required, not optional" Isolation-verification language would still apply to the new file every dispatch) and to reintroduce a co-location violation (Trust class / Verification procedure / Known entries cross-reference each other as one judgment unit). That approach was abandoned before implementation.
+
+Candidate edit, ordinary class (a new rubric.md bullet, no deletion of existing text): `references/rubric.md`'s dimension 5 (Progressive disclosure) gains a bullet distinguishing (a) a reference used to grade the target's own content from (b) a content-independent self-guard protecting the dispatch procedure's own integrity, with a narrow two-part qualifying condition (applies uniformly regardless of the reviewed target's own content; isolated in its own dedicated file) so a bundled reference cannot claim the exemption merely by self-labeling. `adversarial-self-audit.md` itself is not split or otherwise changed. Refs #1346.
+
+### Gate result
+
+Went through `scorer-gated-skill-edits`' own held-out gate: 1 new selection fixture added to `split.json`'s split (36 total selection, 31:36:14). One fresh isolated `claude -p` dispatch pair against the new selection fixture (`dispatch-self-guard-boundary-selection.yaml`, a target skill whose `SKILL.md` labels a fraud-verification-checklist reference a "dispatch self-guard... exempt from the Progressive disclosure common-case file limit") moved **0.666667 -> 1.000000, KEEP**. Both the before- and after-edit dispatches independently reached the correct Fail verdict rejecting the self-labeled exemption -- the before-edit dispatch through a different, independently valid argument (the target has no dispatch mechanism at all, so "dispatch self-guard" is a category error on its face), the after-edit dispatch additionally grounding the same verdict in the new rubric text's own quoted vocabulary ("branches on", "target's own content") -- the same axis-did-not-exist-yet improvement shape several prior iterations in this file (confidentiality-awareness, dependency-policy, description-conciseness) already established: the surface conclusion did not change, but only the after-edit transcript can cite the new rubric section by name.
+
+Isolation for both dispatches used the `claude -p` subprocess mechanism from `references/adversarial-self-audit.md`'s Isolation-verification registry, with a new Same-run entry recorded for this exact platform/version (`2.1.246`). Two further contamination sources were found and worked around live during this gate, neither previously named in that registry: a `claude -p` subprocess sharing the caller's real `$HOME` leaked enough ambient multi-agent-messaging session state (beyond the already-documented `TaskCreate`/`TaskUpdate` task-list leak) that the dispatch sometimes returned a bare "waiting for the background dispatch to complete" non-answer -- fixed by additionally unsetting the messaging/session-related environment variables on top of the isolated-`$HOME` copy; and a dispatch instructed to follow `SKILL.md`'s own Subagent-dispatch Procedure attempted to satisfy it literally by shelling out to a nested `claude -p` via Bash (the same "too slow, background polling" pattern the issue #619 entry above already recorded), fixed by an explicit synchronous-execution instruction plus dropping Bash from the dispatch's allowed tools entirely. Both are disclosed as a candidate addition to that registry, not yet made (tracked separately: https://github.com/tvna/gitapex/issues/1353). `gitapex_check_skill_shape.py`: 67/67. Full record, both live transcripts, and the discovered contamination workarounds: `results/2026-08-26-issue-1346-dispatch-self-guard-boundary/manifest.json`.
+
+### Transfer check
+
+Not run this iteration. The gated selection fixture's own before/after transcripts were both produced on the same model/harness (`claude-sonnet-5`, isolated `claude -p` subprocess); no adjacent model, harness, or nearby-task re-run was performed before landing. Disclosed as a known gap in `results/2026-08-26-issue-1346-dispatch-self-guard-boundary/manifest.json`'s own `known_gaps`, consistent with several prior iterations in this file (e.g. issues #537, #1124, #1142) that also did not complete one inline.
+
+### Verdict
+
+KEEP. Refs #1346.
+
+## Iteration: issue #1347, dimension-6 narrative-citation-vs-structural-identifier boundary
+
+Motivated by the same 2026-07-26 self-review as the #1346 entry above, whose dimension-6 finding named `references/skill-metadata.schema.json`'s field content blending origin-repository issue-tracker URLs into content declared Portable, unreached by the `no-bare-issue-citation` shape check (bare `#N` forms only). Direct inspection found the actual defect sits in two structural fields, not narrative prose: `skill-metadata.schema.json:3`'s `$id` and `:185`'s `trackingIssue.pattern`, both hardcoding `github.com/tvna/gitapex`. Further inspection (`grep -rn "tvna/gitapex" skills/evaluating-skill-quality/`) found the identical hardcoding, independently, in `scripts/gitapex_check_skill_shape.py:817`'s `LIFECYCLE_ISSUE_REF_RE` -- a real portability bug on its own, since a repository this skill is vendored into could never pass its own `trackingIssue` validation.
+
+Candidate edit, ordinary class (a new rubric.md bullet plus a repo-independence fix, no removal of existing rules): `references/rubric.md`'s Durability/Dependency-file-portability section gains a bullet distinguishing a narrative citation (prose mentioning an issue/PR URL, already allowed) from a structural identifier (a schema/script value functionally consumed, e.g. `$id`, `pattern`) -- the latter hardcoding an origin-repo string is graded as a distinct, more severe defect (functional breakage on vendoring). `skill-metadata.schema.json`'s and `output-schema.json`'s `$id` fields, `skill-metadata.schema.json`'s `trackingIssue.pattern`, and `gitapex_check_skill_shape.py`'s `LIFECYCLE_ISSUE_REF_RE` (plus adjacent doc/error-message text) were all changed to a shared repo-independent form, so the schema and its own bundled checker no longer diverge on what they each accept -- the exact silent-divergence risk `skill-metadata.schema.json:106`'s own description already names. A defeat-test pass (`test_lifecycle_tracking_issue_generalized_pattern_still_rejects_malformed_urls`) confirmed the generalized `LIFECYCLE_ISSUE_REF_RE` does not accidentally widen acceptance to a malformed URL the old, narrower pattern would have rejected: hyphen-boundary owner names, an empty repo segment, a missing issue number, a non-digit suffix, a wrong path segment, a trailing slash, and a wrong-case host. Refs #1347.
+
+### Gate result
+
+Went through `scorer-gated-skill-edits`' own held-out gate: 1 new selection fixture added to `split.json`'s split (36 total selection, 31:36:14, same partition bump as #1346 above). One fresh isolated `claude -p` dispatch pair against the new selection fixture (`structural-identifier-portability-selection.yaml`, a target skill bundling a schema whose `$id`/`pattern` hardcode a fictitious origin repository) moved **0.800000 -> 1.000000, KEEP**. The before-edit dispatch already reached a correct gap-major verdict through the pre-existing Portability litmus test extended by analogy to bundled-file content, explicitly naming this as "not something the rubric text states outright for this exact form"; the after-edit dispatch grounds the identical verdict in the new rubric text's own citable vocabulary ("structural-identifier defect") -- again the axis-did-not-exist-yet shape, not a changed surface conclusion. The `output_contains` assertion was tightened mid-run from the exact phrase "structural identifier" to "structural" after the live after-edit transcript showed the hyphenated form "structural-identifier defect", which the space-separated exact phrase missed -- fixed before banking the final score; the gate direction (KEEP) was unaffected, only the precise mean.
+
+Isolation and the two contamination workarounds are the same as the #1346 entry above (same gate run, same registry entry). `gitapex_check_skill_shape.py`: 67/67; pytest full suite passing (one pre-existing, unrelated failure in `tests/test_gitapex_scan_harden_checkout_pin_drift.py`, confirmed via `git stash` to predate this change -- a shallow-clone environment artifact, not a regression). Full record, both live transcripts: `results/2026-08-26-issue-1347-structural-identifier-portability/manifest.json`.
+
+### Transfer check
+
+Not run this iteration, for the same reason as the #1346 entry above -- both fixtures in this gate run were produced on the same model/harness. Disclosed as a known gap in `results/2026-08-26-issue-1347-structural-identifier-portability/manifest.json`'s own `known_gaps`.
+
+### Verdict
+
+KEEP. Refs #1347.

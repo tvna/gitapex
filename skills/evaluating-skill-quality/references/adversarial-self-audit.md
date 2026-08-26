@@ -567,6 +567,24 @@ mechanism, not only the ones already recorded below.
   alternative still isolates `CLAUDE.md`/`AGENTS.md` correctly with no
   permission-bypass flag. Scratch directories deleted after recording the
   outcome, per the Verification procedure's own step 1.
+- **Same-run, unreviewed**: same identifying signals as above
+  (`CLAUDE_CODE_REMOTE=true`, `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=
+  cloud_default`), but `claude --version` now reports `2.1.246 (Claude
+  Code)`, newer than the `2.1.241` the entry above covers -- a fresh run of
+  the Verification procedure ahead of a `scorer-gated-skill-edits` held-out
+  gate cycle for two rubric.md edits addressing dimension 5 and dimension 6
+  NOT-MATURE findings. Same variant (prompt
+  passed as a single self-contained CLI argument; no permission-bypass
+  flag, since the prompt needed no Read/Bash/Write). Positive control
+  (isolated scratch cwd outside any repository, containing a synthetic
+  sentinel `CLAUDE.md`, never the real file): correctly quoted the sentinel
+  sentence verbatim. Negative control (isolated scratch cwd, same prompt,
+  ancestry directly confirmed free of `CLAUDE.md`/`AGENTS.md`): correctly
+  reported none loaded, further noting the directory was not a git
+  repository. Both held at this version. Scratch directories were left
+  under the session's own scratchpad path rather than deleted immediately,
+  since a same-session gate run below reuses the same recipe.
+- **Dated**: 2026-08-26.
 
 - **Reconfirmed 2026-08-25 (later run, same day), at a newer CLI version.**
   Same identifying signals as the entry immediately above

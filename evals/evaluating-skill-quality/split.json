@@ -68,7 +68,9 @@
       "shared-bundled-script-boundary-fit-selection.yaml",
       "dependency-policy-stdlib-only-fail-selection.yaml",
       "dependency-policy-declared-fail-selection.yaml",
-      "description-conciseness-trigger-selection.yaml"
+      "description-conciseness-trigger-selection.yaml",
+      "dispatch-self-guard-boundary-selection.yaml",
+      "structural-identifier-portability-selection.yaml"
     ],
     "test": [
       "guardrail.yaml",
@@ -87,7 +89,7 @@
       "dependency-policy-undeclared-real-import-fail-test.yaml"
     ]
   },
-  "partition": "31:34:14",
+  "partition": "31:36:14",
   "split_arithmetic_exclusions": [
     "dispatch-required-negative-control.yaml"
   ]

@@ -1,0 +1,12 @@
+{
+  "model_id": "claude-sonnet-5",
+  "n_fixtures": 1,
+  "mean_score": 1.0,
+  "scores": [
+    {
+      "fixture_id": "evaluating-skill-quality-dispatch-self-guard-boundary-selection",
+      "score": 1.0,
+      "split": "selection"
+    }
+  ]
+}
