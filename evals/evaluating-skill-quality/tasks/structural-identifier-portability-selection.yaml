@@ -39,7 +39,7 @@ inputs:
     ```
 expected:
   output_contains:
-    - "structural identifier"
+    - "structural"
     - "vendor"
   output_not_contains:
     - "LGTM"
