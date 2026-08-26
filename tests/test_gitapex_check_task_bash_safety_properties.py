@@ -518,6 +518,63 @@ def test_classify_denies_git_push_past_a_vanishing_leading_decoy_end_to_end() ->
     assert verdict.deny is True
 
 
+def test_is_git_push_segment_true_for_a_dash_c_value_past_a_vanishing_decoy() -> None:
+    """Regression pin for the real bypass found live by Step 8
+    independent review, twenty-third round (issue #1326), ported from
+    the main hook's own identical fix: the `-c`/`_GIT_LONG_VALUE_FLAGS`
+    value-consumption block never looked past a leading decoy to find
+    `-c`'s own real value, so the outer loop's own general decoy-skip
+    consumed the decoy first and landed on the real value token
+    (`name=value`) as an ordinary, never-claimed token, one position
+    short of `push` -- confirmed live via a real bash proxy that `-c`
+    genuinely consumes `name=value` as its own value, leaving `push` as
+    the real subcommand once the decoy word-splits away -- a hard deny
+    bypass for this task-agent rule before this fix."""
+    seg = ["git", "-c", "$NEVERSET", "name=value", "push", "origin", "main"]
+    assert checker._is_git_push_segment(seg, {}) is True
+
+
+def test_is_git_push_segment_true_for_a_dash_c_assigned_dynamic_value() -> None:
+    """Regression pin for the real bypass found live by Step 8
+    independent review, twenty-third round (issue #1326), ported from
+    the main hook's own identical fix: the `-c`/`_GIT_LONG_VALUE_FLAGS`
+    value-consumption block only ever consumed a LITERAL value -- an
+    assigned, non-vanishing DYNAMIC value in this exact position was
+    never consumed either, predating this round entirely. Confirmed live
+    via a real bash proxy that `-c` genuinely consumes the resolved
+    value as real argv, leaving `push` as the real subcommand -- a hard
+    deny bypass for this task-agent rule before this fix."""
+    seg = ["git", "-c", "$CFG", "push", "origin", "main"]
+    assert checker._is_git_push_segment(seg, {"CFG": "user.name=x"}) is True
+
+
+def test_is_git_push_segment_false_for_a_vanishing_decoy_consumed_by_dash_c_itself() -> None:
+    """No false positive: when the decoy sitting in `-c`'s own value
+    position vanishes AND nothing else survives between it and `push`,
+    `push` ITSELF becomes the token `-c` consumes as its value (real
+    git's own CLI parser unconditionally consumes the very next
+    surviving token, confirmed live: `-c push` produces "error: key does
+    not contain a section: push") -- so `origin` (not `push`) is left as
+    the would-be subcommand, and no real push actually occurs."""
+    seg = ["git", "-c", "$NEVERSET", "push", "origin", "main"]
+    assert checker._is_git_push_segment(seg, {}) is False
+
+
+def test_classify_denies_git_push_via_dash_c_value_decoy_end_to_end() -> None:
+    """End-to-end companion to `test_is_git_push_segment_true_for_a_
+    dash_c_value_past_a_vanishing_decoy` above, reached through
+    `classify()`."""
+    verdict = checker.classify("git -c $NEVERSET name=value push origin main")
+    assert verdict.deny is True
+
+
+def test_classify_denies_git_push_via_dash_c_assigned_dynamic_value_end_to_end() -> None:
+    """End-to-end companion to `test_is_git_push_segment_true_for_a_
+    dash_c_assigned_dynamic_value` above, reached through `classify()`."""
+    verdict = checker.classify("CFG=user.name=x; git -c $CFG push origin main")
+    assert verdict.deny is True
+
+
 # --- Round 9: bash's own `${NAME:-default}`/`${NAME-default}`/
 # `${NAME:=default}`/`${NAME=default}` parameter-expansion (issue #1326,
 # found live by Step 8 independent review, ninth round). This embeds

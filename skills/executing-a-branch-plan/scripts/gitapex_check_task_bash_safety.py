@@ -2048,7 +2048,47 @@ def _is_git_push_segment(seg: list[str], name_to_value: dict[str, str]) -> bool:
     this genuinely runs `git push origin main` once the decoy word-splits
     away. Closed by skipping (not breaking on) a vanishing token here
     too, the same primitive `_skip_fetch_exec_wrapper`'s own twenty-
-    first-round fix already uses for an analogous position."""
+    first-round fix already uses for an analogous position.
+
+    Found live by Step 8 independent review, twenty-third round (issue
+    #1326), ported from the main hook's own identical fix: the fix above
+    closed the OUTER flag-skip loop's own decoy gap, but the `-c`/
+    `_GIT_LONG_VALUE_FLAGS` value-consumption block a few lines below it
+    had the identical gap in miniature -- it read the token immediately
+    after the flag directly to decide whether to consume it as the
+    flag's own value, with no decoy-skip of its own. A decoy interposed
+    there (`git -c $NEVERSET name=value push origin main`, NEVERSET
+    never assigned) made this block see the decoy (dynamic) and decline
+    to consume it -- but the OUTER loop's own general decoy-skip then
+    consumed the decoy on its next iteration, landing on `name=value` as
+    an ordinary, never-claimed token that does not start with `-`, so the
+    outer loop `break`s there instead of recognizing it as `-c`'s own
+    already-intended value and continuing to `push` one position
+    further -- a HARD DENY bypass for this task-agent rule, confirmed
+    live via a real bash proxy that this genuinely runs `git push origin
+    main` once the decoy word-splits away.
+
+    A second, distinct gap in the SAME block, found in the same twenty-
+    third-round pass and ported from the main hook's own identical fix:
+    the original condition only ever consumed a LITERAL value -- an
+    ASSIGNED, non-vanishing DYNAMIC value in this exact position
+    (`CFG=user.name=x; git -c $CFG push origin main`) was never consumed
+    either, predating this round entirely. Confirmed live via a real
+    bash proxy that `-c` genuinely consumes `$CFG`'s own resolved value
+    as real argv, leaving `push` as the real subcommand -- a HARD DENY
+    bypass, missed since a dynamic token's own `literals[value_j]` is
+    always `None`, so the old value-consumption check could never fire
+    for it. A present (non-vanishing), DYNAMIC token is now also
+    consumed here, failing closed (assume it survives to occupy this
+    position, so a real `push` sitting past it is not missed). This does
+    not disturb the established, deliberately fail-closed `git -C -v
+    push`-shaped precedent (`test_is_git_push_segment_value_flag_
+    followed_by_another_flag`): a LITERAL, flag-shaped token is still
+    declined here and re-examined as its own flag on the next
+    outer-loop iteration -- unchanged, matching the main hook's own
+    identical reasoning (real git's own fatal-error path on a malformed
+    config key/path in that specific literal shape means no push
+    actually reaches this scenario either way)."""
     literals = [(t.lower() if not _is_dynamic(t) else None) for t in seg]
     for i, tok in enumerate(literals):
         if tok != "git":
@@ -2083,10 +2123,17 @@ def _is_git_push_segment(seg: list[str], name_to_value: dict[str, str]) -> bool:
             # OTHER 2-char short global option (-v, -h, -p, -P) is
             # boolean and takes no argument, confirmed against git's own
             # usage synopsis -- found live by Step 8, second round.
-            if (flag == "-c" or flag in _GIT_LONG_VALUE_FLAGS) and j < len(literals):
-                next_tok = literals[j]
-                if next_tok is not None and not next_tok.startswith("-"):
-                    j += 1
+            if flag == "-c" or flag in _GIT_LONG_VALUE_FLAGS:
+                value_j = j
+                while value_j < len(literals):
+                    value_candidate = literals[value_j]
+                    if value_candidate is not None or not _token_is_all_unassigned_refs(seg[value_j], name_to_value):
+                        break
+                    value_j += 1
+                if value_j < len(literals):
+                    value_candidate = literals[value_j]
+                    if value_candidate is None or not value_candidate.startswith("-"):
+                        j = value_j + 1
         if j < len(literals) and literals[j] == "push":
             return True
     return any("git push" in lit for lit in (t.lower() for t in seg if not _is_dynamic(t)))

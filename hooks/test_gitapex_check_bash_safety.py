@@ -681,13 +681,16 @@ DENIED_INDIRECTION_COMMANDS = [
     # `$NEVERSET uv install` genuinely invokes `uv install` once the
     # decoy word-splits away.
     ("$NEVERSET uv $VERB", "bare-unassigned-leading-ref-hides-b2-watched-tool"),
-    # `_gh_api_method_dynamic_value`/`_gh_api_method_flagname_dynamic_hit`
-    # used to read the token immediately after the `-X`/`--method` flag
-    # (or, for the flagname variant, immediately after the resolved
-    # flag-name token) directly, assuming the value always sits there --
-    # a leading decoy interposed in that position made both functions
-    # read the decoy itself as "the value," silently missing the real,
-    # dynamically-resolved write method one position further.
+    # Found live by Step 8 independent review, twenty-second round (issue
+    # #1326): `_gh_api_method_dynamic_value`/`_gh_api_method_flagname_
+    # dynamic_hit` used to read the token immediately after the
+    # `-X`/`--method` flag (or, for the flagname variant, immediately
+    # after the resolved flag-name token) directly, assuming the value
+    # always sits there -- a leading decoy interposed in that position
+    # made both functions read the decoy itself as "the value," silently
+    # missing the real, dynamically-resolved write method one position
+    # further. Confirmed live via direct Python calls that `_value_
+    # position_after` now skips the decoy and finds the real value.
     ("M=POST; gh api repos/o/r/pulls/1 -X $NEVERSET $M", "gh-api-method-value-past-leading-decoy"),
     ("F=-X; M=POST; gh api repos/o/r/pulls/1 $F $NEVERSET $M", "gh-api-method-flagname-value-past-leading-decoy"),
 ]
@@ -742,6 +745,32 @@ OBFUSCATED_GIT_PUSH_WARN_PATH_COMMANDS = [
     (
         'T=git; V=push; ARR=($T $V origin main); "${ARR[@]}"',
         "array-literal-outer-scope-vars-hide-git-push-still-warn-path",
+    ),
+    # Found live by Step 8 independent review, twenty-second round (issue
+    # #1326): `_is_git_push_segment`'s own flag-skip loop used to `break`
+    # the instant it met ANY dynamic-shaped token, abandoning the scan
+    # rather than looking past a token that vanishes to nothing at real
+    # bash runtime -- confirmed live via a real bash proxy (stand-in
+    # `git` binary on PATH) that this genuinely runs `git push origin
+    # main` once the decoy word-splits away.
+    ("git -v $NEVERSET push origin main", "git-push-unassigned-leading-flag-decoy-still-warn-path"),
+    # Found live by Step 8 independent review, twenty-third round (issue
+    # #1326): the `-c`/long-value-flag branch of the SAME flag-skip loop
+    # had two further gaps in miniature -- (1) it never looked past a
+    # decoy to find `-c`'s own real value, so the outer loop's own
+    # decoy-skip consumed the decoy first and landed on the real value
+    # token as an unclaimed, never-consumed token instead, one position
+    # short of `push`; (2) it only ever consumed a LITERAL value, never
+    # an assigned, non-vanishing DYNAMIC one. Both confirmed live via a
+    # real bash proxy that `-c` genuinely consumes the resolved value as
+    # real argv, leaving `push` as the real subcommand.
+    (
+        "git -c $NEVERSET name=value push origin main",
+        "git-push-c-flag-value-past-leading-decoy-still-warn-path",
+    ),
+    (
+        "CFG=user.name=x; git -c $CFG push origin main",
+        "git-push-c-flag-assigned-dynamic-value-still-warn-path",
     ),
 ]
 

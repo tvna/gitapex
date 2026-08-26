@@ -2006,7 +2006,62 @@ def _is_git_push_segment(seg: list[str], name_to_value: dict[str, str]) -> bool:
     main` once the decoy word-splits away. Closed by skipping (not
     breaking on) a vanishing token here too, the same primitive
     `_skip_fetch_exec_wrapper`'s own twenty-first-round fix already uses
-    for an analogous position in the task-scoped sibling module."""
+    for an analogous position in the task-scoped sibling module.
+
+    Found live by Step 8 independent review, twenty-third round (issue
+    #1326): the fix above closed the OUTER flag-skip loop's own decoy
+    gap, but the `-c`/`_GIT_LONG_VALUE_FLAGS` value-consumption block a
+    few lines below it had the identical gap in miniature -- it read the
+    token immediately after the flag directly (`next_tok = literals[j]`)
+    to decide whether to consume it as the flag's own value, with no
+    decoy-skip of its own. A decoy interposed there (`git -c $NEVERSET
+    name=value push origin main`, NEVERSET never assigned) made this
+    block see the decoy (dynamic, so `next_tok is None`) and correctly
+    decline to consume it -- but the OUTER loop's own general decoy-skip
+    then consumed the decoy on its own next iteration, landing on
+    `name=value` as an ordinary, never-claimed token that does not start
+    with `-`, so the outer loop `break`s there instead of recognizing it
+    as `-c`'s own already-intended value and continuing to `push` one
+    position further. Confirmed live via a real bash proxy (stand-in
+    `git` binary on PATH) that this genuinely runs `git push origin
+    main` once the decoy word-splits away. Closed by having this block
+    look PAST a leading decoy run too before deciding whether the flag
+    has a real value to consume, mirroring the outer loop's own skip
+    shape at the position-decision level rather than the token-adjacency
+    level.
+
+    A second, distinct gap in the SAME block, found in the same twenty-
+    third-round pass: the original condition only ever consumed a
+    LITERAL value (`next_tok is not None`) -- an ASSIGNED, non-vanishing
+    DYNAMIC value in this exact position (`CFG=user.name=x; git -c $CFG
+    push origin main`) was never consumed either, predating this round
+    entirely (the pre-round-22 code required a literal `next_tok` too).
+    Confirmed live via a real bash proxy (stand-in `git` binary on PATH)
+    that `-c` genuinely consumes `$CFG`'s own resolved value as real
+    argv (`[-c] [user.name=x] [push] ...`), leaving `push` as the real
+    subcommand -- missed entirely since `literals[value_j]` is always
+    `None` for a dynamic token, so the old `value_candidate is not
+    None and not value_candidate.startswith("-")` check could never
+    fire for it. This function does not need to know what a dynamic
+    value RESOLVES to here -- only that git's own CLI parser
+    unconditionally consumes exactly one token in this position -- so a
+    present (non-vanishing), DYNAMIC token is now also consumed,
+    failing closed (assume it survives to occupy this position, so a
+    real `push` sitting past it is not missed) the same direction this
+    module already takes for an unresolvable dynamic value elsewhere
+    (e.g. `_write_method_candidate_hit`). This does not disturb the
+    established, deliberately fail-closed `git -C -v push`-shaped
+    precedent (`test_is_git_push_segment_value_flag_followed_by_
+    another_flag`): a LITERAL, flag-shaped token (confirmed live via
+    real git that `-C`/`-c` genuinely consume even a literal
+    flag-shaped value unconditionally, e.g. `-c -v` produces `error:
+    key does not contain a section: -v`) is still deliberately declined
+    here and re-examined as its own flag on the next outer-loop
+    iteration -- unchanged, since real git's own fatal-error path on a
+    malformed config key/path in that specific shape means no push
+    actually reaches this scenario either way, and flagging it as a
+    possible push anyway is the conservative, already-accepted choice
+    for that literal case specifically."""
     literals = [(t.lower() if not _is_dynamic(t) else None) for t in seg]
     for i, tok in enumerate(literals):
         if tok != "git":
@@ -2047,10 +2102,17 @@ def _is_git_push_segment(seg: list[str], name_to_value: dict[str, str]) -> bool:
             # 2-char flag as value-taking, which wrongly swallowed the
             # "push" token itself as a boolean flag's "value" (found live
             # by Step 8, second round).
-            if (flag == "-c" or flag in _GIT_LONG_VALUE_FLAGS) and j < len(literals):
-                next_tok = literals[j]
-                if next_tok is not None and not next_tok.startswith("-"):
-                    j += 1
+            if flag == "-c" or flag in _GIT_LONG_VALUE_FLAGS:
+                value_j = j
+                while value_j < len(literals):
+                    value_candidate = literals[value_j]
+                    if value_candidate is not None or not _token_is_all_unassigned_refs(seg[value_j], name_to_value):
+                        break
+                    value_j += 1
+                if value_j < len(literals):
+                    value_candidate = literals[value_j]
+                    if value_candidate is None or not value_candidate.startswith("-"):
+                        j = value_j + 1
         if j < len(literals) and literals[j] == "push":
             return True
     return any("git push" in lit for lit in (t.lower() for t in seg if not _is_dynamic(t)))

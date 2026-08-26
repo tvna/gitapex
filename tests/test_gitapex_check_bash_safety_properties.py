@@ -268,6 +268,54 @@ def test_gh_api_method_dynamic_value_extracts_the_fused_or_separate_shape(var: s
     assert f"${var}" in extracted
 
 
+def test_value_position_after_skips_a_vanishing_decoy_to_find_the_real_value() -> None:
+    """Direct unit coverage for the twenty-second-round helper both
+    `_gh_api_method_dynamic_value` and `_gh_api_method_flagname_dynamic_
+    hit` share: a vanishing decoy (NEVERSET never assigned) sitting
+    right after the flag is skipped, landing on the real, assigned
+    value one position further."""
+    seg = ["gh", "api", "repos/o/r/pulls/1", "-X", "$NEVERSET", "$M"]
+    assert checker._value_position_after(seg, 3, {"M": "post"}) == "$M"
+
+
+def test_value_position_after_falls_back_to_the_adjacent_token_when_nothing_survives() -> None:
+    """Direct unit coverage for the fallback half of the same helper: a
+    single, merely-unresolved-in-this-scope token (not a genuine decoy
+    with a real value beyond it) is still returned rather than silently
+    dropped when skipping runs off the end of the segment."""
+    seg = ["gh", "api", "x", "-x", "$a"]
+    assert checker._value_position_after(seg, 3, {}) == "$a"
+
+
+def test_value_position_after_returns_none_with_no_token_past_the_flag() -> None:
+    """No token at all past the flag -> None, matching every prior
+    caller's own established behavior for that case."""
+    seg = ["gh", "api", "x", "-x"]
+    assert checker._value_position_after(seg, 3, {}) is None
+
+
+def test_token_is_unambiguously_vanishing_true_for_a_genuinely_unassigned_bare_ref() -> None:
+    """The straightforward case: an unbraced bare reference to a name
+    never assigned anywhere, with no shorter-prefix ambiguity, is
+    unambiguously vanishing."""
+    assert checker._token_is_unambiguously_vanishing("$NEVERSET", {}) is True
+
+
+def test_token_is_unambiguously_vanishing_false_when_a_shorter_prefix_is_assigned() -> None:
+    """The quote-boundary-ambiguity case this predicate exists to catch:
+    "aost" is itself unassigned, but the shorter prefix "ao" IS assigned
+    -- shlex has already lost whether the raw token `$aost` was
+    originally bare (`$aost`) or a quoted `$ao` fused with literal "st"
+    -- so this must NOT be treated as unambiguously vanishing."""
+    assert checker._token_is_unambiguously_vanishing("$aost", {"ao": "po"}) is False
+
+
+def test_token_is_unambiguously_vanishing_false_for_an_assigned_name() -> None:
+    """A token whose own name IS directly assigned is not vanishing at
+    all, let alone unambiguously so."""
+    assert checker._token_is_unambiguously_vanishing("$M", {"M": "post"}) is False
+
+
 @_PROPERTIES
 @given(var=_IDENTIFIERS)
 def test_gh_api_method_dynamic_value_none_for_an_unrelated_token(var: str) -> None:
@@ -2029,6 +2077,58 @@ def test_is_git_push_segment_false_for_a_non_vanishing_dynamic_token() -> None:
     assert checker._is_git_push_segment(["git", "$M", "push", "origin", "main"], {"M": "foo"}) is False
 
 
+def test_is_git_push_segment_true_for_a_dash_c_value_past_a_vanishing_decoy() -> None:
+    """Regression pin for the real bypass found live by Step 8
+    independent review, twenty-third round (issue #1326): the `-c`/
+    `_GIT_LONG_VALUE_FLAGS` value-consumption block never looked past a
+    leading decoy to find `-c`'s own real value, so the outer loop's own
+    general decoy-skip consumed the decoy first and landed on the real
+    value token (`name=value`) as an ordinary, never-claimed token, one
+    position short of `push` -- confirmed live via a real bash proxy
+    that `-c` genuinely consumes `name=value` as its own value, leaving
+    `push` as the real subcommand once the decoy word-splits away."""
+    seg = ["git", "-c", "$NEVERSET", "name=value", "push", "origin", "main"]
+    assert checker._is_git_push_segment(seg, {}) is True
+
+
+def test_is_git_push_segment_true_for_a_dash_c_assigned_dynamic_value() -> None:
+    """Regression pin for the real bypass found live by Step 8
+    independent review, twenty-third round (issue #1326): the `-c`/
+    `_GIT_LONG_VALUE_FLAGS` value-consumption block only ever consumed a
+    LITERAL value -- an assigned, non-vanishing DYNAMIC value in this
+    exact position was never consumed either, predating this round
+    entirely. Confirmed live via a real bash proxy that `-c` genuinely
+    consumes the resolved value as real argv, leaving `push` as the real
+    subcommand."""
+    seg = ["git", "-c", "$CFG", "push", "origin", "main"]
+    assert checker._is_git_push_segment(seg, {"CFG": "user.name=x"}) is True
+
+
+def test_is_git_push_segment_false_for_a_vanishing_decoy_consumed_by_dash_c_itself() -> None:
+    """No false positive: when the decoy sitting in `-c`'s own value
+    position vanishes AND nothing else survives between it and `push`,
+    `push` ITSELF becomes the token `-c` consumes as its value (real
+    git's own CLI parser unconditionally consumes the very next
+    surviving token, confirmed live: `-c push` produces "error: key does
+    not contain a section: push") -- so `origin` (not `push`) is left as
+    the would-be subcommand, and no real push actually occurs. Confirmed
+    this stays correctly unflagged after the twenty-third-round fix."""
+    seg = ["git", "-c", "$NEVERSET", "push", "origin", "main"]
+    assert checker._is_git_push_segment(seg, {}) is False
+
+
+def test_is_git_push_segment_false_when_only_decoys_follow_dash_c_to_segment_end() -> None:
+    """Branch-coverage pin: when `-c`'s own value-skip loop runs past
+    EVERY remaining token (all vanishing decoys, nothing surviving all
+    the way to the end of the segment), it must terminate via the
+    while-loop's own natural `value_j == len(literals)` exit rather than
+    an explicit `break`, and the subsequent `if value_j < len(literals)`
+    guard must correctly decline to consume anything -- there is no
+    "push" here regardless."""
+    seg = ["git", "-c", "$NEVERSET1", "$NEVERSET2"]
+    assert checker._is_git_push_segment(seg, {}) is False
+
+
 def test_resolve_seg_tokens_candidates_overflow_returns_none() -> None:
     assert checker._resolve_seg_tokens_candidates([_OVERFLOW_TOKEN], _OVERFLOW_NAME_TO_VALUE, {}) is None
 
@@ -2136,6 +2236,23 @@ def test_classify_flags_git_push_past_a_vanishing_leading_decoy_end_to_end() -> 
     capturing its own argv) that this genuinely runs `git push origin
     main` once the decoy word-splits away."""
     verdict = checker.classify("git -v $NEVERSET push origin main")
+    assert verdict.deny is False
+    assert verdict.is_git_push is True
+
+
+def test_classify_flags_git_push_past_a_dash_c_value_decoy_end_to_end() -> None:
+    """End-to-end companion to `test_is_git_push_segment_true_for_a_
+    dash_c_value_past_a_vanishing_decoy` above, reached through
+    `classify()`."""
+    verdict = checker.classify("git -c $NEVERSET name=value push origin main")
+    assert verdict.deny is False
+    assert verdict.is_git_push is True
+
+
+def test_classify_flags_git_push_via_dash_c_assigned_dynamic_value_end_to_end() -> None:
+    """End-to-end companion to `test_is_git_push_segment_true_for_a_
+    dash_c_assigned_dynamic_value` above, reached through `classify()`."""
+    verdict = checker.classify("CFG=user.name=x; git -c $CFG push origin main")
     assert verdict.deny is False
     assert verdict.is_git_push is True
 

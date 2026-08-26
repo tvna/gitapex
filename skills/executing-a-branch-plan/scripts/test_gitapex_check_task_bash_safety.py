@@ -482,6 +482,19 @@ DENIED_COMMANDS = [
     # binary on PATH) that this genuinely runs `git push origin main`
     # once the decoy word-splits away.
     ("git -v $NEVERSET push origin main", "git-push-unassigned-leading-flag-decoy"),
+    # Found live by Step 8 independent review, twenty-third round (issue
+    # #1326), ported from the main hook's own identical fix: the
+    # `-c`/long-value-flag branch of the same flag-skip loop had two
+    # further gaps -- it never looked past a decoy to find `-c`'s own
+    # real value (so the outer loop's own decoy-skip landed on the real
+    # value token as unclaimed, one position short of `push`), and it
+    # only ever consumed a LITERAL value, never an assigned, non-
+    # vanishing DYNAMIC one. Both confirmed live via a real bash proxy
+    # that `-c` genuinely consumes the resolved value as real argv,
+    # leaving `push` as the real subcommand -- a hard deny bypass for
+    # this task-agent rule before this fix.
+    ("git -c $NEVERSET name=value push origin main", "git-push-c-flag-value-past-leading-decoy"),
+    ("CFG=user.name=x; git -c $CFG push origin main", "git-push-c-flag-assigned-dynamic-value"),
 ]
 
 # --- Allowed: ordinary git/test/build commands that must never regress ----
