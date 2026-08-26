@@ -19,7 +19,7 @@ gate, found real defects; the current design closes all of them:
 1. **First draft checked only marker presence, not absence of retired
    text.** A target carrying the canonical marker *and* a retired heading
    (an incomplete migration) passed clean -- the exact drift class this
-   gate exists to catch. ``_MarkerSpec.legacy_texts`` now flags a target
+   gate exists to catch. ``MarkerSpec.legacy_texts`` now flags a target
    that still carries a retired form, independent of whether the
    canonical one is also present.
 2. **First draft's substring search accepted dead text.** A marker inside
@@ -37,12 +37,12 @@ gate, found real defects; the current design closes all of them:
    migration recorded in a different case. All matching below is now
    ``str.casefold()``-based.
 4. **A third round considered matching each of these four targets as a
-   live ATX heading** (via ``gitapex_gate_independent_review_pending``'s
-   own ``heading_pattern()``, added for exactly this purpose), to track
-   the sibling gate's own end-anchored, indentation-limited regex more
-   closely than a bare substring does. Reverted after checking the
-   targets' own actual content: in all four files, the canonical/retired
-   text is never itself a live heading -- it is quoted prose (a
+   live ATX heading** (via a public ``heading_pattern()`` added to
+   ``gitapex_gate_independent_review_pending`` for exactly this purpose),
+   to track the sibling gate's own end-anchored, indentation-limited
+   regex more closely than a bare substring does. Reverted after checking
+   the targets' own actual content: in all four files, the canonical/
+   retired text is never itself a live heading -- it is quoted prose (a
    backtick-wrapped phrase in ``drafting-a-pr-to-merge/SKILL.md`` and
    ``.github/PULL_REQUEST_TEMPLATE.md``, a JSON string value in
    ``.gitapex/ssot.json``, a YAML comment in the workflow file). Heading-
@@ -52,8 +52,11 @@ gate, found real defects; the current design closes all of them:
    text quoted here" is this gate's own job; verifying "is a genuine PR-
    body verdict section shaped like a live heading" stays
    ``gitapex_gate_independent_review_pending.py``'s, the only place that
-   distinction is load-bearing. ``heading_pattern()`` itself is kept (see
-   that gate's own module for its role there), just not called from here.
+   distinction is load-bearing. A later reuse/simplification review found
+   that ``heading_pattern()`` then had no caller anywhere in shipped code
+   -- a public function built for a reuse case that never materialized --
+   and it was removed from that module entirely, reverting
+   ``_HEADING_RE`` there to a directly-inlined ``re.compile()`` call.
 5. **The same review found this gate itself, in its first draft, was not
    registered as depending on the pytest workflow event the way every
    sibling ``*-drift``/scan gate with the same trigger is.** ``target[]``
@@ -66,7 +69,7 @@ gate, found real defects; the current design closes all of them:
    (``## Merge gate: independent review``) is quoted verbatim, inside a
    code span, by ``skills/executing-a-branch-plan/SKILL.md`` Step 5 -- a
    second pair of files this gate now also tracks, via a second
-   ``_MarkerSpec`` (``_MERGE_GATE_NOTE``).
+   ``MarkerSpec`` (``_MERGE_GATE_NOTE``).
 7. **This gate's own first run against the real repository** (not a
    fixture -- confirmed live) false-flagged that same
    ``executing-a-branch-plan/SKILL.md`` reference as drift: its own
@@ -79,14 +82,14 @@ gate, found real defects; the current design closes all of them:
    tracked phrase hand-reformatted onto one physical line to keep this
    gate quiet.
 
-``_MarkerSpec.targets`` names each target file's own Markdown-ness
+``MarkerSpec.targets`` names each target file's own Markdown-ness
 directly (no separate, independently-maintainable set of "which targets
 are Markdown" the way an earlier draft kept as ``_MARKDOWN_TARGETS`` --
 a review found *that* duplication was itself an unpinned copy of
 information already present in ``targets``).
 
 Adding a future marker this repository needs to keep synchronized means
-adding one more ``_MarkerSpec`` to ``_MARKER_SPECS`` below, not writing a
+adding one more ``MarkerSpec`` to ``_MARKER_SPECS`` below, not writing a
 new gate script -- the detection logic (``_searchable_text``,
 ``_text_present``, ``find_drift``) is spec-driven, not heading-specific.
 
@@ -117,7 +120,7 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 
 @dataclass(frozen=True)
-class _MarkerSpec:
+class MarkerSpec:
     """One canonical text this gate keeps synchronized across a set of
     target files, plus any retired text that must not still be live in
     them. See the module docstring for the two specs this gate currently
@@ -129,7 +132,7 @@ class _MarkerSpec:
     targets: tuple[tuple[pathlib.Path, bool], ...]  # (path relative to repo root, is_markdown)
 
 
-_INDEPENDENT_REVIEW_HEADING = _MarkerSpec(
+_INDEPENDENT_REVIEW_HEADING = MarkerSpec(
     name="independent-review-pending's own recorded-verdict heading",
     canonical_text=gate.CANONICAL_HEADING_TEXT,
     # Extend this tuple, never replace it, on a future rename -- each
@@ -144,7 +147,7 @@ _INDEPENDENT_REVIEW_HEADING = _MarkerSpec(
     ),
 )
 
-_MERGE_GATE_NOTE = _MarkerSpec(
+_MERGE_GATE_NOTE = MarkerSpec(
     name="the PR-template feed-forward note's own section name",
     canonical_text="Merge gate: independent review",
     legacy_texts=(),
@@ -190,8 +193,7 @@ def _text_present(text: str, searchable: str) -> bool:
     matching: none of this gate's own targets carry the tracked text as a
     live heading of their own, only as quoted prose/JSON/YAML text, so a
     plain substring comparison is both sufficient and (confirmed live)
-    more accurate here than reusing
-    `gitapex_gate_independent_review_pending.heading_pattern()` would be."""
+    more accurate here than ATX-heading-pattern matching would be."""
     return _normalize_whitespace(text).casefold() in _normalize_whitespace(searchable).casefold()
 
 

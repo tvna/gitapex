@@ -3,7 +3,7 @@
 
 The final test is the gate itself: the repository's real target files must
 be drift-free. The rest unit-test the spec-driven detector with fixtures,
-built directly against the two real `_MarkerSpec` instances
+built directly against the two real `MarkerSpec` instances
 (`_INDEPENDENT_REVIEW_HEADING`, `_MERGE_GATE_NOTE`) rather than synthetic
 ones -- this file tracks whichever specs the gate script actually defines.
 """
@@ -106,7 +106,7 @@ def test_legacy_text_alone_is_reported_as_both_missing_and_stale(
     # exercise this "both missing and stale" combination -- see
     # test_real_legacy_heading_text_also_satisfies_canonical_substring_check
     # below for that (correct, not a bug) real-world case.
-    spec = drift._MarkerSpec(
+    spec = drift.MarkerSpec(
         name="a synthetic marker",
         canonical_text="brand new marker",
         legacy_texts=("totally different retired marker",),
@@ -224,20 +224,18 @@ def test_canonical_text_split_across_a_line_wrap_is_still_found(tmp_path: pathli
     # GitHub still renders that as one unbroken phrase; this gate must
     # too, via whitespace normalization.
     #
-    # Overwrites each note-spec target with ONLY the wrapped phrase (no
-    # unwrapped copy), so a pass here cannot be explained by the unwrapped
-    # canonical text still being present elsewhere in the file. One of
-    # these targets (`.github/PULL_REQUEST_TEMPLATE.md`) is also a heading-
-    # spec target and the overwrite drops that spec's own canonical text,
-    # so the assertion below only inspects findings naming this spec.
+    # Uses targets[1] (skills/executing-a-branch-plan/SKILL.md), not
+    # targets[0] (.github/PULL_REQUEST_TEMPLATE.md) -- the template is
+    # also a heading-spec target, so overwriting it would additionally
+    # drop that spec's own canonical text and force filtering findings by
+    # spec name instead of asserting a clean result directly.
     _write_clean_fixture(tmp_path)
     words = _NOTE_SPEC.canonical_text.split(" ")
     midpoint = len(words) // 2
     wrapped = " ".join(words[:midpoint]) + "\n   " + " ".join(words[midpoint:])
-    for relative, _is_markdown in _NOTE_SPEC.targets:
-        (tmp_path / relative).write_text(f"prose `{wrapped}` more prose\n", encoding="utf-8")
-    findings = [f for f in drift.find_drift(tmp_path) if _NOTE_SPEC.name in f]
-    assert findings == []
+    note_target, _is_markdown = _NOTE_SPEC.targets[1]
+    (tmp_path / note_target).write_text(f"prose `{wrapped}` more prose\n", encoding="utf-8")
+    assert drift.find_drift(tmp_path) == []
 
 
 def test_merge_gate_note_spec_targets_are_independently_checked(tmp_path: pathlib.Path) -> None:

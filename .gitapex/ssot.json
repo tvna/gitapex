@@ -330,6 +330,7 @@
         {"kind": "file-glob", "ref": ".github/workflows/independent-review-pending.yml"},
         {"kind": "file-glob", "ref": "skills/executing-a-branch-plan/SKILL.md"},
         {"kind": "cross-registry-consistency", "ref": ".github/scripts/gitapex_gate_independent_review_pending.py CANONICAL_HEADING_TEXT <-> the four independent-review-heading target files above"},
+        {"kind": "cross-registry-consistency", "ref": ".github/PULL_REQUEST_TEMPLATE.md 'Merge gate: independent review' section name <-> skills/executing-a-branch-plan/SKILL.md"},
         {"kind": "workflow-event", "ref": "test.yml:pull_request"},
         {"kind": "workflow-event", "ref": "test.yml:push"}
       ]

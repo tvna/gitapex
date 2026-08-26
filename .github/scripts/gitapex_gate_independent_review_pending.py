@@ -100,42 +100,36 @@ import sys
 from pathlib import Path
 
 # Issue #1343: the single source of truth for the recorded-verdict heading
-# text. Every runtime-facing use of it in this file (below) and every
-# external consumer (gitapex_scan_independent_review_heading_drift.py) reads
-# this constant or calls heading_pattern() on it, rather than re-declaring
-# the literal -- the drift that gate exists to catch (issue #1311's own
-# "Step 8" numbering once baked directly into this heading, duplicated by
-# hand across five files with nothing keeping them in sync, later found by
-# a deterministic-gate-quality review to still have unbound runtime copies
-# even after the rename -- see this issue's own follow-up commit) cannot
-# recur for this file's own copies if there are no second copies left to
-# drift from it.
+# text. Every runtime-facing use of it in this file (below) reads this
+# constant rather than re-declaring the literal -- the drift that gate
+# exists to catch (issue #1311's own "Step 8" numbering once baked
+# directly into this heading, duplicated by hand across five files with
+# nothing keeping them in sync, later found by a deterministic-gate-
+# quality review to still have unbound runtime copies even after the
+# rename -- see this issue's own follow-up commit) cannot recur for this
+# file's own copies if there are no second copies left to drift from it.
+# gitapex_scan_independent_review_heading_drift.py -- the drift gate that
+# closed that gap -- reads this constant too, but does its own text-
+# presence matching rather than reusing `_HEADING_RE` below: a reuse/
+# simplification review found an earlier revision made `_HEADING_RE`'s
+# own pattern-building logic a public `heading_pattern()` function
+# specifically for that gate to call, but the call never actually
+# happened (none of the drift gate's own targets carry this text as a
+# live heading, only as quoted prose/JSON/YAML -- see that gate's own
+# module docstring) -- a public function built for one caller that
+# never materializes is unjustified surface area, reverted here.
 CANONICAL_HEADING_TEXT = "Independent review verdict"
 
-
-def heading_pattern(text: str) -> re.Pattern[str]:
-    """Build the same ATX-heading-matching pattern this gate's own
-    detection logic uses, for arbitrary heading text -- CommonMark's 0-3-
-    space indentation limit, 1-6 `#` characters, a required space before
-    the text, end-anchored (so trailing prose after the heading text does
-    not still count as a match), case-insensitive. A public function
-    (not a private, underscore-prefixed one) specifically so an external
-    consumer needing to answer "is this exact heading text live in this
-    file" -- gitapex_scan_independent_review_heading_drift.py, for both
-    the canonical text and each retired one -- calls this rather than
-    re-deriving its own, independently-drifting copy of the same regex
-    shape. A deterministic-gate-quality review found exactly that
-    divergence in an earlier revision: the drift gate's own plain
-    substring search accepted heading text `_HEADING_RE` itself would
-    reject (e.g. trailing prose, or missing the `$`-anchor's own
-    protection), and was also case-sensitive where this gate's own
-    matching is not -- both defeat classes this shared function closes by
-    construction, not by keeping two hand-synchronized copies of the same
-    rule."""
-    return re.compile(r"^[ ]{0,3}#{1,6}[ \t]+" + re.escape(text) + r"[ \t]*$", re.IGNORECASE | re.MULTILINE)
-
-
-_HEADING_RE = heading_pattern(CANONICAL_HEADING_TEXT)
+# CommonMark's own ATX-heading rule: the opening `#` may be indented at
+# most 3 spaces; 4 or more makes the line an indented code block instead,
+# never a live heading. A live adversarial round found that an earlier
+# `[ \t]*` (unlimited indentation, tabs included) let a 4-space-indented
+# "illustrative example" heading parse as a real, live one -- restricting
+# to `[ ]{0,3}` (spaces only) closes that class the same way GitHub's own
+# renderer already treats it as inert.
+_HEADING_RE = re.compile(
+    r"^[ ]{0,3}#{1,6}[ \t]+" + re.escape(CANONICAL_HEADING_TEXT) + r"[ \t]*$", re.IGNORECASE | re.MULTILINE
+)
 _NEXT_HEADING_RE = re.compile(r"^[ ]{0,3}#{1,6}[ \t]+", re.MULTILINE)
 
 _FENCE_OPEN_RE = re.compile(r"^[ \t]*(`{3,}|~{3,})")
@@ -164,12 +158,11 @@ def strip_fenced_code_blocks(text: str) -> str:
     has no such quantifier: each line is visited a bounded number of times
     regardless of how many unmatched candidate opens precede it.
 
-    Public (issue #1343, matching `heading_pattern`'s own rationale above):
-    `gitapex_scan_independent_review_heading_drift.py` needs this exact
-    "is this text live, not fenced-off as an example" definition for its
-    own Markdown targets, and reaching into another script's
-    underscore-prefixed function is not a pattern used anywhere else in
-    this repository's own cross-script imports."""
+    Public (issue #1343): `gitapex_scan_independent_review_heading_drift.py`
+    needs this exact "is this text live, not fenced-off as an example"
+    definition for its own Markdown targets, and reaching into another
+    script's underscore-prefixed function is not a pattern used anywhere
+    else in this repository's own cross-script imports."""
     lines = text.split("\n")
     total = len(lines)
     index = 0
