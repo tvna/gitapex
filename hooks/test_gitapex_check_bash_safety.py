@@ -305,10 +305,19 @@ ALLOWED_DYNAMIC_COMMANDS = [
 # --- Known, disclosed, unresolved regex/token-gate bypasses ----------------
 # This script shares the same cmd_boundary/whitespace-anchored regex
 # construction that skills/executing-a-branch-plan/scripts/
-# check_task_bash_safety.sh was adapted from -- its own KNOWN_BYPASS_COMMANDS
-# (see the sibling test file) pins these identical 4 cases as unresolved
-# there; this script is equally bypassed by them today (verified directly:
-# all 4 return exit 0/unblocked against this script too), but neither this
+# check_task_bash_safety.sh was adapted from -- but its own
+# KNOWN_BYPASS_COMMANDS list below is NOT identical to the sibling test
+# file's own list. This file's list has 3 entries; the sibling's has 4.
+# Only one case-id is shared verbatim between the two:
+# "array-literal-assignment-indirection". This file's other two entries
+# (string-slice-reconstruction-uv-install, graphql-mutation-keyword-
+# variable-concatenation) and the sibling's other three (its own
+# pip-specific string-slice case, string-slice-reconstruction-pip-install,
+# plus fetch-exec-sudo-separate-value-flag-not-skipped and
+# array-literal-subscript-of-a-real-array-whose-own-element-is-empty)
+# each have no matching case-id in the other file's list. This script is
+# confirmed bypassed by its own 3 entries below (verified directly: all
+# 3 return exit 0/unblocked against this script), but neither this
 # script's own header comment nor references/threat-model-and-authorization.md
 # discloses that ceiling for THIS file specifically -- only for the sibling.
 # These tests pin *current* (bypassed) behavior, same as the sibling file's:
