@@ -1413,7 +1413,7 @@
     {
       "id": "behind-base",
       "kind": "script",
-      "script": ".github/scripts/gitapex_gate_behind_base.py",
+      "script": [".github/scripts/gitapex_gate_behind_base.py", ".github/scripts/_gitapex_base_ref.py"],
       "rule": "Fetches origin/main and fails when the current branch's HEAD is behind it, per the behind count from 'git rev-list --left-right --count origin/main...HEAD'. Exits 2, distinct from the exit-1 behind-base FAIL, when the fetch or the comparison itself cannot be trusted (offline, unreachable remote, no common ancestor) -- never falls back to comparing against a possibly-stale local ref.",
       "planes": ["local"],
       "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_behind_base.py"],

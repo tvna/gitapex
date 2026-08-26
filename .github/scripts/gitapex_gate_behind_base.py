@@ -37,13 +37,31 @@ destination, not its merge-base), and is not a substitute here.
 
 **This gate fetches its own base ref before comparing** -- the requester's
 recorded decision in issue #985, chosen over reading a possibly-stale
-local ref or checking a freshness TTL. This is the first network call in
-an otherwise fully offline local-preflight runner
-(`gitapex_gate_local_preflight.py`), and that posture change is deliberate:
-a stale local `origin/main` is exactly the failure mode this gate exists
-to catch (PR #961's session had one four commits stale until fetched), so
-comparing against anything less than a freshly fetched ref would defeat
-the gate's own purpose.
+local ref or checking a freshness TTL. That posture change was, at the
+time, the first network call in an otherwise fully offline local-preflight
+runner (`gitapex_gate_local_preflight.py`); issue #1345 ended that
+distinction by giving `gitapex_run_base_diff.py` (the shared `local_stdin`
+producer for `exception-handler-gap`, `stdlib-only-claim-drift`, and
+`detection-logic-property-coverage`) a network call of its own, so this
+gate is no longer the only one. The two fetches still differ in *when*
+they run, deliberately: a stale local `origin/main` is exactly the failure
+mode this gate exists to catch (PR #961's session had one four commits
+stale until fetched), so this gate fetches on every run regardless of
+whether a local ref already exists -- comparing against anything less than
+a freshly fetched ref would defeat its own purpose.
+`gitapex_run_base_diff.py` only needs the ref to *exist*, not to be
+current, so it fetches only when a peeled probe finds nothing at all (this
+module's own Known-limits section above names the staleness caveat that
+leaves open). Both fetches now share their actual `git fetch`
+implementation, `_gitapex_base_ref.fetch_destination_refspec` (issue
+#1345) -- the refspec shape changed from a source-only form to a
+destination refspec (`+refs/heads/main:refs/remotes/origin/main`), which
+fixes a real defect this gate carried since issue #985: a restricted-
+refspec clone (`git clone --single-branch --branch`) never materialized
+`refs/remotes/origin/main` from a source-only fetch, so this gate
+previously failed closed with `GateError` on every push from such a
+clone, permanently. This is a disclosed behavior change, not a silent
+refactor -- see the PR body for issue #1345.
 
 **A failed fetch never becomes a silent pass.** An offline machine, an
 unreachable remote, or an auth failure raises `GateError` and exits 2 with
@@ -98,10 +116,16 @@ from __future__ import annotations
 
 import argparse
 import pathlib
-import subprocess
+
+# Kept even though this module's own git calls moved to _gitapex_base_ref
+# (issue #1345): tests/test_gitapex_gate_behind_base.py monkeypatches
+# `gate.subprocess.run` directly, and `subprocess` is one process-global
+# module object either way, so this import stays the patch target.
+import subprocess  # noqa: F401
 import sys
 from dataclasses import dataclass
 
+import _gitapex_base_ref
 from pydantic import BaseModel, ValidationError, field_validator
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -119,8 +143,10 @@ BASE_BRANCH = "main"
 # in tests/test_gitapex_gate_behind_base.py) it would have no bound at
 # all. 60s is generous for a local merge-base/rev-list (near-instant) and
 # for a fetch over an ordinary network, while still failing loudly on a
-# hung connection instead of blocking indefinitely.
-GIT_TIMEOUT_SECONDS = 60
+# hung connection instead of blocking indefinitely. Sourced from
+# _gitapex_base_ref (issue #1345) rather than redefined as a second literal
+# -- gitapex_run_base_diff.py shares the same constant.
+GIT_TIMEOUT_SECONDS = _gitapex_base_ref.GIT_TIMEOUT_SECONDS
 
 
 class GateError(Exception):
@@ -138,87 +164,24 @@ class BehindBaseCount:
     ahead: int
 
 
-def _run_git(root: pathlib.Path, args: list[str], *, label: str) -> subprocess.CompletedProcess[str]:
-    """Run ``git -C root <args>`` and return the completed process,
-    regardless of its exit code -- callers decide what a nonzero
-    ``returncode`` means for their own step. Raises :class:`GateError` for
-    every way the subprocess itself can fail to produce one: a missing
-    ``git`` executable, a hang past :data:`GIT_TIMEOUT_SECONDS`, or any
-    other subprocess-layer failure.
-
-    ``errors="replace"`` rather than ``text=True``'s own strict default,
-    matching ``gitapex_gate_local_preflight.py``'s own ``_run`` and the
-    documented regression behind it: a byte sequence on stdout/stderr that
-    is not valid UTF-8 (a corrupted object, a non-ASCII remote error
-    message) otherwise raises ``UnicodeDecodeError`` -- a ``ValueError``.
-    ``errors="replace"`` closes the one known decode path, but
-    ``gitapex_gate_local_preflight.py``'s own ``run_check`` additionally
-    catches ``ValueError``/``subprocess.SubprocessError`` as defense in
-    depth against any other layer raising one, on the documented reasoning
-    that a decode failure escaping as an uncaught traceback -- exit code 1,
-    indistinguishable from this gate's own documented exit-1 "behind base"
-    FAIL -- is a worse outcome than one extra except clause; this function
-    matches that same defense-in-depth shape rather than trusting
-    ``errors="replace"`` alone."""
-    try:
-        # S603/S607 waived: a fixed argv list with no shell, and `git` is
-        # intentionally resolved from PATH -- pinning an absolute path
-        # would break the three environments this has to run in (GitHub
-        # runner, the nix devShell, a contributor's machine). Same
-        # rationale as every other gate script in this file's family.
-        return subprocess.run(  # noqa: S603
-            ["git", "-C", str(root), *args],  # noqa: S607
-            capture_output=True,
-            text=True,
-            errors="replace",
-            check=False,
-            timeout=GIT_TIMEOUT_SECONDS,
-        )
-    except subprocess.TimeoutExpired as error:
-        raise GateError(f"git {label} timed out after {GIT_TIMEOUT_SECONDS}s") from error
-    except (OSError, ValueError, subprocess.SubprocessError) as error:
-        raise GateError(f"cannot run git to {label}: {error}") from error
-
-
 def fetch_base(root: pathlib.Path, remote: str = BASE_REMOTE, branch: str = BASE_BRANCH) -> None:
     """Fetch ``branch`` from ``remote`` so the comparison in
     :func:`count_behind` reads real remote state rather than whatever ref
     this checkout last pulled. Raises :class:`GateError` -- never falls
     back to a possibly-stale local ref -- on any fetch failure: an offline
-    machine, an unreachable remote, an auth failure, or a hang."""
-    result = _run_git(root, ["fetch", remote, branch], label=f"fetch {remote} {branch}")
-    if result.returncode != 0:
-        raise GateError(f"git fetch {remote} {branch} failed: {result.stderr.strip()}")
+    machine, an unreachable remote, an auth failure, or a hang.
 
-
-def _require_common_ancestor(root: pathlib.Path, base_ref: str) -> None:
-    """Raise :class:`GateError` when ``git merge-base`` cannot find a
-    common ancestor between ``base_ref`` and ``HEAD``. Checked explicitly,
-    before the ``rev-list`` call in :func:`count_behind`: unrelated
-    histories do not make ``git rev-list --left-right --count
-    base_ref...HEAD`` fail -- it silently returns a numeric ahead/behind
-    pair for the *empty* merge base, which would otherwise produce a
-    plausible-looking but meaningless behind-base FAIL (exit 1, "merge or
-    rebase") instead of the honest "this comparison cannot be trusted"
-    signal (exit 2) this case actually needs. Verified directly against a
-    real orphan-history pair, not assumed.
-
-    The raised message deliberately does not assert *why* no common
-    ancestor was found -- a nonzero ``merge-base`` exit has more than one
-    real cause (genuinely unrelated histories, ``base_ref`` never fetched
-    locally, or a shallow clone whose truncated history does not reach far
-    enough back), and this function cannot distinguish them from the exit
-    code alone. Naming one as though it were established (a prior revision
-    of this message unconditionally said "unrelated histories") would
-    mislead a contributor debugging a shallow-clone or missing-ref case
-    toward the wrong fix; git's own stderr, appended verbatim, carries
-    whatever specificity is actually available."""
-    result = _run_git(root, ["merge-base", base_ref, "HEAD"], label=f"find a common ancestor with {base_ref}")
-    if result.returncode != 0:
-        raise GateError(
-            f"cannot find a common ancestor between {base_ref} and HEAD -- unrelated histories, "
-            f"{base_ref} not yet fetched, or a shallow clone: {result.stderr.strip()}"
-        )
+    Delegates to :func:`_gitapex_base_ref.fetch_destination_refspec`
+    (issue #1345): only the fetch's own refspec shape changed (a
+    destination refspec, not the source-only form this gate used before --
+    see that module's own docstring for why the source-only form silently
+    fails to materialize the ref in a restricted-refspec clone), never the
+    message text this function raises, so every pre-#1345 test asserting
+    on it keeps matching unmodified. Unlike
+    ``gitapex_run_base_diff.py``'s own ``ensure_base_ref`` (issue #1345),
+    this gate keeps its pre-#1345 unconditional-fetch-every-run posture --
+    see the module docstring for why."""
+    _gitapex_base_ref.fetch_destination_refspec(root, remote, branch, timeout=GIT_TIMEOUT_SECONDS, error_cls=GateError)
 
 
 def count_behind(root: pathlib.Path, remote: str = BASE_REMOTE, branch: str = BASE_BRANCH) -> BehindBaseCount:
@@ -226,12 +189,19 @@ def count_behind(root: pathlib.Path, remote: str = BASE_REMOTE, branch: str = BA
     run after :func:`fetch_base` so the comparison ref is current. Raises
     :class:`GateError` -- distinct from a fetch failure -- when the
     comparison itself cannot be computed: no common ancestor (checked by
-    :func:`_require_common_ancestor` first), a ``rev-list`` failure, or
+    :func:`_gitapex_base_ref.require_common_ancestor` first, extracted
+    there verbatim -- message text included -- in issue #1345 so
+    ``gitapex_run_base_diff.py`` shares the identical shallow-clone-aware
+    check rather than duplicating it), a ``rev-list`` failure, or
     unparseable ``rev-list`` output."""
     base_ref = f"{remote}/{branch}"
-    _require_common_ancestor(root, base_ref)
-    result = _run_git(
-        root, ["rev-list", "--left-right", "--count", f"{base_ref}...HEAD"], label=f"compare against {base_ref}"
+    _gitapex_base_ref.require_common_ancestor(root, base_ref, timeout=GIT_TIMEOUT_SECONDS, error_cls=GateError)
+    result = _gitapex_base_ref.run_git(
+        root,
+        ["rev-list", "--left-right", "--count", f"{base_ref}...HEAD"],
+        label=f"compare against {base_ref}",
+        timeout=GIT_TIMEOUT_SECONDS,
+        error_cls=GateError,
     )
     if result.returncode != 0:
         raise GateError(f"git rev-list against {base_ref} failed: {result.stderr.strip()}")
