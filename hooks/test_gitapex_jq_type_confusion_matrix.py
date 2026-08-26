@@ -304,17 +304,29 @@ GUARDED_FIELDS: list[GuardedField] = [
     ),
     # --- check-pr-duplicate-issue.sh (#1315) --------------------------
     # body: "Refs #1": same hermetic context-only-citation convention as
-    # the pr-issue-acm-disclosure entries above. `tool_input` is
-    # deliberately NOT registered here: issue #1315's own Constraints
-    # scope this fix to the `tool_name` guard only (that hook's
-    # `tool_input` guard was already fixed under issue #1197, before this
-    # matrix file existed).
+    # the pr-issue-acm-disclosure entries above. The `tool_name` entry is
+    # this issue's own reported gap; `tool_input` (already fixed under
+    # issue #1197, before this matrix file existed) is registered too,
+    # per issue #1315's own residual-risk note naming it an allowed
+    # completeness addition -- both fields now match this file's own
+    # "current, authoritative registry" claim for this hook.
     GuardedField(
         hook_id="pr-duplicate-issue",
         script_name="check-pr-duplicate-issue.sh",
         field_path=("tool_name",),
         field_label="tool_name",
         expected_type="string",
+        base_payload={
+            "tool_name": "mcp__github__create_pull_request",
+            "tool_input": {"owner": "tvna", "repo": "gitapex", "title": "x", "body": "Refs #1"},
+        },
+    ),
+    GuardedField(
+        hook_id="pr-duplicate-issue",
+        script_name="check-pr-duplicate-issue.sh",
+        field_path=("tool_input",),
+        field_label="tool_input",
+        expected_type="object",
         base_payload={
             "tool_name": "mcp__github__create_pull_request",
             "tool_input": {"owner": "tvna", "repo": "gitapex", "title": "x", "body": "Refs #1"},

@@ -274,7 +274,7 @@
       "id": "pr-duplicate-issue",
       "kind": "script",
       "script": ["hooks/check-pr-duplicate-issue.sh", "hooks/gitapex_check_pr_duplicate_issue.py"],
-      "rule": "Denies mcp__github__create_pull_request when the new PR's own resolving-cited issue (Closes/Fixes/Resolves) is already cited -- resolving or context (Closes/Fixes/Resolves/Refs/bare #N) -- by another currently-open PR, unless the new PR's own body carries an explicit `Duplicate-PR-waiver: <reason>` line; fails closed on a missing GH_TOKEN/GITHUB_TOKEN or an unresolvable open-PR-list fetch.",
+      "rule": "Denies mcp__github__create_pull_request when the new PR's own resolving-cited issue (Closes/Fixes/Resolves) is already cited -- resolving or context (Closes/Fixes/Resolves/Refs/bare #N) -- by another currently-open PR, unless the new PR's own body carries an explicit `Duplicate-PR-waiver: <reason>` line; fails closed on a missing GH_TOKEN/GITHUB_TOKEN or an unresolvable open-PR-list fetch. Fails closed (denies) rather than allowing the call through when jq is missing from PATH, the payload or tool_input is not a JSON object, or tool_name is present but not a string.",
       "planes": ["pretooluse"],
       "local_exclusion": "Grades the new PR's own citations against live open-PR state on GitHub; 'other currently-open PRs' has no local/offline equivalent to check against.",
       "trigger": "PreToolUse matcher mcp__github__create_pull_request (hooks/hooks.json)",
