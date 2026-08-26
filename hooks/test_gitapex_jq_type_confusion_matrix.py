@@ -296,6 +296,25 @@ GUARDED_FIELDS: list[GuardedField] = [
             "tool_input": {"owner": "tvna", "repo": "gitapex", "title": "feat(x): valid title", "body": "x"},
         },
     ),
+    # --- check-pr-duplicate-issue.sh (seventh hook, #1315) ------------
+    # `body: "Refs #1"` is a context-only citation, same hermetic
+    # convention the pr-issue-acm-disclosure entries above use: this
+    # field's own guard fires before any citation parsing (and any
+    # network fetch) would matter anyway. `tool_input` is deliberately
+    # NOT registered here: issue #1315's own Constraints scope this fix
+    # to the `tool_name` guard only (that hook's `tool_input` guard was
+    # already fixed under issue #1197, before this matrix file existed).
+    GuardedField(
+        hook_id="pr-duplicate-issue",
+        script_name="check-pr-duplicate-issue.sh",
+        field_path=("tool_name",),
+        field_label="tool_name",
+        expected_type="string",
+        base_payload={
+            "tool_name": "mcp__github__create_pull_request",
+            "tool_input": {"owner": "tvna", "repo": "gitapex", "title": "x", "body": "Refs #1"},
+        },
+    ),
 ]
 
 

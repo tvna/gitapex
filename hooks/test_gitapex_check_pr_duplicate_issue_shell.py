@@ -38,7 +38,7 @@ pytestmark = pytest.mark.slow
 
 def run(
     *,
-    tool_name: str = "mcp__github__create_pull_request",
+    tool_name: object = "mcp__github__create_pull_request",
     owner: str = "tvna",
     repo: str = "gitapex",
     title: str = "x",
@@ -84,6 +84,29 @@ def assert_allowed(**kwargs: Any) -> None:
 
 def test_non_matching_tool_name_is_ignored() -> None:
     assert_allowed(tool_name="Bash", body="Closes #1")
+
+
+@pytest.mark.parametrize(
+    "tool_name", [["mcp__github__create_pull_request"], {"x": 1}, 5, True], ids=["array", "object", "number", "bool"]
+)
+def test_denied_when_tool_name_is_not_a_string(tool_name: object) -> None:
+    """Issue #1315: `jq -r '.tool_name // empty'` never errors on a
+    non-string `.tool_name` -- it pretty-prints the JSON form across
+    multiple lines instead, which then never equals the plain string this
+    hook's own re-check compares against, silently falling through as "not
+    our tool" (exit 0) instead of failing closed. Live-confirmed before
+    this guard existed: an array-wrapped tool_name let a
+    create_pull_request call straight through this hook's own
+    duplicate-citation check. Must now deny."""
+    # body="Refs #1": a context-only citation, so this stays hermetic/
+    # network-free the same way test_allowed_when_only_a_context_only_
+    # citation_is_present does -- the guard under test fires before any
+    # citation parsing would matter anyway.
+    result = run(tool_name=tool_name, body="Refs #1")
+    assert result.returncode == 2, f"expected deny (exit 2) for tool_name={tool_name!r}, got {result.returncode}"
+    payload = json.loads(result.stderr)
+    assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "tool_name" in payload["systemMessage"]
 
 
 def test_allowed_when_no_resolving_citation_at_all() -> None:

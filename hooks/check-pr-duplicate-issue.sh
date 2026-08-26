@@ -81,6 +81,22 @@ if ! printf '%s' "$input" | jq -e -s 'length == 1 and (.[0] | type == "object")'
   deny "Blocked by hooks/check-pr-duplicate-issue.sh: the tool-call payload on stdin is not exactly one JSON object. Failing closed."
 fi
 
+# Found by an independent adversarial code-review agent (issue #1315),
+# the same gap PR #1213/#1217 already closed in six sibling hooks: `jq -r`
+# never errors on a non-string `.tool_name` (e.g. `["mcp__github__create_
+# pull_request"]`) -- it pretty-prints the JSON form across multiple
+# lines instead, which then never equals the plain string the check below
+# compares against. That silently falls through as "not our tool" (exit
+# 0) rather than failing closed on a malformed field this gate
+# structurally depends on -- live-confirmed: an array-wrapped tool_name
+# let a create_pull_request call straight through this hook's own
+# duplicate-citation check. `.tool_name == null` covers both absent and
+# explicit null (an absent key indexes as null in jq); only a present
+# non-string, non-null value denies.
+if ! printf '%s' "$input" | jq -e '(.tool_name == null) or (.tool_name | type == "string")' >/dev/null 2>&1; then
+  deny "Blocked by hooks/check-pr-duplicate-issue.sh: tool_name in the payload is not a string. Failing closed."
+fi
+
 tool_name=$(printf '%s' "$input" | jq -r '.tool_name // empty')
 
 if [ "$tool_name" != "mcp__github__create_pull_request" ]; then
