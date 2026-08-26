@@ -1,71 +1,102 @@
 #!/usr/bin/env python3
-"""Guard the independent-review-pending recorded-verdict heading's
-single-source-of-truth invariant.
+"""Guard the single-source-of-truth invariant for text this repository's
+`independent-review-pending` gate and its surrounding PR-flow docs must
+keep in sync across several hand-duplicated files.
 
 Issue #1343: the gate's own recorded-verdict heading (once ``## Step 8
 independent review verdict``, renamed by that issue to ``## Independent
 review verdict`` to de-couple it from ``drafting-a-pr-to-merge``'s internal
 step numbering) is duplicated by hand across four other files besides the
 gate script itself, which now owns the canonical text as
-``gitapex_gate_independent_review_pending.CANONICAL_HEADING_TEXT``:
+``gitapex_gate_independent_review_pending.CANONICAL_HEADING_TEXT``. This
+gate closes that gap -- registered as ``independent-review-heading-drift``
+in ``.gitapex/ssot.json``.
 
-- ``skills/drafting-a-pr-to-merge/SKILL.md`` (Step 8's own recorded-heading
-  instruction)
-- ``.github/PULL_REQUEST_TEMPLATE.md`` (the ``## Merge gate: independent
-  review`` feed-forward note)
-- ``.gitapex/ssot.json`` (the ``independent-review-pending`` gate entry's
-  own ``rule`` field)
-- ``.github/workflows/independent-review-pending.yml`` (a comment)
+Three independent deterministic-gate-quality/adversarial-review rounds
+(same issue's own session), run against three successive drafts of this
+gate, found real defects; the current design closes all of them:
 
-An independent adversarial deterministic-gate-quality review (dimension
-12, issue #1343's own session) found that nothing previously bound these
-five copies together -- this PR's own rename touched all five by hand,
-but a future rename, or a future hand-edit of any one of them, could
-silently drift the rest out of sync with no test failing. CLAUDE.md's own
-governance rule for this repository states the invariant plainly: "ship
-its drift gate in the same change, not a follow-up." This is that gate.
+1. **First draft checked only marker presence, not absence of retired
+   text.** A target carrying the canonical marker *and* a retired heading
+   (an incomplete migration) passed clean -- the exact drift class this
+   gate exists to catch. ``_MarkerSpec.legacy_texts`` now flags a target
+   that still carries a retired form, independent of whether the
+   canonical one is also present.
+2. **First draft's substring search accepted dead text.** A marker inside
+   an HTML comment or a fenced code block (GitHub renders both as
+   nothing) satisfied a bare substring search on the two Markdown
+   targets. ``_searchable_text`` now strips both, reusing
+   ``gitapex_gate_independent_review_pending``'s own
+   ``_strip_html_comments``/``_strip_fenced_code_blocks`` rather than
+   re-deriving them -- this gate's own definition of "live text" can
+   never independently drift from the sibling gate's.
+3. **Second draft's substring search was case-sensitive, where the
+   sibling gate's own detection regex (``_HEADING_RE``) is
+   ``re.IGNORECASE``** -- confirmed live to both false-flag a same-
+   meaning casing change as drift, and false-clear an incomplete
+   migration recorded in a different case. All matching below is now
+   ``str.casefold()``-based.
+4. **A third round considered matching each of these four targets as a
+   live ATX heading** (via ``gitapex_gate_independent_review_pending``'s
+   own ``heading_pattern()``, added for exactly this purpose), to track
+   the sibling gate's own end-anchored, indentation-limited regex more
+   closely than a bare substring does. Reverted after checking the
+   targets' own actual content: in all four files, the canonical/retired
+   text is never itself a live heading -- it is quoted prose (a
+   backtick-wrapped phrase in ``drafting-a-pr-to-merge/SKILL.md`` and
+   ``.github/PULL_REQUEST_TEMPLATE.md``, a JSON string value in
+   ``.gitapex/ssot.json``, a YAML comment in the workflow file). Heading-
+   pattern matching against non-heading targets produced a live false
+   positive (flagging the actual, correct, already-updated files as
+   drift) rather than closing a real gap -- verifying "is the current
+   text quoted here" is this gate's own job; verifying "is a genuine PR-
+   body verdict section shaped like a live heading" stays
+   ``gitapex_gate_independent_review_pending.py``'s, the only place that
+   distinction is load-bearing. ``heading_pattern()`` itself is kept (see
+   that gate's own module for its role there), just not called from here.
+5. **The same review found this gate itself, in its first draft, was not
+   registered as depending on the pytest workflow event the way every
+   sibling ``*-drift``/scan gate with the same trigger is.** ``target[]``
+   in this gate's own ``.gitapex/ssot.json`` entry now carries the
+   ``workflow-event`` refs the other 34 gates sharing that trigger already
+   do.
+6. **A live review of this PR's own diff (not this gate's design) found a
+   second hand-duplicated literal it never covered:** the feed-forward
+   note this same PR added to ``.github/PULL_REQUEST_TEMPLATE.md``
+   (``## Merge gate: independent review``) is quoted verbatim, inside a
+   code span, by ``skills/executing-a-branch-plan/SKILL.md`` Step 5 -- a
+   second pair of files this gate now also tracks, via a second
+   ``_MarkerSpec`` (``_MERGE_GATE_NOTE``).
+7. **This gate's own first run against the real repository** (not a
+   fixture -- confirmed live) false-flagged that same
+   ``executing-a-branch-plan/SKILL.md`` reference as drift: its own
+   Markdown line-wrap splits the code span across two source lines
+   (`` `## Merge gate:\n   independent review` ``), which GitHub still
+   renders as one unbroken phrase but a single-line substring search
+   cannot see across. ``_text_present`` now whitespace-normalizes (every
+   run of whitespace, including a newline, collapses to one space) both
+   sides before comparing, rather than requiring every target to keep the
+   tracked phrase hand-reformatted onto one physical line to keep this
+   gate quiet.
 
-A second, independent deterministic-gate-quality review (same issue,
-against this gate script itself) found the first drafted version checked
-only one direction -- the canonical marker's presence -- and confirmed
-three live gaps that direction alone leaves open, each closed below:
+``_MarkerSpec.targets`` names each target file's own Markdown-ness
+directly (no separate, independently-maintainable set of "which targets
+are Markdown" the way an earlier draft kept as ``_MARKDOWN_TARGETS`` --
+a review found *that* duplication was itself an unpinned copy of
+information already present in ``targets``).
 
-1. **One-directional check.** A target file carrying the canonical marker
-   *and* a retired heading text (e.g. the pre-rename ``## Step 8
-   independent review verdict``) passed clean -- the exact
-   incomplete-migration drift this gate exists to catch.
-   ``_LEGACY_HEADING_TEXTS`` now also fails a target file that still
-   contains a retired text, not only one missing the current one.
-2. **Dead text counted as live.** The marker inside an HTML comment, a
-   fenced code block, or (for a Markdown target) any other form GitHub
-   itself renders as inert satisfied a bare substring search. For the two
-   Markdown targets, ``_strip_html_comments``/``_strip_fenced_code_blocks``
-   are now reused directly from ``gitapex_gate_independent_review_pending``
-   (imported, not re-derived) before searching, so this gate's own
-   definition of "live text" never independently drifts from the sibling
-   gate's. The two non-Markdown targets (``.gitapex/ssot.json``,
-   the workflow YAML) carry neither HTML comments nor Markdown fences in
-   this repository's own convention, so they are searched as plain text,
-   unchanged.
-3. **Overclaimed false-positive immunity.** The prior revision's own
-   docstring asserted a false positive "is not possible"; a heading
-   variant the canonical ``#{1,6}``/``[ \t]+`` regex accepts but this
-   substring check's own fixed ``"## "`` prefix rejects (a single ``#``,
-   or more than one space after ``##``) is exactly such a case in the
-   opposite direction -- a live, valid heading this check would report as
-   missing. Restated below as a disclosed, bounded limitation instead of
-   an unqualified guarantee, the same "deliberately not exhaustive"
-   trade-off ``gitapex_scan_toolchain_pin_drift.py`` documents for its
-   own single-source-of-truth invariant.
+Adding a future marker this repository needs to keep synchronized means
+adding one more ``_MarkerSpec`` to ``_MARKER_SPECS`` below, not writing a
+new gate script -- the detection logic (``_searchable_text``,
+``_text_present``, ``find_drift``) is spec-driven, not heading-specific.
 
-Still deliberately scoped to substring/heading-form matching, not a full
-Markdown/JSON/YAML parse of each target's own surrounding syntax --
-false negative is possible if a file quotes either the canonical or a
-retired heading in a form neither ``_HEADING_RE``-style matching (the two
-Markdown targets) nor a bare substring search (the two non-Markdown
-targets) recognizes; a false positive on the *presence* check remains
-very unlikely (the marker string is specific), but is not claimed
-impossible.
+Still deliberately scoped to whitespace-normalized, case-insensitive
+substring matching, not a full Markdown/JSON/YAML parse of each target's
+own surrounding syntax: a false negative remains possible if a target
+splits the tracked text in some other form this search does not
+recognize (e.g. a hyphenated word-break mid-phrase); a false positive on
+the *presence* check remains very unlikely (each marker string is
+specific), but is not claimed impossible.
 
 Run standalone (exit 1 on drift) or via the pytest gate in
 ``tests/test_gitapex_scan_independent_review_heading_drift.py``.
@@ -74,7 +105,9 @@ Run standalone (exit 1 on drift) or via the pytest gate in
 from __future__ import annotations
 
 import pathlib
+import re
 import sys
+from dataclasses import dataclass
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
@@ -82,93 +115,128 @@ import gitapex_gate_independent_review_pending as gate
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 
-# Relative to the repository root -- the gate script itself is the
-# canonical source and is not included here as a target to check against
-# itself.
-_TARGET_FILES = (
-    pathlib.Path("skills/drafting-a-pr-to-merge/SKILL.md"),
-    pathlib.Path(".github/PULL_REQUEST_TEMPLATE.md"),
-    pathlib.Path(".gitapex/ssot.json"),
-    pathlib.Path(".github/workflows/independent-review-pending.yml"),
+
+@dataclass(frozen=True)
+class _MarkerSpec:
+    """One canonical text this gate keeps synchronized across a set of
+    target files, plus any retired text that must not still be live in
+    them. See the module docstring for the two specs this gate currently
+    tracks and why each exists."""
+
+    name: str
+    canonical_text: str
+    legacy_texts: tuple[str, ...]
+    targets: tuple[tuple[pathlib.Path, bool], ...]  # (path relative to repo root, is_markdown)
+
+
+_INDEPENDENT_REVIEW_HEADING = _MarkerSpec(
+    name="independent-review-pending's own recorded-verdict heading",
+    canonical_text=gate.CANONICAL_HEADING_TEXT,
+    # Extend this tuple, never replace it, on a future rename -- each
+    # entry documents one completed migration this gate keeps verified,
+    # not just the most recent one.
+    legacy_texts=("Step 8 independent review verdict",),
+    targets=(
+        (pathlib.Path("skills/drafting-a-pr-to-merge/SKILL.md"), True),
+        (pathlib.Path(".github/PULL_REQUEST_TEMPLATE.md"), True),
+        (pathlib.Path(".gitapex/ssot.json"), False),
+        (pathlib.Path(".github/workflows/independent-review-pending.yml"), False),
+    ),
 )
 
-# Only these two targets are Markdown; HTML-comment/fence stripping is
-# meaningful only for them (see module docstring, point 2).
-_MARKDOWN_TARGETS = frozenset(
-    {
-        pathlib.Path("skills/drafting-a-pr-to-merge/SKILL.md"),
-        pathlib.Path(".github/PULL_REQUEST_TEMPLATE.md"),
-    }
+_MERGE_GATE_NOTE = _MarkerSpec(
+    name="the PR-template feed-forward note's own section name",
+    canonical_text="Merge gate: independent review",
+    legacy_texts=(),
+    targets=(
+        (pathlib.Path(".github/PULL_REQUEST_TEMPLATE.md"), True),
+        (pathlib.Path("skills/executing-a-branch-plan/SKILL.md"), True),
+    ),
 )
 
-# Heading text this gate's own rename (issue #1343) retired. A target file
-# still containing one of these, even alongside the current canonical
-# marker, has not finished migrating and is reported as drift (module
-# docstring, point 1). Extend this tuple, never replace it, on a future
-# rename -- each entry documents one completed migration this gate keeps
-# verified, not just the most recent one.
-_LEGACY_HEADING_TEXTS = ("Step 8 independent review verdict",)
+_MARKER_SPECS = (_INDEPENDENT_REVIEW_HEADING, _MERGE_GATE_NOTE)
 
 
-def _searchable_text(path: pathlib.Path, content: str) -> str:
-    """Return `content` with dead (non-live) text stripped for the
-    purposes of this gate's own marker search -- HTML comments and fenced
-    code blocks for a Markdown target (module docstring, point 2); `content`
-    unchanged for a non-Markdown target, where neither construct is part of
-    this repository's own convention for that file type."""
-    if path not in _MARKDOWN_TARGETS:
+def _searchable_text(content: str, *, is_markdown: bool) -> str:
+    """Strip HTML comments and fenced code blocks (dead text on GitHub,
+    never live prose) before searching -- but only for a Markdown target,
+    where those constructs are part of the file's own convention.
+    A non-Markdown target (ssot.json, the workflow YAML) is searched as
+    plain text, unchanged; neither construct is part of its own syntax."""
+    if not is_markdown:
         return content
     stripped = gate._strip_html_comments(content)
     return gate._strip_fenced_code_blocks(stripped)
 
 
+def _normalize_whitespace(text: str) -> str:
+    """Collapse every run of whitespace (including a newline) to a single
+    space. Confirmed live (this gate's own first run against the real
+    repository): a Markdown target can carry the tracked text inside a
+    code span that a line-wrap splits across two source lines --
+    `skills/executing-a-branch-plan/SKILL.md` wraps `` `## Merge gate:
+    \\n   independent review` `` exactly this way. GitHub still renders
+    that as one unbroken phrase; a search that only recognizes it on a
+    single physical line does not, and would either false-flag a correct,
+    already-updated file as drift or force every target to stay hand-
+    reformatted onto one line to keep this gate quiet -- reformatting
+    prose to satisfy a drift check, rather than the other way around."""
+    return re.sub(r"\s+", " ", text)
+
+
+def _text_present(text: str, searchable: str) -> bool:
+    """Case-insensitive, whitespace-normalized substring presence -- see
+    the module docstring's point 4 for why this is not heading-pattern
+    matching: none of this gate's own targets carry the tracked text as a
+    live heading of their own, only as quoted prose/JSON/YAML text, so a
+    plain substring comparison is both sufficient and (confirmed live)
+    more accurate here than reusing
+    `gitapex_gate_independent_review_pending.heading_pattern()` would be."""
+    return _normalize_whitespace(text).casefold() in _normalize_whitespace(searchable).casefold()
+
+
 def find_drift(root: pathlib.Path = REPO_ROOT) -> list[str]:
-    """Return one message per target file that either does not carry the
-    canonical ``"## " + CANONICAL_HEADING_TEXT`` marker as live text, or
-    still carries a retired heading text (see ``_LEGACY_HEADING_TEXTS``).
-    Empty list means no drift. A missing target file is itself reported as
-    drift (fail closed) rather than silently skipped -- an absent file
-    cannot be verified to carry the current heading."""
-    marker = "## " + gate.CANONICAL_HEADING_TEXT
+    """Return one message per (spec, target) pair that either does not
+    carry that spec's canonical text as live text, or still carries one
+    of its retired texts as live text. Empty list means no drift. A
+    missing or unreadable target file is itself reported as drift (fail
+    closed) rather than silently skipped -- it cannot be verified to
+    carry the current text."""
     findings: list[str] = []
-    for relative in _TARGET_FILES:
-        path = root / relative
-        if not path.is_file():
-            findings.append(f"{relative}: file not found, cannot verify it carries {marker!r}")
-            continue
-        try:
-            content = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError) as exc:
-            findings.append(f"{relative}: could not read as UTF-8, cannot verify: {exc}")
-            continue
+    for spec in _MARKER_SPECS:
+        for relative, is_markdown in spec.targets:
+            path = root / relative
+            if not path.is_file():
+                findings.append(f"{relative}: file not found, cannot verify it carries {spec.name}")
+                continue
+            try:
+                content = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError) as exc:
+                findings.append(f"{relative}: could not read as UTF-8, cannot verify {spec.name}: {exc}")
+                continue
 
-        searchable = _searchable_text(relative, content)
+            searchable = _searchable_text(content, is_markdown=is_markdown)
 
-        if marker not in searchable:
-            findings.append(f"{relative}: does not contain the canonical heading marker {marker!r} as live text")
+            if not _text_present(spec.canonical_text, searchable):
+                findings.append(f"{relative}: does not carry {spec.name} ({spec.canonical_text!r}) as live text")
 
-        for legacy_text in _LEGACY_HEADING_TEXTS:
-            if legacy_text in searchable:
-                findings.append(
-                    f"{relative}: still contains the retired heading text {legacy_text!r} as live text -- "
-                    "the migration to the canonical heading is incomplete"
-                )
+            for legacy_text in spec.legacy_texts:
+                if _text_present(legacy_text, searchable):
+                    findings.append(
+                        f"{relative}: still carries a retired form of {spec.name} ({legacy_text!r}) as live "
+                        "text -- the migration is incomplete"
+                    )
     return findings
 
 
 def main() -> int:
     findings = find_drift()
     if findings:
-        print(
-            "Independent-review-pending heading drift: every file below must carry the "
-            f"canonical heading text owned by gitapex_gate_independent_review_pending."
-            f"CANONICAL_HEADING_TEXT ({gate.CANONICAL_HEADING_TEXT!r}) and none of the retired "
-            f"heading texts in _LEGACY_HEADING_TEXTS:"
-        )
+        print("Independent-review-pending marker drift found:")
         for finding in findings:
             print(f"  {finding}")
         return 1
-    print("No independent-review-pending heading drift found.")
+    print("No independent-review-pending marker drift found.")
     return 0
 
 

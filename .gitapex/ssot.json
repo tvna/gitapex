@@ -313,7 +313,7 @@
       "id": "independent-review-heading-drift",
       "kind": "script",
       "script": ".github/scripts/gitapex_scan_independent_review_heading_drift.py",
-      "rule": "The independent-review-pending gate's own recorded-verdict heading text (owned as gitapex_gate_independent_review_pending.CANONICAL_HEADING_TEXT) must be present, marker-prefixed as '## ' + that text, in each of skills/drafting-a-pr-to-merge/SKILL.md, .github/PULL_REQUEST_TEMPLATE.md, .gitapex/ssot.json (this file's own independent-review-pending rule field), and .github/workflows/independent-review-pending.yml -- a hand-duplicated literal in four places besides its one canonical source, with nothing previously binding them together (found by a deterministic-gate-quality review, issue #1343).",
+      "rule": "Two spec-driven markers this repo hand-duplicates must stay in sync (case-insensitive, whitespace-normalized substring match; a retired predecessor form must not still be live either -- see the gate script's own module docstring for that history): (1) the independent-review-pending gate's own recorded-verdict heading text (owned as gitapex_gate_independent_review_pending.CANONICAL_HEADING_TEXT) must be present in skills/drafting-a-pr-to-merge/SKILL.md, .github/PULL_REQUEST_TEMPLATE.md, .gitapex/ssot.json (this file's own independent-review-pending rule field), and .github/workflows/independent-review-pending.yml; (2) the PR-template feed-forward note's own section name ('Merge gate: independent review') must be present in .github/PULL_REQUEST_TEMPLATE.md and skills/executing-a-branch-plan/SKILL.md -- found by a deterministic-gate-quality review, issue #1343.",
       "planes": ["ci", "local"],
       "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_independent_review_heading_drift.py"],
       "trigger": "tests/test_gitapex_scan_independent_review_heading_drift.py inside the pytest step of .github/workflows/test.yml",
@@ -328,7 +328,10 @@
         {"kind": "file-glob", "ref": ".github/PULL_REQUEST_TEMPLATE.md"},
         {"kind": "file-glob", "ref": ".gitapex/ssot.json"},
         {"kind": "file-glob", "ref": ".github/workflows/independent-review-pending.yml"},
-        {"kind": "cross-registry-consistency", "ref": ".github/scripts/gitapex_gate_independent_review_pending.py CANONICAL_HEADING_TEXT <-> the four target files above"}
+        {"kind": "file-glob", "ref": "skills/executing-a-branch-plan/SKILL.md"},
+        {"kind": "cross-registry-consistency", "ref": ".github/scripts/gitapex_gate_independent_review_pending.py CANONICAL_HEADING_TEXT <-> the four independent-review-heading target files above"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {

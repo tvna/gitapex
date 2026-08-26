@@ -100,24 +100,42 @@ import sys
 from pathlib import Path
 
 # Issue #1343: the single source of truth for the recorded-verdict heading
-# text, imported directly by gitapex_scan_independent_review_heading_drift.py
-# rather than re-declared there -- the drift that gate exists to catch
-# (issue #1311's own "Step 8" numbering once baked directly into this
-# heading, duplicated by hand across five files with nothing keeping them in
-# sync) cannot recur for this file's own copy if there is no second copy to
-# drift from it, only importers of it.
+# text. Every runtime-facing use of it in this file (below) and every
+# external consumer (gitapex_scan_independent_review_heading_drift.py) reads
+# this constant or calls heading_pattern() on it, rather than re-declaring
+# the literal -- the drift that gate exists to catch (issue #1311's own
+# "Step 8" numbering once baked directly into this heading, duplicated by
+# hand across five files with nothing keeping them in sync, later found by
+# a deterministic-gate-quality review to still have unbound runtime copies
+# even after the rename -- see this issue's own follow-up commit) cannot
+# recur for this file's own copies if there are no second copies left to
+# drift from it.
 CANONICAL_HEADING_TEXT = "Independent review verdict"
 
-# CommonMark's own ATX-heading rule: the opening `#` may be indented at
-# most 3 spaces; 4 or more makes the line an indented code block instead,
-# never a live heading. A live adversarial round found that an earlier
-# `[ \t]*` (unlimited indentation, tabs included) let a 4-space-indented
-# "illustrative example" heading parse as a real, live one -- restricting
-# to `[ ]{0,3}` (spaces only) closes that class the same way GitHub's own
-# renderer already treats it as inert.
-_HEADING_RE = re.compile(
-    r"^[ ]{0,3}#{1,6}[ \t]+" + re.escape(CANONICAL_HEADING_TEXT) + r"[ \t]*$", re.IGNORECASE | re.MULTILINE
-)
+
+def heading_pattern(text: str) -> re.Pattern[str]:
+    """Build the same ATX-heading-matching pattern this gate's own
+    detection logic uses, for arbitrary heading text -- CommonMark's 0-3-
+    space indentation limit, 1-6 `#` characters, a required space before
+    the text, end-anchored (so trailing prose after the heading text does
+    not still count as a match), case-insensitive. A public function
+    (not a private, underscore-prefixed one) specifically so an external
+    consumer needing to answer "is this exact heading text live in this
+    file" -- gitapex_scan_independent_review_heading_drift.py, for both
+    the canonical text and each retired one -- calls this rather than
+    re-deriving its own, independently-drifting copy of the same regex
+    shape. A deterministic-gate-quality review found exactly that
+    divergence in an earlier revision: the drift gate's own plain
+    substring search accepted heading text `_HEADING_RE` itself would
+    reject (e.g. trailing prose, or missing the `$`-anchor's own
+    protection), and was also case-sensitive where this gate's own
+    matching is not -- both defeat classes this shared function closes by
+    construction, not by keeping two hand-synchronized copies of the same
+    rule."""
+    return re.compile(r"^[ ]{0,3}#{1,6}[ \t]+" + re.escape(text) + r"[ \t]*$", re.IGNORECASE | re.MULTILINE)
+
+
+_HEADING_RE = heading_pattern(CANONICAL_HEADING_TEXT)
 _NEXT_HEADING_RE = re.compile(r"^[ ]{0,3}#{1,6}[ \t]+", re.MULTILINE)
 
 _FENCE_OPEN_RE = re.compile(r"^[ \t]*(`{3,}|~{3,})")
@@ -257,7 +275,7 @@ def parse_verdict(body: str) -> Verdict:
     body = _strip_fenced_code_blocks(body)
     headings = list(_HEADING_RE.finditer(body))
     if not headings:
-        return Verdict(None, None, "no '## Independent review verdict' section found")
+        return Verdict(None, None, f"no '## {CANONICAL_HEADING_TEXT}' section found")
 
     section = _last_section_from(body, headings[-1].end())
 
@@ -356,7 +374,7 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"FAIL: {message}", file=sys.stderr)
     print(
-        "Record a '## Independent review verdict' section in the PR body with "
+        f"Record a '## {CANONICAL_HEADING_TEXT}' section in the PR body with "
         "'- Verdict: CLEAN' and '- Verified commit: <current head SHA>' once "
         "drafting-a-pr-to-merge's Step 8 review completes clean against this exact commit.",
         file=sys.stderr,
