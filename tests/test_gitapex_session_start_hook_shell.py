@@ -189,6 +189,17 @@ def _clone_work_repo(origin_dir: Path, work_dir: Path) -> None:
     subprocess.run(["git", "clone", "-q", str(origin_dir), str(work_dir)], check=True)
 
 
+def _clone_work_repo_restricted_refspec(origin_dir: Path, work_dir: Path, branch: str) -> None:
+    """A `git clone --single-branch --branch <branch>` clone -- the shape
+    whose configured `remote.origin.fetch` refspec only covers `branch`,
+    so a *different* branch (e.g. the repo's own configured default
+    branch) never gets a `refs/remotes/origin/<other-branch>` populated by
+    a source-only fetch (issue #1345's own repro)."""
+    subprocess.run(
+        ["git", "clone", "-q", "--single-branch", "--branch", branch, str(origin_dir), str(work_dir)], check=True
+    )
+
+
 def _assert_no_fetch_happened(work_dir: Path) -> None:
     # A fresh `git clone` never writes FETCH_HEAD on its own (verified
     # against this environment's git); a skip path that fetched anyway
@@ -318,6 +329,58 @@ def test_exits_zero_and_warns_when_origin_is_unreachable(tmp_path: Path) -> None
     # "attempted and failed" from "attempted and succeeded".
     assert result.returncode == 0
     assert "could not fetch default branch 'main' from origin this session (non-fatal)" in result.stderr
+
+
+def test_fetches_the_configured_default_branch_from_origin_in_a_restricted_refspec_clone(tmp_path: Path) -> None:
+    """Issue #1345: a restricted-refspec checkout (`git clone
+    --single-branch --branch`) whose cloned branch differs from the
+    configured default branch never gets
+    `refs/remotes/origin/<default-branch>` populated by a source-only
+    fetch, even though the fetch itself reports success and writes
+    FETCH_HEAD -- so checking FETCH_HEAD alone (as
+    test_fetches_the_configured_default_branch_from_origin above does)
+    cannot catch this bug; only the remote-tracking ref itself can."""
+    origin_dir = tmp_path / "origin.git"
+    work_dir = tmp_path / "work"
+    _init_bare_origin_with_commit(origin_dir, "release")
+
+    seed_dir = tmp_path / "origin.git-seed"
+    subprocess.run(["git", "-C", str(seed_dir), "checkout", "-q", "-b", "feature"], check=True)
+    (seed_dir / "feature.txt").write_text("feature\n", encoding="utf-8")
+    subprocess.run(["git", "add", "feature.txt"], cwd=str(seed_dir), check=True)
+    subprocess.run(
+        ["git", "-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "-q", "-m", "feature work"],
+        cwd=str(seed_dir),
+        check=True,
+    )
+    subprocess.run(["git", "push", "-q", "origin", "feature"], cwd=str(seed_dir), check=True)
+
+    _clone_work_repo_restricted_refspec(origin_dir, work_dir, "feature")
+    (work_dir / ".gitapex").mkdir()
+    (work_dir / ".gitapex" / "default-branch.json").write_text('{"default_branch": "release"}\n', encoding="utf-8")
+
+    advanced_sha = subprocess.run(
+        ["git", "rev-parse", "release"], cwd=str(seed_dir), check=True, capture_output=True, text=True
+    ).stdout.strip()
+
+    before = subprocess.run(
+        ["git", "-C", str(work_dir), "rev-parse", "--verify", "--quiet", "refs/remotes/origin/release^{commit}"],
+        capture_output=True,
+        check=False,
+    )
+    assert before.returncode != 0
+
+    result = _run({"CLAUDE_CODE_REMOTE": "true", "CLAUDE_PROJECT_DIR": str(work_dir)})
+    assert result.returncode == 0
+
+    after = subprocess.run(
+        ["git", "-C", str(work_dir), "rev-parse", "--verify", "refs/remotes/origin/release^{commit}"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert after.returncode == 0
+    assert after.stdout.strip() == advanced_sha
 
 
 def test_exits_zero_and_warns_when_uv_not_on_path() -> None:
