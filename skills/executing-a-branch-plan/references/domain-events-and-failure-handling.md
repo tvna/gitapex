@@ -89,6 +89,23 @@ one-primitive constraint above means it cannot be eliminated without a
 platform-level conditional-write (e.g. an ETag/If-Match precondition),
 which is not assumed available here.
 
+**The same discipline applies to the `branch-plan-executing` label**
+(granted/released below), not only the PR body: a label-write call (e.g.
+`github:issue_write` method `update`, `labels` field) replaces the PR's
+*entire* label set on most git-hosting platforms, the identical
+whole-collection-replace hazard the PR body's own write API has --
+setting `labels: ["branch-plan-executing"]` directly would silently
+clobber every other label already on the PR (triage, size, priority).
+Apply the same fetch -> modify -> write-back sequence: fetch the PR's
+current label list first (`github:pull_request_read` method `get`,
+`labels` field), add or remove only `branch-plan-executing` from that
+list in memory, then write the full resulting list back. Where the
+platform instead exposes a dedicated add-one/remove-one label call, prefer
+that call directly -- it has no whole-collection-replace hazard to guard
+against in the first place, so this fetch-modify-write-back sequence is
+the fallback for a platform (or connector) whose only label-write
+primitive is a whole-set replace.
+
 ## Event vocabulary (closed set, append-only, one line per event)
 
 Every event below carries a `run_id` field identifying the specific
@@ -125,15 +142,29 @@ mistaken for an earlier run's.
   dispatching. **Taking a `stop-and-replan` or `escalate` action also ends
   this skill's own ownership window early -- release the
   `branch-plan-executing` label (SKILL.md step 5/9) as part of that same
-  action, not only at step 9's own success path.** This label release is
-  its own API call, independent of the Execution-log write path above, so
-  attempt it even in a Loss and absence handling case where the event
-  itself could not be written (the log's body-fetch-failed mode below). A
-  label left standing past either action is exactly the deadlock the
-  label's own release discipline exists to prevent, and it also removes
-  the circularity an escalation routed through `drafting-a-pr-to-merge`'s
-  own Step 11 would otherwise hit while that skill's Step 2 still sees the
-  label present and defers before ever reaching Step 11.
+  action, not only at step 9's own success path.** Order matters: write
+  the event and post the human-facing comment *first*, release the label
+  *last* -- a concurrently-deferred `drafting-a-pr-to-merge` session is
+  polling specifically for this label's absence before it resumes its own
+  fix loop (its own Step 2), so releasing the label before the comment
+  recording *why* this run stopped is actually posted would let that
+  session start acting on the PR with no explanation yet visible for what
+  happened. This label release is its own API call, independent of the
+  Execution-log write path above, so attempt it even in a Loss and absence
+  handling case where the event itself could not be written (the log's
+  body-fetch-failed mode below) -- there, release still comes after
+  whatever escalation communication that case's own branch below can
+  still manage. A label left standing past either action is exactly the
+  deadlock the label's own release discipline exists to prevent, and
+  releasing it also stops `drafting-a-pr-to-merge`'s own Step 2 from
+  deferring *indefinitely* against a run that has already given up --
+  though not the full circularity: that skill's Step 3 still treats an
+  ordinary CI failure or review comment as "the spec to satisfy," and has
+  no mechanism of its own for recognizing an escalation comment as a
+  stop-and-wait-for-a-human signal rather than something to fix. Closing
+  that gap would require a second check in `drafting-a-pr-to-merge`
+  beyond its own single label-presence check, which is out of scope here;
+  it is named as a residual risk, not solved.
 
 **Escape before interpolating.** Every event's free-text fields
 (`TaskFailed.reason`, `NeedsInput.question`, `StageDeviated.reason`), the
@@ -218,17 +249,31 @@ trusting discipline this skill's own cross-session resume path already
 applies to the log's *content*, applied here to its *cadence*). If this
 run's own `run_id` has no event newer than roughly 3x
 `drafting-a-pr-to-merge`'s own Step 10 fallback self-check-in cadence
-(i.e., no new event in roughly the last 3 hours), treat the run as hung:
-write a `StageDeviated{run_id, task_id: <outstanding wave's task ID(s),
-if known>, reason: "no event in over 3x the check-in cadence, no live
-session confirmed", action: escalate}` event using the read-modify-write
-discipline above, release the `branch-plan-executing` label per the
-`StageDeviated` entry above, and escalate per `drafting-a-pr-to-merge`'s
-own Step 11, the same channel the Loss and absence handling section above
-uses -- never silently keep waiting past that threshold, and never
-re-dispatch the same wave as if the hang were a normal failure this
-skill's one-retry budget already covers (a hung dispatch never returned a
-result to retry against).
+(i.e., no new event in roughly the last 3 hours), do not declare hung yet
+-- first corroborate against ground truth the same way Loss and absence
+handling above already does: read the branch's own commit history for a
+commit newer than that same threshold. A wave's push and its log write
+happen together (step 6), so a healthy run should show both or neither;
+a recent commit with no matching log entry means the run is still making
+real progress and simply has not (yet, or due to a partial failure)
+logged it -- do not declare hung in that case, keep waiting instead. Only
+when *both* the log and the commit history are stale past the threshold,
+treat the run as hung: write a `StageDeviated{run_id, task_id: <outstanding
+wave's task ID(s), if known>, reason: "no event or commit in over 3x the
+check-in cadence, no live session confirmed", action: escalate}` event
+using the read-modify-write discipline above, escalate per
+`drafting-a-pr-to-merge`'s own Step 11 (the same channel the Loss and
+absence handling section above uses), then release the
+`branch-plan-executing` label last, per the `StageDeviated` entry above's
+own ordering rule -- never silently keep
+waiting past that threshold once both signals agree, and never re-dispatch
+the same wave as if the hang were a normal failure this skill's one-retry
+budget already covers (a hung dispatch never returned a result to retry
+against). This corroboration step exists precisely because releasing the
+label on a false positive re-opens the PR to concurrent access from
+`drafting-a-pr-to-merge` while the original run may still be pushing to
+it -- a live-but-slow run misdiagnosed as hung is a worse outcome than
+waiting a while longer.
 
 **Residual risk this does not close:** a run that dies with no session
 ever resuming it (no restart, no handoff, no fresh pickup) leaves the
@@ -238,7 +283,20 @@ genuinely-dead run from a live one still mid-wave, and that skill's own
 change stays scoped to the bare label-presence check alone, deliberately
 not a second freshness mechanism grafted onto it. A human noticing a
 stalled PR and removing the label by hand remains the recovery path for
-this specific case; it is named here rather than assumed away.
+this specific case; it is named here rather than assumed away. A second,
+narrower residual risk sits underneath the corroboration step above: no
+event is ever written when a wave is *dispatched*, only after it
+*returns*, so "wave N+1 has simply never been dispatched yet" (a benign
+gap after a prior session's turn ended, nobody has picked the branch back
+up, and neither the log nor the branch has moved since) is indistinguishable
+from "wave N+1 was dispatched and died with zero progress" by log/commit
+staleness alone -- both read identically stale. The corroboration step
+narrows the false-positive window (a live-but-slow wave that has pushed
+recently still gets caught) but cannot close this specific case, since
+there is nothing to corroborate against either way; a resumed session
+misjudging a merely-unpicked-up branch as hung pays the same cost as a
+false positive above (an unnecessary escalation and label release), not
+a worse one -- it is disclosed here for the same reason.
 
 ## Failure dispatch (step 7)
 
@@ -252,17 +310,18 @@ needed. If the retry also fails, dispatch on what actually failed:
   not fit what the ACM row actually needed) -> `stop-and-replan`'s own
   Stop action, extended to a new trigger beyond that skill's original
   self-correcting-phrase detection: a task's own retry-then-plan-wrong
-  diagnosis. Release the `branch-plan-executing` label (per the
-  `StageDeviated` event vocabulary entry above), close the draft PR with
-  a `StageDeviated{action: stop-and-replan}` event and rationale, comment
-  the same rationale on the parent issue, re-plan from there. Before
-  closing, offer the rollback below.
+  diagnosis. Close the draft PR with a `StageDeviated{run_id, task_id,
+  reason, action: stop-and-replan}` event and rationale, comment the same
+  rationale on the parent issue (before closing, offer the rollback
+  below), then release the `branch-plan-executing` label last, per the
+  `StageDeviated` event vocabulary entry above's own ordering rule.
 - **The execution was wrong but the fix is not obvious** -> escalate:
-  release the `branch-plan-executing` label, write a `StageDeviated{action:
-  escalate}` event, plus a comment on the (still draft) PR naming exactly
-  what was tried, then escalate per `drafting-a-pr-to-merge`'s own Step 11
-  -- matching that step's own "escalate only when blocked... not for
-  anything the agent can fix on its own."
+  write a `StageDeviated{run_id, task_id, reason, action: escalate}`
+  event, post a comment on the (still draft) PR naming exactly what was
+  tried, escalate per `drafting-a-pr-to-merge`'s own Step 11 -- matching
+  that step's own "escalate only when blocked... not for anything the
+  agent can fix on its own" -- then release the `branch-plan-executing`
+  label last, same ordering rule.
 - **`NeedsInput`** -> answer from the ACM/Branch Plan's own already-stated
   content when possible; escalate per the rule above when the ACM itself
   does not settle it. Never counted against the one-retry budget.
@@ -295,18 +354,17 @@ already are the manifest a revert needs.
 The draft PR opens immediately once the step-1 authorization gate passes
 (not after every task commits), containing the ACM and an Execution log
 seeded with `PlanApproved`. In this same moment, this skill also applies
-the `branch-plan-executing` label to the PR -- the ownership-signal mirror
-`drafting-a-pr-to-merge`'s own step 2 checks for before entering its fix
-loop -- and subscribes to the draft PR's own CI/review/comment activity,
-owning responding to it for the entire task-execution window: it does not
-wait for or delegate to `drafting-a-pr-to-merge` during that window. The
-draft PR converts to ready-for-review, and the label is released, only
-once every task has a `TaskCompleted` event and the refactor/adversarial-
-review gate (step 8) is clean -- or earlier, on a `stop-and-replan` or
-`escalate` dispatch (see the Failure dispatch section, and the
-`StageDeviated` event vocabulary entry, above) -- at which point ownership
-of the PR's activity passes to `drafting-a-pr-to-merge`'s normal entry
-point.
+the `branch-plan-executing` label (SKILL.md step 5's own rationale for the
+label, not repeated here) and subscribes to the draft PR's own
+CI/review/comment activity, owning responding to it for the entire
+task-execution window: it does not wait for or delegate to
+`drafting-a-pr-to-merge` during that window. The draft PR converts to
+ready-for-review, and the label is released, only once every task has a
+`TaskCompleted` event and the refactor/adversarial-review gate (step 8) is
+clean -- or earlier, on a `stop-and-replan` or `escalate` dispatch (see
+the Failure dispatch section, and the `StageDeviated` event vocabulary
+entry, above) -- at which point ownership of the PR's activity passes to
+`drafting-a-pr-to-merge`'s normal entry point.
 
 **Handling an incoming review comment or CI signal during this window
 (found via `/code-review`; not previously specified anywhere).** "Owns
