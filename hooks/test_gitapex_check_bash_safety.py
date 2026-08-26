@@ -628,6 +628,21 @@ DENIED_INDIRECTION_COMMANDS = [
     # tool once `"${A[@]}"` expands.
     ('Y=1; A=(uv install $Y); "${A[@]}"', "array-literal-trailing-dynamic-element-hides-uv-install"),
     ('A=(gh pr merge $(echo 1)); "${A[@]}"', "array-literal-trailing-command-substitution-hides-gh-pr-merge"),
+    # Found live by Step 8 independent review, eighteenth round (issue
+    # #1326): a leading UNQUOTED reference to a variable never assigned
+    # anywhere in the command word-splits away to NOTHING at real bash
+    # runtime (confirmed live via `declare -p` that
+    # `A=($NEVERSET gh pr merge 1)`, NEVERSET never assigned, produces a
+    # 4-element array `(gh pr merge 1)` -- NEVERSET contributes zero
+    # elements), so the array's own REAL first element is the denied
+    # tool/verb right after it -- every prior round's own fold-condition
+    # heuristic (unconditional; any-element-dynamic; first-element-
+    # dynamic) treated the reference as an ordinary dynamic first
+    # element and folded the whole span away, hiding the fully literal
+    # content after it. `_rule_array_literal_content`'s own recursive,
+    # fold-independent check (run before any folding) closes this.
+    ('A=($NEVERSET uv install); "${A[@]}" foo', "array-literal-unassigned-leading-ref-hides-uv-install"),
+    ('A=($NEVERSET gh pr merge 1); "${A[@]}"', "array-literal-unassigned-leading-ref-hides-gh-pr-merge"),
 ]
 
 
@@ -658,10 +673,20 @@ OBFUSCATED_GIT_PUSH_WARN_PATH_COMMANDS = [
     # Found live by Step 8 independent review, sixteenth round (issue
     # #1326): the array-literal counterpart of DENIED_INDIRECTION_
     # COMMANDS's own array-literal cases above, for git push specifically
-    # -- `_is_git_push_segment`'s own literal-`git push`-anywhere
-    # substring scan already sees it once the array literal is left
-    # unfolded (see `_fold_array_literal_spans`'s own docstring).
+    # -- `_rule_array_literal_content`'s own recursive check (see its own
+    # docstring) sees this via the SAME `_is_git_push_segment` scan a
+    # top-level `git push` already gets, since the array's own inner
+    # content is classified as if it were its own standalone command.
     ('A=(git push origin main); "${A[@]}"', "array-literal-hides-git-push-still-warn-path"),
+    # Found live by Step 8 independent review, eighteenth round (issue
+    # #1326): the git-push counterpart of the unassigned-leading-ref
+    # cases above -- `A=($NEVERSET git push origin main)` word-splits
+    # NEVERSET away to nothing at real bash runtime, landing `git push`
+    # as the array's own real first elements.
+    (
+        'A=($NEVERSET git push origin main); "${A[@]}"',
+        "array-literal-unassigned-leading-ref-hides-git-push-still-warn-path",
+    ),
 ]
 
 

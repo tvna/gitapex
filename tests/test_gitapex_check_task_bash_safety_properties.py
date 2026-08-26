@@ -161,26 +161,6 @@ def test_pipe_chains_empty_for_no_tokens() -> None:
 
 
 @_PROPERTIES
-@given(name=_IDENTIFIERS, elem=_IDENTIFIERS, cmd=_IDENTIFIERS)
-def test_pipe_chains_segment_breaks_a_literal_array_literal_from_a_following_word(
-    name: str, elem: str, cmd: str
-) -> None:
-    """Model-based, regression pin for the real bypass found live by Step
-    8 independent review, seventeenth round (issue #1326): unlike a
-    genuine subshell grouping, a `NAME=(...)` array-literal span's own
-    `(`/`)` boundary must NOT stay transparent to depth-tracking here --
-    confirmed live that `curl <url> | A=(x) bash` was wrongly ALLOWED,
-    since the array's own leftover element landed in the SAME segment as
-    the real command word right after it (`_skip_fetch_exec_wrapper`
-    inspected the leftover element at position 0 and never reached the
-    interpreter at position 1). The array's own inner element still
-    lands in its own, separately-scannable segment -- only the `NAME=`
-    opener and the array's own boundary parens are dropped."""
-    tokens = [f"{name}=", "(", elem, ")", cmd]
-    assert checker._pipe_chains(tokens) == [[[elem], [cmd]]]
-
-
-@_PROPERTIES
 @given(op=st.sampled_from([";", "&", "&&", "||", "|"]))
 def test_pipe_chains_empty_for_operators_only(op: str) -> None:
     """Robustness: a token stream consisting only of control operators
@@ -1096,41 +1076,162 @@ def test_fold_array_literal_spans_merges_a_dynamic_element_into_one_token(name: 
 
 @_PROPERTIES
 @given(name=_IDENTIFIERS, inner=_IDENTIFIERS)
-def test_fold_array_literal_spans_leaves_a_fully_literal_element_unfolded(name: str, inner: str) -> None:
-    """Model-based, regression pin for the real bypass found live by Step
-    8 independent review, sixteenth round (issue #1326), ported from the
-    main hook's own sixteenth-round fix of the same finding: a FULLY
-    LITERAL array element must NOT fold into one token -- `A=(gh pr
-    merge 1); "${A[@]}"` was wrongly ALLOWED when this span folded
-    unconditionally, since the resulting `NAME=(...)`-shaped token was
-    then discarded whole by `_strip_leading_assignments` as an ordinary
-    (inert) assignment, hiding fully literal, undisguised denied-tool
-    tokens from `_rule_gh_any`'s own `seg[0]` check and every other
-    downstream rule. Leaving the span's own tokens unfolded lets
-    `segment_tokens`/`_pipe_chains` split it exactly as pre-round-15,
-    restoring every existing rule's coverage with no rule needing to
-    learn a new shape."""
+def test_fold_array_literal_spans_merges_a_fully_literal_element_too(name: str, inner: str) -> None:
+    """Model-based: as of the eighteenth round's own redesign (issue
+    #1326), a FULLY LITERAL array element folds into one token exactly
+    the same as a dynamic one -- this function no longer carries ANY
+    content-safety responsibility (see its own docstring's Design
+    history): `_rule_array_literal_content` independently, recursively
+    classifies the array's own inner content BEFORE this fold ever runs,
+    so the fold's downstream effect on `_strip_leading_assignments` is
+    safe regardless of what the array contains."""
     tokens = [f"{name}=", "(", inner, ")", "trailing"]
     folded = checker._fold_array_literal_spans(tokens)
-    assert folded == tokens
+    assert folded == [f"{name}=( {inner})", "trailing"]
+    assert checker._strip_leading_assignments(folded[:1]) == []
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS)
+def test_fold_array_literal_spans_empty_array_no_trailing_space(name: str) -> None:
+    """No false positive / no crash: an EMPTY array literal (`NAME=()`)
+    has no inner elements to space-join -- `middle` must fall back to the
+    empty string, not a stray leading space."""
+    tokens = [f"{name}=", "(", ")"]
+    assert checker._fold_array_literal_spans(tokens) == [f"{name}=()"]
 
 
 @_PROPERTIES
 @given(name=_IDENTIFIERS, first=_IDENTIFIERS, second=_IDENTIFIERS)
-def test_fold_array_literal_spans_leaves_a_literal_first_element_unfolded_even_with_a_later_dynamic_one(
+def test_rule_array_literal_content_detects_a_denied_pair_regardless_of_a_leading_dynamic_element(
     name: str, first: str, second: str
 ) -> None:
     """Model-based, regression pin for the real bypass found live by Step
-    8 independent review, seventeenth round (issue #1326), ported from
-    the main hook's own seventeenth-round fix of the same finding:
-    folding on "any element is dynamic" (not just the FIRST) folded a
-    mixed array whole, hiding a fully literal, undisguised denied tool
-    sitting next to an unrelated trailing dynamic element -- `A=(gh pr
-    merge $(echo 1)); "${A[@]}"` was wrongly ALLOWED this way. A span
-    whose own first element is literal must stay unfolded regardless of
-    what a LATER element contains, so it lands as an ordinary segment
-    every existing rule already knows how to scan."""
-    dynamic_second = f"${second}"
-    tokens = [f"{name}=", "(", first, dynamic_second, ")", "trailing"]
-    folded = checker._fold_array_literal_spans(tokens)
-    assert folded == tokens
+    8 independent review, seventeenth AND eighteenth rounds (issue
+    #1326): a denied adjacent-verb pair sitting inside an array literal
+    must be caught by this recursive content check regardless of what
+    ELSE is in the array (a leading dynamic element used to hide it from
+    every fold-conditional heuristic rounds 16-17 tried in turn) --
+    `Y=1; A=(uv install $Y); "${A[@]}"` was wrongly ALLOWED before this
+    function existed. Unlike the main hook's own port,
+    `_rule_array_literal_content` here returns a bare `str | None`, not a
+    tuple -- this module's own `Verdict` has no `is_git_push` field."""
+    tokens = ["dummy=", "(", f"${first}", "uv", "install", f"${second}", ")"]
+    reason = checker._rule_array_literal_content(tokens, {}, {})
+    assert reason is not None
+
+
+@_PROPERTIES
+@given(unset_name=_IDENTIFIERS, verb_a=st.sampled_from(["uv", "gh"]))
+def test_rule_array_literal_content_collapses_a_leading_unassigned_bare_ref(unset_name: str, verb_a: str) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, eighteenth round (issue #1326): a leading bare
+    `$NAME` reference to a variable never assigned anywhere in the
+    command word-splits away to NOTHING at real bash runtime (confirmed
+    live via `declare -p` against real bash), so the array's own REAL
+    first surviving element is what actually lands at the position a
+    `seg[0]`-anchored rule would see -- `A=($NEVERSET uv install);
+    "${A[@]}" foo` was wrongly ALLOWED before this collapsed reading was
+    checked. A dynamic token that IS assigned in the command, or is
+    fused with other text (not a bare whole-token reference), must NOT
+    be collapsed -- that shape does not word-split away to nothing."""
+    tokens = ["dummy=", "(", f"${unset_name}", verb_a, "install", ")"]
+    reason = checker._rule_array_literal_content(tokens, {}, {})
+    assert reason is not None
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value=_VALUES)
+def test_rule_array_literal_content_does_not_collapse_an_assigned_reference(name: str, value: str) -> None:
+    """No false positive: a leading bare `$NAME` reference to a variable
+    that genuinely IS assigned elsewhere in the command does not
+    word-split away -- collapsing it would wrongly treat its own real,
+    assigned value's position as if it were absent."""
+    tokens = ["dummy=", "(", f"${name}", "echo", "harmless", ")"]
+    assert checker._strip_leading_unassigned_bare_refs(tokens[2:4], {name: value}) == tokens[2:4]
+
+
+def test_rule_array_literal_content_allows_harmless_content() -> None:
+    """No false positive: an array literal whose own content matches no
+    denied pattern, with or without a leading unassigned reference,
+    stays allowed."""
+    tokens = ["dummy=", "(", "$NEVERSET", "echo", "harmless", ")"]
+    assert checker._rule_array_literal_content(tokens, {}, {}) is None
+
+
+def test_rule_array_literal_content_no_span_present() -> None:
+    """Robustness: a token stream with no array-literal span at all
+    (e.g. an ordinary command) returns cleanly, never a crash."""
+    assert checker._rule_array_literal_content(["echo", "hi"], {}, {}) is None
+
+
+def test_strip_leading_unassigned_bare_refs_stops_at_a_fused_token() -> None:
+    """No false positive: a token with anything ELSE fused onto the
+    reference (not a bare, whole-token `$NAME`) does not word-split away
+    to nothing even when the reference itself is unset -- the collapse
+    only applies to a token that IS entirely one bare reference."""
+    tokens = ["-X$NEVERSET", "trailing"]
+    assert checker._strip_leading_unassigned_bare_refs(tokens, {}) == tokens
+
+
+@_PROPERTIES
+@given(a=_IDENTIFIERS, b=_IDENTIFIERS)
+def test_strip_leading_unassigned_bare_refs_strips_the_whole_run(a: str, b: str) -> None:
+    """Robustness: when EVERY token is an unassigned bare reference (no
+    literal token to stop the run), the whole list collapses to empty,
+    not a crash or a stray leftover."""
+    tokens = [f"${a}", f"${b}"]
+    assert checker._strip_leading_unassigned_bare_refs(tokens, {}) == []
+
+
+def test_rule_array_literal_content_empty_array_is_harmless() -> None:
+    """No false positive / no crash: an empty array literal `NAME=()`
+    has no inner content to recursively classify at all."""
+    tokens = ["dummy=", "(", ")"]
+    assert checker._rule_array_literal_content(tokens, {}, {}) is None
+
+
+def test_rule_array_literal_content_skips_the_collapsed_reading_without_a_leading_unassigned_ref() -> None:
+    """No false positive / no redundant work: an array literal whose own
+    first element is NOT an unassigned bare reference has nothing for
+    `_strip_leading_unassigned_bare_refs` to strip -- the collapsed
+    reading equals the as-is one, so only one classification is needed."""
+    tokens = ["dummy=", "(", "echo", "harmless", ")"]
+    assert checker._rule_array_literal_content(tokens, {}, {}) is None
+
+
+def test_rule_array_literal_content_denies_only_on_the_collapsed_reading() -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, eighteenth round (issue #1326): the AS-IS
+    reading of `$NEVERSET uv $VERB` is harmless -- B2 (`_rule_b2_
+    watched_tool_dynamic_verb_position`) requires a LITERAL `seg[0]`, and
+    `$NEVERSET` being dynamic blocks it from ever firing, regardless of
+    what follows (unlike `_rule_a_literal`'s own filtered-adjacency scan,
+    which already sees through a leading dynamic decoy for a PAIR of
+    literal tokens -- this collapse is specifically needed for a
+    POSITION-anchored rule like B2). The COLLAPSED reading (`$NEVERSET`
+    stripped away, since it is never assigned) puts `uv` at `seg[0]` for
+    real, with a dynamic verb argument right after it -- exactly B2's own
+    watched shape."""
+    tokens = ["dummy=", "(", "$NEVERSET", "uv", "$VERB", ")"]
+    reason = checker._rule_array_literal_content(tokens, {}, {})
+    assert reason is not None
+    assert "unassigned reference" in reason
+
+
+def test_rule_array_literal_content_skips_a_fully_dynamic_command_substitution_element() -> None:
+    """No false positive, task-file-specific guard (see `_rule_array_
+    literal_content`'s own docstring): an array literal whose ONLY
+    content is a command substitution (`arr=($(seq 1 5))`, data capture,
+    not invocation) must NOT recurse into `_classify_tokens` at all --
+    this module's own `_rule_bare_install` fails closed on any
+    unresolvable dynamic `seg[0]`, sound at the top level but a category
+    error when applied to array-CONSTRUCTION content, reproducing the
+    exact false positive this module's own fifteenth round already fixed
+    once. The `inner` tokens must be folded through `_fold_command_
+    substitution_spans` FIRST -- the raw, unfolded `$`, `(`, `seq`, `1`,
+    `5`, `)` tokens would otherwise misread the substitution's own
+    internal text as independent literal array elements, defeating this
+    exemption."""
+    tokens = checker.tokenize("arr=($(seq 1 5))")
+    assert checker._rule_array_literal_content(tokens, {}, {}) is None

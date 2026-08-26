@@ -1405,41 +1405,145 @@ def test_fold_array_literal_spans_merges_a_dynamic_element_into_one_token(name: 
 
 @_PROPERTIES
 @given(name=_IDENTIFIERS, inner=_IDENTIFIERS)
-def test_fold_array_literal_spans_leaves_a_fully_literal_element_unfolded(name: str, inner: str) -> None:
-    """Model-based, regression pin for the real bypass found live by Step
-    8 independent review, sixteenth round (issue #1326): a FULLY LITERAL
-    array element must NOT fold into one token -- `A=(gh pr merge 1);
-    "${A[@]}"` was wrongly ALLOWED when this span folded unconditionally,
-    since the resulting `NAME=(...)`-shaped token was then discarded
-    whole by `_strip_leading_assignments` as an ordinary (inert)
-    assignment, hiding fully literal, undisguised denied-verb tokens from
-    every downstream rule. Leaving the span's own tokens unfolded lets
-    `segment_tokens` split it exactly as pre-round-15, restoring every
-    existing rule's coverage with no rule needing to learn a new shape."""
+def test_fold_array_literal_spans_merges_a_fully_literal_element_too(name: str, inner: str) -> None:
+    """Model-based: as of the eighteenth round's own redesign (issue
+    #1326), a FULLY LITERAL array element folds into one token exactly
+    the same as a dynamic one -- this function no longer carries ANY
+    content-safety responsibility (see its own docstring's Design
+    history): `_rule_array_literal_content` independently, recursively
+    classifies the array's own inner content BEFORE this fold ever runs,
+    so the fold's downstream effect on `_strip_leading_assignments` is
+    safe regardless of what the array contains."""
     tokens = [f"{name}=", "(", inner, ")", "trailing"]
     folded = checker._fold_array_literal_spans(tokens)
-    assert folded == tokens
+    assert folded == [f"{name}=( {inner})", "trailing"]
+    assert checker._strip_leading_assignments(folded[:1]) == []
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS)
+def test_fold_array_literal_spans_empty_array_no_trailing_space(name: str) -> None:
+    """No false positive / no crash: an EMPTY array literal (`NAME=()`)
+    has no inner elements to space-join -- `middle` must fall back to the
+    empty string, not a stray leading space."""
+    tokens = [f"{name}=", "(", ")"]
+    assert checker._fold_array_literal_spans(tokens) == [f"{name}=()"]
 
 
 @_PROPERTIES
 @given(name=_IDENTIFIERS, first=_IDENTIFIERS, second=_IDENTIFIERS)
-def test_fold_array_literal_spans_leaves_a_literal_first_element_unfolded_even_with_a_later_dynamic_one(
+def test_rule_array_literal_content_detects_a_denied_pair_regardless_of_a_leading_dynamic_element(
     name: str, first: str, second: str
 ) -> None:
     """Model-based, regression pin for the real bypass found live by Step
-    8 independent review, seventeenth round (issue #1326): folding on
-    "any element is dynamic" (not just the FIRST) folded a mixed array
-    whole, hiding a fully literal, undisguised denied verb sitting next
-    to an unrelated trailing dynamic element -- `Y=1; A=(uv install $Y);
-    "${A[@]}"` was wrongly ALLOWED this way. A span whose own first
-    element is literal must stay unfolded regardless of what a LATER
-    element contains, so it lands as an ordinary segment (literal
-    command word plus a trailing dynamic argument) every existing rule
-    already knows how to scan."""
-    dynamic_second = f"${second}"
-    tokens = [f"{name}=", "(", first, dynamic_second, ")", "trailing"]
-    folded = checker._fold_array_literal_spans(tokens)
-    assert folded == tokens
+    8 independent review, seventeenth AND eighteenth rounds (issue
+    #1326): a denied adjacent-verb pair sitting inside an array literal
+    must be caught by this recursive content check regardless of what
+    ELSE is in the array (a leading dynamic element used to hide it from
+    every fold-conditional heuristic rounds 16-17 tried in turn) --
+    `Y=1; A=(uv install $Y); "${A[@]}"` was wrongly ALLOWED before this
+    function existed."""
+    tokens = ["dummy=", "(", f"${first}", "uv", "install", f"${second}", ")"]
+    reason, _ = checker._rule_array_literal_content(tokens, {}, {})
+    assert reason is not None
+
+
+@_PROPERTIES
+@given(unset_name=_IDENTIFIERS, verb_a=st.sampled_from(["uv", "gh"]))
+def test_rule_array_literal_content_collapses_a_leading_unassigned_bare_ref(unset_name: str, verb_a: str) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, eighteenth round (issue #1326): a leading bare
+    `$NAME` reference to a variable never assigned anywhere in the
+    command word-splits away to NOTHING at real bash runtime (confirmed
+    live via `declare -p` against real bash), so the array's own REAL
+    first surviving element is what actually lands at the position a
+    `seg[0]`-anchored rule would see -- `A=($NEVERSET uv install);
+    "${A[@]}" foo` was wrongly ALLOWED before this collapsed reading was
+    checked. A dynamic token that IS assigned in the command, or is
+    fused with other text (not a bare whole-token reference), must NOT
+    be collapsed -- that shape does not word-split away to nothing."""
+    tokens = ["dummy=", "(", f"${unset_name}", verb_a, "install", ")"]
+    reason, _ = checker._rule_array_literal_content(tokens, {}, {})
+    assert reason is not None
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value=_VALUES)
+def test_rule_array_literal_content_does_not_collapse_an_assigned_reference(name: str, value: str) -> None:
+    """No false positive: a leading bare `$NAME` reference to a variable
+    that genuinely IS assigned elsewhere in the command does not
+    word-split away -- collapsing it would wrongly treat its own real,
+    assigned value's position as if it were absent."""
+    tokens = ["dummy=", "(", f"${name}", "echo", "harmless", ")"]
+    assert checker._strip_leading_unassigned_bare_refs(tokens[2:4], {name: value}) == tokens[2:4]
+
+
+def test_rule_array_literal_content_allows_harmless_content() -> None:
+    """No false positive: an array literal whose own content matches no
+    denied pattern, with or without a leading unassigned reference,
+    stays allowed."""
+    tokens = ["dummy=", "(", "$NEVERSET", "echo", "harmless", ")"]
+    assert checker._rule_array_literal_content(tokens, {}, {}) == (None, False)
+
+
+def test_rule_array_literal_content_no_span_present() -> None:
+    """Robustness: a token stream with no array-literal span at all
+    (e.g. an ordinary command) returns cleanly, never a crash."""
+    assert checker._rule_array_literal_content(["echo", "hi"], {}, {}) == (None, False)
+
+
+def test_strip_leading_unassigned_bare_refs_stops_at_a_fused_token() -> None:
+    """No false positive: a token with anything ELSE fused onto the
+    reference (not a bare, whole-token `$NAME`) does not word-split away
+    to nothing even when the reference itself is unset -- the collapse
+    only applies to a token that IS entirely one bare reference."""
+    tokens = ["-X$NEVERSET", "trailing"]
+    assert checker._strip_leading_unassigned_bare_refs(tokens, {}) == tokens
+
+
+@_PROPERTIES
+@given(a=_IDENTIFIERS, b=_IDENTIFIERS)
+def test_strip_leading_unassigned_bare_refs_strips_the_whole_run(a: str, b: str) -> None:
+    """Robustness: when EVERY token is an unassigned bare reference (no
+    literal token to stop the run), the whole list collapses to empty,
+    not a crash or a stray leftover."""
+    tokens = [f"${a}", f"${b}"]
+    assert checker._strip_leading_unassigned_bare_refs(tokens, {}) == []
+
+
+def test_rule_array_literal_content_empty_array_is_harmless() -> None:
+    """No false positive / no crash: an empty array literal `NAME=()`
+    has no inner content to recursively classify at all."""
+    tokens = ["dummy=", "(", ")"]
+    assert checker._rule_array_literal_content(tokens, {}, {}) == (None, False)
+
+
+def test_rule_array_literal_content_skips_the_collapsed_reading_without_a_leading_unassigned_ref() -> None:
+    """No false positive / no redundant work: an array literal whose own
+    first element is NOT an unassigned bare reference has nothing for
+    `_strip_leading_unassigned_bare_refs` to strip -- the collapsed
+    reading equals the as-is one, so only one classification is needed."""
+    tokens = ["dummy=", "(", "echo", "harmless", ")"]
+    assert checker._rule_array_literal_content(tokens, {}, {}) == (None, False)
+
+
+def test_rule_array_literal_content_denies_only_on_the_collapsed_reading() -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, eighteenth round (issue #1326): the AS-IS
+    reading of `$NEVERSET uv $VERB` is harmless -- B2 (`_rule_b2_
+    watched_tool_dynamic_verb_position`) requires a LITERAL `seg[0]`, and
+    `$NEVERSET` being dynamic blocks it from ever firing, regardless of
+    what follows (unlike `_rule_a_literal`'s own filtered-adjacency scan,
+    which already sees through a leading dynamic decoy for a PAIR of
+    literal tokens -- this collapse is specifically needed for a
+    POSITION-anchored rule like B2). The COLLAPSED reading (`$NEVERSET`
+    stripped away, since it is never assigned) puts `uv` at `seg[0]` for
+    real, with a dynamic verb argument right after it -- exactly B2's own
+    watched shape."""
+    tokens = ["dummy=", "(", "$NEVERSET", "uv", "$VERB", ")"]
+    reason, _ = checker._rule_array_literal_content(tokens, {}, {})
+    assert reason is not None
+    assert "unassigned reference" in reason
 
 
 # --- codecov/patch coverage gate: branches this PR's diff added but no ----
@@ -1738,6 +1842,16 @@ def test_classify_denies_bare_top_level_command_substitution() -> None:
 
 def test_classify_denies_gh_api_write_end_to_end() -> None:
     verdict = checker.classify("gh api repos/o/r/pulls/1 -X POST")
+    assert verdict.deny is True
+
+
+def test_classify_denies_array_literal_content_end_to_end() -> None:
+    """`_classify_tokens`'s own early-return on a denying `_rule_array_
+    literal_content` verdict, reached end-to-end through `classify()` --
+    not just the recursive rule's own unit tests above. Regression pin
+    for the real bypass found live by Step 8 independent review,
+    eighteenth round (issue #1326)."""
+    verdict = checker.classify('A=($NEVERSET uv install); "${A[@]}" foo')
     assert verdict.deny is True
 
 
