@@ -1421,6 +1421,27 @@ def test_fold_array_literal_spans_leaves_a_fully_literal_element_unfolded(name: 
     assert folded == tokens
 
 
+@_PROPERTIES
+@given(name=_IDENTIFIERS, first=_IDENTIFIERS, second=_IDENTIFIERS)
+def test_fold_array_literal_spans_leaves_a_literal_first_element_unfolded_even_with_a_later_dynamic_one(
+    name: str, first: str, second: str
+) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, seventeenth round (issue #1326): folding on
+    "any element is dynamic" (not just the FIRST) folded a mixed array
+    whole, hiding a fully literal, undisguised denied verb sitting next
+    to an unrelated trailing dynamic element -- `Y=1; A=(uv install $Y);
+    "${A[@]}"` was wrongly ALLOWED this way. A span whose own first
+    element is literal must stay unfolded regardless of what a LATER
+    element contains, so it lands as an ordinary segment (literal
+    command word plus a trailing dynamic argument) every existing rule
+    already knows how to scan."""
+    dynamic_second = f"${second}"
+    tokens = [f"{name}=", "(", first, dynamic_second, ")", "trailing"]
+    folded = checker._fold_array_literal_spans(tokens)
+    assert folded == tokens
+
+
 # --- codecov/patch coverage gate: branches this PR's diff added but no ----
 # existing DENIED/ALLOWED end-to-end fixture or property test happened to
 # exercise -- each test below targets one specific line/branch named in the

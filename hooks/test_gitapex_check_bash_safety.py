@@ -609,7 +609,25 @@ DENIED_INDIRECTION_COMMANDS = [
     # against `gh`'s own flag-parsing library (pflag) that a single
     # fused argv token `-X=POST` genuinely parses to a real write.
     ("gh api repos/o/r/issues/1 -X=POST", "gh-api-method-fused-equals-literal"),
+    # The dynamic-flagname counterpart of the case immediately above:
+    # `"$F"=POST` tokenizes to one fused token `$F=POST`, never reaching
+    # `_gh_api_method_literal_hit`'s own literal-token scan at all --
+    # denied instead by `_gh_api_method_fused_flagname_dynamic_hit`'s own
+    # sixteenth-round `.lstrip("=")` fix of the identical gap on a
+    # resolved candidate string.
     ('F=-X; gh api repos/o/r/issues/1 "$F"=POST', "gh-api-method-fused-equals-dynamic-flagname"),
+    # Found live by Step 8 independent review, seventeenth round (issue
+    # #1326): an earlier version of `_fold_array_literal_spans` folded
+    # an array-literal span whenever ANY of its own elements was
+    # dynamic, not just the first -- a single unrelated dynamic element
+    # anywhere in the array (a stray `$Y`, a trailing `$(echo 1)`) folded
+    # the WHOLE span into one opaque token, hiding fully literal,
+    # undisguised denied-verb tokens sitting right next to it. Confirmed
+    # live via a real bash proxy (stand-in `uv`/`gh` binaries on PATH,
+    # capturing their own argv) that both genuinely invoke the denied
+    # tool once `"${A[@]}"` expands.
+    ('Y=1; A=(uv install $Y); "${A[@]}"', "array-literal-trailing-dynamic-element-hides-uv-install"),
+    ('A=(gh pr merge $(echo 1)); "${A[@]}"', "array-literal-trailing-command-substitution-hides-gh-pr-merge"),
 ]
 
 

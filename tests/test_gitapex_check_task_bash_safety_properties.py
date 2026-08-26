@@ -161,6 +161,26 @@ def test_pipe_chains_empty_for_no_tokens() -> None:
 
 
 @_PROPERTIES
+@given(name=_IDENTIFIERS, elem=_IDENTIFIERS, cmd=_IDENTIFIERS)
+def test_pipe_chains_segment_breaks_a_literal_array_literal_from_a_following_word(
+    name: str, elem: str, cmd: str
+) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, seventeenth round (issue #1326): unlike a
+    genuine subshell grouping, a `NAME=(...)` array-literal span's own
+    `(`/`)` boundary must NOT stay transparent to depth-tracking here --
+    confirmed live that `curl <url> | A=(x) bash` was wrongly ALLOWED,
+    since the array's own leftover element landed in the SAME segment as
+    the real command word right after it (`_skip_fetch_exec_wrapper`
+    inspected the leftover element at position 0 and never reached the
+    interpreter at position 1). The array's own inner element still
+    lands in its own, separately-scannable segment -- only the `NAME=`
+    opener and the array's own boundary parens are dropped."""
+    tokens = [f"{name}=", "(", elem, ")", cmd]
+    assert checker._pipe_chains(tokens) == [[[elem], [cmd]]]
+
+
+@_PROPERTIES
 @given(op=st.sampled_from([";", "&", "&&", "||", "|"]))
 def test_pipe_chains_empty_for_operators_only(op: str) -> None:
     """Robustness: a token stream consisting only of control operators
@@ -1091,5 +1111,26 @@ def test_fold_array_literal_spans_leaves_a_fully_literal_element_unfolded(name: 
     restoring every existing rule's coverage with no rule needing to
     learn a new shape."""
     tokens = [f"{name}=", "(", inner, ")", "trailing"]
+    folded = checker._fold_array_literal_spans(tokens)
+    assert folded == tokens
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, first=_IDENTIFIERS, second=_IDENTIFIERS)
+def test_fold_array_literal_spans_leaves_a_literal_first_element_unfolded_even_with_a_later_dynamic_one(
+    name: str, first: str, second: str
+) -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, seventeenth round (issue #1326), ported from
+    the main hook's own seventeenth-round fix of the same finding:
+    folding on "any element is dynamic" (not just the FIRST) folded a
+    mixed array whole, hiding a fully literal, undisguised denied tool
+    sitting next to an unrelated trailing dynamic element -- `A=(gh pr
+    merge $(echo 1)); "${A[@]}"` was wrongly ALLOWED this way. A span
+    whose own first element is literal must stay unfolded regardless of
+    what a LATER element contains, so it lands as an ordinary segment
+    every existing rule already knows how to scan."""
+    dynamic_second = f"${second}"
+    tokens = [f"{name}=", "(", first, dynamic_second, ")", "trailing"]
     folded = checker._fold_array_literal_spans(tokens)
     assert folded == tokens

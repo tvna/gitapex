@@ -1004,73 +1004,97 @@ def _array_literal_token_span(tokens: list[str], i: int) -> int | None:
 
 def _fold_array_literal_spans(tokens: list[str]) -> list[str]:
     """Fold each `NAME=(...)` array-literal span (found via `_array_
-    literal_token_span`) whose own inner elements include at least one
-    DYNAMIC token into a single token -- the same "make the span's
-    boundary visible as one atomic unit before segmenting" strategy
-    `_fold_command_substitution_spans` already uses for `$(...)`, applied
-    here for the identical underlying reason: `NAME=(elem1 elem2)` is
-    indistinguishable, from the token stream alone, from an empty
-    assignment immediately followed by an UNRELATED subshell (`NAME=;
-    (cmd)`) -- shlex breaks a word at `(` regardless of whether real bash
-    source had a space there, discarding the one detail (adjacency)
-    bash's own grammar actually depends on. Left un-folded, `segment_
-    tokens` would put the array's own element list in its own segment,
-    separate from the `NAME=` token that actually explains it --
-    indistinguishable, to every `seg[0]`-anchored rule, from an attempted
-    command invocation.
+    literal_token_span`) whose own FIRST inner element is DYNAMIC into a
+    single token -- the same "make the span's boundary visible as one
+    atomic unit before segmenting" strategy `_fold_command_substitution_
+    spans` already uses for `$(...)`, applied here for the identical
+    underlying reason: `NAME=(elem1 elem2)` is indistinguishable, from
+    the token stream alone, from an empty assignment immediately followed
+    by an UNRELATED subshell (`NAME=; (cmd)`) -- shlex breaks a word at
+    `(` regardless of whether real bash source had a space there,
+    discarding the one detail (adjacency) bash's own grammar actually
+    depends on. Left un-folded, `segment_tokens` would put the array's
+    own element list in its own segment, separate from the `NAME=` token
+    that actually explains it -- and if that segment's own FIRST token
+    happens to be an unresolvable dynamic one, indistinguishable, to
+    every `seg[0]`-anchored fail-closed rule, from an attempted command
+    invocation with an obfuscated command word.
 
-    A FULLY LITERAL array-literal span (no dynamic element at all) is
-    deliberately left UNFOLDED -- passed through as its own original,
-    separate tokens (`NAME=`, `(`, each element, `)`), unchanged. Found
-    live by Step 8 independent review, sixteenth round (issue #1326): an
-    earlier version of this function folded EVERY array-literal span
-    unconditionally, joining a NON-empty value into one `NAME=`-prefixed
-    token that `_strip_leading_assignments` then discarded entirely as an
-    ordinary (inert) assignment -- correct for a genuinely inert scalar
-    RHS, but NOT for an array literal's own elements, which become real
-    argv the moment `"${NAME[@]}"` expands it later in the same command.
-    `declare -a A=(pip install foo); "${A[@]}"` and `A=(gh pr merge 1);
-    "${A[@]}"` were both wrongly ALLOWED this way -- `pip`, `install`,
-    `gh`, `pr`, and `merge` sit right there as fully literal, undisguised
+    Checked by the span's own FIRST element specifically -- not "any
+    element is dynamic" -- because that is the ONLY shape that actually
+    causes the problem this function exists to prevent: once left
+    unfolded, `segment_tokens` puts every element of one array literal
+    into ONE segment together, so ONLY that segment's own `seg[0]` (the
+    array's own first element) is ever inspected by a `seg[0]`-anchored
+    rule; every OTHER position in that same segment is already an
+    ordinary trailing argument, ­handled by the exact same rules
+    (B1a/B1b/B2, `_rule_a_literal`'s own adjacent-pair scan) that already
+    handle a literal command word followed by a dynamic argument
+    OUTSIDE an array literal (e.g. `uv $VERB foo`) -- no special-casing
+    needed there at all.
+
+    Found live by Step 8 independent review, seventeenth round (issue
+    #1326): an earlier version of this function folded whenever ANY
+    element was dynamic, not just the first -- `Y=1; A=(uv install $Y);
+    "${A[@]}"` and `A=(gh pr merge $(echo 1)); "${A[@]}"` were both
+    wrongly ALLOWED, since the single unrelated dynamic element ($Y, the
+    trailing `$(echo 1)`) folded the WHOLE span -- including the fully
+    literal, undisguised `uv`/`install`/`gh`/`pr`/`merge` tokens sitting
+    right next to it -- into one opaque, `_is_dynamic`-filtered blob,
+    hiding them from `_rule_a_literal`'s adjacent-pair scan entirely.
+    Confirmed live via a real bash proxy (stand-in `uv`/`gh` binaries on
+    PATH, capturing their own argv) that both genuinely invoke the
+    denied tool once `"${A[@]}"` expands. Checking only the first
+    element closes this precisely: `A=(uv install $Y)`'s own first
+    element ("uv") is literal, so the span stays unfolded, landing "uv"
+    and "install" as ordinary adjacent literal tokens B2 and
+    `_rule_a_literal` already scan correctly.
+
+    Found live by Step 8 independent review, sixteenth round (issue
+    #1326): an earlier version of this function folded EVERY
+    array-literal span unconditionally (dynamic or not), joining a
+    NON-empty value into one `NAME=`-prefixed token that `_strip_
+    leading_assignments` then discarded entirely as an ordinary (inert)
+    assignment -- correct for a genuinely inert scalar RHS, but NOT for
+    an array literal's own elements, which become real argv the moment
+    `"${NAME[@]}"` expands it later in the same command. `declare -a
+    A=(pip install foo); "${A[@]}"` and `A=(gh pr merge 1); "${A[@]}"`
+    were both wrongly ALLOWED this way -- fully literal, undisguised
     tokens, no indirection technique at all (unlike this module's own
     disclosed array-literal INDIRECTION limitation elsewhere in this
     file's docstring, where the tool/verb name is never a literal token
     anywhere), and pre-round-15 (before array-literal folding existed at
     all) the identical construction was correctly denied -- a genuine
-    regression, not the disclosed limitation. Leaving a literal span
-    unfolded restores that pre-round-15 behavior exactly: `segment_
-    tokens` splits it at the literal `(`/`)` tokens into its own segment
-    (`NAME=` stripped away by `_strip_leading_assignments` as the
-    ordinary empty-value assignment it genuinely is, the array's own
-    elements landing in a SEPARATE segment as ordinary, individually-
-    scannable literal tokens), so `_rule_a_literal`'s adjacent-pair scan,
-    `_rule_gh_any`, and every other existing whole-segment or `seg[0]`-
-    anchored rule sees this exactly as if the array wrapper had never
-    been there, with no rule needing to learn a new "array literal"
-    shape of its own.
+    regression, not the disclosed limitation. Leaving a span whose own
+    first element is literal unfolded restores that pre-round-15
+    behavior exactly: `segment_tokens` splits it at the literal `(`/`)`
+    tokens into its own segment (`NAME=` stripped away by `_strip_
+    leading_assignments` as the ordinary empty-value assignment it
+    genuinely is, the array's own elements landing in a SEPARATE segment
+    as ordinary, individually-scannable literal tokens), so `_rule_a_
+    literal`'s adjacent-pair scan, `_rule_gh_any`, and every other
+    existing whole-segment or `seg[0]`-anchored rule sees this exactly
+    as if the array wrapper had never been there, with no rule needing
+    to learn a new "array literal" shape of its own.
 
-    A DYNAMIC span still folds exactly as before -- `_is_dynamic`
-    correctly filters the resulting opaque token out of `_rule_a_
-    literal`'s literal-only scan, and B1a/B1b/B2 each independently fail
-    to resolve it to any watched tool or verb (confirmed live), so
-    round fifteen's own motivating false positive (`declare -a
-    arr=($(seq 1 5))`, `files=($(ls *.txt))`) stays fixed unchanged.
-    A MIXED span (some elements dynamic, some literal, e.g. `A=(uv
-    $(echo install))`) folds too, the same as an all-dynamic span --
-    the literal element's own text is preserved (space-joined) inside
-    the folded token for a reader, but is not separately scanned by
-    `_rule_a_literal` once fused into an overall-dynamic token; this
-    narrower residual (not itself demonstrated live) is the same class
-    of gap `_substitute_var_refs_candidates`'s own docstring already
-    discloses for a literal fragment fused with an unresolvable dynamic
-    one in the SAME token, not a new one introduced here.
+    A span whose own first element IS dynamic still folds exactly as
+    round fifteen designed -- `_is_dynamic` correctly filters the
+    resulting opaque token out of `_rule_a_literal`'s literal-only scan,
+    and B1a/B1b/B2 each independently fail to resolve it to any watched
+    tool or verb (confirmed live), so round fifteen's own motivating
+    false positive (`declare -a arr=($(seq 1 5))`, `files=($(ls
+    *.txt))`) stays fixed unchanged.
 
     The array's own inner elements are joined WITH spaces, the opener
     (`NAME=` plus `(`) and closer (`)`) joined with NO separator, when
     folded -- mirroring `_fold_command_substitution_spans`'s own
     established opener/inner/closer split, for the identical reason
     given there: a plain `"".join` of the whole span fuses adjacent
-    words together."""
+    words together. `inner` is always non-empty in the folded branch
+    (the `and`-short-circuited `inner and _is_dynamic(inner[0])` guard
+    above already requires it), so `middle`'s own construction needs no
+    "empty inner" fallback the way `_fold_command_substitution_spans`'s
+    own (unconditionally-folding) version of this same pattern does."""
     folded: list[str] = []
     i = 0
     n = len(tokens)
@@ -1078,10 +1102,10 @@ def _fold_array_literal_spans(tokens: list[str]) -> list[str]:
         end = _array_literal_token_span(tokens, i)
         if end is not None:
             inner = tokens[i + 2 : end - 1]
-            if any(_is_dynamic(t) for t in inner):
+            if inner and _is_dynamic(inner[0]):
                 prefix = tokens[i] + tokens[i + 1]
                 suffix = tokens[end - 1]
-                middle = (" " + " ".join(inner)) if inner else ""
+                middle = " " + " ".join(inner)
                 folded.append(prefix + middle + suffix)
             else:
                 folded.extend(tokens[i:end])
