@@ -1,7 +1,7 @@
 """Hypothesis property-based layer for
 ``skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py``'s
 ``LIFECYCLE_ISSUE_REF_RE``/``_valid_tracking_issue`` (issue #1347, closing
-this repository's own ``detection-logic-property-coverage`` gap for the
+issue #1178's own ``detection-logic-property-coverage`` gap for the
 regex's generalization from a ``tvna/gitapex``-only pattern to an
 any-owner/any-repo shape).
 

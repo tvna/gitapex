@@ -303,6 +303,37 @@ def test_lifecycle_tracking_issue_full_url_is_valid() -> None:
     assert _violations(_mutated(lifecycle=lifecycle)) == []
 
 
+def test_lifecycle_tracking_issue_non_origin_repo_url_is_valid() -> None:
+    # Issue #1347 widened trackingIssue.pattern from a tvna/gitapex-only
+    # match to any owner/repo (a vendoring fix -- this schema's own
+    # $id already travels with the skill directory to another repository,
+    # and trackingIssue must too). This is the schema-level counterpart to
+    # skills/evaluating-skill-quality/scripts/test_gitapex_check_skill_shape.py's
+    # test_lifecycle_tracking_issue_non_origin_repo_url_passes_well_formed
+    # -- the JSON Schema path this file exercises had no positive coverage
+    # of the widened shape at all before this test.
+    lifecycle = {
+        "experimental": {
+            "reason": "x",
+            "trackingIssue": "https://github.com/some-other-owner/some-other-repo/issues/1",
+        },
+    }
+    assert _violations(_mutated(lifecycle=lifecycle)) == []
+
+
+def test_lifecycle_tracking_issue_malformed_url_is_flagged() -> None:
+    # Defeat-test counterpart to the two tests above: the widened pattern
+    # must still reject a same-shape-but-wrong URL (a non-issues/pull path
+    # segment), not merely accept every https://github.com/... string.
+    lifecycle = {
+        "experimental": {
+            "reason": "x",
+            "trackingIssue": "https://github.com/tvna/gitapex/commits/999",
+        },
+    }
+    assert _violations(_mutated(lifecycle=lifecycle)) != []
+
+
 def test_lifecycle_date_wrong_shape_is_flagged() -> None:
     lifecycle = {"stable": {"since": "07/21/2026"}}
     assert _violations(_mutated(lifecycle=lifecycle)) != []

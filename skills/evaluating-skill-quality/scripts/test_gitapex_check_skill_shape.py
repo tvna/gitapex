@@ -3394,6 +3394,30 @@ def test_lifecycle_tracking_issue_generalized_pattern_still_rejects_malformed_ur
     assert css.main([str(d)]) == 1
 
 
+def test_lifecycle_issue_ref_pattern_matches_schema():
+    # Cross-file drift guard (this module's OWN established precedent:
+    # test_execution_requirement_packages_key_pattern_matches_schema below
+    # asserts the same thing for EXEC_REQ_PACKAGES_KEY_RE/
+    # executionRequirementsPackages.propertyNames.pattern) -- issue #1347
+    # hand-duplicated LIFECYCLE_ISSUE_REF_RE's generalized owner/repo shape
+    # into skill-metadata.schema.json's trackingIssue.pattern as a second,
+    # independently-enforced copy (this checker's own Python regex, and
+    # the JSON Schema gitapex_scan_skill_metadata_schema.py validates every
+    # committed metadata/gitapex.yaml against in CI). Nothing before this
+    # test compared the two literal pattern strings, so a future edit to
+    # either copy alone (a narrowing fix, a copy-paste typo) could silently
+    # desync which trackingIssue URLs each enforcement path accepts.
+    schema_path = _SCRIPT_PATH.parent.parent / "references" / "skill-metadata.schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    schema_pattern = schema["$defs"]["lifecycleExperimental"]["properties"]["trackingIssue"]["pattern"]
+    assert schema_pattern == css.LIFECYCLE_ISSUE_REF_RE.pattern, (
+        f"skill-metadata.schema.json's lifecycleExperimental.properties."
+        f"trackingIssue.pattern is {schema_pattern!r}, but "
+        f"LIFECYCLE_ISSUE_REF_RE is {css.LIFECYCLE_ISSUE_REF_RE.pattern!r} "
+        "-- the schema and the hand-rolled checker regex have drifted."
+    )
+
+
 def test_manifest_parser_parses_spec_references_list():
     text = (
         "apiVersion: gitapex.io/v1alpha1\n"
