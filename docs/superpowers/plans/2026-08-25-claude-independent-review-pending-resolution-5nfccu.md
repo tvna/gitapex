@@ -179,6 +179,26 @@ filing a separate issue.
 - This branch was 11 commits behind `origin/main` by the time Task 3
   finished; merged (not rebased, to avoid rewriting already-pushed PR
   history) rather than left to fail the `behind-base` gate.
+- **This skill's own mandatory Step 8 independent review** ran as a final
+  4-way parallel pass (correctness, regression/blast-radius, reuse/
+  simplification, convention-adherence) against Task 3's redesign in
+  full. Regression/blast-radius found nothing. The other three converged
+  on real issues: correctness and reuse/simplification both flagged
+  `heading_pattern()` (a public function added so the drift gate could
+  reuse it, but that reuse never materialized -- zero callers in shipped
+  code) -- removed entirely, `_HEADING_RE` reverted to an inlined
+  `re.compile()` call, which also dissolved a correctness bug in one of
+  its property tests (an unsound end-anchor assertion that only passed
+  because the fixed derandomized example set never generated a
+  whitespace-only failing case). Reuse/simplification separately flagged
+  avoidable workaround complexity in the line-wrap regression test (fixed
+  by targeting only the non-shared spec target). Convention-adherence
+  flagged a missing second `cross-registry-consistency` target entry
+  (this gate states two invariants in its `rule` field but registered
+  only one such entry, unlike 4 cited sibling gates) and a naming
+  inconsistency (`_MarkerSpec` was the only underscore-prefixed,
+  module-local dataclass among 15 comparable ones in `.github/scripts/`)
+  -- both fixed.
 
 ## Verification
 
@@ -211,11 +231,21 @@ filing a separate issue.
   before this branch's own changes, i.e. not introduced by this diff).
   `behind-base` PASS after merging `origin/main` (11 commits, no overlap
   with this branch's own changed files).
-- Mutation testing on `heading_pattern()`'s three new property tests
-  (case-insensitivity, end-anchor, indentation limit): each temporarily
-  broken (dropping `re.IGNORECASE`, relaxing `[ \t]*$` to `.*$`, widening
-  `[ ]{0,3}` to `[ \t]*`) and confirmed to fail the corresponding
-  property before the source was restored.
+- Final review round completion: `heading_pattern()` and 3 of its 4
+  property tests removed (see above); `uv run --frozen python3 -m pytest
+  tests/test_gitapex_gate_independent_review_pending.py
+  tests/test_gitapex_gate_independent_review_pending_properties.py
+  tests/test_gitapex_scan_independent_review_heading_drift.py -q`: 69
+  passed (72 minus the 3 removed). `uv run --frozen python3 -m pytest -q`
+  (full repository suite): 5752 passed, same one pre-existing sandbox
+  failure. `gitapex_gate_local_preflight.py`: 36/37 PASS, including
+  `detection-logic-property-coverage` (confirmed the reverted, inlined
+  `_HEADING_RE = re.compile(...)` call is the same pre-existing call
+  site the gate already treated as covered, not a new one).
+- Mutation testing on the retained `test_heading_re_is_case_insensitive`
+  property (dropping `re.IGNORECASE` from `_HEADING_RE`'s own compile
+  call) confirmed to fail the property before the source was restored
+  and diffed byte-identical to the pre-mutation backup.
 - Live defeat-check: a body carrying the new `## Independent review
   verdict` heading with a CLEAN verdict against a matching SHA -> PASS; a
   body carrying the OLD `## Step 8 independent review verdict` heading,
@@ -292,13 +322,26 @@ filing a separate issue.
   (11 commits, no file overlap) to clear `behind-base`; full repository
   suite green except the pre-existing, unrelated shallow-clone sandbox
   artifact.
+- `TaskStarted{step_8_independent_review}` -- this skill's own mandatory
+  Step 8: a final 4-way parallel review (correctness, regression/blast-
+  radius, reuse/simplification, convention-adherence) dispatched against
+  Task 3's redesign in full.
+- `TaskCompleted{step_8_independent_review}` -- regression/blast-radius
+  found nothing; the other three found and closed real issues (see Task
+  3's own final bullet above): `heading_pattern()` removed as unused
+  public surface (which also dissolved an unsound property-test
+  assertion the correctness pass found in it), the line-wrap regression
+  test simplified to a non-shared target, a missing second
+  `cross-registry-consistency` target entry added, and `_MarkerSpec`
+  renamed to `MarkerSpec` to match sibling naming. Each fix's own
+  mutation/regression claim re-verified live; full verification (ruff,
+  ruff format, mypy, pytest, local-preflight) clean.
 
 ## Next Move
 
-Step 8 (this skill's own mandatory refactor + adversarial-review gate)
-runs next against the accumulated diff, then the draft PR converts to
-ready-for-review and ownership passes to `drafting-a-pr-to-merge`. The
-`## Independent review verdict` section itself (naming PR #1348's exact
+This skill's own mandatory Step 8 independent review is complete (see
+the Execution log above) with no outstanding findings. The `##
+Independent review verdict` section itself (naming PR #1348's exact
 current head commit) gets recorded in the PR body only once that review
 completes clean -- not before, per the PR template's own `## Merge gate:
 independent review` note this same plan added in Task 1.
