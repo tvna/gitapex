@@ -762,16 +762,30 @@ OBFUSCATED_GIT_PUSH_WARN_PATH_COMMANDS = [
     # token as an unclaimed, never-consumed token instead, one position
     # short of `push`; (2) it only ever consumed a LITERAL value, never
     # an assigned, non-vanishing DYNAMIC one. Both confirmed live via a
-    # real bash proxy that `-c` genuinely consumes the resolved value as
-    # real argv, leaving `push` as the real subcommand.
+    # real `git` binary (2.43.0) that `-c user.name=x push origin main`
+    # genuinely reaches push dispatch (`error: src refspec main does not
+    # match any` against an empty scratch repo -- a real ref-lookup
+    # failure, not a config-parse error) -- unlike a non-dotted
+    # placeholder value, which real git rejects before ever reaching a
+    # subcommand at all.
     (
-        "git -c $NEVERSET name=value push origin main",
+        "git -c $NEVERSET user.name=x push origin main",
         "git-push-c-flag-value-past-leading-decoy-still-warn-path",
     ),
     (
         "CFG=user.name=x; git -c $CFG push origin main",
         "git-push-c-flag-assigned-dynamic-value-still-warn-path",
     ),
+    # Found live by Step 8 independent review, twenty-fourth round (issue
+    # #1326): a variable assigned the EMPTY STRING (not merely unset)
+    # word-splits away IDENTICALLY to a genuinely-unset one at real bash
+    # runtime -- `_token_is_all_unassigned_refs` used to only ask "is
+    # NAME a key in NAME_TO_VALUE at all," never "does NAME's own
+    # assigned value actually survive word-splitting," so this decoy was
+    # wrongly treated as NOT vanishing. Confirmed live via real bash
+    # that `git -v $CFG push origin main` (CFG assigned "") real-expands
+    # to `git -v push origin main`.
+    ("CFG=; git -v $CFG push origin main", "git-push-empty-assigned-variable-still-warn-path"),
 ]
 
 

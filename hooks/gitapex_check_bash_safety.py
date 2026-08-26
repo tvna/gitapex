@@ -1232,10 +1232,57 @@ def _token_is_all_unassigned_refs(token: str, name_to_value: dict[str, str]) -> 
     value-position read, where the fail-closed direction is to STOP at
     the token and treat it as the value. The ambiguity check instead
     lives in `_value_position_after`'s own narrower skip-loop below,
-    scoped to exactly the two callers that need it."""
+    scoped to exactly the two callers that need it.
+
+    Found live by Step 8 independent review, twenty-fourth round (issue
+    #1326): a BARE-referenced NAME assigned to the EMPTY STRING (`CFG=;
+    git -c $CFG push origin main`) was wrongly treated as NOT vanishing
+    -- this check only ever asked "is NAME a key in NAME_TO_VALUE at
+    all," never "does NAME's own assigned value actually survive word-
+    splitting." Confirmed live via real bash (`set -x`) that an
+    unquoted reference to a variable assigned the empty string
+    word-splits away IDENTICALLY to a genuinely-unset one -- `CFG=; git
+    -v $CFG push origin main` real-expands to `git -v push origin
+    main`, the same as `git -v push origin main` directly. This was a
+    live, exploitable gap in EVERY caller listed above, not merely the
+    twenty-third round's own `-c` fix: found there first only because
+    that round's new "consume any non-vanishing dynamic token" logic
+    made the gap directly observable as a wrong verdict (a real,
+    non-push command wrongly flagged as a push once `-c` swallowed the
+    empty-then-vanished value's own SUCCESSOR token instead).
+
+    Deliberately scoped to the BARE form only, NOT the braced form
+    (`${NAME}`/`${NAME[0]}`) -- `_ONE_REF_SRC`'s own "braced" group
+    cannot distinguish a plain `${NAME}` from a subscripted
+    `${NAME[0]}` (the subscript is optional within the SAME group), and
+    `_assigned_literals` records EVERY array declaration's own NAME as
+    mapped to the empty string regardless of the array's real element
+    contents (an `A=(` token's own RHS, split from the array's opening
+    paren by punctuation tokenization, is always literally empty).
+    Applying this same empty-value-counts-as-vanishing logic to the
+    braced form was tried and REVERTED after it silently "fixed"
+    (changed the behavior of) `_rule_array_literal_content`'s own
+    disclosed, deliberately-left-open residual (see that function's own
+    docstring): `NEVERSET=("" b c); A=(${NEVERSET[0]} gh pr merge 1)`
+    happens to have a genuinely-empty first element, so the broader
+    check accidentally "worked" there, but the SAME broader check would
+    also wrongly treat `${NEVERSET[0]}` as vanishing when NEVERSET's
+    real first element is NON-empty (`NEVERSET=(real b c)`) -- this
+    module has no per-index array-element tracking to tell the two
+    cases apart, so leaving the braced/subscript form on the ORIGINAL,
+    narrower check (unchanged from before this round) is the correct,
+    conservative choice; only the unambiguous bare-scalar case is
+    closed here."""
     if not _REF_RUN_TOKEN_RE.match(token):
         return False
-    return all((m.group("bare") or m.group("braced")) not in name_to_value for m in _REF_RUN_NAME_RE.finditer(token))
+    for match in _REF_RUN_NAME_RE.finditer(token):
+        bare_name = match.group("bare")
+        if bare_name is not None:
+            if name_to_value.get(bare_name, ""):
+                return False
+        elif match.group("braced") in name_to_value:
+            return False
+    return True
 
 
 def _strip_leading_unassigned_bare_refs(tokens: list[str], name_to_value: dict[str, str]) -> list[str]:
@@ -2015,16 +2062,23 @@ def _is_git_push_segment(seg: list[str], name_to_value: dict[str, str]) -> bool:
     token immediately after the flag directly (`next_tok = literals[j]`)
     to decide whether to consume it as the flag's own value, with no
     decoy-skip of its own. A decoy interposed there (`git -c $NEVERSET
-    name=value push origin main`, NEVERSET never assigned) made this
+    user.name=x push origin main`, NEVERSET never assigned) made this
     block see the decoy (dynamic, so `next_tok is None`) and correctly
     decline to consume it -- but the OUTER loop's own general decoy-skip
     then consumed the decoy on its own next iteration, landing on
-    `name=value` as an ordinary, never-claimed token that does not start
-    with `-`, so the outer loop `break`s there instead of recognizing it
-    as `-c`'s own already-intended value and continuing to `push` one
-    position further. Confirmed live via a real bash proxy (stand-in
-    `git` binary on PATH) that this genuinely runs `git push origin
-    main` once the decoy word-splits away. Closed by having this block
+    `user.name=x` as an ordinary, never-claimed token that does not
+    start with `-`, so the outer loop `break`s there instead of
+    recognizing it as `-c`'s own already-intended value and continuing
+    to `push` one position further. Confirmed live via a real `git`
+    binary (2.43.0) that `-c user.name=x push origin main` genuinely
+    reaches push dispatch (`error: src refspec main does not match
+    any` -- the real ref-lookup failure of an empty scratch repo, not a
+    config-parse error) -- unlike the placeholder value `name=value`
+    used during this fix's own development, which real git rejects
+    before ever reaching a subcommand at all (`error: key does not
+    contain a section: name`), a distinction found live by Step 8
+    independent review, twenty-fourth round (issue #1326) and corrected
+    here and in this fix's own tests. Closed by having this block
     look PAST a leading decoy run too before deciding whether the flag
     has a real value to consume, mirroring the outer loop's own skip
     shape at the position-decision level rather than the token-adjacency
@@ -2109,10 +2163,8 @@ def _is_git_push_segment(seg: list[str], name_to_value: dict[str, str]) -> bool:
                     if value_candidate is not None or not _token_is_all_unassigned_refs(seg[value_j], name_to_value):
                         break
                     value_j += 1
-                if value_j < len(literals):
-                    value_candidate = literals[value_j]
-                    if value_candidate is None or not value_candidate.startswith("-"):
-                        j = value_j + 1
+                if value_j < len(literals) and (value_candidate is None or not value_candidate.startswith("-")):
+                    j = value_j + 1
         if j < len(literals) and literals[j] == "push":
             return True
     return any("git push" in lit for lit in (t.lower() for t in seg if not _is_dynamic(t)))

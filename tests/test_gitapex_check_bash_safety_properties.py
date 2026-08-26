@@ -2083,11 +2083,12 @@ def test_is_git_push_segment_true_for_a_dash_c_value_past_a_vanishing_decoy() ->
     `_GIT_LONG_VALUE_FLAGS` value-consumption block never looked past a
     leading decoy to find `-c`'s own real value, so the outer loop's own
     general decoy-skip consumed the decoy first and landed on the real
-    value token (`name=value`) as an ordinary, never-claimed token, one
-    position short of `push` -- confirmed live via a real bash proxy
-    that `-c` genuinely consumes `name=value` as its own value, leaving
-    `push` as the real subcommand once the decoy word-splits away."""
-    seg = ["git", "-c", "$NEVERSET", "name=value", "push", "origin", "main"]
+    value token (`user.name=x`) as an ordinary, never-claimed token, one
+    position short of `push` -- confirmed live via a real `git` binary
+    (2.43.0) that `-c user.name=x push origin main` genuinely reaches
+    push dispatch, leaving `push` as the real subcommand once the decoy
+    word-splits away."""
+    seg = ["git", "-c", "$NEVERSET", "user.name=x", "push", "origin", "main"]
     assert checker._is_git_push_segment(seg, {}) is True
 
 
@@ -2127,6 +2128,51 @@ def test_is_git_push_segment_false_when_only_decoys_follow_dash_c_to_segment_end
     "push" here regardless."""
     seg = ["git", "-c", "$NEVERSET1", "$NEVERSET2"]
     assert checker._is_git_push_segment(seg, {}) is False
+
+
+def test_token_is_all_unassigned_refs_true_for_a_bare_ref_assigned_the_empty_string() -> None:
+    """Regression pin for the real bypass found live by Step 8
+    independent review, twenty-fourth round (issue #1326): a BARE
+    reference to a NAME assigned the EMPTY STRING word-splits away
+    IDENTICALLY to a genuinely-unset one at real bash runtime -- this
+    check used to only ask "is NAME a key in NAME_TO_VALUE at all,"
+    never "does NAME's own assigned value actually survive word-
+    splitting," wrongly treating an assigned-but-empty value as NOT
+    vanishing."""
+    assert checker._token_is_all_unassigned_refs("$CFG", {"CFG": ""}) is True
+
+
+def test_token_is_all_unassigned_refs_false_for_a_braced_subscript_ref_to_an_empty_mapped_name() -> None:
+    """No regression: the empty-string fix is deliberately scoped to the
+    BARE form only. A braced/subscript reference (`${NAME[0]}`) to a
+    name mapped to the empty string in NAME_TO_VALUE stays on the
+    ORIGINAL, narrower check -- `_assigned_literals` maps EVERY array
+    declaration's own NAME to the empty string regardless of the
+    array's real element contents, so generalizing the empty-string
+    check to this form would wrongly treat `${NEVERSET[0]}` as
+    vanishing even when NEVERSET's real first element is non-empty,
+    which this module has no per-index tracking to rule out."""
+    assert checker._token_is_all_unassigned_refs("${NEVERSET[0]}", {"NEVERSET": ""}) is False
+
+
+def test_is_git_push_segment_true_for_an_empty_assigned_variable_in_boolean_flag_position() -> None:
+    """Regression pin for the real bypass found live by Step 8
+    independent review, twenty-fourth round (issue #1326): a boolean
+    flag (`-v`, no value) followed by a variable assigned the EMPTY
+    STRING -- the reference word-splits away identically to an unset
+    one, so `push` is the real next token, confirmed live via real bash
+    that `git -v $CFG push origin main` (CFG assigned "") real-expands
+    to `git -v push origin main`."""
+    assert checker._is_git_push_segment(["git", "-v", "$CFG", "push", "origin", "main"], {"CFG": ""}) is True
+
+
+def test_classify_flags_git_push_via_empty_assigned_variable_end_to_end() -> None:
+    """End-to-end companion to `test_is_git_push_segment_true_for_an_
+    empty_assigned_variable_in_boolean_flag_position` above, reached
+    through `classify()`."""
+    verdict = checker.classify("CFG=; git -v $CFG push origin main")
+    assert verdict.deny is False
+    assert verdict.is_git_push is True
 
 
 def test_resolve_seg_tokens_candidates_overflow_returns_none() -> None:
@@ -2244,7 +2290,7 @@ def test_classify_flags_git_push_past_a_dash_c_value_decoy_end_to_end() -> None:
     """End-to-end companion to `test_is_git_push_segment_true_for_a_
     dash_c_value_past_a_vanishing_decoy` above, reached through
     `classify()`."""
-    verdict = checker.classify("git -c $NEVERSET name=value push origin main")
+    verdict = checker.classify("git -c $NEVERSET user.name=x push origin main")
     assert verdict.deny is False
     assert verdict.is_git_push is True
 

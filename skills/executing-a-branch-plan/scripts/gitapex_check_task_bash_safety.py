@@ -1183,10 +1183,46 @@ def _token_is_all_unassigned_refs(token: str, name_to_value: dict[str, str]) -> 
     the value. Porting a fix across the two files' otherwise-identical
     helper name without checking that its callers want the SAME
     fail-closed direction is exactly the mistake this paragraph
-    documents so a future round does not repeat it."""
+    documents so a future round does not repeat it.
+
+    Found live by Step 8 independent review, twenty-fourth round (issue
+    #1326), ported from the main hook's own identical fix: a BARE-
+    referenced NAME assigned to the EMPTY STRING (`CFG=; git -c $CFG
+    push origin main`) was wrongly treated as NOT vanishing -- this
+    check only ever asked "is NAME a key in NAME_TO_VALUE at all," never
+    "does NAME's own assigned value actually survive word-splitting."
+    Confirmed live via real bash that an unquoted reference to a
+    variable assigned the empty string word-splits away IDENTICALLY to
+    a genuinely-unset one -- a HARD DENY bypass in this file
+    specifically (a real, non-push command wrongly hard-denied as a
+    push once `-c` swallowed the empty-then-vanished value's own
+    SUCCESSOR token instead).
+
+    Deliberately scoped to the BARE form only, NOT the braced form
+    (`${NAME}`/`${NAME[0]}`) -- ported from the main hook's own
+    identical scoping decision: `_ONE_REF_SRC`'s own "braced" group
+    cannot distinguish a plain `${NAME}` from a subscripted
+    `${NAME[0]}`, and `_assigned_literals` records EVERY array
+    declaration's own NAME as mapped to the empty string regardless of
+    the array's real element contents. Applying this same empty-value
+    logic to the braced form was tried and REVERTED after it silently
+    changed the behavior of this module's own disclosed, deliberately-
+    left-open `KNOWN_BYPASS_COMMANDS` residual (`array-literal-
+    subscript-of-a-real-array-whose-own-element-is-empty`) -- this
+    module has no per-index array-element tracking to soundly
+    generalize that case, so the braced/subscript form stays on the
+    ORIGINAL, narrower check; only the unambiguous bare-scalar case is
+    closed here."""
     if not _REF_RUN_TOKEN_RE.match(token):
         return False
-    return all((m.group("bare") or m.group("braced")) not in name_to_value for m in _REF_RUN_NAME_RE.finditer(token))
+    for match in _REF_RUN_NAME_RE.finditer(token):
+        bare_name = match.group("bare")
+        if bare_name is not None:
+            if name_to_value.get(bare_name, ""):
+                return False
+        elif match.group("braced") in name_to_value:
+            return False
+    return True
 
 
 def _strip_leading_unassigned_bare_refs(tokens: list[str], name_to_value: dict[str, str]) -> list[str]:
@@ -2057,16 +2093,23 @@ def _is_git_push_segment(seg: list[str], name_to_value: dict[str, str]) -> bool:
     had the identical gap in miniature -- it read the token immediately
     after the flag directly to decide whether to consume it as the
     flag's own value, with no decoy-skip of its own. A decoy interposed
-    there (`git -c $NEVERSET name=value push origin main`, NEVERSET
+    there (`git -c $NEVERSET user.name=x push origin main`, NEVERSET
     never assigned) made this block see the decoy (dynamic) and decline
     to consume it -- but the OUTER loop's own general decoy-skip then
-    consumed the decoy on its next iteration, landing on `name=value` as
-    an ordinary, never-claimed token that does not start with `-`, so the
-    outer loop `break`s there instead of recognizing it as `-c`'s own
-    already-intended value and continuing to `push` one position
-    further -- a HARD DENY bypass for this task-agent rule, confirmed
-    live via a real bash proxy that this genuinely runs `git push origin
-    main` once the decoy word-splits away.
+    consumed the decoy on its next iteration, landing on `user.name=x`
+    as an ordinary, never-claimed token that does not start with `-`,
+    so the outer loop `break`s there instead of recognizing it as
+    `-c`'s own already-intended value and continuing to `push` one
+    position further -- a HARD DENY bypass for this task-agent rule,
+    confirmed live via a real `git` binary (2.43.0) that `-c
+    user.name=x push origin main` genuinely reaches push dispatch
+    (`error: src refspec main does not match any` -- the real
+    ref-lookup failure of an empty scratch repo, not a config-parse
+    error) -- unlike the placeholder value `name=value` used during
+    this fix's own development, which real git rejects before ever
+    reaching a subcommand at all, a distinction found live by Step 8
+    independent review, twenty-fourth round (issue #1326) and corrected
+    here and in this fix's own tests.
 
     A second, distinct gap in the SAME block, found in the same twenty-
     third-round pass and ported from the main hook's own identical fix:
@@ -2130,10 +2173,8 @@ def _is_git_push_segment(seg: list[str], name_to_value: dict[str, str]) -> bool:
                     if value_candidate is not None or not _token_is_all_unassigned_refs(seg[value_j], name_to_value):
                         break
                     value_j += 1
-                if value_j < len(literals):
-                    value_candidate = literals[value_j]
-                    if value_candidate is None or not value_candidate.startswith("-"):
-                        j = value_j + 1
+                if value_j < len(literals) and (value_candidate is None or not value_candidate.startswith("-")):
+                    j = value_j + 1
         if j < len(literals) and literals[j] == "push":
             return True
     return any("git push" in lit for lit in (t.lower() for t in seg if not _is_dynamic(t)))
