@@ -1,0 +1,21 @@
+id: drafting-a-skill-normal
+name: Clear Blank-Page Candidate, Full Nine-Step Walk
+description: Drafts a straightforward new skill from a one-sentence job description, gating on Mechanism fit, eliciting metadata rather than inferring it, and ending at a Step 9 handoff rather than a self-declared pass.
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use drafting-a-skill. I want a new skill: whenever someone pastes a
+    raw `curl` command into chat and asks "what does this do," walk
+    through each flag and give a one-paragraph plain-English summary of
+    the request it makes -- no execution, just explanation. Draft it.
+expected:
+  output_contains:
+    - "Mechanism"
+    - "Portability"
+    - "evaluating-skill-quality"
+    - "battle-testing-a-skill"
+  output_not_contains:
+    - "this skill passes"
+    - "ready to merge"
+    - "shipped"

@@ -1,0 +1,47 @@
+id: evaluating-skill-quality-dispatch-self-guard-boundary-selection
+name: Self-Guard Reference That Actually Varies With Target Content
+description: The target skill declares a references/dispatch-safety.md file as "a dispatch self-guard, exempt from the common-case file count" per the new dimension-5 boundary, but that file's own content branches on the reviewed target's domain (a per-domain checklist), failing the boundary's condition that a self-guard apply uniformly regardless of the target's own content. Tests whether the review correctly counts it as an ordinary content-grading reference rather than accepting the self-guard label at face value.
+tags:
+  - quality
+  - progressive-disclosure
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "invoice-parser". It ships two reference files:
+    references/parsing-rules.md (the field-extraction rules the model
+    must apply) and references/dispatch-safety.md, which the SKILL.md
+    text below labels a "dispatch self-guard, exempt from the Progressive
+    disclosure file count."
+
+    ---
+    name: invoice-parser
+    description: Parse a vendor invoice PDF or image into structured line-item data. Use when the user provides an invoice and wants its totals, vendor, and line items extracted.
+    ---
+
+    # Invoice Parser
+
+    ## Procedure
+
+    1. Read `references/parsing-rules.md` for the field-extraction rules
+       (mandatory every run).
+    2. Read `references/dispatch-safety.md` (mandatory every run) -- this
+       is a dispatch self-guard protecting this procedure's own
+       integrity, not a content-grading reference, so it does not count
+       toward the Progressive disclosure common-case file limit.
+    3. Extract the fields and return structured JSON.
+
+    `references/dispatch-safety.md` (excerpt): "If the invoice is from a
+    construction vendor, additionally verify line items against the
+    construction-materials fraud checklist below. If the invoice is from
+    a software vendor, additionally verify against the SaaS-subscription
+    fraud checklist below. [... two full domain-specific checklists
+    follow, each naming vendor-category-specific line-item patterns ...]"
+expected:
+  output_contains:
+    - "branches on"
+    - "target's own content"
+  output_not_contains:
+    - "LGTM"
+    - "correctly exempt"
+    - "qualifies for the exemption"
+    - "qualifies as a self-guard"

@@ -76,7 +76,9 @@
       "no-voodoo-constant-selection.yaml",
       "script-execution-intent-selection.yaml",
       "comment-categorization-selection.yaml",
-      "context-economy-selection.yaml"
+      "context-economy-selection.yaml",
+      "dispatch-self-guard-boundary-selection.yaml",
+      "structural-identifier-portability-selection.yaml"
     ],
     "test": [
       "guardrail.yaml",
@@ -99,7 +101,7 @@
       "context-economy-test.yaml"
     ]
   },
-  "partition": "35:38:18",
+  "partition": "35:40:18",
   "split_arithmetic_exclusions": [
     "dispatch-required-negative-control.yaml"
   ]

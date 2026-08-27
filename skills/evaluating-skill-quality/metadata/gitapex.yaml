@@ -532,6 +532,28 @@ spec:
         verdict: fixed
         before: 0.777778
         after: 1.0
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1346"
+      summary: "Closed dimension 5's residual NOT-MATURE finding (three mandatory files) by adding an explicit rubric.md boundary distinguishing a content-grading reference from a content-independent dispatch self-guard, gated on a narrow two-part qualifying condition rather than by splitting adversarial-self-audit.md (an earlier split plan was found, on adversarial review, likely to make the count worse and reintroduce a co-location violation)."
+      outcome:
+        verdict: fixed
+        before: 0.666667
+        after: 1.0
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1347"
+      summary: "Closed dimension 6's residual NOT-MATURE finding by fixing the actual defect location: skill-metadata.schema.json's $id/trackingIssue.pattern and gitapex_check_skill_shape.py's independently-hardcoded LIFECYCLE_ISSUE_REF_RE all hardcoded this repository's own origin URL (a real portability bug, not just a citation-style issue). Made all three repo-independent and added a rubric.md bullet distinguishing narrative citation from a schema/script's own structural identifier."
+      outcome:
+        verdict: fixed
+        before: 0.8
+        after: 1.0
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/1346"
+      summary: "Fresh isolated self-review post-edit confirmed dimension 5 genuinely resolved (checked against the new rubric's own two conditions). A follow-up dispatch confirmed the schema/checker repo-independence fix is complete. The aggregate dimension-6 Fail instead cites a different, previously-undiscovered gap (state-management axes 3/9). Also surfaced a new dimension-7 gap (undeclared PyYAML import), left as follow-up."
+      outcome:
+        verdict: WELL-FORMED-NOT-MATURE
+        found: 2
+        fixed: 2
+        new_gaps_found: 2
   skillDependencies:
     requires: []
     relatedTo:

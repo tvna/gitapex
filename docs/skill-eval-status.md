@@ -46,7 +46,7 @@ The harness to *measure* the repo's cross-model consistency concept now
 exists; the measurement itself does not yet, for the repository's suites
 in aggregate. Concretely, as of issue #106:
 
-- 23 of 26 `evals/*/eval.yaml` declare
+- 24 of 27 `evals/*/eval.yaml` declare
   `trials_per_task: 3`, so each of those tasks is sampled 3 times per run
   rather than once. (waza's docs describe bootstrap confidence
   intervals at trials > 1; that behavior is not verified here, since this
@@ -144,14 +144,15 @@ suites still assert on final text only).
 | --- | --- | --- | --- | --- | --- |
 | `auditing-agent-product-scope` | 3 | 9 | none | no | [evals/auditing-agent-product-scope/eval-status.md](../evals/auditing-agent-product-scope/eval-status.md) |
 | `battle-testing-a-skill` | 3 | 24 | `claude-sonnet-5` | yes | [evals/battle-testing-a-skill/eval-status.md](../evals/battle-testing-a-skill/eval-status.md) |
-| `drafting-a-pr-to-merge` | 3 | 24 | none | no | [evals/drafting-a-pr-to-merge/eval-status.md](../evals/drafting-a-pr-to-merge/eval-status.md) |
+| `drafting-a-pr-to-merge` | 3 | 26 | none | no | [evals/drafting-a-pr-to-merge/eval-status.md](../evals/drafting-a-pr-to-merge/eval-status.md) |
+| `drafting-a-skill` | 3 | 7 | none | no | [evals/drafting-a-skill/eval-status.md](../evals/drafting-a-skill/eval-status.md) |
 | `drafting-an-adr` | 3 | 18 | none | no | [evals/drafting-an-adr/eval-status.md](../evals/drafting-an-adr/eval-status.md) |
 | `drafting-issues` | 3 | 18 | none | no | [evals/drafting-issues/eval-status.md](../evals/drafting-issues/eval-status.md) |
 | `eliciting-a-design` | 3 | 7 | none | no | [evals/eliciting-a-design/eval-status.md](../evals/eliciting-a-design/eval-status.md) |
 | `establishing-ubiquitous-language` | 3 | 6 | none | no | [evals/establishing-ubiquitous-language/eval-status.md](../evals/establishing-ubiquitous-language/eval-status.md) |
 | `evaluating-context-channel-maturity` | 3 | 13 | none | no | [evals/evaluating-context-channel-maturity/eval-status.md](../evals/evaluating-context-channel-maturity/eval-status.md) |
 | `evaluating-deterministic-gate-quality` | 3 | 40 | none | no | [evals/evaluating-deterministic-gate-quality/eval-status.md](../evals/evaluating-deterministic-gate-quality/eval-status.md) |
-| `evaluating-skill-quality` | 3 | 92 | `claude-haiku-4-5-20251001`, `claude-opus-5`, `claude-sonnet-5` | yes | [evals/evaluating-skill-quality/eval-status.md](../evals/evaluating-skill-quality/eval-status.md) |
+| `evaluating-skill-quality` | 3 | 94 | `claude-haiku-4-5-20251001`, `claude-opus-5`, `claude-sonnet-5` | yes | [evals/evaluating-skill-quality/eval-status.md](../evals/evaluating-skill-quality/eval-status.md) |
 | `executing-a-branch-plan` | 3 | 9 | none | no | [evals/executing-a-branch-plan/eval-status.md](../evals/executing-a-branch-plan/eval-status.md) |
 | `explaining-the-work` | 3 | 14 | none | no | [evals/explaining-the-work/eval-status.md](../evals/explaining-the-work/eval-status.md) |
 | `grounding-in-primary-sources` | 3 | 23 | none | no | [evals/grounding-in-primary-sources/eval-status.md](../evals/grounding-in-primary-sources/eval-status.md) |

@@ -197,6 +197,11 @@ propose a branch. No PR follows this outcome.
   Step 1 ever runs -- this skill starts from an existing issue, drafting
   or independently re-checking that skill's own ACM draft rather than
   authoring the issue itself.
+- **vs. `drafting-a-skill`:** whenever this skill's own Acceptance
+  Criteria Map's planned ops include a new `SKILL.md`, `drafting-a-skill`
+  is the authoring method for that row -- name it in the Branch Plan
+  rather than treating "write the skill" as an undifferentiated
+  implementation task.
 
 ## Notes
 

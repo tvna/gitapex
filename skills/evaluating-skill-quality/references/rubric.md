@@ -819,6 +819,30 @@ skill's own directory, at
 cited from a path outside it, so the specification travels with this
 skill wherever it is copied.
 
+**A dependency file's own structural fields are a distinct, stricter
+case than either of the above.** The Portable/Repository-scoped/Mixed
+distinction and the bare-citation rule below both concern text a reader
+or an auto-linker interprets -- prose, a Markdown link, a hash-number
+token. A bundled schema or script can also embed a **structural
+identifier**: a value the file itself functionally consumes to validate
+or identify data (a JSON Schema `$id`, a `pattern` a validator matches
+against, an equivalent script-side regex constant). Hardcoding this
+repository's own name into such a value is a stricter defect than a
+narrative citation, because it does not merely mislink once read out of
+context -- it makes the file functionally wrong the moment it travels: a
+validation pattern anchored to `owner/repo` equal to this repository's
+own name rejects an otherwise-correct value from whatever repository the
+skill is vendored into, and a schema `$id` naming this repository's own
+file path asserts a false provenance for the copy. **Fail:** a
+`trackingIssue` pattern (or its script-side mirror) anchored to
+`github\.com/tvna/gitapex/...` literally, or a schema `$id` naming this
+repository's own path. **Pass:** a pattern matching any `owner/repo`
+shape, and a schema `$id` using a repository-independent identifier (a
+synthetic domain such as `gitapex.io/schemas/...`, the convention this
+skill's own `skill-metadata.schema.json` and `output-schema.json` use).
+Orthogonal to the bare-citation rule immediately below: a structural
+field can fail this bullet while containing no issue/PR citation at all.
+
 **Bare issue/PR-number citations are barred at every level, not just
 Portable.** A bare GitHub issue/PR-number citation (`#149` or
 `owner/repo#149`) in a skill's `SKILL.md` or `references/*.md` body text is
@@ -1615,13 +1639,41 @@ presence by shape.
 - Detail needed only sometimes belongs in `references/`; detail the model
   reads on every single use belongs inlined in `SKILL.md`. Both directions
   are failures.
+- **A common-case-mandatory dispatch self-guard is a distinct case from a
+  content-grading reference, but only under a narrow, stated condition.**
+  Most references a procedure mandates every time exist to grade or act on
+  the reviewed target's own content (a rubric, a checklist). A reference
+  can instead exist to protect the *dispatch procedure's own integrity* --
+  independent of what the target under review says at all (an
+  injection-resistance guard, an isolation-verification check). Counting
+  such a self-guard identically to a content-grading reference is not
+  automatically correct, but neither is exempting it from the count on the
+  bare claim that it is "a safety file": that would let any bundled
+  reference dodge this dimension merely by relabeling itself. The
+  exemption applies only when the referenced content, in its entirety,
+  both (1) applies uniformly regardless of the reviewed target's own
+  content -- it does not vary with, quote, or branch on what the target
+  says -- and (2) is isolated in its own dedicated file, not interleaved
+  with content-grading material. A file meeting both conditions is noted
+  as a distinct kind of mandatory read in this dimension's verdict, rather
+  than counted the same way as a content-grading reference toward the
+  "how many files does the common case need" judgment; a file meeting only
+  one, or neither, is counted exactly like any other reference.
 
 - **Fail:** a reference named `doc2.md` with no branch-point pointer in
   `SKILL.md`, or content the model reads on every single use pushed out to
-  a reference that must be opened just to complete the ordinary path.
+  a reference that must be opened just to complete the ordinary path; a
+  reference claimed as a self-guard exemption that actually varies its
+  content by, or quotes from, the reviewed target (failing condition 1
+  above), or that mixes self-guard material with content-grading material
+  in the same file (failing condition 2).
 - **Pass:** `SKILL.md` links to each reference exactly where it becomes
   necessary, stating what context requires the read and what the reader
-  will obtain; the common case resolves from `SKILL.md` alone.
+  will obtain; the common case resolves from `SKILL.md` alone; where a
+  content-independent, dedicated-file dispatch self-guard is also
+  mandatory every run, the verdict names it as that distinct kind of
+  read rather than silently inflating (or silently excusing) the
+  common-case file count.
 
 ## 6. Durability
 

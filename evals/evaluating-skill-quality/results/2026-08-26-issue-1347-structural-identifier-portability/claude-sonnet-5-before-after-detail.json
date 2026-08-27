@@ -1,0 +1,24 @@
+{
+  "model_id": "claude-sonnet-5",
+  "n_runs": 2,
+  "scores": [
+    {
+      "iteration": "structural-identifier-portability-selection",
+      "fixture_id": "evaluating-skill-quality-structural-identifier-portability-selection",
+      "split": "selection",
+      "condition": "before",
+      "commit": "7d4e6d293cf6ac022e4c274605982396de739e7f",
+      "score": 0.8,
+      "artifact": "artifacts/structural-identifier-portability-selection-before.md"
+    },
+    {
+      "iteration": "structural-identifier-portability-selection",
+      "fixture_id": "evaluating-skill-quality-structural-identifier-portability-selection",
+      "split": "selection",
+      "condition": "after",
+      "commit": "a41edbd0d3c4321a83ddda21060990d0637cbcf1",
+      "score": 1.0,
+      "artifact": "artifacts/structural-identifier-portability-selection-after.md"
+    }
+  ]
+}
