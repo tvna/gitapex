@@ -53,7 +53,7 @@ in aggregate. Concretely, as of issue #106:
   environment cannot run waza.)
 - `evals/scripts/gitapex_set_config_model.py` rewrites a suite's `config.model` for a
   given tier (waza 0.38.0 has no `--model` flag), and
-  `.github/workflows/eval-matrix.yml` fans that over a model list on
+  `.github/workflows/skill-eval-matrix.yml` fans that over a model list on
   manual `workflow_dispatch`. It is advisory, never a merge gate.
 - No result files are committed by that workflow, and the change that added
   this scaffolding ran in an environment that could not execute waza (no

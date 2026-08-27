@@ -1,6 +1,6 @@
 # Issue #582: execute each touched skill's committed evals/<skill>/ suite as
 # a real (not merely advisory) gate on pull_request, without disturbing
-# eval-matrix.yml -- that workflow is issue #124's cross-model matrix
+# skill-eval-matrix.yml -- that workflow is issue #124's cross-model matrix
 # scope (workflow_dispatch-only, model-override, advisory) and is
 # deliberately left unmodified here.
 #
@@ -18,7 +18,7 @@
 # green. Running unconditionally and reporting `has-changes=false` (no-op,
 # not skipped) is the required-check-safe way to stay decoupled from that
 # failure mode from day one.
-name: Eval gate
+name: Skill eval gate
 
 on:
   pull_request: {}
@@ -139,7 +139,7 @@ jobs:
           else
             # workflow_dispatch: no PR base/head SHA exists to diff against.
             # Enumerate every committed suite by its eval.yaml (the same
-            # enumeration eval-matrix.yml already uses, which excludes
+            # enumeration skill-eval-matrix.yml already uses, which excludes
             # non-suite directories such as evals/scripts/ since they have
             # no eval.yaml of their own).
             for suite in evals/*/eval.yaml; do
@@ -237,11 +237,11 @@ jobs:
         run: npm install -g @anthropic-ai/claude-code@2.1.240
 
       # Run each touched skill's suite at its own committed default model --
-      # unlike eval-matrix.yml, there is deliberately no
+      # unlike skill-eval-matrix.yml, there is deliberately no
       # gitapex_set_config_model.py override here, since this gate answers "does the
       # skill behave correctly" (its own pinned default), not "how does it
       # behave across models" (that matrix's own separate question). Mirrors
-      # eval-matrix.yml's per-suite loop/summary-table style otherwise.
+      # skill-eval-matrix.yml's per-suite loop/summary-table style otherwise.
       #
       # evals/scripts/gitapex_run_eval_suite.py (issue #1132/#1157), not
       # `nix run .#waza -- run` (issue #1134): every committed suite lives at

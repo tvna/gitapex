@@ -6,7 +6,7 @@
 # ruff job already needs one admin change; this avoids needing two.
 name: Lint workflows
 
-# Deliberately no `paths:` filter, for the reason eval-gate.yml's own
+# Deliberately no `paths:` filter, for the reason skill-eval-gate.yml's own
 # header states at length and docs/superpowers/plans/
 # 2026-07-30-evals-required-merge-gate.md records as a decision: GitHub
 # distinguishes a job that runs and reports `skipped` (does not block a
@@ -18,7 +18,7 @@ name: Lint workflows
 # required-check-safe shape, and it also removes any dependence on getting
 # a `**/*.py`-style glob right under GitHub's own filter semantics.
 # The cost is a checkout plus two short jobs on every PR, the same price
-# eval-gate.yml accepted for the same reason.
+# skill-eval-gate.yml accepted for the same reason.
 on:
   push:
     branches: [main]

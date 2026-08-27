@@ -2,7 +2,7 @@
 """Compute the sorted, deduped set of skill names under `evals/<skill>/...`
 touched by a list of changed file paths.
 
-Issue #582: `eval-gate.yml` needs to know which skills' `evals/<skill>/`
+Issue #582: `skill-eval-gate.yml` needs to know which skills' `evals/<skill>/`
 suites to run for a given diff, without re-deriving this extraction logic
 inline in bash. This repo's existing convention keeps that kind of
 extraction in a small, unit-tested Python script -- e.g.
@@ -108,7 +108,7 @@ default newline mode. NUL must never pass through a plain bash scalar
 variable (`x=$(...)`) on its way there: bash silently drops embedded NUL
 bytes on capture (confirmed empirically: `x=$(printf 'a\\0b')` yields
 `x="ab"`), which would glue two touched paths together. See
-`eval-gate.yml`'s "Determine touched skills" step for the actual
+`skill-eval-gate.yml`'s "Determine touched skills" step for the actual
 invocation and its rationale.
 
 Output matches `skill-audit-gate.yml`'s own comma-join convention for
@@ -141,7 +141,7 @@ only (`str.split("\\n")`, not `str.splitlines()`, which also splits on
 `\\r`, `\\v`, `\\f`, `\\x1c`-`\\x1e`, `\\x85`, U+2028, and U+2029 -- a real
 path containing one of those raw bytes must not be mis-split either).
 
-`eval-gate.yml`'s actual "Determine touched skills" step composes
+`skill-eval-gate.yml`'s actual "Determine touched skills" step composes
 `--nul` with `git diff --name-status -z` (not `--name-only`), so a
 deleted or purely-renamed path can be filtered out in that workflow step
 before the surviving paths ever reach this script -- see that step's own

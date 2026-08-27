@@ -4,7 +4,7 @@
 # this class of defect, and PR #651's own authoring session reproduced it
 # twice in one sitting despite catching both before commit.
 #
-# Deliberately no `paths:` filter, following eval-gate.yml's own
+# Deliberately no `paths:` filter, following skill-eval-gate.yml's own
 # rationale: a workflow that never fires for a given PR leaves a required
 # status check Pending forever, whereas a job that runs and passes is safe
 # to promote to required later. The scan (a real `pydantic` import as of

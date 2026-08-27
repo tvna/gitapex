@@ -1,7 +1,7 @@
 """Tests for evals/scripts/gitapex_check_suite_threshold.py (issue #1259).
 
 Covers ``check_suite_threshold`` (the pure comparison, extracted from an
-inline ``python3 -c "..."`` one-liner ``eval-matrix.yml``'s
+inline ``python3 -c "..."`` one-liner ``skill-eval-matrix.yml``'s
 ``eval-matrix`` and ``eval-matrix-hf-gemma4`` jobs both carried duplicated)
 and ``main()``'s own CLI wrapper against real files on disk.
 """
