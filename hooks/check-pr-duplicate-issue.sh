@@ -81,6 +81,16 @@ if ! printf '%s' "$input" | jq -e -s 'length == 1 and (.[0] | type == "object")'
   deny "Blocked by hooks/check-pr-duplicate-issue.sh: the tool-call payload on stdin is not exactly one JSON object. Failing closed."
 fi
 
+# Same multi-line-tool_name fall-through the check above describes,
+# reached here via a non-string `.tool_name` value (e.g.
+# `["mcp__github__create_pull_request"]`) rather than a JSON stream --
+# issue #1315, the same gap PR #1213/#1217 already closed in six sibling
+# hooks. `.tool_name == null` covers both absent and explicit null; only a
+# present non-string, non-null value denies.
+if ! printf '%s' "$input" | jq -e '(.tool_name == null) or (.tool_name | type == "string")' >/dev/null 2>&1; then
+  deny "Blocked by hooks/check-pr-duplicate-issue.sh: tool_name in the payload is not a string. Failing closed."
+fi
+
 tool_name=$(printf '%s' "$input" | jq -r '.tool_name // empty')
 
 if [ "$tool_name" != "mcp__github__create_pull_request" ]; then
