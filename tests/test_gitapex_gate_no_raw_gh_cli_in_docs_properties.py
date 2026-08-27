@@ -264,7 +264,11 @@ def _render_fence_document(
             expected.append((open_line, len(lines)))
     lines.extend(_PROSE[choice % len(_PROSE)] for choice in tail)
     if expected and expected[-1][1] == 0:
-        expected[-1] = (expected[-1][0], len(lines))
+        # Exclusive scan boundary one past the last real line -- see
+        # gate._fenced_line_ranges's own docstring for why this must not be
+        # `len(lines)` (that off-by-one silently dropped the file's last
+        # line from the scan, a real bug this property caught).
+        expected[-1] = (expected[-1][0], len(lines) + 1)
     return lines, expected
 
 
@@ -382,8 +386,10 @@ def test_fenced_line_ranges_pair_fences_by_commonmark_run_length(
         opened = lines[open_line - 1].strip()
         marker = opened[0]
         open_run = len(opened) - len(opened.lstrip(marker))
+        if close_line == len(lines) + 1:
+            continue  # unclosed fence -- scan boundary is past the last real line, no marker line to inspect
         closed = lines[close_line - 1].strip()
-        assert _bare_run_length(closed, marker) >= open_run or close_line == len(lines)
+        assert _bare_run_length(closed, marker) >= open_run
 
 
 # ==========================================================================

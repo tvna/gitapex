@@ -10,10 +10,22 @@ caught only by two rounds of manual self-review -- a follow-up carve-out
 reintroducing the same violation was caught only on the second pass. No
 lint checked documentation/plan files for this pattern before now.
 
-Scope: docs/**/*.md only (this repo's tracked plan/spec/report corpus),
-discovered via `git ls-files` -- matching gitapex_gate_hidden_characters.py's
-own tracked-file rationale (an untracked scratch file or an ignored
-worktree checkout is out of scope by construction).
+Scope: every tracked `*.md` file under `docs/` (this repo's tracked
+plan/spec/report corpus), discovered via `git ls-files -- docs` -- matching
+gitapex_gate_hidden_characters.py's own tracked-file rationale (an untracked
+scratch file or an ignored worktree checkout is out of scope by
+construction). Stated as `docs/**/*.md` elsewhere in this module for
+readability, but that is loose shorthand, not the literal git pathspec used:
+git's own pathspec matching requires `**` to span at least one directory
+segment, so a literal `docs/**/*.md` pathspec would NOT match a file
+directly under `docs/` (e.g. `docs/glossary.md`) -- the same pitfall
+`provenance-disclosure-gate.yml` and `retro-title-convention-citation-gate.yml`
+both name and avoid by listing `docs/*.md` and `docs/**/*.md` explicitly.
+This gate's own `discover()` avoids it a different way, by passing the bare
+directory `docs` as the pathspec rather than a glob, so both a top-level and
+a nested `docs/*.md` file are included; `.gitapex/ssot.json`'s own
+`target[].ref` for this gate is `docs/**/*.md`, which is this same loose
+shorthand, not a literal pathspec any code evaluates.
 
 Detection is fence-scoped and subcommand-scoped, not a bare "gh " string
 match, per this issue's own stated residual risk: a plain substring match
@@ -65,11 +77,15 @@ code block is not a fenced block and is not scanned; an invocation split
 across a shell line continuation (`gh \\` then `pr create` on the next
 line) is not matched, since detection is per-line; only the first
 invocation on a given line is reported (the line still fails the gate);
-and CommonMark's own <=3-space cap on fence-marker indentation is not
+CommonMark's own <=3-space cap on fence-marker indentation is not
 modelled, because a flat line scanner cannot see the container
 indentation a fence nested in a list item legitimately carries -- a
 marker line is treated as a fence marker at any indentation, on both the
-opening and the closing side.
+opening and the closing side; and a fence inside a blockquote (a `>`
+prefix on the marker line, e.g. a blockquoted fenced code block) is not
+recognized as a fence marker at all, since `_FENCE_OPEN_RE`/
+`_FENCE_CLOSE_RE` match only a bare run of the marker character after
+stripping whitespace, not a blockquote's own leading `>`.
 
 Exception marker: an explicit `<!-- gitapex-allow-raw-gh-cli: <reason> -->`
 line directly on the line immediately preceding the fence's opening
@@ -80,8 +96,9 @@ uses in this repository, not a bare `noqa`-style flag.
 
 Historical grandfathering: docs/superpowers/plans/2026-07-14-toolchain-foundation.md
 (predates this gate, and CLAUDE.md's rule pre-existed it too) carries 3 real
-fenced `gh run`/`gh pr create` invocations, each given the exception marker
-in the same change that adds this gate -- not silently exempted by path.
+fenced blocks with 4 real `gh run`/`gh pr create` invocations between them,
+each block given the exception marker in the same change that adds this
+gate -- not silently exempted by path.
 
 Exit codes: 0 clean, 1 violation(s) found, 2 the scan could not be trusted
 (no docs/**/*.md files discovered, or a file could not be read/decoded as
@@ -212,13 +229,27 @@ def discover(root: pathlib.Path) -> list[pathlib.Path]:
 
 
 def _fenced_line_ranges(lines: list[str]) -> list[tuple[int, int]]:
-    """Return `(open_marker_line, close_marker_line)`, both 1-indexed
-    marker-line positions, for each fenced block in `lines`. A fence closes
-    only on a bare run of the same marker character at least as long as the
-    opening run (CommonMark's rule), so a three-backtick fence nested inside
-    a four-backtick one does not end the outer block. An unclosed fence's
-    close is `len(lines)` -- extends to end-of-file, matching how GitHub's
-    own renderer treats it."""
+    """Return `(open_marker_line, scan_end_line)` pairs, 1-indexed, for each
+    fenced block in `lines`. `scan_end_line` is an *exclusive* scan
+    boundary -- the caller scans `open_marker_line + 1` through
+    `scan_end_line - 1` -- not necessarily a marker line itself: for a
+    closed fence it is the closing marker's own line (correctly excluded
+    from the scan), but for an unclosed fence it is `len(lines) + 1`, one
+    past the last real line, so that last line -- content, not a marker --
+    is still scanned. Using `len(lines)` there instead was a real bug: it
+    silently dropped a file's final line from every scan whenever that
+    line closed an unclosed fence and the file had no trailing newline
+    (`text.split("\\n")` only pads a synthetic empty final element when the
+    text *does* end in one). Found by adversarial review of this gate,
+    confirmed by execution, not merely reasoned about, before this fix
+    landed.
+
+    A fence closes only on a bare run of the same marker character at
+    least as long as the opening run (CommonMark's rule), so a
+    three-backtick fence nested inside a four-backtick one does not end
+    the outer block. An unclosed fence's scan boundary extends to
+    end-of-file, matching how GitHub's own renderer treats it.
+    """
     ranges: list[tuple[int, int]] = []
     open_run: str | None = None
     open_line = 0  # only meaningful while open_run is not None
@@ -235,7 +266,7 @@ def _fenced_line_ranges(lines: list[str]) -> list[tuple[int, int]]:
             ranges.append((open_line, i))
             open_run = None
     if open_run is not None:
-        ranges.append((open_line, len(lines)))
+        ranges.append((open_line, len(lines) + 1))
     return ranges
 
 

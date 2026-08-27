@@ -134,6 +134,26 @@ def test_unclosed_fence_extends_to_end_of_file(tmp_path: pathlib.Path) -> None:
     assert violations[0].line == 3
 
 
+def test_unclosed_fence_with_no_trailing_newline_still_scans_its_last_line(tmp_path: pathlib.Path) -> None:
+    """Regression (found by adversarial review, confirmed live before the
+    fix landed). `str.split("\\n")` only pads a synthetic trailing empty
+    element when the text ends in a newline -- so for a file with NO
+    trailing newline, the unclosed fence's last real line IS the file's
+    last element, not one before it. Grading it as
+    `_fenced_line_ranges`'s own close-line position (as the pre-fix code
+    did) silently excluded that line from every scan: this exact fixture
+    reported zero violations before the fix, one after."""
+    root = _repo(tmp_path)
+    path = root / "docs" / "plan.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text('```bash\ngh pr create --title "x"', encoding="utf-8")
+    subprocess.run(["git", "-C", str(root), "add", "--", "docs/plan.md"], check=True)
+    violations = gate.find_violations(root)
+    assert len(violations) == 1
+    assert violations[0].line == 2
+    assert violations[0].matched == "gh pr"
+
+
 def test_double_quoted_invocation_is_a_violation(tmp_path: pathlib.Path) -> None:
     """Audit finding (issue #529 gate review). The original opener class
     `[\\s;&|(`]` did not include a quote, so a quoted invocation -- the
@@ -199,6 +219,18 @@ def test_indented_code_block_is_a_disclosed_unscanned_gap(tmp_path: pathlib.Path
     so."""
     root = _repo(tmp_path)
     _write(root, "docs/plan.md", "Run:\n\n    gh pr view 123\n\nDone.\n")
+    assert gate.find_violations(root) == []
+
+
+def test_fence_inside_a_blockquote_is_a_disclosed_unscanned_gap(tmp_path: pathlib.Path) -> None:
+    """Pins another limitation this gate's own docstring discloses rather
+    than claims closed (found by adversarial review): a fence marker
+    prefixed with a blockquote's `>` (as GitHub renders `> \\`\\`\\`bash`)
+    is not recognized as a fence marker at all, since fence detection
+    matches only a bare run of the marker character after stripping
+    whitespace -- never a leading `>`."""
+    root = _repo(tmp_path)
+    _write(root, "docs/plan.md", "> Note:\n>\n> ```bash\n> gh pr create --title x\n> ```\n")
     assert gate.find_violations(root) == []
 
 
