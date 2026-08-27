@@ -15,11 +15,11 @@ concurrency:
 jobs:
   pytest:
     runs-on: ubuntu-latest
-    # Back to this repo's own pre-#1365 budget: this job's own scope no
-    # longer includes the real-bash-subprocess-heavy files (see the 4
-    # pytest-bash-oracle-* jobs below), so it is back to roughly the same
-    # ~6300 test, previously-comfortable-at-10-minutes shape those files
-    # were added on top of.
+    # Issue #1365: back to this repo's own pre-#1365 budget -- this job's
+    # own scope no longer includes the real-bash-subprocess-heavy files
+    # (see the 4 pytest-bash-oracle-* jobs below), so it is back to
+    # roughly the same ~6300 test, previously-comfortable-at-10-minutes
+    # shape those files were added on top of.
     timeout-minutes: 10
     permissions:
       contents: read
@@ -83,7 +83,9 @@ jobs:
       # "Run pytest" step's own comment above), consumed only by
       # coverage-combine below. include-hidden-files: true because
       # `.coverage.pytest` is a dotfile and actions/upload-artifact
-      # silently excludes dotfiles by default otherwise.
+      # silently excludes dotfiles by default otherwise (confirmed against
+      # that action's own README's "Uploading Hidden Files" section, not
+      # assumed).
       # if-no-files-found: error, not the repo's other upload step's own
       # `warn` (issue #124's own precedent) -- that step uploads a
       # best-effort artifact for a human to look at; this one is a
@@ -124,6 +126,15 @@ jobs:
   # -- still prints one dot per completed test before any hang, so a
   # recurrence pinpoints exactly where within the file it happens instead
   # of producing silence again.
+  #
+  # 4 separate literal jobs, not one `strategy: matrix` job over the 4
+  # files: `.github/scripts/gitapex_gate_ruleset_required_checks.py`'s own
+  # `_check_run_name()` deliberately treats any matrix (or reusable-
+  # workflow) job as producing no reachable required-status-check name at
+  # all (a matrix job's real check-run reads `job_id (value, value)`, not
+  # the bare `job_id` a ruleset context names) -- so a matrix here could
+  # never be added to `.github/rulesets/main.json`'s
+  # `required_status_checks` the way each of these 4 jobs is below.
   pytest-bash-oracle-hooks-pins:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -276,6 +287,11 @@ jobs:
         with:
           enable-cache: true
 
+      # actions/download-artifact pin, verified live against that action's
+      # own tags (`git ls-remote --tags` against
+      # https://github.com/actions/download-artifact.git): v7 and v7.0.0
+      # both resolve to this exact commit, the same discipline this repo's
+      # own upload-artifact pin above already applies to itself.
       - name: Download pytest coverage data
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
         with:
