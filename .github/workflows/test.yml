@@ -102,23 +102,31 @@ jobs:
   # Issue #1365: isolates the real-bash oracle harness's own pinned and
   # Hypothesis-generative test files (each spawns genuine `bash -c`
   # subprocesses, safe but not free under this runner's own harden-runner
-  # eBPF process/network tracing) into their own job instead of sharing one
-  # combined ~7200-test job with everything else. Root-caused directly
-  # (issue #1365's own PR execution log, not guessed): a job-log inspection
-  # under `-v` showed 10 consecutive failures, all on the SAME xdist worker,
-  # all in the SAME file, each within ~0.01s of the oracle harness's own
-  # 5-second per-invocation timeout -- i.e. one worker got stuck on a
-  # multi-process (subshell/pipe/command-substitution) command and every
-  # later test scheduled onto that SAME worker inherited the degradation.
-  # Splitting this file set into its own job, with far fewer other tests
-  # (and therefore far fewer concurrent xdist workers/subprocesses)
-  # competing for the runner's own resources at the same time, directly
-  # shrinks the contention window this depends on -- without claiming to
-  # have pinned the exact kernel-level mechanism, which this PR's own body
-  # discloses as still not fully isolated.
-  pytest-bash-oracle:
+  # eBPF process/network tracing) into their own jobs instead of sharing one
+  # combined ~7200-test job with everything else.
+  #
+  # First split into one combined `pytest-bash-oracle` job for all 4 files
+  # (root-caused directly from a `-v` job-log inspection, not guessed: 10
+  # consecutive failures, all on the SAME xdist worker, all in the SAME
+  # file, each within ~0.01s of the oracle harness's own 5-second
+  # per-invocation timeout). That combined job THEN hung completely --
+  # zero progress output at all for the full 15-minute budget, across all
+  # 4 xdist workers and all 72 items (run 33066046460, job 98496228476) --
+  # a materially different, more severe symptom than the first failure,
+  # confirming the earlier "shrink the contention window" fix was
+  # necessary but not sufficient. Split further, per file, per the
+  # operator's own direction, both to isolate the true failure blast
+  # radius (does the hang track one specific file, or all four?) and to
+  # reduce simultaneous real-subprocess creation: `-n 0` (serial, no
+  # xdist workers) trades this small file's own parallelism for a
+  # materially lower peak concurrent-subprocess rate against this
+  # runner's harden-runner tracer, and -- unlike the parallel case above
+  # -- still prints one dot per completed test before any hang, so a
+  # recurrence pinpoints exactly where within the file it happens instead
+  # of producing silence again.
+  pytest-bash-oracle-hooks-pins:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
@@ -130,36 +138,122 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Run pytest -- real-bash oracle (pinned + differential)
+      - name: Run pytest -- real-bash oracle (hooks classifier pins)
         env:
-          COVERAGE_FILE: .coverage.pytest-bash-oracle
-        run: |
-          uv run --frozen pytest \
-            tests/test_gitapex_check_bash_safety_oracle_pins.py \
-            tests/test_gitapex_check_task_bash_safety_oracle_pins.py \
-            tests/test_gitapex_check_bash_safety_differential.py \
-            tests/test_gitapex_check_task_bash_safety_differential.py
+          COVERAGE_FILE: .coverage.pytest-bash-oracle-hooks-pins
+        run: uv run --frozen pytest tests/test_gitapex_check_bash_safety_oracle_pins.py -n 0
 
       - name: Upload coverage data
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          name: coverage-data-pytest-bash-oracle
-          path: .coverage.pytest-bash-oracle
+          name: coverage-data-pytest-bash-oracle-hooks-pins
+          path: .coverage.pytest-bash-oracle-hooks-pins
           include-hidden-files: true
           if-no-files-found: error
 
-  # Issue #1365: the pytest job above was split in two so the real-bash
-  # oracle harness's own heavy tests no longer share one combined-coverage
-  # run with everything else; this job re-combines both jobs' own raw
+  pytest-bash-oracle-task-pins:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Run pytest -- real-bash oracle (sibling classifier pins)
+        env:
+          COVERAGE_FILE: .coverage.pytest-bash-oracle-task-pins
+        run: uv run --frozen pytest tests/test_gitapex_check_task_bash_safety_oracle_pins.py -n 0
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: coverage-data-pytest-bash-oracle-task-pins
+          path: .coverage.pytest-bash-oracle-task-pins
+          include-hidden-files: true
+          if-no-files-found: error
+
+  pytest-bash-oracle-hooks-differential:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Run pytest -- real-bash oracle (hooks classifier differential)
+        env:
+          COVERAGE_FILE: .coverage.pytest-bash-oracle-hooks-differential
+        run: uv run --frozen pytest tests/test_gitapex_check_bash_safety_differential.py -n 0
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: coverage-data-pytest-bash-oracle-hooks-differential
+          path: .coverage.pytest-bash-oracle-hooks-differential
+          include-hidden-files: true
+          if-no-files-found: error
+
+  pytest-bash-oracle-task-differential:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Run pytest -- real-bash oracle (sibling classifier differential)
+        env:
+          COVERAGE_FILE: .coverage.pytest-bash-oracle-task-differential
+        run: uv run --frozen pytest tests/test_gitapex_check_task_bash_safety_differential.py -n 0
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: coverage-data-pytest-bash-oracle-task-differential
+          path: .coverage.pytest-bash-oracle-task-differential
+          include-hidden-files: true
+          if-no-files-found: error
+
+  # Issue #1365: the pytest job above was split so the real-bash oracle
+  # harness's own heavy tests no longer share one combined-coverage run
+  # with everything else; this job re-combines every split job's own raw
   # coverage data back into the one final report the two gates below (and
   # Codecov) already depended on, so neither gate's own downstream
-  # invocation needed to change. `coverage combine` on both jobs' data
+  # invocation needed to change. `coverage combine` on all jobs' data
   # files reproduces byte-for-byte the same per-file totals a single
   # unsplit run produced (confirmed locally against this same repo tree
   # before this change shipped, not assumed).
   coverage-combine:
-    needs: [pytest, pytest-bash-oracle]
+    needs:
+      [
+        pytest,
+        pytest-bash-oracle-hooks-pins,
+        pytest-bash-oracle-task-pins,
+        pytest-bash-oracle-hooks-differential,
+        pytest-bash-oracle-task-differential,
+      ]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -178,14 +272,34 @@ jobs:
         with:
           name: coverage-data-pytest
 
-      - name: Download pytest-bash-oracle coverage data
+      - name: Download pytest-bash-oracle-hooks-pins coverage data
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
         with:
-          name: coverage-data-pytest-bash-oracle
+          name: coverage-data-pytest-bash-oracle-hooks-pins
+
+      - name: Download pytest-bash-oracle-task-pins coverage data
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+        with:
+          name: coverage-data-pytest-bash-oracle-task-pins
+
+      - name: Download pytest-bash-oracle-hooks-differential coverage data
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+        with:
+          name: coverage-data-pytest-bash-oracle-hooks-differential
+
+      - name: Download pytest-bash-oracle-task-differential coverage data
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+        with:
+          name: coverage-data-pytest-bash-oracle-task-differential
 
       - name: Combine coverage data and generate reports
         run: |
-          uv run --frozen coverage combine .coverage.pytest .coverage.pytest-bash-oracle
+          uv run --frozen coverage combine \
+            .coverage.pytest \
+            .coverage.pytest-bash-oracle-hooks-pins \
+            .coverage.pytest-bash-oracle-task-pins \
+            .coverage.pytest-bash-oracle-hooks-differential \
+            .coverage.pytest-bash-oracle-task-differential
           uv run --frozen coverage xml
           uv run --frozen coverage json
 
