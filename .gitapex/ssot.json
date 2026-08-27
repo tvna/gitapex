@@ -1052,6 +1052,28 @@
       ]
     },
     {
+      "id": "no-raw-gh-cli-in-docs",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_gate_no_raw_gh_cli_in_docs.py",
+      "rule": "No fenced code block (``` or ~~~) in a tracked docs/**/*.md file may carry a literal raw `gh <subcommand>` CLI invocation (gh's real top-level subcommands only, in command-start position), unless the line directly above the fence's opening marker (no blank line in between) is an explicit `<!-- gitapex-allow-raw-gh-cli: <reason> -->` exception marker with a non-empty reason. A single-backtick inline code span discussing the CLI is never in scope. Exits 2, never a silent pass, when no tracked docs/**/*.md file is discovered or a file cannot be read/decoded as UTF-8.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_no_raw_gh_cli_in_docs.py"],
+      "trigger": ".github/workflows/no-raw-gh-cli-in-docs-gate.yml on pull_request and workflow_dispatch, plus tests/test_gitapex_gate_no_raw_gh_cli_in_docs.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "repo-hygiene",
+      "tracking_issue": 529,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "docs/**/*.md"},
+        {"kind": "workflow-event", "ref": "no-raw-gh-cli-in-docs-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "no-raw-gh-cli-in-docs-gate.yml:workflow_dispatch"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
+    },
+    {
       "id": "cyclomatic-complexity-floor",
       "kind": "script",
       "script": ".github/workflows/test.yml",

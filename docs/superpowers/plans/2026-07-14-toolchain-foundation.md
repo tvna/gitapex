@@ -192,6 +192,7 @@ git push
 - [ ] **Step 4: Retrieve the CI-generated flake.lock and commit it**
 
 Wait for the workflow, then:
+<!-- gitapex-allow-raw-gh-cli: historical plan predating the no-raw-gh-CLI-in-docs gate (issue #529, refs #205 Repairs 5 & 8) -->
 ```bash
 run_id=$(gh run list --workflow "Toolchain (nix)" --branch "$(git branch --show-current)" --limit 1 --json databaseId --jq '.[0].databaseId')
 gh run download "$run_id" --name flake-lock --dir .
@@ -386,6 +387,7 @@ Expected: both greps find nothing (commands exit 0 due to `!`).
 - [ ] **Step 2: Confirm the CI Nix matrix is green (this is the whole-toolchain live proof)**
 
 Run:
+<!-- gitapex-allow-raw-gh-cli: historical plan predating the no-raw-gh-CLI-in-docs gate (issue #529, refs #205 Repairs 5 & 8) -->
 ```bash
 gh run list --workflow "Toolchain (nix)" --branch "$(git branch --show-current)" --limit 1
 ```
@@ -393,6 +395,7 @@ Expected: the latest run is `completed / success` on both `ubuntu-latest` and `m
 
 - [ ] **Step 3: Open the PR for #57**
 
+<!-- gitapex-allow-raw-gh-cli: historical plan predating the no-raw-gh-CLI-in-docs gate (issue #529, refs #205 Repairs 5 & 8) -->
 ```bash
 gh pr create --title "toolchain: nix foundation embedding all tools (PR-1) (#57)" \
   --body "Implements PR-1 of #57: flake.nix embedding Class A (nixpkgs) and Class B (waza/apm/rtk/betterleaks release pins) across 4 systems, plus prek via PyPI. Live proof: the Toolchain (nix) CI matrix (ubuntu + macos) is green -- nix flake check, nix build of all Class B packages, and a full devShell smoke. Refs #57"
