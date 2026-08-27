@@ -92,6 +92,38 @@ def test_multiple_violations_across_files_are_all_reported(tmp_path: pathlib.Pat
     assert sorted(v.path for v in violations) == ["docs/a.md", "docs/b.md"]
 
 
+def test_fence_nested_in_a_longer_fence_is_still_scanned(tmp_path: pathlib.Path) -> None:
+    """Audit finding (issue #529 gate review). The original
+    `stripped.startswith("```")` fence toggle closed a four-backtick fence
+    on the first three-backtick line nested inside it, so every line of the
+    nested block fell outside every computed range and was never scanned --
+    a raw `gh pr view` there passed the gate silently. The shape is not
+    hypothetical: docs/superpowers/plans/2026-07-13-evaluating-skill-quality-shape-script.md
+    already wraps a ```` ```markdown ```` example around an inner fence
+    today. CommonMark closes a fence only on a bare run of the same marker
+    character at least as long as the opening run."""
+    root = _repo(tmp_path)
+    _write(
+        root,
+        "docs/plan.md",
+        "Write this into the reference file:\n\n"
+        "````markdown\n## Example\n\n```bash\ngh pr view 123\n```\n````\n\nDone.\n",
+    )
+    violations = gate.find_violations(root)
+    assert len(violations) == 1
+    assert violations[0].line == 7
+    assert violations[0].matched == "gh pr"
+
+
+def test_a_longer_closing_run_still_closes_the_fence(tmp_path: pathlib.Path) -> None:
+    """The other half of CommonMark's run-length rule: a closing run longer
+    than the opening one does close the block, so text after it is prose
+    again and must not be scanned."""
+    root = _repo(tmp_path)
+    _write(root, "docs/plan.md", "```bash\necho x\n````\n\ngh pr view 123 (prose, not a code block)\n")
+    assert gate.find_violations(root) == []
+
+
 def test_unclosed_fence_extends_to_end_of_file(tmp_path: pathlib.Path) -> None:
     """Matches GitHub's own renderer: an unclosed fence still hides -- and
     still scans -- everything after it."""
@@ -102,7 +134,72 @@ def test_unclosed_fence_extends_to_end_of_file(tmp_path: pathlib.Path) -> None:
     assert violations[0].line == 3
 
 
+def test_double_quoted_invocation_is_a_violation(tmp_path: pathlib.Path) -> None:
+    """Audit finding (issue #529 gate review). The original opener class
+    `[\\s;&|(`]` did not include a quote, so a quoted invocation -- the
+    exact quote-splitting bypass class hooks/gitapex_check_bash_safety.py
+    was already live-confirmed vulnerable to before issue #1326 moved it
+    off raw-text matching -- passed the gate silently."""
+    root = _repo(tmp_path)
+    _write(root, "docs/plan.md", '```bash\nbash -lc "gh pr merge 123 --squash"\n```\n')
+    violations = gate.find_violations(root)
+    assert len(violations) == 1
+    assert violations[0].matched == "gh pr"
+
+
+def test_invocation_inside_a_json_string_is_a_violation(tmp_path: pathlib.Path) -> None:
+    """Same root cause as the quoted-shell case, in the shape a plan
+    document is most likely to carry it: a tool-call payload."""
+    root = _repo(tmp_path)
+    _write(root, "docs/plan.md", '```json\n{"tool": "Bash", "command": "gh issue close 42"}\n```\n')
+    assert len(gate.find_violations(root)) == 1
+
+
+def test_path_prefixed_invocation_is_a_violation(tmp_path: pathlib.Path) -> None:
+    """A `/` was not in the original opener class either."""
+    root = _repo(tmp_path)
+    _write(root, "docs/plan.md", "```bash\n/usr/bin/gh pr merge 123\n```\n")
+    assert len(gate.find_violations(root)) == 1
+
+
+def test_gh_discussion_and_agent_task_are_in_the_subcommand_vocabulary(tmp_path: pathlib.Path) -> None:
+    """Audit finding (issue #529 gate review). `_GH_SUBCOMMANDS` was stale
+    against gh's own published manual (https://cli.github.com/manual/):
+    `agent-task`, `copilot`, `discussion`, `licenses`, `skill` and `help`
+    all ship today and were all absent, so a documented `gh discussion
+    create` in a fenced block was not an invocation as far as the gate was
+    concerned."""
+    root = _repo(tmp_path)
+    _write(root, "docs/a.md", '```bash\ngh discussion create --title "x"\n```\n')
+    _write(root, "docs/b.md", '```bash\ngh agent-task create --base main -p "x"\n```\n')
+    assert sorted(v.path for v in gate.find_violations(root)) == ["docs/a.md", "docs/b.md"]
+
+
 # --- must not fire -----------------------------------------------------
+
+
+def test_word_internal_gh_inside_a_fenced_block_is_not_a_violation(tmp_path: pathlib.Path) -> None:
+    """Guard on widening the command-start test to a negative lookbehind:
+    "through pr" and "high pr" end in `gh` followed by a real subcommand
+    word, and neither is an invocation."""
+    root = _repo(tmp_path)
+    _write(
+        root,
+        "docs/plan.md",
+        "```text\nRoute it through pr review, and rank high pr first.\nSee weigh issue counts.\n```\n",
+    )
+    assert gate.find_violations(root) == []
+
+
+def test_indented_code_block_is_a_disclosed_unscanned_gap(tmp_path: pathlib.Path) -> None:
+    """Pins a limitation this gate's own docstring discloses rather than
+    claims closed: detection is fence-scoped, so a four-space-indented
+    Markdown code block is not scanned. Recorded as an executable pin so
+    the gap stays visible, and so any later fix has to come here and say
+    so."""
+    root = _repo(tmp_path)
+    _write(root, "docs/plan.md", "Run:\n\n    gh pr view 123\n\nDone.\n")
+    assert gate.find_violations(root) == []
 
 
 def test_inline_backtick_span_discussing_gh_is_not_a_violation(tmp_path: pathlib.Path) -> None:

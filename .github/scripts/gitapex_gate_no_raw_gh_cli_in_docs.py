@@ -24,23 +24,52 @@ inside a fenced block -- verified directly, not assumed, at authoring
 time). So:
 
   1. Only text inside a fenced code block (``` or ~~~) is scanned at all --
-     the same fence-toggle line-scan `hooks/gitapex_check_acm_present_or_waiver.py`
-     already uses, run in the opposite direction (that check strips fences
-     to find text *outside* them; this one keeps only text *inside* them).
-     An unclosed fence extends to end-of-file, matching how GitHub's own
-     renderer treats it.
-  2. Within a fenced block, only a `gh` token in command-start position
-     (line start, or immediately after a shell separator/opener: whitespace,
-     `;`, `&`, `|`, `(`, a backtick) followed by one of gh CLI's real
-     top-level subcommands counts as an invocation. The subcommand
-     vocabulary is fixed and explicit (`_GH_SUBCOMMANDS`), the same
-     never-grow-it-ad-hoc discipline `_HIDDEN_CHARACTERS` uses in the
-     hidden-characters gate -- this closes the false positive a bare
+     a fence-scoped line scan run in the opposite direction from
+     `hooks/gitapex_check_acm_present_or_waiver.py`'s own (that check
+     strips fences to find text *outside* them; this one keeps only text
+     *inside* them), but with stricter pairing than that sibling's plain
+     `startswith` fence toggle, which this gate's own audit found wrong.
+     Fence pairing follows CommonMark's own run-length rule: a fence closes
+     only on a line that is nothing but a run of the SAME marker character
+     at least as long as the opening run. A plain `startswith("```")`
+     toggle instead closed a four-backtick fence on the first three-backtick
+     line inside it, so every line of a nested ```` ```markdown ```` example
+     block -- a shape this repository's own
+     docs/superpowers/plans/2026-07-13-evaluating-skill-quality-shape-script.md
+     already carries -- fell outside every computed range and was never
+     scanned (audit of issue #529's own gate, confirmed live against that
+     file). An unclosed fence extends to end-of-file, matching how GitHub's
+     own renderer treats it.
+  2. Within a fenced block, only a `gh` token in command-start position --
+     `gh` not preceded by a word character or a hyphen -- followed by one
+     of gh CLI's real top-level subcommands counts as an invocation. The
+     negative lookbehind rejects a word-internal match ("through pr")
+     while still accepting every real command-start position, including
+     ones an enumerated opener character class silently missed: a quoted
+     invocation (`bash -lc "gh pr merge 1"`, a JSON `"command": "gh issue
+     close 42"`) and a path-prefixed one (`/usr/bin/gh pr merge 1`).
+     Quote-splitting is the same bypass class
+     `hooks/gitapex_check_bash_safety.py` was already live-confirmed
+     vulnerable to (issue #1326) before it moved off raw-text matching.
+     The subcommand vocabulary is fixed and explicit (`_GH_SUBCOMMANDS`),
+     the same never-grow-it-ad-hoc discipline `_HIDDEN_CHARACTERS` uses in
+     the hidden-characters gate -- this closes the false positive a bare
      `gh\\s+\\S` match would produce on `for t in uv gh actionlint bun
      lychee` (a real line in this repository's own
      docs/superpowers/plans/2026-07-14-toolchain-foundation.md): `actionlint`
      is not a gh subcommand, so `gh actionlint` here is correctly not an
      invocation.
+
+Known gaps, disclosed rather than claimed closed: an indented (four-space)
+code block is not a fenced block and is not scanned; an invocation split
+across a shell line continuation (`gh \\` then `pr create` on the next
+line) is not matched, since detection is per-line; only the first
+invocation on a given line is reported (the line still fails the gate);
+and CommonMark's own <=3-space cap on fence-marker indentation is not
+modelled, because a flat line scanner cannot see the container
+indentation a fence nested in a list item legitimately carries -- a
+marker line is treated as a fence marker at any indentation, on both the
+opening and the closing side.
 
 Exception marker: an explicit `<!-- gitapex-allow-raw-gh-cli: <reason> -->`
 line directly on the line immediately preceding the fence's opening
@@ -75,18 +104,34 @@ from pydantic import BaseModel, ValidationError, field_validator
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 
-_FENCE_MARKERS = ("```", "~~~")
+# A fence opens on a run of >= 3 of the same marker character (an info
+# string may follow) and closes only on a line that is nothing but a run of
+# that same character, at least as long -- CommonMark's own rule. Anything
+# looser closes a four-backtick fence on the three-backtick fence nested
+# inside it and silently stops scanning the nested block; see this module's
+# own docstring.
+_FENCE_OPEN_RE = re.compile(r"^(`{3,}|~{3,})")
+_FENCE_CLOSE_RE = re.compile(r"^(`{3,}|~{3,})$")
 
-# gh CLI's real top-level subcommands (core + actions + additional), fixed
-# and explicit -- never grown ad hoc, the same discipline `_HIDDEN_CHARACTERS`
-# uses in gitapex_gate_hidden_characters.py. Sourced from `gh help` at
-# authoring time; a future gh CLI subcommand not yet in this list is a
-# documented residual risk (see this module's own docstring), not silently
-# claimed complete.
+# gh CLI's real top-level commands, fixed and explicit -- never grown ad
+# hoc, the same discipline `_HIDDEN_CHARACTERS` uses in
+# gitapex_gate_hidden_characters.py. Re-sourced from gh's own published
+# manual (https://cli.github.com/manual/, fetched during the audit of this
+# gate) rather than from memory: that pass found `agent-task`, `copilot`,
+# `discussion`, `licenses`, `skill` and `help` already shipping and absent
+# here, so a documented `gh discussion create` in a fenced block passed the
+# gate silently. The two documented single-word aliases (`gh cs` for
+# codespace, `gh skills` for skill) are included for the same reason. A gh
+# CLI command added after this list was last re-sourced remains a
+# documented residual risk, not a silently claimed completeness.
 _GH_SUBCOMMANDS = frozenset(
     {
+        "agent-task",
         "browse",
         "codespace",
+        "copilot",
+        "cs",
+        "discussion",
         "gist",
         "issue",
         "org",
@@ -106,21 +151,28 @@ _GH_SUBCOMMANDS = frozenset(
         "config",
         "extension",
         "gpg-key",
+        "help",
         "label",
+        "licenses",
         "preview",
         "search",
         "secret",
+        "skill",
+        "skills",
         "ssh-key",
         "status",
         "variable",
     }
 )
 
-# The leading separator/opener is matched but not captured, so
-# `match.group(1)` below is the invocation itself (`gh run`), never the
-# separator character that preceded it (e.g. a command-substitution `(`).
+# The command-start position is asserted by a zero-width negative
+# lookbehind rather than an enumerated opener character class, so
+# `match.group(1)` is the invocation itself (`gh run`) and no real opener
+# has to be remembered: a quote (`bash -lc "gh pr merge 1"`), a path
+# separator (`/usr/bin/gh pr merge 1`) and a command-substitution `(` all
+# qualify, while a word-internal "gh" ("through pr", "high pr") does not.
 _RAW_GH_INVOCATION_RE = re.compile(
-    r"(?:^|[\s;&|(`])(gh\s+(?:" + "|".join(re.escape(s) for s in sorted(_GH_SUBCOMMANDS)) + r"))\b"
+    r"(?<![\w-])(gh\s+(?:" + "|".join(re.escape(s) for s in sorted(_GH_SUBCOMMANDS)) + r"))\b"
 )
 
 _ALLOW_MARKER_RE = re.compile(r"^[ \t]*<!--[ \t]*gitapex-allow-raw-gh-cli[ \t]*:[ \t]*\S.*-->[ \t]*$")
@@ -161,23 +213,28 @@ def discover(root: pathlib.Path) -> list[pathlib.Path]:
 
 def _fenced_line_ranges(lines: list[str]) -> list[tuple[int, int]]:
     """Return `(open_marker_line, close_marker_line)`, both 1-indexed
-    marker-line positions, for each fenced block in `lines`. An unclosed
-    fence's close is `len(lines)` -- extends to end-of-file, matching how
-    GitHub's own renderer treats it."""
+    marker-line positions, for each fenced block in `lines`. A fence closes
+    only on a bare run of the same marker character at least as long as the
+    opening run (CommonMark's rule), so a three-backtick fence nested inside
+    a four-backtick one does not end the outer block. An unclosed fence's
+    close is `len(lines)` -- extends to end-of-file, matching how GitHub's
+    own renderer treats it."""
     ranges: list[tuple[int, int]] = []
-    fence_marker: str | None = None
-    open_line = 0  # only meaningful while fence_marker is not None
+    open_run: str | None = None
+    open_line = 0  # only meaningful while open_run is not None
     for i, line in enumerate(lines, start=1):
-        stripped = line.lstrip()
-        if fence_marker is None:
-            if stripped.startswith(_FENCE_MARKERS):
-                fence_marker = stripped[:3]
+        stripped = line.strip()
+        if open_run is None:
+            opening = _FENCE_OPEN_RE.match(stripped)
+            if opening:
+                open_run = opening.group(1)
                 open_line = i
             continue
-        if stripped.startswith(fence_marker):
+        closing = _FENCE_CLOSE_RE.match(stripped)
+        if closing and closing.group(1)[0] == open_run[0] and len(closing.group(1)) >= len(open_run):
             ranges.append((open_line, i))
-            fence_marker = None
-    if fence_marker is not None:
+            open_run = None
+    if open_run is not None:
         ranges.append((open_line, len(lines)))
     return ranges
 
