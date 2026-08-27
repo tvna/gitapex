@@ -15,7 +15,16 @@ concurrency:
 jobs:
   pytest:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Issue #1365: the real-bash oracle harness and its ~900 new pinned/
+    # generative test cases each spawn a genuine bash subprocess -- safe,
+    # but not free under this runner's own harden-runner eBPF process/
+    # network tracing, which adds real per-subprocess overhead the prior
+    # 10-minute budget never had to absorb. Measured directly, not
+    # guessed: the un-widened budget got to 89% completion before being
+    # killed by this exact timeout (run 33026714167, job 98391924118).
+    # 15 minutes is a measured-headroom bump, not a speculative round
+    # number.
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
