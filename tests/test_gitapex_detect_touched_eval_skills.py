@@ -1,7 +1,7 @@
 """Tests for the touched-eval-skill detector
 (.github/scripts/gitapex_detect_touched_eval_skills.py).
 
-Issue #582: `waza-eval-gate.yml` needs the sorted, deduped set of skill
+Issue #582: `skill-eval-gate.yml` needs the sorted, deduped set of skill
 names under `evals/<skill>/...` touched by a diff, excluding the shared
 `evals/scripts/` infrastructure directory, with any skill-name segment
 outside `^[A-Za-z0-9_-]+$` raising loud rather than being silently dropped.
@@ -18,7 +18,7 @@ import gitapex_detect_touched_eval_skills as mod
 import pytest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
-WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "waza-eval-gate.yml"
+WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "skill-eval-gate.yml"
 
 
 # --- touched_skills: normal cases ---
@@ -223,7 +223,7 @@ def test_parse_paths_nul_splits_on_nul_and_drops_trailing_empty():
 def test_parse_paths_nul_empty_input_returns_empty_list():
     assert mod.parse_paths_nul(b"") == []
     # A single lone NUL (e.g. `printf '%s\0'` called with zero arguments,
-    # as waza-eval-gate.yml's own step does when nothing was touched) must
+    # as skill-eval-gate.yml's own step does when nothing was touched) must
     # also yield no paths, not a spurious empty-string path.
     assert mod.parse_paths_nul(b"\0") == []
 
@@ -351,7 +351,7 @@ def test_main_positional_args_ignore_nul_flag_and_stdin(monkeypatch, capsys):
 # `segments[0] != "evals"` check fail, silently dropping a real touched
 # skill -- the exact "gate silently skips a suite it should have run"
 # false-negative this gate exists to prevent. The fix lives in
-# waza-eval-gate.yml's "Determine touched skills" step (`-z` disables the
+# skill-eval-gate.yml's "Determine touched skills" step (`-z` disables the
 # quoting).
 
 
@@ -367,7 +367,7 @@ def test_workflow_uses_name_status_z_and_never_converts_nul_via_tr():
     # must be committed as a permanent regression test" convention.
     text = WORKFLOW_PATH.read_text()
     assert "git diff --name-status -z " in text, (
-        "waza-eval-gate.yml's pull_request diff step must use "
+        "skill-eval-gate.yml's pull_request diff step must use "
         "`git diff --name-status -z` (NUL-delimited) -- plain --name-only "
         "quotes non-ASCII/special-character paths and silently drops them "
         "from touched-skill detection, and --name-status is what lets "
@@ -460,7 +460,7 @@ def test_fixed_git_diff_name_only_z_detects_the_non_ascii_skill(eval_gate_git_re
     # `-z` alone (independent of the tr-vs-embedded-newline defeat case
     # covered separately below) correctly handles a non-ASCII filename --
     # the quoting defeat case and the embedded-newline defeat case are two
-    # distinct bugs with two distinct fixes. waza-eval-gate.yml's actual
+    # distinct bugs with two distinct fixes. skill-eval-gate.yml's actual
     # "Determine touched skills" step no longer uses `tr` at all (see the
     # embedded-newline-skill-name tests below for its real invocation).
     repo, base_sha, head_sha = eval_gate_git_repo
@@ -568,7 +568,7 @@ def test_nul_mode_pipeline_detects_the_embedded_newline_filename_end_to_end(
     eval_gate_git_repo_with_embedded_newline_filename,
 ):
     # Same repo/history, but through the fixed `--name-status -z` + `--nul`
-    # pipeline, mirroring waza-eval-gate.yml's actual "Determine touched
+    # pipeline, mirroring skill-eval-gate.yml's actual "Determine touched
     # skills" step: a single "A" (added) record, so the path is simply the
     # second NUL-delimited field once the status field is dropped.
     repo, base_sha, head_sha = eval_gate_git_repo_with_embedded_newline_filename

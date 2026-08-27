@@ -285,7 +285,7 @@ def test_main_exits_2_on_a_root_that_is_a_file(tmp_path, capsys):
 
 def test_the_workflow_has_no_paths_filter() -> None:
     """Drift gate for this workflow's own no-`paths:`-filter invariant, per
-    CLAUDE.md section 3 and the same `waza-eval-gate.yml` rationale: a
+    CLAUDE.md section 3 and the same `skill-eval-gate.yml` rationale: a
     filter here would leave a required check stuck `Pending` for any PR
     that doesn't touch one of the three small files this gate scans.
     `conftest.assert_workflow_has_no_trigger_path_filter`'s own docstring

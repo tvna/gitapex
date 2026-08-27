@@ -4,10 +4,10 @@
 
 Extracted from an inline ``python3 -c "..."`` one-liner (JSON+YAML parsing,
 an "exactly one ``metrics[]`` entry" invariant, and a threshold-direction
-comparison) that ``waza-eval-matrix.yml``'s ``eval-matrix`` and
+comparison) that ``skill-eval-matrix.yml``'s ``eval-matrix`` and
 ``eval-matrix-hf-gemma4`` jobs both carried byte-for-byte duplicated inline
-(a third copy lives in ``waza-eval-gate.yml``, out of this PR's scope --
-issue #1259 only touches ``waza-eval-matrix.yml``). This repository's own
+(a third copy lives in ``skill-eval-gate.yml``, out of this PR's scope --
+issue #1259 only touches ``skill-eval-matrix.yml``). This repository's own
 established convention for CI-step logic this size is a real, tested,
 committed script (``gitapex_set_config_model.py``, called by name from the
 very same step) -- not opaque shell-embedded Python with no test coverage

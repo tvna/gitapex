@@ -36,7 +36,7 @@
 # development environment): that the HF endpoint exposes an
 # OpenAI-Chat-Completions-compatible surface, reachable with the bearer
 # token this job passes as HTTP_EXECUTOR_API_KEY.
-name: Waza eval matrix (cross-model, advisory)
+name: Skill eval matrix (cross-model, advisory)
 
 on:
   workflow_dispatch:

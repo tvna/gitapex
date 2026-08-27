@@ -27,7 +27,7 @@ declaration itself stayed broken for another five weeks.
 **What this gate is, and is not.** APPROVED_MODELS records what a human last
 reviewed and approved -- it does not make a declaration self-verifying.
 Nothing in this repository can currently ask the copilot-sdk executor which
-models it serves: .github/workflows/waza-eval-matrix.yml cannot run until the
+models it serves: .github/workflows/skill-eval-matrix.yml cannot run until the
 owner provisions COPILOT_BASE_URL / COPILOT_PROVIDER_BASE_URL (see
 docs/skill-eval-status.md), so no offline check can confirm an id is
 dispatchable. This gate converts a silent failure into a reviewed one: an id
@@ -63,7 +63,7 @@ id that a dispatch would actually use:
    carries its own two model-bearing fields (``inputs.responder.model`` and a
    ``promptGraderConfig`` ``model``), and four committed task files already
    declare ``graders``.
-3. ``.github/workflows/waza-eval-matrix.yml``: its ``models`` dispatch-input
+3. ``.github/workflows/skill-eval-matrix.yml``: its ``models`` dispatch-input
    *default* -- the value that runs when an operator dispatches the matrix
    workflow without typing a list -- and every ``*_MODEL`` environment value
    the workflow hardcodes (today, ``HF_GEMMA4_MODEL``). Its non-default
@@ -88,7 +88,7 @@ import yaml
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 EVALS_DIR = REPO_ROOT / "evals"
-MATRIX_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "waza-eval-matrix.yml"
+MATRIX_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "skill-eval-matrix.yml"
 #: Registered in .gitapex/ssot.json's policy_sources as this gate's own
 #: reviewed-evidence data source (issue #1013) -- previously the two maps
 #: below were hardcoded Python dict literals with no policy_sources entry

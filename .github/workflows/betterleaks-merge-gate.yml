@@ -18,7 +18,7 @@
 # Non-goals), so the baseline stays green without remediation.
 #
 # Deliberately no top-level `paths:` filter, same rationale already stated
-# in waza-eval-gate.yml/hidden-characters-gate.yml: once this job is
+# in skill-eval-gate.yml/hidden-characters-gate.yml: once this job is
 # promoted to a required status check in branch protection (a repo-owner
 # action outside this PR's own reach -- see the issue's own Acceptance
 # Criteria Map), a path-filtered trigger would never fire on an unrelated

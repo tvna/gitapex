@@ -38,7 +38,7 @@ approved_models:
     Approved on issue #937, which brought the already-committed
     HF_GEMMA4_MODEL value under this gate rather than leaving it
     ungraded. Evidence at approval time is the one
-    .github/workflows/waza-eval-matrix.yml already records in its own
+    .github/workflows/skill-eval-matrix.yml already records in its own
     header comment for the eval-matrix-hf-gemma4 lane (issue #317,
     sub-task of #310): the largest Gemma 4 variant whose published bf16
     safetensors weights are under 100GB, confirmed 62.6GB across two

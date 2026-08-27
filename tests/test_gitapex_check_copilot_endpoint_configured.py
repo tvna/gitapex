@@ -1,7 +1,7 @@
 """Tests for the shared copilot-sdk endpoint preflight
 (.github/scripts/gitapex_check_copilot_endpoint_configured.py).
 
-Issue #124: waza-eval-matrix.yml and waza-eval-gate.yml previously each
+Issue #124: skill-eval-matrix.yml and skill-eval-gate.yml previously each
 carried their own copy of the same bash ``-z`` check. These tests cover the
 Python replacement's env-var precedence (matching waza's own envFirst()),
 its URL-validity check (matching waza's own providerHost()), and the
