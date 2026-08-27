@@ -16,10 +16,10 @@ jobs:
   pytest:
     runs-on: ubuntu-latest
     # Back to this repo's own pre-#1365 budget: this job's own scope no
-    # longer includes the real-bash-subprocess-heavy files (see
-    # pytest-bash-oracle below), so it is back to roughly the same ~6300
-    # test, previously-comfortable-at-10-minutes shape those files were
-    # added on top of.
+    # longer includes the real-bash-subprocess-heavy files (see the 4
+    # pytest-bash-oracle-* jobs below), so it is back to roughly the same
+    # ~6300 test, previously-comfortable-at-10-minutes shape those files
+    # were added on top of.
     timeout-minutes: 10
     permissions:
       contents: read
@@ -38,13 +38,13 @@ jobs:
           enable-cache: true
 
       # Issue #1365: the real-bash oracle harness's own pinned/generative
-      # test files are run in the separate pytest-bash-oracle job below
-      # instead, so this job's own coverage is only a partial slice --
+      # test files are run in the 4 separate pytest-bash-oracle-* jobs
+      # below instead, so this job's own coverage is only a partial slice --
       # COVERAGE_FILE gives it a job-unique data-file name (never the bare
-      # default `.coverage`, which would collide with the other job's own
-      # artifact once both land in the same coverage-combine checkout) and
+      # default `.coverage`, which would collide with another job's own
+      # artifact once all 5 land in the same coverage-combine checkout) and
       # no --cov-report flag here: the combined, final coverage.xml/json is
-      # only produced once by the coverage-combine job below, after both
+      # only produced once by the coverage-combine job below, after all 5
       # jobs' own raw data is merged -- generating a report from this job's
       # own partial data here would be actively misleading (most files this
       # scope doesn't touch would read as 0%).
@@ -254,6 +254,15 @@ jobs:
         pytest-bash-oracle-hooks-differential,
         pytest-bash-oracle-task-differential,
       ]
+    # if: always() -- without this, GitHub Actions' own default `needs:`
+    # semantics skip this whole job the moment any ONE of the 5 upstream
+    # jobs fails (a genuine test failure, not only a crash), which would
+    # silently drop Codecov reporting and the coverage-floor gate for that
+    # commit even though every one of those 5 upstream jobs' own "Upload
+    # coverage data" step already carries `if: always()` specifically to
+    # survive a failing test run (issue #1365, Step 8 independent
+    # adversarial review -- found live, not assumed).
+    if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
