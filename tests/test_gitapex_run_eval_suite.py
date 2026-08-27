@@ -486,6 +486,14 @@ def _skill_md(tmp_path: Path) -> Path:
     return skill_md
 
 
+def _skill_md_with_references(tmp_path: Path) -> Path:
+    skill_md = _skill_md(tmp_path)
+    refs_dir = skill_md.parent / "references"
+    refs_dir.mkdir(exist_ok=True)
+    (refs_dir / "rubric.md").write_text("distinctive-rubric-marker", encoding="utf-8")
+    return skill_md
+
+
 def test_run_eval_suite_dispatches_trials_per_task_times_per_fixture(tmp_path: Path):
     eval_yaml = _write_suite(tmp_path, tasks={"a.yaml": TASK_A_TEXT, "b.yaml": TASK_A_TEXT})
     executor = _RecordingExecutor(["ok output"])
@@ -527,6 +535,78 @@ def test_run_eval_suite_always_injects_skill_single_arm(tmp_path: Path):
 
     for argv, _timeout in executor.calls:
         assert "--append-system-prompt-file" in argv
+        assert str(skill_md) in argv
+
+
+# ---------------------------------------------------------------------------
+# run_eval_suite + include_references (issue #1046)
+# ---------------------------------------------------------------------------
+
+
+def test_run_eval_suite_include_references_injects_combined_context_for_every_dispatch(tmp_path: Path):
+    eval_yaml = _write_suite(tmp_path, tasks={"a.yaml": TASK_A_TEXT, "b.yaml": TASK_A_TEXT})
+    skill_md = _skill_md_with_references(tmp_path)
+    executor = _RecordingExecutor(["ok output"])
+
+    gitapex_run_eval_suite.run_eval_suite(
+        eval_yaml, skill_md, executor=executor, model_cli="claude", include_references=True
+    )
+
+    context_paths = set()
+    for argv, _timeout in executor.calls:
+        context_index = argv.index("--append-system-prompt-file") + 1
+        context_path = Path(argv[context_index])
+        assert context_path != skill_md
+        context_paths.add(context_path)
+    # Resolved exactly once for the whole suite run -- every dispatch shares it.
+    assert len(context_paths) == 1
+
+
+def test_run_eval_suite_include_references_content_is_visible_during_dispatch(tmp_path: Path):
+    # The temp context file is cleaned up once the whole run finishes (see
+    # the cleanup test below), so its content must be captured live, from
+    # inside a dispatch, not read back afterwards.
+    eval_yaml = _write_suite(tmp_path, tasks={"a.yaml": TASK_A_TEXT})
+    skill_md = _skill_md_with_references(tmp_path)
+    captured: list[str] = []
+
+    def capturing_executor(argv, timeout) -> str:
+        context_index = argv.index("--append-system-prompt-file") + 1
+        captured.append(Path(argv[context_index]).read_text(encoding="utf-8"))
+        return "ok output"
+
+    gitapex_run_eval_suite.run_eval_suite(
+        eval_yaml, skill_md, executor=capturing_executor, model_cli="claude", include_references=True
+    )
+
+    assert captured
+    assert all("distinctive-rubric-marker" in content for content in captured)
+
+
+def test_run_eval_suite_include_references_cleans_up_temp_file_after_run(tmp_path: Path):
+    eval_yaml = _write_suite(tmp_path)
+    skill_md = _skill_md_with_references(tmp_path)
+    executor = _RecordingExecutor(["ok output"])
+
+    gitapex_run_eval_suite.run_eval_suite(
+        eval_yaml, skill_md, executor=executor, model_cli="claude", include_references=True
+    )
+
+    context_index = executor.calls[0][0].index("--append-system-prompt-file") + 1
+    context_path = Path(executor.calls[0][0][context_index])
+    assert not context_path.exists()
+
+
+def test_run_eval_suite_include_references_false_keeps_original_skill_md_path(tmp_path: Path):
+    eval_yaml = _write_suite(tmp_path)
+    skill_md = _skill_md_with_references(tmp_path)
+    executor = _RecordingExecutor(["ok output"])
+
+    gitapex_run_eval_suite.run_eval_suite(
+        eval_yaml, skill_md, executor=executor, model_cli="claude", include_references=False
+    )
+
+    for argv, _timeout in executor.calls:
         assert str(skill_md) in argv
 
 
@@ -1062,6 +1142,36 @@ def test_main_success_prints_json_to_stdout_when_no_output_given(tmp_path: Path,
     assert rc == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["n_fixtures"] == 1
+
+
+def test_main_include_references_flag_injects_combined_context(tmp_path: Path, monkeypatch):
+    eval_yaml = _write_suite(tmp_path, tasks={"a.yaml": TASK_A_TEXT})
+    skill_md = _skill_md_with_references(tmp_path)
+
+    executor = _RecordingExecutor(["ok output"])
+    monkeypatch.setattr(gitapex_run_eval_suite, "subprocess_executor", executor)
+
+    rc = gitapex_run_eval_suite.main(
+        ["--eval-yaml", str(eval_yaml), "--skill-md", str(skill_md), "--include-references"]
+    )
+
+    assert rc == 0
+    context_index = executor.calls[0][0].index("--append-system-prompt-file") + 1
+    assert executor.calls[0][0][context_index] != str(skill_md)
+
+
+def test_main_without_include_references_flag_uses_skill_md_directly(tmp_path: Path, monkeypatch):
+    eval_yaml = _write_suite(tmp_path, tasks={"a.yaml": TASK_A_TEXT})
+    skill_md = _skill_md_with_references(tmp_path)
+
+    executor = _RecordingExecutor(["ok output"])
+    monkeypatch.setattr(gitapex_run_eval_suite, "subprocess_executor", executor)
+
+    rc = gitapex_run_eval_suite.main(["--eval-yaml", str(eval_yaml), "--skill-md", str(skill_md)])
+
+    assert rc == 0
+    context_index = executor.calls[0][0].index("--append-system-prompt-file") + 1
+    assert executor.calls[0][0][context_index] == str(skill_md)
 
 
 def test_main_missing_eval_yaml_returns_2(tmp_path: Path, capsys):

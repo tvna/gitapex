@@ -443,6 +443,7 @@ def run_eval_suite(
     *,
     executor: gitapex_run_ablation.Executor,
     model_cli: str = DEFAULT_MODEL_CLI,
+    include_references: bool = False,
 ) -> SuiteResult:
     """Run every task fixture ``eval_yaml_path``'s own ``tasks:`` glob
     matches, ``trials_per_task`` times each, skill always injected (see
@@ -454,6 +455,16 @@ def run_eval_suite(
     ``expected``/``graders`` shape) happens before the first trial of any
     fixture dispatches -- a malformed fixture three suites in must not have
     let the first two already spend real executor calls.
+
+    ``include_references`` (default ``False``, unchanged behavior) is
+    resolved to a context path exactly once via
+    ``gitapex_run_ablation.build_skill_context_file`` before the fixture
+    loop below -- not per fixture or per trial -- so every trial of every
+    fixture in this one suite run shares the same injected context, and a
+    real temporary file (see that function's own docstring) is written and
+    cleaned up at most once per suite run, not once per trial. See
+    ``gitapex_run_ablation.py``'s own module docstring, "Reference-file
+    context inclusion" section, for why this exists.
 
     A fixture whose ``executor`` call raises a content-policy-shaped
     ``RuntimeError`` (see ``_is_content_policy_rejection``) is skipped
@@ -487,78 +498,86 @@ def run_eval_suite(
     timeout_seconds = suite["config"]["timeout_seconds"]
     model = suite["config"]["model"]
 
-    scores: list[dict[str, Any]] = []
-    skipped_fixtures: list[dict[str, Any]] = []
-    for fixture in fixtures:
-        trials: list[dict[str, Any]] = []
-        skip_reason: str | None = None
-        for trial_index in range(trials_per_task):
-            argv = gitapex_run_ablation.build_command(model_cli, fixture["prompt"], skill_md, model=model)
-            try:
-                output = executor(argv, timeout_seconds)
-            except RuntimeError as exc:
-                if not _is_content_policy_rejection(exc):
-                    raise
-                skip_reason = gitapex_run_ablation.redact_executor_failure_reason(exc)
-                break
-            substring_score = gitapex_score_contract.score(output, fixture["expected"])
-            grader_results = [run_text_grader(output, entry) for entry in fixture["graders"]]
-            trial_score = statistics.mean([substring_score] + [1.0 if gr.passed else 0.0 for gr in grader_results])
-            trials.append(
-                {
-                    "trial_index": trial_index,
-                    "score": trial_score,
-                    "grader_results": [
-                        {"name": gr.name, "passed": gr.passed, "detail": gr.detail} for gr in grader_results
-                    ],
-                }
+    # Resolved once for the whole suite run, not per fixture/trial -- see
+    # this function's own docstring. Cleaned up in `finally` regardless of
+    # how the loop below exits (a raised ValueError/RuntimeError included).
+    context_file = gitapex_run_ablation.build_skill_context_file(skill_md, include_references=include_references)
+    try:
+        scores: list[dict[str, Any]] = []
+        skipped_fixtures: list[dict[str, Any]] = []
+        for fixture in fixtures:
+            trials: list[dict[str, Any]] = []
+            skip_reason: str | None = None
+            for trial_index in range(trials_per_task):
+                argv = gitapex_run_ablation.build_command(model_cli, fixture["prompt"], context_file, model=model)
+                try:
+                    output = executor(argv, timeout_seconds)
+                except RuntimeError as exc:
+                    if not _is_content_policy_rejection(exc):
+                        raise
+                    skip_reason = gitapex_run_ablation.redact_executor_failure_reason(exc)
+                    break
+                substring_score = gitapex_score_contract.score(output, fixture["expected"])
+                grader_results = [run_text_grader(output, entry) for entry in fixture["graders"]]
+                trial_score = statistics.mean([substring_score] + [1.0 if gr.passed else 0.0 for gr in grader_results])
+                trials.append(
+                    {
+                        "trial_index": trial_index,
+                        "score": trial_score,
+                        "grader_results": [
+                            {"name": gr.name, "passed": gr.passed, "detail": gr.detail} for gr in grader_results
+                        ],
+                    }
+                )
+            if skip_reason is not None and not trials:
+                # Explicit flag-and-continue, not a bare inner `break`: a
+                # rejection on the very first trial leaves `trials` empty, and
+                # falling through to `statistics.mean(trial["score"] for trial
+                # in trials)` below would crash with StatisticsError on that
+                # empty sequence -- precisely on the fixture this behavior
+                # exists to handle gracefully. `continue` skips both that mean
+                # and the scores.append below for this one fixture.
+                skipped_fixtures.append({"fixture_id": fixture["id"], "reason": skip_reason})
+                continue
+            fixture_score = statistics.mean(trial["score"] for trial in trials)
+            score_entry: dict[str, Any] = {"fixture_id": fixture["id"], "score": fixture_score, "trials": trials}
+            if skip_reason is not None:
+                # A later trial of this SAME fixture was rejected after one or
+                # more earlier trials of it already succeeded (a real, already
+                # -paid-for live call each) -- score on the successful subset
+                # rather than discard that data outright (the determinism this
+                # break's own docstring assumes is based on a single pilot
+                # observation, not a guarantee), but still disclose the
+                # rejection loudly rather than silently drop it.
+                score_entry["content_policy_partial_rejection"] = skip_reason
+            scores.append(score_entry)
+
+        if not scores:
+            # Embed each skipped fixture's own (already-redacted) id/reason in
+            # the message itself (code-review finding): run_eval_suite raises
+            # here before ever constructing a SuiteResult, so this is the only
+            # path fixture-level detail can reach a caller that only catches
+            # ValueError and keeps its text verbatim (compute_pairs' own
+            # per-entry failure handling) -- without it, an all-skipped suite
+            # loses every fixture id/reason down to a single generic count.
+            detail = "; ".join(f"{sf['fixture_id']}: {sf['reason']}" for sf in skipped_fixtures)
+            raise ValueError(
+                f"eval suite {eval_yaml_path}: all {len(fixtures)} fixture(s) were skipped "
+                f"(content-policy rejection) -- {detail}; cannot compute mean_score"
             )
-        if skip_reason is not None and not trials:
-            # Explicit flag-and-continue, not a bare inner `break`: a
-            # rejection on the very first trial leaves `trials` empty, and
-            # falling through to `statistics.mean(trial["score"] for trial
-            # in trials)` below would crash with StatisticsError on that
-            # empty sequence -- precisely on the fixture this behavior
-            # exists to handle gracefully. `continue` skips both that mean
-            # and the scores.append below for this one fixture.
-            skipped_fixtures.append({"fixture_id": fixture["id"], "reason": skip_reason})
-            continue
-        fixture_score = statistics.mean(trial["score"] for trial in trials)
-        score_entry: dict[str, Any] = {"fixture_id": fixture["id"], "score": fixture_score, "trials": trials}
-        if skip_reason is not None:
-            # A later trial of this SAME fixture was rejected after one or
-            # more earlier trials of it already succeeded (a real, already
-            # -paid-for live call each) -- score on the successful subset
-            # rather than discard that data outright (the determinism this
-            # break's own docstring assumes is based on a single pilot
-            # observation, not a guarantee), but still disclose the
-            # rejection loudly rather than silently drop it.
-            score_entry["content_policy_partial_rejection"] = skip_reason
-        scores.append(score_entry)
 
-    if not scores:
-        # Embed each skipped fixture's own (already-redacted) id/reason in
-        # the message itself (code-review finding): run_eval_suite raises
-        # here before ever constructing a SuiteResult, so this is the only
-        # path fixture-level detail can reach a caller that only catches
-        # ValueError and keeps its text verbatim (compute_pairs' own
-        # per-entry failure handling) -- without it, an all-skipped suite
-        # loses every fixture id/reason down to a single generic count.
-        detail = "; ".join(f"{sf['fixture_id']}: {sf['reason']}" for sf in skipped_fixtures)
-        raise ValueError(
-            f"eval suite {eval_yaml_path}: all {len(fixtures)} fixture(s) were skipped "
-            f"(content-policy rejection) -- {detail}; cannot compute mean_score"
+        scores.sort(key=lambda entry: entry["fixture_id"])
+        mean_score = statistics.mean(entry["score"] for entry in scores)
+        return SuiteResult(
+            model_id=model,
+            n_fixtures=len(scores),
+            mean_score=mean_score,
+            scores=scores,
+            skipped_fixtures=skipped_fixtures,
         )
-
-    scores.sort(key=lambda entry: entry["fixture_id"])
-    mean_score = statistics.mean(entry["score"] for entry in scores)
-    return SuiteResult(
-        model_id=model,
-        n_fixtures=len(scores),
-        mean_score=mean_score,
-        scores=scores,
-        skipped_fixtures=skipped_fixtures,
-    )
+    finally:
+        if context_file != skill_md:
+            context_file.unlink(missing_ok=True)
 
 
 def to_eval_scores_json(result: SuiteResult) -> dict[str, Any]:
@@ -676,6 +695,13 @@ def main(argv: list[str] | None = None) -> int:
         "endpoint via HTTP_EXECUTOR_BASE_URL/HTTP_EXECUTOR_API_KEY -- issue #1259).",
     )
     parser.add_argument("-o", "--output", type=Path, help="Write the aggregate JSON here; stdout when omitted.")
+    parser.add_argument(
+        "--include-references",
+        action="store_true",
+        help="Concatenate --skill-md's sibling references/ files into the injected context "
+        "(issue #1046) -- see gitapex_run_ablation.py's module docstring, 'Reference-file "
+        "context inclusion' section. Off by default.",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -695,6 +721,7 @@ def main(argv: list[str] | None = None) -> int:
             args.skill_md,
             executor=executor,
             model_cli=args.model_cli,
+            include_references=args.include_references,
         )
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)

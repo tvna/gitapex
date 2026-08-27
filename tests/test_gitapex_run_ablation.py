@@ -288,6 +288,79 @@ def test_build_command_rejects_padded_model_cli():
 
 
 # ---------------------------------------------------------------------------
+# build_skill_context_file (issue #1046)
+# ---------------------------------------------------------------------------
+
+
+def _skill_with_references(tmp_path: Path, *, ref_files: dict[str, str] | None = None) -> Path:
+    skill_dir = tmp_path / "some-skill"
+    skill_dir.mkdir()
+    skill_md = skill_dir / "SKILL.md"
+    skill_md.write_text("# Some skill\n\nBody text.\n", encoding="utf-8")
+    if ref_files:
+        refs_dir = skill_dir / "references"
+        refs_dir.mkdir()
+        for name, content in ref_files.items():
+            (refs_dir / name).write_text(content, encoding="utf-8")
+    return skill_md
+
+
+def test_build_skill_context_file_returns_skill_md_unchanged_when_flag_off(tmp_path: Path):
+    skill_md = _skill_with_references(tmp_path, ref_files={"rubric.md": "rubric text"})
+    result = gitapex_run_ablation.build_skill_context_file(skill_md, include_references=False)
+    assert result == skill_md
+
+
+def test_build_skill_context_file_returns_skill_md_unchanged_when_no_references_dir(tmp_path: Path):
+    skill_md = _skill_with_references(tmp_path, ref_files=None)
+    result = gitapex_run_ablation.build_skill_context_file(skill_md, include_references=True)
+    assert result == skill_md
+
+
+def test_build_skill_context_file_returns_skill_md_unchanged_when_references_dir_empty(tmp_path: Path):
+    skill_md = _skill_with_references(tmp_path, ref_files=None)
+    (skill_md.parent / "references").mkdir()
+    result = gitapex_run_ablation.build_skill_context_file(skill_md, include_references=True)
+    assert result == skill_md
+
+
+def test_build_skill_context_file_concatenates_skill_and_references(tmp_path: Path):
+    skill_md = _skill_with_references(
+        tmp_path,
+        ref_files={"rubric.md": "rubric contents here", "other.md": "other reference contents"},
+    )
+    result = gitapex_run_ablation.build_skill_context_file(skill_md, include_references=True)
+    try:
+        assert result != skill_md
+        assert result.is_file()
+        combined = result.read_text(encoding="utf-8")
+        assert "# Some skill" in combined
+        assert "Body text." in combined
+        assert "rubric contents here" in combined
+        assert "other reference contents" in combined
+        assert "references/rubric.md" in combined
+        assert "references/other.md" in combined
+        # other.md sorts before rubric.md
+        assert combined.index("other reference contents") < combined.index("rubric contents here")
+    finally:
+        result.unlink(missing_ok=True)
+
+
+def test_build_skill_context_file_ignores_subdirectories_under_references(tmp_path: Path):
+    skill_md = _skill_with_references(tmp_path, ref_files={"rubric.md": "top level ref"})
+    nested_dir = skill_md.parent / "references" / "nested"
+    nested_dir.mkdir()
+    (nested_dir / "deep.md").write_text("nested content should not appear", encoding="utf-8")
+    result = gitapex_run_ablation.build_skill_context_file(skill_md, include_references=True)
+    try:
+        combined = result.read_text(encoding="utf-8")
+        assert "top level ref" in combined
+        assert "nested content should not appear" not in combined
+    finally:
+        result.unlink(missing_ok=True)
+
+
+# ---------------------------------------------------------------------------
 # subprocess_executor (real subprocess, no `claude` binary needed)
 # ---------------------------------------------------------------------------
 
@@ -589,6 +662,51 @@ def test_run_ablation_rejects_invalid_model_cli(tmp_path: Path):
 
 
 # ---------------------------------------------------------------------------
+# gitapex_run_ablation + include_references (issue #1046)
+# ---------------------------------------------------------------------------
+
+
+def test_run_ablation_include_references_injects_combined_context_and_cleans_up(tmp_path: Path):
+    skill_dir = tmp_path / "some-skill"
+    skill_dir.mkdir()
+    skill_md = skill_dir / "SKILL.md"
+    skill_md.write_text("# Some skill\n", encoding="utf-8")
+    (skill_dir / "references").mkdir()
+    (skill_dir / "references" / "rubric.md").write_text("distinctive-rubric-marker", encoding="utf-8")
+
+    executor = _RecordingExecutor(["magic-word-present here", "no magic here"])
+
+    gitapex_run_ablation.gitapex_run_ablation(
+        _demo_fixture(), skill_md, executor=executor, model_cli="claude", include_references=True
+    )
+
+    first_argv, _ = executor.calls[0]
+    context_index = first_argv.index("--append-system-prompt-file") + 1
+    context_path = Path(first_argv[context_index])
+    assert context_path != skill_md
+    # The temporary file must be cleaned up by the time gitapex_run_ablation returns.
+    assert not context_path.exists()
+
+
+def test_run_ablation_include_references_false_keeps_original_skill_md_path(tmp_path: Path):
+    skill_dir = tmp_path / "some-skill"
+    skill_dir.mkdir()
+    skill_md = skill_dir / "SKILL.md"
+    skill_md.write_text("# Some skill\n", encoding="utf-8")
+    (skill_dir / "references").mkdir()
+    (skill_dir / "references" / "rubric.md").write_text("distinctive-rubric-marker", encoding="utf-8")
+
+    executor = _RecordingExecutor(["magic-word-present here", "no magic here"])
+
+    gitapex_run_ablation.gitapex_run_ablation(
+        _demo_fixture(), skill_md, executor=executor, model_cli="claude", include_references=False
+    )
+
+    first_argv, _ = executor.calls[0]
+    assert str(skill_md) in first_argv
+
+
+# ---------------------------------------------------------------------------
 # AblationResult
 # ---------------------------------------------------------------------------
 
@@ -637,6 +755,45 @@ def test_main_success_prints_json(tmp_path: Path, monkeypatch, capsys):
     assert payload["with_skill_output"] == "magic-word-present here"
     assert payload["without_skill_output"] == "no magic here"
     assert executor.calls[0][1] == 5
+
+
+def test_main_include_references_flag_injects_combined_context(tmp_path: Path, monkeypatch, capsys):
+    task = _write_demo_fixture(tmp_path)
+    skill_dir = tmp_path / "some-skill"
+    skill_dir.mkdir()
+    skill_md = skill_dir / "SKILL.md"
+    skill_md.write_text("# Demo skill\n", encoding="utf-8")
+    (skill_dir / "references").mkdir()
+    (skill_dir / "references" / "rubric.md").write_text("distinctive-rubric-marker", encoding="utf-8")
+
+    executor = _RecordingExecutor(["magic-word-present here", "no magic here"])
+    monkeypatch.setattr(gitapex_run_ablation, "subprocess_executor", executor)
+
+    rc = gitapex_run_ablation.main(["--task", str(task), "--skill-md", str(skill_md), "--include-references"])
+
+    assert rc == 0
+    first_argv, _ = executor.calls[0]
+    context_index = first_argv.index("--append-system-prompt-file") + 1
+    assert first_argv[context_index] != str(skill_md)
+
+
+def test_main_without_include_references_flag_uses_skill_md_directly(tmp_path: Path, monkeypatch, capsys):
+    task = _write_demo_fixture(tmp_path)
+    skill_dir = tmp_path / "some-skill"
+    skill_dir.mkdir()
+    skill_md = skill_dir / "SKILL.md"
+    skill_md.write_text("# Demo skill\n", encoding="utf-8")
+    (skill_dir / "references").mkdir()
+    (skill_dir / "references" / "rubric.md").write_text("distinctive-rubric-marker", encoding="utf-8")
+
+    executor = _RecordingExecutor(["magic-word-present here", "no magic here"])
+    monkeypatch.setattr(gitapex_run_ablation, "subprocess_executor", executor)
+
+    rc = gitapex_run_ablation.main(["--task", str(task), "--skill-md", str(skill_md)])
+
+    assert rc == 0
+    first_argv, _ = executor.calls[0]
+    assert str(skill_md) in first_argv
 
 
 def test_main_missing_task_file_returns_2(tmp_path: Path, capsys):
