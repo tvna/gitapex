@@ -354,7 +354,11 @@ def build_skill_context_file(skill_md: Path, *, include_references: bool) -> Pat
     Raises ``ValueError`` (via ``_read_text_or_raise``) if ``skill_md`` or
     any ``references/`` file it reads is unreadable or not valid UTF-8 --
     the same malformed-local-input contract this module's other loaders
-    already use, rather than an uncaught ``UnicodeDecodeError``.
+    already use, rather than an uncaught ``UnicodeDecodeError``. Also
+    raises ``ValueError`` if writing the combined temporary file itself
+    fails (e.g. a full disk); the partially-written temp file is deleted
+    before re-raising, so a write failure never leaks an orphaned
+    ``gitapex-skill-context-*.md`` file for no caller to clean up.
     """
     if not include_references:
         return skill_md
@@ -372,8 +376,17 @@ def build_skill_context_file(skill_md: Path, *, include_references: bool) -> Pat
 
     fd, raw_path = tempfile.mkstemp(prefix="gitapex-skill-context-", suffix=".md")
     combined_path = Path(raw_path)
-    with os.fdopen(fd, "w", encoding="utf-8") as handle:
-        handle.write("".join(sections))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write("".join(sections))
+    except OSError as exc:
+        # mkstemp already created the file by this point -- clean it up
+        # rather than leaking it (adversarial review finding: an ENOSPC or
+        # permission failure here previously left an orphaned
+        # gitapex-skill-context-*.md temp file with no caller ever handed
+        # its path to delete).
+        combined_path.unlink(missing_ok=True)
+        raise ValueError(f"cannot write combined skill context to {combined_path}: {exc}") from exc
     return combined_path
 
 

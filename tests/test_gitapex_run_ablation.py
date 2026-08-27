@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import gitapex_run_ablation
@@ -381,6 +382,28 @@ def test_build_skill_context_file_ignores_subdirectories_under_references(tmp_pa
         assert "nested content should not appear" not in combined
     finally:
         result.unlink(missing_ok=True)
+
+
+def test_build_skill_context_file_cleans_up_and_wraps_write_failure(tmp_path: Path, monkeypatch):
+    # Defeat test: a write failure after mkstemp already created the file
+    # (e.g. a full disk) must not leak that temp file, and must surface as
+    # this module's own ValueError contract, not an uncaught OSError.
+    skill_md = _skill_with_references(tmp_path, ref_files={"rubric.md": "fine"})
+
+    real_fdopen = gitapex_run_ablation.os.fdopen
+
+    def failing_fdopen(fd, *args, **kwargs):
+        handle = real_fdopen(fd, *args, **kwargs)
+        handle.close()
+        raise OSError("simulated disk-full failure")
+
+    monkeypatch.setattr(gitapex_run_ablation.os, "fdopen", failing_fdopen)
+
+    created_before = set(Path(tempfile.gettempdir()).glob("gitapex-skill-context-*"))
+    with pytest.raises(ValueError, match="cannot write combined skill context"):
+        gitapex_run_ablation.build_skill_context_file(skill_md, include_references=True)
+    created_after = set(Path(tempfile.gettempdir()).glob("gitapex-skill-context-*"))
+    assert created_after == created_before, "a failed write must not leak a temp file"
 
 
 # ---------------------------------------------------------------------------

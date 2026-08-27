@@ -170,18 +170,51 @@ jobs:
       # references/ files via `git ls-tree` rather than assuming today's
       # file set, since a historical ref's own references/ directory
       # contents can differ from what this checkout currently holds.
+      #
+      # ARM_REF selection happens inside this step's own bash, not via a
+      # `${{ cond && a || b }}` expression in `env:` -- that idiom silently
+      # falls through to the OTHER arm's ref whenever the selected input is
+      # an empty string (GitHub Actions expressions treat "" as falsy), which
+      # a manual dispatch clearing the pre-filled before_ref/after_ref default
+      # would trigger with no error, silently running both arms on identical
+      # content and reporting a false "no difference" verdict on the exact
+      # gate this workflow exists to compute (adversarial review finding).
+      # Explicitly failing on an empty ref here closes that hole.
+      #
+      # `git ls-tree` (no `-r`): matches build_skill_context_file()'s own
+      # non-recursive `references_dir.iterdir()` contract exactly (see that
+      # function's own docstring) -- a prior `-r` revision recursed into
+      # subdirectories while flattening every file into one directory via
+      # `basename`, which both diverged from what the Python function would
+      # ever read and could silently drop content if two files under
+      # different subdirectories shared a basename (adversarial review
+      # finding; latent today since no committed skill's references/ nests,
+      # but a real risk for a `skill:` input whose references/ does).
       - name: Materialize ${{ matrix.arm }}-arm skill content at its own ref
         env:
           SKILL: ${{ inputs.skill }}
-          ARM_REF: ${{ matrix.arm == 'before' && inputs.before_ref || inputs.after_ref }}
+          MATRIX_ARM: ${{ matrix.arm }}
+          BEFORE_REF: ${{ inputs.before_ref }}
+          AFTER_REF: ${{ inputs.after_ref }}
         run: |
           set -euo pipefail
+          if [ "${MATRIX_ARM}" = "before" ]; then
+            ARM_REF="${BEFORE_REF}"
+          else
+            ARM_REF="${AFTER_REF}"
+          fi
+          if [ -z "${ARM_REF}" ]; then
+            echo "::error::${MATRIX_ARM}_ref input is empty -- refusing to" \
+              "silently fall back to the other arm's ref, which would make" \
+              "both arms run on identical content."
+            exit 1
+          fi
           mkdir -p "arm-content/references"
           git show "${ARM_REF}:skills/${SKILL}/SKILL.md" > "arm-content/SKILL.md"
           while IFS= read -r ref_path; do
             name="$(basename "$ref_path")"
             git show "${ARM_REF}:${ref_path}" > "arm-content/references/${name}"
-          done < <(git ls-tree -r --name-only "${ARM_REF}" -- "skills/${SKILL}/references/")
+          done < <(git ls-tree --name-only "${ARM_REF}" -- "skills/${SKILL}/references/")
 
       # An ephemeral eval.yaml scoped to only the fixtures: input, not a
       # committed file -- mirrors evals/scripts/gitapex_set_config_model.py's
@@ -299,11 +332,19 @@ jobs:
       # Procedure step 4's own documented invocation shape: pipe the
       # candidate ("after") arm's own per-fixture scores into
       # gitapex_score_contract.py --compare-to <prior mean>. The "prior
-      # mean" here is this run's own before-arm mean, computed and
-      # formatted to gitapex_score_contract.py's own published six-decimal
-      # precision (CORRECTNESS_DECIMALS) so --compare-to's own
+      # mean" here is this run's own before-arm mean, read straight off
+      # `results-before.json`'s own `mean_score` field (already computed by
+      # gitapex_run_eval_suite.py's own to_eval_scores_json() as
+      # statistics.mean(...) over the same scores list) and formatted to
+      # gitapex_score_contract.py's own published six-decimal precision
+      # (CORRECTNESS_DECIMALS) so --compare-to's own
       # _validate_published_prior accepts it without a second manual
-      # rounding step.
+      # rounding step -- not recomputed via a second, independent
+      # sum()/len() formula, which would risk silently diverging from
+      # to_eval_scores_json()'s own statistics.mean() on a floating-point
+      # edge case (adversarial review finding; waza-eval-gate.yml's own
+      # "Run suites" step already reads `result['mean_score']` the same
+      # way, not recomputed).
       - name: Compute before-arm mean and KEEP/REJECT verdict
         run: |
           set -euo pipefail
@@ -311,8 +352,7 @@ jobs:
           import json
           with open("keep-gate-before/results-before.json", encoding="utf-8") as fh:
               data = json.load(fh)
-          scores = [entry["score"] for entry in data["scores"]]
-          print(f"{sum(scores) / len(scores):.6f}")
+          print(f"{data[\"mean_score\"]:.6f}")
           ')"
           echo "before_mean=${before_mean}" >> "$GITHUB_ENV"
           uv run --frozen python3 -c '
