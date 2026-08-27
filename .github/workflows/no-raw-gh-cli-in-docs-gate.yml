@@ -1,0 +1,45 @@
+# Issue #529 (refs #205 Repairs 5 & 8): an implementation plan document
+# instructed a raw `gh pr view` CLI invocation, contradicting CLAUDE.md's
+# "Do not invoke command-line GitHub tools directly." The violation was
+# caught only by two rounds of manual self-review. No lint checked
+# documentation/plan files for this pattern before this gate.
+#
+# Deliberately no `paths:` filter, following hidden-characters-gate.yml's
+# own rationale: a workflow that never fires for a given PR leaves a
+# required status check Pending forever, whereas a job that runs and
+# passes is safe to promote to required later. The scan (a real
+# `pydantic` import, same as the hidden-characters gate) runs
+# unconditionally over every tracked docs/**/*.md file and still costs
+# only a few seconds.
+name: No raw gh CLI in docs gate
+
+on:
+  pull_request: {}
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  no-raw-gh-cli-in-docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Check for raw gh CLI invocations in docs/**/*.md fenced blocks
+        run: |
+          set -euo pipefail
+          uv run --frozen python3 .github/scripts/gitapex_gate_no_raw_gh_cli_in_docs.py
