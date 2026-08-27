@@ -163,7 +163,7 @@ import gitapex_check_bash_safety as checker
 import pytest
 import test_gitapex_check_bash_safety as hooks_known_bypass_module
 import test_gitapex_check_task_bash_safety as sibling_known_bypass_module
-from _gitapex_bash_oracle import parse_capture_file, run_oracle_in
+from _gitapex_bash_oracle import assert_closed_vocabulary, parse_capture_file, run_oracle_in
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
@@ -190,6 +190,27 @@ _METHOD_FLAGS = ("-X", "--method")
 _FIELD_FLAGS = ("-f", "-F", "--field", "--raw-field")
 
 _DECOYS = ("foo", "bar", "baz", "x", "y")
+
+# Grammar-closure gate, run at import time (issue #1365, Step 8 independent
+# adversarial review). Every vocabulary above except `_DECOYS` is IMPORTED
+# from `gitapex_check_bash_safety`, a module this branch may not modify and
+# whose tables will keep evolving -- so this grammar's own "no free
+# redirection operator, no backgrounding, no unbounded nesting" closure
+# claim (see the module docstring) actually depends on a property of THAT
+# file: that no table entry carries whitespace or a shell metacharacter.
+# A future `_DENIED_ADJACENT` entry such as `("gh", "pr", "merge --admin")`
+# would otherwise silently widen what a real `bash -c` is handed here, with
+# nothing catching it. Checked, not assumed: a violation is a collection
+# error naming the drifted table, not a wider generated command.
+for _vocabulary, _source in (
+    ([word for pattern in _DENIED_ADJACENT_PATTERNS for word in pattern], "checker._DENIED_ADJACENT"),
+    (_WATCHED_TOOL_NAMES, "checker._WATCHED_TOOLS"),
+    (_WRITE_METHOD_VALUES, "checker._WRITE_METHODS"),
+    (_METHOD_FLAGS, "this module's own _METHOD_FLAGS"),
+    (_FIELD_FLAGS, "this module's own _FIELD_FLAGS"),
+    (_DECOYS, "this module's own _DECOYS"),
+):
+    assert_closed_vocabulary(_vocabulary, _source)
 
 # Every technique below is safe (empirically confirmed, see module
 # docstring) for BOTH the denied-adjacent tool+verb payload and the git-push
@@ -382,6 +403,12 @@ def _oracle_shows_denied_write(observations: list[tuple[str, list[str]]]) -> boo
                     and lowered_args[i + 1] in checker._WRITE_METHODS
                 ):
                     return True
+                # `-F` is absent from this tuple deliberately, not by
+                # omission: `lowered_args` has already lower-cased every
+                # token, so the generated `-F` field flag arrives here as
+                # `-f` and is matched by that entry. Spelled out because
+                # the generation-side `_FIELD_FLAGS` above DOES list all
+                # four, and the asymmetry otherwise reads as a gap.
                 if tok in ("-f", "--field", "--raw-field"):
                     return True
     return False
@@ -402,6 +429,70 @@ def _run_oracle_observations(command: str, tmp_path_factory: pytest.TempPathFact
     base = tmp_path_factory.mktemp("bash_safety_differential")
     _run, capture_file = run_oracle_in(command, _WATCHED_TOOL_NAMES, base)
     return parse_capture_file(capture_file)
+
+
+@pytest.mark.parametrize(
+    ("rule_names", "command", "field"),
+    [
+        (
+            ("_rule_a_literal",),
+            _make_denied_write_command("denied_adjacent", 0, "POST", "-X", "-f", "foo", "bar", "baz", 0, False, 1),
+            "deny",
+        ),
+        (
+            ("_rule_gh_api_write",),
+            _make_denied_write_command("gh_api_method", 0, "POST", "-X", "-f", "foo", "bar", "baz", 0, False, 1),
+            "deny",
+        ),
+        (
+            ("_rule_gh_api_write",),
+            _make_denied_write_command("gh_api_field", 0, "POST", "-X", "-f", "foo", "bar", "baz", 0, False, 1),
+            "deny",
+        ),
+        (
+            ("_rule_b1a_dynamic_word_same_segment_verb", "_rule_b1b_dynamic_word_assigned_tool_and_verb"),
+            _make_denied_write_command("denied_adjacent", 0, "POST", "-X", "-f", "foo", "bar", "baz", 5, False, 1),
+            "deny",
+        ),
+        (("_is_git_push_segment",), _make_git_push_command("foo", 0, False, 1), "is_git_push"),
+    ],
+    ids=["literal", "gh_api_method", "gh_api_field", "var_b1b", "git_push"],
+)
+def test_property_assertions_have_teeth(
+    rule_names: tuple[str, ...], command: str, field: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Anti-vacuity gate for the two properties below (issue #1365, Step 8
+    independent adversarial review): a one-directional property that never
+    reaches its assertion, or whose consequent cannot fail, is green for
+    the wrong reason.
+
+    The manual version of this check -- neutralize one rule in the
+    classifier's own source, confirm the differential property then fails
+    -- cannot be committed: issue #1365's own Constraints forbid this
+    branch from touching either classifier's detection logic. Neutralizing
+    the same rule by `monkeypatch` instead needs no source edit at all, so
+    the proof lives in-tree as a real regression gate rather than as a
+    procedure a future reader has to trust and re-run by hand.
+
+    Each case takes a command built by THIS FILE's own generator (never a
+    hand-written string, so it tracks the grammar), asserts the classifier
+    denies/flags it today, then neutralizes the specific rule(s) the
+    property is actually exercising for that shape and asserts the verdict
+    flips -- i.e. the property's own assertion below WOULD have failed. The
+    other half of anti-vacuity (the oracle's own antecedent genuinely
+    firing, never silently skipping) is what `_oracle_shows_denied_write`/
+    `_oracle_shows_git_push` are measured on: exhaustively re-checked
+    during that same review across every (category x technique x
+    pattern x process-substitution) combination this grammar can build --
+    100% reached, none skipped."""
+    assert getattr(checker.classify(command), field) is True, command
+    for rule_name in rule_names:
+        monkeypatch.setattr(checker, rule_name, lambda *_args, **_kwargs: None)
+    assert getattr(checker.classify(command), field) is False, (
+        f"neutralizing {rule_names} did not change classify().{field} for {command!r} -- this "
+        "property's own assertion is being satisfied by some other rule, so it is not "
+        "actually testing what its name claims"
+    )
 
 
 @pytest.mark.slow

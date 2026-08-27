@@ -28,12 +28,13 @@ handed to ``pytest`` on the command line -- only *directory* recursion
 consults that glob). ``uv run --frozen pytest tests/_gitapex_bash_oracle.py
 -v`` therefore runs real, green tests; a whole-``tests/`` directory sweep
 never auto-discovers this file (by the same glob rule), which is expected
-and intentional, not a gap -- callers needing this harness import its four
+and intentional, not a gap -- callers needing this harness import its five
 public functions below directly.
 
 Three building blocks, used together by every consumer (task-2, task-3,
 task-5, task-6 of the branch plan this belongs to), plus one composer over
-them:
+them and one grammar-closure guard used only by the two generative
+consumers:
 
 * :func:`write_stand_ins` -- the "fixture/helper": given a list of watched
   tool names and a directory (always ``tmp_path``/``tmp_path_factory``-
@@ -56,6 +57,21 @@ them:
   parsing happens at all is a real per-caller decision (a caller that
   returns early on ``timed_out`` legitimately never parses a capture file a
   ``killpg`` may have truncated mid-line).
+* :func:`assert_closed_vocabulary` -- the "grammar-closure guard" (added
+  under issue #1365's own Step 8 independent adversarial review): the two
+  generative consumers (task-5/6's differential property tests) build every
+  command they execute out of vocabularies they IMPORT from the classifier
+  modules under test (``_DENIED_ADJACENT``, ``_WATCHED_TOOLS``,
+  ``_WATCHED_VERBS``, ``_FETCH_EXEC_WRAPPERS``, ``_GIT_LONG_VALUE_FLAGS``,
+  ...). Their "no free redirection / no backgrounding / no unbounded
+  nesting" closure claim therefore rests on a property of files they do not
+  own and this branch may not modify: that no entry in those tables
+  contains a shell metacharacter or whitespace. That was prose, checked by
+  a reviewer's eye, and nothing re-checked it when a table changed -- so a
+  future entry such as ``("gh", "pr", "merge --admin")`` or anything
+  carrying ``;``/``&``/``|``/``>`` would silently widen what a real
+  ``bash -c`` is handed here. This turns that assumption into a gate the
+  importing module runs at import time, failing loudly instead.
 
 Capture-file format (binding for every future consumer of this module --
 task-2/3/5/6 all depend on this exact shape)
@@ -115,9 +131,19 @@ Safety design of the runner
   its environment is an explicit two-key minimal dict (``PATH``,
   ``LC_ALL=C``), never the parent's inherited ``os.environ``.
 * The child runs in a disposable, empty working directory, distinct from
-  both the stand-in directory and the capture file's own parent directory
-  (:func:`run_bash_oracle` asserts this explicitly rather than silently
-  tolerating an alias).
+  both the stand-in directory and the capture file's own parent directory.
+  :func:`run_bash_oracle` enforces the first half of that directly (it
+  rejects ``cwd == stand_in_dir`` rather than silently tolerating an
+  alias); the capture file's own location is NOT passed to it at all --
+  only :func:`write_stand_ins` ever sees that path -- so keeping ``cwd``
+  out of the capture file's parent directory is a caller convention (every
+  caller in this repository roots ``cwd``, ``stand_in_dir`` and the capture
+  file in one ``tmp_path``/``tmp_path_factory`` directory, with ``cwd`` its
+  own subdirectory), not something this module can check. Stated exactly
+  that way deliberately: an enforced check and a convention are not the
+  same guarantee, and this docstring previously claimed the stronger one
+  for both halves (corrected under issue #1365, Step 8 independent
+  adversarial review).
 * The child is launched in its own new process group/session
   (``start_new_session=True``): on a hard wall-clock timeout (``communicate
   (timeout=...)`` raising ``subprocess.TimeoutExpired``), the *whole group*
@@ -149,7 +175,7 @@ directly.
 
 Proof-method tests
 -------------------
-Three tests below prove the design claims above, each directly:
+Four tests below prove the design claims above, each directly:
 
 (a) :func:`test_stand_in_tool_resolves_but_real_system_binary_is_unreachable`
     -- a stand-in-only tool name resolves and runs; a real system binary
@@ -167,6 +193,12 @@ Three tests below prove the design claims above, each directly:
     confirming both that the pid is no longer alive and that the
     grandchild never lived long enough to write its own "I survived"
     marker file.
+(d) :func:`test_closed_vocabulary_guard_rejects_a_metacharacter_entry` --
+    the grammar-closure guard actually rejects the adversarial table entry
+    it exists to catch (a tool/verb word carrying ``;``, ``&``, ``|``,
+    ``>``, a space, a backtick, ``$``, ...), and accepts every real
+    vocabulary token both classifier tables carry today, so that closure
+    claim is enforced rather than merely asserted in prose.
 """
 
 from __future__ import annotations
@@ -176,6 +208,7 @@ import functools
 import json
 import os
 import pathlib
+import re
 import resource
 import shutil
 import signal
@@ -274,14 +307,30 @@ def _resource_limit_prologue(cpu_seconds: int, nproc: int) -> Callable[[], None]
     a pathological fork-bomb-shaped generated command -- not a substitute
     for the generation grammar's own closure (task-5/6's job, not this
     module's), and not universally enforced: Linux does not apply
-    ``RLIMIT_NPROC`` to a privileged process at all, so a ``setrlimit``
-    failure here is swallowed rather than raised -- the hard wall-clock
-    timeout plus ``os.killpg`` in :func:`run_bash_oracle` is the real,
-    unconditional backstop this is layered on top of, not a replacement
-    for."""
+    ``RLIMIT_NPROC`` to a privileged process at all, and *neither*
+    ``setrlimit`` call can succeed when the ambient process already carries
+    a HARDER limit than the one requested here (lowering a hard limit is
+    unprivileged, raising one is not -- so an ambient ``RLIMIT_CPU`` hard
+    limit below ``cpu_seconds``, which a hardened CI runner or container
+    can legitimately impose, makes this call raise ``ValueError``).
+
+    BOTH calls therefore swallow their own failure rather than raising it
+    (issue #1365, Step 8 independent adversarial review): an exception
+    escaping a ``preexec_fn`` is re-raised in the PARENT as
+    ``subprocess.SubprocessError``, which would turn every single oracle
+    invocation in this repository's test suite into a hard error on such a
+    host -- reproduced directly, by lowering this process's own
+    ``RLIMIT_CPU`` hard limit to 2 and calling :func:`run_bash_oracle`
+    (``SubprocessError: Exception occurred in preexec_fn.``), rather than
+    assumed. Swallowing is sound precisely because the only ordinary
+    failure mode is "the ambient limit is already at least as strict", and
+    because the hard wall-clock timeout plus ``os.killpg`` in
+    :func:`run_bash_oracle` is the real, unconditional backstop this is
+    layered on top of, not a replacement for."""
 
     def _apply() -> None:
-        resource.setrlimit(resource.RLIMIT_CPU, (cpu_seconds, cpu_seconds))
+        with contextlib.suppress(ValueError, OSError):
+            resource.setrlimit(resource.RLIMIT_CPU, (cpu_seconds, cpu_seconds))
         with contextlib.suppress(ValueError, OSError):
             resource.setrlimit(resource.RLIMIT_NPROC, (nproc, nproc))
 
@@ -304,9 +353,12 @@ def run_bash_oracle(
     never the parent's inherited ``os.environ``), and ``cwd`` as its
     working directory -- ``cwd`` must be a distinct, disposable, empty
     directory, neither ``stand_in_dir`` itself nor the capture file's own
-    parent directory (both callers are expected to pass distinct
-    ``tmp_path``-rooted directories; this function asserts the distinction
-    explicitly rather than silently tolerating an alias).
+    parent directory. Only the first of those two is actually checked here
+    (``cwd == stand_in_dir`` raises, rather than being silently
+    tolerated); the capture file's own path is never passed to this
+    function at all, so the second is a caller convention this function
+    cannot verify -- see the module docstring's own "Safety design of the
+    runner" section.
 
     Enforces a hard wall-clock ``timeout`` (seconds): the child is launched
     in its own new process group/session (``start_new_session=True``), so
@@ -375,6 +427,39 @@ def _proc_is_terminated(pid: int) -> bool:
     # reliably rather than assuming comm has none.
     state_field = contents.rsplit(")", 1)[-1].split()[0]
     return state_field == "Z"
+
+
+# One shell word, drawn from a closed vocabulary: letters/digits, an
+# optional leading `-`/`--` (flag names), and the four inert punctuation
+# characters real tool/verb/flag words in these tables actually use
+# (`.` in `example.invalid`, `_`, `-` in `apt-get`/`--raw-field`, `/` and
+# `=` in a fused `--git-dir=/tmp/decoy`). Deliberately an ALLOW-list, not a
+# metacharacter deny-list: a deny-list has to enumerate every one of bash's
+# own special characters correctly to be sound, and silently admits any it
+# forgets.
+_CLOSED_VOCABULARY_WORD = re.compile(r"\A-{0,2}[A-Za-z0-9][A-Za-z0-9._/=-]*\Z")
+
+
+def assert_closed_vocabulary(words: Iterable[str], source: str) -> None:
+    """Fail loudly (``ValueError``) unless every word in ``WORDS`` is a
+    single inert shell word safe to splice into a generated command string
+    -- see this module's own "Four building blocks" docstring section for
+    why the generative consumers need this and what it is guarding against.
+
+    ``SOURCE`` names the vocabulary being checked (e.g.
+    ``"gitapex_check_bash_safety._DENIED_ADJACENT"``) so a failure points
+    at the table that drifted, not merely at the test that noticed.
+    Consumers call this at IMPORT time, over every vocabulary they import
+    from a module they do not own, so a drifted table is a collection
+    error rather than a real ``bash -c`` running a wider string than the
+    grammar's own documented closure allows."""
+    for word in words:
+        if not _CLOSED_VOCABULARY_WORD.fullmatch(word):
+            raise ValueError(
+                f"{source}: {word!r} is not a closed-vocabulary shell word -- a generative "
+                "consumer of this harness splices it directly into a real `bash -c` command "
+                "string, so it must not carry whitespace or any shell metacharacter"
+            )
 
 
 def parse_capture_file(capture_file: pathlib.Path) -> list[tuple[str, list[str]]]:
@@ -495,6 +580,57 @@ def test_concurrent_invocations_use_isolated_paths(tmp_path_factory: pytest.Temp
     assert capture_alpha != capture_beta
     assert observed_alpha == [("mytool", ["alpha"])]
     assert observed_beta == [("mytool", ["beta"])]
+
+
+@pytest.mark.parametrize(
+    "bad_word",
+    [
+        "merge --admin",  # whitespace: two words where the grammar assumes one
+        "install;touch",
+        "pip&",
+        "gh|cat",
+        "install>out",
+        "install<in",
+        "$(id)",
+        "`id`",
+        "a'b",
+        'a"b',
+        "a\\b",
+        "a*b",
+        "",
+    ],
+)
+def test_closed_vocabulary_guard_rejects_a_metacharacter_entry(bad_word: str) -> None:
+    """(d) The grammar-closure guard rejects exactly the adversarial table
+    entry it exists to catch -- an imported classifier-table word carrying
+    whitespace or a shell metacharacter, which a generative consumer would
+    otherwise splice straight into a real ``bash -c`` string -- while
+    still accepting each SHAPE of token those tables really carry today
+    (bare word, hyphenated tool, short/long flag, fused ``=`` value,
+    dotted host name). The guard's application to the live tables
+    themselves is not here but at the two differential modules' own import
+    time, over the real imported objects; this test proves the guard those
+    modules call actually discriminates."""
+    with pytest.raises(ValueError, match="closed-vocabulary shell word"):
+        assert_closed_vocabulary(["pip", bad_word], "test-source")
+
+    # ... and every real token in use today passes, so the guard is a real
+    # constraint on drift, not a tautology that would reject the status quo.
+    assert_closed_vocabulary(
+        [
+            "gh",
+            "pr",
+            "merge",
+            "apt-get",
+            "pip3",
+            "--raw-field",
+            "-X",
+            "--git-dir=/tmp/decoy",
+            "POST",
+            "example.invalid",
+        ],
+        "test-source",
+    )
 
 
 def _write_self_backgrounding_stand_in(

