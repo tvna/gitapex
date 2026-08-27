@@ -317,6 +317,23 @@ def build_command(model_cli: str, prompt: str, skill_md: Path | None, *, model: 
     return argv
 
 
+def _read_text_or_raise(path: Path) -> str:
+    """UTF-8 ``path.read_text()``, converting an unreadable file or a stray
+    non-UTF-8 byte into ``ValueError`` -- the same
+    ``(OSError, UnicodeDecodeError)`` -> ``ValueError`` conversion
+    ``load_yaml_mapping`` above already applies to a task-fixture read,
+    applied here to ``build_skill_context_file``'s own reads (``skill_md``
+    itself and each ``references/`` file): a committed reference file with
+    accidental non-UTF-8 content is not physically impossible, so it must
+    fail loudly through this module's existing malformed-input contract
+    rather than as an uncaught ``UnicodeDecodeError`` traceback.
+    """
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ValueError(f"cannot read {path}: {exc}") from exc
+
+
 def build_skill_context_file(skill_md: Path, *, include_references: bool) -> Path:
     """Return the path to hand ``--append-system-prompt-file`` for the "skill
     available" arm: ``skill_md`` itself, unless ``include_references`` is set
@@ -333,6 +350,11 @@ def build_skill_context_file(skill_md: Path, *, include_references: bool) -> Pat
     Callers own deleting the returned temporary file once done with it
     (compare the returned path against ``skill_md`` -- unequal means a real
     temp file was created); this function does not delete anything itself.
+
+    Raises ``ValueError`` (via ``_read_text_or_raise``) if ``skill_md`` or
+    any ``references/`` file it reads is unreadable or not valid UTF-8 --
+    the same malformed-local-input contract this module's other loaders
+    already use, rather than an uncaught ``UnicodeDecodeError``.
     """
     if not include_references:
         return skill_md
@@ -343,10 +365,10 @@ def build_skill_context_file(skill_md: Path, *, include_references: bool) -> Pat
     if not reference_paths:
         return skill_md
 
-    sections = [skill_md.read_text(encoding="utf-8")]
+    sections = [_read_text_or_raise(skill_md)]
     for reference_path in reference_paths:
         relative = reference_path.relative_to(skill_md.parent).as_posix()
-        sections.append(f"\n\n---\n# {relative}\n\n{reference_path.read_text(encoding='utf-8')}")
+        sections.append(f"\n\n---\n# {relative}\n\n{_read_text_or_raise(reference_path)}")
 
     fd, raw_path = tempfile.mkstemp(prefix="gitapex-skill-context-", suffix=".md")
     combined_path = Path(raw_path)

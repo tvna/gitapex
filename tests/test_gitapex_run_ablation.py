@@ -346,6 +346,29 @@ def test_build_skill_context_file_concatenates_skill_and_references(tmp_path: Pa
         result.unlink(missing_ok=True)
 
 
+def test_build_skill_context_file_wraps_non_utf8_skill_md_as_value_error(tmp_path: Path):
+    # Defeat test (not merely happy-path coverage): a stray non-UTF-8 byte
+    # must surface as this module's own malformed-input ValueError
+    # contract, not escape as an uncaught UnicodeDecodeError.
+    skill_dir = tmp_path / "some-skill"
+    skill_dir.mkdir()
+    skill_md = skill_dir / "SKILL.md"
+    skill_md.write_bytes(b"# Some skill\n\xff\xfe bad bytes\n")
+    (skill_dir / "references").mkdir()
+    (skill_dir / "references" / "rubric.md").write_text("fine", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="cannot read"):
+        gitapex_run_ablation.build_skill_context_file(skill_md, include_references=True)
+
+
+def test_build_skill_context_file_wraps_non_utf8_reference_file_as_value_error(tmp_path: Path):
+    skill_md = _skill_with_references(tmp_path, ref_files={"rubric.md": "fine"})
+    (skill_md.parent / "references" / "bad.md").write_bytes(b"\xff\xfe bad bytes")
+
+    with pytest.raises(ValueError, match="cannot read"):
+        gitapex_run_ablation.build_skill_context_file(skill_md, include_references=True)
+
+
 def test_build_skill_context_file_ignores_subdirectories_under_references(tmp_path: Path):
     skill_md = _skill_with_references(tmp_path, ref_files={"rubric.md": "top level ref"})
     nested_dir = skill_md.parent / "references" / "nested"
