@@ -4,7 +4,7 @@ endpoint (issue #1259).
 Before this module, ``evals/scripts/gitapex_run_ablation.py``'s ``Executor``
 DI type (``Callable[[Sequence[str], int], str]``, argv+timeout in,
 captured stdout out) had exactly one implementation --
-``subprocess_executor``, a ``claude`` CLI subprocess. ``waza-eval-matrix.yml``'s
+``subprocess_executor``, a ``claude`` CLI subprocess. ``eval-matrix.yml``'s
 ``eval-matrix-hf-gemma4`` job still called ``nix run .#waza -- run`` to
 reach a Hugging Face Inference Endpoint because no non-Claude ``Executor``
 existed. This module is that second implementation.
@@ -164,7 +164,7 @@ class HttpExecutorConfig(BaseModel):
     own source/behavior directly) -- an unvalidated ``api_key`` is this
     module's own header-injection surface into that request, not just an
     auth-failure risk. In this repository's own real call site
-    (``.github/workflows/waza-eval-matrix.yml``'s ``eval-matrix-hf-gemma4``
+    (``.github/workflows/eval-matrix.yml``'s ``eval-matrix-hf-gemma4``
     job) the value only ever originates from a repository secret, not
     attacker-controlled input, so this is defense-in-depth, not a fix for
     an exploited path -- kept anyway per CLAUDE.md section 4's own

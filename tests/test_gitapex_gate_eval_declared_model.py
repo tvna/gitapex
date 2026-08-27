@@ -79,7 +79,7 @@ def _write_suite(
 
 
 def _write_workflow(root: pathlib.Path, text: str = _MINIMAL_WORKFLOW) -> pathlib.Path:
-    path = root / "waza-eval-matrix.yml"
+    path = root / "eval-matrix.yml"
     path.write_text(text, encoding="utf-8")
     return path
 
@@ -351,7 +351,7 @@ def test_unreadable_workflow_raises_from_the_env_walk_too(tmp_path: pathlib.Path
     """The env walk parses the workflow independently of the default-input
     parse, so it needs its own read guard -- an unhandled decode error there
     would escape `main()` exactly the way defect 1 did."""
-    path = tmp_path / "waza-eval-matrix.yml"
+    path = tmp_path / "eval-matrix.yml"
     path.write_bytes(b"on:\n  workflow_dispatch: \xff\xfe\n")
     with pytest.raises(gate.DeclarationReadError, match="cannot be read as UTF-8 YAML"):
         gate._hardcoded_env_models(path)
@@ -440,7 +440,7 @@ def test_zero_discovered_suites_raises_rather_than_passing(tmp_path: pathlib.Pat
 
 
 def test_non_utf8_workflow_raises(tmp_path: pathlib.Path) -> None:
-    path = tmp_path / "waza-eval-matrix.yml"
+    path = tmp_path / "eval-matrix.yml"
     path.write_bytes(b"on:\n  workflow_dispatch: \xff\xfe\n")
     with pytest.raises(gate.DeclarationReadError, match="cannot be read as UTF-8 YAML"):
         gate._matrix_default_models(path)

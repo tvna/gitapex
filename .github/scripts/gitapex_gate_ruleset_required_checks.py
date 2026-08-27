@@ -13,7 +13,7 @@ error message pointing at the cause. Recovering means an admin editing the live
 ruleset, which is exactly the manual, unreviewable path the committed
 source-of-truth design exists to avoid.
 
-`.github/workflows/lint.yml` and `.github/workflows/waza-eval-gate.yml` both
+`.github/workflows/lint.yml` and `.github/workflows/eval-gate.yml` both
 already carry that reasoning in their own headers, as the stated justification
 for deliberately having no `paths:` filter. This gate turns that prose into a
 check, so a future edit that adds a `paths:` filter to one of those workflows --

@@ -34,7 +34,7 @@ Issue #858: this repository's own committed ``evals/*/tasks/*.yaml``
 fixtures are scored by two different consumers of the *same*
 ``expected.output_contains``/``output_not_contains`` keys -- this scorer
 (case-sensitive, per the paragraph above), and waza 0.38.0's own built-in
-``expected.*`` grading (the path ``.github/workflows/waza-eval-gate.yml``
+``expected.*`` grading (the path ``.github/workflows/eval-gate.yml``
 runs), which is case-**insensitive** -- confirmed live against the
 flake-pinned ``waza`` binary (``executor: mock``): an
 ``output_contains: ["MOCK RESPONSE FOR"]`` assertion scored 1.0 against mock

@@ -280,7 +280,7 @@ just measures the wrong thing.
 - **Casing is not cosmetic here.** `gitapex_score_contract.py` matches
   `output_contains`/`output_not_contains` case-sensitively by design;
   waza's own built-in `expected.output_contains` grading (used by
-  `.github/workflows/waza-eval-gate.yml`) is case-insensitive, pinned
+  `.github/workflows/eval-gate.yml`) is case-insensitive, pinned
   upstream behavior this repository does not control. An exact-case match
   always also satisfies waza's case-insensitive one, so quoting the
   rubric's own casing exactly (the rule above) is what keeps a fixture's

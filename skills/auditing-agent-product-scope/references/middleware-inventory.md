@@ -99,7 +99,7 @@ Class B mechanism above), invoked as `nix run .#waza -- run` (its
   was dropped rather than rebuilt -- see `evaluating-skill-quality`'s own
   `references/rubric.md` for the three documented false-positive/negative
   cases that motivated dropping it instead of replacing it.
-- `.github/workflows/waza-eval-matrix.yml`: `workflow_dispatch`-only,
+- `.github/workflows/eval-matrix.yml`: `workflow_dispatch`-only,
   never gates a merge. Requires repository secrets
   `COPILOT_BASE_URL`/`COPILOT_PROVIDER_BASE_URL` (and, for the optional
   Hugging Face job, `HF_INFERENCE_ENDPOINT_URL`/`HF_API_TOKEN`); fails

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Preflight: verify the copilot-sdk custom-provider endpoint is configured.
 
-Shared by ``.github/workflows/waza-eval-matrix.yml`` (``eval-matrix`` job)
-and ``.github/workflows/waza-eval-gate.yml``, which previously each carried
+Shared by ``.github/workflows/eval-matrix.yml`` (``eval-matrix`` job)
+and ``.github/workflows/eval-gate.yml``, which previously each carried
 their own copy of the identical bash check
 (``if [ -z "$COPILOT_BASE_URL" ] && [ -z "$COPILOT_PROVIDER_BASE_URL" ]``).
 This module is the single source of truth those two call sites now share
@@ -106,7 +106,7 @@ Usage::
 A bare ``python3`` invocation is no longer sufficient now that this module
 imports pydantic: it would fail with ``ModuleNotFoundError`` wherever
 pydantic is not already on the ambient interpreter's path. Both real call
-sites (``waza-eval-matrix.yml``, ``waza-eval-gate.yml``) already go through
+sites (``eval-matrix.yml``, ``eval-gate.yml``) already go through
 ``uv run``, per this repository's own ``bare-python3-invocation-gate``.
 
 Reads ``COPILOT_BASE_URL`` / ``COPILOT_PROVIDER_BASE_URL`` from the process

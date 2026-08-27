@@ -79,7 +79,7 @@ SDK it imports) is imported lazily, only inside the ``--executor http``
 branch -- never at this module's own top level (adversarial-review finding:
 a top-level import would have put ``openai``'s own import-time success on
 the critical path of every ``--executor claude-cli`` invocation too,
-including ``waza-eval-gate.yml``'s merge-gating call site, which never
+including ``eval-gate.yml``'s merge-gating call site, which never
 passes ``--executor`` and has no other reason to need that dependency
 importable at all).
 
