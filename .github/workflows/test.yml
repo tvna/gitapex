@@ -42,7 +42,15 @@ jobs:
           enable-cache: true
 
       - name: Run pytest
-        run: uv run --frozen pytest --cov-report=xml --cov-report=json
+        # Issue #1365, temporary diagnostic: -v so a failing test's node ID
+        # streams to this log as soon as it completes, surviving even if the
+        # job is later killed by its own timeout before pytest's end-of-run
+        # summary prints (exactly what happened on run 33037759746, job
+        # 98404195895 -- 10 failures observed in the dot-mode output but no
+        # traceback, since the job was SIGKILLed before the FAILURES section
+        # could print). Revert this flag once the actual failing test(s) are
+        # identified from a run under this change.
+        run: uv run --frozen pytest --cov-report=xml --cov-report=json -v
 
       # Issue #536: evals/scripts/*.py had no minimum-coverage floor, so a
       # file's CLI surface could ship untested (PR #512's own retrospective
