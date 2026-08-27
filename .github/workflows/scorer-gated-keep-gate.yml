@@ -211,10 +211,24 @@ jobs:
           fi
           mkdir -p "arm-content/references"
           git show "${ARM_REF}:skills/${SKILL}/SKILL.md" > "arm-content/SKILL.md"
-          while IFS= read -r ref_path; do
-            name="$(basename "$ref_path")"
-            git show "${ARM_REF}:${ref_path}" > "arm-content/references/${name}"
-          done < <(git ls-tree --name-only "${ARM_REF}" -- "skills/${SKILL}/references/")
+          # Filter to blob (regular file) entries only, matching
+          # build_skill_context_file()'s own `is_file()` filter exactly --
+          # `git ls-tree` (without --name-only) also lists a tree (nested
+          # subdirectory) entry, and `git show ref:<dir>` succeeds on one
+          # (printing a text tree listing, not erroring), which an earlier
+          # revision of this loop would have written verbatim as bogus file
+          # content into arm-content/references/<subdirname> instead of
+          # skipping it (adversarial re-review finding on the -r removal
+          # above: dropping -r closed the original collision risk but this
+          # loop still had no type filter, unlike the Python side).
+          while IFS=$'\t' read -r meta name; do
+            type="$(printf '%s' "$meta" | awk '{print $2}')"
+            if [ "${type}" != "blob" ]; then
+              continue
+            fi
+            base="$(basename "$name")"
+            git show "${ARM_REF}:${name}" > "arm-content/references/${base}"
+          done < <(git ls-tree "${ARM_REF}" -- "skills/${SKILL}/references/")
 
       # An ephemeral eval.yaml scoped to only the fixtures: input, not a
       # committed file -- mirrors evals/scripts/gitapex_set_config_model.py's
