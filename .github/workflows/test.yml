@@ -15,6 +15,11 @@ concurrency:
 jobs:
   pytest:
     runs-on: ubuntu-latest
+    # Issue #1365: back to this repo's own pre-#1365 budget -- this job's
+    # own scope no longer includes the real-bash-subprocess-heavy files
+    # (see the 4 pytest-bash-oracle-* jobs below), so it is back to
+    # roughly the same ~6300 test, previously-comfortable-at-10-minutes
+    # shape those files were added on top of.
     timeout-minutes: 10
     permissions:
       contents: read
@@ -32,19 +37,26 @@ jobs:
         with:
           enable-cache: true
 
+      # Issue #1365: the real-bash oracle harness's own pinned/generative
+      # test files are run in the 4 separate pytest-bash-oracle-* jobs
+      # below instead, so this job's own coverage is only a partial slice --
+      # COVERAGE_FILE gives it a job-unique data-file name (never the bare
+      # default `.coverage`, which would collide with another job's own
+      # artifact once all 5 land in the same coverage-combine checkout) and
+      # no --cov-report flag here: the combined, final coverage.xml/json is
+      # only produced once by the coverage-combine job below, after all 5
+      # jobs' own raw data is merged -- generating a report from this job's
+      # own partial data here would be actively misleading (most files this
+      # scope doesn't touch would read as 0%).
       - name: Run pytest
-        run: uv run --frozen pytest --cov-report=xml --cov-report=json
-
-      # Issue #536: evals/scripts/*.py had no minimum-coverage floor, so a
-      # file's CLI surface could ship untested (PR #512's own retrospective
-      # finding) without CI ever flagging it. coverage.json already exists
-      # from the pytest step above; this only asserts a threshold on what
-      # it measured. Issue #562: the gate's default scope grew from just
-      # evals/scripts/*.py to every pyproject.toml [tool.coverage.run]
-      # source directory (derived from pyproject.toml itself, no extra
-      # flag needed here), including this gate's own .github/scripts file.
-      - name: Enforce per-file coverage minimum
-        run: uv run --frozen python3 .github/scripts/gitapex_gate_evals_scripts_coverage.py --coverage-json coverage.json
+        env:
+          COVERAGE_FILE: .coverage.pytest
+        run: |
+          uv run --frozen pytest \
+            --ignore=tests/test_gitapex_check_bash_safety_oracle_pins.py \
+            --ignore=tests/test_gitapex_check_task_bash_safety_oracle_pins.py \
+            --ignore=tests/test_gitapex_check_bash_safety_differential.py \
+            --ignore=tests/test_gitapex_check_task_bash_safety_differential.py
 
       # Issue #727: xenon (wraps radon cc) fails the block/module/average
       # thresholds below, measured empirically against this repo's real
@@ -59,17 +71,278 @@ jobs:
       # check_shape) are refactored below rank F. apm_modules/* is
       # excluded defensively even though no workflow here populates it
       # (it is apm's gitignored package cache), consistent with every
-      # other gate's scope never reaching into it.
+      # other gate's scope never reaching into it. Source-tree-based, not
+      # test-result-based -- unaffected by the pytest-job split above.
       - name: Enforce cyclomatic-complexity ceiling
         run: |
           uv run --frozen xenon --max-absolute E --max-modules B --max-average A \
             --exclude "apm_modules/*,skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py" \
             .
 
+      # Uploaded as a raw coverage DATA file (never a report -- see the
+      # "Run pytest" step's own comment above), consumed only by
+      # coverage-combine below. include-hidden-files: true because
+      # `.coverage.pytest` is a dotfile and actions/upload-artifact
+      # silently excludes dotfiles by default otherwise (confirmed against
+      # that action's own README's "Uploading Hidden Files" section, not
+      # assumed).
+      # if-no-files-found: error, not the repo's other upload step's own
+      # `warn` (issue #124's own precedent) -- that step uploads a
+      # best-effort artifact for a human to look at; this one is a
+      # required input to the coverage-combine job below, so a missing
+      # file here must fail loudly, not silently produce an empty/partial
+      # combined report downstream.
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: coverage-data-pytest
+          path: .coverage.pytest
+          include-hidden-files: true
+          if-no-files-found: error
+
+  # Issue #1365: isolates the real-bash oracle harness's own pinned and
+  # Hypothesis-generative test files (each spawns genuine `bash -c`
+  # subprocesses, safe but not free under this runner's own harden-runner
+  # eBPF process/network tracing) into their own jobs instead of sharing one
+  # combined ~7200-test job with everything else.
+  #
+  # First split into one combined `pytest-bash-oracle` job for all 4 files
+  # (root-caused directly from a `-v` job-log inspection, not guessed: 10
+  # consecutive failures, all on the SAME xdist worker, all in the SAME
+  # file, each within ~0.01s of the oracle harness's own 5-second
+  # per-invocation timeout). That combined job THEN hung completely --
+  # zero progress output at all for the full 15-minute budget, across all
+  # 4 xdist workers and all 72 items (run 33066046460, job 98496228476) --
+  # a materially different, more severe symptom than the first failure,
+  # confirming the earlier "shrink the contention window" fix was
+  # necessary but not sufficient. Split further, per file, per the
+  # operator's own direction, both to isolate the true failure blast
+  # radius (does the hang track one specific file, or all four?) and to
+  # reduce simultaneous real-subprocess creation: `-n 0` (serial, no
+  # xdist workers) trades this small file's own parallelism for a
+  # materially lower peak concurrent-subprocess rate against this
+  # runner's harden-runner tracer, and -- unlike the parallel case above
+  # -- still prints one dot per completed test before any hang, so a
+  # recurrence pinpoints exactly where within the file it happens instead
+  # of producing silence again.
+  #
+  # 4 separate literal jobs, not one `strategy: matrix` job over the 4
+  # files: `.github/scripts/gitapex_gate_ruleset_required_checks.py`'s own
+  # `_check_run_name()` deliberately treats any matrix (or reusable-
+  # workflow) job as producing no reachable required-status-check name at
+  # all (a matrix job's real check-run reads `job_id (value, value)`, not
+  # the bare `job_id` a ruleset context names) -- so a matrix here could
+  # never be added to `.github/rulesets/main.json`'s
+  # `required_status_checks` the way each of these 4 jobs is below.
+  pytest-bash-oracle-hooks-pins:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Run pytest -- real-bash oracle (hooks classifier pins)
+        env:
+          COVERAGE_FILE: .coverage.pytest-bash-oracle-hooks-pins
+        run: uv run --frozen pytest tests/test_gitapex_check_bash_safety_oracle_pins.py -n 0
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: coverage-data-pytest-bash-oracle-hooks-pins
+          path: .coverage.pytest-bash-oracle-hooks-pins
+          include-hidden-files: true
+          if-no-files-found: error
+
+  pytest-bash-oracle-task-pins:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Run pytest -- real-bash oracle (sibling classifier pins)
+        env:
+          COVERAGE_FILE: .coverage.pytest-bash-oracle-task-pins
+        run: uv run --frozen pytest tests/test_gitapex_check_task_bash_safety_oracle_pins.py -n 0
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: coverage-data-pytest-bash-oracle-task-pins
+          path: .coverage.pytest-bash-oracle-task-pins
+          include-hidden-files: true
+          if-no-files-found: error
+
+  pytest-bash-oracle-hooks-differential:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Run pytest -- real-bash oracle (hooks classifier differential)
+        env:
+          COVERAGE_FILE: .coverage.pytest-bash-oracle-hooks-differential
+        run: uv run --frozen pytest tests/test_gitapex_check_bash_safety_differential.py -n 0
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: coverage-data-pytest-bash-oracle-hooks-differential
+          path: .coverage.pytest-bash-oracle-hooks-differential
+          include-hidden-files: true
+          if-no-files-found: error
+
+  pytest-bash-oracle-task-differential:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Run pytest -- real-bash oracle (sibling classifier differential)
+        env:
+          COVERAGE_FILE: .coverage.pytest-bash-oracle-task-differential
+        run: uv run --frozen pytest tests/test_gitapex_check_task_bash_safety_differential.py -n 0
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: coverage-data-pytest-bash-oracle-task-differential
+          path: .coverage.pytest-bash-oracle-task-differential
+          include-hidden-files: true
+          if-no-files-found: error
+
+  # Issue #1365: the pytest job above was split so the real-bash oracle
+  # harness's own heavy tests no longer share one combined-coverage run
+  # with everything else; this job re-combines every split job's own raw
+  # coverage data back into the one final report the two gates below (and
+  # Codecov) already depended on, so neither gate's own downstream
+  # invocation needed to change. `coverage combine` on all jobs' data
+  # files reproduces byte-for-byte the same per-file totals a single
+  # unsplit run produced (confirmed locally against this same repo tree
+  # before this change shipped, not assumed).
+  coverage-combine:
+    needs:
+      [
+        pytest,
+        pytest-bash-oracle-hooks-pins,
+        pytest-bash-oracle-task-pins,
+        pytest-bash-oracle-hooks-differential,
+        pytest-bash-oracle-task-differential,
+      ]
+    # if: always() -- without this, GitHub Actions' own default `needs:`
+    # semantics skip this whole job the moment any ONE of the 5 upstream
+    # jobs fails (a genuine test failure, not only a crash), which would
+    # silently drop Codecov reporting and the coverage-floor gate for that
+    # commit even though every one of those 5 upstream jobs' own "Upload
+    # coverage data" step already carries `if: always()` specifically to
+    # survive a failing test run (issue #1365, Step 8 independent
+    # adversarial review -- found live, not assumed).
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      # actions/download-artifact pin, verified live against that action's
+      # own tags (`git ls-remote --tags` against
+      # https://github.com/actions/download-artifact.git): v7 and v7.0.0
+      # both resolve to this exact commit, the same discipline this repo's
+      # own upload-artifact pin above already applies to itself.
+      - name: Download pytest coverage data
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+        with:
+          name: coverage-data-pytest
+
+      - name: Download pytest-bash-oracle-hooks-pins coverage data
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+        with:
+          name: coverage-data-pytest-bash-oracle-hooks-pins
+
+      - name: Download pytest-bash-oracle-task-pins coverage data
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+        with:
+          name: coverage-data-pytest-bash-oracle-task-pins
+
+      - name: Download pytest-bash-oracle-hooks-differential coverage data
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+        with:
+          name: coverage-data-pytest-bash-oracle-hooks-differential
+
+      - name: Download pytest-bash-oracle-task-differential coverage data
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+        with:
+          name: coverage-data-pytest-bash-oracle-task-differential
+
+      - name: Combine coverage data and generate reports
+        run: |
+          uv run --frozen coverage combine \
+            .coverage.pytest \
+            .coverage.pytest-bash-oracle-hooks-pins \
+            .coverage.pytest-bash-oracle-task-pins \
+            .coverage.pytest-bash-oracle-hooks-differential \
+            .coverage.pytest-bash-oracle-task-differential
+          uv run --frozen coverage xml
+          uv run --frozen coverage json
+
+      # Issue #536: evals/scripts/*.py had no minimum-coverage floor, so a
+      # file's CLI surface could ship untested (PR #512's own retrospective
+      # finding) without CI ever flagging it. coverage.json already exists
+      # from the combine step above; this only asserts a threshold on what
+      # it measured. Issue #562: the gate's default scope grew from just
+      # evals/scripts/*.py to every pyproject.toml [tool.coverage.run]
+      # source directory (derived from pyproject.toml itself, no extra
+      # flag needed here), including this gate's own .github/scripts file.
+      - name: Enforce per-file coverage minimum
+        run: uv run --frozen python3 .github/scripts/gitapex_gate_evals_scripts_coverage.py --coverage-json coverage.json
+
       # if: always() -- the coverage-minimum step above can fail (exit 1)
-      # on a real coverage regression without pytest itself failing; the
-      # coverage.xml pytest already produced is still valid and worth
-      # uploading so a reviewer can see the diff-coverage report on
+      # on a real coverage regression without the combine step itself
+      # failing; the coverage.xml already produced is still valid and
+      # worth uploading so a reviewer can see the diff-coverage report on
       # exactly the run where it matters most, instead of the upload
       # silently being skipped along with every other later step.
       - name: Upload coverage to Codecov
