@@ -31,6 +31,8 @@
           {"context": "actionlint"},
           {"context": "ruff"},
           {"context": "pytest"},
+          {"context": "pytest-bash-oracle"},
+          {"context": "coverage-combine"},
           {"context": "mypy"},
           {"context": "exception-handler-gaps"},
           {"context": "hidden-characters"},

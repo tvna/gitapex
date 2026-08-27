@@ -15,16 +15,12 @@ concurrency:
 jobs:
   pytest:
     runs-on: ubuntu-latest
-    # Issue #1365: the real-bash oracle harness and its ~900 new pinned/
-    # generative test cases each spawn a genuine bash subprocess -- safe,
-    # but not free under this runner's own harden-runner eBPF process/
-    # network tracing, which adds real per-subprocess overhead the prior
-    # 10-minute budget never had to absorb. Measured directly, not
-    # guessed: the un-widened budget got to 89% completion before being
-    # killed by this exact timeout (run 33026714167, job 98391924118).
-    # 15 minutes is a measured-headroom bump, not a speculative round
-    # number.
-    timeout-minutes: 15
+    # Back to this repo's own pre-#1365 budget: this job's own scope no
+    # longer includes the real-bash-subprocess-heavy files (see
+    # pytest-bash-oracle below), so it is back to roughly the same ~6300
+    # test, previously-comfortable-at-10-minutes shape those files were
+    # added on top of.
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
@@ -41,27 +37,26 @@ jobs:
         with:
           enable-cache: true
 
+      # Issue #1365: the real-bash oracle harness's own pinned/generative
+      # test files are run in the separate pytest-bash-oracle job below
+      # instead, so this job's own coverage is only a partial slice --
+      # COVERAGE_FILE gives it a job-unique data-file name (never the bare
+      # default `.coverage`, which would collide with the other job's own
+      # artifact once both land in the same coverage-combine checkout) and
+      # no --cov-report flag here: the combined, final coverage.xml/json is
+      # only produced once by the coverage-combine job below, after both
+      # jobs' own raw data is merged -- generating a report from this job's
+      # own partial data here would be actively misleading (most files this
+      # scope doesn't touch would read as 0%).
       - name: Run pytest
-        # Issue #1365, temporary diagnostic: -v so a failing test's node ID
-        # streams to this log as soon as it completes, surviving even if the
-        # job is later killed by its own timeout before pytest's end-of-run
-        # summary prints (exactly what happened on run 33037759746, job
-        # 98404195895 -- 10 failures observed in the dot-mode output but no
-        # traceback, since the job was SIGKILLed before the FAILURES section
-        # could print). Revert this flag once the actual failing test(s) are
-        # identified from a run under this change.
-        run: uv run --frozen pytest --cov-report=xml --cov-report=json -v
-
-      # Issue #536: evals/scripts/*.py had no minimum-coverage floor, so a
-      # file's CLI surface could ship untested (PR #512's own retrospective
-      # finding) without CI ever flagging it. coverage.json already exists
-      # from the pytest step above; this only asserts a threshold on what
-      # it measured. Issue #562: the gate's default scope grew from just
-      # evals/scripts/*.py to every pyproject.toml [tool.coverage.run]
-      # source directory (derived from pyproject.toml itself, no extra
-      # flag needed here), including this gate's own .github/scripts file.
-      - name: Enforce per-file coverage minimum
-        run: uv run --frozen python3 .github/scripts/gitapex_gate_evals_scripts_coverage.py --coverage-json coverage.json
+        env:
+          COVERAGE_FILE: .coverage.pytest
+        run: |
+          uv run --frozen pytest \
+            --ignore=tests/test_gitapex_check_bash_safety_oracle_pins.py \
+            --ignore=tests/test_gitapex_check_task_bash_safety_oracle_pins.py \
+            --ignore=tests/test_gitapex_check_bash_safety_differential.py \
+            --ignore=tests/test_gitapex_check_task_bash_safety_differential.py
 
       # Issue #727: xenon (wraps radon cc) fails the block/module/average
       # thresholds below, measured empirically against this repo's real
@@ -76,17 +71,139 @@ jobs:
       # check_shape) are refactored below rank F. apm_modules/* is
       # excluded defensively even though no workflow here populates it
       # (it is apm's gitignored package cache), consistent with every
-      # other gate's scope never reaching into it.
+      # other gate's scope never reaching into it. Source-tree-based, not
+      # test-result-based -- unaffected by the pytest-job split above.
       - name: Enforce cyclomatic-complexity ceiling
         run: |
           uv run --frozen xenon --max-absolute E --max-modules B --max-average A \
             --exclude "apm_modules/*,skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py" \
             .
 
+      # Uploaded as a raw coverage DATA file (never a report -- see the
+      # "Run pytest" step's own comment above), consumed only by
+      # coverage-combine below. include-hidden-files: true because
+      # `.coverage.pytest` is a dotfile and actions/upload-artifact
+      # silently excludes dotfiles by default otherwise.
+      # if-no-files-found: error, not the repo's other upload step's own
+      # `warn` (issue #124's own precedent) -- that step uploads a
+      # best-effort artifact for a human to look at; this one is a
+      # required input to the coverage-combine job below, so a missing
+      # file here must fail loudly, not silently produce an empty/partial
+      # combined report downstream.
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: coverage-data-pytest
+          path: .coverage.pytest
+          include-hidden-files: true
+          if-no-files-found: error
+
+  # Issue #1365: isolates the real-bash oracle harness's own pinned and
+  # Hypothesis-generative test files (each spawns genuine `bash -c`
+  # subprocesses, safe but not free under this runner's own harden-runner
+  # eBPF process/network tracing) into their own job instead of sharing one
+  # combined ~7200-test job with everything else. Root-caused directly
+  # (issue #1365's own PR execution log, not guessed): a job-log inspection
+  # under `-v` showed 10 consecutive failures, all on the SAME xdist worker,
+  # all in the SAME file, each within ~0.01s of the oracle harness's own
+  # 5-second per-invocation timeout -- i.e. one worker got stuck on a
+  # multi-process (subshell/pipe/command-substitution) command and every
+  # later test scheduled onto that SAME worker inherited the degradation.
+  # Splitting this file set into its own job, with far fewer other tests
+  # (and therefore far fewer concurrent xdist workers/subprocesses)
+  # competing for the runner's own resources at the same time, directly
+  # shrinks the contention window this depends on -- without claiming to
+  # have pinned the exact kernel-level mechanism, which this PR's own body
+  # discloses as still not fully isolated.
+  pytest-bash-oracle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Run pytest -- real-bash oracle (pinned + differential)
+        env:
+          COVERAGE_FILE: .coverage.pytest-bash-oracle
+        run: |
+          uv run --frozen pytest \
+            tests/test_gitapex_check_bash_safety_oracle_pins.py \
+            tests/test_gitapex_check_task_bash_safety_oracle_pins.py \
+            tests/test_gitapex_check_bash_safety_differential.py \
+            tests/test_gitapex_check_task_bash_safety_differential.py
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: coverage-data-pytest-bash-oracle
+          path: .coverage.pytest-bash-oracle
+          include-hidden-files: true
+          if-no-files-found: error
+
+  # Issue #1365: the pytest job above was split in two so the real-bash
+  # oracle harness's own heavy tests no longer share one combined-coverage
+  # run with everything else; this job re-combines both jobs' own raw
+  # coverage data back into the one final report the two gates below (and
+  # Codecov) already depended on, so neither gate's own downstream
+  # invocation needed to change. `coverage combine` on both jobs' data
+  # files reproduces byte-for-byte the same per-file totals a single
+  # unsplit run produced (confirmed locally against this same repo tree
+  # before this change shipped, not assumed).
+  coverage-combine:
+    needs: [pytest, pytest-bash-oracle]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Download pytest coverage data
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+        with:
+          name: coverage-data-pytest
+
+      - name: Download pytest-bash-oracle coverage data
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+        with:
+          name: coverage-data-pytest-bash-oracle
+
+      - name: Combine coverage data and generate reports
+        run: |
+          uv run --frozen coverage combine .coverage.pytest .coverage.pytest-bash-oracle
+          uv run --frozen coverage xml
+          uv run --frozen coverage json
+
+      # Issue #536: evals/scripts/*.py had no minimum-coverage floor, so a
+      # file's CLI surface could ship untested (PR #512's own retrospective
+      # finding) without CI ever flagging it. coverage.json already exists
+      # from the combine step above; this only asserts a threshold on what
+      # it measured. Issue #562: the gate's default scope grew from just
+      # evals/scripts/*.py to every pyproject.toml [tool.coverage.run]
+      # source directory (derived from pyproject.toml itself, no extra
+      # flag needed here), including this gate's own .github/scripts file.
+      - name: Enforce per-file coverage minimum
+        run: uv run --frozen python3 .github/scripts/gitapex_gate_evals_scripts_coverage.py --coverage-json coverage.json
+
       # if: always() -- the coverage-minimum step above can fail (exit 1)
-      # on a real coverage regression without pytest itself failing; the
-      # coverage.xml pytest already produced is still valid and worth
-      # uploading so a reviewer can see the diff-coverage report on
+      # on a real coverage regression without the combine step itself
+      # failing; the coverage.xml already produced is still valid and
+      # worth uploading so a reviewer can see the diff-coverage report on
       # exactly the run where it matters most, instead of the upload
       # silently being skipped along with every other later step.
       - name: Upload coverage to Codecov

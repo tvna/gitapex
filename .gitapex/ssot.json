@@ -612,7 +612,7 @@
       "rule": "Every file under each of pyproject.toml's [tool.coverage.run] source directories must meet a minimum per-file coverage percentage, read from coverage.json.",
       "planes": ["ci"],
       "local_exclusion": "Reads a coverage.json that only exists after a full pytest run; wiring it would either grade a stale artifact or force the whole suite into every pre-push pass.",
-      "trigger": "pytest step inside .github/workflows/test.yml",
+      "trigger": "coverage-combine job inside .github/workflows/test.yml (issue #1365: relocated from the pytest job's own step once that job was split into pytest/pytest-bash-oracle, so this gate now runs against the two jobs' own combined coverage data)",
       "policy_refs": ["pyproject-coverage"],
       "cluster": ["supply-chain", "test-integrity"],
       "tracking_issue": 536,
