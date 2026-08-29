@@ -3576,6 +3576,78 @@ def test_classify_denies_a_checkout_hidden_behind_a_dynamic_cd() -> None:
         assert verdict.checkout_restore_paths == ()
 
 
+def test_rule_git_checkout_restore_allows_a_dynamic_word_resolving_to_something_harmless() -> None:
+    """CRITICAL false-positive regression pin (round-11 independent
+    review, issue #1375). Round 10's own first version flagged EVERY
+    non-vanishing dynamic `seg[0]` regardless of what it could actually
+    resolve to -- live-verified to wrongly deny `EDITOR=vim; $EDITOR sub;
+    git checkout -- f.py`, a completely safe, ordinary command (an
+    `$EDITOR`/`$TOOL` dispatch idiom followed by an unrelated, clean
+    checkout), purely because `$EDITOR` is dynamic and non-vanishing.
+    `_dynamic_word_may_resolve_to_a_cwd_relocator` must resolve the
+    word's actual candidate value and only flag when it could genuinely
+    be `cd`/`pushd`/`popd`."""
+    segments = [["$EDITOR", "sub"], ["git", "checkout", "--", "f.py"]]
+    reason, resolved = checker._rule_git_checkout_restore(segments, {"EDITOR": "vim"})
+    assert reason is None
+    assert resolved == ("f.py",)
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value=_VALUES)
+def test_dynamic_word_may_resolve_to_a_cwd_relocator_matches_relocator_set(name: str, value: str) -> None:
+    """Model-based: `_dynamic_word_may_resolve_to_a_cwd_relocator` flags a
+    resolvable dynamic word if and only if its resolved value is exactly
+    one of `cd`/`pushd`/`popd` -- case-sensitively, matching real bash's
+    own case-sensitive command-name lookup."""
+    result = checker._dynamic_word_may_resolve_to_a_cwd_relocator(f"${name}", {name: value})
+    assert result == (value in checker._CWD_RELOCATING_COMMANDS)
+
+
+def test_dynamic_word_may_resolve_to_a_cwd_relocator_true_for_a_matching_assignment() -> None:
+    assert checker._dynamic_word_may_resolve_to_a_cwd_relocator("$X", {"X": "cd"}) is True
+    assert checker._dynamic_word_may_resolve_to_a_cwd_relocator("$X", {"X": "pushd"}) is True
+
+
+def test_dynamic_word_may_resolve_to_a_cwd_relocator_false_for_a_harmless_assignment() -> None:
+    assert checker._dynamic_word_may_resolve_to_a_cwd_relocator("$EDITOR", {"EDITOR": "vim"}) is False
+
+
+def test_dynamic_word_may_resolve_to_a_cwd_relocator_is_case_sensitive() -> None:
+    """`cd`/`pushd`/`popd` are real bash command names, case-SENSITIVE --
+    an assignment of `CD` (uppercase) must not be treated as resolving to
+    the `cd` builtin, unlike this module's usual lowercased write-method
+    comparisons elsewhere."""
+    assert checker._dynamic_word_may_resolve_to_a_cwd_relocator("$X", {"X": "CD"}) is False
+
+
+def test_dynamic_word_may_resolve_to_a_cwd_relocator_true_when_unresolvable() -> None:
+    """A token whose dynamism this classifier cannot decompose into
+    `$NAME`-shaped references at all (e.g. a folded command-substitution
+    placeholder) fails closed, preserving round 10's own blanket-flag
+    behavior for this shape -- this primitive only ever narrows what
+    round 10 already flagged, never widens it."""
+    assert checker._dynamic_word_may_resolve_to_a_cwd_relocator("__CMDSUB_PLACEHOLDER__", {}) is True
+
+
+def test_dynamic_word_may_resolve_to_a_cwd_relocator_true_for_an_unresolvable_reference() -> None:
+    """A `$NAME`-shaped reference this classifier cannot resolve at all
+    (NAME never assigned) also fails closed, via
+    `_substitute_var_refs_candidates`'s own empty-list return -- a
+    narrower unit-level pin than the vanishing-check short-circuit
+    `_rule_git_checkout_restore` applies before ever reaching this helper
+    in that context."""
+    assert checker._dynamic_word_may_resolve_to_a_cwd_relocator("$NEVERSET", {}) is True
+
+
+def test_classify_allows_a_checkout_hidden_behind_an_unrelated_dynamic_word() -> None:
+    """End-to-end regression pin for the round-11 finding at the
+    `classify()` level."""
+    verdict = checker.classify("EDITOR=vim; $EDITOR sub; git checkout -- f.py")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("f.py",)
+
+
 # --- End-to-end classify() coverage, pinning every explicit safe/deny case
 # issue #1375's own Acceptance Criteria Map and "Explicit safe cases"
 # section name by hand.

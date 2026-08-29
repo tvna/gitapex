@@ -3597,6 +3597,58 @@ def _find_git_checkout_restore(seg: list[str], name_to_raw_value: dict[str, str]
 _CWD_RELOCATING_COMMANDS = {"cd", "pushd", "popd"}
 
 
+def _dynamic_word_may_resolve_to_a_cwd_relocator(token: str, name_to_raw_value: dict[str, str]) -> bool:
+    """Whether a DYNAMIC command word (already confirmed non-vanishing by
+    the caller) could plausibly resolve, at real bash runtime, to a
+    literal `cd`/`pushd`/`popd` -- narrower than round 10's own original
+    fix, which flagged EVERY non-vanishing dynamic `seg[0]` regardless of
+    what it could actually resolve to.
+
+    CRITICAL false-positive bug found by independent adversarial review
+    (round 11, issue #1375) and independently reproduced live: round 10's
+    blanket flag denied `EDITOR=vim; $EDITOR sub; git checkout -- f.py`
+    outright -- a completely safe, ordinary command (an `$EDITOR`/`$TOOL`/
+    positional-parameter dispatch idiom, followed by an unrelated, clean
+    checkout) -- purely because `$EDITOR` is dynamic and does not vanish,
+    with no attempt to check what it could actually resolve to. This is
+    the same over-broad "deny every dynamic word" policy this module's
+    own opening docstring already measured at a 28% false-positive rate
+    and rejected everywhere else; round 10 had reintroduced it in this one
+    narrow spot.
+
+    Resolves TOKEN via `_substitute_var_refs_candidates`, reusing it with
+    NAME_TO_RAW_VALUE passed as BOTH of that function's parameters (rather
+    than the module's usual lowercased `name_to_value`) so every candidate
+    stays case-PRESERVED -- `cd`/`pushd`/`popd` are real bash command
+    names, case-SENSITIVE unlike the write-method literals every other
+    caller of that primitive compares case-insensitively; lowercasing here
+    would make an assignment like `X=CD` (which real bash would try to run
+    as literal, non-existent command `CD`, not the `cd` builtin) a false
+    positive of its own.
+
+    Three cases:
+    - No `$NAME`-shaped reference found in TOKEN at all
+      (`_VAR_REF_FULL_RE.search` finds nothing) -- TOKEN's dynamism comes
+      from something this resolution primitive cannot decompose (e.g. a
+      folded command-substitution placeholder). Fails closed (`True`),
+      preserving round 10's own blanket-flag behavior for this shape
+      exactly -- this function only ever NARROWS what round 10 already
+      flagged, never widens it.
+    - `_substitute_var_refs_candidates` returns `None` (too many candidate
+      readings to enumerate) or `[]` (some referenced name has no
+      assigned-and-in-range reading this classifier can resolve) -- both
+      genuine ambiguity, not a resolved-safe value. Fails closed (`True`).
+    - A concrete candidate list -- flags (`True`) only if some candidate
+      is exactly `cd`/`pushd`/`popd`; otherwise the word demonstrably
+      resolves to something else, so returns `False`."""
+    if _VAR_REF_FULL_RE.search(token) is None:
+        return True
+    candidates = _substitute_var_refs_candidates(token, name_to_raw_value, name_to_raw_value)
+    if candidates is None or not candidates:
+        return True
+    return any(candidate in _CWD_RELOCATING_COMMANDS for candidate in candidates)
+
+
 def _rule_git_checkout_restore(
     segments: list[list[str]], raw_assigned: dict[str, str]
 ) -> tuple[str | None, tuple[str, ...]]:
@@ -3631,25 +3683,39 @@ def _rule_git_checkout_restore(
 
     A DYNAMIC command word at `seg[0]` (after `_classify_tokens`'s own
     uniform `_strip_leading_assignments`, so `seg[0]` is always the real
-    command word here) that does not unambiguously vanish is ALSO treated
-    as a possible relocator -- CRITICAL bug found by independent
-    adversarial review (round 10, issue #1375) and independently
-    reproduced live: the literal-token scan above only ever recognized
-    `cd`/`pushd`/`popd` written out directly, so `X=cd; $X sub; git
-    checkout -- file.py` (dirty relative to `sub`, absent at the
-    PreToolUse payload's own `.cwd`) resolved to the same CONFIDENT,
-    WRONG `checkout_restore_paths` claim round 9's fix closed for the
-    literal case, and the real command silently discarded the
-    uncommitted change when actually executed; same result for `X=pushd`.
-    A token that unambiguously vanishes (`_token_is_all_unassigned_refs`/
-    `_token_is_a_vanishing_default_or_alt_clause`, the same primitives
-    `_find_git_checkout_restore` already uses for the identical git/
-    subcommand-position question) is NOT flagged here, since real bash
-    then runs whatever token follows as the actual command word instead
-    -- and the existing literal scan above, which checks every token in
-    the segment regardless of position, already covers a literal `cd`/
-    `pushd`/`popd` sitting after such a decoy without this addition
-    needing its own skip-past loop."""
+    command word here) that does not unambiguously vanish, AND could
+    plausibly resolve to `cd`/`pushd`/`popd`, is ALSO treated as a
+    possible relocator -- CRITICAL bug found by independent adversarial
+    review (round 10, issue #1375) and independently reproduced live: the
+    literal-token scan above only ever recognized `cd`/`pushd`/`popd`
+    written out directly, so `X=cd; $X sub; git checkout -- file.py`
+    (dirty relative to `sub`, absent at the PreToolUse payload's own
+    `.cwd`) resolved to the same CONFIDENT, WRONG `checkout_restore_paths`
+    claim round 9's fix closed for the literal case, and the real command
+    silently discarded the uncommitted change when actually executed;
+    same result for `X=pushd`. A token that unambiguously vanishes
+    (`_token_is_all_unassigned_refs`/`_token_is_a_vanishing_default_or_
+    alt_clause`, the same primitives `_find_git_checkout_restore` already
+    uses for the identical git/subcommand-position question) is NOT
+    flagged here, since real bash then runs whatever token follows as the
+    actual command word instead -- and the existing literal scan above,
+    which checks every token in the segment regardless of position,
+    already covers a literal `cd`/`pushd`/`popd` sitting after such a
+    decoy without this addition needing its own skip-past loop.
+
+    Round 10's own first version flagged EVERY non-vanishing dynamic
+    `seg[0]`, with no attempt to check what it could actually resolve to
+    -- CRITICAL false-positive bug found by independent adversarial review
+    (round 11, issue #1375) and independently reproduced live:
+    `EDITOR=vim; $EDITOR sub; git checkout -- f.py`, a completely safe,
+    ordinary command with an unrelated, clean checkout, was denied
+    outright purely because `$EDITOR` is dynamic and non-vanishing.
+    `_dynamic_word_may_resolve_to_a_cwd_relocator` narrows this to
+    actually resolve the word's candidate value(s) (see its own
+    docstring) and only flags when a candidate could genuinely be
+    `cd`/`pushd`/`popd`, or resolution is itself ambiguous/unresolvable --
+    never widening beyond what round 10 already flagged, only narrowing
+    it."""
     saw_cd = False
     all_paths: list[str] = []
     for seg in segments:
@@ -3662,6 +3728,7 @@ def _rule_git_checkout_restore(
                     _token_is_all_unassigned_refs(seg[0], raw_assigned)
                     or _token_is_a_vanishing_default_or_alt_clause(seg[0], raw_assigned)
                 )
+                and _dynamic_word_may_resolve_to_a_cwd_relocator(seg[0], raw_assigned)
             ):
                 saw_cd = True
             continue

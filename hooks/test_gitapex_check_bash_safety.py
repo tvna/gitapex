@@ -1686,6 +1686,22 @@ def test_checkout_denied_when_an_earlier_dynamic_word_resolves_to_cd(tmp_path: P
     assert "working tree is at risk" in payload["systemMessage"]
 
 
+def test_checkout_allowed_when_an_earlier_dynamic_word_resolves_to_something_harmless(tmp_path: Path) -> None:
+    """CRITICAL false-positive regression pin (round-11 independent
+    review, issue #1375). Round 10's own first version flagged EVERY
+    non-vanishing dynamic `seg[0]`, regardless of what it could actually
+    resolve to -- live-verified before this fix to wrongly deny
+    `EDITOR=vim; $EDITOR sub; git checkout -- f.py`, a completely safe,
+    ordinary command (an `$EDITOR`/`$TOOL` dispatch idiom followed by an
+    unrelated, clean checkout), purely because `$EDITOR` is dynamic and
+    non-vanishing. The target file here is committed and clean, so a
+    correct verdict allows the command outright end-to-end."""
+    repo_dir = tmp_path / "repo"
+    _init_repo_with_committed_file(repo_dir)
+    result = run("EDITOR=vim; $EDITOR sub; git checkout -- f.py", payload_cwd=str(repo_dir))
+    assert result.returncode == 0, f"stderr={result.stderr!r}"
+
+
 def test_checkout_denied_in_a_real_merge_conflict_names_the_conflict_remedy(tmp_path: Path) -> None:
     """A real merge conflict (issue #1375's own Acceptance Criteria Map):
     the deny message names a remedy that actually works mid-conflict
