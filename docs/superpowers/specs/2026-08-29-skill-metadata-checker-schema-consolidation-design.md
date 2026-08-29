@@ -187,12 +187,14 @@ Out of scope, confirmed unaffected by this migration (non-manifest checks):
 `mechanism-fit-subsections-cite-sources`, `no-bare-issue-citation`,
 `no-illustrative-model-identifier`, `no-raw-angle-bracket-placeholder`,
 `no-step-location-contradiction`, `no-voodoo-constant`,
-`script-execution-intent-stated`, and the five `portable-no-*` checks
-(`portable-no-repo-path-citation`,
-`portable-no-unhedged-inline-path-citation`,
+`script-execution-intent-stated`, and the six `portable-no-*` checks
+(`portable-no-repo-path-citation`, `portable-no-inline-path-citation`,
 `portable-no-unhedged-inline-issue-citation`,
 `portable-no-unhedged-skill-fact-claim`,
-`portable-no-out-of-skill-scripts-citation`).
+`portable-no-out-of-skill-scripts-citation`,
+`portable-no-demonstrative-origin-repository-citation`) -- re-confirmed
+live 2026-08-29 after merging a same-day `origin/main` advance that added
+the sixth.
 
 ### 4.4 Decision: migration sequencing -- single PR (carried forward), updated implementation plan
 
