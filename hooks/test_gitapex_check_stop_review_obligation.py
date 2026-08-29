@@ -25,6 +25,7 @@ from typing import Any
 
 import gitapex_check_post_review_obligation_tracker as tracker
 import gitapex_check_stop_review_obligation as stop_checker
+import pytest
 
 SCRIPT = Path(__file__).parent / "check-stop-review-obligation.sh"
 
@@ -143,26 +144,24 @@ def test_load_state_missing_file_returns_none(tmp_path: Path) -> None:
     assert stop_checker._load_state(tmp_path / "does-not-exist.json") is None
 
 
+def test_load_state_returns_parsed_dict(tmp_path: Path) -> None:
+    path = tmp_path / "state.json"
+    path.write_text(json.dumps({"push_detected": True}))
+    assert stop_checker._load_state(path) == {"push_detected": True}
+
+
 def test_load_state_corrupt_json_raises(tmp_path: Path) -> None:
     corrupt = tmp_path / "corrupt.json"
     corrupt.write_text("not json{{{")
-    try:
+    with pytest.raises(stop_checker.StateUnreadable):
         stop_checker._load_state(corrupt)
-        raised = False
-    except stop_checker.StateUnreadable:
-        raised = True
-    assert raised
 
 
 def test_load_state_non_object_json_raises(tmp_path: Path) -> None:
     non_object = tmp_path / "list.json"
     non_object.write_text("[1, 2, 3]")
-    try:
+    with pytest.raises(stop_checker.StateUnreadable):
         stop_checker._load_state(non_object)
-        raised = False
-    except stop_checker.StateUnreadable:
-        raised = True
-    assert raised
 
 
 # --- Shell-wrapper integration tests ------------------------------------
@@ -283,3 +282,84 @@ def test_shell_fails_closed_on_corrupt_state_file(tmp_path: Path) -> None:
     assert result.returncode == 2
     payload = json.loads(result.stderr)
     assert payload["hookSpecificOutput"]["decision"] == "block"
+
+
+# --- main() CLI entry point (direct call, not via the .sh wrapper) --------
+
+
+def test_main_handles_invalid_json_payload(monkeypatch: Any) -> None:
+    import io as _io
+
+    monkeypatch.setattr("sys.stdin", type("S", (), {"buffer": _io.BytesIO(b"not json{{{")})())
+    assert stop_checker.main() == 1
+
+
+def test_main_handles_non_object_payload(monkeypatch: Any) -> None:
+    import io as _io
+
+    monkeypatch.setattr("sys.stdin", type("S", (), {"buffer": _io.BytesIO(b"[1, 2, 3]")})())
+    assert stop_checker.main() == 1
+
+
+def test_main_returns_zero_when_session_id_missing(monkeypatch: Any) -> None:
+    import io as _io
+
+    payload = json.dumps({})
+    monkeypatch.setattr("sys.stdin", type("S", (), {"buffer": _io.BytesIO(payload.encode())})())
+    assert stop_checker.main() == 0
+
+
+def test_main_returns_zero_when_no_state_file(tmp_path: Path, monkeypatch: Any) -> None:
+    import io as _io
+
+    monkeypatch.setenv("TMPDIR", str(tmp_path))
+    payload = json.dumps({"session_id": "main-none"})
+    monkeypatch.setattr("sys.stdin", type("S", (), {"buffer": _io.BytesIO(payload.encode())})())
+    assert stop_checker.main() == 0
+
+
+def test_main_blocks_and_prints_reason_when_obligation_outstanding(tmp_path: Path, monkeypatch: Any) -> None:
+    import io as _io
+
+    monkeypatch.setenv("TMPDIR", str(tmp_path))
+    session_id = "main-block"
+    tracker.state_path(session_id).write_text(
+        json.dumps({"push_detected": True, "target_pr": "#1", "open_review_threads": None, "mergeable_checked": False})
+    )
+    payload = json.dumps({"session_id": session_id})
+    monkeypatch.setattr("sys.stdin", type("S", (), {"buffer": _io.BytesIO(payload.encode())})())
+    assert stop_checker.main() == 1
+
+
+def test_main_returns_one_when_state_unreadable(tmp_path: Path, monkeypatch: Any) -> None:
+    import io as _io
+
+    monkeypatch.setenv("TMPDIR", str(tmp_path))
+    session_id = "main-corrupt"
+    tracker.state_path(session_id).write_text("not json{{{")
+    payload = json.dumps({"session_id": session_id})
+    monkeypatch.setattr("sys.stdin", type("S", (), {"buffer": _io.BytesIO(payload.encode())})())
+    assert stop_checker.main() == 1
+
+
+def test_main_clears_state_file_when_satisfied(tmp_path: Path, monkeypatch: Any) -> None:
+    import io as _io
+
+    monkeypatch.setenv("TMPDIR", str(tmp_path))
+    session_id = "main-clear"
+    state_file = tracker.state_path(session_id)
+    state_file.write_text(
+        json.dumps(
+            {
+                "push_detected": True,
+                "target_pr": "#1",
+                "open_review_threads": 0,
+                "resolve_calls": 0,
+                "mergeable_checked": True,
+            }
+        )
+    )
+    payload = json.dumps({"session_id": session_id})
+    monkeypatch.setattr("sys.stdin", type("S", (), {"buffer": _io.BytesIO(payload.encode())})())
+    assert stop_checker.main() == 0
+    assert not state_file.exists()

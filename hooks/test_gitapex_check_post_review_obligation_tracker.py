@@ -305,6 +305,86 @@ def test_reports_error_recognizes_all_three_markers() -> None:
     assert tracker._reports_error("not a dict") is False
 
 
+def test_unwrap_tool_response_skips_unparseable_block_and_tries_next() -> None:
+    # Two text blocks, the first not valid JSON -- must fall through to the
+    # second rather than stopping at the first candidate's parse failure.
+    wrapped = [
+        {"type": "text", "text": "not valid json{{{"},
+        {"type": "text", "text": json.dumps({"mergeable_state": "clean"})},
+    ]
+    assert tracker._unwrap_tool_response(wrapped) == {"mergeable_state": "clean"}
+
+
+def test_read_state_falls_back_to_default_on_non_dict_json() -> None:
+    path = tracker.state_path("s17")
+    path.write_text(json.dumps([1, 2, 3]))
+    assert tracker._read_state(path) == dict(tracker._DEFAULT_STATE)
+
+
+def test_contains_mergeable_state_handles_bare_list() -> None:
+    assert tracker._contains_mergeable_state([{"other": "field"}, {"mergeable_state": "clean"}]) is True
+    assert tracker._contains_mergeable_state([{"other": "field"}]) is False
+
+
+def test_pull_request_read_without_pull_number_still_updates_established_target() -> None:
+    # target_pr is already set from an earlier call; a later call that
+    # simply omits pullNumber (call_pr is None, not "a different PR") must
+    # not be treated as cross-PR and skipped -- it should still update.
+    session_id = "s16"
+    _push(session_id)
+    _read_pr(session_id, response={"threads": [{"isResolved": False}]})  # establishes target_pr
+    result = tracker.process(
+        {
+            "session_id": session_id,
+            "tool_name": "mcp__github__pull_request_read",
+            "tool_input": {"method": "get"},  # no owner/repo/pullNumber this time
+            "tool_response": {"mergeable_state": "clean"},
+        }
+    )
+    assert result is not None
+    assert result["mergeable_checked"] is True
+
+
+# --- main() CLI entry point -----------------------------------------------
+
+
+def test_main_processes_valid_payload_and_writes_state(monkeypatch: Any) -> None:
+    import io as _io
+
+    payload = json.dumps({"session_id": "main-1", "tool_name": "Bash", "tool_input": {"command": "git push"}})
+    monkeypatch.setattr("sys.stdin", type("S", (), {"buffer": _io.BytesIO(payload.encode())})())
+    exit_code = tracker.main()
+    assert exit_code == 0
+    state = json.loads(tracker.state_path("main-1").read_text())
+    assert state["push_detected"] is True
+
+
+def test_main_handles_invalid_json_payload(monkeypatch: Any) -> None:
+    import io as _io
+
+    monkeypatch.setattr("sys.stdin", type("S", (), {"buffer": _io.BytesIO(b"not json{{{")})())
+    assert tracker.main() == 0
+
+
+def test_main_handles_non_object_payload(monkeypatch: Any) -> None:
+    import io as _io
+
+    monkeypatch.setattr("sys.stdin", type("S", (), {"buffer": _io.BytesIO(b"[1, 2, 3]")})())
+    assert tracker.main() == 0
+
+
+def test_main_suppresses_oserror_from_process(monkeypatch: Any) -> None:
+    import io as _io
+
+    def _raise_oserror(payload: dict[str, Any]) -> dict[str, Any] | None:
+        raise OSError("disk full")
+
+    monkeypatch.setattr(tracker, "process", _raise_oserror)
+    payload = json.dumps({"session_id": "main-2", "tool_name": "Bash", "tool_input": {"command": "git push"}})
+    monkeypatch.setattr("sys.stdin", type("S", (), {"buffer": _io.BytesIO(payload.encode())})())
+    assert tracker.main() == 0
+
+
 # --- Shell-wrapper integration tests ------------------------------------
 
 
