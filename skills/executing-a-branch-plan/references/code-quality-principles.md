@@ -1,16 +1,27 @@
 # Code Quality Principles
 
-Step 6 and Step 8's own reference. Source: issue `#1388`, a
-gitapex-filtered subset of 7 principles (from a candidate set of 21
-surveyed against `cursor/plugins`' `pstack` collection) that duplicate no
-existing gitapex principle -- CLAUDE.md sections 1-5's own discipline, or
-a sibling skill's own coverage, was checked for each of the 14 excluded
-candidates before this file was written; see the issue for the full
-per-candidate accounting. Kept deliberately concise, one governing
-statement plus one warning-sign example per principle, rather than this
-directory's longer discursive reference-file style elsewhere -- these are
-prompts to recognize a code smell while writing or reviewing a diff, not
-a procedure to execute.
+Steps 6 and 8's own reference. Source: issue `#1388`, a gitapex-filtered
+subset of 7 principles out of `cursor/plugins/pstack`'s own 21-principle
+index. Each of the 21 was checked against CLAUDE.md sections 1-5's own
+discipline and sibling-skill coverage; 14 duplicated one or the other and
+were excluded -- the issue's own Problem section names 13 of them; the
+14th, Fix Root Causes, is excluded here for the same reason as two of
+those 13 (Prove It Works, Sequence Verifiable Units) -- `diagnosing-a-
+failure` and `reviewing-an-artifact`'s root-cause-vs-symptom tag already
+cover it. Kept deliberately concise, one governing statement plus one
+warning-sign example per principle, rather than this directory's longer
+discursive reference-file style elsewhere -- prompts to recognize a code
+smell while writing or reviewing a diff, not a procedure to execute.
+
+## Contents
+
+- [1. Type System Discipline](#1-type-system-discipline)
+- [2. Boundary Discipline](#2-boundary-discipline)
+- [3. Make Operations Idempotent](#3-make-operations-idempotent)
+- [4. Migrate Callers Then Delete Legacy APIs](#4-migrate-callers-then-delete-legacy-apis)
+- [5. Model the Domain](#5-model-the-domain)
+- [6. Separate Before Serializing Shared State](#6-separate-before-serializing-shared-state)
+- [7. Foundational Thinking](#7-foundational-thinking)
 
 ## 1. Type System Discipline
 
@@ -31,8 +42,11 @@ at the module or service boundary where it enters; everything past that
 boundary trusts the shape the boundary already enforced.
 
 **Warning sign:** the same field is re-validated (null-checked,
-range-checked, re-parsed) at two or more internal call sites downstream
-of the boundary that already validated it once.
+range-checked, re-parsed) at two or more internal call sites, with no
+evidence of a bypass the first checkpoint misses. Incidental, reflexive
+re-validation only -- a second checkpoint `diagnosing-a-failure` or a
+blast-radius judgment actually showed is needed is a deliberate layer,
+not this warning sign.
 
 ## 3. Make Operations Idempotent
 
@@ -57,21 +71,26 @@ never actually enumerating which call sites were checked.
 
 ## 5. Model the Domain
 
-**Governing statement:** give a business concept its own type or value
-object instead of carrying it as the primitive it happens to be stored
-in -- the type is where the concept's own rules live.
+**Governing statement:** when code branches a lot or repeats the same
+shape assumption across files, encode the domain in one structure (a
+state machine, a typed model, a registry, a reducer) instead of leaving
+it scattered across conditionals -- distinct from Type System Discipline
+above, which names an invalid *value* unrepresentable; this names an
+invalid *combination of state* unrepresentable.
 
-**Warning sign:** a concept like an email address, a money amount, or an
-identifier is passed between functions as a bare `string`/`float`, with
-its format or range assumptions re-asserted ad hoc at each new usage site
-rather than made structurally impossible to violate.
+**Warning sign:** the same `if status == "x" and flag_y and not
+flag_z`-shaped condition, or an equivalent chain of booleans, is
+duplicated (exactly or with drift) across several files or functions
+that all need to agree on which states are actually reachable together.
 
 ## 6. Separate Before Serializing Shared State
 
-**Governing statement:** when multiple writers can touch the same shared
-state concurrently, resolve ownership or partitioning of that state
-before reaching for a serialization mechanism (a lock, a mutex, a queue)
-to arbitrate the conflict.
+**Governing statement:** "serializing" here means arbitrating concurrent
+access (forcing writers to take turns), not data serialization -- when
+multiple writers can touch the same shared state concurrently, resolve
+ownership or partitioning of that state before reaching for a
+serialization mechanism (a lock, a mutex, a queue, a shared worktree) to
+arbitrate the conflict.
 
 **Warning sign:** a lock is added around a shared mutable structure to
 stop writers from interleaving, without first asking whether the
@@ -80,11 +99,13 @@ slice and no lock is needed at all.
 
 ## 7. Foundational Thinking
 
-**Governing statement:** before writing new code for a capability, check
-whether a lower layer -- a language builtin, an already-imported library,
-the platform itself -- already provides it, rather than re-implementing
-it bespoke at the application layer.
+**Governing statement:** settle the core data shape -- what fields exist,
+what a name refers to, what concurrent actors actually share -- before
+writing the logic that operates on it; get infrastructure a later phase
+depends on (types, a schema, a CI check) in place before building the
+feature that assumes it, not the other way around.
 
-**Warning sign:** a hand-rolled retry/backoff loop, date parser, or
-cache-eviction routine sits beside an already-available library import
-that provides the same behavior with its own edge cases already handled.
+**Warning sign:** a task writes business logic against a data shape still
+being decided elsewhere in the same change, or before the infrastructure
+it depends on (a schema migration, a type definition) actually exists --
+forcing a rewrite once the shape settles instead of settling it first.

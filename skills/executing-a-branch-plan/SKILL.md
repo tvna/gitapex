@@ -120,8 +120,8 @@ first, not skimmed.
    for the same distinction. Within
    each task, apply Red-Green order when the task's inherited proof
    method is an automatable test; Refactor is never per-task, deferred
-   entirely to step 8. When writing a task's own implementation code (the
-   Green step above), apply [code quality principles
+   entirely to step 8. When writing a task's own implementation code,
+   apply the principles in [the code quality principles
    reference](references/code-quality-principles.md). Once a wave's run
    returns, in the main thread (the Workflow script itself has no
    filesystem/shell access): screen each
@@ -198,12 +198,13 @@ first, not skimmed.
    12, mandatory, non-skippable). Two separate fresh subagent dispatches
    over the full diff -- a refactor/simplify pass (behavior-preserving
    only), then an independent adversarial code review -- findings
-   verified and fixed before proceeding. The refactor/simplify pass also
-   specifically re-checks [Migrate Callers Then Delete Legacy
-   APIs](references/code-quality-principles.md#4-migrate-callers-then-delete-legacy-apis)
-   across the full accumulated diff, confirming a caller migration begun
-   by one task actually completed cleanly rather than being left
-   half-done by another. Both dispatches carry a
+   verified and fixed before proceeding. The independent adversarial code
+   review also specifically re-checks [Migrate Callers Then Delete Legacy
+   APIs](references/code-quality-principles.md#4-migrate-callers-then-delete-legacy-apis),
+   confirming a caller migration begun by one task actually completed
+   cleanly rather than being left half-done by another -- a
+   behavior-affecting correctness question, not the refactor/simplify
+   pass's own behavior-preserving scope. Both dispatches carry a
    model/effort pin; see [refactor and review gate
    reference](references/refactor-and-review-gate.md#mandatory-aggregate-refactor--adversarial-review-step-8)
    for the rationale. After
@@ -434,7 +435,7 @@ interface-dependency-edge judgment (after
 file-ownership edge, which needs no pin), and step 8's
 refactor/adversarial-review dispatch. The other five steps run at
 whatever model/effort the calling session already uses. `Adaptive` is a
-reasoned fit given this skill's own existing lean-body-plus-five-
+reasoned fit given this skill's own existing lean-body-plus-six-
 reference-file structure -- not a rubric-compelled choice (`Broad`, a
 different, unattempted target, would additionally require auditing every
 currently-unpinned step against the rubric's own weak-tier-sufficiency
