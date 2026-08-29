@@ -1702,6 +1702,27 @@
       ]
     },
     {
+      "id": "betterleaks-allowlist-no-removal",
+      "kind": "script",
+      "script": [".github/scripts/gitapex_gate_betterleaks_allowlist_no_removal.py", ".github/scripts/_gitapex_base_ref.py", ".github/workflows/betterleaks-allowlist-no-removal-gate.yml"],
+      "rule": "A .betterleaks.toml [allowlist].paths entry present at a PR's base commit and absent from HEAD fails the check, compared structurally (parsed with tomllib, not a raw text-line diff) so reordering/reformatting the array never false-positives. A `# betterleaks-allowlist-no-removal: WAIVED: <reason>` comment anywhere in the head file that quotes the removed entry's exact TOML string verbatim waives that one entry. Base-ref resolution reuses _gitapex_base_ref.py (issue #1345), the same shared helper family gitapex_gate_behind_base.py (issue #985) and gitapex_run_base_diff.py (issue #1178) already use.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_betterleaks_allowlist_no_removal.py"],
+      "trigger": ".github/workflows/betterleaks-allowlist-no-removal-gate.yml on pull_request, plus tests/test_gitapex_gate_betterleaks_allowlist_no_removal.py and tests/test_gitapex_gate_betterleaks_allowlist_no_removal_properties.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "secret-scanning",
+      "tracking_issue": 1427,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": ".betterleaks.toml"},
+        {"kind": "workflow-event", "ref": "betterleaks-allowlist-no-removal-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
+    },
+    {
       "id": "split-disclosure",
       "kind": "script",
       "script": ["evals/scripts/gitapex_check_split_disclosure.py", ".github/workflows/split-disclosure-gate.yml"],
