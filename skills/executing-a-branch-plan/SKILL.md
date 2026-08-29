@@ -151,11 +151,22 @@ first, not skimmed.
    regression check (step 8's own rule for a code-touching fix) is re-run
    before continuing, and the resolution is disclosed via a PR comment --
    this skill had no equivalent to `drafting-a-pr-to-merge` step 7's own
-   `"dirty"`-resolution comment rule until now; it does going forward. On
-   exit 2: proceed with a disclosed note rather than blocking, this
-   repository's own established fail-loud-but-continue convention for a
-   detective check that cannot itself gate. Step 8's own fix-round loop
-   repeats this same check between rounds, per its own text below.
+   `"dirty"`-resolution comment rule until now; it does going forward. A
+   conflict that cannot actually be resolved (a genuine semantic clash,
+   not a mechanical one) dispatches through step 7's own failure rule
+   below, the same as any other blocker this loop cannot resolve
+   unilaterally -- never left half-merged. On exit 2: proceed with a
+   disclosed note rather than blocking -- this check is detective, not
+   preventive, and re-runs at the next checkpoint (the next wave, or the
+   next Step 8 round), so one transient fetch/comparison failure
+   self-heals without holding up the loop; if exit 2 recurs at the
+   following checkpoint too, that is no longer transient -- treat it as a
+   real blocker and dispatch through step 7 instead of continuing
+   indefinitely. Any exit code other than 0, 1, or 2 (a missing or
+   non-executable script, an environment failure) is likewise a screening
+   flag for step 7, never silently read as one of the three defined
+   outcomes. Step 8's own fix-round loop repeats this same check between
+   rounds, per its own text below.
 
    An irreversible task (step 3's flag) gets a fresh step-1-
    equivalent confirmation for that specific task before its own wave
