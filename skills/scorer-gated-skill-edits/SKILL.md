@@ -120,6 +120,20 @@ evaluation. Name the gap; never fake a score to proceed.
    Pruning-only is eligible only when the patch deletes text and adds or
    rewords no behavior; a replacement, mixed add/delete patch, relabeling,
    or uncertain classification uses the ordinary gate.
+   When the edit changes an enumerated or ordinal item that the target
+   skill's own `references/` directory (or its `evals/<skill>/` docs)
+   cites elsewhere -- "the Nth check," a fixture or corpus count, a "the
+   following N items" list -- grep that skill's own `references/`
+   directory and `evals/<skill>/` docs for every such reference to the
+   changed item before scoring, and fix each one found in the same
+   patch, not a follow-up. Issue `#343` found exactly this gap:
+   inserting a new fourth Mechanism-fit check pushed an existing
+   "fourth" ordinal citation in a sibling worked example to fifth, and a
+   corpus-size math note in a sibling doc went stale the same way --
+   both slipped past review because nothing in this step prompted the
+   sweep. See
+   [references/worked-example.md](references/worked-example.md)'s
+   Cross-reference sweep before scoring section.
 4. **Gate: strict improve-or-reject.** Run the selection-split trials with
    the runner step 1 confirmed, at the suite's own `eval.yaml`
    `config.trials_per_task` (no separate flag for it), then feed
@@ -185,6 +199,9 @@ evaluation. Name the gap; never fake a score to proceed.
 5. **Log rejected edits.** Record each rejected edit and the score change
    it caused, so later iterations do not repeat it. That negative feedback
    is the only value a rejected edit has; discarding it silently wastes it.
+   A fixture cited in this log as corroborating the rejection must be the
+   one actually, independently dispatched -- see the Stop boundaries
+   below.
 6. **Transfer-check before shipping.** Re-run the accepted skill unchanged
    on an adjacent model, harness, or nearby task and confirm it does not
    regress below that target's no-skill baseline before treating it as
@@ -231,6 +248,12 @@ evaluation. Name the gap; never fake a score to proceed.
      explicitly; never drop the field to mean the same thing.
    - `headline_pattern` -- a one-paragraph statement of the run's main
      finding, for a reader who will not open the score files.
+
+   A named-fixture corroboration claim recorded anywhere in this run's
+   own account -- the `gate` field's evidence, the `headline_pattern`,
+   or a narrative log this schema's record is embedded in (for example
+   `evals/<skill>/split.md`'s Kept-edit entries) -- must name a fixture
+   actually, independently dispatched. See the Stop boundaries below.
 
    Every value is recorded as data. Anything carried over from a
    transcript is escaped for the record's own format, so a fixture's own
@@ -393,6 +416,20 @@ just measures the wrong thing.
   verified mechanism available section to display the
   environment-fix-or-handoff code block that section requires, and wait
   for the operator to act on it before running the gate.
+- Never treat a bounded edit (step 3) that changes an enumerated or
+  ordinal item as complete before sweeping the target skill's own
+  `references/` directory and `evals/<skill>/` docs for every stale
+  cross-reference to it. An unswept edit is not a smaller patch; it
+  ships a citation already known to be wrong.
+- Never record a "restraint check" or any other named-fixture
+  corroboration claim in a rejected-edit log entry (step 5) or a run
+  record (step 7) unless that specific fixture was actually,
+  independently dispatched. Citing scores or evidence from a
+  different, unrelated fixture as if it corroborated the named one is
+  an unverified claim written as a verified one, not a lighter-weight
+  substitute. If the named fixture was not dispatched, say so
+  explicitly (a disclosed gap in `known_gaps`, step 7) instead of
+  implying indirect coverage.
 
 ## Notes
 

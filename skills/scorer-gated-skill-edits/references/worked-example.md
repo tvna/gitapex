@@ -15,6 +15,8 @@ skill's current text.
 - [Iteration 1](#iteration-1)
 - [After the iteration](#after-the-iteration)
 - [Obtaining the "before" state under a live gate](#obtaining-the-before-state-under-a-live-gate)
+- [Cross-reference sweep before scoring](#cross-reference-sweep-before-scoring)
+- [Restraint-check corroboration must be a real dispatch](#restraint-check-corroboration-must-be-a-real-dispatch)
 - [What this example demonstrates](#what-this-example-demonstrates)
 
 ## The scorer
@@ -116,6 +118,35 @@ was caught only by a lucky tell (the report cited rubric content that did
 not exist yet) and had to be redone. `git show` is fixed at the named
 revision, so a concurrent working-tree change cannot move it.
 
+## Cross-reference sweep before scoring
+
+Issue `#343`: a bounded edit inserted a new fourth Mechanism-fit check
+into a skill's `references/rubric.md`. A sibling reference file,
+`worked-example-self-review.md`, cited "the fourth Mechanism-fit
+check" by ordinal -- true before the edit, stale after it (the newly
+inserted check now held that position, pushing the cited one to
+fifth). A third sibling doc's corpus-size math note also assumed the
+pre-edit fixture count. Both went uncaught until a later,
+self-initiated review pass found them -- after the edit had already
+been scored and kept. Grepping the target skill's own `references/`
+directory and `evals/<skill>/` docs for ordinal or count language
+naming the changed item, before scoring, would have caught both in the
+same patch that introduced them.
+
+## Restraint-check corroboration must be a real dispatch
+
+Issue `#343`: a Kept-edit log entry recorded a "restraint check" for a
+new cohesion-detection edit -- confirming the edit does not over-fire
+on a case designed to look like a false positive. The entry cited two
+dispatches, but neither was the purpose-built restraint fixture the
+entry named; both were unrelated after-dispatches whose scores were
+read as if they corroborated the named fixture. The substitution went
+unnoticed until a later review pass actually dispatched the named
+fixture and found the entry's claim had never been checked. A log
+entry naming a specific fixture is a claim about that fixture, not
+about the edit's dispatches in general -- it is either backed by
+dispatching that fixture, or disclosed as not dispatched.
+
 ## What this example demonstrates
 
 - Edits are motivated by the **train** split; the **selection** split only
@@ -123,3 +154,9 @@ revision, so a concurrent working-tree change cannot move it.
 - Acceptance is **strict**: 0.75 -> 1.0 is kept, 1.0 -> 1.0 is rejected.
 - A rejected edit still produces value as a **logged** negative signal, and
   the "before" state comes from `git show`, never a working-tree stash.
+- A bounded edit that changes an ordinal or count another doc cites is
+  not complete until that citation is swept and fixed in the same
+  patch.
+- A named-fixture corroboration claim in a log entry must be backed by
+  dispatching that exact fixture, or disclosed as not dispatched --
+  never substituted with an unrelated dispatch's evidence.
