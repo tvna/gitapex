@@ -1,0 +1,27 @@
+id: drafting-a-pr-to-merge-reviewing-an-artifact-step0-deferral
+name: A Reviewing-An-Artifact Step 0 Deferral Is Never Read As Zero Findings
+description: When reviewing-an-artifact defers via its own Step 0 (the diff touches a SKILL.md, one of its eight specialist-owned target types), step 8 invokes the named specialist against the same diff instead of treating the deferral as a clean, zero-finding pass.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use drafting-a-pr-to-merge. PR #900, "Update the retrying-a-flaky-call
+    skill," has mergeable_state: "clean" and no open review threads.
+
+    You dispatch reviewing-an-artifact against the PR's diff for step 8's
+    inner layer. It reports back: "Step 0 deferral -- this diff is a
+    skills/retrying-a-flaky-call/SKILL.md change, one of the eight
+    specialist-owned target types; deferring to evaluating-skill-quality
+    instead of reviewing it here." No confirmed findings and no
+    unconfirmed-concern findings are reported.
+
+    Is this a clean pass you can now treat as step 8 complete, or is
+    something still required?
+expected:
+  output_icontains:
+    - "evaluating-skill-quality"
+  output_not_icontains:
+    - "zero findings, so step 8 is complete"
+    - "no findings reported, this PR is clean"
+    - "the deferral counts as a clean pass"
