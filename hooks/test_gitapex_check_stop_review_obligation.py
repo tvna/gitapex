@@ -47,7 +47,21 @@ def test_push_with_unknown_threads_and_no_mergeable_check_blocks() -> None:
     should_block, reason = stop_checker.evaluate(state)
     assert should_block is True
     assert "mergeable_state" in reason
-    assert "resolve_review_thread" not in reason  # threads unknown -- skip that half, per module docstring
+    assert "get_review_comments" in reason
+    assert "resolve_review_thread" not in reason  # threads unknown -- can't yet know how many to resolve
+
+
+def test_push_with_unknown_threads_still_blocks_even_when_mergeable_checked() -> None:
+    # Independent-review finding, reproduced live against the writer half:
+    # a turn that pushed, then only read an unrelated PR's mergeable_state
+    # (never called get_review_comments at all), must not satisfy this
+    # gate merely because mergeable_checked happens to be True -- the
+    # thread state was never actually confirmed.
+    state = {"push_detected": True, "open_review_threads": None, "resolve_calls": 0, "mergeable_checked": True}
+    should_block, reason = stop_checker.evaluate(state)
+    assert should_block is True
+    assert "get_review_comments" in reason
+    assert "mergeable_state" not in reason  # that half is genuinely satisfied
 
 
 def test_push_with_open_threads_and_insufficient_resolves_blocks() -> None:
@@ -94,7 +108,7 @@ def test_writer_then_reader_end_to_end(tmp_path: Path, monkeypatch: Any) -> None
     tracker.process({"session_id": session_id, "tool_name": "Bash", "tool_input": {"command": "git push"}})
     state = json.loads(tracker.state_path(session_id).read_text())
     should_block, _ = stop_checker.evaluate(state)
-    assert should_block is True  # mergeable_state never checked
+    assert should_block is True  # nothing checked yet at all
 
     tracker.process(
         {
@@ -102,6 +116,19 @@ def test_writer_then_reader_end_to_end(tmp_path: Path, monkeypatch: Any) -> None
             "tool_name": "mcp__github__pull_request_read",
             "tool_input": {"method": "get"},
             "tool_response": {"mergeable_state": "clean"},
+        }
+    )
+    state = json.loads(tracker.state_path(session_id).read_text())
+    should_block, reason = stop_checker.evaluate(state)
+    assert should_block is True  # mergeable_state checked, but review threads never were
+    assert "get_review_comments" in reason
+
+    tracker.process(
+        {
+            "session_id": session_id,
+            "tool_name": "mcp__github__pull_request_read",
+            "tool_input": {"method": "get_review_comments"},
+            "tool_response": {"threads": []},
         }
     )
     state = json.loads(tracker.state_path(session_id).read_text())
@@ -203,6 +230,21 @@ def test_shell_allows_and_clears_state_once_satisfied(tmp_path: Path) -> None:
                 "tool_name": "mcp__github__pull_request_read",
                 "tool_input": {"method": "get"},
                 "tool_response": {"mergeable_state": "clean"},
+            }
+        ),
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env=env,
+    )
+    subprocess.run(
+        ["bash", str(tracker_script)],
+        input=json.dumps(
+            {
+                "session_id": session_id,
+                "tool_name": "mcp__github__pull_request_read",
+                "tool_input": {"method": "get_review_comments"},
+                "tool_response": {"threads": []},
             }
         ),
         capture_output=True,

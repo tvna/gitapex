@@ -32,13 +32,25 @@ risk for the full reasoning against a git-tracked alternative.
 
 Fields:
     push_detected: bool -- a git-push Bash call was classified this cycle.
+    target_pr: str | None -- "#<number>" or "<owner>/<repo>#<number>" for
+        the first PR this cycle's resolve/read calls actually named; None
+        until the first pull_request_read call after a push. Independent
+        review of this module's first version found that without this,
+        a resolve_review_thread or pull_request_read call against ANY
+        PR -- including one wholly unrelated to the push just made --
+        satisfied the obligation, since neither handler checked which PR
+        it was looking at. Once set, a call naming a different PR is
+        ignored rather than updating state, closing that gap; see
+        `_pr_key`.
     open_review_threads: int | None -- unresolved-thread count last
-        observed from a get_review_comments response; None means "never
-        observed this cycle," not "zero."
-    resolve_calls: int -- how many times resolve_review_thread fired
-        since the last push_detected reset.
+        observed from a get_review_comments response for `target_pr`;
+        None means "never observed this cycle," not "zero."
+    resolve_calls: int -- how many successful (non-error-response)
+        resolve_review_thread calls fired against `target_pr` since the
+        last push_detected reset.
     mergeable_checked: bool -- a pull_request_read(method="get") response
-        carrying mergeable_state was observed since the last reset.
+        for `target_pr` carrying mergeable_state was observed since the
+        last reset.
 
 Three tool shapes update this file:
 
@@ -47,21 +59,47 @@ Three tool shapes update this file:
   hooks/check-bash-safety.sh already relies on for its own git-push
   provenance-scan gate -- rather than re-implementing git-push detection.
   `classify(command).is_git_push` true resets the state file to a fresh
-  pending cycle (push_detected=true, everything else cleared).
-- mcp__github__resolve_review_thread: increments resolve_calls. A no-op
-  (never creates a state file) when push_detected has not fired yet this
-  cycle -- resolving a thread outside a tracked push cycle is not this
-  gate's concern.
-- mcp__github__pull_request_read: dispatches on tool_input.method.
-  get_review_comments records the unresolved-thread count, read directly
-  out of the tool's own tool_response by recursively counting every dict
-  carrying `isResolved: false` -- deliberately shape-tolerant (walks the
-  whole response tree rather than assuming one fixed envelope), since the
-  exact response envelope is the MCP server's own contract, not this
-  repository's (the identical fragility issue #908 already named for
-  hooks/gitapex_check_post_write_provenance.py's own URL-tail parsing).
-  method get sets mergeable_checked when the response tree contains a
-  `mergeable_state` key anywhere.
+  pending cycle (push_detected=true, target_pr unset, everything else
+  cleared) -- deliberately unconditional on the tool_response (a denied/
+  failed push still means the agent intended one), matching this
+  module's own fail-toward-more-tracking posture.
+- mcp__github__resolve_review_thread: increments resolve_calls, but only
+  once `target_pr` is already set (a push happened AND at least one
+  pull_request_read against that PR has already run this cycle -- see
+  `_pr_key`'s own docstring for why resolve_review_thread's own
+  arguments cannot establish `target_pr` by themselves) and only when
+  the call's own tool_response does not report an error (`_reports_error`,
+  mirroring hooks/gitapex_check_post_write_provenance.py's own marker
+  vocabulary) -- independent review found a failed/rejected resolve call
+  was previously counted identically to a successful one.
+- mcp__github__pull_request_read: dispatches on tool_input.method, after
+  first resolving/checking `target_pr` via `_pr_key(tool_input)`. When
+  `target_pr` is unset, this call's own PR becomes it; when already set,
+  a call against a different PR is ignored entirely (state unchanged).
+  get_review_comments records the unresolved-thread count, read out of
+  the tool's own tool_response (unwrapped via `_unwrap_tool_response`,
+  the same MCP content-envelope shapes
+  hooks/gitapex_check_post_write_provenance.py's own response_payload()
+  documents, generalized to also accept a bare list -- issue #908's own
+  observed envelope is a list of text blocks, and get_review_comments'
+  own return value is itself thread-shaped data that may or may not be a
+  list at the top level, so this cannot assume dict the way that sibling
+  helper does) by recursively counting every dict carrying
+  `isResolved: false` -- deliberately shape-tolerant beyond just the MCP
+  envelope (walks the whole unwrapped tree rather than assuming one
+  fixed thread-list shape), since the exact response envelope is the MCP
+  server's own contract, not this repository's (the identical fragility
+  issue #908 already named). method get sets mergeable_checked when the
+  unwrapped response tree contains a `mergeable_state`/`mergeableState`
+  key anywhere.
+
+Known, disclosed limitation (not fixed here): get_review_comments'
+pagination (perPage/after) is not followed -- a PR with more unresolved
+threads than fit in one page undercounts `open_review_threads` rather
+than following pageInfo.hasNextPage, since this module never makes its
+own API call. Undercounting is the safer direction (it can only make the
+Stop hook LESS strict, never let a genuinely-unresolved thread silently
+count as resolved), but is named here rather than left implicit.
 
 Fails OPEN on every error path (malformed payload, missing jq is handled
 by the .sh wrapper, unwritable state dir, unreadable prior state) --
@@ -93,6 +131,7 @@ import gitapex_check_bash_safety as bash_safety
 
 _DEFAULT_STATE: dict[str, Any] = {
     "push_detected": False,
+    "target_pr": None,
     "open_review_threads": None,
     "resolve_calls": 0,
     "mergeable_checked": False,
@@ -125,6 +164,84 @@ def _write_state(path: Path, state: dict[str, Any]) -> None:
     tmp_path = path.with_suffix(f".{os.getpid()}.tmp")
     tmp_path.write_text(json.dumps(state), encoding="utf-8")
     tmp_path.replace(path)
+
+
+def _pr_key(tool_input: dict[str, Any]) -> str | None:
+    """Return a string identifying the PR `tool_input` targets, or None
+    when no usable pull-request number is present.
+
+    `pullNumber` is the one field every covered call (resolve_review_thread
+    takes a thread node ID, not a PR number, so it is never a source of
+    this key -- see the module docstring's own note on why `target_pr`
+    can only be established via pull_request_read) is guaranteed to carry
+    as an ordinary tool_input field. owner/repo are read too when present
+    for a tighter key, but are not required -- the GitHub MCP server's
+    schema marks them `x-mcp-header`, which may mean they arrive via a
+    request header this hook's stdin payload never sees rather than in
+    tool_input, so a key scoped to pullNumber alone is the reliable
+    floor even though it cannot distinguish same-numbered PRs across two
+    different repositories in the (rare, same-session) case both owner
+    and repo are absent."""
+    pull_number = tool_input.get("pullNumber")
+    if isinstance(pull_number, bool) or not isinstance(pull_number, int):
+        return None
+    owner = tool_input.get("owner")
+    repo = tool_input.get("repo")
+    if isinstance(owner, str) and owner and isinstance(repo, str) and repo:
+        return f"{owner}/{repo}#{pull_number}"
+    return f"#{pull_number}"
+
+
+def _unwrap_tool_response(tool_response: Any) -> Any:
+    """Best-effort unwrap of a PostToolUse tool_response's MCP content
+    envelope, returning whatever JSON value the tool actually returned --
+    a dict OR a list. Unlike
+    hooks/gitapex_check_post_write_provenance.py's own response_payload(),
+    which is dict-only (every caller there reads object fields off a
+    single PR/issue), this cannot assume dict:
+    mcp__github__pull_request_read's get_review_comments method returns
+    thread data whose own top-level shape is not guaranteed to be an
+    object.
+
+    Same MCP envelope shapes response_payload() documents (issue #908):
+    a bare text-block list, the returned value itself, an MCP
+    ``{"content": "<json>"}`` string, or an MCP
+    ``{"content": [{"type": "text", "text": "<json>"}, ...]}`` block
+    list. Falls back to `tool_response` itself, unchanged, when nothing
+    parses -- never raises, never silently drops data the caller's own
+    recursive walk could still use."""
+    content: Any = tool_response if isinstance(tool_response, list) else None
+    if content is None and isinstance(tool_response, dict):
+        content = tool_response.get("content")
+
+    candidates: list[str] = []
+    if isinstance(content, str):
+        candidates.append(content)
+    elif isinstance(content, list):
+        candidates.extend(
+            block["text"] for block in content if isinstance(block, dict) and isinstance(block.get("text"), str)
+        )
+
+    for candidate in candidates:
+        try:
+            return json.loads(candidate)
+        except (json.JSONDecodeError, ValueError):
+            continue
+    return tool_response
+
+
+def _reports_error(node: Any) -> bool:
+    """True when NODE carries an explicit failure marker.
+
+    Mirrors hooks/gitapex_check_post_write_provenance.py's own
+    `_reports_error()` marker vocabulary (`status == "error"` /
+    `is_error is True` / `isError is True`) -- kept as a separate,
+    tiny re-implementation rather than imported, since that sibling's
+    version is dict-only while this module's callers already hold an
+    `Any`-typed unwrapped value (see `_unwrap_tool_response`)."""
+    if not isinstance(node, dict):
+        return False
+    return node.get("status") == "error" or node.get("is_error") is True or node.get("isError") is True
 
 
 def _count_unresolved_threads(node: Any) -> int:
@@ -161,16 +278,14 @@ def handle_bash(state: dict[str, Any], tool_input: dict[str, Any]) -> dict[str, 
     verdict = bash_safety.classify(command)
     if not verdict.is_git_push:
         return state
-    return {
-        "push_detected": True,
-        "open_review_threads": None,
-        "resolve_calls": 0,
-        "mergeable_checked": False,
-    }
+    return dict(_DEFAULT_STATE, push_detected=True)
 
 
-def handle_resolve_review_thread(state: dict[str, Any]) -> dict[str, Any]:
-    if not state.get("push_detected"):
+def handle_resolve_review_thread(state: dict[str, Any], tool_response: Any) -> dict[str, Any]:
+    if not state.get("push_detected") or state.get("target_pr") is None:
+        return state
+    outer = tool_response if isinstance(tool_response, dict) else {}
+    if _reports_error(outer) or _reports_error(_unwrap_tool_response(tool_response)):
         return state
     return {**state, "resolve_calls": int(state.get("resolve_calls") or 0) + 1}
 
@@ -178,10 +293,24 @@ def handle_resolve_review_thread(state: dict[str, Any]) -> dict[str, Any]:
 def handle_pull_request_read(state: dict[str, Any], tool_input: dict[str, Any], tool_response: Any) -> dict[str, Any]:
     if not state.get("push_detected"):
         return state
+
+    call_pr = _pr_key(tool_input)
+    target_pr = state.get("target_pr")
+    if target_pr is None:
+        if call_pr is not None:
+            state = {**state, "target_pr": call_pr}
+    elif call_pr is not None and call_pr != target_pr:
+        # A call against a PR other than the one this cycle is already
+        # tracking -- independent review found that without this check,
+        # reading an unrelated PR's state satisfied the obligation for
+        # the PR actually just pushed to.
+        return state
+
+    unwrapped = _unwrap_tool_response(tool_response)
     method = tool_input.get("method")
     if method == "get_review_comments":
-        return {**state, "open_review_threads": _count_unresolved_threads(tool_response)}
-    if method == "get" and _contains_mergeable_state(tool_response):
+        return {**state, "open_review_threads": _count_unresolved_threads(unwrapped)}
+    if method == "get" and _contains_mergeable_state(unwrapped):
         return {**state, "mergeable_checked": True}
     return state
 
@@ -203,7 +332,7 @@ def process(payload: dict[str, Any]) -> dict[str, Any] | None:
     if tool_name == "Bash":
         new_state = handle_bash(state, tool_input)
     elif tool_name == "mcp__github__resolve_review_thread":
-        new_state = handle_resolve_review_thread(state)
+        new_state = handle_resolve_review_thread(state, payload.get("tool_response"))
     elif tool_name == "mcp__github__pull_request_read":
         new_state = handle_pull_request_read(state, tool_input, payload.get("tool_response"))
     else:

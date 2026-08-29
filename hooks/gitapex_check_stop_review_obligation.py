@@ -23,12 +23,31 @@ Blocking condition (exit 2 -- Claude Code's own Stop contract: "Prevents
 Claude from stopping, continues the conversation"), only once
 push_detected is true:
 
+- open_review_threads was never observed at all this cycle (None -- the
+  tracker's own get_review_comments call never ran, or ran against a
+  different PR than the one target_pr ended up naming), OR
 - open_review_threads is a known positive count and resolve_calls is
   still short of it, OR
 - mergeable_checked is still false.
 
-Both satisfied (or push_detected was never set) clears the state file and
-exits 0.
+Both the thread-count and mergeable-state conditions satisfied (or
+push_detected was never set) clears the state file and exits 0.
+
+The first bullet (None, not just "0 and satisfied") closes a gap an
+independent review of the writer half's first version found and
+reproduced live: without it, a turn that pushed, then read only an
+unrelated PR's mergeable_state (via pull_request_read method="get",
+never method="get_review_comments") satisfied this gate entirely --
+target_pr got set to that unrelated PR by the read call itself,
+open_review_threads stayed None (its cross-PR guard skips a call
+against a different PR, but nothing had established target_pr yet at
+that point), and the None-is-"nothing to check" reading let the whole
+obligation pass without ever confirming a single review thread's state.
+Requiring at least one get_review_comments call before mergeable_checked
+alone can satisfy this gate is what the writer's own cross-PR guard
+(gitapex_check_post_review_obligation_tracker.py's `_pr_key` check) then
+protects: an agent cannot re-target a different PR's get_review_comments
+count onto the one it actually pushed to, once target_pr is set.
 
 No stop_hook_active-equivalent infinite-loop guard is implemented here --
 deliberate, not an oversight: Claude Code's own hooks reference does not
@@ -66,6 +85,10 @@ from typing import Any
 
 from gitapex_check_post_review_obligation_tracker import state_path
 
+_MISSING_STEPS_REVIEW_COMMENTS = (
+    'call mcp__github__pull_request_read (method="get_review_comments") on the PR you just pushed to, '
+    "so this gate can confirm whether any review thread is still unresolved"
+)
 _MISSING_STEPS_RESOLVE = (
     "call mcp__github__resolve_review_thread for the remaining open review thread(s) on the PR you just pushed to"
 )
@@ -103,7 +126,9 @@ def evaluate(state: dict[str, Any] | None) -> tuple[bool, str]:
     missing: list[str] = []
     open_threads = state.get("open_review_threads")
     resolve_calls = state.get("resolve_calls") or 0
-    if isinstance(open_threads, int) and open_threads > 0 and resolve_calls < open_threads:
+    if open_threads is None:
+        missing.append(_MISSING_STEPS_REVIEW_COMMENTS)
+    elif open_threads > 0 and resolve_calls < open_threads:
         missing.append(_MISSING_STEPS_RESOLVE)
     if not state.get("mergeable_checked"):
         missing.append(_MISSING_STEPS_MERGEABLE)
