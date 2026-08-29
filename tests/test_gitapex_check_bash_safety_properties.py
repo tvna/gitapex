@@ -3536,6 +3536,46 @@ def test_classify_denies_a_checkout_hidden_behind_pushd() -> None:
     assert "pushd" in verdict.reason
 
 
+def test_rule_git_checkout_restore_denies_when_an_earlier_segment_starts_with_a_dynamic_non_vanishing_word() -> None:
+    """CRITICAL regression pin (round-10 independent review, issue
+    #1375). Round 9's literal-token scan only ever recognized
+    `cd`/`pushd`/`popd` written out directly -- a dynamic command word
+    (e.g. `$X` with `X=cd`) that resolves to one of those at real bash
+    runtime was not recognized at all, live-verified to let `X=cd; $X
+    sub; git checkout -- file.py` resolve to a CONFIDENT, WRONG
+    `checkout_restore_paths` claim the same way round 9's own fix closed
+    for the literal case."""
+    segments = [["$X", "sub"], ["git", "checkout", "--", "f.py"]]
+    reason, resolved = checker._rule_git_checkout_restore(segments, {"X": "cd"})
+    assert reason is not None
+    assert resolved == ()
+
+
+def test_rule_git_checkout_restore_allows_a_genuinely_vanishing_dynamic_word() -> None:
+    """No false positive: a dynamic `seg[0]` that unambiguously vanishes
+    (word-splits to nothing at real bash runtime, e.g. an unset
+    parameter with no default) is NOT flagged as a possible relocator --
+    real bash would run whatever token follows as the actual command
+    word instead, and that token is scanned on its own merits."""
+    segments = [["${NEVERSET}", "sub"], ["git", "checkout", "--", "f.py"]]
+    reason, resolved = checker._rule_git_checkout_restore(segments, {})
+    assert reason is None
+    assert resolved == ("f.py",)
+
+
+def test_classify_denies_a_checkout_hidden_behind_a_dynamic_cd() -> None:
+    """End-to-end regression pin for the round-10 finding at the
+    `classify()` level: a variable holding `cd` (or `pushd`) must deny
+    the same way a literal `cd`/`pushd` does."""
+    for cmd in (
+        "X=cd; $X sub; git checkout -- file.py",
+        "X=pushd; $X sub; git checkout -- file.py",
+    ):
+        verdict = checker.classify(cmd)
+        assert verdict.deny is True, cmd
+        assert verdict.checkout_restore_paths == ()
+
+
 # --- End-to-end classify() coverage, pinning every explicit safe/deny case
 # issue #1375's own Acceptance Criteria Map and "Explicit safe cases"
 # section name by hand.

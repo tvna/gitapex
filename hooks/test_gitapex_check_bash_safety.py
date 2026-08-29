@@ -1668,6 +1668,24 @@ def test_checkout_denied_when_an_earlier_pushd_relocates_the_working_tree(tmp_pa
     assert "working tree is at risk" in payload["systemMessage"]
 
 
+def test_checkout_denied_when_an_earlier_dynamic_word_resolves_to_cd(tmp_path: Path) -> None:
+    """CRITICAL regression pin (round-10 independent review, issue #1375).
+    Round 9's fix only recognized a literal `cd`/`pushd`/`popd` token --
+    a dynamic command word that resolves to one of those at real bash
+    runtime (`X=cd; $X ...`) was not recognized at all. Live-verified
+    before this fix: the classifier's own claimed `checkout_restore_paths`
+    would have checked the wrong tree, letting the wrapper's live `git
+    diff` check silently allow a real, uncommitted-change discard --
+    classifier-level deny (no live git call), so no such file needs to
+    actually exist for this regression pin."""
+    repo_dir = tmp_path / "repo"
+    _init_repo_with_committed_file(repo_dir)
+    result = run("X=cd; $X sub; git checkout -- dirty.py", payload_cwd=str(repo_dir))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+    payload = json.loads(result.stderr)
+    assert "working tree is at risk" in payload["systemMessage"]
+
+
 def test_checkout_denied_in_a_real_merge_conflict_names_the_conflict_remedy(tmp_path: Path) -> None:
     """A real merge conflict (issue #1375's own Acceptance Criteria Map):
     the deny message names a remedy that actually works mid-conflict

@@ -3627,13 +3627,42 @@ def _rule_git_checkout_restore(
     and the real command silently discarded the uncommitted change when
     actually executed). `popd` joins for the same reason: it also
     relocates the shell's cwd, to whatever the directory stack's own
-    prior entry was, which this classifier has no way to know either."""
+    prior entry was, which this classifier has no way to know either.
+
+    A DYNAMIC command word at `seg[0]` (after `_classify_tokens`'s own
+    uniform `_strip_leading_assignments`, so `seg[0]` is always the real
+    command word here) that does not unambiguously vanish is ALSO treated
+    as a possible relocator -- CRITICAL bug found by independent
+    adversarial review (round 10, issue #1375) and independently
+    reproduced live: the literal-token scan above only ever recognized
+    `cd`/`pushd`/`popd` written out directly, so `X=cd; $X sub; git
+    checkout -- file.py` (dirty relative to `sub`, absent at the
+    PreToolUse payload's own `.cwd`) resolved to the same CONFIDENT,
+    WRONG `checkout_restore_paths` claim round 9's fix closed for the
+    literal case, and the real command silently discarded the
+    uncommitted change when actually executed; same result for `X=pushd`.
+    A token that unambiguously vanishes (`_token_is_all_unassigned_refs`/
+    `_token_is_a_vanishing_default_or_alt_clause`, the same primitives
+    `_find_git_checkout_restore` already uses for the identical git/
+    subcommand-position question) is NOT flagged here, since real bash
+    then runs whatever token follows as the actual command word instead
+    -- and the existing literal scan above, which checks every token in
+    the segment regardless of position, already covers a literal `cd`/
+    `pushd`/`popd` sitting after such a decoy without this addition
+    needing its own skip-past loop."""
     saw_cd = False
     all_paths: list[str] = []
     for seg in segments:
         subcommand, tokens_after, saw_tree_relocation = _find_git_checkout_restore(seg, raw_assigned)
         if subcommand is None:
-            if any(not _is_dynamic(t) and t in _CWD_RELOCATING_COMMANDS for t in seg):
+            if any(not _is_dynamic(t) and t in _CWD_RELOCATING_COMMANDS for t in seg) or (
+                seg
+                and _is_dynamic(seg[0])
+                and not (
+                    _token_is_all_unassigned_refs(seg[0], raw_assigned)
+                    or _token_is_a_vanishing_default_or_alt_clause(seg[0], raw_assigned)
+                )
+            ):
                 saw_cd = True
             continue
         if saw_tree_relocation or saw_cd or any(name in raw_assigned for name in _GIT_TREE_ENV_VARS):
