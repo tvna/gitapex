@@ -232,7 +232,7 @@
       "trigger": "PreToolUse matcher mcp__github__create_pull_request and mcp__github__update_pull_request (hooks/hooks.json); .github/workflows/skill-audit-gate.yml on pull_request",
       "policy_refs": [],
       "cluster": "skill-lifecycle",
-      "tracking_issue": null,
+      "tracking_issue": [248, 242, 246],
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
@@ -584,6 +584,27 @@
       ]
     },
     {
+      "id": "eval-yaml-parses",
+      "kind": "script",
+      "script": "evals/scripts/gitapex_validate_eval_yaml.py",
+      "rule": "Every committed evals/*/eval.yaml and evals/*/tasks/*.yaml file must parse cleanly as YAML (syntax only, never schema validity) -- swept in one pass across the whole tree, a strict superset of touched-files-only.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", "evals/scripts/gitapex_validate_eval_yaml.py"],
+      "trigger": "tests/test_gitapex_validate_eval_yaml.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "skill-lifecycle",
+      "tracking_issue": 527,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "evals/*/eval.yaml"},
+        {"kind": "file-glob", "ref": "evals/*/tasks/*.yaml"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
+    },
+    {
       "id": "skill-eval-status-doc-drift",
       "kind": "script",
       "script": ".github/scripts/gitapex_generate_skill_eval_status.py",
@@ -797,19 +818,21 @@
       "id": "retrospective-gate-drift-scan",
       "kind": "script",
       "script": ".github/scripts/gitapex_scan_retrospective_gate_drift.py",
-      "rule": "Lists every retrospective-labelled issue (any state), excludes any whose body carries a gate-less marker (CI-opened stub or zero-repair fast-close -- issue #1297), and fails the job if the count of remaining issues with zero commit on main citing it exceeds threshold 20.",
+      "rule": "Fails the job if the gate-proposal label itself no longer exists; otherwise fails if the count of currently-open gate-proposal-labelled issues exceeds threshold 20, or if any closed gate-proposal-labelled issue whose state_reason is neither not_planned nor duplicate lacks a commit on the checked ref citing it or a .gitapex/ssot.json gates[].tracking_issue entry naming it (issue #1406 rescope; the prior retrospective-label citation sweep is retired).",
       "planes": ["ci"],
-      "local_exclusion": "Queries the GitHub issues API for retrospective-labelled issues; there is no offline equivalent.",
+      "local_exclusion": "Queries the GitHub labels and issues APIs for the gate-proposal label and its labelled issues; there is no offline equivalent.",
       "trigger": ".github/workflows/retrospective-gate-drift.yml, daily cron 07:00 UTC + workflow_dispatch",
       "policy_refs": [],
       "cluster": "self-governance",
-      "tracking_issue": [297, 422, 426],
+      "tracking_issue": [297, 422, 426, 187, 242, 246, 1406],
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
         {"kind": "file-glob", "ref": ".gitapex/ssot.json"},
-        {"kind": "runtime-resolved-reference", "ref": "GitHub API GET /repos/{owner}/{repo}/issues?labels=retrospective&state=all (list_labelled_issues) -- the live retrospective-labelled issue set"},
+        {"kind": "runtime-resolved-reference", "ref": "GitHub API GET /repos/{owner}/{repo}/labels/{name} (label_exists) -- the gate-proposal label's own liveness, checked before either pass runs"},
+        {"kind": "runtime-resolved-reference", "ref": "GitHub API GET /repos/{owner}/{repo}/issues?labels=gate-proposal&state=open (list_labelled_issue_records) -- the live open gate-proposal backlog counted against the threshold"},
+        {"kind": "runtime-resolved-reference", "ref": "GitHub API GET /repos/{owner}/{repo}/issues?labels=gate-proposal&state=closed (list_labelled_issue_records) -- every closed gate-proposal issue, for the zero-tolerance two-signal integrity pass"},
         {"kind": "runtime-resolved-reference", "ref": "git log <ref> commit messages (git_commit_messages) matched against a #<N> citation pattern (_citation_pattern) per issue number"},
         {"kind": "workflow-event", "ref": "retrospective-gate-drift.yml:schedule"},
         {"kind": "workflow-event", "ref": "retrospective-gate-drift.yml:workflow_dispatch"}
@@ -1681,6 +1704,27 @@
         {"kind": "workflow-event", "ref": "betterleaks-merge-gate.yml:workflow_dispatch"},
         {"kind": "file-glob", "ref": ".betterleaks.toml"},
         {"kind": "github-native", "ref": "required_status_checks context \"betterleaks\" (repository ruleset on the default branch)"}
+      ]
+    },
+    {
+      "id": "betterleaks-allowlist-no-removal",
+      "kind": "script",
+      "script": [".github/scripts/gitapex_gate_betterleaks_allowlist_no_removal.py", ".github/scripts/_gitapex_base_ref.py", ".github/workflows/betterleaks-allowlist-no-removal-gate.yml"],
+      "rule": "A .betterleaks.toml [allowlist].paths entry present at a PR's base commit and absent from HEAD fails the check, compared structurally (parsed with tomllib, not a raw text-line diff) so reordering/reformatting the array never false-positives. A `# betterleaks-allowlist-no-removal: WAIVED: <reason>` comment anywhere in the head file that quotes the removed entry's exact TOML string verbatim waives that one entry. Base-ref resolution reuses _gitapex_base_ref.py (issue #1345), the same shared helper family gitapex_gate_behind_base.py (issue #985) and gitapex_run_base_diff.py (issue #1178) already use.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_betterleaks_allowlist_no_removal.py"],
+      "trigger": ".github/workflows/betterleaks-allowlist-no-removal-gate.yml on pull_request, plus tests/test_gitapex_gate_betterleaks_allowlist_no_removal.py and tests/test_gitapex_gate_betterleaks_allowlist_no_removal_properties.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "secret-scanning",
+      "tracking_issue": 1427,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": ".betterleaks.toml"},
+        {"kind": "workflow-event", "ref": "betterleaks-allowlist-no-removal-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {

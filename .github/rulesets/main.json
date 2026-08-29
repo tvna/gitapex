@@ -43,7 +43,8 @@
           {"context": "provenance-disclosure"},
           {"context": "pr-title-convention"},
           {"context": "betterleaks"},
-          {"context": "independent-review-pending"}
+          {"context": "independent-review-pending"},
+          {"context": "skill-branch-fixture-coverage"}
         ]
       }
     }

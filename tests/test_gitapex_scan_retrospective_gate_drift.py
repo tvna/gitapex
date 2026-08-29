@@ -1,9 +1,13 @@
 """Tests for the retrospective gate-drift meta-check
 (.github/scripts/gitapex_scan_retrospective_gate_drift.py).
 
-Refs #297 (refs #187, #242, #246): this script mechanizes
-merge-retrospective's Step 0 (find retrospective-labelled issues with no
-citing commit on main) and fails CI when the count exceeds a threshold.
+Refs #1406 (refs #297, #187, #242, #246, #709): this script audits the
+`gate-proposal` label the flat gate-proposal-issues design
+(docs/superpowers/specs/2026-08-29-flat-gate-proposal-issues-design.md)
+introduces -- a label-liveness guard, a threshold-gated open-issue-count
+report, and an unbounded zero-tolerance integrity pass over every closed
+labelled issue (the existing two-signal check, issue #709, re-run over
+that narrower set instead of the prior full `retrospective`-label sweep).
 
 No test in this file makes a real network or subprocess call -- the
 network layer is exercised through an injected `opener`, and the git
@@ -46,8 +50,22 @@ def http_error(code: int, body: str = "") -> urllib.error.HTTPError:
     return urllib.error.HTTPError("https://example.test", code, "err", {}, Response(code, body))  # type: ignore[arg-type]
 
 
+def _url_capturing_opener(captured: dict, body: str = "[]"):
+    """An `opener` that records the request URL under `captured["url"]` and
+    answers 200 with `body`. Shared by every test below whose only subject
+    is the URL a fetch helper builds (which label it quotes, which `state=`
+    it asks for) rather than the response it gets back."""
+
+    def opener(request: urllib.request.Request) -> Response:
+        captured["url"] = request.full_url
+        return Response(200, body)
+
+    return opener
+
+
 # ---------------------------------------------------------------------------
-# citation_count / find_no_citation_issues
+# citation_count / find_no_citation_issues (issue #709's two-signal check --
+# unchanged logic, now reused by the closed-issue integrity pass below)
 # ---------------------------------------------------------------------------
 
 
@@ -119,77 +137,7 @@ def test_find_no_citation_issues_clears_when_citation_and_tracking_issue_both_pr
 
 
 # ---------------------------------------------------------------------------
-# is_gate_less / partition_gate_less (issue #1297)
-# ---------------------------------------------------------------------------
-
-
-def test_is_gate_less_matches_ci_stub_marker():
-    body = "Automated stub opened by the post-merge-auto-retro gate for PR #42."
-    assert gate.is_gate_less(body) is True
-
-
-def test_is_gate_less_matches_zero_repair_fast_close_marker():
-    body = "PR #63 merged with zero repairs.\nRetrospective status: zero-repair-fast-close\nRefs #63."
-    assert gate.is_gate_less(body) is True
-
-
-def test_is_gate_less_false_when_neither_marker_present():
-    assert gate.is_gate_less("1. [Repair] ... Status: `missing-deterministic-gate`") is False
-
-
-def test_is_gate_less_false_for_empty_body():
-    assert gate.is_gate_less("") is False
-
-
-def test_is_gate_less_matches_zero_repair_marker_with_bullet_prefix():
-    body = "PR #63 merged with zero repairs.\n- Retrospective status: zero-repair-fast-close\nRefs #63."
-    assert gate.is_gate_less(body) is True
-
-
-def test_is_gate_less_matches_zero_repair_marker_with_crlf_line_endings():
-    # Defeat case: GitHub is known to deliver an issue body with CRLF
-    # endings for one authored or edited via the web UI -- the marker
-    # line's own `\r` must not defeat the standalone-line match.
-    body = "PR #63 merged with zero repairs.\r\nRetrospective status: zero-repair-fast-close\r\nRefs #63."
-    assert gate.is_gate_less(body) is True
-
-
-def test_is_gate_less_false_when_zero_repair_marker_only_quoted_mid_sentence():
-    # Defeat case (issue #1297): this repo's own retrospectives routinely
-    # re-quote an earlier issue's text verbatim inside a later, real
-    # retrospective's Carried-forward section -- a bare substring match
-    # would misclassify that later, real issue as gate-less merely for
-    # quoting a fast-closed one.
-    body = (
-        "1. [Carried-forward] Issue #63 was fast-closed "
-        "(`Retrospective status: zero-repair-fast-close`), but the real "
-        "gate proposed in this cycle remains unimplemented.\n"
-        "   Status: `missing-deterministic-gate`\n"
-        "   Proposed gate: add a pre-push hook."
-    )
-    assert gate.is_gate_less(body) is False
-
-
-def test_partition_gate_less_separates_records_preserving_order():
-    records = [
-        {"number": 118, "body": "Automated stub opened by the post-merge-auto-retro gate."},
-        {"number": 187, "body": "Retrospective status: zero-repair-fast-close"},
-        {"number": 242, "body": "Status: `missing-deterministic-gate`"},
-    ]
-    gate_less, remaining = gate.partition_gate_less(records)
-    assert gate_less == [118, 187]
-    assert remaining == [242]
-
-
-def test_partition_gate_less_treats_missing_or_null_body_as_not_gate_less():
-    records = [{"number": 1, "body": None}, {"number": 2}]
-    gate_less, remaining = gate.partition_gate_less(records)
-    assert gate_less == []
-    assert remaining == [1, 2]
-
-
-# ---------------------------------------------------------------------------
-# evaluate / format_report
+# evaluate / format_open_count_report (pass (a): threshold-gated open count)
 # ---------------------------------------------------------------------------
 
 
@@ -205,33 +153,156 @@ def test_evaluate_false_when_count_below_threshold():
     assert gate.evaluate(5, 20) is False
 
 
-def test_format_report_lists_no_citation_issues_and_passes():
-    report = gate.format_report([118, 191], 22, 20)
-    assert "2 of 22" in report
-    assert "#118" in report
-    assert "#191" in report
+def test_format_open_count_report_passes_at_threshold():
+    report = gate.format_open_count_report(20, 20, "gate-proposal")
+    assert "20" in report
+    assert "gate-proposal" in report
     assert "PASS" in report
 
 
-def test_format_report_fails_when_over_threshold():
-    report = gate.format_report(list(range(21)), 22, 20)
+def test_format_open_count_report_passes_below_threshold():
+    report = gate.format_open_count_report(5, 20, "gate-proposal")
+    assert "PASS" in report
+
+
+def test_format_open_count_report_fails_over_threshold():
+    report = gate.format_open_count_report(21, 20, "gate-proposal")
     assert "FAIL" in report
 
 
-def test_format_report_empty_backlog_states_every_issue_cited():
-    report = gate.format_report([], 4, 20)
-    assert "Every" in report
+# ---------------------------------------------------------------------------
+# is_exempt_closed_issue / partition_exempt_closed_issues (Decision 5's
+# state_reason exemption) / format_closed_integrity_report (pass (b))
+# ---------------------------------------------------------------------------
+
+
+def test_is_exempt_closed_issue_true_for_not_planned():
+    assert gate.is_exempt_closed_issue("not_planned") is True
+
+
+def test_is_exempt_closed_issue_true_for_duplicate():
+    assert gate.is_exempt_closed_issue("duplicate") is True
+
+
+def test_is_exempt_closed_issue_false_for_completed():
+    assert gate.is_exempt_closed_issue("completed") is False
+
+
+def test_is_exempt_closed_issue_false_for_none():
+    assert gate.is_exempt_closed_issue(None) is False
+
+
+def test_partition_exempt_closed_issues_separates_records_preserving_order():
+    records = [
+        {"number": 1, "state_reason": "not_planned"},
+        {"number": 2, "state_reason": "completed"},
+        {"number": 3, "state_reason": "duplicate"},
+        {"number": 4, "state_reason": None},
+    ]
+    exempt, remaining = gate.partition_exempt_closed_issues(records)
+    assert exempt == [1, 3]
+    assert remaining == [2, 4]
+
+
+def test_partition_exempt_closed_issues_treats_missing_state_reason_as_not_exempt():
+    records = [{"number": 5}]
+    exempt, remaining = gate.partition_exempt_closed_issues(records)
+    assert exempt == []
+    assert remaining == [5]
+
+
+def test_format_closed_integrity_report_passes_when_no_unverified_issues():
+    report = gate.format_closed_integrity_report([], 5, 2, "gate-proposal")
     assert "PASS" in report
+    assert "0 of 5" in report
+    assert "2 exempted" in report
 
 
-def test_format_report_omits_gate_less_line_when_zero():
-    report = gate.format_report([118], 22, 20)
-    assert "excluded as gate-less" not in report
+def test_format_closed_integrity_report_fails_and_lists_unverified_issues():
+    report = gate.format_closed_integrity_report([118, 191], 5, 1, "gate-proposal")
+    assert "FAIL" in report
+    assert "#118" in report
+    assert "#191" in report
+    assert "1 exempted" in report
 
 
-def test_format_report_discloses_gate_less_exclusion_count():
-    report = gate.format_report([118], 22, 20, gate_less_count=3)
-    assert "3 of 22 were excluded as gate-less by construction" in report
+def test_format_closed_integrity_report_never_mentions_reopening():
+    # Decision 5: no reopen action of any kind -- this pass only detects
+    # and fails loudly.
+    #
+    # Asserted as an occurrence count, not as
+    # `"reopen" not in report or "no reopen action taken" in report`: that
+    # disjunction is satisfied outright by the disclaimer the FAIL branch
+    # already prints, so it would still pass after a line promising or
+    # describing a reopen was added right next to it. Counting pins the
+    # disclaimer as the *only* place the word may appear.
+    fail_report = gate.format_closed_integrity_report([118], 5, 0, "gate-proposal").lower()
+    assert fail_report.count("reopen") == 1
+    assert "no reopen action taken" in fail_report
+
+    # The PASS branch has no disclaimer line at all, so it must not
+    # mention reopening even once.
+    pass_report = gate.format_closed_integrity_report([], 5, 0, "gate-proposal").lower()
+    assert pass_report.count("reopen") == 0
+
+
+# ---------------------------------------------------------------------------
+# label_exists (the label-liveness guard both passes require)
+# ---------------------------------------------------------------------------
+
+
+def test_label_exists_requests_expected_url():
+    captured = {}
+
+    def opener(request: urllib.request.Request) -> Response:
+        captured["url"] = request.full_url
+        assert request.headers["Authorization"] == "Bearer tok"
+        return Response(200, json.dumps({"name": "gate-proposal"}))
+
+    gate.label_exists("tvna", "gitapex", "gate-proposal", "tok", opener=opener)
+    assert captured["url"] == "https://api.github.com/repos/tvna/gitapex/labels/gate-proposal"
+
+
+def test_label_exists_returns_true_on_200():
+    def opener(request: urllib.request.Request) -> Response:
+        return Response(200, json.dumps({"name": "gate-proposal"}))
+
+    assert gate.label_exists("tvna", "gitapex", "gate-proposal", "tok", opener=opener) is True
+
+
+def test_label_exists_returns_false_on_404():
+    def opener(request: urllib.request.Request) -> Response:
+        raise http_error(404, "not found")
+
+    assert gate.label_exists("tvna", "gitapex", "gate-proposal", "tok", opener=opener) is False
+
+
+def test_label_exists_raises_rather_than_reporting_missing_on_persistent_5xx():
+    # The guard must fail loudly on an inconclusive result -- a server
+    # error is not evidence the label is missing, and treating it as such
+    # would let a transient outage masquerade as "label deleted."
+    def opener(request: urllib.request.Request) -> Response:
+        raise http_error(500, "boom")
+
+    with pytest.raises(gate.GitHubApiError):
+        gate.label_exists("tvna", "gitapex", "gate-proposal", "tok", opener=opener, sleeper=lambda _: None)
+
+
+def test_label_exists_raises_on_persistent_4xx_other_than_404():
+    def opener(request: urllib.request.Request) -> Response:
+        raise http_error(403, "forbidden")
+
+    with pytest.raises(gate.GitHubApiError):
+        gate.label_exists("tvna", "gitapex", "gate-proposal", "tok", opener=opener)
+
+
+def test_label_exists_quotes_a_label_name_with_special_characters():
+    captured = {}
+    gate.label_exists(
+        "tvna", "gitapex", "a/b", "tok", opener=_url_capturing_opener(captured, json.dumps({"name": "a/b"}))
+    )
+    assert "a/b" not in captured["url"]
+    assert "a%2Fb" in captured["url"]
 
 
 # ---------------------------------------------------------------------------
@@ -352,6 +423,16 @@ def test_list_labelled_issues_raises_after_repeated_network_failure():
     assert calls == 3
 
 
+def test_list_labelled_issues_still_defaults_to_state_all_via_positional_call():
+    # list_labelled_issues calls list_labelled_issue_records positionally
+    # through `sleeper` -- confirms `state` being appended *after*
+    # opener/sleeper (rather than before) did not shift that positional
+    # call onto the wrong parameter.
+    captured = {}
+    gate.list_labelled_issues("tvna", "gitapex", "gate-proposal", "tok", opener=_url_capturing_opener(captured))
+    assert "state=all" in captured["url"]
+
+
 # ---------------------------------------------------------------------------
 # list_labelled_issue_records (issue #726: shared fetch for gitapex_compute_gprr.py)
 # ---------------------------------------------------------------------------
@@ -396,6 +477,54 @@ def test_list_labelled_issues_delegates_to_records(monkeypatch):
     records = [{"number": 5, "body": "", "created_at": "2026-07-01T00:00:00Z"}]
     monkeypatch.setattr(gate, "list_labelled_issue_records", lambda *a, **k: records)
     assert gate.list_labelled_issues("tvna", "gitapex", "retrospective", "tok") == [5]
+
+
+def test_list_labelled_issue_records_defaults_to_state_all():
+    # gitapex_compute_gprr.py calls this positionally with exactly four
+    # arguments (owner, repo, label, token) and depends on this default
+    # staying "all" -- see this function's own docstring.
+    captured = {}
+    gate.list_labelled_issue_records("tvna", "gitapex", "gate-proposal", "tok", opener=_url_capturing_opener(captured))
+    assert "state=all" in captured["url"]
+
+
+@pytest.mark.parametrize("state", ["open", "closed"])
+def test_list_labelled_issue_records_uses_given_state(state):
+    # `main`'s two passes ask for exactly these two states explicitly.
+    captured = {}
+    gate.list_labelled_issue_records(
+        "tvna", "gitapex", "gate-proposal", "tok", opener=_url_capturing_opener(captured), state=state
+    )
+    assert f"state={state}" in captured["url"]
+
+
+def test_list_labelled_issue_records_quotes_a_label_containing_a_space():
+    # Defeat case for the label-liveness guard: `label_exists` quotes the
+    # label, so a space-bearing label name (GitHub's own default
+    # "good first issue" has two) passes the guard. If this fetch then
+    # interpolated the label raw, it would emit a bare space into the
+    # request line -- the guard reporting "the label is live" while the
+    # pass it guards asks a malformed question.
+    captured = {}
+    gate.list_labelled_issue_records(
+        "tvna", "gitapex", "gate proposal", "tok", opener=_url_capturing_opener(captured), state="open"
+    )
+    assert " " not in captured["url"]
+    assert "labels=gate%20proposal" in captured["url"]
+
+
+def test_list_labelled_issue_records_label_cannot_inject_a_second_query_parameter():
+    # The sharper half of the same defeat: a label named `x&state=all`
+    # passes the (quoting) liveness guard, and a raw interpolation here
+    # would silently query label `x` with an injected `state=all` ahead of
+    # this call's own `state=closed` -- a clean-looking report about a
+    # label and state neither pass ever asked for.
+    captured = {}
+    gate.list_labelled_issue_records(
+        "tvna", "gitapex", "x&state=all", "tok", opener=_url_capturing_opener(captured), state="closed"
+    )
+    assert captured["url"].count("state=") == 1
+    assert "labels=x%26state%3Dall" in captured["url"]
 
 
 # ---------------------------------------------------------------------------
@@ -561,52 +690,226 @@ def test_load_gate_tracking_issues_flatten_rejects_nested_list_and_empty_list(tm
 
 
 # ---------------------------------------------------------------------------
-# main
+# main: label-liveness guard, open-count threshold report (pass a), and
+# closed-issue zero-tolerance integrity pass (pass b)
 # ---------------------------------------------------------------------------
 
 
-def _records(*numbers, body=""):
-    return [{"number": n, "body": body} for n in numbers]
+def _open_records(*numbers):
+    return [{"number": n} for n in numbers]
 
 
-def test_main_exits_zero_when_count_at_threshold(monkeypatch, capsys):
+def _closed_record(number, state_reason=None):
+    return {"number": number, "state_reason": state_reason}
+
+
+def _fake_records_by_state(open_records=(), closed_records=()):
+    """A `list_labelled_issue_records` stand-in that dispatches on the
+    `state=` keyword `main` passes for each of its two passes."""
+
+    def fake(owner, repo, label, token, state="all", **kwargs):
+        if state == "open":
+            return list(open_records)
+        if state == "closed":
+            return list(closed_records)
+        raise AssertionError(f"unexpected state: {state!r}")
+
+    return fake
+
+
+def test_main_fails_loudly_when_label_does_not_exist(monkeypatch, capsys):
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
-    monkeypatch.setattr(gate, "list_labelled_issue_records", lambda *a, **k: _records(1, 2))
-    monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: ["Refs #1", "Refs #2"])
-    monkeypatch.setattr(gate, "load_gate_tracking_issues", lambda *a, **k: {1, 2})
-    exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", "--threshold", "0"])
-    assert exit_code == 0
-    assert "PASS" in capsys.readouterr().out
+    monkeypatch.setattr(gate, "label_exists", lambda *a, **k: False)
+    exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", "--label", "gate-proposal"])
+    assert exit_code == 1
+    stderr = capsys.readouterr().err
+    assert "gate-proposal" in stderr
+    assert "does not exist" in stderr
 
 
-def test_main_exits_one_when_count_exceeds_threshold(monkeypatch, capsys):
+def test_main_does_not_fetch_issues_when_label_missing(monkeypatch):
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
-    monkeypatch.setattr(gate, "list_labelled_issue_records", lambda *a, **k: _records(1, 2, 3))
+    monkeypatch.setattr(gate, "label_exists", lambda *a, **k: False)
+
+    def fail_if_called(*a, **k):
+        raise AssertionError("list_labelled_issue_records must not run when the label is missing")
+
+    monkeypatch.setattr(gate, "list_labelled_issue_records", fail_if_called)
+    assert gate.main(["--owner", "tvna", "--repo", "gitapex"]) == 1
+
+
+def test_main_exits_one_on_label_exists_github_api_error(monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+
+    def raise_api_error(*a, **k):
+        raise gate.GitHubApiError("boom")
+
+    monkeypatch.setattr(gate, "label_exists", raise_api_error)
+    assert gate.main(["--owner", "tvna", "--repo", "gitapex"]) == 1
+
+
+def test_main_open_count_over_threshold_fails(monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setattr(gate, "label_exists", lambda *a, **k: True)
+    monkeypatch.setattr(
+        gate, "list_labelled_issue_records", _fake_records_by_state(open_records=_open_records(*range(21)))
+    )
     monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: [])
     monkeypatch.setattr(gate, "load_gate_tracking_issues", lambda *a, **k: set())
-    exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", "--threshold", "1"])
+    exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", "--threshold", "20"])
     assert exit_code == 1
     assert "FAIL" in capsys.readouterr().out
 
 
-def test_main_excludes_gate_less_records_and_discloses_count(monkeypatch, capsys):
+def test_main_open_count_at_threshold_passes(monkeypatch, capsys):
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setattr(gate, "label_exists", lambda *a, **k: True)
+    monkeypatch.setattr(
+        gate, "list_labelled_issue_records", _fake_records_by_state(open_records=_open_records(*range(20)))
+    )
+    monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: [])
+    monkeypatch.setattr(gate, "load_gate_tracking_issues", lambda *a, **k: set())
+    exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", "--threshold", "20"])
+    assert exit_code == 0
+    assert "PASS" in capsys.readouterr().out
+
+
+def test_main_open_count_below_threshold_passes(monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setattr(gate, "label_exists", lambda *a, **k: True)
+    monkeypatch.setattr(gate, "list_labelled_issue_records", _fake_records_by_state(open_records=_open_records(1, 2)))
+    monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: [])
+    monkeypatch.setattr(gate, "load_gate_tracking_issues", lambda *a, **k: set())
+    exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", "--threshold", "20"])
+    assert exit_code == 0
+    assert "PASS" in capsys.readouterr().out
+
+
+def test_main_passes_when_all_closed_issues_verified_or_exempt(monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setattr(gate, "label_exists", lambda *a, **k: True)
+    closed = [
+        _closed_record(100),
+        _closed_record(101, state_reason="not_planned"),
+        _closed_record(102, state_reason="duplicate"),
+    ]
+    monkeypatch.setattr(gate, "list_labelled_issue_records", _fake_records_by_state(closed_records=closed))
+    monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: ["Refs #100"])
+    monkeypatch.setattr(gate, "load_gate_tracking_issues", lambda *a, **k: {100})
+    exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", "--threshold", "20"])
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "PASS: every closed issue" in out
+
+
+def test_main_fails_when_single_non_exempt_closed_issue_is_unverified(monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setattr(gate, "label_exists", lambda *a, **k: True)
+    closed = [_closed_record(200), _closed_record(201)]
+    monkeypatch.setattr(gate, "list_labelled_issue_records", _fake_records_by_state(closed_records=closed))
+    monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: ["Refs #200"])
+    monkeypatch.setattr(gate, "load_gate_tracking_issues", lambda *a, **k: {200})
+    exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", "--threshold", "20"])
+    assert exit_code == 1
+    out = capsys.readouterr().out
+    assert "#201" in out
+    assert "#200" not in out.split("Closed issues with no verified gate")[-1]
+    assert "FAIL" in out
+
+
+def test_main_fails_a_closed_issue_that_has_a_citing_commit_but_no_ssot_entry(monkeypatch, capsys):
+    # Defeat case for the closed-issue integrity pass: half of the
+    # two-signal check is not enough. A closed issue whose number is cited
+    # by a commit on the checked ref, but which no `.gitapex/ssot.json`
+    # `gates[].tracking_issue` entry names, is exactly issue #709's
+    # false-negative shape -- it must still fail here.
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setattr(gate, "label_exists", lambda *a, **k: True)
+    monkeypatch.setattr(
+        gate, "list_labelled_issue_records", _fake_records_by_state(closed_records=[_closed_record(910)])
+    )
+    monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: ["feat(gates): something related (Refs #910)"])
+    monkeypatch.setattr(gate, "load_gate_tracking_issues", lambda *a, **k: set())
+    assert gate.main(["--owner", "tvna", "--repo", "gitapex"]) == 1
+    assert "#910" in capsys.readouterr().out
+
+
+def test_main_fails_a_closed_issue_that_has_an_ssot_entry_but_no_citing_commit(monkeypatch, capsys):
+    # The mirror-image half of the same defeat: a registry entry alone,
+    # with no commit on the checked ref citing the issue, must also still
+    # fail. Both signals are required, never either.
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setattr(gate, "label_exists", lambda *a, **k: True)
+    monkeypatch.setattr(
+        gate, "list_labelled_issue_records", _fake_records_by_state(closed_records=[_closed_record(911)])
+    )
+    monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: ["chore: unrelated"])
+    monkeypatch.setattr(gate, "load_gate_tracking_issues", lambda *a, **k: {911})
+    assert gate.main(["--owner", "tvna", "--repo", "gitapex"]) == 1
+    assert "#911" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("state_reason", ["reopened", "completed", "resolved", "NOT_PLANNED", "not_planned "])
+def test_main_fails_a_closed_issue_whose_state_reason_is_not_one_of_the_two_exempt_values(
+    monkeypatch, capsys, state_reason
+):
+    # Defeat case for the exemption: only the two literal values
+    # `not_planned` and `duplicate` excuse a closed issue. A different
+    # GitHub value, a future one, and a case- or whitespace-variant of an
+    # exempt one all stay non-exempt -- the exemption fails closed rather
+    # than widening on anything that merely resembles a declined proposal.
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setattr(gate, "label_exists", lambda *a, **k: True)
     monkeypatch.setattr(
         gate,
         "list_labelled_issue_records",
-        lambda *a, **k: [
-            {"number": 1, "body": "Automated stub opened by the post-merge-auto-retro gate."},
-            {"number": 2, "body": "Retrospective status: zero-repair-fast-close"},
-            {"number": 3, "body": "Status: `missing-deterministic-gate`"},
-        ],
+        _fake_records_by_state(closed_records=[_closed_record(912, state_reason=state_reason)]),
     )
-    monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: ["Refs #3"])
-    monkeypatch.setattr(gate, "load_gate_tracking_issues", lambda *a, **k: {3})
-    exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", "--threshold", "0"])
-    assert exit_code == 0
+    monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: [])
+    monkeypatch.setattr(gate, "load_gate_tracking_issues", lambda *a, **k: set())
+    assert gate.main(["--owner", "tvna", "--repo", "gitapex"]) == 1
     out = capsys.readouterr().out
-    assert "PASS" in out
-    assert "2 of 3 were excluded as gate-less by construction" in out
+    assert "#912" in out
+    assert "0 exempted by state_reason" in out
+
+
+def test_main_exempts_declined_closed_issues_while_still_failing_on_a_genuine_unverified_one(monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setattr(gate, "label_exists", lambda *a, **k: True)
+    closed = [
+        _closed_record(300, state_reason="not_planned"),
+        _closed_record(301, state_reason="duplicate"),
+        _closed_record(302),
+    ]
+    monkeypatch.setattr(gate, "list_labelled_issue_records", _fake_records_by_state(closed_records=closed))
+    monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: [])
+    monkeypatch.setattr(gate, "load_gate_tracking_issues", lambda *a, **k: set())
+    exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", "--threshold", "20"])
+    assert exit_code == 1
+    out = capsys.readouterr().out
+    assert "2 exempted by state_reason" in out
+    assert "#302" in out
+    assert "FAIL: 1 closed issue(s) never passed" in out
+
+
+def test_main_open_count_failure_and_closed_integrity_failure_both_reported(monkeypatch, capsys):
+    # Both passes run and are both reported regardless of which one fails
+    # first -- neither short-circuits the other.
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setattr(gate, "label_exists", lambda *a, **k: True)
+    monkeypatch.setattr(
+        gate,
+        "list_labelled_issue_records",
+        _fake_records_by_state(open_records=_open_records(*range(25)), closed_records=[_closed_record(400)]),
+    )
+    monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: [])
+    monkeypatch.setattr(gate, "load_gate_tracking_issues", lambda *a, **k: set())
+    exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", "--threshold", "20"])
+    assert exit_code == 1
+    out = capsys.readouterr().out
+    assert "Retrospective gate-drift report" in out
+    assert "Closed 'gate-proposal'-labelled issue integrity" in out
+    assert out.count("FAIL") == 2
 
 
 def test_main_exits_one_on_missing_token(monkeypatch):
@@ -616,6 +919,7 @@ def test_main_exits_one_on_missing_token(monkeypatch):
 
 def test_main_exits_one_on_github_api_error(monkeypatch):
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setattr(gate, "label_exists", lambda *a, **k: True)
 
     def raise_api_error(*a, **k):
         raise gate.GitHubApiError("boom")
@@ -626,7 +930,8 @@ def test_main_exits_one_on_github_api_error(monkeypatch):
 
 def test_main_exits_one_on_git_log_error(monkeypatch):
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
-    monkeypatch.setattr(gate, "list_labelled_issue_records", lambda *a, **k: _records(1))
+    monkeypatch.setattr(gate, "label_exists", lambda *a, **k: True)
+    monkeypatch.setattr(gate, "list_labelled_issue_records", lambda *a, **k: [])
 
     def raise_git_error(*a, **k):
         raise gate.GitLogError("boom")
@@ -637,8 +942,9 @@ def test_main_exits_one_on_git_log_error(monkeypatch):
 
 def test_main_exits_one_on_ssot_ledger_error(monkeypatch):
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
-    monkeypatch.setattr(gate, "list_labelled_issue_records", lambda *a, **k: _records(1))
-    monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: ["Refs #1"])
+    monkeypatch.setattr(gate, "label_exists", lambda *a, **k: True)
+    monkeypatch.setattr(gate, "list_labelled_issue_records", lambda *a, **k: [])
+    monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: [])
 
     def raise_ssot_error(*a, **k):
         raise gate.SsotLedgerError("boom")
@@ -649,12 +955,26 @@ def test_main_exits_one_on_ssot_ledger_error(monkeypatch):
 
 def test_main_uses_default_threshold_when_unspecified(monkeypatch, capsys):
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
-    monkeypatch.setattr(gate, "list_labelled_issue_records", lambda *a, **k: _records(*range(18)))
+    monkeypatch.setattr(gate, "label_exists", lambda *a, **k: True)
+    monkeypatch.setattr(
+        gate, "list_labelled_issue_records", _fake_records_by_state(open_records=_open_records(*range(18)))
+    )
     monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: [])
     monkeypatch.setattr(gate, "load_gate_tracking_issues", lambda *a, **k: set())
     exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex"])
     assert exit_code == 0
     assert f"threshold: {gate.DEFAULT_THRESHOLD}" in capsys.readouterr().out
+
+
+def test_main_uses_gate_proposal_label_by_default(monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setattr(gate, "label_exists", lambda *a, **k: True)
+    monkeypatch.setattr(gate, "list_labelled_issue_records", lambda *a, **k: [])
+    monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: [])
+    monkeypatch.setattr(gate, "load_gate_tracking_issues", lambda *a, **k: set())
+    exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex"])
+    assert exit_code == 0
+    assert f"'{gate.GATE_PROPOSAL_LABEL}'" in capsys.readouterr().out
 
 
 # ---------------------------------------------------------------------------
@@ -819,17 +1139,26 @@ def test_main_names_every_invisible_only_flag_in_declaration_order(monkeypatch, 
     )
 
 
-def test_main_keeps_invisible_padded_but_meaningful_values_unmutated(monkeypatch, capsys):
-    """A value padded with a Cf mark rather than ASCII whitespace must
-    keep working, unmutated -- only an entirely invisible/non-printing
-    value changes verdict (issue #1094)."""
-    monkeypatch.setenv("GITHUB_TOKEN", "tok")
-    received = {}
+def _install_recording_fakes(monkeypatch) -> dict:
+    """Replace `main`'s four I/O collaborators with recording fakes and
+    return the dict they record into.
 
-    def fake_list_labelled_issue_records(owner, repo, label, token):
-        received["owner"] = owner
-        received["repo"] = repo
-        received["label"] = label
+    Shared by the two "validation never silently trims" tests below (issues
+    #1087 and #1094), which differ only in the padding characters they feed
+    each flag -- ordinary whitespace versus Unicode Format-category marks.
+    """
+    received: dict = {}
+
+    def fake_label_exists(owner, repo, label, token):
+        received["label_exists_owner"] = owner
+        received["label_exists_repo"] = repo
+        received["label_exists_label"] = label
+        return True
+
+    def fake_list_labelled_issue_records(owner, repo, label, token, state="all", **kwargs):
+        received[f"records_{state}_owner"] = owner
+        received[f"records_{state}_repo"] = repo
+        received[f"records_{state}_label"] = label
         return []
 
     def fake_git_commit_messages(ref, cwd):
@@ -841,9 +1170,19 @@ def test_main_keeps_invisible_padded_but_meaningful_values_unmutated(monkeypatch
         received["ssot_path_joined"] = path
         return set()
 
+    monkeypatch.setattr(gate, "label_exists", fake_label_exists)
     monkeypatch.setattr(gate, "list_labelled_issue_records", fake_list_labelled_issue_records)
     monkeypatch.setattr(gate, "git_commit_messages", fake_git_commit_messages)
     monkeypatch.setattr(gate, "load_gate_tracking_issues", fake_load_gate_tracking_issues)
+    return received
+
+
+def test_main_keeps_invisible_padded_but_meaningful_values_unmutated(monkeypatch, capsys):
+    """A value padded with a Cf mark rather than ASCII whitespace must
+    keep working, unmutated -- only an entirely invisible/non-printing
+    value changes verdict (issue #1094)."""
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    received = _install_recording_fakes(monkeypatch)
     exit_code = gate.main(
         [
             "--owner",
@@ -855,17 +1194,18 @@ def test_main_keeps_invisible_padded_but_meaningful_values_unmutated(monkeypatch
             "--cwd",
             "\ufeff.\ufeff",
             "--label",
-            "\u200bretrospective-gate\u200b",
+            "\u200bgate-proposal-gate\u200b",
             "--ssot-path",
             "\ufeff.gitapex/ssot.json\ufeff",
         ]
     )
     assert exit_code == 0
-    assert received["owner"] == "\u200btvna\u200b"
-    assert received["repo"] == "\ufeffgitapex\ufeff"
+    assert received["label_exists_owner"] == "\u200btvna\u200b"
+    assert received["label_exists_label"] == "\u200bgate-proposal-gate\u200b"
+    assert received["records_open_repo"] == "\ufeffgitapex\ufeff"
+    assert received["records_closed_label"] == "\u200bgate-proposal-gate\u200b"
     assert received["ref"] == "\u200bHEAD\u200b"
     assert received["cwd"] == "\ufeff.\ufeff"
-    assert received["label"] == "\u200bretrospective-gate\u200b"
     assert received["ssot_path_joined"] == str(pathlib.Path("\ufeff.\ufeff") / "\ufeff.gitapex/ssot.json\ufeff")
 
 
@@ -874,26 +1214,7 @@ def test_main_keeps_padded_but_meaningful_values_unmutated(monkeypatch, capsys):
     content plus surrounding whitespace reaches every downstream call
     exactly as typed."""
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
-    received = {}
-
-    def fake_list_labelled_issue_records(owner, repo, label, token):
-        received["owner"] = owner
-        received["repo"] = repo
-        received["label"] = label
-        return []
-
-    def fake_git_commit_messages(ref, cwd):
-        received["ref"] = ref
-        received["cwd"] = cwd
-        return []
-
-    def fake_load_gate_tracking_issues(path):
-        received["ssot_path_joined"] = path
-        return set()
-
-    monkeypatch.setattr(gate, "list_labelled_issue_records", fake_list_labelled_issue_records)
-    monkeypatch.setattr(gate, "git_commit_messages", fake_git_commit_messages)
-    monkeypatch.setattr(gate, "load_gate_tracking_issues", fake_load_gate_tracking_issues)
+    received = _install_recording_fakes(monkeypatch)
     exit_code = gate.main(
         [
             "--owner",
@@ -905,15 +1226,15 @@ def test_main_keeps_padded_but_meaningful_values_unmutated(monkeypatch, capsys):
             "--cwd",
             " . ",
             "--label",
-            " retrospective ",
+            " gate-proposal ",
             "--ssot-path",
             " .gitapex/ssot.json ",
         ]
     )
     assert exit_code == 0
-    assert received["owner"] == " tvna "
-    assert received["repo"] == " gitapex "
-    assert received["label"] == " retrospective "
+    assert received["label_exists_owner"] == " tvna "
+    assert received["records_open_label"] == " gate-proposal "
+    assert received["records_closed_repo"] == " gitapex "
     assert received["ref"] == " HEAD "
     assert received["cwd"] == " . "
     assert received["ssot_path_joined"] == str(pathlib.Path(" . ") / " .gitapex/ssot.json ")
@@ -944,26 +1265,3 @@ def test_main_names_every_offending_flag_in_declaration_order(monkeypatch, capsy
         f"error: invalid arguments: --owner {blank}, --repo {blank}, --ref {blank}, "
         f"--cwd {blank}, --label {blank}, --ssot-path {blank}" in capsys.readouterr().err
     )
-
-
-# ---------------------------------------------------------------------------
-# Marker drift gate (issue #1297): _CI_STUB_MARKER and _ZERO_REPAIR_MARKER
-# are literal copies of two canonical sources, not imports (this repo keeps
-# .github/scripts/*.py files independent of one another) -- assert directly
-# against those sources' own text so the two cannot silently re-diverge,
-# per test_gitapex_stale_retro_stub_autoclose.py's own
-# test_stub_marker_matches_post_merge_retro_source precedent for the
-# identical drift risk on the CI-stub marker half of this pair.
-# ---------------------------------------------------------------------------
-
-REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
-
-
-def test_ci_stub_marker_matches_post_merge_retro_source():
-    source = (REPO_ROOT / ".github" / "scripts" / "gitapex_post_merge_retro.py").read_text(encoding="utf-8")
-    assert gate._CI_STUB_MARKER in source
-
-
-def test_zero_repair_marker_matches_skill_md_source():
-    source = (REPO_ROOT / "skills" / "merge-retrospective" / "SKILL.md").read_text(encoding="utf-8")
-    assert gate._ZERO_REPAIR_MARKER in source
