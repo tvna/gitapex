@@ -1357,7 +1357,7 @@ def test_rule_command_substitution_content_detects_an_embedded_install(tool: str
     a punctuation character shlex breaks a word at, so an assignment's
     `NAME=` prefix stays fused onto the leading `$` in the same token."""
     tokens = ["x=$", "(", tool, "install", "evil-pkg", ")"]
-    reason, _ = checker._rule_command_substitution_content(tokens)
+    reason, _, _ = checker._rule_command_substitution_content(tokens)
     assert reason is not None
 
 
@@ -1373,7 +1373,7 @@ def test_rule_command_substitution_content_allows_harmless_inner_content(value: 
     silently dropping a non-denying inner `is_git_push=True` signal (see
     the function's own docstring)."""
     tokens = ["echo", "$", "(", "date", value, ")"]
-    assert checker._rule_command_substitution_content(tokens) == (None, False)
+    assert checker._rule_command_substitution_content(tokens) == (None, False, ())
 
 
 # --- Issue #1326 Stage 1, fifteenth round: bash's own leading-assignment ----
@@ -1492,7 +1492,7 @@ def test_rule_array_literal_content_detects_a_denied_pair_regardless_of_a_leadin
     `Y=1; A=(uv install $Y); "${A[@]}"` was wrongly ALLOWED before this
     function existed."""
     tokens = ["dummy=", "(", f"${first}", "uv", "install", f"${second}", ")"]
-    reason, _ = checker._rule_array_literal_content(tokens, {}, {})
+    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {})
     assert reason is not None
 
 
@@ -1511,7 +1511,7 @@ def test_rule_array_literal_content_collapses_a_leading_unassigned_bare_ref(unse
     fused with other text (not a bare whole-token reference), must NOT
     be collapsed -- that shape does not word-split away to nothing."""
     tokens = ["dummy=", "(", f"${unset_name}", verb_a, "install", ")"]
-    reason, _ = checker._rule_array_literal_content(tokens, {}, {})
+    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {})
     assert reason is not None
 
 
@@ -1531,13 +1531,13 @@ def test_rule_array_literal_content_allows_harmless_content() -> None:
     denied pattern, with or without a leading unassigned reference,
     stays allowed."""
     tokens = ["dummy=", "(", "$NEVERSET", "echo", "harmless", ")"]
-    assert checker._rule_array_literal_content(tokens, {}, {}) == (None, False)
+    assert checker._rule_array_literal_content(tokens, {}, {}) == (None, False, ())
 
 
 def test_rule_array_literal_content_no_span_present() -> None:
     """Robustness: a token stream with no array-literal span at all
     (e.g. an ordinary command) returns cleanly, never a crash."""
-    assert checker._rule_array_literal_content(["echo", "hi"], {}, {}) == (None, False)
+    assert checker._rule_array_literal_content(["echo", "hi"], {}, {}) == (None, False, ())
 
 
 def test_strip_leading_unassigned_bare_refs_stops_at_a_fused_token() -> None:
@@ -1563,7 +1563,7 @@ def test_rule_array_literal_content_empty_array_is_harmless() -> None:
     """No false positive / no crash: an empty array literal `NAME=()`
     has no inner content to recursively classify at all."""
     tokens = ["dummy=", "(", ")"]
-    assert checker._rule_array_literal_content(tokens, {}, {}) == (None, False)
+    assert checker._rule_array_literal_content(tokens, {}, {}) == (None, False, ())
 
 
 def test_rule_array_literal_content_skips_the_collapsed_reading_without_a_leading_unassigned_ref() -> None:
@@ -1572,7 +1572,7 @@ def test_rule_array_literal_content_skips_the_collapsed_reading_without_a_leadin
     `_strip_leading_unassigned_bare_refs` to strip -- the collapsed
     reading equals the as-is one, so only one classification is needed."""
     tokens = ["dummy=", "(", "echo", "harmless", ")"]
-    assert checker._rule_array_literal_content(tokens, {}, {}) == (None, False)
+    assert checker._rule_array_literal_content(tokens, {}, {}) == (None, False, ())
 
 
 def test_rule_array_literal_content_denies_only_on_the_collapsed_reading() -> None:
@@ -1589,7 +1589,7 @@ def test_rule_array_literal_content_denies_only_on_the_collapsed_reading() -> No
     real, with a dynamic verb argument right after it -- exactly B2's own
     watched shape."""
     tokens = ["dummy=", "(", "$NEVERSET", "uv", "$VERB", ")"]
-    reason, _ = checker._rule_array_literal_content(tokens, {}, {})
+    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {})
     assert reason is not None
     assert "unassigned reference" in reason
 
@@ -1631,7 +1631,7 @@ def test_rule_array_literal_content_collapses_a_leading_unassigned_braced_bare_r
     this round, silently degrading the collapsed reading to a no-op for
     this shape."""
     tokens = ["dummy=", "(", f"${{{unset_name}}}", verb_a, "install", ")"]
-    reason, _ = checker._rule_array_literal_content(tokens, {}, {})
+    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {})
     assert reason is not None
 
 
@@ -1646,7 +1646,7 @@ def test_rule_array_literal_content_detects_an_outer_scope_resolved_pair() -> No
     recursive `_classify_tokens` call."""
     tokens = ["dummy=", "(", "$G", "$P", "$M", ")"]
     outer = {"G": "gh", "P": "pr", "M": "merge"}
-    reason, _ = checker._rule_array_literal_content(tokens, outer, outer)
+    reason, _, _ = checker._rule_array_literal_content(tokens, outer, outer)
     assert reason is not None
 
 
@@ -1743,7 +1743,7 @@ def test_rule_array_literal_content_detects_a_braced_subscript_decoy() -> None:
     the subscript decoy blocked it from ever firing until it collapsed
     away."""
     tokens = ["dummy=", "(", "${NEVERSET[0]}", "uv", "$VERB", ")"]
-    reason, _ = checker._rule_array_literal_content(tokens, {}, {})
+    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {})
     assert reason is not None
 
 
@@ -1754,7 +1754,7 @@ def test_rule_array_literal_content_detects_a_fused_reference_chain_decoy() -> N
     before a fused chain of two bare references was recognized as
     vanishing as a unit."""
     tokens = ["dummy=", "(", "$A_UNSET$B_UNSET", "gh", "pr", "merge", "1", ")"]
-    reason, _ = checker._rule_array_literal_content(tokens, {}, {})
+    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {})
     assert reason is not None
 
 
@@ -1887,7 +1887,7 @@ def test_rule_command_substitution_content_scans_second_fused_span_in_same_token
     this test only proves that fix reached end-to-end through
     `_rule_command_substitution_content`'s own scan loop."""
     tokens = ["echo", "$(echo ok)$(pip install evil-pkg)"]
-    reason, _ = checker._rule_command_substitution_content(tokens)
+    reason, _, _ = checker._rule_command_substitution_content(tokens)
     assert reason is not None
 
 
@@ -1896,20 +1896,20 @@ def test_rule_command_substitution_content_skips_blank_fused_span_then_finds_den
     skipped without denying by itself, but scanning continues to the next
     fused span in the same token."""
     tokens = ["echo", "$( )$(pip install evil-pkg)"]
-    reason, _ = checker._rule_command_substitution_content(tokens)
+    reason, _, _ = checker._rule_command_substitution_content(tokens)
     assert reason is not None
 
 
 def test_rule_command_substitution_content_both_fused_spans_harmless() -> None:
     tokens = ["echo", "$(echo ok)$(echo also-ok)"]
-    assert checker._rule_command_substitution_content(tokens) == (None, False)
+    assert checker._rule_command_substitution_content(tokens) == (None, False, ())
 
 
 def test_rule_command_substitution_content_empty_unquoted_span_skipped() -> None:
     """An empty, unquoted `$()` substitution has no inner tokens to
     recurse into -- distinct from the fused/quoted empty-span case above."""
     tokens = ["$", "(", ")"]
-    assert checker._rule_command_substitution_content(tokens) == (None, False)
+    assert checker._rule_command_substitution_content(tokens) == (None, False, ())
 
 
 def test_tokenize_raises_on_unbalanced_quote() -> None:
@@ -2613,3 +2613,490 @@ def test_main_denies_a_real_denied_command(monkeypatch: pytest.MonkeyPatch, caps
 def test_main_allows_a_harmless_command(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     payload = {"tool_name": "Bash", "tool_input": {"command": "echo hi"}}
     assert _run_main(payload, monkeypatch, capsys)["decision"] == "allow"
+
+
+# --- Issue #1375: git checkout/restore path extraction. `classify()` stays
+# I/O-free (this module's own established architecture); this section only
+# extracts every candidate path a checkout/restore invocation could
+# discard, for hooks/check-bash-safety.sh's own new wrapper step to check
+# live against the real working tree. See hooks/gitapex_check_bash_safety.py's
+# own "git checkout/restore path extraction" section for the full design
+# rationale and the live-git verification (git 2.43.0) it is built on.
+
+_PATH_TOKENS = st.text(alphabet=string.ascii_letters + string.digits + "_./", min_size=1, max_size=12).filter(
+    lambda p: not p.startswith("-") and p not in (".", "..")
+)
+
+
+@_PROPERTIES
+@given(paths=st.lists(_PATH_TOKENS, min_size=1, max_size=5))
+def test_resolve_path_tokens_returns_literal_tokens_unchanged(paths: list[str]) -> None:
+    """Model-based: every literal (non-dynamic) token is returned as-is, in
+    order, with no deny reason."""
+    reason, resolved = checker._resolve_path_tokens(paths, {})
+    assert reason is None
+    assert resolved == tuple(paths)
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value=_PATH_TOKENS)
+def test_resolve_path_tokens_resolves_a_braced_reference_case_preserved(name: str, value: str) -> None:
+    """Model-based: a dynamic `${NAME}` path token resolves to NAME's own
+    CASE-PRESERVED raw value -- unlike every other caller of
+    `_substitute_var_refs_candidates` in this module (which compares a
+    resolved value case-insensitively against a known tool/verb/flag
+    literal via the lowercased `name_to_value`), a filesystem path is
+    case-sensitive, so this must resolve against the raw, case-preserving
+    map. Regression pin: an earlier version of this function resolved
+    against the lowercased map and would have silently mismatched a
+    mixed-case path like `README.md` against `readme.md`."""
+    mixed_case_value = value.swapcase()
+    reason, resolved = checker._resolve_path_tokens([f"${{{name}}}"], {name: mixed_case_value})
+    assert reason is None
+    assert resolved == (mixed_case_value,)
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS)
+def test_resolve_path_tokens_denies_an_unresolvable_dynamic_token(name: str) -> None:
+    """Fail-closed: a dynamic token referencing a name that is never
+    assigned cannot be resolved to a literal -- denied outright here
+    rather than passed to the live wrapper check empty-handed, since
+    `git diff --quiet HEAD -- PATH` exits 0 (clean) for a path that does
+    not exist (issue #1375 Fact 5, confirmed live), which would be
+    fail-open."""
+    reason, resolved = checker._resolve_path_tokens([f"${name}"], {})
+    assert reason is not None
+    assert resolved == ()
+
+
+def test_resolve_path_tokens_denies_an_array_subscript_token() -> None:
+    """Regression pin, found during this function's own development: bash
+    array-subscript syntax (`${paths[@]}`) is not matched by
+    `_substitute_var_refs_candidates`'s own `_VAR_REF_FULL_RE` at all
+    (issue #1375 Fact 5 cites this exact limitation), so with no `$NAME`
+    match found inside the token, that function harmlessly returns the
+    token's own text UNCHANGED -- silently treating an unexpanded shell
+    construct as though it were already a resolved literal path. Must
+    deny, not pass `${paths[@]}` through as a literal filename."""
+    reason, resolved = checker._resolve_path_tokens(["${paths[@]}"], {})
+    assert reason is not None
+    assert resolved == ()
+
+
+@_PROPERTIES
+@given(paths=st.lists(_PATH_TOKENS, min_size=1, max_size=4))
+def test_git_checkout_paths_extracts_every_token_after_double_dash(paths: list[str]) -> None:
+    """Model-based, sub-case (a): every token after a literal `--` is a
+    path -- the near-miss's own exact shape (`git checkout -- PATH`)."""
+    reason, resolved = checker._git_checkout_paths(["--", *paths], {})
+    assert reason is None
+    assert resolved == tuple(paths)
+
+
+def test_git_checkout_paths_denies_double_dash_with_nothing_following() -> None:
+    """`git checkout --` with no paths following denies outright: a
+    harmless no-op in real git by itself, but a downstream pipe/loop could
+    still append paths at runtime this classifier cannot see, and denying
+    a genuine no-op costs nothing."""
+    reason, resolved = checker._git_checkout_paths(["--"], {})
+    assert reason is not None
+    assert resolved == ()
+
+
+@_PROPERTIES
+@given(paths=st.lists(_PATH_TOKENS, min_size=2, max_size=4))
+def test_git_checkout_paths_extracts_two_or_more_positionals_with_no_double_dash(paths: list[str]) -> None:
+    """Model-based, sub-case (b): with no `--`, 2+ non-flag-shaped
+    positionals are ALL read as paths -- confirmed live that
+    `git checkout no-such-ref no-such-file` reports a pathspec error for
+    BOTH arguments, so every position past the first is a pathspec under
+    every resolution real git can take once one exists at all."""
+    reason, resolved = checker._git_checkout_paths(paths, {})
+    assert reason is None
+    assert resolved == tuple(paths)
+
+
+@_PROPERTIES
+@given(dot=st.sampled_from([".", ".."]))
+def test_git_checkout_paths_treats_a_single_dot_or_dotdot_positional_as_a_path(dot: str) -> None:
+    """Model-based, sub-case (c): a lone `.`/`..` positional (no `--`) is
+    a path, not a ref -- both are syntactically invalid git ref names
+    (confirmed live: `git check-ref-format --branch .`/`--branch ..` both
+    fail), and `git checkout .` on a dirty tracked file was confirmed live
+    to silently discard the change."""
+    reason, resolved = checker._git_checkout_paths([dot], {})
+    assert reason is None
+    assert resolved == (dot,)
+
+
+@_PROPERTIES
+@given(name=_PATH_TOKENS)
+def test_git_checkout_paths_is_a_non_goal_for_a_single_bare_positional(name: str) -> None:
+    """No false positive: a single positional that is not `.`/`..` (e.g.
+    a branch name) is a deliberate Non-goal -- disambiguating a bare
+    `git checkout SOMENAME` from a branch/ref name needs a live
+    ref-existence lookup this pure classifier does not perform."""
+    assume(name not in (".", ".."))
+    reason, resolved = checker._git_checkout_paths([name], {})
+    assert reason is None
+    assert resolved == ()
+
+
+def test_git_checkout_paths_allows_a_flag_only_invocation() -> None:
+    """No false positive: `git checkout -b new-branch` has one
+    flag-shaped and one non-flag-shaped token, but the non-flag token is
+    a branch name, not `.`/`..` -- stays the Non-goal, empty paths."""
+    reason, resolved = checker._git_checkout_paths(["-b", "new-branch"], {})
+    assert reason is None
+    assert resolved == ()
+
+
+@_PROPERTIES
+@given(staged=st.sampled_from(["--staged", "-S"]), paths=st.lists(_PATH_TOKENS, min_size=0, max_size=3))
+def test_git_restore_paths_empty_when_staged_without_worktree(staged: str, paths: list[str]) -> None:
+    """Model-based: `--staged`/`-S` without `--worktree` never touches the
+    working tree -- empty `checkout_restore_paths`, never live-checked,
+    regardless of what path arguments are also present."""
+    reason, resolved = checker._git_restore_paths([staged, *paths], {})
+    assert reason is None
+    assert resolved == ()
+
+
+@_PROPERTIES
+@given(worktree=st.sampled_from(["--worktree", "-W"]), paths=st.lists(_PATH_TOKENS, min_size=1, max_size=3))
+def test_git_restore_paths_checked_when_staged_and_worktree_both_present(worktree: str, paths: list[str]) -> None:
+    """Model-based, regression pin for issue #1375's own Fact 5: `--staged
+    --worktree PATH` is a real working-tree-affecting restore despite
+    `--staged` being present -- `saw_worktree=True` must still force the
+    path to be checked."""
+    reason, resolved = checker._git_restore_paths(["--staged", worktree, *paths], {})
+    assert reason is None
+    assert resolved == tuple(paths)
+
+
+@_PROPERTIES
+@given(paths=st.lists(_PATH_TOKENS, min_size=1, max_size=3))
+def test_git_restore_paths_checked_with_no_flags_at_all(paths: list[str]) -> None:
+    """Model-based: a bare `git restore PATH` with no flags at all is
+    never staged-only-safe -- always checked."""
+    reason, resolved = checker._git_restore_paths(paths, {})
+    assert reason is None
+    assert resolved == tuple(paths)
+
+
+@_PROPERTIES
+@given(ref=_PATH_TOKENS, paths=st.lists(_PATH_TOKENS, min_size=1, max_size=3))
+def test_git_restore_paths_checked_for_source_short_flag_not_conflated_with_staged(ref: str, paths: list[str]) -> None:
+    """Model-based, regression pin for issue #1375's own Fact 5: `-s`
+    (`--source`, value-taking) must never be conflated with `-S`
+    (`--staged`, boolean) the way a lower-casing flag scan (like
+    `_is_git_push_segment`'s own) would -- `git restore -s main PATH`
+    stays checked, not wrongly read as staged-only-safe."""
+    reason, resolved = checker._git_restore_paths(["-s", ref, *paths], {})
+    assert reason is None
+    assert resolved == tuple(paths)
+
+
+@_PROPERTIES
+@given(last=st.sampled_from(["--staged", "--no-staged"]))
+def test_git_restore_paths_last_occurrence_wins_for_staged(last: str) -> None:
+    """Model-based: `saw_staged` is last-occurrence-wins -- `--staged
+    --no-staged` ends with `saw_staged=False` (checked), and `--no-staged
+    --staged` ends with `saw_staged=True` (empty, iff no `--worktree`)."""
+    flags = ["--no-staged", "--staged"] if last == "--staged" else ["--staged", "--no-staged"]
+    reason, resolved = checker._git_restore_paths([*flags, "f.py"], {})
+    assert reason is None
+    if last == "--staged":
+        assert resolved == ()
+    else:
+        assert resolved == ("f.py",)
+
+
+@_PROPERTIES
+@given(flag=st.sampled_from(["--pathspec-from-file=list.txt", "--pathspec-from-file", "--pathspec-file-nul"]))
+def test_git_restore_paths_denies_pathspec_from_file(flag: str) -> None:
+    """Paths sourced from a file this classifier cannot inspect deny
+    outright rather than silently under-extracting (an empty
+    `checkout_restore_paths` would be exactly issue #1375 Fact 5's own
+    fail-open shape)."""
+    reason, resolved = checker._git_restore_paths([flag], {})
+    assert reason is not None
+    assert resolved == ()
+
+
+@_PROPERTIES
+@given(flag=st.text(alphabet=string.ascii_lowercase, min_size=1, max_size=8).map(lambda s: f"--{s}"))
+def test_git_restore_paths_denies_an_unrecognized_flag(flag: str) -> None:
+    """Fail-closed: any flag-shaped token outside the enumerated
+    vocabulary denies outright -- this classifier cannot safely guarantee
+    correct path extraction past a flag whose own value-consumption
+    behavior it does not know."""
+    assume(flag not in checker._RESTORE_BOOLEAN_FLAGS | checker._RESTORE_VALUE_FLAGS)
+    assume(not flag.startswith("--pathspec-from-file") and not flag.startswith("--recurse-submodules"))
+    assume(flag not in ("--staged", "--no-staged", "--worktree", "--no-worktree"))
+    reason, resolved = checker._git_restore_paths([flag], {})
+    assert reason is not None
+    assert resolved == ()
+
+
+@_PROPERTIES
+@given(prefix=st.lists(_PATH_TOKENS, min_size=0, max_size=3), paths=st.lists(_PATH_TOKENS, min_size=1, max_size=3))
+def test_find_git_checkout_restore_finds_git_at_any_segment_position(prefix: list[str], paths: list[str]) -> None:
+    """Model-based, regression pin found during this function's own
+    development: scans for a literal `git` token at ANY position in the
+    segment, not just `seg[0]` -- like `_is_git_push_segment`'s own scan.
+    A `for VAR in ...; do ...; done` loop is one real reason this matters:
+    bash's `for`/`do`/`done`/`in` keywords are not shell control
+    operators, so `segment_tokens` never splits a segment at them, and
+    `git checkout -- PATH` sitting after a literal `do` would never be
+    found at `seg[0]`."""
+    assume(all(p != "git" for p in prefix))
+    seg = [*prefix, "git", "checkout", "--", *paths]
+    subcommand, tokens_after, saw_tree_relocation = checker._find_git_checkout_restore(seg)
+    assert subcommand == "checkout"
+    assert tokens_after == ["--", *paths]
+    assert saw_tree_relocation is False
+
+
+def test_find_git_checkout_restore_none_for_a_segment_with_no_git() -> None:
+    """No false positive: a segment with no literal `git` token at all is
+    never treated as a checkout/restore invocation."""
+    subcommand, _tokens_after, _saw = checker._find_git_checkout_restore(["echo", "checkout", "restore"])
+    assert subcommand is None
+
+
+@_PROPERTIES
+@given(flag=st.sampled_from(["-C", "--git-dir", "--work-tree"]))
+def test_find_git_checkout_restore_flags_tree_relocation(flag: str) -> None:
+    """Model-based: `-C`/`--git-dir`/`--work-tree` (global flags that
+    relocate which working tree git operates against) are flagged
+    regardless of their own value -- the caller uses this to deny outright
+    rather than let the live wrapper check the wrong tree (issue #1375's
+    own Fact 5 cwd finding)."""
+    seg = ["git", flag, "/some/path", "checkout", "--", "f.py"]
+    subcommand, _tokens_after, saw_tree_relocation = checker._find_git_checkout_restore(seg)
+    assert subcommand == "checkout"
+    assert saw_tree_relocation is True
+
+
+def test_find_git_checkout_restore_does_not_flag_lowercase_c_config_flag() -> None:
+    """No false positive: `-c` (lowercase, sets a config value) is
+    case-sensitively distinct from `-C` (uppercase, relocates the working
+    tree) and must never be conflated with it (issue #1375's own Fact 5)."""
+    seg = ["git", "-c", "user.name=x", "checkout", "--", "f.py"]
+    subcommand, _tokens_after, saw_tree_relocation = checker._find_git_checkout_restore(seg)
+    assert subcommand == "checkout"
+    assert saw_tree_relocation is False
+
+
+def test_find_git_checkout_restore_is_a_non_goal_for_a_dynamic_subcommand() -> None:
+    """No false positive (disclosed Non-goal): a dynamically constructed
+    subcommand name (`V=checkout; git $V -- f.py`) is not honest-accident-
+    shaped and is not detected -- the same disclosed-residual convention
+    this module's own `KNOWN_BYPASS_COMMANDS` test list already uses for
+    the analogous dynamic-tool/dynamic-verb case."""
+    subcommand, _tokens_after, _saw = checker._find_git_checkout_restore(["git", "$V", "--", "f.py"])
+    assert subcommand is None
+
+
+@_PROPERTIES
+@given(command_paths=st.lists(_PATH_TOKENS, min_size=1, max_size=3))
+def test_rule_git_checkout_restore_accumulates_paths_across_segments(command_paths: list[str]) -> None:
+    """Model-based: multiple checkout/restore invocations chained in one
+    command (`git checkout -- a.py; git restore b.py`) accumulate paths
+    from every segment, not just the first."""
+    segments = [["git", "checkout", "--", *command_paths], ["git", "restore", *command_paths]]
+    reason, resolved = checker._rule_git_checkout_restore(segments, {})
+    assert reason is None
+    assert resolved == (*command_paths, *command_paths)
+
+
+def test_rule_git_checkout_restore_denies_when_git_dir_env_var_assigned() -> None:
+    """Model-based, regression pin for issue #1375's own Fact 5: a
+    `GIT_DIR=`/`GIT_WORK_TREE=`/`GIT_INDEX_FILE=` assignment anywhere in
+    the command makes the wrapper's own fixed `.cwd` reference point
+    unsound -- denied outright by the classifier itself (I/O-free, a
+    token-shape fact) rather than letting the live wrapper check the
+    wrong tree."""
+    segments = [["git", "checkout", "--", "f.py"]]
+    reason, resolved = checker._rule_git_checkout_restore(segments, {"GIT_DIR": "/tmp/x.git"})
+    assert reason is not None
+    assert resolved == ()
+
+
+def test_rule_git_checkout_restore_denies_when_an_earlier_segment_is_cd() -> None:
+    """Model-based, regression pin for issue #1375's own Fact 5: an
+    earlier segment in the same command containing a literal `cd` makes
+    the wrapper's own fixed `.cwd` unsound for a LATER checkout/restore
+    segment -- denied outright."""
+    segments = [["cd", "/tmp"], ["git", "checkout", "--", "f.py"]]
+    reason, resolved = checker._rule_git_checkout_restore(segments, {})
+    assert reason is not None
+    assert resolved == ()
+
+
+def test_rule_git_checkout_restore_allows_cd_after_the_checkout_segment() -> None:
+    """No false positive: `_rule_git_checkout_restore` only denies for a
+    `cd` in an EARLIER segment -- a `cd` AFTER the checkout/restore segment
+    does not retroactively make the already-scanned segment unsound."""
+    segments = [["git", "checkout", "--", "f.py"], ["cd", "/tmp"]]
+    reason, resolved = checker._rule_git_checkout_restore(segments, {})
+    assert reason is None
+    assert resolved == ("f.py",)
+
+
+# --- End-to-end classify() coverage, pinning every explicit safe/deny case
+# issue #1375's own Acceptance Criteria Map and "Explicit safe cases"
+# section name by hand.
+
+
+@_PROPERTIES
+@given(ref=st.sampled_from(["main", "HEAD~1", "some-branch"]))
+def test_classify_allows_ordinary_branch_switching(ref: str) -> None:
+    verdict = checker.classify(f"git checkout {ref}")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ()
+
+
+def test_classify_allows_checkout_dash_b() -> None:
+    verdict = checker.classify("git checkout -b new-branch")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ()
+
+
+def test_classify_allows_restore_staged_only() -> None:
+    verdict = checker.classify("git restore --staged f.py")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ()
+
+
+def test_classify_extracts_path_for_checkout_double_dash() -> None:
+    verdict = checker.classify("git checkout -- f.py")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("f.py",)
+
+
+def test_classify_extracts_dot_for_checkout_dot() -> None:
+    verdict = checker.classify("git checkout .")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == (".",)
+
+
+def test_classify_extracts_path_for_bare_restore() -> None:
+    verdict = checker.classify("git restore f.py")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("f.py",)
+
+
+def test_classify_resolves_a_same_command_assignment_to_a_literal_path() -> None:
+    """A dynamic path token that resolves to a literal via a same-command
+    assignment (`f=README.md; git checkout -- "$f"`) is substituted and
+    surfaced as a candidate, not denied."""
+    verdict = checker.classify('f=README.md; git checkout -- "$f"')
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("README.md",)
+
+
+def test_classify_denies_a_loop_fed_dynamic_checkout_path() -> None:
+    """Regression pin for issue #1375's own Acceptance Criteria Map: a
+    `for`-loop-fed dynamic path with no same-command assignment for the
+    loop variable is unresolvable and denies outright, rather than
+    silently passing through with an empty `checkout_restore_paths`."""
+    verdict = checker.classify('for f in $(git diff --name-only); do git checkout -- "$f"; done')
+    assert verdict.deny is True
+
+
+def test_classify_denies_an_array_subscript_fed_checkout_path() -> None:
+    """Regression pin for issue #1375's own Acceptance Criteria Map: the
+    `${paths[@]}`-shaped array-subscript indirection is a real, pinned
+    `KNOWN_BYPASS` shape (this module's own `array-literal-assignment-
+    indirection` entry) for the same underlying `_VAR_REF_FULL_RE`
+    limitation -- must deny, not silently pass an unresolved literal
+    string through as a path."""
+    verdict = checker.classify('paths=(a.py b.py); git checkout -- "${paths[@]}"')
+    assert verdict.deny is True
+
+
+def test_classify_threads_checkout_restore_paths_through_command_substitution() -> None:
+    """Regression pin, mirroring the fifteenth-round `is_git_push`
+    recursion-drop fix this module already carries: a checkout/restore
+    invocation embedded in a `$(...)` command substitution must still
+    surface its own `checkout_restore_paths` in the outer `Verdict`, not
+    silently drop it the way an earlier version of this function would
+    have."""
+    verdict = checker.classify("x=$(git checkout -- f.py)")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("f.py",)
+
+
+def test_classify_threads_checkout_restore_paths_through_array_literal() -> None:
+    """Regression pin, mirroring `_rule_array_literal_content`'s own
+    nineteenth-round outer-scope fix: a checkout/restore invocation
+    embedded in a `NAME=(...)` array literal must still surface its own
+    `checkout_restore_paths` in the outer `Verdict`."""
+    verdict = checker.classify('A=(git checkout -- f.py); "${A[@]}"')
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("f.py",)
+
+
+def test_classify_denies_checkout_with_a_tree_relocation_flag() -> None:
+    """Regression pin for issue #1375's own Fact 5 cwd finding: a `-C`
+    global flag makes the wrapper's fixed `.cwd` unsound for this
+    invocation -- denied outright by the classifier."""
+    verdict = checker.classify("git -C /tmp/some-repo checkout -- f.py")
+    assert verdict.deny is True
+
+
+def test_classify_denies_checkout_after_an_earlier_cd() -> None:
+    """Regression pin for issue #1375's own Fact 5 cwd finding: an
+    earlier `cd` in the same command makes the wrapper's fixed `.cwd`
+    unsound for a later checkout -- denied outright."""
+    verdict = checker.classify("cd /tmp; git checkout -- f.py")
+    assert verdict.deny is True
+
+
+def test_classify_does_not_flag_checkout_restore_prose_inside_a_commit_message() -> None:
+    """No false positive: this module's own established convention (see
+    its module docstring's own "no substring/prose fallback" constraint)
+    -- `git checkout`-shaped TEXT sitting inside an unrelated command's own
+    quoted string argument is not a real invocation and must never be
+    flagged, unlike `_rule_a_literal`'s own deliberate same-token
+    literal-phrase fallback for install verbs (a `deny`-severity false
+    positive here would fire exactly when files are legitimately dirty,
+    which this gate cannot tolerate the way a `warn` could)."""
+    verdict = checker.classify('git commit -m "revert via git checkout -- foo.py"')
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ()
+
+
+def test_classify_leaves_ordinary_git_push_unaffected() -> None:
+    """No regression: this is purely additive detection surface -- an
+    ordinary `git push` must still classify exactly as before, with no
+    checkout_restore_paths."""
+    verdict = checker.classify("git push origin main")
+    assert verdict.deny is False
+    assert verdict.is_git_push is True
+    assert verdict.checkout_restore_paths == ()
+
+
+def test_main_output_includes_checkout_restore_paths_for_a_checkout_command(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """End-to-end: the stdin-JSON entrypoint surfaces `checkout_restore_
+    paths` as a genuine JSON array (issue #1375: not a newline-joined
+    string, so hooks/check-bash-safety.sh's own new wrapper step can
+    base64-decode each element safely even if a path contains a
+    newline)."""
+    payload = {"tool_name": "Bash", "tool_input": {"command": "git checkout -- f.py"}}
+    out = _run_main(payload, monkeypatch, capsys)
+    assert out["decision"] == "allow"
+    assert out["checkout_restore_paths"] == ["f.py"]
+
+
+def test_main_output_includes_empty_checkout_restore_paths_for_a_harmless_command(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    payload = {"tool_name": "Bash", "tool_input": {"command": "echo hi"}}
+    out = _run_main(payload, monkeypatch, capsys)
+    assert out["checkout_restore_paths"] == []

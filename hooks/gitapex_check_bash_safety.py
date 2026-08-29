@@ -743,7 +743,7 @@ def _is_unresolvable_substitution(token: str) -> bool:
     return "$(" in token or "`" in token
 
 
-def _rule_command_substitution_content(tokens: list[str]) -> tuple[str | None, bool]:
+def _rule_command_substitution_content(tokens: list[str]) -> tuple[str | None, bool, tuple[str, ...]]:
     """Recursively classify each `$(...)` command-substitution span's OWN
     inner content through this module's full rule set -- bash genuinely
     RUNS that inner text as a complete command the instant the
@@ -778,18 +778,18 @@ def _rule_command_substitution_content(tokens: list[str]) -> tuple[str | None, b
     classifying the span's own inner content directly, instead of
     requiring the outer, now-opaque token to itself carry the phrase.
 
-    Returns `(reason_or_None, is_git_push)` -- ALWAYS a tuple, never a
-    bare `None` -- this module's own `Verdict` carries a THIRD, warn-only
-    `is_git_push` field the task-scoped sibling module's `Verdict` does
-    not, and `git push` alone is WARN-only here (`deny=False,
-    is_git_push=True`), not a hard deny. An earlier version of this
-    function only returned `is_git_push` alongside a DENY, discarding it
-    whenever the inner substitution's own verdict was `deny=False` --
-    found live by Step 8 independent review, fifteenth round (issue
-    #1326): `x=$(git push origin main)` (confirmed live end-to-end
-    through the real hook entrypoint) silently dropped the warn signal
-    entirely, since folding made `git`/`push`/`origin`/`main` one opaque
-    token invisible to `_is_git_push_segment`'s own scan, and the
+    Returns `(reason_or_None, is_git_push, checkout_restore_paths)` --
+    ALWAYS a 3-tuple, never a bare `None` -- this module's own `Verdict`
+    carries a THIRD, warn-only `is_git_push` field the task-scoped sibling
+    module's `Verdict` does not, and `git push` alone is WARN-only here
+    (`deny=False, is_git_push=True`), not a hard deny. An earlier version
+    of this function only returned `is_git_push` alongside a DENY,
+    discarding it whenever the inner substitution's own verdict was
+    `deny=False` -- found live by Step 8 independent review, fifteenth
+    round (issue #1326): `x=$(git push origin main)` (confirmed live
+    end-to-end through the real hook entrypoint) silently dropped the warn
+    signal entirely, since folding made `git`/`push`/`origin`/`main` one
+    opaque token invisible to `_is_git_push_segment`'s own scan, and the
     recursive check's own early-return-only-on-deny never propagated the
     inner `classify()`/`_classify_tokens()` call's OWN `is_git_push=True`
     result outward. This gated the outward-artifact-preflight provenance
@@ -799,6 +799,13 @@ def _rule_command_substitution_content(tokens: list[str]) -> tuple[str | None, b
     unconditionally (not stopping at the first denied one) and OR-ing
     each inner verdict's own `is_git_push` into a running total,
     returned regardless of whether any span was itself denied.
+
+    Issue #1375 threads `checkout_restore_paths` through this exact same
+    shape: every span's own inner `checkout_restore_paths` is concatenated
+    into a running tuple, unconditionally, so `x=$(git checkout -- f.py)`
+    is not silently dropped the same way the fifteenth round's own
+    `is_git_push` bug would have dropped it -- the identical bug class,
+    for a tuple instead of a bool.
 
     Disclosed residual (found live by Step 8 independent review,
     nineteenth round, issue #1326): unlike `_rule_array_literal_content`'s
@@ -813,6 +820,7 @@ def _rule_command_substitution_content(tokens: list[str]) -> tuple[str | None, b
     the finding that prompted `_rule_array_literal_content`'s own fix
     warranted."""
     is_git_push = False
+    checkout_restore_paths: list[str] = []
     i = 0
     n = len(tokens)
     while i < n:
@@ -840,9 +848,10 @@ def _rule_command_substitution_content(tokens: list[str]) -> tuple[str | None, b
             if inner_text.strip():
                 inner_verdict = classify(inner_text)
                 is_git_push = is_git_push or inner_verdict.is_git_push
+                checkout_restore_paths.extend(inner_verdict.checkout_restore_paths)
                 if inner_verdict.deny:
                     reason = f"a command substitution $(...) embeds a denied command -- {inner_verdict.reason}"
-                    return reason, is_git_push
+                    return reason, is_git_push, tuple(checkout_restore_paths)
             search_from = end
         if found_fused:
             i += 1
@@ -853,13 +862,14 @@ def _rule_command_substitution_content(tokens: list[str]) -> tuple[str | None, b
             if inner_tokens:
                 inner_verdict = _classify_tokens(inner_tokens)
                 is_git_push = is_git_push or inner_verdict.is_git_push
+                checkout_restore_paths.extend(inner_verdict.checkout_restore_paths)
                 if inner_verdict.deny:
                     reason = f"a command substitution $(...) embeds a denied command -- {inner_verdict.reason}"
-                    return reason, is_git_push
+                    return reason, is_git_push, tuple(checkout_restore_paths)
             i = span_end
             continue
         i += 1
-    return None, is_git_push
+    return None, is_git_push, tuple(checkout_restore_paths)
 
 
 def tokenize(command: str) -> list[str]:
@@ -1565,7 +1575,7 @@ def _strip_leading_unassigned_bare_refs(tokens: list[str], name_to_raw_value: di
 
 def _rule_array_literal_content(
     tokens: list[str], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
-) -> tuple[str | None, bool]:
+) -> tuple[str | None, bool, tuple[str, ...]]:
     """Recursively classify each `NAME=(...)` array-literal span's OWN
     inner content through this module's full rule set -- bash genuinely
     expands `"${NAME[@]}"` into that content as real argv the instant the
@@ -1639,6 +1649,7 @@ def _rule_array_literal_content(
     for the quoted/fused `$(...)` shape) to also accept an outer scope,
     a larger change than this round's own confirmed finding warranted."""
     is_git_push = False
+    checkout_restore_paths: list[str] = []
     i = 0
     n = len(tokens)
     while i < n:
@@ -1655,11 +1666,12 @@ def _rule_array_literal_content(
             for reading, suffix in readings:
                 reading_verdict = _classify_tokens(reading, name_to_value, name_to_raw_value)
                 is_git_push = is_git_push or reading_verdict.is_git_push
+                checkout_restore_paths.extend(reading_verdict.checkout_restore_paths)
                 if reading_verdict.deny:
                     reason = f"an array literal NAME=(...) embeds a denied command{suffix} -- {reading_verdict.reason}"
-                    return reason, is_git_push
+                    return reason, is_git_push, tuple(checkout_restore_paths)
         i = end
-    return None, is_git_push
+    return None, is_git_push, tuple(checkout_restore_paths)
 
 
 # --- Denylists -----------------------------------------------------------
@@ -1777,6 +1789,15 @@ class Verdict(NamedTuple):
     deny: bool
     reason: str
     is_git_push: bool
+    # Issue #1375: every path a `git checkout`/`git restore` invocation in
+    # this command could discard, extracted soundly with no live I/O (see
+    # the "git checkout/restore path extraction" section below). Defaults
+    # to `()` -- every pre-existing `Verdict(...)` call site in this module
+    # denies for a reason unrelated to checkout/restore, where this field
+    # is never read (hooks/check-bash-safety.sh's own new wrapper step,
+    # like its existing `is_git_push` step, only ever runs on the "allow"
+    # decision), so none of them need updating for this new field.
+    checkout_restore_paths: tuple[str, ...] = ()
 
 
 def _rule_a_literal(segments: list[list[str]]) -> str | None:
@@ -2460,6 +2481,321 @@ def _is_git_push_segment(seg: list[str], name_to_raw_value: dict[str, str]) -> b
     return any("git push" in lit for lit in (t.lower() for t in seg if not _is_dynamic(t)))
 
 
+# --- git checkout/restore path extraction (issue #1375) --------------------
+# `git checkout -- PATH` / `git restore PATH` / `git checkout .` can discard
+# uncommitted work on a tracked path with no warning (the near-miss issue
+# #1375 documents, issue #1128 repair 4). `classify()` stays I/O-free (this
+# module's own established architecture, see `_is_git_push_segment`'s own
+# `is_git_push`-then-live-wrapper-check split): this section only extracts
+# every candidate path a checkout/restore invocation *could* discard,
+# soundly and with no live git call, for hooks/check-bash-safety.sh's own
+# new wrapper step to check against the real working tree via `git diff
+# --quiet HEAD -- PATH`. An unresolved or unresolvable dynamic path token
+# denies outright HERE rather than being passed through empty-handed --
+# `git diff --quiet HEAD -- PATH` exits 0 (clean) for a path that does not
+# exist, so treating an unresolved token as "nothing to check" would be
+# fail-OPEN, not fail-closed (confirmed live, git 2.43.0).
+
+_GIT_TREE_RELOCATION_LONG_FLAGS = {"--git-dir", "--work-tree"}
+_GIT_GLOBAL_SHORT_VALUE_FLAGS = {"-c", "-C"}
+_GIT_TREE_ENV_VARS = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE")
+
+_RESTORE_BOOLEAN_FLAGS = {
+    "--quiet",
+    "-q",
+    "--progress",
+    "--no-progress",
+    "--overlay",
+    "--no-overlay",
+    "--ours",
+    "--theirs",
+    "--merge",
+    "-m",
+    "--ignore-unmerged",
+    "--ignore-skip-worktree-bits",
+}
+_RESTORE_VALUE_FLAGS = {"--source", "-s", "--conflict"}
+
+
+def _resolve_path_tokens(tokens: list[str], name_to_raw_value: dict[str, str]) -> tuple[str | None, tuple[str, ...]]:
+    """Resolve every token in TOKENS to one or more literal path
+    candidates for a `git checkout`/`git restore` invocation. A literal
+    token is used as-is. A dynamic token is resolved via this module's
+    existing `_substitute_var_refs_candidates`, called with the
+    CASE-PRESERVING NAME_TO_RAW_VALUE as both its value map and its
+    raw-value map -- unlike every other caller of that function in this
+    module (which resolves against the lowercased `name_to_value`, since
+    they only ever compare a resolved value case-insensitively against a
+    known tool/verb/flag literal), a filesystem path is case-sensitive, so
+    lowercasing it here would resolve to the wrong path. An unresolvable
+    token (empty candidate list), a too-large candidate set (`None`, the
+    same fail-closed convention `_substitute_var_refs_candidates`'s own
+    callers already use), or a candidate that ITSELF still contains `$`/
+    backtick after substitution all deny outright here rather than being
+    passed to the live wrapper check empty-handed -- see this section's
+    own module-level comment for why that would be fail-open.
+
+    The still-dynamic-candidate check closes a real gap found while
+    building this function: `_substitute_var_refs_candidates`'s own
+    `_VAR_REF_FULL_RE` does not match bash array-subscript syntax
+    (`${paths[@]}`, `${paths[0]}`) at all (issue #1375's own Fact 5 cites
+    this exact limitation, and it is the same gap this module's own
+    `array-literal-assignment-indirection` `KNOWN_BYPASS_COMMANDS` entry
+    documents for verb reconstruction) -- with no `$NAME`-shaped match
+    found inside the token, the function harmlessly returns the token's
+    own text UNCHANGED as if it were already a resolved literal, so
+    `paths=(a.py b.py); git checkout -- "${paths[@]}"` would otherwise
+    silently pass the literal string `${paths[@]}` through as a
+    "resolved" candidate instead of being recognized as still-unresolved.
+    Confirmed live during this function's own development (before this
+    check was added)."""
+    paths: list[str] = []
+    for tok in tokens:
+        if not _is_dynamic(tok):
+            paths.append(tok)
+            continue
+        candidates = _substitute_var_refs_candidates(tok, name_to_raw_value, name_to_raw_value)
+        if not candidates or any(_is_dynamic(candidate) for candidate in candidates):
+            return (
+                f"a git checkout/restore command has a dynamic path argument ({tok!r}) that could not be "
+                "resolved to a literal value -- an unresolved path cannot be safely checked against the "
+                "working tree, so this is denied outright",
+                (),
+            )
+        paths.extend(candidates)
+    return None, tuple(paths)
+
+
+def _git_checkout_paths(
+    tokens_after: list[str], name_to_raw_value: dict[str, str]
+) -> tuple[str | None, tuple[str, ...]]:
+    """checkout_restore_paths for a `git checkout` invocation, TOKENS_AFTER
+    being every segment token following the literal `checkout` word.
+    Three sound sub-cases, none requiring a live ref-existence lookup
+    (issue #1375's own Fact 5 documents the live-git verification each
+    relies on, git 2.43.0):
+
+    (a) `--` present -- every token after it is a path (git's own
+        pathspec-disambiguation syntax, and the near-miss's own exact
+        shape). `git checkout --` with nothing following denies outright:
+        real git treats this as a harmless no-op, but a downstream pipe or
+        loop (`git checkout -- | xargs ...`-shaped) could still append
+        paths at runtime this classifier cannot see, and denying a
+        genuine no-op costs nothing.
+    (b) No `--`, 2+ non-flag-shaped positional tokens -- confirmed live
+        that `git checkout no-such-ref no-such-file` (two unresolvable
+        positionals, no `--`) reports a pathspec error for BOTH, meaning
+        whenever real git is given 2+ positionals with no `--`, every
+        position past the first is a pathspec under every resolution git
+        can take. Over-including a token that also happens to be a valid
+        ref name just checks a path that likely does not exist, which is
+        harmless.
+    (c) No `--`, exactly one positional token, and it is the literal `.`
+        or `..` -- both are syntactically invalid git ref names (confirmed
+        live: `git check-ref-format --branch .`/`--branch ..` both fail,
+        "not a valid branch name"), so this is unambiguously a path, not a
+        ref, with no live lookup needed. `git checkout .` on a dirty
+        tracked file was confirmed live to silently discard the change.
+
+    Bare `git checkout SOMENAME` (single positional, not `.`/`..`, no
+    `--`) is a deliberate Non-goal: SOMENAME might be a branch/ref name or
+    a path, and disambiguating soundly needs a live ref-existence lookup
+    this pure classifier does not perform."""
+    if "--" in tokens_after:
+        after = tokens_after[tokens_after.index("--") + 1 :]
+        if not after:
+            return (
+                "a 'git checkout --' with no paths following it in this command -- a downstream pipe or loop "
+                "could append paths at runtime this classifier cannot see, so this is denied outright",
+                (),
+            )
+        return _resolve_path_tokens(after, name_to_raw_value)
+    positionals = [t for t in tokens_after if not t.startswith("-")]
+    if len(positionals) >= 2:
+        return _resolve_path_tokens(positionals, name_to_raw_value)
+    if len(positionals) == 1 and not _is_dynamic(positionals[0]) and positionals[0] in (".", ".."):
+        return _resolve_path_tokens(positionals, name_to_raw_value)
+    return None, ()
+
+
+def _git_restore_paths(
+    tokens_after: list[str], name_to_raw_value: dict[str, str]
+) -> tuple[str | None, tuple[str, ...]]:
+    """checkout_restore_paths for a `git restore` invocation, TOKENS_AFTER
+    being every segment token following the literal `restore` word.
+    Case-sensitive flag walk over an explicit, enumerated vocabulary --
+    deliberately NOT reusing `_is_git_push_segment`'s own lower-casing
+    step, which would collapse `-S` (`--staged`, boolean) and `-s`
+    (`--source`, value-taking) into the same token and misread a
+    working-tree-destroying `git restore -s main file.py` as
+    staged-only-safe (issue #1375's own Fact 5). `saw_staged`/
+    `saw_worktree` are last-occurrence-wins (`--staged --no-staged` ends
+    with `saw_staged=False`); this invocation is safe (empty
+    checkout_restore_paths, never live-checked) iff `saw_staged` and not
+    `saw_worktree`. Any flag-shaped token not in this vocabulary --
+    including `--pathspec-from-file`/`--pathspec-file-nul`, whose paths
+    come from a file this classifier cannot inspect -- denies outright
+    rather than risk under-extracting paths past a flag whose own
+    value-consumption behavior is unknown here."""
+    saw_staged = False
+    saw_worktree = False
+    path_tokens: list[str] = []
+    i = 0
+    n = len(tokens_after)
+    while i < n:
+        tok = tokens_after[i]
+        if tok == "--pathspec-from-file" or tok.startswith("--pathspec-from-file=") or tok == "--pathspec-file-nul":
+            return (
+                "a 'git restore --pathspec-from-file'/'--pathspec-file-nul' flag reads paths from a file this "
+                "classifier cannot inspect, so this is denied outright",
+                (),
+            )
+        if tok in ("--staged", "-S"):
+            saw_staged = True
+            i += 1
+            continue
+        if tok == "--no-staged":
+            saw_staged = False
+            i += 1
+            continue
+        if tok in ("--worktree", "-W"):
+            saw_worktree = True
+            i += 1
+            continue
+        if tok == "--no-worktree":
+            saw_worktree = False
+            i += 1
+            continue
+        if tok == "--recurse-submodules" or tok.startswith("--recurse-submodules="):
+            i += 1
+            continue
+        if tok in _RESTORE_BOOLEAN_FLAGS:
+            i += 1
+            continue
+        if tok in _RESTORE_VALUE_FLAGS:
+            i += 2
+            continue
+        if tok.startswith("-"):
+            return (
+                f"an unrecognized 'git restore' flag ({tok!r}) -- this classifier cannot safely guarantee "
+                "correct path extraction past an unrecognized flag that might itself consume the next token, "
+                "so this is denied outright",
+                (),
+            )
+        path_tokens.append(tok)
+        i += 1
+    if saw_staged and not saw_worktree:
+        return None, ()
+    return _resolve_path_tokens(path_tokens, name_to_raw_value)
+
+
+def _find_git_checkout_restore(seg: list[str]) -> tuple[str | None, list[str], bool]:
+    """Scan SEG (already assignment-stripped, see `_strip_leading_
+    assignments`) for a `git checkout`/`git restore` invocation, skipping
+    past git's own global value-taking options the same way
+    `_is_git_push_segment` skips past them to find `push` -- but
+    CASE-SENSITIVELY for the `-C`/`-c` distinction (issue #1375's own Fact
+    5: only uppercase `-C`, not lowercase `-c`, relocates which working
+    tree git operates against; `-c` only sets a config value).
+
+    Scans for a literal `git` token at ANY position in SEG, not just
+    `seg[0]` -- like `_is_git_push_segment`'s own scan, not anchored to
+    position 0. A `for VAR in ...; do ...; done` loop is one, real,
+    non-honest-accident-shaped reason this matters: bash's `for`/`do`/
+    `done`/`in` keywords are not shell control operators, so
+    `segment_tokens` never splits a segment at them, and `git checkout --
+    "$f"` sitting after a literal `do` would never be found at `seg[0]`.
+    Confirmed live during this function's own development that a
+    seg[0]-anchored version of this scan let `for f in $(git diff
+    --name-only); do git checkout -- "$f"; done` (this module's own
+    Acceptance Criteria Map names this exact shape) through with an empty
+    `checkout_restore_paths` instead of denying on the unresolvable `$f`.
+
+    Returns `(subcommand, tokens_after_subcommand,
+    saw_tree_relocation_flag)`; `subcommand` is `None` when SEG has no
+    checkout/restore invocation at all (including when a dynamic token
+    sits in a position that could be either a global flag/value or the
+    subcommand itself, immediately after a literal `git` -- a genuinely
+    ambiguous, non-honest-accident shape this pure classifier declines to
+    resolve at that specific `git` occurrence, the same disclosed-residual
+    convention this module's own `KNOWN_BYPASS_COMMANDS` test list already
+    uses for the analogous dynamic-tool/dynamic-verb case; scanning
+    continues past it to any later `git` occurrence in the same segment),
+    in which case the other two return values are meaningless."""
+    n = len(seg)
+    for i, tok in enumerate(seg):
+        if _is_dynamic(tok) or tok.lower() != "git":
+            continue
+        saw_tree_relocation = False
+        j = i + 1
+        ambiguous = False
+        while j < n:
+            candidate = seg[j]
+            if _is_dynamic(candidate):
+                ambiguous = True
+                break
+            if (
+                candidate == "-C"
+                or candidate in _GIT_TREE_RELOCATION_LONG_FLAGS
+                or any(candidate.startswith(f"{flag}=") for flag in _GIT_TREE_RELOCATION_LONG_FLAGS)
+            ):
+                saw_tree_relocation = True
+            if not candidate.startswith("-"):
+                break
+            flag_bare = candidate.split("=", 1)[0]
+            j += 1
+            if "=" not in candidate and (
+                flag_bare in _GIT_GLOBAL_SHORT_VALUE_FLAGS or flag_bare in _GIT_LONG_VALUE_FLAGS
+            ):
+                j += 1
+        if ambiguous:
+            continue
+        if j < n and seg[j] in ("checkout", "restore"):
+            return seg[j], seg[j + 1 :], saw_tree_relocation
+    return None, [], False
+
+
+def _rule_git_checkout_restore(
+    segments: list[list[str]], raw_assigned: dict[str, str]
+) -> tuple[str | None, tuple[str, ...]]:
+    """Extract every `checkout_restore_paths` candidate across every
+    segment of one command, denying outright on any segment where this
+    classifier cannot soundly determine which working tree is at risk: a
+    `-C`/`--git-dir`/`--work-tree` global flag on the checkout/restore
+    segment itself, a `GIT_DIR=`/`GIT_WORK_TREE=`/`GIT_INDEX_FILE=`
+    assignment anywhere in the command, or a literal `cd` in an earlier
+    segment of the same command. hooks/check-bash-safety.sh's own new
+    wrapper step always checks a path against `.cwd` from the PreToolUse
+    payload (issue #1375's own Fact 5, the cwd-mismatch finding) -- any of
+    these makes that single, fixed `.cwd` reference point unsound for this
+    particular invocation, so this denies here (I/O-free -- a token-shape
+    fact, not a live check) rather than letting the wrapper check the
+    wrong tree."""
+    saw_cd = False
+    all_paths: list[str] = []
+    for seg in segments:
+        subcommand, tokens_after, saw_tree_relocation = _find_git_checkout_restore(seg)
+        if subcommand is None:
+            if any(not _is_dynamic(t) and t == "cd" for t in seg):
+                saw_cd = True
+            continue
+        if saw_tree_relocation or saw_cd or any(name in raw_assigned for name in _GIT_TREE_ENV_VARS):
+            return (
+                f"a 'git {subcommand}' command carries a -C/--git-dir/--work-tree flag, a GIT_DIR=/"
+                "GIT_WORK_TREE=/GIT_INDEX_FILE= assignment, or an earlier 'cd' in the same command -- this "
+                "classifier cannot soundly determine which working tree is at risk, so this is denied outright",
+                (),
+            )
+        if subcommand == "checkout":
+            deny_reason, paths = _git_checkout_paths(tokens_after, raw_assigned)
+        else:
+            deny_reason, paths = _git_restore_paths(tokens_after, raw_assigned)
+        if deny_reason:
+            return deny_reason, ()
+        all_paths.extend(paths)
+    return None, tuple(all_paths)
+
+
 def _resolve_seg_tokens_candidates(
     tokens: list[str], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
 ) -> set[str] | None:
@@ -2702,18 +3038,19 @@ def _classify_tokens(
     outer_literals = outer_name_to_value or {}
     outer_raw = outer_name_to_raw_value or {}
 
-    content_reason, content_is_git_push = _rule_command_substitution_content(tokens)
+    content_reason, content_is_git_push, content_checkout_restore_paths = _rule_command_substitution_content(tokens)
     if content_reason:
-        return Verdict(True, content_reason, content_is_git_push)
+        return Verdict(True, content_reason, content_is_git_push, content_checkout_restore_paths)
 
-    array_content_reason, array_content_is_git_push = _rule_array_literal_content(
+    array_content_reason, array_content_is_git_push, array_content_checkout_restore_paths = _rule_array_literal_content(
         tokens,
         {**outer_literals, **_assigned_literals(tokens)},
         {**outer_raw, **_assigned_raw_values(tokens)},
     )
     is_git_push = content_is_git_push or array_content_is_git_push
+    checkout_restore_paths = content_checkout_restore_paths + array_content_checkout_restore_paths
     if array_content_reason:
-        return Verdict(True, array_content_reason, is_git_push)
+        return Verdict(True, array_content_reason, is_git_push, checkout_restore_paths)
 
     tokens = _fold_array_literal_spans(_fold_command_substitution_spans(tokens))
     segments = [s for s in (_strip_leading_assignments(seg) for seg in segment_tokens(tokens)) if s]
@@ -2725,16 +3062,16 @@ def _classify_tokens(
 
     literal_hit = _rule_a_literal(segments)
     if literal_hit:
-        return Verdict(True, literal_hit, is_git_push)
+        return Verdict(True, literal_hit, is_git_push, checkout_restore_paths)
 
     gh_api_hit = _rule_gh_api_write(segments, lowered_command, assigned, raw_assigned)
     if gh_api_hit:
-        return Verdict(True, gh_api_hit, is_git_push)
+        return Verdict(True, gh_api_hit, is_git_push, checkout_restore_paths)
 
     loop_hit, loop_is_git_push = _segment_loop_hit(segments, assigned, raw_assigned)
     is_git_push = is_git_push or loop_is_git_push
     if loop_hit:
-        return Verdict(True, loop_hit, is_git_push)
+        return Verdict(True, loop_hit, is_git_push, checkout_restore_paths)
 
     collapsed_segments = [
         collapsed for seg in segments if (collapsed := _strip_leading_unassigned_bare_refs(seg, raw_assigned))
@@ -2743,9 +3080,19 @@ def _classify_tokens(
         collapsed_hit, collapsed_is_git_push = _segment_loop_hit(collapsed_segments, assigned, raw_assigned)
         is_git_push = is_git_push or collapsed_is_git_push
         if collapsed_hit:
-            return Verdict(True, f"{collapsed_hit}, once a leading unassigned reference word-split away", is_git_push)
+            return Verdict(
+                True,
+                f"{collapsed_hit}, once a leading unassigned reference word-split away",
+                is_git_push,
+                checkout_restore_paths,
+            )
 
-    return Verdict(False, "no denied pattern matched", is_git_push)
+    own_checkout_restore_hit, own_checkout_restore_paths = _rule_git_checkout_restore(segments, raw_assigned)
+    checkout_restore_paths = checkout_restore_paths + own_checkout_restore_paths
+    if own_checkout_restore_hit:
+        return Verdict(True, own_checkout_restore_hit, is_git_push, checkout_restore_paths)
+
+    return Verdict(False, "no denied pattern matched", is_git_push, checkout_restore_paths)
 
 
 # --- stdin JSON entrypoint ------------------------------------------------
@@ -2795,6 +3142,12 @@ def main() -> int:
                 "decision": "deny" if verdict.deny else "allow",
                 "reason": verdict.reason,
                 "is_git_push": verdict.is_git_push,
+                # Issue #1375: a genuine JSON array, not a newline-joined
+                # string -- a path containing a newline would otherwise
+                # split into fragments that each match nothing on the live
+                # `git diff` check and silently pass. `json.dumps` encodes
+                # a tuple as a JSON array natively.
+                "checkout_restore_paths": verdict.checkout_restore_paths,
             }
         )
     )
