@@ -1,10 +1,22 @@
 name: Skill decision-branch fixture coverage gate
 
+# Deliberately no `paths:` filter, for the reason lint.yml's and
+# skill-eval-gate.yml's own headers state at length: GitHub distinguishes a
+# job that runs and reports `skipped` (does not block a required status
+# check) from a workflow that never fires at all for a given pull request
+# (leaves the required check `Pending` forever, with no in-repository fix).
+# A `paths:` trigger filter is the second case, and
+# .github/scripts/gitapex_gate_ruleset_required_checks.py (issue #439)
+# structurally refuses to accept a path-filtered job's context as a
+# required status check for exactly that reason -- see issue #1422. Running
+# unconditionally is the required-check-safe shape; the diff step below
+# already exits early (reporting success) when no skills/*/SKILL.md
+# changed, so the added cost is one checkout, one uv install, plus a short
+# diff on every PR (measured: ~16s end to end) -- the same price lint.yml
+# and skill-eval-gate.yml already accepted.
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-    paths:
-      - "skills/**/SKILL.md"
 
 permissions:
   contents: read
@@ -118,6 +130,14 @@ jobs:
 
       - name: Check decision-branch fixture coverage
         if: steps.diff.outputs.applicable == 'true'
+        env:
+          # The entries-file path reaches the shell through env rather than a
+          # `${{ }}` interpolation inside `run:`; interpolating a context
+          # directly into a script body is the template-injection shape
+          # zizmor flags, and there is no reason to hand-wave it as safe here
+          # when an env var costs nothing (see apply-rulesets.yml's own
+          # identical "Guard dispatch ref" step for the same reasoning).
+          ENTRIES_FILE: ${{ steps.diff.outputs.entries-file }}
         run: |
           set -euo pipefail
-          uv run --frozen python3 .github/scripts/gitapex_gate_skill_branch_fixture_coverage.py --entries "${{ steps.diff.outputs.entries-file }}"
+          uv run --frozen python3 .github/scripts/gitapex_gate_skill_branch_fixture_coverage.py --entries "$ENTRIES_FILE"
