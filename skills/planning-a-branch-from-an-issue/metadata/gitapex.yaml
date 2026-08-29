@@ -37,3 +37,17 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1462"
       summary: "Fixed both findings: narrowed the trigger to rows proposing to combine logic from two or more files into one shared file/module, explicitly excluding a row where one file merely calls or references another; added an explicit trivial-satisfaction clause for a repository with no distribution-boundary concept. Re-run of gitapex_check_skill_shape.py confirmed 51/51 unchanged."
+    - kind: audit
+      anchor: "method:evaluating-skill-quality"
+      summary: "A second isolated re-audit, run after dimension 12's own directional-placement fix (https://github.com/tvna/gitapex/issues/1456) landed in the same PR, found Step 5's criterion had not been updated to match: it still required all combined files on the 'same side' of the boundary and flagged any boundary crossing, while the sibling dimension 12 it claims to mirror now permits a shared module placed on the deployed side. The parity claim was stale, not the trigger scoping this issue already fixed."
+      outcome:
+        verdict: WELL-FORMED-NOT-MATURE
+    - kind: audit
+      anchor: "method:battle-testing-a-skill"
+      summary: "Same re-audit round: confirmed a concrete failure scenario -- an ACM row proposing a new shared module on the deployed side, importing from a never-deployed file, is valid under dimension 12's directional test but would still be wrongly flagged by Step 5's literal same-side wording."
+      outcome:
+        verdict: FAIL
+        found: 1
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1462"
+      summary: "Reworded Step 5's criterion to match dimension 12's directional test exactly: only flag when the row's own planned shared-file location would land on the never-deployed side, not merely when a boundary exists between the carriers. Re-run of gitapex_check_skill_shape.py confirmed 51/51."

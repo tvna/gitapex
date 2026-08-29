@@ -68,19 +68,25 @@ without losing the issue's acceptance criteria.
    accepting it merely for being well-formed. For any row whose planned
    ops propose combining logic from two or more files into one shared
    file or module (a consolidation- or shared-module-shaped criterion --
-   not merely a row where one file calls or references another),
-   confirm the calling repository's own layout documentation (or, absent
-   one, direct inspection of what is and is not distributed) puts all of
-   the files being combined on the same side of any deployed-to-consumers
-   vs. never-deployed boundary before accepting that row -- the same
-   redistribution-boundary check `evaluating-deterministic-gate-quality`'s
-   own duplication/drift-risk dimension applies at review time, applied
-   here before implementation instead. A calling repository with no such
-   distribution-boundary concept at all (an ordinary application
-   repository, not a redistributed package or plugin) satisfies this
-   check trivially -- note that explicitly rather than forcing a
-   meaningless classification. Flag and correct the row, per this step's
-   own mandate above, when a genuine boundary crossing is found.
+   not merely a row where one file calls or references another), and
+   where the calling repository's own layout documentation puts those
+   files on different sides of a deployed-to-consumers vs.
+   never-deployed boundary, confirm the row's own planned location for
+   the new shared file sits on the deployed side (or, absent one,
+   direct inspection of what is and is not distributed confirms the
+   equivalent) before accepting the row -- the harm is a shared module
+   landing on the never-deployed side breaking the deployed side's own
+   standalone-execution guarantee, not the boundary's mere existence
+   between the carriers, the same directional check
+   `evaluating-deterministic-gate-quality`'s own duplication/drift-risk
+   dimension applies at review time, applied here before implementation
+   instead. A calling repository with no such distribution-boundary
+   concept at all (an ordinary application repository, not a
+   redistributed package or plugin) satisfies this check trivially --
+   note that explicitly rather than forcing a meaningless
+   classification. Flag and correct the row, per this step's own
+   mandate above, when the row's planned shared-file location would
+   actually cross the boundary onto the never-deployed side.
 
    **Postcondition:** once this re-verification pass is complete, write a
    re-verification marker onto the parent issue's own body via the
