@@ -732,7 +732,7 @@ spec:
         lines: "dimensions.md 553->560, output-schema.json 398->403"
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1385"
-      summary: "Added Dimension 25 (Idempotency: convergence after partial execution and retry) to references/dimensions.md's probabilistic-maturity lane, appended after dimension 24 without renumbering (lane range 7-24 -> 7-25). Distinct from dimension 6 (timeout/budget) and dimension 15 (fail-closed on malformed input). Includes an inline CI-job-step worked example (re-run after a simulated mid-step timeout) and an explicit not-applicable case for a pure read-only gate."
+      summary: "Added Dimension 25 (Idempotency: convergence after partial execution and retry) to references/dimensions.md's probabilistic-maturity lane, appended after dimension 24 without renumbering (lane range 7-24 -> 7-25). Distinct from shape check 6 (timeout/budget) and dimension 15 (fail-closed on malformed input). Includes an inline CI-job-step worked example (re-run after a simulated mid-step timeout) and an explicit not-applicable case for a pure read-only gate."
       outcome:
         lines: "dimensions.md 560->601"
     - kind: audit
