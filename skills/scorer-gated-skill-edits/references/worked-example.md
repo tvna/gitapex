@@ -120,8 +120,8 @@ revision, so a concurrent working-tree change cannot move it.
 
 ## Cross-reference sweep before scoring
 
-Issue `#343`: a bounded edit inserted a new fourth Mechanism-fit check
-into a skill's `references/rubric.md`. A sibling reference file,
+A real incident: a bounded edit inserted a new fourth Mechanism-fit
+check into a skill's `references/rubric.md`. A sibling reference file,
 `worked-example-self-review.md`, cited "the fourth Mechanism-fit
 check" by ordinal -- true before the edit, stale after it (the newly
 inserted check now held that position, pushing the cited one to
@@ -135,7 +135,7 @@ same patch that introduced them.
 
 ## Restraint-check corroboration must be a real dispatch
 
-Issue `#343`: a Kept-edit log entry recorded a "restraint check" for a
+A real incident: a Kept-edit log entry recorded a "restraint check" for a
 new cohesion-detection edit -- confirming the edit does not over-fire
 on a case designed to look like a false positive. The entry cited two
 dispatches, but neither was the purpose-built restraint fixture the
