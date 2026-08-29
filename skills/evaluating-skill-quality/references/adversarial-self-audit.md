@@ -19,6 +19,7 @@ Procedure steps 1-6; it is not one more addition to
    - [Verification procedure](#verification-procedure)
    - [Known entries](#known-entries)
    - [Unlisted platform](#unlisted-platform)
+   - [No verified mechanism available](#no-verified-mechanism-available)
 8. [Contaminated-dispatch disclosure](#contaminated-dispatch-disclosure)
 9. [Downstream verdict consumption](#downstream-verdict-consumption)
 
@@ -659,6 +660,71 @@ an entry -- or, if this skill was vendored from elsewhere, add the entry to
 this copy of the file rather than assuming the origin repository's registry
 still applies; a vendored copy's platform is not guaranteed to match the
 origin's.
+
+### No verified mechanism available
+
+Reached when the Unlisted platform step above -- or the unconditional
+identifying-signal comparison against an existing Known entry -- concludes
+with nothing that passes both controls: every candidate mechanism actually
+tried fails isolation, or no candidate can even be attempted in the current
+execution environment (no shell/subprocess capability, the CLI a Known
+entries mechanism depends on is missing or unreachable, a required
+permission or tool the current harness does not expose). Reaching this
+state is itself the finding to report -- **never** a license to fall back
+to the Agent-tool (or any other undemonstrated) subagent dispatch merely
+because it happens to be available in the current session. An
+available-but-unverified mechanism is exactly the contamination this
+section exists to keep out of a review's precondition, not a fallback path
+around it; treating "nothing verified, but something is available" the
+same as "something verified" defeats the entire point of this registry.
+
+Required, not optional: stop before dispatching (or before continuing, if
+this is discovered mid-run) and emit exactly one fenced code block giving
+the operator two concrete, actionable paths -- never choose between them on
+the operator's behalf, and never dispatch while waiting for a reply:
+
+- **Fix this environment.** Name what the verified mechanism -- the Known
+  entries' currently-recorded one for this platform, or the closest
+  candidate actually tried -- needs that this session currently lacks (a
+  CLI binary, shell/subprocess access, an environment variable, a
+  permission grant), and give the exact commands to install or configure
+  it so the Verification procedure's two controls can be run here and
+  pass.
+- **Hand off to a different environment.** Give the exact command line (or
+  session-creation steps) to run this identical review from an environment
+  that already carries a Known entries-verified mechanism, including
+  precisely what to pass it (the target's path or content, plus a pointer
+  to this skill's own `references/rubric.md`) and what the operator should
+  do with the result.
+
+Example shape (illustrative -- fill in the real values for the platform at
+hand; never leave a placeholder unresolved and call the block complete):
+
+```bash
+# Option A: fix this environment
+<install/configure command(s) the verified mechanism actually needs here>
+
+# Option B: hand off to a verified environment
+<exact command or session-creation steps to run the identical review
+elsewhere, plus exactly what to pass it>
+```
+
+State plainly, in the same message, which of the two this environment's own
+diagnostics already rule out (if any), so the operator is not left to
+re-derive probing this run already did. This governs the pre-dispatch
+state; a dispatch already under way when contamination is discovered
+mid-run is the different case Contaminated-dispatch disclosure below
+covers, and that section's operator-override path is unaffected by this
+one.
+
+Whether the "never fall back" prohibition above carries real deterministic
+backing (a hook or permission rule blocking an Agent-tool dispatch outright)
+or is enforced by this instruction alone depends on the environment this run
+is actually in -- check directly rather than assuming either way, the same
+self-audit `SKILL.md`'s own eval-tooling-install Stop boundary already
+applies to itself. An environment with no such backing is currently
+prose-only and worth naming as a Mechanism-fit gap the same way that Stop
+boundary already names its own, not a guarantee to assume holds.
 
 ## Contaminated-dispatch disclosure
 
