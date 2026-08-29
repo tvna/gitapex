@@ -1,0 +1,29 @@
+id: merge-retrospective-gate-proposal-zero-repair-fast-close
+name: Zero-Repair Cycle Still Fast-Closes Unchanged
+description: A zero-repair cycle with no legacy backlog in play still fast-closes via Step 5's existing zero-repair path exactly as before this redesign -- confirms the flat gate-proposal-issues rewrite did not change the fast-close behavior itself (no gate-proposal filing is even attempted for a cycle with nothing to file).
+tags:
+  - quality
+  - gate-proposal
+  - zero-repair
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #302 ("chore: bump the pinned ruff version
+    in CI") just merged into main.
+
+    Full history from open to merge: CI ran once and passed clean on the
+    first push. No reviewer left any comment requiring a follow-up commit,
+    and no force-pushes happened. The PR merged exactly as opened, with
+    zero repairs of any kind.
+
+    An operator is present and available to respond.
+
+    Run the retrospective now that PR #302 has merged.
+expected:
+  output_contains:
+    - "zero repairs"
+    - "Retrospective status: zero-repair-fast-close"
+    - "Refs #302"
+  output_not_contains:
+    - "gate-proposal:"
+    - "Filed as:"
+    - "Carried-forward gate"

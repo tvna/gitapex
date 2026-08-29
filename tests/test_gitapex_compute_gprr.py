@@ -86,6 +86,24 @@ def test_parse_status_tags_empty_body() -> None:
     assert gprr.parse_status_tags("") == []
 
 
+def test_parse_status_tags_unaffected_by_adjacent_filed_as_line() -> None:
+    # Issue #1406: the flat gate-proposal-issues redesign's Repair record
+    # format appends a `Filed as: #<N>` line immediately after a
+    # missing-deterministic-gate repair's own `Status:` line, once Step 5
+    # confirms that repair's standalone gate-proposal issue actually
+    # exists (Decision 2 -- additive, never a substitution for `Status:`).
+    # This new adjacent line must not interfere with parse_status_tags's
+    # own line-anchored `Status:` match.
+    body = (
+        "1. [Failed CI rerun] repair.\n"
+        "   Classification: missing deterministic gate.\n"
+        "   Status: `missing-deterministic-gate`\n"
+        "   Proposed gate: text.\n"
+        "   Filed as: #87\n"
+    )
+    assert gprr.parse_status_tags(body) == ["missing-deterministic-gate"]
+
+
 # ---------------------------------------------------------------------------
 # week_key
 # ---------------------------------------------------------------------------

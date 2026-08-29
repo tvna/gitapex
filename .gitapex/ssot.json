@@ -815,19 +815,21 @@
       "id": "retrospective-gate-drift-scan",
       "kind": "script",
       "script": ".github/scripts/gitapex_scan_retrospective_gate_drift.py",
-      "rule": "Lists every retrospective-labelled issue (any state), excludes any whose body carries a gate-less marker (CI-opened stub or zero-repair fast-close -- issue #1297), and fails the job if the count of remaining issues with zero commit on main citing it exceeds threshold 20.",
+      "rule": "Fails the job if the gate-proposal label itself no longer exists; otherwise fails if the count of currently-open gate-proposal-labelled issues exceeds threshold 20, or if any closed gate-proposal-labelled issue whose state_reason is neither not_planned nor duplicate lacks a commit on the checked ref citing it or a .gitapex/ssot.json gates[].tracking_issue entry naming it (issue #1406 rescope; the prior retrospective-label citation sweep is retired).",
       "planes": ["ci"],
-      "local_exclusion": "Queries the GitHub issues API for retrospective-labelled issues; there is no offline equivalent.",
+      "local_exclusion": "Queries the GitHub labels and issues APIs for the gate-proposal label and its labelled issues; there is no offline equivalent.",
       "trigger": ".github/workflows/retrospective-gate-drift.yml, daily cron 07:00 UTC + workflow_dispatch",
       "policy_refs": [],
       "cluster": "self-governance",
-      "tracking_issue": [297, 422, 426, 187, 242, 246],
+      "tracking_issue": [297, 422, 426, 187, 242, 246, 1406],
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
         {"kind": "file-glob", "ref": ".gitapex/ssot.json"},
-        {"kind": "runtime-resolved-reference", "ref": "GitHub API GET /repos/{owner}/{repo}/issues?labels=retrospective&state=all (list_labelled_issues) -- the live retrospective-labelled issue set"},
+        {"kind": "runtime-resolved-reference", "ref": "GitHub API GET /repos/{owner}/{repo}/labels/{name} (label_exists) -- the gate-proposal label's own liveness, checked before either pass runs"},
+        {"kind": "runtime-resolved-reference", "ref": "GitHub API GET /repos/{owner}/{repo}/issues?labels=gate-proposal&state=open (list_labelled_issue_records) -- the live open gate-proposal backlog counted against the threshold"},
+        {"kind": "runtime-resolved-reference", "ref": "GitHub API GET /repos/{owner}/{repo}/issues?labels=gate-proposal&state=closed (list_labelled_issue_records) -- every closed gate-proposal issue, for the zero-tolerance two-signal integrity pass"},
         {"kind": "runtime-resolved-reference", "ref": "git log <ref> commit messages (git_commit_messages) matched against a #<N> citation pattern (_citation_pattern) per issue number"},
         {"kind": "workflow-event", "ref": "retrospective-gate-drift.yml:schedule"},
         {"kind": "workflow-event", "ref": "retrospective-gate-drift.yml:workflow_dispatch"}
@@ -1740,6 +1742,45 @@
         {"kind": "file-glob", "ref": "evals/evaluating-skill-quality/tasks/*.yaml"},
         {"kind": "file-glob", "ref": "evals/evaluating-skill-quality/split.md"},
         {"kind": "workflow-event", "ref": "split-disclosure-gate.yml:pull_request"}
+      ]
+    },
+    {
+      "id": "post-review-obligation-tracker",
+      "kind": "script",
+      "script": ["hooks/check-post-review-obligation-tracker.sh", "hooks/gitapex_check_post_review_obligation_tracker.py"],
+      "rule": "Writer half of the marker-file state machine backing the review-thread-resolution + mergeable_state-verification obligation (CLAUDE.md section 3). No jq dependency -- payload-shape validation and tool_name dispatch happen entirely in python; the .sh wrapper invokes python3 unconditionally, failing open with a systemMessage only if python3 or the tracker script itself is unavailable. On a Bash call classified as a git push (reusing hooks/gitapex_check_bash_safety.py's own is_git_push classifier) resets a session-scoped state file to a fresh pending cycle (target_pr cleared); on mcp__github__pull_request_read, establishes/switches target_pr from that call's own owner/repo/pullNumber -- a call naming a PR that is not the SAME PR as the one currently tracked (per _same_pr, which tolerates owner/repo being present on one call and absent on another for the identical pull number -- a third independent-review round found plain string equality treated that as a switch) resets open_review_threads/resolve_calls/mergeable_checked, rather than being ignored, closing a permanent-lockout gap a second independent-review round found and reproduced -- and records the unresolved-thread count (method get_review_comments) or that mergeable_state was observed (method get), both read directly from that call's own tool_response (unwrapped from the MCP content envelope) rather than a fresh API call; on mcp__github__resolve_review_thread increments a resolve-call counter, but only once target_pr is already established and the call's own tool_response does not report an error. State writes are TOCTOU-safe (tempfile.mkstemp's own O_CREAT|O_EXCL, not a predictable PID-based name). A residual gap remains disclosed, not fixed: target_pr is a heuristic (whichever PR was most recently read), never verified against the branch the git push actually targeted, and the state file itself is writable by the same agent this gate targets (a property this repository's entire hooks-as-deterministic-gate architecture already shares, not specific to this gate). Always exits 0 -- PostToolUse cannot block an already-executed tool call.",
+      "planes": ["posttooluse"],
+      "local_exclusion": "PostToolUse-only: tracks a Claude Code tool-call's own JSON payload and tool_response arriving on stdin, which has no working-tree equivalent to reconstruct.",
+      "trigger": "PostToolUse matcher Bash|mcp__github__resolve_review_thread|mcp__github__pull_request_read (hooks/hooks.json)",
+      "policy_refs": [],
+      "cluster": "github-operations",
+      "tracking_issue": 1209,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "bash-pattern", "ref": "git push"},
+        {"kind": "mcp-tool", "ref": "mcp__github__resolve_review_thread"},
+        {"kind": "mcp-tool", "ref": "mcp__github__pull_request_read"}
+      ]
+    },
+    {
+      "id": "stop-review-obligation",
+      "kind": "script",
+      "script": ["hooks/check-stop-review-obligation.sh", "hooks/gitapex_check_stop_review_obligation.py"],
+      "rule": "Reader half of the marker-file state machine backing the review-thread-resolution + mergeable_state-verification obligation (CLAUDE.md section 3: after a fix push that addresses a review thread, call mcp__github__resolve_review_thread and verify mergeable_state before closing the turn). No jq dependency -- an earlier version pre-validated payload shape via jq and failed closed (exit 2) whenever jq itself was missing, denying EVERY turn end unconditionally (even one that never touched a push) and, combined with hooks/check-bash-safety.sh's own jq-missing fail-closed posture on Bash, creating a full deadlock; independent review found and reproduced this live. The .sh wrapper now delegates all payload-shape validation to gitapex_check_stop_review_obligation.py's own main() (no jq involved) and fails closed only when python3 itself or the check script is unavailable -- the two failure modes it genuinely cannot delegate. Reads only the state file post-review-obligation-tracker writes -- never the network, never the transcript. Exits 0 immediately when no push was detected this cycle (Stop has no matcher support, so this in-script check is what keeps an ordinary turn from ever being blocked); once a push was detected, denies (exit 2, continues the conversation) until get_review_comments has been observed at least once (unresolved-thread count no longer unknown) AND the tracked resolve-call count reaches that count AND mergeable_state has been observed -- the get_review_comments requirement closes a gap independent review found live: without it, checking only an unrelated PR's mergeable_state satisfied this gate without ever confirming a single review thread's state. Fails closed on a present-but-corrupt state file; treats a genuinely absent file as nothing to verify.",
+      "planes": ["stop"],
+      "local_exclusion": "Stop-only: evaluates a Claude Code turn-end payload arriving on stdin plus a session-scoped state file, neither of which has a working-tree equivalent.",
+      "trigger": "Stop (hooks/hooks.json, no matcher -- Stop supports none)",
+      "policy_refs": [],
+      "cluster": "github-operations",
+      "tracking_issue": 1209,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "mcp-tool", "ref": "mcp__github__resolve_review_thread"},
+        {"kind": "mcp-tool", "ref": "mcp__github__pull_request_read"}
       ]
     }
   ],
