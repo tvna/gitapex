@@ -3664,6 +3664,48 @@ def _dynamic_word_may_resolve_to_a_cwd_relocator(token: str, name_to_raw_value: 
     return any(candidate in _CWD_RELOCATING_COMMANDS for candidate in candidates)
 
 
+def _first_surviving_segment_word(seg: list[str], name_to_raw_value: dict[str, str]) -> str | None:
+    """The first token of SEG that would actually survive as bash's real
+    command word once every LEADING vanishing decoy -- a bare/braced
+    unassigned reference (`_token_is_all_unassigned_refs`) or an
+    empty-default/alt-value clause (`_token_is_a_vanishing_default_or_
+    alt_clause`) -- has word-split away to nothing. `None` if the whole
+    leading run (up to and including every token in SEG) vanishes.
+
+    CRITICAL bug found by independent adversarial review (round 13, issue
+    #1375) and independently reproduced live: `_rule_git_checkout_restore`
+    only ever checked `seg[0]` itself for a possible cwd-relocator, the
+    same way `_find_git_checkout_restore` checks `seg[0]` for the git/
+    subcommand-position question -- but when `seg[0]` genuinely vanishes,
+    the classifier already knows (per this module's own established
+    convention, e.g. `_strip_leading_unassigned_bare_refs`'s use in
+    `_classify_tokens`'s own `collapsed_segments` pass) that whatever
+    token follows becomes the REAL command word at real bash runtime, and
+    that word was never itself checked here. Confirmed live: `X=cd;
+    $NEVERSET $X sub; git checkout -- dirty.py` (`NEVERSET` genuinely
+    never assigned) -- `$NEVERSET` vanishes, so the previous `seg[0]`-only
+    check silently skipped the whole segment, even though `$X` (which
+    resolves to `cd`) is what bash actually runs first. Real bash
+    (confirmed via an argv-capturing `cd` proxy) genuinely executes `cd
+    sub` there. Same result for `X=pushd` and for a vanishing
+    `${NEVERSET:-}` decoy in place of the bare `$NEVERSET`.
+
+    Callers should feed the RESULT of this function to
+    `_dynamic_word_may_resolve_to_a_cwd_relocator` (when dynamic) or the
+    existing literal `_CWD_RELOCATING_COMMANDS` membership check (when
+    not), exactly like they would have used `seg[0]` directly before this
+    fix -- this function only changes WHICH token that check runs
+    against, never the check itself."""
+    i = 0
+    n = len(seg)
+    while i < n and (
+        _token_is_all_unassigned_refs(seg[i], name_to_raw_value)
+        or _token_is_a_vanishing_default_or_alt_clause(seg[i], name_to_raw_value)
+    ):
+        i += 1
+    return seg[i] if i < n else None
+
+
 def _rule_git_checkout_restore(
     segments: list[list[str]], raw_assigned: dict[str, str]
 ) -> tuple[str | None, tuple[str, ...]]:
@@ -3730,20 +3772,34 @@ def _rule_git_checkout_restore(
     docstring) and only flags when a candidate could genuinely be
     `cd`/`pushd`/`popd`, or resolution is itself ambiguous/unresolvable --
     never widening beyond what round 10 already flagged, only narrowing
-    it."""
+    it.
+
+    The dynamic-word check above runs against `_first_surviving_segment_
+    word(seg, raw_assigned)`, not `seg[0]` directly -- CRITICAL bug found
+    by independent adversarial review (round 13, issue #1375) and
+    independently reproduced live: a `seg[0]`-only check silently skips
+    the whole segment when `seg[0]` itself genuinely vanishes, even
+    though the token that actually survives to become bash's real command
+    word (per that same vanishing logic this function already trusts
+    elsewhere) was never itself checked. `X=cd; $NEVERSET $X sub; git
+    checkout -- dirty.py` (`NEVERSET` genuinely never assigned) resolved
+    to the same CONFIDENT, WRONG `checkout_restore_paths` claim every
+    earlier round in this area has closed for a different gap -- see
+    `_first_surviving_segment_word`'s own docstring for the full
+    reproduction. The literal scan above is unaffected: it already checks
+    every token in the segment regardless of position, so a literal
+    `cd`/`pushd`/`popd` sitting after a vanishing decoy was already
+    covered."""
     saw_cd = False
     all_paths: list[str] = []
     for seg in segments:
         subcommand, tokens_after, saw_tree_relocation = _find_git_checkout_restore(seg, raw_assigned)
         if subcommand is None:
+            first = _first_surviving_segment_word(seg, raw_assigned)
             if any(not _is_dynamic(t) and t in _CWD_RELOCATING_COMMANDS for t in seg) or (
-                seg
-                and _is_dynamic(seg[0])
-                and not (
-                    _token_is_all_unassigned_refs(seg[0], raw_assigned)
-                    or _token_is_a_vanishing_default_or_alt_clause(seg[0], raw_assigned)
-                )
-                and _dynamic_word_may_resolve_to_a_cwd_relocator(seg[0], raw_assigned)
+                first is not None
+                and _is_dynamic(first)
+                and _dynamic_word_may_resolve_to_a_cwd_relocator(first, raw_assigned)
             ):
                 saw_cd = True
             continue

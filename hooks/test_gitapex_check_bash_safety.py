@@ -1723,6 +1723,27 @@ def test_checkout_denied_when_an_earlier_default_clause_could_resolve_to_cd(tmp_
     assert "working tree is at risk" in payload["systemMessage"]
 
 
+def test_checkout_denied_when_a_dynamic_relocator_sits_behind_a_leading_vanishing_decoy(tmp_path: Path) -> None:
+    """CRITICAL bypass regression pin (round-13 independent review, issue
+    #1375). The classifier's own cwd-relocation check only ever inspected
+    a segment's first token -- when that first token itself genuinely
+    vanishes at real bash runtime (e.g. a bare reference to a name never
+    assigned), the token that actually survives to become the real
+    command word was never itself checked. Live-verified before this fix:
+    `X=cd; $NEVERSET $X sub; git checkout -- dirty.py` (`NEVERSET`
+    genuinely never assigned) was wrongly allowed outright, and the real
+    command silently discarded a genuinely dirty `dirty.py` -- real bash
+    genuinely runs `cd sub` there. The deny here is classifier-level (a
+    token-shape fact, no live git call), so no such file needs to
+    actually exist for this regression pin."""
+    repo_dir = tmp_path / "repo"
+    _init_repo_with_committed_file(repo_dir)
+    result = run("X=cd; $NEVERSET $X sub; git checkout -- dirty.py", payload_cwd=str(repo_dir))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+    payload = json.loads(result.stderr)
+    assert "working tree is at risk" in payload["systemMessage"]
+
+
 def test_checkout_denied_in_a_real_merge_conflict_names_the_conflict_remedy(tmp_path: Path) -> None:
     """A real merge conflict (issue #1375's own Acceptance Criteria Map):
     the deny message names a remedy that actually works mid-conflict

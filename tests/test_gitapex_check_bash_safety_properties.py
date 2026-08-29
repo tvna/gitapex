@@ -3680,6 +3680,46 @@ def test_classify_denies_a_checkout_hidden_behind_a_still_dynamic_default_clause
     assert verdict.checkout_restore_paths == ()
 
 
+def test_first_surviving_segment_word_skips_a_leading_vanishing_run() -> None:
+    """A leading run of vanishing decoys (bare-unassigned, then an empty
+    default clause) is skipped, landing on the real surviving word --
+    whether that word is dynamic or a plain literal."""
+    assert checker._first_surviving_segment_word(["$NEVERSET", "${OTHER:-}", "$X"], {"X": "cd"}) == "$X"
+    assert checker._first_surviving_segment_word(["$NEVERSET", "sub"], {}) == "sub"
+
+
+def test_first_surviving_segment_word_none_when_everything_vanishes() -> None:
+    assert checker._first_surviving_segment_word(["$NEVERSET", "${OTHER:-}"], {}) is None
+
+
+def test_rule_git_checkout_restore_denies_a_dynamic_relocator_behind_a_leading_vanishing_decoy() -> None:
+    """CRITICAL bypass regression pin (round-13 independent review, issue
+    #1375). The prior `seg[0]`-only check silently skipped the whole
+    segment whenever `seg[0]` itself genuinely vanished, even though the
+    token that actually survives to become bash's real command word was
+    never itself checked. Live-verified before this fix: `X=cd; $NEVERSET
+    $X sub; git checkout -- dirty.py` (`NEVERSET` genuinely never
+    assigned) resolved to a CONFIDENT, WRONG `checkout_restore_paths`
+    claim -- real bash genuinely runs `cd sub` there."""
+    segments = [["$NEVERSET", "$X", "sub"], ["git", "checkout", "--", "f.py"]]
+    reason, resolved = checker._rule_git_checkout_restore(segments, {"X": "cd"})
+    assert reason is not None
+    assert resolved == ()
+
+
+def test_classify_denies_a_checkout_hidden_behind_a_leading_vanishing_decoy() -> None:
+    """End-to-end regression pin for the round-13 finding at the
+    `classify()` level."""
+    for cmd in (
+        "X=cd; $NEVERSET $X sub; git checkout -- dirty.py",
+        "X=pushd; $NEVERSET $X sub; git checkout -- dirty.py",
+        "X=cd; ${NEVERSET:-} $X sub; git checkout -- dirty.py",
+    ):
+        verdict = checker.classify(cmd)
+        assert verdict.deny is True, cmd
+        assert verdict.checkout_restore_paths == ()
+
+
 # --- End-to-end classify() coverage, pinning every explicit safe/deny case
 # issue #1375's own Acceptance Criteria Map and "Explicit safe cases"
 # section name by hand.
