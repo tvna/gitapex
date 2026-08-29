@@ -50,6 +50,19 @@ def http_error(code: int, body: str = "") -> urllib.error.HTTPError:
     return urllib.error.HTTPError("https://example.test", code, "err", {}, Response(code, body))  # type: ignore[arg-type]
 
 
+def _url_capturing_opener(captured: dict, body: str = "[]"):
+    """An `opener` that records the request URL under `captured["url"]` and
+    answers 200 with `body`. Shared by every test below whose only subject
+    is the URL a fetch helper builds (which label it quotes, which `state=`
+    it asks for) rather than the response it gets back."""
+
+    def opener(request: urllib.request.Request) -> Response:
+        captured["url"] = request.full_url
+        return Response(200, body)
+
+    return opener
+
+
 # ---------------------------------------------------------------------------
 # citation_count / find_no_citation_issues (issue #709's two-signal check --
 # unchanged logic, now reused by the closed-issue integrity pass below)
@@ -272,12 +285,9 @@ def test_label_exists_raises_on_persistent_4xx_other_than_404():
 
 def test_label_exists_quotes_a_label_name_with_special_characters():
     captured = {}
-
-    def opener(request: urllib.request.Request) -> Response:
-        captured["url"] = request.full_url
-        return Response(200, json.dumps({"name": "a/b"}))
-
-    gate.label_exists("tvna", "gitapex", "a/b", "tok", opener=opener)
+    gate.label_exists(
+        "tvna", "gitapex", "a/b", "tok", opener=_url_capturing_opener(captured, json.dumps({"name": "a/b"}))
+    )
     assert "a/b" not in captured["url"]
     assert "a%2Fb" in captured["url"]
 
@@ -406,12 +416,7 @@ def test_list_labelled_issues_still_defaults_to_state_all_via_positional_call():
     # opener/sleeper (rather than before) did not shift that positional
     # call onto the wrong parameter.
     captured = {}
-
-    def opener(request: urllib.request.Request) -> Response:
-        captured["url"] = request.full_url
-        return Response(200, "[]")
-
-    gate.list_labelled_issues("tvna", "gitapex", "gate-proposal", "tok", opener=opener)
+    gate.list_labelled_issues("tvna", "gitapex", "gate-proposal", "tok", opener=_url_capturing_opener(captured))
     assert "state=all" in captured["url"]
 
 
@@ -466,35 +471,18 @@ def test_list_labelled_issue_records_defaults_to_state_all():
     # arguments (owner, repo, label, token) and depends on this default
     # staying "all" -- see this function's own docstring.
     captured = {}
-
-    def opener(request: urllib.request.Request) -> Response:
-        captured["url"] = request.full_url
-        return Response(200, "[]")
-
-    gate.list_labelled_issue_records("tvna", "gitapex", "gate-proposal", "tok", opener=opener)
+    gate.list_labelled_issue_records("tvna", "gitapex", "gate-proposal", "tok", opener=_url_capturing_opener(captured))
     assert "state=all" in captured["url"]
 
 
-def test_list_labelled_issue_records_uses_given_state_open():
+@pytest.mark.parametrize("state", ["open", "closed"])
+def test_list_labelled_issue_records_uses_given_state(state):
+    # `main`'s two passes ask for exactly these two states explicitly.
     captured = {}
-
-    def opener(request: urllib.request.Request) -> Response:
-        captured["url"] = request.full_url
-        return Response(200, "[]")
-
-    gate.list_labelled_issue_records("tvna", "gitapex", "gate-proposal", "tok", opener=opener, state="open")
-    assert "state=open" in captured["url"]
-
-
-def test_list_labelled_issue_records_uses_given_state_closed():
-    captured = {}
-
-    def opener(request: urllib.request.Request) -> Response:
-        captured["url"] = request.full_url
-        return Response(200, "[]")
-
-    gate.list_labelled_issue_records("tvna", "gitapex", "gate-proposal", "tok", opener=opener, state="closed")
-    assert "state=closed" in captured["url"]
+    gate.list_labelled_issue_records(
+        "tvna", "gitapex", "gate-proposal", "tok", opener=_url_capturing_opener(captured), state=state
+    )
+    assert f"state={state}" in captured["url"]
 
 
 # ---------------------------------------------------------------------------
@@ -1011,12 +999,15 @@ def test_main_names_every_invisible_only_flag_in_declaration_order(monkeypatch, 
     )
 
 
-def test_main_keeps_invisible_padded_but_meaningful_values_unmutated(monkeypatch, capsys):
-    """A value padded with a Cf mark rather than ASCII whitespace must
-    keep working, unmutated -- only an entirely invisible/non-printing
-    value changes verdict (issue #1094)."""
-    monkeypatch.setenv("GITHUB_TOKEN", "tok")
-    received = {}
+def _install_recording_fakes(monkeypatch) -> dict:
+    """Replace `main`'s four I/O collaborators with recording fakes and
+    return the dict they record into.
+
+    Shared by the two "validation never silently trims" tests below (issues
+    #1087 and #1094), which differ only in the padding characters they feed
+    each flag -- ordinary whitespace versus Unicode Format-category marks.
+    """
+    received: dict = {}
 
     def fake_label_exists(owner, repo, label, token):
         received["label_exists_owner"] = owner
@@ -1043,6 +1034,15 @@ def test_main_keeps_invisible_padded_but_meaningful_values_unmutated(monkeypatch
     monkeypatch.setattr(gate, "list_labelled_issue_records", fake_list_labelled_issue_records)
     monkeypatch.setattr(gate, "git_commit_messages", fake_git_commit_messages)
     monkeypatch.setattr(gate, "load_gate_tracking_issues", fake_load_gate_tracking_issues)
+    return received
+
+
+def test_main_keeps_invisible_padded_but_meaningful_values_unmutated(monkeypatch, capsys):
+    """A value padded with a Cf mark rather than ASCII whitespace must
+    keep working, unmutated -- only an entirely invisible/non-printing
+    value changes verdict (issue #1094)."""
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    received = _install_recording_fakes(monkeypatch)
     exit_code = gate.main(
         [
             "--owner",
@@ -1074,33 +1074,7 @@ def test_main_keeps_padded_but_meaningful_values_unmutated(monkeypatch, capsys):
     content plus surrounding whitespace reaches every downstream call
     exactly as typed."""
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
-    received = {}
-
-    def fake_label_exists(owner, repo, label, token):
-        received["label_exists_owner"] = owner
-        received["label_exists_repo"] = repo
-        received["label_exists_label"] = label
-        return True
-
-    def fake_list_labelled_issue_records(owner, repo, label, token, state="all", **kwargs):
-        received[f"records_{state}_owner"] = owner
-        received[f"records_{state}_repo"] = repo
-        received[f"records_{state}_label"] = label
-        return []
-
-    def fake_git_commit_messages(ref, cwd):
-        received["ref"] = ref
-        received["cwd"] = cwd
-        return []
-
-    def fake_load_gate_tracking_issues(path):
-        received["ssot_path_joined"] = path
-        return set()
-
-    monkeypatch.setattr(gate, "label_exists", fake_label_exists)
-    monkeypatch.setattr(gate, "list_labelled_issue_records", fake_list_labelled_issue_records)
-    monkeypatch.setattr(gate, "git_commit_messages", fake_git_commit_messages)
-    monkeypatch.setattr(gate, "load_gate_tracking_issues", fake_load_gate_tracking_issues)
+    received = _install_recording_fakes(monkeypatch)
     exit_code = gate.main(
         [
             "--owner",

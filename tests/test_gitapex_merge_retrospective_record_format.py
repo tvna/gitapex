@@ -39,6 +39,7 @@ _REPAIR_ENTRY_RE = re.compile(r"^\d+\.\s\[[^\]]+\].*?(?=\n\d+\.\s\[|\Z)", re.MUL
 _CLASSIFICATION_RE = re.compile(r"^\s*Classification:\s*([^\n]+?)\.?$", re.MULTILINE)
 _STATUS_RE = re.compile(r"^\s*Status:\s*`([^`]+)`", re.MULTILINE)
 _PROPOSED_GATE_LINE_RE = re.compile(r"^\s*Proposed gate[^:]*:", re.MULTILINE)
+_FILED_AS_RE = re.compile(r"^\s*Filed as:\s*#(\d+)\s*$", re.MULTILINE)
 
 
 def _skill_text() -> str:
@@ -57,9 +58,6 @@ def _repairs_section(issue_body: str) -> str:
     start = issue_body.index("## Repairs") + len("## Repairs")
     end = issue_body.index("## Notes")
     return issue_body[start:end]
-
-
-_FILED_AS_RE = re.compile(r"^\s*Filed as:\s*#(\d+)\s*$", re.MULTILINE)
 
 
 def test_repair_record_format_declares_the_three_fixed_fields():
@@ -110,12 +108,22 @@ def test_worked_example_repairs_match_the_declared_record_format():
             f"(expected `{_TAXONOMY_PHRASE_TO_SLUG[classification]}`)."
         )
 
+        # Both optional fields are present exactly for the
+        # missing-deterministic-gate category and absent for the other two,
+        # so they share one branch on the same slug rather than repeating it.
         has_proposed_gate = bool(_PROPOSED_GATE_LINE_RE.search(entry))
+        has_filed_as = bool(_FILED_AS_RE.search(entry))
         if slug == "missing-deterministic-gate":
             assert has_proposed_gate, (
                 f"repair entry {label!r} is classified "
                 "missing-deterministic-gate but has no 'Proposed gate:' "
                 "line -- Step 4 requires a gate proposal for this category."
+            )
+            assert has_filed_as, (
+                f"repair entry {label!r} is classified "
+                "missing-deterministic-gate but has no 'Filed as: #<N>' "
+                "line -- Step 5 records this once its own standalone "
+                "gate-proposal issue is filed and confirmed."
             )
         else:
             assert not has_proposed_gate, (
@@ -124,16 +132,6 @@ def test_worked_example_repairs_match_the_declared_record_format():
                 "this field entirely for the unclear-agent-instruction and "
                 "external-human-decision categories."
             )
-
-        has_filed_as = bool(_FILED_AS_RE.search(entry))
-        if slug == "missing-deterministic-gate":
-            assert has_filed_as, (
-                f"repair entry {label!r} is classified "
-                "missing-deterministic-gate but has no 'Filed as: #<N>' "
-                "line -- Step 5 records this once its own standalone "
-                "gate-proposal issue is filed and confirmed."
-            )
-        else:
             assert not has_filed_as, (
                 f"repair entry {label!r} is classified `{slug}` but carries "
                 "a 'Filed as:' line -- only a missing-deterministic-gate "

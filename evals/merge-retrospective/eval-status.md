@@ -29,9 +29,8 @@ Left uncorrected as a disclosed, out-of-scope follow-up -- retiring them
 properly means updating `split.json`/`split.md`'s own declared
 train/selection/test partition arithmetic and equivalence-class
 bookkeeping, a separate concern from this doc's own fixture-count sync.
-Step 0's own dedup
-check (hardened by issue #1197) has coverage too: a second pair
-(`dedup-step0-exact-match-train.yaml`,
+Step 0's own dedup check (hardened by issue #1197) has coverage too: a
+second pair (`dedup-step0-exact-match-train.yaml`,
 `dedup-step0-title-substring-not-exact-match-test.yaml`) exercises the
 exact-string-equality discipline the hardening added, both when a
 candidate title is a genuine exact match (stop, do not re-file) and when

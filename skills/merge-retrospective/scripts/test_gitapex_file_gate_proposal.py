@@ -58,33 +58,30 @@ def test_gate_proposal_label_is_the_exact_literal() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_build_title_from_representative_index_label_and_retro_number() -> None:
+@pytest.mark.parametrize(
+    ("retro_number", "index", "label", "expected"),
+    [
+        (1405, 2, "Failed CI rerun", "gate-proposal: retro #1405 repair 2: Failed CI rerun"),
+        (42, 1, "Review fix round", "gate-proposal: retro #42 repair 1: Review fix round"),
+    ],
+)
+def test_build_title_concatenates_literal_pieces_in_order(
+    retro_number: int, index: int, label: str, expected: str
+) -> None:
     title = builder.build_gate_proposal_title(
-        retrospective_issue_number=1405,
-        repair_index=2,
-        repair_label="Failed CI rerun",
+        retrospective_issue_number=retro_number,
+        repair_index=index,
+        repair_label=label,
     )
-    assert title == "gate-proposal: retro #1405 repair 2: Failed CI rerun"
+    assert title == expected
 
 
-def test_build_title_concatenates_literal_pieces_in_order() -> None:
-    title = builder.build_gate_proposal_title(
-        retrospective_issue_number=42,
-        repair_index=1,
-        repair_label="Review fix round",
-    )
-    assert title.startswith("gate-proposal: retro #42 repair 1: ")
-    assert title.endswith("Review fix round")
-
-
-def test_build_title_rejects_zero_index() -> None:
+# 0 is the off-by-one a 0-based in-memory index pass would produce; a
+# negative index is the same contract violation from the other side.
+@pytest.mark.parametrize("repair_index", [0, -1])
+def test_build_title_rejects_non_positive_index(repair_index: int) -> None:
     with pytest.raises(ValueError, match="1-based"):
-        builder.build_gate_proposal_title(retrospective_issue_number=1405, repair_index=0, repair_label="x")
-
-
-def test_build_title_rejects_negative_index() -> None:
-    with pytest.raises(ValueError, match="1-based"):
-        builder.build_gate_proposal_title(retrospective_issue_number=1405, repair_index=-1, repair_label="x")
+        builder.build_gate_proposal_title(retrospective_issue_number=1405, repair_index=repair_index, repair_label="x")
 
 
 # ---------------------------------------------------------------------------
