@@ -417,6 +417,37 @@ KNOWN_BYPASS_COMMANDS = [
         "git checkout -f -b newbranch other",
         "checkout-branch-creation-flag-non-goal",
     ),
+    (
+        # CRITICAL, WHOLE-MODULE bypass -- NOT specific to checkout/restore
+        # or to this file's own KNOWN_BYPASS_COMMANDS convention's usual
+        # narrow-decoy shape. Found live by independent adversarial review
+        # (round 8, issue #1375), tracked as its own dedicated issue rather
+        # than fixed here: https://github.com/tvna/gitapex/issues/1404 --
+        # deliberately out of issue #1375's own scope, since the root cause
+        # predates it, is architectural (Python's `shlex` tracks
+        # double-quote state as one flat, whole-command toggle with no
+        # concept of bash's own recursive quote-context reset inside a
+        # `$(...)` command substitution), and is shared by EVERY rule in
+        # this file, not just checkout/restore. A double-quoted span
+        # nested inside a `$(...)` that is itself nested inside an outer
+        # double-quoted string desynchronizes `shlex`'s quote parity from
+        # real bash's own parse while keeping the TOTAL quote-character
+        # count even, so `tokenize()`'s own `TokenizeError` fail-closed
+        # path never fires (unlike the structurally-safe, always-
+        # unbalanced quote-decoy case the round-7 fix's own docstring
+        # already documents). Live-verified real, silent data loss: this
+        # exact command genuinely discards a dirty tracked file named
+        # `dirty.py` when actually executed, while `classify()` reports
+        # `deny=False` with an EMPTY `checkout_restore_paths` -- "git"
+        # and "checkout" never appear as their own separate tokens at all,
+        # fused into an inert-looking quoted blob by `shlex`'s own
+        # mis-toggled state. See issue #1404 for the full write-up,
+        # live-verification detail, and why a genuine fix needs a
+        # command-substitution-aware recursive tokenizer rather than a
+        # narrow patch.
+        'x="$(echo "y)" && git checkout -- dirty.py)"',
+        "shlex-nested-double-quote-inside-command-substitution-full-bypass",
+    ),
 ]
 
 

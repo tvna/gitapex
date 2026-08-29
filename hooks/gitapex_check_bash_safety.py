@@ -79,6 +79,32 @@ instead of a command/verb token. Deliberately not attempted in Stage 1;
 pinned as `graphql-mutation-keyword-variable-concatenation` in
 hooks/test_gitapex_check_bash_safety.py's own `KNOWN_BYPASS_COMMANDS`.
 
+CRITICAL, disclosed, whole-module limitation, NOT specific to any one rule
+(found live by Step 8 independent review, round 8 of issue #1375's own
+checkout/restore feature review, while stress-testing an unrelated,
+narrower fix): `tokenize()`'s own reliance on the standard library's
+`shlex` tracks double-quote state as one flat, whole-command toggle, with
+no concept of bash's own recursive quote-context reset inside a `$(...)`
+command substitution. A double-quoted span nested inside a `$(...)` that
+is itself nested inside an outer double-quoted string desynchronizes
+`shlex`'s own quote parity from real bash's actual parse while keeping
+the TOTAL double-quote count even across the whole command -- so
+`tokenize()`'s own `TokenizeError` fail-closed path never fires, unlike
+the structurally-safe, always-unbalanced quote-decoy shape documented
+elsewhere in this module. Live-verified real, silent data loss: `x="$(echo
+"y)" && git checkout -- dirty.py)"` genuinely discards a dirty tracked
+file when actually executed, while `classify()` reports `deny=False` with
+"git"/"checkout" never appearing as their own separate tokens at all --
+fused into what `shlex` mis-reads as inert quoted content. This is a
+property of `shlex` itself, not any rule built on top of it (checkout/
+restore, git push, pip install, gh api all share this exposure equally),
+and predates issue #1375. Deliberately NOT attempted here -- tracked as
+its own dedicated issue, https://github.com/tvna/gitapex/issues/1404,
+since a genuine fix needs a command-substitution-aware recursive
+tokenizer, not a narrow patch; pinned as `shlex-nested-double-quote-
+inside-command-substitution-full-bypass` in
+hooks/test_gitapex_check_bash_safety.py's own `KNOWN_BYPASS_COMMANDS`.
+
 Closed by fifth-round Step 8 independent review: `_gh_api_method_dynamic_
 value`/`_gh_api_field_dynamic_hit` (and the earlier literal-token scans)
 only ever recognized a dynamic VALUE fused onto a literal `-X`/`--method`/
