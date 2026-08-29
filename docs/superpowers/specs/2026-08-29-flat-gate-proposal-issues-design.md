@@ -148,13 +148,54 @@ because it is a silent loss, not a visible one. Fixed by keying the title
 on each repair's own fixed position, not its free-text label: `gate-proposal:
 retro #<retrospective-issue-number> repair <1-based index>: <repair's own
 one-line label>` (the label stays in the title for human readability; the
-index is what actually disambiguates). The index and every repair's own
-label are recorded into the retrospective issue's own body immediately
-after Step 2-4's classification completes, *before* any filing begins --
-so a resumed run (a new session, possibly with LLM-regenerated,
-non-byte-stable repair text) reads that already-recorded list rather than
-re-deriving the title from freshly-generated prose, closing the
-retry-instability half of the same finding.
+index is what actually disambiguates), where the literal string
+`gate-proposal` is the fixed label's own name too (Decision 6). The index
+is assigned once, in-memory, during Step 2-4's own single classification
+pass, and held for the rest of that same session's filing calls -- no
+different from how the repair's own label text is already held for that
+session today.
+
+The fourth adversarial review found the prior revision's own hardening
+attempt here -- writing that index list into the retrospective issue's
+body in a step *before* Step 5 begins, specifically to survive a session
+interruption -- collided with Step 0's own existing, unchanged
+marker-based branching (`SKILL.md`'s Step 0: a body still carrying the
+CI-opener's stub marker means "nothing enriched yet, continue"; a body
+without it means "already enriched, stop here"), because that extra write
+would itself remove or predate the marker's own removal outside Step 5's
+one designated write. Rather than teach Step 0 a third state to
+distinguish "enriched but incomplete" from "fully enriched" -- a change to
+an *unchanged* component this design deliberately keeps out of scope --
+the index list is instead written as part of Step 5's own single existing
+body write (Component 1; the same write that already replaces the stub
+per Step 0's marker-present branch, or creates fresh per its no-match
+branch), immediately followed in that same session by each repair's
+`Filed as: #<N>` line as its filing is confirmed.
+
+Named residual risk, not solved by this design: a session interrupted
+*mid*-Step-5 -- after that one body write lands (the marker is gone) but
+before every repair's own `Filed as:` line is recorded -- leaves a later,
+resumed run seeing Step 0's own marker-absent branch ("nothing left to
+file, stop here"), even though some repairs may still be unfiled. This is
+an existing limitation of Step 0's own binary, unchanged branching, not
+newly introduced by the index-keyed title; this design does not extend
+Step 0's own state model to fix it. The concrete cost, if this is hit, is
+a stuck-open retrospective issue needing a human to notice and finish the
+filing by hand -- not silent data loss (nothing already filed is lost)
+and not a duplicate (the exact-title search-before-create in Data flow
+step 4 still catches a repair that was already filed before the
+interruption). Within one uninterrupted session -- the common case, and
+the only case the second and third adversarial reviews' own within-cycle
+collision finding actually required fixing -- the index is fully stable.
+
+The same single-pass assignment extends unmodified to a future manual
+audit of the pre-existing 277-item legacy backlog (should one ever be
+undertaken; still out of scope per Non-goals): the auditor walks the
+backlog in one sitting and assigns indices 1..K within that sweep, keyed
+on each item's own *original* retrospective issue number, exactly like a
+routine cycle's Step 2-4 pass -- no separate persistence mechanism is
+needed for that case either, since none is guaranteed for the routine
+case above.
 
 Rejected alternative: **a single issue's body as an append-only checklist**
 (each finding becomes one more Markdown checkbox line in one persistent
@@ -186,6 +227,18 @@ now owns follow-through. `unclear-agent-instruction` and
 `external-human-decision` repairs are unaffected -- neither proposes a
 gate to track, so neither gets a standalone issue; both stay recorded
 inline exactly as today.
+
+Each `missing-deterministic-gate` repair's own inline `Status:
+missing-deterministic-gate` tag (the fixed-vocabulary line
+`.github/scripts/gitapex_compute_gprr.py`'s `_STATUS_LINE_RE` already
+parses out of every retrospective issue's body to compute the
+Gate-Preventable Repair Rate) is **not** removed or replaced by this
+design -- it stays exactly where Step 5 already writes it today. The new
+`Filed as: #<N>` line is recorded immediately alongside it, as an
+addition, not a substitution. GPRR's own numerator is therefore unaffected
+by this design: a repair still reads as `missing-deterministic-gate` in
+the retrospective issue's body whether or not this design's own
+standalone-issue mechanism successfully filed it.
 
 ### 3. Retrospective issues close immediately once every finding is filed and verified -- with the existing attended/unattended distinction extended to every close, not only the zero-repair case
 
@@ -261,38 +314,43 @@ CI check runs two passes:
 - **(a) Primary, threshold-gated:** count of currently-open issues
   carrying the label (a plain `state=open` + label search -- the actual
   backlog size). Threshold unchanged from today (20), per Non-goals.
-- **(b) Secondary integrity pass, threshold-gated the same as (a) --
-  revised in this round from "report only" after the third adversarial
-  review found the original text never specified a consequence:** the
-  REST issues-list endpoint's own `since` parameter filters by
-  `updated_at`, not `closed_at`, so "recently closed" is not a single
-  clean server-side filter -- fetch `state=closed` plus the label, sorted
-  by `updated`, and apply a client-side filter on each issue's own
-  `closed_at` field against a fixed window (recommend 7 days, giving one
-  full extra day of slack over the daily cron cadence against a single
-  missed run). For each, re-run the two-signal check. **Explicitly
-  exempt** an issue whose own `state_reason` is `not_planned` or
-  `duplicate` -- a legitimately declined proposal is not a silent-close
-  failure, and flagging it daily for the whole window would make the
-  check noisy enough to stop being trusted, the same failure mode
+- **(b) Secondary integrity pass, zero-tolerance and unbounded --
+  revised again in this round after the fourth adversarial review found
+  the third round's own fix (a 7-day `closed_at` window plus a
+  window-exit reopen) both contradicted itself (the reopen text called
+  the pass "threshold-gated the same as (a)" -- count > 20 -- while
+  separately requiring it to fail on *any* non-exempt unverified closure,
+  two different rules for the same pass) and needed `issues: write` on
+  `retrospective-gate-drift.yml`, which only ever carries `issues: read`
+  -- Decision 1's own "no elevated CI permission" claim, made about a
+  different pass, does not extend to a reopen action, and the design
+  never asked for the extra scope:** fetch `state=closed` plus the label
+  -- every closed issue ever carrying it, with **no time window and no
+  `closed_at` filtering at all** -- and re-run the two-signal check on
+  each. **Explicitly exempt** an issue whose own `state_reason` is
+  `not_planned` or `duplicate` -- a legitimately declined proposal is not
+  a silent-close failure, and flagging it forever would make the check
+  noisy enough to stop being trusted, the same failure mode
   `evals/scripts/gitapex_lint_fixture_assertions.py`'s own
   `--check-prompt-echo` was kept non-blocking to avoid (per its own
   docstring, 23 real false positives already found against this
-  repository's own corpus). Any non-exempt issue that closed without
-  passing the two-signal check **fails this run** (matching (a)'s own
-  blocking posture, not merely reporting it) -- given this repository's
-  own near-zero human-close-review throughput (Decision 3's own residual-
-  risk note), a report nobody acts on and a window that later slides past
-  it is a durable escape hatch, not a check. If a flagged issue is still
-  unverified when it is about to age out of the 7-day window (i.e. this
-  is its last day inside the window), **reopen it** (`state: open`,
-  leaving a comment naming why) rather than letting the window simply
-  pass it by -- this drops it back into pass (a)'s own permanently-visible,
-  no-time-limit open count instead of letting scrutiny expire with the
-  window. This is the concrete, durable consequence the third adversarial
-  review found missing; it also means the closed-state gap the very first
-  "Rejected" section named is now closed by a mechanism with no expiry,
-  not merely time-boxed to a week.
+  repository's own corpus). **Any** non-exempt issue that closed without
+  passing the two-signal check fails this run -- a single, unambiguous
+  rule, distinct from (a)'s own count>20 threshold, not "the same as (a)"
+  worded two different ways. There is no reopen and no window to age out
+  of: an issue stays in this pass's scope for as long as it stays closed
+  and non-exempt, so a missed cron run costs nothing (tomorrow's run still
+  finds it) and no write permission is needed (CI stays `issues: read`
+  throughout, matching Decision 1's read-only claim for once, genuinely).
+  The concrete, durable consequence the third adversarial review asked
+  for is the daily red CI run itself, which a human then resolves by
+  hand -- reopening the issue, correcting `.gitapex/ssot.json`, or setting
+  `state_reason` once it is legitimately declined -- rather than an
+  automated reopen action this design does not attempt. This is a smaller
+  claim than "self-healing": it guarantees the closed-state gap can never
+  again pass silently (Decision 5's own scope is bounded to *detecting*
+  and *failing loudly*, not to auto-remediating), which is what the very
+  first "Rejected" section's closed-state finding actually required.
 
 **Label-liveness check, new in this revision:** both passes assume the
 label itself still exists on GitHub. `gitapex_scan_retrospective_gate_drift.py`'s
@@ -343,24 +401,46 @@ there was no second constant for a sync test to actually import and
 compare; a label renamed only in that prose would drift silently past
 the very test meant to catch drift.
 
-Fixed by making Step 5's filing operation itself a small bundled script
--- `skills/merge-retrospective/scripts/gitapex_file_gate_proposal.py`
-(Components below) -- matching this repository's own established
-preference for pushing deterministic operations into a script rather than
-leaving them to prose-only agent judgment (the same rationale
-`gitapex_check_retro_gate_resolved.py` already exists to serve for Step 1's
-verification side). `SKILL.md`'s own Step 5 prose then reads as "invoke
-this script to file a repair," not as a second place the literal label
-name is separately spelled out. This makes the precedent apply cleanly, as
-originally intended: the label's literal name is defined once as a named
-constant in each of exactly two independently-self-contained scripts --
-this new skill-side filing script, and the existing CI-side scan script --
-with a new sync test asserting both literal values stay equal. Weaker
-than this design's own earlier, now-abandoned `.gitapex/ssot.json`-
-registration claim of "only one copy to ever drift from," but consistent
-with how this repository already solves the identical cross-boundary
-duplication problem elsewhere, rather than reopening a recorded
-`.gitapex/ssot.json` scope decision to avoid writing that test.
+Fixed by making Step 5's *computation* -- not its GitHub calls -- a small
+bundled script: `skills/merge-retrospective/scripts/gitapex_file_gate_proposal.py`
+(Components below), holding the label's own literal name, **`gate-proposal`**,
+as a named constant, alongside the deterministic-title builder (Decision 1)
+and the ACM-body template (Decision 4). The fourth adversarial review found
+the prior revision's own draft of this script wrong in a different way: it
+had the script call `issue_write` itself, but `issue_write` is an
+MCP tool this repository's own agent session invokes directly (the exact
+tool `hooks/check-issue-acm-disclosure.sh`'s `hooks.json` entry matches on),
+not something a plain bundled script can call into -- and this repository's
+own established convention (CLAUDE.md's Git Ecosystem section) is that
+GitHub writes go through the agent's own platform-integrated tool calls
+specifically so the paired safety hook fires, never through a script
+re-implementing the REST call itself. So the script stays pure and
+network-free: given a repair's already-classified fields plus its
+recorded index (Decision 1), it returns the deterministic title, the
+fully-populated ACM body, and the label constant -- nothing else.
+`SKILL.md`'s own Step 5 prose invokes the script for those three values,
+then makes the actual GitHub calls itself, as direct `mcp__github__*` tool
+calls exactly like every other step in this skill already does: list/search
+for an exact-title match first (Data flow step 4), and on no match, call
+`issue_write` method `create` with the script's own title/body/label,
+then `issue_read` to re-fetch and verify. This keeps every GitHub write in
+this design passing through the same ACM-disclosure hook every other
+`issue_write` call in this repository already passes through, and keeps
+the new script itself trivially unit-testable (pure functions, no network
+mocking needed) -- both properties the prior draft's script-does-everything
+shape did not have. `SKILL.md`'s own Step 5 prose then reads as "invoke
+this script for the title/body/label, then file it," not as a second
+place the literal label name is separately spelled out. This makes the
+sync-test precedent apply cleanly, as originally intended: the label's
+literal name is defined once as a named constant in each of exactly two
+independently-self-contained scripts -- this new skill-side helper, and
+the existing CI-side scan script -- with a new sync test asserting both
+literal values stay equal. Weaker than this design's own earlier, now-
+abandoned `.gitapex/ssot.json`-registration claim of "only one copy to
+ever drift from," but consistent with how this repository already solves
+the identical cross-boundary duplication problem elsewhere, rather than
+reopening a recorded `.gitapex/ssot.json` scope decision to avoid writing
+that test.
 
 ## Non-goals
 
@@ -379,7 +459,19 @@ duplication problem elsewhere, rather than reopening a recorded
   unscheduled follow-on work.)
 - **Changing the two-signal resolution algorithm's own logic** (citing
   commit + `ssot.json` tracking_issue) -- only its scope (the labelled-issue
-  set, open and recently-closed) changes, not its criteria.
+  set, open and closed) changes, not its criteria.
+- **Automatically remediating a closed-but-unverified issue** (reopening
+  it, editing `.gitapex/ssot.json`, or anything else beyond failing the CI
+  run and naming the issue). The fourth adversarial review found an
+  earlier, time-boxed reopen attempt here both needed CI write permission
+  this design does not request and produced an internally contradictory
+  gating rule; Decision 5 deliberately narrows this pass's own job to
+  detection, leaving remediation to the human the failing run alerts.
+- **Having `gitapex_file_gate_proposal.py` (or any script this design
+  introduces) make GitHub API calls of its own.** Every actual write stays
+  a direct agent tool call (Decision 6), matching how every other step in
+  `skills/merge-retrospective/SKILL.md` already files or updates issues
+  today; this design does not add a second GitHub-calling code path.
 - **Retiring `retrospective-gate-drift.yml`'s threshold concept.** The
   design keeps a threshold-gated daily check on the open count; only its
   enumerated set shrinks from all 345 retrospective issues to the new
@@ -401,39 +493,46 @@ duplication problem elsewhere, rather than reopening a recorded
 ## Architecture
 
 No parent, no hierarchy. Every `missing-deterministic-gate` finding becomes
-its own standalone GitHub issue, carrying a fixed label (literal name held
-as a sync-tested constant, per Decision 6) and a `Refs #<retrospective-issue>`
-back-link, its body a full Acceptance Criteria Map (Decision 4) rather than
-a waiver, filed under a collision-proof, index-keyed deterministic title
-(Decision 1). Each PR's own retrospective issue records its own enumerated
-repair list (with each repair's own 1-based index and label) immediately
-after classification, before any filing begins, then records a
-`Filed as: #<issue-number>` line per `missing-deterministic-gate` repair
-once that filing is verified, and closes once every such repair from the
-cycle is filed -- subject to the attended/unattended distinction in
-Decision 3.
+its own standalone GitHub issue, carrying the fixed `gate-proposal` label
+(literal name held as a sync-tested constant, per Decision 6) and a
+`Refs #<retrospective-issue>` back-link, its body a full Acceptance
+Criteria Map (Decision 4) rather than a waiver, filed under a
+collision-proof, index-keyed deterministic title (Decision 1). Each PR's
+own retrospective issue's single Step 5 body write records its own
+enumerated repair list (with each repair's own 1-based index and label)
+and, as each filing is confirmed, a `Filed as: #<issue-number>` line per
+`missing-deterministic-gate` repair, closing once every such repair from
+the cycle is filed -- subject to the attended/unattended distinction in
+Decision 3. Every GitHub write this design performs (the search, the
+create, the verifying re-fetch) is a direct agent tool call, never a
+script-internal HTTP call, so the repository's existing ACM-disclosure
+hook keeps seeing and gating every filing the same way it gates any other
+`issue_write` call today.
 
 ## Components
 
 1. **`skills/merge-retrospective/SKILL.md`** -- Step 1 rewritten (a routine
    cycle has nothing to sweep, since new findings are filed directly and
-   the legacy 277 stay explicitly out of scope). Step 2-4 gain one new
-   sub-step: record the cycle's own enumerated repair list (index + label)
-   into the retrospective issue's body before Step 5 begins (Decision 1's
-   own retry-stability fix). Step 5 rewritten to invoke the new filing
-   script (Component 2 below) once per `missing-deterministic-gate`
-   repair, passing that repair's own recorded index/label/retrospective
-   number; close following Decision 3's attended/unattended rule, extended
-   from the existing zero-repair-only case to every close.
+   the legacy 277 stay explicitly out of scope). Step 2-4 assign each
+   repair's own 1-based index in-memory during classification, held for
+   the rest of the session (no separate write). Step 5 rewritten: its one
+   existing body write (create fresh, or update-replacing-stub per Step 0's
+   unchanged branching) now includes the enumerated repair list up front,
+   then invokes the new helper script (Component 2) once per
+   `missing-deterministic-gate` repair to get that repair's deterministic
+   title/ACM-body/label, performs the search-then-create-then-verify
+   sequence itself via direct `mcp__github__*` tool calls, and records
+   `Filed as: #<N>` against that repair's entry as each filing is
+   confirmed; close following Decision 3's attended/unattended rule,
+   extended from the existing zero-repair-only case to every close.
 2. **`skills/merge-retrospective/scripts/gitapex_file_gate_proposal.py`**
-   (new) -- owns the label constant (Decision 6) and Step 5's actual filing
-   operation: build the deterministic title (Decision 1), search for an
-   existing issue with that exact title before creating anything (fail
-   closed and escalate on more than one match), and on no match, create the
-   issue via `issue_write` `create` with the full ACM body (Decision 4);
-   re-fetch to verify before reporting success. `SKILL.md`'s own Step 5
-   prose invokes this script rather than separately spelling out the label
-   or the search-then-create sequence as agent-improvised tool calls.
+   (new) -- pure, network-free helper. Owns the label constant (Decision
+   6) and the deterministic-title builder (Decision 1); given a repair's
+   own classification fields and recorded index, returns the title, the
+   fully-populated ACM body (Decision 4), and the label -- nothing else.
+   Makes no GitHub calls of its own; `SKILL.md`'s own Step 5 prose is what
+   invokes `issue_write`/`issue_read` directly with the values this script
+   computes.
 3. **`skills/merge-retrospective/scripts/gitapex_check_retro_gate_resolved.py`**
    -- unchanged from the second revision: narrowed from a bulk 345-issue
    historical sweep to verifying one labelled issue (or a small explicit
@@ -442,10 +541,12 @@ Decision 3.
    issue numbers it is handed, the same shape as today.
 4. **`.github/scripts/gitapex_scan_retrospective_gate_drift.py`** +
    **`.github/workflows/retrospective-gate-drift.yml`** -- rescoped to a
-   label-liveness check, then two threshold-gated passes: open-count
-   report, and a `closed_at`-windowed, `state_reason`-aware integrity pass
-   that reopens an unverified issue on window-exit (Decision 5); carries
-   its own copy of the label constant (Decision 6).
+   label-liveness check, then two passes: a threshold-gated (20) open-count
+   report, and an unbounded, zero-tolerance, `state_reason`-aware integrity
+   pass over every closed labelled issue, with no time window and no
+   reopen action (Decision 5); carries its own copy of the label constant
+   (Decision 6). Workflow permissions stay `issues: read` -- unchanged from
+   today, no new write scope requested.
 5. **`tests/test_gitapex_retro_gate_label_sync.py`** (new) -- asserts the
    label constant defined in Component 2's own tree and the one defined in
    Component 4's own tree stay equal, the same shape
@@ -458,26 +559,29 @@ Decision 3.
 
 1. PR merges -> CI opens a stub retrospective issue (unchanged).
 2. `merge-retrospective` invoked -> Step 0 dedup (unchanged) -> enumerate
-   and classify this cycle's own repairs (unchanged, Steps 2-4), then
-   record the enumerated list (index + label per repair) into the
-   retrospective issue's own body before Step 5 begins (Decision 1).
+   and classify this cycle's own repairs (unchanged, Steps 2-4), assigning
+   each repair its own 1-based index in-memory during this same pass
+   (Decision 1).
 3. **New Step 1**: a routine cycle has nothing to sweep (the legacy
    backlog is out of scope per Non-goals) -- no `.gitapex/ssot.json` read
    needed for this step.
-4. **New Step 5**: for each `missing-deterministic-gate` repair this
-   cycle -- invoke `gitapex_file_gate_proposal.py` (Component 2) with that
-   repair's own recorded index, label, and the retrospective's own issue
-   number. The script builds the deterministic title (Decision 1), searches
-   for an existing issue with that exact title (idempotency: covers both a
-   resumed run and a concurrent-session race, matching Step 0's own
+4. **New Step 5**: write the retrospective issue's body once (create or
+   update, per Step 0's own unchanged branching), including the enumerated
+   repair list (index + label). Then, for each `missing-deterministic-gate`
+   repair -- call `gitapex_file_gate_proposal.py` (Component 2) with that
+   repair's own index, label, and the retrospective's own issue number to
+   get its deterministic title/ACM-body/label; search for an existing issue
+   with that exact title (idempotency: narrows a concurrent-session race
+   and prevents a duplicate on a same-session retry, matching Step 0's own
    stub-dedup search-before-create discipline; exact title equality, never
-   substring) before creating anything; on no match, files it as its own
-   labelled issue with a full ACM body (Decision 4) and a link back to the
-   originating PR/retrospective, then re-fetches to verify. `SKILL.md`
-   records `Filed as: #<N>` against that repair's own entry in the
-   retrospective issue body once the script reports success (also the
-   fast-path idempotency check on a resumed run: skip invoking the script
-   again for a repair that already carries a `Filed as:` line locally).
+   substring -- per Decision 1, a reduction and a detection guarantee, not
+   a proof no duplicate can ever momentarily exist) before creating
+   anything; on no match, file it as its own labelled issue with the full
+   ACM body (Decision 4) and a link back to the originating PR/retrospective,
+   then re-fetch to verify. Record `Filed as: #<N>` against that repair's
+   own entry in the retrospective issue body once verified (also the
+   fast-path idempotency check on a resumed run within the same session:
+   skip a repair that already carries a `Filed as:` line).
    `unclear-agent-instruction` / `external-human-decision` repairs stay
    recorded inline, unchanged, no issue filed, no script invoked.
 5. Once every `missing-deterministic-gate` repair from the cycle is filed
@@ -487,34 +591,38 @@ Decision 3.
 6. The pre-existing 277-item legacy backlog is untouched by this flow
    (Non-goal).
 7. `retrospective-gate-drift.yml` runs daily: confirm the label itself
-   still exists (Decision 5); primary threshold-gated report over
-   currently-open labelled issues; secondary threshold-gated integrity pass
-   over labelled issues closed within the last 7 days (client-side
-   `closed_at` filter), excluding any with `state_reason`
-   `not_planned`/`duplicate`, failing on any that closed without passing
-   the two-signal check, and reopening one that is about to age out of the
-   window still unverified (Decision 5).
+   still exists (Decision 5); primary threshold-gated (20) report over
+   currently-open labelled issues; secondary zero-tolerance integrity pass
+   over every labelled issue in state `closed` (no time window), excluding
+   any with `state_reason` `not_planned`/`duplicate`, failing the run on
+   any remaining issue that closed without passing the two-signal check.
 
 ## Error handling
 
-- **`gitapex_file_gate_proposal.py` (Component 2) reports a create
-  failure** for any repair: `SKILL.md` does not record a `Filed as:` line
-  and does not close the retrospective issue. The next run re-attempts
-  only the repairs still missing a `Filed as:` line, re-invoking the
-  script (which searches before creating) each time (Data flow step 4).
-- **Filing appears to succeed but the script's own re-fetch cannot confirm
-  it** (e.g. a transient read failure right after a successful write): the
-  script reports unverified, treated the same as an outright failure --
-  `SKILL.md` never records `Filed as:` on an unconfirmed write, and never
-  closes on an unconfirmed set. The search-before-create step on the next
-  invocation is what prevents this case from producing a duplicate issue,
-  not the `Filed as:` line alone.
-- **The script's own search-before-create step finds more than one
-  existing issue** matching the deterministic title (e.g. an earlier race
-  already produced a duplicate before this fix existed): the script fails
-  closed and escalates -- same as Step 0's own existing ambiguous-stub-match
-  discipline -- never guesses which one is authoritative or silently files
-  a third.
+- **`gitapex_file_gate_proposal.py` (Component 2) cannot compute a value**
+  for a repair (missing a required classification field): `SKILL.md` does
+  not attempt the filing for that repair, does not record a `Filed as:`
+  line, and does not close the retrospective issue. The next run
+  re-attempts only the repairs still missing a `Filed as:` line (Data flow
+  step 4).
+- **The search-then-create-then-verify sequence fails or cannot confirm
+  the create** (e.g. a transient read failure right after a successful
+  write): `SKILL.md` never records `Filed as:` on an unconfirmed write,
+  and never closes on an unconfirmed set. The search-before-create step on
+  the next invocation is what prevents this case from producing a
+  duplicate issue, not the `Filed as:` line alone.
+- **The search step finds more than one existing issue** matching the
+  deterministic title (e.g. an earlier race already produced a duplicate
+  before this fix existed): fail closed and escalate -- same as Step 0's
+  own existing ambiguous-stub-match discipline -- never guess which one is
+  authoritative or silently file a third.
+- **A session is interrupted mid-Step-5**, after the body write lands
+  (the CI-opener's stub marker is gone) but before every repair's own
+  `Filed as:` line is recorded: a later resumed run hits Step 0's own
+  unchanged marker-absent branch and stops without finishing the filing.
+  Named, accepted residual risk (Decision 1) -- the retrospective issue
+  stays open, visibly incomplete, for a human to notice and finish by
+  hand; nothing already filed is lost or duplicated.
 - **The label does not exist** when the CI liveness check runs, or the
   sync test (Component 5) finds the two copies of its literal name have
   drifted: fail loudly in both cases, never report a clean pass by
@@ -522,20 +630,19 @@ Decision 3.
 
 ## Testing
 
-- Unit tests for `gitapex_file_gate_proposal.py` (Component 2, new):
-  deterministic-title construction from index/label/retrospective-number,
-  search-before-create (no match -> create; one match -> skip, report
-  already-filed; more than one match -> fail closed), and the ACM-body
-  template it populates.
+- Unit tests for `gitapex_file_gate_proposal.py` (Component 2, new): pure
+  functions, no network mocking needed -- deterministic-title construction
+  from index/label/retrospective-number, and the ACM-body template it
+  populates.
 - Unit tests for the narrowed `gitapex_check_retro_gate_resolved.py`
   (single labelled-issue number input, or a small explicit list -- not a
   345-issue bulk sweep; unchanged from the second revision).
 - Unit tests for the CI script's rescoped checks: the label-liveness guard
   (missing label fails loudly, not a clean zero), the open-count threshold
-  report (mocked label search), and the closed-but-unverified integrity
-  pass (mocked label search over issues closed in the last 7 days,
-  `state_reason` exemption applied, two-signal check applied to the
-  remainder, window-exit reopen behavior).
+  report (mocked label search), and the closed-issue zero-tolerance
+  integrity pass (mocked label search over every closed issue carrying the
+  label, `state_reason` exemption applied, two-signal check applied to the
+  remainder, no reopen action).
 - `tests/test_gitapex_retro_gate_label_sync.py` (Component 5): asserts
   both hardcoded copies of the label's literal name are equal.
 - A test asserting the ACM table `gitapex_file_gate_proposal.py` populates
@@ -548,6 +655,10 @@ Decision 3.
   one-line label still produce two distinct filed issues (the specific
   collision the third adversarial review found, closed by the index-keyed
   title in Decision 1).
+- A test asserting a retrospective issue's own inline `Status:
+  missing-deterministic-gate` line for a repair survives unchanged
+  alongside its new `Filed as:` line, so `gitapex_compute_gprr.py`'s own
+  parsing keeps working (Decision 2).
 - New `evals/merge-retrospective/tasks/*.yaml` fixtures (directory already
   exists) covering: zero-repair, no legacy backlog touched -> fast-close
   (unchanged behavior); zero-repair, pre-existing legacy backlog exists but
@@ -560,7 +671,7 @@ Decision 3.
 
 ## Open questions
 
-None outstanding. Every fork surfaced during elicitation and three rounds
+None outstanding. Every fork surfaced during elicitation and four rounds
 of adversarial review was resolved: round one rejected the sub-issue
 hierarchy mechanism outright (see "Rejected" above); round two, run
 against the flat-labelled-issue revision, found the ACM/waiver citation
@@ -568,12 +679,29 @@ gap (Decision 4), the `.gitapex/ssot.json` scope conflict (Decision 6),
 and the resolution-verification API/exemption gaps (Decision 5); round
 three, run against those fixes, found the idempotency key's own
 collision risk and the SKILL.md-prose-versus-script precedent mismatch
-(both folded into Decision 1's title-keying and Decision 6's new bundled
-filing script, Component 2), the overclaimed race-elimination framing
-(corrected in Decision 1), and the integrity pass's own missing
-consequence and time-boxed escape (corrected in Decision 5's
-threshold-gated failure plus window-exit reopen). Each finding across all
-three rounds is addressed in the decision it is now attributed to above,
-verified against this repository's actual hooks, schema, scripts, and
-workflow files rather than left as prose claims. See Decisions 1-6 and the
-"Rejected" section for each choice and why its alternative was set aside.
+(folded into Decision 1's title-keying and Decision 6's new helper
+script, Component 2), the overclaimed race-elimination framing (corrected
+in Decision 1), and the integrity pass's own missing consequence and
+time-boxed escape; round four, run against that fix, found the
+window-exit reopen it introduced needed CI write permission the workflow
+does not have and contradicted its own gating rule, found the helper
+script's draft `issue_write` call was not actually callable from a plain
+script, found the pre-Step-5 body write it introduced collided with
+Step 0's own unchanged marker-based branching, found the race-reduction
+wording had not fully propagated out of Data flow, found the legacy-audit
+indexing claim was unbacked, and found the retrospective body rewrite's
+effect on `gitapex_compute_gprr.py`'s own parsing was unexamined -- all
+six resolved in this revision by removing the reopen action and the
+window entirely in favor of an unbounded zero-tolerance pass (Decision 5),
+making the helper script pure and network-free with the agent performing
+every GitHub call directly (Decision 6), folding the repair-list write
+into Step 5's own existing single write with the resulting limitation
+named as an accepted residual risk rather than solved (Decision 1), fixing
+the Data flow wording to match Decision 1, extending the same single-pass
+indexing rationale explicitly to the legacy-audit case (Decision 1), and
+adding an explicit GPRR-compatibility clause plus test (Decision 2).
+Each finding across all four rounds is addressed in the decision it is
+now attributed to above, verified against this repository's actual hooks,
+schema, scripts, and workflow files rather than left as prose claims. See
+Decisions 1-6 and the "Rejected" section for each choice and why its
+alternative was set aside.
