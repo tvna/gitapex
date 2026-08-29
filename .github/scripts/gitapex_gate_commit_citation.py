@@ -67,7 +67,9 @@ either directly into a shell command line. Both are omitted in
 Exit codes (both modes): 0 pass, 1 no citation found (a clear FAIL on
 stderr), 2 the check itself could not be trusted -- invalid CLI
 arguments, an unreadable input file, or (`pr-range` only) a base ref that
-could not be resolved/fetched or shares no common ancestor with HEAD.
+could not be resolved/fetched, shares no common ancestor with HEAD, or a
+git call that could not run at all (no `git` on PATH, a hang past
+`GIT_TIMEOUT_SECONDS`).
 Mirrors `gitapex_gate_behind_base.py`'s/`gitapex_run_base_diff.py`'s own
 0/1/2 convention, distinct from a confirmed policy FAIL.
 
@@ -98,7 +100,6 @@ from __future__ import annotations
 
 import argparse
 import pathlib
-import subprocess
 import sys
 from typing import Literal, cast
 
@@ -114,6 +115,11 @@ from pydantic import BaseModel, ValidationError, field_validator, model_validato
 # pointed at hooks/ instead of this file's own directory. Under pytest this is
 # a harmless no-op prepend: pyproject.toml's own `pythonpath` already lists
 # both ".github/scripts" and "hooks".
+#
+# Spelled out here rather than reusing REPO_ROOT below: ruff's own E402
+# tolerates a sys.path mutation before this deferred import, but not a
+# preceding assignment, so hoisting REPO_ROOT above this line to share the
+# expression fails `ruff check` outright (verified, not assumed).
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "hooks"))
 
 from gitapex_check_pr_issue_acm_disclosure import extract_citations  # sys.path bootstrap above must run first
@@ -209,14 +215,20 @@ def commit_range_messages(root: pathlib.Path, base_ref: str, head_ref: str) -> l
     excludes a real merge commit from this list entirely, before any
     citation check ever runs against it -- an uncited merge commit in the
     range therefore never fails this gate on its own, this issue's own
-    stated Non-goal."""
-    result = subprocess.run(  # noqa: S603
-        ["git", "-C", str(root), "log", "--no-merges", f"{base_ref}..{head_ref}", "--format=%B%x00"],  # noqa: S607
-        capture_output=True,
-        text=True,
-        errors="replace",
-        check=False,
+    stated Non-goal.
+
+    Runs through `_gitapex_base_ref.run_git`, like every other git call
+    this module makes: that helper already carries this call's exact
+    capture/`errors="replace"` shape, and turns a subprocess-layer failure
+    (no `git` on PATH, a hang past `GIT_TIMEOUT_SECONDS`) into a
+    `CitationGateError` -- the exit-2 "could not be trusted" signal --
+    rather than an uncaught exception."""
+    result = _gitapex_base_ref.run_git(
+        root,
+        ["log", "--no-merges", f"{base_ref}..{head_ref}", "--format=%B%x00"],
+        label=f"list commits in {base_ref}..{head_ref}",
         timeout=GIT_TIMEOUT_SECONDS,
+        error_cls=CitationGateError,
     )
     if result.returncode != 0:
         raise CitationGateError(f"git log --no-merges {base_ref}..{head_ref} failed: {result.stderr.strip()}")
@@ -281,19 +293,26 @@ class CommitCitationArgs(BaseModel):
         return self
 
 
-def _read_optional_file(path: str | None) -> tuple[str, str | None]:
-    """(text, error) for an optional `--title`/`--body` file. `error` is
-    None on success. Empty text -- never an error -- when `path` itself is
-    None: the flag was omitted, the local `local_invocation` shape, where
-    no PR title/body exists yet and the commit-range scan alone runs."""
+def _read_input_file(path: str | None, *, label: str = "file") -> str:
+    """The text of one input file this gate was pointed at. Empty text --
+    never an error -- when `path` itself is None: the `--title`/`--body`
+    flag was omitted, the local `local_invocation` shape, where no PR
+    title/body exists yet and the commit-range scan alone runs.
+
+    Raises :class:`CitationGateError` -- the module's own exit-2 "the
+    check itself could not be trusted" signal, which both call sites
+    already catch -- rather than returning an error alongside the text, so
+    all three reads share one handler pair instead of three copies.
+    `label` only names the file in the not-found message ("commit message
+    file" for `--mode commit-msg`'s own positional argument)."""
     if path is None:
-        return "", None
+        return ""
     try:
-        return pathlib.Path(path).read_text(encoding="utf-8"), None
-    except FileNotFoundError:
-        return "", f"file not found: {path}"
+        return pathlib.Path(path).read_text(encoding="utf-8")
+    except FileNotFoundError as error:
+        raise CitationGateError(f"{label} not found: {path}") from error
     except UnicodeDecodeError as error:
-        return "", f"{path} is not valid UTF-8: {error}"
+        raise CitationGateError(f"{path} is not valid UTF-8: {error}") from error
 
 
 def _run_commit_msg(args: CommitCitationArgs) -> int:
@@ -301,14 +320,10 @@ def _run_commit_msg(args: CommitCitationArgs) -> int:
     # already rejected any commit-msg-mode construction missing it; cast (not
     # assert -- ruff S101 bans a bare assert outside tests) only narrows the
     # static type to match that already-enforced runtime guarantee.
-    commit_msg_path = pathlib.Path(cast(str, args.commit_msg_file))
     try:
-        message = commit_msg_path.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        print(f"error: commit message file not found: {commit_msg_path}", file=sys.stderr)
-        return 2
-    except UnicodeDecodeError as error:
-        print(f"error: {commit_msg_path} is not valid UTF-8: {error}", file=sys.stderr)
+        message = _read_input_file(cast(str, args.commit_msg_file), label="commit message file")
+    except CitationGateError as error:
+        print(f"error: {error}", file=sys.stderr)
         return 2
 
     if check_commit_message(message):
@@ -323,16 +338,9 @@ def _run_commit_msg(args: CommitCitationArgs) -> int:
 
 
 def _run_pr_range(args: CommitCitationArgs) -> int:
-    title, title_error = _read_optional_file(args.title)
-    if title_error:
-        print(f"error: {title_error}", file=sys.stderr)
-        return 2
-    body, body_error = _read_optional_file(args.body)
-    if body_error:
-        print(f"error: {body_error}", file=sys.stderr)
-        return 2
-
     try:
+        title = _read_input_file(args.title)
+        body = _read_input_file(args.body)
         passed, message = evaluate_pr_range(args.root, args.owner, args.repo, title, body, args.base_ref, args.head_ref)
     except CitationGateError as error:
         print(f"error: {error}", file=sys.stderr)
