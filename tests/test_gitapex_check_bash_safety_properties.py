@@ -3722,8 +3722,7 @@ def test_classify_denies_a_checkout_hidden_behind_a_leading_vanishing_decoy() ->
 
 def test_redirect_span_length_recognizes_operator_and_target() -> None:
     assert checker._redirect_span_length([">", "/dev/null", "x"], 0) == 2
-    assert checker._redirect_span_length(["2", ">", "/dev/null", "x"], 0) == 3
-    assert checker._redirect_span_length(["2", ">&", "1", "x"], 0) == 3
+    assert checker._redirect_span_length([">&", "1", "x"], 0) == 2
 
 
 def test_redirect_span_length_zero_when_no_redirect_present() -> None:
@@ -3855,8 +3854,16 @@ def test_classify_does_not_extract_paths_from_an_unrelated_dynamic_tool() -> Non
 def test_strip_redirect_clauses_removes_a_redirect_wherever_it_occurs() -> None:
     assert checker._strip_redirect_clauses(["f.py", ">>", "log.txt"]) == ["f.py"]
     assert checker._strip_redirect_clauses([">>", "log.txt", "f.py"]) == ["f.py"]
-    assert checker._strip_redirect_clauses(["f.py", "2", ">&", "1"]) == ["f.py"]
+    assert checker._strip_redirect_clauses(["f.py", ">&", "1"]) == ["f.py"]
     assert checker._strip_redirect_clauses(["f.py", "g.py"]) == ["f.py", "g.py"]
+
+
+def test_strip_redirect_clauses_preserves_a_leading_digit_as_a_real_token() -> None:
+    """CRITICAL data-loss regression pin (round-16 independent review,
+    issue #1375): the strict, path-extraction-facing variant must NOT
+    guess "consumed by the redirect" for a leading digit token -- see
+    `_redirect_span_length`'s own docstring for why."""
+    assert checker._strip_redirect_clauses(["f.py", "2", ">", "target.txt"]) == ["f.py", "2"]
 
 
 def test_git_checkout_paths_excludes_a_trailing_redirect_clause() -> None:
@@ -3893,6 +3900,86 @@ def test_classify_does_not_flag_a_redirect_target_as_a_checkout_path() -> None:
         verdict = checker.classify(cmd)
         assert verdict.deny is False, cmd
         assert verdict.checkout_restore_paths == ("f.py",), cmd
+
+
+def test_redirect_span_length_never_consumes_a_leading_digit() -> None:
+    """CRITICAL data-loss regression pin (round-16 independent review,
+    issue #1375). `tokenize()`'s own shlex punctuation-splitting cannot
+    distinguish a fused `2>file` (a genuine fd-redirect prefix, no
+    argument) from a spaced `2 >file` (the literal word `2` followed by
+    a separate redirect) -- both produce the identical token sequence.
+    The strict, path-extraction-facing `_redirect_span_length` must NOT
+    guess "consumed by the redirect" for the leading digit: doing so
+    silently drops a real argument from `checkout_restore_paths`."""
+    assert checker._redirect_span_length(["2", ">", "target.txt"], 0) == 0
+    assert checker._redirect_span_length([">", "target.txt"], 0) == 2
+
+
+def test_git_checkout_paths_does_not_drop_a_digit_shaped_path() -> None:
+    """CRITICAL data-loss regression pin (round-16 independent review,
+    issue #1375). Live-verified before this fix: `git checkout --
+    realfile.py 2 >target.txt` resolved to
+    `checkout_restore_paths=('realfile.py',)`, silently dropping `2` (a
+    real, dirty, tracked file) -- the classifier's own former digit-
+    consuming redirect heuristic wrongly treated `2` as an fd-redirect
+    prefix rather than a real path argument."""
+    deny_reason, paths = checker._git_checkout_paths(["--", "realfile.py", "2", ">", "target.txt"], {})
+    assert deny_reason is None
+    assert paths == ("realfile.py", "2")
+
+
+def test_git_restore_paths_does_not_drop_a_real_path_behind_a_digit_redirect() -> None:
+    """CRITICAL data-loss regression pin (round-16 independent review,
+    issue #1375). Live-verified before this fix: `git restore --source 2
+    >target.txt file.py` resolved to an EMPTY `checkout_restore_paths` --
+    once `2` vanished into the wrongly-recognized redirect, `--source`'s
+    own value-consumption swallowed `file.py` itself, the actual restore
+    target, leaving nothing for the live wrapper check to examine."""
+    deny_reason, paths = checker._git_restore_paths(["--source", "2", ">", "target.txt", "file.py"], {})
+    assert deny_reason is None
+    assert paths == ("file.py",)
+
+
+def test_classify_does_not_drop_a_digit_shaped_path_behind_a_redirect() -> None:
+    """End-to-end regression pin for the round-16 finding at the
+    `classify()` level."""
+    verdict = checker.classify("git checkout -- realfile.py 2 >target.txt")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("realfile.py", "2")
+
+
+def test_redirect_span_length_with_optional_fd_recognizes_a_fused_fd_redirect() -> None:
+    """CRITICAL false-negative regression pin (round-16 independent
+    review, issue #1375, own follow-up). The strict, digit-free
+    `_redirect_span_length` alone made the subcommand-finding/cwd-
+    relocation walks stop on a bare digit token sitting in front of a
+    genuine `2>&1`-shaped redirect, so a fully literal, unambiguous `git
+    > out.log 2>&1 checkout -- dirty.py` went entirely unrecognized as a
+    checkout invocation (empty `checkout_restore_paths`, the live
+    wrapper check never runs at all) -- the FAIL-OPEN direction for this
+    walk. `_redirect_span_length_with_optional_fd` (used only by the
+    skip-PAST-a-possible-redirect walks, never by path extraction)
+    closes this by also consuming an optional leading digit."""
+    assert checker._redirect_span_length_with_optional_fd(["2", ">&", "1", "checkout"], 0) == 3
+    assert checker._redirect_span_length_with_optional_fd([">", "out.log", "checkout"], 0) == 2
+    assert checker._redirect_span_length_with_optional_fd(["checkout"], 0) == 0
+
+
+def test_find_git_checkout_restore_skips_a_digit_prefixed_redirect_between_git_and_subcommand() -> None:
+    subcommand, tokens_after, saw_tree_relocation = checker._find_git_checkout_restore(
+        ["git", ">", "out.log", "2", ">&", "1", "checkout", "--", "f.py"], {}
+    )
+    assert subcommand == "checkout"
+    assert tokens_after == ["--", "f.py"]
+    assert saw_tree_relocation is False
+
+
+def test_classify_extracts_paths_behind_multiple_redirects_including_a_digit_prefixed_one() -> None:
+    """End-to-end regression pin for the round-16 follow-up finding at
+    the `classify()` level."""
+    verdict = checker.classify("git > out.log 2>&1 checkout -- dirty.py")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("dirty.py",)
 
 
 # --- End-to-end classify() coverage, pinning every explicit safe/deny case

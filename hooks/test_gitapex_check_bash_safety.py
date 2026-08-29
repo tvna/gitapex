@@ -1490,6 +1490,40 @@ def test_checkout_allowed_when_a_trailing_redirect_names_an_unrelated_dirty_file
     assert result.stderr == ""
 
 
+def test_checkout_denied_when_a_digit_shaped_path_sits_before_a_redirect(tmp_path: Path) -> None:
+    """CRITICAL data-loss regression pin (round-16 independent review,
+    issue #1375). `tokenize()`'s own shlex punctuation-splitting cannot
+    distinguish a fused `2>file` (a genuine fd-redirect prefix, no
+    argument) from a spaced `2 >file` (the literal word `2` followed by
+    a separate redirect) -- both produce the identical token sequence.
+    The classifier's own former digit-consuming redirect heuristic
+    wrongly guessed "consumed by the redirect" here, silently dropping a
+    real, dirty, tracked file named `2` from `checkout_restore_paths`.
+    `realfile.py` here is clean; `2` is the only genuinely dirty file."""
+    repo_dir = tmp_path / "repo"
+    _init_repo_with_committed_file(repo_dir, filename="realfile.py")
+    file_path = _init_repo_with_committed_file(repo_dir, filename="2")
+    file_path.write_text("UNCOMMITTED WORK -- must not be discarded\n")
+    result = run("git checkout -- realfile.py 2 >target.txt", payload_cwd=str(repo_dir))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+
+
+def test_checkout_denied_behind_multiple_redirects_including_a_digit_prefixed_one(tmp_path: Path) -> None:
+    """CRITICAL false-negative regression pin (round-16 independent
+    review, issue #1375, own follow-up). Making the strict, digit-free
+    redirect check the ONLY one in use would make the subcommand-finding
+    walk stop on a bare digit token sitting in front of a genuine
+    `2>&1`-shaped redirect, so a fully literal, unambiguous checkout
+    behind multiple redirects would go entirely unrecognized (the live
+    wrapper check never even running) -- confirmed as a regression this
+    same round's own fix would otherwise introduce."""
+    repo_dir = tmp_path / "repo"
+    file_path = _init_repo_with_committed_file(repo_dir, filename="dirty.py")
+    file_path.write_text("UNCOMMITTED WORK -- must not be discarded\n")
+    result = run("git > out.log 2>&1 checkout -- dirty.py", payload_cwd=str(repo_dir))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+
+
 def test_checkout_denied_for_a_real_checkout_hidden_behind_a_commented_paren_in_a_substitution(
     tmp_path: Path,
 ) -> None:

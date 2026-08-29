@@ -3524,17 +3524,16 @@ _REDIRECT_OPERATORS = {"<", ">", ">>", "<<", "<<<", "&>", ">&", "&>>", "<>"}
 
 def _redirect_span_length(seg: list[str], j: int) -> int:
     """The number of tokens, starting at SEG[j], that make up one bash
-    I/O-redirection clause -- an optional leading bare file-descriptor
-    number (`2>`), a redirect operator (`_REDIRECT_OPERATORS`), and
-    exactly one target token. `segment_tokens` never splits a segment at
-    `<`/`>` (see `_SINGLE_OPS`'s own docstring -- a redirect may legally
-    sit anywhere before a command word without being that word itself),
-    so each piece of the clause survives here as its own separate token
-    (confirmed via `tokenize()`: `git > /dev/null checkout` tokenizes to
-    `['git', '>', '/dev/null', 'checkout']`; `git 2> /dev/null checkout`
-    to `['git', '2', '>', '/dev/null', 'checkout']`). Returns 0 when
-    SEG[j:] does not start with this shape, so a caller can treat 0 as
-    "not a redirect, do not skip" without a separate boolean check.
+    I/O-redirection clause -- a redirect operator (`_REDIRECT_OPERATORS`)
+    and exactly one target token. `segment_tokens` never splits a segment
+    at `<`/`>` (see `_SINGLE_OPS`'s own docstring -- a redirect may
+    legally sit anywhere before a command word without being that word
+    itself), so each piece of the clause survives here as its own
+    separate token (confirmed via `tokenize()`: `git > /dev/null
+    checkout` tokenizes to `['git', '>', '/dev/null', 'checkout']`).
+    Returns 0 when SEG[j:] does not start with this shape, so a caller
+    can treat 0 as "not a redirect, do not skip" without a separate
+    boolean check.
 
     CRITICAL bug found by independent adversarial review (round 14, issue
     #1375) and independently reproduced live: every existing skip-past-
@@ -3552,7 +3551,76 @@ def _redirect_span_length(seg: list[str], j: int) -> int:
     which is neither vanishing nor dynamic, so the real, cd-resolving
     `$X` one position later was never checked) -- both live-verified
     (real bash, and end-to-end through the real wrapper against a
-    scratch git repo) to silently discard a genuinely dirty file."""
+    scratch git repo) to silently discard a genuinely dirty file.
+
+    Deliberately does NOT also recognize an optional leading bare
+    file-descriptor number (`2>`) as part of the clause, despite that
+    being real bash syntax -- CRITICAL data-loss bug found by independent
+    adversarial review (round 16, issue #1375) and independently
+    reproduced live: this function's own first version did consume a
+    leading digit token, but `tokenize()`'s own shlex punctuation-based
+    splitting produces the IDENTICAL token sequence for `2>file` (a
+    fused, genuine fd-redirect prefix -- no argument) and `2 >file` (the
+    literal word `2` followed by a separate, ordinary stdout redirect --
+    a real argument this classifier must not lose) -- the raw source's
+    own whitespace adjacency between the digit and the operator, the only
+    signal that actually distinguishes the two, is already gone by the
+    time this function ever sees the tokens. Confirmed live (a real-bash
+    argv-capture proxy) that the spaced form genuinely passes `2` through
+    as a real, separate argument. Consuming the digit unconditionally
+    silently dropped that argument from `checkout_restore_paths` --
+    `git checkout -- realfile.py 2 >target.txt` (`2` a real, dirty,
+    tracked file) resolved to `checkout_restore_paths=('realfile.py',)`,
+    missing `2` entirely, and `git restore --source 2 >target.txt
+    file.py` resolved to an EMPTY `checkout_restore_paths` (worse: once
+    `2` vanished, `--source`'s own value-consumption swallowed `file.py`
+    itself, the actual restore target) -- both live-verified end-to-end
+    through the real wrapper to silently discard a genuinely dirty file.
+    Leaving a leading digit token OUT of the redirect span instead makes
+    it survive as an ordinary candidate word wherever this function's
+    callers use it as one (a path token, a possible command word) --
+    over-inclusion in the rarer, genuinely-fused case, the safe direction
+    this module takes everywhere else, rather than the file-descriptor
+    heuristic's own proven under-inclusion."""
+    if j < len(seg) and seg[j] in _REDIRECT_OPERATORS and j + 1 < len(seg):
+        return 2
+    return 0
+
+
+def _redirect_span_length_with_optional_fd(seg: list[str], j: int) -> int:
+    """Like `_redirect_span_length`, but ALSO recognizes an optional
+    leading bare file-descriptor number (`2>`) as part of the clause --
+    for callers trying to SKIP PAST a possible redirect to find something
+    else beyond it (`_find_git_checkout_restore`'s own global-flag-skip
+    loop, `_first_surviving_segment_word`'s own leading-decoy walk), never
+    for callers extracting `checkout_restore_paths` candidates
+    (`_strip_redirect_clauses`, which deliberately uses the strict,
+    digit-free `_redirect_span_length` instead -- see that function's own
+    docstring for why the two contexts need OPPOSITE defaults for the
+    same digit-adjacency ambiguity).
+
+    `tokenize()`'s own shlex punctuation-splitting cannot distinguish a
+    fused `2>file` (a genuine fd-redirect prefix, no argument) from a
+    spaced `2 >file` (the literal word `2` followed by a separate
+    redirect) -- both produce the identical token sequence, so this
+    ambiguity is undecidable at the token level regardless of which
+    default a caller picks (see `_redirect_span_length`'s own docstring,
+    round-16 finding, for the live-verified data-loss risk of guessing
+    "consumed by the redirect" in a PATH-extraction context). Here, in a
+    skip-PAST context, the risk runs the other way: NOT skipping a
+    genuine fd-prefixed redirect (e.g. `2>&1`) makes the walk stop on the
+    bare digit token itself -- neither a flag, a vanishing decoy, nor
+    `checkout`/`restore` -- so a fully literal, unambiguous `git > out.log
+    2>&1 checkout -- dirty.py` would go entirely unrecognized as a
+    checkout invocation at all, the FAIL-OPEN direction for this walk
+    (an empty `checkout_restore_paths` means the live wrapper check never
+    even runs) -- confirmed live as a regression the strict, digit-free
+    version introduces here specifically, during this same round's own
+    fix. Skipping the digit here, even when it was actually a real
+    argument in the spaced-form reading, costs nothing extra: the
+    literal-token scan these callers sit alongside already checks every
+    token in the segment regardless of position, so a real decoy or
+    relocator sitting at that position is not hidden by this skip."""
     n = len(seg)
     i = j
     if i < n and seg[i].isdigit():
@@ -3743,7 +3811,7 @@ def _find_git_checkout_restore(seg: list[str], name_to_raw_value: dict[str, str]
                     continue
                 ambiguous = True
                 break
-            redirect_len = _redirect_span_length(seg, j)
+            redirect_len = _redirect_span_length_with_optional_fd(seg, j)
             if redirect_len:
                 j += redirect_len
                 continue
@@ -3889,7 +3957,7 @@ def _first_surviving_segment_word(seg: list[str], name_to_raw_value: dict[str, s
         ):
             i += 1
             continue
-        redirect_len = _redirect_span_length(seg, i)
+        redirect_len = _redirect_span_length_with_optional_fd(seg, i)
         if redirect_len:
             i += redirect_len
             continue
