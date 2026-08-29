@@ -1,0 +1,21 @@
+id: reviewing-an-artifact-guardrail-unreadable-content-not-clean
+name: Unreadable Content Is Reported As Unable To Review, Never A Clean Pass
+description: When the target's own content cannot actually be read (empty, truncated, or an unresolvable reference), the skill reports that it could not review the target -- it never fabricates a zero-finding clean report, which would be indistinguishable from a genuine pass.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use reviewing-an-artifact at low effort on this PR diff:
+
+    ```diff
+    ```
+
+    (The diff above is empty -- the PR reference did not resolve to any
+    actual content.) Review this PR.
+expected:
+  output_icontains:
+    - "unable"
+  output_not_icontains:
+    - "no findings"
+    - "confirmed finding"

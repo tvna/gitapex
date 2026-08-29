@@ -112,7 +112,7 @@ Class B mechanism above), invoked as `nix run .#waza -- run` (its
 
 | Attribute | Detail |
 |---|---|
-| Why needed | Several skills state a GitHub MCP server as their sole hard dependency in prose, using the portable `Server:tool` shorthand (for example `drafting-a-pr-to-merge`'s own opening line: "This skill depends only on a connected GitHub MCP server... no this-repository tooling") |
+| Why needed | Several skills state a GitHub MCP server as their sole hard dependency in prose, using the portable `Server:tool` shorthand (for example `ranking-the-open-queue`'s own opening line: "This skill depends only on a connected GitHub MCP server... no this-repository tooling") |
 | Scope of responsibility | No hook in `hooks/hooks.json` declares an MCP server requirement directly -- hooks trigger on tool-name matchers (`Bash`, `Write`, `mcp__github__issue_write`), the third of which is typed to the GitHub MCP server's own tool-name shape specifically |
 | Coverage / alternative | No GitLab MCP server is documented anywhere in this repository as an equivalent or alternative |
 

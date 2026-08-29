@@ -3,7 +3,9 @@
 ``LIFECYCLE_ISSUE_REF_RE``/``_valid_tracking_issue`` (issue #1347, closing
 issue #1178's own ``detection-logic-property-coverage`` gap for the
 regex's generalization from a ``tvna/gitapex``-only pattern to an
-any-owner/any-repo shape).
+any-owner/any-repo shape) and its ``_owning_skill_dir`` path-normalization
+helper (issue #1387, closing the same gap for that function's own
+string-comparison allowlist checks).
 
 Reproducibility: ``derandomize=True`` with an explicit ``max_examples`` and
 ``deadline=None``, matching
@@ -14,6 +16,8 @@ intermittently red suite).
 """
 
 from __future__ import annotations
+
+from pathlib import Path
 
 import gitapex_check_skill_shape as css
 from hypothesis import given, settings
@@ -141,3 +145,69 @@ def test_non_string_values_are_always_rejected(value: object) -> None:
     collection type -- every non-string type must be rejected outright
     rather than raising or coercing."""
     assert not css._valid_tracking_issue(value)
+
+
+# Issue #1387: `_owning_skill_dir`'s `target.name == "SKILL.md"` and
+# `ancestor.name in ("metadata", "references")` checks are exactly the
+# allowlist-comparison shape `detection-logic-property-coverage` (issue
+# #1178) flags. Component alphabet deliberately excludes "." so a
+# generated component can never accidentally collide with "SKILL.md",
+# "metadata", or "references" themselves (all contain a literal "." or
+# are the exact reserved names under test) -- pure Path arithmetic, no
+# real filesystem entries, since `_owning_skill_dir` only calls
+# `Path.is_dir()` (always False for a nonexistent generated path) before
+# falling into the string-comparison branches this coverage gap is about.
+_PATH_COMPONENT_ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
+_PATH_COMPONENT = st.text(alphabet=_PATH_COMPONENT_ALPHABET, min_size=1, max_size=12)
+_PATH_COMPONENTS = st.lists(_PATH_COMPONENT, min_size=0, max_size=4)
+
+
+@_PROPERTIES
+@given(prefix=_PATH_COMPONENTS, leaf_parent=_PATH_COMPONENT)
+def test_skill_md_path_always_normalizes_to_its_parent(prefix: list[str], leaf_parent: str) -> None:
+    """Function-scoped property for `_owning_skill_dir`'s
+    `target.name == "SKILL.md"` branch: regardless of how many, or what,
+    arbitrary directory segments precede it, a path whose final component
+    is literally "SKILL.md" must always normalize to its immediate
+    parent -- never further up, never left unchanged."""
+    target = Path(*prefix, leaf_parent, "SKILL.md")
+    assert css._owning_skill_dir(target) == target.parent
+
+
+@_PROPERTIES
+@given(
+    prefix=_PATH_COMPONENTS,
+    kind=st.sampled_from(("metadata", "references")),
+    depth=st.integers(min_value=0, max_value=5),
+    leaf=_PATH_COMPONENT,
+)
+def test_nested_metadata_or_references_path_normalizes_to_the_owning_directory_at_any_depth(
+    prefix: list[str], kind: str, depth: int, leaf: str
+) -> None:
+    """Defeat-test-shaped, encoding the exact regression an adversarial
+    review found in this function's first version (issue #1387): a file
+    any number of levels under a `metadata`/`references` directory -- not
+    only one level -- must still normalize to that directory's own parent
+    (the owning skill directory), never silently misresolve to the wrong
+    ancestor. Reverting to checking only `target.parent.name` (this
+    function's own pre-fix shape) makes this property FAIL as soon as
+    `depth` generates > 0, which is exactly the false-pass the review
+    reproduced live against a real `references/sub/deep.md` fixture."""
+    owner = Path(*prefix)
+    nested = [f"sub{i}" for i in range(depth)]
+    target = owner / kind / Path(*nested, leaf)
+    assert css._owning_skill_dir(target) == owner
+
+
+@_PROPERTIES
+@given(prefix=_PATH_COMPONENTS, leaf=_PATH_COMPONENT)
+def test_a_path_with_no_skill_md_or_metadata_or_references_component_is_left_unchanged(
+    prefix: list[str], leaf: str
+) -> None:
+    """Robustness: a path that matches neither of `_owning_skill_dir`'s
+    two normalization branches (no "SKILL.md" leaf, no "metadata"/
+    "references" ancestor anywhere in its own generated segments) must be
+    returned unchanged -- the function's own documented fallback for a
+    target it does not recognize, not silently altered."""
+    target = Path(*prefix, leaf)
+    assert css._owning_skill_dir(target) == target

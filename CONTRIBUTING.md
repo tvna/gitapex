@@ -211,6 +211,26 @@ Scope, stated narrowly so this does not widen into a blanket exemption:
   time -- do not add an ignore pattern, allowlist, or `--exclude` flag
   to suppress it.
 
+## Content migration parity check
+
+When migrating content between two files (retiring a doc in favor of a
+sidecar field, splitting a file, moving a section to a new home, and
+similar), verify parity with a full diff-based read of old vs. new
+content, not identifier/grep matching alone. A grep for unique tokens
+(issue numbers, proper nouns, anchors) confirms those specific tokens
+survived, but silently misses a lead-in sentence or paragraph that carries
+no unique token of its own -- issue #205 Repair 7 found exactly this: a
+docs/skill-provenance.md migration's own content-fidelity check grepped
+for unique identifiers and missed a lead-in sentence because of it. Before
+treating any such migration as complete, confirm every sentence in the
+source survives in the destination (or is a deliberate, stated omission),
+not just that grep found no missing token.
+
+This is a documented operational rule, not a deterministic gate -- it
+relies on the migration's own author following it. If a future
+retrospective finds a recurrence, that is the signal to design an
+automated content-parity check instead of relying on this note alone.
+
 ## Signed-commit bot App
 
 The "Sync agent instructions" workflow (`.github/workflows/sync-agent-instructions.yml`)

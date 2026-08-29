@@ -97,6 +97,14 @@ def test_installs_the_prek_hook_for_a_real_checkout(real_checkout: Path) -> None
     pre_commit_hook = real_checkout / ".git" / "hooks" / "pre-commit"
     assert pre_commit_hook.exists()
     assert "prek" in pre_commit_hook.read_text(encoding="utf-8")
+    # Issue #1387: `prek install` with no `-t` flags writes the pre-commit
+    # shim only, matching CONTRIBUTING.md's own documented behavior --
+    # this repository's local-preflight/betterleaks-history pre-push gates
+    # (wired via .gitapex/ssot.json's `local` plane) never ran automatically
+    # on this session-start path until both shims were installed explicitly.
+    pre_push_hook = real_checkout / ".git" / "hooks" / "pre-push"
+    assert pre_push_hook.exists()
+    assert "prek" in pre_push_hook.read_text(encoding="utf-8")
 
 
 def test_does_not_dirty_the_real_checkouts_settings_json(real_checkout: Path) -> None:
@@ -128,6 +136,7 @@ def test_skips_prek_install_without_apm_yml_even_with_a_real_git_repo(tmp_path: 
     assert result.returncode == 0
     assert "not a gitapex checkout" in result.stderr
     assert not (other_repo / ".git" / "hooks" / "pre-commit").exists()
+    assert not (other_repo / ".git" / "hooks" / "pre-push").exists()
 
 
 def test_skips_self_plugin_registration_without_apm_yml_even_with_a_real_git_repo(
