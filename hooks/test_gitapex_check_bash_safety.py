@@ -1647,6 +1647,27 @@ def test_checkout_with_tree_relocation_flag_denied_end_to_end(tmp_path: Path) ->
     assert "working tree is at risk" in payload["systemMessage"]
 
 
+def test_checkout_denied_when_an_earlier_pushd_relocates_the_working_tree(tmp_path: Path) -> None:
+    """CRITICAL regression pin (round-9 independent review, issue #1375).
+    `pushd` relocates the shell's own working directory exactly like `cd`
+    does, but only `cd` was recognized here. Live-verified before the
+    fix: with a target file dirty relative to a subdirectory but absent
+    at the repo root (the PreToolUse payload's own `.cwd`), the wrapper
+    allowed `pushd sub &amp;&amp; git checkout -- dirty.py` outright (the
+    classifier's own claimed `checkout_restore_paths` checked the wrong
+    tree and found nothing) and the real command silently discarded the
+    uncommitted change. The deny here is classifier-level (a token-shape
+    fact, no live git call), so no such file needs to actually exist for
+    this regression pin -- the whole point is that it never gets far
+    enough to check."""
+    repo_dir = tmp_path / "repo"
+    _init_repo_with_committed_file(repo_dir)
+    result = run("pushd sub && git checkout -- dirty.py", payload_cwd=str(repo_dir))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+    payload = json.loads(result.stderr)
+    assert "working tree is at risk" in payload["systemMessage"]
+
+
 def test_checkout_denied_in_a_real_merge_conflict_names_the_conflict_remedy(tmp_path: Path) -> None:
     """A real merge conflict (issue #1375's own Acceptance Criteria Map):
     the deny message names a remedy that actually works mid-conflict

@@ -3594,6 +3594,9 @@ def _find_git_checkout_restore(seg: list[str], name_to_raw_value: dict[str, str]
     return None, [], False
 
 
+_CWD_RELOCATING_COMMANDS = {"cd", "pushd", "popd"}
+
+
 def _rule_git_checkout_restore(
     segments: list[list[str]], raw_assigned: dict[str, str]
 ) -> tuple[str | None, tuple[str, ...]]:
@@ -3602,27 +3605,43 @@ def _rule_git_checkout_restore(
     classifier cannot soundly determine which working tree is at risk: a
     `-C`/`--git-dir`/`--work-tree` global flag on the checkout/restore
     segment itself, a `GIT_DIR=`/`GIT_WORK_TREE=`/`GIT_INDEX_FILE=`
-    assignment anywhere in the command, or a literal `cd` in an earlier
-    segment of the same command. hooks/check-bash-safety.sh's own new
-    wrapper step always checks a path against `.cwd` from the PreToolUse
-    payload (issue #1375's own Fact 5, the cwd-mismatch finding) -- any of
-    these makes that single, fixed `.cwd` reference point unsound for this
-    particular invocation, so this denies here (I/O-free -- a token-shape
-    fact, not a live check) rather than letting the wrapper check the
-    wrong tree."""
+    assignment anywhere in the command, or a literal `cd`/`pushd`/`popd`
+    in an earlier segment of the same command. hooks/check-bash-safety.sh's
+    own new wrapper step always checks a path against `.cwd` from the
+    PreToolUse payload (issue #1375's own Fact 5, the cwd-mismatch
+    finding) -- any of these makes that single, fixed `.cwd` reference
+    point unsound for this particular invocation, so this denies here
+    (I/O-free -- a token-shape fact, not a live check) rather than letting
+    the wrapper check the wrong tree.
+
+    `pushd`/`popd` join `cd` in `_CWD_RELOCATING_COMMANDS` -- CRITICAL bug
+    found by independent adversarial review (round 9, issue #1375) and
+    independently reproduced live: only a literal `cd` token was
+    recognized here, but `pushd <dir>` relocates the shell's own working
+    directory exactly like `cd` does (confirmed live: `pushd sub &&
+    git checkout -- dirty.py`, with `dirty.py` dirty relative to `sub`
+    but absent at the PreToolUse payload's own `.cwd`, resolved
+    `checkout_restore_paths` to `('dirty.py',)` -- a CONFIDENT, WRONG
+    claim, since the wrapper's live `git diff` check against that
+    filename at the wrong `.cwd` found no such path and reported clean --
+    and the real command silently discarded the uncommitted change when
+    actually executed). `popd` joins for the same reason: it also
+    relocates the shell's cwd, to whatever the directory stack's own
+    prior entry was, which this classifier has no way to know either."""
     saw_cd = False
     all_paths: list[str] = []
     for seg in segments:
         subcommand, tokens_after, saw_tree_relocation = _find_git_checkout_restore(seg, raw_assigned)
         if subcommand is None:
-            if any(not _is_dynamic(t) and t == "cd" for t in seg):
+            if any(not _is_dynamic(t) and t in _CWD_RELOCATING_COMMANDS for t in seg):
                 saw_cd = True
             continue
         if saw_tree_relocation or saw_cd or any(name in raw_assigned for name in _GIT_TREE_ENV_VARS):
             return (
                 f"a 'git {subcommand}' command carries a -C/--git-dir/--work-tree flag, a GIT_DIR=/"
-                "GIT_WORK_TREE=/GIT_INDEX_FILE= assignment, or an earlier 'cd' in the same command -- this "
-                "classifier cannot soundly determine which working tree is at risk, so this is denied outright",
+                "GIT_WORK_TREE=/GIT_INDEX_FILE= assignment, or an earlier 'cd'/'pushd'/'popd' in the same "
+                "command -- this classifier cannot soundly determine which working tree is at risk, so this "
+                "is denied outright",
                 (),
             )
         if subcommand == "checkout":

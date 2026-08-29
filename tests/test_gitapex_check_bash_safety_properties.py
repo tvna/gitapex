@@ -3510,6 +3510,32 @@ def test_rule_git_checkout_restore_allows_cd_after_the_checkout_segment() -> Non
     assert resolved == ("f.py",)
 
 
+@pytest.mark.parametrize("relocator", ["pushd", "popd"])
+def test_rule_git_checkout_restore_denies_when_an_earlier_segment_is_pushd_or_popd(relocator: str) -> None:
+    """CRITICAL regression pin (round-9 independent review, issue #1375).
+    `pushd`/`popd` relocate the shell's own working directory exactly
+    like `cd` does, but only a literal `cd` token was recognized here --
+    live-verified this let `pushd sub && git checkout -- dirty.py`
+    (dirty.py dirty relative to `sub`, absent at the PreToolUse payload's
+    own `.cwd`) resolve to a CONFIDENT, WRONG `checkout_restore_paths`
+    claim that the wrapper's live check then found clean at the wrong
+    `.cwd`, silently allowing a real, uncommitted-change discard."""
+    segments = [[relocator, "/tmp"], ["git", "checkout", "--", "f.py"]]
+    reason, resolved = checker._rule_git_checkout_restore(segments, {})
+    assert reason is not None
+    assert resolved == ()
+
+
+def test_classify_denies_a_checkout_hidden_behind_pushd() -> None:
+    """End-to-end regression pin for the round-9 finding at the
+    `classify()` level: the previously wrong, confident
+    `checkout_restore_paths=('dirty.py',)` claim must become an honest
+    outright deny instead."""
+    verdict = checker.classify("pushd sub && git checkout -- dirty.py")
+    assert verdict.deny is True
+    assert "pushd" in verdict.reason
+
+
 # --- End-to-end classify() coverage, pinning every explicit safe/deny case
 # issue #1375's own Acceptance Criteria Map and "Explicit safe cases"
 # section name by hand.
