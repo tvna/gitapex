@@ -399,7 +399,7 @@ Named gaps, graded against that file's axes:
   any mismatch. Re-graded: the axis clears in full.
 - **Axis 3 (freshness) -- now closed.** The prior gap was the same root
   cause as axis 9's unconditional-recheck half: `SKILL.md`'s own dispatch
-  text read "record a new entry ... if none exists yet," so an existing
+  text read "recording a new entry if none exists yet," so an existing
   entry was read once and trusted with no mandated re-check -- axis 3's
   Fail shape ("a single read at skill start with no later re-read, where
   the operation the record guards happens many turns after that read"), the
@@ -426,12 +426,22 @@ matched against the file it cites, both reduced by collapsing whitespace runs
 to single spaces, and each matched *within one block* -- no span crosses a
 blank line, a fence, or a heading, which is the rule's own limit and the
 reason the reduction is per block rather than per file. All quoted spans
-cross only soft wraps, the accepted case: the `SKILL.md` span spans four
-physical lines, and `adversarial-self-audit.md`'s Caveat and Pass-bar spans
-each cross their own paragraph's soft wraps only. Every span was re-derived
-from the current files for this update rather than carried forward from
-recall: an ancillary claim *about* a verified match is still an unverified
-claim until it is matched too.
+cross only soft wraps, the accepted case: the `SKILL.md` span spans five
+physical lines, and `state-management-quality.md`'s axis 9 Pass-bar span
+crosses its own paragraph's soft wraps only. Four spans were re-derived
+from the current files for this update: `SKILL.md`'s dispatch bullet (the
+opening quote above), `adversarial-self-audit.md`'s pre-existing, unchanged
+"Mark it **Same-run, unreviewed**..." step-4 marker text, and the axis 3
+Fail and axis 9 Pass-bar criteria from `state-management-quality.md`, which
+this fix does not edit. Two spans are deliberately historical, not
+current-file, quotes: `adversarial-self-audit.md`'s old Caveat text and
+`SKILL.md`'s old "recording a new entry if none exists yet" wording, both
+quoted as evidence of the pre-fix gap this subsection records as now
+closed -- each was matched against that file's actual pre-fix content
+(this same change's own diff), not against the file as it reads today, and
+neither is re-derivable from the current files by construction. An
+ancillary claim *about* a verified match is still an unverified claim until
+it is matched too.
 
 ### 7. Bundled scripts
 
