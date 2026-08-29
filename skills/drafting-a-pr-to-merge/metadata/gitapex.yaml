@@ -3,12 +3,13 @@ kind: SkillMetadata
 metadata:
   name: drafting-a-pr-to-merge
 spec:
-  portability: Portable
+  portability: Mixed
   capabilityAssumption: Broad
   lifecycle:
     renamedFrom: driving-pr-to-merge
   skillDependencies:
-    requires: []
+    requires:
+      - reviewing-an-artifact
     relatedTo:
       - stop-and-replan
       - untrusted-input-triage
@@ -26,3 +27,6 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/823"
       summary: "Declared spec.executionRequirements.tools (W3 third slice, https://github.com/tvna/gitapex/issues/307): Step 3 fixes the underlying issue (write) and Step 4 pushes the fix (shell git push), beyond this skill's GitHub-MCP calls (not modeled by this tools category)."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1249"
+      summary: "Step 8's inner layer (the former inline correctness/blast-radius/reuse/convention fan-out) is replaced with an invocation of the new reviewing-an-artifact skill, at that skill's default (low) effort, preserving this step's own prior behavior exactly. portability corrected from Portable to Mixed and reviewing-an-artifact added to skillDependencies.requires accordingly -- this skill no longer functions standalone without that sibling traveling with it (requires-portability-compatible)."

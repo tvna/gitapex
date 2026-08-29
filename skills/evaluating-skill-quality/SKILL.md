@@ -141,10 +141,9 @@ is still grading from a contaminated context.
   human asking whether it happened, and requesting the exclusion is not
   proof it held; only that section's own two-part behavioral test counts
   as verification, and it records why a filesystem-only check does not.
-  Read what that section's Trust class rule says about an entry the
-  current run wrote before relying on one. If no platform mechanism can
-  be verified this way, stop and escalate rather than dispatching into a
-  contaminated context. Whether the exclusion, once verified, carries
+  Read what that section's Trust class rule says about an entry the current run wrote before relying on one. If no platform mechanism can be
+  verified, follow that section's "No verified mechanism available"
+  subsection rather than dispatching into a contaminated context. Whether the exclusion, once verified, carries
   real deterministic backing (a hook, a permission rule) or is enforced
   by this instruction alone still depends on the environment -- check
   directly, the same self-audit this skill already applies to its
@@ -455,6 +454,7 @@ actually specifies.
   requirement applied as an invariant, not a separate rule; see that
   section above for the mechanism list, the observable check, and the
   backing-status check, rather than restating them here.
+- Never fall back to an unverified subagent dispatch merely because no verified mechanism exists -- Subagent dispatch's own handling above governs.
 - Never revise a dimension verdict in the main thread after the dispatch
   returns it -- Subagent dispatch's second-independent-dispatch rule
   above, not a patch made in place.

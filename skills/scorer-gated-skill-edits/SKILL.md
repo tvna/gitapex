@@ -246,6 +246,34 @@ evaluation. Name the gap; never fake a score to proceed.
    schema alone has never been enough -- a corpus of records can validate
    individually and still drift into disagreeing key spellings and
    unreferenced attachments when no procedure states the contract.
+8. **Recommended: adversarial-verification pass over prose and disclosure
+   quality, before filing the PR.** Issue `#218` -- the merge retrospective
+   for PR `#216` -- found four defects the strict score gate could not have caught
+   even in principle, in `evals/evaluating-skill-quality/split.md` (that
+   skill's own gate-record file, an instance of the run record step 7
+   describes -- not this file): an omitted entry in that file's own
+   Correction-block disclosure, a brittle fixture assertion, dangling
+   rubric wording, and a missing citation-status label -- because all four
+   are about the candidate text's own wording, citation completeness, and
+   that disclosure's own honesty, not about measured behavior. Step
+   4's gate gives none of this: a substring scorer is not positioned to
+   catch a sentence that reads badly, a disclosure paragraph that drops
+   one of its own corrections, or a citation the rubric's own intro
+   promises but the new content never delivers. Before filing the PR,
+   run a separate pass -- independent of the authoring context where
+   possible, the same shape step 4's own Conditional branch already uses
+   for an LLM-judge verdict -- whose only goal is to find defects in the
+   accepted edit's own prose and in this run's own disclosure paragraph
+   (step 7): does every changed assertion get named in the disclosure,
+   does every new citation resolve, does the wording read as the rest of
+   this repository's own established phrasing would. This is
+   recommended, not required: unlike step 4's strict gate (a STOP
+   boundary) or step 4's own Conditional branch (mandatory whenever no
+   deterministic scorer exists), skipping this pass is not itself a
+   defect -- but whether it ran, and what a completed pass found, still
+   belongs in the run record's `known_gaps` field (step 7) either way, so
+   a later reader can tell whether this happened rather than silently
+   assuming it did.
 
 ## Authoring fixtures for a substring scorer
 
@@ -304,6 +332,9 @@ just measures the wrong thing.
 - **Rejected-edit log:** edits tried and rejected, with the score change.
 - **Transfer check:** the adjacent target and whether it regressed.
 - **Run record:** where the record was written, and the fields it carries.
+- **Prose/disclosure pass:** whether step 8's recommended adversarial pass
+  ran and what it found, or that it was not run this iteration --
+  recorded either way, per step 8's own `known_gaps` rule.
 - **Next move:** the concrete next iteration or the ship/stop decision.
 
 ## Stop boundaries
@@ -356,7 +387,12 @@ just measures the wrong thing.
   Isolation verification section), follow its currently-recorded mechanism
   and confirm it before trusting any resulting score; an equivalent target
   skill without such a recipe needs the same confirmation by whatever means
-  its own harness provides.
+  its own harness provides. If no such mechanism can be confirmed, do not
+  fall back to an unverified dispatch merely to obtain a score -- follow
+  `evaluating-skill-quality`'s `references/adversarial-self-audit.md` No
+  verified mechanism available section to display the
+  environment-fix-or-handoff code block that section requires, and wait
+  for the operator to act on it before running the gate.
 
 ## Notes
 

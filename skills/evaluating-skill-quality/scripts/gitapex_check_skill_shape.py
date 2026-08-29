@@ -1273,6 +1273,44 @@ PORTABLE_SKILL_FACT_CLAIM_RE = re.compile(
     r"(?P<clause>[^.;\n]{0,120})"
 )
 
+# Issue #218 (Repair 3) / #1399: a bare demonstrative "this origin
+# repository" inside Portable-declared content either dangles or silently
+# narrows to the rubric's own host once vendored elsewhere -- the exact
+# defect PR #216's own new Dimension 6 bullet shipped and then had to
+# correct to "the origin repository" (evals/evaluating-skill-quality/
+# split.md's "Iteration: issue #200" entry, Correction item 3). This
+# repository's own established convention -- the sibling issue/PR-number-
+# citation bullet's lead sentence, and that same correction -- is the
+# definite article "the origin repository", never the demonstrative "this
+# origin repository".
+#
+# Deliberately narrower than banning "this repository's own" outright, an
+# earlier draft of this check considered per issue #218's own retrospective
+# text: that longer phrase is this repository's own single most common way
+# to cite itself in disclosure/rationale prose (174 occurrences across
+# skills/ at authoring time, all benign -- e.g. rubric.md's own "labelled
+# here as this repository's own reasoned extension rather than an
+# Anthropic-sourced claim"), and an unscoped ban on it would false-positive
+# on nearly every Portable skill in the corpus, the same over-broad-ban
+# shape issue #1051 already found and narrowed once for
+# GENERIC_ROLE_HEDGE_PHRASES. "this origin repository" carries no such
+# legitimate use: "origin" only ever modifies "repository" to mean *this
+# specific repository, as opposed to wherever a Portable skill is vendored
+# to* -- there is no reading of "this origin repository" that is not the
+# demonstrative defect this check exists to catch. No hedge-phrase rescue
+# either, for the same reason: unlike a repo-path or issue-number citation,
+# which can legitimately disclose a real, deliberate same-repo dependency,
+# there is no legitimate reading of this specific demonstrative to hedge.
+#
+# ``\s+`` between words, not a literal space: this repository's own
+# Markdown source is hard-wrapped at roughly 80 columns, so a live
+# occurrence of this exact phrase (references/worked-example-self-review.md,
+# found while validating this check against the real corpus) lands with an
+# actual newline between "origin" and "repository" -- "this origin\n
+# repository's tree" -- which a literal-space pattern silently misses
+# even though a rendered reader sees one continuous phrase.
+DEMONSTRATIVE_ORIGIN_REPOSITORY_RE = re.compile(r"\bthis\s+origin\s+repository\b", re.IGNORECASE)
+
 # Issue #192 (Refs #93 repair 1): a "step N" / "steps N-M" reference,
 # case-insensitive (this repo's own SKILL.md files use both "Step 1" and
 # "step 5"). Deliberately does not attempt to parse "and"/comma-joined
@@ -3590,6 +3628,46 @@ def _resolve_skill_md(target: Path) -> Path:
     return target / "SKILL.md" if target.is_dir() else target
 
 
+def _owning_skill_dir(target: Path) -> Path:
+    """Normalize a CLI-supplied path to the skill directory ``check_shape()``
+    accepts (issue #1387): a pre-commit hook hands this script whichever
+    changed files matched its ``files:`` pattern, which includes a skill's
+    ``metadata/gitapex.yaml`` sidecar and its ``references/*.md`` files, not
+    only ``SKILL.md`` itself. A directory is already what
+    ``_resolve_skill_md`` expects and is returned unchanged; a ``SKILL.md``
+    path is normalized to its parent. Otherwise, walk up through every
+    ancestor (nearest first) for one named ``metadata`` or ``references``
+    and, on the first match, return ITS parent -- not simply the target's
+    own immediate parent, which would silently walk to the wrong directory
+    for a file more than one level under ``references/`` (adversarial
+    review finding: ``.pre-commit-config.yaml``'s own ``files:`` pattern for
+    this hook, ``references/.*\\.md``, matches a nested path like
+    ``references/sub/deep.md`` too, since ``.*`` crosses ``/`` -- the very
+    shape ``references-flat`` exists to flag as a violation). This still
+    grades every skill directory once per commit: a commit touching both a
+    skill's ``SKILL.md`` and a (possibly nested) ``references/*.md`` file
+    dedupes to the same key.
+
+    Known residual limitation, not reachable through the pre-commit hook's
+    own ``files:`` pattern (which only ever emits ``SKILL.md``,
+    ``metadata/gitapex.yaml``, or a path under ``references/``, never a
+    loose file directly inside a directory literally named ``metadata`` or
+    ``references``): a skill directory whose own name IS ``metadata`` or
+    ``references`` would misresolve a loose file sitting directly in it.
+    This repository's own naming convention (kebab-case skill slugs) and
+    the ``name-pattern``/``name-not-reserved`` checks make that shape
+    already unlikely to exist; guarding it would add complexity this
+    unreachable-via-the-actual-caller path does not warrant."""
+    if target.is_dir():
+        return target
+    if target.name == "SKILL.md":
+        return target.parent
+    for ancestor in target.parents:
+        if ancestor.name in ("metadata", "references"):
+            return ancestor.parent
+    return target
+
+
 def _validate_read_scope(target: Path, allowed_root: Path) -> None:
     """Reject an escaped or symlinked CLI target before reading any content."""
     # PTH100 waived on all three abspath calls in this file: Path.resolve()
@@ -4571,6 +4649,7 @@ def check_shape(target: Path) -> list[CheckResult]:
         )
         results.extend(_portable_path_citation_checks(skill_md, skill_dir, body, declared_citation_paths))
         results.extend(_portable_skill_citation_checks(skill_md, skill_dir, body))
+        results.extend(_portable_demonstrative_repository_citation_checks(skill_md, skill_dir, body))
         results.extend(_out_of_skill_scripts_checks(skill_md, skill_dir, body))
 
     return results
@@ -5181,6 +5260,58 @@ def _portable_skill_citation_checks(skill_md: Path, skill_dir: Path, body: list[
             "Portable content has no unhedged declarative fact-claim "
             "about a named sibling skill's own behavior "
             f"(no approved hedge phrase {HEDGE_PHRASES} nearby)",
+            "none" if not hits else "found: " + ", ".join(hits),
+        ),
+    ]
+
+
+def _demonstrative_origin_repository_offenders(defenced_text: str) -> list[str]:
+    """Return each ``this origin repository`` match
+    (DEMONSTRATIVE_ORIGIN_REPOSITORY_RE) in ``defenced_text``, with a short
+    trailing window of context so a finding reads as a real sentence
+    fragment rather than a bare three-word match. Internal whitespace in
+    the window is collapsed to single spaces before returning it -- the
+    match itself can span a hard-wrapped line break (see the constant's
+    own comment), and a raw embedded newline would render as a broken
+    finding string. See that constant's own comment for why this check has
+    no hedge-phrase rescue, unlike the other Portable-citation checks
+    above.
+    """
+    offenders: list[str] = []
+    for m in DEMONSTRATIVE_ORIGIN_REPOSITORY_RE.finditer(defenced_text):
+        window_end = min(len(defenced_text), m.end() + 40)
+        snippet = defenced_text[m.start() : window_end].strip()
+        offenders.append(re.sub(r"\s+", " ", snippet))
+    return offenders
+
+
+def _portable_demonstrative_repository_citation_checks(
+    skill_md: Path, skill_dir: Path, body: list[str]
+) -> list[CheckResult]:
+    """The check_shape() entry point for
+    _demonstrative_origin_repository_offenders, scanning SKILL.md and every
+    references/*.md file the same way every other _citation_sources-based
+    check does. Only called when ``_is_portable`` is true (see
+    ``check_shape``), matching ``_portable_skill_citation_checks``'s own
+    Portable-only gate: a skill that has declared itself Repository-scoped
+    is not asking this check to excuse it -- that declaration is exactly
+    what it means to depend on this repository on purpose (the same
+    carve-out rubric.md's own Dimension 6 bullet states for the sibling
+    defect, issue #200/#218).
+    """
+    hits: list[str] = []
+    for label, source_text in _citation_sources(skill_md, skill_dir, body):
+        defenced = _blank_fenced_blocks(source_text)
+        for offender in _demonstrative_origin_repository_offenders(defenced):
+            hits.append(f"{label}:{offender}")
+    hits = _dedup(hits)
+    return [
+        CheckResult(
+            "portable-no-demonstrative-origin-repository-citation",
+            not hits,
+            "Portable content refers to the origin repository with the "
+            'definite article ("the origin repository"), never the '
+            'demonstrative "this origin repository"',
             "none" if not hits else "found: " + ", ".join(hits),
         ),
     ]
@@ -6121,34 +6252,69 @@ def format_report(results: list[CheckResult]) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Check a SKILL.md's deterministic shape (read-only).")
+    parser = argparse.ArgumentParser(description="Check one or more SKILL.md's deterministic shape (read-only).")
     parser.add_argument(
         "--allowed-root",
-        help="Caller-approved directory that must contain the target; "
+        help="Caller-approved directory that must contain every target; "
         "also rejects symlinks in the target skill. The caller must keep "
         "the snapshot immutable while the check runs.",
     )
-    parser.add_argument("target", help="Path to a skill directory or a SKILL.md file.")
+    parser.add_argument(
+        "target",
+        nargs="+",
+        help="One or more paths to a skill directory or a SKILL.md file. A "
+        "path under a skill's metadata/ or references/ directory (issue "
+        "#1387: what a pre-commit hook's changed-file argv actually "
+        "supplies) is normalized to its owning skill directory.",
+    )
     args = parser.parse_args(argv)
-    target = Path(args.target)
     allowed_root = Path(args.allowed_root) if args.allowed_root else None
-    if allowed_root is not None:
+
+    # Normalize each raw target to its owning skill directory and dedupe --
+    # a commit touching both skills/foo/SKILL.md and
+    # skills/foo/references/bar.md must grade skills/foo once, not twice.
+    # Order preserved (first occurrence wins); sources kept per group so the
+    # printed report can attribute back to every raw path that mapped there.
+    sources_by_owner: dict[Path, list[str]] = {}
+    for raw in args.target:
+        owner = _owning_skill_dir(Path(raw))
+        sources_by_owner.setdefault(owner, []).append(raw)
+
+    guard_error = False
+    check_error = False
+    for target, sources in sources_by_owner.items():
+        if allowed_root is not None:
+            try:
+                _validate_read_scope(target, allowed_root)
+            except (OSError, ValueError) as exc:
+                print(f"error: unsafe target path: {exc}", file=sys.stderr)
+                guard_error = True
+                continue
+        skill_md = _resolve_skill_md(target)
+        if not skill_md.is_file():
+            print(f"error: no SKILL.md found at: {target}", file=sys.stderr)
+            guard_error = True
+            continue
         try:
-            _validate_read_scope(target, allowed_root)
-        except (OSError, ValueError) as exc:
-            print(f"error: unsafe target path: {exc}", file=sys.stderr)
-            return 2
-    skill_md = _resolve_skill_md(target)
-    if not skill_md.is_file():
-        print(f"error: no SKILL.md found at: {target}", file=sys.stderr)
+            results = check_shape(target)
+        except (OSError, UnicodeDecodeError) as exc:
+            print(f"error: could not read skill files: {exc}", file=sys.stderr)
+            guard_error = True
+            continue
+        # len(sources) == 1, not sources == [str(target)] (adversarial
+        # review finding): the raw source's literal spelling almost always
+        # differs from the normalized target (e.g. a "SKILL.md"-suffixed
+        # or "references/..."-prefixed argv), so the stricter equality
+        # would attach "(touched: ...)" to nearly every single-target run.
+        header = str(target) if len(sources) == 1 else f"{target} (touched: {', '.join(sources)})"
+        print(f"{header}:")
+        print(format_report(results))
+        if not all(r.passed for r in results):
+            check_error = True
+
+    if guard_error:
         return 2
-    try:
-        results = check_shape(target)
-    except (OSError, UnicodeDecodeError) as exc:
-        print(f"error: could not read skill files: {exc}", file=sys.stderr)
-        return 2
-    print(format_report(results))
-    return 0 if all(r.passed for r in results) else 1
+    return 1 if check_error else 0
 
 
 if __name__ == "__main__":

@@ -490,18 +490,115 @@ def test_short_non_markdown_reference_is_unaffected(tmp_path):
     assert "anchor-targets-resolve:small.json" not in names
 
 
-def test_missing_argument_exits_2(tmp_path):
+def test_missing_argument_exits_2():
     # argparse exits (raises SystemExit) with code 2 when the required
-    # target is absent or extra positionals are given.
+    # target is absent -- nargs="+" (issue #1387) still requires at least
+    # one positional, unlike the extra-positionals case it now accepts (see
+    # test_multiple_targets_are_each_graded below).
     with pytest.raises(SystemExit) as exc:
         css.main([])
     assert exc.value.code == 2
-    with pytest.raises(SystemExit):
-        css.main([str(tmp_path), str(tmp_path)])
 
 
 def test_nonexistent_target_returns_2(tmp_path):
     assert css.main([str(tmp_path / "nope")]) == 2
+
+
+def test_multiple_targets_are_each_graded(tmp_path, capsys):
+    good_base = tmp_path / "good"
+    good_base.mkdir()
+    good = _write_skill(good_base, name="good")
+    bad_base = tmp_path / "bad"
+    bad_base.mkdir()
+    bad = _write_skill(bad_base, name="bad", description=None)
+    # Aggregate exit code is 1 (a failing check), not 2, even though one of
+    # two targets fails -- guard-level errors (2) only come from a missing
+    # SKILL.md or an unreadable target, never from a failing check.
+    assert css.main([str(good), str(bad)]) == 1
+    out = capsys.readouterr().out
+    assert str(good) in out
+    assert str(bad) in out
+    assert "description-present" in out
+
+
+def test_guard_error_on_one_target_does_not_stop_grading_the_rest(tmp_path, capsys):
+    # A missing SKILL.md on one target must not prevent a sibling target
+    # from being graded -- main() continues past a guard-level error rather
+    # than stopping at the first one.
+    good_base = tmp_path / "good"
+    good_base.mkdir()
+    good = _write_skill(good_base, name="good")
+    missing = tmp_path / "missing"
+    assert css.main([str(missing), str(good)]) == 2
+    captured = capsys.readouterr()
+    assert "no SKILL.md found" in captured.err
+    assert "checks passed" in captured.out
+
+
+def test_check_shape_raising_is_a_guard_error_not_a_crash(tmp_path, monkeypatch, capsys):
+    # main()'s own try/except (OSError, UnicodeDecodeError) around
+    # check_shape() -- distinct from check_shape()'s own internal
+    # per-check decode-error handling (covered elsewhere) -- must turn an
+    # escaping exception into a reported guard error, never propagate.
+    d = _write_skill(tmp_path)
+
+    def _raise(_target):
+        raise OSError("simulated unreadable skill file")
+
+    monkeypatch.setattr(css, "check_shape", _raise)
+    assert css.main([str(d)]) == 2
+    assert "could not read skill files" in capsys.readouterr().err
+
+
+def test_duplicate_targets_are_deduplicated_and_graded_once(tmp_path, capsys):
+    # A commit touching both a skill's SKILL.md and its own
+    # references/*.md file normalizes both to the same owning skill
+    # directory (issue #1387 item A) -- graded once, not twice, with the
+    # report naming every raw path that mapped there.
+    d = _write_skill(tmp_path, references={"notes.md": "# notes\n"})
+    skill_md_arg = str(d / "SKILL.md")
+    reference_arg = str(d / "references" / "notes.md")
+    assert css.main([skill_md_arg, reference_arg]) == 0
+    out = capsys.readouterr().out
+    assert out.count("checks passed") == 1
+    assert skill_md_arg in out
+    assert reference_arg in out
+
+
+def test_metadata_sidecar_path_normalizes_to_owning_skill_dir(tmp_path):
+    d = _write_skill(tmp_path)
+    sidecar_arg = str(d / "metadata" / "gitapex.yaml")
+    assert css.main([sidecar_arg]) == 0
+
+
+def test_nested_reference_path_normalizes_to_owning_skill_dir(tmp_path, capsys):
+    # Adversarial review finding (issue #1387): .pre-commit-config.yaml's
+    # own files: pattern for this hook (references/.*\.md) matches a
+    # NESTED references path too, since .* crosses "/" -- a real commit
+    # touching only such a file must still normalize to the real owning
+    # skill directory (walking up through every ancestor, not just the
+    # immediate parent), so the genuine references-flat violation that
+    # nesting itself causes is reported -- not silently misresolved to the
+    # wrong ancestor and reported as a false pass.
+    d = _write_skill(tmp_path, references={"sub/deep.md": "# nested\n"})
+    nested_arg = str(d / "references" / "sub" / "deep.md")
+    assert css.main([nested_arg]) == 1
+    out = capsys.readouterr().out
+    assert str(d) in out
+    assert "references-flat" in out
+    assert "FAIL" in out
+
+
+def test_single_target_header_has_no_touched_suffix(tmp_path, capsys):
+    # Finding C (adversarial review, issue #1387): the header must not
+    # show "(touched: ...)" for an ordinary single-target run just because
+    # the raw argv spelling (e.g. a SKILL.md-suffixed path) differs from
+    # the normalized directory -- only when more than one raw source
+    # actually mapped to the same owning skill.
+    d = _write_skill(tmp_path)
+    assert css.main([str(d / "SKILL.md")]) == 0
+    out = capsys.readouterr().out
+    assert "(touched:" not in out
 
 
 def test_cli_subprocess_well_formed_skill_exits_0(tmp_path):
@@ -2728,6 +2825,108 @@ def test_hedge_in_prior_paragraph_does_not_count(tmp_path):
     assert result.passed is False
 
 
+# ---- Portable demonstrative "this origin repository" citation scan (issue
+# ---- #218 Repair 3 / #1399) ----
+#
+# The real incident (evals/evaluating-skill-quality/split.md's "Iteration:
+# issue #200" entry, Correction item 3): a new Dimension 6 bullet said
+# "this origin repository", which either dangles or narrows the check to
+# the rubric's own host once vendored, and was corrected to "the origin
+# repository" -- the established convention the sibling issue/PR-number-
+# citation bullet already uses. Deliberately scoped to the bare three-word
+# phrase, not the broader "this repository's own" pattern issue #218's own
+# retrospective text also floated: that broader phrase is this
+# repository's own single most common way to cite itself in disclosure
+# prose (e.g. this file's own "labelled here as this repository's own
+# reasoned extension"), and a full-repo scan performed while designing
+# this check confirmed banning it outright would false-positive across
+# nearly every Portable skill.
+
+
+def test_demonstrative_origin_repository_citation_fails(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        _portable_body(
+            "A skill's issue-filing step must not hardcode this origin "
+            "repository's own title/body convention as universal."
+        ),
+    )
+    result = _by_name(css.check_shape(d))["portable-no-demonstrative-origin-repository-citation"]
+    assert result.passed is False
+    assert "this origin repository" in result.evidence
+
+
+def test_definite_article_origin_repository_citation_passes(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        _portable_body(
+            "A skill's issue-filing step must not hardcode the origin "
+            "repository's own title/body convention as universal."
+        ),
+    )
+    result = _by_name(css.check_shape(d))["portable-no-demonstrative-origin-repository-citation"]
+    assert result.passed is True
+
+
+def test_demonstrative_origin_repository_citation_in_reference_file_fails(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        _portable_body("Clean body."),
+        references={"notes.md": "No step depends on a path outside this origin repository.\n"},
+    )
+    result = _by_name(css.check_shape(d))["portable-no-demonstrative-origin-repository-citation"]
+    assert result.passed is False
+    assert "references/notes.md:" in result.evidence
+
+
+def test_non_portable_skill_skips_demonstrative_origin_repository_scan(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        _portable_body(
+            "No step depends on a path outside this origin repository.",
+            marker="**Portability: Mixed.** Repo-specific detail is split out.",
+        ),
+    )
+    names = _by_name(css.check_shape(d))
+    assert "portable-no-demonstrative-origin-repository-citation" not in names
+
+
+def test_demonstrative_origin_repository_hard_wrapped_across_line_break_still_flagged(tmp_path):
+    # Regression guard for a defect found while validating this check
+    # against the real corpus: this repository's own Markdown source is
+    # hard-wrapped at roughly 80 columns, so a live occurrence
+    # (references/worked-example-self-review.md, since fixed) had a literal
+    # newline between "origin" and "repository" -- a rendered reader sees
+    # one continuous phrase, but a literal-space pattern would silently
+    # miss it.
+    d = _write_raw(
+        tmp_path,
+        _portable_body("Not a dependency on this origin\nrepository's tree, so the claim still holds."),
+    )
+    result = _by_name(css.check_shape(d))["portable-no-demonstrative-origin-repository-citation"]
+    assert result.passed is False
+
+
+def test_repository_scoped_skill_may_use_demonstrative_origin_repository(tmp_path):
+    # Explicitly pins the Repository-scoped declared level, not just Mixed
+    # (test_non_portable_skill_skips_demonstrative_origin_repository_scan
+    # above): _is_portable() takes the same False branch for both today, so
+    # this is currently redundant with that test rather than a distinct
+    # code path -- kept as a named regression guard for this specific
+    # declared level (per rubric.md's own Dimension 6 Repository-scoped
+    # carve-out, issue #200/#218) in case the two levels' handling ever
+    # diverges.
+    d = _write_raw(
+        tmp_path,
+        _portable_body(
+            "No step depends on a path outside this origin repository.",
+            marker="**Portability: Repository-scoped.** Assumes this repository's own layout.",
+        ),
+    )
+    names = _by_name(css.check_shape(d))
+    assert "portable-no-demonstrative-origin-repository-citation" not in names
+
+
 # ---- Portability source precedence: sidecar first, body marker as fallback ----
 
 # The three Portable-only citation checks -- gated by _is_portable, unlike
@@ -3597,6 +3796,31 @@ def test_references_entries_decode_escaped_quotes():
     parsed = css._parse_manifest(text)
     assert parsed.root["spec"]["references"] == [
         {"kind": "decision", "anchor": "https://github.com/tvna/gitapex/issues/25", "summary": 'a "quoted" phrase'},
+    ]
+
+    # The \\ (literal double-backslash) half of the same claim, previously
+    # untested (issue #1395): a value containing an escaped backslash, not
+    # an escaped quote.
+    backslash_text = (
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n"
+        "    - kind: decision\n"
+        "      anchor: https://github.com/tvna/gitapex/issues/25\n"
+        '      summary: "a \\\\literal backslash\\\\ here"\n'
+    )
+    parsed_backslash = css._parse_manifest(backslash_text)
+    assert parsed_backslash.root["spec"]["references"] == [
+        {
+            "kind": "decision",
+            "anchor": "https://github.com/tvna/gitapex/issues/25",
+            "summary": "a \\literal backslash\\ here",
+        },
     ]
 
 
@@ -6218,6 +6442,92 @@ def test_non_string_scalar_detection_matches_pyyaml_for_representative_inputs():
         real_is_string = isinstance(real_value, str)
         parsed_is_non_string = css._is_non_string_plain_scalar(raw)
         assert (not real_is_string) == parsed_is_non_string, (raw, real_value, type(real_value).__name__)
+
+
+def test_references_mapping_item_matches_pyyaml_for_representative_inputs():
+    # Differential test against PyYAML (issue #1395, completing #518 ACM row
+    # 1): the two differential tests above cover the null/empty block-header
+    # case and scalar-*list-item* type classification, but neither exercises
+    # spec.references' own mapping-item shape -- exactly the gap #205 named,
+    # stating "a differential gate ... would have caught Repairs 3 and 6
+    # immediately" had one existed. For each representative full
+    # references-list item below, this parser's own parsed item dict must
+    # equal what yaml.safe_load resolves the same manifest text's
+    # spec.references to.
+    import yaml
+
+    manifest_prefix = (
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n"
+    )
+    cases = [
+        (
+            "plain unquoted fields",
+            "    - kind: decision\n"
+            "      anchor: https://github.com/tvna/gitapex/issues/25\n"
+            "      summary: fixed this\n",
+        ),
+        (
+            "escaped double-quote (Repair 3's own regression class)",
+            "    - kind: decision\n"
+            "      anchor: https://github.com/tvna/gitapex/issues/25\n"
+            '      summary: "a \\"quoted\\" phrase"\n',
+        ),
+        (
+            "escaped backslash",
+            "    - kind: decision\n"
+            "      anchor: https://github.com/tvna/gitapex/issues/25\n"
+            '      summary: "a \\\\literal backslash\\\\ here"\n',
+        ),
+        (
+            "escaped newline inside a quoted value (this field's own multi-line-content case -- the parser has no block-scalar '|'/'>' support, so an embedded newline can only arrive via a quoted escape)",
+            "    - kind: decision\n"
+            "      anchor: https://github.com/tvna/gitapex/issues/25\n"
+            '      summary: "line one\\nline two"\n',
+        ),
+        (
+            "nested outcome mapping, plain and quoted-escaped subfields",
+            "    - kind: audit\n"
+            "      anchor: https://github.com/tvna/gitapex/issues/25\n"
+            "      summary: audited\n"
+            "      outcome:\n"
+            "        verdict: confirmed\n"
+            '        note: "a \\"quoted\\" note"\n',
+        ),
+    ]
+    for label, body in cases:
+        text = manifest_prefix + body
+        real_value = yaml.safe_load(text)["spec"]["references"]
+        parsed_value = css._parse_manifest(text).root["spec"]["references"]
+        assert real_value == parsed_value, (label, real_value, parsed_value)
+
+    # Deliberately excluded, and named here rather than silently asserted
+    # away (same discipline test_non_string_scalar_detection_matches_
+    # pyyaml_for_representative_inputs' own docstring already applies to
+    # its own two known divergences): unlike a bare scalar *list item*
+    # elsewhere in this file, an unquoted kind/anchor/summary/outcome-
+    # subfield VALUE inside a references mapping item is never passed
+    # through _is_non_string_plain_scalar -- it is always read as a raw
+    # string via _unquote. Real YAML instead resolves an unquoted
+    # "true"/"123"/etc. value to its own typed scalar (bool/int/...). This
+    # is a genuine, previously-undocumented divergence from PyYAML found
+    # while writing this test; closing it is a separate, unrequested scope
+    # from this issue's own ACM (narrowing free-prose summary/outcome
+    # fields is a bigger behavior change than a differential-test addition
+    # should make silently), so it is recorded here instead of fixed.
+    text = manifest_prefix + (
+        "    - kind: decision\n      anchor: https://github.com/tvna/gitapex/issues/25\n      summary: true\n"
+    )
+    real_summary = yaml.safe_load(text)["spec"]["references"][0]["summary"]
+    parsed_summary = css._parse_manifest(text).root["spec"]["references"][0]["summary"]
+    assert real_summary is True
+    assert parsed_summary == "true"
 
 
 # ---- _parse_manifest docstring recognized-key drift guard (issue #518 ACM row 4) ----

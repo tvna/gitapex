@@ -1,0 +1,67 @@
+# Issue #218 (Repair 1) / #1399: a real, historical omission (PR #216's own
+# split.md disclosure paragraph named three fixed fixture-assertion bugs and
+# silently dropped a fourth, edge.yaml) shipped undetected because nothing
+# ran the deterministic check for it -- only a manually requested adversarial
+# review pass caught it. evals/scripts/gitapex_check_split_disclosure.py is
+# that check; this workflow is what actually runs it on every PR, matching
+# CLAUDE.md section 3's "push deterministic work into hooks, pre-commit, and
+# CI/CD" and closing the exact "the gate exists but nothing invokes it" gap
+# a code-review pass on this same PR found before merge.
+#
+# Deliberately no `paths:` filter, following stdlib-only-claim-drift-gate.yml's
+# and exception-handler-gap-gate.yml's own stated rationale: a workflow that
+# never fires for a given PR leaves a required status check Pending forever,
+# whereas a job that runs and reports a fast "PASS: ... (no fixtures touched)"
+# on an out-of-scope diff does not. The scan itself only ever reads
+# evals/evaluating-skill-quality/tasks/*.yaml and .../split.md, so running it
+# unconditionally costs a few seconds.
+name: Split disclosure gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  split-disclosure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      # fetch-depth: 0 so the merge-base below resolves, and so the script's
+      # own `git diff <merge-base>..<head>` calls can read the full range's
+      # history, not just the PR head's own tip.
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+        with:
+          fetch-depth: '0'
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      # git merge-base (not base.sha directly), same reasoning as
+      # stdlib-only-claim-drift-gate.yml and exception-handler-gap-gate.yml:
+      # a change that landed on the base branch after this PR forked must
+      # never be misattributed to it.
+      - name: Flag an undisclosed fixture-assertion change
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if ! merge_base=$(git merge-base "$BASE_SHA" "$HEAD_SHA"); then
+            echo "::error::git merge-base failed between $BASE_SHA and $HEAD_SHA" >&2
+            exit 1
+          fi
+          uv run --frozen python3 evals/scripts/gitapex_check_split_disclosure.py \
+            --base "$merge_base" --head "$HEAD_SHA"

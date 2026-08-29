@@ -46,6 +46,33 @@ repos:
         types_or: [python, pyi]
         require_serial: true
 
+      # Issue #1387: gitapex_check_skill_shape.py's own deterministic shape
+      # checks (including its body-length check) were registered nowhere
+      # for local/pre-commit use -- CI-enforced today only via
+      # tests/test_gitapex_repository_skill_shape.py's whole-repo sweep
+      # inside the pytest job, so a violation surfaced one red CI check
+      # late rather than at commit time. Pre-commit stage (not pre-push):
+      # fast and single-skill-scoped, matching ruff/mypy's own placement.
+      # `files:` covers a skill's SKILL.md, its metadata/gitapex.yaml
+      # sidecar, and its references/*.md files -- not SKILL.md alone --
+      # matching the same three file classes check_shape() itself grades;
+      # main()'s own path normalization (see _owning_skill_dir) collapses
+      # a commit touching more than one of these under the same skill to a
+      # single graded pass. Cross-file checks (skill-dependencies-resolve
+      # and similar) resolve against on-disk sibling skills/ directories,
+      # so an intermediate WIP commit within a multi-commit PR can trip a
+      # check PR-head CI would pass once every file lands -- an
+      # already-accepted class at pre-commit stage in this same config
+      # (the mypy hook below checks whole directory groups, not only
+      # staged files). Escape hatch when that happens:
+      # `SKIP=skill-shape-check git commit ...`, or `git commit --no-verify`.
+      - id: skill-shape-check
+        name: skill shape check (SKILL.md, sidecar, references -- SKIP=skill-shape-check to bypass)
+        entry: uv run --frozen python3 skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py
+        language: system
+        files: ^skills/[^/]+/(SKILL\.md|metadata/gitapex\.yaml|references/.*\.md)$
+        require_serial: true
+
       - id: mypy
         name: mypy (type check)
         # mypy resolves cross-file imports within each of the directory
@@ -107,8 +134,8 @@ repos:
       # already-open PR. This runs all of them in one pass at pre-push --
       # the last local moment before a gap becomes a CI round-trip, and
       # deliberately not pre-commit: it grades committed state (HEAD vs
-      # origin/main), not a staged index, and at ~12 s
-      # warm end to end for all 39 wired gates it is too slow to sit on every
+      # origin/main), not a staged index, and at ~17 s
+      # warm end to end for all 40 wired gates it is too slow to sit on every
       # single commit.
       #
       # The wired set is not listed here: the runner discovers it from
