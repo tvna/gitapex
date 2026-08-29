@@ -477,10 +477,17 @@ Checks (the canonical list -- the manual fallback is to apply these):
     is a Call, not a literal) of a plain assignment or an annotated
     assignment with a value (``TIMEOUT: int = 30``; a bare annotation with
     no value, ``TIMEOUT: int``, has nothing to scan) in every non-test
-    ``*.py`` file directly under the skill's own ``scripts/`` directory
-    (``test_*.py`` files are excluded -- test fixture literals are not
+    ``*.py`` file anywhere under the skill's own ``scripts/`` directory --
+    recursively, so a skill that ships its scripts as a package
+    (``scripts/<name>/*.py``) has that subpackage's own constants scanned
+    too rather than silently exempted, matching the same recursive scope
+    this skill's own sibling ``gitapex_scan_execution_requirements_drift.py``
+    already uses for the same question
+    (``test_*.py`` files are excluded, by basename at any depth -- test
+    fixture literals are not
     "configuration" and would be enormous false-positive noise, e.g. this
-    very checker's own ``test_gitapex_check_skill_shape.py``) whose
+    very checker's own ``test_gitapex_check_skill_shape.py``; dotfiles and
+    ``__pycache__`` bytecode caches are likewise skipped as junk) whose
     right-hand side is a "simple literal" (a bare ``ast.Constant``; an
     ``ast.Tuple``/``ast.List``/``ast.Set`` of nothing but ``ast.Constant``
     elements; or an ``ast.Dict`` whose every key and value is itself an
@@ -512,13 +519,18 @@ Checks (the canonical list -- the manual fallback is to apply these):
     UTF-8 text is reported as an offender instead of silently skipped --
     unlike a syntax error, nothing else is guaranteed to notice an
     unreadable bundled script, so skipping it here would pass vacuously.
+    An offender is reported as its path relative to the skill directory
+    (``scripts/helperpkg/config.py``, not a bare ``scripts/config.py``),
+    so a same-named module in two different subdirectories still points at
+    the real file.
     Silently passes with "not declared (optional)" evidence, the same
     absent-optional-content convention used throughout this docstring,
     when the skill has no ``scripts/`` directory at all or it contains no
     qualifying non-test ``.py`` file.
   - Script execution intent stated (script-execution-intent-stated, issue
-    #1045's Acceptance Criteria Map item A): every file directly under
-    the skill's own ``scripts/`` directory (any extension, not just
+    #1045's Acceptance Criteria Map item A): every file anywhere under
+    the skill's own ``scripts/`` directory (recursively, same scope and
+    same junk filter as no-voodoo-constant above; any extension, not just
     ``.py`` -- a referenced ``.sh`` script counts too) that is mentioned
     anywhere in SKILL.md or references/* (via ``_citation_sources``, the
     same source set every prose citation check above scans) as an

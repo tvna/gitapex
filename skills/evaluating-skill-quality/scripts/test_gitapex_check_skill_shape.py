@@ -7488,3 +7488,83 @@ def test_script_execution_intent_unmentioned_script_not_flagged(tmp_path):
     result = _by_name(css.check_shape(d))["script-execution-intent-stated"]
     assert result.passed is True
     assert result.evidence == "none"
+
+
+# ---- Bundled-script enumeration is RECURSIVE (adversarial-review
+# ---- regression, issue #1330) ----
+#
+# Both bundled-script checks used to enumerate scripts/ with a
+# non-recursive iterdir(), so a skill shipping its scripts as a package
+# (scripts/<name>/*.py) had that whole subpackage silently exempted. This
+# checker's own skill demonstrated the failure live: issue #1330's split
+# moved ~5000 lines -- constants.py among them -- into
+# scripts/shape_checks/, and every one of those modules' module-level
+# constants fell out of no-voodoo-constant's scope overnight without a
+# single check changing. These cases pin the recursive scope so the same
+# narrowing cannot silently return.
+
+
+def test_voodoo_constant_in_scripts_subpackage_is_flagged(tmp_path):
+    d = _write_raw(tmp_path, _simple_body("No prose reference needed."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "helperpkg").mkdir()
+    (d / "scripts" / "helperpkg" / "config.py").write_text("TIMEOUT_SECONDS = 30\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is False
+    # Reported by its path relative to the skill directory, not a bare
+    # "scripts/<basename>" -- two subdirectories can hold a same-named
+    # module, so the evidence must still point at the real file.
+    assert "scripts/helperpkg/config.py:1:TIMEOUT_SECONDS" in result.evidence
+
+
+def test_voodoo_constant_flat_script_keeps_its_bare_scripts_label(tmp_path):
+    # The relative-path label above must be identical to the historical
+    # "scripts/<basename>" spelling for a script sitting directly under
+    # scripts/ -- recursion changed the scope, not the flat-file evidence.
+    d = _write_raw(tmp_path, _simple_body("No prose reference needed."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text("TIMEOUT_SECONDS = 30\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is False
+    assert result.evidence == "found: scripts/checker.py:1:TIMEOUT_SECONDS"
+
+
+def test_voodoo_constant_subpackage_test_file_still_excluded(tmp_path):
+    # The test_*.py exclusion applies by basename at ANY depth -- a test
+    # file's fixture literals are not "configuration" wherever it lives.
+    d = _write_raw(tmp_path, _simple_body("No prose reference needed."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "helperpkg").mkdir()
+    (d / "scripts" / "helperpkg" / "test_config.py").write_text("TIMEOUT_SECONDS = 30\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is True
+    assert result.evidence == "not declared (optional)"
+
+
+def test_bundled_script_scan_ignores_pycache_junk(tmp_path):
+    # __pycache__ holds build artifacts, not bundled scripts. It matters
+    # most for script-execution-intent-stated, whose scope is "any
+    # extension" and would otherwise treat compiled .pyc bytecode as a
+    # bundled script.
+    d = _write_raw(tmp_path, _simple_body("No prose reference needed."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "__pycache__").mkdir()
+    (d / "scripts" / "__pycache__" / "stale.cpython-312.pyc").write_bytes(b"\x00\x01binary")
+    (d / "scripts" / "__pycache__" / "leftover.py").write_text("TIMEOUT_SECONDS = 30\n", encoding="utf-8")
+    results = _by_name(css.check_shape(d))
+    assert results["no-voodoo-constant"].passed is True
+    assert results["no-voodoo-constant"].evidence == "not declared (optional)"
+    assert results["script-execution-intent-stated"].passed is True
+    assert results["script-execution-intent-stated"].evidence == "not declared (optional)"
+
+
+def test_script_execution_intent_covers_scripts_subpackage(tmp_path):
+    # The execution-intent rule follows the same recursive scope: a cited
+    # script nested in a subpackage is in scope, not silently exempt.
+    d = _write_raw(tmp_path, _simple_body("The `helper.sh` file exists."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "helperpkg").mkdir()
+    (d / "scripts" / "helperpkg" / "helper.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["script-execution-intent-stated"]
+    assert result.passed is False
+    assert "helper.sh" in result.evidence

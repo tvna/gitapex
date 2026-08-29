@@ -14,7 +14,7 @@ from pathlib import Path
 from shape_checks.citation_checks import _citation_sources
 from shape_checks.citations import _blank_fenced_blocks, _dedup, _strip_illustrative_spans
 from shape_checks.constants import _ALL_CAPS_CONST_NAME_RE, SCRIPTS_PATH_BARE_RE, CheckResult
-from shape_checks.links_portability import _escapes_skill_dir
+from shape_checks.links_portability import _escapes_skill_dir, _is_ignorable
 
 
 def _out_of_skill_scripts_offenders(skill_dir: Path, source_text: str) -> list[str]:
@@ -117,19 +117,41 @@ def _is_simple_literal_node(node: ast.expr) -> bool:
 
 
 def _bundled_python_scripts(skill_dir: Path) -> list[Path]:
-    """Every non-test ``*.py`` file directly under the skill's own
+    """Every non-test ``*.py`` file anywhere under the skill's own
     ``scripts/`` directory, sorted for deterministic offender ordering.
     Returns an empty list when ``scripts/`` does not exist -- the shared
     "not declared (optional)" precondition both new bundled-script checks
-    use. ``test_*.py`` files are excluded: test fixture literals are not
-    "configuration" and would be enormous false-positive noise (e.g. this
-    very checker's own 6000+-line ``test_gitapex_check_skill_shape.py``).
+    use. ``test_*.py`` files are excluded, by basename regardless of
+    depth: test fixture literals are not "configuration" and would be
+    enormous false-positive noise (e.g. this very checker's own
+    7000+-line ``test_gitapex_check_skill_shape.py``).
+
+    RECURSIVE (``scripts_dir.rglob``), not ``scripts_dir.iterdir()``: a
+    skill may ship its scripts as a package (a ``scripts/<name>/``
+    subdirectory of modules), and that subpackage's own content is just
+    as much the skill's real bundled code as a top-level script's -- a
+    top-level-only scan silently exempts all of it. This checker's own
+    ``skills/evaluating-skill-quality`` demonstrated the failure mode
+    live: the shape-check families were moved into ``scripts/
+    shape_checks/`` (a package of ~5000 lines, ``constants.py`` among
+    them), and a top-level-only scan stopped seeing every one of those
+    modules' module-level constants overnight, without a single check
+    changing. Matches the established convention this skill's own sibling
+    scanner already uses for the same "what are this skill's bundled
+    Python scripts" question (see
+    ``gitapex_scan_execution_requirements_drift.py``'s own
+    ``_bundled_script_trees``, likewise recursive, likewise excluding
+    ``test_*`` by basename at any depth). ``_is_ignorable`` drops
+    dotfiles and ``__pycache__`` bytecode-cache content, the same junk
+    filter the references/ checks already apply.
     """
     scripts_dir = skill_dir / "scripts"
     if not scripts_dir.is_dir():
         return []
     return [
-        p for p in sorted(scripts_dir.iterdir()) if p.is_file() and p.suffix == ".py" and not p.name.startswith("test_")
+        p
+        for p in sorted(scripts_dir.rglob("*.py"))
+        if p.is_file() and not p.name.startswith("test_") and not _is_ignorable(p)
     ]
 
 
@@ -204,7 +226,7 @@ def _has_adjacent_comment(node: ast.stmt, lines: list[str], comment_lines: set[i
     return False
 
 
-def _voodoo_constant_offenders(scripts: list[Path]) -> list[str]:
+def _voodoo_constant_offenders(scripts: list[Path], skill_dir: Path) -> list[str]:
     """Return ``scripts/FILE.py:LINE:NAME`` for each module-level,
     ALL-CAPS-named, simple-literal assignment or annotated assignment in
     ``scripts`` with no adjacent justifying comment -- see the module
@@ -227,13 +249,24 @@ def _voodoo_constant_offenders(scripts: list[Path]) -> list[str]:
     matching this checker's own ``skill-md-readable`` check's fail-loud
     precedent (``shape_checks/orchestrator.py``'s ``_skill_md_read_result``)
     for the same failure mode on ``SKILL.md`` itself.
+
+    Each offender is labelled by its path relative to ``skill_dir`` (e.g.
+    ``scripts/helperpkg/config.py``), not a bare ``scripts/<basename>``:
+    ``_bundled_python_scripts`` above scans recursively, so two different
+    subdirectories can hold a same-named module and the evidence string
+    must still point at the real file. Identical to the old bare-basename
+    label for a script sitting directly under ``scripts/``. Same reasoning
+    ``gitapex_scan_execution_requirements_drift.py``'s own
+    ``_bundled_script_trees`` already records for its own relative-name
+    reporting.
     """
     offenders: list[str] = []
     for script in scripts:
+        relpath = script.relative_to(skill_dir).as_posix()
         try:
             source = script.read_text(encoding="utf-8")
         except (UnicodeDecodeError, OSError) as exc:
-            offenders.append(f"scripts/{script.name}:0:unreadable ({type(exc).__name__})")
+            offenders.append(f"{relpath}:0:unreadable ({type(exc).__name__})")
             continue
         try:
             tree = ast.parse(source, filename=str(script))
@@ -241,7 +274,6 @@ def _voodoo_constant_offenders(scripts: list[Path]) -> list[str]:
             continue
         lines = source.splitlines()
         comment_lines = _comment_line_numbers(source)
-        relpath = f"scripts/{script.name}"
         for node in tree.body:
             names, value = _assignment_target_names(node)
             if not names or value is None or not _is_simple_literal_node(value):
@@ -265,7 +297,7 @@ def _no_voodoo_constant_checks(skill_md: Path, skill_dir: Path, body: list[str])
     scripts = _bundled_python_scripts(skill_dir)
     if not scripts:
         return [CheckResult("no-voodoo-constant", True, rule, "not declared (optional)")]
-    offenders = sorted(_voodoo_constant_offenders(scripts))
+    offenders = sorted(_voodoo_constant_offenders(scripts, skill_dir))
     return [
         CheckResult(
             "no-voodoo-constant",
@@ -277,16 +309,25 @@ def _no_voodoo_constant_checks(skill_md: Path, skill_dir: Path, body: list[str])
 
 
 def _bundled_scripts(skill_dir: Path) -> list[Path]:
-    """Every file (any extension) directly under the skill's own
+    """Every file (any extension) anywhere under the skill's own
     ``scripts/`` directory, sorted for deterministic offender ordering --
     the script-execution-intent-stated check's own scope, wider than
     ``_bundled_python_scripts`` above since a referenced ``.sh`` script
     counts too. Returns an empty list when ``scripts/`` does not exist.
+
+    RECURSIVE for the same reason ``_bundled_python_scripts`` above is
+    (see its own docstring): a script shipped inside a ``scripts/<name>/``
+    subdirectory is still one of the skill's own bundled scripts, and a
+    top-level-only scan exempts it from the execution-intent rule
+    entirely. ``_is_ignorable`` drops dotfiles and ``__pycache__``
+    content -- the latter matters more here than for the ``*.py``-only
+    scan above, since this one accepts any extension and would otherwise
+    pick up compiled ``.pyc`` bytecode as if it were a bundled script.
     """
     scripts_dir = skill_dir / "scripts"
     if not scripts_dir.is_dir():
         return []
-    return [p for p in sorted(scripts_dir.iterdir()) if p.is_file()]
+    return [p for p in sorted(scripts_dir.rglob("*")) if p.is_file() and not _is_ignorable(p)]
 
 
 def _markdown_paragraphs(source_text: str) -> list[str]:
