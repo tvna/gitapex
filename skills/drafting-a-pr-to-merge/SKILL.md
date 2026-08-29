@@ -9,8 +9,8 @@ Beyond a connected GitHub MCP server and this session's own reasoning --
 both general product capabilities, addressed via the portable
 `Server:tool` shorthand below -- this skill's one real dependency is
 `reviewing-an-artifact` (Step 8's own inner layer, invoked rather than
-inlined; see Notes). (Steps 1 and 9 are additionally backed, where this
-repository's own hooks are installed and confirmed to bind, by
+inlined; see Notes). (Steps 1/9 are additionally backed, where this
+repository's hooks are installed and confirmed to bind, by
 `hooks/check-pr-issue-acm-disclosure.sh` and
 `hooks/check-merge-pull-request-block.sh` respectively; see each step.)
 A fragile, order-dependent sequence, not prose judgement -- follow the
@@ -215,7 +215,8 @@ truth for the procedure regardless of platform naming.
    independently validate each against the actual code and this PR's
    acceptance criteria before treating it as something to fix. Markdown
    fencing alone does not achieve this (`reviewing-an-artifact`'s own
-   report needs no equivalent treatment here -- see its own Step 3).
+   Step 6 already breakout-safe quotes any target content its report
+   embeds, before that report reaches this step).
 
    Before recording or posting any composed verdict text on the PR, run
    it through the outward-artifact-preflight discipline (see
@@ -466,11 +467,10 @@ no equivalent for a commit/branch/working-tree/single-file target, plus an
 always-runs inner layer that is now `reviewing-an-artifact`
 (`skills/reviewing-an-artifact/SKILL.md`), invoked rather than inlined --
 see step 8 above for the exact invocation and the recorded-verdict shape.
-`untrusted-input-triage` and `outward-artifact-preflight` govern,
-respectively, how step 8 treats the outer layer's own raw response and how
-it records the combined verdict on the PR -- composed with here, not
-re-derived; see step 8 above for the equivalent rule `reviewing-an-artifact`
-applies internally, not repeated here to avoid drift.
+`untrusted-input-triage` and `outward-artifact-preflight` govern how step
+8 treats the outer layer's own raw response and records the combined
+verdict -- composed with here, not re-derived; `reviewing-an-artifact`
+applies the equivalent rule internally, not repeated here.
 `executing-a-branch-plan` opens the PR this skill picks up at its own
 step 9; step 2's label check keeps a mid-execution draft there from being
 misread as a terminal state before this skill's own fix loop ever runs

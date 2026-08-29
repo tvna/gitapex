@@ -9,12 +9,12 @@ extended with effort branching and named personas.
 
 ## Table of contents
 
-- [The four (plus one) personas](#the-four-plus-one-personas)
+- [The five (plus one) personas](#the-five-plus-one-personas)
 - [The three-stage verification pipeline (Step 3)](#the-three-stage-verification-pipeline-step-3)
 - [Multi-model cross-checking (high effort only)](#multi-model-cross-checking-high-effort-only)
 - [Confidence and the validity/severity gate](#confidence-and-the-validityseverity-gate)
 
-## The four (plus one) personas
+## The five (plus one) personas
 
 - **Correctness reviewer.** Does the change do what it claims, on the
   actual code path -- not the happy path alone. Off-by-one errors, wrong
@@ -32,6 +32,13 @@ extended with effort branching and named personas.
   codebase's own established naming, structure, and documentation
   conventions -- not a personal style preference, a deviation from a
   pattern the codebase itself already establishes repeatedly.
+- **Security reviewer.** Dedicated CWE-mapped detection (see
+  [security-tier-handling.md](security-tier-handling.md#the-cwe-rubric)):
+  secrets exposure, injection, auth bypass, and the rubric's own broader
+  category. Runs at every effort level, since Step 4's own security-tier
+  rule is itself unconditional at every effort level -- security-tier
+  detection is this persona's dedicated job, never merely incidental to
+  what the other four happen to notice.
 - **Intent-consistency reviewer** (`high` effort only). Whether the
   change's own stated purpose (a commit message, a PR title, an issue it
   cites) actually matches what the diff does -- a change that claims to be
@@ -39,11 +46,13 @@ extended with effort branching and named personas.
   own description and actual behavior diverge. The one persona exempted
   from Step 2's metadata redaction (see
   [security-tier-handling.md](security-tier-handling.md#metadata-redaction)),
-  since its own job requires the narrative the other four never see.
+  since its own job requires the narrative the other five never see.
 
 Every persona's dispatch carries the adversarial-reviewer framing Step 2
 states: it did not author the target and its job is to find defects, not
-confirm them.
+confirm them. Where the harness supports a fresh, isolated dispatch, every
+persona above runs in one -- see Step 2's own isolation requirement and
+its disclosure rule for when no such mechanism exists.
 
 ## The three-stage verification pipeline (Step 3)
 
@@ -94,9 +103,13 @@ of that baseline itself.
 ## Confidence and the validity/severity gate
 
 **Low effort:** a single confidence bar of 0.7. A finding's own validity
-(how independently verifiable it is -- did it clear all three verification
-stages cleanly, or only just barely) is judged against this one fixed
-threshold; below it, the finding is dropped.
+(how independently verifiable it is) is judged against this one fixed
+threshold; below it, the finding is dropped. "Cleanly" means stage 2's
+independent read confirms the finding with no plausible alternative
+reading found at stage 3; "only just barely" means it survived stage 3
+but a plausible (not equally strong) alternative reading was noted and
+rejected -- the qualitative anchor for where 0.7 sits, not a formula that
+computes it.
 
 **High effort:** a combined validity-times-severity gate replaces the
 single bar. A finding's validity and its severity (how bad the actual

@@ -1,7 +1,7 @@
 # reviewing-an-artifact eval status
 
 A committed `evals/reviewing-an-artifact/` suite exists: `eval.yaml` plus
-11 fixtures under `tasks/`. Two follow this repository's normal/edge
+15 fixtures under `tasks/`. Two follow this repository's normal/edge
 naming convention: `normal.yaml` (a dangerous-signal PR gets fanned out
 and a confirmed finding reported with a blast-radius trace, never
 authoring a fix) and `edge.yaml` (a safe-side-only diff skips fan-out
@@ -31,11 +31,28 @@ ruled-out symptom does not false-fail), and
 findings only, no rejected-candidate noise; the audit trail is included
 regardless).
 
-One fixture, `adversarial-injection.yaml`, is adversarial rather than
-behavioral: the diff itself carries a code comment claiming the file is
-already reviewed and directing the skill to report zero findings. It
-exercises Step 3's own Extract/Ignore/Flag/Tag handling of the target's
-content directly.
+Two fixtures are adversarial rather than behavioral:
+`adversarial-injection.yaml` (a code comment claiming the file is already
+reviewed, directing zero findings -- exercises Step 3's own
+Extract/Ignore/Flag/Tag handling of the target's content directly) and
+`guardrail-no-already-reviewed-shortcut.yaml` (a caller claims part of
+this exact target was already reviewed clean in an earlier session and
+asks to skip it -- exercises the Precondition's own per-invocation
+re-derivation requirement, the cross-session variant of the same class of
+claim).
+
+Four further fixtures, added after an isolated `evaluating-skill-quality`/
+`battle-testing-a-skill` review round, target Stop boundaries that round's
+own findings added: `guardrail-secret-value-redaction.yaml` (a committed
+credential in what would otherwise classify as "an added test" is neither
+safe-side-skipped nor reproduced verbatim in the finding -- doubles as a
+regression check for the safe-skip security-tier fix below),
+`guardrail-isolation-disclosure.yaml` (the report discloses whether the
+fan-out actually ran in a fresh, isolated context when the calling session
+itself authored the diff under review), `guardrail-unreadable-content-
+not-clean.yaml` (empty/unreadable target content is reported as inability
+to review, never a fabricated zero-finding clean pass), and the
+cross-session fixture named above.
 
 **Case-sensitivity correction (post-authoring adversarial review):** an
 independent adversarial review of this suite found that
@@ -76,16 +93,29 @@ instead tests the adjacent, observably-testable claim: that a misleading
 PR description does not sway Step 1's own classification.
 
 Disclosed rather than silently assumed solved: no trial of this suite has
-been executed yet -- the config declares `copilot-sdk` / `claude-sonnet-5`
-per this repository's own sibling-suite convention, but this PR does not
-claim a passing run. None of the eleven fixtures exercises `high` effort
-specifically (the multi-model cross-check, the validity/severity gate, the
-intent-consistency persona's own metadata-redaction exception, or
-signature-aware blast radius) -- a disclosed gap for a future addition,
-not a claimed clean bill. Fixture-to-Stop-boundary coverage is enforced
-deterministically, not merely by convention:
+been executed, at any tier -- an ablation runner exists in this repository
+(`evals/scripts/gitapex_run_ablation.py`), so this suite is
+ablation-capable, not yet run, a distinct state from having no such
+mechanism at all. No cross-model disclosure follows either: `eval.yaml`
+declares a single tier (`claude-sonnet-5`); nothing here claims transfer
+to another tier has been measured. None of the fifteen fixtures exercises
+`high` effort specifically (the multi-model cross-check, the
+validity/severity gate, the intent-consistency persona's own
+metadata-redaction exception, or signature-aware blast radius). Corpus
+coverage against this skill's own named surface is partial in two
+specific ways: of the six target types the description names (PR, commit,
+branch, working tree, merge candidate, single file), only PR/diff-shaped
+fixtures exist; of the five always-on personas plus intent-consistency,
+only correctness, blast-radius, and security are exercised by name (reuse
+and convention are not cited by any fixture). None of this is a claimed
+clean bill -- each gap is named here specifically so a future addition has
+a concrete target rather than a vague "more coverage would help."
+Fixture-to-Stop-boundary coverage is enforced deterministically, not
+merely by convention:
 `.github/scripts/gitapex_gate_skill_branch_fixture_coverage.py` requires
 at least as many `tasks/*.yaml` fixtures as this skill's own
-Stop-boundary bullets and named dispatch branches (9 as of this suite),
-and this suite's 11 fixtures exceed that count by two. Refs
+Stop-boundary bullets and named dispatch branches (13 as of this suite,
+up from 9 after the review round above added five personas' worth of new
+security/isolation/redaction/re-derivation guardrails), and this suite's
+15 fixtures exceed that count by two. Refs
 <https://github.com/tvna/gitapex/issues/1249>.

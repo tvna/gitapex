@@ -1,6 +1,6 @@
 # RADAR signal vocabulary
 
-Step 1's safe/dangerous classification, adopted verbatim from Meta's own
+Step 1's safe/dangerous classification, adopted from Meta's own
 risk-stratification vocabulary: Automating Low-Risk Code Review at Meta:
 RADAR, Risk Calibration, and Review Efficiency (arXiv:2605.30208).
 Independently fetched and confirmed to exist during this skill's own
@@ -11,18 +11,23 @@ Automated Code Review, and deterministic validation before landing
 qualifying changes," consistent with this skill's own safe/dangerous
 framing. The exact vocabulary list below is this skill's tracking issue's
 own restatement of that paper's categories, not an independently re-quoted
-excerpt of the paper's own text.
+excerpt of the paper's own text -- "adopted from," not "adopted verbatim
+from."
 
 ## The two sides
 
 **Safe side** -- a behavior-preserving refactor, dead-code removal, a log
-addition that logs no secret-shaped value, formatting, a documentation
-update, import reorganization, or an added test, with no dangerous signal
-also present. A target whose entire diff (or entire content, for a
-non-diff single-file target) matches this side and only this side skips
-Step 2's fan-out. A log addition that DOES log a credential, token, or key
-is security-tier dangerous instead (Step 1's own carve-out), never
-safe-side regardless of how routine the rest of the change looks.
+addition, formatting, a documentation update, import reorganization, or
+an added test. A target whose entire diff (or entire content, for a
+non-diff single-file target) matches this side and only this side, AND
+carries no security-tier signal (Step 4's own CWE-mapped rubric --
+secrets exposure, injection, auth bypass, and the rest) anywhere, skips
+Step 2's fan-out. A security-tier signal anywhere overrides a safe-side
+match on the rest of the target -- Step 1's own carve-out, applying to
+every safe-side category alike, not only a log addition -- never
+safe-side regardless of how routine the rest of the change looks (a log
+addition that logs a credential, a formatting-only-looking diff that also
+removes an auth check, a doc update pasting a real API key as an example).
 
 **Dangerous side** -- high complexity, a large structural change, a
 detected bug, a performance risk, or a security vulnerability. Any one of

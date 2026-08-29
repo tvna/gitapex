@@ -3,11 +3,11 @@ kind: SkillMetadata
 metadata:
   name: reviewing-an-artifact
 spec:
-  portability: Mixed
+  portability: Repository-scoped
   capabilityAssumption: Adaptive
   lifecycle:
     experimental:
-      reason: "First draft; extracted from drafting-a-pr-to-merge's own former Step 8. Pending an isolated evaluating-skill-quality dispatch and an isolated battle-testing-a-skill dispatch before graduating to stable -- see this file's own tracking issue."
+      reason: "First draft; extracted from drafting-a-pr-to-merge's own former Step 8. One isolated evaluating-skill-quality dispatch (WELL-FORMED-NOT-MATURE, gaps fixed) and one isolated battle-testing-a-skill dispatch (FAIL, critical/high findings fixed) have run -- graduating to stable is a subsequent repository-owner decision, not automatic on a clean review pass."
       trackingIssue: "https://github.com/tvna/gitapex/issues/1249"
   skillDependencies:
     requires: []
@@ -42,10 +42,19 @@ spec:
       summary: "Adopted 3 of 4 accepted pstack-informed candidates from the issue's own 2026-08-29 comment: multi-model cross-checking at high effort (Step 3), named per-axis sub-personas (Step 2), and a root-cause-vs-symptom output tag (Step 6). The fourth (a dynamic, test-execution-driven blast-radius pass) is explicitly NOT adopted -- contingent on an executable-environment assumption this design does not make, per the candidate's own stated condition; recorded as a Non-goal instead."
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1249"
-      summary: "executionRequirements declares only read:[files]: this skill's own procedure reads a target's content/diff and reasons about it; it never writes a file, runs a shell command, or performs a GitHub write itself (Postcondition/Stop boundaries: reporting only, never posting or fixing)."
+      summary: "executionRequirements declares only read:[files]: the Precondition requires the caller to hand over or already have fetched the target's content/diff; this skill never fetches one itself via shell or a git-hosting API call, and never writes a file, runs a shell command, or performs a GitHub write (Postcondition/Stop boundaries: reporting only)."
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1249"
       summary: "executing-a-branch-plan's own mandatory Step 8 review found and fixed: Step 1 read PR-description text before Step 2's redaction applied; the intent-consistency persona needed the exact narrative Step 2 redacts (now one named exception); Step 3 had no security-tier carve-out, contradicting Step 4's unconditional rule; drafting-a-pr-to-merge Step 8 mapped this skill's own Step 0 deferral to CLEAN (added a fourth outcome). Also: a mixed-target rule, two deferral targets, hyphenation."
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1249"
       summary: "The same review, empirically scoring synthetic outputs per fixture, found output_contains/output_not_contains are case-sensitive and several assertions did not match plausible model casing -- two scored a real defect as passing. Fixed across all 11 fixtures (icontains, case-varied near entries, hyphenation). guardrail-metadata-redaction.yaml, whose target is unobservable in output text, was replaced by guardrail-step1-classification-resists-narrative.yaml."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1249"
+      summary: "drafting-a-skill Step 9's isolated review dispatches (both self-disclosed contaminated -- favorable findings provisional) found and fixed: safe-skip missed a security signal outside log-addition; no persona owned security detection; wrong scanning-attack-surfaces mode; Mixed declared with no real split; a false review-verdict claim; no output escaping; no unreadable-content state; no secret redaction; no fan-out isolation requirement."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1249"
+      summary: "Added a fifth always-on security-reviewer persona to Step 2's fan-out (was four generic personas plus intent-consistency at high effort only) so security-tier detection has a dedicated owner rather than being incidental to the other four -- fan-out cap updated to 5/6 dispatches. Four new Stop boundaries and matching evals/reviewing-an-artifact/tasks/*.yaml fixtures added (15 total against 13 decision branches)."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/1249"
+      summary: "battle-testing-a-skill's medium findings on the 0.7 confidence bar's uncalibrated scale and the missing FABRICATED-pre-check bundled script are disclosed (Non-goals, fan-out-and-verification.md) rather than fixed this round -- calibration needs measured evidence this authoring session cannot produce, and the script is a larger, separately-scoped addition."
