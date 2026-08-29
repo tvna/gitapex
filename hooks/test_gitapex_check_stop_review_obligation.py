@@ -115,7 +115,7 @@ def test_writer_then_reader_end_to_end(tmp_path: Path, monkeypatch: Any) -> None
         {
             "session_id": session_id,
             "tool_name": "mcp__github__pull_request_read",
-            "tool_input": {"method": "get"},
+            "tool_input": {"pullNumber": 1209, "method": "get"},
             "tool_response": {"mergeable_state": "clean"},
         }
     )
@@ -128,7 +128,7 @@ def test_writer_then_reader_end_to_end(tmp_path: Path, monkeypatch: Any) -> None
         {
             "session_id": session_id,
             "tool_name": "mcp__github__pull_request_read",
-            "tool_input": {"method": "get_review_comments"},
+            "tool_input": {"pullNumber": 1209, "method": "get_review_comments"},
             "tool_response": {"threads": []},
         }
     )
@@ -227,7 +227,7 @@ def test_shell_allows_and_clears_state_once_satisfied(tmp_path: Path) -> None:
             {
                 "session_id": session_id,
                 "tool_name": "mcp__github__pull_request_read",
-                "tool_input": {"method": "get"},
+                "tool_input": {"pullNumber": 1209, "method": "get"},
                 "tool_response": {"mergeable_state": "clean"},
             }
         ),
@@ -242,7 +242,7 @@ def test_shell_allows_and_clears_state_once_satisfied(tmp_path: Path) -> None:
             {
                 "session_id": session_id,
                 "tool_name": "mcp__github__pull_request_read",
-                "tool_input": {"method": "get_review_comments"},
+                "tool_input": {"pullNumber": 1209, "method": "get_review_comments"},
                 "tool_response": {"threads": []},
             }
         ),

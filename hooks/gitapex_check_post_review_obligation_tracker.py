@@ -33,24 +33,24 @@ risk for the full reasoning against a git-tracked alternative.
 Fields:
     push_detected: bool -- a git-push Bash call was classified this cycle.
     target_pr: str | None -- "#<number>" or "<owner>/<repo>#<number>" for
-        the first PR this cycle's resolve/read calls actually named; None
-        until the first pull_request_read call after a push. Independent
-        review of this module's first version found that without this,
-        a resolve_review_thread or pull_request_read call against ANY
-        PR -- including one wholly unrelated to the push just made --
-        satisfied the obligation, since neither handler checked which PR
-        it was looking at. Once set, a call naming a different PR is
-        ignored rather than updating state, closing that gap; see
-        `_pr_key`.
+        the PR this cycle's most recent pull_request_read call named;
+        None until the first such call after a push. Switching to a
+        different PR than the one currently tracked (including the very
+        first observation) resets open_review_threads/resolve_calls/
+        mergeable_checked to their initial values -- see `_pr_key` and
+        `handle_pull_request_read`'s own docstring for why this is a
+        deliberate design choice, not an incidental reset, and for the
+        residual gap it does not close.
     open_review_threads: int | None -- unresolved-thread count last
         observed from a get_review_comments response for `target_pr`;
         None means "never observed this cycle," not "zero."
     resolve_calls: int -- how many successful (non-error-response)
-        resolve_review_thread calls fired against `target_pr` since the
-        last push_detected reset.
+        resolve_review_thread calls fired since `target_pr` was last set
+        (by the most recent PR switch, or the last push_detected reset,
+        whichever is more recent).
     mergeable_checked: bool -- a pull_request_read(method="get") response
-        for `target_pr` carrying mergeable_state was observed since the
-        last reset.
+        for `target_pr` carrying mergeable_state was observed since
+        `target_pr` was last set.
 
 Three tool shapes update this file:
 
@@ -65,20 +65,27 @@ Three tool shapes update this file:
   module's own fail-toward-more-tracking posture.
 - mcp__github__resolve_review_thread: increments resolve_calls, but only
   once `target_pr` is already set (a push happened AND at least one
-  pull_request_read against that PR has already run this cycle -- see
-  `_pr_key`'s own docstring for why resolve_review_thread's own
-  arguments cannot establish `target_pr` by themselves) and only when
-  the call's own tool_response does not report an error (`_reports_error`,
-  mirroring hooks/gitapex_check_post_write_provenance.py's own marker
-  vocabulary) -- independent review found a failed/rejected resolve call
-  was previously counted identically to a successful one.
+  pull_request_read has already run this cycle -- see `_pr_key`'s own
+  docstring for why resolve_review_thread's own arguments cannot
+  establish `target_pr` by themselves, a residual gap disclosed below,
+  not closed by this design) and only when the call's own tool_response
+  does not report an error (`_reports_error`, mirroring
+  hooks/gitapex_check_post_write_provenance.py's own marker vocabulary)
+  -- independent review found a failed/rejected resolve call was
+  previously counted identically to a successful one.
 - mcp__github__pull_request_read: dispatches on tool_input.method, after
-  first resolving/checking `target_pr` via `_pr_key(tool_input)`. When
-  `target_pr` is unset, this call's own PR becomes it; when already set,
-  a call against a different PR is ignored entirely (state unchanged).
-  get_review_comments records the unresolved-thread count, read out of
-  the tool's own tool_response (unwrapped via `_unwrap_tool_response`,
-  the same MCP content-envelope shapes
+  first resolving/checking `target_pr` via `_pr_key(tool_input)`. A call
+  naming a PR other than the one currently tracked -- including the very
+  first pull_request_read call this cycle, which always "switches" from
+  no tracked PR at all -- makes that PR the new `target_pr` and resets
+  open_review_threads/resolve_calls/mergeable_checked, discarding
+  whatever was tracked against the previous PR (see
+  `handle_pull_request_read`'s own docstring for why a two-round
+  independent review settled on always-reset over the first version's
+  once-locked-never-updates design, and what residual gap even this
+  still leaves open). get_review_comments records the unresolved-thread
+  count, read out of the tool's own tool_response (unwrapped via
+  `_unwrap_tool_response`, the same MCP content-envelope shapes
   hooks/gitapex_check_post_write_provenance.py's own response_payload()
   documents, generalized to also accept a bare list -- issue #908's own
   observed envelope is a list of text blocks, and get_review_comments'
@@ -93,13 +100,33 @@ Three tool shapes update this file:
   unwrapped response tree contains a `mergeable_state`/`mergeableState`
   key anywhere.
 
-Known, disclosed limitation (not fixed here): get_review_comments'
-pagination (perPage/after) is not followed -- a PR with more unresolved
-threads than fit in one page undercounts `open_review_threads` rather
-than following pageInfo.hasNextPage, since this module never makes its
-own API call. Undercounting is the safer direction (it can only make the
-Stop hook LESS strict, never let a genuinely-unresolved thread silently
-count as resolved), but is named here rather than left implicit.
+Known, disclosed limitations (not fixed here):
+
+- get_review_comments' pagination (perPage/after) is not followed -- a PR
+  with more unresolved threads than fit in one page undercounts
+  `open_review_threads` rather than following pageInfo.hasNextPage, since
+  this module never makes its own API call. Undercounting is the safer
+  direction (it can only make the Stop hook LESS strict, never let a
+  genuinely-unresolved thread silently count as resolved), but is named
+  here rather than left implicit.
+- Neither `target_pr` establishment nor resolve_review_thread's own
+  counting is grounded in which PR the actual `git push` targeted --
+  there is no field on any of these three tool calls that names the
+  pushed branch's own PR directly, and this module does not attempt to
+  resolve one from the push command's own branch argument (a materially
+  larger change than the two independent-review rounds' own fixes, per
+  issue #1209's own PR body). `target_pr` is therefore a heuristic --
+  whichever PR the agent's own pull_request_read calls most recently
+  named -- not a verified fact, and resolve_calls counts every
+  successful resolve_review_thread call since target_pr was last set
+  regardless of which PR's thread it actually resolved (that tool's own
+  arguments carry a thread node ID, never a PR number). An agent that
+  fully walks an entirely unrelated PR's review flow (calls
+  get_review_comments and get, and resolve_review_thread, against a PR
+  that was never pushed to) still satisfies this gate for that PR --
+  the always-reset-on-switch design (see above) closes the specific gap
+  a second independent-review round found and reproduced (a wrong first
+  PR permanently blocking the real one), not this broader one.
 
 Fails OPEN on every error path (malformed payload, missing jq is handled
 by the .sh wrapper, unwritable state dir, unreadable prior state) --
@@ -296,14 +323,32 @@ def handle_pull_request_read(state: dict[str, Any], tool_input: dict[str, Any], 
 
     call_pr = _pr_key(tool_input)
     target_pr = state.get("target_pr")
-    if target_pr is None:
-        if call_pr is not None:
-            state = {**state, "target_pr": call_pr}
-    elif call_pr is not None and call_pr != target_pr:
-        # A call against a PR other than the one this cycle is already
-        # tracking -- independent review found that without this check,
-        # reading an unrelated PR's state satisfied the obligation for
-        # the PR actually just pushed to.
+    if call_pr is not None and call_pr != target_pr:
+        # Switching to a different PR than the one this cycle was already
+        # tracking (including the first PR ever observed this cycle)
+        # resets every piece of tracked progress, not just target_pr
+        # itself. A second independent review round found and reproduced
+        # the gap the single-line target_pr reassignment this replaces
+        # left open: once target_pr locked onto whichever PR the agent
+        # happened to read FIRST, a call against the PR actually pushed
+        # to -- if it differed -- was silently ignored forever, leaving
+        # the Stop hook demanding a get_review_comments call the agent
+        # had already made (just against the wrong PR) with no way to
+        # recover short of a second push. Carrying open_review_threads/
+        # resolve_calls/mergeable_checked forward across a PR switch
+        # would reopen the original cross-PR gap from the other
+        # direction (an unrelated PR's already-satisfied state leaking
+        # into the newly-tracked one), so a switch clears all three.
+        state = {
+            **state,
+            "target_pr": call_pr,
+            "open_review_threads": None,
+            "resolve_calls": 0,
+            "mergeable_checked": False,
+        }
+    elif call_pr is None and target_pr is None:
+        # No PR identifiable from this call, and none tracked yet --
+        # nothing to attribute this read to.
         return state
 
     unwrapped = _unwrap_tool_response(tool_response)

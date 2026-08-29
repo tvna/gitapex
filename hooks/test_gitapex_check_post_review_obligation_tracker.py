@@ -5,9 +5,12 @@ See hooks/gitapex_check_post_review_obligation_tracker.py's own module
 docstring for the full state-machine design this exercises: a git-push
 Bash call (reusing hooks/gitapex_check_bash_safety.py's own
 is_git_push classifier) resets the state file; resolve_review_thread and
-pull_request_read update it, the latter also establishing `target_pr` so
-a call against an unrelated PR is ignored rather than counted; the Stop
-hook (hooks/gitapex_check_stop_review_obligation.py, its own test suite
+pull_request_read update it, the latter also establishing `target_pr` --
+a call naming a different PR than the one currently tracked switches
+`target_pr` to it and resets tracked progress (open_review_threads/
+resolve_calls/mergeable_checked), rather than being ignored, so a wrong
+first read can never permanently lock out the real target; the Stop hook
+(hooks/gitapex_check_stop_review_obligation.py, its own test suite
 in hooks/test_gitapex_check_stop_review_obligation.py) reads it back.
 
 Direct-import unit tests exercise `process()` (fast, no subprocess); a
@@ -225,10 +228,11 @@ def test_contains_mergeable_state_handles_camel_case() -> None:
 # --- Cross-PR scoping (independent-review finding) -----------------------
 
 
-def test_pull_request_read_against_a_different_pr_is_ignored() -> None:
+def test_pull_request_read_against_a_different_pr_switches_target_and_resets_progress() -> None:
     session_id = "s13"
     _push(session_id)
     _read_pr(session_id, response={"threads": [{"isResolved": False}]})  # establishes target_pr #1209
+    tracker.process({"session_id": session_id, "tool_name": "mcp__github__resolve_review_thread"})
     other_pr_input = {"owner": "tvna", "repo": "gitapex", "pullNumber": 999, "method": "get"}
     result = tracker.process(
         {
@@ -238,14 +242,48 @@ def test_pull_request_read_against_a_different_pr_is_ignored() -> None:
             "tool_response": {"number": 999, "mergeable_state": "clean"},
         }
     )
-    assert result is None  # state unchanged -- mergeable_checked must still be False
-    state = tracker._read_state(tracker.state_path(session_id))
-    assert state["mergeable_checked"] is False
+    assert result is not None
+    assert result["target_pr"] == "tvna/gitapex#999"
+    assert result["open_review_threads"] is None  # reset, not carried forward from #1209
+    assert result["resolve_calls"] == 0  # reset, not carried forward from #1209
+    assert result["mergeable_checked"] is True  # this call's own method=get response sets it
+
+
+def test_switching_back_to_the_real_target_unblocks_after_a_wrong_pr_was_read_first() -> None:
+    # Second independent-review finding: the FIRST pull_request_read call
+    # this cycle must not permanently lock target_pr onto whichever PR the
+    # agent happened to read first -- a later call against the actual push
+    # target must still be able to satisfy the obligation, not be silently
+    # ignored forever because an unrelated PR claimed target_pr first.
+    session_id = "s13b"
+    _push(session_id)
+    wrong_pr_input = {"owner": "tvna", "repo": "gitapex", "pullNumber": 1, "method": "get"}
+    first = tracker.process(
+        {
+            "session_id": session_id,
+            "tool_name": "mcp__github__pull_request_read",
+            "tool_input": wrong_pr_input,
+            "tool_response": {"number": 1, "mergeable_state": "clean"},
+        }
+    )
+    assert first is not None
+    assert first["target_pr"] == "tvna/gitapex#1"
+    assert first["mergeable_checked"] is True
+
+    switched = _read_pr(session_id, response={"threads": [{"isResolved": False}]})
+    assert switched is not None
+    assert switched["target_pr"] == "tvna/gitapex#1209"
+    assert switched["mergeable_checked"] is False  # reset by the switch, not carried over from PR #1
+    assert switched["open_review_threads"] == 1
+
+    resolved = tracker.process({"session_id": session_id, "tool_name": "mcp__github__resolve_review_thread"})
+    assert resolved is not None
+    assert resolved["resolve_calls"] == 1
 
 
 def test_resolve_review_thread_against_established_target_still_counts() -> None:
-    # Sanity check that the cross-PR guard above does not also block the
-    # ordinary, same-PR case.
+    # Sanity check that the target-switch handling above does not also
+    # disturb the ordinary, same-PR case.
     session_id = "s14"
     _push(session_id)
     _read_pr(session_id, response={"threads": [{"isResolved": False}]})
@@ -324,6 +362,27 @@ def test_read_state_falls_back_to_default_on_non_dict_json() -> None:
 def test_contains_mergeable_state_handles_bare_list() -> None:
     assert tracker._contains_mergeable_state([{"other": "field"}, {"mergeable_state": "clean"}]) is True
     assert tracker._contains_mergeable_state([{"other": "field"}]) is False
+
+
+def test_pull_request_read_without_pull_number_and_no_target_established_is_ignored() -> None:
+    # Neither this call nor any earlier one can be attributed to a PR --
+    # the stricter, fail-toward-more-tracking posture (module docstring)
+    # is to not credit an unattributable read rather than optimistically
+    # crediting it toward whichever PR turns out to matter later.
+    session_id = "s16b"
+    _push(session_id)
+    result = tracker.process(
+        {
+            "session_id": session_id,
+            "tool_name": "mcp__github__pull_request_read",
+            "tool_input": {"method": "get"},  # no owner/repo/pullNumber at all
+            "tool_response": {"mergeable_state": "clean"},
+        }
+    )
+    assert result is None
+    state = tracker._read_state(tracker.state_path(session_id))
+    assert state["target_pr"] is None
+    assert state["mergeable_checked"] is False
 
 
 def test_pull_request_read_without_pull_number_still_updates_established_target() -> None:

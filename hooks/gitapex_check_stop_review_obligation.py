@@ -33,21 +33,28 @@ push_detected is true:
 Both the thread-count and mergeable-state conditions satisfied (or
 push_detected was never set) clears the state file and exits 0.
 
-The first bullet (None, not just "0 and satisfied") closes a gap an
-independent review of the writer half's first version found and
-reproduced live: without it, a turn that pushed, then read only an
-unrelated PR's mergeable_state (via pull_request_read method="get",
-never method="get_review_comments") satisfied this gate entirely --
-target_pr got set to that unrelated PR by the read call itself,
-open_review_threads stayed None (its cross-PR guard skips a call
-against a different PR, but nothing had established target_pr yet at
-that point), and the None-is-"nothing to check" reading let the whole
-obligation pass without ever confirming a single review thread's state.
-Requiring at least one get_review_comments call before mergeable_checked
-alone can satisfy this gate is what the writer's own cross-PR guard
-(gitapex_check_post_review_obligation_tracker.py's `_pr_key` check) then
-protects: an agent cannot re-target a different PR's get_review_comments
-count onto the one it actually pushed to, once target_pr is set.
+The first bullet (None, not just "0 and satisfied") closes a gap the
+first independent-review round found and reproduced live: without it, a
+turn that pushed, then read only a PR's mergeable_state (via
+pull_request_read method="get", never method="get_review_comments")
+satisfied this gate entirely -- open_review_threads never got observed at
+all, and the None-is-"nothing to check" reading let the whole obligation
+pass without ever confirming a single review thread's state. Requiring at
+least one get_review_comments call before mergeable_checked alone can
+satisfy this gate is what this bullet enforces regardless of which PR
+that get_review_comments call named.
+
+That "regardless of which PR" qualifier is deliberate, not an oversight:
+this module reads only the tracker's final state for the cycle, so it
+cannot itself distinguish a get_review_comments call against the PR that
+was actually pushed to from one against an unrelated PR the agent also
+happened to read. gitapex_check_post_review_obligation_tracker.py's own
+`target_pr`-switch design (see that module's docstring, "Known, disclosed
+limitations") resets tracked progress whenever the tracked PR changes --
+closing the narrower gap where a wrong first read permanently locks out
+the real target -- but does not, and cannot from state alone, verify that
+`target_pr`'s last-observed value is the actual push target. That residual
+gap is accepted and disclosed there, not fixed here.
 
 No stop_hook_active-equivalent infinite-loop guard is implemented here --
 deliberate, not an oversight: Claude Code's own hooks reference does not
