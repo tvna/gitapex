@@ -12,6 +12,7 @@ malformed-JSON-on-HTTP-200 path neither sibling test file reaches.
 
 from __future__ import annotations
 
+import http.client
 import inspect
 import json
 import urllib.error
@@ -149,6 +150,65 @@ def test_request_with_retry_max_attempts_1_disables_retry_for_non_idempotent_cal
     )
     assert code == 503
     assert len(attempts) == 1
+
+
+def test_request_with_retry_retries_incomplete_body_read_then_succeeds() -> None:
+    # `http.client.IncompleteRead` is NOT an `OSError` subclass (its MRO is
+    # HTTPException -> Exception), which is the entire reason
+    # request_with_retry's except clause is the two-element tuple
+    # `(OSError, http.client.IncompleteRead)` rather than a bare `OSError`.
+    # Without this test, collapsing that tuple to `OSError` -- reintroducing
+    # the crash-instead-of-retry bug the comment there warns about -- passes
+    # every other test in this file.
+    attempts: list[int] = []
+
+    class FlakyResponse(Response):
+        def read(self) -> bytes:
+            raise http.client.IncompleteRead(b"partial")
+
+    def opener(request: urllib.request.Request) -> Response:
+        attempts.append(1)
+        return FlakyResponse(200) if len(attempts) < 2 else Response(200, "recovered")
+
+    sleeps: list[float] = []
+    code, body = _gitapex_github_http.request_with_retry("GET", "https://example.test", "tok", opener, sleeps.append)
+    assert (code, body) == (200, "recovered")
+    assert len(attempts) == 2
+    assert sleeps == [5]
+
+
+def test_request_with_retry_treats_network_failure_as_code_0_and_retries() -> None:
+    # A network failure (`urllib.error.URLError`, an `OSError` subclass)
+    # sets the sentinel code 0 and carries `str(error)` as the body, so the
+    # early-break rule (`last_code != 0 and last_code < 500`) is false and
+    # the call retries like a 5xx rather than giving up after one attempt.
+    attempts: list[int] = []
+
+    def opener(request: urllib.request.Request) -> Response:
+        attempts.append(1)
+        raise urllib.error.URLError("boom")
+
+    sleeps: list[float] = []
+    code, body = _gitapex_github_http.request_with_retry("GET", "https://example.test", "tok", opener, sleeps.append)
+    assert code == 0
+    assert body == str(urllib.error.URLError("boom"))
+    assert len(attempts) == 3
+    assert sleeps == [5, 10]
+
+
+def test_call_json_raises_github_api_error_after_repeated_network_failure() -> None:
+    # The network-failure counterpart to
+    # test_call_json_raises_github_api_error_with_exact_message_on_repeated_failure
+    # above (which exercises the non-2xx-status path): once
+    # request_with_retry exhausts its attempts with no response at all,
+    # call_json must still surface GitHubApiError, rendering the sentinel
+    # code 0 through format_code rather than as a bare "0".
+    def opener(request: urllib.request.Request) -> Response:
+        raise urllib.error.URLError("boom")
+
+    with pytest.raises(_gitapex_github_http.GitHubApiError) as excinfo:
+        _gitapex_github_http.call_json("GET", "https://example.test", "tok", opener, lambda _: None)
+    assert str(excinfo.value).startswith("GET https://example.test failed: HTTP network error: ")
 
 
 def test_request_with_retry_sends_json_body_and_content_type_only_when_body_given() -> None:
