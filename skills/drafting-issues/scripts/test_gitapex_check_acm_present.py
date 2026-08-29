@@ -151,6 +151,42 @@ def test_has_dedup_disclosure_rejects_a_line_inside_a_bare_cr_fenced_block() -> 
     assert not checker.has_dedup_disclosure("intro\n\r```\nDedup: none found\n```\n")
 
 
+def test_has_dedup_disclosure_rejects_a_line_inside_an_ordered_or_plus_fenced_block() -> None:
+    """Regression test (second adversarial review of the issue #1432 fix):
+    `_CONTAINER_PREFIX`'s ordered-list (`1. `) and `+`-bullet branches
+    were present in the pattern but previously exercised by zero tests --
+    only the `-` bullet and bare-CR paths were pinned. Pin both remaining
+    marker branches the same way, closing the coverage gap the reuse
+    review flagged rather than leaving untested width in the pattern."""
+    assert not checker.has_dedup_disclosure("1. ```\n  Dedup: none found\n  ```\n")
+    assert not checker.has_dedup_disclosure("+ ```\n  Dedup: none found\n  ```\n")
+
+
+def test_has_dedup_disclosure_does_not_catastrophically_backtrack_on_a_whitespace_padded_container_prefix() -> None:
+    """Regression test (second adversarial review of the issue #1432 fix,
+    security-tier CWE-1333): the first `_CONTAINER_PREFIX` shape put a
+    `[ \\t\\r]*` inside each alternative of the repeated `(?:...)*` group,
+    ambiguous with the previous iteration's own trailing `[ \\t]+`/`[ \\t]?`
+    whenever the whitespace run between two consecutive markers was two or
+    more characters -- an "ambiguous adjacent quantifiers" ReDoS shape.
+    Measured as clean exponential blowup (~2x runtime per added whitespace
+    character) on the real regexes before the fix, with a sub-100-byte
+    input already exceeding several seconds. `_CONTAINER_PREFIX` now hoists
+    the leading whitespace out of the repeated group, removing the
+    ambiguity; this asserts the fix holds by giving the adversarial input a
+    hard wall-clock budget a catastrophic-backtracking regex could never
+    meet, rather than merely asserting on the (correct, but ambiguity-blind)
+    output value."""
+    import time
+
+    payload = "-  " * 200 + "x"
+    start = time.perf_counter()
+    result = checker.has_dedup_disclosure(payload)
+    elapsed = time.perf_counter() - start
+    assert elapsed < 2.0, f"took {elapsed:.3f}s on a {len(payload)}-char adversarial input -- possible ReDoS regression"
+    assert result is False
+
+
 def test_has_dedup_disclosure_rejects_a_blockquoted_line() -> None:
     """Regression test (battle-testing-a-skill audit, PR #1215 Finding A/B):
     Step 3 requires quoting the requester's own words verbatim into Facts,

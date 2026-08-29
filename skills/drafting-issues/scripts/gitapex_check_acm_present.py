@@ -83,21 +83,48 @@ _DEDUP_RE = re.compile(
 
 # The CommonMark "block container" prefix that can precede a fence marker
 # and still have it open a real fence: zero or more list-item markers
-# (`- `/`* `/`+ `/`1. `/`1) `) and/or blockquote markers (`>`), each
-# followed by its own leading whitespace, plus any trailing indentation.
-# `[ \t\r]*`, not `[ \t]*`: a bare CR (not part of a CRLF pair) is itself a
-# CommonMark line ending, so a marker following one still opens a genuine
-# fence -- found live by an adversarial review of this same fix (issue
-# #1432 follow-up): the first anchored version used `[ \t]*` alone, which
-# both failed to strip a fence whose marker sat on the first line of a list
-# item (treating its own genuine closing marker as an opener instead, and
-# so inverting which text got stripped) and failed to strip one following a
-# lone CR. This is still not a full CommonMark container parser (it does
-# not bound indentation to <=3 spaces, model closing-fence-length rules, or
-# handle nested nesting-depth changes mid-block) -- see that same review's
-# own disclosed residual gaps -- but it closes the specific list-item and
-# bare-CR misses that review found exploitable in the first anchored form.
-_CONTAINER_PREFIX = r"(?:[ \t\r]*(?:[-*+]|\d{1,9}[.)])[ \t]+|[ \t\r]*>[ \t]?)*[ \t\r]*"
+# (`- `/`* `/`+ `/`1. `/`1) `) and/or blockquote markers (`>`), plus any
+# leading/trailing whitespace. `[ \t\r]*`, not `[ \t]*`: a bare CR (not
+# part of a CRLF pair) is itself a CommonMark line ending, so a marker
+# following one still opens a genuine fence -- found live by an
+# adversarial review of this same fix (issue #1432 follow-up): the first
+# anchored version used `[ \t]*` alone, which both failed to strip a fence
+# whose marker sat on the first line of a list item (treating its own
+# genuine closing marker as an opener instead, and so inverting which
+# text got stripped) and failed to strip one following a lone CR. This is
+# still not a full CommonMark container parser (it does not bound
+# indentation to <=3 spaces, model closing-fence-length rules, or handle
+# nested nesting-depth changes mid-block) -- see that same review's own
+# disclosed residual gaps -- but it closes the specific list-item and
+# bare-CR misses that review found exploitable in the first anchored
+# form.
+#
+# The leading `[ \t\r]*` sits ONCE, outside the repeated group, rather
+# than once per alternative inside it (that first shape's own form,
+# `(?:[ \t\r]*(?:...)[ \t]+|[ \t\r]*>[ \t]?)*[ \t\r]*`): a second
+# adversarial review of THIS fix found that per-alternative form was
+# exploitable as a ReDoS (CWE-1333) -- ambiguous adjacent quantifiers,
+# since a >=2-char whitespace gap between two consecutive markers can be
+# split between one iteration's own trailing `[ \t]+` and the next
+# iteration's leading `[ \t\r]*` in multiple ways, and Python's
+# backtracking engine exhaustively explores all of them once the overall
+# match fails; measured as clean exponential (~2x runtime per added
+# whitespace character) with a sub-100-byte adversarial input (e.g.
+# `"-  " * 22`) already exceeding 2 seconds. Hoisting the leading
+# whitespace out of the repeated group removes that ambiguity (each
+# marker's own required trailing `[ \t]+`/optional `[ \t]?` no longer
+# overlaps with any other iteration's own leading run) and was verified
+# linear up to 500 repetitions (no measurable slowdown) while every
+# previously-passing case (the two cases above, every genuine/non-fence
+# case from the first anchored form, and the list-item/bare-CR cases from
+# the first review) stayed unchanged. This also narrows away an
+# incidental, untested side effect that same review flagged: the
+# per-alternative form additionally tolerated arbitrary whitespace
+# *between* two stacked container markers (e.g. a blockquote followed by
+# a list marker with extra spaces in between) that no comment or test
+# here ever claimed as intentional; the hoisted form no longer accepts
+# that shape either, closing the gap rather than leaving it undocumented.
+_CONTAINER_PREFIX = r"[ \t\r]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+|>[ \t]?)*"
 # A well-paired fenced code block (``` or ~~~, opened and closed with the
 # same marker -- hence the backreference), anchored to line start (issue
 # #1432): per CommonMark/GitHub fence syntax a marker opens a fence only as
