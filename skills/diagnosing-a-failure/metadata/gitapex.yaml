@@ -41,3 +41,9 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1155"
       summary: "executionRequirements declares write:[files] and shell:[bash]: Step 2's reproduction attempt and the tracing-and-instrumentation.md reference's own temporary-logging technique both read as file edits and shell invocations, even though this skill's own Postcondition and Non-goals explicitly exclude authoring a durable fix or failing test -- the distinction is temporary diagnostic instrumentation (in scope) vs. a permanent code change (out of scope, the caller's job)."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "A non-isolated battle-testing-a-skill dispatch (own disclosed caveat: single trial, CLAUDE.md already loaded) found gaps, fixed: Step 8 now requires breakout-safe fencing and secret redaction for caller-supplied text quoted into the Verdict, and states the Verdict is not authoritative merely for being well-formed; Step 1 now stops on an empty/degenerate symptom; Notes now states this file is itself an install/vendoring-time artifact, matching untrusted-input-triage's own precedent."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "Same dispatch's trigger-collision finding (overlaps a gitapex-external debugging plugin) is not fixed by naming that plugin here: the owner asked, mid-session, that this skill's body/references not name any gitapex-external plugin, since that dependency is being retired. Real but temporary, outside this skill's scope (Non-goals). Eval-suite execution deferred to CI: no ANTHROPIC_API_KEY in this authoring session, per eval-status.md."
