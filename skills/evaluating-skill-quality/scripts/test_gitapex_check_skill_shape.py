@@ -3696,6 +3696,31 @@ def test_references_entries_decode_escaped_quotes():
         {"kind": "decision", "anchor": "https://github.com/tvna/gitapex/issues/25", "summary": 'a "quoted" phrase'},
     ]
 
+    # The \\ (literal double-backslash) half of the same claim, previously
+    # untested (issue #1395): a value containing an escaped backslash, not
+    # an escaped quote.
+    backslash_text = (
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n"
+        "    - kind: decision\n"
+        "      anchor: https://github.com/tvna/gitapex/issues/25\n"
+        '      summary: "a \\\\literal backslash\\\\ here"\n'
+    )
+    parsed_backslash = css._parse_manifest(backslash_text)
+    assert parsed_backslash.root["spec"]["references"] == [
+        {
+            "kind": "decision",
+            "anchor": "https://github.com/tvna/gitapex/issues/25",
+            "summary": "a \\literal backslash\\ here",
+        },
+    ]
+
 
 def test_unquote_falls_back_on_invalid_json_escaping():
     # _unquote decodes double-quoted values via json.loads; a value that
@@ -6315,6 +6340,92 @@ def test_non_string_scalar_detection_matches_pyyaml_for_representative_inputs():
         real_is_string = isinstance(real_value, str)
         parsed_is_non_string = css._is_non_string_plain_scalar(raw)
         assert (not real_is_string) == parsed_is_non_string, (raw, real_value, type(real_value).__name__)
+
+
+def test_references_mapping_item_matches_pyyaml_for_representative_inputs():
+    # Differential test against PyYAML (issue #1395, completing #518 ACM row
+    # 1): the two differential tests above cover the null/empty block-header
+    # case and scalar-*list-item* type classification, but neither exercises
+    # spec.references' own mapping-item shape -- exactly the gap #205 named,
+    # stating "a differential gate ... would have caught Repairs 3 and 6
+    # immediately" had one existed. For each representative full
+    # references-list item below, this parser's own parsed item dict must
+    # equal what yaml.safe_load resolves the same manifest text's
+    # spec.references to.
+    import yaml
+
+    manifest_prefix = (
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        "  portability: Portable\n"
+        "  capabilityAssumption: Broad\n"
+        "  references:\n"
+    )
+    cases = [
+        (
+            "plain unquoted fields",
+            "    - kind: decision\n"
+            "      anchor: https://github.com/tvna/gitapex/issues/25\n"
+            "      summary: fixed this\n",
+        ),
+        (
+            "escaped double-quote (Repair 3's own regression class)",
+            "    - kind: decision\n"
+            "      anchor: https://github.com/tvna/gitapex/issues/25\n"
+            '      summary: "a \\"quoted\\" phrase"\n',
+        ),
+        (
+            "escaped backslash",
+            "    - kind: decision\n"
+            "      anchor: https://github.com/tvna/gitapex/issues/25\n"
+            '      summary: "a \\\\literal backslash\\\\ here"\n',
+        ),
+        (
+            "escaped newline inside a quoted value (this field's own multi-line-content case -- the parser has no block-scalar '|'/'>' support, so an embedded newline can only arrive via a quoted escape)",
+            "    - kind: decision\n"
+            "      anchor: https://github.com/tvna/gitapex/issues/25\n"
+            '      summary: "line one\\nline two"\n',
+        ),
+        (
+            "nested outcome mapping, plain and quoted-escaped subfields",
+            "    - kind: audit\n"
+            "      anchor: https://github.com/tvna/gitapex/issues/25\n"
+            "      summary: audited\n"
+            "      outcome:\n"
+            "        verdict: confirmed\n"
+            '        note: "a \\"quoted\\" note"\n',
+        ),
+    ]
+    for label, body in cases:
+        text = manifest_prefix + body
+        real_value = yaml.safe_load(text)["spec"]["references"]
+        parsed_value = css._parse_manifest(text).root["spec"]["references"]
+        assert real_value == parsed_value, (label, real_value, parsed_value)
+
+    # Deliberately excluded, and named here rather than silently asserted
+    # away (same discipline test_non_string_scalar_detection_matches_
+    # pyyaml_for_representative_inputs' own docstring already applies to
+    # its own two known divergences): unlike a bare scalar *list item*
+    # elsewhere in this file, an unquoted kind/anchor/summary/outcome-
+    # subfield VALUE inside a references mapping item is never passed
+    # through _is_non_string_plain_scalar -- it is always read as a raw
+    # string via _unquote. Real YAML instead resolves an unquoted
+    # "true"/"123"/etc. value to its own typed scalar (bool/int/...). This
+    # is a genuine, previously-undocumented divergence from PyYAML found
+    # while writing this test; closing it is a separate, unrequested scope
+    # from this issue's own ACM (narrowing free-prose summary/outcome
+    # fields is a bigger behavior change than a differential-test addition
+    # should make silently), so it is recorded here instead of fixed.
+    text = manifest_prefix + (
+        "    - kind: decision\n      anchor: https://github.com/tvna/gitapex/issues/25\n      summary: true\n"
+    )
+    real_summary = yaml.safe_load(text)["spec"]["references"][0]["summary"]
+    parsed_summary = css._parse_manifest(text).root["spec"]["references"][0]["summary"]
+    assert real_summary is True
+    assert parsed_summary == "true"
 
 
 # ---- _parse_manifest docstring recognized-key drift guard (issue #518 ACM row 4) ----

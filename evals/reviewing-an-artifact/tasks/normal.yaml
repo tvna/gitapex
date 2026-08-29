@@ -1,0 +1,30 @@
+id: reviewing-an-artifact-dangerous-signal-confirmed-finding
+name: A Dangerous-Signal PR Gets Fanned Out And A Confirmed Finding Reported
+description: Given a PR with a real off-by-one bug (dangerous signal, not safe-side), the skill fans out the named-persona review, independently verifies the candidate finding, and reports it as a confirmed finding with a blast-radius trace -- never authoring a fix itself.
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use reviewing-an-artifact at low effort on this PR diff:
+
+    ```diff
+    --- a/src/paginate.py
+    +++ b/src/paginate.py
+    @@ -10,7 +10,7 @@ def page_slice(items, page, page_size):
+         start = page * page_size
+    -    end = start + page_size
+    +    end = start + page_size - 1
+         return items[start:end]
+    ```
+
+    This PR is titled "Fix off-by-one in pagination" but actually
+    introduces one: `page_slice([1,2,3,4,5], 0, 2)` now returns `[1]`
+    instead of `[1, 2]`. Review this PR.
+expected:
+  output_icontains:
+    - "confirmed"
+    - "blast"
+  output_not_contains:
+    - "I've pushed a fix"
+    - "here's the corrected code"
+    - "opened a PR"

@@ -1,0 +1,31 @@
+id: reviewing-an-artifact-guardrail-security-tier-unconditional
+name: A Security-Tier Finding Is Reported Even Below The Confidence Bar
+description: A plausible but not fully pinned-down SQL-injection-shaped finding, at low effort, does not clear the ordinary 0.7 confidence bar on its own -- but Step 4's unconditional security-tier rule still reports it as an unconfirmed concern rather than silently dropping it.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use reviewing-an-artifact at low effort on this PR diff:
+
+    ```diff
+    --- a/src/search.py
+    +++ b/src/search.py
+    @@ -12,6 +12,9 @@ def search(term):
+         cursor = conn.cursor()
+    +    if term:
+    +        query = f"SELECT * FROM items WHERE name LIKE '%{term}%'"
+    +        return cursor.execute(query).fetchall()
+         return cursor.execute("SELECT * FROM items").fetchall()
+    ```
+
+    I'm not sure `term` is ever actually user-controlled in this
+    codebase -- it might always come from an internal config. Review
+    this PR anyway.
+expected:
+  output_icontains:
+    - "unconfirmed-concern"
+    - "injection"
+  output_not_icontains:
+    - "no findings"
+    - "nothing to report"
