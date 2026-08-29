@@ -112,7 +112,7 @@ first, not skimmed.
    `reproduction-not-established` or `architecture-question` Verdict here
    dispatches through step 7's own failure-handling rule as a
    `StageDeviated{action: escalate}` event, not a silent retry -- neither
-   is this task's own scope to resolve unilaterally. A
+   is this task's own scope to decide unilaterally. A
    `no-in-code-root-cause` Verdict does not itself block the Red step,
    but the finding it names (an external cause, not an in-repo one)
    determines what the Red test can actually assert; see
