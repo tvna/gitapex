@@ -1321,6 +1321,28 @@
       ]
     },
     {
+      "id": "gate-enforcement-drift-scan",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_scan_gate_enforcement_drift.py",
+      "rule": "Every gates[] entry with status active and 'ci' in planes must have a matching context in .github/rulesets/main.json's required_status_checks, up to a --threshold ceiling -- a gate that runs in CI and reports red without being able to block a merge (issue #1422's own motivating case: skill-branch-fixture-coverage) is a defect class, not just that one instance. Report-only above the threshold: a gate found missing may be a genuine oversight or a deliberately advisory one (e.g. docs/runbooks/rulesets.md's own documented eval-gate exclusion), and this script cannot tell the two apart, so it names the gap for a human to triage rather than auto-registering every one.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_gate_enforcement_drift.py"],
+      "trigger": "tests/test_gitapex_scan_gate_enforcement_drift.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "self-governance",
+      "tracking_issue": 1422,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": ".gitapex/ssot.json"},
+        {"kind": "file-glob", "ref": ".github/rulesets/main.json"},
+        {"kind": "cross-registry-consistency", "ref": "gates[].id where status==active and 'ci' in planes (ssot.json) <-> rules[].parameters.required_status_checks[].context (main.json)"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
+    },
+    {
       "id": "ruleset-sync-gate",
       "kind": "script",
       "script": [".github/scripts/gitapex_scan_ruleset_drift.py", ".github/scripts/gitapex_compute_ruleset_verify_scope.py"],
