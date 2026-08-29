@@ -80,8 +80,12 @@ limits.
    exists. Only that test counts as proof -- an ancestry-only check on the
    scratch path has already missed a real leak (see
    `references/provenance-and-caveats.md`, "Variance re-measurement"). No
-   available mechanism -> stop and escalate rather than dispatch
-   contaminated. If an operator explicitly authorizes proceeding anyway,
+   available mechanism -> stop; never fall back to the Agent-tool (or any
+   other unverified) subagent dispatch merely because it happens to be
+   available -- follow `evaluating-skill-quality`'s
+   `references/adversarial-self-audit.md` No verified mechanism available
+   section to display the environment-fix-or-handoff code block that
+   section requires, instead of dispatching contaminated. If an operator explicitly authorizes proceeding anyway,
    disclose the contamination prominently in the trial's own report and
    grade every PASS from that trial provisional pending an isolated re-run.
    After each dispatch starts, capture `observed_tester_model` from trusted
@@ -216,6 +220,13 @@ to that re-derivation, not a substitute for it.
   decoded or rendered and scanned before concluding no embedded instruction
   exists (dimension 16's own obfuscation list), the same standard this
   skill requires when grading a target for the identical gap.
+- Do not fall back to the Agent-tool (or any other undemonstrated) subagent
+  dispatch merely because no verified isolation mechanism exists for the
+  current platform -- reaching that state is itself the finding, not
+  license to dispatch anyway (step 2). Display the
+  environment-fix-or-handoff code block `evaluating-skill-quality`'s
+  `references/adversarial-self-audit.md` No verified mechanism available
+  section requires, and wait for the operator to act on it.
 
 ## Notes
 

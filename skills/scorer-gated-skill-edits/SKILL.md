@@ -356,7 +356,12 @@ just measures the wrong thing.
   Isolation verification section), follow its currently-recorded mechanism
   and confirm it before trusting any resulting score; an equivalent target
   skill without such a recipe needs the same confirmation by whatever means
-  its own harness provides.
+  its own harness provides. If no such mechanism can be confirmed, do not
+  fall back to an unverified dispatch merely to obtain a score -- follow
+  `evaluating-skill-quality`'s `references/adversarial-self-audit.md` No
+  verified mechanism available section to display the
+  environment-fix-or-handoff code block that section requires, and wait
+  for the operator to act on it before running the gate.
 
 ## Notes
 
