@@ -1393,6 +1393,26 @@ def test_checkout_denied_when_the_command_uses_an_ordinary_line_continuation(tmp
     assert "f.py" in payload["systemMessage"]
 
 
+def test_checkout_denied_for_pathspec_from_file(tmp_path: Path) -> None:
+    """CRITICAL regression pin (round-5 independent review, issue #1375).
+    `_git_restore_paths` already hard-denied `--pathspec-from-file`, but
+    `_git_checkout_paths` never recognized it -- a single positional after
+    it fell through to the honest bare-SOMENAME Non-goal, which is the
+    WRONG treatment for a flag whose value is a file naming the real
+    pathspecs. Live-verified before the fix: with a tracked file listed
+    in that control file dirtied, the wrapper allowed the command
+    unconditionally and the real checkout silently discarded the change."""
+    repo_dir = tmp_path / "repo"
+    file_path = _init_repo_with_committed_file(repo_dir)
+    file_path.write_text("hello\ndirty\n")
+    (repo_dir / "files.txt").write_text("f.py\n")
+    result = run("git checkout --pathspec-from-file files.txt", payload_cwd=str(repo_dir))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+    payload = json.loads(result.stderr)
+    assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "pathspec-from-file" in payload["systemMessage"]
+
+
 def test_checkout_denied_from_a_subdirectory_when_target_has_uncommitted_changes(tmp_path: Path) -> None:
     """The near-miss's own exact shape (issue #1375, issue #1128 repair 4):
     replayed from a SUBDIRECTORY of the repo, not just the repo root --

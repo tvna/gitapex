@@ -2761,9 +2761,43 @@ def _git_checkout_paths(
     out of a pure classifier's reach) restores the honest, no-claim
     behavior and removes the false-confidence gap; it does not newly
     regress anything `-f`/`-b` could already do to an unguarded working
-    tree before this classifier existed at all."""
+    tree before this classifier existed at all.
+
+    `--pathspec-from-file`/`--pathspec-file-nul` (real git accepts both on
+    `checkout`, not just `restore`) is checked next and DENIES outright --
+    CRITICAL bug found by independent adversarial review (round 5, issue
+    #1375) and independently reproduced live: `_git_restore_paths` already
+    hard-denies this exact flag pair ("paths come from a file this
+    classifier cannot inspect"), but `_git_checkout_paths` never
+    recognized it at all, so `git checkout --pathspec-from-file
+    files.txt` (a single positional, `files.txt`, itself not `.`/`..`)
+    fell all the way through to the bare-SOMENAME Non-goal above -- an
+    HONEST no-claim shape for an ordinary ambiguous ref/path, but not for
+    a flag whose own value-consumption is a FILE CONTAINING THE REAL
+    PATHSPECS this classifier cannot read. Live-verified: with a tracked
+    file listed in that control file dirtied, the wrapper allowed the
+    command (exit 0, no check performed) and the real `git checkout
+    --pathspec-from-file` silently discarded the change. Denying here,
+    matching restore's own established treatment, rather than folding
+    into the Non-goal: unlike the `-b`/`-B` case above (where an
+    unresolvable "would this overwrite anything" question is inherent to
+    branch switching itself, matching git's own already-imperfect native
+    protection), a pathspec-from-file's paths are knowable in principle --
+    this classifier simply cannot read the named file -- so silently
+    granting no-claim safety here would under-serve the exact opaque-path
+    threat model this whole feature exists to close, not merely decline
+    to extend coverage."""
     if any(tok in _CHECKOUT_BRANCH_CREATION_FLAGS or tok.startswith("--orphan=") for tok in tokens_after):
         return None, ()
+    if any(
+        tok == "--pathspec-from-file" or tok.startswith("--pathspec-from-file=") or tok == "--pathspec-file-nul"
+        for tok in tokens_after
+    ):
+        return (
+            "a 'git checkout --pathspec-from-file'/'--pathspec-file-nul' flag reads paths from a file this "
+            "classifier cannot inspect, so this is denied outright",
+            (),
+        )
     if "--" in tokens_after:
         after = tokens_after[tokens_after.index("--") + 1 :]
         if not after:

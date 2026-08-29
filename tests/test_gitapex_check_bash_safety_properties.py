@@ -3316,6 +3316,31 @@ def test_classify_no_longer_falsely_claims_safety_for_a_forced_branch_creation()
 
 
 @_PROPERTIES
+@given(flag=st.sampled_from(["--pathspec-from-file=list.txt", "--pathspec-from-file", "--pathspec-file-nul"]))
+def test_git_checkout_paths_denies_pathspec_from_file(flag: str) -> None:
+    """CRITICAL regression pin (round-5 independent review, issue #1375).
+    `_git_restore_paths` already hard-denies this exact flag pair ("paths
+    come from a file this classifier cannot inspect"), but
+    `_git_checkout_paths` never recognized it at all -- a single
+    positional after it fell through to the honest bare-SOMENAME Non-goal,
+    which is the WRONG treatment for a flag whose own value-consumption is
+    a file containing the real pathspecs, not an ambiguous ref/path.
+    Live-verified end-to-end that this silently discarded a dirty tracked
+    file listed in the control file."""
+    reason, resolved = checker._git_checkout_paths([flag, "files.txt"], {})
+    assert reason is not None
+    assert resolved == ()
+
+
+def test_classify_denies_checkout_pathspec_from_file() -> None:
+    """End-to-end regression pin for the round-5 finding at the
+    `classify()` level, mirroring the already-existing restore-side pin."""
+    verdict = checker.classify("git checkout --pathspec-from-file files.txt")
+    assert verdict.deny is True
+    assert "pathspec-from-file" in verdict.reason
+
+
+@_PROPERTIES
 @given(command_paths=st.lists(_PATH_TOKENS, min_size=1, max_size=3))
 def test_rule_git_checkout_restore_accumulates_paths_across_segments(command_paths: list[str]) -> None:
     """Model-based: multiple checkout/restore invocations chained in one
