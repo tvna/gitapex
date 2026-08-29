@@ -105,6 +105,64 @@ tokenizer, not a narrow patch; pinned as `shlex-nested-double-quote-
 inside-command-substitution-full-bypass` in
 hooks/test_gitapex_check_bash_safety.py's own `KNOWN_BYPASS_COMMANDS`.
 
+CRITICAL, disclosed, redirect-handling-specific limitation, the same
+underlying `shlex`-quote-information-loss class as the residual just
+above (found live by Step 8 independent review, round 17 of issue
+#1375's own checkout/restore feature review, while stress-testing
+rounds 14-16's own newly-added redirect-clause handling):
+`_REDIRECT_OPERATORS`/`_redirect_span_length`/`_redirect_span_length_
+with_optional_fd`/`_strip_redirect_clauses` recognize a redirect
+operator purely by a token's final TEXT value -- `tokenize()`'s own
+`shlex` dequotes every token before this check ever runs, so a real,
+tracked file whose name is literally one of these operator strings
+(e.g. a file named `>`) tokenizes to the exact same text as a genuine,
+unquoted redirect operator, with no way to recover which one the
+source actually was. Live-verified real, silent data loss: with a
+real tracked file literally named `>` and a second file `realfile.py`
+genuinely dirty, `git checkout ">" realfile.py` genuinely discards
+`realfile.py`'s uncommitted content when actually executed, while
+`classify()` reports `deny=False` with an EMPTY `checkout_restore_
+paths` -- `_strip_redirect_clauses` misreads the quoted `">"` as a
+real operator and `realfile.py` as its "target," stripping BOTH and
+leaving nothing for `_git_checkout_paths` to extract. Reachability is
+narrow (the decoy path must already exist as a real tracked file, or
+git's own atomic multi-pathspec validation aborts first, confirmed
+live), but the underlying gap is real and this is a full, confirmed
+bypass for that shape. Deliberately NOT attempted here: a narrow fix
+confined to the redirect-handling functions alone does not exist
+without reintroducing round 15's own, far more common false-positive
+(denying an ordinary `git checkout -- f.py >> log.txt`-style output
+redirect) -- a genuine fix needs `tokenize()` itself to preserve
+per-token quote/escape provenance, the same class of tokenizer-level
+change issue #1404 above already requires, not a narrow patch; tracked
+as its own dedicated issue, https://github.com/tvna/gitapex/issues/1412,
+since it is a distinct shlex-information-loss shape (redirect-operator
+text matching, not nested double-quote state) from #1404's own finding;
+pinned as `quoted-redirect-operator-shaped-filename-bypass` in
+hooks/test_gitapex_check_bash_safety.py's own `KNOWN_BYPASS_COMMANDS`.
+
+A second, distinct, round-17 finding in the SAME redirect-handling area
+is NOT a bypass and is NOT tracked separately: `_redirect_span_length`'s
+own deliberate choice (round 16) to leave a leading digit token OUT of
+a redirect span, rather than risk dropping a real path argument (see
+that function's own docstring), is INHERENTLY indistinguishable at the
+token level from the case where the digit genuinely is consumed by a
+fused `N>file`-shaped redirect with no `--` present -- `git checkout
+realfile.py 2>target.txt` (fused, no `--`) and `git checkout realfile.py
+2 >target.txt` (spaced, no `--`) tokenize identically, but only the
+spaced form genuinely passes `2` to git as a second positional. Since
+this classifier cannot tell the two apart, it deliberately treats BOTH
+the same way -- as `_git_checkout_paths`'s own sub-case (b), extracting
+BOTH `realfile.py` and `2` -- rather than silently assuming the
+fused-and-therefore-safe reading. This can produce a false deny when a
+file named `2` happens to be dirty even though the fused form never
+actually touches it, but that is the SAME "when a token-level ambiguity
+cannot be soundly resolved, prefer extra scrutiny over a silent miss"
+posture this module takes everywhere else (see round 12's own still-
+dynamic-candidate fail-closed choice for the identical trade-off
+direction) -- an accepted, intentional cost of round 16's own data-loss
+fix, not a new defect.
+
 Closed by fifth-round Step 8 independent review: `_gh_api_method_dynamic_
 value`/`_gh_api_field_dynamic_hit` (and the earlier literal-token scans)
 only ever recognized a dynamic VALUE fused onto a literal `-X`/`--method`/
@@ -3234,7 +3292,15 @@ def _git_checkout_paths(
         `-b`/`-B`/`--orphan` (see below), every position past the first is
         a pathspec under every resolution git can take. Over-including a
         token that also happens to be a valid ref name just checks a path
-        that likely does not exist, which is harmless.
+        that likely does not exist, which is harmless. A digit token that
+        survived `_strip_redirect_clauses`'s own deliberately strict,
+        never-consume-a-leading-digit choice (see `_redirect_span_length`'s
+        own docstring, round-16 finding) can flip a genuinely single-
+        positional, no-`--` invocation (case Non-goal below) into THIS
+        case when the digit was actually consumed by a real, fused
+        `N>file`-shaped redirect at real bash runtime -- an accepted,
+        intentional cost of that fix (see the module docstring's own
+        round-17 paragraph for the full trade-off), not a defect.
     (c) No `--`, exactly one positional token, and it is the literal `.`
         or `..` -- both are syntactically invalid git ref names (confirmed
         live: `git check-ref-format --branch .`/`--branch ..` both fail,

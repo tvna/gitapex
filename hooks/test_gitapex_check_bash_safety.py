@@ -448,6 +448,35 @@ KNOWN_BYPASS_COMMANDS = [
         'x="$(echo "y)" && git checkout -- dirty.py)"',
         "shlex-nested-double-quote-inside-command-substitution-full-bypass",
     ),
+    (
+        # CRITICAL bypass, same underlying shlex-quote-information-loss
+        # class as the residual just above. Found live by independent
+        # adversarial review (round 17, issue #1375), tracked as its own
+        # dedicated issue rather than fixed here:
+        # https://github.com/tvna/gitapex/issues/1412 -- deliberately out
+        # of issue #1375's own scope, since a narrow fix confined to the
+        # redirect-handling functions alone does not exist without
+        # reintroducing round 15's own, far more common false positive
+        # (denying an ordinary `git checkout -- f.py >> log.txt`-style
+        # output redirect); a genuine fix needs tokenize() itself to
+        # preserve per-token quote/escape provenance, the same class of
+        # tokenizer-level change issue #1404 already requires.
+        # `_REDIRECT_OPERATORS`/`_strip_redirect_clauses` recognize a
+        # redirect operator purely by a token's final TEXT value --
+        # `tokenize()`'s own shlex dequotes every token first, so a real,
+        # tracked file literally named `>` tokenizes identically to a
+        # genuine, unquoted redirect operator. Live-verified real, silent
+        # data loss: with a real tracked file literally named `>` and a
+        # second, genuinely dirty file `realfile.py`, this exact command
+        # discards `realfile.py`'s uncommitted content when actually
+        # executed, while `classify()` reports `deny=False` with an EMPTY
+        # `checkout_restore_paths` -- the quoted `">"` is misread as a
+        # real operator and `realfile.py` as its "target," stripping both
+        # and leaving nothing to extract. See issue #1412 for the full
+        # write-up and live-verification detail.
+        'git checkout ">" realfile.py',
+        "quoted-redirect-operator-shaped-filename-bypass",
+    ),
 ]
 
 
