@@ -259,3 +259,127 @@ def test_graphql_call_uses_default_opener_and_sleeper_when_omitted() -> None:
     # retry actually happens, which a 4xx (non-transient) response avoids.
     signature = inspect.signature(_gitapex_github_http.graphql_call)
     assert signature.parameters["opener"].default is _gitapex_github_http.default_opener
+
+
+def _http_error(code: int, body: str = "") -> urllib.error.HTTPError:
+    # Response duck-types urlopen's context-manager response, not the
+    # stdlib IO[bytes] HTTPError expects for its `fp` argument; mypy can't
+    # see the structural match. Same technique as
+    # tests/test_gitapex_sync_pr_publish.py's own http_error helper.
+    return urllib.error.HTTPError("https://example.test", code, "err", {}, Response(code, body))  # type: ignore[arg-type]
+
+
+def test_graphql_call_retries_on_5xx_status_then_succeeds() -> None:
+    # Distinct from test_graphql_call_retries_on_transient_marker_then_succeeds
+    # above: this exercises _graphql_is_transient's other transient
+    # condition (code >= 500), not the 200-with-error-marker path.
+    attempts: list[int] = []
+
+    def opener(request: urllib.request.Request) -> Response:
+        attempts.append(1)
+        if len(attempts) < 2:
+            return Response(500, "boom")
+        return Response(200, json.dumps({"data": {"ok": True}}))
+
+    sleeps: list[float] = []
+    code, body = _gitapex_github_http.graphql_call(
+        query="query", variables={}, token="tok", opener=opener, sleeper=sleeps.append
+    )
+    assert code == 200
+    assert body == {"data": {"ok": True}}
+    assert len(attempts) == 2
+    assert sleeps == [5]
+
+
+def test_graphql_call_exhausts_retries_on_persistent_5xx() -> None:
+    def opener(request: urllib.request.Request) -> Response:
+        return Response(500, "still broken")
+
+    sleeps: list[float] = []
+    code, body = _gitapex_github_http.graphql_call(
+        query="query", variables={}, token="tok", opener=opener, sleeper=sleeps.append
+    )
+    assert code == 500
+    assert body == {}
+    assert sleeps == [5, 10]
+
+
+def test_graphql_call_retries_http_error_then_succeeds() -> None:
+    attempts: list[int] = []
+
+    def opener(request: urllib.request.Request) -> Response:
+        attempts.append(1)
+        if len(attempts) < 2:
+            raise _http_error(502, "boom")
+        return Response(200, json.dumps({"data": {"ok": True}}))
+
+    code, body = _gitapex_github_http.graphql_call(
+        query="query", variables={}, token="tok", opener=opener, sleeper=lambda _: None
+    )
+    assert code == 200
+    assert body == {"data": {"ok": True}}
+    assert len(attempts) == 2
+
+
+def test_graphql_call_retries_url_error_then_succeeds() -> None:
+    attempts: list[int] = []
+
+    def opener(request: urllib.request.Request) -> Response:
+        attempts.append(1)
+        if len(attempts) < 2:
+            raise urllib.error.URLError("connection refused")
+        return Response(200, json.dumps({"data": {"ok": True}}))
+
+    code, body = _gitapex_github_http.graphql_call(
+        query="query", variables={}, token="tok", opener=opener, sleeper=lambda _: None
+    )
+    assert code == 200
+    assert body == {"data": {"ok": True}}
+    assert len(attempts) == 2
+
+
+# ---------------------------------------------------------------------------
+# _graphql_is_transient -- direct unit coverage of each branch.
+# ---------------------------------------------------------------------------
+
+
+def test_graphql_is_transient_true_on_network_failure_code() -> None:
+    assert _gitapex_github_http._graphql_is_transient(0, {}) is True
+
+
+def test_graphql_is_transient_true_on_5xx() -> None:
+    assert _gitapex_github_http._graphql_is_transient(502, {}) is True
+
+
+def test_graphql_is_transient_false_on_2xx_with_no_errors() -> None:
+    assert _gitapex_github_http._graphql_is_transient(200, {"data": {}}) is False
+
+
+def test_graphql_is_transient_false_when_errors_present_but_no_marker() -> None:
+    body = {"errors": [{"message": "some other, non-transient failure"}]}
+    assert _gitapex_github_http._graphql_is_transient(200, body) is False
+
+
+def test_graphql_is_transient_false_when_errors_entry_is_not_a_dict() -> None:
+    assert _gitapex_github_http._graphql_is_transient(200, {"errors": ["not-a-dict"]}) is False
+
+
+def test_graphql_is_transient_true_when_marker_present_case_insensitive() -> None:
+    body = {"errors": [{"message": "SOMETHING WENT WRONG WHILE EXECUTING YOUR QUERY"}]}
+    assert _gitapex_github_http._graphql_is_transient(200, body) is True
+
+
+def test_default_opener_calls_urlopen_with_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_urlopen(request: urllib.request.Request, timeout: float | None = None) -> Response:
+        captured["request"] = request
+        captured["timeout"] = timeout
+        return Response(200, "{}")
+
+    monkeypatch.setattr(_gitapex_github_http.urllib.request, "urlopen", fake_urlopen)
+    request = urllib.request.Request("https://example.test", method="GET")
+    result = _gitapex_github_http.default_opener(request)
+    assert isinstance(result, Response)
+    assert captured["request"] is request
+    assert captured["timeout"] == _gitapex_github_http._HTTP_TIMEOUT_SECONDS
