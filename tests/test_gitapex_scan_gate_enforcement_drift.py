@@ -48,9 +48,15 @@ def test_load_active_ci_gate_ids_tolerates_malformed_entries() -> None:
     assert scanner.load_active_ci_gate_ids(ssot) == {"a"}
 
 
-def test_load_active_ci_gate_ids_empty_when_gates_missing() -> None:
-    assert scanner.load_active_ci_gate_ids({}) == set()
-    assert scanner.load_active_ci_gate_ids({"gates": "not-a-list"}) == set()
+def test_load_active_ci_gate_ids_raises_when_gates_key_broken() -> None:
+    """Dimension 15 (fail-closed on malformed input): a missing/non-list
+    top-level `gates` key must raise, not silently read as zero active
+    gates -- that would make run() report a clean PASS with no gap at all
+    for a corrupted registry."""
+    with pytest.raises(scanner.RegistryReadError):
+        scanner.load_active_ci_gate_ids({})
+    with pytest.raises(scanner.RegistryReadError):
+        scanner.load_active_ci_gate_ids({"gates": "not-a-list"})
 
 
 def test_load_required_contexts_reads_required_status_checks_rule() -> None:
@@ -71,14 +77,34 @@ def test_load_required_contexts_reads_required_status_checks_rule() -> None:
     assert scanner.load_required_contexts(ruleset) == {"actionlint", "pytest"}
 
 
-def test_load_required_contexts_empty_when_rule_absent() -> None:
+def test_load_required_contexts_empty_when_rule_type_absent() -> None:
+    """A well-formed `rules` list simply carrying no
+    `required_status_checks`-typed entry is a valid "zero required
+    contexts" state, distinct from the `rules` key itself being broken --
+    see test_load_required_contexts_raises_when_rules_key_broken."""
     assert scanner.load_required_contexts({"rules": [{"type": "deletion"}]}) == set()
-    assert scanner.load_required_contexts({}) == set()
+
+
+def test_load_required_contexts_raises_when_rules_key_broken() -> None:
+    """Dimension 15: a missing/non-list top-level `rules` key must raise,
+    not silently read as zero required contexts."""
+    with pytest.raises(scanner.RulesetReadError):
+        scanner.load_required_contexts({})
 
 
 def test_find_unregistered_gates_is_sorted_set_difference() -> None:
     result = scanner.find_unregistered_gates({"b", "a", "c"}, {"b"})
     assert result == ["a", "c"]
+
+
+def test_find_unregistered_gates_ignores_the_reverse_direction() -> None:
+    """Dimension 20: this scanner is deliberately one-directional (see the
+    module docstring) -- a required context with no matching ssot.json
+    gate id (e.g. this repository's own baseline `ruff`/`pytest`/`mypy`
+    jobs, never registered as ssot.json gates in the first place) must not
+    appear in the result or affect it."""
+    result = scanner.find_unregistered_gates({"a"}, {"a", "ruff", "pytest", "mypy"})
+    assert result == []
 
 
 def test_evaluate_exceeds_threshold() -> None:

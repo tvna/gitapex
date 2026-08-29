@@ -30,6 +30,20 @@ fix it": it reports the count against a `--threshold` (the same shape
 `gitapex_scan_retrospective_gate_drift.py` already uses) and leaves the
 per-gate judgment call to whoever reads a failing run.
 
+**One-directional by design, not by oversight (dimension 20).** This
+script only ever reports `gate_ids - required_contexts` -- an active
+CI-plane `ssot.json` gate absent from `required_status_checks`. It
+deliberately does not also report the reverse (`required_contexts -
+gate_ids`): a direct check found 11 such reverse entries in this
+repository today (`actionlint`, `ruff`, `pytest`, `mypy`, `betterleaks`,
+`coverage-combine`, `exception-handler-gaps`, and four
+`pytest-bash-oracle-*` jobs), none of which are `ssot.json` gate
+registrations at all -- they are this repository's baseline lint/test/
+type-check/secret-scan jobs, outside `ssot.schema.json`'s own stated scope
+("gitapex's own deterministic gates", not every CI job the repository
+runs). Reporting that direction as a "gap" would be a false claim that
+those jobs are missing a registration they were never meant to have.
+
 **Why this is a working-tree-only check, not a network scan.** Everything
 it needs -- the gate registry and the committed ruleset -- is already
 checked into this repository. Unlike `gitapex_scan_ruleset_drift.py`
@@ -99,13 +113,27 @@ def load_active_ci_gate_ids(ssot: dict[str, Any]) -> set[str]:
 
     Mirrors `gitapex_scan_retrospective_gate_drift.py`'s own
     `load_gate_tracking_issues` in shape (read one field across every
-    `gates[]` entry, tolerate a malformed individual entry rather than
+    `gates[]` entry, tolerate a malformed *individual* entry rather than
     crashing on it) but reads `id`/`status`/`planes` instead of
     `tracking_issue`.
+
+    Raises `RegistryReadError` when the top-level `gates` key is missing or
+    not a list -- fail-closed, per
+    `skills/evaluating-deterministic-gate-quality/references/dimensions.md`
+    dimension 15: silently returning an empty set here would let a
+    corrupted or truncated `gates` array read as "zero active CI-plane
+    gates", which `run()` would then report as a clean PASS with no gap at
+    all -- the exact "malformed input reads as clean" failure mode this
+    script exists to avoid in the class of gate it itself checks for.
+    Tolerating a malformed *individual* gate entry (not a dict, blank id,
+    non-list `planes`) stays a skip, not a raise: one bad entry among many
+    good ones is not evidence the whole registry is unusable, and skipping
+    it only ever shrinks the counted set, which biases toward reporting
+    more gaps, not fewer.
     """
     gates = ssot.get("gates")
     if not isinstance(gates, list):
-        return set()
+        raise RegistryReadError("ssot: top-level 'gates' key is missing or not a list -- registry is unusable")
     gate_ids: set[str] = set()
     for gate in gates:
         if not isinstance(gate, dict):
@@ -125,14 +153,23 @@ def load_active_ci_gate_ids(ssot: dict[str, Any]) -> set[str]:
 def load_required_contexts(ruleset: dict[str, Any]) -> set[str]:
     """Return every `context` named in `ruleset`'s `required_status_checks` rule.
 
-    Tolerant of a missing or malformed rule (returns an empty set) rather
-    than raising -- an unparseable *policy* here is `find_schema_violations`
-    (`gitapex_gate_ruleset_required_checks.py`)'s own job to report; this
-    function only reads what is already known-valid JSON.
+    Raises `RulesetReadError` when the top-level `rules` key is missing or
+    not a list -- the same fail-closed reasoning `load_active_ci_gate_ids`
+    applies to `gates` above: a corrupted `rules` array must not silently
+    read as "zero required contexts" (which would, if anything, bias
+    toward over-reporting gaps here, but a missing top-level key is still
+    evidence the file itself is unusable, not a valid "no rules" state).
+    A `required_status_checks`-typed rule that is simply absent from an
+    otherwise well-formed `rules` list, or a malformed *individual* rule
+    entry, is tolerated as "zero required contexts" -- that shape check
+    against GitHub's own request schema is
+    `gitapex_gate_ruleset_required_checks.py`'s own job, not this
+    function's; this function only reads what is already known-valid
+    top-level JSON.
     """
     rules = ruleset.get("rules")
     if not isinstance(rules, list):
-        return set()
+        raise RulesetReadError("ruleset: top-level 'rules' key is missing or not a list -- ruleset is unusable")
     contexts: set[str] = set()
     for rule in rules:
         if not isinstance(rule, dict) or rule.get("type") != "required_status_checks":
