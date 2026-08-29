@@ -66,16 +66,21 @@ without losing the issue's acceptance criteria.
    each row against the issue's own stated facts before adopting it,
    and correct or flag any row that does not hold up rather than
    accepting it merely for being well-formed. For any row whose planned
-   files/operations merge, import, or otherwise couple two or more
-   files (a consolidation- or shared-module-shaped criterion), confirm
-   the calling repository's own layout documentation (or, absent one,
-   direct inspection of what is and is not distributed) puts all of
-   them on the same side of any deployed-to-consumers vs.
-   never-deployed boundary before accepting that row -- the same
+   ops propose combining logic from two or more files into one shared
+   file or module (a consolidation- or shared-module-shaped criterion --
+   not merely a row where one file calls or references another),
+   confirm the calling repository's own layout documentation (or, absent
+   one, direct inspection of what is and is not distributed) puts all of
+   the files being combined on the same side of any deployed-to-consumers
+   vs. never-deployed boundary before accepting that row -- the same
    redistribution-boundary check `evaluating-deterministic-gate-quality`'s
    own duplication/drift-risk dimension applies at review time, applied
-   here before implementation instead. Flag and correct the row, per
-   this step's own mandate above, when the boundary check fails.
+   here before implementation instead. A calling repository with no such
+   distribution-boundary concept at all (an ordinary application
+   repository, not a redistributed package or plugin) satisfies this
+   check trivially -- note that explicitly rather than forcing a
+   meaningless classification. Flag and correct the row, per this step's
+   own mandate above, when a genuine boundary crossing is found.
 
    **Postcondition:** once this re-verification pass is complete, write a
    re-verification marker onto the parent issue's own body via the

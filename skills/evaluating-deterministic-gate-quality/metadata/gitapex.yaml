@@ -788,6 +788,27 @@ spec:
       outcome:
         verdict: PASS
         tests: 43
+    - kind: audit
+      anchor: "method:evaluating-skill-quality"
+      summary: "A second isolated dispatch on the issue-1456 diff found the new worked example's quotation spliced two non-adjacent docstring spans under a 'verified verbatim' label with no elision marker, breaking this file's own established elision-disclosure convention; and a pre-existing, differently-scoped 'dimension 12' section heading immediately adjacent to the new one, worsening reader confusion though not introduced by this diff."
+      outcome:
+        verdict: WELL-FORMED-NOT-MATURE
+        found: 2
+    - kind: audit
+      anchor: "method:battle-testing-a-skill"
+      summary: "The same dispatch round adversarially probed the new dimension-12 clause and found it over-broad (the stated harm is directional -- a shared module landing on the never-deployed side -- but the conclusion banned consolidation whenever any boundary exists, including a safe placement on the deployed side) and under-constrained (the 'actively building toward' carve-out set no evidentiary bar, letting an unfalsifiable assertion block a valid consolidation indefinitely)."
+      outcome:
+        verdict: FAIL
+        found: 2
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1456"
+      summary: "Fixed the two battle-testing-a-skill findings: narrowed the consolidation ban to a shared module actually placed on the never-deployed side (a deployed-side placement remains valid); required a concrete, checkable artifact (a committed file, an open issue, an established precedent) before an 'actively building toward' claim counts, rather than a bare assertion."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1456"
+      summary: "Fixed the two evaluating-skill-quality findings: added an `[elided]` marker to the worked-example quotation's spliced docstring spans; retitled the pre-existing adjacent section to match its actual content (mechanism-fit criterion 5, not dimension 12) and updated the Contents list. Re-run confirmed 61/61 shape checks and 43/43 pytest."
+      outcome:
+        checks: "61/61"
+        tests: 43
   skillDependencies:
     requires:
       - evaluating-skill-quality

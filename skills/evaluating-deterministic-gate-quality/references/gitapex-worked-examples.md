@@ -21,7 +21,7 @@ copied from the report's own text.
 
 1. [Worked example: Reproducibility / Domain-coverage axis](#worked-example-reproducibility--domain-coverage-axis-argued-multi-domain-coverage)
 2. [Worked example: retrospective-identity, single-source-of-truth predicate](#worked-example-retrospective-identity-single-source-of-truth-predicate)
-3. [Worked example: dimension 12 and sibling-repository provenance](#worked-example-dimension-12-deployment-mode-portability-and-sibling-repository-provenance)
+3. [Worked example: mechanism-fit criterion 5 and sibling-repository provenance](#worked-example-mechanism-fit-criterion-5-precedent-reuse-and-sibling-repository-provenance)
 4. [Worked example: dimension 12, redistribution-boundary-aware resolution](#worked-example-dimension-12-redistribution-boundary-aware-resolution)
 5. [Smoke test: this skill applied to a real Domain-2 gate](#smoke-test-this-skill-applied-to-a-real-domain-2-gate)
 6. [Worked example: Security-level / Zero-Trust maturity classification axis](#worked-example-security-level--zero-trust-maturity-classification-axis-this-repositorys-own-established-ceiling)
@@ -85,7 +85,7 @@ This is also the pattern this skill recommends any target repository
 build for its own coverage-attestation findings: a *standing*,
 drift-detecting meta-gate, not only a one-time audit.
 
-## Worked example: dimension 12 (deployment-mode portability) and sibling-repository provenance
+## Worked example: mechanism-fit criterion 5 (precedent reuse) and sibling-repository provenance
 
 `.github/scripts/gitapex_gate_owasp_asi_mapping.py:4` (verbatim except one
 `[elided]` backing-issue number): "[an issue] ports `tvna/claude-md`'s
@@ -102,10 +102,12 @@ from elsewhere rather than re-deriving one.
 ## Worked example: dimension 12, redistribution-boundary-aware resolution
 
 `hooks/gitapex_check_skill_audit_disclosure_or_waiver.py`'s own docstring
-(verified verbatim): "Per docs/repository-layout.md, only skills/ and
-hooks/ are deployed runtime primitives when this repository is installed
-as a plugin -- .github/ is dev-only CI tooling and is never installed
-into a consumer repository. **Deliberately not imported** from
+(verified verbatim except one `[elided]` mid-docstring paragraph about a
+later applicability-computation move, unrelated to this worked example):
+"Per docs/repository-layout.md, only skills/ and hooks/ are deployed
+runtime primitives when this repository is installed as a plugin --
+.github/ is dev-only CI tooling and is never installed into a consumer
+repository. [elided] **Deliberately not imported** from
 .github/scripts/gitapex_gate_skill_audit_disclosure.py or any other copy:
 this file must work standalone from inside a distributed plugin bundle
 with no access to .github/. **Kept in sync** with that script's own

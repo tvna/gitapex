@@ -220,16 +220,28 @@ differentiation from shape check 1 and dimension 15 below.
     dimension's resolution, check whether the duplicate-bearing
     artifacts sit on different sides of a redistribution boundary the
     target repository's own layout documentation declares (a path
-    deployed to consumers vs. one that is dev-only and never deployed).
-    A shared module placed on the never-deployed side breaks the
-    deployed side's own standalone-execution guarantee the moment that
-    boundary is crossed -- including a boundary the target is actively
-    building toward but has not yet made live. Where a
-    redistribution-boundary mismatch exists, consolidation is not an
-    available resolution; the correct one is deliberate, disclosed
-    duplication plus an automated parity/synchronization test asserting
-    the two copies' policy-relevant logic stays identical -- satisfying
-    this dimension's "named... with a synchronization check" bar without
+    deployed to consumers vs. one that is dev-only and never deployed;
+    a reusable-CI-workflow boundary and a license/customer-tier split
+    are the same shape under a different name). The harm is directional,
+    not automatic from the boundary's mere existence: a shared module
+    placed on the never-deployed side breaks the deployed side's own
+    standalone-execution guarantee the moment that boundary is crossed,
+    but a shared module placed on the deployed side, imported only by
+    the never-deployed side, does not cross it and remains a valid
+    resolution -- check the specific proposed module's own placement,
+    not merely whether a boundary exists somewhere between the carriers.
+    A boundary the target is actively building toward but has not yet
+    made live counts too, but only when grounded in a concrete,
+    checkable artifact (a committed file, an open issue, an established
+    precedent elsewhere in the same repository) -- an unfalsifiable
+    assertion ("this will eventually be split out") does not, and must
+    not be allowed to block an otherwise-valid consolidation
+    indefinitely. Where a genuine placement-crossing mismatch exists,
+    consolidation on the never-deployed side is not an available
+    resolution; the correct one is deliberate, disclosed duplication
+    plus an automated parity/synchronization test asserting the two
+    copies' policy-relevant logic stays identical -- satisfying this
+    dimension's "named... with a synchronization check" bar without
     violating either side's own distribution constraint.
     *Domains:* generalizes directly.
 13. **Side-effect independence from the deny decision.** For a gate that

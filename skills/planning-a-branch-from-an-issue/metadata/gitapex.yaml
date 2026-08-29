@@ -25,3 +25,15 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1155"
       summary: "Step 4's bare-defect-report path now routes a successfully-reproduced issue through the new diagnosing-a-failure skill before Step 5 begins; added to relatedTo."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1462"
+      summary: "Step 5's re-verification now checks a consolidation/shared-module-shaped ACM row's file list against the calling repository's own redistribution boundary, mirroring evaluating-deterministic-gate-quality's dimension 12 (https://github.com/tvna/gitapex/issues/1456) at planning time instead of review time."
+    - kind: audit
+      anchor: "method:battle-testing-a-skill"
+      summary: "An isolated dispatch on the issue-1462 diff returned FAIL with 2 findings: the trigger clause ('merge, import, or otherwise couple two or more files') was broad enough to match an ordinary row where one file merely calls another; and the check assumed every calling repository has a distribution-boundary concept at all."
+      outcome:
+        verdict: FAIL
+        found: 2
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1462"
+      summary: "Fixed both findings: narrowed the trigger to rows proposing to combine logic from two or more files into one shared file/module, explicitly excluding a row where one file merely calls or references another; added an explicit trivial-satisfaction clause for a repository with no distribution-boundary concept. Re-run of gitapex_check_skill_shape.py confirmed 51/51 unchanged."
