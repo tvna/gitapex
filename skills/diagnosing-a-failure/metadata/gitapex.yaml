@@ -7,7 +7,7 @@ spec:
   capabilityAssumption: Adaptive
   lifecycle:
     experimental:
-      reason: "First draft, pending evaluating-skill-quality and battle-testing-a-skill review verdicts before graduating to stable"
+      reason: "First draft; one isolated evaluating-skill-quality dispatch (WELL-FORMED-NOT-MATURE, both gaps fixed) and one battle-testing-a-skill dispatch (findings fixed, one deferred) have run -- graduating to stable is a subsequent repository-owner decision, not automatic on a clean review pass"
       trackingIssue: "https://github.com/tvna/gitapex/issues/1155"
   skillDependencies:
     requires: []
@@ -47,3 +47,9 @@ spec:
     - kind: deferral
       anchor: "https://github.com/tvna/gitapex/issues/1155"
       summary: "Same dispatch's trigger-collision finding (overlaps a gitapex-external debugging plugin) is not fixed by naming that plugin here: the owner asked, mid-session, that this skill's body/references not name any gitapex-external plugin, since that dependency is being retired. Real but temporary, outside this skill's scope (Non-goals). Eval-suite execution deferred to CI: no ANTHROPIC_API_KEY in this authoring session, per eval-status.md."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "An isolated evaluating-skill-quality dispatch verdict WELL-FORMED-NOT-MATURE, fixed: dimension 5 (major) -- layered-validation.md claimed to support Step 4/8 but neither linked it nor used its own checkpoint-map term; both Steps now name and link it. Dimension 6 (minor) -- Notes duplicated the tracking-issue URL already correct in this sidecar; now points to the sidecar instead."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "Same dispatch's Blind spot pass found two gaps, fixed: (A) Step 2 now checks reproduction-side-effect idempotency before a live run against a non-idempotent operation; (B) Postcondition now requires confirmed removal of any Step 4/6 temporary instrumentation before the Verdict, not merely an intent to remove it."

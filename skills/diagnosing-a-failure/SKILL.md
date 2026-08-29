@@ -42,7 +42,13 @@ cause is "already known" as a reason to skip straight to Step 8.
    *End-state:* a symptom record with both sides stated and a named
    divergence source, or an explicit stop naming exactly what is missing.
 
-2. **Establish reproducibility; branch on the result.** Attempt to
+2. **Establish reproducibility; branch on the result.** Before running a
+   live reproduction, check whether the operation itself is idempotent --
+   re-triggering a non-idempotent side effect (a payment, an email send,
+   a row delete, an outbound webhook) is itself a risk the reproduction
+   attempt introduces, not only a diagnostic step; prefer a read-only or
+   dry-run path when one exists, and name the side effect explicitly if
+   none does. Attempt to
    reproduce -- typically a shell command or test invocation run directly
    against the real code path -- refining any evidence the caller handed
    over into a minimal case. **On success**, carry that live minimal
@@ -89,7 +95,13 @@ cause is "already known" as a reason to skip straight to Step 8.
    sourcing, an append-only audit log, a maintained Event Model), build
    the expected-vs-actual comparison directly from it instead of
    re-deriving it by hand -- see
-   `references/tracing-and-instrumentation.md`.
+   `references/tracing-and-instrumentation.md`. Alongside the boundary
+   map, name which validation checkpoints the failing value actually
+   passed through (entry, business-logic, environment-guard,
+   instrumentation) and whether each validated or silently passed -- this
+   checkpoint map is a required part of Step 8's Verdict; see
+   `references/layered-validation.md` for the four checkpoint kinds and
+   when adding a missing layer is actually warranted.
    *End-state:* a boundary map with one earliest-divergence point named,
    or the map exhausted with none found (feeds Step 8's
    `no-in-code-root-cause`).
@@ -114,7 +126,11 @@ cause is "already known" as a reason to skip straight to Step 8.
    *End-state:* the leading hypothesis has survived exactly one genuine
    attempt to disprove it, or has been ruled out and returned to Step 6.
 
-8. **Issue the Diagnosis Verdict.** Exactly one of:
+8. **Issue the Diagnosis Verdict.** Include Step 4's own checkpoint map
+   (which validation checkpoints the failing value passed through, and
+   which silently passed) in the Verdict whenever one was built -- the
+   caller uses it to scope its own fix, not as a direction to add every
+   missing layer (`references/layered-validation.md`). Exactly one of:
    - **`root-cause-confirmed`** -- Step 7 survived a disconfirmation
      attempt.
    - **`no-in-code-root-cause`** -- Step 4's boundary map is exhausted
@@ -162,7 +178,11 @@ Exactly one Diagnosis Verdict, handed back to the caller, naming the
 evidence and boundary/hypothesis trail that produced it. No GitHub write
 of any kind has occurred. No fix code and no durable failing test has
 been authored -- both stay the caller's own job, using the Verdict as
-input.
+input. Any temporary instrumentation added during Steps 4 or 6 has been
+removed -- confirmed, not merely intended -- before the Verdict is
+handed back; a Verdict recommending a permanent instrumentation addition
+is a Step 8 finding for the caller to act on, not leftover debug code
+left in place by this skill itself.
 
 ## Non-goals
 
@@ -240,10 +260,10 @@ technique detail (timing-dependent failures, layered validation,
 boundary-contract probing, event-history tracing) needed for a harder
 case but not for the ordinary path.
 
-Lifecycle: **experimental**, tracking
-<https://github.com/tvna/gitapex/issues/1155> -- pending
-`evaluating-skill-quality` and `battle-testing-a-skill` review verdicts
-before graduating to stable.
+Lifecycle: **experimental** -- see `metadata/gitapex.yaml`'s own
+`spec.lifecycle.experimental.trackingIssue` for the tracking issue;
+pending `evaluating-skill-quality` and `battle-testing-a-skill` review
+verdicts before graduating to stable.
 
 This file's own provenance is a separate question from the runtime
 content-trust rules above: this `SKILL.md` is itself an
