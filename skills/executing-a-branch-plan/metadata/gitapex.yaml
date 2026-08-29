@@ -33,3 +33,6 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1155"
       summary: "Step 6 now routes a task decomposed from a bare-defect-report ACM row through the new diagnosing-a-failure skill before that task's own Red step; added to relatedTo."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1388"
+      summary: "references/code-quality-principles.md keeps 7 of cursor/plugins/pstack's 21 principles. The other 14 duplicate CLAUDE.md sections 1-5 or existing sibling-skill coverage -- 13 named in the issue's own Problem section, plus Fix Root Causes (the 14th, omitted from the issue's own count): diagnosing-a-failure and reviewing-an-artifact's root-cause-vs-symptom tag already cover it."
