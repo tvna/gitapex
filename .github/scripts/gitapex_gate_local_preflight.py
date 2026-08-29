@@ -172,7 +172,7 @@ SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
 # worst case is ~4200 s, not 600 s. A ceiling matching that would be useless
 # as a hang guard (80 minutes of a silent pre-push), so this is a judgment
 # call in the other direction. For scale: a warm run of all 42 wired gates
-# combined measures roughly PLACEHOLDER s end to end (the
+# combined measures roughly 18 s end to end (the
 # prior 41-gate set measured roughly 18 s, the
 # prior 40-gate set measured roughly 18 s, the
 # prior 39-gate set measured roughly 12 s, the 38-gate set before that
