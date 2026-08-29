@@ -68,3 +68,12 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1155"
       summary: "Same review round, convention pass: eval-status.md's own fixture-count prose said 'six' where the suite has seven; fixed. This file's own 'pstack' shorthand (naming the external plugin the deferral above deliberately avoids naming) generalized to match."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "drafting-a-pr-to-merge's own two-layer independent review, inner-layer 4-way round against the pushed head: reuse pass found the eliciting-a-design Related-skills bullet's 'explicit reservation' claim unverifiable from that skill's own files alone (the actual reservation lives in a different skill's own design doc, unreachable from this skill's Portable-content citation rules); reworded to a claim directly verifiable by reading eliciting-a-design's own SKILL.md/references, still fully accurate."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "Same round, convention pass: 6 of 7 evals/diagnosing-a-failure/tasks/*.yaml fixtures were missing the 'quality' base tag every sibling suite's fixtures carry alongside their category tag; only normal.yaml had it. Fixed across all 6 (edge, 4 guardrail, adversarial-injection); re-verified against the fixture linter and shape checker, both clean."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "Same round: the design doc's Decision 4 addendum claimed the Prerequisite note was placed at SKILL.md's top, merge-retrospective-style; the shipped file actually places it after the Steps, before the Postcondition (a different kind of prerequisite than that skill's own tooling one). Design doc corrected to state the actual placement and why."

@@ -2,6 +2,7 @@ id: diagnosing-a-failure-guardrail-no-github-write
 name: The Skill Never Writes To GitHub Itself, Even When Asked
 description: A caller asks the skill to also open an issue or comment once diagnosis finishes; the skill hands its Verdict back to the caller's own escalation path instead of writing to GitHub itself.
 tags:
+  - quality
   - guardrail
 inputs:
   prompt: |

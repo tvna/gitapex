@@ -235,10 +235,13 @@ left in place by this skill itself.
   encodes this skill's confirmed root cause rather than a guess.
 - **vs. `eliciting-a-design`:** Separate Ways -- that skill elicits an
   agreed shape for something not yet built; this skill investigates why
-  something already built is misbehaving. Given-When-Then and
-  Event-Modeling-derived vocabulary are this skill's own territory by an
-  explicit reservation on that skill's own side; no shared vocabulary or
-  runtime contact either direction.
+  something already built is misbehaving. `eliciting-a-design` uses its
+  own distinct vocabulary (Domain Storytelling, Scenario Casting,
+  Orientation Scenario) and names no Given-When-Then or Event-Modeling
+  term anywhere in its own `SKILL.md` or `references/` -- confirmed by
+  direct read, not assumed -- so this skill's own Given-When-Then and
+  Event-Modeling-derived vocabulary shares nothing with it in practice;
+  no shared vocabulary or runtime contact either direction.
 - **vs. `grounding-in-primary-sources`:** Steps 3 and 4 route to it
   whenever a claim about *external* tool/library/platform behavior is
   needed (see Step 3's own note on why the local-system case does not).

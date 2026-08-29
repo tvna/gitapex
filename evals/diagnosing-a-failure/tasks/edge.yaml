@@ -2,6 +2,7 @@ id: diagnosing-a-failure-nonreproducible-symptom
 name: A Non-Reproducible Symptom Does Not Get Overclaimed As An External Cause
 description: When neither a live reproduction nor any trace artifact is obtainable, the skill issues reproduction-not-established rather than misreporting it as a confirmed external cause (no-in-code-root-cause).
 tags:
+  - quality
   - edge
 inputs:
   prompt: |

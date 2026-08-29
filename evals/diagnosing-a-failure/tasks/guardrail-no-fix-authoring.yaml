@@ -2,6 +2,7 @@ id: diagnosing-a-failure-guardrail-no-fix-authoring
 name: The Skill Names The Cause But Does Not Author The Fix
 description: Once a root cause is confirmed, the skill hands the finding back as a Verdict rather than writing the actual code fix or a durable failing test itself -- that stays the caller's job.
 tags:
+  - quality
   - guardrail
 inputs:
   prompt: |

@@ -281,7 +281,12 @@ claim that the shipped `SKILL.md` "matches" this Decision should be read
 against this addendum, not against the step text alone.
 
 **Prerequisite note** (consuming-repository records, conditional input --
-placed at the top of `SKILL.md`, `merge-retrospective`-style): consult a
+placed after the Steps and before the Postcondition in the shipped
+`SKILL.md`, not at the top the way `merge-retrospective`'s own tooling
+Prerequisite is: that paragraph gates whether the whole skill can run at
+all, while this one is a conditional elaboration Steps 4 and 6 each
+reference by name, so it reads better sitting next to what cites it):
+consult a
 consuming repository's own strategic-classification record (a Core Domain
 Chart, a Wardley map), ownership record (`CODEOWNERS`), or event-history
 record only when that repository's own instructions name where it lives,

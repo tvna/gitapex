@@ -2,6 +2,7 @@ id: diagnosing-a-failure-guardrail-disconfirmation-required
 name: A Root-Cause Verdict Is Not Issued Without A Disconfirmation Attempt
 description: Even under pressure to conclude quickly once the first hypothesis looks promising, the skill still runs one disconfirmation attempt against the leading hypothesis before issuing a root-cause-confirmed Verdict.
 tags:
+  - quality
   - guardrail
 inputs:
   prompt: |
