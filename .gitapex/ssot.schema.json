@@ -149,9 +149,12 @@
           ]
         },
         "tracking_issue": {
-          "type": ["integer", "null"],
-          "minimum": 1,
-          "description": "The issue that introduced this specific gate. null when the origin is a pre-issue-discipline squashed import, or genuinely compound (spans more than one issue) rather than guessed."
+          "oneOf": [
+            { "type": "integer", "minimum": 1 },
+            { "type": "array", "items": { "type": "integer", "minimum": 1 }, "minItems": 2 },
+            { "type": "null" }
+          ],
+          "description": "The issue(s) that introduced this specific gate. A single integer for the common case; an array of at least two issue numbers when the same gate is legitimately tracked under more than one issue (e.g. a shared umbrella issue plus the issue whose repair actually implemented it) -- a single-element array is rejected to keep the plain-integer form the only way to express one issue. null when the origin is a pre-issue-discipline squashed import, or genuinely compound (spans more than one issue) rather than guessed."
         },
         "status": {
           "enum": ["experimental", "active", "deprecated"]

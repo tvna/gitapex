@@ -1,6 +1,6 @@
 {
   "meta": {
-    "schema_version": "1.3.0",
+    "schema_version": "1.4.0",
     "tracking_issue": 123,
     "status": "active",
     "phase": "phase-0"
@@ -368,7 +368,7 @@
       "trigger": ".github/workflows/provenance-disclosure-gate.yml on pull_request",
       "policy_refs": [],
       "cluster": "outward-hygiene",
-      "tracking_issue": 520,
+      "tracking_issue": [520, 350],
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
@@ -393,7 +393,7 @@
       "trigger": ".github/workflows/retro-title-convention-citation-gate.yml on pull_request",
       "policy_refs": [],
       "cluster": "self-governance",
-      "tracking_issue": 520,
+      "tracking_issue": [520, 344],
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
@@ -416,7 +416,7 @@
       "trigger": ".github/workflows/routine-scope-enforcement-gate.yml on pull_request",
       "policy_refs": ["skill-metadata-sidecar"],
       "cluster": "self-governance",
-      "tracking_issue": 520,
+      "tracking_issue": [520, 348],
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
@@ -800,7 +800,7 @@
       "trigger": ".github/workflows/retrospective-gate-drift.yml, daily cron 07:00 UTC + workflow_dispatch",
       "policy_refs": [],
       "cluster": "self-governance",
-      "tracking_issue": 297,
+      "tracking_issue": [297, 422, 426],
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
@@ -1706,6 +1706,26 @@
         {"kind": "workflow-event", "ref": "commit-citation-gate.yml:pull_request"},
         {"kind": "runtime-resolved-reference", "ref": "git log --no-merges <merge-base>..<head>"},
         {"kind": "runtime-resolved-reference", "ref": "github.event.pull_request.title / .body"}
+      ]
+    },
+    {
+      "id": "split-disclosure",
+      "kind": "script",
+      "script": ["evals/scripts/gitapex_check_split_disclosure.py", ".github/workflows/split-disclosure-gate.yml"],
+      "rule": "A commit range that touches an evals/evaluating-skill-quality/tasks/*.yaml fixture's output_contains/output_not_contains assertions must name that fixture with a possessive citation (`NAME.yaml`'s -- not a bare mention, which a routine per-iteration scoring table already provides for every touched fixture regardless of whether its assertions changed) somewhere in the same range's own added lines to evals/evaluating-skill-quality/split.md. Issue #218 Repair 1 / #1399: PR #216's own commit 4b9edfa39e20bc1b8a16651d1fc6e7db778c8909 loosened edge.yaml's assertions and added its own split.md disclosure paragraph in the same commit, but that paragraph omitted one of the two changes -- caught only by a manually requested adversarial-verification pass, not mechanically. A deleted fixture file is out of scope. See the script's own docstring for the full design rationale, including why a bare-mention design was tried and rejected.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", "evals/scripts/gitapex_check_split_disclosure.py"],
+      "trigger": ".github/workflows/split-disclosure-gate.yml on pull_request, plus tests/test_gitapex_check_split_disclosure.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "skill-lifecycle",
+      "tracking_issue": 1399,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "evals/evaluating-skill-quality/tasks/*.yaml"},
+        {"kind": "file-glob", "ref": "evals/evaluating-skill-quality/split.md"},
+        {"kind": "workflow-event", "ref": "split-disclosure-gate.yml:pull_request"}
       ]
     }
   ],
