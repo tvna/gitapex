@@ -3175,10 +3175,14 @@ def test_classify_does_not_leak_a_later_lines_token_into_an_earlier_checkout() -
     """End-to-end regression pin for the newline finding: an ordinary
     two-line script with `git checkout` on the first line and an
     unrelated `$`-containing token on the second line must classify the
-    checkout using only its own line's tokens."""
-    verdict = checker.classify('git checkout -b newbranch master\necho "exit=$?"')
+    checkout using only its own line's tokens. Deliberately avoids `-b`
+    (which the round-4 branch-creation-flag fix folds into the Non-goal
+    regardless of what follows on either line, no longer exercising
+    sub-case (b)'s own 2-positional path extraction this test targets) --
+    two ordinary non-flag positionals exercise the identical sub-case."""
+    verdict = checker.classify('git checkout a.py b.py\necho "exit=$?"')
     assert verdict.deny is False
-    assert verdict.checkout_restore_paths == ("newbranch", "master")
+    assert verdict.checkout_restore_paths == ("a.py", "b.py")
 
 
 def test_shlex_default_punctuation_chars_still_matches_the_hardcoded_extension() -> None:
@@ -3260,6 +3264,55 @@ def test_classify_denies_a_line_continued_checkout_path_that_used_to_bypass() ->
     verdict = checker.classify("git checkout -- \\\nfile.py")
     assert verdict.deny is False
     assert verdict.checkout_restore_paths == ("file.py",)
+
+
+@pytest.mark.parametrize("flag", ["-b", "-B", "--orphan"])
+def test_git_checkout_paths_folds_branch_creation_flags_into_the_non_goal(flag: str) -> None:
+    """CRITICAL regression pin (round-4 independent review, issue #1375).
+    `-b`/`-B`/`--orphan` take the immediately following token as their own
+    new-branch-NAME value, which does not start with `-` -- sub-case (b)'s
+    dash-prefix positional filter used to sweep that value (and a
+    start-point after it) into `checkout_restore_paths` as if they were
+    file paths, so `git checkout -f -b newbranch other` reported
+    `('newbranch', 'other')` -- neither the real at-risk file -- and the
+    wrapper's live check against those two nonexistent paths found "clean"
+    and silently allowed a real, forced branch switch that discarded an
+    uncommitted change elsewhere. Live-verified end-to-end that real git
+    discards the change while the old code reported this as checked-safe.
+    Must now fold into the same honest, no-claim Non-goal bare `git
+    checkout SOMENAME` already carries -- empty paths, not a false claim."""
+    reason, paths = checker._git_checkout_paths([flag, "newbranch", "other"], {})
+    assert reason is None
+    assert paths == ()
+
+
+def test_git_checkout_paths_branch_creation_flag_wins_even_with_a_double_dash() -> None:
+    """`-b`/`-B`/`--orphan` is git's own branch-creation mode, mutually
+    exclusive with every pathspec-checkout mode (per `git checkout -h`'s
+    own synopsis) -- the Non-goal fold must fire before sub-case (a)'s own
+    `--`-present branch is ever reached, not only when `--` is absent."""
+    reason, paths = checker._git_checkout_paths(["-b", "newbranch", "--", "file.py"], {})
+    assert reason is None
+    assert paths == ()
+
+
+def test_git_checkout_paths_still_extracts_a_real_path_without_a_branch_creation_flag() -> None:
+    """No regression from the branch-creation fold: an ordinary two-
+    positional pathspec checkout with no `-b`/`-B`/`--orphan` present is
+    unaffected."""
+    reason, paths = checker._git_checkout_paths(["a.py", "b.py"], {})
+    assert reason is None
+    assert paths == ("a.py", "b.py")
+
+
+def test_classify_no_longer_falsely_claims_safety_for_a_forced_branch_creation() -> None:
+    """End-to-end regression pin for the round-4 independent-review
+    finding: `git checkout -f -b newbranch other` must resolve to an empty
+    `checkout_restore_paths` (the honest Non-goal), never a claim naming
+    the branch name/start-point as though they were the checked paths."""
+    verdict = checker.classify("git checkout -f -b newbranch other")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ()
 
 
 @_PROPERTIES

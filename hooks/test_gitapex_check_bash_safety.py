@@ -394,6 +394,29 @@ KNOWN_BYPASS_COMMANDS = [
         "git ${NEVERSET#x} checkout -- file.py",
         "checkout-restore-exotic-parameter-expansion-decoy",
     ),
+    (
+        # Found live by independent adversarial review (round 4, issue
+        # #1375): `-b`/`-B`/`--orphan` is git's own branch-creation mode,
+        # mutually exclusive with every pathspec-checkout mode -- but
+        # `-b`/`-B` take the immediately following token as their own
+        # new-branch-NAME value, which does not start with `-`, so this
+        # command used to sweep "newbranch"/"other" into
+        # `checkout_restore_paths` as if they were file paths instead of
+        # the actual at-risk file. Live-verified before the fix: the
+        # wrapper's check against those two nonexistent paths found
+        # "clean" and allowed a real, forced branch switch through that
+        # silently discarded an uncommitted change elsewhere. Now folded
+        # into the same honest, no-claim Non-goal `git checkout SOMENAME`
+        # already carries (empty `checkout_restore_paths`, not a false
+        # claim) -- disambiguating a branch-creation/reset's own working-
+        # tree impact soundly would need to reproduce git's internal
+        # "would this overwrite ANY dirty tracked file" logic, out of a
+        # pure classifier's reach, the same reasoning that already accepts
+        # the bare-SOMENAME case as a Non-goal rather than a sound
+        # extraction.
+        "git checkout -f -b newbranch other",
+        "checkout-branch-creation-flag-non-goal",
+    ),
 ]
 
 

@@ -2647,6 +2647,7 @@ _RESTORE_BOOLEAN_FLAGS = {
     "--ignore-skip-worktree-bits",
 }
 _RESTORE_VALUE_FLAGS = {"--source", "-s", "--conflict"}
+_CHECKOUT_BRANCH_CREATION_FLAGS = {"-b", "-B", "--orphan"}
 
 
 def _resolve_path_tokens(tokens: list[str], name_to_raw_value: dict[str, str]) -> tuple[str | None, tuple[str, ...]]:
@@ -2717,11 +2718,11 @@ def _git_checkout_paths(
     (b) No `--`, 2+ non-flag-shaped positional tokens -- confirmed live
         that `git checkout no-such-ref no-such-file` (two unresolvable
         positionals, no `--`) reports a pathspec error for BOTH, meaning
-        whenever real git is given 2+ positionals with no `--`, every
-        position past the first is a pathspec under every resolution git
-        can take. Over-including a token that also happens to be a valid
-        ref name just checks a path that likely does not exist, which is
-        harmless.
+        whenever real git is given 2+ positionals with no `--` AND no
+        `-b`/`-B`/`--orphan` (see below), every position past the first is
+        a pathspec under every resolution git can take. Over-including a
+        token that also happens to be a valid ref name just checks a path
+        that likely does not exist, which is harmless.
     (c) No `--`, exactly one positional token, and it is the literal `.`
         or `..` -- both are syntactically invalid git ref names (confirmed
         live: `git check-ref-format --branch .`/`--branch ..` both fail,
@@ -2732,7 +2733,37 @@ def _git_checkout_paths(
     Bare `git checkout SOMENAME` (single positional, not `.`/`..`, no
     `--`) is a deliberate Non-goal: SOMENAME might be a branch/ref name or
     a path, and disambiguating soundly needs a live ref-existence lookup
-    this pure classifier does not perform."""
+    this pure classifier does not perform.
+
+    `-b`/`-B`/`--orphan` (git's own branch-creation/reset mode, mutually
+    exclusive with every pathspec-checkout mode above per `git checkout
+    -h`'s own synopsis) is checked FIRST, before any sub-case above, and
+    folded into that same Non-goal -- CRITICAL bug found by independent
+    adversarial review (round 4, issue #1375) and independently
+    reproduced live: `-b`/`-B` take the immediately following token as
+    their own new-branch-NAME value, which does not start with `-`, so
+    sub-case (b)'s own dash-prefix positional filter swept a value like
+    `git checkout -f -b newbranch other` into `checkout_restore_paths =
+    ('newbranch', 'other')` -- neither of which is the actual at-risk
+    file -- and the wrapper's live `git diff --quiet` check against those
+    two nonexistent paths found "clean" and silently ALLOWED a real,
+    forced branch switch that discarded an uncommitted change to an
+    entirely different, unchecked file. Worse than the already-accepted
+    bare-SOMENAME Non-goal above: that one makes NO claim at all (falls
+    through with an empty `checkout_restore_paths`, the same as if this
+    classifier had never seen the command, honestly matching real git's
+    own built-in switch-protection minus whatever `-f` already bypasses);
+    sub-case (b)'s old behavior here instead made a CONFIDENT, WRONG claim
+    that specific paths were checked and clean. Folding this case into the
+    Non-goal (rather than a live-git-lookup-free sound extraction, which
+    would need to reproduce git's own internal "would this branch switch
+    overwrite ANY dirty tracked file in the whole working tree" logic --
+    out of a pure classifier's reach) restores the honest, no-claim
+    behavior and removes the false-confidence gap; it does not newly
+    regress anything `-f`/`-b` could already do to an unguarded working
+    tree before this classifier existed at all."""
+    if any(tok in _CHECKOUT_BRANCH_CREATION_FLAGS or tok.startswith("--orphan=") for tok in tokens_after):
+        return None, ()
     if "--" in tokens_after:
         after = tokens_after[tokens_after.index("--") + 1 :]
         if not after:
