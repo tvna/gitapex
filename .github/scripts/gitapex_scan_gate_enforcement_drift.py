@@ -44,13 +44,14 @@ new entry of its own in `.github/rulesets/main.json` to actually block a
 merge -- the same reachability problem this script itself was written to
 report elsewhere.
 
-Standard library only, aside from this repository's own shared
-`_gitapex_schema_validation.load_json_or_raise` helper.
+Uses this repository's own shared `_gitapex_schema_validation.load_json_or_raise`
+helper, which pulls in `jsonschema` -- run via `uv run` (see Usage), not a
+bare `python3` invocation.
 
 Usage::
 
-    python3 .github/scripts/gitapex_scan_gate_enforcement_drift.py \\
-        --ssot .gitapex/ssot.json --ruleset .github/rulesets/main.json --threshold 52
+    uv run --frozen python3 .github/scripts/gitapex_scan_gate_enforcement_drift.py \\
+        --ssot .gitapex/ssot.json --ruleset .github/rulesets/main.json --threshold 53
 
 Exit codes:
     0  The count of active CI-plane gates missing from required_status_checks
