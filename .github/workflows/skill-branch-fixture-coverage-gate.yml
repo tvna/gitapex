@@ -11,8 +11,9 @@ name: Skill decision-branch fixture coverage gate
 # required status check for exactly that reason -- see issue #1422. Running
 # unconditionally is the required-check-safe shape; the diff step below
 # already exits early (reporting success) when no skills/*/SKILL.md
-# changed, so the added cost is one checkout plus a short diff on every PR,
-# the same price lint.yml and skill-eval-gate.yml already accepted.
+# changed, so the added cost is one checkout, one uv install, plus a short
+# diff on every PR (measured: ~16s end to end) -- the same price lint.yml
+# and skill-eval-gate.yml already accepted.
 on:
   pull_request:
     types: [opened, synchronize, reopened]
