@@ -81,14 +81,32 @@ _DEDUP_RE = re.compile(
     re.IGNORECASE | re.MULTILINE,
 )
 
+# The CommonMark "block container" prefix that can precede a fence marker
+# and still have it open a real fence: zero or more list-item markers
+# (`- `/`* `/`+ `/`1. `/`1) `) and/or blockquote markers (`>`), each
+# followed by its own leading whitespace, plus any trailing indentation.
+# `[ \t\r]*`, not `[ \t]*`: a bare CR (not part of a CRLF pair) is itself a
+# CommonMark line ending, so a marker following one still opens a genuine
+# fence -- found live by an adversarial review of this same fix (issue
+# #1432 follow-up): the first anchored version used `[ \t]*` alone, which
+# both failed to strip a fence whose marker sat on the first line of a list
+# item (treating its own genuine closing marker as an opener instead, and
+# so inverting which text got stripped) and failed to strip one following a
+# lone CR. This is still not a full CommonMark container parser (it does
+# not bound indentation to <=3 spaces, model closing-fence-length rules, or
+# handle nested nesting-depth changes mid-block) -- see that same review's
+# own disclosed residual gaps -- but it closes the specific list-item and
+# bare-CR misses that review found exploitable in the first anchored form.
+_CONTAINER_PREFIX = r"(?:[ \t\r]*(?:[-*+]|\d{1,9}[.)])[ \t]+|[ \t\r]*>[ \t]?)*[ \t\r]*"
 # A well-paired fenced code block (``` or ~~~, opened and closed with the
 # same marker -- hence the backreference), anchored to line start (issue
 # #1432): per CommonMark/GitHub fence syntax a marker opens a fence only as
-# the first non-whitespace content of its own line, so an unanchored form --
+# the first non-whitespace content of its own line (allowing for the
+# container prefix above), so a form unanchored to line start at all --
 # still hooks/gitapex_check_pr_duplicate_issue.py's own `_FENCE_RE` shape,
 # which this one no longer mirrors exactly -- swallows a `Dedup:` line whose
 # disclosed reason merely contains fence-marker characters.
-_FENCE_RE = re.compile(r"^[ \t]*(```|~~~).*?^[ \t]*\1", re.DOTALL | re.MULTILINE)
+_FENCE_RE = re.compile(rf"^{_CONTAINER_PREFIX}(```|~~~).*?^{_CONTAINER_PREFIX}\1", re.DOTALL | re.MULTILINE)
 # An *unterminated* fence opener (no matching close anywhere in the rest
 # of the body): GitHub renders this as code through to the end of the
 # body, so it must be stripped the same as a terminated fence, not left
@@ -98,8 +116,9 @@ _FENCE_RE = re.compile(r"^[ \t]*(```|~~~).*?^[ \t]*\1", re.DOTALL | re.MULTILINE
 # hooks/gitapex_check_pr_duplicate_issue.py's own `_strip_fences`, it does
 # not also strip single-backtick inline code spans; see the module
 # docstring for why that would break an accepted decorated form here.
-# Anchored to line start for the same reason as `_FENCE_RE` above.
-_UNTERMINATED_FENCE_RE = re.compile(r"^[ \t]*(?:```|~~~).*\Z", re.DOTALL | re.MULTILINE)
+# Anchored to line start (allowing the same container prefix) for the same
+# reason as `_FENCE_RE` above.
+_UNTERMINATED_FENCE_RE = re.compile(rf"^{_CONTAINER_PREFIX}(?:```|~~~).*\Z", re.DOTALL | re.MULTILINE)
 
 
 def _strip_fenced_blocks(text: str) -> str:

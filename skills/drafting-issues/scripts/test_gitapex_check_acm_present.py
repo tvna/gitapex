@@ -119,6 +119,38 @@ def test_has_dedup_disclosure_accepts_a_fence_shaped_reason() -> None:
     assert checker.has_dedup_disclosure("Dedup: ```\nreal content after\n```\n")
 
 
+def test_has_dedup_disclosure_rejects_a_line_inside_a_list_item_fenced_block() -> None:
+    """Regression test (adversarial review of the issue #1432 fix): a fence
+    opened on the same line as a list-item marker (`- ```) is still a
+    genuine CommonMark fence -- the marker is the first non-whitespace
+    content of the list item's own content, not merely of the raw line.
+
+    An `^[ \\t]*` anchor alone (the fix's first draft) cannot match the
+    opener here (`- ` is not `[ \\t]`), so `_FENCE_RE` finds no pair and
+    `_UNTERMINATED_FENCE_RE` then matches the *closing* marker instead
+    (which the plain `[ \\t]*` prefix *does* reach), stripping from the
+    closer to the end of the body -- inverting which side of the fence
+    survives. Both directions of that inversion are pinned here: a
+    fabricated `Dedup:` line inside the list-fenced block must still be
+    rejected, and a real `Dedup:` line elsewhere in the body must still be
+    detected regardless of an unrelated list-fenced block."""
+    assert not checker.has_dedup_disclosure(
+        "## Facts\n\n- The requester wrote, verbatim:\n- ```\n  Dedup: none found\n  ```\n"
+    )
+    assert checker.has_dedup_disclosure(
+        "- Reproduction:\n- ```\n  pytest -q\n  ```\n\nDedup: searched acm present, 6 results reviewed\n"
+    )
+
+
+def test_has_dedup_disclosure_rejects_a_line_inside_a_bare_cr_fenced_block() -> None:
+    """Regression test (adversarial review of the issue #1432 fix): per
+    CommonMark 2.1, a bare CR (not part of a CRLF pair) is itself a line
+    ending, so a fence marker immediately following one still opens a
+    genuine fence. `[ \\t]*` cannot cross that CR to reach the marker; the
+    container prefix must accept a leading `\\r` too."""
+    assert not checker.has_dedup_disclosure("intro\n\r```\nDedup: none found\n```\n")
+
+
 def test_has_dedup_disclosure_rejects_a_blockquoted_line() -> None:
     """Regression test (battle-testing-a-skill audit, PR #1215 Finding A/B):
     Step 3 requires quoting the requester's own words verbatim into Facts,
