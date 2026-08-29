@@ -15,7 +15,6 @@ test_gitapex_post_merge_retro.py's own fixture style.
 
 from __future__ import annotations
 
-import http.client
 import json
 import pathlib
 import re
@@ -199,47 +198,25 @@ def test_remove_label_reraises_other_errors():
 
 
 # ---------------------------------------------------------------------------
-# _call retry behavior (exercised via add_label, mirroring
-# test_gitapex_post_merge_retro.py's own retry-path coverage)
+# Retry-loop delegation (issue #729): the retry/backoff mechanics
+# themselves (5xx retry, IncompleteRead retry, repeated-network-failure
+# raise) no longer live in this module -- they were extracted to
+# `_gitapex_github_http.request_with_retry`/`call_json` and are covered
+# there by tests/test_gitapex_github_http.py. The one integration test
+# below confirms only that this module's own public API (`add_label`,
+# which now delegates to `_gitapex_github_http.call_json`) still surfaces
+# `GitHubApiError` correctly once retries are exhausted -- i.e. that the
+# migration itself didn't break this module's observable behavior.
 # ---------------------------------------------------------------------------
 
 
-def test_call_retries_5xx_then_succeeds():
-    responses = [http_error(503, "{}"), Response(200, "[]")]
-    sleeps: list[float] = []
-
-    def opener(request: urllib.request.Request) -> Response:
-        response = responses.pop(0)
-        if isinstance(response, urllib.error.HTTPError):
-            raise response
-        return response
-
-    gate.add_label("tvna", "gitapex", 414, "tok", opener=opener, sleeper=sleeps.append)
-    assert sleeps == [5]
-
-
-def test_call_retries_incomplete_body_read_then_succeeds():
-    class FlakyResponse(Response):
-        def read(self) -> bytes:
-            raise http.client.IncompleteRead(b"partial")
-
-    responses = [FlakyResponse(200), Response(200, "[]")]
-    sleeps: list[float] = []
-
-    def opener(request: urllib.request.Request) -> Response:
-        return responses.pop(0)
-
-    gate.add_label("tvna", "gitapex", 414, "tok", opener=opener, sleeper=sleeps.append)
-    assert sleeps == [5]
-
-
-def test_call_raises_after_repeated_network_failure():
+def test_add_label_raises_github_api_error_after_repeated_5xx():
     calls = 0
 
     def opener(request: urllib.request.Request) -> Response:
         nonlocal calls
         calls += 1
-        raise urllib.error.URLError("boom")
+        raise http_error(503, "{}")
 
     with pytest.raises(gate.GitHubApiError):
         gate.add_label("tvna", "gitapex", 414, "tok", opener=opener, sleeper=lambda _: None)
