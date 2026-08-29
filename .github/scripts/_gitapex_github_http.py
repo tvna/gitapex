@@ -49,10 +49,11 @@ def build_headers(token: str, *, content_type: str | None = None) -> dict[str, s
     """The `Authorization`/`Accept`/`X-GitHub-Api-Version` headers every
     caller in this repository sends, plus `Content-Type` when given.
 
-    Shared by this module's own read path and `gitapex_apply_rulesets.py`'s
-    write path (`send_write`) -- previously two independent copies of the
-    same three header literals plus this module's own `_API_VERSION`/
-    `_HTTP_TIMEOUT_SECONDS` constants, re-declared verbatim in that file.
+    Shared by this module's own REST and GraphQL paths and by
+    `gitapex_apply_rulesets.py`'s write path (`send_write`) -- previously
+    two independent copies of the same three header literals plus this
+    module's own `_API_VERSION`/`_HTTP_TIMEOUT_SECONDS` constants,
+    re-declared verbatim in that file.
     Only header-literal construction is shared: the actual mutating
     request (URL, method, body, the `urlopen` call, and its own exception
     handling) stays entirely inside `send_write`, so "what in this
@@ -227,6 +228,18 @@ def call_json(
     own `_call` functions already raise) once retries are exhausted on a
     non-2xx status.
 
+    `max_attempts` defaults to 3, which is correct for an idempotent call
+    (GET/search, or a PATCH that sets an already-final state). A caller
+    creating a non-idempotent resource -- an issue or a comment POST --
+    must pass `max_attempts=1` instead: a lost or truncated response
+    after GitHub has already created the resource would otherwise be
+    retried into a duplicate (RFC 9110 SS9.2.2). This paragraph is the
+    rationale `gitapex_post_merge_retro.py`'s `open_retro_issue` and
+    `gitapex_stale_retro_stub_autoclose.py`'s `close_stub_issue` cite at
+    their own `max_attempts=1` call sites; it moved here with the retry
+    loop itself (issue #729) rather than staying behind in the deleted
+    per-carrier `_call` docstrings.
+
     Deliberately does NOT guard the `json.loads` call below with a
     try/except: this preserves an existing, deliberately-not-fixed-in-
     this-PR bug already present in every one of those three carriers'
@@ -271,7 +284,12 @@ def graphql_call(
     GraphQL transient-error marker (`_GRAPHQL_TRANSIENT_ERROR_MARKER`,
     via `_graphql_is_transient`), and it already guards its own
     `json.loads` with `try/except json.JSONDecodeError`, degrading to an
-    empty dict on an unparseable/empty body.
+    empty dict on an unparseable/empty body. The one edit made on arrival:
+    its four hand-written `add_header` calls now go through this module's
+    own `build_headers`, which already produced that exact header set for
+    the REST path -- keeping them re-declared here would have re-created,
+    inside the shared module, the very header duplication this module
+    exists to remove.
     `gitapex_sync_pr_publish.py`'s own `_CREATE_COMMIT_ON_BRANCH_MUTATION`
     string stays there -- it is business logic specific to that carrier,
     not generic retry-client mechanics.
@@ -283,10 +301,8 @@ def graphql_call(
 
     for attempt in range(1, 4):
         request = urllib.request.Request(_GRAPHQL_URL, data=payload.encode("utf-8"), method="POST")
-        request.add_header("Authorization", f"Bearer {token}")
-        request.add_header("Accept", "application/vnd.github+json")
-        request.add_header("X-GitHub-Api-Version", _API_VERSION)
-        request.add_header("Content-Type", "application/json")
+        for name, value in build_headers(token, content_type="application/json").items():
+            request.add_header(name, value)
         try:
             with opener(request) as response:
                 code = int(response.status)
