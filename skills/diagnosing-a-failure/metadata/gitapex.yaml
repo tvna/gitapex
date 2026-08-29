@@ -1,0 +1,79 @@
+apiVersion: gitapex.io/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: diagnosing-a-failure
+spec:
+  portability: Portable
+  capabilityAssumption: Adaptive
+  lifecycle:
+    experimental:
+      reason: "First draft; one isolated evaluating-skill-quality dispatch (WELL-FORMED-NOT-MATURE, both gaps fixed) and one battle-testing-a-skill dispatch (findings fixed, one deferred) have run -- graduating to stable is a subsequent repository-owner decision, not automatic on a clean review pass"
+      trackingIssue: "https://github.com/tvna/gitapex/issues/1155"
+  skillDependencies:
+    requires: []
+    relatedTo:
+      - planning-a-branch-from-an-issue
+      - executing-a-branch-plan
+      - eliciting-a-design
+      - grounding-in-primary-sources
+      - untrusted-input-triage
+  executionRequirements:
+    tools:
+      read:
+        - files
+      write:
+        - files
+      shell:
+        - bash
+  references:
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "New native skill, per docs/superpowers/specs/2026-08-29-diagnosing-a-failure-design.md (Decisions 1-7). Absorbs the general-purpose diagnosis half of a now-retired predecessor's own gap; the GitHub-issue-lifecycle half already lives in planning-a-branch-from-an-issue and executing-a-branch-plan (see the design doc's own Method section for the retirement citation)."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "A design-only artifact and a later set of external-plugin-comparison-informed refinements, both linked from this tracking issue's own comment thread, predated the predecessor skill's actual retirement and this issue's own scope-extension to implementation. The design doc treats both as draft input, not pre-verified fact -- see its own Method section for the full accounting."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "The design doc's Decision 4 folds four accepted external-plugin-comparison-informed refinements (reproducibility branch, parallel evidence search, per-step end-states, a disconfirmation step) into a fresh 8-step sequence, rather than patching the design-only artifact's own earlier 7-step one."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "defense-in-depth renamed to layered validation within this skill only (design doc Decision 3) -- a repository-wide grep this session found 30+ files already using defense-in-depth in CLAUDE.md section 4's own layered-safety-controls sense, a genuine polysemy against this skill's own layered-code-correctness-checkpoints sense, not a single-file coinage."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "executionRequirements declares write:[files] and shell:[bash]: Step 2's reproduction attempt and the tracing-and-instrumentation.md reference's own temporary-logging technique both read as file edits and shell invocations, even though this skill's own Postcondition and Non-goals explicitly exclude authoring a durable fix or failing test -- the distinction is temporary diagnostic instrumentation (in scope) vs. a permanent code change (out of scope, the caller's job)."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "A non-isolated battle-testing-a-skill dispatch (own disclosed caveat: single trial, CLAUDE.md already loaded) found gaps, fixed: Step 8 now requires breakout-safe fencing and secret redaction for caller-supplied text quoted into the Verdict, and states the Verdict is not authoritative merely for being well-formed; Step 1 now stops on an empty/degenerate symptom; Notes now states this file is itself an install/vendoring-time artifact, matching untrusted-input-triage's own precedent."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "Same dispatch's trigger-collision finding (overlaps a gitapex-external debugging plugin) is not fixed by naming that plugin here: the owner asked, mid-session, that this skill's body/references not name any gitapex-external plugin, since that dependency is being retired. Real but temporary, outside this skill's scope (Non-goals). Eval-suite execution deferred to CI: no ANTHROPIC_API_KEY in this authoring session, per eval-status.md."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "An isolated evaluating-skill-quality dispatch verdict WELL-FORMED-NOT-MATURE, fixed: dimension 5 (major) -- layered-validation.md claimed to support Step 4/8 but neither linked it nor used its own checkpoint-map term; both Steps now name and link it. Dimension 6 (minor) -- Notes duplicated the tracking-issue URL already correct in this sidecar; now points to the sidecar instead."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "Same dispatch's Blind spot pass found two gaps, fixed: (A) Step 2 now checks reproduction-side-effect idempotency before a live run against a non-idempotent operation; (B) Postcondition now requires confirmed removal of any Step 4/6 temporary instrumentation before the Verdict, not merely an intent to remove it."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "An isolated design-doc-adversarial-review dispatch found the design doc's own Decision 4 text had drifted stale against the two prior audit-fix commits (5 additions never folded back). Fixed: a Post-design revisions addendum added to Decision 4; the Acceptance-criteria checklist's overclaiming matches wording softened; planning-a-branch-from-an-issue Step 4 gained the reproduction-not-established carve-out Decision 6 had promised but the shipped text omitted."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "drafting-a-pr-to-merge's own inner-layer review (4 parallel adversarial passes: correctness, regression, reuse, convention) found and fixed: Step 8's 'three failed hypothesis loops' cap was never grounded in Step 6/7's own text (design doc had the same gap); Step 6 now counts and caps explicitly, in both SKILL.md and the design doc."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "Same review round, regression pass: planning-a-branch-from-an-issue Step 5's test-first requirement silently presumed root-cause-confirmed; now states the no-in-code-root-cause alternative explicitly. executing-a-branch-plan Step 6 only dispatched reproduction-not-established; now also dispatches architecture-question and clarifies no-in-code-root-cause, and no longer misattributes step 7's failure-handling rule as its own."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "Same review round, reuse pass: Step 8's evidence-fencing/redaction rule re-derived untrusted-input-triage's own Flag-step rule near-verbatim instead of citing it (contradicting this skill's own Related-skills claim of 'not re-derived here'); now cites it. The 'local system is already a primary source' caveat was stated three times (SKILL.md Step 3, probing-boundary-contracts.md, Related skills); the latter two now point back to Step 3 instead of restating it."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "Same review round, convention pass: eval-status.md's own fixture-count prose said 'six' where the suite has seven; fixed. This file's own 'pstack' shorthand (naming the external plugin the deferral above deliberately avoids naming) generalized to match."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "drafting-a-pr-to-merge's own two-layer independent review, inner-layer 4-way round against the pushed head: reuse pass found the eliciting-a-design Related-skills bullet's 'explicit reservation' claim unverifiable from that skill's own files alone (the actual reservation lives in a different skill's own design doc, unreachable from this skill's Portable-content citation rules); reworded to a claim directly verifiable by reading eliciting-a-design's own SKILL.md/references, still fully accurate."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "Same round, convention pass: 6 of 7 evals/diagnosing-a-failure/tasks/*.yaml fixtures were missing the 'quality' base tag every sibling suite's fixtures carry alongside their category tag; only normal.yaml had it. Fixed across all 6 (edge, 4 guardrail, adversarial-injection); re-verified against the fixture linter and shape checker, both clean."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "Same round: the design doc's Decision 4 addendum claimed the Prerequisite note was placed at SKILL.md's top, merge-retrospective-style; the shipped file actually places it after the Steps, before the Postcondition (a different kind of prerequisite than that skill's own tooling one). Design doc corrected to state the actual placement and why."

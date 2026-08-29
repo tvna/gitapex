@@ -46,7 +46,16 @@ without losing the issue's acceptance criteria.
      bare-defect-reproduction procedure used. Do not fabricate an
      Acceptance Criteria Map for a defect that did not reproduce — see
      this skill's own Stop boundaries below.
-   - **On successful reproduction:** continue to Step 5, which states this
+   - **On successful reproduction:** route through `diagnosing-a-failure`
+     to establish root cause before Step 5 begins -- its Diagnosis
+     Verdict becomes Step 5's own Interpretation column. On an
+     `architecture-question` Verdict, stop here (comment on the issue
+     per that Verdict's own two-option framing) rather than proceeding
+     to a normal ACM row. A `reproduction-not-established` Verdict here
+     should not recur in practice (this step's own reproduction gate
+     already screened that case out upstream), but if it does, treat it
+     the same as a failed reproduction above -- stop, comment, no ACM.
+     Otherwise continue to Step 5, which states this
      path's own Proof-method requirement.
 5. Produce an Acceptance Criteria Map before any branch work begins:
    criterion -> interpretation -> planned files/operations -> proof method
@@ -90,7 +99,12 @@ without losing the issue's acceptance criteria.
    written and confirmed failing before the fix, then passing after the
    fix, plus the existing suite still green. A defect fix is not exempt
    from this proof-method requirement merely because its issue started
-   out with a waiver.
+   out with a waiver. This test-first requirement presumes a
+   `root-cause-confirmed` Diagnosis Verdict (Step 4) -- an in-repo code
+   fix is what it proves. On a `no-in-code-root-cause` Verdict instead,
+   state a Proof method that actually verifies the external-cause
+   finding (e.g. a config change, a documented workaround, an upstream
+   bug report), not a code-fix test the finding itself rules out.
 6. Propose a branch name, commit scope, PR title, and PR body outline, all
    tied to the issue number.
 7. Identify the deterministic gates the mapped criteria require: tests,
@@ -202,6 +216,10 @@ propose a branch. No PR follows this outcome.
   is the authoring method for that row -- name it in the Branch Plan
   rather than treating "write the skill" as an undifferentiated
   implementation task.
+- **vs. `diagnosing-a-failure`:** Step 4's bare-defect-report path routes
+  a successfully-reproduced issue through it before Step 5 begins -- see
+  Step 4 above for the exact handoff and the architecture-question
+  Verdict's own short-circuit.
 
 ## Notes
 
