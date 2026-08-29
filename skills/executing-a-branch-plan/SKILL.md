@@ -120,8 +120,11 @@ first, not skimmed.
    for the same distinction. Within
    each task, apply Red-Green order when the task's inherited proof
    method is an automatable test; Refactor is never per-task, deferred
-   entirely to step 8. Once a wave's run returns, in the main thread (the
-   Workflow script itself has no filesystem/shell access): screen each
+   entirely to step 8. When writing a task's own implementation code (the
+   Green step above), apply [code quality principles
+   reference](references/code-quality-principles.md). Once a wave's run
+   returns, in the main thread (the Workflow script itself has no
+   filesystem/shell access): screen each
    task's own `BASE..HEAD` diff -- `scripts/gitapex_check_canonical_governance_paths.py`
    pre-filters the literal/canonical cases first, then the model's own
    full review (the pinned residual judgment step 2 already introduced)
@@ -195,7 +198,12 @@ first, not skimmed.
    12, mandatory, non-skippable). Two separate fresh subagent dispatches
    over the full diff -- a refactor/simplify pass (behavior-preserving
    only), then an independent adversarial code review -- findings
-   verified and fixed before proceeding. Both dispatches carry a
+   verified and fixed before proceeding. The refactor/simplify pass also
+   specifically re-checks [Migrate Callers Then Delete Legacy
+   APIs](references/code-quality-principles.md#4-migrate-callers-then-delete-legacy-apis)
+   across the full accumulated diff, confirming a caller migration begun
+   by one task actually completed cleanly rather than being left
+   half-done by another. Both dispatches carry a
    model/effort pin; see [refactor and review gate
    reference](references/refactor-and-review-gate.md#mandatory-aggregate-refactor--adversarial-review-step-8)
    for the rationale. After
