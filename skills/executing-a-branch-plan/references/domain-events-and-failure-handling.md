@@ -69,7 +69,16 @@ three-step read-modify-write, never a bare append call:
    section's own text, in memory, leaving every other section of the body
    byte-for-byte unchanged.
 3. **Write back** the full, modified body via the one whole-body-replace
-   call.
+   call, always passing `base` explicitly (the PR's own already-known base
+   branch) on this `update_pull_request` call -- issue `#1387`: this
+   revises the body without otherwise changing the base, so `base` is
+   optional to the call and typically omitted, which downgrades the
+   calling repository's own local pre-check (where one exists, e.g. this
+   repository's own `hooks/check-pr-skill-audit-disclosure.sh`) from its
+   full disclosure verdict to a narrower fallback scoped to less content.
+   Passing `base` explicitly costs nothing here (the value does not
+   change) and keeps this write-back reaching the same coverage a fresh
+   `create_pull_request` call already gets.
 
 **The hazard this closes:** treating the convention's name as if it
 described the mechanism invites a naive shortcut -- constructing a body

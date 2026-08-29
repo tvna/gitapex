@@ -3590,6 +3590,27 @@ def _resolve_skill_md(target: Path) -> Path:
     return target / "SKILL.md" if target.is_dir() else target
 
 
+def _owning_skill_dir(target: Path) -> Path:
+    """Normalize a CLI-supplied path to the skill directory ``check_shape()``
+    accepts (issue #1387): a pre-commit hook hands this script whichever
+    changed files matched its ``files:`` pattern, which includes a skill's
+    ``metadata/gitapex.yaml`` sidecar and its ``references/*.md`` files, not
+    only ``SKILL.md`` itself. A directory is already what
+    ``_resolve_skill_md`` expects and is returned unchanged; a ``SKILL.md``
+    path is normalized to its parent, and a file one level under
+    ``metadata/`` or ``references/`` is normalized to its owning skill
+    directory (the grandparent) -- so a commit touching both a skill's
+    ``SKILL.md`` and a ``references/*.md`` file dedupes to the same key and
+    grades that skill once, not twice."""
+    if target.is_dir():
+        return target
+    if target.name == "SKILL.md":
+        return target.parent
+    if target.parent.name in ("metadata", "references"):
+        return target.parent.parent
+    return target
+
+
 def _validate_read_scope(target: Path, allowed_root: Path) -> None:
     """Reject an escaped or symlinked CLI target before reading any content."""
     # PTH100 waived on all three abspath calls in this file: Path.resolve()
@@ -6121,34 +6142,64 @@ def format_report(results: list[CheckResult]) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Check a SKILL.md's deterministic shape (read-only).")
+    parser = argparse.ArgumentParser(description="Check one or more SKILL.md's deterministic shape (read-only).")
     parser.add_argument(
         "--allowed-root",
-        help="Caller-approved directory that must contain the target; "
+        help="Caller-approved directory that must contain every target; "
         "also rejects symlinks in the target skill. The caller must keep "
         "the snapshot immutable while the check runs.",
     )
-    parser.add_argument("target", help="Path to a skill directory or a SKILL.md file.")
+    parser.add_argument(
+        "target",
+        nargs="+",
+        help="One or more paths to a skill directory or a SKILL.md file. A "
+        "path under a skill's metadata/ or references/ directory (issue "
+        "#1387: what a pre-commit hook's changed-file argv actually "
+        "supplies) is normalized to its owning skill directory.",
+    )
     args = parser.parse_args(argv)
-    target = Path(args.target)
     allowed_root = Path(args.allowed_root) if args.allowed_root else None
-    if allowed_root is not None:
+
+    # Normalize each raw target to its owning skill directory and dedupe --
+    # a commit touching both skills/foo/SKILL.md and
+    # skills/foo/references/bar.md must grade skills/foo once, not twice.
+    # Order preserved (first occurrence wins); sources kept per group so the
+    # printed report can attribute back to every raw path that mapped there.
+    sources_by_owner: dict[Path, list[str]] = {}
+    for raw in args.target:
+        owner = _owning_skill_dir(Path(raw))
+        sources_by_owner.setdefault(owner, []).append(raw)
+
+    guard_error = False
+    check_error = False
+    for target, sources in sources_by_owner.items():
+        if allowed_root is not None:
+            try:
+                _validate_read_scope(target, allowed_root)
+            except (OSError, ValueError) as exc:
+                print(f"error: unsafe target path: {exc}", file=sys.stderr)
+                guard_error = True
+                continue
+        skill_md = _resolve_skill_md(target)
+        if not skill_md.is_file():
+            print(f"error: no SKILL.md found at: {target}", file=sys.stderr)
+            guard_error = True
+            continue
         try:
-            _validate_read_scope(target, allowed_root)
-        except (OSError, ValueError) as exc:
-            print(f"error: unsafe target path: {exc}", file=sys.stderr)
-            return 2
-    skill_md = _resolve_skill_md(target)
-    if not skill_md.is_file():
-        print(f"error: no SKILL.md found at: {target}", file=sys.stderr)
+            results = check_shape(target)
+        except (OSError, UnicodeDecodeError) as exc:
+            print(f"error: could not read skill files: {exc}", file=sys.stderr)
+            guard_error = True
+            continue
+        header = str(target) if sources == [str(target)] else f"{target} (touched: {', '.join(sources)})"
+        print(f"{header}:")
+        print(format_report(results))
+        if not all(r.passed for r in results):
+            check_error = True
+
+    if guard_error:
         return 2
-    try:
-        results = check_shape(target)
-    except (OSError, UnicodeDecodeError) as exc:
-        print(f"error: could not read skill files: {exc}", file=sys.stderr)
-        return 2
-    print(format_report(results))
-    return 0 if all(r.passed for r in results) else 1
+    return 1 if check_error else 0
 
 
 if __name__ == "__main__":

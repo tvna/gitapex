@@ -490,18 +490,70 @@ def test_short_non_markdown_reference_is_unaffected(tmp_path):
     assert "anchor-targets-resolve:small.json" not in names
 
 
-def test_missing_argument_exits_2(tmp_path):
+def test_missing_argument_exits_2():
     # argparse exits (raises SystemExit) with code 2 when the required
-    # target is absent or extra positionals are given.
+    # target is absent -- nargs="+" (issue #1387) still requires at least
+    # one positional, unlike the extra-positionals case it now accepts (see
+    # test_multiple_targets_are_each_graded below).
     with pytest.raises(SystemExit) as exc:
         css.main([])
     assert exc.value.code == 2
-    with pytest.raises(SystemExit):
-        css.main([str(tmp_path), str(tmp_path)])
 
 
 def test_nonexistent_target_returns_2(tmp_path):
     assert css.main([str(tmp_path / "nope")]) == 2
+
+
+def test_multiple_targets_are_each_graded(tmp_path, capsys):
+    good_base = tmp_path / "good"
+    good_base.mkdir()
+    good = _write_skill(good_base, name="good")
+    bad_base = tmp_path / "bad"
+    bad_base.mkdir()
+    bad = _write_skill(bad_base, name="bad", description=None)
+    # Aggregate exit code is 1 (a failing check), not 2, even though one of
+    # two targets fails -- guard-level errors (2) only come from a missing
+    # SKILL.md or an unreadable target, never from a failing check.
+    assert css.main([str(good), str(bad)]) == 1
+    out = capsys.readouterr().out
+    assert str(good) in out
+    assert str(bad) in out
+    assert "description-present" in out
+
+
+def test_guard_error_on_one_target_does_not_stop_grading_the_rest(tmp_path, capsys):
+    # A missing SKILL.md on one target must not prevent a sibling target
+    # from being graded -- main() continues past a guard-level error rather
+    # than stopping at the first one.
+    good_base = tmp_path / "good"
+    good_base.mkdir()
+    good = _write_skill(good_base, name="good")
+    missing = tmp_path / "missing"
+    assert css.main([str(missing), str(good)]) == 2
+    captured = capsys.readouterr()
+    assert "no SKILL.md found" in captured.err
+    assert "checks passed" in captured.out
+
+
+def test_duplicate_targets_are_deduplicated_and_graded_once(tmp_path, capsys):
+    # A commit touching both a skill's SKILL.md and its own
+    # references/*.md file normalizes both to the same owning skill
+    # directory (issue #1387 item A) -- graded once, not twice, with the
+    # report naming every raw path that mapped there.
+    d = _write_skill(tmp_path, references={"notes.md": "# notes\n"})
+    skill_md_arg = str(d / "SKILL.md")
+    reference_arg = str(d / "references" / "notes.md")
+    assert css.main([skill_md_arg, reference_arg]) == 0
+    out = capsys.readouterr().out
+    assert out.count("checks passed") == 1
+    assert skill_md_arg in out
+    assert reference_arg in out
+
+
+def test_metadata_sidecar_path_normalizes_to_owning_skill_dir(tmp_path):
+    d = _write_skill(tmp_path)
+    sidecar_arg = str(d / "metadata" / "gitapex.yaml")
+    assert css.main([sidecar_arg]) == 0
 
 
 def test_cli_subprocess_well_formed_skill_exits_0(tmp_path):

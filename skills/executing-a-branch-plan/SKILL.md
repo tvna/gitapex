@@ -136,7 +136,28 @@ first, not skimmed.
    (found by a Codex review pass on this PR; step 4's own push is the
    *first* push, not the *only* one). All of this is main-thread-only,
    never delegated into a task `agent()`. The next wave's run dispatches
-   only once this settles. An irreversible task (step 3's flag) gets a fresh step-1-
+   only once this settles.
+
+   **Check `origin/main` drift (issue `#1387`) once the wave's own push
+   lands, before the next wave dispatches** -- never mid-wave, since a
+   wave's own task worktrees are forked from one head and merging
+   `origin/main` in mid-wave would fork later tasks from a different base
+   than earlier ones in the same wave. Run `uv run --frozen python3
+   .github/scripts/gitapex_gate_behind_base.py` (exit 0: clean, proceed;
+   exit 1: behind; exit 2: the fetch/comparison itself cannot be trusted).
+   On exit 1: fetch and merge (or fast-forward) `origin/main` into the
+   shared branch. A clean merge needs no further action. A conflicted one
+   is resolved, then every already-completed task's own Red-Green
+   regression check (step 8's own rule for a code-touching fix) is re-run
+   before continuing, and the resolution is disclosed via a PR comment --
+   this skill had no equivalent to `drafting-a-pr-to-merge` step 7's own
+   `"dirty"`-resolution comment rule until now; it does going forward. On
+   exit 2: proceed with a disclosed note rather than blocking, this
+   repository's own established fail-loud-but-continue convention for a
+   detective check that cannot itself gate. Step 8's own fix-round loop
+   repeats this same check between rounds, per its own text below.
+
+   An irreversible task (step 3's flag) gets a fresh step-1-
    equivalent confirmation for that specific task before its own wave
    dispatches. Full execution/wave/worktree mechanics: [execution and
    dispatch reference](references/execution-and-dispatch.md).
@@ -168,7 +189,12 @@ first, not skimmed.
    to the fix. **Push every fix commit to the remote branch as it lands**
    -- same reasoning as step 6's per-wave push: a fix applied only
    locally would leave the ready-for-review PR (step 9) not actually
-   containing the fix it claims to. An outstanding CONFIRMED finding, or
+   containing the fix it claims to. **Between fix rounds** (never
+   mid-round), also repeat step 6's own `origin/main` drift check and
+   resolution procedure (issue `#1387`) -- the motivating incident for that
+   rule (`#1361` repair 2) happened specifically during a Step 8 fix round,
+   not only at a wave boundary, so a wave-boundary-only check would not
+   have caught it. An outstanding CONFIRMED finding, or
    a re-verification failure, blocks step 9. Detail: [refactor and review
    gate reference](references/refactor-and-review-gate.md).
 9. **On all tasks complete, step 8 clean, and the branch's remote state
