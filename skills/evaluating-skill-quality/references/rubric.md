@@ -716,7 +716,7 @@ grading below.
       prose has never had a hedge escape at all). The other half (`the
       calling repository` / `the target repository`) marks the opposite:
       a generic illustrative placeholder for *whatever* repository the
-      skill lands in, not a citation to this origin repository's own real
+      skill lands in, not a citation to the origin repository's own real
       file at all (establishing-ubiquitous-language's "record resolved
       terms in the calling repository's own glossary doc (e.g.
       `docs/glossary.md`)" is the canonical real example -- a portable
