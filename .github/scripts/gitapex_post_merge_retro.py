@@ -35,12 +35,17 @@ registry wiring. The opened issue is a stub -- it does not enumerate
 repairs; a human or a later interactive agent session fills that in per
 skills/merge-retrospective/SKILL.md.
 
-Deliberately dependency-light (stdlib plus ``pydantic``, this repository's
-own pinned CLI-arg validation dependency) and self-contained -- this repository keeps
-``.github/scripts/*.py`` files independent of one another rather than
-importing across them (see gitapex_scan_retrospective_gate_drift.py's own
-docstring for the same rationale), even though the retry-with-backoff
-shape below mirrors that script's own ``_fetch_issues_page``.
+Issue #729: the retry/backoff-with-``GitHubApiError`` HTTP call this script
+needs (previously a hand-copied local ``_call``, near-identical to
+``gitapex_gate_acm_issue_disclosure.py`` and
+``gitapex_stale_retro_stub_autoclose.py``'s own former copies) now delegates
+to ``_gitapex_github_http.call_json``. That module is the one deliberate,
+generic exception to this repository's ``.github/scripts/*.py``
+independence convention (see its own docstring, and
+gitapex_scan_retrospective_gate_drift.py's docstring for the convention
+itself) -- this script otherwise stays dependency-light (stdlib plus
+``pydantic``, this repository's own pinned CLI-arg validation dependency)
+and does not import any other carrier script.
 
 Untrusted input note: ``--pr-title`` carries attacker-influenced text (a
 PR title, from a possibly-untrusted fork). It never touches a shell
@@ -76,94 +81,20 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
-import http.client
-import json
 import os
 import sys
 import time
 import unicodedata
-import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
 from typing import Any
 
+from _gitapex_github_http import GitHubApiError, call_json, default_opener
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
 _API_ROOT = "https://api.github.com"
-_API_VERSION = "2022-11-28"
-_HTTP_TIMEOUT_SECONDS = 30
 _RETRO_LABEL = "retrospective"
-
-
-class GitHubApiError(RuntimeError):
-    """Raised when the GitHub REST/Search API returns a non-recoverable error."""
-
-
-def _default_opener(request: urllib.request.Request) -> Any:
-    # S310 justification: every caller builds `request` from a fixed
-    # https://api.github.com URL plus trusted env-var-derived segments; the
-    # one attacker-influenced value (pr_title) travels only in the JSON
-    # body of a POST, never in the URL itself.
-    return urllib.request.urlopen(request, timeout=_HTTP_TIMEOUT_SECONDS)  # noqa: S310
-
-
-def _format_code(code: int) -> str:
-    return str(code) if code else "network error"
-
-
-def _call(
-    method: str,
-    url: str,
-    token: str,
-    opener: Callable[[urllib.request.Request], Any],
-    sleeper: Callable[[float], None],
-    body: dict[str, Any] | None = None,
-    max_attempts: int = 3,
-) -> dict[str, Any]:
-    """Call the GitHub API, retrying transient (network / 5xx) failures up
-    to `max_attempts` attempts -- mirrors gitapex_scan_retrospective_gate_drift.py's
-    own `_fetch_issues_page` retry shape.
-
-    `max_attempts` defaults to 3 for idempotent (GET/search) calls. The
-    issue-creation POST is not idempotent -- a lost or truncated response
-    after GitHub has already created the issue would otherwise retry into
-    a duplicate -- so its caller passes `max_attempts=1` to disable retry
-    for that specific call (RFC 9110 SS9.2.2)."""
-    data = json.dumps(body).encode("utf-8") if body is not None else None
-    last_code = 0
-    last_body = ""
-    for attempt in range(1, max_attempts + 1):
-        request = urllib.request.Request(url, data=data, method=method)  # noqa: S310 -- fixed https://api.github.com URL
-        request.add_header("Authorization", f"Bearer {token}")
-        request.add_header("Accept", "application/vnd.github+json")
-        request.add_header("X-GitHub-Api-Version", _API_VERSION)
-        if data is not None:
-            request.add_header("Content-Type", "application/json")
-        try:
-            with opener(request) as response:
-                last_code = int(response.status)
-                last_body = response.read().decode("utf-8", errors="replace")
-        except urllib.error.HTTPError as error:
-            last_code = int(error.code)
-            last_body = error.read().decode("utf-8", errors="replace")
-        except (OSError, http.client.IncompleteRead) as error:
-            # Covers urllib.error.URLError (an OSError subclass, e.g. DNS/
-            # connection failures) and TimeoutError/ConnectionError, plus a
-            # body read that starts (headers arrive, `last_code` gets set)
-            # but stalls or is cut short.
-            last_code = 0
-            last_body = str(error)
-
-        if 200 <= last_code < 300:
-            return json.loads(last_body) if last_body else {}
-        print(f"Attempt {attempt}: HTTP {_format_code(last_code)} for {method} {url}", file=sys.stderr)
-        if last_code != 0 and last_code < 500:
-            break
-        if attempt < max_attempts:
-            sleeper(attempt * 5)
-
-    raise GitHubApiError(f"{method} {url} failed: HTTP {_format_code(last_code)}: {last_body}")
 
 
 def _retro_title(pr_number: int) -> str:
@@ -194,7 +125,7 @@ def find_existing_retro_issue(
     repo: str,
     pr_number: int,
     token: str,
-    opener: Callable[[urllib.request.Request], Any] = _default_opener,
+    opener: Callable[[urllib.request.Request], Any] = default_opener,
     sleeper: Callable[[float], None] | None = None,
 ) -> int | None:
     """Return the number of an existing retro issue for `pr_number`, or
@@ -203,7 +134,7 @@ def find_existing_retro_issue(
     sleeper = sleeper if sleeper is not None else time.sleep
     query = dedup_query(owner, repo, pr_number)
     url = f"{_API_ROOT}/search/issues?{urllib.parse.urlencode({'q': query})}"
-    result = _call("GET", url, token, opener, sleeper)
+    result = call_json("GET", url, token, opener, sleeper)
     items = result.get("items", [])
     return int(items[0]["number"]) if items else None
 
@@ -215,7 +146,7 @@ def open_retro_issue(
     pr_title: str,
     pr_url: str,
     token: str,
-    opener: Callable[[urllib.request.Request], Any] = _default_opener,
+    opener: Callable[[urllib.request.Request], Any] = default_opener,
     sleeper: Callable[[float], None] | None = None,
 ) -> int:
     """Open a retrospective issue for `pr_number`, titled per
@@ -247,10 +178,10 @@ def open_retro_issue(
     )
     url = f"{_API_ROOT}/repos/{owner}/{repo}/issues"
     payload = {"title": title, "body": body, "labels": [_RETRO_LABEL]}
-    # max_attempts=1: issue creation is not idempotent -- see _call's
-    # docstring -- so a lost/truncated response is never retried into a
+    # max_attempts=1: issue creation is not idempotent -- see call_json's
+    # own docstring -- so a lost/truncated response is never retried into a
     # duplicate issue.
-    result = _call("POST", url, token, opener, sleeper, body=payload, max_attempts=1)
+    result = call_json("POST", url, token, opener, sleeper, body=payload, max_attempts=1)
     return int(result["number"])
 
 
