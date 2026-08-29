@@ -2670,6 +2670,17 @@ def _git_restore_paths(
     n = len(tokens_after)
     while i < n:
         tok = tokens_after[i]
+        if tok == "--":
+            # Real git syntax: `--` disambiguates every remaining token as
+            # a pathspec, the identical role it plays for `git checkout`
+            # (see `_git_checkout_paths`'s own sub-case (a)). Found by
+            # independent adversarial review of this PR: the pre-fix
+            # version had no case for a literal `--` at all, so it fell
+            # into the unrecognized-flag branch below and denied an
+            # entirely ordinary, harmless `git restore -- PATH` outright.
+            path_tokens.extend(tokens_after[i + 1 :])
+            i = n
+            break
         if tok == "--pathspec-from-file" or tok.startswith("--pathspec-from-file=") or tok == "--pathspec-file-nul":
             return (
                 "a 'git restore --pathspec-from-file'/'--pathspec-file-nul' flag reads paths from a file this "
@@ -2701,6 +2712,15 @@ def _git_restore_paths(
         if tok in _RESTORE_VALUE_FLAGS:
             i += 2
             continue
+        if any(tok.startswith(f"{flag}=") for flag in _RESTORE_VALUE_FLAGS):
+            # Fused `--source=main`/`--conflict=diff3`: self-contained,
+            # unlike the separate-token form above -- no extra token to
+            # skip. Found by independent adversarial review of this PR:
+            # the pre-fix version only recognized the bare, separate-token
+            # spelling and denied this equally legitimate fused one as an
+            # unrecognized flag.
+            i += 1
+            continue
         if tok.startswith("-"):
             return (
                 f"an unrecognized 'git restore' flag ({tok!r}) -- this classifier cannot safely guarantee "
@@ -2713,6 +2733,79 @@ def _git_restore_paths(
     if saw_staged and not saw_worktree:
         return None, ()
     return _resolve_path_tokens(path_tokens, name_to_raw_value)
+
+
+# A whole token that is EXACTLY one `${NAME-}`/`${NAME:-}` (empty default
+# text) or `${NAME+anything}`/`${NAME:+anything}` (alternate-value clause)
+# construct -- nothing else fused in. Deliberately narrower than
+# `_ONE_REF_SRC`'s own general reference-run matching (this is a single,
+# whole-token check, not a "run of references" one): the two clause shapes
+# below need their own NAME extracted and their own vanishing rule applied
+# (see `_token_is_a_vanishing_default_or_alt_clause`'s own docstring),
+# unlike a bare/braced/subscript reference where any run of them can be
+# fused together and each one either independently vanishes or doesn't.
+_EMPTY_DEFAULT_CLAUSE_RE = re.compile(r"^\$\{(?P<name>[A-Za-z_][A-Za-z0-9_]*):?-\}$")
+_ALT_VALUE_CLAUSE_RE = re.compile(r"^\$\{(?P<name>[A-Za-z_][A-Za-z0-9_]*)(?P<colon>:)?\+[^}]*\}$")
+
+
+def _token_is_a_vanishing_default_or_alt_clause(token: str, name_to_raw_value: dict[str, str]) -> bool:
+    """TOKEN word-splits away to NOTHING, unquoted, at real bash runtime,
+    because it is an `${NAME-}`/`${NAME:-}` (empty default) or
+    `${NAME+word}`/`${NAME:+word}` (alternate-value) construct whose own
+    substitution is empty. Deliberately narrow and LOCAL to this module's
+    own checkout/restore detection (issue #1375) rather than folded into
+    `_token_is_all_unassigned_refs` itself: that function's own docstring
+    explicitly and, for a NON-empty default/alt text, CORRECTLY excludes
+    every default-clause shape ("a default-clause reference supplies REAL
+    substitute text regardless of whether NAME is assigned, so it never
+    vanishes to nothing") -- widening that already heavily-scrutinized,
+    many-times-revised shared primitive (28+ documented rounds of narrow
+    fixes and reverted over-generalizations, per its own docstring) is a
+    materially larger, riskier change than this specific, live-confirmed
+    gap warrants; every existing caller of that function keeps its exact
+    prior behavior unchanged.
+
+    Found live by independent adversarial review of this PR, in the SAME
+    position the already-fixed `$NEVERSET`-shaped bug occupied: that
+    function's own blanket exclusion is only sound when the default/alt
+    text is non-empty -- `${NEVERSET:-}`, `${NEVERSET-}`, and
+    `${NEVERSET:+x}` (NEVERSET genuinely never assigned) all confirmed
+    live (a real bash proxy capturing argv) to word-split away to nothing
+    identically to a bare `$NEVERSET`, making `git ${NEVERSET:-} checkout
+    -- file.py` genuinely run as `git checkout -- file.py` -- the same
+    near-zero-effort bypass of the entire feature the bare-reference fix
+    closed, in a shape that fix's own primitive does not recognize.
+
+    Two sound, narrow cases, both delegating the actual "does NAME itself
+    vanish" question back to `_token_is_all_unassigned_refs` on a
+    synthesized plain `${NAME}` reference (reusing its own already-correct,
+    already-tested per-name rule -- assigned-empty and assigned-all-IFS-
+    whitespace both count as vanishing there too -- rather than
+    re-deriving it here):
+    - `${NAME-}`/`${NAME:-}` (default text is the empty string, checked
+      via the regex itself, not a resolved value): the whole construct
+      substitutes NAME's own value if NAME is set (colon form: set AND
+      non-empty), else the empty default text -- either way, this
+      construct vanishes exactly when NAME itself does.
+    - `${NAME:+word}` (colon form): substitutes WORD only when NAME is set
+      AND non-empty, else nothing -- so this construct vanishes exactly
+      when NAME itself does, regardless of WORD's own content (WORD is
+      never evaluated in the vanishing branch).
+    - `${NAME+word}` (no-colon form): substitutes WORD when NAME is set at
+      ALL (even assigned-empty), else nothing -- a stricter condition than
+      `_token_is_all_unassigned_refs`'s own "set but empty/IFS-whitespace
+      still counts as vanishing," so this form is only recognized when
+      NAME is not a key in NAME_TO_RAW_VALUE at all, not delegated to that
+      broader check."""
+    match = _EMPTY_DEFAULT_CLAUSE_RE.match(token)
+    if match:
+        return _token_is_all_unassigned_refs(f"${{{match.group('name')}}}", name_to_raw_value)
+    match = _ALT_VALUE_CLAUSE_RE.match(token)
+    if match:
+        if match.group("colon"):
+            return _token_is_all_unassigned_refs(f"${{{match.group('name')}}}", name_to_raw_value)
+        return match.group("name") not in name_to_raw_value
+    return False
 
 
 def _find_git_checkout_restore(seg: list[str], name_to_raw_value: dict[str, str]) -> tuple[str | None, list[str], bool]:
@@ -2776,7 +2869,9 @@ def _find_git_checkout_restore(seg: list[str], name_to_raw_value: dict[str, str]
         while j < n:
             candidate = seg[j]
             if _is_dynamic(candidate):
-                if _token_is_all_unassigned_refs(candidate, name_to_raw_value):
+                if _token_is_all_unassigned_refs(
+                    candidate, name_to_raw_value
+                ) or _token_is_a_vanishing_default_or_alt_clause(candidate, name_to_raw_value):
                     j += 1
                     continue
                 ambiguous = True

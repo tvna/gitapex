@@ -2870,6 +2870,45 @@ def test_find_git_checkout_restore_none_when_only_global_flags_and_no_subcommand
     assert saw_tree_relocation is False
 
 
+# --- Two LOW-severity false positives, found by the same independent
+# adversarial review round that found the round-2 vanishing-decoy bypass
+# above: `git restore` denied two entirely legitimate, harmless
+# invocations outright as "unrecognized flag" because neither shape was in
+# the enumerated vocabulary.
+
+
+@_PROPERTIES
+@given(paths=st.lists(_PATH_TOKENS, min_size=1, max_size=3))
+def test_git_restore_paths_extracts_every_token_after_double_dash(paths: list[str]) -> None:
+    """`--` disambiguates every remaining token as a pathspec for `git
+    restore`, the identical role it plays for `git checkout` -- must be
+    recognized, not denied as an unrecognized flag."""
+    reason, resolved = checker._git_restore_paths(["--", *paths], {})
+    assert reason is None
+    assert resolved == tuple(paths)
+
+
+@_PROPERTIES
+@given(
+    flag_value=st.sampled_from([("--source", "main"), ("--conflict", "diff3")]),
+    paths=st.lists(_PATH_TOKENS, min_size=1, max_size=3),
+)
+def test_git_restore_paths_recognizes_fused_value_flags(flag_value: tuple[str, str], paths: list[str]) -> None:
+    """`--source=VALUE`/`--conflict=VALUE` (fused with `=`) are equally
+    legitimate git syntax as the separate-token form already recognized --
+    must not be denied as an unrecognized flag."""
+    flag, value = flag_value
+    reason, resolved = checker._git_restore_paths([f"{flag}={value}", *paths], {})
+    assert reason is None
+    assert resolved == tuple(paths)
+
+
+def test_classify_allows_restore_double_dash_when_clean() -> None:
+    verdict = checker.classify("git restore -- f.py")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("f.py",)
+
+
 @_PROPERTIES
 @given(flag=st.sampled_from(["--pathspec-from-file=list.txt", "--pathspec-from-file", "--pathspec-file-nul"]))
 def test_git_restore_paths_denies_pathspec_from_file(flag: str) -> None:
@@ -2988,6 +3027,84 @@ def test_classify_denies_checkout_with_a_vanishing_decoy_when_dirty() -> None:
     verdict = checker.classify("git $NEVERSET checkout -- file.py")
     assert verdict.deny is False
     assert verdict.checkout_restore_paths == ("file.py",)
+
+
+# --- Round 2: an empty-default/alt-clause decoy in the SAME position,
+# found by a second, independent adversarial review pass after the first
+# fix above landed. `${NEVERSET:-}`/`${NEVERSET-}`/`${NEVERSET:+x}` all
+# vanish identically to a bare `$NEVERSET` when NEVERSET is genuinely
+# unset (confirmed live via a real bash proxy), but `_token_is_all_
+# unassigned_refs`'s own regex never matches these clause shapes at all --
+# its own docstring deliberately excludes them for a non-empty default,
+# which is correct, but does not carve out the empty-default case.
+
+
+@_PROPERTIES
+@given(clause=st.sampled_from(["${NEVERSET:-}", "${NEVERSET-}", "${NEVERSET:+x}", "${NEVERSET+x}"]))
+def test_classify_denies_checkout_with_an_empty_default_or_alt_clause_decoy(clause: str) -> None:
+    """CRITICAL regression pin, round 2. Every one of these four clause
+    shapes, with NEVERSET genuinely never assigned, must be recognized as
+    vanishing -- the same near-zero-effort bypass class as the bare
+    `$NEVERSET` case, just spelled differently."""
+    verdict = checker.classify(f"git {clause} checkout -- file.py")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("file.py",)
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, shape=st.sampled_from(["${{{name}:-}}", "${{{name}-}}", "${{{name}:+x}}", "${{{name}+x}}"]))
+def test_token_is_a_vanishing_default_or_alt_clause_true_for_any_unassigned_name(name: str, shape: str) -> None:
+    """Model-based, direct coverage of `_token_is_a_vanishing_default_or_
+    alt_clause` itself: for ANY identifier never assigned, all four
+    empty-default/alt-clause shapes are recognized as vanishing."""
+    token = shape.format(name=name)
+    assert checker._token_is_a_vanishing_default_or_alt_clause(token, {}) is True
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value=_VALUES)
+def test_token_is_a_vanishing_default_or_alt_clause_false_for_any_assigned_non_empty_name(
+    name: str, value: str
+) -> None:
+    """Model-based: for ANY identifier assigned a real, non-empty value,
+    the colon-form clauses never vanish."""
+    assert checker._token_is_a_vanishing_default_or_alt_clause(f"${{{name}:-}}", {name: value}) is False
+    assert checker._token_is_a_vanishing_default_or_alt_clause(f"${{{name}:+x}}", {name: value}) is False
+
+
+def test_token_is_a_vanishing_default_or_alt_clause_true_for_empty_default_unassigned() -> None:
+    assert checker._token_is_a_vanishing_default_or_alt_clause("${NEVERSET:-}", {}) is True
+    assert checker._token_is_a_vanishing_default_or_alt_clause("${NEVERSET-}", {}) is True
+
+
+def test_token_is_a_vanishing_default_or_alt_clause_true_for_alt_clause_unassigned() -> None:
+    assert checker._token_is_a_vanishing_default_or_alt_clause("${NEVERSET:+x}", {}) is True
+    assert checker._token_is_a_vanishing_default_or_alt_clause("${NEVERSET+x}", {}) is True
+
+
+def test_token_is_a_vanishing_default_or_alt_clause_false_for_non_empty_default() -> None:
+    """No false positive: a NON-empty default text supplies real
+    substitute text regardless of NAME's own state, so it never
+    vanishes."""
+    assert checker._token_is_a_vanishing_default_or_alt_clause("${NEVERSET:-x}", {}) is False
+
+
+def test_token_is_a_vanishing_default_or_alt_clause_false_when_name_is_assigned_non_empty() -> None:
+    """No false positive: a NAME assigned a real, non-empty value does not
+    vanish under the colon forms."""
+    assert checker._token_is_a_vanishing_default_or_alt_clause("${SET:-}", {"SET": "-C"}) is False
+    assert checker._token_is_a_vanishing_default_or_alt_clause("${SET:+x}", {"SET": "-C"}) is False
+
+
+def test_token_is_a_vanishing_default_or_alt_clause_no_colon_plus_requires_strictly_unset() -> None:
+    """The no-colon `+` form checks "is NAME set AT ALL" (ignoring
+    emptiness), a stricter condition than the colon form's "set and
+    non-empty" -- a NAME assigned the empty string still counts as SET
+    for this form, so `${NAME+word}` does NOT vanish (WORD is genuinely
+    substituted at real bash runtime), unlike `${NAME:+word}` for the
+    identical assigned-empty NAME."""
+    assert checker._token_is_a_vanishing_default_or_alt_clause("${SET+x}", {"SET": ""}) is False
+    assert checker._token_is_a_vanishing_default_or_alt_clause("${SET:+x}", {"SET": ""}) is True
 
 
 def test_find_git_checkout_restore_does_not_skip_an_assigned_dynamic_token() -> None:
