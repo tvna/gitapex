@@ -1,17 +1,12 @@
 # Code Quality Principles
 
-Steps 6 and 8's own reference. Source: issue `#1388`, a gitapex-filtered
-subset of 7 principles out of `cursor/plugins/pstack`'s own 21-principle
-index. Each of the 21 was checked against CLAUDE.md sections 1-5's own
-discipline and sibling-skill coverage; 14 duplicated one or the other and
-were excluded -- the issue's own Problem section names 13 of them; the
-14th, Fix Root Causes, is excluded here for the same reason as two of
-those 13 (Prove It Works, Sequence Verifiable Units) -- `diagnosing-a-
-failure` and `reviewing-an-artifact`'s root-cause-vs-symptom tag already
-cover it. Kept deliberately concise, one governing statement plus one
-warning-sign example per principle, rather than this directory's longer
-discursive reference-file style elsewhere -- prompts to recognize a code
-smell while writing or reviewing a diff, not a procedure to execute.
+Steps 6 and 8's own reference: 7 gitapex-filtered code-design principles,
+each with one governing statement and one warning-sign example. Kept
+deliberately concise rather than this directory's longer discursive
+reference-file style elsewhere -- prompts to recognize a code smell while
+writing or reviewing a diff, not a procedure to execute. Source and the
+excluded-candidate accounting: `metadata/gitapex.yaml`'s own
+`spec.references` decision entry for issue `#1388`.
 
 ## Contents
 

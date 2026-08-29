@@ -122,8 +122,16 @@ first, not skimmed.
    method is an automatable test; Refactor is never per-task, deferred
    entirely to step 8. When writing a task's own implementation code,
    apply the principles in [the code quality principles
-   reference](references/code-quality-principles.md). Once a wave's run
-   returns, in the main thread (the Workflow script itself has no
+   reference](references/code-quality-principles.md) -- this runs inside
+   this step's own dispatched `agent()` call, a separate context from the
+   main thread that read this file, so each task's own dispatch prompt
+   cites this reference's path explicitly, in-band, the same way Decision
+   17's exclusion list already must be (see [the threat-model
+   reference](references/threat-model-and-authorization.md#the-branch-plan-task-subagent-type));
+   the dispatched agent retains Read access (its own exclusion list bars
+   `mcp__github__*` and specific Bash patterns, not file reads) and reads
+   the reference from its own worktree checkout once cited. Once a wave's
+   run returns, in the main thread (the Workflow script itself has no
    filesystem/shell access): screen each
    task's own `BASE..HEAD` diff -- `scripts/gitapex_check_canonical_governance_paths.py`
    pre-filters the literal/canonical cases first, then the model's own
