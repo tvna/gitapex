@@ -395,9 +395,10 @@ Steps 6 and 8's own `origin/main`-drift check (issue `#1387`) calls
 `.github/scripts/gitapex_gate_behind_base.py` -- unlike the bundled
 scripts just above, this one is not vendored under this skill's own
 `scripts/` directory; it is repo-root tooling this Mixed-declared skill
-assumes is present, the same trust relationship this Notes section
-already states for the GitHub connector calls and the Workflow tool
-above, not a new kind of dependency this skill did not already have.
+assumes is present, an environment-provided dependency in the same vein
+as the GitHub connector calls and the Workflow tool this Notes section
+already discusses above, not a new kind of dependency this skill did not
+already have.
 
 Capability assumption: **Adaptive**. Was declared `Frontier` by review
 oversight, with no `model:`/`effort:` pin anywhere to justify targeting
