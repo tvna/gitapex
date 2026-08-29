@@ -246,6 +246,32 @@ evaluation. Name the gap; never fake a score to proceed.
    schema alone has never been enough -- a corpus of records can validate
    individually and still drift into disagreeing key spellings and
    unreferenced attachments when no procedure states the contract.
+8. **Recommended: adversarial-verification pass over prose and disclosure
+   quality, before filing the PR.** Issue `#218` -- the merge retrospective
+   for PR `#216` -- found four defects the strict score gate could not have caught
+   even in principle -- an omitted entry in this same file's own
+   Correction-block disclosure, a brittle fixture assertion, dangling
+   rubric wording, and a missing citation-status label -- because all four
+   are about the candidate text's own wording, citation completeness, and
+   this file's own disclosure honesty, not about measured behavior. Step
+   4's gate gives none of this: a substring scorer is not positioned to
+   catch a sentence that reads badly, a disclosure paragraph that drops
+   one of its own corrections, or a citation the rubric's own intro
+   promises but the new content never delivers. Before filing the PR,
+   run a separate pass -- independent of the authoring context where
+   possible, the same shape step 4's own Conditional branch already uses
+   for an LLM-judge verdict -- whose only goal is to find defects in the
+   accepted edit's own prose and in this run's own disclosure paragraph
+   (step 7): does every changed assertion get named in the disclosure,
+   does every new citation resolve, does the wording read as the rest of
+   this repository's own established phrasing would. This is
+   recommended, not required: unlike step 4's strict gate (a STOP
+   boundary) or step 4's own Conditional branch (mandatory whenever no
+   deterministic scorer exists), skipping this pass is not itself a
+   defect -- but a completed pass, and what it found, still belongs in
+   the run record's `known_gaps` field (step 7) either way, so a later
+   reader can tell whether this happened rather than silently assuming it
+   did.
 
 ## Authoring fixtures for a substring scorer
 
@@ -304,6 +330,9 @@ just measures the wrong thing.
 - **Rejected-edit log:** edits tried and rejected, with the score change.
 - **Transfer check:** the adjacent target and whether it regressed.
 - **Run record:** where the record was written, and the fields it carries.
+- **Prose/disclosure pass:** whether step 8's recommended adversarial pass
+  ran and what it found, or that it was not run this iteration --
+  recorded either way, per step 8's own `known_gaps` rule.
 - **Next move:** the concrete next iteration or the ship/stop decision.
 
 ## Stop boundaries
