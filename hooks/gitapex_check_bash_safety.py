@@ -2736,24 +2736,38 @@ def _git_restore_paths(
 
 
 # A whole token that is EXACTLY one `${NAME-}`/`${NAME:-}` (empty default
-# text) or `${NAME+anything}`/`${NAME:+anything}` (alternate-value clause)
-# construct -- nothing else fused in. Deliberately narrower than
-# `_ONE_REF_SRC`'s own general reference-run matching (this is a single,
-# whole-token check, not a "run of references" one): the two clause shapes
-# below need their own NAME extracted and their own vanishing rule applied
-# (see `_token_is_a_vanishing_default_or_alt_clause`'s own docstring),
-# unlike a bare/braced/subscript reference where any run of them can be
-# fused together and each one either independently vanishes or doesn't.
-_EMPTY_DEFAULT_CLAUSE_RE = re.compile(r"^\$\{(?P<name>[A-Za-z_][A-Za-z0-9_]*):?-\}$")
+# text), `${NAME=}`/`${NAME:=}` (empty ASSIGN-default text -- also
+# assigns NAME the empty string as a side effect, which does not change
+# whether THIS token itself vanishes), or `${NAME+anything}`/
+# `${NAME:+anything}` (alternate-value clause) construct -- nothing else
+# fused in. Deliberately narrower than `_ONE_REF_SRC`'s own general
+# reference-run matching (this is a single, whole-token check, not a "run
+# of references" one): the clause shapes below need their own NAME
+# extracted and their own vanishing rule applied (see
+# `_token_is_a_vanishing_default_or_alt_clause`'s own docstring), unlike a
+# bare/braced/subscript reference where any run of them can be fused
+# together and each one either independently vanishes or doesn't.
+#
+# `${NAME:?}`/`${NAME?}` (empty error-message clause) is deliberately NOT
+# included here: unlike every clause above, this one does not silently
+# vanish when NAME is unset -- real bash prints the message to stderr and
+# TERMINATES the command entirely (non-interactively) with a non-zero
+# status, confirmed live, so `checkout`/`restore` never even runs. Treating
+# it as ambiguous (the default, unrecognized-dynamic-token fallback) is
+# already safe: there is no real invocation for a missed detection to miss.
+_EMPTY_DEFAULT_CLAUSE_RE = re.compile(r"^\$\{(?P<name>[A-Za-z_][A-Za-z0-9_]*):?[-=]\}$")
 _ALT_VALUE_CLAUSE_RE = re.compile(r"^\$\{(?P<name>[A-Za-z_][A-Za-z0-9_]*)(?P<colon>:)?\+[^}]*\}$")
 
 
 def _token_is_a_vanishing_default_or_alt_clause(token: str, name_to_raw_value: dict[str, str]) -> bool:
     """TOKEN word-splits away to NOTHING, unquoted, at real bash runtime,
-    because it is an `${NAME-}`/`${NAME:-}` (empty default) or
-    `${NAME+word}`/`${NAME:+word}` (alternate-value) construct whose own
-    substitution is empty. Deliberately narrow and LOCAL to this module's
-    own checkout/restore detection (issue #1375) rather than folded into
+    because it is an `${NAME-}`/`${NAME:-}` (empty default), `${NAME=}`/
+    `${NAME:=}` (empty assign-default -- confirmed live this also
+    vanishes to nothing the identical way, the assignment side effect
+    notwithstanding), or `${NAME+word}`/`${NAME:+word}` (alternate-value)
+    construct whose own substitution is empty. Deliberately narrow and
+    LOCAL to this module's own checkout/restore detection (issue #1375)
+    rather than folded into
     `_token_is_all_unassigned_refs` itself: that function's own docstring
     explicitly and, for a NON-empty default/alt text, CORRECTLY excludes
     every default-clause shape ("a default-clause reference supplies REAL

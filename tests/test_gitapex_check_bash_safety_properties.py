@@ -3040,23 +3040,34 @@ def test_classify_denies_checkout_with_a_vanishing_decoy_when_dirty() -> None:
 
 
 @_PROPERTIES
-@given(clause=st.sampled_from(["${NEVERSET:-}", "${NEVERSET-}", "${NEVERSET:+x}", "${NEVERSET+x}"]))
+@given(
+    clause=st.sampled_from(
+        ["${NEVERSET:-}", "${NEVERSET-}", "${NEVERSET:=}", "${NEVERSET=}", "${NEVERSET:+x}", "${NEVERSET+x}"]
+    )
+)
 def test_classify_denies_checkout_with_an_empty_default_or_alt_clause_decoy(clause: str) -> None:
-    """CRITICAL regression pin, round 2. Every one of these four clause
-    shapes, with NEVERSET genuinely never assigned, must be recognized as
-    vanishing -- the same near-zero-effort bypass class as the bare
-    `$NEVERSET` case, just spelled differently."""
+    """CRITICAL regression pin, round 2 (plus the `${NAME:=}`/`${NAME=}`
+    assign-default shapes found immediately afterward, same root cause).
+    Every one of these six clause shapes, with NEVERSET genuinely never
+    assigned, must be recognized as vanishing -- the same near-zero-effort
+    bypass class as the bare `$NEVERSET` case, just spelled differently."""
     verdict = checker.classify(f"git {clause} checkout -- file.py")
     assert verdict.deny is False
     assert verdict.checkout_restore_paths == ("file.py",)
 
 
 @_PROPERTIES
-@given(name=_IDENTIFIERS, shape=st.sampled_from(["${{{name}:-}}", "${{{name}-}}", "${{{name}:+x}}", "${{{name}+x}}"]))
+@given(
+    name=_IDENTIFIERS,
+    shape=st.sampled_from(
+        ["${{{name}:-}}", "${{{name}-}}", "${{{name}:=}}", "${{{name}=}}", "${{{name}:+x}}", "${{{name}+x}}"]
+    ),
+)
 def test_token_is_a_vanishing_default_or_alt_clause_true_for_any_unassigned_name(name: str, shape: str) -> None:
     """Model-based, direct coverage of `_token_is_a_vanishing_default_or_
-    alt_clause` itself: for ANY identifier never assigned, all four
-    empty-default/alt-clause shapes are recognized as vanishing."""
+    alt_clause` itself: for ANY identifier never assigned, all six
+    empty-default/assign-default/alt-clause shapes are recognized as
+    vanishing."""
     token = shape.format(name=name)
     assert checker._token_is_a_vanishing_default_or_alt_clause(token, {}) is True
 
@@ -3075,6 +3086,25 @@ def test_token_is_a_vanishing_default_or_alt_clause_false_for_any_assigned_non_e
 def test_token_is_a_vanishing_default_or_alt_clause_true_for_empty_default_unassigned() -> None:
     assert checker._token_is_a_vanishing_default_or_alt_clause("${NEVERSET:-}", {}) is True
     assert checker._token_is_a_vanishing_default_or_alt_clause("${NEVERSET-}", {}) is True
+
+
+def test_token_is_a_vanishing_default_or_alt_clause_true_for_empty_assign_default_unassigned() -> None:
+    """`${NAME:=}`/`${NAME=}` (assign-default, empty text) also vanishes
+    to nothing when NAME is unassigned -- confirmed live that this both
+    substitutes the empty string AND assigns NAME the empty string as a
+    side effect, but the side effect does not change whether THIS token
+    itself occupies an argv position."""
+    assert checker._token_is_a_vanishing_default_or_alt_clause("${NEVERSET:=}", {}) is True
+    assert checker._token_is_a_vanishing_default_or_alt_clause("${NEVERSET=}", {}) is True
+
+
+def test_token_is_a_vanishing_default_or_alt_clause_false_for_error_message_clause() -> None:
+    """No false positive: `${NAME:?}`/`${NAME?}` is deliberately NOT
+    recognized -- real bash terminates the whole command with an error
+    when NAME is unset for this clause, rather than silently vanishing,
+    so there is no real invocation for a missed detection to miss."""
+    assert checker._token_is_a_vanishing_default_or_alt_clause("${NEVERSET:?}", {}) is False
+    assert checker._token_is_a_vanishing_default_or_alt_clause("${NEVERSET?}", {}) is False
 
 
 def test_token_is_a_vanishing_default_or_alt_clause_true_for_alt_clause_unassigned() -> None:
