@@ -229,7 +229,7 @@
       "trigger": "PreToolUse matcher mcp__github__create_pull_request and mcp__github__update_pull_request (hooks/hooks.json); .github/workflows/skill-audit-gate.yml on pull_request",
       "policy_refs": [],
       "cluster": "skill-lifecycle",
-      "tracking_issue": null,
+      "tracking_issue": [248, 242, 246],
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
@@ -581,6 +581,27 @@
       ]
     },
     {
+      "id": "eval-yaml-parses",
+      "kind": "script",
+      "script": "evals/scripts/gitapex_validate_eval_yaml.py",
+      "rule": "Every committed evals/*/eval.yaml and evals/*/tasks/*.yaml file must parse cleanly as YAML (syntax only, never schema validity) -- swept in one pass across the whole tree, a strict superset of touched-files-only.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", "evals/scripts/gitapex_validate_eval_yaml.py"],
+      "trigger": "tests/test_gitapex_validate_eval_yaml.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "skill-lifecycle",
+      "tracking_issue": 527,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "evals/*/eval.yaml"},
+        {"kind": "file-glob", "ref": "evals/*/tasks/*.yaml"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
+    },
+    {
       "id": "skill-eval-status-doc-drift",
       "kind": "script",
       "script": ".github/scripts/gitapex_generate_skill_eval_status.py",
@@ -800,7 +821,7 @@
       "trigger": ".github/workflows/retrospective-gate-drift.yml, daily cron 07:00 UTC + workflow_dispatch",
       "policy_refs": [],
       "cluster": "self-governance",
-      "tracking_issue": [297, 422, 426, 1406],
+      "tracking_issue": [297, 422, 426, 187, 242, 246, 1406],
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
