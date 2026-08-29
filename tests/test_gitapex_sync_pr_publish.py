@@ -114,7 +114,14 @@ def test_apply_call_network_failure_retries_three_times() -> None:
         sleeper=sleeps.append,
     )
     assert code == 0
-    assert body == "boom"
+    # Issue #729: apply_call's own former URLError handler read
+    # `str(error.reason)` ("boom"); the shared `request_with_retry` it now
+    # delegates to catches the same URLError one level higher (as a plain
+    # `OSError`) and formats via `str(error)`, i.e. urllib's own
+    # "<urlopen error ...>" wrapper text. Retry count/timing/status code
+    # (the actual control-flow contract) are unaffected -- only this
+    # network-failure error-message surface text differs.
+    assert body == "<urlopen error boom>"
     assert calls == 3
     assert sleeps == [5, 10]
 
