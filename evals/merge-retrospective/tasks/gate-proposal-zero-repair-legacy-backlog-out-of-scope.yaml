@@ -1,0 +1,39 @@
+id: merge-retrospective-gate-proposal-zero-repair-legacy-backlog-out-of-scope
+name: Zero-Repair Cycle Fast-Closes Despite A Pre-Existing Legacy Backlog
+description: The specific behavior this redesign changes -- a zero-repair cycle still fast-closes exactly like any other zero-repair cycle even when a large pre-existing legacy backlog of unresolved gate proposals is known to exist, because the new Step 1 ("Nothing to sweep") never runs a carry-forward check at all and the legacy backlog stays explicitly out of scope (Non-goals). The old skill would have produced a "Carried-forward gate" subsection here and stayed open indefinitely; this rewrite must not.
+tags:
+  - quality
+  - gate-proposal
+  - zero-repair
+  - legacy-backlog
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #305 ("chore: pin the transitive `requests`
+    dependency to the patched version") just merged into main.
+
+    Full history from open to merge: CI ran once and passed clean on the
+    first push. No reviewer left any comment requiring a follow-up commit,
+    and no force-pushes happened. The PR merged exactly as opened, with
+    zero repairs of any kind.
+
+    For context, unrelated to this cycle: this repository carries a large
+    pre-existing backlog of retrospective issues filed before the current
+    gate-proposal-per-repair mechanism existed, many of them still open
+    with an unresolved proposed gate that was never actually built. That
+    backlog is explicitly out of scope for every routine cycle going
+    forward, including this one -- nothing about it needs to be swept,
+    re-verified, or referenced here.
+
+    An operator is present and available to respond.
+
+    Run the retrospective now that PR #305 has merged.
+expected:
+  output_contains:
+    - "zero repairs"
+    - "Retrospective status: zero-repair-fast-close"
+    - "Refs #305"
+  output_not_contains:
+    - "## Carried-forward gate"
+    - "carried-forward"
+    - "gate-proposal:"
+    - "Filed as:"
