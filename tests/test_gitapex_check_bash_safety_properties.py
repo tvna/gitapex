@@ -20,6 +20,7 @@ Reproducibility: ``derandomize=True`` with an explicit ``max_examples`` and
 from __future__ import annotations
 
 import json
+import shlex
 import string
 import sys
 from typing import cast
@@ -2863,7 +2864,7 @@ def test_find_git_checkout_restore_none_when_only_global_flags_and_no_subcommand
     checkout/restore invocation -- the while loop runs off the end of the
     segment (`j == n`) rather than finding a literal `checkout`/`restore`
     token."""
-    subcommand, tokens_after, saw_tree_relocation = checker._find_git_checkout_restore(["git", "-C", "/tmp/x"])
+    subcommand, tokens_after, saw_tree_relocation = checker._find_git_checkout_restore(["git", "-C", "/tmp/x"], {})
     assert subcommand is None
     assert tokens_after == []
     assert saw_tree_relocation is False
@@ -2909,7 +2910,7 @@ def test_find_git_checkout_restore_finds_git_at_any_segment_position(prefix: lis
     found at `seg[0]`."""
     assume(all(p != "git" for p in prefix))
     seg = [*prefix, "git", "checkout", "--", *paths]
-    subcommand, tokens_after, saw_tree_relocation = checker._find_git_checkout_restore(seg)
+    subcommand, tokens_after, saw_tree_relocation = checker._find_git_checkout_restore(seg, {})
     assert subcommand == "checkout"
     assert tokens_after == ["--", *paths]
     assert saw_tree_relocation is False
@@ -2918,7 +2919,7 @@ def test_find_git_checkout_restore_finds_git_at_any_segment_position(prefix: lis
 def test_find_git_checkout_restore_none_for_a_segment_with_no_git() -> None:
     """No false positive: a segment with no literal `git` token at all is
     never treated as a checkout/restore invocation."""
-    subcommand, _tokens_after, _saw = checker._find_git_checkout_restore(["echo", "checkout", "restore"])
+    subcommand, _tokens_after, _saw = checker._find_git_checkout_restore(["echo", "checkout", "restore"], {})
     assert subcommand is None
 
 
@@ -2931,7 +2932,7 @@ def test_find_git_checkout_restore_flags_tree_relocation(flag: str) -> None:
     rather than let the live wrapper check the wrong tree (issue #1375's
     own Fact 5 cwd finding)."""
     seg = ["git", flag, "/some/path", "checkout", "--", "f.py"]
-    subcommand, _tokens_after, saw_tree_relocation = checker._find_git_checkout_restore(seg)
+    subcommand, _tokens_after, saw_tree_relocation = checker._find_git_checkout_restore(seg, {})
     assert subcommand == "checkout"
     assert saw_tree_relocation is True
 
@@ -2941,7 +2942,7 @@ def test_find_git_checkout_restore_does_not_flag_lowercase_c_config_flag() -> No
     case-sensitively distinct from `-C` (uppercase, relocates the working
     tree) and must never be conflated with it (issue #1375's own Fact 5)."""
     seg = ["git", "-c", "user.name=x", "checkout", "--", "f.py"]
-    subcommand, _tokens_after, saw_tree_relocation = checker._find_git_checkout_restore(seg)
+    subcommand, _tokens_after, saw_tree_relocation = checker._find_git_checkout_restore(seg, {})
     assert subcommand == "checkout"
     assert saw_tree_relocation is False
 
@@ -2952,8 +2953,96 @@ def test_find_git_checkout_restore_is_a_non_goal_for_a_dynamic_subcommand() -> N
     shaped and is not detected -- the same disclosed-residual convention
     this module's own `KNOWN_BYPASS_COMMANDS` test list already uses for
     the analogous dynamic-tool/dynamic-verb case."""
-    subcommand, _tokens_after, _saw = checker._find_git_checkout_restore(["git", "$V", "--", "f.py"])
+    subcommand, _tokens_after, _saw = checker._find_git_checkout_restore(["git", "$V", "--", "f.py"], {})
     assert subcommand is None
+
+
+# --- Regression pins for two real findings from this PR's own independent
+# adversarial review (issue #1375), both confirmed live before being fixed.
+
+
+def test_find_git_checkout_restore_skips_a_vanishing_decoy_between_git_and_subcommand() -> None:
+    """CRITICAL regression pin. A genuinely-unset, unquoted `$NEVERSET`
+    sitting between `git` and `checkout`/`restore` word-splits away to
+    nothing at real bash runtime (confirmed live via a real bash proxy,
+    stand-in `git` binary on PATH, capturing its own argv: `git $NEVERSET
+    checkout -- file.py` genuinely runs `git checkout -- file.py`). Before
+    this fix, `_find_git_checkout_restore` treated ANY dynamic token in
+    this position as ambiguous and gave up, so this exact near-zero-effort
+    decoy silently bypassed the entire checkout/restore safety feature --
+    the same vanishing-decoy bug class `_is_git_push_segment` already
+    closed for `git push` over rounds 20-24 of issue #1326, using the same
+    `_token_is_all_unassigned_refs` primitive this fix now reuses here."""
+    seg = ["git", "$NEVERSET", "checkout", "--", "file.py"]
+    subcommand, tokens_after, saw_tree_relocation = checker._find_git_checkout_restore(seg, {})
+    assert subcommand == "checkout"
+    assert tokens_after == ["--", "file.py"]
+    assert saw_tree_relocation is False
+
+
+def test_classify_denies_checkout_with_a_vanishing_decoy_when_dirty() -> None:
+    """End-to-end regression pin for the same finding: `classify()` must
+    surface the resolved path, not silently allow with an empty
+    `checkout_restore_paths`, when a vanishing decoy sits between `git`
+    and `checkout`."""
+    verdict = checker.classify("git $NEVERSET checkout -- file.py")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("file.py",)
+
+
+def test_find_git_checkout_restore_does_not_skip_an_assigned_dynamic_token() -> None:
+    """No false positive from the vanishing-decoy fix itself: a dynamic
+    token that IS assigned a real (non-empty) value does not
+    unambiguously vanish, so it still makes this `git` occurrence
+    ambiguous -- unchanged from the pre-fix behavior for this case."""
+    seg = ["git", "$SET", "checkout", "--", "file.py"]
+    subcommand, _tokens_after, _saw = checker._find_git_checkout_restore(seg, {"SET": "-C"})
+    assert subcommand is None
+
+
+def test_tokenize_splits_on_an_unquoted_newline() -> None:
+    """MEDIUM regression pin. shlex's own default `whitespace` set
+    includes `\\n`, silently swallowing an unquoted newline as ordinary
+    inter-token whitespace and never producing it as its own token --
+    making `_SINGLE_OPS`'s inclusion of `"\\n"` (and `segment_tokens`'s
+    own documented newline-boundary behavior) dead code. Confirmed live
+    that this let an ordinary two-line script (`git checkout` on one
+    line, something unrelated with a `$` token on the next) get the
+    second line's own token swept into the first line's own checkout
+    path candidates and spuriously denied -- not a security miss (the
+    fail-closed direction), but a real false-positive regression for a
+    very common multi-line Bash tool-call shape."""
+    tokens = checker.tokenize("echo a\necho b")
+    assert tokens == ["echo", "a", "\n", "echo", "b"]
+
+
+def test_tokenize_preserves_a_newline_inside_a_quoted_string() -> None:
+    """No false positive from the newline fix itself: a newline INSIDE a
+    quoted string is real string content, not a shell control operator,
+    and must stay fused into its own token exactly as before."""
+    tokens = checker.tokenize('echo "multi\nline"')
+    assert tokens == ["echo", "multi\nline"]
+
+
+def test_classify_does_not_leak_a_later_lines_token_into_an_earlier_checkout() -> None:
+    """End-to-end regression pin for the newline finding: an ordinary
+    two-line script with `git checkout` on the first line and an
+    unrelated `$`-containing token on the second line must classify the
+    checkout using only its own line's tokens."""
+    verdict = checker.classify('git checkout -b newbranch master\necho "exit=$?"')
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("newbranch", "master")
+
+
+def test_shlex_default_punctuation_chars_still_matches_the_hardcoded_extension() -> None:
+    """Pins the stdlib assumption `tokenize()`'s own newline fix depends
+    on: shlex's documented default `punctuation_chars` value for
+    `punctuation_chars=True`, which `tokenize()` now hardcodes (extended
+    with `\\n`) rather than deriving at runtime. If a future Python
+    version ever changes this default, this test fails loudly instead of
+    `tokenize()` silently drifting from it."""
+    default_lexer = shlex.shlex("x", posix=True, punctuation_chars=True)
+    assert default_lexer.punctuation_chars == "();<>|&"
 
 
 @_PROPERTIES

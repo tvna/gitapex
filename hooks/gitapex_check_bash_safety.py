@@ -880,10 +880,36 @@ def tokenize(command: str) -> list[str]:
     spans here -- `_classify_tokens` applies `_fold_command_substitution_
     spans` itself, AFTER first running `_rule_command_substitution_
     content` against these still-unfolded tokens, which needs each
-    span's own inner tokens still separable."""
+    span's own inner tokens still separable.
+
+    An UNQUOTED newline is one of `segment_tokens`'s own documented
+    segment boundaries (it is a member of `_SINGLE_OPS`) -- but shlex's
+    own default `whitespace` set includes `\\n`, so a bare newline was
+    silently swallowed as ordinary inter-token whitespace and never
+    reached `segment_tokens` as its own token at all, making that half of
+    `_SINGLE_OPS` dead code. Found live by independent adversarial review
+    of issue #1375's own new checkout/restore detection: unlike every
+    prior rule in this module (none of which depend on a segment actually
+    ending where a real multi-line script's own line breaks fall),
+    `_git_checkout_paths`/`_git_restore_paths` consume every token up to
+    the (wrongly unbroken) end of the segment as candidate path data --
+    confirmed live that `git checkout -b newbranch master\\necho
+    "exit=$?"` (an ordinary two-line script, checkout on the first line,
+    something unrelated on the second) had the second line's own
+    `exit=$?` swept in as a checkout path candidate and spuriously
+    denied the whole command as an unresolvable dynamic path, purely
+    because the newline between the two lines was never recognized as a
+    boundary. Closed by moving `\\n` from shlex's own `whitespace` set
+    into `punctuation_chars` instead, so it tokenizes as its own
+    single-character operator token -- confirmed live this does not
+    change a QUOTED newline (still preserved verbatim inside its
+    enclosing token, since shlex's own quote handling runs before
+    punctuation-splitting) nor any command with no literal newline in it
+    at all (the entire pre-existing test suite's own command strings)."""
     try:
-        lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+        lexer = shlex.shlex(command, posix=True, punctuation_chars="();<>|&\n")
         lexer.whitespace_split = True
+        lexer.whitespace = lexer.whitespace.replace("\n", "")
         raw_tokens = list(lexer)
     except ValueError as error:
         raise TokenizeError(str(error)) from error
@@ -2689,7 +2715,7 @@ def _git_restore_paths(
     return _resolve_path_tokens(path_tokens, name_to_raw_value)
 
 
-def _find_git_checkout_restore(seg: list[str]) -> tuple[str | None, list[str], bool]:
+def _find_git_checkout_restore(seg: list[str], name_to_raw_value: dict[str, str]) -> tuple[str | None, list[str], bool]:
     """Scan SEG (already assignment-stripped, see `_strip_leading_
     assignments`) for a `git checkout`/`git restore` invocation, skipping
     past git's own global value-taking options the same way
@@ -2711,17 +2737,35 @@ def _find_git_checkout_restore(seg: list[str]) -> tuple[str | None, list[str], b
     Acceptance Criteria Map names this exact shape) through with an empty
     `checkout_restore_paths` instead of denying on the unresolvable `$f`.
 
+    A DYNAMIC token encountered while skip-parsing global flags is
+    resolved via `_token_is_all_unassigned_refs` (the same primitive
+    `_is_git_push_segment` already uses for the identical position) rather
+    than always treated as ambiguous: a token that unambiguously vanishes
+    at real bash runtime (a genuinely unset, unquoted `$NEVERSET`-shaped
+    reference) is skipped over, not given up on. Found live by
+    independent adversarial review of this PR: `git $NEVERSET checkout --
+    file.py` (NEVERSET never assigned) was wrongly allowed with an empty
+    `checkout_restore_paths` before this check -- confirmed live via a
+    real bash proxy (stand-in `git` binary on PATH, capturing its own
+    argv) that the decoy word-splits away to nothing and this genuinely
+    runs `git checkout -- file.py`, silently bypassing the whole feature
+    with one trivial unset variable. A dynamic token that does NOT
+    unambiguously vanish (assigned, or an indirect/default-clause
+    reference this primitive does not cover) still makes this `git`
+    occurrence ambiguous, per the paragraph below.
+
     Returns `(subcommand, tokens_after_subcommand,
     saw_tree_relocation_flag)`; `subcommand` is `None` when SEG has no
     checkout/restore invocation at all (including when a dynamic token
     sits in a position that could be either a global flag/value or the
-    subcommand itself, immediately after a literal `git` -- a genuinely
-    ambiguous, non-honest-accident shape this pure classifier declines to
-    resolve at that specific `git` occurrence, the same disclosed-residual
-    convention this module's own `KNOWN_BYPASS_COMMANDS` test list already
-    uses for the analogous dynamic-tool/dynamic-verb case; scanning
-    continues past it to any later `git` occurrence in the same segment),
-    in which case the other two return values are meaningless."""
+    subcommand itself, immediately after a literal `git`, and does not
+    unambiguously vanish -- a genuinely ambiguous, non-honest-accident
+    shape this pure classifier declines to resolve at that specific `git`
+    occurrence, the same disclosed-residual convention this module's own
+    `KNOWN_BYPASS_COMMANDS` test list already uses for the analogous
+    dynamic-tool/dynamic-verb case; scanning continues past it to any
+    later `git` occurrence in the same segment), in which case the other
+    two return values are meaningless."""
     n = len(seg)
     for i, tok in enumerate(seg):
         if _is_dynamic(tok) or tok.lower() != "git":
@@ -2732,6 +2776,9 @@ def _find_git_checkout_restore(seg: list[str]) -> tuple[str | None, list[str], b
         while j < n:
             candidate = seg[j]
             if _is_dynamic(candidate):
+                if _token_is_all_unassigned_refs(candidate, name_to_raw_value):
+                    j += 1
+                    continue
                 ambiguous = True
                 break
             if (
@@ -2774,7 +2821,7 @@ def _rule_git_checkout_restore(
     saw_cd = False
     all_paths: list[str] = []
     for seg in segments:
-        subcommand, tokens_after, saw_tree_relocation = _find_git_checkout_restore(seg)
+        subcommand, tokens_after, saw_tree_relocation = _find_git_checkout_restore(seg, raw_assigned)
         if subcommand is None:
             if any(not _is_dynamic(t) and t == "cd" for t in seg):
                 saw_cd = True
