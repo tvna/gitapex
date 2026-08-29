@@ -2908,10 +2908,14 @@ def test_demonstrative_origin_repository_hard_wrapped_across_line_break_still_fl
 
 
 def test_repository_scoped_skill_may_use_demonstrative_origin_repository(tmp_path):
-    # Matching portable-no-unhedged-skill-fact-claim's own Repository-scoped
-    # exclusion: a skill that has declared itself Repository-scoped is not
-    # asking this check to excuse it -- that declaration is exactly what it
-    # means to depend on this repository on purpose.
+    # Explicitly pins the Repository-scoped declared level, not just Mixed
+    # (test_non_portable_skill_skips_demonstrative_origin_repository_scan
+    # above): _is_portable() takes the same False branch for both today, so
+    # this is currently redundant with that test rather than a distinct
+    # code path -- kept as a named regression guard for this specific
+    # declared level (per rubric.md's own Dimension 6 Repository-scoped
+    # carve-out, issue #200/#218) in case the two levels' handling ever
+    # diverges.
     d = _write_raw(
         tmp_path,
         _portable_body(

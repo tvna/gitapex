@@ -81,6 +81,28 @@ def _run_git(args: list[str], root: pathlib.Path) -> str:
     Unstripped, unlike a plain version-lookup helper: a diff's own leading/
     trailing blank context lines are part of what this script's callers
     scan, not incidental whitespace to discard.
+
+    This function mirrors, rather than imports,
+    ``.github/scripts/gitapex_scan_harden_checkout_pin_drift.py``'s own
+    ``_run_git`` -- reimplemented locally rather than imported across the
+    ``.github/scripts``/``evals/scripts`` boundary, to keep this module's
+    own import surface to what ``pyproject.toml``'s
+    ``pythonpath``/``uv run`` invocation already guarantees without a new
+    cross-directory ``sys.path`` bootstrap (the same convention
+    ``gitapex_run_http_executor.py``'s own module docstring states for its
+    mirrored base-URL validator).
+
+    ``errors="replace"`` on the text-mode decode: git's own output is not
+    guaranteed valid UTF-8 (a fixture or split.md line could carry a
+    non-UTF-8 byte), and a bare `text=True` default's strict decoding
+    raises an uncaught ``UnicodeDecodeError`` -- neither
+    ``CalledProcessError`` nor ``OSError`` -- past this function's own
+    "raises RuntimeError only" contract. Found live during review: a
+    fixture line with an invalid UTF-8 byte crashed the CLI with a raw
+    traceback instead of the documented behavior. Replacing the
+    undecodable byte is safe here specifically because every caller only
+    ever substring/regex-matches the result; it never round-trips the
+    text back to a file.
     """
     try:
         result = subprocess.run(  # noqa: S603
@@ -88,11 +110,32 @@ def _run_git(args: list[str], root: pathlib.Path) -> str:
             cwd=root,
             capture_output=True,
             text=True,
+            errors="replace",
             check=True,
         )
     except (subprocess.CalledProcessError, OSError) as exc:
         raise RuntimeError(f"`git {' '.join(args)}` failed in {root}: {exc}") from exc
     return result.stdout
+
+
+_REVISION_ARG_RE = re.compile(r"^[^-].*$", re.DOTALL)
+
+
+def _validate_revision_arg(value: str, flag: str) -> None:
+    """Reject a `--base`/`--head` value that could be parsed by git as an
+    option rather than a revision (CWE-88, argument injection) -- a value
+    starting with `-` (e.g. `--output=/tmp/x`) reaching a git subcommand's
+    positional revision-range argument. Not reachable through this
+    module's own CI wiring today (``.github/workflows/split-disclosure-
+    gate.yml`` only ever passes a real commit SHA, from the `pull_request`
+    event payload or `git merge-base`'s own output, neither of which can
+    start with `-`), but this CLI's `--base`/`--head` flags are public and
+    a future caller is not bound by that same guarantee. Empty is also
+    rejected: `f"{base}..{head}"` with an empty side is a different,
+    silently-wrong git revision-range shape, not a no-op.
+    """
+    if not value or not _REVISION_ARG_RE.match(value):
+        raise RuntimeError(f"{flag} {value!r} is not a valid git revision: must be non-empty and not start with '-'")
 
 
 def changed_task_files(base: str, head: str, root: pathlib.Path) -> list[str]:
@@ -161,6 +204,8 @@ def undisclosed_fixtures(base: str, head: str, root: pathlib.Path | None = None)
     """Return every touched fixture's basename with no possessive citation
     (see `_fixture_citation_re`) in split.md's own added lines for the
     same range, sorted for stable output."""
+    _validate_revision_arg(base, "--base")
+    _validate_revision_arg(head, "--head")
     repo_root = root if root is not None else pathlib.Path()
     task_files = changed_task_files(base, head, repo_root)
     if not task_files:

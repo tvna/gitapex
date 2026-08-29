@@ -249,11 +249,13 @@ evaluation. Name the gap; never fake a score to proceed.
 8. **Recommended: adversarial-verification pass over prose and disclosure
    quality, before filing the PR.** Issue `#218` -- the merge retrospective
    for PR `#216` -- found four defects the strict score gate could not have caught
-   even in principle -- an omitted entry in this same file's own
+   even in principle, in `evals/evaluating-skill-quality/split.md` (that
+   skill's own gate-record file, an instance of the run record step 7
+   describes -- not this file): an omitted entry in that file's own
    Correction-block disclosure, a brittle fixture assertion, dangling
    rubric wording, and a missing citation-status label -- because all four
    are about the candidate text's own wording, citation completeness, and
-   this file's own disclosure honesty, not about measured behavior. Step
+   that disclosure's own honesty, not about measured behavior. Step
    4's gate gives none of this: a substring scorer is not positioned to
    catch a sentence that reads badly, a disclosure paragraph that drops
    one of its own corrections, or a citation the rubric's own intro
@@ -268,10 +270,10 @@ evaluation. Name the gap; never fake a score to proceed.
    recommended, not required: unlike step 4's strict gate (a STOP
    boundary) or step 4's own Conditional branch (mandatory whenever no
    deterministic scorer exists), skipping this pass is not itself a
-   defect -- but a completed pass, and what it found, still belongs in
-   the run record's `known_gaps` field (step 7) either way, so a later
-   reader can tell whether this happened rather than silently assuming it
-   did.
+   defect -- but whether it ran, and what a completed pass found, still
+   belongs in the run record's `known_gaps` field (step 7) either way, so
+   a later reader can tell whether this happened rather than silently
+   assuming it did.
 
 ## Authoring fixtures for a substring scorer
 
