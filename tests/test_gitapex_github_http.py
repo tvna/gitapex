@@ -252,11 +252,12 @@ def test_graphql_call_degrades_to_empty_dict_on_invalid_json() -> None:
     assert body == {}
 
 
-def test_graphql_call_uses_default_opener_and_sleeper_when_omitted() -> None:
-    # Exercises the `opener=default_opener`/`sleeper=None -> time.sleep`
-    # defaults without making a real network call: the default_opener
-    # default is asserted by identity, and sleeper is only invoked when a
-    # retry actually happens, which a 4xx (non-transient) response avoids.
+def test_graphql_call_defaults_opener_to_this_modules_default_opener() -> None:
+    # Asserted by signature identity, not by calling graphql_call with the
+    # opener omitted: doing that would open a real socket to
+    # api.github.com. Named for what it actually checks -- the `sleeper`
+    # default (`None -> time.sleep`) is NOT covered here, and cannot be
+    # without either a real sleep or patching time.sleep.
     signature = inspect.signature(_gitapex_github_http.graphql_call)
     assert signature.parameters["opener"].default is _gitapex_github_http.default_opener
 
