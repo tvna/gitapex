@@ -3505,6 +3505,89 @@ def _token_is_a_vanishing_default_or_alt_clause(token: str, name_to_raw_value: d
     return False
 
 
+_REDIRECT_OPERATORS = {"<", ">", ">>", "<<", "<<<", "&>", ">&", "&>>", "<>"}
+
+
+def _redirect_span_length(seg: list[str], j: int) -> int:
+    """The number of tokens, starting at SEG[j], that make up one bash
+    I/O-redirection clause -- an optional leading bare file-descriptor
+    number (`2>`), a redirect operator (`_REDIRECT_OPERATORS`), and
+    exactly one target token. `segment_tokens` never splits a segment at
+    `<`/`>` (see `_SINGLE_OPS`'s own docstring -- a redirect may legally
+    sit anywhere before a command word without being that word itself),
+    so each piece of the clause survives here as its own separate token
+    (confirmed via `tokenize()`: `git > /dev/null checkout` tokenizes to
+    `['git', '>', '/dev/null', 'checkout']`; `git 2> /dev/null checkout`
+    to `['git', '2', '>', '/dev/null', 'checkout']`). Returns 0 when
+    SEG[j:] does not start with this shape, so a caller can treat 0 as
+    "not a redirect, do not skip" without a separate boolean check.
+
+    CRITICAL bug found by independent adversarial review (round 14, issue
+    #1375) and independently reproduced live: every existing skip-past-
+    decoy walk in this file's checkout/restore detection --
+    `_find_git_checkout_restore`'s own global-flag-skip loop and
+    `_first_surviving_segment_word`'s own leading-vanishing-run walk --
+    had no concept of a redirect clause at all, so a bare `>`/`<` token
+    (ordinary, legal bash syntax) broke both: `git > /dev/null checkout
+    -- dirty.py` (a fully literal command, no dynamic content at all)
+    resolved to an empty, wrong `checkout_restore_paths` (the redirect
+    operator token itself was mistaken for the subcommand position and
+    the scan gave up), and `X=cd; > /dev/null $X sub; git checkout --
+    dirty.py` resolved to a confident, wrong ALLOW (the redirect made
+    `_first_surviving_segment_word` return the operator token itself,
+    which is neither vanishing nor dynamic, so the real, cd-resolving
+    `$X` one position later was never checked) -- both live-verified
+    (real bash, and end-to-end through the real wrapper against a
+    scratch git repo) to silently discard a genuinely dirty file."""
+    n = len(seg)
+    i = j
+    if i < n and seg[i].isdigit():
+        i += 1
+    if i < n and seg[i] in _REDIRECT_OPERATORS and i + 1 < n:
+        return i + 2 - j
+    return 0
+
+
+def _dynamic_token_resolves_only_to_literal(token: str, name_to_raw_value: dict[str, str], literal: str) -> bool:
+    """Whether TOKEN unambiguously resolves, at real bash runtime, to
+    exactly LITERAL (case-insensitively, matching this function's own
+    caller's existing case-insensitive literal comparison) and nothing
+    else -- narrower than "could plausibly resolve to LITERAL": an
+    ambiguous or unresolvable token declines (returns `False`) rather
+    than assuming the positive case, since a false positive here would
+    mis-attribute an unrelated dynamic command word's own subcommand
+    (e.g. `$TOOL checkout` where TOOL is some other, non-git tool that
+    also happens to have a `checkout` subcommand) as a git checkout/
+    restore invocation -- unlike the cwd-relocation check's own
+    fail-closed posture, `_find_git_checkout_restore`'s own docstring
+    already establishes that an ambiguous "is this actually git" question
+    here declines to resolve rather than assumes the worst (see its own
+    "genuinely ambiguous... this pure classifier declines to resolve"
+    paragraph, for the analogous ambiguous-token-after-`git` case this
+    mirrors for the `git` token itself).
+
+    CRITICAL bug found by independent adversarial review (round 14, issue
+    #1375) and independently reproduced live: `_find_git_checkout_
+    restore`'s own outer scan only ever recognized a LITERAL `git` token
+    -- `G=git; $G checkout -- dirty.py` resolved to an empty, wrong
+    `checkout_restore_paths` even though `$G` unambiguously resolves to
+    `git`. Live-verified this genuinely runs `git checkout -- dirty.py`
+    once bash resolves it. Reuses `_substitute_var_refs_candidates`
+    exactly like `_dynamic_word_may_resolve_to_a_cwd_relocator` does for
+    the analogous cd/pushd/popd question, but requires EVERY candidate
+    reading to match LITERAL (not just one), the mirror-image of that
+    function's OR-based check -- appropriate here because a false
+    positive in THIS position risks a wrong `checkout_restore_paths`
+    CLAIM about an unrelated tool, while that function's own false
+    positive would only over-deny (the safer direction)."""
+    if _VAR_REF_FULL_RE.search(token) is None:
+        return False
+    candidates = _substitute_var_refs_candidates(token, name_to_raw_value, name_to_raw_value)
+    if candidates is None or not candidates:
+        return False
+    return all(candidate.lower() == literal for candidate in candidates)
+
+
 def _find_git_checkout_restore(seg: list[str], name_to_raw_value: dict[str, str]) -> tuple[str | None, list[str], bool]:
     """Scan SEG (already assignment-stripped, see `_strip_leading_
     assignments`) for a `git checkout`/`git restore` invocation, skipping
@@ -3555,10 +3638,35 @@ def _find_git_checkout_restore(seg: list[str], name_to_raw_value: dict[str, str]
     `KNOWN_BYPASS_COMMANDS` test list already uses for the analogous
     dynamic-tool/dynamic-verb case; scanning continues past it to any
     later `git` occurrence in the same segment), in which case the other
-    two return values are meaningless."""
+    two return values are meaningless.
+
+    A DYNAMIC `tok` that unambiguously resolves to `git` (per
+    `_dynamic_token_resolves_only_to_literal`, see its own docstring) is
+    ALSO recognized as this `git` occurrence -- CRITICAL bug found by
+    independent adversarial review (round 14, issue #1375) and
+    independently reproduced live: `G=git; $G checkout -- dirty.py`
+    resolved to an empty, wrong `checkout_restore_paths` before this fix,
+    even though `$G` unambiguously resolves to `git` and this genuinely
+    runs `git checkout -- dirty.py` once bash resolves it. An ambiguous
+    or unresolvable dynamic `tok` still declines here (returns to the
+    outer scan without treating it as `git`), the same "decline, don't
+    assume" posture already established above for an ambiguous token
+    AFTER a literal `git`.
+
+    The flag-skip loop below also skips a redirect clause
+    (`_redirect_span_length`, see its own docstring) wherever it would
+    otherwise land -- CRITICAL bug found by independent adversarial
+    review (round 14, issue #1375) and independently reproduced live:
+    `git > /dev/null checkout -- dirty.py` (fully literal, no dynamic
+    content at all) resolved to an empty, wrong `checkout_restore_paths`
+    before this fix, since the redirect operator token itself was
+    mistaken for the subcommand position and the scan gave up there."""
     n = len(seg)
     for i, tok in enumerate(seg):
-        if _is_dynamic(tok) or tok.lower() != "git":
+        if _is_dynamic(tok):
+            if not _dynamic_token_resolves_only_to_literal(tok, name_to_raw_value, "git"):
+                continue
+        elif tok.lower() != "git":
             continue
         saw_tree_relocation = False
         j = i + 1
@@ -3573,6 +3681,10 @@ def _find_git_checkout_restore(seg: list[str], name_to_raw_value: dict[str, str]
                     continue
                 ambiguous = True
                 break
+            redirect_len = _redirect_span_length(seg, j)
+            if redirect_len:
+                j += redirect_len
+                continue
             if (
                 candidate == "-C"
                 or candidate in _GIT_TREE_RELOCATION_LONG_FLAGS
@@ -3695,14 +3807,31 @@ def _first_surviving_segment_word(seg: list[str], name_to_raw_value: dict[str, s
     existing literal `_CWD_RELOCATING_COMMANDS` membership check (when
     not), exactly like they would have used `seg[0]` directly before this
     fix -- this function only changes WHICH token that check runs
-    against, never the check itself."""
+    against, never the check itself.
+
+    Also skips a leading redirect clause (`_redirect_span_length`, see
+    its own docstring) -- CRITICAL bug found by independent adversarial
+    review (round 14, issue #1375) and independently reproduced live:
+    `X=cd; > /dev/null $X sub; git checkout -- dirty.py` resolved to a
+    confident, wrong ALLOW before this fix, since the redirect made this
+    walk return the `>` operator token itself (neither vanishing nor
+    dynamic) as the "surviving word," so the real, cd-resolving `$X` one
+    position later was never checked. A vanishing decoy and a redirect
+    clause may interleave in either order (`$NEVERSET > /dev/null $X
+    sub`), so both skips run in the SAME loop until neither applies."""
     i = 0
     n = len(seg)
-    while i < n and (
-        _token_is_all_unassigned_refs(seg[i], name_to_raw_value)
-        or _token_is_a_vanishing_default_or_alt_clause(seg[i], name_to_raw_value)
-    ):
-        i += 1
+    while i < n:
+        if _token_is_all_unassigned_refs(seg[i], name_to_raw_value) or _token_is_a_vanishing_default_or_alt_clause(
+            seg[i], name_to_raw_value
+        ):
+            i += 1
+            continue
+        redirect_len = _redirect_span_length(seg, i)
+        if redirect_len:
+            i += redirect_len
+            continue
+        break
     return seg[i] if i < n else None
 
 

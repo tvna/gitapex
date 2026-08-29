@@ -3720,6 +3720,138 @@ def test_classify_denies_a_checkout_hidden_behind_a_leading_vanishing_decoy() ->
         assert verdict.checkout_restore_paths == ()
 
 
+def test_redirect_span_length_recognizes_operator_and_target() -> None:
+    assert checker._redirect_span_length([">", "/dev/null", "x"], 0) == 2
+    assert checker._redirect_span_length(["2", ">", "/dev/null", "x"], 0) == 3
+    assert checker._redirect_span_length(["2", ">&", "1", "x"], 0) == 3
+
+
+def test_redirect_span_length_zero_when_no_redirect_present() -> None:
+    assert checker._redirect_span_length(["checkout", "--", "f.py"], 0) == 0
+    assert checker._redirect_span_length(["2", "checkout", "--", "f.py"], 0) == 0
+    assert checker._redirect_span_length([">"], 0) == 0
+
+
+def test_first_surviving_segment_word_skips_a_leading_redirect() -> None:
+    assert checker._first_surviving_segment_word([">", "/dev/null", "$X"], {"X": "cd"}) == "$X"
+    assert checker._first_surviving_segment_word(["$NEVERSET", ">", "/dev/null", "$X"], {"X": "cd"}) == "$X"
+
+
+def test_rule_git_checkout_restore_denies_a_dynamic_relocator_behind_a_leading_redirect() -> None:
+    """CRITICAL bypass regression pin (round-14 independent review, issue
+    #1375). A leading redirect clause (ordinary, legal bash syntax) made
+    `_first_surviving_segment_word` return the redirect operator token
+    itself -- neither vanishing nor dynamic -- as the "surviving word,"
+    so the real, cd-resolving `$X` one position later was never checked.
+    Live-verified before this fix: `X=cd; > /dev/null $X sub; git
+    checkout -- dirty.py` resolved to a confident, wrong ALLOW."""
+    segments = [[">", "/dev/null", "$X", "sub"], ["git", "checkout", "--", "f.py"]]
+    reason, resolved = checker._rule_git_checkout_restore(segments, {"X": "cd"})
+    assert reason is not None
+    assert resolved == ()
+
+
+def test_classify_denies_a_checkout_hidden_behind_a_leading_redirect() -> None:
+    """End-to-end regression pin for the round-14 redirect-before-dynamic-
+    word finding at the `classify()` level."""
+    verdict = checker.classify("X=cd; > /dev/null $X sub; git checkout -- dirty.py")
+    assert verdict.deny is True
+    assert verdict.checkout_restore_paths == ()
+
+
+def test_find_git_checkout_restore_skips_a_redirect_between_git_and_subcommand() -> None:
+    """CRITICAL bypass regression pin (round-14 independent review, issue
+    #1375). A fully literal command with a redirect between `git` and its
+    subcommand was invisible to detection -- the redirect operator token
+    was mistaken for the subcommand position and the scan gave up.
+    Live-verified before this fix: `git > /dev/null checkout -- dirty.py`
+    resolved to an empty, wrong `checkout_restore_paths`."""
+    subcommand, tokens_after, saw_tree_relocation = checker._find_git_checkout_restore(
+        ["git", ">", "/dev/null", "checkout", "--", "f.py"], {}
+    )
+    assert subcommand == "checkout"
+    assert tokens_after == ["--", "f.py"]
+    assert saw_tree_relocation is False
+
+
+def test_classify_extracts_paths_behind_a_redirect_between_git_and_subcommand() -> None:
+    """End-to-end regression pin for the round-14 redirect-between-git-
+    and-subcommand finding at the `classify()` level."""
+    verdict = checker.classify("git > /dev/null checkout -- dirty.py")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("dirty.py",)
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value=_VALUES)
+def test_dynamic_token_resolves_only_to_literal_matches_the_resolved_value(name: str, value: str) -> None:
+    """Model-based: `_dynamic_token_resolves_only_to_literal` returns
+    `True` if and only if the token's one resolved candidate equals the
+    target literal, case-insensitively."""
+    result = checker._dynamic_token_resolves_only_to_literal(f"${name}", {name: value}, "git")
+    assert result == (value.lower() == "git")
+
+
+def test_dynamic_token_resolves_only_to_literal_true_for_an_unambiguous_match() -> None:
+    assert checker._dynamic_token_resolves_only_to_literal("$G", {"G": "git"}, "git") is True
+    assert checker._dynamic_token_resolves_only_to_literal("$G", {"G": "GIT"}, "git") is True
+
+
+def test_dynamic_token_resolves_only_to_literal_false_for_an_unrelated_value() -> None:
+    assert checker._dynamic_token_resolves_only_to_literal("$G", {"G": "svn"}, "git") is False
+
+
+def test_dynamic_token_resolves_only_to_literal_false_when_unresolvable() -> None:
+    """A false positive here would mis-attribute an unrelated tool's own
+    subcommand (e.g. `$TOOL checkout` where TOOL is not git) as a git
+    checkout/restore invocation, so an ambiguous or unresolvable token
+    declines rather than assumes the positive case -- the mirror image of
+    `_dynamic_word_may_resolve_to_a_cwd_relocator`'s own fail-closed
+    posture, appropriate here because the risk direction is reversed."""
+    assert checker._dynamic_token_resolves_only_to_literal("$UNKNOWN", {}, "git") is False
+
+
+def test_find_git_checkout_restore_recognizes_a_dynamic_git_token() -> None:
+    """CRITICAL bypass regression pin (round-14 independent review, issue
+    #1375). Only a LITERAL `git` token was ever recognized as the start
+    of a checkout/restore invocation -- live-verified before this fix:
+    `G=git; $G checkout -- dirty.py` resolved to an empty, wrong
+    `checkout_restore_paths` even though `$G` unambiguously resolves to
+    `git`."""
+    subcommand, tokens_after, saw_tree_relocation = checker._find_git_checkout_restore(
+        ["$G", "checkout", "--", "f.py"], {"G": "git"}
+    )
+    assert subcommand == "checkout"
+    assert tokens_after == ["--", "f.py"]
+    assert saw_tree_relocation is False
+
+
+def test_find_git_checkout_restore_declines_an_unresolvable_dynamic_first_word() -> None:
+    """No false positive: a dynamic first token that does not unambiguously
+    resolve to `git` (unrelated tool, or unresolvable) is not mistaken for
+    a git invocation."""
+    subcommand, _tokens_after, _saw_tree_relocation = checker._find_git_checkout_restore(
+        ["$TOOL", "checkout", "--", "f.py"], {"TOOL": "svn"}
+    )
+    assert subcommand is None
+
+
+def test_classify_extracts_paths_behind_a_dynamic_git_token() -> None:
+    """End-to-end regression pin for the round-14 dynamic-git-token
+    finding at the `classify()` level."""
+    verdict = checker.classify("G=git; $G checkout -- dirty.py")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("dirty.py",)
+
+
+def test_classify_does_not_extract_paths_from_an_unrelated_dynamic_tool() -> None:
+    """No false positive: `$TOOL checkout -- x` where TOOL resolves to a
+    non-git tool must not be mistaken for a git checkout."""
+    verdict = checker.classify("TOOL=svn; $TOOL checkout -- x")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ()
+
+
 # --- End-to-end classify() coverage, pinning every explicit safe/deny case
 # issue #1375's own Acceptance Criteria Map and "Explicit safe cases"
 # section name by hand.

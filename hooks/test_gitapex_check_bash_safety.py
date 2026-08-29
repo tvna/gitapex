@@ -1744,6 +1744,56 @@ def test_checkout_denied_when_a_dynamic_relocator_sits_behind_a_leading_vanishin
     assert "working tree is at risk" in payload["systemMessage"]
 
 
+def test_checkout_denied_when_a_dynamic_relocator_sits_behind_a_leading_redirect(tmp_path: Path) -> None:
+    """CRITICAL bypass regression pin (round-14 independent review, issue
+    #1375). A leading I/O-redirection clause -- ordinary, legal bash
+    syntax -- made the classifier's own leading-decoy-skip walk return
+    the redirect operator token itself as the "surviving word," so the
+    real, cd-resolving `$X` one position later was never checked.
+    Live-verified before this fix: `X=cd; > /dev/null $X sub; git
+    checkout -- dirty.py` was wrongly allowed outright, and the real
+    command silently discarded a genuinely dirty `dirty.py`. The deny
+    here is classifier-level (a token-shape fact, no live git call), so
+    no such file needs to actually exist for this regression pin."""
+    repo_dir = tmp_path / "repo"
+    _init_repo_with_committed_file(repo_dir)
+    result = run("X=cd; > /dev/null $X sub; git checkout -- dirty.py", payload_cwd=str(repo_dir))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+    payload = json.loads(result.stderr)
+    assert "working tree is at risk" in payload["systemMessage"]
+
+
+def test_checkout_denied_when_a_redirect_sits_between_git_and_the_subcommand(tmp_path: Path) -> None:
+    """CRITICAL bypass regression pin (round-14 independent review, issue
+    #1375). A fully literal command -- no dynamic content at all -- with
+    a redirect between `git` and its subcommand was invisible to
+    detection entirely: the redirect operator token was mistaken for the
+    subcommand position and the scan gave up, so `checkout_restore_paths`
+    resolved empty and the live wrapper check never even ran.
+    Live-verified before this fix: `git > /dev/null checkout -- dirty.py`
+    was wrongly allowed outright, and the real command silently discarded
+    a genuinely dirty `dirty.py`."""
+    repo_dir = tmp_path / "repo"
+    file_path = _init_repo_with_committed_file(repo_dir, filename="dirty.py")
+    file_path.write_text("UNCOMMITTED WORK -- must not be discarded\n")
+    result = run("git > /dev/null checkout -- dirty.py", payload_cwd=str(repo_dir))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+
+
+def test_checkout_denied_when_git_itself_is_a_dynamic_word(tmp_path: Path) -> None:
+    """CRITICAL bypass regression pin (round-14 independent review, issue
+    #1375). Only a LITERAL `git` token was ever recognized as the start
+    of a checkout/restore invocation -- live-verified before this fix:
+    `G=git; $G checkout -- dirty.py` was wrongly allowed outright, even
+    though `$G` unambiguously resolves to `git`, and the real command
+    silently discarded a genuinely dirty `dirty.py`."""
+    repo_dir = tmp_path / "repo"
+    file_path = _init_repo_with_committed_file(repo_dir, filename="dirty.py")
+    file_path.write_text("UNCOMMITTED WORK -- must not be discarded\n")
+    result = run("G=git; $G checkout -- dirty.py", payload_cwd=str(repo_dir))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+
+
 def test_checkout_denied_in_a_real_merge_conflict_names_the_conflict_remedy(tmp_path: Path) -> None:
     """A real merge conflict (issue #1375's own Acceptance Criteria Map):
     the deny message names a remedy that actually works mid-conflict
