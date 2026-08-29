@@ -250,10 +250,15 @@ def assert_workflow_checkout_pins_head_sha_with_full_history(workflow_name: str)
     `.github/workflows/<workflow_name>` is the pinned `harden-checkout`
     action, passing `ref: <head sha>` and `fetch-depth: 0`.
 
-    Shared by the two gate workflows that correlate diff-derived line numbers
-    against tree content (same rationale as `assert_path_is_gitignored`
-    above), so this check cannot silently diverge between them. Each caller's
-    own docstring states why its gate needs the pin.
+    Shared by every gate workflow whose own comparison needs the checked-out
+    working tree to actually be a specific commit's content -- two gates
+    that correlate diff-derived line numbers against tree content, and one
+    (`betterleaks-allowlist-no-removal-gate.yml`, issue #1427) that instead
+    reads a whole file's content at a resolved merge-base commit via `git
+    show`, which equally requires that commit's tree to be present locally,
+    not merely reachable by SHA -- so this check cannot silently diverge
+    between any of them (same rationale as `assert_path_is_gitignored`
+    above). Each caller's own docstring states why its gate needs the pin.
 
     Scoped to the parsed `jobs.*.steps[].with` mapping rather than checked
     against the whole file as text: both workflows' own pointer comment for
