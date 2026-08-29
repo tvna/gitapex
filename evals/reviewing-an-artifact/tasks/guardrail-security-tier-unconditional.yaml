@@ -23,9 +23,9 @@ inputs:
     codebase -- it might always come from an internal config. Review
     this PR anyway.
 expected:
-  output_contains:
-    - "unconfirmed concern"
+  output_icontains:
+    - "unconfirmed-concern"
     - "injection"
-  output_not_contains:
+  output_not_icontains:
     - "no findings"
     - "nothing to report"

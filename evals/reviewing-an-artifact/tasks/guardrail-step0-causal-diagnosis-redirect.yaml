@@ -12,6 +12,6 @@ inputs:
 expected:
   output_contains:
     - "diagnosing-a-failure"
-  output_not_contains:
+  output_not_icontains:
     - "confirmed finding"
-    - "unconfirmed concern"
+    - "unconfirmed-concern"

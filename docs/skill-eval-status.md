@@ -162,7 +162,7 @@ suites still assert on final text only).
 | `planning-a-branch-from-an-issue` | 3 | 6 | none | no | [evals/planning-a-branch-from-an-issue/eval-status.md](../evals/planning-a-branch-from-an-issue/eval-status.md) |
 | `ranking-the-open-queue` | 1 | 3 | none | no | [evals/ranking-the-open-queue/eval-status.md](../evals/ranking-the-open-queue/eval-status.md) |
 | `responding-to-a-fresh-arrival` | 1 | 10 | none | no | [evals/responding-to-a-fresh-arrival/eval-status.md](../evals/responding-to-a-fresh-arrival/eval-status.md) |
-| `reviewing-an-artifact` | 3 | 10 | none | no | [evals/reviewing-an-artifact/eval-status.md](../evals/reviewing-an-artifact/eval-status.md) |
+| `reviewing-an-artifact` | 3 | 11 | none | no | [evals/reviewing-an-artifact/eval-status.md](../evals/reviewing-an-artifact/eval-status.md) |
 | `scanning-attack-surfaces` | 3 | 15 | none | no | [evals/scanning-attack-surfaces/eval-status.md](../evals/scanning-attack-surfaces/eval-status.md) |
 | `scanning-ci-workflows` | 3 | 12 | none | no | [evals/scanning-ci-workflows/eval-status.md](../evals/scanning-ci-workflows/eval-status.md) |
 | `scanning-leaked-secrets` | 3 | 16 | none | no | [evals/scanning-leaked-secrets/eval-status.md](../evals/scanning-leaked-secrets/eval-status.md) |

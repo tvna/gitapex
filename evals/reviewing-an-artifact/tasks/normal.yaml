@@ -21,7 +21,7 @@ inputs:
     introduces one: `page_slice([1,2,3,4,5], 0, 2)` now returns `[1]`
     instead of `[1, 2]`. Review this PR.
 expected:
-  output_contains:
+  output_icontains:
     - "confirmed"
     - "blast"
   output_not_contains:

@@ -12,6 +12,7 @@ inputs:
 expected:
   output_contains:
     - "evaluating-skill-quality"
+  output_icontains:
     - "defer"
   output_not_contains:
     - "correctness reviewer"

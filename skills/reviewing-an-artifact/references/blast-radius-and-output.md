@@ -66,21 +66,21 @@ skill's own mechanical trigger for a downstream caller to consider routing
 the underlying question to `diagnosing-a-failure`, sharper than a
 prose-only "does this look like it needs deeper diagnosis" judgment call.
 
-**A skip or rejection record** (Step 1's skip disclosure, or a Step 3
-rejection surviving into the audit trail):
+**A skip or rejection record** (Step 1's skip disclosure, or a Step 3/4
+rejection surviving into the audit trail Step 6 always includes alongside
+the surviving findings -- a report showing only confirmed and
+unconfirmed-concern findings cannot be checked for over-suppression):
 
 ```
 file: <path, or "(whole target)">
 line: <line or line range, or "(whole file)">
 summary: <what was skipped or rejected, and why>
-stage: skipped-safe-signal | fabricated-precheck | independent-verification | counterfactual-check
+stage: skipped-safe-signal | fabricated-precheck | independent-verification | counterfactual-check | confidence-gate
+signal: <for skipped-safe-signal only -- which safe-side category matched, e.g. "behavior-preserving refactor">
 ```
 
-## The audit trail
-
-Step 6's report always includes every Step 3 rejection alongside the
-surviving findings -- not only the survivors. A report showing only
-confirmed and unconfirmed-concern findings, with no record of what a
-persona raised and verification discarded, cannot be checked for
-over-suppression by whoever reads it; the audit trail is what makes that
-check possible.
+`stage: confidence-gate` is the one non-security-tier way an ordinary
+finding is dropped rather than reported: it did not clear Step 4's own
+bar or gate. It never applies to a security-tier finding, which Step 4's
+own unconditional rule always routes to the finding-record shape above as
+`unconfirmed-concern` instead of this one.

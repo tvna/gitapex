@@ -36,12 +36,14 @@ extended with effort branching and named personas.
   change's own stated purpose (a commit message, a PR title, an issue it
   cites) actually matches what the diff does -- a change that claims to be
   a one-line fix but touches twelve unrelated files, or a change whose
-  own description and actual behavior diverge.
+  own description and actual behavior diverge. The one persona exempted
+  from Step 2's metadata redaction (see
+  [security-tier-handling.md](security-tier-handling.md#metadata-redaction)),
+  since its own job requires the narrative the other four never see.
 
-Every persona's dispatch carries the identical adversarial-reviewer
-framing this skill's own Step 2 already states: it did not author the
-target, holds no presumption of correctness, and its job is to find
-defects, not confirm them.
+Every persona's dispatch carries the adversarial-reviewer framing Step 2
+states: it did not author the target and its job is to find defects, not
+confirm them.
 
 ## The three-stage verification pipeline (Step 3)
 
@@ -67,7 +69,9 @@ stages before it is treated as real:
 A finding surviving all three stages proceeds to Step 4's confidence
 judgment. A finding that fails any stage is recorded in Step 6's own audit
 trail with the stage and reason it failed, never silently dropped from the
-report entirely.
+report entirely -- except a security-tier candidate, which a failed stage
+routes to Step 4 as `unconfirmed-concern` instead of the audit trail (see
+[security-tier-handling.md](security-tier-handling.md#unconditional-reporting)).
 
 ## Multi-model cross-checking (high effort only)
 
@@ -77,8 +81,8 @@ model that ran the originating persona dispatch also confirming its own
 finding. Each of the two verification passes runs the identical stage-2
 check independently; a finding is treated as independently verified only
 when both agree it holds. A disagreement between the two does not
-automatically drop the finding -- it demotes it to the `unconfirmed
-concern` class (Step 4) with both passes' own reasoning disclosed in the
+automatically drop the finding -- it demotes it to the `unconfirmed-concern`
+class (Step 4) with both passes' own reasoning disclosed in the
 audit trail, rather than either silently overriding the other.
 
 This is this skill's own tracking issue's adopted pstack-informed
@@ -104,8 +108,8 @@ not. This is a qualitative combined judgment, not a fixed numeric formula
 -- state the specific validity and severity reasoning behind each retained
 or dropped finding in the audit trail, rather than reporting a bare
 composite score with no rationale behind it. A finding that does not clear
-this combined gate but is not confidently invalid either becomes an
-**unconfirmed concern**: reported, explicitly labeled speculative, never
+this combined gate but is not confidently invalid either becomes
+**`unconfirmed-concern`**: reported, explicitly labeled speculative, never
 silently discarded (Step 4's own security-tier rule additionally forces
 this class unconditionally for a security-tier finding at any effort
 level -- see

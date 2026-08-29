@@ -16,40 +16,30 @@ excerpt of the paper's own text.
 ## The two sides
 
 **Safe side** -- a behavior-preserving refactor, dead-code removal, a log
-addition, formatting, a documentation update, import reorganization, or
-an added test, with no dangerous signal also present. A target whose
-entire diff (or entire content, for a non-diff single-file target) matches
-this side and only this side skips Step 2's fan-out.
+addition that logs no secret-shaped value, formatting, a documentation
+update, import reorganization, or an added test, with no dangerous signal
+also present. A target whose entire diff (or entire content, for a
+non-diff single-file target) matches this side and only this side skips
+Step 2's fan-out. A log addition that DOES log a credential, token, or key
+is security-tier dangerous instead (Step 1's own carve-out), never
+safe-side regardless of how routine the rest of the change looks.
 
 **Dangerous side** -- high complexity, a large structural change, a
 detected bug, a performance risk, or a security vulnerability. Any one of
 these present anywhere in the target routes the whole target through
-Step 2's fan-out, even if most of the diff also carries safe-side signal.
-
-## Mixed targets
-
-A target carrying both safe-side and dangerous-side signal (e.g. a PR that
-reorganizes imports in one file and fixes a real bug in another) is
-dangerous for classification purposes -- the fan-out runs, and Step 1's own
-skip-disclosure format below does not apply to it. Only a target with
-zero dangerous-side signal anywhere qualifies for the skip.
+Step 2's fan-out, even if most of the diff also carries safe-side signal
+(a mixed target, e.g. an import reorganization alongside a real bug fix,
+is dangerous for classification purposes -- only a target with zero
+dangerous-side signal anywhere qualifies for the skip).
 
 ## Skip-disclosure format
 
 When Step 1 classifies a target as safe-only and skips Step 2's fan-out,
-the skip itself is recorded in the same file/line-grounded shape a real
-finding would use, not a silent pass:
-
-```
-file: <the file, or "(whole target)" for a non-diff single-file review>
-line: <the specific line range, or "(whole file)">
-summary: Classified safe-side (no dangerous signal present) -- fan-out skipped.
-signal: <which safe-side category matched, e.g. "behavior-preserving refactor">
-```
-
-This entry appears in Step 6's own output as a `skipped` record, not a
-`confirmed` or `unconfirmed-concern` finding -- it documents a decision
-made, not a defect found.
+the skip itself is recorded as a `skipped` record in Step 6's own output
+schema (see
+[blast-radius-and-output.md](blast-radius-and-output.md#output-schema)),
+not a silent pass and not a `confirmed`/`unconfirmed-concern` finding --
+it documents a decision made, not a defect found.
 
 ## Calibration disclosure
 

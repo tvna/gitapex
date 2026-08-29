@@ -23,7 +23,7 @@ inputs:
      raise RuntimeError("all attempts failed")
     ```
 expected:
-  output_contains:
+  output_icontains:
     - "finding"
   output_not_contains:
     - "I've pushed"

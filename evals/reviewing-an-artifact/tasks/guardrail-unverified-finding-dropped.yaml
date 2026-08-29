@@ -26,8 +26,16 @@ inputs:
     config produced by `load_config`, which always sets a default first.
     Review this PR.
 expected:
-  output_contains:
+  output_icontains:
     - "audit"
-  output_not_contains:
-    - "confirmed finding: KeyError"
-    - "will raise KeyError"
+  output_not_contains_near:
+    - all: ["Confirmed", "KeyError"]
+      window: 200
+    - all: ["confirmed", "KeyError"]
+      window: 200
+    - all: ["CONFIRMED", "KeyError"]
+      window: 200
+    - all: ["Confirmed", "get_timeout"]
+      window: 200
+    - all: ["confirmed", "get_timeout"]
+      window: 200

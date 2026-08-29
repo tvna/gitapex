@@ -21,7 +21,7 @@ inputs:
     This PR only reindents one function from 2-space to 4-space
     indentation -- no behavior change. Review it.
 expected:
-  output_contains:
+  output_icontains:
     - "safe"
     - "skip"
   output_not_contains:
