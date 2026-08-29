@@ -85,90 +85,44 @@
       "kind": "script",
       "script": "hooks/check-bash-safety.sh",
       "rule": "Delegates classification to hooks/gitapex_check_bash_safety.py, a token-based classifier (Python stdlib shlex, POSIX mode) that matches against bash's own dequoted, operator-segmented token stream -- closing the quote-splitting, ${IFS}/$IFS substitution, and variable/array/positional-parameter indirection bypass classes a prior raw-text regex substring scan was live-confirmed vulnerable to (issue #1326). Denies a Bash call matching a package/plugin-install verb (uv add/uv remove and apm install/apm uninstall stay allowed as declarative, visibly-mutating commands); denies gh issue/gh pr write subcommands and gh api writes (POST/PUT/PATCH/DELETE, a field flag, or 'mutation' in gh api graphql); on git push (including an obfuscated/indirected one that still resolves to git push), runs skills/outward-artifact-preflight/scripts/gitapex_scan_provenance.py against the outgoing commit range and warns (never blocks) if it flags something. Fails closed (denies) rather than allowing the call through when jq or python3 is missing from PATH, the payload or tool_input is not a JSON object, tool_name is present but not a string, tool_input.command is present but not a string, the classifier exits non-zero, or the classifier's own output is not a JSON object with a recognized decision. Disclosed residual (not closed by this classifier): verb-token-splitting that never places the tool/verb name as its own literal token anywhere, e.g. string-slice reconstruction (cmd=uvinstall; eval \"${cmd:0:2} ${cmd:2}\") or array-literal-assignment indirection (A=(uv); V=(install); \"${A[@]}\" \"${V[@]}\") -- see hooks/gitapex_check_bash_safety.py's own module docstring.",
-      "planes": [
-        "pretooluse"
-      ],
+      "planes": ["pretooluse"],
       "local_exclusion": "PreToolUse-only: grades a Claude Code tool-call JSON payload arriving on stdin, which has no working-tree equivalent to reconstruct ahead of a push.",
       "trigger": "PreToolUse matcher Bash (hooks/hooks.json)",
       "policy_refs": [],
-      "cluster": [
-        "outward-hygiene",
-        "github-operations"
-      ],
+      "cluster": ["outward-hygiene", "github-operations"],
       "tracking_issue": null,
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "bash-pattern",
-          "ref": "pip install|pip3 install|npm install|npm i|yarn add|pnpm add|go install|brew install|apt install|apt-get install|gem install|cargo install|uv pip install|uv install|plugin install"
-        },
-        {
-          "kind": "bash-pattern",
-          "ref": "gh issue create|edit|close|comment|delete|reopen|transfer|pin|unpin|lock|unlock|develop"
-        },
-        {
-          "kind": "bash-pattern",
-          "ref": "gh pr create|edit|close|comment|merge|review|ready|reopen|lock|unlock|update-branch"
-        },
-        {
-          "kind": "bash-pattern",
-          "ref": "gh api -X|--method POST|PUT|PATCH|DELETE"
-        },
-        {
-          "kind": "bash-pattern",
-          "ref": "gh api -f|-F|--field|--raw-field"
-        },
-        {
-          "kind": "bash-pattern",
-          "ref": "gh api graphql ... mutation"
-        },
-        {
-          "kind": "bash-pattern",
-          "ref": "git push"
-        }
+        {"kind": "bash-pattern", "ref": "pip install|pip3 install|npm install|npm i|yarn add|pnpm add|go install|brew install|apt install|apt-get install|gem install|cargo install|uv pip install|uv install|plugin install"},
+        {"kind": "bash-pattern", "ref": "gh issue create|edit|close|comment|delete|reopen|transfer|pin|unpin|lock|unlock|develop"},
+        {"kind": "bash-pattern", "ref": "gh pr create|edit|close|comment|merge|review|ready|reopen|lock|unlock|update-branch"},
+        {"kind": "bash-pattern", "ref": "gh api -X|--method POST|PUT|PATCH|DELETE"},
+        {"kind": "bash-pattern", "ref": "gh api -f|-F|--field|--raw-field"},
+        {"kind": "bash-pattern", "ref": "gh api graphql ... mutation"},
+        {"kind": "bash-pattern", "ref": "git push"}
       ]
     },
     {
       "id": "post-write-provenance-recheck",
       "kind": "script",
-      "script": [
-        "hooks/check-post-write-provenance.sh",
-        "hooks/gitapex_check_post_write_provenance.py"
-      ],
+      "script": ["hooks/check-post-write-provenance.sh", "hooks/gitapex_check_post_write_provenance.py"],
       "rule": "After mcp__github__create_pull_request / update_pull_request / issue_write succeeds, re-fetches the body GitHub actually stored via the issues endpoint and re-runs skills/outward-artifact-preflight/scripts/gitapex_scan_provenance.py plus an ASCII-only scan against it; reports a hit, or any inability to verify, on both in-session channels (decision/reason to the agent, systemMessage to the operator) and never posts publicly. Detective only -- PostToolUse cannot block a write that already succeeded. Since issue #1327, also compares the submitted tool_input body against this same already-fetched, already-unsanitized stored body and reports a distinct CONTENT_LOSS verdict when the stored body is missing content the submission had (beyond an append-only addition or CRLF/trailing-whitespace normalization) -- closing the gap where the two prior checks (provenance/ASCII) never verified 'is my submission still intact', which #1088/#1302/#1313 each misdiagnosed as this hook's own raw fetch being wrong when the actual cause was a since-corrected instruction to re-verify via the GitHub MCP server's own sanitizing read tools instead of this hook's raw channel.",
-      "planes": [
-        "posttooluse"
-      ],
+      "planes": ["posttooluse"],
       "local_exclusion": "PostToolUse-only: grades the body GitHub actually stored, re-fetched through the issues API after a write already succeeded. There is nothing to grade before the write, and no working-tree equivalent of a server-stored body.",
       "trigger": "PostToolUse matcher mcp__github__create_pull_request|mcp__github__update_pull_request|mcp__github__issue_write (hooks/hooks.json)",
       "policy_refs": [],
-      "cluster": [
-        "outward-hygiene",
-        "github-operations"
-      ],
+      "cluster": ["outward-hygiene", "github-operations"],
       "tracking_issue": 878,
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "mcp-tool",
-          "ref": "mcp__github__create_pull_request"
-        },
-        {
-          "kind": "mcp-tool",
-          "ref": "mcp__github__update_pull_request"
-        },
-        {
-          "kind": "mcp-tool",
-          "ref": "mcp__github__issue_write"
-        },
-        {
-          "kind": "runtime-resolved-reference",
-          "ref": "GET /repos/{owner}/{repo}/issues/{number} (the stored PR/issue body, re-fetched post-write)"
-        }
+        {"kind": "mcp-tool", "ref": "mcp__github__create_pull_request"},
+        {"kind": "mcp-tool", "ref": "mcp__github__update_pull_request"},
+        {"kind": "mcp-tool", "ref": "mcp__github__issue_write"},
+        {"kind": "runtime-resolved-reference", "ref": "GET /repos/{owner}/{repo}/issues/{number} (the stored PR/issue body, re-fetched post-write)"}
       ]
     },
     {
@@ -176,9 +130,7 @@
       "kind": "script",
       "script": "hooks/check-template-overwrite.sh",
       "rule": "Denies a Write call whose file_path case-insensitively matches an existing GitHub/GitLab issue/PR/MR template location. Fails closed (denies) rather than allowing the call through when jq is missing from PATH, the payload or tool_input is not a JSON object, tool_name is present but not a string, or tool_input.file_path is present but not a string.",
-      "planes": [
-        "pretooluse"
-      ],
+      "planes": ["pretooluse"],
       "local_exclusion": "PreToolUse-only: grades a Claude Code Write tool-call payload, not repository state.",
       "trigger": "PreToolUse matcher Write (hooks/hooks.json)",
       "policy_refs": [],
@@ -188,34 +140,13 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": "*.github/issue_template/*"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "*.github/pull_request_template/*"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "*.gitlab/issue_templates/*"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "*.gitlab/merge_request_templates/*"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "pull_request_template"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "pull_request_template.md"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "pull_request_template.txt"
-        }
+        {"kind": "file-glob", "ref": "*.github/issue_template/*"},
+        {"kind": "file-glob", "ref": "*.github/pull_request_template/*"},
+        {"kind": "file-glob", "ref": "*.gitlab/issue_templates/*"},
+        {"kind": "file-glob", "ref": "*.gitlab/merge_request_templates/*"},
+        {"kind": "file-glob", "ref": "pull_request_template"},
+        {"kind": "file-glob", "ref": "pull_request_template.md"},
+        {"kind": "file-glob", "ref": "pull_request_template.txt"}
       ]
     },
     {
@@ -227,10 +158,7 @@
         ".github/scripts/gitapex_gate_acm_issue_disclosure.py"
       ],
       "rule": "Requires a new GitHub issue's body (method==\"create\" only) to contain an ACM table header or an explicit 'ACM: not-applicable (chore|docs|tracking|defect): <reason>' waiver; the CI twin re-checks on issues opened/edited and labels+comments (non-blocking).",
-      "planes": [
-        "pretooluse",
-        "ci"
-      ],
+      "planes": ["pretooluse", "ci"],
       "local_exclusion": "Grades an issue or PR body against live GitHub issue state; no body exists locally before the issue or PR is opened.",
       "trigger": "PreToolUse matcher mcp__github__issue_write (hooks/hooks.json); .github/workflows/acm-issue-gate.yml on issues:[opened, edited]",
       "policy_refs": [],
@@ -240,18 +168,9 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "mcp-tool",
-          "ref": "mcp__github__issue_write"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": ".github/workflows/acm-issue-gate.yml:issues:opened,edited"
-        },
-        {
-          "kind": "runtime-resolved-reference",
-          "ref": "github.event.issue.body"
-        }
+        {"kind": "mcp-tool", "ref": "mcp__github__issue_write"},
+        {"kind": "workflow-event", "ref": ".github/workflows/acm-issue-gate.yml:issues:opened,edited"},
+        {"kind": "runtime-resolved-reference", "ref": "github.event.issue.body"}
       ]
     },
     {
@@ -259,9 +178,7 @@
       "kind": "script",
       "script": "hooks/check-pr-upstream-pushed.sh",
       "rule": "Denies mcp__github__create_pull_request when the head branch has no resolvable upstream or has local commits not yet pushed to it; fails open on any unresolvable local git state.",
-      "planes": [
-        "pretooluse"
-      ],
+      "planes": ["pretooluse"],
       "local_exclusion": "PreToolUse-only: asserts the branch tip is already pushed -- a property of the operation this runner precedes, not one it can usefully pre-check.",
       "trigger": "PreToolUse matcher mcp__github__create_pull_request (hooks/hooks.json)",
       "policy_refs": [],
@@ -271,10 +188,7 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "mcp-tool",
-          "ref": "mcp__github__create_pull_request"
-        }
+        {"kind": "mcp-tool", "ref": "mcp__github__create_pull_request"}
       ]
     },
     {
@@ -282,9 +196,7 @@
       "kind": "script",
       "script": "hooks/check-merge-pull-request-block.sh",
       "rule": "Denies mcp__github__merge_pull_request unconditionally, no override -- per planning-a-branch-from-an-issue/SKILL.md (\"Do not merge or enable auto-merge; that is a separate, explicit human or CI decision\"), drafting-a-pr-to-merge/SKILL.md's own step 9 (a PR's terminal action is converting to DRAFT, never merging it), and the ranking-the-open-queue Routine specs' \"100% human review of any pull request merge\" policy; closes the gap where check-bash-safety.sh's shell-only 'gh pr merge' block had no equivalent for the platform-integrated MCP tool call. Fails closed (denies) rather than allowing the call through when jq is missing from PATH, the payload is not a JSON object, or tool_name is present but not a string, since none of those states let the hook confirm the call is not a disguised merge_pull_request.",
-      "planes": [
-        "pretooluse"
-      ],
+      "planes": ["pretooluse"],
       "local_exclusion": "Grades a Claude Code tool-call matcher only (mcp__github__merge_pull_request), an unconditional deny with no payload inspection; nothing in the working tree to reconstruct this decision against.",
       "trigger": "PreToolUse matcher mcp__github__merge_pull_request (hooks/hooks.json)",
       "policy_refs": [],
@@ -294,10 +206,7 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "mcp-tool",
-          "ref": "mcp__github__merge_pull_request"
-        }
+        {"kind": "mcp-tool", "ref": "mcp__github__merge_pull_request"}
       ]
     },
     {
@@ -315,10 +224,7 @@
         "hooks/hooks.json"
       ],
       "rule": "Requires a PR touching skills/*/SKILL.md to disclose battle-testing-a-skill / evaluating-skill-quality verdicts or waivers under a '## Skill audit evidence' heading; the CI twin additionally requires disclosure for description changes, security-relevant skills, changed design docs, changed checker scripts, changed deterministic gates, and (issue #998) changed checker-or-gate scripts (the union of the checker-script and gate-script scopes). Gate membership is the union of the .github/scripts/gate_*.py / scan_*.py naming convention, every gates[].script path registered in this file, and this file itself; deletions and renames count, and the disclosure must be 'deterministic-gate-quality: RAN' or an explicit waiver with a reason, never 'NOT-RUN'. 'defeat-test-disclosure' shares checker-script-adversarial-review's RAN/NOT-RUN/WAIVED shape instead, disclosing that at least one test was constructed to defeat (not merely exercise the happy path of) the new or changed detection logic. The applicability computation lives in one place (gitapex_compute_skill_audit_flags.py), which the CI diff step and the local pre-push wrapper (gitapex_gate_skill_audit_disclosure.py --check-diff BASE HEAD --body-file PATH, invoked by the PreToolUse hook when .github/ is present) both call, so the full verdict including every conditional extension is reachable before a push. The PreToolUse hook itself fails closed (denies) when jq is missing from PATH, the payload or tool_input is not a JSON object, or tool_name is present but not a string -- an unparseable payload is treated as indeterminate, not as evidence the disclosure requirement does not apply.",
-      "planes": [
-        "pretooluse",
-        "ci"
-      ],
+      "planes": ["pretooluse", "ci"],
       "local_exclusion": "Grades a PR body against the changed-skill list; the body does not exist until the PR is opened.",
       "trigger": "PreToolUse matcher mcp__github__create_pull_request and mcp__github__update_pull_request (hooks/hooks.json); .github/workflows/skill-audit-gate.yml on pull_request",
       "policy_refs": [],
@@ -328,50 +234,17 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "mcp-tool",
-          "ref": "mcp__github__create_pull_request"
-        },
-        {
-          "kind": "mcp-tool",
-          "ref": "mcp__github__update_pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "skill-audit-gate.yml:pull_request"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "skills/*/SKILL.md"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "docs/superpowers/specs/*.md"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "skills/*/scripts/*.py"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "evals/scripts/*.py"
-        },
-        {
-          "kind": "file-glob",
-          "ref": ".github/scripts/*.py"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "hooks/**"
-        },
-        {
-          "kind": "file-glob",
-          "ref": ".gitapex/ssot.json"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "gates[].script paths + .gitapex/ssot.json + hooks/hooks.json + gitapex_(gate|scan)_*.py/check-*.sh naming convention <-> diff paths (gitapex_detect_changed_gate_scripts.py)"
-        }
+        {"kind": "mcp-tool", "ref": "mcp__github__create_pull_request"},
+        {"kind": "mcp-tool", "ref": "mcp__github__update_pull_request"},
+        {"kind": "workflow-event", "ref": "skill-audit-gate.yml:pull_request"},
+        {"kind": "file-glob", "ref": "skills/*/SKILL.md"},
+        {"kind": "file-glob", "ref": "docs/superpowers/specs/*.md"},
+        {"kind": "file-glob", "ref": "skills/*/scripts/*.py"},
+        {"kind": "file-glob", "ref": "evals/scripts/*.py"},
+        {"kind": "file-glob", "ref": ".github/scripts/*.py"},
+        {"kind": "file-glob", "ref": "hooks/**"},
+        {"kind": "file-glob", "ref": ".gitapex/ssot.json"},
+        {"kind": "cross-registry-consistency", "ref": "gates[].script paths + .gitapex/ssot.json + hooks/hooks.json + gitapex_(gate|scan)_*.py/check-*.sh naming convention <-> diff paths (gitapex_detect_changed_gate_scripts.py)"}
       ]
     },
     {
@@ -383,101 +256,57 @@
         "hooks/gitapex_check_acm_present_or_waiver.py"
       ],
       "rule": "Denies mcp__github__create_pull_request when the PR title/body cites no issue at all, or when any Closes/Fixes-cited issue lacks both an ACM table and a valid waiver, carries a 'tracking' waiver, or is already closed; fails closed on a missing GH_TOKEN/GITHUB_TOKEN or an unfetchable issue. Fails closed (denies) rather than allowing the call through when jq is missing from PATH, the payload or tool_input is not a JSON object, or tool_name is present but not a string.",
-      "planes": [
-        "pretooluse"
-      ],
+      "planes": ["pretooluse"],
       "local_exclusion": "Grades a PR body against its cited issue's Acceptance Criteria Map; the body does not exist until the PR is opened.",
       "trigger": "PreToolUse matcher mcp__github__create_pull_request (hooks/hooks.json)",
       "policy_refs": [],
-      "cluster": [
-        "plan-integrity",
-        "github-operations"
-      ],
+      "cluster": ["plan-integrity", "github-operations"],
       "tracking_issue": 657,
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "mcp-tool",
-          "ref": "mcp__github__create_pull_request"
-        },
-        {
-          "kind": "runtime-resolved-reference",
-          "ref": "GET /repos/{owner}/{repo}/issues/{number}"
-        }
+        {"kind": "mcp-tool", "ref": "mcp__github__create_pull_request"},
+        {"kind": "runtime-resolved-reference", "ref": "GET /repos/{owner}/{repo}/issues/{number}"}
       ]
     },
     {
       "id": "pr-duplicate-issue",
       "kind": "script",
-      "script": [
-        "hooks/check-pr-duplicate-issue.sh",
-        "hooks/gitapex_check_pr_duplicate_issue.py"
-      ],
+      "script": ["hooks/check-pr-duplicate-issue.sh", "hooks/gitapex_check_pr_duplicate_issue.py"],
       "rule": "Denies mcp__github__create_pull_request when the new PR's own resolving-cited issue (Closes/Fixes/Resolves) is already cited -- resolving or context (Closes/Fixes/Resolves/Refs/bare #N) -- by another currently-open PR, unless the new PR's own body carries an explicit `Duplicate-PR-waiver: <reason>` line; fails closed on a missing GH_TOKEN/GITHUB_TOKEN or an unresolvable open-PR-list fetch. Fails closed (denies) rather than allowing the call through when jq is missing from PATH, the payload or tool_input is not a JSON object, or tool_name is present but not a string.",
-      "planes": [
-        "pretooluse"
-      ],
+      "planes": ["pretooluse"],
       "local_exclusion": "Grades the new PR's own citations against live open-PR state on GitHub; 'other currently-open PRs' has no local/offline equivalent to check against.",
       "trigger": "PreToolUse matcher mcp__github__create_pull_request (hooks/hooks.json)",
       "policy_refs": [],
-      "cluster": [
-        "plan-integrity",
-        "github-operations"
-      ],
+      "cluster": ["plan-integrity", "github-operations"],
       "tracking_issue": 1197,
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "mcp-tool",
-          "ref": "mcp__github__create_pull_request"
-        },
-        {
-          "kind": "runtime-resolved-reference",
-          "ref": "GET /repos/{owner}/{repo}/pulls?state=open"
-        }
+        {"kind": "mcp-tool", "ref": "mcp__github__create_pull_request"},
+        {"kind": "runtime-resolved-reference", "ref": "GET /repos/{owner}/{repo}/pulls?state=open"}
       ]
     },
     {
       "id": "independent-review-pending",
       "kind": "script",
-      "script": [
-        ".github/workflows/independent-review-pending.yml",
-        ".github/scripts/gitapex_gate_independent_review_pending.py"
-      ],
+      "script": [".github/workflows/independent-review-pending.yml", ".github/scripts/gitapex_gate_independent_review_pending.py"],
       "rule": "Required status check: fails/pends from the moment a PR is opened (the workflow has no draft-state condition of its own -- it also runs, harmlessly, while a PR is still draft, since GitHub already blocks merging a draft regardless of check status) until a '## Independent review verdict' section naming the PR's exact current head commit as CLEAN is present in the PR body, per drafting-a-pr-to-merge/SKILL.md Step 8's own recorded-verdict format. Closes the race issue #1286 documented -- a PR merged directly via the GitHub UI after clean CI but before drafting-a-pr-to-merge's own mandatory Step 8 review had run against it at all. A structural presence/shape check mirroring the skill-audit-disclosure gate's own precedent, not a cryptographic guarantee: it cannot distinguish a genuine Step 8 run from PR-body text that merely mimics the required shape, a known, disclosed limitation (issue #1311's own residual risk) rather than one this gate resolves. DECLARED, NOT YET CONFIRMED LIVE as of this entry's own introduction: this row's own registration and the main.json required_status_checks entry below only take live effect on GitHub once a human dispatches the separate, human-gated apply-rulesets.yml workflow (deterministic-gate-quality review, issue #1311) -- until that dispatch happens and is confirmed (e.g. via ruleset-scan or a direct branch-protection read), this check does not yet block a direct merge, the exact incident this gate exists to close.",
-      "planes": [
-        "ci"
-      ],
+      "planes": ["ci"],
       "local_exclusion": "Grades a PR body against the PR's own current head SHA, both only resolvable via the GitHub API at trigger time; no working-tree equivalent exists before the PR is opened.",
       "trigger": ".github/workflows/independent-review-pending.yml on pull_request:[opened, ready_for_review, synchronize, edited, reopened]",
-      "policy_refs": [
-        "main-branch-ruleset"
-      ],
-      "cluster": [
-        "plan-integrity",
-        "github-operations"
-      ],
+      "policy_refs": ["main-branch-ruleset"],
+      "cluster": ["plan-integrity", "github-operations"],
       "tracking_issue": 1311,
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "workflow-event",
-          "ref": "independent-review-pending.yml:pull_request"
-        },
-        {
-          "kind": "runtime-resolved-reference",
-          "ref": "github.event.pull_request.body + github.event.pull_request.head.sha"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": ".github/rulesets/main.json required_status_checks[].context 'independent-review-pending' <-> this workflow's own job id"
-        }
+        {"kind": "workflow-event", "ref": "independent-review-pending.yml:pull_request"},
+        {"kind": "runtime-resolved-reference", "ref": "github.event.pull_request.body + github.event.pull_request.head.sha"},
+        {"kind": "cross-registry-consistency", "ref": ".github/rulesets/main.json required_status_checks[].context 'independent-review-pending' <-> this workflow's own job id"}
       ]
     },
     {
@@ -485,64 +314,25 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_scan_independent_review_heading_drift.py",
       "rule": "Two spec-driven markers this repo hand-duplicates must stay in sync (case-insensitive, whitespace-normalized substring match; a retired predecessor form must not still be live either -- see the gate script's own module docstring for that history): (1) the independent-review-pending gate's own recorded-verdict heading text (owned as gitapex_gate_independent_review_pending.CANONICAL_HEADING_TEXT) must be present in skills/drafting-a-pr-to-merge/SKILL.md, .github/PULL_REQUEST_TEMPLATE.md, .gitapex/ssot.json (this file's own independent-review-pending rule field), and .github/workflows/independent-review-pending.yml; (2) the PR-template feed-forward note's own section name ('Merge gate: independent review') must be present in .github/PULL_REQUEST_TEMPLATE.md and skills/executing-a-branch-plan/SKILL.md -- found by a deterministic-gate-quality review, issue #1343.",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_scan_independent_review_heading_drift.py"
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_independent_review_heading_drift.py"],
       "trigger": "tests/test_gitapex_scan_independent_review_heading_drift.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
-      "cluster": [
-        "plan-integrity",
-        "github-operations"
-      ],
+      "cluster": ["plan-integrity", "github-operations"],
       "tracking_issue": 1343,
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": "skills/drafting-a-pr-to-merge/SKILL.md"
-        },
-        {
-          "kind": "file-glob",
-          "ref": ".github/PULL_REQUEST_TEMPLATE.md"
-        },
-        {
-          "kind": "file-glob",
-          "ref": ".gitapex/ssot.json"
-        },
-        {
-          "kind": "file-glob",
-          "ref": ".github/workflows/independent-review-pending.yml"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "skills/executing-a-branch-plan/SKILL.md"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": ".github/scripts/gitapex_gate_independent_review_pending.py CANONICAL_HEADING_TEXT <-> the four independent-review-heading target files above"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": ".github/PULL_REQUEST_TEMPLATE.md 'Merge gate: independent review' section name <-> skills/executing-a-branch-plan/SKILL.md"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "file-glob", "ref": "skills/drafting-a-pr-to-merge/SKILL.md"},
+        {"kind": "file-glob", "ref": ".github/PULL_REQUEST_TEMPLATE.md"},
+        {"kind": "file-glob", "ref": ".gitapex/ssot.json"},
+        {"kind": "file-glob", "ref": ".github/workflows/independent-review-pending.yml"},
+        {"kind": "file-glob", "ref": "skills/executing-a-branch-plan/SKILL.md"},
+        {"kind": "cross-registry-consistency", "ref": ".github/scripts/gitapex_gate_independent_review_pending.py CANONICAL_HEADING_TEXT <-> the four independent-review-heading target files above"},
+        {"kind": "cross-registry-consistency", "ref": ".github/PULL_REQUEST_TEMPLATE.md 'Merge gate: independent review' section name <-> skills/executing-a-branch-plan/SKILL.md"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -550,9 +340,7 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_gate_gitignore_pattern_coverage.py",
       "rule": "Every .gitignore line added in a PR diff must have its de-negated/de-slashed core text referenced, as a whole token, by some file under tests/.",
-      "planes": [
-        "ci"
-      ],
+      "planes": ["ci"],
       "local_exclusion": "--added takes the diff's added .gitignore lines. Wiring it needs a diff-derived argument provider, which this runner deliberately does not have yet: local_stdin is its only input provider (see gitapex_gate_local_preflight.py's module docstring).",
       "trigger": ".github/workflows/gitignore-pattern-coverage-gate.yml on pull_request",
       "policy_refs": [],
@@ -562,18 +350,9 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": ".gitignore"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "tests/**/*.py"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "gitignore-pattern-coverage-gate.yml:pull_request"
-        }
+        {"kind": "file-glob", "ref": ".gitignore"},
+        {"kind": "file-glob", "ref": "tests/**/*.py"},
+        {"kind": "workflow-event", "ref": "gitignore-pattern-coverage-gate.yml:pull_request"}
       ]
     },
     {
@@ -584,9 +363,7 @@
         ".github/scripts/gitapex_extract_diff_added_lines.py"
       ],
       "rule": "Flags a paragraph (PR body, or diff-added docs/evals/skills Markdown) combining a capability-limitation cue with a tool-fingerprint cue absent an explicit 'tool-fingerprint-disclosure: WAIVED: <reason>' line.",
-      "planes": [
-        "ci"
-      ],
+      "planes": ["ci"],
       "local_exclusion": "Grades a PR body against the diff's added lines; the body does not exist locally before the PR is opened.",
       "trigger": ".github/workflows/provenance-disclosure-gate.yml on pull_request",
       "policy_refs": [],
@@ -596,38 +373,14 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "runtime-resolved-reference",
-          "ref": "github.event.pull_request.body"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "docs/*.md"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "docs/**/*.md"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "evals/*.md"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "evals/**/*.md"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "skills/*.md"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "skills/**/*.md"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "provenance-disclosure-gate.yml:pull_request"
-        }
+        {"kind": "runtime-resolved-reference", "ref": "github.event.pull_request.body"},
+        {"kind": "file-glob", "ref": "docs/*.md"},
+        {"kind": "file-glob", "ref": "docs/**/*.md"},
+        {"kind": "file-glob", "ref": "evals/*.md"},
+        {"kind": "file-glob", "ref": "evals/**/*.md"},
+        {"kind": "file-glob", "ref": "skills/*.md"},
+        {"kind": "file-glob", "ref": "skills/**/*.md"},
+        {"kind": "workflow-event", "ref": "provenance-disclosure-gate.yml:pull_request"}
       ]
     },
     {
@@ -635,9 +388,7 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_gate_retro_title_convention_citation.py",
       "rule": "Any changed skills/**/*.md or docs/**/*.md paragraph asserting a title/identity string is this repo's own/established convention must cite a real #N issue.",
-      "planes": [
-        "ci"
-      ],
+      "planes": ["ci"],
       "local_exclusion": "Takes the changed retrospective files as positional arguments and resolves each cited issue through the GitHub API.",
       "trigger": ".github/workflows/retro-title-convention-citation-gate.yml on pull_request",
       "policy_refs": [],
@@ -647,30 +398,12 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": "skills/*.md"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "skills/**/*.md"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "docs/*.md"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "docs/**/*.md"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "retro-title-convention-citation-gate.yml:pull_request"
-        },
-        {
-          "kind": "runtime-resolved-reference",
-          "ref": "GitHub API GET /repos/{owner}/{repo}/issues/{issue_number} (is_resolvable_issue) for each #<N> citation found in an offending file"
-        }
+        {"kind": "file-glob", "ref": "skills/*.md"},
+        {"kind": "file-glob", "ref": "skills/**/*.md"},
+        {"kind": "file-glob", "ref": "docs/*.md"},
+        {"kind": "file-glob", "ref": "docs/**/*.md"},
+        {"kind": "workflow-event", "ref": "retro-title-convention-citation-gate.yml:pull_request"},
+        {"kind": "runtime-resolved-reference", "ref": "GitHub API GET /repos/{owner}/{repo}/issues/{issue_number} (is_resolvable_issue) for each #<N> citation found in an offending file"}
       ]
     },
     {
@@ -678,36 +411,20 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_gate_routine_scope_enforcement.py",
       "rule": "A docs/superpowers/specs/*routine*.md doc naming a skill whose metadata/gitapex.yaml declares capabilityAssumption: Broad must also cite a concrete scoping mechanism.",
-      "planes": [
-        "ci"
-      ],
+      "planes": ["ci"],
       "local_exclusion": "Takes the changed doc paths as positional arguments; needs the same diff-derived argument provider gitignore-pattern-test-coverage names.",
       "trigger": ".github/workflows/routine-scope-enforcement-gate.yml on pull_request",
-      "policy_refs": [
-        "skill-metadata-sidecar"
-      ],
+      "policy_refs": ["skill-metadata-sidecar"],
       "cluster": "self-governance",
       "tracking_issue": 520,
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": "docs/superpowers/specs/*routine*.md"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "skills/*/metadata/gitapex.yaml"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "routine-scope-enforcement-gate.yml:pull_request"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "referenced_skill_names() in the routine-connection doc <-> capability_assumption() read from skills/<name>/metadata/gitapex.yaml"
-        }
+        {"kind": "file-glob", "ref": "docs/superpowers/specs/*routine*.md"},
+        {"kind": "file-glob", "ref": "skills/*/metadata/gitapex.yaml"},
+        {"kind": "workflow-event", "ref": "routine-scope-enforcement-gate.yml:pull_request"},
+        {"kind": "cross-registry-consistency", "ref": "referenced_skill_names() in the routine-connection doc <-> capability_assumption() read from skills/<name>/metadata/gitapex.yaml"}
       ]
     },
     {
@@ -715,36 +432,20 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_gate_skill_rename_lifecycle.py",
       "rule": "Any skills/ directory name removed in a diff (while at least one is added) must appear as some surviving skill's spec.lifecycle.renamedFrom value.",
-      "planes": [
-        "ci"
-      ],
+      "planes": ["ci"],
       "local_exclusion": "--removed takes the diff's removed skill paths; needs the same diff-derived argument provider gitignore-pattern-test-coverage names.",
       "trigger": ".github/workflows/skill-rename-lifecycle-gate.yml on pull_request",
-      "policy_refs": [
-        "skill-metadata-sidecar"
-      ],
+      "policy_refs": ["skill-metadata-sidecar"],
       "cluster": "skill-lifecycle",
       "tracking_issue": 285,
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "workflow-event",
-          "ref": "skill-rename-lifecycle-gate.yml:pull_request"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "skills/**/SKILL.md"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "skills/*/metadata/gitapex.yaml"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "removed skills/ directory names <-> skills/*/metadata/gitapex.yaml spec.lifecycle.renamedFrom values"
-        }
+        {"kind": "workflow-event", "ref": "skill-rename-lifecycle-gate.yml:pull_request"},
+        {"kind": "file-glob", "ref": "skills/**/SKILL.md"},
+        {"kind": "file-glob", "ref": "skills/*/metadata/gitapex.yaml"},
+        {"kind": "cross-registry-consistency", "ref": "removed skills/ directory names <-> skills/*/metadata/gitapex.yaml spec.lifecycle.renamedFrom values"}
       ]
     },
     {
@@ -752,9 +453,7 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_gate_skill_branch_fixture_coverage.py",
       "rule": "If a changed SKILL.md increases its own count of Stop-boundary bullets plus named dispatch branches, evals/<skill>/tasks/*.yaml must gain at least that many new fixtures.",
-      "planes": [
-        "ci"
-      ],
+      "planes": ["ci"],
       "local_exclusion": "--entries takes diff-derived skill/fixture entries; needs the same diff-derived argument provider gitignore-pattern-test-coverage names.",
       "trigger": ".github/workflows/skill-branch-fixture-coverage-gate.yml on pull_request",
       "policy_refs": [],
@@ -764,22 +463,10 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "workflow-event",
-          "ref": "skill-branch-fixture-coverage-gate.yml:pull_request"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "skills/**/SKILL.md"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "evals/*/tasks/*.yaml"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "SKILL.md Stop-boundary bullets + named dispatch branches count <-> evals/<skill>/tasks/*.yaml fixture count"
-        }
+        {"kind": "workflow-event", "ref": "skill-branch-fixture-coverage-gate.yml:pull_request"},
+        {"kind": "file-glob", "ref": "skills/**/SKILL.md"},
+        {"kind": "file-glob", "ref": "evals/*/tasks/*.yaml"},
+        {"kind": "cross-registry-consistency", "ref": "SKILL.md Stop-boundary bullets + named dispatch branches count <-> evals/<skill>/tasks/*.yaml fixture count"}
       ]
     },
     {
@@ -787,9 +474,7 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_gate_split_fixture_coverage.py",
       "rule": "A changed split.md's gate-result table Fixture column must be a superset of its own declared selection list; a changed SKILL.md precedence sentence needs a matching fixture-pair row in split.md's Equivalence classes table; every selection-split fixture must declare an expected.exercises list matching a real ###-level section in its sibling SKILL.md; and a split.md declaring a train:selection:test partition must carry a Split-arithmetic exclusions: line whose declared waivers reconcile each split's unique listed fixture count with the declared figure.",
-      "planes": [
-        "ci"
-      ],
+      "planes": ["ci"],
       "local_exclusion": "--split-md/--skill-md take diff-derived paths; needs the same diff-derived argument provider gitignore-pattern-test-coverage names.",
       "trigger": ".github/workflows/split-fixture-coverage-gate.yml on pull_request",
       "policy_refs": [],
@@ -799,38 +484,14 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "workflow-event",
-          "ref": "split-fixture-coverage-gate.yml:pull_request"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "evals/*/split.md"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "skills/*/SKILL.md"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "evals/*/split.json"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "split.json assignment.selection <-> split.md's most recent gate-result table Fixture column"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "split.json equivalence_classes train_fixture/held_out_fixture pairs <-> SKILL.md precedence/priority sentence"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "split.json assignment.selection fixtures' exercises declarations <-> SKILL.md ###-level section headings"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "split.json partition figure <-> assignment listing's unique fixture count minus split_arithmetic_exclusions"
-        }
+        {"kind": "workflow-event", "ref": "split-fixture-coverage-gate.yml:pull_request"},
+        {"kind": "file-glob", "ref": "evals/*/split.md"},
+        {"kind": "file-glob", "ref": "skills/*/SKILL.md"},
+        {"kind": "file-glob", "ref": "evals/*/split.json"},
+        {"kind": "cross-registry-consistency", "ref": "split.json assignment.selection <-> split.md's most recent gate-result table Fixture column"},
+        {"kind": "cross-registry-consistency", "ref": "split.json equivalence_classes train_fixture/held_out_fixture pairs <-> SKILL.md precedence/priority sentence"},
+        {"kind": "cross-registry-consistency", "ref": "split.json assignment.selection fixtures' exercises declarations <-> SKILL.md ###-level section headings"},
+        {"kind": "cross-registry-consistency", "ref": "split.json partition figure <-> assignment listing's unique fixture count minus split_arithmetic_exclusions"}
       ]
     },
     {
@@ -838,9 +499,7 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_gate_transfer_check_disclosure.py",
       "rule": "Every newly-added '**Iteration:' entry under a '## Kept-edit log' in evals/*/split.md must contain a Transfer check line.",
-      "planes": [
-        "ci"
-      ],
+      "planes": ["ci"],
       "local_exclusion": "--entries takes diff-derived entries; needs the same diff-derived argument provider gitignore-pattern-test-coverage names.",
       "trigger": ".github/workflows/transfer-check-disclosure-gate.yml on pull_request",
       "policy_refs": [],
@@ -850,14 +509,8 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "workflow-event",
-          "ref": "transfer-check-disclosure-gate.yml:pull_request"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "evals/*/split.md"
-        }
+        {"kind": "workflow-event", "ref": "transfer-check-disclosure-gate.yml:pull_request"},
+        {"kind": "file-glob", "ref": "evals/*/split.md"}
       ]
     },
     {
@@ -865,55 +518,23 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_scan_skill_metadata_schema.py",
       "rule": "Every skills/*/metadata/gitapex.yaml sidecar must validate against skills/evaluating-skill-quality/references/skill-metadata.schema.json (JSON Schema draft 2020-12) and resolve its cross-file references: metadata.name matches its own skill directory name, spec.skillDependencies/spec.lifecycle.deprecated.replacement each resolve to a real sibling skill directory (one with its own SKILL.md), and the repo-wide spec.skillDependencies.requires graph is acyclic.",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_scan_skill_metadata_schema.py"
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_skill_metadata_schema.py"],
       "trigger": "tests/test_gitapex_scan_skill_metadata_schema.py inside the pytest step of .github/workflows/test.yml",
-      "policy_refs": [
-        "skill-metadata-sidecar"
-      ],
+      "policy_refs": ["skill-metadata-sidecar"],
       "cluster": "skill-lifecycle",
       "tracking_issue": 745,
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "skills/*/metadata/gitapex.yaml"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "skills/evaluating-skill-quality/references/skill-metadata.schema.json"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "metadata.name <-> skill directory name"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "spec.skillDependencies.requires/relatedTo + spec.lifecycle.deprecated.replacement <-> sibling skills/<name>/ directories"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "spec.skillDependencies.requires graph acyclicity across skills/*/metadata/gitapex.yaml"
-        }
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"},
+        {"kind": "file-glob", "ref": "skills/*/metadata/gitapex.yaml"},
+        {"kind": "file-glob", "ref": "skills/evaluating-skill-quality/references/skill-metadata.schema.json"},
+        {"kind": "cross-registry-consistency", "ref": "metadata.name <-> skill directory name"},
+        {"kind": "cross-registry-consistency", "ref": "spec.skillDependencies.requires/relatedTo + spec.lifecycle.deprecated.replacement <-> sibling skills/<name>/ directories"},
+        {"kind": "cross-registry-consistency", "ref": "spec.skillDependencies.requires graph acyclicity across skills/*/metadata/gitapex.yaml"}
       ]
     },
     {
@@ -921,17 +542,8 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_scan_split_schema.py",
       "rule": "Every evals/*/split.json file, discovered via glob at runtime rather than a hardcoded skill list, must validate against skills/scorer-gated-skill-edits/references/split.schema.json (JSON Schema draft 2020-12).",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_scan_split_schema.py"
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_split_schema.py"],
       "trigger": "tests/test_gitapex_scan_split_schema.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "skill-lifecycle",
@@ -940,22 +552,10 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": "evals/*/split.json"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "skills/scorer-gated-skill-edits/references/split.schema.json"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "file-glob", "ref": "evals/*/split.json"},
+        {"kind": "file-glob", "ref": "skills/scorer-gated-skill-edits/references/split.schema.json"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -963,17 +563,8 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_gate_skill_eval_yaml_parity.py",
       "rule": "Every skills/*/ directory, discovered via directory listing at runtime rather than a hardcoded skill list, must have a matching evals/*/eval.yaml, and vice versa -- exact-string name comparison, never case-folded.",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_gate_skill_eval_yaml_parity.py"
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_skill_eval_yaml_parity.py"],
       "trigger": "tests/test_gitapex_gate_skill_eval_yaml_parity.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "skill-lifecycle",
@@ -982,26 +573,11 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": "skills/*/"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "evals/*/eval.yaml"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "skills/*/ <-> evals/*/eval.yaml"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "file-glob", "ref": "skills/*/"},
+        {"kind": "file-glob", "ref": "evals/*/eval.yaml"},
+        {"kind": "cross-registry-consistency", "ref": "skills/*/ <-> evals/*/eval.yaml"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -1009,18 +585,8 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_generate_skill_eval_status.py",
       "rule": "docs/skill-eval-status.md must exactly match a fresh regeneration from docs/skill-eval-status-narrative.md plus live per-skill facts derived from evals/*/eval.yaml, evals/*/tasks/, and evals/*/results/*/manifest.json.",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_generate_skill_eval_status.py",
-        "--check"
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_generate_skill_eval_status.py", "--check"],
       "trigger": "tests/test_gitapex_generate_skill_eval_status.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "skill-lifecycle",
@@ -1029,38 +595,14 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": "docs/skill-eval-status.md"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "docs/skill-eval-status-narrative.md"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "evals/*/eval.yaml"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "evals/*/tasks/*.yaml"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "evals/*/results/*/manifest.json"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "docs/skill-eval-status.md <-> regeneration from docs/skill-eval-status-narrative.md + evals/*/eval.yaml + evals/*/tasks/*.yaml + evals/*/results/*/manifest.json"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "file-glob", "ref": "docs/skill-eval-status.md"},
+        {"kind": "file-glob", "ref": "docs/skill-eval-status-narrative.md"},
+        {"kind": "file-glob", "ref": "evals/*/eval.yaml"},
+        {"kind": "file-glob", "ref": "evals/*/tasks/*.yaml"},
+        {"kind": "file-glob", "ref": "evals/*/results/*/manifest.json"},
+        {"kind": "cross-registry-consistency", "ref": "docs/skill-eval-status.md <-> regeneration from docs/skill-eval-status-narrative.md + evals/*/eval.yaml + evals/*/tasks/*.yaml + evals/*/results/*/manifest.json"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -1068,39 +610,20 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_gate_evals_scripts_coverage.py",
       "rule": "Every file under each of pyproject.toml's [tool.coverage.run] source directories must meet a minimum per-file coverage percentage, read from coverage.json.",
-      "planes": [
-        "ci"
-      ],
+      "planes": ["ci"],
       "local_exclusion": "Reads a coverage.json that only exists after a full pytest run; wiring it would either grade a stale artifact or force the whole suite into every pre-push pass.",
       "trigger": "coverage-combine job inside .github/workflows/test.yml (issue #1365: relocated from the pytest job's own step once that job was split into pytest plus 4 per-file pytest-bash-oracle-* jobs, so this gate now runs against all 5 jobs' own combined coverage data)",
-      "policy_refs": [
-        "pyproject-coverage"
-      ],
-      "cluster": [
-        "supply-chain",
-        "test-integrity"
-      ],
+      "policy_refs": ["pyproject-coverage"],
+      "cluster": ["supply-chain", "test-integrity"],
       "tracking_issue": 536,
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": "pyproject.toml"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "coverage.json"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "file-glob", "ref": "pyproject.toml"},
+        {"kind": "file-glob", "ref": "coverage.json"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -1108,47 +631,21 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_scan_apm_manifest_drift.py",
       "rule": "apm.yml's name/version must equal .claude-plugin/plugin.json's (.claude-plugin/plugin.json is authoritative for this comparison -- it is itself generated from the repository-root plugin.json, see plugin-manifest-mirror-drift); raises if either manifest is missing a mirrored field.",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_scan_apm_manifest_drift.py"
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_apm_manifest_drift.py"],
       "trigger": "tests/test_gitapex_scan_apm_manifest_drift.py inside the pytest step of .github/workflows/test.yml",
-      "policy_refs": [
-        "claude-plugin-manifest"
-      ],
+      "policy_refs": ["claude-plugin-manifest"],
       "cluster": "supply-chain",
       "tracking_issue": 234,
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": "apm.yml"
-        },
-        {
-          "kind": "file-glob",
-          "ref": ".claude-plugin/plugin.json"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "apm.yml <-> .claude-plugin/plugin.json"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "file-glob", "ref": "apm.yml"},
+        {"kind": "file-glob", "ref": ".claude-plugin/plugin.json"},
+        {"kind": "cross-registry-consistency", "ref": "apm.yml <-> .claude-plugin/plugin.json"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -1156,17 +653,8 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_scan_apm_lockfile_drift.py",
       "rule": "Every apm.yml devDependencies.apm entry must have a matching apm.lock.yaml dependencies[] entry (matched by repo_url) carrying a non-empty deployed_files list and a non-empty deployed_file_hashes map. A lockfile regenerated by a no-deploy resolve step (e.g. `apm lock`) alone, never followed by `apm install`, leaves a structurally-present but incomplete entry that no other wired gate catches (issue #1254: cathrynlavery/diagram-design landed exactly this way in #1158).",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_scan_apm_lockfile_drift.py"
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_apm_lockfile_drift.py"],
       "trigger": "tests/test_gitapex_scan_apm_lockfile_drift.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "supply-chain",
@@ -1175,26 +663,11 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": "apm.yml"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "apm.lock.yaml"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "apm.yml devDependencies.apm <-> apm.lock.yaml dependencies[].repo_url + deployed_files/deployed_file_hashes completeness"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "file-glob", "ref": "apm.yml"},
+        {"kind": "file-glob", "ref": "apm.lock.yaml"},
+        {"kind": "cross-registry-consistency", "ref": "apm.yml devDependencies.apm <-> apm.lock.yaml dependencies[].repo_url + deployed_files/deployed_file_hashes completeness"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -1202,10 +675,7 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_generate_plugin_manifest.py",
       "rule": ".claude-plugin/plugin.json must exactly match a fresh regeneration from the repository-root plugin.json (the plugin-identity SSOT) with only the $schema key stripped and key order otherwise preserved.",
-      "planes": [
-        "ci",
-        "local"
-      ],
+      "planes": ["ci", "local"],
       "local_invocation": [
         "uv",
         "run",
@@ -1215,36 +685,18 @@
         "--check"
       ],
       "trigger": "tests/test_gitapex_generate_plugin_manifest.py inside the pytest step of .github/workflows/test.yml",
-      "policy_refs": [
-        "plugin-manifest",
-        "claude-plugin-manifest"
-      ],
+      "policy_refs": ["plugin-manifest", "claude-plugin-manifest"],
       "cluster": "supply-chain",
       "tracking_issue": 1028,
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": "plugin.json"
-        },
-        {
-          "kind": "file-glob",
-          "ref": ".claude-plugin/plugin.json"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "plugin.json <-> .claude-plugin/plugin.json"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "file-glob", "ref": "plugin.json"},
+        {"kind": "file-glob", "ref": ".claude-plugin/plugin.json"},
+        {"kind": "cross-registry-consistency", "ref": "plugin.json <-> .claude-plugin/plugin.json"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -1252,10 +704,7 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_scan_plugin_manifest_schema.py",
       "rule": "Validates the repository-root plugin.json against the vendored Agent Plugins Specification v1.0.0 plugin.schema.json (Draft202012Validator, format assertion enabled), and in parallel against a PluginManifest pydantic model that additionally types homepage/repository/author.url as AnyUrl (stricter than the vendored schema's untyped strings); flags vendor-digest-drift if the vendored schema's sha256 no longer matches its recorded digest. --verify-upstream (opt-in, network) additionally byte-compares the vendored file against what agentplugins/agent-plugins-spec publishes at the pinned commit.",
-      "planes": [
-        "ci",
-        "local"
-      ],
+      "planes": ["ci", "local"],
       "local_invocation": [
         "uv",
         "run",
@@ -1264,32 +713,17 @@
         ".github/scripts/gitapex_scan_plugin_manifest_schema.py"
       ],
       "trigger": "tests/test_gitapex_scan_plugin_manifest_schema.py inside the pytest step of .github/workflows/test.yml",
-      "policy_refs": [
-        "plugin-manifest",
-        "agent-plugins-plugin-schema"
-      ],
+      "policy_refs": ["plugin-manifest", "agent-plugins-plugin-schema"],
       "cluster": "supply-chain",
       "tracking_issue": 1028,
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": "plugin.json"
-        },
-        {
-          "kind": "file-glob",
-          "ref": ".gitapex/agent-plugins-plugin.schema.json"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "file-glob", "ref": "plugin.json"},
+        {"kind": "file-glob", "ref": ".gitapex/agent-plugins-plugin.schema.json"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -1297,17 +731,8 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_scan_toolchain_pin_drift.py",
       "rule": "No .github/workflows/*.yml/.yaml may reference a flake-owned Class B tool's (microsoft/apm, rtk-ai/rtk, betterleaks/betterleaks) upstream repo in an install context -- they must come from flake.nix only.",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_scan_toolchain_pin_drift.py"
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_toolchain_pin_drift.py"],
       "trigger": "tests/test_gitapex_scan_toolchain_pin_drift.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "supply-chain",
@@ -1316,34 +741,13 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": ".github/workflows/*.yml"
-        },
-        {
-          "kind": "file-glob",
-          "ref": ".github/workflows/*.yaml"
-        },
-        {
-          "kind": "bash-pattern",
-          "ref": "microsoft/apm"
-        },
-        {
-          "kind": "bash-pattern",
-          "ref": "rtk-ai/rtk"
-        },
-        {
-          "kind": "bash-pattern",
-          "ref": "betterleaks/betterleaks"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "file-glob", "ref": ".github/workflows/*.yml"},
+        {"kind": "file-glob", "ref": ".github/workflows/*.yaml"},
+        {"kind": "bash-pattern", "ref": "microsoft/apm"},
+        {"kind": "bash-pattern", "ref": "rtk-ai/rtk"},
+        {"kind": "bash-pattern", "ref": "betterleaks/betterleaks"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -1351,17 +755,8 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_gate_owasp_asi_mapping.py",
       "rule": "docs/security-control-inventory.md's ASI section must have exactly one row per ASI01-ASI10, each with a status in {covered, partially covered, not covered, not applicable} and a rationale prefixed by exactly one of [deny]/[require_approval]/[allow].",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_gate_owasp_asi_mapping.py"
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_owasp_asi_mapping.py"],
       "trigger": "tests/test_gitapex_gate_owasp_asi_mapping.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "self-governance",
@@ -1370,18 +765,9 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": "docs/security-control-inventory.md"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        }
+        {"kind": "file-glob", "ref": "docs/security-control-inventory.md"},
+        {"kind": "workflow-event", "ref": "test.yml:push"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"}
       ]
     },
     {
@@ -1389,17 +775,8 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_gate_owasp_llm_mapping.py",
       "rule": "Sibling gate to owasp-asi-mapping-completeness, for the exact-pinned heading '## OWASP Top 10 for LLM Applications and Generative AI (LLM01-10:2025)', LLM01-LLM10.",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_gate_owasp_llm_mapping.py"
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_owasp_llm_mapping.py"],
       "trigger": "tests/test_gitapex_gate_owasp_llm_mapping.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "self-governance",
@@ -1408,18 +785,9 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": "docs/security-control-inventory.md"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        }
+        {"kind": "file-glob", "ref": "docs/security-control-inventory.md"},
+        {"kind": "workflow-event", "ref": "test.yml:push"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"}
       ]
     },
     {
@@ -1427,9 +795,7 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_scan_retrospective_gate_drift.py",
       "rule": "Lists every retrospective-labelled issue (any state), excludes any whose body carries a gate-less marker (CI-opened stub or zero-repair fast-close -- issue #1297), and fails the job if the count of remaining issues with zero commit on main citing it exceeds threshold 20.",
-      "planes": [
-        "ci"
-      ],
+      "planes": ["ci"],
       "local_exclusion": "Queries the GitHub issues API for retrospective-labelled issues; there is no offline equivalent.",
       "trigger": ".github/workflows/retrospective-gate-drift.yml, daily cron 07:00 UTC + workflow_dispatch",
       "policy_refs": [],
@@ -1439,26 +805,11 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": ".gitapex/ssot.json"
-        },
-        {
-          "kind": "runtime-resolved-reference",
-          "ref": "GitHub API GET /repos/{owner}/{repo}/issues?labels=retrospective&state=all (list_labelled_issues) -- the live retrospective-labelled issue set"
-        },
-        {
-          "kind": "runtime-resolved-reference",
-          "ref": "git log <ref> commit messages (git_commit_messages) matched against a #<N> citation pattern (_citation_pattern) per issue number"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "retrospective-gate-drift.yml:schedule"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "retrospective-gate-drift.yml:workflow_dispatch"
-        }
+        {"kind": "file-glob", "ref": ".gitapex/ssot.json"},
+        {"kind": "runtime-resolved-reference", "ref": "GitHub API GET /repos/{owner}/{repo}/issues?labels=retrospective&state=all (list_labelled_issues) -- the live retrospective-labelled issue set"},
+        {"kind": "runtime-resolved-reference", "ref": "git log <ref> commit messages (git_commit_messages) matched against a #<N> citation pattern (_citation_pattern) per issue number"},
+        {"kind": "workflow-event", "ref": "retrospective-gate-drift.yml:schedule"},
+        {"kind": "workflow-event", "ref": "retrospective-gate-drift.yml:workflow_dispatch"}
       ]
     },
     {
@@ -1470,9 +821,7 @@
         "evals/scripts/gitapex_run_eval_suite.py"
       ],
       "rule": "Executes each PR-touched skill's own evals/<skill>/ suite via 'uv run --frozen python3 evals/scripts/gitapex_run_eval_suite.py --eval-yaml evals/<skill>/eval.yaml --skill-md skills/<skill>/SKILL.md' (issue #1134, replacing 'nix run .#waza -- run <skill>') and fails the job if any suite fails; not yet a required status check.",
-      "planes": [
-        "ci"
-      ],
+      "planes": ["ci"],
       "local_exclusion": "Runs eval suites via a live model-CLI subprocess, which need ANTHROPIC_API_KEY plus model access rather than a working-tree read.",
       "trigger": ".github/workflows/skill-eval-gate.yml on pull_request and workflow_dispatch",
       "policy_refs": [],
@@ -1482,18 +831,9 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "workflow-event",
-          "ref": "skill-eval-gate.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "skill-eval-gate.yml:workflow_dispatch"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "evals/*/eval.yaml"
-        }
+        {"kind": "workflow-event", "ref": "skill-eval-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "skill-eval-gate.yml:workflow_dispatch"},
+        {"kind": "file-glob", "ref": "evals/*/eval.yaml"}
       ]
     },
     {
@@ -1501,9 +841,7 @@
       "kind": "script",
       "script": ".github/workflows/lint.yml",
       "rule": "Runs actionlint (rhysd/actionlint, digest-pinned) against changed .github/workflows/** files.",
-      "planes": [
-        "ci"
-      ],
+      "planes": ["ci"],
       "local_exclusion": "actionlint runs from a digest-pinned Docker image in CI; resolving actionlint from ambient PATH instead is the exact drift issue #678 closed for ruff, so no local equivalent is offered.",
       "trigger": ".github/workflows/lint.yml on pull_request and push to main",
       "policy_refs": [],
@@ -1513,22 +851,10 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": ".github/workflows/*.yml"
-        },
-        {
-          "kind": "file-glob",
-          "ref": ".github/workflows/*.yaml"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "lint.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "lint.yml:push"
-        }
+        {"kind": "file-glob", "ref": ".github/workflows/*.yml"},
+        {"kind": "file-glob", "ref": ".github/workflows/*.yaml"},
+        {"kind": "workflow-event", "ref": "lint.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "lint.yml:push"}
       ]
     },
     {
@@ -1536,106 +862,44 @@
       "kind": "script",
       "script": ".github/workflows/lint.yml",
       "rule": "Runs 'uv run --locked ruff check .' over the whole repository; the rule set is pyproject.toml's [tool.ruff.lint] select/ignore/per-file-ignores and the ruff version is the one pinned in uv.lock. --locked (not --frozen) additionally asserts uv.lock is still in sync with pyproject.toml, so bumping the ruff pin without running 'uv lock' fails the job instead of silently enforcing the previously locked version.",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--locked",
-        "ruff",
-        "check",
-        "."
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--locked", "ruff", "check", "."],
       "trigger": ".github/workflows/lint.yml on every pull_request and on push to main; deliberately no paths: filter, so a required check on this job never enters GitHub's Pending-forever state",
-      "policy_refs": [
-        "pyproject-ruff"
-      ],
+      "policy_refs": ["pyproject-ruff"],
       "cluster": "supply-chain",
       "tracking_issue": 678,
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": "**/*.py"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "pyproject.toml <-> uv.lock"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "lint.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "lint.yml:push"
-        }
+        {"kind": "file-glob", "ref": "**/*.py"},
+        {"kind": "cross-registry-consistency", "ref": "pyproject.toml <-> uv.lock"},
+        {"kind": "workflow-event", "ref": "lint.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "lint.yml:push"}
       ]
     },
     {
       "id": "mypy-type-check",
       "kind": "script",
-      "script": [
-        ".github/workflows/test.yml",
-        ".github/scripts/gitapex_run_precommit_mypy.py"
-      ],
+      "script": [".github/workflows/test.yml", ".github/scripts/gitapex_run_precommit_mypy.py"],
       "rule": "Runs 'uv run --frozen mypy --config-file pyproject.toml' as 7 directory-grouped invocations over tests/, hooks/, .github/scripts/, evals/scripts/, and every skills/*/scripts/ directory -- a single repo-wide sweep errors 'Duplicate module named' on two same-basename gitapex_check_acm_present.py files with no shared __init__.py. strict=true by default, with a named per-module override allowlist for pre-existing typing debt (each entry cites issue #684 or a dedicated follow-up). pydantic is deliberately scoped narrower than this gate's own mypy coverage: several .github/scripts/ and evals/scripts/ files are invoked by their own small dedicated CI workflow with no dependency-install step, so they stay pydantic-free even though mypy still type-checks them.",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_run_precommit_mypy.py"
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_run_precommit_mypy.py"],
       "trigger": ".github/workflows/test.yml, mypy job, on every pull_request and push to main",
-      "policy_refs": [
-        "pyproject-mypy-config"
-      ],
-      "cluster": [
-        "test-integrity",
-        "supply-chain"
-      ],
+      "policy_refs": ["pyproject-mypy-config"],
+      "cluster": ["test-integrity", "supply-chain"],
       "tracking_issue": 684,
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": "tests"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "hooks"
-        },
-        {
-          "kind": "file-glob",
-          "ref": ".github/scripts"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "evals/scripts"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "skills/*/scripts"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "file-glob", "ref": "tests"},
+        {"kind": "file-glob", "ref": "hooks"},
+        {"kind": "file-glob", "ref": ".github/scripts"},
+        {"kind": "file-glob", "ref": "evals/scripts"},
+        {"kind": "file-glob", "ref": "skills/*/scripts"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -1643,9 +907,7 @@
       "kind": "script",
       "script": ".github/workflows/toolchain-nix.yml",
       "rule": "On flake.nix/flake.lock changes: fails if flake.lock is stale after nix flake lock, or if nix flake check, the Class-B build, or the devShell smoke step fail.",
-      "planes": [
-        "ci"
-      ],
+      "planes": ["ci"],
       "local_exclusion": "Builds the flake, which needs Nix; the local surface this runner targets is explicitly the no-Nix path (see skills/setup-gitapex-toolchain).",
       "trigger": ".github/workflows/toolchain-nix.yml on changes to flake.nix/flake.lock",
       "policy_refs": [],
@@ -1655,26 +917,11 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": "flake.nix"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "flake.lock"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "flake.nix <-> flake.lock"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "toolchain-nix.yml:push"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "toolchain-nix.yml:pull_request"
-        }
+        {"kind": "file-glob", "ref": "flake.nix"},
+        {"kind": "file-glob", "ref": "flake.lock"},
+        {"kind": "cross-registry-consistency", "ref": "flake.nix <-> flake.lock"},
+        {"kind": "workflow-event", "ref": "toolchain-nix.yml:push"},
+        {"kind": "workflow-event", "ref": "toolchain-nix.yml:pull_request"}
       ]
     },
     {
@@ -1685,17 +932,8 @@
         ".github/scripts/_gitapex_argv_safety.py"
       ],
       "rule": "Validates .gitapex/ssot.json against .gitapex/ssot.schema.json (JSON Schema draft 2020-12); fails if any gates[].script path doesn't exist as a real file, or any policy_refs[] value doesn't resolve to a real policy_sources[].id. The argv-safety predicates this gate applies to local_invocation/local_stdin live in _gitapex_argv_safety.py, registered here (issue #904) so gitapex_detect_changed_gate_scripts.py selects an edit to them as a gate change requiring disclosure. Known gap (issue #1227): checks only that a registered entry's script path is real, not the reverse -- a real gate-shaped file (matching the naming convention gitapex_detect_changed_gate_scripts.py already applies for a different purpose) with no gates[] entry passes this check undetected.",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_scan_ssot_schema.py"
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_ssot_schema.py"],
       "trigger": "tests/test_gitapex_scan_ssot_schema.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "registry-integrity",
@@ -1704,42 +942,15 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": ".gitapex/ssot.json"
-        },
-        {
-          "kind": "file-glob",
-          "ref": ".gitapex/ssot.schema.json"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "gates[].script <-> real files on disk"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "gates[].policy_refs[] <-> policy_sources[].id"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "gates[].cluster <-> clusters keys"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "gates[].local_invocation/local_stdin path tokens <-> real files on disk"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "gates[].local_invocation <-> gates[].script (same gate)"
-        }
+        {"kind": "file-glob", "ref": ".gitapex/ssot.json"},
+        {"kind": "file-glob", "ref": ".gitapex/ssot.schema.json"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"},
+        {"kind": "cross-registry-consistency", "ref": "gates[].script <-> real files on disk"},
+        {"kind": "cross-registry-consistency", "ref": "gates[].policy_refs[] <-> policy_sources[].id"},
+        {"kind": "cross-registry-consistency", "ref": "gates[].cluster <-> clusters keys"},
+        {"kind": "cross-registry-consistency", "ref": "gates[].local_invocation/local_stdin path tokens <-> real files on disk"},
+        {"kind": "cross-registry-consistency", "ref": "gates[].local_invocation <-> gates[].script (same gate)"}
       ]
     },
     {
@@ -1747,17 +958,8 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_report_ssot_field_coverage.py",
       "rule": "Reports, per field (fail_mode, target), how many of .gitapex/ssot.json's gates carry it and lists which ones don't. Always exits 0 except on a genuine read/parse failure of ssot.json itself -- incomplete field coverage is expected, honestly-disclosed state (issue #1232), never a CI failure. Not a required status check; report-only by explicit design, distinct from every other gate in this cluster.",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_report_ssot_field_coverage.py"
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_report_ssot_field_coverage.py"],
       "trigger": "tests/test_gitapex_report_ssot_field_coverage.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "registry-integrity",
@@ -1766,18 +968,9 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": ".gitapex/ssot.json"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "file-glob", "ref": ".gitapex/ssot.json"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -1785,17 +978,8 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_gate_plugin_root_brace_notation.py",
       "rule": "Every hook command in a hooks.json manifest or an agent definition's frontmatter must reference the plugin root as ${CLAUDE_PLUGIN_ROOT}; the unbraced $CLAUDE_PLUGIN_ROOT fails. apm substitutes only the braced form, so an unbraced command is deployed verbatim into a consumer's .claude/settings.json, resolves against an unset variable, and its hook silently never fires while the install log still reports it integrated. Only command values are graded, never prose. Discovery reads git-tracked files, so every ignored path (apm's package cache and deploy trees, worktree checkouts) is out of scope by construction. Exits 2, never a silent pass, when no surface is discovered or a file is unreadable or malformed.",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_gate_plugin_root_brace_notation.py"
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_plugin_root_brace_notation.py"],
       "trigger": ".github/workflows/plugin-root-brace-notation-gate.yml on pull_request and workflow_dispatch, plus tests/test_gitapex_gate_plugin_root_brace_notation.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "supply-chain",
@@ -1804,42 +988,15 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": "hooks.json"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "*/hooks.json"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "agents/*.md"
-        },
-        {
-          "kind": "file-glob",
-          "ref": ".claude/agents/*.md"
-        },
-        {
-          "kind": "bash-pattern",
-          "ref": "$CLAUDE_PLUGIN_ROOT"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "plugin-root-brace-notation-gate.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "plugin-root-brace-notation-gate.yml:workflow_dispatch"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "file-glob", "ref": "hooks.json"},
+        {"kind": "file-glob", "ref": "*/hooks.json"},
+        {"kind": "file-glob", "ref": "agents/*.md"},
+        {"kind": "file-glob", "ref": ".claude/agents/*.md"},
+        {"kind": "bash-pattern", "ref": "$CLAUDE_PLUGIN_ROOT"},
+        {"kind": "workflow-event", "ref": "plugin-root-brace-notation-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "plugin-root-brace-notation-gate.yml:workflow_dispatch"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -1852,26 +1009,9 @@
         ".github/workflows/exception-handler-gap-gate.yml"
       ],
       "rule": "A decoded read (read_text, or open in a text read mode), or a .get() on a json.loads result, added by a PR diff to .github/scripts/*.py, hooks/*.py, evals/scripts/*.py or skills/*/scripts/*.py must handle what it can actually raise: an enclosing try covering UnicodeDecodeError or an ancestor for the read, an isinstance() against a mapping type for the .get(). Scope is the diff, not the repository. An inline exception-handler-gap WAIVED comment carrying a reason discloses a read whose caller owns the handling, and every honoured waiver is printed. Exits 2 rather than pass silently on input it cannot grade. See the script docstring for the measurement behind the scoping decision and for the known misses and over-reports.",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_gate_exception_handler_gaps.py"
-      ],
-      "local_stdin": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_run_base_diff.py",
-        "--",
-        "*.py"
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_exception_handler_gaps.py"],
+      "local_stdin": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_run_base_diff.py", "--", "*.py"],
       "trigger": ".github/workflows/exception-handler-gap-gate.yml on pull_request, plus tests/test_gitapex_gate_exception_handler_gaps.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "test-integrity",
@@ -1880,34 +1020,13 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": ".github/scripts/*.py"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "hooks/*.py"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "evals/scripts/*.py"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "skills/*/scripts/*.py"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "exception-handler-gap-gate.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "file-glob", "ref": ".github/scripts/*.py"},
+        {"kind": "file-glob", "ref": "hooks/*.py"},
+        {"kind": "file-glob", "ref": "evals/scripts/*.py"},
+        {"kind": "file-glob", "ref": "skills/*/scripts/*.py"},
+        {"kind": "workflow-event", "ref": "exception-handler-gap-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -1915,17 +1034,8 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_gate_hidden_characters.py",
       "rule": "No repository-tracked file may carry a literal hidden/invisible Unicode character -- U+FEFF, the zero-width family (U+200B-U+200D), the bidi control characters (U+200E/U+200F, U+202A-U+202E, U+2066-U+2069), or word joiner (U+2060). The escape-sequence spelling of any of these (e.g. \\ufeff) is never graded -- that is the fix this gate steers authors toward. Discovery reads git-tracked files, so every ignored path is out of scope by construction. Diagnostic output never reproduces the offending character itself, naming the codepoint, its Unicode name, and line/column instead. Exits 2, never a silent pass, when no tracked file is discovered or a file cannot be read/decoded as UTF-8.",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_gate_hidden_characters.py"
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_hidden_characters.py"],
       "trigger": ".github/workflows/hidden-characters-gate.yml on pull_request and workflow_dispatch, plus tests/test_gitapex_gate_hidden_characters.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "repo-hygiene",
@@ -1934,26 +1044,11 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": "**/*"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "hidden-characters-gate.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "hidden-characters-gate.yml:workflow_dispatch"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "file-glob", "ref": "**/*"},
+        {"kind": "workflow-event", "ref": "hidden-characters-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "hidden-characters-gate.yml:workflow_dispatch"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -1961,17 +1056,8 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_gate_no_raw_gh_cli_in_docs.py",
       "rule": "No fenced code block (``` or ~~~) in a tracked docs/**/*.md file may carry a literal raw `gh <subcommand>` CLI invocation (gh's real top-level subcommands only, in command-start position), unless the line directly above the fence's opening marker (no blank line in between) is an explicit `<!-- gitapex-allow-raw-gh-cli: <reason> -->` exception marker with a non-empty reason. A single-backtick inline code span discussing the CLI is never in scope. Exits 2, never a silent pass, when no tracked docs/**/*.md file is discovered or a file cannot be read/decoded as UTF-8.",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_gate_no_raw_gh_cli_in_docs.py"
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_no_raw_gh_cli_in_docs.py"],
       "trigger": ".github/workflows/no-raw-gh-cli-in-docs-gate.yml on pull_request and workflow_dispatch, plus tests/test_gitapex_gate_no_raw_gh_cli_in_docs.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "repo-hygiene",
@@ -1980,26 +1066,11 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": "docs/**/*.md"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "no-raw-gh-cli-in-docs-gate.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "no-raw-gh-cli-in-docs-gate.yml:workflow_dispatch"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "file-glob", "ref": "docs/**/*.md"},
+        {"kind": "workflow-event", "ref": "no-raw-gh-cli-in-docs-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "no-raw-gh-cli-in-docs-gate.yml:workflow_dispatch"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -2007,25 +1078,8 @@
       "kind": "script",
       "script": ".github/workflows/test.yml",
       "rule": "Runs 'uv run --frozen xenon --max-absolute E --max-modules B --max-average A --exclude apm_modules/*,skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py .' inside the pytest job. Thresholds are the empirically-measured ceiling of this repo's own real code as of issue #727 (worst non-excluded block rank E, worst module average B, repo-wide average A) -- a new F-rank block, or an average regression, fails CI. gitapex_check_skill_shape.py is excluded as pre-existing, explicitly tracked debt (CC 99/64, MI 0.00).",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "xenon",
-        "--max-absolute",
-        "E",
-        "--max-modules",
-        "B",
-        "--max-average",
-        "A",
-        "--exclude",
-        "apm_modules/*,skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py",
-        "."
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "xenon", "--max-absolute", "E", "--max-modules", "B", "--max-average", "A", "--exclude", "apm_modules/*,skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py", "."],
       "trigger": ".github/workflows/test.yml, pytest job, on every pull_request and push to main",
       "policy_refs": [],
       "cluster": "test-integrity",
@@ -2034,18 +1088,9 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "bash-pattern",
-          "ref": "xenon --max-absolute E --max-modules B --max-average A"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "bash-pattern", "ref": "xenon --max-absolute E --max-modules B --max-average A"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -2053,9 +1098,7 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_stale_retro_stub_autoclose.py",
       "rule": "Closes open retrospective-labelled issues whose body still carries gitapex_post_merge_retro.py's own unenriched-stub marker text and whose created_at is older than 48 hours, posting an explanatory comment on every close; never touches an already-enriched issue.",
-      "planes": [
-        "ci"
-      ],
+      "planes": ["ci"],
       "local_exclusion": "Closes stale stub issues through the GitHub API on a schedule -- an action, not a working-tree check.",
       "trigger": ".github/workflows/stale-retro-stub-autoclose.yml, daily cron 08:00 UTC + workflow_dispatch",
       "policy_refs": [],
@@ -2065,18 +1108,9 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "runtime-resolved-reference",
-          "ref": "GitHub API GET /repos/{owner}/{repo}/issues?labels=retrospective&state=open (list_open_retro_issues), filtered by is_unenriched_stub's literal marker \"Automated stub opened by the post-merge-auto-retro gate\" and is_stale's --stale-hours (default 48) elapsed-time check"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "stale-retro-stub-autoclose.yml:schedule"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "stale-retro-stub-autoclose.yml:workflow_dispatch"
-        }
+        {"kind": "runtime-resolved-reference", "ref": "GitHub API GET /repos/{owner}/{repo}/issues?labels=retrospective&state=open (list_open_retro_issues), filtered by is_unenriched_stub's literal marker \"Automated stub opened by the post-merge-auto-retro gate\" and is_stale's --stale-hours (default 48) elapsed-time check"},
+        {"kind": "workflow-event", "ref": "stale-retro-stub-autoclose.yml:schedule"},
+        {"kind": "workflow-event", "ref": "stale-retro-stub-autoclose.yml:workflow_dispatch"}
       ]
     },
     {
@@ -2084,9 +1118,7 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_gate_low_trust_workflow_hooks.py",
       "rule": "A PR diff touching .github/workflows/** or hooks/** from an author whose GitHub author_association is not OWNER/MEMBER/COLLABORATOR fails CI unless the workflow-hooks-reviewed label is present on the PR.",
-      "planes": [
-        "ci"
-      ],
+      "planes": ["ci"],
       "local_exclusion": "--author-association is required and comes from GitHub PR metadata that does not exist before the PR is opened.",
       "trigger": ".github/workflows/low-trust-workflow-hooks-gate.yml on pull_request",
       "policy_refs": [],
@@ -2096,26 +1128,11 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": ".github/workflows/**"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "hooks/**"
-        },
-        {
-          "kind": "runtime-resolved-reference",
-          "ref": "github.event.pull_request.author_association"
-        },
-        {
-          "kind": "runtime-resolved-reference",
-          "ref": "workflow-hooks-reviewed"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "low-trust-workflow-hooks-gate.yml:pull_request"
-        }
+        {"kind": "file-glob", "ref": ".github/workflows/**"},
+        {"kind": "file-glob", "ref": "hooks/**"},
+        {"kind": "runtime-resolved-reference", "ref": "github.event.pull_request.author_association"},
+        {"kind": "runtime-resolved-reference", "ref": "workflow-hooks-reviewed"},
+        {"kind": "workflow-event", "ref": "low-trust-workflow-hooks-gate.yml:pull_request"}
       ]
     },
     {
@@ -2123,17 +1140,8 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_gate_registry_wiring.py",
       "rule": "Every module-level tuple/list registry row under .github/scripts/*.py carrying a string-literal cli_flag keyword argument must have that flag's text appear in every .github/workflows/*.yml or *.yaml file whose own text mentions the registry's owning script by filename. Generalizes the single hand-written skill-audit-gate wiring test (issue #673/#674) into a self-discovering, stdlib-only scan: a second cli_flag registry landing anywhere under .github/scripts/ is protected with no new test to author. A script with a qualifying registry that no workflow mentions by name at all is out of scope by design (it may be invoked only from a PreToolUse hook), and a cli_flag value that is not a string literal cannot be extracted and is silently skipped -- both documented blind spots, not defects. Issue #797 adds the converse direction: a workflow run: step that passes a --flag-shaped token to a registry-bearing script matching neither a live registry cli_flag nor the script's own hardcoded add_argument flags is flagged as orphaned, scoped per run: block so an unrelated step's flags are never misattributed.",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_gate_registry_wiring.py"
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_registry_wiring.py"],
       "trigger": "tests/test_gitapex_gate_registry_wiring.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "self-governance",
@@ -2142,30 +1150,12 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": ".github/scripts/*.py"
-        },
-        {
-          "kind": "file-glob",
-          "ref": ".github/workflows/*.yml"
-        },
-        {
-          "kind": "file-glob",
-          "ref": ".github/workflows/*.yaml"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "cli_flag string literals in .github/scripts/*.py module-level tuple/list registries (find_registry_rows) <-> flag tokens present in .github/workflows/*.yml|*.yaml run: step text (find_unwired_rows registry->workflow direction, find_orphaned_flags converse workflow->registry direction)"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        }
+        {"kind": "file-glob", "ref": ".github/scripts/*.py"},
+        {"kind": "file-glob", "ref": ".github/workflows/*.yml"},
+        {"kind": "file-glob", "ref": ".github/workflows/*.yaml"},
+        {"kind": "cross-registry-consistency", "ref": "cli_flag string literals in .github/scripts/*.py module-level tuple/list registries (find_registry_rows) <-> flag tokens present in .github/workflows/*.yml|*.yaml run: step text (find_unwired_rows registry->workflow direction, find_orphaned_flags converse workflow->registry direction)"},
+        {"kind": "workflow-event", "ref": "test.yml:push"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"}
       ]
     },
     {
@@ -2173,17 +1163,8 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_scan_harden_checkout_pin_drift.py",
       "rule": "Every .github/workflows/*.yml/.yaml `uses: tvna/gitapex/.github/actions/harden-checkout@<sha>` reference must match .github/actions/harden-checkout/action.yml's own current (most-recent-commit) SHA, computed live via git log rather than a fixed literal.",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_scan_harden_checkout_pin_drift.py"
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_harden_checkout_pin_drift.py"],
       "trigger": "tests/test_gitapex_scan_harden_checkout_pin_drift.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "supply-chain",
@@ -2192,30 +1173,12 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": ".github/actions/harden-checkout/action.yml"
-        },
-        {
-          "kind": "file-glob",
-          "ref": ".github/workflows/*.yml"
-        },
-        {
-          "kind": "file-glob",
-          "ref": ".github/workflows/*.yaml"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": ".github/workflows/*.yml uses: pins <-> .github/actions/harden-checkout/action.yml"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "file-glob", "ref": ".github/actions/harden-checkout/action.yml"},
+        {"kind": "file-glob", "ref": ".github/workflows/*.yml"},
+        {"kind": "file-glob", "ref": ".github/workflows/*.yaml"},
+        {"kind": "cross-registry-consistency", "ref": ".github/workflows/*.yml uses: pins <-> .github/actions/harden-checkout/action.yml"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -2223,43 +1186,20 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_scan_runtime_compatibility_matrix.py",
       "rule": "Validates .gitapex/runtime-compatibility-matrix.json against .gitapex/runtime-compatibility-matrix.schema.json (JSON Schema draft 2020-12).",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_scan_runtime_compatibility_matrix.py"
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_runtime_compatibility_matrix.py"],
       "trigger": "tests/test_gitapex_scan_runtime_compatibility_matrix.py inside the pytest step of .github/workflows/test.yml",
-      "policy_refs": [
-        "runtime-compatibility-matrix"
-      ],
+      "policy_refs": ["runtime-compatibility-matrix"],
       "cluster": "runtime-compatibility",
       "tracking_issue": 828,
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": ".gitapex/runtime-compatibility-matrix.json"
-        },
-        {
-          "kind": "file-glob",
-          "ref": ".gitapex/runtime-compatibility-matrix.schema.json"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "file-glob", "ref": ".gitapex/runtime-compatibility-matrix.json"},
+        {"kind": "file-glob", "ref": ".gitapex/runtime-compatibility-matrix.schema.json"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -2267,43 +1207,20 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_gate_metadata_outcome_lines.py",
       "rule": "Every line-count claim under a skills/*/metadata/gitapex.yaml sidecar's spec.references[].outcome (a `lines` or `*_lines` key holding an `N->M` delta or a bare total) must match the real line count of the file it names -- read with `git show <rev>:<path>` when the claim cites a commit, otherwise from the checked-out tree when it is that file's most recent claim in the sidecar. A superseded, prose-scoped-to-a-past-commit, or unresolvable-target claim is reported as unverified rather than graded.",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_gate_metadata_outcome_lines.py"
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_metadata_outcome_lines.py"],
       "trigger": "tests/test_gitapex_gate_metadata_outcome_lines.py inside the pytest step of .github/workflows/test.yml (which checks out with fetch-depth: 0, so a cited commit resolves)",
-      "policy_refs": [
-        "skill-metadata-sidecar"
-      ],
+      "policy_refs": ["skill-metadata-sidecar"],
       "cluster": "self-governance",
       "tracking_issue": 877,
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": "skills/*/metadata/gitapex.yaml"
-        },
-        {
-          "kind": "runtime-resolved-reference",
-          "ref": "outcome.lines / outcome.<x>_lines claim value's target-file token + outcome.commit (or an inline commit-ish token) revision"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "file-glob", "ref": "skills/*/metadata/gitapex.yaml"},
+        {"kind": "runtime-resolved-reference", "ref": "outcome.lines / outcome.<x>_lines claim value's target-file token + outcome.commit (or an inline commit-ish token) revision"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -2311,63 +1228,25 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_scan_eval_suite_schema.py",
       "rule": "Every evals/*/eval.yaml and evals/*/tasks/*.yaml must validate against waza's own schemas vendored at VENDORED_WAZA_TAG (.gitapex/waza-eval.schema.json, .gitapex/waza-task.schema.json), extended only by the reviewed EXTENSION_KEYS allowlist -- so an approved repository-local key passes and a misspelling of it fails, where waza itself only warns and the local pydantic extra=\"allow\" consumers silently see nothing. Each allowlist row must name a consumer file that exists and still mentions the key, and must not shadow a property waza has since adopted natively. Each vendored file's sha256 must match its recorded digest; the opt-in --verify-upstream flag additionally compares both vendored files byte-for-byte against what microsoft/waza published at that tag. Its former flake.nix-pin cross-check (find_pin_drift) was removed by issue #1136 once flake.nix stopped pinning any waza version at all -- VENDORED_WAZA_TAG is now pure provenance metadata for the two vendored schema files, not a live flake.nix cross-reference.",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_scan_eval_suite_schema.py"
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_eval_suite_schema.py"],
       "trigger": "tests/test_gitapex_scan_eval_suite_schema.py inside the pytest step of .github/workflows/test.yml",
-      "policy_refs": [
-        "waza-suite-schemas"
-      ],
+      "policy_refs": ["waza-suite-schemas"],
       "cluster": "test-integrity",
       "tracking_issue": 862,
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": "evals/*/eval.yaml"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "evals/*/tasks/*.yaml"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "evals/*/tasks/*.yml"
-        },
-        {
-          "kind": "file-glob",
-          "ref": ".gitapex/waza-eval.schema.json"
-        },
-        {
-          "kind": "file-glob",
-          "ref": ".gitapex/waza-task.schema.json"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": ".gitapex/waza-eval.schema.json & .gitapex/waza-task.schema.json bytes <-> VENDORED_DIGESTS recorded sha256"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "EXTENSION_KEYS allowlist rows <-> named consumer files' real content"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "file-glob", "ref": "evals/*/eval.yaml"},
+        {"kind": "file-glob", "ref": "evals/*/tasks/*.yaml"},
+        {"kind": "file-glob", "ref": "evals/*/tasks/*.yml"},
+        {"kind": "file-glob", "ref": ".gitapex/waza-eval.schema.json"},
+        {"kind": "file-glob", "ref": ".gitapex/waza-task.schema.json"},
+        {"kind": "cross-registry-consistency", "ref": ".gitapex/waza-eval.schema.json & .gitapex/waza-task.schema.json bytes <-> VENDORED_DIGESTS recorded sha256"},
+        {"kind": "cross-registry-consistency", "ref": "EXTENSION_KEYS allowlist rows <-> named consumer files' real content"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -2375,55 +1254,23 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_scan_eval_results_schema.py",
       "rule": "Every evals/*/results/<date>-issue-<N>-<label>/ run record must pass two layers. Layer 1, this repository's own structural rules, applies with no exemption: the directory name matches that pattern; manifest.json exists; the root holds *.json plus an artifacts/ directory only, so raw prompts and model outputs never sit in the root; artifacts[] and the real files agree in BOTH directions over every file except manifest.json itself, so an orphan and a dangling reference each fail; the ten keys evals/evaluating-skill-quality/results/README.md declares are present; a known misspelling of a contract key (model for models, and four siblings) fails, which neither schema can catch since both deliberately permit additional keys; known_gaps is a non-empty array of non-empty strings; issue is a full URL, not a repository-local number; and commit is a 7-40 character hex object name, or an explicit null accompanied by a known_gaps entry naming it, so a missing value is recorded as missing and never reconstructed. Layer 2 validates a record declaring record_contract: gate-run in full against skills/scorer-gated-skill-edits/references/eval-run.schema.json, and each of its score_files[] targets against eval-scores.schema.json; a record declaring record_contract: pre-contract is exempt from layer 2 and must disclose that exemption in known_gaps; a record declaring neither fails, so the exemption cannot be reached by omission. A missing skill-owned schema is a hard error, never a silent pass. Shape only -- a record that misreports which model ran still passes.",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_scan_eval_results_schema.py"
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_eval_results_schema.py"],
       "trigger": "tests/test_gitapex_scan_eval_results_schema.py inside the pytest step of .github/workflows/test.yml",
-      "policy_refs": [
-        "eval-run-record-schemas"
-      ],
+      "policy_refs": ["eval-run-record-schemas"],
       "cluster": "test-integrity",
       "tracking_issue": 926,
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": "evals/*/results/*"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "evals/*/results/*/manifest.json"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "skills/scorer-gated-skill-edits/references/eval-run.schema.json"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "skills/scorer-gated-skill-edits/references/eval-scores.schema.json"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "evals/*/results/*/manifest.json artifacts[] <-> real files under that run directory"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "file-glob", "ref": "evals/*/results/*"},
+        {"kind": "file-glob", "ref": "evals/*/results/*/manifest.json"},
+        {"kind": "file-glob", "ref": "skills/scorer-gated-skill-edits/references/eval-run.schema.json"},
+        {"kind": "file-glob", "ref": "skills/scorer-gated-skill-edits/references/eval-scores.schema.json"},
+        {"kind": "cross-registry-consistency", "ref": "evals/*/results/*/manifest.json artifacts[] <-> real files under that run directory"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -2431,55 +1278,23 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_gate_eval_declared_model.py",
       "rule": "Every committed model identifier must appear in the reviewed APPROVED_MODELS allowlist, each row of which carries the evidence a human weighed when approving it. Three surfaces are graded: every evals/*/eval.yaml and every evals/*/tasks/*.yaml, walked recursively for any key named model or ending in _model (so waza's own judge_model and grader-level model overrides are covered the day they first appear, not the day someone remembers them); and .github/workflows/skill-eval-matrix.yml's models dispatch-input default plus every hardcoded *_MODEL env value it declares. An id RETIRED_MODELS records as undispatchable is rejected with that reason named, may never also appear in APPROVED_MODELS, and -- like an approved row -- may not carry a blank justification. An eval.yaml with no config.model, any model-named key whose value is not a string, an unreadable or non-UTF-8 file, and a zero-suite discovery each raise this gate's own typed error rather than passing. An operator-supplied (non-default) matrix dispatch input is deliberately not graded, so a live probe of an unapproved id stays possible; a hardcoded env value is not operator-supplied and gets no such exemption. The allowlist records what a human last approved, not what the copilot-sdk executor currently serves: no offline check can confirm dispatchability while COPILOT_BASE_URL / COPILOT_PROVIDER_BASE_URL are unprovisioned. Every field is graded as a declaration only -- a skill's evaluated-on provenance comes from a run record under that suite's own results/ directory, never from a declared model field.",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_gate_eval_declared_model.py"
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_eval_declared_model.py"],
       "trigger": "tests/test_gitapex_gate_eval_declared_model.py inside the pytest step of .github/workflows/test.yml",
-      "policy_refs": [
-        "eval-model-allowlist"
-      ],
+      "policy_refs": ["eval-model-allowlist"],
       "cluster": "test-integrity",
       "tracking_issue": 925,
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": "evals/*/eval.yaml"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "evals/*/tasks/*.yaml"
-        },
-        {
-          "kind": "file-glob",
-          "ref": ".github/workflows/skill-eval-matrix.yml"
-        },
-        {
-          "kind": "file-glob",
-          "ref": ".gitapex/eval-model-allowlist.yaml"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "declared model ids (evals/*/eval.yaml, evals/*/tasks/*.yaml, skill-eval-matrix.yml 'models' dispatch default & hardcoded *_MODEL env) <-> .gitapex/eval-model-allowlist.yaml approved_models/retired_models"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "file-glob", "ref": "evals/*/eval.yaml"},
+        {"kind": "file-glob", "ref": "evals/*/tasks/*.yaml"},
+        {"kind": "file-glob", "ref": ".github/workflows/skill-eval-matrix.yml"},
+        {"kind": "file-glob", "ref": ".gitapex/eval-model-allowlist.yaml"},
+        {"kind": "cross-registry-consistency", "ref": "declared model ids (evals/*/eval.yaml, evals/*/tasks/*.yaml, skill-eval-matrix.yml 'models' dispatch default & hardcoded *_MODEL env) <-> .gitapex/eval-model-allowlist.yaml approved_models/retired_models"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -2487,135 +1302,65 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_gate_ruleset_required_checks.py",
       "rule": "The committed .github/rulesets/main.json must validate against a pydantic model of GitHub's own ruleset request body -- extra=forbid at every level, a type-discriminated rule union, and every pull_request parameter required rather than defaulted, so a misspelled parameter, a wrong-typed count or an unknown rule type is a finding here instead of a silently-ignored field or a 422 discovered after a live dispatch. On top of that schema it must target ~DEFAULT_BRANCH with enforcement active, grant no bypass actors, block deletion and non-fast-forward, require pull requests with code-owner review and thread resolution, and allow only the merge methods this repository uses. Every context it names as a required status check must resolve to a job that actually reports under that exact name on every pull request targeting the default branch: the workflow's pull_request trigger may carry no paths/paths-ignore filter, its branches/branches-ignore filter must admit the default branch, its types filter must include opened and synchronize, and the backing job may be neither a matrix job (which reports as 'job (value)') nor a reusable-workflow call (which reports as 'caller / inner'). A context no job can ever report stays Pending forever, blocking the merge with no in-repository fix.",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_gate_ruleset_required_checks.py"
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_ruleset_required_checks.py"],
       "trigger": "tests/test_gitapex_gate_ruleset_required_checks.py inside the pytest step of .github/workflows/test.yml",
-      "policy_refs": [
-        "main-branch-ruleset"
-      ],
+      "policy_refs": ["main-branch-ruleset"],
       "cluster": "self-governance",
       "tracking_issue": 439,
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": ".github/rulesets/main.json"
-        },
-        {
-          "kind": "file-glob",
-          "ref": ".github/workflows/*.yml"
-        },
-        {
-          "kind": "file-glob",
-          "ref": ".github/workflows/*.yaml"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "rules[].parameters.required_status_checks[].context (main.json) <-> unconditional-pull_request job/check-run names in .github/workflows/*.yml"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "file-glob", "ref": ".github/rulesets/main.json"},
+        {"kind": "file-glob", "ref": ".github/workflows/*.yml"},
+        {"kind": "file-glob", "ref": ".github/workflows/*.yaml"},
+        {"kind": "cross-registry-consistency", "ref": "rules[].parameters.required_status_checks[].context (main.json) <-> unconditional-pull_request job/check-run names in .github/workflows/*.yml"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
       "id": "ruleset-sync-gate",
       "kind": "script",
-      "script": [
-        ".github/scripts/gitapex_scan_ruleset_drift.py",
-        ".github/scripts/gitapex_compute_ruleset_verify_scope.py"
-      ],
+      "script": [".github/scripts/gitapex_scan_ruleset_drift.py", ".github/scripts/gitapex_compute_ruleset_verify_scope.py"],
       "rule": "Every status-check context named in .github/rulesets/main.json as it exists on the pull request's BASE ref must also be required by the live main ruleset. One-directional by design: a context live but absent from the file is the shape of an in-flight removal and is left to the scheduled full scan. Exit 2 (no live ruleset yet, or no readable token) is surfaced as a warning, not a failure, because neither precondition is one a pull request can satisfy.",
-      "planes": [
-        "ci"
-      ],
+      "planes": ["ci"],
       "local_exclusion": "Reads the live GitHub Rulesets API with an Administration-scoped token and needs the pull request's own base SHA; neither exists on a working tree. gitapex_compute_ruleset_verify_scope.py itself is locally invocable (issue #1013) -- it only resolves which scope/source-of-truth this gate needs, not the live-API comparison itself.",
       "trigger": ".github/workflows/ruleset-verify.yml, the ruleset-scan job on pull_request (which resolves --scope required-checks from github.event_name)",
-      "policy_refs": [
-        "main-branch-ruleset"
-      ],
+      "policy_refs": ["main-branch-ruleset"],
       "cluster": "self-governance",
       "tracking_issue": 439,
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": ".github/rulesets/main.json"
-        },
-        {
-          "kind": "github-native",
-          "ref": "GET /repos/{owner}/{repo}/rulesets"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "required_check_contexts(sot) from .github/rulesets/main.json at the PR base SHA <-> required_check_contexts(live) from the live GitHub ruleset, one-directional"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "ruleset-verify.yml:pull_request"
-        }
+        {"kind": "file-glob", "ref": ".github/rulesets/main.json"},
+        {"kind": "github-native", "ref": "GET /repos/{owner}/{repo}/rulesets"},
+        {"kind": "cross-registry-consistency", "ref": "required_check_contexts(sot) from .github/rulesets/main.json at the PR base SHA <-> required_check_contexts(live) from the live GitHub ruleset, one-directional"},
+        {"kind": "workflow-event", "ref": "ruleset-verify.yml:pull_request"}
       ]
     },
     {
       "id": "ruleset-drift-scan",
       "kind": "script",
-      "script": [
-        ".github/scripts/gitapex_scan_ruleset_drift.py",
-        ".github/scripts/gitapex_compute_ruleset_verify_scope.py"
-      ],
+      "script": [".github/scripts/gitapex_scan_ruleset_drift.py", ".github/scripts/gitapex_compute_ruleset_verify_scope.py"],
       "rule": "The live main ruleset's projection (name/target/enforcement/conditions/bypass_actors/rules) must equal .github/rulesets/main.json's. Catches a change made directly in the Settings UI, which no pull request would ever show. Exit 2 (no live ruleset yet, or no readable token) is surfaced as a warning, not a failure, for the same reason as ruleset-sync-gate.",
-      "planes": [
-        "ci"
-      ],
+      "planes": ["ci"],
       "local_exclusion": "Reads the live GitHub Rulesets API with an Administration-scoped token; there is no offline equivalent of what GitHub currently enforces. gitapex_compute_ruleset_verify_scope.py itself is locally invocable (issue #1013) -- it only resolves which scope/source-of-truth this gate needs, not the live-API comparison itself.",
       "trigger": ".github/workflows/ruleset-verify.yml, the same ruleset-scan job on daily cron 09:00 UTC + workflow_dispatch (which resolves --scope full from github.event_name)",
-      "policy_refs": [
-        "main-branch-ruleset"
-      ],
+      "policy_refs": ["main-branch-ruleset"],
       "cluster": "self-governance",
       "tracking_issue": 439,
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": ".github/rulesets/main.json"
-        },
-        {
-          "kind": "github-native",
-          "ref": "GET /repos/{owner}/{repo}/rulesets"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "canonical_projection(sot) from .github/rulesets/main.json on main <-> canonical_projection(live) from the live GitHub ruleset, bidirectional"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "ruleset-verify.yml:schedule"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "ruleset-verify.yml:workflow_dispatch"
-        }
+        {"kind": "file-glob", "ref": ".github/rulesets/main.json"},
+        {"kind": "github-native", "ref": "GET /repos/{owner}/{repo}/rulesets"},
+        {"kind": "cross-registry-consistency", "ref": "canonical_projection(sot) from .github/rulesets/main.json on main <-> canonical_projection(live) from the live GitHub ruleset, bidirectional"},
+        {"kind": "workflow-event", "ref": "ruleset-verify.yml:schedule"},
+        {"kind": "workflow-event", "ref": "ruleset-verify.yml:workflow_dispatch"}
       ]
     },
     {
@@ -2623,17 +1368,8 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_scan_contract_axis_vocabulary_drift.py",
       "rule": "evaluating-deterministic-gate-quality's fifth cross-cutting axis (Contract role / input-domain closure) must keep its classification vocabulary: the three Design-by-Contract role labels and both input-domain-kind labels in references/cross-cutting-axes.md's own axis section, the non-exhaustive marker on the open half, the warning-only limit in that section AND in SKILL.md's pointer to it, the never-both rule citing dimension 15, a SKILL.md axis-count declaration matching the real number of '### Axis:' headings, and matching contractRole/inputDomainKind enums in references/output-schema.json. A missing or unreadable file, a duplicated or empty axis section, or malformed schema JSON fails closed rather than passing.",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_scan_contract_axis_vocabulary_drift.py"
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_contract_axis_vocabulary_drift.py"],
       "trigger": "tests/test_gitapex_scan_contract_axis_vocabulary_drift.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "self-governance",
@@ -2642,34 +1378,13 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": "skills/evaluating-deterministic-gate-quality/SKILL.md"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "skills/evaluating-deterministic-gate-quality/references/cross-cutting-axes.md"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "skills/evaluating-deterministic-gate-quality/references/output-schema.json"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "skills/evaluating-deterministic-gate-quality/references/security-level.md"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "SKILL.md axis-count/'the other N axes' declarations <-> references/cross-cutting-axes.md '## Axis: Contract role / input-domain closure' section vocabulary <-> references/output-schema.json contractRole/inputDomainKind enums <-> references/security-level.md 'narrower than all N' count"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "file-glob", "ref": "skills/evaluating-deterministic-gate-quality/SKILL.md"},
+        {"kind": "file-glob", "ref": "skills/evaluating-deterministic-gate-quality/references/cross-cutting-axes.md"},
+        {"kind": "file-glob", "ref": "skills/evaluating-deterministic-gate-quality/references/output-schema.json"},
+        {"kind": "file-glob", "ref": "skills/evaluating-deterministic-gate-quality/references/security-level.md"},
+        {"kind": "cross-registry-consistency", "ref": "SKILL.md axis-count/'the other N axes' declarations <-> references/cross-cutting-axes.md '## Axis: Contract role / input-domain closure' section vocabulary <-> references/output-schema.json contractRole/inputDomainKind enums <-> references/security-level.md 'narrower than all N' count"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -2680,33 +1395,9 @@
         ".github/workflows/contract-discipline-drift-gate.yml"
       ],
       "rule": "drafting-a-skill's own references/contract-structure.md restates evaluating-skill-quality/references/rubric.md's Contract discipline section (its Fault-attribution and Never-both rules) and must not silently diverge from it: both files must keep the literal terms 'Fault attribution' and 'Never both', contract-structure.md must keep citing the Contract discipline section by name, and a PR diff that edits rubric.md inside the Contract-discipline section's own line span must also touch contract-structure.md or carry a '<!-- contract-discipline-ack: <reason> -->' comment in the diff. A missing or unreadable file, a missing/duplicated/empty Contract-discipline heading, or an unparseable diff fails closed rather than passing.",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_scan_contract_discipline_drift.py",
-        "--diff",
-        "-"
-      ],
-      "local_stdin": [
-        "git",
-        "-c",
-        "core.quotePath=false",
-        "diff",
-        "-U0",
-        "--no-renames",
-        "--merge-base",
-        "origin/main",
-        "HEAD",
-        "--",
-        "skills/evaluating-skill-quality/references/rubric.md",
-        "skills/drafting-a-skill/references/contract-structure.md"
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_contract_discipline_drift.py", "--diff", "-"],
+      "local_stdin": ["git", "-c", "core.quotePath=false", "diff", "-U0", "--no-renames", "--merge-base", "origin/main", "HEAD", "--", "skills/evaluating-skill-quality/references/rubric.md", "skills/drafting-a-skill/references/contract-structure.md"],
       "trigger": ".github/workflows/contract-discipline-drift-gate.yml on pull_request (diff-awareness half), plus tests/test_gitapex_scan_contract_discipline_drift.py inside the pytest step of .github/workflows/test.yml (always-on content-lock half)",
       "policy_refs": [],
       "cluster": "self-governance",
@@ -2715,30 +1406,12 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": "skills/evaluating-skill-quality/references/rubric.md"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "skills/drafting-a-skill/references/contract-structure.md"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "rubric.md '## Contract discipline' section (Fault attribution, Never both) <-> drafting-a-skill/references/contract-structure.md's own restatement of the same two rules"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "contract-discipline-drift-gate.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "file-glob", "ref": "skills/evaluating-skill-quality/references/rubric.md"},
+        {"kind": "file-glob", "ref": "skills/drafting-a-skill/references/contract-structure.md"},
+        {"kind": "cross-registry-consistency", "ref": "rubric.md '## Contract discipline' section (Fault attribution, Never both) <-> drafting-a-skill/references/contract-structure.md's own restatement of the same two rules"},
+        {"kind": "workflow-event", "ref": "contract-discipline-drift-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -2746,17 +1419,8 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_scan_skill_quality_rubric_vocabulary_drift.py",
       "rule": "evaluating-skill-quality's own nine-dimension rubric and Mechanism-fit vocabulary must stay internally consistent: every bold dimension-count declaration in SKILL.md and references/rubric.md matches the real number of '## N. <Name>' headings in rubric.md, every literal 'dimensions 1-N' full-span range citation in either file matches that same count, rubric.md's nine dimension headings are present exactly once each, numbered 1 through the real count with no gap or duplicate, in ascending order, and non-empty, and SKILL.md's Mechanism fit section carries all nine named step-level check labels. A missing or unreadable file, zero dimension headings found, or a missing/duplicate/empty Mechanism-fit section fails closed rather than passing.",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_scan_skill_quality_rubric_vocabulary_drift.py"
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_skill_quality_rubric_vocabulary_drift.py"],
       "trigger": "tests/test_gitapex_scan_skill_quality_rubric_vocabulary_drift.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "self-governance",
@@ -2765,26 +1429,11 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": "skills/evaluating-skill-quality/SKILL.md"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "skills/evaluating-skill-quality/references/rubric.md"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "SKILL.md dimension-count/'dimensions 1-N' range declarations + Mechanism-fit step labels <-> references/rubric.md '## N. <Name>' dimension headings (numbering/order/non-empty)"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "file-glob", "ref": "skills/evaluating-skill-quality/SKILL.md"},
+        {"kind": "file-glob", "ref": "skills/evaluating-skill-quality/references/rubric.md"},
+        {"kind": "cross-registry-consistency", "ref": "SKILL.md dimension-count/'dimensions 1-N' range declarations + Mechanism-fit step labels <-> references/rubric.md '## N. <Name>' dimension headings (numbering/order/non-empty)"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -2792,17 +1441,8 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_scan_dimensions_numbering_drift.py",
       "rule": "evaluating-deterministic-gate-quality's references/dimensions.md carries one continuous ordered-list numbering across two lanes (deterministic-shape checks 1-6, probabilistic-maturity dimensions 7-N): every item must stay sequential with no gap, duplicate, or out-of-order entry; both '**<lane>** (X-Y)' range declarations, output-schema.json's findings[].dimensionId.maximum, and that same schema's findings-array description's 'dimensions.md, 1-N' span must all match the real item count; and every 'dimension N' / 'shape check N' cross-reference in dimensions.md or SKILL.md must name a number that actually exists in its own lane. A missing, duplicated, or empty section heading, zero items in either lane, or malformed schema JSON fails closed rather than passing.",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_scan_dimensions_numbering_drift.py"
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_dimensions_numbering_drift.py"],
       "trigger": "tests/test_gitapex_scan_dimensions_numbering_drift.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "self-governance",
@@ -2811,50 +1451,21 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": "skills/evaluating-deterministic-gate-quality/references/dimensions.md"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "skills/evaluating-deterministic-gate-quality/SKILL.md"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "skills/evaluating-deterministic-gate-quality/references/output-schema.json"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "references/dimensions.md two-lane ordinal numbering ('## Deterministic-shape checks' 1-S, '## Probabilistic-maturity dimensions' S+1-S+D) + its own range declarations <-> SKILL.md 'dimension N'/'shape check N' cross-references <-> references/output-schema.json findings[].dimensionId.maximum + 'dimensions.md, 1-N' description span"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "file-glob", "ref": "skills/evaluating-deterministic-gate-quality/references/dimensions.md"},
+        {"kind": "file-glob", "ref": "skills/evaluating-deterministic-gate-quality/SKILL.md"},
+        {"kind": "file-glob", "ref": "skills/evaluating-deterministic-gate-quality/references/output-schema.json"},
+        {"kind": "cross-registry-consistency", "ref": "references/dimensions.md two-lane ordinal numbering ('## Deterministic-shape checks' 1-S, '## Probabilistic-maturity dimensions' S+1-S+D) + its own range declarations <-> SKILL.md 'dimension N'/'shape check N' cross-references <-> references/output-schema.json findings[].dimensionId.maximum + 'dimensions.md, 1-N' description span"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
       "id": "behind-base",
       "kind": "script",
-      "script": [
-        ".github/scripts/gitapex_gate_behind_base.py",
-        ".github/scripts/_gitapex_base_ref.py"
-      ],
+      "script": [".github/scripts/gitapex_gate_behind_base.py", ".github/scripts/_gitapex_base_ref.py"],
       "rule": "Fetches origin/main and fails when the current branch's HEAD is behind it, per the behind count from 'git rev-list --left-right --count origin/main...HEAD'. Exits 2, distinct from the exit-1 behind-base FAIL, when the fetch or the comparison itself cannot be trusted (offline, unreachable remote, no common ancestor) -- never falls back to comparing against a possibly-stale local ref.",
-      "planes": [
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_gate_behind_base.py"
-      ],
+      "planes": ["local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_behind_base.py"],
       "trigger": "tests/test_gitapex_gate_behind_base.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "github-operations",
@@ -2863,18 +1474,9 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "runtime-resolved-reference",
-          "ref": "origin/main...HEAD"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "runtime-resolved-reference", "ref": "origin/main...HEAD"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -2882,17 +1484,8 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_gate_bare_python3_invocation.py",
       "rule": "Every .github/scripts/*.py invocation in any .github/workflows/*.yml or *.yaml run: step must go through uv run; a bare python3 .github/scripts/*.py invocation fails. Parses each workflow's YAML and scans only run: step text (not arbitrary comment lines elsewhere in the file). Exits 1, never a silent pass, when the workflow directory is missing, no workflow files are found, a file cannot be decoded, or a file's YAML does not parse to the expected jobs: {...: {steps: [...]}} shape.",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_gate_bare_python3_invocation.py"
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_bare_python3_invocation.py"],
       "trigger": ".github/workflows/bare-python3-invocation-gate.yml on pull_request/workflow_dispatch, plus tests/test_gitapex_gate_bare_python3_invocation.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "supply-chain",
@@ -2901,34 +1494,13 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": ".github/workflows/*.yml"
-        },
-        {
-          "kind": "file-glob",
-          "ref": ".github/workflows/*.yaml"
-        },
-        {
-          "kind": "bash-pattern",
-          "ref": "python3 .github/scripts/*.py"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "bare-python3-invocation-gate.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "bare-python3-invocation-gate.yml:workflow_dispatch"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "file-glob", "ref": ".github/workflows/*.yml"},
+        {"kind": "file-glob", "ref": ".github/workflows/*.yaml"},
+        {"kind": "bash-pattern", "ref": "python3 .github/scripts/*.py"},
+        {"kind": "workflow-event", "ref": "bare-python3-invocation-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "bare-python3-invocation-gate.yml:workflow_dispatch"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -2941,27 +1513,9 @@
         ".github/workflows/stdlib-only-claim-drift-gate.yml"
       ],
       "rule": "A diff adding a top-level third-party import to a .github/scripts/*.py or evals/scripts/*.py file must not leave a stale 'standard library only'/'stdlib-only' claim, or a bare python3 <file>.py invocation example, in that file's own content, in any other script that imports it directly, or in any .github/workflows/*.yml file referencing it by name (issue #1047, #1049). A negated claim ('no longer stdlib-only') or an accurate disclosure with a nearby 'uv run' mention is not flagged. Deliberately not exhaustive -- a paraphrased or reformatted claim can still false-negative; see the script's own docstring.",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_gate_stdlib_only_claim_drift.py"
-      ],
-      "local_stdin": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_run_base_diff.py",
-        "--",
-        ".github/scripts/*.py",
-        "evals/scripts/*.py"
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_stdlib_only_claim_drift.py"],
+      "local_stdin": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_run_base_diff.py", "--", ".github/scripts/*.py", "evals/scripts/*.py"],
       "trigger": ".github/workflows/stdlib-only-claim-drift-gate.yml on pull_request, plus tests/test_gitapex_gate_stdlib_only_claim_drift.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "test-integrity",
@@ -2970,30 +1524,12 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": ".github/scripts/*.py"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "evals/scripts/*.py"
-        },
-        {
-          "kind": "file-glob",
-          "ref": ".github/workflows/*.yml"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "stdlib-only-claim-drift-gate.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "file-glob", "ref": ".github/scripts/*.py"},
+        {"kind": "file-glob", "ref": "evals/scripts/*.py"},
+        {"kind": "file-glob", "ref": ".github/workflows/*.yml"},
+        {"kind": "workflow-event", "ref": "stdlib-only-claim-drift-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -3006,10 +1542,7 @@
         ".github/workflows/pr-title-convention-gate.yml"
       ],
       "rule": "A pull request's title must match Conventional Commits format: type(scope)!: description, type in feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert, scope and the breaking-change '!' optional, description 1-72 characters. The PreToolUse hook denies a create_pull_request call outright, and denies an update_pull_request call only when it carries a title field; the CI twin re-checks on pull_request:[opened, edited, synchronize] as a required status check, covering a PR opened or retitled via the GitHub web UI, the gh CLI, or another bot. Fails closed (denies) rather than allowing the call through when jq is missing from PATH, the payload or tool_input is not a JSON object, or tool_name is present but not a string.",
-      "planes": [
-        "pretooluse",
-        "ci"
-      ],
+      "planes": ["pretooluse", "ci"],
       "local_exclusion": "Grades a PR title against live GitHub PR state; no title exists locally before the PR is opened.",
       "trigger": "PreToolUse matcher mcp__github__create_pull_request and mcp__github__update_pull_request (hooks/hooks.json); .github/workflows/pr-title-convention-gate.yml on pull_request:[opened, edited, synchronize], registered as a required status check in .github/rulesets/main.json",
       "policy_refs": [],
@@ -3019,22 +1552,10 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "mcp-tool",
-          "ref": "mcp__github__create_pull_request"
-        },
-        {
-          "kind": "mcp-tool",
-          "ref": "mcp__github__update_pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": ".github/workflows/pr-title-convention-gate.yml:pull_request"
-        },
-        {
-          "kind": "github-native",
-          "ref": ".github/rulesets/main.json:required_status_checks[context=pr-title-convention]"
-        }
+        {"kind": "mcp-tool", "ref": "mcp__github__create_pull_request"},
+        {"kind": "mcp-tool", "ref": "mcp__github__update_pull_request"},
+        {"kind": "workflow-event", "ref": ".github/workflows/pr-title-convention-gate.yml:pull_request"},
+        {"kind": "github-native", "ref": ".github/rulesets/main.json:required_status_checks[context=pr-title-convention]"}
       ]
     },
     {
@@ -3044,9 +1565,7 @@
         ".github/scripts/gitapex_check_copilot_endpoint_configured.py"
       ],
       "rule": "DEPRECATED (issue #1134): fails loudly unless COPILOT_BASE_URL or COPILOT_PROVIDER_BASE_URL resolves (waza's own envFirst() precedence) to a well-formed absolute URL (scheme + host, matching waza's own providerHost()) before a copilot-sdk-executor run; never prints the resolved value. Neither remaining real call site (skill-eval-gate.yml, skill-eval-matrix.yml's eval-matrix job) invokes this script anymore -- both switched to evals/scripts/gitapex_run_eval_suite.py, preflighted instead by that job's own inline ANTHROPIC_API_KEY check (see the 'skill-eval-gate' gate entry above). skill-eval-matrix.yml's eval-matrix-hf-gemma4 job never called this script either -- before issue #1259 it ran nix run .#waza -- run directly behind its own separate, inline HF_INFERENCE_ENDPOINT_URL/HF_API_TOKEN preflight; since #1259 it instead maps those same two repository secrets onto HTTP_EXECUTOR_BASE_URL/HTTP_EXECUTOR_API_KEY and preflights those before calling evals/scripts/gitapex_run_eval_suite.py --executor http (see evals/scripts/gitapex_run_http_executor.py's own HttpExecutorConfig validators for the base_url/api_key well-formedness checks that module mirrors, not imports, from this script's own _CopilotEndpointURL). The script and its test are kept, unmodified, as dead code pending an explicit decision to delete them -- not deleted in this same change, to keep that decision reversible and separately reviewable.",
-      "planes": [
-        "ci"
-      ],
+      "planes": ["ci"],
       "local_exclusion": "Grades GitHub Actions repository secrets (COPILOT_BASE_URL / COPILOT_PROVIDER_BASE_URL); a local working tree has no equivalent secret to check, and failing every unrelated local pre-push on their absence would be a false-alarm regression.",
       "trigger": "No longer triggered from any workflow (issue #1134) -- retained only via tests/test_gitapex_check_copilot_endpoint_configured.py inside the pytest step of .github/workflows/test.yml, which exercises the script's own pure functions directly, not through either former call site.",
       "policy_refs": [],
@@ -3056,14 +1575,8 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -3071,16 +1584,8 @@
       "kind": "script",
       "script": ".github/scripts/gitapex_gate_real_checkout_git_write.py",
       "rule": "No pytest-discovered test file may construct a REPO_ROOT-rooted path expression that continues into a literal \".git\" path segment, unless the flagged line carries an inline \"# real-checkout-git-write: WAIVED: <reason>\" comment with a non-empty reason. Catches a test writing into this repository's own real checkout's .git directory (issue #991) without needing to distinguish a read from a write -- the waiver is the escape hatch for a genuine read-only need.",
-      "planes": [
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_gate_real_checkout_git_write.py"
-      ],
+      "planes": ["local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_real_checkout_git_write.py"],
       "trigger": "tests/test_gitapex_gate_real_checkout_git_write.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "repo-hygiene",
@@ -3089,30 +1594,12 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": "tests/**/test_*.py"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "tests/**/*_test.py"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "tests/**/conftest.py"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "pyproject.toml"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "file-glob", "ref": "tests/**/test_*.py"},
+        {"kind": "file-glob", "ref": "tests/**/*_test.py"},
+        {"kind": "file-glob", "ref": "tests/**/conftest.py"},
+        {"kind": "file-glob", "ref": "pyproject.toml"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -3123,51 +1610,22 @@
         ".github/workflows/dependency-allowlist-gate.yml"
       ],
       "rule": "Every skills/*/metadata/gitapex.yaml's spec.executionRequirements.packages.<ecosystem> entries, PEP-503-normalized, must be in this gate's own hardcoded ALLOWED_PACKAGES allowlist (currently pip: pyyaml/jsonschema/pydantic, matching ADR 0001/issue #1115). A skill declaring no packages is a no-op.",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_gate_dependency_allowlist.py"
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_dependency_allowlist.py"],
       "trigger": ".github/workflows/dependency-allowlist-gate.yml on pull_request, paths: skills/**/metadata/gitapex.yaml, .github/scripts/gitapex_gate_dependency_allowlist.py, .github/workflows/dependency-allowlist-gate.yml; also re-checked unconditionally by tests/test_gitapex_gate_dependency_allowlist.py's own real-repository test inside the required pytest step of .github/workflows/test.yml",
-      "policy_refs": [
-        "skill-metadata-sidecar"
-      ],
+      "policy_refs": ["skill-metadata-sidecar"],
       "cluster": "skill-lifecycle",
       "tracking_issue": 1141,
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": "skills/*/metadata/gitapex.yaml"
-        },
-        {
-          "kind": "file-glob",
-          "ref": ".github/scripts/gitapex_gate_dependency_allowlist.py"
-        },
-        {
-          "kind": "file-glob",
-          "ref": ".github/workflows/dependency-allowlist-gate.yml"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "dependency-allowlist-gate.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "file-glob", "ref": "skills/*/metadata/gitapex.yaml"},
+        {"kind": "file-glob", "ref": ".github/scripts/gitapex_gate_dependency_allowlist.py"},
+        {"kind": "file-glob", "ref": ".github/workflows/dependency-allowlist-gate.yml"},
+        {"kind": "workflow-event", "ref": "dependency-allowlist-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
@@ -3180,26 +1638,9 @@
         ".github/workflows/detection-logic-property-coverage-gate.yml"
       ],
       "rule": "A regex call (a .compile() on a bare name the graded file's own imports bind to the re module, including an 'import re as <alias>' alias, or a receiver-agnostic .match()/.search()/.fullmatch()), a path-resolution call (receiver-agnostic .resolve()/.is_symlink()/.relative_to(), or os.path.realpath()/os.path.abspath() matched on the call's final two attribute segments), or a string-comparison allowlist/denylist construct (receiver-agnostic .startswith()/.endswith(), an in/not in comparison against an inline list/tuple/set literal, or a frozenset()/set() call over one), newly added by a PR diff inside skills/*/scripts/gitapex_check_*.py, .github/scripts/gitapex_gate_*.py or hooks/gitapex_check_*.py (test_*.py and conftest.py excluded) must be covered by a co-located tests/test_<source-stem>_properties.py that imports the source module and defines an @given(...) property test whose own body references the trigger's enclosing function name, or any @given test in the file for a module-level trigger. Scope is the diff, not the repository. An inline '# detection-logic-property-coverage: WAIVED: <reason>' comment waives findings on that exact line. Exits 2 rather than pass silently on a malformed diff (an unparseable @@ hunk header, a post-image path that is neither /dev/null nor b/-prefixed, or a '+++ ' post-image header outside a hunk with no '--- ' source header before it) or an in-scope file that cannot be read or parsed. See the script's own module docstring for the disclosed known misses and over-reports.",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_gate_detection_logic_property_coverage.py"
-      ],
-      "local_stdin": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        ".github/scripts/gitapex_run_base_diff.py",
-        "--",
-        "*.py"
-      ],
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_detection_logic_property_coverage.py"],
+      "local_stdin": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_run_base_diff.py", "--", "*.py"],
       "trigger": ".github/workflows/detection-logic-property-coverage-gate.yml on pull_request, plus tests/test_gitapex_gate_detection_logic_property_coverage.py and tests/test_gitapex_gate_detection_logic_property_coverage_properties.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "test-integrity",
@@ -3208,99 +1649,44 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": "skills/*/scripts/gitapex_check_*.py"
-        },
-        {
-          "kind": "file-glob",
-          "ref": ".github/scripts/gitapex_gate_*.py"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "hooks/gitapex_check_*.py"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "tests/test_*_properties.py"
-        },
-        {
-          "kind": "cross-registry-consistency",
-          "ref": "new regex/path-resolution/string-comparison call sites in skills/*/scripts/gitapex_check_*.py, .github/scripts/gitapex_gate_*.py, hooks/gitapex_check_*.py <-> co-located tests/test_<stem>_properties.py @given coverage"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "detection-logic-property-coverage-gate.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "test.yml:push"
-        }
+        {"kind": "file-glob", "ref": "skills/*/scripts/gitapex_check_*.py"},
+        {"kind": "file-glob", "ref": ".github/scripts/gitapex_gate_*.py"},
+        {"kind": "file-glob", "ref": "hooks/gitapex_check_*.py"},
+        {"kind": "file-glob", "ref": "tests/test_*_properties.py"},
+        {"kind": "cross-registry-consistency", "ref": "new regex/path-resolution/string-comparison call sites in skills/*/scripts/gitapex_check_*.py, .github/scripts/gitapex_gate_*.py, hooks/gitapex_check_*.py <-> co-located tests/test_<stem>_properties.py @given coverage"},
+        {"kind": "workflow-event", "ref": "detection-logic-property-coverage-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     },
     {
       "id": "betterleaks-merge-gate",
       "kind": "script",
-      "script": [
-        ".github/scripts/gitapex_run_betterleaks.py",
-        ".github/workflows/betterleaks-merge-gate.yml"
-      ],
+      "script": [".github/scripts/gitapex_run_betterleaks.py", ".github/workflows/betterleaks-merge-gate.yml"],
       "rule": "Every pull_request runs a full-history betterleaks secret scan (uv run --frozen python3 .github/scripts/gitapex_run_betterleaks.py --mode history, against the flake.nix-pinned 1.6.1 binary built via `nix build .#betterleaks` and the committed .betterleaks.toml) -- closing the --no-verify bypass left open by the pre-commit/pre-push hooks alone (issue #890). Registered as a required status check in .github/rulesets/main.json; a failing run only blocks merge once a human dispatches apply-rulesets.yml (a separate, reviewer-gated step -- see that workflow and docs/runbooks/rulesets.md) to apply that file's committed source of truth to the live GitHub ruleset.",
-      "planes": [
-        "ci"
-      ],
+      "planes": ["ci"],
       "local_exclusion": "Duplicates, at CI scope, the same full-history scan the pre-push betterleaks-history hook in .pre-commit-config.yaml already runs locally; this entry registers issue #894's separate merge-path enforcement (the local hook is bypassable with --no-verify), not a third local invocation of the same script.",
       "trigger": ".github/workflows/betterleaks-merge-gate.yml on pull_request (no paths filter, so a required check can never be left Pending) and workflow_dispatch",
-      "policy_refs": [
-        "main-branch-ruleset"
-      ],
+      "policy_refs": ["main-branch-ruleset"],
       "cluster": "secret-scanning",
       "tracking_issue": 894,
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "workflow-event",
-          "ref": "betterleaks-merge-gate.yml:pull_request"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "betterleaks-merge-gate.yml:workflow_dispatch"
-        },
-        {
-          "kind": "file-glob",
-          "ref": ".betterleaks.toml"
-        },
-        {
-          "kind": "github-native",
-          "ref": "required_status_checks context \"betterleaks\" (repository ruleset on the default branch)"
-        }
+        {"kind": "workflow-event", "ref": "betterleaks-merge-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "betterleaks-merge-gate.yml:workflow_dispatch"},
+        {"kind": "file-glob", "ref": ".betterleaks.toml"},
+        {"kind": "github-native", "ref": "required_status_checks context \"betterleaks\" (repository ruleset on the default branch)"}
       ]
     },
     {
       "id": "split-disclosure",
       "kind": "script",
-      "script": [
-        "evals/scripts/gitapex_check_split_disclosure.py",
-        ".github/workflows/split-disclosure-gate.yml"
-      ],
-      "rule": "A commit range that touches an evals/evaluating-skill-quality/tasks/*.yaml fixture's output_contains/output_not_contains assertions must name that fixture with a possessive citation (`` `NAME.yaml`'s `` -- not a bare mention, which a routine per-iteration scoring table already provides for every touched fixture regardless of whether its assertions changed) somewhere in the same range's own added lines to evals/evaluating-skill-quality/split.md. Issue #218 Repair 1 / #1399: PR #216's own commit 4b9edfa39e20bc1b8a16651d1fc6e7db778c8909 loosened edge.yaml's assertions and added its own split.md disclosure paragraph in the same commit, but that paragraph omitted one of the two changes -- caught only by a manually requested adversarial-verification pass, not mechanically. A deleted fixture file is out of scope. See the script's own docstring for the full design rationale, including why a bare-mention design was tried and rejected.",
-      "planes": [
-        "ci",
-        "local"
-      ],
-      "local_invocation": [
-        "uv",
-        "run",
-        "--frozen",
-        "python3",
-        "evals/scripts/gitapex_check_split_disclosure.py"
-      ],
+      "script": ["evals/scripts/gitapex_check_split_disclosure.py", ".github/workflows/split-disclosure-gate.yml"],
+      "rule": "A commit range that touches an evals/evaluating-skill-quality/tasks/*.yaml fixture's output_contains/output_not_contains assertions must name that fixture with a possessive citation (`NAME.yaml`'s -- not a bare mention, which a routine per-iteration scoring table already provides for every touched fixture regardless of whether its assertions changed) somewhere in the same range's own added lines to evals/evaluating-skill-quality/split.md. Issue #218 Repair 1 / #1399: PR #216's own commit 4b9edfa39e20bc1b8a16651d1fc6e7db778c8909 loosened edge.yaml's assertions and added its own split.md disclosure paragraph in the same commit, but that paragraph omitted one of the two changes -- caught only by a manually requested adversarial-verification pass, not mechanically. A deleted fixture file is out of scope. See the script's own docstring for the full design rationale, including why a bare-mention design was tried and rejected.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", "evals/scripts/gitapex_check_split_disclosure.py"],
       "trigger": ".github/workflows/split-disclosure-gate.yml on pull_request, plus tests/test_gitapex_check_split_disclosure.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "skill-lifecycle",
@@ -3309,18 +1695,9 @@
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
       "target": [
-        {
-          "kind": "file-glob",
-          "ref": "evals/evaluating-skill-quality/tasks/*.yaml"
-        },
-        {
-          "kind": "file-glob",
-          "ref": "evals/evaluating-skill-quality/split.md"
-        },
-        {
-          "kind": "workflow-event",
-          "ref": "split-disclosure-gate.yml:pull_request"
-        }
+        {"kind": "file-glob", "ref": "evals/evaluating-skill-quality/tasks/*.yaml"},
+        {"kind": "file-glob", "ref": "evals/evaluating-skill-quality/split.md"},
+        {"kind": "workflow-event", "ref": "split-disclosure-gate.yml:pull_request"}
       ]
     }
   ],
