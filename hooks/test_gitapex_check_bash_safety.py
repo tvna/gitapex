@@ -1991,6 +1991,60 @@ def test_restore_denied_when_a_dynamic_pushd_relocator_is_reassigned_after_use(t
     assert "working tree is at risk" in payload["systemMessage"]
 
 
+def test_checkout_denied_when_a_dynamic_cd_relocator_is_reassigned_across_a_command_substitution(
+    tmp_path: Path,
+) -> None:
+    """CRITICAL bypass regression pin (round-21 independent review, issue
+    #1375). Round 20's own cd-biased fix was scoped to the current
+    `_classify_tokens` invocation's own top-level segments only, which
+    missed a reassignment straddling a command substitution's OWN
+    boundary -- the relocator `$X` is used entirely WITHIN the
+    substitution, but the ambiguity lives in the OUTER token stream.
+    Live-verified before this fix: `X=cd; y=$($X sub; git checkout --
+    dirty.py); X=somethingelse` was wrongly allowed outright through the
+    real wrapper. The deny here is classifier-level (a token-shape fact,
+    no live git call), so no such file needs to actually exist for this
+    regression pin."""
+    repo_dir = tmp_path / "repo"
+    _init_repo_with_committed_file(repo_dir)
+    result = run("X=cd; y=$($X sub; git checkout -- dirty.py); X=somethingelse", payload_cwd=str(repo_dir))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+    payload = json.loads(result.stderr)
+    assert "working tree is at risk" in payload["systemMessage"]
+
+
+def test_checkout_denied_when_a_path_argument_is_reassigned_after_use(tmp_path: Path) -> None:
+    """CRITICAL bypass regression pin (round-21 independent review, issue
+    #1375). `_resolve_path_tokens`'s own dynamic-path-argument resolution
+    is a THIRD consumer of the order-blind `_assigned_raw_values`
+    collapse, with no bias mechanism at all before this fix -- the most
+    severely reachable of the three reassignment-ambiguity bugs found in
+    this feature (rounds 19-21): no command substitution, no cd/pushd/
+    popd, not even multiple statements beyond the reassignment itself are
+    required. Live-verified before this fix: `F=dirty.py; git checkout --
+    $F; F=other.py` resolved `checkout_restore_paths` to `('other.py',)`
+    alone -- a CONFIDENT, WRONG claim, since `$F` genuinely was
+    `dirty.py` at its actual point of use -- so the real wrapper's own
+    live `git diff --quiet` check ran against the harmless `other.py`
+    and never checked the genuinely dirty `dirty.py` at all, wrongly
+    allowing the command outright."""
+    repo_dir = tmp_path / "repo"
+    file_path = _init_repo_with_committed_file(repo_dir, filename="dirty.py")
+    file_path.write_text("UNCOMMITTED WORK -- must not be discarded\n")
+    result = run("F=dirty.py; git checkout -- $F; F=other.py", payload_cwd=str(repo_dir))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+
+
+def test_restore_denied_when_a_path_argument_is_reassigned_after_use(tmp_path: Path) -> None:
+    """Companion to the checkout pin above, for `git restore` -- the
+    round-21 finding was confirmed live for both subcommands."""
+    repo_dir = tmp_path / "repo"
+    file_path = _init_repo_with_committed_file(repo_dir, filename="dirty.py")
+    file_path.write_text("UNCOMMITTED WORK -- must not be discarded\n")
+    result = run("F=dirty.py; git restore $F; F=other.py", payload_cwd=str(repo_dir))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+
+
 def test_checkout_denied_in_a_real_merge_conflict_names_the_conflict_remedy(tmp_path: Path) -> None:
     """A real merge conflict (issue #1375's own Acceptance Criteria Map):
     the deny message names a remedy that actually works mid-conflict

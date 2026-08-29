@@ -851,6 +851,8 @@ def _rule_command_substitution_content(
     name_to_value: dict[str, str],
     name_to_raw_value: dict[str, str],
     name_to_raw_value_git_biased: dict[str, str],
+    name_to_raw_value_cd_biased: dict[str, str],
+    name_to_raw_value_history: dict[str, tuple[str, ...]],
 ) -> tuple[str | None, bool, tuple[str, ...]]:
     """Recursively classify each `$(...)` command-substitution span's OWN
     inner content through this module's full rule set -- bash genuinely
@@ -960,7 +962,12 @@ def _rule_command_substitution_content(
     elsewhere in the OUTER command -- e.g. `G=git; x=$($G checkout --
     dirty.py); G=notgit` -- is still recognized inside the substitution's
     own inner content; see `_find_git_checkout_restore`'s own docstring
-    for what this parameter means and the live bypass it closes."""
+    for what this parameter means and the live bypass it closes.
+    NAME_TO_RAW_VALUE_CD_BIASED and NAME_TO_RAW_VALUE_HISTORY (round 21,
+    issue #1375) are threaded the same way, for the analogous cd/pushd/
+    popd-relocation and path-argument reassignment bypasses -- see
+    `_assigned_raw_values_biased_toward`'s own second CRITICAL-bug
+    paragraph and `_assigned_raw_value_history`'s own docstring."""
     is_git_push = False
     checkout_restore_paths: list[str] = []
     i = 0
@@ -988,7 +995,14 @@ def _rule_command_substitution_content(
             # check would only change how often an empty-content recursive
             # `classify()` call is skipped, never a real verdict.
             if inner_text.strip():
-                inner_verdict = classify(inner_text, name_to_value, name_to_raw_value, name_to_raw_value_git_biased)
+                inner_verdict = classify(
+                    inner_text,
+                    name_to_value,
+                    name_to_raw_value,
+                    name_to_raw_value_git_biased,
+                    name_to_raw_value_cd_biased,
+                    name_to_raw_value_history,
+                )
                 is_git_push = is_git_push or inner_verdict.is_git_push
                 checkout_restore_paths.extend(inner_verdict.checkout_restore_paths)
                 if inner_verdict.deny:
@@ -1003,7 +1017,12 @@ def _rule_command_substitution_content(
             inner_tokens = tokens[i + 2 : span_end - 1]
             if inner_tokens:
                 inner_verdict = _classify_tokens(
-                    inner_tokens, name_to_value, name_to_raw_value, name_to_raw_value_git_biased
+                    inner_tokens,
+                    name_to_value,
+                    name_to_raw_value,
+                    name_to_raw_value_git_biased,
+                    name_to_raw_value_cd_biased,
+                    name_to_raw_value_history,
                 )
                 is_git_push = is_git_push or inner_verdict.is_git_push
                 checkout_restore_paths.extend(inner_verdict.checkout_restore_paths)
@@ -1693,17 +1712,35 @@ def _assigned_raw_values_biased_toward(tokens: list[str], literals: frozenset[st
     check now also tries `_dynamic_word_may_resolve_to_a_cwd_relocator`
     against a `raw_assigned_cd_biased` reading -- `_assigned_raw_values_
     biased_toward(tokens, _CWD_RELOCATING_COMMANDS)` -- as a fallback
-    when the ordinary reading declines. Scoped to the current
-    `_classify_tokens` invocation's own top-level segments only (merged
-    with plain OUTER_RAW, not a THIRD `..._cd_biased` outer-scope
-    parameter threaded through the whole recursive chain the way round
-    19's git-biased fix was): a `cd`/`pushd`/`popd` occurring INSIDE a
-    `$(...)`/array-literal span runs in an isolated subshell and never
-    relocates the OUTER shell's own cwd at real bash runtime regardless
-    of any outer reassignment, so there is no equivalent live bypass to
-    close by threading further -- unlike a `git` token, whose own
-    resolved identity is unaffected by which shell (sub- or otherwise)
-    evaluates it."""
+    when the ordinary reading declines.
+
+    Round 20's own original version scoped RAW_ASSIGNED_CD_BIASED to the
+    current `_classify_tokens` invocation's own top-level segments only
+    (merged with plain OUTER_RAW, not threaded as a fourth outer-scope
+    parameter through the whole recursive chain the way round 19's own
+    git-biased dict was), reasoning that a `cd`/`pushd`/`popd` occurring
+    INSIDE a `$(...)`/array-literal span runs in an isolated subshell and
+    never relocates the OUTER shell's own cwd, so no equivalent bypass
+    existed to close by threading further. CRITICAL bug found by
+    independent adversarial review (round 21, issue #1375), independently
+    reproduced live: that subshell reasoning is correct as far as it
+    goes, but incomplete -- it does not cover a reassignment straddling
+    the substitution's OWN boundary, where the ambiguity lives in the
+    OUTER token stream, not inside the subshell. `X=cd; y=$($X sub; git
+    checkout -- dirty.py); X=somethingelse` (the relocator `$X` used
+    entirely WITHIN the substitution, no relocation crossing the subshell
+    boundary at all) still silently missed the relocation, since the
+    scoped-down RAW_ASSIGNED_CD_BIASED never saw the OUTER `X=
+    somethingelse` reassignment that poisoned the recursive call's own
+    merged OUTER_RAW. Confirmed live end-to-end through the real wrapper
+    against a scratch repo with `sub/dirty.py` genuinely dirty relative
+    to `sub`: this command wrongly allowed with exit 0, and actually
+    running it afterward silently discarded the uncommitted edit; the
+    identical command with no trailing reassignment correctly denies.
+    Closed by threading RAW_ASSIGNED_CD_BIASED as a fourth outer-scope
+    parameter through the full recursive chain after all, mirroring round
+    19's own git-biased threading exactly -- see `_classify_tokens`'s own
+    docstring."""
     values: dict[str, str] = {}
     for token in tokens:
         if _is_dynamic(token):
@@ -1716,6 +1753,108 @@ def _assigned_raw_values_biased_toward(tokens: list[str], literals: frozenset[st
             continue
         values[name] = match.group(2)
     return values
+
+
+# Matches a token that is EXACTLY one bare `$NAME` or braced `${NAME}`
+# reference and nothing else -- no surrounding literal text, no default
+# clause, no indirect `${!NAME}` reference. Used only by `_resolve_path_
+# tokens`'s own history-widening (see `_assigned_raw_value_history`'s own
+# docstring): for this narrow, unambiguous whole-token shape, the token's
+# real bash value is exactly NAME's own raw value, with no risk of the
+# unbraced-prefix ambiguity `_substitute_var_refs_candidates` itself
+# exists to handle for a token containing MORE than just the reference.
+_BARE_OR_BRACED_VAR_REF_RE = re.compile(r"^\$([A-Za-z_][A-Za-z0-9_]*)$|^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$")
+
+
+def _assigned_raw_value_history(tokens: list[str]) -> dict[str, tuple[str, ...]]:
+    """Like `_assigned_raw_values`, but maps each assigned name to the
+    TUPLE of every DISTINCT raw value assigned to it anywhere in TOKENS
+    (first-seen order, deduplicated) -- not collapsed to the single
+    last-occurrence-wins value `_assigned_raw_values` itself returns.
+
+    CRITICAL bug found by independent adversarial review (round 21, issue
+    #1375) and independently reproduced live: `_resolve_path_tokens`'s
+    own dynamic-path-argument resolution is a THIRD consumer of the
+    order-blind `_assigned_raw_values` collapse -- a THIRD instance of
+    the identical reassignment-ambiguity class rounds 19 and 20 already
+    closed for the git-token and cd-relocation consumers in this same
+    feature, just left open here, and the most severely reachable of the
+    three: no command substitution, no cd/pushd/popd, not even multiple
+    statements are required -- `F=dirty.py; git checkout -- $F;
+    F=other.py` resolves `$F` to `"other.py"` (the LAST assignment in
+    token order), even though `$F` genuinely was `dirty.py` at its actual
+    point of use. Unlike the other two consumers, this one does not
+    merely MISS a real invocation -- it produces a CONFIDENT, WRONG path
+    claim: `checkout_restore_paths=('other.py',)` instead of `('dirty.py',
+    )`, so the live wrapper's own `git diff --quiet` check runs against
+    the WRONG, harmless file while the REAL, genuinely dirty `dirty.py`
+    is never checked at all. Confirmed live end-to-end through the real
+    wrapper against a scratch repo with a genuinely dirty, tracked
+    `dirty.py` and a clean `other.py`: this command wrongly allowed with
+    exit 0, and actually running it afterward silently discarded the
+    uncommitted edit to `dirty.py`. Identically reproducible for `git
+    restore $F`, and reachable through a command substitution's own
+    inner content the same way rounds 19/20's own findings were (see
+    `_classify_tokens`'s own docstring for the outer-scope threading this
+    needs).
+
+    There is no single fixed literal to bias toward here (unlike `git` or
+    `cd`/`pushd`/`popd` -- an arbitrary path has no small, enumerable
+    target set), so the fix this history dict feeds is different in kind
+    from `_assigned_raw_values_biased_toward`'s own single-reading bias:
+    `_resolve_path_tokens` extracts EVERY distinct historical value for a
+    name referenced by a bare/braced whole-token reference (see
+    `_BARE_OR_BRACED_VAR_REF_RE`) as its own SEPARATE candidate path,
+    rather than picking one. This over-includes (an extra, harmless
+    candidate path gets checked for dirtiness) rather than ever silently
+    dropping the one that matters -- the same safe direction every other
+    ambiguity in this module resolves toward. Deliberately narrower than
+    full soundness: a token that FUSES a reference with literal text, a
+    default-value clause, or an indirect `${!NAME}` reference is NOT
+    widened by this mechanism and keeps whatever single reading
+    `_substitute_var_refs_candidates` already gives it -- the same
+    "handle the common, simple bare-reference shape narrowly, don't
+    attempt full generality" scoping this module's own reassignment-bias
+    fixes already use elsewhere."""
+    history: dict[str, list[str]] = {}
+    for token in tokens:
+        if _is_dynamic(token):
+            continue
+        match = _ASSIGN_RE.match(token)
+        if not match:
+            continue
+        name, value = match.group(1), match.group(2)
+        values = history.setdefault(name, [])
+        if value not in values:
+            values.append(value)
+    return {name: tuple(values) for name, values in history.items()}
+
+
+def _merge_raw_value_histories(
+    outer: dict[str, tuple[str, ...]], inner: dict[str, tuple[str, ...]]
+) -> dict[str, tuple[str, ...]]:
+    """Union OUTER's and INNER's own historical-value tuples per name,
+    deduplicated, rather than letting INNER's own entry for a shared name
+    silently replace OUTER's (the plain `{**outer, **inner}` shadowing
+    convention every other scope dict in this module uses). A name
+    reassigned INSIDE a `$(...)`/array-literal span's own recursive scope
+    does shadow the outer value for every OTHER purpose in this module
+    (an inner reassignment genuinely does take effect for the rest of
+    that subshell's own execution) -- but for HISTORY specifically,
+    dropping OUTER's own candidates would silently lose a value `$NAME`
+    might still resolve to at real bash runtime if it is referenced
+    BEFORE the inner reassignment takes effect, which this module's own
+    static analysis (no execution-order tracking, see `_assigned_raw_
+    values_biased_toward`'s own docstring) cannot rule out -- so both
+    scopes' own candidates are kept."""
+    merged: dict[str, tuple[str, ...]] = {}
+    for name in {*outer, *inner}:
+        seen: list[str] = []
+        for value in (*outer.get(name, ()), *inner.get(name, ())):
+            if value not in seen:
+                seen.append(value)
+        merged[name] = tuple(seen)
+    return merged
 
 
 def _strip_leading_assignments(seg: list[str]) -> list[str]:
@@ -2396,6 +2535,8 @@ def _rule_array_literal_content(
     name_to_value: dict[str, str],
     name_to_raw_value: dict[str, str],
     name_to_raw_value_git_biased: dict[str, str],
+    name_to_raw_value_cd_biased: dict[str, str],
+    name_to_raw_value_history: dict[str, tuple[str, ...]],
 ) -> tuple[str | None, bool, tuple[str, ...]]:
     """Recursively classify each `NAME=(...)` array-literal span's OWN
     inner content through this module's full rule set -- bash genuinely
@@ -2505,7 +2646,10 @@ def _rule_array_literal_content(
     VALUE/NAME_TO_RAW_VALUE, mirroring `_rule_command_substitution_
     content`'s own identical parameter exactly -- see `_find_git_
     checkout_restore`'s own docstring for what it means and the live
-    bypass it closes."""
+    bypass it closes. NAME_TO_RAW_VALUE_CD_BIASED and NAME_TO_RAW_VALUE_
+    HISTORY (round 21, issue #1375) are threaded the same way -- see
+    `_assigned_raw_values_biased_toward`'s own second CRITICAL-bug
+    paragraph and `_assigned_raw_value_history`'s own docstring."""
     is_git_push = False
     checkout_restore_paths: list[str] = []
     i = 0
@@ -2523,7 +2667,12 @@ def _rule_array_literal_content(
                 readings.append((collapsed, " once its own leading unassigned reference(s) word-split away"))
             for reading, suffix in readings:
                 reading_verdict = _classify_tokens(
-                    reading, name_to_value, name_to_raw_value, name_to_raw_value_git_biased
+                    reading,
+                    name_to_value,
+                    name_to_raw_value,
+                    name_to_raw_value_git_biased,
+                    name_to_raw_value_cd_biased,
+                    name_to_raw_value_history,
                 )
                 is_git_push = is_git_push or reading_verdict.is_git_push
                 checkout_restore_paths.extend(reading_verdict.checkout_restore_paths)
@@ -3392,7 +3541,9 @@ _RESTORE_VALUE_FLAGS = {"--source", "-s", "--conflict"}
 _CHECKOUT_BRANCH_CREATION_FLAGS = {"-b", "-B", "--orphan"}
 
 
-def _resolve_path_tokens(tokens: list[str], name_to_raw_value: dict[str, str]) -> tuple[str | None, tuple[str, ...]]:
+def _resolve_path_tokens(
+    tokens: list[str], name_to_raw_value: dict[str, str], name_to_raw_value_history: dict[str, tuple[str, ...]]
+) -> tuple[str | None, tuple[str, ...]]:
     """Resolve every token in TOKENS to one or more literal path
     candidates for a `git checkout`/`git restore` invocation. A literal
     token is used as-is. A dynamic token is resolved via this module's
@@ -3423,7 +3574,17 @@ def _resolve_path_tokens(tokens: list[str], name_to_raw_value: dict[str, str]) -
     silently pass the literal string `${paths[@]}` through as a
     "resolved" candidate instead of being recognized as still-unresolved.
     Confirmed live during this function's own development (before this
-    check was added)."""
+    check was added).
+
+    NAME_TO_RAW_VALUE_HISTORY (round 21, issue #1375) widens a BARE or
+    braced whole-token reference (`_BARE_OR_BRACED_VAR_REF_RE`) to every
+    DISTINCT value ever assigned to that name, not just the single,
+    possibly-stale one NAME_TO_RAW_VALUE's own order-blind collapse
+    gives -- see `_assigned_raw_value_history`'s own docstring for the
+    live bypass this closes. A token that is not exactly a bare/braced
+    reference (fused with literal text, a default clause, or an indirect
+    reference) keeps the ordinary, un-widened CANDIDATES resolution
+    below unchanged."""
     paths: list[str] = []
     for tok in tokens:
         if not _is_dynamic(tok):
@@ -3437,12 +3598,21 @@ def _resolve_path_tokens(tokens: list[str], name_to_raw_value: dict[str, str]) -
                 "working tree, so this is denied outright",
                 (),
             )
+        bare_match = _BARE_OR_BRACED_VAR_REF_RE.fullmatch(tok)
+        history = name_to_raw_value_history.get(bare_match.group(1) or bare_match.group(2)) if bare_match else None
+        if history:
+            for value in history:
+                if value not in paths:
+                    paths.append(value)
+            continue
         paths.extend(candidates)
     return None, tuple(paths)
 
 
 def _git_checkout_paths(
-    tokens_after: list[str], name_to_raw_value: dict[str, str]
+    tokens_after: list[str],
+    name_to_raw_value: dict[str, str],
+    name_to_raw_value_history: dict[str, tuple[str, ...]],
 ) -> tuple[str | None, tuple[str, ...]]:
     """checkout_restore_paths for a `git checkout` invocation, TOKENS_AFTER
     being every segment token following the literal `checkout` word.
@@ -3563,17 +3733,19 @@ def _git_checkout_paths(
                 "could append paths at runtime this classifier cannot see, so this is denied outright",
                 (),
             )
-        return _resolve_path_tokens(after, name_to_raw_value)
+        return _resolve_path_tokens(after, name_to_raw_value, name_to_raw_value_history)
     positionals = [t for t in tokens_after if not t.startswith("-")]
     if len(positionals) >= 2:
-        return _resolve_path_tokens(positionals, name_to_raw_value)
+        return _resolve_path_tokens(positionals, name_to_raw_value, name_to_raw_value_history)
     if len(positionals) == 1 and not _is_dynamic(positionals[0]) and positionals[0] in (".", ".."):
-        return _resolve_path_tokens(positionals, name_to_raw_value)
+        return _resolve_path_tokens(positionals, name_to_raw_value, name_to_raw_value_history)
     return None, ()
 
 
 def _git_restore_paths(
-    tokens_after: list[str], name_to_raw_value: dict[str, str]
+    tokens_after: list[str],
+    name_to_raw_value: dict[str, str],
+    name_to_raw_value_history: dict[str, tuple[str, ...]],
 ) -> tuple[str | None, tuple[str, ...]]:
     """checkout_restore_paths for a `git restore` invocation, TOKENS_AFTER
     being every segment token following the literal `restore` word.
@@ -3667,7 +3839,7 @@ def _git_restore_paths(
         i += 1
     if saw_staged and not saw_worktree:
         return None, ()
-    return _resolve_path_tokens(path_tokens, name_to_raw_value)
+    return _resolve_path_tokens(path_tokens, name_to_raw_value, name_to_raw_value_history)
 
 
 # A whole token that is EXACTLY one `${NAME-}`/`${NAME:-}` (empty default
@@ -4233,6 +4405,7 @@ def _rule_git_checkout_restore(
     raw_assigned: dict[str, str],
     raw_assigned_git_biased: dict[str, str],
     raw_assigned_cd_biased: dict[str, str],
+    raw_assigned_history: dict[str, tuple[str, ...]],
 ) -> tuple[str | None, tuple[str, ...]]:
     """Extract every `checkout_restore_paths` candidate across every
     segment of one command, denying outright on any segment where this
@@ -4322,7 +4495,10 @@ def _rule_git_checkout_restore(
     issue #1375). RAW_ASSIGNED_CD_BIASED feeds a SECOND fallback, for the
     cd/pushd/popd-relocation check just below (round 20, issue #1375) --
     see `_assigned_raw_values_biased_toward`'s own second CRITICAL-bug
-    paragraph for the live bypass this one closes."""
+    paragraph for the live bypass this one closes. RAW_ASSIGNED_HISTORY
+    is passed straight through into `_git_checkout_paths`/`_git_restore_
+    paths` (round 21, issue #1375) -- see `_assigned_raw_value_history`'s
+    own docstring for what it means and the live bypass it closes."""
     saw_cd = False
     all_paths: list[str] = []
     for seg in segments:
@@ -4350,9 +4526,9 @@ def _rule_git_checkout_restore(
                 (),
             )
         if subcommand == "checkout":
-            deny_reason, paths = _git_checkout_paths(tokens_after, raw_assigned)
+            deny_reason, paths = _git_checkout_paths(tokens_after, raw_assigned, raw_assigned_history)
         else:
-            deny_reason, paths = _git_restore_paths(tokens_after, raw_assigned)
+            deny_reason, paths = _git_restore_paths(tokens_after, raw_assigned, raw_assigned_history)
         if deny_reason:
             return deny_reason, ()
         all_paths.extend(paths)
@@ -4559,6 +4735,8 @@ def classify(
     outer_name_to_value: dict[str, str] | None = None,
     outer_name_to_raw_value: dict[str, str] | None = None,
     outer_name_to_raw_value_git_biased: dict[str, str] | None = None,
+    outer_name_to_raw_value_cd_biased: dict[str, str] | None = None,
+    outer_name_to_raw_value_history: dict[str, tuple[str, ...]] | None = None,
 ) -> Verdict:
     """Classify one Bash tool_input.command string. Fails closed (deny) on
     anything shlex cannot tokenize -- an unparseable command is exactly the
@@ -4575,15 +4753,24 @@ def classify(
     `$(...)` span's own inner content can resolve a variable assigned
     OUTSIDE the span against the same shell scope real bash would use.
 
-    OUTER_NAME_TO_RAW_VALUE_GIT_BIASED (round 19, issue #1375) is the
-    same recursive call's own analogous third argument -- see `_classify_
-    tokens`'s own docstring and `_find_git_checkout_restore`'s own
-    docstring for what it means and the live bypass it closes."""
+    OUTER_NAME_TO_RAW_VALUE_GIT_BIASED (round 19, issue #1375),
+    OUTER_NAME_TO_RAW_VALUE_CD_BIASED and OUTER_NAME_TO_RAW_VALUE_HISTORY
+    (round 21, issue #1375) are the same recursive call's own analogous
+    further arguments -- see `_classify_tokens`'s own docstring and
+    `_find_git_checkout_restore`'s/`_assigned_raw_value_history`'s own
+    docstrings for what each means and the live bypass each closes."""
     try:
         tokens = tokenize(command)
     except TokenizeError as error:
         return Verdict(True, f"the command could not be parsed as shell syntax ({error}). Failing closed", False)
-    return _classify_tokens(tokens, outer_name_to_value, outer_name_to_raw_value, outer_name_to_raw_value_git_biased)
+    return _classify_tokens(
+        tokens,
+        outer_name_to_value,
+        outer_name_to_raw_value,
+        outer_name_to_raw_value_git_biased,
+        outer_name_to_raw_value_cd_biased,
+        outer_name_to_raw_value_history,
+    )
 
 
 def _classify_tokens(
@@ -4591,6 +4778,8 @@ def _classify_tokens(
     outer_name_to_value: dict[str, str] | None = None,
     outer_name_to_raw_value: dict[str, str] | None = None,
     outer_name_to_raw_value_git_biased: dict[str, str] | None = None,
+    outer_name_to_raw_value_cd_biased: dict[str, str] | None = None,
+    outer_name_to_raw_value_history: dict[str, tuple[str, ...]] | None = None,
 ) -> Verdict:
     """The token-level core of `classify` -- split out so `_rule_command_
     substitution_content` can recurse into a `$(...)` span's own inner
@@ -4631,25 +4820,60 @@ def _classify_tokens(
     something else LATER in the same command (in an outer scope, inside
     a `$(...)`/array-literal span, or both) still resolves to `git` for
     checkout/restore recognition specifically. See `_find_git_checkout_
-    restore`'s own docstring for the live bypass this closes."""
+    restore`'s own docstring for the live bypass this closes.
+
+    OUTER_NAME_TO_RAW_VALUE_CD_BIASED and OUTER_NAME_TO_RAW_VALUE_HISTORY
+    (round 21, issue #1375) are two further, parallel outer-scope
+    arguments, merged the identical way -- `_assigned_raw_values_biased_
+    toward(tokens, _CWD_RELOCATING_COMMANDS)` for the former, `_merge_
+    raw_value_histories(outer, _assigned_raw_value_history(tokens))` (a
+    UNION merge, not the plain `{**outer, **inner}` shadowing every other
+    dict here uses -- see that function's own docstring for why) for the
+    latter -- and threaded the same way into the same two recursive
+    calls plus `_rule_git_checkout_restore`'s own fourth and fifth
+    arguments. CD_BIASED closes the cd/pushd/popd-relocation analogue of
+    the git-token bypass just above; HISTORY closes a live path-argument-
+    resolution bypass round 20's own scoped-down (non-recursively-
+    threaded) cd-biased fix did NOT cover -- see `_assigned_raw_values_
+    biased_toward`'s own second CRITICAL-bug paragraph and `_assigned_
+    raw_value_history`'s own docstring for both bypasses."""
     outer_literals = outer_name_to_value or {}
     outer_raw = outer_name_to_raw_value or {}
     outer_raw_git_biased = outer_name_to_raw_value_git_biased or {}
+    outer_raw_cd_biased = outer_name_to_raw_value_cd_biased or {}
+    outer_raw_history = outer_name_to_raw_value_history or {}
     merged_name_to_value = {**outer_literals, **_assigned_literals(tokens)}
     merged_name_to_raw_value = {**outer_raw, **_assigned_raw_values(tokens)}
     merged_name_to_raw_value_git_biased = {
         **outer_raw_git_biased,
         **_assigned_raw_values_biased_toward(tokens, frozenset({"git"})),
     }
+    merged_name_to_raw_value_cd_biased = {
+        **outer_raw_cd_biased,
+        **_assigned_raw_values_biased_toward(tokens, _CWD_RELOCATING_COMMANDS),
+    }
+    merged_name_to_raw_value_history = _merge_raw_value_histories(
+        outer_raw_history, _assigned_raw_value_history(tokens)
+    )
 
     content_reason, content_is_git_push, content_checkout_restore_paths = _rule_command_substitution_content(
-        tokens, merged_name_to_value, merged_name_to_raw_value, merged_name_to_raw_value_git_biased
+        tokens,
+        merged_name_to_value,
+        merged_name_to_raw_value,
+        merged_name_to_raw_value_git_biased,
+        merged_name_to_raw_value_cd_biased,
+        merged_name_to_raw_value_history,
     )
     if content_reason:
         return Verdict(True, content_reason, content_is_git_push, content_checkout_restore_paths)
 
     array_content_reason, array_content_is_git_push, array_content_checkout_restore_paths = _rule_array_literal_content(
-        tokens, merged_name_to_value, merged_name_to_raw_value, merged_name_to_raw_value_git_biased
+        tokens,
+        merged_name_to_value,
+        merged_name_to_raw_value,
+        merged_name_to_raw_value_git_biased,
+        merged_name_to_raw_value_cd_biased,
+        merged_name_to_raw_value_history,
     )
     is_git_push = content_is_git_push or array_content_is_git_push
     checkout_restore_paths = content_checkout_restore_paths + array_content_checkout_restore_paths
@@ -4664,7 +4888,11 @@ def _classify_tokens(
         **outer_raw_git_biased,
         **_assigned_raw_values_biased_toward(tokens, frozenset({"git"})),
     }
-    raw_assigned_cd_biased = {**outer_raw, **_assigned_raw_values_biased_toward(tokens, _CWD_RELOCATING_COMMANDS)}
+    raw_assigned_cd_biased = {
+        **outer_raw_cd_biased,
+        **_assigned_raw_values_biased_toward(tokens, _CWD_RELOCATING_COMMANDS),
+    }
+    raw_assigned_history = _merge_raw_value_histories(outer_raw_history, _assigned_raw_value_history(tokens))
     lowered_command = " ".join(tokens).lower()
 
     is_git_push = is_git_push or any(_is_git_push_segment(seg, raw_assigned) for seg in segments)
@@ -4697,7 +4925,7 @@ def _classify_tokens(
             )
 
     own_checkout_restore_hit, own_checkout_restore_paths = _rule_git_checkout_restore(
-        segments, raw_assigned, raw_assigned_git_biased, raw_assigned_cd_biased
+        segments, raw_assigned, raw_assigned_git_biased, raw_assigned_cd_biased, raw_assigned_history
     )
     checkout_restore_paths = checkout_restore_paths + own_checkout_restore_paths
     if own_checkout_restore_hit:

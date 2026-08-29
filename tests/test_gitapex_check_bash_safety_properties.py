@@ -1358,7 +1358,7 @@ def test_rule_command_substitution_content_detects_an_embedded_install(tool: str
     a punctuation character shlex breaks a word at, so an assignment's
     `NAME=` prefix stays fused onto the leading `$` in the same token."""
     tokens = ["x=$", "(", tool, "install", "evil-pkg", ")"]
-    reason, _, _ = checker._rule_command_substitution_content(tokens, {}, {}, {})
+    reason, _, _ = checker._rule_command_substitution_content(tokens, {}, {}, {}, {}, {})
     assert reason is not None
 
 
@@ -1374,7 +1374,7 @@ def test_rule_command_substitution_content_allows_harmless_inner_content(value: 
     silently dropping a non-denying inner `is_git_push=True` signal (see
     the function's own docstring)."""
     tokens = ["echo", "$", "(", "date", value, ")"]
-    assert checker._rule_command_substitution_content(tokens, {}, {}, {}) == (None, False, ())
+    assert checker._rule_command_substitution_content(tokens, {}, {}, {}, {}, {}) == (None, False, ())
 
 
 # --- Issue #1326 Stage 1, fifteenth round: bash's own leading-assignment ----
@@ -1493,7 +1493,7 @@ def test_rule_array_literal_content_detects_a_denied_pair_regardless_of_a_leadin
     `Y=1; A=(uv install $Y); "${A[@]}"` was wrongly ALLOWED before this
     function existed."""
     tokens = ["dummy=", "(", f"${first}", "uv", "install", f"${second}", ")"]
-    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {}, {})
+    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {})
     assert reason is not None
 
 
@@ -1512,7 +1512,7 @@ def test_rule_array_literal_content_collapses_a_leading_unassigned_bare_ref(unse
     fused with other text (not a bare whole-token reference), must NOT
     be collapsed -- that shape does not word-split away to nothing."""
     tokens = ["dummy=", "(", f"${unset_name}", verb_a, "install", ")"]
-    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {}, {})
+    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {})
     assert reason is not None
 
 
@@ -1532,13 +1532,13 @@ def test_rule_array_literal_content_allows_harmless_content() -> None:
     denied pattern, with or without a leading unassigned reference,
     stays allowed."""
     tokens = ["dummy=", "(", "$NEVERSET", "echo", "harmless", ")"]
-    assert checker._rule_array_literal_content(tokens, {}, {}, {}) == (None, False, ())
+    assert checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {}) == (None, False, ())
 
 
 def test_rule_array_literal_content_no_span_present() -> None:
     """Robustness: a token stream with no array-literal span at all
     (e.g. an ordinary command) returns cleanly, never a crash."""
-    assert checker._rule_array_literal_content(["echo", "hi"], {}, {}, {}) == (None, False, ())
+    assert checker._rule_array_literal_content(["echo", "hi"], {}, {}, {}, {}, {}) == (None, False, ())
 
 
 def test_strip_leading_unassigned_bare_refs_stops_at_a_fused_token() -> None:
@@ -1564,7 +1564,7 @@ def test_rule_array_literal_content_empty_array_is_harmless() -> None:
     """No false positive / no crash: an empty array literal `NAME=()`
     has no inner content to recursively classify at all."""
     tokens = ["dummy=", "(", ")"]
-    assert checker._rule_array_literal_content(tokens, {}, {}, {}) == (None, False, ())
+    assert checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {}) == (None, False, ())
 
 
 def test_rule_array_literal_content_skips_the_collapsed_reading_without_a_leading_unassigned_ref() -> None:
@@ -1573,7 +1573,7 @@ def test_rule_array_literal_content_skips_the_collapsed_reading_without_a_leadin
     `_strip_leading_unassigned_bare_refs` to strip -- the collapsed
     reading equals the as-is one, so only one classification is needed."""
     tokens = ["dummy=", "(", "echo", "harmless", ")"]
-    assert checker._rule_array_literal_content(tokens, {}, {}, {}) == (None, False, ())
+    assert checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {}) == (None, False, ())
 
 
 def test_rule_array_literal_content_denies_only_on_the_collapsed_reading() -> None:
@@ -1590,7 +1590,7 @@ def test_rule_array_literal_content_denies_only_on_the_collapsed_reading() -> No
     real, with a dynamic verb argument right after it -- exactly B2's own
     watched shape."""
     tokens = ["dummy=", "(", "$NEVERSET", "uv", "$VERB", ")"]
-    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {}, {})
+    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {})
     assert reason is not None
     assert "unassigned reference" in reason
 
@@ -1632,7 +1632,7 @@ def test_rule_array_literal_content_collapses_a_leading_unassigned_braced_bare_r
     this round, silently degrading the collapsed reading to a no-op for
     this shape."""
     tokens = ["dummy=", "(", f"${{{unset_name}}}", verb_a, "install", ")"]
-    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {}, {})
+    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {})
     assert reason is not None
 
 
@@ -1647,7 +1647,7 @@ def test_rule_array_literal_content_detects_an_outer_scope_resolved_pair() -> No
     recursive `_classify_tokens` call."""
     tokens = ["dummy=", "(", "$G", "$P", "$M", ")"]
     outer = {"G": "gh", "P": "pr", "M": "merge"}
-    reason, _, _ = checker._rule_array_literal_content(tokens, outer, outer, outer)
+    reason, _, _ = checker._rule_array_literal_content(tokens, outer, outer, outer, {}, {})
     assert reason is not None
 
 
@@ -1683,7 +1683,7 @@ def test_rule_command_substitution_content_detects_an_outer_scope_resolved_check
     for the array-literal span."""
     tokens = ["x=$", "(", "$G", "checkout", "--", "dirty.py", ")"]
     outer = {"G": "git"}
-    reason, _, checkout_restore_paths = checker._rule_command_substitution_content(tokens, outer, outer, outer)
+    reason, _, checkout_restore_paths = checker._rule_command_substitution_content(tokens, outer, outer, outer, {}, {})
     assert reason is None
     assert checkout_restore_paths == ("dirty.py",)
 
@@ -1846,7 +1846,7 @@ def test_rule_git_checkout_restore_recognizes_a_cd_biased_reassigned_relocator()
     some point, so the earlier relocation is still flagged and the
     checkout is denied rather than confidently, wrongly resolved."""
     segments = [["$X", "sub"], ["git", "checkout", "--", "dirty.py"]]
-    reason, resolved = checker._rule_git_checkout_restore(segments, {"X": "elsewhere"}, {}, {"X": "cd"})
+    reason, resolved = checker._rule_git_checkout_restore(segments, {"X": "elsewhere"}, {}, {"X": "cd"}, {})
     assert reason is not None
     assert "cd" in reason or "pushd" in reason or "popd" in reason
     assert resolved == ()
@@ -1880,6 +1880,140 @@ def test_classify_does_not_flag_cd_relocation_for_an_unrelated_reassigned_tool()
     verdict = checker.classify("X=curl; $X sub; git checkout -- dirty.py; X=wget")
     assert verdict.deny is False
     assert verdict.checkout_restore_paths == ("dirty.py",)
+
+
+def test_classify_denies_checkout_when_a_cd_token_is_reassigned_across_a_command_substitution() -> None:
+    """End-to-end regression pin for the round-21 finding at the
+    `classify()` level: round 20's own cd-biased fix was scoped to the
+    current `_classify_tokens` invocation's own top-level segments only,
+    which missed a reassignment straddling a command substitution's OWN
+    boundary -- the relocator `$X` is used entirely WITHIN the
+    substitution, but the ambiguity lives in the OUTER token stream.
+    Confirmed live before this fix: `X=cd; y=$($X sub; git checkout --
+    dirty.py); X=somethingelse` resolved to `deny=False` with a
+    CONFIDENT, WRONG `checkout_restore_paths` claim."""
+    verdict = checker.classify("X=cd; y=$($X sub; git checkout -- dirty.py); X=somethingelse")
+    assert verdict.deny is True
+
+
+def test_assigned_raw_value_history_records_every_distinct_value() -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, twenty-first round (issue #1375): unlike
+    `_assigned_raw_values`'s own last-occurrence-wins collapse, every
+    DISTINCT value ever assigned to a name is kept, in first-seen order."""
+    assert checker._assigned_raw_value_history(["F=dirty.py", "F=other.py"]) == {"F": ("dirty.py", "other.py")}
+
+
+def test_assigned_raw_value_history_deduplicates_an_identical_reassignment() -> None:
+    """The SAME value assigned twice to the same name contributes only
+    ONE entry to its history, not a duplicate."""
+    assert checker._assigned_raw_value_history(["F=dirty.py", "F=dirty.py"]) == {"F": ("dirty.py",)}
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value1=_VALUES, value2=_VALUES, tail=st.lists(_IDENTIFIERS, max_size=2))
+def test_assigned_raw_value_history_matches_last_assignment_of_assigned_raw_values(
+    name: str, value1: str, value2: str, tail: list[str]
+) -> None:
+    """Model-based: `_assigned_raw_value_history`'s own last entry for a
+    name always agrees with `_assigned_raw_values`'s own single,
+    last-occurrence-wins value for that same name -- the history is a
+    strict widening (every value `_assigned_raw_values` itself could ever
+    report, plus every earlier one it silently discarded), never a
+    disagreement."""
+    tokens = [f"{name}={value1}", f"{name}={value2}", *tail]
+    history = checker._assigned_raw_value_history(tokens)
+    assert history[name][-1] == checker._assigned_raw_values(tokens)[name]
+
+
+def test_merge_raw_value_histories_unions_rather_than_shadows() -> None:
+    """Model-based: unlike the plain `{**outer, **inner}` shadowing
+    convention every other scope dict in this module uses, a name
+    appearing in BOTH outer and inner histories keeps candidates from
+    BOTH, not just inner's own -- an inner reassignment could genuinely
+    take effect only AFTER `$NAME` was already used with an outer value,
+    which this module's own static analysis cannot rule out (see this
+    function's own docstring)."""
+    merged = checker._merge_raw_value_histories({"F": ("dirty.py",)}, {"F": ("other.py",)})
+    assert merged == {"F": ("dirty.py", "other.py")}
+
+
+def test_merge_raw_value_histories_deduplicates_a_value_shared_by_both_scopes() -> None:
+    """A value present in BOTH outer's and inner's own history for the
+    same name contributes only one entry to the merged result."""
+    merged = checker._merge_raw_value_histories({"F": ("dirty.py", "other.py")}, {"F": ("other.py",)})
+    assert merged == {"F": ("dirty.py", "other.py")}
+
+
+def test_resolve_path_tokens_widens_a_bare_reference_to_its_full_history() -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, twenty-first round (issue #1375):
+    `_resolve_path_tokens`'s own dynamic-path-argument resolution is a
+    THIRD consumer of the order-blind `_assigned_raw_values` collapse,
+    with no bias mechanism at all before this fix -- `F=dirty.py; git
+    checkout -- $F; F=other.py` resolved `$F` to `"other.py"` (the LAST
+    assignment in token order) alone, even though `$F` genuinely was
+    `dirty.py` at its actual point of use, so the REAL dirty file was
+    never checked. A bare/braced whole-token reference to a name with
+    multiple distinct historical values now extracts ALL of them as
+    separate candidates, not just the single, possibly-stale one the
+    collapsed NAME_TO_RAW_VALUE dict gives."""
+    reason, resolved = checker._resolve_path_tokens(["$F"], {"F": "other.py"}, {"F": ("dirty.py", "other.py")})
+    assert reason is None
+    assert resolved == ("dirty.py", "other.py")
+
+
+def test_resolve_path_tokens_history_widening_deduplicates_against_existing_paths() -> None:
+    """A historical value that coincides with a path already extracted
+    from an earlier, literal token in the same command is not appended
+    twice."""
+    reason, resolved = checker._resolve_path_tokens(
+        ["dirty.py", "$F"], {"F": "other.py"}, {"F": ("dirty.py", "other.py")}
+    )
+    assert reason is None
+    assert resolved == ("dirty.py", "other.py")
+
+
+def test_resolve_path_tokens_does_not_widen_a_fused_reference() -> None:
+    """No false positive: a token that FUSES a reference with literal
+    text is NOT widened by the history mechanism (`_BARE_OR_BRACED_VAR_
+    REF_RE` only matches a WHOLE-token bare/braced reference) -- it keeps
+    the ordinary, single-candidate resolution unchanged, the same
+    documented, deliberately narrower-than-full-soundness scoping this
+    fix uses everywhere else."""
+    reason, resolved = checker._resolve_path_tokens(["${F}.py"], {"F": "dirty"}, {"F": ("dirty", "other")})
+    assert reason is None
+    assert resolved == ("dirty.py",)
+
+
+def test_classify_extracts_every_historical_path_when_a_checkout_path_is_reassigned_after_use() -> None:
+    """End-to-end regression pin for the round-21 finding at the
+    `classify()` level. Confirmed live before this fix: `F=dirty.py; git
+    checkout -- $F; F=other.py` resolved to `checkout_restore_paths=
+    ('other.py',)` -- a CONFIDENT, WRONG claim, since `$F` genuinely was
+    `dirty.py` at its actual point of use -- instead of including the
+    real, at-risk path at all."""
+    verdict = checker.classify("F=dirty.py; git checkout -- $F; F=other.py")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("dirty.py", "other.py")
+
+
+def test_classify_extracts_every_historical_path_when_a_restore_path_is_reassigned_after_use() -> None:
+    """Companion to the checkout pin above, for `git restore` -- the
+    round-21 finding was confirmed live for both subcommands."""
+    verdict = checker.classify("F=dirty.py; git restore $F; F=other.py")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("dirty.py", "other.py")
+
+
+def test_classify_extracts_every_historical_path_behind_a_command_substitution() -> None:
+    """Companion to the two pins above, for the command-substitution
+    shape: the SAME reassignment-after-use gap, reached through
+    `_rule_command_substitution_content`'s own outer-scope threading
+    (rounds 18-21)."""
+    verdict = checker.classify("F=dirty.py; x=$(git checkout -- $F); F=other.py")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("dirty.py", "other.py")
 
 
 @_PROPERTIES
@@ -1956,7 +2090,7 @@ def test_rule_array_literal_content_detects_a_braced_subscript_decoy() -> None:
     the subscript decoy blocked it from ever firing until it collapsed
     away."""
     tokens = ["dummy=", "(", "${NEVERSET[0]}", "uv", "$VERB", ")"]
-    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {}, {})
+    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {})
     assert reason is not None
 
 
@@ -1967,7 +2101,7 @@ def test_rule_array_literal_content_detects_a_fused_reference_chain_decoy() -> N
     before a fused chain of two bare references was recognized as
     vanishing as a unit."""
     tokens = ["dummy=", "(", "$A_UNSET$B_UNSET", "gh", "pr", "merge", "1", ")"]
-    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {}, {})
+    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {})
     assert reason is not None
 
 
@@ -2100,7 +2234,7 @@ def test_rule_command_substitution_content_scans_second_fused_span_in_same_token
     this test only proves that fix reached end-to-end through
     `_rule_command_substitution_content`'s own scan loop."""
     tokens = ["echo", "$(echo ok)$(pip install evil-pkg)"]
-    reason, _, _ = checker._rule_command_substitution_content(tokens, {}, {}, {})
+    reason, _, _ = checker._rule_command_substitution_content(tokens, {}, {}, {}, {}, {})
     assert reason is not None
 
 
@@ -2109,20 +2243,20 @@ def test_rule_command_substitution_content_skips_blank_fused_span_then_finds_den
     skipped without denying by itself, but scanning continues to the next
     fused span in the same token."""
     tokens = ["echo", "$( )$(pip install evil-pkg)"]
-    reason, _, _ = checker._rule_command_substitution_content(tokens, {}, {}, {})
+    reason, _, _ = checker._rule_command_substitution_content(tokens, {}, {}, {}, {}, {})
     assert reason is not None
 
 
 def test_rule_command_substitution_content_both_fused_spans_harmless() -> None:
     tokens = ["echo", "$(echo ok)$(echo also-ok)"]
-    assert checker._rule_command_substitution_content(tokens, {}, {}, {}) == (None, False, ())
+    assert checker._rule_command_substitution_content(tokens, {}, {}, {}, {}, {}) == (None, False, ())
 
 
 def test_rule_command_substitution_content_empty_unquoted_span_skipped() -> None:
     """An empty, unquoted `$()` substitution has no inner tokens to
     recurse into -- distinct from the fused/quoted empty-span case above."""
     tokens = ["$", "(", ")"]
-    assert checker._rule_command_substitution_content(tokens, {}, {}, {}) == (None, False, ())
+    assert checker._rule_command_substitution_content(tokens, {}, {}, {}, {}, {}) == (None, False, ())
 
 
 def test_tokenize_raises_on_unbalanced_quote() -> None:
@@ -2846,7 +2980,7 @@ _PATH_TOKENS = st.text(alphabet=string.ascii_letters + string.digits + "_./", mi
 def test_resolve_path_tokens_returns_literal_tokens_unchanged(paths: list[str]) -> None:
     """Model-based: every literal (non-dynamic) token is returned as-is, in
     order, with no deny reason."""
-    reason, resolved = checker._resolve_path_tokens(paths, {})
+    reason, resolved = checker._resolve_path_tokens(paths, {}, {})
     assert reason is None
     assert resolved == tuple(paths)
 
@@ -2864,7 +2998,7 @@ def test_resolve_path_tokens_resolves_a_braced_reference_case_preserved(name: st
     against the lowercased map and would have silently mismatched a
     mixed-case path like `README.md` against `readme.md`."""
     mixed_case_value = value.swapcase()
-    reason, resolved = checker._resolve_path_tokens([f"${{{name}}}"], {name: mixed_case_value})
+    reason, resolved = checker._resolve_path_tokens([f"${{{name}}}"], {name: mixed_case_value}, {})
     assert reason is None
     assert resolved == (mixed_case_value,)
 
@@ -2878,7 +3012,7 @@ def test_resolve_path_tokens_denies_an_unresolvable_dynamic_token(name: str) -> 
     `git diff --quiet HEAD -- PATH` exits 0 (clean) for a path that does
     not exist (issue #1375 Fact 5, confirmed live), which would be
     fail-open."""
-    reason, resolved = checker._resolve_path_tokens([f"${name}"], {})
+    reason, resolved = checker._resolve_path_tokens([f"${name}"], {}, {})
     assert reason is not None
     assert resolved == ()
 
@@ -2892,7 +3026,7 @@ def test_resolve_path_tokens_denies_an_array_subscript_token() -> None:
     token's own text UNCHANGED -- silently treating an unexpanded shell
     construct as though it were already a resolved literal path. Must
     deny, not pass `${paths[@]}` through as a literal filename."""
-    reason, resolved = checker._resolve_path_tokens(["${paths[@]}"], {})
+    reason, resolved = checker._resolve_path_tokens(["${paths[@]}"], {}, {})
     assert reason is not None
     assert resolved == ()
 
@@ -2902,7 +3036,7 @@ def test_resolve_path_tokens_denies_an_array_subscript_token() -> None:
 def test_git_checkout_paths_extracts_every_token_after_double_dash(paths: list[str]) -> None:
     """Model-based, sub-case (a): every token after a literal `--` is a
     path -- the near-miss's own exact shape (`git checkout -- PATH`)."""
-    reason, resolved = checker._git_checkout_paths(["--", *paths], {})
+    reason, resolved = checker._git_checkout_paths(["--", *paths], {}, {})
     assert reason is None
     assert resolved == tuple(paths)
 
@@ -2912,7 +3046,7 @@ def test_git_checkout_paths_denies_double_dash_with_nothing_following() -> None:
     harmless no-op in real git by itself, but a downstream pipe/loop could
     still append paths at runtime this classifier cannot see, and denying
     a genuine no-op costs nothing."""
-    reason, resolved = checker._git_checkout_paths(["--"], {})
+    reason, resolved = checker._git_checkout_paths(["--"], {}, {})
     assert reason is not None
     assert resolved == ()
 
@@ -2925,7 +3059,7 @@ def test_git_checkout_paths_extracts_two_or_more_positionals_with_no_double_dash
     `git checkout no-such-ref no-such-file` reports a pathspec error for
     BOTH arguments, so every position past the first is a pathspec under
     every resolution real git can take once one exists at all."""
-    reason, resolved = checker._git_checkout_paths(paths, {})
+    reason, resolved = checker._git_checkout_paths(paths, {}, {})
     assert reason is None
     assert resolved == tuple(paths)
 
@@ -2938,7 +3072,7 @@ def test_git_checkout_paths_treats_a_single_dot_or_dotdot_positional_as_a_path(d
     (confirmed live: `git check-ref-format --branch .`/`--branch ..` both
     fail), and `git checkout .` on a dirty tracked file was confirmed live
     to silently discard the change."""
-    reason, resolved = checker._git_checkout_paths([dot], {})
+    reason, resolved = checker._git_checkout_paths([dot], {}, {})
     assert reason is None
     assert resolved == (dot,)
 
@@ -2951,7 +3085,7 @@ def test_git_checkout_paths_is_a_non_goal_for_a_single_bare_positional(name: str
     `git checkout SOMENAME` from a branch/ref name needs a live
     ref-existence lookup this pure classifier does not perform."""
     assume(name not in (".", ".."))
-    reason, resolved = checker._git_checkout_paths([name], {})
+    reason, resolved = checker._git_checkout_paths([name], {}, {})
     assert reason is None
     assert resolved == ()
 
@@ -2960,7 +3094,7 @@ def test_git_checkout_paths_allows_a_flag_only_invocation() -> None:
     """No false positive: `git checkout -b new-branch` has one
     flag-shaped and one non-flag-shaped token, but the non-flag token is
     a branch name, not `.`/`..` -- stays the Non-goal, empty paths."""
-    reason, resolved = checker._git_checkout_paths(["-b", "new-branch"], {})
+    reason, resolved = checker._git_checkout_paths(["-b", "new-branch"], {}, {})
     assert reason is None
     assert resolved == ()
 
@@ -2971,7 +3105,7 @@ def test_git_restore_paths_empty_when_staged_without_worktree(staged: str, paths
     """Model-based: `--staged`/`-S` without `--worktree` never touches the
     working tree -- empty `checkout_restore_paths`, never live-checked,
     regardless of what path arguments are also present."""
-    reason, resolved = checker._git_restore_paths([staged, *paths], {})
+    reason, resolved = checker._git_restore_paths([staged, *paths], {}, {})
     assert reason is None
     assert resolved == ()
 
@@ -2983,7 +3117,7 @@ def test_git_restore_paths_checked_when_staged_and_worktree_both_present(worktre
     --worktree PATH` is a real working-tree-affecting restore despite
     `--staged` being present -- `saw_worktree=True` must still force the
     path to be checked."""
-    reason, resolved = checker._git_restore_paths(["--staged", worktree, *paths], {})
+    reason, resolved = checker._git_restore_paths(["--staged", worktree, *paths], {}, {})
     assert reason is None
     assert resolved == tuple(paths)
 
@@ -2993,7 +3127,7 @@ def test_git_restore_paths_checked_when_staged_and_worktree_both_present(worktre
 def test_git_restore_paths_checked_with_no_flags_at_all(paths: list[str]) -> None:
     """Model-based: a bare `git restore PATH` with no flags at all is
     never staged-only-safe -- always checked."""
-    reason, resolved = checker._git_restore_paths(paths, {})
+    reason, resolved = checker._git_restore_paths(paths, {}, {})
     assert reason is None
     assert resolved == tuple(paths)
 
@@ -3006,7 +3140,7 @@ def test_git_restore_paths_checked_for_source_short_flag_not_conflated_with_stag
     (`--staged`, boolean) the way a lower-casing flag scan (like
     `_is_git_push_segment`'s own) would -- `git restore -s main PATH`
     stays checked, not wrongly read as staged-only-safe."""
-    reason, resolved = checker._git_restore_paths(["-s", ref, *paths], {})
+    reason, resolved = checker._git_restore_paths(["-s", ref, *paths], {}, {})
     assert reason is None
     assert resolved == tuple(paths)
 
@@ -3018,7 +3152,7 @@ def test_git_restore_paths_last_occurrence_wins_for_staged(last: str) -> None:
     --no-staged` ends with `saw_staged=False` (checked), and `--no-staged
     --staged` ends with `saw_staged=True` (empty, iff no `--worktree`)."""
     flags = ["--no-staged", "--staged"] if last == "--staged" else ["--staged", "--no-staged"]
-    reason, resolved = checker._git_restore_paths([*flags, "f.py"], {})
+    reason, resolved = checker._git_restore_paths([*flags, "f.py"], {}, {})
     assert reason is None
     if last == "--staged":
         assert resolved == ()
@@ -3033,7 +3167,7 @@ def test_git_restore_paths_last_occurrence_wins_for_worktree(paths: list[str]) -
     `--staged --worktree --no-worktree` ends with `saw_worktree=False`,
     so the invocation is safe (staged, not worktree) and never
     live-checked -- exercises the `--no-worktree` branch directly."""
-    reason, resolved = checker._git_restore_paths(["--staged", "--worktree", "--no-worktree", *paths], {})
+    reason, resolved = checker._git_restore_paths(["--staged", "--worktree", "--no-worktree", *paths], {}, {})
     assert reason is None
     assert resolved == ()
 
@@ -3050,7 +3184,7 @@ def test_git_restore_paths_every_boolean_flag_consumes_no_value(flag: str, paths
     `--ignore-unmerged`, `--ignore-skip-worktree-bits`) is skipped without
     consuming the token after it as a value -- the following path tokens
     are still extracted."""
-    reason, resolved = checker._git_restore_paths([flag, *paths], {})
+    reason, resolved = checker._git_restore_paths([flag, *paths], {}, {})
     assert reason is None
     assert resolved == tuple(paths)
 
@@ -3061,10 +3195,10 @@ def test_git_restore_paths_recurse_submodules_bare_and_fused(value: str, paths: 
     """Model-based: `--recurse-submodules` (bare, consumes nothing) and
     `--recurse-submodules=VALUE` (fused, self-contained) are both skipped
     without treating the next token as a value or as part of the flag."""
-    reason, resolved = checker._git_restore_paths(["--recurse-submodules", *paths], {})
+    reason, resolved = checker._git_restore_paths(["--recurse-submodules", *paths], {}, {})
     assert reason is None
     assert resolved == tuple(paths)
-    reason, resolved = checker._git_restore_paths([f"--recurse-submodules={value}", *paths], {})
+    reason, resolved = checker._git_restore_paths([f"--recurse-submodules={value}", *paths], {}, {})
     assert reason is None
     assert resolved == tuple(paths)
 
@@ -3095,7 +3229,7 @@ def test_git_restore_paths_extracts_every_token_after_double_dash(paths: list[st
     """`--` disambiguates every remaining token as a pathspec for `git
     restore`, the identical role it plays for `git checkout` -- must be
     recognized, not denied as an unrecognized flag."""
-    reason, resolved = checker._git_restore_paths(["--", *paths], {})
+    reason, resolved = checker._git_restore_paths(["--", *paths], {}, {})
     assert reason is None
     assert resolved == tuple(paths)
 
@@ -3110,7 +3244,7 @@ def test_git_restore_paths_recognizes_fused_value_flags(flag_value: tuple[str, s
     legitimate git syntax as the separate-token form already recognized --
     must not be denied as an unrecognized flag."""
     flag, value = flag_value
-    reason, resolved = checker._git_restore_paths([f"{flag}={value}", *paths], {})
+    reason, resolved = checker._git_restore_paths([f"{flag}={value}", *paths], {}, {})
     assert reason is None
     assert resolved == tuple(paths)
 
@@ -3128,7 +3262,7 @@ def test_git_restore_paths_denies_pathspec_from_file(flag: str) -> None:
     outright rather than silently under-extracting (an empty
     `checkout_restore_paths` would be exactly issue #1375 Fact 5's own
     fail-open shape)."""
-    reason, resolved = checker._git_restore_paths([flag], {})
+    reason, resolved = checker._git_restore_paths([flag], {}, {})
     assert reason is not None
     assert resolved == ()
 
@@ -3143,7 +3277,7 @@ def test_git_restore_paths_denies_an_unrecognized_flag(flag: str) -> None:
     assume(flag not in checker._RESTORE_BOOLEAN_FLAGS | checker._RESTORE_VALUE_FLAGS)
     assume(not flag.startswith("--pathspec-from-file") and not flag.startswith("--recurse-submodules"))
     assume(flag not in ("--staged", "--no-staged", "--worktree", "--no-worktree"))
-    reason, resolved = checker._git_restore_paths([flag], {})
+    reason, resolved = checker._git_restore_paths([flag], {}, {})
     assert reason is not None
     assert resolved == ()
 
@@ -3617,7 +3751,7 @@ def test_git_checkout_paths_folds_branch_creation_flags_into_the_non_goal(flag: 
     discards the change while the old code reported this as checked-safe.
     Must now fold into the same honest, no-claim Non-goal bare `git
     checkout SOMENAME` already carries -- empty paths, not a false claim."""
-    reason, paths = checker._git_checkout_paths([flag, "newbranch", "other"], {})
+    reason, paths = checker._git_checkout_paths([flag, "newbranch", "other"], {}, {})
     assert reason is None
     assert paths == ()
 
@@ -3627,7 +3761,7 @@ def test_git_checkout_paths_branch_creation_flag_wins_even_with_a_double_dash() 
     exclusive with every pathspec-checkout mode (per `git checkout -h`'s
     own synopsis) -- the Non-goal fold must fire before sub-case (a)'s own
     `--`-present branch is ever reached, not only when `--` is absent."""
-    reason, paths = checker._git_checkout_paths(["-b", "newbranch", "--", "file.py"], {})
+    reason, paths = checker._git_checkout_paths(["-b", "newbranch", "--", "file.py"], {}, {})
     assert reason is None
     assert paths == ()
 
@@ -3636,7 +3770,7 @@ def test_git_checkout_paths_still_extracts_a_real_path_without_a_branch_creation
     """No regression from the branch-creation fold: an ordinary two-
     positional pathspec checkout with no `-b`/`-B`/`--orphan` present is
     unaffected."""
-    reason, paths = checker._git_checkout_paths(["a.py", "b.py"], {})
+    reason, paths = checker._git_checkout_paths(["a.py", "b.py"], {}, {})
     assert reason is None
     assert paths == ("a.py", "b.py")
 
@@ -3663,7 +3797,7 @@ def test_git_checkout_paths_denies_pathspec_from_file(flag: str) -> None:
     a file containing the real pathspecs, not an ambiguous ref/path.
     Live-verified end-to-end that this silently discarded a dirty tracked
     file listed in the control file."""
-    reason, resolved = checker._git_checkout_paths([flag, "files.txt"], {})
+    reason, resolved = checker._git_checkout_paths([flag, "files.txt"], {}, {})
     assert reason is not None
     assert resolved == ()
 
@@ -3683,7 +3817,7 @@ def test_rule_git_checkout_restore_accumulates_paths_across_segments(command_pat
     command (`git checkout -- a.py; git restore b.py`) accumulate paths
     from every segment, not just the first."""
     segments = [["git", "checkout", "--", *command_paths], ["git", "restore", *command_paths]]
-    reason, resolved = checker._rule_git_checkout_restore(segments, {}, {}, {})
+    reason, resolved = checker._rule_git_checkout_restore(segments, {}, {}, {}, {})
     assert reason is None
     assert resolved == (*command_paths, *command_paths)
 
@@ -3696,7 +3830,7 @@ def test_rule_git_checkout_restore_denies_when_git_dir_env_var_assigned() -> Non
     token-shape fact) rather than letting the live wrapper check the
     wrong tree."""
     segments = [["git", "checkout", "--", "f.py"]]
-    reason, resolved = checker._rule_git_checkout_restore(segments, {"GIT_DIR": "/tmp/x.git"}, {}, {})
+    reason, resolved = checker._rule_git_checkout_restore(segments, {"GIT_DIR": "/tmp/x.git"}, {}, {}, {})
     assert reason is not None
     assert resolved == ()
 
@@ -3707,7 +3841,7 @@ def test_rule_git_checkout_restore_denies_when_an_earlier_segment_is_cd() -> Non
     the wrapper's own fixed `.cwd` unsound for a LATER checkout/restore
     segment -- denied outright."""
     segments = [["cd", "/tmp"], ["git", "checkout", "--", "f.py"]]
-    reason, resolved = checker._rule_git_checkout_restore(segments, {}, {}, {})
+    reason, resolved = checker._rule_git_checkout_restore(segments, {}, {}, {}, {})
     assert reason is not None
     assert resolved == ()
 
@@ -3717,7 +3851,7 @@ def test_rule_git_checkout_restore_allows_cd_after_the_checkout_segment() -> Non
     `cd` in an EARLIER segment -- a `cd` AFTER the checkout/restore segment
     does not retroactively make the already-scanned segment unsound."""
     segments = [["git", "checkout", "--", "f.py"], ["cd", "/tmp"]]
-    reason, resolved = checker._rule_git_checkout_restore(segments, {}, {}, {})
+    reason, resolved = checker._rule_git_checkout_restore(segments, {}, {}, {}, {})
     assert reason is None
     assert resolved == ("f.py",)
 
@@ -3733,7 +3867,7 @@ def test_rule_git_checkout_restore_denies_when_an_earlier_segment_is_pushd_or_po
     claim that the wrapper's live check then found clean at the wrong
     `.cwd`, silently allowing a real, uncommitted-change discard."""
     segments = [[relocator, "/tmp"], ["git", "checkout", "--", "f.py"]]
-    reason, resolved = checker._rule_git_checkout_restore(segments, {}, {}, {})
+    reason, resolved = checker._rule_git_checkout_restore(segments, {}, {}, {}, {})
     assert reason is not None
     assert resolved == ()
 
@@ -3758,7 +3892,7 @@ def test_rule_git_checkout_restore_denies_when_an_earlier_segment_starts_with_a_
     `checkout_restore_paths` claim the same way round 9's own fix closed
     for the literal case."""
     segments = [["$X", "sub"], ["git", "checkout", "--", "f.py"]]
-    reason, resolved = checker._rule_git_checkout_restore(segments, {"X": "cd"}, {}, {})
+    reason, resolved = checker._rule_git_checkout_restore(segments, {"X": "cd"}, {}, {}, {})
     assert reason is not None
     assert resolved == ()
 
@@ -3770,7 +3904,7 @@ def test_rule_git_checkout_restore_allows_a_genuinely_vanishing_dynamic_word() -
     real bash would run whatever token follows as the actual command
     word instead, and that token is scanned on its own merits."""
     segments = [["${NEVERSET}", "sub"], ["git", "checkout", "--", "f.py"]]
-    reason, resolved = checker._rule_git_checkout_restore(segments, {}, {}, {})
+    reason, resolved = checker._rule_git_checkout_restore(segments, {}, {}, {}, {})
     assert reason is None
     assert resolved == ("f.py",)
 
@@ -3814,7 +3948,7 @@ def test_rule_git_checkout_restore_allows_a_dynamic_word_resolving_to_something_
     not a live production gap, since production always keeps the two
     dicts' own key sets in sync)."""
     segments = [["$EDITOR", "sub"], ["git", "checkout", "--", "f.py"]]
-    reason, resolved = checker._rule_git_checkout_restore(segments, {"EDITOR": "vim"}, {}, {"EDITOR": "vim"})
+    reason, resolved = checker._rule_git_checkout_restore(segments, {"EDITOR": "vim"}, {}, {"EDITOR": "vim"}, {})
     assert reason is None
     assert resolved == ("f.py",)
 
@@ -3893,7 +4027,7 @@ def test_dynamic_word_may_resolve_to_a_cwd_relocator_true_for_a_still_dynamic_ca
 
 def test_rule_git_checkout_restore_denies_a_still_dynamic_candidate() -> None:
     segments = [["${UNSET:-$OTHER}", "sub"], ["git", "checkout", "--", "f.py"]]
-    reason, resolved = checker._rule_git_checkout_restore(segments, {"OTHER": "cd"}, {}, {})
+    reason, resolved = checker._rule_git_checkout_restore(segments, {"OTHER": "cd"}, {}, {}, {})
     assert reason is not None
     assert resolved == ()
 
@@ -3928,7 +4062,7 @@ def test_rule_git_checkout_restore_denies_a_dynamic_relocator_behind_a_leading_v
     assigned) resolved to a CONFIDENT, WRONG `checkout_restore_paths`
     claim -- real bash genuinely runs `cd sub` there."""
     segments = [["$NEVERSET", "$X", "sub"], ["git", "checkout", "--", "f.py"]]
-    reason, resolved = checker._rule_git_checkout_restore(segments, {"X": "cd"}, {}, {})
+    reason, resolved = checker._rule_git_checkout_restore(segments, {"X": "cd"}, {}, {}, {})
     assert reason is not None
     assert resolved == ()
 
@@ -3971,7 +4105,7 @@ def test_rule_git_checkout_restore_denies_a_dynamic_relocator_behind_a_leading_r
     Live-verified before this fix: `X=cd; > /dev/null $X sub; git
     checkout -- dirty.py` resolved to a confident, wrong ALLOW."""
     segments = [[">", "/dev/null", "$X", "sub"], ["git", "checkout", "--", "f.py"]]
-    reason, resolved = checker._rule_git_checkout_restore(segments, {"X": "cd"}, {}, {})
+    reason, resolved = checker._rule_git_checkout_restore(segments, {"X": "cd"}, {}, {}, {})
     assert reason is not None
     assert resolved == ()
 
@@ -4105,13 +4239,13 @@ def test_git_checkout_paths_excludes_a_trailing_redirect_clause() -> None:
     wrapper check to wrongly deny whenever the unrelated append target
     happened to be dirty, even though an append redirect can never
     discard that file's existing content."""
-    deny_reason, paths = checker._git_checkout_paths(["--", "f.py", ">>", "unrelated_append_target.py"], {})
+    deny_reason, paths = checker._git_checkout_paths(["--", "f.py", ">>", "unrelated_append_target.py"], {}, {})
     assert deny_reason is None
     assert paths == ("f.py",)
 
 
 def test_git_restore_paths_excludes_a_trailing_redirect_clause() -> None:
-    deny_reason, paths = checker._git_restore_paths(["f.py", ">>", "unrelated_append_target.py"], {})
+    deny_reason, paths = checker._git_restore_paths(["f.py", ">>", "unrelated_append_target.py"], {}, {})
     assert deny_reason is None
     assert paths == ("f.py",)
 
@@ -4149,7 +4283,7 @@ def test_git_checkout_paths_does_not_drop_a_digit_shaped_path() -> None:
     real, dirty, tracked file) -- the classifier's own former digit-
     consuming redirect heuristic wrongly treated `2` as an fd-redirect
     prefix rather than a real path argument."""
-    deny_reason, paths = checker._git_checkout_paths(["--", "realfile.py", "2", ">", "target.txt"], {})
+    deny_reason, paths = checker._git_checkout_paths(["--", "realfile.py", "2", ">", "target.txt"], {}, {})
     assert deny_reason is None
     assert paths == ("realfile.py", "2")
 
@@ -4161,7 +4295,7 @@ def test_git_restore_paths_does_not_drop_a_real_path_behind_a_digit_redirect() -
     once `2` vanished into the wrongly-recognized redirect, `--source`'s
     own value-consumption swallowed `file.py` itself, the actual restore
     target, leaving nothing for the live wrapper check to examine."""
-    deny_reason, paths = checker._git_restore_paths(["--source", "2", ">", "target.txt", "file.py"], {})
+    deny_reason, paths = checker._git_restore_paths(["--source", "2", ">", "target.txt", "file.py"], {}, {})
     assert deny_reason is None
     assert paths == ("file.py",)
 
