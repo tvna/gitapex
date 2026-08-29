@@ -119,13 +119,13 @@
 
     "findings": {
       "type": "array",
-      "description": "One entry per dimension (references/dimensions.md, 1-24) actually assessed, for THIS instance's own artifactRef. A dimension not assessable from available evidence is reported with verdict=indeterminate and an indeterminateReason, never silently omitted (SKILL.md Stop boundaries). Exception: dimension 23 (reviewScoped=true) never varies by artifact and so must appear at most once across the whole review's set of instances -- on the same instance that carries the non-null coverageAttestation (SKILL.md Procedure step 5), never repeated on every per-artifact instance and never present on an instance that has no coverageAttestation.",
+      "description": "One entry per dimension (references/dimensions.md, 1-25) actually assessed, for THIS instance's own artifactRef. A dimension not assessable from available evidence is reported with verdict=indeterminate and an indeterminateReason, never silently omitted (SKILL.md Stop boundaries). Exception: dimension 23 (reviewScoped=true) never varies by artifact and so must appear at most once across the whole review's set of instances -- on the same instance that carries the non-null coverageAttestation (SKILL.md Procedure step 5), never repeated on every per-artifact instance and never present on an instance that has no coverageAttestation.",
       "items": {
         "type": "object",
         "required": ["dimensionId", "lane", "verdict"],
         "additionalProperties": false,
         "properties": {
-          "dimensionId": { "type": "integer", "minimum": 1, "maximum": 24 },
+          "dimensionId": { "type": "integer", "minimum": 1, "maximum": 25 },
           "lane": { "type": "string", "enum": ["deterministic-shape", "probabilistic-maturity"] },
           "domainGeneralization": {
             "type": "string",

@@ -52,13 +52,13 @@ def test_main_with_no_argv_defaults_to_this_repository() -> None:
     assert G.main([]) == 0
 
 
-def test_real_content_lane_counts_are_six_and_twenty_four() -> None:
+def test_real_content_lane_counts_are_six_and_twenty_five() -> None:
     """Pin the real repository's own current lane spans, so a future
     dimension addition that forgets to update this test file is at least
     forced to look at it -- not itself a drift lock, just a sanity anchor."""
     counts, problems = G.compute_lane_counts(G.read_text(REAL_SKILL_DIR / G.DIMENSIONS_MD))
     assert problems == []
-    assert counts == G.LaneCount(shape_max=6, dimension_max=24)
+    assert counts == G.LaneCount(shape_max=6, dimension_max=25)
 
 
 # --- Sequence lock: gap / duplicate / out-of-order ----------------------------
@@ -189,11 +189,11 @@ def test_stale_dimension_range_declaration_fails(tmp_path: Path) -> None:
     _mutate(
         skill_dir,
         G.DIMENSIONS_MD,
+        "**Probabilistic-maturity dimensions** (7-25)",
         "**Probabilistic-maturity dimensions** (7-24)",
-        "**Probabilistic-maturity dimensions** (7-23)",
     )
     problems = G.scan(skill_dir)
-    assert any("declares dimensions '(7-23)' but 18 dimension item(s)" in p for p in problems), problems
+    assert any("declares dimensions '(7-24)' but 19 dimension item(s)" in p for p in problems), problems
 
 
 def test_missing_shape_range_declaration_fails(tmp_path: Path) -> None:
@@ -208,8 +208,8 @@ def test_missing_dimension_range_declaration_fails(tmp_path: Path) -> None:
     _mutate(
         skill_dir,
         G.DIMENSIONS_MD,
-        "**Probabilistic-maturity dimensions** (7-24)",
-        "Probabilistic-maturity dimensions (7-24)",
+        "**Probabilistic-maturity dimensions** (7-25)",
+        "Probabilistic-maturity dimensions (7-25)",
     )
     problems = G.scan(skill_dir)
     assert any("dimension range lock cannot run" in p for p in problems), problems
@@ -238,10 +238,10 @@ def test_second_stale_dimension_range_declaration_is_still_caught(tmp_path: Path
         G.DIMENSIONS_MD,
         "## Probabilistic-maturity dimensions\n",
         "## Probabilistic-maturity dimensions\n\n"
-        "As a reminder, **Probabilistic-maturity dimensions** (7-23) stay open-ended.\n",
+        "As a reminder, **Probabilistic-maturity dimensions** (7-24) stay open-ended.\n",
     )
     problems = G.scan(skill_dir)
-    assert any("declares dimensions '(7-23)' but 18 dimension item(s)" in p for p in problems), problems
+    assert any("declares dimensions '(7-24)' but 19 dimension item(s)" in p for p in problems), problems
 
 
 def test_unrelated_trailing_section_is_not_swept_into_dimension_lane(tmp_path: Path) -> None:
@@ -266,7 +266,7 @@ def test_dimension_reference_beyond_the_real_max_fails_in_dimensions_md(tmp_path
     skill_dir = _copy_skill(tmp_path)
     _mutate(skill_dir, G.DIMENSIONS_MD, "dimension 10 already cite", "dimension 99 already cite")
     problems = G.scan(skill_dir)
-    assert any("cites 'dimension 99' but dimensions are only numbered 7-24" in p for p in problems), problems
+    assert any("cites 'dimension 99' but dimensions are only numbered 7-25" in p for p in problems), problems
 
 
 def test_dimension_reference_naming_a_shape_check_number_fails(tmp_path: Path) -> None:
@@ -276,7 +276,7 @@ def test_dimension_reference_naming_a_shape_check_number_fails(tmp_path: Path) -
     skill_dir = _copy_skill(tmp_path)
     _mutate(skill_dir, G.DIMENSIONS_MD, "dimension 10 already cite", "dimension 3 already cite")
     problems = G.scan(skill_dir)
-    assert any("cites 'dimension 3' but dimensions are only numbered 7-24" in p for p in problems), problems
+    assert any("cites 'dimension 3' but dimensions are only numbered 7-25" in p for p in problems), problems
 
 
 def test_shape_check_reference_beyond_the_real_max_fails(tmp_path: Path) -> None:
@@ -315,7 +315,7 @@ def test_valid_dimension_reference_to_the_newest_dimension_passes(tmp_path: Path
     """A reference to the highest real dimension number is legitimate, not
     a false positive -- the range check is inclusive at both ends."""
     skill_dir = _copy_skill(tmp_path)
-    _mutate(skill_dir, G.SKILL_MD, "dimension 15's ground", "dimension 24's ground")
+    _mutate(skill_dir, G.SKILL_MD, "dimension 15's ground", "dimension 25's ground")
     assert G.scan(skill_dir) == []
 
 
@@ -324,16 +324,16 @@ def test_valid_dimension_reference_to_the_newest_dimension_passes(tmp_path: Path
 
 def test_stale_schema_dimension_id_maximum_fails(tmp_path: Path) -> None:
     skill_dir = _copy_skill(tmp_path)
-    _mutate(skill_dir, G.SCHEMA_JSON, '"maximum": 24', '"maximum": 23')
+    _mutate(skill_dir, G.SCHEMA_JSON, '"maximum": 25', '"maximum": 24')
     problems = G.scan(skill_dir)
-    assert any("dimensionId.maximum is 23 but 24 is the real highest" in p for p in problems), problems
+    assert any("dimensionId.maximum is 24 but 25 is the real highest" in p for p in problems), problems
 
 
 def test_stale_schema_findings_description_range_fails(tmp_path: Path) -> None:
     skill_dir = _copy_skill(tmp_path)
-    _mutate(skill_dir, G.SCHEMA_JSON, "dimensions.md, 1-24", "dimensions.md, 1-23")
+    _mutate(skill_dir, G.SCHEMA_JSON, "dimensions.md, 1-25", "dimensions.md, 1-24")
     problems = G.scan(skill_dir)
-    assert any("cites 'dimensions.md, 1-23' but 24 is the real highest" in p for p in problems), problems
+    assert any("cites 'dimensions.md, 1-24' but 25 is the real highest" in p for p in problems), problems
 
 
 def test_second_stale_schema_range_citation_is_still_caught(tmp_path: Path) -> None:
@@ -343,10 +343,10 @@ def test_second_stale_schema_range_citation_is_still_caught(tmp_path: Path) -> N
     skill_dir = _copy_skill(tmp_path)
     path = skill_dir / G.SCHEMA_JSON
     schema = json.loads(path.read_text(encoding="utf-8"))
-    schema["properties"]["findings"]["description"] += " See also dimensions.md, 1-23 for an older count."
+    schema["properties"]["findings"]["description"] += " See also dimensions.md, 1-24 for an older count."
     path.write_text(json.dumps(schema), encoding="utf-8")
     problems = G.scan(skill_dir)
-    assert any("cites 'dimensions.md, 1-23' but 24 is the real highest" in p for p in problems), problems
+    assert any("cites 'dimensions.md, 1-24' but 25 is the real highest" in p for p in problems), problems
 
 
 def test_malformed_schema_json_is_a_scan_error(tmp_path: Path) -> None:
@@ -361,7 +361,7 @@ def test_missing_schema_max_node_is_a_scan_error(tmp_path: Path) -> None:
     _mutate(
         skill_dir,
         G.SCHEMA_JSON,
-        '"dimensionId": { "type": "integer", "minimum": 1, "maximum": 24 }',
+        '"dimensionId": { "type": "integer", "minimum": 1, "maximum": 25 }',
         '"dimensionId": {}',
     )
     with pytest.raises(G.ScanError, match="no node at"):
@@ -391,19 +391,19 @@ def test_schema_description_with_no_range_span_fails(tmp_path: Path) -> None:
 # --- A whole new dimension landing correctly should still pass -----------------
 
 
-def test_scan_passes_after_a_well_formed_dimension_25_lands(tmp_path: Path) -> None:
+def test_scan_passes_after_a_well_formed_dimension_26_lands(tmp_path: Path) -> None:
     """Every dependent citation moved together for a hypothetical dimension
-    25 -- the lock should hold, proving it is not simply hardcoded to 24."""
+    26 -- the lock should hold, proving it is not simply hardcoded to 25."""
     skill_dir = _copy_skill(tmp_path)
     # The dimension lane is the last section in the real document, so
-    # appending directly lands dimension 25 in real document order, after
-    # 24's own body ends -- no insert-then-renumber dance needed.
+    # appending directly lands dimension 26 in real document order, after
+    # 25's own body ends -- no insert-then-renumber dance needed.
     text = (skill_dir / G.DIMENSIONS_MD).read_text(encoding="utf-8")
-    text = text.rstrip("\n") + "\n25. **Invented follow-on dimension.** Body text for a hypothetical dimension.\n"
-    text = text.replace("**Probabilistic-maturity dimensions** (7-24)", "**Probabilistic-maturity dimensions** (7-25)")
+    text = text.rstrip("\n") + "\n26. **Invented follow-on dimension.** Body text for a hypothetical dimension.\n"
+    text = text.replace("**Probabilistic-maturity dimensions** (7-25)", "**Probabilistic-maturity dimensions** (7-26)")
     (skill_dir / G.DIMENSIONS_MD).write_text(text, encoding="utf-8")
-    _mutate(skill_dir, G.SCHEMA_JSON, '"maximum": 24', '"maximum": 25')
-    _mutate(skill_dir, G.SCHEMA_JSON, "dimensions.md, 1-24", "dimensions.md, 1-25")
+    _mutate(skill_dir, G.SCHEMA_JSON, '"maximum": 25', '"maximum": 26')
+    _mutate(skill_dir, G.SCHEMA_JSON, "dimensions.md, 1-25", "dimensions.md, 1-26")
     assert G.scan(skill_dir) == []
 
 

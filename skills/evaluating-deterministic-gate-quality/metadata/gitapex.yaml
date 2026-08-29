@@ -730,6 +730,20 @@ spec:
       outcome:
         fixed: 1
         lines: "dimensions.md 553->560, output-schema.json 398->403"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1385"
+      summary: "Added Dimension 25 (Idempotency: convergence after partial execution and retry) to references/dimensions.md's probabilistic-maturity lane, appended after dimension 24 without renumbering (lane range 7-24 -> 7-25). Distinct from dimension 6 (timeout/budget) and dimension 15 (fail-closed on malformed input). Includes an inline CI-job-step worked example (re-run after a simulated mid-step timeout) and an explicit not-applicable case for a pure read-only gate."
+      outcome:
+        lines: "dimensions.md 560->601"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1385"
+      summary: "Added the same 'Optional upgrade... capped at a small explicit N' sentence evaluating-skill-quality's own Subagent dispatch section already carries, to this skill's own Subagent dispatch section -- adapted so the upgrade applies only once this section's own conditional trigger (unlike evaluating-skill-quality's unconditional one) fires. Folded onto an existing line rather than a new one, so the 500-line body-length shape check still holds: 500->500."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1385"
+      summary: "output-schema.json's findings[].dimensionId.maximum bumped 24->25 and the findings-array description's 'dimensions.md, 1-24' citation bumped to 'dimensions.md, 1-25', mirroring https://github.com/tvna/gitapex/issues/1229's own companion edit for dimension 24. Not in this issue's stated file scope; made anyway since gitapex_scan_dimensions_numbering_drift.py hard-fails a dimension/schema mismatch -- confirmed clean after. No line-count change."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1385"
+      summary: "eval-status.md's coverage headline and uncovered-dimensions sentence bumped (13/24 -> 13/25) and a paragraph added explaining Dimension 25 has no fixture yet, mirroring Dimension 24's own paragraph -- required by test_gitapex_evaluating_deterministic_gate_quality_dimension_coverage.py (https://github.com/tvna/gitapex/issues/511), confirmed passing after this change. Not in this issue's own scope constraint; same hard-CI-gate reason as the schema bump above."
   skillDependencies:
     requires:
       - evaluating-skill-quality
