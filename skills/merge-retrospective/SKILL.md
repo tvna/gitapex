@@ -168,11 +168,12 @@ such taxonomy applies only `retrospective`, unchanged from before.
      - **Match found, body still carries the opener's own stub marker text**
        (`"Automated stub opened by the post-merge-auto-retro gate"` --
        unenriched) -> fill the stub, don't open a second issue. Continue into
-       Step 1; when Step 5 files, call `issue_write` method `update` on that
-       issue number instead of `create`, replacing the stub body with Step 5's
-       full Repairs content, and add the repository's secondary lifecycle label
-       (if any) alongside `retrospective`. Cross-linking (Step 6) and
-       verification (Step 7) still apply to the updated issue.
+       Step 1; when Step 5 files, call `issue_write` method `update` on
+       that issue (never `create`) with whichever body shape this cycle
+       calls for (full Repairs, or Zero-repair fast-close -- its
+       confirm-then-close rule still applying), and add the secondary
+       lifecycle label (if any) alongside `retrospective`. Cross-linking
+       (Step 6) and verification (Step 7) still apply.
      - **Match found, body no longer carries the marker** -> a prior run (this
        skill, an earlier pass, or a human) already enriched this PR's
        retrospective; nothing is left to file. Do not overwrite real content or
@@ -297,17 +298,16 @@ such taxonomy applies only `retrospective`, unchanged from before.
      body ends up in: record every repair using the Repair record format
      above (`Classification`, `Status`, and -- for a
      missing-deterministic-gate repair only -- `Proposed gate`), not a
-     free paragraph. Proposing a gate is proposing, not implementing, in
-     this cycle (implementing gates is separate follow-on work). For
-     "unclear agent instruction" and "external/human decision" repairs,
-     the `Classification` line's own rationale clause is the required
-     one-line rationale; noting what instruction would have helped is
-     useful context but not a required deliverable the way the gate
-     proposal is. If Step 1 found any unimplemented prior gates, include
-     them here as their own **"Carried-forward gate"** subsection, in
-     the same record format (`Status` set to `carried-forward`), distinct
-     from this cycle's Repairs section -- omit the subsection entirely
-     when Step 1 found nothing to carry forward.
+     free paragraph. For "unclear agent instruction" and
+     "external/human decision" repairs, the `Classification` line's own
+     rationale clause is the required one-line rationale; noting what
+     instruction would have helped is useful context but not a required
+     deliverable the way the gate proposal is. If Step 1 found any
+     unimplemented prior gates, include them here as their own
+     **"Carried-forward gate"** subsection, in the same record format
+     (`Status` set to `carried-forward`), distinct from this cycle's
+     Repairs section -- omit the subsection entirely when Step 1 found
+     nothing to carry forward.
    - **Zero-repair fast-close.** When Step 2 finds no repairs at all
      **and** Step 1 found nothing to carry forward, file a single-
      paragraph issue body instead of the full Repairs shape above --
@@ -478,9 +478,9 @@ pursued -- this issue only records the repairs and proposes it, per
 merge-retrospective's Stop boundary.
 ```
 
-For a zero-repair cycle, Step 5's fast-close path files a single-
-paragraph issue body instead of the full shape above, then closes it
-in the same step -- for example:
+For a zero-repair cycle, Step 5's fast-close path files (or updates an
+existing stub with) a single-paragraph body, closed once confirmed --
+for example:
 
 ```
 Title: Merge retrospective: PR #63
