@@ -584,9 +584,9 @@ def test_load_gate_tracking_issues_raises_when_gates_list_missing_or_empty(tmp_p
 
 def test_load_gate_tracking_issues_excludes_non_int_and_bool_values(tmp_path):
     # `bool` is an `int` subclass in Python -- a stray `true`/`false` must
-    # not be silently coerced into corroborating issue #1/#0. Strings,
-    # floats, and lists are equally malformed and must also be excluded
-    # rather than crashing or being accepted.
+    # not be silently coerced into corroborating issue #1/#0. Strings and
+    # floats are equally malformed and must also be excluded rather than
+    # crashing or being accepted.
     ssot = tmp_path / "ssot.json"
     ssot.write_text(
         json.dumps(
@@ -596,13 +596,55 @@ def test_load_gate_tracking_issues_excludes_non_int_and_bool_values(tmp_path):
                     {"id": "b", "tracking_issue": False},
                     {"id": "c", "tracking_issue": "297"},
                     {"id": "d", "tracking_issue": 297.0},
-                    {"id": "e", "tracking_issue": [297]},
                     {"id": "f", "tracking_issue": 650},
                 ]
             }
         )
     )
     assert gate.load_gate_tracking_issues(str(ssot)) == {650}
+
+
+def test_load_gate_tracking_issues_flattens_list_values(tmp_path):
+    # Issue #1425: a gate legitimately tracked under more than one issue
+    # (a shared umbrella issue plus the issue whose repair actually
+    # implemented it) stores tracking_issue as a list -- every int in it
+    # corroborates, and non-int/bool entries within the list are excluded
+    # the same as a bare scalar value would be.
+    ssot = tmp_path / "ssot.json"
+    ssot.write_text(
+        json.dumps(
+            {
+                "gates": [
+                    {"id": "a", "tracking_issue": [520, 344]},
+                    {"id": "b", "tracking_issue": [297, 422, 426]},
+                    {"id": "c", "tracking_issue": [650, True, "297", 297.0]},
+                    {"id": "d", "tracking_issue": 999},
+                ]
+            }
+        )
+    )
+    assert gate.load_gate_tracking_issues(str(ssot)) == {520, 344, 297, 422, 426, 650, 999}
+
+
+def test_load_gate_tracking_issues_flatten_rejects_nested_list_and_empty_list(tmp_path):
+    # Defeat case (dimension 15, fail-closed on malformed input): a
+    # schema-invalid but not-impossible hand-edited shape -- a list
+    # nested inside the tracking_issue list, or an empty list -- must be
+    # excluded rather than crashing the flatten loop or silently
+    # corroborating something it never named.
+    ssot = tmp_path / "ssot.json"
+    ssot.write_text(
+        json.dumps(
+            {
+                "gates": [
+                    {"id": "a", "tracking_issue": [[297], 344]},
+                    {"id": "b", "tracking_issue": []},
+                    {"id": "c", "tracking_issue": 650},
+                ]
+            }
+        )
+    )
+    assert gate.load_gate_tracking_issues(str(ssot)) == {344, 650}
 
 
 # ---------------------------------------------------------------------------
