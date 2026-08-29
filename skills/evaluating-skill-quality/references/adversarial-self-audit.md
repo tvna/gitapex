@@ -188,6 +188,27 @@ a mechanism the reading run has not itself controlled for.
 Portable across platforms -- run this to test any candidate dispatch
 mechanism, not only the ones already recorded below.
 
+**Before trusting an existing Known entries record, run this check --
+unconditionally, every time, never only when an entry "looks" stale.**
+Compare the current session's own identifying signal(s) (environment
+variable values, `claude --version` output, and any other signal the
+candidate entry records) against that entry's recorded signal(s), field by
+field:
+
+- **Every signal matches exactly.** The entry's conclusion may be trusted
+  as-is; no live re-run is required.
+- **Any signal differs, or no entry exists at all** -- a newer CLI version,
+  a changed environment variable, an unlisted platform indicator, or an
+  absent entry -- run the numbered Verification procedure below in full and
+  record a new entry per step 4, rather than extending an existing entry's
+  conclusion to a platform or version it was not actually tested on.
+
+The check itself is unconditional; only its outcome (skip vs. re-run) is
+conditional on the comparison. This is a mechanical field comparison, not a
+judgment call about whether the entry seems current -- the reader in a
+position to notice staleness subjectively is exactly the reader this
+check does not rely on.
+
 1. **Positive control.** This step proves the *mechanism* can see a
    project-instruction file at all, so that a "none loaded" in step 2 means
    something. It does not need the calling repository's real file, and by
@@ -260,10 +281,10 @@ mechanism, not only the ones already recorded below.
   an isolated directory outside any such repository's ancestry.
 - **Caveat**: a dated empirical observation on the tested `claude` CLI and
   harness versions above, not a permanent property of "the Agent tool" as a
-  concept. Re-run the Verification procedure above if this entry looks
-  stale, the harness version has changed materially, or the result seems
-  inconsistent with current behavior -- never extend this entry's
-  conclusion to a platform or version it was not actually tested on.
+  concept. Before trusting this entry, run the unconditional
+  identifying-signal comparison at the top of Verification procedure above;
+  re-run that procedure in full on any mismatch -- never extend this
+  entry's conclusion to a platform or version it was not actually tested on.
 - **Reconfirmed 2026-07-28**: same identifying signals as above
   (`CLAUDE_CODE_REMOTE=true`, `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=
   cloud_default`, `claude --version` again reported `2.1.220 (Claude
@@ -425,7 +446,8 @@ mechanism, not only the ones already recorded below.
   target through a real marketplace/plugin install instead of `--plugin-dir`
   loading it directly.
 - **Dated**: 2026-07-30, same version pin as the entry above; re-run the
-  Verification procedure if this entry looks stale.
+  Verification procedure on any identifying-signal mismatch (see the
+  unconditional check above).
 
 #### `claude plugin marketplace add` + `claude plugin install` combined with cwd/HOME isolation
 
@@ -481,7 +503,8 @@ mechanism, not only the ones already recorded below.
   target before treating any resulting score as evidence of genuine
   dispatch.
 - **Dated**: 2026-07-31, same version pin as the two entries above; re-run
-  the Verification procedure if this entry looks stale.
+  the Verification procedure on any identifying-signal mismatch (see the
+  unconditional check above).
 
 #### Plain `claude -p` (no permission-bypass flag) with cwd isolation only
 
@@ -548,7 +571,8 @@ mechanism, not only the ones already recorded below.
   than assume it is unnecessary because this entry omitted it.
 - **Dated**: 2026-08-15, same run as a `scorer-gated-skill-edits` held-out
   gate cycle for this skill's own `references/rubric.md`; re-run the
-  Verification procedure if this entry looks stale.
+  Verification procedure on any identifying-signal mismatch (see the
+  unconditional check above).
 - **Reconfirmed 2026-08-25**: same identifying signals as above
   (`CLAUDE_CODE_REMOTE=true`, `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=
   cloud_default`), but `claude --version` now reports `2.1.241 (Claude
@@ -607,6 +631,25 @@ mechanism, not only the ones already recorded below.
   (target snapshots reused across dispatches), not deleted immediately
   after the two controls as the Verification procedure's step 1 default
   describes -- deleted once the round's dispatches completed.
+- **Same-run, unreviewed** (per Trust class above): same identifying
+  signals as the entries above (`CLAUDE_CODE_REMOTE=true`,
+  `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=cloud_default`), but `claude
+  --version` now reports `2.1.251 (Claude Code)`, newer than the `2.1.246`
+  the entry above covers -- a fresh run of the new unconditional
+  identifying-signal comparison this Verification procedure section now
+  requires (rather than a discretionary "looks stale" judgment), run ahead
+  of an isolated dispatch that re-graded state-management axis 9 and axis 3
+  against this same change. Positive control (isolated cwd containing a
+  synthetic sentinel
+  `CLAUDE.md`, never the real file, prompt passed as a single
+  self-contained CLI argument, no permission-bypass flag): correctly
+  quoted the sentinel sentence verbatim. Negative control (isolated cwd,
+  same prompt, no `CLAUDE.md`/`AGENTS.md` anywhere in its ancestry,
+  directly confirmed via a filesystem walk from `/`): correctly reported
+  none loaded. Both held at this version; the verified alternative still
+  isolates `CLAUDE.md`/`AGENTS.md` correctly with no permission-bypass
+  flag. Scratch directories deleted after recording the outcome, per the
+  Verification procedure's own step 1 default.
 
 ### Unlisted platform
 
