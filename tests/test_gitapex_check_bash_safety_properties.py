@@ -3192,6 +3192,76 @@ def test_shlex_default_punctuation_chars_still_matches_the_hardcoded_extension()
     assert default_lexer.punctuation_chars == "();<>|&"
 
 
+def test_strip_line_continuations_removes_an_unquoted_backslash_newline() -> None:
+    """CRITICAL regression pin (round-3 independent review). An ordinary
+    line-continued command -- backslash immediately followed by a newline,
+    outside any quoting -- must vanish entirely, exactly as real bash
+    resolves it, joining the two physical lines with nothing left behind."""
+    assert checker._strip_line_continuations("git checkout -- \\\nfile.py") == "git checkout -- file.py"
+
+
+def test_strip_line_continuations_removes_a_double_quoted_backslash_newline() -> None:
+    """Real bash also removes a backslash-newline pair INSIDE double
+    quotes (backslash retains its escaping meaning there), unlike shlex's
+    own posix-mode escape handling, which left both characters untouched."""
+    assert checker._strip_line_continuations('echo "a\\\nb"') == 'echo "ab"'
+
+
+def test_strip_line_continuations_preserves_a_single_quoted_backslash_newline() -> None:
+    """Inside single quotes, backslash has no special meaning at all, so a
+    literal backslash-newline pair there must stay exactly as written --
+    confirmed live real bash does not join these two lines."""
+    assert checker._strip_line_continuations("echo 'a\\\nb'") == "echo 'a\\\nb'"
+
+
+def test_strip_line_continuations_does_not_double_consume_an_escaped_backslash() -> None:
+    """An escaped literal backslash (`\\\\`) must consume its own pair
+    atomically so the second backslash is never re-examined as a fresh,
+    wrongly-applied escape-introducer for the newline that follows it --
+    confirmed live real bash keeps this newline (the second backslash was
+    already spent escaping the first)."""
+    assert checker._strip_line_continuations('echo "a\\\\\nb"') == 'echo "a\\\\\nb"'
+
+
+def test_strip_line_continuations_preserves_a_raw_quoted_newline() -> None:
+    """A genuine embedded newline inside a quoted string, with no
+    preceding backslash at all, is real string content, not a line
+    continuation, and must never be stripped."""
+    assert checker._strip_line_continuations('echo "line1\nline2"') == 'echo "line1\nline2"'
+
+
+@_PROPERTIES
+@given(text=st.text(alphabet=st.characters(blacklist_characters="\\'\"\n"), max_size=40))
+def test_strip_line_continuations_is_a_no_op_without_backslash_or_quote(text: str) -> None:
+    """Property: with no backslash, quote, or newline in the input at
+    all, `_strip_line_continuations` cannot find anything to remove, so it
+    must return the input byte-for-byte unchanged."""
+    assert checker._strip_line_continuations(text) == text
+
+
+@_PROPERTIES
+@given(text=st.text(alphabet="ab\\'\"\n", max_size=12))
+def test_strip_line_continuations_is_idempotent(text: str) -> None:
+    """Property: running the pass twice must equal running it once -- once
+    every unescaped, non-single-quoted backslash-newline pair is removed,
+    a second pass over the result finds nothing further to remove."""
+    once = checker._strip_line_continuations(text)
+    twice = checker._strip_line_continuations(once)
+    assert once == twice
+
+
+def test_classify_denies_a_line_continued_checkout_path_that_used_to_bypass() -> None:
+    """End-to-end regression pin for the round-3 independent-review
+    finding: an ordinary `\\`-then-newline-wrapped `git checkout --
+    file.py` must resolve to the real path (`file.py`), not a path with a
+    literal leading newline baked in (`'\\nfile.py'`, which the live `git
+    diff` wrapper check would silently run against a nonexistent path and
+    allow through)."""
+    verdict = checker.classify("git checkout -- \\\nfile.py")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("file.py",)
+
+
 @_PROPERTIES
 @given(command_paths=st.lists(_PATH_TOKENS, min_size=1, max_size=3))
 def test_rule_git_checkout_restore_accumulates_paths_across_segments(command_paths: list[str]) -> None:

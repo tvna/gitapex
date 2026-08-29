@@ -237,6 +237,23 @@ if [ "$checkout_restore_paths_count" -gt 0 ]; then
   else
     diff_base="4b825dc642cb6eb9a060e54bf8d69288fbee4904"
   fi
+  # Disclosed, accepted residual (round-3 independent review, issue #1375):
+  # a bare `git checkout -- PATH` / `git restore PATH` restores the
+  # WORKING TREE from the INDEX, not from HEAD -- so a path that was
+  # `git add`-ed with no further unstaged edit (worktree == index, but
+  # index != HEAD) is a genuine no-op checkout/restore, yet this check
+  # diffs against HEAD/the empty tree and denies it as if it would
+  # discard something. Confirmed live: stage a change with no further
+  # edit, then `git checkout -- PATH` changes nothing on disk, but this
+  # diff_base comparison still reports a difference. Deliberately left
+  # as-is rather than special-cased per flag combination (`--staged`
+  # alone already skips this check entirely below, since unstaging alone
+  # never discards file content) -- the failure direction is safe
+  # (over-denial only, matching every other explicit-source variant this
+  # check already treats the same conservative way; it never under-denies
+  # a real discard), and the existing deny message's `git checkout -m --`
+  # / `git add` remedies still resolve it as a false alarm the caller can
+  # work around.
   # Fed via process substitution (`< <(...)`), not a pipe
   # (`... | while read`) -- bash runs a pipe's right-hand side in a
   # subshell, where `deny`'s own `exit 2` would only exit that subshell,

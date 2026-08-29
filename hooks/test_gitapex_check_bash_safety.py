@@ -1353,6 +1353,23 @@ def test_checkout_denied_when_target_has_uncommitted_changes(tmp_path: Path) -> 
     assert "git stash" in payload["systemMessage"]
 
 
+def test_checkout_denied_when_the_command_uses_an_ordinary_line_continuation(tmp_path: Path) -> None:
+    """CRITICAL regression pin (round-3 independent review, issue #1375).
+    An everyday line-wrapping style for a long git command -- a trailing
+    backslash before the newline -- must still resolve to the real path
+    (`f.py`), not a path with a literal leading newline baked in that the
+    live `git diff` check would silently run against a nonexistent path
+    and allow through."""
+    repo_dir = tmp_path / "repo"
+    file_path = _init_repo_with_committed_file(repo_dir)
+    file_path.write_text("hello\ndirty\n")
+    result = run("git checkout -- \\\nf.py", payload_cwd=str(repo_dir))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+    payload = json.loads(result.stderr)
+    assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "f.py" in payload["systemMessage"]
+
+
 def test_checkout_denied_from_a_subdirectory_when_target_has_uncommitted_changes(tmp_path: Path) -> None:
     """The near-miss's own exact shape (issue #1375, issue #1128 repair 4):
     replayed from a SUBDIRECTORY of the repo, not just the repo root --
@@ -1377,6 +1394,36 @@ def test_checkout_allowed_when_target_is_clean(tmp_path: Path) -> None:
     assert result.returncode == 0, f"stderr={result.stderr!r}"
     assert result.stdout == ""
     assert result.stderr == ""
+
+
+def test_checkout_denied_for_a_staged_no_op_pins_the_disclosed_over_denial(tmp_path: Path) -> None:
+    """Disclosed, accepted residual (round-3 independent review, issue
+    #1375), pinned rather than left silently uncovered: `git checkout --
+    PATH` restores the working tree from the INDEX, not HEAD, so staging a
+    change with no further unstaged edit (worktree == index, index !=
+    HEAD) makes the checkout a genuine no-op on disk. This check still
+    diffs against HEAD and denies it -- over-denial only, the safe
+    direction, never a missed real discard. If this check is ever changed
+    to diff against the index for the non-`--staged` case, this test's
+    own assertion must flip to `returncode == 0` alongside it."""
+    repo_dir = tmp_path / "repo"
+    file_path = _init_repo_with_committed_file(repo_dir)
+    file_path.write_text("hello\nstaged\n")
+    _git(repo_dir, "add", "f.py")
+    result = run("git checkout -- f.py", payload_cwd=str(repo_dir))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+    payload = json.loads(result.stderr)
+    assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
+    before = file_path.read_text()
+    subprocess.run(
+        ["git", "checkout", "--", "f.py"],
+        cwd=str(repo_dir),
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert file_path.read_text() == before, "real git checkout is a no-op here, confirming the denial was spurious"
 
 
 def test_checkout_dot_denied_when_a_tracked_file_is_dirty(tmp_path: Path) -> None:

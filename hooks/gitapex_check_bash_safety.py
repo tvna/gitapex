@@ -872,6 +872,94 @@ def _rule_command_substitution_content(tokens: list[str]) -> tuple[str | None, b
     return None, is_git_push, tuple(checkout_restore_paths)
 
 
+def _strip_line_continuations(command: str) -> str:
+    """POSIX shell removes a backslash immediately followed by a newline
+    ("\\<newline>") entirely, wherever backslash is an active escape
+    character -- unquoted and inside double quotes -- joining the two
+    physical lines into one logical line with nothing left behind
+    (confirmed live: `echo \\` + newline + `text` runs as `echo text`,
+    one argument, no embedded newline). Inside single quotes, backslash
+    has no special meaning at all, so a literal backslash-newline pair
+    there stays exactly as written (confirmed live).
+
+    `shlex`'s own posix-mode escape handling does not implement this
+    line-joining rule: for an UNQUOTED backslash-newline it strips only
+    the backslash and leaves the newline embedded in the resulting token;
+    for a DOUBLE-QUOTED one it leaves both characters untouched. So a
+    completely ordinary line-continued git command -- `git checkout --
+    \\` + newline + `file.py`, an everyday style for wrapping a long
+    command -- tokenized to a path token with a leading literal newline
+    baked in (`'\\nfile.py'`) instead of the real path (`'file.py'`).
+    `_resolve_path_tokens` then resolved that literal (non-dynamic)
+    token as-is, and the wrapper's live `git diff` check ran against a
+    nonexistent path and reported clean, silently allowing a real,
+    dirty-file checkout through. A live, verified bypass of the entire
+    checkout/restore guard for ordinary line-wrapping, not exotic
+    obfuscation. Found by independent adversarial review of the
+    checkout/restore feature itself (round 3, issue #1375).
+
+    This is a narrow, single-purpose preprocessing pass run BEFORE
+    `shlex` ever sees the command: it tracks only single-vs-double-vs-
+    unquoted state (the same quote state `shlex` itself already computes
+    downstream) and removes exactly a backslash immediately followed by
+    a newline, only when not inside single quotes. Every other
+    character -- including every other backslash-escape sequence -- is
+    passed through completely UNCHANGED (byte-for-byte identical to the
+    input) for `shlex`'s own existing, already-tested escape resolution
+    to still handle exactly as before; the only possible divergence from
+    pure identity-passthrough is the removed backslash-newline pairs.
+
+    An escape pair is always consumed two source characters at a time
+    (never one), so a `\\\\` (an escaped literal backslash) does not
+    leave its second backslash dangling as a fresh, wrongly-re-examined
+    escape-introducer for whatever follows -- confirmed live this
+    matters: `"\\\\` + newline + `b"` keeps the newline (the second
+    backslash was already spent escaping the first, so the newline that
+    follows is a plain literal character), while `"\\` + newline + `b"`
+    (a single leading backslash) removes it."""
+    result: list[str] = []
+    in_single = False
+    in_double = False
+    i = 0
+    n = len(command)
+    while i < n:
+        ch = command[i]
+        if in_single:
+            result.append(ch)
+            if ch == "'":
+                in_single = False
+            i += 1
+            continue
+        if ch == "\\" and i + 1 < n:
+            nxt = command[i + 1]
+            if nxt == "\n":
+                i += 2
+                continue
+            result.append(ch)
+            result.append(nxt)
+            i += 2
+            continue
+        if in_double:
+            if ch == '"':
+                in_double = False
+            result.append(ch)
+            i += 1
+            continue
+        if ch == "'":
+            in_single = True
+            result.append(ch)
+            i += 1
+            continue
+        if ch == '"':
+            in_double = True
+            result.append(ch)
+            i += 1
+            continue
+        result.append(ch)
+        i += 1
+    return "".join(result)
+
+
 def tokenize(command: str) -> list[str]:
     """Raises TokenizeError on anything shlex cannot parse (e.g. an
     unbalanced quote) -- the caller must fail closed on that, the same
@@ -881,6 +969,9 @@ def tokenize(command: str) -> list[str]:
     spans` itself, AFTER first running `_rule_command_substitution_
     content` against these still-unfolded tokens, which needs each
     span's own inner tokens still separable.
+
+    Runs `_strip_line_continuations` first -- see that function's own
+    docstring for the live-verified backslash-newline bypass it closes.
 
     An UNQUOTED newline is one of `segment_tokens`'s own documented
     segment boundaries (it is a member of `_SINGLE_OPS`) -- but shlex's
@@ -906,6 +997,7 @@ def tokenize(command: str) -> list[str]:
     enclosing token, since shlex's own quote handling runs before
     punctuation-splitting) nor any command with no literal newline in it
     at all (the entire pre-existing test suite's own command strings)."""
+    command = _strip_line_continuations(command)
     try:
         lexer = shlex.shlex(command, posix=True, punctuation_chars="();<>|&\n")
         lexer.whitespace_split = True
