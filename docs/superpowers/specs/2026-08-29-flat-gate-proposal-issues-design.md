@@ -178,21 +178,34 @@ per Step 0's marker-present branch, or creates fresh per its no-match
 branch), immediately followed in that same session by each repair's
 `Filed as: #<N>` line as its filing is confirmed.
 
-Named residual risk, not solved by this design: a session interrupted
-*mid*-Step-5 -- after that one body write lands (the marker is gone) but
-before every repair's own `Filed as:` line is recorded -- leaves a later,
-resumed run seeing Step 0's own marker-absent branch ("nothing left to
-file, stop here"), even though some repairs may still be unfiled. This is
-an existing limitation of Step 0's own binary, unchanged branching, not
-newly introduced by the index-keyed title; this design does not extend
-Step 0's own state model to fix it. The concrete cost, if this is hit, is
-a stuck-open retrospective issue needing a human to notice and finish the
-filing by hand -- not silent data loss (nothing already filed is lost)
-and not a duplicate (the exact-title search-before-create in Data flow
-step 4 still catches a repair that was already filed before the
-interruption). Within one uninterrupted session -- the common case, and
-the only case the second and third adversarial reviews' own within-cycle
-collision finding actually required fixing -- the index is fully stable.
+Originally scoped as a named residual risk this design deliberately left
+unsolved: a session interrupted *mid*-Step-5 -- after that one body write
+lands (the marker is gone) but before every repair's own `Filed as:` line
+is recorded -- would leave a later, resumed run seeing Step 0's own
+marker-absent branch ("nothing left to file, stop here"), even though some
+repairs may still be unfiled. A fifth adversarial-review round
+(`battle-testing-a-skill`, dimension 13, run against the implementing
+PR's own Step 8) found this was not merely an inconvenience but a genuine
+trust-boundary gap: the same round found that once resumed filing could
+happen at all, a resumed run trusting a pre-existing `Filed as: #<N>` line
+at face value -- with no re-verification that the referenced issue still
+exists -- let an externally edited (careless or hostile) retrospective
+body silently suppress a real filing. Both findings are resolved together,
+not left as accepted risk: Step 0's marker-absent branch now carves out
+the case where the enriched body records a `missing-deterministic-gate`
+repair with no `Filed as:` line, routing to Step 5's own filing bullets
+instead of stopping; and before Step 5 skips a repair that already carries
+a `Filed as:` line, it re-fetches the referenced issue and confirms it
+still exists and still carries the `gate-proposal` label, treating a line
+that does not re-verify exactly like an unconfirmed write. The concrete
+cost of a mid-Step-5 interruption is therefore no longer a stuck-open
+issue needing a human to finish the filing by hand -- a resumed run now
+finishes it automatically, without duplicating a repair that already
+carries a confirmed line (the exact-title search-before-create in Data
+flow step 4 remains the backstop against a duplicate either way). Within
+one uninterrupted session -- the common case, and the only case the
+second and third adversarial reviews' own within-cycle collision finding
+actually required fixing -- the index is fully stable.
 
 The same single-pass assignment extends unmodified to a future manual
 audit of the pre-existing 277-item legacy backlog (should one ever be
@@ -585,9 +598,14 @@ hook keeps seeing and gating every filing the same way it gates any other
    anything; on no match, file it as its own labelled issue with the full
    ACM body (Decision 4) and a link back to the originating PR/retrospective,
    then re-fetch to verify. Record `Filed as: #<N>` against that repair's
-   own entry in the retrospective issue body once verified (also the
-   fast-path idempotency check on a resumed run within the same session:
-   skip a repair that already carries a `Filed as:` line).
+   own entry in the retrospective issue body once verified. On a resumed
+   run, this same re-fetch discipline gates the idempotency check itself:
+   before skipping a repair that already carries a `Filed as: #<N>` line,
+   re-fetch issue `#<N>` and confirm it still exists and still carries the
+   `gate-proposal` label -- a line that does not re-verify this way (an
+   externally edited or stale body) is treated exactly like an unconfirmed
+   write, and that repair proceeds through this same search-then-create
+   flow as if the line were absent.
    `unclear-agent-instruction` / `external-human-decision` repairs stay
    recorded inline, unchanged, no issue filed, no script invoked.
 5. Once every `missing-deterministic-gate` repair from the cycle is filed
@@ -624,11 +642,15 @@ hook keeps seeing and gating every filing the same way it gates any other
   authoritative or silently file a third.
 - **A session is interrupted mid-Step-5**, after the body write lands
   (the CI-opener's stub marker is gone) but before every repair's own
-  `Filed as:` line is recorded: a later resumed run hits Step 0's own
-  unchanged marker-absent branch and stops without finishing the filing.
-  Named, accepted residual risk (Decision 1) -- the retrospective issue
-  stays open, visibly incomplete, for a human to notice and finish by
-  hand; nothing already filed is lost or duplicated.
+  `Filed as:` line is recorded: a later resumed run's Step 0 recognizes the
+  enriched-but-incomplete body and routes directly to Step 5's own filing
+  bullets (Decision 1) -- it does not stop. Before trusting any
+  pre-existing `Filed as: #<N>` line as already-filed, that resumed run
+  re-fetches issue `#<N>` to confirm it still exists and still carries the
+  `gate-proposal` label; a line that fails this check is treated as
+  unconfirmed and the repair is re-filed through the normal
+  search-then-create flow. Nothing already filed (and re-verified) is
+  lost or duplicated.
 - **The label does not exist** when the CI liveness check runs, or the
   sync test (Component 5) finds the two copies of its literal name have
   drifted: fail loudly in both cases, never report a clean pass by
@@ -673,7 +695,12 @@ hook keeps seeing and gating every filing the same way it gates any other
   each filed as its own labelled issue, verified, retrospective closes;
   same but unattended -> filed and verified, retrospective stays open for
   human review; a resumed run after a partial filing failure -> only the
-  unfiled repairs are retried, already-filed ones are not duplicated.
+  unfiled repairs are retried, already-filed ones are not duplicated (each
+  re-verified by re-fetch before being treated as already filed -- a sixth
+  fixture, added during the implementing PR's own Step 8 adversarial
+  review, covers the case where that re-fetch finds the referenced issue
+  does not actually exist and the repair is re-filed rather than silently
+  skipped).
 
 ## Open questions
 
@@ -711,3 +738,15 @@ now attributed to above, verified against this repository's actual hooks,
 schema, scripts, and workflow files rather than left as prose claims. See
 Decisions 1-6 and the "Rejected" section for each choice and why its
 alternative was set aside.
+
+A fifth, later finding surfaced not during this design's own elicitation
+but during the implementing PR's own mandatory Step 8 review:
+`battle-testing-a-skill`, dispatched against the implemented `SKILL.md`
+text rather than this doc, found that the residual risk Decision 1
+originally left unsolved (a resumed run stopping instead of finishing an
+interrupted filing) compounded with a second, more serious gap once fixed
+-- a resumed run trusting a pre-existing `Filed as:` line with no
+re-verification, letting an externally edited body silently suppress a
+real filing. Both are now resolved together (see Decision 1's own updated
+text, Data flow step 4, and Error handling above) rather than left as
+accepted risk.
