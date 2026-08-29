@@ -81,7 +81,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
 
-from _gitapex_github_http import GitHubApiError, _format_code, default_opener, request_with_retry
+from _gitapex_github_http import GitHubApiError, default_opener, format_code, request_with_retry
 from pydantic import BaseModel, ValidationError, model_validator
 
 _API_ROOT = "https://api.github.com"
@@ -191,7 +191,7 @@ def is_resolvable_issue(
         return False
     if 200 <= last_code < 300:
         return True
-    raise GitHubApiError(f"GET {url} failed: HTTP {_format_code(last_code)}: {last_body}")
+    raise GitHubApiError(f"GET {url} failed: HTTP {format_code(last_code)}: {last_body}")
 
 
 def find_unresolvable_offenders(

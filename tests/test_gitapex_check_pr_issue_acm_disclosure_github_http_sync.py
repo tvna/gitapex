@@ -37,7 +37,7 @@ current values plus the documented inequality relationship rather than
 asserting cross-file equality (which would fail by design). Everything
 that IS meant to be identical -- the `attempt * 5` backoff formula, the
 "retry on 5xx/network-error, break immediately on any other 4xx" rule, and
-the numeric-code-vs-"network error" display convention (`_format_code` in
+the numeric-code-vs-"network error" display convention (`format_code` in
 the shared module, inlined in the hook) -- is compared behaviorally
 instead: both sides' retry function is driven through a scripted fake
 opener/sleeper and their attempt counts, sleep durations, and resulting
@@ -238,7 +238,7 @@ def test_network_error_retries_like_5xx_on_both_sides() -> None:
 
 
 def test_code_to_display_string_convention_matches_format_code() -> None:
-    """The shared module names this convention `_format_code`; the hook
+    """The shared module names this convention `format_code`; the hook
     inlines the identical `str(code) if code else "network error"`
     expression directly inside `_call` rather than importing it (per the
     hook's own "no access to .github/scripts/" constraint). The overall
@@ -247,14 +247,14 @@ def test_code_to_display_string_convention_matches_format_code() -> None:
     "{method} {url} failed: HTTP {code}: {body}"; the hook's `_call`
     raises the shorter "fetch-failed: HTTP {code}") -- what must stay
     identical is this inner formatting convention, checked directly on the
-    shared side (it has a real `_format_code` function) and via the
+    shared side (it has a real `format_code` function) and via the
     hook's own raised message text on the hook side (its equivalent is
     inlined, not a callable)."""
     shared = _load_module(SHARED_MODULE_PATH)
     hook = _load_module(HOOK_PATH)
 
-    assert shared._format_code(0) == "network error"
-    assert shared._format_code(403) == "403"
+    assert shared.format_code(0) == "network error"
+    assert shared.format_code(403) == "403"
 
     network_error_opener = _ScriptedOpener([("os_error", 0, b"")])
     with pytest.raises(hook.GitHubApiError, match="network error"):

@@ -143,7 +143,7 @@ def fetch_json_document(
             # instead of the documented clean error/exit-1 path.
             raise GitHubApiError(f"GET {url} returned HTTP {last_code} with unparseable JSON: {error}") from error
         return document
-    raise GitHubApiError(f"GET {url} failed: HTTP {_format_code(last_code)}: {last_body}")
+    raise GitHubApiError(f"GET {url} failed: HTTP {format_code(last_code)}: {last_body}")
 
 
 def request_with_retry(
@@ -202,7 +202,7 @@ def request_with_retry(
 
         if 200 <= last_code < 300:
             break
-        print(f"Attempt {attempt}: HTTP {_format_code(last_code)} for {method} {url}", file=sys.stderr)
+        print(f"Attempt {attempt}: HTTP {format_code(last_code)} for {method} {url}", file=sys.stderr)
         if last_code != 0 and last_code < 500:
             break
         if attempt < max_attempts:
@@ -252,7 +252,7 @@ def call_json(
     last_code, last_body = request_with_retry(method, url, token, opener, sleeper, body=body, max_attempts=max_attempts)
     if 200 <= last_code < 300:
         return json.loads(last_body) if last_body else {}
-    raise GitHubApiError(f"{method} {url} failed: HTTP {_format_code(last_code)}: {last_body}")
+    raise GitHubApiError(f"{method} {url} failed: HTTP {format_code(last_code)}: {last_body}")
 
 
 def _graphql_is_transient(code: int, body: dict[str, Any]) -> bool:
@@ -322,12 +322,27 @@ def graphql_call(
 
         if not _graphql_is_transient(last_code, last_body):
             break
-        print(f"Attempt {attempt}: transient GraphQL response HTTP {_format_code(last_code)}", file=sys.stderr)
+        print(f"Attempt {attempt}: transient GraphQL response HTTP {format_code(last_code)}", file=sys.stderr)
         if attempt < 3:
             sleeper(attempt * 5)
 
     return last_code, last_body
 
 
-def _format_code(code: int) -> str:
+def format_code(code: int) -> str:
+    """Render a status code for a human: the number itself, or
+    "network error" for the sentinel 0 this module uses when no HTTP
+    response arrived at all.
+
+    Public (not `_format_code`) because it is part of this module's
+    contract with its callers, not an implementation detail: every
+    `GitHubApiError` message and retry-attempt log line in this
+    repository -- including the one
+    `gitapex_gate_retro_title_convention_citation.py` raises itself, from
+    a `request_with_retry` result this module never sees again -- has to
+    render a code the same way, or the same failure reads differently
+    depending on which caller reported it. Every other cross-module
+    import in `.github/scripts/` names public symbols only; this one
+    should not be the exception.
+    """
     return str(code) if code else "network error"
