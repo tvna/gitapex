@@ -853,6 +853,8 @@ def _rule_command_substitution_content(
     name_to_raw_value_git_biased: dict[str, str],
     name_to_raw_value_cd_biased: dict[str, str],
     name_to_raw_value_history: dict[str, tuple[str, ...]],
+    name_to_value_write_biased: dict[str, str],
+    name_to_raw_value_write_biased: dict[str, str],
 ) -> tuple[str | None, bool, tuple[str, ...]]:
     """Recursively classify each `$(...)` command-substitution span's OWN
     inner content through this module's full rule set -- bash genuinely
@@ -967,7 +969,24 @@ def _rule_command_substitution_content(
     issue #1375) are threaded the same way, for the analogous cd/pushd/
     popd-relocation and path-argument reassignment bypasses -- see
     `_assigned_raw_values_biased_toward`'s own second CRITICAL-bug
-    paragraph and `_assigned_raw_value_history`'s own docstring."""
+    paragraph and `_assigned_raw_value_history`'s own docstring.
+
+    NAME_TO_VALUE_WRITE_BIASED and NAME_TO_RAW_VALUE_WRITE_BIASED (round
+    22, issue #1375) are threaded the same way, for the analogous B1a/B1b
+    tool+verb and `_rule_gh_api_write` method/field reassignment bypasses
+    on THIS module's own HARD-DENY paths -- see `_assigned_literals_
+    biased_toward`'s own docstring for the live bypass this closes and
+    `_classify_tokens`'s own docstring for where the OR-fallback calls
+    that actually consume these two dicts live (`_rule_gh_api_write` and
+    `_segment_loop_hit` are both called against SEGMENTS derived from the
+    top-level token stream, not against this function's own recursive
+    inner content directly -- these two parameters exist here only so a
+    `pip install`/`gh api` write hidden ENTIRELY WITHIN a `$(...)` span,
+    with the reassignment-ambiguity poisoning the OUTER token stream the
+    same way round 21 found for the cd-biased case, still resolves
+    correctly once the inner content reaches ITS OWN recursive
+    `_classify_tokens`/`classify` call's own local `_rule_gh_api_write`/
+    `_segment_loop_hit` invocations)."""
     is_git_push = False
     checkout_restore_paths: list[str] = []
     i = 0
@@ -1002,6 +1021,8 @@ def _rule_command_substitution_content(
                     name_to_raw_value_git_biased,
                     name_to_raw_value_cd_biased,
                     name_to_raw_value_history,
+                    name_to_value_write_biased,
+                    name_to_raw_value_write_biased,
                 )
                 is_git_push = is_git_push or inner_verdict.is_git_push
                 checkout_restore_paths.extend(inner_verdict.checkout_restore_paths)
@@ -1023,6 +1044,8 @@ def _rule_command_substitution_content(
                     name_to_raw_value_git_biased,
                     name_to_raw_value_cd_biased,
                     name_to_raw_value_history,
+                    name_to_value_write_biased,
+                    name_to_raw_value_write_biased,
                 )
                 is_git_push = is_git_push or inner_verdict.is_git_push
                 checkout_restore_paths.extend(inner_verdict.checkout_restore_paths)
@@ -1680,13 +1703,26 @@ def _assigned_raw_values_biased_toward(tokens: list[str], literals: frozenset[st
     -- never toward silently missing a real git invocation, which is the
     unsafe direction here). Used to feed the outer git-token-recognition
     fallback in `_find_git_checkout_restore`, AND (round 20, below) the
-    cd/pushd/popd-relocation fallback in `_rule_git_checkout_restore` --
-    every OTHER consumer of `name_to_raw_value` in this module keeps
+    cd/pushd/popd-relocation fallback in `_rule_git_checkout_restore`.
+
+    CORRECTION (round 22, issue #1375): this paragraph previously claimed
+    every OTHER consumer of `name_to_raw_value` in this module could keep
     using the ordinary, order-blind `_assigned_raw_values` unchanged,
-    since a reassignment-ambiguity miss for one of those risks a missed
-    advisory warning or an unrecognized non-destructive write, not
+    since a reassignment-ambiguity miss for one of those risked only a
+    missed advisory warning or an unrecognized non-destructive write, not
     irreversible data loss -- the same reasoning that scoped round 19's
-    own original, narrower fix.
+    own original, narrower fix. That claim was FALSE for two consumers:
+    B1a/B1b's own tool+verb reconstruction (guarding `pip`/`uv
+    install`-shaped invocations) and `_rule_gh_api_write`'s own dynamic
+    -X/--method and -f/-F/--field/--raw-field resolution (guarding `gh
+    api` write calls, including a PR merge) are both HARD-DENY paths, not
+    advisory-only, and a reassignment-ambiguity miss on either is a
+    genuine, unrecognized package install or unreviewed write API call --
+    see `_assigned_literals_biased_toward`'s own docstring for the live
+    reproduction and fix. The claim remains accurate for this module's
+    remaining `name_to_raw_value` consumers not covered by that fix (e.g.
+    the warn-only `git push` detection, and the graphql-mutation-keyword
+    substring residual disclosed in this module's own header docstring).
 
     CRITICAL bug found by independent adversarial review (round 20, issue
     #1375) and independently reproduced live: `_rule_git_checkout_
@@ -1753,6 +1789,65 @@ def _assigned_raw_values_biased_toward(tokens: list[str], literals: frozenset[st
             continue
         values[name] = match.group(2)
     return values
+
+
+def _assigned_literals_biased_toward(tokens: list[str], literals: frozenset[str]) -> dict[str, str]:
+    """Lowercased counterpart of `_assigned_raw_values_biased_toward`
+    above, for a consumer that needs the `name_to_value`-shaped
+    (already-lowercased) dict as its own resolution source -- e.g.
+    `_substitute_var_refs_candidates`'s own first argument -- not the
+    raw-case dict that function itself returns. A thin lowering wrapper
+    around the same bias computation, not a separate one of its own, so
+    both dicts stay in lockstep for the same NAME by construction; see
+    `_assigned_raw_values_biased_toward`'s own docstring for the bias
+    rule this applies (sticks to the first value seen that is a member of
+    LITERALS, case-insensitively, ignoring any later, different
+    reassignment).
+
+    CRITICAL bug found by independent adversarial review (round 22, issue
+    #1375) and independently reproduced live: `_rule_b1a_dynamic_word_
+    same_segment_verb`/`_rule_b1b_dynamic_word_assigned_tool_and_verb`
+    (B1a/B1b, the tool+verb dynamic-indirection HARD-DENY rules guarding
+    `pip`/`uv install`-shaped invocations) and every `_rule_gh_api_write`
+    helper that resolves a dynamic `-X`/`--method` or `-f`/`--field`
+    value or flag name were, before this fix, all fed the ordinary,
+    order-blind `assigned`/`raw_assigned` dicts -- the SAME reassignment-
+    ambiguity class round 19 (git-token) and round 20 (cd/pushd/popd-
+    relocation) already closed for the checkout/restore consumer, left
+    open on these two entirely different, HARD-DENY consumers. `A=uv;
+    B=install; $A $B foo; B=somethingelse` resolved `$B` to `"somethingelse"`
+    (the LAST assignment in token order) even though `$B` genuinely was
+    `"install"` at its actual point of use one statement earlier;
+    `M=POST; gh api repos/o/r/pulls/1/merge -X $M; M=safe` resolved `$M`
+    the same way. Confirmed live end-to-end via a real bash proxy (stand-in
+    `uv`/`gh` binaries on PATH, capturing their own argv): both commands
+    were wrongly classified `deny=False` by this module, while real bash
+    genuinely executed `uv install foo` and `gh api .../merge -X POST`
+    respectively -- a genuine, unrecognized package install and a genuine,
+    unrecognized write API call (e.g. merging a pull request), not merely
+    a missed advisory warning. This directly contradicts `_assigned_raw_
+    values_biased_toward`'s own prior claim (see that function's own
+    docstring, corrected alongside this fix) that every consumer other
+    than checkout/restore only risked "a missed advisory warning or an
+    unrecognized non-destructive write, not irreversible data loss" -- a
+    supply-chain package install and an unreviewed write to a live GitHub
+    repository (including a PR merge) are exactly the kind of consequence
+    that claim was meant to exclude.
+
+    Closed the same way rounds 19/20 closed their own consumers: every
+    call site that resolves a dynamic token for B1a/B1b or `_rule_gh_api_
+    write` now tries the ordinary reading first, OR-ed with a second
+    attempt against this bias mechanism fed `_WATCHED_WRITE_BIAS` (see
+    that constant's own comment for why one combined set covers both
+    consumers safely) -- see `_classify_tokens`'s own docstring for
+    exactly where the OR-fallback calls live and how the corresponding
+    raw-case bias dict (`_assigned_raw_values_biased_toward(tokens,
+    _WATCHED_WRITE_BIAS)`) is threaded alongside this one. Deliberately
+    NOT full execution-order tracking, the same bounded, one-directional,
+    safe-to-over-recognize posture every other bias fix in this module
+    already takes -- see `_assigned_raw_values_biased_toward`'s own
+    docstring for why that scoping is deliberate, not an oversight."""
+    return {name: value.lower() for name, value in _assigned_raw_values_biased_toward(tokens, literals).items()}
 
 
 # Matches a token that is EXACTLY one bare `$NAME` or braced `${NAME}`
@@ -2537,6 +2632,8 @@ def _rule_array_literal_content(
     name_to_raw_value_git_biased: dict[str, str],
     name_to_raw_value_cd_biased: dict[str, str],
     name_to_raw_value_history: dict[str, tuple[str, ...]],
+    name_to_value_write_biased: dict[str, str],
+    name_to_raw_value_write_biased: dict[str, str],
 ) -> tuple[str | None, bool, tuple[str, ...]]:
     """Recursively classify each `NAME=(...)` array-literal span's OWN
     inner content through this module's full rule set -- bash genuinely
@@ -2649,7 +2746,13 @@ def _rule_array_literal_content(
     bypass it closes. NAME_TO_RAW_VALUE_CD_BIASED and NAME_TO_RAW_VALUE_
     HISTORY (round 21, issue #1375) are threaded the same way -- see
     `_assigned_raw_values_biased_toward`'s own second CRITICAL-bug
-    paragraph and `_assigned_raw_value_history`'s own docstring."""
+    paragraph and `_assigned_raw_value_history`'s own docstring.
+    NAME_TO_VALUE_WRITE_BIASED and NAME_TO_RAW_VALUE_WRITE_BIASED (round
+    22, issue #1375) are threaded the same way -- see `_rule_command_
+    substitution_content`'s own identical parameters' docstring paragraph
+    for what they mean and why they are threaded here even though this
+    function's own recursive call site does not itself invoke
+    `_rule_gh_api_write`/`_segment_loop_hit` directly."""
     is_git_push = False
     checkout_restore_paths: list[str] = []
     i = 0
@@ -2673,6 +2776,8 @@ def _rule_array_literal_content(
                     name_to_raw_value_git_biased,
                     name_to_raw_value_cd_biased,
                     name_to_raw_value_history,
+                    name_to_value_write_biased,
+                    name_to_raw_value_write_biased,
                 )
                 is_git_push = is_git_push or reading_verdict.is_git_push
                 checkout_restore_paths.extend(reading_verdict.checkout_restore_paths)
@@ -2792,6 +2897,29 @@ _WATCHED_VERBS = {
 _GIT_PUSH_VERB = "push"
 
 _WRITE_METHODS = {"post", "put", "patch", "delete"}
+
+# The combined literal set B1a/B1b's own tool+verb reconstruction
+# (`_rule_b1a_dynamic_word_same_segment_verb`/`_rule_b1b_dynamic_word_
+# assigned_tool_and_verb`) and `_rule_gh_api_write`'s own -X/--method and
+# -f/-F/--field/--raw-field flag/value reconstruction each bias toward,
+# for the same reassignment-ambiguity reason `_assigned_raw_values_biased_
+# toward`'s own docstring documents for the git-token and cd/pushd/popd-
+# relocation consumers -- see `_assigned_literals_biased_toward`'s own
+# docstring for the live bypass this closes on these two HARD-DENY paths.
+# One shared, combined set (rather than a separate bias set per consumer)
+# is safe: the bias mechanism only decides whether a NAME's own
+# resolution STICKS to a qualifying value once assigned one; every actual
+# comparison downstream still filters against its own narrower target set
+# (`_WATCHED_TOOLS`, a specific VERB_SET, `_WRITE_METHODS`, or a specific
+# flag-name literal) unchanged, so biasing toward the union cannot make a
+# check fire on the wrong literal.
+_WATCHED_WRITE_BIAS = frozenset(
+    _WATCHED_TOOLS
+    | _WATCHED_VERBS
+    | {_GIT_PUSH_VERB}
+    | _WRITE_METHODS
+    | {"-x", "--method", "-f", "--field", "--raw-field"}
+)
 
 
 class Verdict(NamedTuple):
@@ -4737,6 +4865,8 @@ def classify(
     outer_name_to_raw_value_git_biased: dict[str, str] | None = None,
     outer_name_to_raw_value_cd_biased: dict[str, str] | None = None,
     outer_name_to_raw_value_history: dict[str, tuple[str, ...]] | None = None,
+    outer_name_to_value_write_biased: dict[str, str] | None = None,
+    outer_name_to_raw_value_write_biased: dict[str, str] | None = None,
 ) -> Verdict:
     """Classify one Bash tool_input.command string. Fails closed (deny) on
     anything shlex cannot tokenize -- an unparseable command is exactly the
@@ -4755,10 +4885,12 @@ def classify(
 
     OUTER_NAME_TO_RAW_VALUE_GIT_BIASED (round 19, issue #1375),
     OUTER_NAME_TO_RAW_VALUE_CD_BIASED and OUTER_NAME_TO_RAW_VALUE_HISTORY
-    (round 21, issue #1375) are the same recursive call's own analogous
-    further arguments -- see `_classify_tokens`'s own docstring and
-    `_find_git_checkout_restore`'s/`_assigned_raw_value_history`'s own
-    docstrings for what each means and the live bypass each closes."""
+    (round 21, issue #1375), and OUTER_NAME_TO_VALUE_WRITE_BIASED/
+    OUTER_NAME_TO_RAW_VALUE_WRITE_BIASED (round 22, issue #1375) are the
+    same recursive call's own analogous further arguments -- see
+    `_classify_tokens`'s own docstring and `_find_git_checkout_restore`'s/
+    `_assigned_raw_value_history`'s/`_assigned_literals_biased_toward`'s
+    own docstrings for what each means and the live bypass each closes."""
     try:
         tokens = tokenize(command)
     except TokenizeError as error:
@@ -4770,6 +4902,8 @@ def classify(
         outer_name_to_raw_value_git_biased,
         outer_name_to_raw_value_cd_biased,
         outer_name_to_raw_value_history,
+        outer_name_to_value_write_biased,
+        outer_name_to_raw_value_write_biased,
     )
 
 
@@ -4780,6 +4914,8 @@ def _classify_tokens(
     outer_name_to_raw_value_git_biased: dict[str, str] | None = None,
     outer_name_to_raw_value_cd_biased: dict[str, str] | None = None,
     outer_name_to_raw_value_history: dict[str, tuple[str, ...]] | None = None,
+    outer_name_to_value_write_biased: dict[str, str] | None = None,
+    outer_name_to_raw_value_write_biased: dict[str, str] | None = None,
 ) -> Verdict:
     """The token-level core of `classify` -- split out so `_rule_command_
     substitution_content` can recurse into a `$(...)` span's own inner
@@ -4836,12 +4972,28 @@ def _classify_tokens(
     resolution bypass round 20's own scoped-down (non-recursively-
     threaded) cd-biased fix did NOT cover -- see `_assigned_raw_values_
     biased_toward`'s own second CRITICAL-bug paragraph and `_assigned_
-    raw_value_history`'s own docstring for both bypasses."""
+    raw_value_history`'s own docstring for both bypasses.
+
+    OUTER_NAME_TO_VALUE_WRITE_BIASED and OUTER_NAME_TO_RAW_VALUE_
+    WRITE_BIASED (round 22, issue #1375) are two further, parallel
+    outer-scope arguments, merged the identical way -- `_assigned_
+    literals_biased_toward(tokens, _WATCHED_WRITE_BIAS)` and `_assigned_
+    raw_values_biased_toward(tokens, _WATCHED_WRITE_BIAS)` respectively --
+    and threaded the same way into the same two recursive calls. Unlike
+    every prior bias pair above, these two are NOT threaded into `_rule_
+    git_checkout_restore` (that rule has no B1a/B1b/gh-api-write concern
+    at all); instead they feed a second, OR-ed attempt at `_rule_gh_api_
+    write` and `_segment_loop_hit` below, alongside the ordinary ASSIGNED/
+    RAW_ASSIGNED attempt -- see `_assigned_literals_biased_toward`'s own
+    docstring for the live bypass this closes on those two HARD-DENY
+    consumers specifically."""
     outer_literals = outer_name_to_value or {}
     outer_raw = outer_name_to_raw_value or {}
     outer_raw_git_biased = outer_name_to_raw_value_git_biased or {}
     outer_raw_cd_biased = outer_name_to_raw_value_cd_biased or {}
     outer_raw_history = outer_name_to_raw_value_history or {}
+    outer_write_biased = outer_name_to_value_write_biased or {}
+    outer_raw_write_biased = outer_name_to_raw_value_write_biased or {}
     merged_name_to_value = {**outer_literals, **_assigned_literals(tokens)}
     merged_name_to_raw_value = {**outer_raw, **_assigned_raw_values(tokens)}
     merged_name_to_raw_value_git_biased = {
@@ -4855,6 +5007,14 @@ def _classify_tokens(
     merged_name_to_raw_value_history = _merge_raw_value_histories(
         outer_raw_history, _assigned_raw_value_history(tokens)
     )
+    merged_name_to_value_write_biased = {
+        **outer_write_biased,
+        **_assigned_literals_biased_toward(tokens, _WATCHED_WRITE_BIAS),
+    }
+    merged_name_to_raw_value_write_biased = {
+        **outer_raw_write_biased,
+        **_assigned_raw_values_biased_toward(tokens, _WATCHED_WRITE_BIAS),
+    }
 
     content_reason, content_is_git_push, content_checkout_restore_paths = _rule_command_substitution_content(
         tokens,
@@ -4863,6 +5023,8 @@ def _classify_tokens(
         merged_name_to_raw_value_git_biased,
         merged_name_to_raw_value_cd_biased,
         merged_name_to_raw_value_history,
+        merged_name_to_value_write_biased,
+        merged_name_to_raw_value_write_biased,
     )
     if content_reason:
         return Verdict(True, content_reason, content_is_git_push, content_checkout_restore_paths)
@@ -4874,6 +5036,8 @@ def _classify_tokens(
         merged_name_to_raw_value_git_biased,
         merged_name_to_raw_value_cd_biased,
         merged_name_to_raw_value_history,
+        merged_name_to_value_write_biased,
+        merged_name_to_raw_value_write_biased,
     )
     is_git_push = content_is_git_push or array_content_is_git_push
     checkout_restore_paths = content_checkout_restore_paths + array_content_checkout_restore_paths
@@ -4893,6 +5057,14 @@ def _classify_tokens(
         **_assigned_raw_values_biased_toward(tokens, _CWD_RELOCATING_COMMANDS),
     }
     raw_assigned_history = _merge_raw_value_histories(outer_raw_history, _assigned_raw_value_history(tokens))
+    assigned_write_biased = {
+        **outer_write_biased,
+        **_assigned_literals_biased_toward(tokens, _WATCHED_WRITE_BIAS),
+    }
+    raw_assigned_write_biased = {
+        **outer_raw_write_biased,
+        **_assigned_raw_values_biased_toward(tokens, _WATCHED_WRITE_BIAS),
+    }
     lowered_command = " ".join(tokens).lower()
 
     is_git_push = is_git_push or any(_is_git_push_segment(seg, raw_assigned) for seg in segments)
@@ -4901,12 +5073,19 @@ def _classify_tokens(
     if literal_hit:
         return Verdict(True, literal_hit, is_git_push, checkout_restore_paths)
 
-    gh_api_hit = _rule_gh_api_write(segments, lowered_command, assigned, raw_assigned)
+    gh_api_hit = _rule_gh_api_write(segments, lowered_command, assigned, raw_assigned) or _rule_gh_api_write(
+        segments, lowered_command, assigned_write_biased, raw_assigned_write_biased
+    )
     if gh_api_hit:
         return Verdict(True, gh_api_hit, is_git_push, checkout_restore_paths)
 
     loop_hit, loop_is_git_push = _segment_loop_hit(segments, assigned, raw_assigned)
     is_git_push = is_git_push or loop_is_git_push
+    if not loop_hit:
+        loop_hit, biased_loop_is_git_push = _segment_loop_hit(
+            segments, assigned_write_biased, raw_assigned_write_biased
+        )
+        is_git_push = is_git_push or biased_loop_is_git_push
     if loop_hit:
         return Verdict(True, loop_hit, is_git_push, checkout_restore_paths)
 
@@ -4916,6 +5095,11 @@ def _classify_tokens(
     if collapsed_segments != segments:
         collapsed_hit, collapsed_is_git_push = _segment_loop_hit(collapsed_segments, assigned, raw_assigned)
         is_git_push = is_git_push or collapsed_is_git_push
+        if not collapsed_hit:
+            collapsed_hit, collapsed_biased_is_git_push = _segment_loop_hit(
+                collapsed_segments, assigned_write_biased, raw_assigned_write_biased
+            )
+            is_git_push = is_git_push or collapsed_biased_is_git_push
         if collapsed_hit:
             return Verdict(
                 True,

@@ -864,6 +864,34 @@ DENIED_INDIRECTION_COMMANDS = [
         "IFS=post; DECOY=POST; gh api repos/foo/bar/merge -X ${DECOY} extra",
         "gh-api-method-value-past-case-folded-ifs-collision",
     ),
+    # Found live by Step 8 independent review, twenty-second round (issue
+    # #1375, confirmed against issue #1326): B1a/B1b's own tool+verb
+    # reconstruction and `_rule_gh_api_write`'s own dynamic -X/--method
+    # resolution were both fed the ordinary, order-blind ASSIGNED/
+    # RAW_ASSIGNED dicts -- the SAME reassignment-ambiguity class round
+    # 19 (git-token) and round 20 (cd/pushd/popd-relocation) already
+    # closed for the checkout/restore consumer, left open on these two
+    # entirely different, HARD-DENY consumers. Confirmed live via a real
+    # bash proxy (stand-in `uv`/`gh` binaries on PATH, capturing their own
+    # argv): `$B` genuinely was "install" at its actual point of use one
+    # statement earlier, and real bash genuinely ran `uv install foo`.
+    ("A=uv; B=install; $A $B foo; B=somethingelse", "var-split-tool-and-verb-reassigned-after-use"),
+    # Same round, the gh-api-write counterpart: `$M` genuinely was "POST"
+    # at its actual point of use; real bash genuinely ran `gh api
+    # repos/o/r/pulls/1/merge -X POST` -- a genuine, unreviewed write API
+    # call (e.g. merging a pull request).
+    ("M=POST; gh api repos/o/r/pulls/1/merge -X $M; M=safe", "gh-api-method-value-reassigned-after-use"),
+    # Round 22's own OR-fallback fix threads the write-biased dict through
+    # the SAME recursive chain rounds 19-21 already use, not merely the
+    # top-level segment scope -- confirms the reassignment straddling a
+    # command substitution's OWN boundary (the ambiguity living in the
+    # OUTER token stream, the tool+verb pair used entirely WITHIN the
+    # substitution) is closed too, mirroring round 21's own correction of
+    # round 20's initially-scoped-down cd-biased fix.
+    (
+        "A=uv; x=$($A install foo); A=somethingelse",
+        "var-split-tool-and-verb-reassigned-after-use-across-command-substitution",
+    ),
 ]
 
 

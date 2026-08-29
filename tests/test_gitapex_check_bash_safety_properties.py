@@ -1358,7 +1358,7 @@ def test_rule_command_substitution_content_detects_an_embedded_install(tool: str
     a punctuation character shlex breaks a word at, so an assignment's
     `NAME=` prefix stays fused onto the leading `$` in the same token."""
     tokens = ["x=$", "(", tool, "install", "evil-pkg", ")"]
-    reason, _, _ = checker._rule_command_substitution_content(tokens, {}, {}, {}, {}, {})
+    reason, _, _ = checker._rule_command_substitution_content(tokens, {}, {}, {}, {}, {}, {}, {})
     assert reason is not None
 
 
@@ -1374,7 +1374,7 @@ def test_rule_command_substitution_content_allows_harmless_inner_content(value: 
     silently dropping a non-denying inner `is_git_push=True` signal (see
     the function's own docstring)."""
     tokens = ["echo", "$", "(", "date", value, ")"]
-    assert checker._rule_command_substitution_content(tokens, {}, {}, {}, {}, {}) == (None, False, ())
+    assert checker._rule_command_substitution_content(tokens, {}, {}, {}, {}, {}, {}, {}) == (None, False, ())
 
 
 # --- Issue #1326 Stage 1, fifteenth round: bash's own leading-assignment ----
@@ -1493,7 +1493,7 @@ def test_rule_array_literal_content_detects_a_denied_pair_regardless_of_a_leadin
     `Y=1; A=(uv install $Y); "${A[@]}"` was wrongly ALLOWED before this
     function existed."""
     tokens = ["dummy=", "(", f"${first}", "uv", "install", f"${second}", ")"]
-    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {})
+    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {}, {}, {})
     assert reason is not None
 
 
@@ -1512,7 +1512,7 @@ def test_rule_array_literal_content_collapses_a_leading_unassigned_bare_ref(unse
     fused with other text (not a bare whole-token reference), must NOT
     be collapsed -- that shape does not word-split away to nothing."""
     tokens = ["dummy=", "(", f"${unset_name}", verb_a, "install", ")"]
-    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {})
+    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {}, {}, {})
     assert reason is not None
 
 
@@ -1532,13 +1532,13 @@ def test_rule_array_literal_content_allows_harmless_content() -> None:
     denied pattern, with or without a leading unassigned reference,
     stays allowed."""
     tokens = ["dummy=", "(", "$NEVERSET", "echo", "harmless", ")"]
-    assert checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {}) == (None, False, ())
+    assert checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {}, {}, {}) == (None, False, ())
 
 
 def test_rule_array_literal_content_no_span_present() -> None:
     """Robustness: a token stream with no array-literal span at all
     (e.g. an ordinary command) returns cleanly, never a crash."""
-    assert checker._rule_array_literal_content(["echo", "hi"], {}, {}, {}, {}, {}) == (None, False, ())
+    assert checker._rule_array_literal_content(["echo", "hi"], {}, {}, {}, {}, {}, {}, {}) == (None, False, ())
 
 
 def test_strip_leading_unassigned_bare_refs_stops_at_a_fused_token() -> None:
@@ -1564,7 +1564,7 @@ def test_rule_array_literal_content_empty_array_is_harmless() -> None:
     """No false positive / no crash: an empty array literal `NAME=()`
     has no inner content to recursively classify at all."""
     tokens = ["dummy=", "(", ")"]
-    assert checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {}) == (None, False, ())
+    assert checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {}, {}, {}) == (None, False, ())
 
 
 def test_rule_array_literal_content_skips_the_collapsed_reading_without_a_leading_unassigned_ref() -> None:
@@ -1573,7 +1573,7 @@ def test_rule_array_literal_content_skips_the_collapsed_reading_without_a_leadin
     `_strip_leading_unassigned_bare_refs` to strip -- the collapsed
     reading equals the as-is one, so only one classification is needed."""
     tokens = ["dummy=", "(", "echo", "harmless", ")"]
-    assert checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {}) == (None, False, ())
+    assert checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {}, {}, {}) == (None, False, ())
 
 
 def test_rule_array_literal_content_denies_only_on_the_collapsed_reading() -> None:
@@ -1590,7 +1590,7 @@ def test_rule_array_literal_content_denies_only_on_the_collapsed_reading() -> No
     real, with a dynamic verb argument right after it -- exactly B2's own
     watched shape."""
     tokens = ["dummy=", "(", "$NEVERSET", "uv", "$VERB", ")"]
-    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {})
+    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {}, {}, {})
     assert reason is not None
     assert "unassigned reference" in reason
 
@@ -1632,7 +1632,7 @@ def test_rule_array_literal_content_collapses_a_leading_unassigned_braced_bare_r
     this round, silently degrading the collapsed reading to a no-op for
     this shape."""
     tokens = ["dummy=", "(", f"${{{unset_name}}}", verb_a, "install", ")"]
-    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {})
+    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {}, {}, {})
     assert reason is not None
 
 
@@ -1647,7 +1647,7 @@ def test_rule_array_literal_content_detects_an_outer_scope_resolved_pair() -> No
     recursive `_classify_tokens` call."""
     tokens = ["dummy=", "(", "$G", "$P", "$M", ")"]
     outer = {"G": "gh", "P": "pr", "M": "merge"}
-    reason, _, _ = checker._rule_array_literal_content(tokens, outer, outer, outer, {}, {})
+    reason, _, _ = checker._rule_array_literal_content(tokens, outer, outer, outer, {}, {}, {}, {})
     assert reason is not None
 
 
@@ -1683,7 +1683,9 @@ def test_rule_command_substitution_content_detects_an_outer_scope_resolved_check
     for the array-literal span."""
     tokens = ["x=$", "(", "$G", "checkout", "--", "dirty.py", ")"]
     outer = {"G": "git"}
-    reason, _, checkout_restore_paths = checker._rule_command_substitution_content(tokens, outer, outer, outer, {}, {})
+    reason, _, checkout_restore_paths = checker._rule_command_substitution_content(
+        tokens, outer, outer, outer, {}, {}, {}, {}
+    )
     assert reason is None
     assert checkout_restore_paths == ("dirty.py",)
 
@@ -2090,7 +2092,7 @@ def test_rule_array_literal_content_detects_a_braced_subscript_decoy() -> None:
     the subscript decoy blocked it from ever firing until it collapsed
     away."""
     tokens = ["dummy=", "(", "${NEVERSET[0]}", "uv", "$VERB", ")"]
-    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {})
+    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {}, {}, {})
     assert reason is not None
 
 
@@ -2101,7 +2103,7 @@ def test_rule_array_literal_content_detects_a_fused_reference_chain_decoy() -> N
     before a fused chain of two bare references was recognized as
     vanishing as a unit."""
     tokens = ["dummy=", "(", "$A_UNSET$B_UNSET", "gh", "pr", "merge", "1", ")"]
-    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {})
+    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {}, {}, {})
     assert reason is not None
 
 
@@ -2234,7 +2236,7 @@ def test_rule_command_substitution_content_scans_second_fused_span_in_same_token
     this test only proves that fix reached end-to-end through
     `_rule_command_substitution_content`'s own scan loop."""
     tokens = ["echo", "$(echo ok)$(pip install evil-pkg)"]
-    reason, _, _ = checker._rule_command_substitution_content(tokens, {}, {}, {}, {}, {})
+    reason, _, _ = checker._rule_command_substitution_content(tokens, {}, {}, {}, {}, {}, {}, {})
     assert reason is not None
 
 
@@ -2243,20 +2245,20 @@ def test_rule_command_substitution_content_skips_blank_fused_span_then_finds_den
     skipped without denying by itself, but scanning continues to the next
     fused span in the same token."""
     tokens = ["echo", "$( )$(pip install evil-pkg)"]
-    reason, _, _ = checker._rule_command_substitution_content(tokens, {}, {}, {}, {}, {})
+    reason, _, _ = checker._rule_command_substitution_content(tokens, {}, {}, {}, {}, {}, {}, {})
     assert reason is not None
 
 
 def test_rule_command_substitution_content_both_fused_spans_harmless() -> None:
     tokens = ["echo", "$(echo ok)$(echo also-ok)"]
-    assert checker._rule_command_substitution_content(tokens, {}, {}, {}, {}, {}) == (None, False, ())
+    assert checker._rule_command_substitution_content(tokens, {}, {}, {}, {}, {}, {}, {}) == (None, False, ())
 
 
 def test_rule_command_substitution_content_empty_unquoted_span_skipped() -> None:
     """An empty, unquoted `$()` substitution has no inner tokens to
     recurse into -- distinct from the fused/quoted empty-span case above."""
     tokens = ["$", "(", ")"]
-    assert checker._rule_command_substitution_content(tokens, {}, {}, {}, {}, {}) == (None, False, ())
+    assert checker._rule_command_substitution_content(tokens, {}, {}, {}, {}, {}, {}, {}) == (None, False, ())
 
 
 def test_tokenize_raises_on_unbalanced_quote() -> None:
@@ -4496,3 +4498,102 @@ def test_main_output_includes_empty_checkout_restore_paths_for_a_harmless_comman
     payload = {"tool_name": "Bash", "tool_input": {"command": "echo hi"}}
     out = _run_main(payload, monkeypatch, capsys)
     assert out["checkout_restore_paths"] == []
+
+
+def test_assigned_literals_biased_toward_stays_on_literal_once_assigned() -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, twenty-second round (issue #1375): the
+    lowercased counterpart of `_assigned_raw_values_biased_toward` --
+    once a name is assigned a value matching a member of LITERALS at any
+    point, it stays on that (lowercased) reading regardless of a later,
+    different reassignment, exactly mirroring the raw-case function's own
+    behavior."""
+    assert checker._assigned_literals_biased_toward(["TOOL=UV", "TOOL=npm"], frozenset({"uv"})) == {"TOOL": "uv"}
+
+
+def test_assigned_literals_biased_toward_falls_back_to_last_assignment_when_literal_never_seen() -> None:
+    """A name never assigned a biased-toward literal anywhere resolves
+    exactly as `_assigned_literals`'s own plain last-occurrence-wins
+    collapse would (lowercased)."""
+    assert checker._assigned_literals_biased_toward(["TOOL=NPM", "TOOL=Yarn"], frozenset({"uv"})) == {"TOOL": "yarn"}
+
+
+def test_assigned_literals_biased_toward_matches_lowered_raw_bias() -> None:
+    """`_assigned_literals_biased_toward` is a thin lowering wrapper around
+    `_assigned_raw_values_biased_toward`, not a separate bias computation
+    of its own -- both dicts must agree for the same NAME, up to case, by
+    construction."""
+    tokens = ["A=UV", "B=Install", "A=somethingelse"]
+    raw = checker._assigned_raw_values_biased_toward(tokens, checker._WATCHED_WRITE_BIAS)
+    literals = checker._assigned_literals_biased_toward(tokens, checker._WATCHED_WRITE_BIAS)
+    assert literals == {name: value.lower() for name, value in raw.items()}
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, decoy_value=_VALUES, tail=st.lists(_IDENTIFIERS, max_size=2))
+def test_assigned_literals_biased_toward_matches_plain_collapse_when_never_reassigned_to_literal(
+    name: str, decoy_value: str, tail: list[str]
+) -> None:
+    """Model-based: for a single assignment never matching the biased-
+    toward literal, `_assigned_literals_biased_toward` agrees exactly with
+    the plain, order-blind `_assigned_literals`."""
+    assume(decoy_value.lower() != "uv")
+    tokens = [f"{name}={decoy_value}", *tail]
+    assert checker._assigned_literals_biased_toward(tokens, frozenset({"uv"})) == checker._assigned_literals(tokens)
+
+
+def test_classify_denies_tool_and_verb_indirection_when_verb_is_reassigned_after_use() -> None:
+    """End-to-end regression pin for the round-22 finding at the
+    `classify()` level, top-level shape: B1a/B1b's own tool+verb
+    reconstruction was fed the ordinary, order-blind ASSIGNED/RAW_
+    ASSIGNED dicts, the SAME reassignment-ambiguity class rounds 19-20
+    already closed for the checkout/restore consumer, left open on this
+    HARD-DENY consumer. Confirmed live via a real bash proxy (stand-in
+    `uv` binary on PATH): `$B` genuinely was "install" at its actual
+    point of use one statement earlier, and real bash genuinely ran `uv
+    install foo` -- but this module wrongly classified `deny=False`
+    before this fix."""
+    verdict = checker.classify("A=uv; B=install; $A $B foo; B=somethingelse")
+    assert verdict.deny is True
+
+
+def test_classify_denies_gh_api_write_when_method_value_is_reassigned_after_use() -> None:
+    """Companion to the tool+verb pin above, for `_rule_gh_api_write`'s
+    own dynamic -X/--method value resolution. Confirmed live via a real
+    bash proxy (stand-in `gh` binary on PATH): `$M` genuinely was "POST"
+    at its actual point of use; real bash genuinely ran `gh api
+    repos/o/r/pulls/1/merge -X POST` -- a genuine, unreviewed write API
+    call (e.g. merging a pull request) -- but this module wrongly
+    classified `deny=False` before this fix."""
+    verdict = checker.classify("M=POST; gh api repos/o/r/pulls/1/merge -X $M; M=safe")
+    assert verdict.deny is True
+
+
+def test_classify_denies_tool_and_verb_indirection_reassigned_across_a_command_substitution() -> None:
+    """End-to-end regression pin for round 22's own recursive-threading
+    correction, mirroring round 21's correction of round 20's initially
+    scoped-down cd-biased fix: the tool+verb pair is used entirely WITHIN
+    a `$(...)` span, but the reassignment-ambiguity poisoning lives in
+    the OUTER token stream -- `A=uv; x=$($A install foo); A=somethingelse`
+    -- so the write-biased dict must be threaded through the SAME
+    recursive chain as every other bias dict, not merely computed at the
+    top-level segment scope."""
+    verdict = checker.classify("A=uv; x=$($A install foo); A=somethingelse")
+    assert verdict.deny is True
+
+
+def test_classify_denies_gh_api_write_reassigned_across_a_command_substitution() -> None:
+    """Companion to the command-substitution pin above, for the gh-api-
+    write consumer."""
+    verdict = checker.classify("M=POST; x=$(gh api repos/o/r/pulls/1/merge -X $M); M=safe")
+    assert verdict.deny is True
+
+
+def test_classify_leaves_reassigned_but_unrelated_dynamic_word_allowed() -> None:
+    """No false positive: a name reassigned across statements, none of
+    whose values are ever a watched tool/verb/write-method, must not be
+    denied merely because it participates in this bias mechanism -- the
+    bias only ever widens toward a member of `_WATCHED_WRITE_BIAS`, never
+    invents a match out of nothing."""
+    verdict = checker.classify("TOOL=echo; $TOOL hello; TOOL=world")
+    assert verdict.deny is False
