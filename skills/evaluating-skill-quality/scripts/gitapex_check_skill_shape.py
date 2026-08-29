@@ -1273,6 +1273,44 @@ PORTABLE_SKILL_FACT_CLAIM_RE = re.compile(
     r"(?P<clause>[^.;\n]{0,120})"
 )
 
+# Issue #218 (Repair 3) / #1399: a bare demonstrative "this origin
+# repository" inside Portable-declared content either dangles or silently
+# narrows to the rubric's own host once vendored elsewhere -- the exact
+# defect PR #216's own new Dimension 6 bullet shipped and then had to
+# correct to "the origin repository" (evals/evaluating-skill-quality/
+# split.md's "Iteration: issue #200" entry, Correction item 3). This
+# repository's own established convention -- the sibling issue/PR-number-
+# citation bullet's lead sentence, and that same correction -- is the
+# definite article "the origin repository", never the demonstrative "this
+# origin repository".
+#
+# Deliberately narrower than banning "this repository's own" outright, an
+# earlier draft of this check considered per issue #218's own retrospective
+# text: that longer phrase is this repository's own single most common way
+# to cite itself in disclosure/rationale prose (174 occurrences across
+# skills/ at authoring time, all benign -- e.g. rubric.md's own "labelled
+# here as this repository's own reasoned extension rather than an
+# Anthropic-sourced claim"), and an unscoped ban on it would false-positive
+# on nearly every Portable skill in the corpus, the same over-broad-ban
+# shape issue #1051 already found and narrowed once for
+# GENERIC_ROLE_HEDGE_PHRASES. "this origin repository" carries no such
+# legitimate use: "origin" only ever modifies "repository" to mean *this
+# specific repository, as opposed to wherever a Portable skill is vendored
+# to* -- there is no reading of "this origin repository" that is not the
+# demonstrative defect this check exists to catch. No hedge-phrase rescue
+# either, for the same reason: unlike a repo-path or issue-number citation,
+# which can legitimately disclose a real, deliberate same-repo dependency,
+# there is no legitimate reading of this specific demonstrative to hedge.
+#
+# ``\s+`` between words, not a literal space: this repository's own
+# Markdown source is hard-wrapped at roughly 80 columns, so a live
+# occurrence of this exact phrase (references/worked-example-self-review.md,
+# found while validating this check against the real corpus) lands with an
+# actual newline between "origin" and "repository" -- "this origin\n
+# repository's tree" -- which a literal-space pattern silently misses
+# even though a rendered reader sees one continuous phrase.
+DEMONSTRATIVE_ORIGIN_REPOSITORY_RE = re.compile(r"\bthis\s+origin\s+repository\b", re.IGNORECASE)
+
 # Issue #192 (Refs #93 repair 1): a "step N" / "steps N-M" reference,
 # case-insensitive (this repo's own SKILL.md files use both "Step 1" and
 # "step 5"). Deliberately does not attempt to parse "and"/comma-joined
@@ -4611,6 +4649,7 @@ def check_shape(target: Path) -> list[CheckResult]:
         )
         results.extend(_portable_path_citation_checks(skill_md, skill_dir, body, declared_citation_paths))
         results.extend(_portable_skill_citation_checks(skill_md, skill_dir, body))
+        results.extend(_portable_demonstrative_repository_citation_checks(skill_md, skill_dir, body))
         results.extend(_out_of_skill_scripts_checks(skill_md, skill_dir, body))
 
     return results
@@ -5221,6 +5260,58 @@ def _portable_skill_citation_checks(skill_md: Path, skill_dir: Path, body: list[
             "Portable content has no unhedged declarative fact-claim "
             "about a named sibling skill's own behavior "
             f"(no approved hedge phrase {HEDGE_PHRASES} nearby)",
+            "none" if not hits else "found: " + ", ".join(hits),
+        ),
+    ]
+
+
+def _demonstrative_origin_repository_offenders(defenced_text: str) -> list[str]:
+    """Return each ``this origin repository`` match
+    (DEMONSTRATIVE_ORIGIN_REPOSITORY_RE) in ``defenced_text``, with a short
+    trailing window of context so a finding reads as a real sentence
+    fragment rather than a bare three-word match. Internal whitespace in
+    the window is collapsed to single spaces before returning it -- the
+    match itself can span a hard-wrapped line break (see the constant's
+    own comment), and a raw embedded newline would render as a broken
+    finding string. See that constant's own comment for why this check has
+    no hedge-phrase rescue, unlike the other Portable-citation checks
+    above.
+    """
+    offenders: list[str] = []
+    for m in DEMONSTRATIVE_ORIGIN_REPOSITORY_RE.finditer(defenced_text):
+        window_end = min(len(defenced_text), m.end() + 40)
+        snippet = defenced_text[m.start() : window_end].strip()
+        offenders.append(re.sub(r"\s+", " ", snippet))
+    return offenders
+
+
+def _portable_demonstrative_repository_citation_checks(
+    skill_md: Path, skill_dir: Path, body: list[str]
+) -> list[CheckResult]:
+    """The check_shape() entry point for
+    _demonstrative_origin_repository_offenders, scanning SKILL.md and every
+    references/*.md file the same way every other _citation_sources-based
+    check does. Only called when ``_is_portable`` is true (see
+    ``check_shape``), matching ``_portable_skill_citation_checks``'s own
+    Portable-only gate: a skill that has declared itself Repository-scoped
+    is not asking this check to excuse it -- that declaration is exactly
+    what it means to depend on this repository on purpose (the same
+    carve-out rubric.md's own Dimension 6 bullet states for the sibling
+    defect, issue #200/#218).
+    """
+    hits: list[str] = []
+    for label, source_text in _citation_sources(skill_md, skill_dir, body):
+        defenced = _blank_fenced_blocks(source_text)
+        for offender in _demonstrative_origin_repository_offenders(defenced):
+            hits.append(f"{label}:{offender}")
+    hits = _dedup(hits)
+    return [
+        CheckResult(
+            "portable-no-demonstrative-origin-repository-citation",
+            not hits,
+            "Portable content refers to the origin repository with the "
+            'definite article ("the origin repository"), never the '
+            'demonstrative "this origin repository"',
             "none" if not hits else "found: " + ", ".join(hits),
         ),
     ]
