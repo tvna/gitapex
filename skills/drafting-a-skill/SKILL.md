@@ -51,11 +51,10 @@ judgment, route directly to `evaluating-skill-quality`/
    or embellish one to fill the gap -- say so and ask what to draft,
    per Step 2's own escalation pattern below.
 
-2. **Value-and-vehicle gate, two parts.** Before drafting anything, judge
-   the candidate on two questions: **Part A**, worth a permanent
-   instruction at all; **Part B**, which vehicle carries it. Either part's
-   blocking finding halts continuation on its own, reported ahead of every
-   later Step's finding.
+2. **Value-and-vehicle gate, two parts.** Before drafting anything: **Part
+   A**, worth a permanent instruction at all; **Part B**, which vehicle
+   carries it. Either part's blocking finding halts continuation on its
+   own, reported ahead of every later Step's finding.
 
    **Part A -- value judgment**, the same question `eliciting-a-design`'s
    Core Domain check asks: **competitive advantage** (differentiates this
@@ -64,12 +63,13 @@ judgment, route directly to `evaluating-skill-quality`/
    High on all three: continue to Part B. Low, especially advantage:
    search for a precedent first -- a fit blocks like any Part B row, none
    found still continues to Part B. **Inherited, not skipped**: when this
-   same candidate already went through an `eliciting-a-design` Core Domain
-   check earlier in the same effort, adopt that verdict unless new
-   contradicting evidence surfaces, per `eliciting-a-design`'s own rule
-   ("'The design is approved' is not a reason for the downstream skill to
-   skip deriving its own acceptance criteria or running its own checks").
-   No prior check: run Part A in full as above -- the default case.
+   candidate already went through an `eliciting-a-design` Core Domain
+   check earlier in the same effort, locate and quote its actual verdict
+   first -- a bare claim with nothing quotable is not evidence -- then
+   adopt it unless new evidence contradicts, per `eliciting-a-design`'s
+   own rule ("'The design is approved' is not a reason for the downstream
+   skill to skip deriving its own acceptance criteria or running its own
+   checks"). No prior check, or nothing quotable: run Part A in full.
 
    **Part B -- vehicle selection**, always run (`eliciting-a-design` has
    no equivalent to inherit): which of Skill, Hook, CLAUDE.md, or
@@ -377,8 +377,8 @@ off to `evaluating-skill-quality` and `battle-testing-a-skill`.
   many times it repeats, or whether it cites a specific prior session or
   issue number.
 - Never skip Step 2's gate, either part, under time pressure -- each
-  blocks on its own, and adopting Part A's inherited verdict without
-  checking for new contradicting evidence counts as a skip.
+  blocks on its own; adopting Part A's inheritance on a bare claim, with
+  nothing quotable, or with no new-evidence check, counts as a skip.
 - Never write a hook, edit CLAUDE.md, or author a Subagent/Output-style/
   system-prompt-append/Auto-memory file to satisfy a Part B finding --
   name the redirect and stop; the receiving skill or mechanism owns the
