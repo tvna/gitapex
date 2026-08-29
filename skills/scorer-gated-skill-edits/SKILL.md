@@ -131,7 +131,10 @@ evaluation. Name the gap; never fake a score to proceed.
    "fourth" ordinal citation in a sibling worked example to fifth, and a
    corpus-size math note in a sibling doc went stale the same way --
    both slipped past review because nothing in this step prompted the
-   sweep. See
+   sweep. This sweep-and-fix is mechanical citation upkeep, not new
+   behavior: correcting a stale ordinal or count elsewhere does not by
+   itself disqualify an otherwise deletion-only candidate from
+   pruning-only eligibility above. See
    [references/worked-example.md](references/worked-example.md)'s
    Cross-reference sweep before scoring section.
 4. **Gate: strict improve-or-reject.** Run the selection-split trials with
