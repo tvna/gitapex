@@ -102,6 +102,26 @@ def test_has_dedup_disclosure_before_an_unrelated_fence_still_counts() -> None:
     assert checker.has_dedup_disclosure("Dedup: real reason\n```\nexample text\n```\n")
 
 
+def test_has_dedup_disclosure_accepts_a_fence_shaped_reason() -> None:
+    """Regression test (issue #1432): a `Dedup:` line whose own disclosed
+    reason is exactly a bare triple-backtick sequence (or otherwise starts
+    with/contains fence-marker characters) must still be detected, because
+    that marker is mid-line after "Dedup: " -- not the first non-whitespace
+    content on its own line -- so it never actually opens a real,
+    GitHub-rendered code fence per CommonMark/GitHub fence syntax.
+
+    Before the fix, `_UNTERMINATED_FENCE_RE`/`_FENCE_RE` matched the fence
+    marker anywhere in the text (not anchored to the start of its own
+    line), so `_strip_fenced_blocks()` silently swallowed the reason text
+    before `_DEDUP_RE` ever saw it. Also covers the paired-fence variant of
+    the same bug: `_FENCE_RE` shares the identical unanchored shape, so a
+    fence-shaped reason immediately followed by a genuine, later paired
+    fence swallowed the reason too.
+    """
+    assert checker.has_dedup_disclosure("Some drafted issue body.\n\nDedup: ```\n")
+    assert checker.has_dedup_disclosure("Dedup: ```\nreal content after\n```\n")
+
+
 def test_has_dedup_disclosure_rejects_a_blockquoted_line() -> None:
     """Regression test (battle-testing-a-skill audit, PR #1215 Finding A/B):
     Step 3 requires quoting the requester's own words verbatim into Facts,

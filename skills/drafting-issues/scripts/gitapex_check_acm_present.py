@@ -82,9 +82,15 @@ _DEDUP_RE = re.compile(
 )
 
 # A well-paired fenced code block (``` or ~~~, opened and closed with the
-# same marker) -- mirrors hooks/gitapex_check_pr_duplicate_issue.py's own
-# `_FENCE_RE` exactly, not re-derived, so the two stay the same shape.
-_FENCE_RE = re.compile(r"```.*?```|~~~.*?~~~", re.DOTALL)
+# same marker). Anchored to line start (issue #1432): CommonMark/GitHub
+# fence syntax requires the marker to be the first non-whitespace content
+# on its own line, not merely present anywhere in the text -- an
+# unanchored form (this module's own earlier shape, and
+# hooks/gitapex_check_pr_duplicate_issue.py's own `_FENCE_RE`, which this
+# no longer mirrors exactly for that reason) misfires on a `Dedup:` line
+# whose disclosed reason text starts with or contains fence-marker
+# characters without actually opening a real fence.
+_FENCE_RE = re.compile(r"^[ \t]*```.*?^[ \t]*```|^[ \t]*~~~.*?^[ \t]*~~~", re.DOTALL | re.MULTILINE)
 # An *unterminated* fence opener (no matching close anywhere in the rest
 # of the body): GitHub renders this as code through to the end of the
 # body, so it must be stripped the same as a terminated fence, not left
@@ -94,7 +100,8 @@ _FENCE_RE = re.compile(r"```.*?```|~~~.*?~~~", re.DOTALL)
 # hooks/gitapex_check_pr_duplicate_issue.py's own `_strip_fences`, it does
 # not also strip single-backtick inline code spans; see the module
 # docstring for why that would break an accepted decorated form here.
-_UNTERMINATED_FENCE_RE = re.compile(r"```.*\Z|~~~.*\Z", re.DOTALL)
+# Anchored to line start for the same reason as `_FENCE_RE` above.
+_UNTERMINATED_FENCE_RE = re.compile(r"^[ \t]*```.*\Z|^[ \t]*~~~.*\Z", re.DOTALL | re.MULTILINE)
 
 
 def _strip_fenced_blocks(text: str) -> str:
