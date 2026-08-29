@@ -1702,6 +1702,27 @@ def test_checkout_allowed_when_an_earlier_dynamic_word_resolves_to_something_har
     assert result.returncode == 0, f"stderr={result.stderr!r}"
 
 
+def test_checkout_denied_when_an_earlier_default_clause_could_resolve_to_cd(tmp_path: Path) -> None:
+    """CRITICAL bypass regression pin (round-12 independent review, issue
+    #1375). `_substitute_var_refs_candidates` does not recursively
+    re-expand a `${NAME:-default}` clause's own DEFAULT text -- so when
+    the default text is itself a `$OTHER` reference, the classifier's own
+    resolution returned the literal, still-unexpanded string `"$OTHER"`,
+    never equal to `cd`/`pushd`/`popd` as plain text even when `$OTHER`
+    genuinely holds one of those at real bash runtime. Live-verified
+    before this fix: `OTHER=cd; ${UNSET:-$OTHER} sub; git checkout --
+    dirty.py` was wrongly allowed outright, and the real command silently
+    discarded a genuinely dirty `dirty.py`. The deny here is
+    classifier-level (a token-shape fact, no live git call), so no such
+    file needs to actually exist for this regression pin."""
+    repo_dir = tmp_path / "repo"
+    _init_repo_with_committed_file(repo_dir)
+    result = run("OTHER=cd; ${UNSET:-$OTHER} sub; git checkout -- dirty.py", payload_cwd=str(repo_dir))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+    payload = json.loads(result.stderr)
+    assert "working tree is at risk" in payload["systemMessage"]
+
+
 def test_checkout_denied_in_a_real_merge_conflict_names_the_conflict_remedy(tmp_path: Path) -> None:
     """A real merge conflict (issue #1375's own Acceptance Criteria Map):
     the deny message names a remedy that actually works mid-conflict

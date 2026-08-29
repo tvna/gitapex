@@ -3626,7 +3626,7 @@ def _dynamic_word_may_resolve_to_a_cwd_relocator(token: str, name_to_raw_value: 
     as literal, non-existent command `CD`, not the `cd` builtin) a false
     positive of its own.
 
-    Three cases:
+    Four cases:
     - No `$NAME`-shaped reference found in TOKEN at all
       (`_VAR_REF_FULL_RE.search` finds nothing) -- TOKEN's dynamism comes
       from something this resolution primitive cannot decompose (e.g. a
@@ -3638,13 +3638,28 @@ def _dynamic_word_may_resolve_to_a_cwd_relocator(token: str, name_to_raw_value: 
       readings to enumerate) or `[]` (some referenced name has no
       assigned-and-in-range reading this classifier can resolve) -- both
       genuine ambiguity, not a resolved-safe value. Fails closed (`True`).
-    - A concrete candidate list -- flags (`True`) only if some candidate
-      is exactly `cd`/`pushd`/`popd`; otherwise the word demonstrably
-      resolves to something else, so returns `False`."""
+    - A returned candidate is ITSELF still dynamic (contains `$`/backtick
+      after substitution) -- CRITICAL bypass found by independent
+      adversarial review (round 12, issue #1375) and independently
+      reproduced live: `_substitute_var_refs_candidates` does NOT
+      recursively re-expand a `${NAME:-default}` clause's own DEFAULT
+      text (a disclosed residual of that primitive itself, see its own
+      docstring), so `OTHER=cd; ${UNSET:-$OTHER} sub; git checkout --
+      dirty.py` resolved `${UNSET:-$OTHER}`'s one candidate to the
+      literal, still-unexpanded string `"$OTHER"` -- never equal to
+      `cd`/`pushd`/`popd` as plain text, even though `$OTHER` genuinely
+      holds `cd` at real bash runtime -- silently discarding uncommitted
+      work exactly like round 10's own original bypass. Fails closed
+      (`True`), mirroring the identical still-dynamic-candidate check
+      `_resolve_path_tokens` already carries for the same reason (see its
+      own docstring).
+    - A concrete, fully-resolved candidate list -- flags (`True`) only if
+      some candidate is exactly `cd`/`pushd`/`popd`; otherwise the word
+      demonstrably resolves to something else, so returns `False`."""
     if _VAR_REF_FULL_RE.search(token) is None:
         return True
     candidates = _substitute_var_refs_candidates(token, name_to_raw_value, name_to_raw_value)
-    if candidates is None or not candidates:
+    if candidates is None or not candidates or any(_is_dynamic(candidate) for candidate in candidates):
         return True
     return any(candidate in _CWD_RELOCATING_COMMANDS for candidate in candidates)
 

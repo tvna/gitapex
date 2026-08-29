@@ -3648,6 +3648,38 @@ def test_classify_allows_a_checkout_hidden_behind_an_unrelated_dynamic_word() ->
     assert verdict.checkout_restore_paths == ("f.py",)
 
 
+def test_dynamic_word_may_resolve_to_a_cwd_relocator_true_for_a_still_dynamic_candidate() -> None:
+    """CRITICAL bypass regression pin (round-12 independent review, issue
+    #1375). `_substitute_var_refs_candidates` does NOT recursively
+    re-expand a `${NAME:-default}` clause's own DEFAULT text (a
+    disclosed residual of that primitive itself) -- so when the default
+    text is itself a `$OTHER` reference, the one returned candidate is
+    the literal, still-unexpanded string `"$OTHER"`, never equal to
+    `cd`/`pushd`/`popd` as plain text even when `$OTHER` genuinely holds
+    one of those at real bash runtime. Live-verified before this fix:
+    `${UNSET:-$OTHER}` with `OTHER=cd` resolved to a false `False`
+    (not-a-relocator) verdict instead of failing closed, mirroring the
+    identical still-dynamic-candidate check `_resolve_path_tokens`
+    already carries for the same reason."""
+    assert checker._dynamic_word_may_resolve_to_a_cwd_relocator("${UNSET:-$OTHER}", {"OTHER": "cd"}) is True
+    assert checker._dynamic_word_may_resolve_to_a_cwd_relocator("${UNSET:-$OTHER}", {"OTHER": "pushd"}) is True
+
+
+def test_rule_git_checkout_restore_denies_a_still_dynamic_candidate() -> None:
+    segments = [["${UNSET:-$OTHER}", "sub"], ["git", "checkout", "--", "f.py"]]
+    reason, resolved = checker._rule_git_checkout_restore(segments, {"OTHER": "cd"})
+    assert reason is not None
+    assert resolved == ()
+
+
+def test_classify_denies_a_checkout_hidden_behind_a_still_dynamic_default_clause() -> None:
+    """End-to-end regression pin for the round-12 finding at the
+    `classify()` level."""
+    verdict = checker.classify("OTHER=cd; ${UNSET:-$OTHER} sub; git checkout -- dirty.py")
+    assert verdict.deny is True
+    assert verdict.checkout_restore_paths == ()
+
+
 # --- End-to-end classify() coverage, pinning every explicit safe/deny case
 # issue #1375's own Acceptance Criteria Map and "Explicit safe cases"
 # section name by hand.
