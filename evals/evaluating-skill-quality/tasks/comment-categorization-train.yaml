@@ -1,0 +1,51 @@
+id: evaluating-skill-quality-comment-categorization-train
+name: Execute-Only Script's Comments Are All Implementation, No Interface
+description: Train fixture for the Comment categorization (Interface vs. Implementation, Ousterhout) prose-only dimension-7 axis added by issue #1045 -- the skill tells the model to run the script (execute-only), so its comments should be Interface documentation first (inputs, outputs, flags, exit codes), but every comment here instead explains internal algorithm choices, leaving a caller with no stated way to know what to pass in or what comes back out.
+tags:
+  - quality
+  - bundled-scripts
+  - comment-categorization
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "order-batch-merger". Is this a good skill?
+
+    ---
+    name: order-batch-merger
+    description: Merge two sorted order-export files into one sorted file. Use when the user asks to combine two sorted order exports.
+    ---
+
+    # Order Batch Merger
+
+    ## Procedure
+
+    1. Run `scripts/merge_batches.py <a.csv> <b.csv> <out.csv>`.
+
+    `scripts/merge_batches.py` (top of file):
+    ```python
+    import csv
+    import sys
+
+    def merge(a_rows, b_rows):
+        # Uses a two-pointer sliding-window walk instead of sorted() + merge
+        # because both inputs are already externally guaranteed sorted, so
+        # a full re-sort would waste the O(n log n) pass.
+        # We preserve first-seen insertion order on ties because a downstream
+        # internal reconciliation job depends on stable ordering.
+        i = j = 0
+        merged = []
+        while i < len(a_rows) and j < len(b_rows):
+            if a_rows[i][0] <= b_rows[j][0]:
+                merged.append(a_rows[i]); i += 1
+            else:
+                merged.append(b_rows[j]); j += 1
+        merged.extend(a_rows[i:]); merged.extend(b_rows[j:])
+        return merged
+    ```
+expected:
+  output_contains:
+    - "Interface"
+    - "Implementation"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

@@ -1,0 +1,48 @@
+id: evaluating-skill-quality-script-execution-intent-train
+name: Bundled Script Named but Never Told to Run or Read
+description: Train fixture for the script-execution-intent-stated dimension-7 check (issue #1045 ACM item A, mechanized in gitapex_check_skill_shape.py) -- the script is cited by exact filename in SKILL.md prose, but the citing paragraph never says whether the model should execute it ("Run `x.py`") or read it as reference ("See `x.py` for ...").
+tags:
+  - quality
+  - bundled-scripts
+  - script-execution-intent-stated
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "duplicate-row-finder". Is this a good skill?
+
+    ---
+    name: duplicate-row-finder
+    description: Find duplicate rows in a CSV file. Use when the user asks to de-duplicate tabular data.
+    ---
+
+    # Duplicate Row Finder
+
+    ## Procedure
+
+    1. Load the input CSV.
+    2. The de-duplication logic lives in `scripts/find_duplicates.py`.
+    3. Report the duplicate rows found.
+
+    `scripts/find_duplicates.py` (top of file):
+    ```python
+    import csv
+    import sys
+
+    def find_duplicates(path):
+        seen = set()
+        dupes = []
+        with open(path, newline="") as handle:
+            for row in csv.reader(handle):
+                key = tuple(row)
+                if key in seen:
+                    dupes.append(row)
+                seen.add(key)
+        return dupes
+    ```
+expected:
+  output_contains:
+    - "execution intent"
+    - "find_duplicates.py"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

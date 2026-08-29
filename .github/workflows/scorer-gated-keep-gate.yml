@@ -1,0 +1,409 @@
+# scorer-gated-skill-edits KEEP gate, CI-side (issue #1046).
+#
+# This is the CI-side execution mechanism for scorer-gated-skill-edits'
+# own Procedure step 4 ("Gate: strict improve-or-reject") -- previously
+# blocked because a full selection-split before/after run (this
+# repository's own evaluating-skill-quality suite: 40 selection fixtures
+# x 3 trials x 2 arms = 240 trials, ~7h+ serial once
+# evals/scripts/gitapex_run_ablation.py's --include-references flag is
+# enabled) does not fit .github/workflows/waza-eval-gate.yml's own
+# 45-minute per-PR budget, and gitapex_run_eval_suite.py's own
+# run_eval_suite() dispatches every trial strictly serially -- eval.yaml's
+# `config.parallel`/`config.workers` fields are read by load_eval_suite()
+# but never consulted for concurrency anywhere in this script (confirmed
+# by reading its source, not assumed).
+#
+# Scope, not schedule, is the lever this workflow pulls: rather than a
+# single long-timeout job over the full selection split, each dispatch is
+# scoped to the specific fixtures a `fixtures:` input names -- by default,
+# the 4 selection fixtures issue #1045 itself added
+# (no-voodoo-constant-selection.yaml, script-execution-intent-selection.yaml,
+# comment-categorization-selection.yaml, context-economy-selection.yaml),
+# not the full 40-fixture split. This mirrors a scoping precedent this
+# repository's own eval-runner records already established for a
+# pure-insertion rubric.md diff (issues #537, #1124, #1142, #1346, #1347):
+# a change that only adds new rubric text, verified content-disjoint from
+# the pre-existing corpus by direct inspection, does not re-score every
+# pre-existing selection fixture on both arms -- that gap is disclosed
+# explicitly in the run record's own `known_gaps` field
+# (skills/scorer-gated-skill-edits/SKILL.md Procedure step 7), never
+# silently assumed clean. A future direction, not built here: dynamically
+# computing which fixtures a given diff actually touches, rather than a
+# human naming them via this workflow's own `fixtures:` input each time.
+#
+# Two arms, matrixed (issue #1045's own before/after commits by default:
+# f0e0a129e5cac042a70a81265792163346c82882 is #1045's own direct parent,
+# 5d20907a54fae63b55d61a7c145b6d5406175de1 is the commit that itself
+# carries #1045's full rubric.md/SKILL.md patch -- confirmed live via
+# `git show --no-patch --format="%H %P" 5d20907` and `git show --numstat`,
+# not assumed): each arm materializes its own skill_md/references/ content
+# at its own `before_ref`/`after_ref` via `git show <ref>:<path>` into a
+# scratch directory, never by mutating this job's own working tree --
+# scorer-gated-skill-edits/SKILL.md's own Stop boundary forbids
+# `git stash`/`checkout`/`reset` for exactly this reason (a concurrent read
+# could observe either state), and even though each matrix leg already runs
+# on its own isolated runner (no concurrent-read risk in this specific
+# topology), `git show` is also simply the correct, lower-cost way to read
+# one historical path without a second full checkout. The runner
+# (evals/scripts/gitapex_run_eval_suite.py) and the fixtures
+# (evals/evaluating-skill-quality/tasks/*.yaml) are NOT varied between
+# arms -- both come from this workflow's own checkout at
+# `github.sha`/dispatch time, matching Procedure step 4's own requirement
+# that "both sides of the comparison run on the same runner commit, model,
+# and fixture set."
+#
+# This workflow computes and reports the KEEP/REJECT verdict (via
+# skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py
+# --compare-to, the same script and invocation shape Procedure step 4
+# documents) and uploads both arms' raw score files as artifacts. It does
+# NOT write or commit scorer-gated-skill-edits' own run record (Procedure
+# step 7) -- authoring `headline_pattern`/`known_gaps` prose and validating
+# against references/eval-run.schema.json is a judgment step this workflow
+# deliberately leaves to whoever downloads its artifacts afterward, the
+# same review checkpoint every other write in this repository gets before
+# landing in git history. `permissions: contents: read` throughout,
+# unchanged by this scope decision: nothing here ever pushes.
+name: scorer-gated-skill-edits KEEP gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      skill:
+        description: >-
+          Skill directory name under skills/ whose SKILL.md/references/ are
+          under test (evals/<skill>/ must hold the matching suite).
+        required: false
+        default: 'evaluating-skill-quality'
+      before_ref:
+        description: >-
+          Git ref (commit SHA, tag, or branch) for the pre-edit skill
+          content -- the "before" arm. Default is #1045's own direct
+          parent commit.
+        required: false
+        default: 'f0e0a129e5cac042a70a81265792163346c82882'
+      after_ref:
+        description: >-
+          Git ref for the post-edit skill content -- the "after" arm.
+          Default is the commit that itself carries #1045's full patch.
+        required: false
+        default: '5d20907a54fae63b55d61a7c145b6d5406175de1'
+      fixtures:
+        description: >-
+          Comma-separated task fixture filenames, relative to
+          evals/<skill>/tasks/, to run on both arms. Default is the 4
+          selection-split fixtures issue #1045 itself added.
+        required: false
+        default: >-
+          no-voodoo-constant-selection.yaml,script-execution-intent-selection.yaml,comment-categorization-selection.yaml,context-economy-selection.yaml
+      issue_url:
+        description: >-
+          Full URL of the issue or change this run is performed for
+          (scorer-gated-skill-edits Procedure step 7's own `issue` field --
+          never a bare number).
+        required: false
+        default: 'https://github.com/tvna/gitapex/issues/1046'
+
+permissions:
+  contents: read
+
+jobs:
+  run-arm:
+    runs-on: ubuntu-latest
+    # 12 trials per arm (4 fixtures x eval.yaml's own trials_per_task: 3),
+    # each up to eval.yaml's own timeout_seconds: 300 worst case = 60m;
+    # 120m leaves real margin for --include-references' larger per-call
+    # context (unmeasured against this specific corpus as of this writing
+    # -- see this file's own header comment).
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        arm: [before, after]
+    steps:
+      # fetch-depth: 0 (full history), not the composite action's own
+      # default shallow clone -- this job's own later step needs
+      # `git show <before_ref|after_ref>:<path>` to resolve against
+      # arbitrary historical commits, which a shallow clone would not
+      # carry.
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+        with:
+          fetch-depth: '0'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      # Same preflight shape as waza-eval-matrix.yml's own eval-matrix job
+      # (issue #1134): the runner's model-CLI subprocess needs this, and
+      # its hermetic env allowlist passes only PATH/HOME/ANTHROPIC_API_KEY/
+      # TMPDIR/TMP/TEMP through -- verified by reading
+      # evals/scripts/gitapex_run_ablation.py's source, not assumed.
+      - name: Preflight -- require ANTHROPIC_API_KEY
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::error::No ANTHROPIC_API_KEY configured. Set repository" \
+              "secret ANTHROPIC_API_KEY under Settings -> Secrets and" \
+              "variables -> Actions before dispatching. Never printed" \
+              "here; only checked for presence."
+            exit 1
+          fi
+
+      # Same pin as waza-eval-matrix.yml's own eval-matrix job -- this
+      # binary is not preinstalled on ubuntu-latest and not provisioned by
+      # this repo's own Nix flake; keep both pins in sync manually when
+      # bumping either (no Dependabot ecosystem tracks a bare npm install
+      # line inside a workflow run: step).
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code@2.1.240
+
+      # Materializes this matrix leg's own arm content into a scratch
+      # directory via `git show <ref>:<path>` -- never by mutating this
+      # job's own working tree (checked out at github.sha/dispatch time),
+      # per scorer-gated-skill-edits/SKILL.md's own Stop boundary. Lists
+      # references/ files via `git ls-tree` rather than assuming today's
+      # file set, since a historical ref's own references/ directory
+      # contents can differ from what this checkout currently holds.
+      #
+      # ARM_REF selection happens inside this step's own bash, not via a
+      # `${{ cond && a || b }}` expression in `env:` -- that idiom silently
+      # falls through to the OTHER arm's ref whenever the selected input is
+      # an empty string (GitHub Actions expressions treat "" as falsy), which
+      # a manual dispatch clearing the pre-filled before_ref/after_ref default
+      # would trigger with no error, silently running both arms on identical
+      # content and reporting a false "no difference" verdict on the exact
+      # gate this workflow exists to compute (adversarial review finding).
+      # Explicitly failing on an empty ref here closes that hole.
+      #
+      # `git ls-tree` (no `-r`): matches build_skill_context_file()'s own
+      # non-recursive `references_dir.iterdir()` contract exactly (see that
+      # function's own docstring) -- a prior `-r` revision recursed into
+      # subdirectories while flattening every file into one directory via
+      # `basename`, which both diverged from what the Python function would
+      # ever read and could silently drop content if two files under
+      # different subdirectories shared a basename (adversarial review
+      # finding; latent today since no committed skill's references/ nests,
+      # but a real risk for a `skill:` input whose references/ does).
+      - name: Materialize ${{ matrix.arm }}-arm skill content at its own ref
+        env:
+          SKILL: ${{ inputs.skill }}
+          MATRIX_ARM: ${{ matrix.arm }}
+          BEFORE_REF: ${{ inputs.before_ref }}
+          AFTER_REF: ${{ inputs.after_ref }}
+        run: |
+          set -euo pipefail
+          if [ "${MATRIX_ARM}" = "before" ]; then
+            ARM_REF="${BEFORE_REF}"
+          else
+            ARM_REF="${AFTER_REF}"
+          fi
+          if [ -z "${ARM_REF}" ]; then
+            echo "::error::${MATRIX_ARM}_ref input is empty -- refusing to" \
+              "silently fall back to the other arm's ref, which would make" \
+              "both arms run on identical content."
+            exit 1
+          fi
+          mkdir -p "arm-content/references"
+          git show "${ARM_REF}:skills/${SKILL}/SKILL.md" > "arm-content/SKILL.md"
+          # Filter to blob (regular file) entries only, matching
+          # build_skill_context_file()'s own `is_file()` filter exactly --
+          # `git ls-tree` (without --name-only) also lists a tree (nested
+          # subdirectory) entry, and `git show ref:<dir>` succeeds on one
+          # (printing a text tree listing, not erroring), which an earlier
+          # revision of this loop would have written verbatim as bogus file
+          # content into arm-content/references/<subdirname> instead of
+          # skipping it (adversarial re-review finding on the -r removal
+          # above: dropping -r closed the original collision risk but this
+          # loop still had no type filter, unlike the Python side).
+          while IFS=$'\t' read -r meta name; do
+            type="$(printf '%s' "$meta" | awk '{print $2}')"
+            if [ "${type}" != "blob" ]; then
+              continue
+            fi
+            base="$(basename "$name")"
+            git show "${ARM_REF}:${name}" > "arm-content/references/${base}"
+          done < <(git ls-tree "${ARM_REF}" -- "skills/${SKILL}/references/")
+
+      # An ephemeral eval.yaml scoped to only the fixtures: input, not a
+      # committed file -- mirrors evals/scripts/gitapex_set_config_model.py's
+      # own established precedent of editing an eval.yaml only on the
+      # ephemeral CI checkout, never the committed default (see
+      # waza-eval-matrix.yml's own "Run suites" step comment). trials_per_task
+      # /timeout_seconds/model mirror evals/evaluating-skill-quality/eval.yaml's
+      # own committed config exactly, so this scoped run measures under the
+      # same trial budget the full suite would.
+      - name: Build fixture-scoped eval.yaml
+        env:
+          SKILL: ${{ inputs.skill }}
+          FIXTURES: ${{ inputs.fixtures }}
+        run: |
+          set -euo pipefail
+          {
+            echo "name: ${SKILL}-keep-gate-scoped-${{ matrix.arm }}"
+            echo "skill: ${SKILL}"
+            echo "config:"
+            echo "  trials_per_task: 3"
+            echo "  timeout_seconds: 300"
+            echo "  executor: copilot-sdk"
+            echo "  model: claude-sonnet-5"
+            echo "tasks:"
+            IFS=',' read -ra FIXTURE_ARR <<< "${FIXTURES}"
+            for fixture in "${FIXTURE_ARR[@]}"; do
+              echo "  - \"evals/${SKILL}/tasks/${fixture}\""
+            done
+          } > scoped-eval.yaml
+          cat scoped-eval.yaml
+
+      # --include-references (issue #1046): without it, neither arm's
+      # injected context would ever contain the rubric.md text that
+      # actually differs between before_ref and after_ref -- see
+      # evals/scripts/gitapex_run_ablation.py's own module docstring,
+      # "Reference-file context inclusion" section, for the full rationale.
+      - name: Run scoped suite for the ${{ matrix.arm }} arm
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -euo pipefail
+          uv run --frozen python3 evals/scripts/gitapex_run_eval_suite.py \
+            --eval-yaml scoped-eval.yaml \
+            --skill-md arm-content/SKILL.md \
+            --include-references \
+            -o "results-${{ matrix.arm }}.json"
+
+      - name: Upload ${{ matrix.arm }}-arm results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: keep-gate-${{ matrix.arm }}
+          path: results-${{ matrix.arm }}.json
+          if-no-files-found: error
+
+  compare:
+    needs: run-arm
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      # fetch-depth: 0 -- scorer-gated-skill-edits/SKILL.md Procedure step
+      # 1 requires confirming the runner's own commit has a resolvable
+      # parent (rules out a shallow-clone boundary artifact), which needs
+      # real history, not the composite action's own shallow default.
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+        with:
+          fetch-depth: '0'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Download before-arm results
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53  # v6.0.0
+        with:
+          name: keep-gate-before
+          path: keep-gate-before
+
+      - name: Download after-arm results
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53  # v6.0.0
+        with:
+          name: keep-gate-after
+          path: keep-gate-after
+
+      # scorer-gated-skill-edits/SKILL.md Procedure step 1: the runner's
+      # own recorded "version" is the exact commit that last touched it,
+      # confirmed clean (no local edits) and confirmed to have a
+      # resolvable parent (rules out a shallow-clone boundary artifact --
+      # this workflow's own fetch-depth: 0 checkout should never trip
+      # this, but the check is cheap and this is the one job whose own
+      # output claims a runner version at all).
+      - name: Confirm and record the eval runner's own commit
+        run: |
+          set -euo pipefail
+          if [ -n "$(git status --porcelain -- evals/scripts/gitapex_run_eval_suite.py)" ]; then
+            echo "::error::evals/scripts/gitapex_run_eval_suite.py carries local edits on this checkout; its commit cannot be trusted as this run's runner version."
+            exit 1
+          fi
+          runner_commit="$(git log -1 --format=%H -- evals/scripts/gitapex_run_eval_suite.py)"
+          if [ -z "${runner_commit}" ]; then
+            echo "::error::No commit history found for evals/scripts/gitapex_run_eval_suite.py."
+            exit 1
+          fi
+          if ! git rev-parse --verify -q "${runner_commit}^" > /dev/null; then
+            echo "::error::${runner_commit} has no locally-known parent commit -- likely a shallow-clone boundary artifact."
+            exit 1
+          fi
+          echo "runner_commit=${runner_commit}" >> "$GITHUB_ENV"
+          echo "Runner commit: ${runner_commit}"
+
+      # Procedure step 4's own documented invocation shape: pipe the
+      # candidate ("after") arm's own per-fixture scores into
+      # gitapex_score_contract.py --compare-to <prior mean>. The "prior
+      # mean" here is this run's own before-arm mean, read straight off
+      # `results-before.json`'s own `mean_score` field (already computed by
+      # gitapex_run_eval_suite.py's own to_eval_scores_json() as
+      # statistics.mean(...) over the same scores list) and formatted to
+      # gitapex_score_contract.py's own published six-decimal precision
+      # (CORRECTNESS_DECIMALS) so --compare-to's own
+      # _validate_published_prior accepts it without a second manual
+      # rounding step -- not recomputed via a second, independent
+      # sum()/len() formula, which would risk silently diverging from
+      # to_eval_scores_json()'s own statistics.mean() on a floating-point
+      # edge case (adversarial review finding; waza-eval-gate.yml's own
+      # "Run suites" step already reads `result['mean_score']` the same
+      # way, not recomputed).
+      - name: Compute before-arm mean and KEEP/REJECT verdict
+        run: |
+          set -euo pipefail
+          before_mean="$(uv run --frozen python3 -c '
+          import json
+          with open("keep-gate-before/results-before.json", encoding="utf-8") as fh:
+              data = json.load(fh)
+          print(f"{data[\"mean_score\"]:.6f}")
+          ')"
+          echo "before_mean=${before_mean}" >> "$GITHUB_ENV"
+          uv run --frozen python3 -c '
+          import json
+          with open("keep-gate-after/results-after.json", encoding="utf-8") as fh:
+              data = json.load(fh)
+          for entry in data["scores"]:
+              print(entry["score"])
+          ' | uv run --frozen python3 skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py \
+                --compare-to "${before_mean}" | tee verdict.txt
+
+      - name: Write job summary
+        if: always()
+        run: |
+          set -euo pipefail
+          {
+            echo "## scorer-gated-skill-edits KEEP gate"
+            echo ""
+            echo "- skill: \`${{ inputs.skill }}\`"
+            echo "- before_ref: \`${{ inputs.before_ref }}\`"
+            echo "- after_ref: \`${{ inputs.after_ref }}\`"
+            echo "- fixtures: \`${{ inputs.fixtures }}\`"
+            echo "- issue: ${{ inputs.issue_url }}"
+            echo "- runner commit: \`${runner_commit}\`"
+            echo "- before-arm mean: \`${before_mean}\`"
+            echo ""
+            echo '```'
+            cat verdict.txt 2>/dev/null || echo "(verdict.txt not written -- see the prior step's own failure)"
+            echo '```'
+            echo ""
+            echo "Run record (scorer-gated-skill-edits Procedure step 7) is NOT written by this workflow -- download the \`keep-gate-before\`/\`keep-gate-after\` artifacts and author it separately, validated against references/eval-run.schema.json / references/eval-scores.schema.json."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload verdict
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: keep-gate-verdict
+          path: verdict.txt
+          if-no-files-found: warn

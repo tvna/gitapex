@@ -1,0 +1,42 @@
+id: evaluating-skill-quality-comment-categorization-selection
+name: Read-as-Reference Script's Comments Are All Interface, No Implementation
+description: Selection fixture for the Comment categorization dimension-7 axis -- the opposite failure direction from the train fixture (read-as-reference here, not execute-only) and a different domain (a scheduling heuristic, not a merge). The skill tells the model to read the script for its algorithm, so its comments should carry Implementation detail (tricky aspects, non-obvious reasons, boundary conditions), but every comment restates only the function's inputs/outputs -- Interface-shaped restatement a reader-for-algorithm never needed. Gates whether the check generalizes to the opposite direction rather than memorizing the train fixture's execute-only shape.
+tags:
+  - quality
+  - bundled-scripts
+  - comment-categorization
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "shift-slot-balancer". Is this a good skill?
+
+    ---
+    name: shift-slot-balancer
+    description: Explain how work shifts get balanced across a roster. Use when the user asks how the shift-balancing algorithm works.
+    ---
+
+    # Shift Slot Balancer
+
+    ## Procedure
+
+    1. See `scripts/balance_shifts.py` for the balancing algorithm.
+
+    `scripts/balance_shifts.py` (top of file):
+    ```python
+    def balance_shifts(workers, slots):
+        # workers is a list of worker names.
+        # slots is a list of shift slot identifiers.
+        # Returns a dict mapping each worker name to their assigned slot.
+        assignment = {}
+        slots_sorted = sorted(slots, key=lambda s: _slot_load(s, assignment))
+        for worker, slot in zip(workers, slots_sorted):
+            assignment[worker] = slot
+        return assignment
+    ```
+expected:
+  output_contains:
+    - "Interface"
+    - "Implementation"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

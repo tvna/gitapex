@@ -1,0 +1,40 @@
+id: evaluating-skill-quality-no-voodoo-constant-test
+name: Bundled Script's Constants Are Either Commented or Not Configuration Literals
+description: Restraint check for the no-voodoo-constant dimension-7 check (test split, read once) -- a module-level ALL-CAPS numeric constant carries a justifying comment, and a second ALL-CAPS-named target (a compiled regex) has a Call right-hand side, not a literal, so it is not a "voodoo constant" in the check's own sense. Must not be false-positively flagged.
+tags:
+  - quality
+  - bundled-scripts
+  - no-voodoo-constant
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "ticket-id-extractor". Is this a good skill?
+
+    ---
+    name: ticket-id-extractor
+    description: Extract ticket IDs from a block of text. Use when the user asks to pull ticket references out of a log or message.
+    ---
+
+    # Ticket ID Extractor
+
+    ## Procedure
+
+    1. Run `scripts/extract_ids.py <textfile>`.
+
+    `scripts/extract_ids.py` (top of file):
+    ```python
+    import re
+    import sys
+
+    TIMEOUT = 30  # seconds; matches the upstream API's own request timeout
+    TICKET_RE = re.compile(r"TICKET-[0-9]+")
+
+    def extract_ids(text):
+        return TICKET_RE.findall(text)
+    ```
+expected:
+  output_contains:
+    - "commented"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

@@ -1,0 +1,53 @@
+id: evaluating-skill-quality-context-economy-test
+name: Execute-Only Script's Verbose Comments Get No Verbosity Penalty
+description: Restraint check for the Context economy dimension-7 axis (test split, read once) -- the script is execute-only (the model is told to run it, never read it), so per the axis's own stated rule nothing in it enters context regardless of length and comment verbosity is a non-issue there, even though the comments restate the code line by line exactly like the train fixture's read-as-reference case. Must not be flagged for verbosity merely because the comment style looks similar to a read-as-reference violation.
+tags:
+  - quality
+  - bundled-scripts
+  - context-economy
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "queue-drain-runner". Is this a good skill?
+
+    ---
+    name: queue-drain-runner
+    description: Drain a priority queue of pending work items into a result file. Use when the user asks to process a queue of items in priority order.
+    ---
+
+    # Queue Drain Runner
+
+    ## Procedure
+
+    1. Run `scripts/drain_queue.py <items.json> <out.json>`.
+
+    `scripts/drain_queue.py` (top of file):
+    ```python
+    import heapq
+    import json
+    import sys
+
+    def drain_queue(items):
+        # Create an empty list called heap
+        heap = []
+        # Loop over each item in items
+        for item in items:
+            # Push the item onto the heap
+            heapq.heappush(heap, item)
+        # Create an empty list called result
+        result = []
+        # While the heap is not empty
+        while heap:
+            # Pop the smallest item from the heap
+            smallest = heapq.heappop(heap)
+            # Append the smallest item to result
+            result.append(smallest)
+        # Return the result list
+        return result
+    ```
+expected:
+  output_contains:
+    - "no verbosity penalty"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"

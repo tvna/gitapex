@@ -74,6 +74,39 @@ re-documented a second time here. The vendored eval schema's `mcp_mocks` field
 (`.gitapex/waza-eval.schema.json`) stays declarable but unimplemented
 here: with zero tools ever granted, there is nothing for it to mock.
 
+Reference-file context inclusion (issue #1046, `--include-references` /
+`include_references=`, off by default): with `--tools ""` granted, the
+"skill available" arm cannot follow a `SKILL.md`'s own Step-1 instruction
+to read its `references/` files at run time -- `evaluating-skill-quality`'s
+own `SKILL.md` states exactly that ("Read `SKILL.md` and every
+`references/` file"), so a change confined to a reference file (e.g. a
+rubric addition) would otherwise never reach either arm's context and the
+two arms would score identically regardless of what the reference change
+actually did. `build_skill_context_file` below is the fix: when the flag
+is set AND `skill_md`'s own directory has a sibling `references/`
+directory with at least one file in it, it concatenates `skill_md`'s own
+text with every file directly under `references/` (sorted by name, each
+preceded by a `# <relative-path>` heading) into one temporary file and
+returns that path instead; `--append-system-prompt-file` (this module's
+own existing, sole, bare-mode-safe injection mechanism -- see "Skill
+toggle mechanism" above) is handed that combined file exactly as it would
+otherwise have been handed `skill_md` alone. Every other case (`include_
+references=False`, no `references/` directory, or an empty one) returns
+`skill_md` unchanged -- zero temporary file, zero behavior change from
+before this parameter existed, matching every existing call site's
+default. Off by default rather than always-on: unlike `--bare`/`--tools
+""`, this is a fidelity dial with a real MVP-vs-full-fidelity middle
+setting, not a security boundary -- turning it on can multiply a single
+skill's context size severalfold (confirmed against this repository's own
+`evaluating-skill-quality/references/`: over 300 KB combined), so callers
+opt in per invocation rather than paying that cost on every run of every
+skill's suite. This concatenation, not a `--tools` relaxation to grant
+`Read`, is the fix: reopening tool access would reintroduce exactly the
+hole issue #1132 closed (an executed agent with tool access reaching
+outside a fixture's own intended scope), where a rubric text addition
+needs no tool access at all -- only more of `--append-system-prompt-
+file`'s existing content.
+
 Standard library plus PyYAML (already a dev dependency used by this
 repository's other fixture tooling), pydantic (`_RunAblationArgs`'
 CLI-argument validation), and this repository's own
@@ -108,6 +141,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -283,6 +317,79 @@ def build_command(model_cli: str, prompt: str, skill_md: Path | None, *, model: 
     return argv
 
 
+def _read_text_or_raise(path: Path) -> str:
+    """UTF-8 ``path.read_text()``, converting an unreadable file or a stray
+    non-UTF-8 byte into ``ValueError`` -- the same
+    ``(OSError, UnicodeDecodeError)`` -> ``ValueError`` conversion
+    ``load_yaml_mapping`` above already applies to a task-fixture read,
+    applied here to ``build_skill_context_file``'s own reads (``skill_md``
+    itself and each ``references/`` file): a committed reference file with
+    accidental non-UTF-8 content is not physically impossible, so it must
+    fail loudly through this module's existing malformed-input contract
+    rather than as an uncaught ``UnicodeDecodeError`` traceback.
+    """
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ValueError(f"cannot read {path}: {exc}") from exc
+
+
+def build_skill_context_file(skill_md: Path, *, include_references: bool) -> Path:
+    """Return the path to hand ``--append-system-prompt-file`` for the "skill
+    available" arm: ``skill_md`` itself, unless ``include_references`` is set
+    AND ``skill_md``'s own sibling ``references/`` directory exists and holds
+    at least one file -- see module docstring's "Reference-file context
+    inclusion" section for why this exists and why it defaults off.
+
+    When it applies, returns a freshly written temporary file (UTF-8,
+    ``.md`` suffix) whose content is ``skill_md``'s own text followed by
+    every direct child of ``references/`` (sorted by name; sub-directories
+    are not recursed into -- no committed skill's ``references/`` nests one
+    today), each preceded by a ``\\n\\n---\\n# <relative-path>\\n\\n``
+    heading naming its path relative to ``skill_md``'s own directory.
+    Callers own deleting the returned temporary file once done with it
+    (compare the returned path against ``skill_md`` -- unequal means a real
+    temp file was created); this function does not delete anything itself.
+
+    Raises ``ValueError`` (via ``_read_text_or_raise``) if ``skill_md`` or
+    any ``references/`` file it reads is unreadable or not valid UTF-8 --
+    the same malformed-local-input contract this module's other loaders
+    already use, rather than an uncaught ``UnicodeDecodeError``. Also
+    raises ``ValueError`` if writing the combined temporary file itself
+    fails (e.g. a full disk); the partially-written temp file is deleted
+    before re-raising, so a write failure never leaks an orphaned
+    ``gitapex-skill-context-*.md`` file for no caller to clean up.
+    """
+    if not include_references:
+        return skill_md
+    references_dir = skill_md.parent / "references"
+    if not references_dir.is_dir():
+        return skill_md
+    reference_paths = sorted(p for p in references_dir.iterdir() if p.is_file())
+    if not reference_paths:
+        return skill_md
+
+    sections = [_read_text_or_raise(skill_md)]
+    for reference_path in reference_paths:
+        relative = reference_path.relative_to(skill_md.parent).as_posix()
+        sections.append(f"\n\n---\n# {relative}\n\n{_read_text_or_raise(reference_path)}")
+
+    fd, raw_path = tempfile.mkstemp(prefix="gitapex-skill-context-", suffix=".md")
+    combined_path = Path(raw_path)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write("".join(sections))
+    except OSError as exc:
+        # mkstemp already created the file by this point -- clean it up
+        # rather than leaking it (adversarial review finding: an ENOSPC or
+        # permission failure here previously left an orphaned
+        # gitapex-skill-context-*.md temp file with no caller ever handed
+        # its path to delete).
+        combined_path.unlink(missing_ok=True)
+        raise ValueError(f"cannot write combined skill context to {combined_path}: {exc}") from exc
+    return combined_path
+
+
 def subprocess_executor(argv: Sequence[str], timeout: int) -> str:
     """Default executor: run ``argv`` as a real subprocess and return its
     captured stdout.
@@ -401,6 +508,7 @@ def gitapex_run_ablation(
     executor: Executor,
     model_cli: str = DEFAULT_MODEL_CLI,
     timeout: int = DEFAULT_TIMEOUT_SECONDS,
+    include_references: bool = False,
 ) -> AblationResult:
     """Run ``fixture``'s prompt twice (with ``skill_md`` injected, then
     without) through ``executor``, scoring each output against the
@@ -411,12 +519,25 @@ def gitapex_run_ablation(
     shape is validated (see ``_validate_expected_shape``) before either
     live call, so a malformed or empty assertion set is rejected without
     spending a single model-CLI invocation on it.
+
+    ``include_references`` (default ``False``, unchanged behavior) is
+    passed straight through to ``build_skill_context_file`` -- see that
+    function's own docstring and the module docstring's "Reference-file
+    context inclusion" section. When it produces a real temporary file
+    (as opposed to returning ``skill_md`` unchanged), that file is deleted
+    again before this function returns, whether or not the "with skill"
+    executor call succeeded.
     """
     prompt = fixture["prompt"]
     expected = fixture["expected"]
     _validate_expected_shape(expected)
 
-    with_skill_output = executor(build_command(model_cli, prompt, skill_md), timeout)
+    context_file = build_skill_context_file(skill_md, include_references=include_references)
+    try:
+        with_skill_output = executor(build_command(model_cli, prompt, context_file), timeout)
+    finally:
+        if context_file != skill_md:
+            context_file.unlink(missing_ok=True)
     without_skill_output = executor(build_command(model_cli, prompt, None), timeout)
 
     return AblationResult(
@@ -482,6 +603,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--skill-md", required=True, type=Path, help="Path to the skill's SKILL.md.")
     parser.add_argument("--model-cli", default=DEFAULT_MODEL_CLI)
     parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT_SECONDS)
+    parser.add_argument(
+        "--include-references",
+        action="store_true",
+        help="Concatenate --skill-md's sibling references/ files into the 'skill available' "
+        "arm's injected context (issue #1046) -- see module docstring's 'Reference-file "
+        "context inclusion' section. Off by default.",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -503,6 +631,7 @@ def main(argv: list[str] | None = None) -> int:
             executor=subprocess_executor,
             model_cli=args.model_cli,
             timeout=validated_args.timeout,
+            include_references=args.include_references,
         )
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
