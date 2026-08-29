@@ -160,8 +160,21 @@ disallow_any_generics = false
 # (matches Tier A/B's own "a real error inside typed code is still
 # caught" principle) -- only the specific narrowing-error codes actually
 # observed against this file are disabled, not the broader flags.
+#
+# shape_checks.skill_dependencies (issue #1330 ACM row 1): gitapex_check_skill_shape.py's
+# own _skill_dependency_checks moved here verbatim -- byte-identical body,
+# see that module's own docstring -- carrying its one pre-existing "operator"
+# narrowing gap (deps.get("requires")/deps.get("relatedTo") each typed
+# object | None post-isinstance-narrowing; _valid_skill_dependency_list
+# returns a plain bool, not a TypeGuard, so mypy cannot narrow the
+# `requires if _valid_skill_dependency_list(requires) else []` ternary) with
+# it. Verified empirically, not assumed: every other shape_checks/*.py
+# submodule mypy-strict-clean without needing this override (checked
+# individually, same as gitapex_gate_skill_audit_disclosure.py's own
+# precedent above) -- only skill_dependencies actually needs it, so only it
+# is listed, not a broader shape_checks.* glob.
 [[tool.mypy.overrides]]
-module = "gitapex_check_skill_shape"
+module = ["gitapex_check_skill_shape", "shape_checks.skill_dependencies"]
 disable_error_code = ["attr-defined", "arg-type", "operator", "no-untyped-call"]
 # tracking: issue #684 (skills/evaluating-skill-quality/scripts/)
 
