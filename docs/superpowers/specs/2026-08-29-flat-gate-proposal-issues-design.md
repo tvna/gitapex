@@ -1,9 +1,11 @@
-# Gate-backlog sub-issue consolidation for merge-retrospective: design
+# Flat gate-proposal issues for merge-retrospective: design
 
 Date: 2026-08-29
 
 Refs #1405 (refs #1402, #1395, #205, #191, #187, #118). Design-then-implement
-doc, per this repo's own plan-first discipline.
+doc, per this repo's own plan-first discipline. Supersedes this file's own
+first version (a GitHub-native sub-issues design), rejected after adversarial
+review -- see "Rejected: GitHub-native sub-issue hierarchy" below.
 
 ## Context
 
@@ -50,223 +52,308 @@ anything: `skills/merge-retrospective/SKILL.md`'s own literal text is what a
 future session actually executes, and this repository's own 345-issue
 sample is direct evidence that a proposal recorded only in an issue body,
 with no corresponding change to the instruction file it critiques, has a
-1% or lower historical rate of ever being acted on. This design is therefore
-scoped to the instruction-file and script changes themselves, not to a
-persuasive case for making them.
+1% or lower historical rate of ever being acted on. This design is
+therefore scoped to the instruction-file and script changes themselves, not
+to a persuasive case for making them.
+
+## Rejected: GitHub-native sub-issue hierarchy
+
+This design's own first draft proposed consolidating every
+`missing-deterministic-gate` finding under one long-lived "Gate Backlog"
+parent issue via GitHub-native sub-issues, discovered by a fixed
+label+title lookup. An adversarial review (run against that draft, with
+every load-bearing claim independently re-verified against GitHub's own
+documentation and this repository's actual tool schemas and workflow files
+before being accepted) found the mechanism itself, not merely its
+implementation detail, to be the wrong fit:
+
+- **A hard platform limit the single-parent design cannot survive.**
+  GitHub's own documentation (docs.github.com, "Adding sub-issues") states
+  a parent issue may hold at most 100 sub-issues. This repository's own
+  measured rate (277 gate findings across 345 cycles, ~0.8 per PR) would
+  exhaust that cap in roughly 125 merges even ignoring the pre-existing
+  backlog -- at which point sub-issue filing starts failing, and the
+  design's own "don't close on a failed filing" safeguard reinstates the
+  exact stuck-open failure mode this redesign exists to remove.
+- **A write-permission gap the design didn't specify around.** The daily
+  CI check (`retrospective-gate-drift.yml`) runs with `contents: read`,
+  `issues: read`, `pull-requests: read` only (verified directly in the
+  workflow file) -- it cannot create the parent issue were one ever
+  missing, an unaddressed day-one bootstrap gap.
+- **A race condition with no deterministic resolution.** GitHub's API
+  offers no atomic find-or-create for an issue; two retrospective cycles
+  racing to create the same missing parent could both succeed, producing
+  duplicate parents with no specified reconciliation.
+- **A cited tool that does not do what the design assumed.** The design's
+  own first draft named `mcp__github__sub_issue_write` as the filing
+  mechanism; that tool's actual schema (verified directly) only attaches
+  an *already-existing* issue as a sub-issue via its internal database ID
+  (`sub_issue_id`, explicitly documented as distinct from the issue
+  number) -- it cannot create anything. (The corrected primitive,
+  `mcp__github__issue_write` method `create` with `parent_issue_number`,
+  does support one-call creation-plus-attachment and was not the design's
+  own error once corrected -- but the review still stands: the
+  architecture around it is the actual problem, not only this one
+  citation.)
+- **A closed-state/verification gap.** The design's own periodic
+  resolution audit covered only the parent's *open* sub-issues; a
+  sub-issue closed without ever passing the two-signal check silently
+  exited both the completion summary's "resolved" count and the audit's
+  own scope -- unverified closure became indistinguishable from verified
+  resolution.
+
+None of these are implementation nits fixable by adjusting the same
+architecture -- they are direct consequences of routing every gate finding
+through one shared, GitHub-capacity-bounded, concurrently-written parent.
+The design below removes the parent entirely.
 
 ## Decisions
 
-### 1. Consolidate all `missing-deterministic-gate` findings under one long-lived GitHub-native parent issue, via native sub-issues
+### 1. Flat, independently-labelled issues -- no hierarchy of any kind
 
-Every `missing-deterministic-gate`-classified repair -- whether discovered
+Every `missing-deterministic-gate`-classified finding -- whether discovered
 fresh in the current cycle's own Repairs section, or (during any future
 manual audit of the pre-existing 277-item backlog) carried forward from an
-older retrospective -- is filed as a GitHub **sub-issue** of one singleton
-"Gate Backlog" parent issue, via `mcp__github__sub_issue_write` (or the
-calling harness's equivalent). The parent is discovered by the same
-exact-title + label lookup pattern Step 0's own CI-stub dedup already uses
-(a fixed label, e.g. `gate-backlog`, plus an exact title match) -- created
-once, on first use, if not yet found.
+older retrospective -- is filed as its own **ordinary, standalone GitHub
+issue**, carrying a fixed label (see Decision 5 for where that label's
+literal name is registered) and a `Refs #<retrospective-issue>` back-link.
+No parent issue, no sub-issue relationship, no singleton of any kind.
 
-This directly uses a precedent already present in this toolchain (the
-`mcp__github__issue_read` surface already exposes `has_parent`,
-`sub_issues_summary`, and a dedicated `sub_issue_write` tool), rather than
-inventing a bespoke aggregation mechanism -- the Core Domain check that
-opened this design's own elicitation dialogue judged the underlying
-problem (backlog-item consolidation) Generic, not Core, and this repository
-already has the relevant native building block wired into its own tool
-surface.
+This removes every failure mode named in "Rejected" above by construction:
+plain issue creation (`issue_write` method `create`) carries no 100-item
+cap, no shared-resource creation race (each filing creates its own
+independent issue; there is nothing to find-or-create first), and no
+elevated CI permission (label search is a read operation the CI workflow's
+existing `issues: read` scope already covers).
 
-Rejected alternative: **a prose-only pointer convention** (the status quo
-`#205` -> "see `#191`" -> "see `#187`" chain, formalized). Rejected because
-it keeps the exact weakness driving this redesign: no native GitHub
-visibility (no progress bar, no structured completion state), and every
-new retrospective still has to re-state or re-point at the same chain by
-hand.
+Rejected alternative: **a single issue's body as an append-only checklist**
+(each finding becomes one more Markdown checkbox line in one persistent
+issue, rather than its own issue). Rejected because appending requires a
+read-modify-write cycle against shared issue-body text -- concurrent
+retrospective cycles racing to append would be *more* exposed to a lost-
+update race than the singleton-parent design's own already-rejected
+find-or-create race, and a checklist line has no independent label, state,
+or two-signal-checkable identity of its own the way a real issue does.
 
-Rejected alternative: **a GitHub Projects board**. Rejected because this
-repository's own tool surface (`mcp__github__*`) has no confirmed Projects
-operations to automate against; adopting it would add a new integration
-surface for a problem the already-available sub-issues feature already
-solves.
+Rejected alternative: **only change the closing rule, keep findings
+embedded inline in the retrospective issue's own body** (no separate
+tracking artifact of any kind). Rejected because it trades the unbounded-
+open-issue-count problem for a different one: once every retrospective
+closes immediately regardless of content, `OPEN`/`CLOSED` state stops
+signalling "still needs attention" at all, and backlog visibility would
+depend entirely on re-running the two-signal script's own output with no
+GitHub-native affordance (label search, saved filter) standing in for it.
 
 ### 2. Unify "this cycle's own Repairs" and "carried-forward from history" into one filing path
 
-A `missing-deterministic-gate` finding is filed as a Gate Backlog sub-issue
-the moment it is classified -- regardless of whether it was found in this
-cycle's own Step 2-4 repair enumeration or (during a future manual sweep of
-the pre-existing backlog) inherited from an older retrospective. The two
-were previously treated asymmetrically: Repairs stayed inline in the filing
-retrospective issue's own body indefinitely; only a *later* cycle's Step 1
-sweep ever promoted an unresolved one to "Carried-forward" status, and even
-then only as a re-stated paragraph, not a trackable artifact.
+Unchanged in substance from the rejected draft: a `missing-deterministic-gate`
+finding is filed the moment it is classified, regardless of whether it
+came from this cycle's own Step 2-4 enumeration or a future manual sweep of
+the legacy backlog. This collapses the retrospective issue's own role: it
+no longer *holds* a proposed gate (that now always lives in its own
+standalone issue), it only *records* what happened and which issue number
+now owns follow-through. `unclear-agent-instruction` and
+`external-human-decision` repairs are unaffected -- neither proposes a
+gate to track, so neither gets a standalone issue; both stay recorded
+inline exactly as today.
 
-Unifying the two collapses the retrospective issue's own role: it is no
-longer where a proposed gate *lives* (that is now always the Gate Backlog
-sub-issue), only where the cycle's own facts are *recorded* -- what
-happened, how it was classified, and which sub-issue number now owns
-follow-through. Once every `missing-deterministic-gate` finding from a
-cycle is filed, the retrospective issue itself has nothing left it is
-solely responsible for holding open, and can close immediately.
+### 3. Retrospective issues close immediately once every finding is filed and verified -- with the existing attended/unattended distinction extended to every close, not only the zero-repair case
 
-`unclear-agent-instruction` and `external-human-decision` repairs are
-unaffected -- neither classification proposes a gate to track, so neither
-gets a sub-issue; both stay recorded inline in the retrospective issue's
-own body exactly as today.
+A zero-repair cycle has nothing of its own to file (the pre-existing
+277-item backlog is explicitly out of scope, per Non-goals below), so it
+fast-closes exactly as the existing zero-repair path already intends. A
+cycle with one or more `missing-deterministic-gate` repairs files each as
+its own labelled issue, re-fetches to confirm each filing actually
+succeeded before recording it, and then also closes -- but this close now
+follows the *same* attended/unattended rule the current zero-repair
+fast-close path already uses (Step 5's own existing text), extended to
+every close this design newly introduces, not left implicit: an attended
+session previews the exact close and gets an explicit go-ahead; an
+unattended run (no session able to respond) files every finding but leaves
+the retrospective issue open for a human to close after review, rather
+than closing unattended. This preserves the deliberate safety checkpoint
+the rejected draft's own adversarial review found silently dropped.
 
-### 3. Retrospective issues close immediately once every finding is filed -- including a zero-repair cycle whose only "content" is pre-existing legacy backlog
+### 4. Resolution verification keeps the existing two-signal check, and closes the closed-but-unverified gap the rejected draft left open
 
-Under the old design, a zero-repair PR still could not fast-close if any
-carried-forward content existed, because Step 5's own rule required the
-subsection to stay open with the debt inside it. Under this design, a
-zero-repair cycle has, by construction, nothing of its own to file (the
-pre-existing 277-item backlog is explicitly out of scope for this design,
-per Non-goals below -- it is not re-swept or re-filed by a routine cycle),
-so it fast-closes exactly as the zero-repair path already intends. A cycle
-with one or more `missing-deterministic-gate` repairs files each as a
-sub-issue, records the resulting sub-issue number against each repair
-entry in its own body, and then also closes immediately -- this is the
-actual fix for the unbounded-open-issue-count problem: no retrospective
-issue's own lifecycle is ever gated on an unrelated backlog's completion
-status again.
-
-### 4. Sub-issue resolution keeps the existing two-signal verification, not bare GitHub `closed` state
-
-A sub-issue's own `closed` state is not, by itself, treated as proof its
-gate was built -- the same reasoning issue #709 already established for
-the current mechanism (a citing commit alone is not proof; closing an
-issue is an even weaker signal, closeable by anyone with write access with
-zero corroborating evidence). `gitapex_check_retro_gate_resolved.py`'s
+A filed issue's own `closed` state is still not, by itself, treated as
+proof its gate was built -- unchanged reasoning from issue #709 and the
+rejected draft's own Decision 4. `gitapex_check_retro_gate_resolved.py`'s
 two-signal check (citing commit + `ssot.json` `tracking_issue` match) is
-kept, but its own scope narrows: from "sweep all 345 retrospective issues"
-to "verify one specific sub-issue," invoked either when someone proposes to
-close a sub-issue, or by a periodic backlog-health audit over the Gate
-Backlog parent's own (now much smaller) open sub-issue set.
+kept, narrowed in scope from "sweep all 345 retrospective issues" to
+"verify the label-tagged issue set." Unlike the rejected draft, the daily
+CI check now runs *two* passes over that set, closing the specific gap the
+adversarial review found: (a) the primary, threshold-gated report -- how
+many labelled issues are currently open (the actual backlog size); and (b)
+a secondary integrity pass over issues *recently closed* under the same
+label, applying the same two-signal check and separately flagging any that
+closed without ever passing it. (b) has no threshold of its own -- any
+non-empty result is itself the finding, the same "even one is worth
+naming" posture `hooks/gitapex_check_pr_issue_acm_disclosure.py`'s sibling
+checks already take for other silent-failure classes in this repository.
 
-### 5. Step 1 stops sweeping full retrospective-issue history; it reads the Gate Backlog parent's own `sub_issues_summary` instead
+### 5. The label's own literal name is registered once, in `.gitapex/ssot.json` -- never duplicated as an independent hardcoded string
 
-Once every future `missing-deterministic-gate` finding is filed directly
-against the one parent, that parent's own native sub-issue completion
-state (`sub_issues_summary`: total / completed / percent, already exposed
-by `mcp__github__issue_read`) *is* the carried-forward picture -- no
-per-cycle historical sweep is needed to reconstruct it. This retires the
-345-issue, ~12-page-paginated fetch this design's own precipitating
-retrospective (issue #1405) had to perform by hand; a future cycle's Step 1
-becomes a single `issue_read get` call against the known parent.
+The new label this design introduces (its exact literal name is an
+implementation-time decision, not fixed by this doc -- see Components
+below) is registered as a new field under `.gitapex/ssot.json`, the same
+file this mechanism already depends on for `gates[].tracking_issue`, with
+`.gitapex/ssot.schema.json` updated to describe the new field. Every
+consumer -- `skills/merge-retrospective/SKILL.md`'s own prose, the CI
+script, and any future implementation script -- reads the label's name
+from that one registered field at the point of use, rather than each
+independently hardcoding its own copy of the literal string. This is a
+stronger anti-drift guarantee than a test comparing two hardcoded copies
+for equality: there is only ever one copy to drift from.
+
+Chosen over a dedicated new config file specifically for this one value,
+because `.gitapex/ssot.json` already is this repository's own established
+single source of truth for exactly this class of fact (a registered gate's
+own tracking-issue number), and this label serves the identical role for a
+different kind of gate-tracking record -- adding a second, parallel
+registry file for the same purpose would itself become a second thing to
+keep from drifting against the first.
 
 ## Non-goals
 
-- **Migrating the existing 277-item unresolved backlog into Gate Backlog
-  sub-issues.** Explicitly out of scope for this design -- a separate,
-  future decision, once this mechanism is proven correct going forward.
-  Neither `skills/merge-retrospective/SKILL.md` nor either script may treat
-  "no legacy migration happened" as an error condition.
-- **Adopting GitHub Projects** (rejected in Decision 1).
+- **Migrating the existing 277-item unresolved backlog into the new
+  labelled-issue scheme.** Explicitly out of scope for this design -- a
+  separate, future decision, once this mechanism is proven correct going
+  forward. Neither `skills/merge-retrospective/SKILL.md` nor either script
+  may treat "no legacy migration happened" as an error condition. Worth
+  naming plainly and without overselling it as a fix: this design *bounds*
+  future growth of open, unrelated-content-carrying retrospective issues;
+  it does not shrink the pre-existing ~300-issue count on its own. (Should
+  a migration ever be undertaken, this flat-label design makes it cheaper
+  than the rejected sub-issue design would have: re-labelling an existing
+  issue is a single API call with no hierarchy, cap, or parent-assignment
+  concern to manage -- but that migration itself remains separate,
+  unscheduled follow-on work.)
 - **Changing the two-signal resolution algorithm's own logic** (citing
-  commit + `ssot.json` tracking_issue) -- only its scope (one sub-issue at
-  a time, or the parent's own sub-issue set) changes, not its criteria.
+  commit + `ssot.json` tracking_issue) -- only its scope (the labelled-issue
+  set, open and recently-closed) changes, not its criteria.
 - **Retiring `retrospective-gate-drift.yml`'s threshold concept.** The
-  design keeps a threshold-gated daily check; only its enumerated set
-  shrinks from all 345 retrospective issues to the Gate Backlog parent's
-  own sub-issues. The specific threshold value (currently 20) is left
-  unchanged by this design; revisiting it is separate follow-on work if the
-  new, correctly-scoped count suggests a different number is warranted.
+  design keeps a threshold-gated daily check on the open count; only its
+  enumerated set shrinks from all 345 retrospective issues to the new
+  label's own open-issue set. The specific threshold value (currently 20)
+  is left unchanged by this design; revisiting it is separate follow-on
+  work if the new, correctly-scoped count suggests a different number is
+  warranted.
+- **Retrofitting an SSoT registration for the pre-existing `retrospective`
+  label**, or any other already-established label this repository already
+  uses. Decision 5 registers only the one new label this design itself
+  introduces; auditing or migrating other labels' own provenance is a
+  separate concern this design does not take on.
 
 ## Architecture
 
-A single long-lived "Gate Backlog" parent issue (label `gate-backlog` +
-fixed title, e.g. `chore(gate-backlog): durable gate tracking`), discovered
-by exact label+title lookup (same pattern as Step 0's existing CI-stub
-dedup), created once on first use if absent. Every `missing-deterministic-gate`
-finding, from any cycle, becomes a GitHub-native sub-issue of that parent.
-Each PR's own retrospective issue keeps recording what happened (Summary,
-Repairs with Classification/Status/Proposed gate, `unclear-agent-instruction`/
-`external-human-decision` entries inline as today) but adds, per
-`missing-deterministic-gate` repair, a `Filed as: #<sub-issue-number>`
-line, and closes as soon as every such repair is filed.
+No parent, no hierarchy. Every `missing-deterministic-gate` finding becomes
+its own standalone GitHub issue, carrying a fixed label (name registered in
+`.gitapex/ssot.json`, per Decision 5) and a `Refs #<retrospective-issue>`
+back-link. Each PR's own retrospective issue keeps recording what happened
+(Summary, Repairs with Classification/Status/Proposed gate,
+`unclear-agent-instruction`/`external-human-decision` entries inline as
+today) but adds, per `missing-deterministic-gate` repair, a
+`Filed as: #<issue-number>` line once that filing is verified, and closes
+once every such repair from the cycle is filed -- subject to the
+attended/unattended distinction in Decision 3.
 
 ## Components
 
-1. **`skills/merge-retrospective/SKILL.md`** -- Step 1 rewritten (find/create
-   the Gate Backlog parent; read its `sub_issues_summary` instead of
-   sweeping all `retrospective`-labelled issues). Step 5 rewritten (file
-   each `missing-deterministic-gate` repair as a parent sub-issue via
-   `sub_issue_write`, record the resulting number, then close the
-   retrospective issue once every repair from the cycle is filed --
-   including the zero-repair case, which now has nothing left barring
-   fast-close).
+1. **`skills/merge-retrospective/SKILL.md`** -- Step 1 rewritten (read the
+   registered label name from `.gitapex/ssot.json`; the "carried-forward
+   picture" for a *routine* cycle is simply "nothing to sweep," since new
+   findings are filed directly and the legacy 277 stay explicitly out of
+   scope). Step 5 rewritten (file each `missing-deterministic-gate` repair
+   as its own labelled issue via `issue_write` `create`; verify each
+   filing by re-fetch before recording `Filed as: #<N>`; close following
+   Decision 3's attended/unattended rule, extended from the existing
+   zero-repair-only case to every close).
 2. **`skills/merge-retrospective/scripts/gitapex_check_retro_gate_resolved.py`**
-   -- narrowed from a bulk historical-sweep tool to a single-sub-issue (or
-   small explicit list) verifier; existing two-signal logic unchanged.
+   -- narrowed from a bulk 345-issue historical sweep to verifying one
+   labelled issue (or a small explicit list) at a time; existing two-signal
+   logic unchanged.
 3. **`.github/scripts/gitapex_scan_retrospective_gate_drift.py`** +
    **`.github/workflows/retrospective-gate-drift.yml`** -- rescoped to
-   enumerate the Gate Backlog parent's own sub-issues (via the GitHub
-   sub-issues GraphQL connection) instead of every `retrospective`-labelled
-   issue; same two-signal check and threshold concept, smaller and
-   correctly-scoped input set.
-4. **Parent-issue discovery/creation** -- no new dedicated script; reuses
-   Step 0's existing label+exact-title lookup pattern, stated in SKILL.md
-   prose (consistent with how that step already avoids a bespoke script
-   for the same kind of lookup).
+   enumerate open issues carrying the registered label (a plain label
+   search, no permission change needed) for the primary threshold-gated
+   report, plus a secondary pass over recently-closed issues under the
+   same label for the closed-but-unverified integrity check (Decision 4).
+4. **`.gitapex/ssot.json`** + **`.gitapex/ssot.schema.json`** -- gain the
+   new label-name field and its schema description (Decision 5).
 
 ## Data flow
 
 1. PR merges -> CI opens a stub retrospective issue (unchanged).
 2. `merge-retrospective` invoked -> Step 0 dedup (unchanged) -> enumerate
    and classify this cycle's own repairs (unchanged, Steps 2-4).
-3. **New Step 1**: find (or create, once) the Gate Backlog parent issue.
+3. **New Step 1**: read the registered label name from
+   `.gitapex/ssot.json`; a routine cycle has nothing further to sweep (the
+   legacy backlog is out of scope per Non-goals).
 4. **New Step 5**: for each `missing-deterministic-gate` repair this cycle
-   -- file it as a sub-issue of the parent (body carries Classification,
-   Status, Proposed gate, and a link back to the originating PR/retrospective
-   for context); record `Filed as: #<N>` against that repair's own entry in
-   the retrospective issue body. `unclear-agent-instruction` /
+   -- file it as its own labelled issue (body carries Classification,
+   Status, Proposed gate, and a link back to the originating PR/retrospective);
+   re-fetch to verify the filing succeeded; record `Filed as: #<N>` against
+   that repair's own entry in the retrospective issue body (this record is
+   also the idempotency check on a resumed run: skip re-filing a repair
+   that already carries a `Filed as:` line). `unclear-agent-instruction` /
    `external-human-decision` repairs stay recorded inline, unchanged, no
-   sub-issue filed.
+   issue filed.
 5. Once every `missing-deterministic-gate` repair from the cycle is filed
-   (zero such repairs is the trivial case), close the retrospective issue.
+   and verified (zero such repairs is the trivial case), close the
+   retrospective issue -- attended: preview and get explicit go-ahead;
+   unattended: leave open for later human review (Decision 3).
 6. The pre-existing 277-item legacy backlog is untouched by this flow
    (Non-goal).
-7. `retrospective-gate-drift.yml` runs daily against the Gate Backlog
-   parent's own sub-issue set (not all 345 historical issues), applying the
-   same two-signal check per sub-issue and the same threshold-gated
-   report/fail as today.
+7. `retrospective-gate-drift.yml` runs daily: primary threshold-gated
+   report over currently-open labelled issues; secondary integrity pass
+   over recently-closed labelled issues, flagging any that closed without
+   passing the two-signal check (Decision 4).
 
 ## Error handling
 
-- **Ambiguous parent-issue lookup** (more than one issue matches the fixed
-  label + exact title): fail closed, same as Step 0's existing stub-dedup
-  discipline -- exact string equality, never substring containment; escalate
-  rather than guess which one is authoritative.
-- **`sub_issue_write` failure** for any repair: do not close the
-  retrospective issue. Filing must be verified (re-fetch, confirm the
-  sub-issue exists and is actually linked under the parent) before the
-  retrospective issue's own close call fires -- the same "verify the write"
-  discipline Step 7 already requires for the retrospective issue itself,
-  extended to each sub-issue filing.
-- **Parent issue found closed or otherwise missing** on a run that expects
-  it to exist: do not silently recreate a duplicate parent. Escalate to a
-  human -- an unexpectedly closed/deleted long-lived parent is itself worth
-  a person's attention, not a condition to route around automatically.
+- **`issue_write` `create` failure** for any repair: do not record a
+  `Filed as:` line and do not close the retrospective issue. The next run
+  (attended or a retry) re-attempts only the repairs still missing a
+  `Filed as:` line (Data flow step 4's own idempotency check).
+- **Filing appears to succeed but the re-fetch cannot confirm it** (e.g. a
+  transient read failure right after a successful write): treat as
+  unverified, same as an outright failure -- never record `Filed as:` on
+  an unconfirmed write, and never close on an unconfirmed set.
+- **The registered label name in `.gitapex/ssot.json` is missing or the
+  schema field is absent**: fail loudly (matching this repository's own
+  existing fail-closed convention for a missing/malformed SSoT field,
+  e.g. `gitapex_scan_ssot_schema.py`'s own posture) rather than silently
+  falling back to an unregistered, hardcoded literal.
 
 ## Testing
 
 - Unit tests for the narrowed `gitapex_check_retro_gate_resolved.py`
-  (single sub-issue number input, or a small explicit list -- not a
+  (single labelled-issue number input, or a small explicit list -- not a
   345-issue bulk sweep).
-- Unit tests for the CI script's new sub-issue-enumeration path (mocked
-  GitHub sub-issues GraphQL connection response).
+- Unit tests for the CI script's two new passes: open-count threshold
+  report (mocked label search), and closed-but-unverified integrity check
+  (mocked label search over recently-closed issues, two-signal check
+  applied per issue).
+- A schema/drift test asserting `.gitapex/ssot.json`'s new label field
+  validates against the updated `.gitapex/ssot.schema.json`, matching this
+  repository's own existing `test_gitapex_scan_ssot_schema.py` pattern.
 - New `evals/merge-retrospective/tasks/*.yaml` fixtures (directory already
   exists) covering: zero-repair, no legacy backlog touched -> fast-close
   (unchanged behavior); zero-repair, pre-existing legacy backlog exists but
   is out of scope -> still fast-closes (the specific behavior this design
-  changes); one or more `missing-deterministic-gate` repairs -> each filed
-  as a Gate Backlog sub-issue, retrospective issue closes once filing is
-  verified.
+  changes); one or more `missing-deterministic-gate` repairs, attended ->
+  each filed as its own labelled issue, verified, retrospective closes;
+  same but unattended -> filed and verified, retrospective stays open for
+  human review; a resumed run after a partial filing failure -> only the
+  unfiled repairs are retried, already-filed ones are not duplicated.
 
 ## Open questions
 
-None outstanding -- every fork surfaced during elicitation (aggregation
-mechanism, closure eligibility, resolution-verification strength,
-Repairs/Carried-forward unification) was resolved with the user during the
-design dialogue (see Decisions 1-5 above for each choice and its rejected
-alternatives).
+None outstanding. Every fork surfaced during elicitation and the
+subsequent adversarial review (aggregation mechanism -- reversed from
+sub-issues to flat labelled issues -- closure eligibility, resolution-
+verification strength, Repairs/Carried-forward unification, and the
+label's own SSoT registration) was resolved with the user during the
+design dialogue; see Decisions 1-5 above and the "Rejected" section for
+each choice and why its alternative was set aside.
