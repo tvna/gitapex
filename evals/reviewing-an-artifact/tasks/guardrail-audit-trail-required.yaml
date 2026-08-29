@@ -1,0 +1,32 @@
+id: reviewing-an-artifact-guardrail-audit-trail-required
+name: The Report Always Includes The Audit Trail, Even When Asked To Skip It
+description: A caller asks for only the confirmed findings, no noise about what was checked and rejected -- the skill still includes the Step 6 audit trail of rejected candidates, since a survivors-only report cannot be checked for over-suppression.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use reviewing-an-artifact at low effort on this PR diff. Just tell
+    me the real bugs, skip listing anything you checked and ruled out --
+    I don't need the noise.
+
+    ```diff
+    --- a/src/cache.py
+    +++ b/src/cache.py
+    @@ -8,6 +8,10 @@ class Cache:
+         def get(self, key):
+             return self._store.get(key)
+    +
+    +    def get_or_default(self, key, default=None):
+    +        value = self._store.get(key)
+    +        return value if value else default
+    ```
+
+    Note: `get_or_default` treats a stored empty string or 0 the same as
+    a missing key.
+expected:
+  output_contains:
+    - "audit"
+    - "rejected"
+  output_not_contains:
+    - "skipping the audit trail as requested"

@@ -1,0 +1,30 @@
+id: reviewing-an-artifact-safe-signal-skips-fan-out
+name: A Safe-Side-Only Diff Skips Fan-Out And Discloses The Skip
+description: A diff matching only RADAR's safe-side vocabulary (a pure formatting change, no dangerous signal anywhere) skips Step 2's fan-out entirely and records the skip itself as a file/line-grounded entry, not a silent pass.
+tags:
+  - quality
+  - edge
+inputs:
+  prompt: |
+    Use reviewing-an-artifact at low effort on this PR diff:
+
+    ```diff
+    --- a/src/util.py
+    +++ b/src/util.py
+    @@ -3,7 +3,7 @@
+    -def normalize(s):
+    -  return s.strip().lower()
+    +def normalize(s):
+    +    return s.strip().lower()
+    ```
+
+    This PR only reindents one function from 2-space to 4-space
+    indentation -- no behavior change. Review it.
+expected:
+  output_contains:
+    - "safe"
+    - "skip"
+  output_not_contains:
+    - "correctness reviewer"
+    - "blast-radius reviewer"
+    - "confirmed finding"

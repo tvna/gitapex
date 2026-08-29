@@ -1,0 +1,43 @@
+apiVersion: gitapex.io/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: reviewing-an-artifact
+spec:
+  portability: Mixed
+  capabilityAssumption: Adaptive
+  lifecycle:
+    experimental:
+      reason: "First draft; extracted from drafting-a-pr-to-merge's own former Step 8. Pending an isolated evaluating-skill-quality dispatch and an isolated battle-testing-a-skill dispatch before graduating to stable -- see this file's own tracking issue."
+      trackingIssue: "https://github.com/tvna/gitapex/issues/1249"
+  skillDependencies:
+    requires: []
+    relatedTo:
+      - drafting-a-pr-to-merge
+      - diagnosing-a-failure
+      - evaluating-skill-quality
+      - evaluating-deterministic-gate-quality
+      - scanning-ci-workflows
+      - scanning-attack-surfaces
+      - evaluating-context-channel-maturity
+      - battle-testing-a-skill
+      - untrusted-input-triage
+      - outward-artifact-preflight
+  executionRequirements:
+    tools:
+      read:
+        - files
+      write: []
+      shell: []
+  references:
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1249"
+      summary: "New native skill, extracting drafting-a-pr-to-merge's own former Step 8 (outer GitHub-native/Copilot layer plus an always-runs inner adversarial fan-out layer) into a standalone, directly-invocable defect-finding skill. drafting-a-pr-to-merge Step 8's body is replaced with a single reference line to this skill in the same change."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1249"
+      summary: "The design record this issue cites throughout as already-finalized, reviewing-a-pull-request-design.md, does not exist anywhere in this repository -- checked the full working tree and every local/remote branch during this session's own re-verification pass. Implemented directly from the issue's own Acceptance Criteria Map content and its accepted pstack-informed-refinement comment instead; disclosed on the issue's own re-verification marker comment, not silently assumed present."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1249"
+      summary: "Adopted 3 of 4 accepted pstack-informed candidates from the issue's own 2026-08-29 comment: multi-model cross-checking at high effort (Step 3), named per-axis sub-personas (Step 2), and a root-cause-vs-symptom output tag (Step 6). The fourth (a dynamic, test-execution-driven blast-radius pass) is explicitly NOT adopted -- contingent on an executable-environment assumption this design does not make, per the candidate's own stated condition; recorded as a Non-goal instead."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1249"
+      summary: "executionRequirements declares only read:[files]: this skill's own procedure reads a target's content/diff and reasons about it; it never writes a file, runs a shell command, or performs a GitHub write itself (Postcondition/Stop boundaries: reporting only, never posting or fixing)."

@@ -1,0 +1,17 @@
+id: reviewing-an-artifact-guardrail-step0-causal-diagnosis-redirect
+name: A Stated-Malfunction Request Is Redirected To Diagnosing-A-Failure
+description: A request that already states an observed malfunction ("this is failing, find out why") is redirected to diagnosing-a-failure at Step 0, rather than treated as a defect-finding review with no known symptom.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use reviewing-an-artifact at low effort on our billing-sync branch.
+    It's currently failing in production -- customers are being charged
+    twice for the same invoice. Find out why this is happening.
+expected:
+  output_contains:
+    - "diagnosing-a-failure"
+  output_not_contains:
+    - "confirmed finding"
+    - "unconfirmed concern"

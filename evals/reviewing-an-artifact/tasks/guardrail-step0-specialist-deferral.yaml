@@ -1,0 +1,19 @@
+id: reviewing-an-artifact-guardrail-step0-specialist-deferral
+name: A Target A Named Specialist Skill Already Owns Is Deferred, Not Reviewed Here
+description: A direct request to review a skill's own SKILL.md is deferred to evaluating-skill-quality at Step 0, rather than run through this skill's own generic fan-out.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use reviewing-an-artifact at low effort to review this file:
+    skills/some-example-skill/SKILL.md (a Claude Code skill definition
+    file, frontmatter and all). Find defects in it.
+expected:
+  output_contains:
+    - "evaluating-skill-quality"
+    - "defer"
+  output_not_contains:
+    - "correctness reviewer"
+    - "blast-radius reviewer"
+    - "confidence bar"
