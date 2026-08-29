@@ -9,12 +9,12 @@ dependency and `.pre-commit-config.yaml` wires it to this repo's own
 hook. Run once per clone:
 
 ```sh
-uv run prek install -t pre-commit -t pre-push
+uv run prek install -t pre-commit -t pre-push -t commit-msg
 ```
 
-Both stages matter, so both shims are named: `prek install` with no `-t`
-installs the pre-commit shim only, and the pre-push secret scan would then
-never run.
+All three stages matter, so all three shims are named: `prek install` with
+no `-t` installs the pre-commit shim only, and the pre-push secret scan
+and the commit-msg issue-citation check (issue #1212) would then never run.
 
 This makes `git commit` reject a commit that fails ruff, mypy, or the
 secret scan locally, before it exists, rather than only after a push reaches
@@ -63,7 +63,7 @@ fail outright once the worktree is removed:
 .git/hooks/pre-push: exec: prek: not found
 ```
 
-Recovery is `uv run prek install --overwrite -t pre-commit -t pre-push` from the
+Recovery is `uv run prek install --overwrite -t pre-commit -t pre-push -t commit-msg` from the
 main checkout. The devShell already refuses to install from a worktree for this
 reason -- it verifies the shared shims and tells you to install from the main
 checkout instead.
@@ -123,12 +123,13 @@ The pre-commit hooks above cover ruff and mypy only. Most of this
 repository's other deterministic gates run as separate CI jobs, so a gap
 used to be discovered one red check at a time on an already-open PR.
 
-The same `uv run prek install -t pre-commit -t pre-push` above also installs
+The same `uv run prek install -t pre-commit -t pre-push -t commit-msg` above also installs
 a **pre-push** hook that runs every gate with a working-tree-only form in
-one pass, before the push leaves your machine. A warm run of all 39 wired
-gates measures roughly 12 seconds end to end (the
-prior 38-gate set measured roughly 11 seconds, the 37-gate set before that
-measured roughly 11 seconds, the 36-gate set before that measured roughly 11
+one pass, before the push leaves your machine. A warm run of all 40 wired
+gates measures roughly 18 seconds end to end (the
+prior 39-gate set measured roughly 12 seconds, the 38-gate set before that
+measured roughly 11 seconds, the 37-gate set before that measured roughly 11
+seconds, the 36-gate set before that measured roughly 11
 seconds, the 35-gate set before that measured roughly 13 seconds, the
 34-gate set before that measured roughly 11 seconds,
 the 31-gate set before that measured roughly 7 seconds, and
@@ -151,7 +152,7 @@ If a clone predates this hook, re-run the install command above once to pick
 it up, then confirm both shims with the check in the previous section.
 `git push --no-verify` skips it, as with any pre-push hook.
 
-The runner itself needs no dependencies, but all 39 wired gates run through
+The runner itself needs no dependencies, but all 40 wired gates run through
 `uv` (the same `uv run` pins CI uses). Without `uv` on PATH every one of
 them reports `FAIL ... failed to run` -- that is one missing tool, not a
 whole broken wired set.

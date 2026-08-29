@@ -1679,6 +1679,34 @@
         {"kind": "file-glob", "ref": ".betterleaks.toml"},
         {"kind": "github-native", "ref": "required_status_checks context \"betterleaks\" (repository ruleset on the default branch)"}
       ]
+    },
+    {
+      "id": "commit-citation-gate",
+      "kind": "script",
+      "script": [".github/scripts/gitapex_gate_commit_citation.py", ".github/workflows/commit-citation-gate.yml"],
+      "rule": "CLAUDE.md section 3's issue-citation rule for commits: passes when a citation (Closes/Fixes/Refs #N, or a bare #N) is found in at least one non-merge commit in the PR's own range (git log --no-merges base..head, so an uncited merge commit in that range never fails this on its own) OR in the PR's own title/body; fails when found in neither. The commit-msg pre-commit hook (.pre-commit-config.yaml's commit-citation entry, sharing this same script's --mode commit-msg) is the bypassable local first pass; this CI check is the actual no-exceptions backstop and carries no separate registry entry of its own, matching this registry's existing convention for pre-commit-stage-only hooks (e.g. ruff-check, skill-shape-check).",
+      "planes": ["ci", "local"],
+      "local_invocation": [
+        "uv",
+        "run",
+        "--frozen",
+        "python3",
+        ".github/scripts/gitapex_gate_commit_citation.py",
+        "--mode",
+        "pr-range"
+      ],
+      "trigger": ".github/workflows/commit-citation-gate.yml on pull_request:[opened, edited, synchronize, reopened] (no paths filter, so a required check can never be left Pending)",
+      "policy_refs": [],
+      "cluster": "plan-integrity",
+      "tracking_issue": 1212,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "workflow-event", "ref": "commit-citation-gate.yml:pull_request"},
+        {"kind": "runtime-resolved-reference", "ref": "git log --no-merges <merge-base>..<head>"},
+        {"kind": "runtime-resolved-reference", "ref": "github.event.pull_request.title / .body"}
+      ]
     }
   ],
   "clusters": {
