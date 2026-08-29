@@ -168,22 +168,12 @@ such taxonomy applies only `retrospective`, unchanged from before.
      - **Match found, body still carries the opener's own stub marker text**
        (`"Automated stub opened by the post-merge-auto-retro gate"` --
        unenriched) -> fill the stub, don't open a second issue. Continue into
-       Step 1; when Step 5 files, call `issue_write` method `update` on that
-       issue number instead of `create`, and add the repository's secondary
-       lifecycle label (if any) alongside `retrospective`. Which body
-       replaces the stub follows Step 5's own two paths exactly as it would
-       for a freshly-created issue: Step 5's full Repairs content for a
-       cycle with repairs or a carried-forward gate, or Step 5's
-       **Zero-repair fast-close** single-paragraph body when Step 2 finds
-       nothing and Step 1 has nothing to carry forward -- a stub being
-       updated is not an exemption from the fast-close path, only a
-       different starting body. A zero-repair cycle against an existing
-       stub therefore gets the same confirm-then-close treatment Step 5's
-       fast-close path already defines for a freshly-created issue: update
-       the stub first, then close it once confirmed (or leave it open,
-       unattended) -- never update it and stop, leaving an enriched-but-
-       still-open stub behind. Cross-linking (Step 6) and verification
-       (Step 7) still apply to the updated issue.
+       Step 1; when Step 5 files, call `issue_write` method `update` on
+       that issue (never `create`) with whichever body shape this cycle
+       calls for (full Repairs, or Zero-repair fast-close -- its
+       confirm-then-close rule still applying), and add the secondary
+       lifecycle label (if any) alongside `retrospective`. Cross-linking
+       (Step 6) and verification (Step 7) still apply.
      - **Match found, body no longer carries the marker** -> a prior run (this
        skill, an earlier pass, or a human) already enriched this PR's
        retrospective; nothing is left to file. Do not overwrite real content or
@@ -308,29 +298,24 @@ such taxonomy applies only `retrospective`, unchanged from before.
      body ends up in: record every repair using the Repair record format
      above (`Classification`, `Status`, and -- for a
      missing-deterministic-gate repair only -- `Proposed gate`), not a
-     free paragraph. Proposing a gate is proposing, not implementing, in
-     this cycle (implementing gates is separate follow-on work). For
-     "unclear agent instruction" and "external/human decision" repairs,
-     the `Classification` line's own rationale clause is the required
-     one-line rationale; noting what instruction would have helped is
-     useful context but not a required deliverable the way the gate
-     proposal is. If Step 1 found any unimplemented prior gates, include
-     them here as their own **"Carried-forward gate"** subsection, in
-     the same record format (`Status` set to `carried-forward`), distinct
-     from this cycle's Repairs section -- omit the subsection entirely
-     when Step 1 found nothing to carry forward.
+     free paragraph. For "unclear agent instruction" and
+     "external/human decision" repairs, the `Classification` line's own
+     rationale clause is the required one-line rationale; noting what
+     instruction would have helped is useful context but not a required
+     deliverable the way the gate proposal is. If Step 1 found any
+     unimplemented prior gates, include them here as their own
+     **"Carried-forward gate"** subsection, in the same record format
+     (`Status` set to `carried-forward`), distinct from this cycle's
+     Repairs section -- omit the subsection entirely when Step 1 found
+     nothing to carry forward.
    - **Zero-repair fast-close.** When Step 2 finds no repairs at all
-     **and** Step 1 found nothing to carry forward, file (or, when Step 0
-     matched an existing stub, `update` that stub with) a single-
+     **and** Step 1 found nothing to carry forward, file a single-
      paragraph issue body instead of the full Repairs shape above --
      state the PR number, that zero repairs occurred, and that this is
      recorded as evidence the process worked this cycle, plus the fixed
      line `Retrospective status: zero-repair-fast-close` verbatim on its
-     own line. This path applies identically whether the issue is being
-     created fresh or an existing stub is being updated -- updating a
-     stub with this body is not a stopping point on its own; the
-     confirm-then-close rule below still applies. Confirm the zero-repair
-     conclusion before the close call fires, rather than closing on it
+     own line. Confirm the zero-repair conclusion before the close call
+     fires, rather than closing on it
      unchecked: when an operator is present to respond (an interactive
      session), preview the exact drafted body and the zero-repair
      conclusion it rests on, and wait for an explicit go-ahead before
@@ -493,9 +478,8 @@ pursued -- this issue only records the repairs and proposes it, per
 merge-retrospective's Stop boundary.
 ```
 
-For a zero-repair cycle, Step 5's fast-close path files (or, against an
-existing stub from Step 0, updates it with) a single-paragraph issue
-body instead of the full shape above, then closes it once confirmed --
+For a zero-repair cycle, Step 5's fast-close path files (or updates an
+existing stub with) a single-paragraph body, closed once confirmed --
 for example:
 
 ```
