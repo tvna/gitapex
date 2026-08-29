@@ -556,6 +556,36 @@ def test_metadata_sidecar_path_normalizes_to_owning_skill_dir(tmp_path):
     assert css.main([sidecar_arg]) == 0
 
 
+def test_nested_reference_path_normalizes_to_owning_skill_dir(tmp_path, capsys):
+    # Adversarial review finding (issue #1387): .pre-commit-config.yaml's
+    # own files: pattern for this hook (references/.*\.md) matches a
+    # NESTED references path too, since .* crosses "/" -- a real commit
+    # touching only such a file must still normalize to the real owning
+    # skill directory (walking up through every ancestor, not just the
+    # immediate parent), so the genuine references-flat violation that
+    # nesting itself causes is reported -- not silently misresolved to the
+    # wrong ancestor and reported as a false pass.
+    d = _write_skill(tmp_path, references={"sub/deep.md": "# nested\n"})
+    nested_arg = str(d / "references" / "sub" / "deep.md")
+    assert css.main([nested_arg]) == 1
+    out = capsys.readouterr().out
+    assert str(d) in out
+    assert "references-flat" in out
+    assert "FAIL" in out
+
+
+def test_single_target_header_has_no_touched_suffix(tmp_path, capsys):
+    # Finding C (adversarial review, issue #1387): the header must not
+    # show "(touched: ...)" for an ordinary single-target run just because
+    # the raw argv spelling (e.g. a SKILL.md-suffixed path) differs from
+    # the normalized directory -- only when more than one raw source
+    # actually mapped to the same owning skill.
+    d = _write_skill(tmp_path)
+    assert css.main([str(d / "SKILL.md")]) == 0
+    out = capsys.readouterr().out
+    assert "(touched:" not in out
+
+
 def test_cli_subprocess_well_formed_skill_exits_0(tmp_path):
     # System-level: the real process exit code and stdout contract, not
     # main()'s in-process return value -- covers the integration-level gap

@@ -3597,17 +3597,36 @@ def _owning_skill_dir(target: Path) -> Path:
     ``metadata/gitapex.yaml`` sidecar and its ``references/*.md`` files, not
     only ``SKILL.md`` itself. A directory is already what
     ``_resolve_skill_md`` expects and is returned unchanged; a ``SKILL.md``
-    path is normalized to its parent, and a file one level under
-    ``metadata/`` or ``references/`` is normalized to its owning skill
-    directory (the grandparent) -- so a commit touching both a skill's
-    ``SKILL.md`` and a ``references/*.md`` file dedupes to the same key and
-    grades that skill once, not twice."""
+    path is normalized to its parent. Otherwise, walk up through every
+    ancestor (nearest first) for one named ``metadata`` or ``references``
+    and, on the first match, return ITS parent -- not simply the target's
+    own immediate parent, which would silently walk to the wrong directory
+    for a file more than one level under ``references/`` (adversarial
+    review finding: ``.pre-commit-config.yaml``'s own ``files:`` pattern for
+    this hook, ``references/.*\\.md``, matches a nested path like
+    ``references/sub/deep.md`` too, since ``.*`` crosses ``/`` -- the very
+    shape ``references-flat`` exists to flag as a violation). This still
+    grades every skill directory once per commit: a commit touching both a
+    skill's ``SKILL.md`` and a (possibly nested) ``references/*.md`` file
+    dedupes to the same key.
+
+    Known residual limitation, not reachable through the pre-commit hook's
+    own ``files:`` pattern (which only ever emits ``SKILL.md``,
+    ``metadata/gitapex.yaml``, or a path under ``references/``, never a
+    loose file directly inside a directory literally named ``metadata`` or
+    ``references``): a skill directory whose own name IS ``metadata`` or
+    ``references`` would misresolve a loose file sitting directly in it.
+    This repository's own naming convention (kebab-case skill slugs) and
+    the ``name-pattern``/``name-not-reserved`` checks make that shape
+    already unlikely to exist; guarding it would add complexity this
+    unreachable-via-the-actual-caller path does not warrant."""
     if target.is_dir():
         return target
     if target.name == "SKILL.md":
         return target.parent
-    if target.parent.name in ("metadata", "references"):
-        return target.parent.parent
+    for ancestor in target.parents:
+        if ancestor.name in ("metadata", "references"):
+            return ancestor.parent
     return target
 
 
@@ -6191,7 +6210,12 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: could not read skill files: {exc}", file=sys.stderr)
             guard_error = True
             continue
-        header = str(target) if sources == [str(target)] else f"{target} (touched: {', '.join(sources)})"
+        # len(sources) == 1, not sources == [str(target)] (adversarial
+        # review finding): the raw source's literal spelling almost always
+        # differs from the normalized target (e.g. a "SKILL.md"-suffixed
+        # or "references/..."-prefixed argv), so the stricter equality
+        # would attach "(touched: ...)" to nearly every single-target run.
+        header = str(target) if len(sources) == 1 else f"{target} (touched: {', '.join(sources)})"
         print(f"{header}:")
         print(format_report(results))
         if not all(r.passed for r in results):
