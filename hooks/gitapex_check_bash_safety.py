@@ -847,7 +847,10 @@ def _is_unresolvable_substitution(token: str) -> bool:
 
 
 def _rule_command_substitution_content(
-    tokens: list[str], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
+    tokens: list[str],
+    name_to_value: dict[str, str],
+    name_to_raw_value: dict[str, str],
+    name_to_raw_value_git_biased: dict[str, str],
 ) -> tuple[str | None, bool, tuple[str, ...]]:
     """Recursively classify each `$(...)` command-substitution span's OWN
     inner content through this module's full rule set -- bash genuinely
@@ -949,7 +952,15 @@ def _rule_command_substitution_content(
     `_classify_tokens` already did -- the exact extension
     `_rule_array_literal_content`'s own nineteenth-round paragraph (see
     that function's docstring) once deferred as a larger change than its
-    own, narrower finding warranted."""
+    own, narrower finding warranted.
+
+    NAME_TO_RAW_VALUE_GIT_BIASED (round 19, issue #1375) is threaded
+    through the same two recursive calls alongside NAME_TO_VALUE/NAME_TO_
+    RAW_VALUE, so a `git` token held in a variable that is reassigned
+    elsewhere in the OUTER command -- e.g. `G=git; x=$($G checkout --
+    dirty.py); G=notgit` -- is still recognized inside the substitution's
+    own inner content; see `_find_git_checkout_restore`'s own docstring
+    for what this parameter means and the live bypass it closes."""
     is_git_push = False
     checkout_restore_paths: list[str] = []
     i = 0
@@ -977,7 +988,7 @@ def _rule_command_substitution_content(
             # check would only change how often an empty-content recursive
             # `classify()` call is skipped, never a real verdict.
             if inner_text.strip():
-                inner_verdict = classify(inner_text, name_to_value, name_to_raw_value)
+                inner_verdict = classify(inner_text, name_to_value, name_to_raw_value, name_to_raw_value_git_biased)
                 is_git_push = is_git_push or inner_verdict.is_git_push
                 checkout_restore_paths.extend(inner_verdict.checkout_restore_paths)
                 if inner_verdict.deny:
@@ -991,7 +1002,9 @@ def _rule_command_substitution_content(
         if span_end is not None:
             inner_tokens = tokens[i + 2 : span_end - 1]
             if inner_tokens:
-                inner_verdict = _classify_tokens(inner_tokens, name_to_value, name_to_raw_value)
+                inner_verdict = _classify_tokens(
+                    inner_tokens, name_to_value, name_to_raw_value, name_to_raw_value_git_biased
+                )
                 is_git_push = is_git_push or inner_verdict.is_git_push
                 checkout_restore_paths.extend(inner_verdict.checkout_restore_paths)
                 if inner_verdict.deny:
@@ -1586,6 +1599,78 @@ def _assigned_raw_values(tokens: list[str]) -> dict[str, str]:
         match = _ASSIGN_RE.match(token)
         if match:
             values[match.group(1)] = match.group(2)
+    return values
+
+
+def _assigned_raw_values_biased_toward(tokens: list[str], literal: str) -> dict[str, str]:
+    """Like `_assigned_raw_values`, but once a name is assigned LITERAL
+    (case-insensitively) at ANY point among TOKENS, that name STAYS
+    LITERAL here regardless of any later, different reassignment --
+    unlike `_assigned_raw_values`'s own plain last-occurrence-in-token-
+    order-wins collapse, which has no concept of which assignment is
+    actually in effect at bash's own real, sequential runtime relative to
+    a specific point of use. A name never assigned LITERAL anywhere
+    resolves exactly as `_assigned_raw_values` itself would.
+
+    CRITICAL bug found by independent adversarial review (round 19, issue
+    #1375) and independently reproduced live: `_find_git_checkout_
+    restore`'s own outer git-token-recognition (`_dynamic_token_resolves_
+    only_to_literal`) is fed the ordinary, order-blind `_assigned_raw_
+    values` dict, so an entirely ordinary shell idiom -- reusing a
+    variable name for a later, unrelated purpose after it was already
+    used as `git` -- silently defeats recognition entirely: `TOOL=git;
+    $TOOL checkout -- dirty.py; TOOL=npm` resolves `$TOOL`'s own dict
+    entry to `"npm"` (the LAST assignment in token order), even though
+    `$TOOL` genuinely was `git` at the actual point of use one statement
+    earlier. Confirmed live end-to-end through the real wrapper against a
+    scratch repo with a genuinely dirty, tracked `dirty.py`: the control
+    command (no trailing reassignment) correctly denies with exit 2; the
+    same command with a trailing `TOOL=npm` wrongly allows with exit 0,
+    and actually running it afterward silently discards the uncommitted
+    edit. Identically reproducible for the command-substitution path
+    (`G=git; x=$($G checkout -- dirty.py); G=notgit`) and for `restore`.
+    This is not itself a new gap -- `_assigned_raw_values`'s own
+    order-blind collapse is a pre-existing, whole-module primitive used
+    since this module's own earliest rounds, and the module already
+    discloses the identical class of gap for `$IFS` reassignment
+    elsewhere as an accepted limitation -- but the checkout/restore
+    surface is the one consumer where a silent miss means real,
+    irreversible data loss rather than a missed advisory warning, so a
+    narrow, targeted mitigation is applied here rather than left
+    disclosed-only, matching the same "when a token-level ambiguity
+    cannot be soundly resolved, prefer extra scrutiny over a silent miss"
+    posture this module already applies pervasively elsewhere (e.g.
+    `_dynamic_word_may_resolve_to_a_cwd_relocator`'s own OR-based fail-
+    closed choice for the analogous cd/pushd/popd question).
+
+    Deliberately NOT full execution-order tracking (a far larger,
+    Stage-2-class change -- this module's own header docstring already
+    scopes real bash execution semantics out of Stage 1's static token
+    analysis): this is a bounded, one-directional bias toward the single
+    safe-to-over-recognize reading (an unrelated tool's own dynamic
+    `checkout`/`restore`-shaped subcommand at worst triggers a spurious,
+    reversible live `git diff` check and possible false deny -- the same
+    safe direction every other ambiguity in this module resolves toward
+    -- never toward silently missing a real git invocation, which is the
+    unsafe direction here). Used ONLY to feed the outer git-token-
+    recognition fallback in `_find_git_checkout_restore` -- every other
+    consumer of `name_to_raw_value` in this module keeps using the
+    ordinary, order-blind `_assigned_raw_values` unchanged, since a
+    reassignment-ambiguity miss elsewhere in this module risks a missed
+    advisory warning or an unrecognized non-destructive write, not
+    irreversible data loss."""
+    values: dict[str, str] = {}
+    literal_lower = literal.lower()
+    for token in tokens:
+        if _is_dynamic(token):
+            continue
+        match = _ASSIGN_RE.match(token)
+        if not match:
+            continue
+        name = match.group(1)
+        if values.get(name, "").lower() == literal_lower:
+            continue
+        values[name] = match.group(2)
     return values
 
 
@@ -2263,7 +2348,10 @@ def _strip_array_literal_newlines(tokens: list[str]) -> list[str]:
 
 
 def _rule_array_literal_content(
-    tokens: list[str], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
+    tokens: list[str],
+    name_to_value: dict[str, str],
+    name_to_raw_value: dict[str, str],
+    name_to_raw_value_git_biased: dict[str, str],
 ) -> tuple[str | None, bool, tuple[str, ...]]:
     """Recursively classify each `NAME=(...)` array-literal span's OWN
     inner content through this module's full rule set -- bash genuinely
@@ -2366,7 +2454,14 @@ def _rule_array_literal_content(
     the same way `_array_literal_token_span` itself does), so a newline
     genuinely nested inside a `$(...)`/`(...)` construct WITHIN the
     array's own inner content (still a real command list there) is left
-    untouched for the recursive call to classify correctly."""
+    untouched for the recursive call to classify correctly.
+
+    NAME_TO_RAW_VALUE_GIT_BIASED (round 19, issue #1375) is threaded
+    through the recursive `_classify_tokens` call below alongside NAME_TO_
+    VALUE/NAME_TO_RAW_VALUE, mirroring `_rule_command_substitution_
+    content`'s own identical parameter exactly -- see `_find_git_
+    checkout_restore`'s own docstring for what it means and the live
+    bypass it closes."""
     is_git_push = False
     checkout_restore_paths: list[str] = []
     i = 0
@@ -2383,7 +2478,9 @@ def _rule_array_literal_content(
             if collapsed and collapsed != inner:
                 readings.append((collapsed, " once its own leading unassigned reference(s) word-split away"))
             for reading, suffix in readings:
-                reading_verdict = _classify_tokens(reading, name_to_value, name_to_raw_value)
+                reading_verdict = _classify_tokens(
+                    reading, name_to_value, name_to_raw_value, name_to_raw_value_git_biased
+                )
                 is_git_push = is_git_push or reading_verdict.is_git_push
                 checkout_restore_paths.extend(reading_verdict.checkout_restore_paths)
                 if reading_verdict.deny:
@@ -3815,7 +3912,9 @@ def _dynamic_token_resolves_only_to_literal(token: str, name_to_raw_value: dict[
     return all(candidate.lower() == literal for candidate in candidates)
 
 
-def _find_git_checkout_restore(seg: list[str], name_to_raw_value: dict[str, str]) -> tuple[str | None, list[str], bool]:
+def _find_git_checkout_restore(
+    seg: list[str], name_to_raw_value: dict[str, str], name_to_raw_value_git_biased: dict[str, str]
+) -> tuple[str | None, list[str], bool]:
     """Scan SEG (already assignment-stripped, see `_strip_leading_
     assignments`) for a `git checkout`/`git restore` invocation, skipping
     past git's own global value-taking options the same way
@@ -3887,11 +3986,34 @@ def _find_git_checkout_restore(seg: list[str], name_to_raw_value: dict[str, str]
     `git > /dev/null checkout -- dirty.py` (fully literal, no dynamic
     content at all) resolved to an empty, wrong `checkout_restore_paths`
     before this fix, since the redirect operator token itself was
-    mistaken for the subcommand position and the scan gave up there."""
+    mistaken for the subcommand position and the scan gave up there.
+
+    NAME_TO_RAW_VALUE_GIT_BIASED is a second reading, alongside NAME_TO_
+    RAW_VALUE, tried for a DYNAMIC `tok` that the ordinary reading
+    declines -- CRITICAL bug found by independent adversarial review
+    (round 19, issue #1375) and independently reproduced live:
+    NAME_TO_RAW_VALUE alone is `_assigned_raw_values`'s own order-blind,
+    last-occurrence-wins collapse, so `TOOL=git; $TOOL checkout --
+    dirty.py; TOOL=npm` -- reusing a variable name for a later, unrelated
+    purpose, an entirely ordinary idiom, not an exotic construction --
+    resolved `$TOOL` to `"npm"` even though it genuinely was `git` at the
+    actual point of use, silently defeating recognition entirely.
+    NAME_TO_RAW_VALUE_GIT_BIASED (`_assigned_raw_values_biased_toward`,
+    see its own docstring) instead reads as `git` whenever `git` was
+    EVER assigned to that name anywhere in the command, so this second
+    attempt still recognizes the `git` occurrence. Only ever WIDENS
+    recognition (an unrelated tool's own dynamic `checkout`/`restore`-
+    shaped subcommand at worst triggers a spurious, reversible live
+    `git diff` check), never narrows it -- trying NAME_TO_RAW_VALUE
+    first, unchanged, preserves this function's own existing "ambiguous
+    declines" posture for every case that was already resolvable."""
     n = len(seg)
     for i, tok in enumerate(seg):
         if _is_dynamic(tok):
-            if not _dynamic_token_resolves_only_to_literal(tok, name_to_raw_value, "git"):
+            if not (
+                _dynamic_token_resolves_only_to_literal(tok, name_to_raw_value, "git")
+                or _dynamic_token_resolves_only_to_literal(tok, name_to_raw_value_git_biased, "git")
+            ):
                 continue
         elif tok.lower() != "git":
             continue
@@ -4063,7 +4185,7 @@ def _first_surviving_segment_word(seg: list[str], name_to_raw_value: dict[str, s
 
 
 def _rule_git_checkout_restore(
-    segments: list[list[str]], raw_assigned: dict[str, str]
+    segments: list[list[str]], raw_assigned: dict[str, str], raw_assigned_git_biased: dict[str, str]
 ) -> tuple[str | None, tuple[str, ...]]:
     """Extract every `checkout_restore_paths` candidate across every
     segment of one command, denying outright on any segment where this
@@ -4145,11 +4267,18 @@ def _rule_git_checkout_restore(
     reproduction. The literal scan above is unaffected: it already checks
     every token in the segment regardless of position, so a literal
     `cd`/`pushd`/`popd` sitting after a vanishing decoy was already
-    covered."""
+    covered.
+
+    RAW_ASSIGNED_GIT_BIASED is passed straight through as `_find_git_
+    checkout_restore`'s own third argument -- see that function's own
+    docstring for what it means and the live bypass it closes (round 19,
+    issue #1375)."""
     saw_cd = False
     all_paths: list[str] = []
     for seg in segments:
-        subcommand, tokens_after, saw_tree_relocation = _find_git_checkout_restore(seg, raw_assigned)
+        subcommand, tokens_after, saw_tree_relocation = _find_git_checkout_restore(
+            seg, raw_assigned, raw_assigned_git_biased
+        )
         if subcommand is None:
             first = _first_surviving_segment_word(seg, raw_assigned)
             if any(not _is_dynamic(t) and t in _CWD_RELOCATING_COMMANDS for t in seg) or (
@@ -4376,6 +4505,7 @@ def classify(
     command: str,
     outer_name_to_value: dict[str, str] | None = None,
     outer_name_to_raw_value: dict[str, str] | None = None,
+    outer_name_to_raw_value_git_biased: dict[str, str] | None = None,
 ) -> Verdict:
     """Classify one Bash tool_input.command string. Fails closed (deny) on
     anything shlex cannot tokenize -- an unparseable command is exactly the
@@ -4390,18 +4520,24 @@ def classify(
     substitution_content`'s own recursive call (issue #1375, eighteenth
     round) is the one caller that supplies them, so a quoted/fused
     `$(...)` span's own inner content can resolve a variable assigned
-    OUTSIDE the span against the same shell scope real bash would use."""
+    OUTSIDE the span against the same shell scope real bash would use.
+
+    OUTER_NAME_TO_RAW_VALUE_GIT_BIASED (round 19, issue #1375) is the
+    same recursive call's own analogous third argument -- see `_classify_
+    tokens`'s own docstring and `_find_git_checkout_restore`'s own
+    docstring for what it means and the live bypass it closes."""
     try:
         tokens = tokenize(command)
     except TokenizeError as error:
         return Verdict(True, f"the command could not be parsed as shell syntax ({error}). Failing closed", False)
-    return _classify_tokens(tokens, outer_name_to_value, outer_name_to_raw_value)
+    return _classify_tokens(tokens, outer_name_to_value, outer_name_to_raw_value, outer_name_to_raw_value_git_biased)
 
 
 def _classify_tokens(
     tokens: list[str],
     outer_name_to_value: dict[str, str] | None = None,
     outer_name_to_raw_value: dict[str, str] | None = None,
+    outer_name_to_raw_value_git_biased: dict[str, str] | None = None,
 ) -> Verdict:
     """The token-level core of `classify` -- split out so `_rule_command_
     substitution_content` can recurse into a `$(...)` span's own inner
@@ -4430,20 +4566,37 @@ def _classify_tokens(
     substitution fix -- for the live bypass each closes) -- `None` (the
     top-level `classify` entry point, when its own caller has no outer
     scope of its own to supply) preserves this function's behavior for a
-    genuinely top-level command exactly."""
+    genuinely top-level command exactly.
+
+    OUTER_NAME_TO_RAW_VALUE_GIT_BIASED (round 19, issue #1375) is a third,
+    parallel outer-scope argument, merged with TOKENS's own `_assigned_
+    raw_values_biased_toward(tokens, "git")` (see that function's own
+    docstring) the same way OUTER_NAME_TO_RAW_VALUE is merged with the
+    plain `_assigned_raw_values(tokens)` above -- threaded into the same
+    two recursive calls, AND into `_rule_git_checkout_restore`'s own
+    third argument below, so a `git` token that is reassigned to
+    something else LATER in the same command (in an outer scope, inside
+    a `$(...)`/array-literal span, or both) still resolves to `git` for
+    checkout/restore recognition specifically. See `_find_git_checkout_
+    restore`'s own docstring for the live bypass this closes."""
     outer_literals = outer_name_to_value or {}
     outer_raw = outer_name_to_raw_value or {}
+    outer_raw_git_biased = outer_name_to_raw_value_git_biased or {}
     merged_name_to_value = {**outer_literals, **_assigned_literals(tokens)}
     merged_name_to_raw_value = {**outer_raw, **_assigned_raw_values(tokens)}
+    merged_name_to_raw_value_git_biased = {
+        **outer_raw_git_biased,
+        **_assigned_raw_values_biased_toward(tokens, "git"),
+    }
 
     content_reason, content_is_git_push, content_checkout_restore_paths = _rule_command_substitution_content(
-        tokens, merged_name_to_value, merged_name_to_raw_value
+        tokens, merged_name_to_value, merged_name_to_raw_value, merged_name_to_raw_value_git_biased
     )
     if content_reason:
         return Verdict(True, content_reason, content_is_git_push, content_checkout_restore_paths)
 
     array_content_reason, array_content_is_git_push, array_content_checkout_restore_paths = _rule_array_literal_content(
-        tokens, merged_name_to_value, merged_name_to_raw_value
+        tokens, merged_name_to_value, merged_name_to_raw_value, merged_name_to_raw_value_git_biased
     )
     is_git_push = content_is_git_push or array_content_is_git_push
     checkout_restore_paths = content_checkout_restore_paths + array_content_checkout_restore_paths
@@ -4454,6 +4607,7 @@ def _classify_tokens(
     segments = [s for s in (_strip_leading_assignments(seg) for seg in segment_tokens(tokens)) if s]
     assigned = {**outer_literals, **_assigned_literals(tokens)}
     raw_assigned = {**outer_raw, **_assigned_raw_values(tokens)}
+    raw_assigned_git_biased = {**outer_raw_git_biased, **_assigned_raw_values_biased_toward(tokens, "git")}
     lowered_command = " ".join(tokens).lower()
 
     is_git_push = is_git_push or any(_is_git_push_segment(seg, raw_assigned) for seg in segments)
@@ -4485,7 +4639,9 @@ def _classify_tokens(
                 checkout_restore_paths,
             )
 
-    own_checkout_restore_hit, own_checkout_restore_paths = _rule_git_checkout_restore(segments, raw_assigned)
+    own_checkout_restore_hit, own_checkout_restore_paths = _rule_git_checkout_restore(
+        segments, raw_assigned, raw_assigned_git_biased
+    )
     checkout_restore_paths = checkout_restore_paths + own_checkout_restore_paths
     if own_checkout_restore_hit:
         return Verdict(True, own_checkout_restore_hit, is_git_push, checkout_restore_paths)
