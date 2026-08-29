@@ -99,7 +99,12 @@ without losing the issue's acceptance criteria.
    written and confirmed failing before the fix, then passing after the
    fix, plus the existing suite still green. A defect fix is not exempt
    from this proof-method requirement merely because its issue started
-   out with a waiver.
+   out with a waiver. This test-first requirement presumes a
+   `root-cause-confirmed` Diagnosis Verdict (Step 4) -- an in-repo code
+   fix is what it proves. On a `no-in-code-root-cause` Verdict instead,
+   state a Proof method that actually verifies the external-cause
+   finding (e.g. a config change, a documented workaround, an upstream
+   bug report), not a code-fix test the finding itself rules out.
 6. Propose a branch name, commit scope, PR title, and PR body outline, all
    tied to the issue number.
 7. Identify the deterministic gates the mapped criteria require: tests,

@@ -108,10 +108,16 @@ first, not skimmed.
    unavailable (`CLAUDE_CODE_DISABLE_WORKFLOWS=1` or otherwise absent).
    For a task decomposed from a bare-defect-report ACM row, route through
    `diagnosing-a-failure` before that task's own Red step, so the failing
-   test encodes its confirmed root cause rather than a guess; a
-   `reproduction-not-established` Verdict here dispatches through this
-   step's own failure-handling rule below as a
-   `StageDeviated{action: escalate}` event, not a silent retry. Within
+   test encodes its confirmed root cause rather than a guess. A
+   `reproduction-not-established` or `architecture-question` Verdict here
+   dispatches through step 7's own failure-handling rule as a
+   `StageDeviated{action: escalate}` event, not a silent retry -- neither
+   is this task's own scope to resolve unilaterally. A
+   `no-in-code-root-cause` Verdict does not itself block the Red step,
+   but the finding it names (an external cause, not an in-repo one)
+   determines what the Red test can actually assert; see
+   `planning-a-branch-from-an-issue`'s own equivalent Step 5 clarification
+   for the same distinction. Within
    each task, apply Red-Green order when the task's inherited proof
    method is an automatable test; Refactor is never per-task, deferred
    entirely to step 8. Once a wave's run returns, in the main thread (the

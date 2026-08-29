@@ -27,7 +27,7 @@ handling directly.
 Disclosed rather than silently assumed solved: no trial of this suite has
 been executed yet -- the config declares `copilot-sdk` / `claude-sonnet-5`
 per this repository's own sibling-suite convention, but this PR does not
-claim a passing run. The corpus's own adequacy -- whether these six
+claim a passing run. The corpus's own adequacy -- whether these seven
 fixtures exercise the skill's most novel behaviors (the Step 2
 reproducibility branch, the Step 7 disconfirmation requirement, the
 Prerequisite note's conditional clauses), and what blind spot remains in

@@ -31,10 +31,10 @@ spec:
       summary: "New native skill, per docs/superpowers/specs/2026-08-29-diagnosing-a-failure-design.md (Decisions 1-7). Absorbs the general-purpose diagnosis half of a now-retired predecessor's own gap; the GitHub-issue-lifecycle half already lives in planning-a-branch-from-an-issue and executing-a-branch-plan (see the design doc's own Method section for the retirement citation)."
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1155"
-      summary: "A design-only artifact and a later set of pstack-informed refinements, both linked from this tracking issue's own comment thread, predated the predecessor skill's actual retirement and this issue's own scope-extension to implementation. The design doc treats both as draft input, not pre-verified fact -- see its own Method section for the full accounting."
+      summary: "A design-only artifact and a later set of external-plugin-comparison-informed refinements, both linked from this tracking issue's own comment thread, predated the predecessor skill's actual retirement and this issue's own scope-extension to implementation. The design doc treats both as draft input, not pre-verified fact -- see its own Method section for the full accounting."
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1155"
-      summary: "The design doc's Decision 4 folds four accepted pstack-informed refinements (reproducibility branch, parallel evidence search, per-step end-states, a disconfirmation step) into a fresh 8-step sequence, rather than patching the design-only artifact's own earlier 7-step one."
+      summary: "The design doc's Decision 4 folds four accepted external-plugin-comparison-informed refinements (reproducibility branch, parallel evidence search, per-step end-states, a disconfirmation step) into a fresh 8-step sequence, rather than patching the design-only artifact's own earlier 7-step one."
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1155"
       summary: "defense-in-depth renamed to layered validation within this skill only (design doc Decision 3) -- a repository-wide grep this session found 30+ files already using defense-in-depth in CLAUDE.md section 4's own layered-safety-controls sense, a genuine polysemy against this skill's own layered-code-correctness-checkpoints sense, not a single-file coinage."
@@ -56,3 +56,15 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1155"
       summary: "An isolated design-doc-adversarial-review dispatch found the design doc's own Decision 4 text had drifted stale against the two prior audit-fix commits (5 additions never folded back). Fixed: a Post-design revisions addendum added to Decision 4; the Acceptance-criteria checklist's overclaiming matches wording softened; planning-a-branch-from-an-issue Step 4 gained the reproduction-not-established carve-out Decision 6 had promised but the shipped text omitted."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "drafting-a-pr-to-merge's own inner-layer review (4 parallel adversarial passes: correctness, regression, reuse, convention) found and fixed: Step 8's 'three failed hypothesis loops' cap was never grounded in Step 6/7's own text (design doc had the same gap); Step 6 now counts and caps explicitly, in both SKILL.md and the design doc."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "Same review round, regression pass: planning-a-branch-from-an-issue Step 5's test-first requirement silently presumed root-cause-confirmed; now states the no-in-code-root-cause alternative explicitly. executing-a-branch-plan Step 6 only dispatched reproduction-not-established; now also dispatches architecture-question and clarifies no-in-code-root-cause, and no longer misattributes step 7's failure-handling rule as its own."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "Same review round, reuse pass: Step 8's evidence-fencing/redaction rule re-derived untrusted-input-triage's own Flag-step rule near-verbatim instead of citing it (contradicting this skill's own Related-skills claim of 'not re-derived here'); now cites it. The 'local system is already a primary source' caveat was stated three times (SKILL.md Step 3, probing-boundary-contracts.md, Related skills); the latter two now point back to Step 3 instead of restating it."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "Same review round, convention pass: eval-status.md's own fixture-count prose said 'six' where the suite has seven; fixed. This file's own 'pstack' shorthand (naming the external plugin the deferral above deliberately avoids naming) generalized to match."

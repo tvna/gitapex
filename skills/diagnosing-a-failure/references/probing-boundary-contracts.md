@@ -77,9 +77,9 @@ behavior through `grounding-in-primary-sources` before treating it as
 either the cause or ruled out -- a claim about a third-party tool's
 behavior sourced from memory rather than its own current docs or the
 observed live state is exactly the kind of unverified claim that skill
-exists to catch. This skill's own investigation of the *local* system
-does not need that skill's discipline applied reflexively -- only the
-external-behavior claim does.
+exists to catch (see `SKILL.md` Step 3 for why this applies only to the
+external-behavior claim, not this skill's own local-system
+investigation).
 
 ## Redistribution-aware conditional clauses
 

@@ -206,9 +206,13 @@ refinement 4 becomes the new Step 7.
    *End-state:* either a concrete behavioral diff is named, or its
    absence is confirmed.
 6. **Loop hypotheses.** One falsifiable probe per hypothesis; do not
-   advance to the next without running the current one.
+   advance to the next without running the current one. Count each
+   hypothesis ruled out here or returned from Step 7's own
+   disconfirmation; a third ruled-out hypothesis stops the loop and
+   forces Step 8's `architecture-question` Verdict.
    *End-state:* each hypothesis is confirmed or ruled out by its own
-   probe's result, not by inference alone.
+   probe's result, not by inference alone -- or the third ruled-out
+   hypothesis is reached and Step 8's forced Verdict applies instead.
 7. **Attempt one disconfirmation before the Verdict.** Against the
    leading hypothesis only, run one probe designed to break it, not
    confirm it. Disconfirmed -> back to Step 6 with the leading hypothesis
@@ -333,19 +337,32 @@ comment-and-stop pattern for failed reproduction. On
 `reproduction-not-established`, this skill's own Step 4 reproduction gate
 already screens this case out upstream, so it should not recur here in
 practice; if it does, treat it the same as a failed reproduction (stop,
-comment, no ACM).
+comment, no ACM). On `no-in-code-root-cause`, Step 5's own test-first
+Proof-method requirement presumes `root-cause-confirmed` (an in-repo code
+fix is what it proves); state instead a Proof method that verifies the
+external-cause finding itself (a config change, a documented workaround,
+an upstream bug report) -- **added by the `design-doc-adversarial-review`
+dispatch's follow-on regression review**, which found the shipped Step 4
+text left this interaction unaddressed.
 
 **`executing-a-branch-plan/SKILL.md` Step 6**: insert, immediately before
 the existing "Within each task, apply Red-Green order..." sentence, an
 instruction that a task decomposed from a bare-defect-report ACM row
 routes through `diagnosing-a-failure` before its own Red step, so the
-failing test written encodes the returned root cause. A `reproduction-not-established`
-Verdict here (this skill has no upstream reproduction gate of its own)
-dispatches through the existing step 7 failure-handling rule as a
-`StageDeviated{action: escalate}` event, not a silent retry. (Shipped
-wording: `executing-a-branch-plan/SKILL.md`'s own step 6 text says "this
-step's own failure-handling rule below" rather than naming step 7
-explicitly -- same target, a paraphrase only.)
+failing test written encodes the returned root cause. A
+`reproduction-not-established` **or `architecture-question`** Verdict
+here (this skill has no upstream reproduction gate of its own, and
+neither Verdict is this task's own scope to resolve unilaterally)
+dispatches through step 7's own failure-handling rule as a
+`StageDeviated{action: escalate}` event, not a silent retry. A
+`no-in-code-root-cause` Verdict does not itself block the Red step, but
+determines what the Red test can actually assert, per the same
+distinction as the Step 4 update above. **Both additions -- the second
+Verdict branch and the `no-in-code-root-cause` clarification -- came from
+the same follow-on regression review**, which also found the originally
+shipped "this step's own failure-handling rule" wording misattributed
+step 7's rule to step 6; the shipped text now names step 7 directly
+rather than paraphrasing it.
 
 Both skills' `## Related skills` sections gain one bullet in their
 existing `**vs. \`X\`:**` pattern, naming `diagnosing-a-failure` and
