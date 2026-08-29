@@ -98,6 +98,27 @@
             "timeout": 60
           }
         ]
+      },
+      {
+        "matcher": "Bash|mcp__github__resolve_review_thread|mcp__github__pull_request_read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/check-post-review-obligation-tracker.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/check-stop-review-obligation.sh\"",
+            "timeout": 10
+          }
+        ]
       }
     ]
   }
