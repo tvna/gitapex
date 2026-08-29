@@ -106,8 +106,8 @@ import _gitapex_base_ref
 from pydantic import BaseModel, ValidationError, field_validator, model_validator
 
 # hooks/ is a sibling of .github/ at the repo root, never on sys.path by
-# default for a standalone `python3 .github/scripts/gitapex_gate_commit_citation.py`
-# invocation (Python only auto-adds this script's own directory). Mirrors the
+# default for a standalone `uv run --frozen python3` invocation of this file
+# (Python only auto-adds this script's own directory). Mirrors the
 # exact `sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))`
 # bootstrap style every other cross-file .github/scripts/*.py import in this
 # repository already uses (e.g. gitapex_gate_ruleset_required_checks.py), just
