@@ -76,7 +76,7 @@ def test_unimportable_scanner_is_indeterminate_not_a_clean_pass(tmp_path: Path) 
     assert "failed to import" in str(excinfo.value)
 
 
-# --- ASCII scan (outward-artifact-preflight checklist item 3) --------------
+# --- ASCII scan (outward-artifact-preflight checklist item 2) --------------
 
 
 def test_an_importable_module_without_scan_is_indeterminate(tmp_path: Path) -> None:

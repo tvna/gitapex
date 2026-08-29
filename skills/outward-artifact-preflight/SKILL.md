@@ -6,8 +6,8 @@ description: Use when about to push, post, or publish any outward-facing artifac
 # Outward Artifact Preflight
 
 This skill's checklist is general. Check 1's "agreed disclosure
-convention" and check 3's ASCII-only default illustrate gitapex's own
-policy; check 2's raw-fetch hook is likewise gitapex's own illustration
+convention" and check 2's ASCII-only default illustrate gitapex's own
+policy; check 4's raw-fetch hook is likewise gitapex's own illustration
 of that channel, not a required dependency. Each states an inline
 fallback to substitute the calling repository's actual policy or
 tooling where it differs. The explaining-the-work coupling
@@ -43,11 +43,11 @@ destined for a public sink.
    2. If the calling repository already has an agreed disclosure
       convention for PR bodies (for example a fixed "Generated with X"
       trailer), keep it there.
-   3. Disclosure does not exempt something from check 3: a disclosed
-      trailer still has to pass whatever check 3 currently requires --
+   3. Disclosure does not exempt something from check 2: a disclosed
+      trailer still has to pass whatever check 2 currently requires --
       by default an ASCII equivalent for any non-ASCII glyph (an emoji,
       for instance), unless the calling repository's own documented
-      character-set policy (check 3's fallback) already permits it.
+      character-set policy (check 2's fallback) already permits it.
    4. Commit messages follow a separate, narrower rule (where installed,
       the explaining-the-work skill routes commit-log content to one
       line plus a `Closes #N`/`Refs #N` issue pointer, nothing more) --
@@ -67,12 +67,79 @@ destined for a public sink.
       instance and not a lookalike remains a per-hit judgment call, not
       something to suppress with an ignore pattern, allowlist, or
       `--exclude` flag.
-2. **Post-creation re-check.** A pre-submission scan of the drafted text
+2. **ASCII-only.** Default to no em dashes, en dashes, curly quotes,
+   full-width punctuation, or any other non-ASCII character -- gitapex's
+   own convention. If the calling repository documents a different
+   character-set policy (for example, permitting Unicode or emoji),
+   follow that instead. Check with (`-P` enables
+   Perl-regex mode so `\t` is read as a tab escape, not two literal
+   characters -- a plain bracket expression would still flag ordinary
+   tabs). This requires GNU grep with PCRE support (`grep -P`), which
+   BSD/macOS grep lacks:
+
+   ```bash
+   LC_ALL=C grep -nP '[^ -~\t]' <file>
+   ```
+
+   On a platform without `grep -P` (e.g. stock macOS/BSD grep), use this
+   portable equivalent instead:
+
+   ```bash
+   LC_ALL=C perl -ne 'print "$.:$_" if /[^ -~\t\n]/' <file>
+   ```
+
+   No output means the file is ASCII-only.
+3. **Closing-keyword narration hazard.** A sentence that only narrates
+   history -- citing a past PR or issue by number -- can still trip a
+   git host's closing-keyword scan if a recognized keyword happens to
+   land immediately before the `#`-number, even when the author's
+   intent is not to close anything. Confirmed against each of GitHub,
+   GitLab, Forgejo, and Gitea's own documentation as it stood on
+   2026-08-15: all four match a literal keyword-plus-number pattern
+   with no stated grammatical, semantic, or tense analysis of the
+   surrounding sentence. This is not a blanket claim about every
+   git-hosting platform -- a host not checked here (for example
+   Bitbucket or sourcehut) could behave differently in either
+   direction, and any of the four platforms' own lists could change
+   after the date above -- re-verify against the live documentation
+   if this guidance is being relied on long after that date.
+
+   1. GitHub and Forgejo recognize close/closes/closed,
+      fix/fixes/fixed, and resolve/resolves/resolved (Forgejo's list
+      is admin-customizable but ships with this same set). GitLab
+      recognizes the same three families plus an
+      implement/implements/implemented family, and adds an "-ing"
+      form to all four (closing, fixing, resolving, implementing) --
+      the widest of the four. Gitea's list is identical to Forgejo's.
+   2. Forgejo and Gitea additionally require, for a reference placed
+      in a PR description specifically, that the merger hold
+      close/reopen permission at merge time (a commit-message
+      reference, or a commenter who already holds that permission, is
+      sufficient without it). GitHub and GitLab's own documentation
+      states no such permission gate.
+   3. Before publishing a sentence that cites a past PR or issue by
+      number in prose, check whether a recognized keyword lands
+      immediately before the `#`-number. If it does, and the sentence
+      narrates something that already happened rather than directing
+      this artifact to resolve it, rewrite to avoid the trigger:
+      prefer a full URL citation over the bare `#`-number, or a verb
+      outside every platform's list above (for example "addressed",
+      "landed", "shipped"). See the third worked example below.
+   4. If it is unclear from the sentence alone whether the author
+      means to close the cited issue or only narrate it, do not
+      decide silently either way: treat it the same as any other
+      unresolved hit under this checklist's Stop boundary and confirm
+      intent with the author before publishing. Guessing "narration"
+      risks stripping a closing directive the author meant to keep;
+      guessing "directive" risks leaving the accidental-closure hazard
+      unflagged.
+4. **Post-creation re-check.** A pre-submission scan of the drafted text
    is not enough: `create_pull_request` and `update_pull_request` can
    inject a session-URL trailer downstream of the submitted `body`,
    invisible to any scan run before the call. Immediately after either
    call returns, re-fetch the actually-stored body through a raw,
-   unsanitized channel and re-run check 1 against it, not the draft.
+   unsanitized channel and re-run check 1 and check 2 against it, not
+   the draft.
 
    **Do not use an MCP read tool (`pull_request_read`, `issue_read`) for
    this re-check.** A GitHub MCP server can sanitize the HTML/Markdown of
@@ -95,7 +162,7 @@ destined for a public sink.
    (`hooks/check-post-write-provenance.sh` /
    `hooks/gitapex_check_post_write_provenance.py`) re-fetches the stored
    body this way after `create_pull_request` / `update_pull_request` /
-   `issue_write` returns and re-runs this checklist's check 1 and check 3
+   `issue_write` returns and re-runs this checklist's check 1 and check 2
    -- plus a submitted-vs-stored content-loss comparison -- against it.
    Where it is installed, its verdict resolves this step for you, with
    PASS / FLAGGED / CONTENT_LOSS each already a terminal answer (confirm
@@ -144,72 +211,6 @@ destined for a public sink.
    perform -- and it covers only the tool calls it matches, so a body
    edited afterwards through any other path is still yours to re-check
    through the raw channel by hand.
-3. **ASCII-only.** Default to no em dashes, en dashes, curly quotes,
-   full-width punctuation, or any other non-ASCII character -- gitapex's
-   own convention. If the calling repository documents a different
-   character-set policy (for example, permitting Unicode or emoji),
-   follow that instead. Check with (`-P` enables
-   Perl-regex mode so `\t` is read as a tab escape, not two literal
-   characters -- a plain bracket expression would still flag ordinary
-   tabs). This requires GNU grep with PCRE support (`grep -P`), which
-   BSD/macOS grep lacks:
-
-   ```bash
-   LC_ALL=C grep -nP '[^ -~\t]' <file>
-   ```
-
-   On a platform without `grep -P` (e.g. stock macOS/BSD grep), use this
-   portable equivalent instead:
-
-   ```bash
-   LC_ALL=C perl -ne 'print "$.:$_" if /[^ -~\t\n]/' <file>
-   ```
-
-   No output means the file is ASCII-only.
-4. **Closing-keyword narration hazard.** A sentence that only narrates
-   history -- citing a past PR or issue by number -- can still trip a
-   git host's closing-keyword scan if a recognized keyword happens to
-   land immediately before the `#`-number, even when the author's
-   intent is not to close anything. Confirmed against each of GitHub,
-   GitLab, Forgejo, and Gitea's own documentation as it stood on
-   2026-08-15: all four match a literal keyword-plus-number pattern
-   with no stated grammatical, semantic, or tense analysis of the
-   surrounding sentence. This is not a blanket claim about every
-   git-hosting platform -- a host not checked here (for example
-   Bitbucket or sourcehut) could behave differently in either
-   direction, and any of the four platforms' own lists could change
-   after the date above -- re-verify against the live documentation
-   if this guidance is being relied on long after that date.
-
-   1. GitHub and Forgejo recognize close/closes/closed,
-      fix/fixes/fixed, and resolve/resolves/resolved (Forgejo's list
-      is admin-customizable but ships with this same set). GitLab
-      recognizes the same three families plus an
-      implement/implements/implemented family, and adds an "-ing"
-      form to all four (closing, fixing, resolving, implementing) --
-      the widest of the four. Gitea's list is identical to Forgejo's.
-   2. Forgejo and Gitea additionally require, for a reference placed
-      in a PR description specifically, that the merger hold
-      close/reopen permission at merge time (a commit-message
-      reference, or a commenter who already holds that permission, is
-      sufficient without it). GitHub and GitLab's own documentation
-      states no such permission gate.
-   3. Before publishing a sentence that cites a past PR or issue by
-      number in prose, check whether a recognized keyword lands
-      immediately before the `#`-number. If it does, and the sentence
-      narrates something that already happened rather than directing
-      this artifact to resolve it, rewrite to avoid the trigger:
-      prefer a full URL citation over the bare `#`-number, or a verb
-      outside every platform's list above (for example "addressed",
-      "landed", "shipped"). See the worked example below.
-   4. If it is unclear from the sentence alone whether the author
-      means to close the cited issue or only narrate it, do not
-      decide silently either way: treat it the same as any other
-      unresolved hit under this checklist's Stop boundary and confirm
-      intent with the author before publishing. Guessing "narration"
-      risks stripping a closing directive the author meant to keep;
-      guessing "directive" risks leaving the accidental-closure hazard
-      unflagged.
 
 ## Worked example
 
@@ -227,10 +228,10 @@ Applying the checklist:
 - Check 1 fires: `claude-example-model` and the session URL are a bare
   model identifier and a session URL -- neither is an agreed disclosure
   convention, so both must be removed to pass.
-- Check 3 fires: `grep` prints line 1 (exit status 0) -- the `\xe2\x80\x94`
+- Check 2 fires: `grep` prints line 1 (exit status 0) -- the `\xe2\x80\x94`
   bytes (an em dash) are non-ASCII.
 
-This example exercises checks 1 and 3 only. Check 2 has nothing to fire
+This example exercises checks 1 and 2 only. Check 4 has nothing to fire
 on here: there is no posted artifact to re-fetch yet. See the second
 worked example below for that one.
 
@@ -244,7 +245,7 @@ Refs #8
 
 ## Worked example: post-creation re-check catches what pre-submission cannot
 
-This is the actual shape of the gap check 2 (Post-creation re-check)
+This is the actual shape of the gap check 4 (Post-creation re-check)
 exists for -- confirmed twice, on two independent PRs merged the same day.
 
 The drafted `body` passed to `create_pull_request` is clean: check 1's
@@ -261,7 +262,7 @@ PASS: no candidate provenance markers found
 ```
 
 `create_pull_request` returns. Re-fetching the same PR's stored body per
-check 2, the platform has appended a trailer that was never in the
+check 4, the platform has appended a trailer that was never in the
 submitted `body`:
 
 ```bash
@@ -288,7 +289,7 @@ force-reinjected.
 
 ## Worked example: a citation sentence that reads as a directive
 
-The hazard check 4 exists to catch is a bare issue/PR-number citation
+The hazard check 3 exists to catch is a bare issue/PR-number citation
 used only to narrate history: "PR `#911` closed `#907`." A keyword
 scanner reads that same text as GitHub, Forgejo, and Gitea's own
 recognized `closed` keyword immediately before a number -- the same
@@ -334,10 +335,10 @@ citations). Apply both; neither substitutes for the other.
   this checklist's judgment call to each hit before the push is actually
   safe to make, whether or not such a hook exists.
 - Check 1's pre-submission scan is not sufficient on its own for
-  `create_pull_request`/`update_pull_request`. Check 2's post-creation
+  `create_pull_request`/`update_pull_request`. Check 4's post-creation
   re-check is mandatory after every such call, not optional follow-up --
   treat the PR as unverified until the re-fetched, actually-stored body
-  has been scanned clean. Where a PostToolUse hook backs it, check 2's
+  has been scanned clean. Where a PostToolUse hook backs it, check 4's
   own note states what that hook does and does not cover; that note is
   the single place this file states it.
 - This skill only applies the checklist; it does not authorize skipping
