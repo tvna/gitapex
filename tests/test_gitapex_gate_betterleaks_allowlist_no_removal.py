@@ -214,6 +214,23 @@ def test_resolve_merge_base_returns_the_common_ancestor(tmp_path: pathlib.Path) 
     assert merge_base == base_sha
 
 
+def test_resolve_merge_base_fails_closed_when_the_merge_base_call_itself_fails(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Defeat test: `require_common_ancestor` finding a common ancestor does
+    not guarantee the later `git merge-base` call in this function also
+    succeeds (a race, a corrupt object appearing between the two calls) --
+    a nonzero exit here must raise GateError, not silently return garbage
+    stdout as though it were a real SHA."""
+
+    def _fake_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="fatal: not a valid object name")
+
+    monkeypatch.setattr(gate._gitapex_base_ref, "run_git", lambda *a, **k: _fake_run())
+    with pytest.raises(gate.GateError, match=r"git merge-base .* failed"):
+        gate.resolve_merge_base(tmp_path, "refs/remotes/origin/main")
+
+
 @pytest.mark.slow
 def test_check_local_plane_fetches_and_reports_an_unwaived_removal(tmp_path: pathlib.Path) -> None:
     _origin, head = _synced_head(tmp_path)
