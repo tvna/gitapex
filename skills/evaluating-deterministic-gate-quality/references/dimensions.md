@@ -13,7 +13,7 @@ Two lanes, mirroring `evaluating-skill-quality`'s own split:
   `SKILL.md`'s Lifecycle note); apply the checks below to those domains,
   and to whatever a Domain-2 target's own manual judgment still requires,
   by direct inspection.
-- **Probabilistic-maturity dimensions** (7-24) -- need judgment; walk all
+- **Probabilistic-maturity dimensions** (7-25) -- need judgment; walk all
   of them, quoting the specific evidence that earns each verdict --
   except dimension 23, which is never walked per-artifact alongside the
   rest of this lane; see its own review-scope tag below and `SKILL.md`
@@ -558,3 +558,45 @@ differentiation from shape check 1 and dimension 15 below.
     looks like -- check (2)'s own action must be nameable in the
     response payload itself, never assumed from a shared convention the
     caller may not carry.
+25. **Idempotency: convergence after partial execution and retry.** Does
+    the gate converge to the same end state whether it runs once cleanly
+    or is interrupted partway through and then retried -- the realistic
+    case for any CI job step subject to network failure or timeout, or
+    any hook/MCP call a caller (or the harness itself) re-issues after a
+    partial failure? A gate whose partial-then-retried run leaves
+    duplicate side effects (a doubled notification, a second write, a
+    corrupted partial artifact mistaken for a complete one), or that
+    reaches a different allow/deny decision on retry than a single clean
+    run would have reached for the same input, fails this dimension even
+    when a single, uninterrupted run passes every other dimension
+    cleanly. Distinct from shape check 6 (whether a timeout/budget is set
+    at all, not what happens after one fires) and dimension 15
+    (fail-closed behavior on malformed *input*, not on an *interrupted
+    execution* of otherwise well-formed input): this dimension's own
+    failure mode is a specific interrupted-then-retried run leaving
+    behind state a clean run never would.
+    *Domains:* generalizes with adaptation -- retry after partial failure
+    is a realistic operational event in all four domains, but what counts
+    as "leftover partial state" is domain-specific vocabulary, not a
+    single domain-generic check. CI job step: does a re-run after a
+    simulated mid-step timeout (kill the check process partway through,
+    then re-trigger the job) reach the same pass/fail decision and leave
+    no leftover partial state (a half-written cache, a partially posted
+    status) uncleaned or unaccounted for by the second run? Agent-harness
+    hook: does a hook re-invoked after the harness itself retries a tool
+    call following a transient error re-evaluate cleanly, rather than
+    assuming its own prior, partial invocation's side effects never
+    happened? Git hook subprocess: an interrupted pre-commit/pre-push
+    (killed mid-run, then the same command re-issued) must not leave the
+    repository or the hook's own state store in a condition where the
+    retry both compounds a prior partial write and disagrees with what a
+    single clean run would have decided. MCP server subprocess: a client
+    retrying a call after a dropped connection must not cause the
+    server-side check to double-apply a side effect it had already
+    partially applied on the first, interrupted attempt.
+    *Not-applicable case:* a pure read-only check with no state of its
+    own to leave partial (one that only inspects and reports, writing
+    nothing) has nothing to converge -- report this dimension
+    not-applicable for such a gate, stated explicitly rather than
+    silently omitted, the same explicit treatment domain-inapplicability
+    already gets elsewhere in this file (see dimension 8).

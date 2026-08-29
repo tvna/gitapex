@@ -180,7 +180,7 @@ deferred -- to `evaluating-skill-quality`'s own Subagent dispatch
 section, rather than re-derived here. That skill's dispatch protocol does
 not transfer with them: its unconditional trigger, its relay and
 second-dispatch rules are its own, and this section's own conditional
-trigger and payload rule above govern here.
+trigger and payload rule above govern here. Optional upgrade, once that trigger fires: on a multi-agent harness, this dispatch may become several independent cross-checking dispatches, capped at a small explicit N (default: single-dispatch).
 
 ## Procedure
 

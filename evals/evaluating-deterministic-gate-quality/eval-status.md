@@ -93,8 +93,8 @@ text for a `"dimension N"` or axis-name citation.
 runs it against this real corpus and fails CI if any dimension it reports
 uncovered is not named right here -- so this list can't silently drift from
 the real corpus the way the "dimension 12" mislabel above did. Current
-output: 13/24 dimensions and 5/5 axes cited; **dimensions 9, 11, 12, 13, 14,
-16, 17, 20, 21, 22, and 24 remain uncovered**, not exhaustive by design -- no fixture's
+output: 13/25 dimensions and 5/5 axes cited; **dimensions 9, 11, 12, 13, 14,
+16, 17, 20, 21, 22, 24, and 25 remain uncovered**, not exhaustive by design -- no fixture's
 scenario naturally exercises known-limitation disclosure (9), deployment-
 mode portability (11), duplication/drift risk (12), side-effect independence
 from the deny decision (13), structured-output hygiene (14), runtime
@@ -117,6 +117,19 @@ precondition, and issue #1229's own acceptance criteria scoped this change
 to the dimension's rubric text and a numbering drift gate, not a new eval
 fixture, so authoring one (for Part A, which is more directly testable in
 principle) is left to a follow-up rather than folded in here.
+Dimension 25 (idempotency: convergence after partial execution and retry)
+was added per issue #1385, appended after dimension 24 without
+renumbering (lane range 7-24 -> 7-25); it has no fixture yet either --
+issue #1385's own acceptance criteria scoped this change to the
+dimension's rubric text (`references/dimensions.md`) and the
+Subagent-dispatch multi-dispatch-upgrade sentence already carried by
+`evaluating-skill-quality` (`SKILL.md`), not a new eval fixture, so
+authoring one is left to a follow-up rather than folded in here. The
+acceptance criterion's own "worked example (a CI job step re-run after a
+simulated timeout)" proof method is satisfied by the dimension's own
+inline CI-job-step illustration in `references/dimensions.md`, not a
+fixture -- the same rubric-text-only scope issue #1229 already
+established for dimension 24 above.
 Dimension 23 (caller/installing-environment maturity, distinct from any
 single gate's own quality -- issue #829) was added to close a gap
 identified in a session-level review: no prior dimension measured the
