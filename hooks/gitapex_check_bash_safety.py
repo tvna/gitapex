@@ -501,6 +501,18 @@ _SINGLE_OPS = {";", "|", "&", "(", ")", "\n"}
 _MULTI_OPS = {"&&", "||"}
 _ASSIGN_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
 
+# Matches bash's own compound/append-assignment operator (`NAME+=value`)
+# by NAME alone -- deliberately NOT anchored at the end (`re.match`, not
+# `re.fullmatch`), so it still matches the shlex-tokenizer-split form a
+# `NAME+=$(...)` assignment produces (e.g. the single token `DIR+=$`, with
+# `(`/`echo`/`other`/`)` as their own separate following tokens -- shlex is
+# punctuation-aware around `(`/`)`). `_ASSIGN_RE` above never matches a
+# `+=` token at all (its own greedy identifier-char class cannot consume
+# past the literal `+`, so the required `=` immediately after never lines
+# up) -- used only by `_names_with_dynamic_assignment`, see that
+# function's own docstring for the live bypass this closes.
+_APPEND_ASSIGN_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\+=")
+
 # Matches one `$NAME`/`${NAME}`/`${NAME:-default}`/`${!NAME}` reference
 # anywhere in a token, capturing its full span (including the braces, when
 # present) so _substitute_var_refs_candidates below can replace exactly
@@ -3756,8 +3768,12 @@ def _multi_valued_names_referenced(
 
 
 def _names_with_dynamic_assignment(tokens: list[str]) -> set[str]:
-    """Every NAME assigned a DYNAMIC value (containing `$`/backtick)
-    anywhere in TOKENS.
+    """Every NAME whose own value, at some point in TOKENS, is genuinely
+    UNKNOWN to this classifier -- either a DYNAMIC value (containing
+    `$`/backtick) via a plain `NAME=value` assignment, or ANY compound
+    `NAME+=value` (append) assignment regardless of whether the appended
+    text is itself static or dynamic (see the round-25 paragraph below
+    for why the static case needs the same treatment).
 
     CRITICAL bug found by independent adversarial review (round 24, issue
     #1375) and independently reproduced live: `_assigned_raw_values`/
@@ -3779,15 +3795,45 @@ def _names_with_dynamic_assignment(tokens: list[str]) -> set[str]:
     uncommitted edit to `other`. Also reproduced identically for the
     fused-reference form (`"$DIR/f"`).
 
+    CRITICAL bug found by independent adversarial review (round 25, issue
+    #1375) and independently reproduced live: `_ASSIGN_RE` never matches
+    bash's own `NAME+=value` compound/append-assignment operator at all
+    (its own greedy identifier-char class cannot consume past the
+    literal `+`, so the required `=` immediately after never lines up) --
+    this function's own round-24 form, keyed entirely off `_ASSIGN_RE`,
+    was completely blind to an appended name regardless of whether the
+    appended text was itself dynamic. `DIR=sub; for i in 1; do
+    DIR+=$(echo other); done; git checkout -- $DIR` resolved
+    `checkout_restore_paths` to `('sub',)` -- the STALE, pre-append value
+    (real bash: `$DIR` genuinely becomes `subother`, confirmed live via
+    `bash -c 'DIR=sub; for i in 1; do DIR+=$(echo other); done; echo
+    $DIR'`). Confirmed live end-to-end through the real wrapper against a
+    scratch repo with the genuinely-appended-to path dirty and the stale
+    pre-append path clean: wrongly allowed with exit 0, and actually
+    running the command afterward silently discarded the uncommitted
+    edit. Reproduced identically for `git restore`. A STATIC append
+    (`DIR+=txt`, no `$`/backtick in the appended text) shares the
+    identical exposure for a DIFFERENT reason: reconstructing the real
+    concatenated value would need genuine execution-order tracking this
+    classifier does not perform (which static assignment among several
+    was actually in effect immediately before the append), so a static
+    append is poisoned here too, via `_APPEND_ASSIGN_RE` alone,
+    independent of `_is_dynamic`.
+
     Closed by `_resolve_path_tokens` treating a name in this set as
     forced-unresolvable (deny outright) wherever referenced -- the same
     posture this module already takes for a name that was NEVER assigned
-    any value at all (a name with a static-only history, or no history,
-    resolves exactly as before; a name with even one dynamic assignment
-    anywhere loses all confidence, matching how this classifier already
-    treats a name with NO recorded static value)."""
+    any value at all (a name with a static-only history of plain `=`
+    assignments, or no history, resolves exactly as before; a name with
+    even one dynamic OR append assignment anywhere loses all confidence,
+    matching how this classifier already treats a name with NO recorded
+    static value)."""
     names: set[str] = set()
     for token in tokens:
+        append_match = _APPEND_ASSIGN_RE.match(token)
+        if append_match:
+            names.add(append_match.group(1))
+            continue
         if not _is_dynamic(token):
             continue
         match = _ASSIGN_RE.match(token)

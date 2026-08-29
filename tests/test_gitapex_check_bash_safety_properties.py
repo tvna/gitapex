@@ -2124,6 +2124,48 @@ def test_names_with_dynamic_assignment_ignores_a_purely_static_name() -> None:
     assert checker._names_with_dynamic_assignment(["DIR=sub", "DIR=other"]) == set()
 
 
+def test_names_with_dynamic_assignment_finds_a_dynamic_compound_append() -> None:
+    """Regression pin for the real bypass found live by Step 8 independent
+    review, twenty-fifth round (issue #1375): `_ASSIGN_RE` never matches
+    bash's own `NAME+=value` compound/append-assignment operator at all,
+    so the round-24 form of this function -- keyed entirely off
+    `_ASSIGN_RE` -- was completely blind to an appended name regardless
+    of whether the appended text was itself dynamic."""
+    assert checker._names_with_dynamic_assignment(["DIR=sub", "DIR+=$other"]) == {"DIR"}
+
+
+def test_names_with_dynamic_assignment_finds_a_static_compound_append() -> None:
+    """A STATIC append (`DIR+=txt`, no `$`/backtick) shares the identical
+    exposure for a different reason: reconstructing the real concatenated
+    value would need genuine execution-order tracking this classifier
+    does not perform, so a static append is poisoned too, independent of
+    `_is_dynamic`."""
+    assert checker._names_with_dynamic_assignment(["DIR=sub", "DIR+=txt"]) == {"DIR"}
+
+
+def test_names_with_dynamic_assignment_append_ignores_an_unrelated_name() -> None:
+    """No false positive: an append to one name does not poison a
+    completely different name."""
+    assert checker._names_with_dynamic_assignment(["DIR=sub", "OTHER=x", "OTHER+=y"]) == {"OTHER"}
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, static_value=_VALUES, appended_value=_VALUES)
+def test_names_with_dynamic_assignment_matches_model_for_a_static_then_appended_reassignment(
+    name: str, static_value: str, appended_value: str
+) -> None:
+    """Model-based: for ANY identifier assigned a static value and then
+    appended to (`+=`) with a DYNAMIC value, `_names_with_dynamic_
+    assignment` always includes it -- and a second, entirely unrelated
+    identifier that is only ever assigned statically is never included
+    alongside it."""
+    other_name = name + "_OTHER"
+    tokens = [f"{name}={static_value}", f"{name}+=$({appended_value})", f"{other_name}={static_value}"]
+    result = checker._names_with_dynamic_assignment(tokens)
+    assert name in result
+    assert other_name not in result
+
+
 @_PROPERTIES
 @given(name=_IDENTIFIERS, static_value=_VALUES, dynamic_value=_VALUES)
 def test_names_with_dynamic_assignment_matches_model_for_a_static_then_dynamic_reassignment(
@@ -4837,3 +4879,42 @@ def test_classify_widens_an_indirect_reference_restore_path_reassigned_after_use
     verdict = checker.classify("TARGET=sub; C=TARGET; git restore ${!C}; TARGET=other")
     assert verdict.deny is False
     assert verdict.checkout_restore_paths == ("sub", "other")
+
+
+def test_classify_denies_a_checkout_path_dynamically_appended_to_after_use() -> None:
+    """End-to-end regression pin for the round-25 finding at the
+    `classify()` level. Confirmed live before this fix: `DIR=sub; for i
+    in 1; do DIR+=$(echo other); done; git checkout -- $DIR` resolved
+    `checkout_restore_paths` to `('sub',)` -- the STALE, pre-append value
+    (real bash: `$DIR` genuinely becomes `subother`, confirmed live via
+    `bash -c`). Confirmed live end-to-end through the real wrapper
+    against a scratch repo with the genuinely-appended-to path dirty:
+    wrongly allowed before this fix, with the uncommitted edit silently
+    discarded once actually executed."""
+    verdict = checker.classify("DIR=sub; for i in 1; do DIR+=$(echo other); done; git checkout -- $DIR")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_restore_path_dynamically_appended_to_after_use() -> None:
+    """Companion to the checkout pin above, for `git restore` -- the
+    round-25 finding was confirmed live for both subcommands."""
+    verdict = checker.classify("DIR=sub; for i in 1; do DIR+=$(echo other); done; git restore $DIR")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_checkout_path_statically_appended_to_after_use() -> None:
+    """A STATIC append shares the identical exposure (see
+    `_names_with_dynamic_assignment`'s own docstring): reconstructing the
+    real concatenated value would need genuine execution-order tracking
+    this classifier does not perform."""
+    verdict = checker.classify("DIR=sub; DIR+=txt; git checkout -- $DIR")
+    assert verdict.deny is True
+
+
+def test_classify_leaves_an_append_to_an_unrelated_name_unaffected() -> None:
+    """No false positive: an append to a name NOT referenced by the
+    checkout/restore path argument must not poison an unrelated
+    resolution."""
+    verdict = checker.classify("DIR=sub; OTHER=x; OTHER+=y; git checkout -- $DIR")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("sub",)

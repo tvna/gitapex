@@ -2167,6 +2167,39 @@ def test_restore_denied_when_an_indirect_reference_target_is_reassigned_after_us
     assert result.returncode == 2, f"stderr={result.stderr!r}"
 
 
+def test_checkout_denied_when_the_path_name_is_dynamically_appended_to_after_use(tmp_path: Path) -> None:
+    """CRITICAL bypass regression pin (round-25 independent review, issue
+    #1375). `_ASSIGN_RE` never matches bash's own `NAME+=value` compound/
+    append-assignment operator at all, so round 24's own `_names_with_
+    dynamic_assignment` -- keyed entirely off `_ASSIGN_RE` -- was
+    completely blind to an appended name. Live-verified before this fix:
+    `DIR=dirty.py; for i in 1; do DIR+=$(echo .bak); done; git checkout
+    -- $DIR` resolved `checkout_restore_paths` to `('dirty.py',)` -- the
+    STALE, pre-append value, since real bash genuinely resolves `$DIR` to
+    `dirty.py.bak` at its actual point of use."""
+    repo_dir = tmp_path / "repo"
+    file_path = _init_repo_with_committed_file(repo_dir, filename="dirty.py.bak")
+    file_path.write_text("UNCOMMITTED WORK -- must not be discarded\n")
+    result = run(
+        "DIR=dirty.py; for i in 1; do DIR+=$(echo .bak); done; git checkout -- $DIR",
+        payload_cwd=str(repo_dir),
+    )
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+
+
+def test_restore_denied_when_the_path_name_is_dynamically_appended_to_after_use(tmp_path: Path) -> None:
+    """Companion to the checkout pin above, for `git restore` -- the
+    round-25 finding was confirmed live for both subcommands."""
+    repo_dir = tmp_path / "repo"
+    file_path = _init_repo_with_committed_file(repo_dir, filename="dirty.py.bak")
+    file_path.write_text("UNCOMMITTED WORK -- must not be discarded\n")
+    result = run(
+        "DIR=dirty.py; for i in 1; do DIR+=$(echo .bak); done; git restore $DIR",
+        payload_cwd=str(repo_dir),
+    )
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+
+
 def test_checkout_denied_in_a_real_merge_conflict_names_the_conflict_remedy(tmp_path: Path) -> None:
     """A real merge conflict (issue #1375's own Acceptance Criteria Map):
     the deny message names a remedy that actually works mid-conflict
