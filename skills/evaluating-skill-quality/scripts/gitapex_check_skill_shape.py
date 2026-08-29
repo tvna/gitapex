@@ -561,7 +561,6 @@ from shape_checks.bundled_scripts import (
 )
 from shape_checks.citation_checks import (
     _cross_skill_citation_checks,
-    _external_citation_declaration_offenders,
     _illustrative_model_id_checks,
     _issue_citation_checks,
     _mechanism_fit_checks,
@@ -575,41 +574,32 @@ from shape_checks.constants import (
     _INLINE_CITATION_CHECK_SPECS,
     BODY_MAX_LINES,
     CAPABILITY_ASSUMPTIONS,
-    DEPENDENCY_POLICY_LEVELS,
     DESCRIPTION_MAX_CHARS,
     EXEC_REQ_NETWORK_SUBKEYS,
     EXEC_REQ_PACKAGES_KEY_RE,
     EXEC_REQ_TOOLS_SUBKEYS,
     EXPECTED_API_VERSION,
     EXPECTED_KIND,
-    EXTERNAL_CITATION_PATH_RE,
-    EXTERNAL_CITATION_ROLES,
     LIFECYCLE_ISSUE_REF_RE,
     LIFECYCLE_SCALAR_KEYS,
     LIFECYCLE_SUBKEYS,
     NAME_MAX_CHARS,
-    NAME_RE,
     PORTABILITY_LEVELS,
     REFERENCES_ENTRY_MAX_CHARS,
     REFERENCES_ITEM_SUBKEYS,
-    RESERVED_NAME_WORDS,
     SIDECAR_RELATIVE_PATH,
     SKILL_DEP_LIST_ITEM_RE,
     SKILL_DEPENDENCY_SUBKEYS,
     TOC_MIN_LINES,
-    TOC_RE,
     CheckResult,
 )
 from shape_checks.execution_requirements import _execution_requirements_checks
 from shape_checks.field_checks import (
     _invocation_mode_check,
-    _length_check,
-    _no_xml_check,
     _owning_skill_dir,
     _references_grammar_check,
     _resolve_skill_md,
     _validate_read_scope,
-    _yaml_plain_scalar_safety_check,
 )
 from shape_checks.frontmatter import _parse_frontmatter, _unquote
 from shape_checks.lifecycle import _lifecycle_checks, _valid_tracking_issue
@@ -618,13 +608,26 @@ from shape_checks.links_portability import (
     _body_after_frontmatter,
     _broken_anchor_targets,
     _heading_slugs,
-    _is_ignorable,
     _is_portable,
     _out_of_skill_link_targets,
     _resolves_to_sibling_skill,
     _stale_related_skill_references,
 )
 from shape_checks.manifest import _is_non_string_plain_scalar, _parse_manifest, spec_of
+from shape_checks.orchestrator import (
+    _body_length_result,
+    _dependency_policy_declared_result,
+    _description_field_checks,
+    _external_citations_resolve_result,
+    _external_citations_well_formed_result,
+    _lifecycle_reason_citation_sources,
+    _name_field_checks,
+    _references_citation_source,
+    _references_dir_checks,
+    _references_well_formed_result,
+    _sidecar_unreadable_results,
+    _skill_md_read_result,
+)
 from shape_checks.skill_dependencies import _skill_dependency_checks
 
 # Names this hub imports only to re-export -- never referenced by
@@ -637,16 +640,31 @@ from shape_checks.skill_dependencies import _skill_dependency_checks
 # shape_checks/ package split (issue #1330 ACM row 1). Listed explicitly
 # (rather than a blanket `from shape_checks.x import *`) so ruff's F401 marks
 # each as an intentional public re-export instead of an unused import.
+#
+# BODY_MAX_LINES/DESCRIPTION_MAX_CHARS/NAME_MAX_CHARS/
+# REFERENCES_ENTRY_MAX_CHARS/TOC_MIN_LINES joined this list in issue #1330's
+# own row-2 decomposition: check_shape() itself no longer reads them
+# directly (each moved into its own shape_checks/orchestrator.py helper),
+# but the same four test files still reach in for them by name, so they
+# need the same explicit re-export treatment the constants above already
+# have -- otherwise ruff's F401 (correctly, from its own static-analysis
+# view) reports them as unused and strips them, breaking that attribute
+# access.
 __all__ = [
+    "BODY_MAX_LINES",
+    "DESCRIPTION_MAX_CHARS",
     "EXEC_REQ_NETWORK_SUBKEYS",
     "EXEC_REQ_PACKAGES_KEY_RE",
     "EXEC_REQ_TOOLS_SUBKEYS",
     "LIFECYCLE_ISSUE_REF_RE",
     "LIFECYCLE_SCALAR_KEYS",
     "LIFECYCLE_SUBKEYS",
+    "NAME_MAX_CHARS",
+    "REFERENCES_ENTRY_MAX_CHARS",
     "REFERENCES_ITEM_SUBKEYS",
     "SKILL_DEPENDENCY_SUBKEYS",
     "SKILL_DEP_LIST_ITEM_RE",
+    "TOC_MIN_LINES",
     "_INLINE_CITATION_CHECK_SPECS",
     "_comment_line_numbers",
     "_is_non_string_plain_scalar",
@@ -678,74 +696,17 @@ def check_shape(target: Path) -> list[CheckResult]:
     # report the one failure and stop, rather than a raised exception
     # that would abort any direct caller (not just main(), which already
     # guards its own check_shape() call) with a bare traceback.
-    try:
-        text = skill_md.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        # A SKILL.md that does not exist at all is a different, pre-existing
-        # contract this fix does not change: main() already pre-checks
-        # ``skill_md.is_file()`` before ever calling check_shape() and
-        # returns exit 2 for that case (see test_directory_without_skill_md_
-        # returns_2), the same "missing" vs. "present but corrupt" split the
-        # sidecar's own is_file() check below draws. Re-raising here (rather
-        # than folding "missing" into the "present but unreadable" evidence
-        # below) keeps that split intact for any other direct caller too.
-        raise
-    except (OSError, UnicodeDecodeError) as exc:
-        return [
-            CheckResult(
-                "skill-md-readable", False, "SKILL.md is readable as UTF-8 text", f"unreadable: {type(exc).__name__}"
-            )
-        ]
-    # Always emitted (pass or fail), matching every other check in this
-    # module -- not only on the failure path above -- so a caller scanning
-    # results for this name never has to treat its absence as a third,
-    # ambiguous state.
-    results.append(CheckResult("skill-md-readable", True, "SKILL.md is readable as UTF-8 text", "present"))
+    text, skill_md_result = _skill_md_read_result(skill_md)
+    if text is None:
+        return [skill_md_result]
+    results.append(skill_md_result)
     frontmatter = _parse_frontmatter(text)
     fields = frontmatter.fields
 
-    description = fields.get("description", "")
-    if not description:
-        results.append(
-            CheckResult("description-present", False, "description present and non-empty", "missing or empty")
-        )
-    else:
-        results.append(CheckResult("description-present", True, "description present and non-empty", "present"))
-        results.append(_no_xml_check("description", description))
-        results.append(_length_check("description", description, DESCRIPTION_MAX_CHARS))
-        results.append(
-            _yaml_plain_scalar_safety_check("description", description, "description" in frontmatter.plain_fields)
-        )
-
-    name = fields.get("name")
-    if name:
-        results.append(
-            CheckResult("name-pattern", bool(NAME_RE.match(name)), "name is lowercase-hyphenated", repr(name))
-        )
-        results.append(_length_check("name", name, NAME_MAX_CHARS))
-        results.append(_no_xml_check("name", name))
-        lname = name.lower()
-        reserved_hit = any(word in lname for word in RESERVED_NAME_WORDS)
-        results.append(
-            CheckResult(
-                "name-not-reserved",
-                not reserved_hit,
-                f"name contains no reserved word {RESERVED_NAME_WORDS}",
-                repr(name),
-            )
-        )
-
+    results.extend(_description_field_checks(fields, frontmatter))
+    results.extend(_name_field_checks(fields))
     results.append(_invocation_mode_check(fields))
-
-    body_lines = len(text.splitlines())
-    results.append(
-        CheckResult(
-            "body-length",
-            body_lines <= BODY_MAX_LINES,
-            f"SKILL.md body <= {BODY_MAX_LINES} lines",
-            f"{body_lines} lines",
-        )
-    )
+    results.append(_body_length_result(text))
 
     sidecar = skill_dir / SIDECAR_RELATIVE_PATH
     # Every well-formed spec.externalCitations item (path/role), populated
@@ -828,160 +789,12 @@ def check_shape(target: Path) -> list[CheckResult]:
         if manifest is None:
             external_citations_sidecar_unreadable = True
             evidence = f"unreadable: {read_error}"
-            results.append(
-                CheckResult(
-                    "manifest-parsable", False, f"{SIDECAR_RELATIVE_PATH} has no malformed top-level lines", evidence
-                )
-            )
-            results.append(
-                CheckResult(
-                    "manifest-envelope",
-                    False,
-                    f"apiVersion is {EXPECTED_API_VERSION} and kind is {EXPECTED_KIND}",
-                    evidence,
-                )
-            )
-            results.append(
-                CheckResult(
-                    "metadata-name-matches-dir", False, "metadata.name equals the skill directory name", evidence
-                )
-            )
-            results.append(
-                CheckResult("portability-declared", False, f"spec.portability is one of {PORTABILITY_LEVELS}", evidence)
-            )
-            results.append(
-                CheckResult(
-                    "capability-assumption-declared",
-                    False,
-                    f"spec.capabilityAssumption is one of {CAPABILITY_ASSUMPTIONS}",
-                    evidence,
-                )
-            )
-            results.append(
-                CheckResult(
-                    "dependency-policy-declared",
-                    False,
-                    f"spec.dependencyPolicy, if present, is one of {DEPENDENCY_POLICY_LEVELS}",
-                    evidence,
-                )
-            )
-            results.append(
-                CheckResult(
-                    "references-well-formed",
-                    False,
-                    "spec.references, if present, is a non-empty list of non-empty strings",
-                    evidence,
-                )
-            )
-            results.append(
-                CheckResult(
-                    "references-grammar",
-                    False,
-                    'spec.references, if present, has each entry shaped "<kind> | <anchor> | <summary>[ | <outcome>]"',
-                    evidence,
-                )
-            )
-            results.append(
-                CheckResult(
-                    "external-citations-well-formed",
-                    False,
-                    "spec.externalCitations, if present, is a non-empty list of "
-                    "item mappings, each with path/role (role one of "
-                    f"{EXTERNAL_CITATION_ROLES}) and no unrecognized key",
-                    evidence,
-                )
-            )
-            results.append(
-                CheckResult(
-                    "external-citations-resolve",
-                    False,
-                    "every spec.externalCitations path literally appears somewhere "
-                    "in SKILL.md or references/*.md (no stale declaration)",
-                    evidence,
-                )
-            )
-            results.append(
-                CheckResult(
-                    "skill-dependencies-well-formed",
-                    False,
-                    "spec.skillDependencies, if present, is a mapping with only "
-                    "requires/relatedTo keys, each -- if present -- a list of "
-                    "non-empty strings",
-                    evidence,
-                )
-            )
-            results.append(
-                CheckResult(
-                    "skill-dependencies-resolve",
-                    False,
-                    "every name in spec.skillDependencies.requires/relatedTo "
-                    "resolves to an existing sibling skill directory",
-                    evidence,
-                )
-            )
-            results.append(
-                CheckResult(
-                    "requires-portability-compatible",
-                    False,
-                    "a non-empty spec.skillDependencies.requires is incompatible with spec.portability: Portable",
-                    evidence,
-                )
-            )
-            results.append(
-                CheckResult(
-                    "lifecycle-well-formed",
-                    False,
-                    "spec.lifecycle, if present, is a mapping with only "
-                    "experimental/deprecated/stable/renamedFrom keys, each "
-                    "block sub-key (experimental/deprecated/stable) -- if "
-                    "present -- a mapping of its own recognized scalar fields "
-                    "with required fields non-empty and since/removeAfter, if "
-                    "present, real YYYY-MM-DD dates, and renamedFrom, if "
-                    "present, a non-empty scalar string",
-                    evidence,
-                )
-            )
-            results.append(
-                CheckResult(
-                    "lifecycle-deprecated-replacement-resolves",
-                    False,
-                    "spec.lifecycle.deprecated.replacement, if a non-empty "
-                    "string, resolves to an existing sibling skill directory",
-                    evidence,
-                )
-            )
-            results.append(
-                CheckResult(
-                    "experimental-stable-compatible",
-                    False,
-                    "spec.lifecycle.experimental and spec.lifecycle.stable "
-                    "cannot both be present -- a skill cannot be both "
-                    "not-yet-graduated and already graduated",
-                    evidence,
-                )
-            )
-            results.append(
-                CheckResult(
-                    "execution-requirements-well-formed",
-                    False,
-                    "spec.executionRequirements, if present, is a mapping with "
-                    "only the tools/packages/network keys; tools, if present, "
-                    "is a mapping with only read/write/shell keys, each -- if "
-                    "present -- a list of non-empty strings; packages, if "
-                    "present, is a mapping keyed by free-form ecosystem "
-                    "identifiers, each value -- if present -- a list of "
-                    "non-empty strings; network, if present, is a mapping "
-                    "with only mode (a disabled/allowlist/unrestricted enum) "
-                    "and domains (a list of non-empty strings, non-empty "
-                    "only when mode is allowlist)",
-                    evidence,
-                )
-            )
             # Deliberately not the body-marker fallback: a present-but-broken
             # sidecar is authoritative-and-failing, not absent. Running the
             # scan (rather than skipping it) lands extra findings on a skill
             # that is already failing portability-declared -- a false
             # negative in the gate is worse than a false positive.
+            results.extend(_sidecar_unreadable_results(evidence))
             sidecar_portability = SidecarPortability(state="unusable")
         else:
             if malformed_lines:
@@ -1044,228 +857,30 @@ def check_shape(target: Path) -> list[CheckResult]:
                     repr(capability),
                 )
             )
-            dependency_policy_declared_rule = f"spec.dependencyPolicy, if present, is one of {DEPENDENCY_POLICY_LEVELS}"
-            dependency_policy = spec.get("dependencyPolicy")
-            if not spec_is_mapping:
-                # Same precondition failure portability-declared/
-                # capability-assumption-declared already report above --
-                # "not declared (optional)" would misreport a non-mapping
-                # spec as the ordinary optional-and-absent case, mirroring
-                # references-well-formed's own guard below.
-                results.append(
-                    CheckResult(
-                        "dependency-policy-declared",
-                        False,
-                        dependency_policy_declared_rule,
-                        f"spec is not a mapping: {spec_raw!r}",
-                    )
-                )
-            elif dependency_policy is None:
-                results.append(
-                    CheckResult(
-                        "dependency-policy-declared",
-                        True,
-                        dependency_policy_declared_rule,
-                        "not declared (optional, treated as StdlibOnly-equivalent)",
-                    )
-                )
-            else:
-                results.append(
-                    CheckResult(
-                        "dependency-policy-declared",
-                        dependency_policy in DEPENDENCY_POLICY_LEVELS,
-                        dependency_policy_declared_rule,
-                        repr(dependency_policy),
-                    )
-                )
+            results.append(_dependency_policy_declared_result(spec_is_mapping, spec_raw, spec))
+
             references = spec.get("references")
-            references_well_formed_rule = (
-                "spec.references, if present, is a non-empty list of "
-                "item mappings, each with kind/anchor/summary (and no "
-                f"unrecognized key), summary <= {REFERENCES_ENTRY_MAX_CHARS} "
-                "chars"
+            results.append(
+                _references_well_formed_result(
+                    spec_is_mapping, spec_raw, malformed_reference_items, unknown_reference_item_keys, references
+                )
             )
-            is_ref_item = lambda r: (  # noqa: E731 -- local, single use
-                isinstance(r, dict)
-                and isinstance(r.get("kind"), str)
-                and isinstance(r.get("anchor"), str)
-                and isinstance(r.get("summary"), str)
-            )
-            if not spec_is_mapping:
-                # spec itself failed to parse as a mapping (e.g. "spec:
-                # some-scalar"), the same precondition failure
-                # portability-declared/capability-assumption-declared
-                # already report above -- "not declared" would misreport
-                # this as the ordinary optional-and-absent case.
-                results.append(
-                    CheckResult(
-                        "references-well-formed",
-                        False,
-                        references_well_formed_rule,
-                        f"spec is not a mapping: {spec_raw!r}",
-                    )
-                )
-            elif malformed_reference_items:
-                # An item whose own opening line was unrecognizable, whose
-                # first key was unrecognized, whose indent didn't match the
-                # rest of its own list, or that was missing a required
-                # field by the time it closed was already flagged by the
-                # parser -- fail loudly instead of reporting on whatever
-                # partial item it was excluded in favor of, even if the
-                # rest of the list otherwise looks clean.
-                count = len(malformed_reference_items)
-                results.append(
-                    CheckResult(
-                        "references-well-formed",
-                        False,
-                        references_well_formed_rule,
-                        f"{count} malformed entr{'y' if count == 1 else 'ies'}: {malformed_reference_items[0]!r}",
-                    )
-                )
-            elif unknown_reference_item_keys:
-                count = len(unknown_reference_item_keys)
-                results.append(
-                    CheckResult(
-                        "references-well-formed",
-                        False,
-                        references_well_formed_rule,
-                        f"{count} unknown key{'' if count == 1 else 's'}: {unknown_reference_item_keys[0]!r}",
-                    )
-                )
-            elif references is None:
-                results.append(
-                    CheckResult("references-well-formed", True, references_well_formed_rule, "not declared (optional)")
-                )
-            elif not (isinstance(references, list) and references and all(is_ref_item(r) for r in references)):
-                ref_evidence = "empty list" if references == [] else f"not a list of item mappings: {references!r}"
-                results.append(CheckResult("references-well-formed", False, references_well_formed_rule, ref_evidence))
-            else:
-                oversized = [r for r in references if len(r["summary"]) > REFERENCES_ENTRY_MAX_CHARS]
-                if oversized:
-                    results.append(
-                        CheckResult(
-                            "references-well-formed",
-                            False,
-                            references_well_formed_rule,
-                            f"{len(oversized)} entr{'y' if len(oversized) == 1 else 'ies'} "
-                            f"over {REFERENCES_ENTRY_MAX_CHARS} chars: "
-                            f"{len(oversized[0]['summary'])} chars, kind="
-                            f"{oversized[0].get('kind')!r}",
-                        )
-                    )
-                else:
-                    ref_count = len(references)
-                    ref_noun = "entry" if ref_count == 1 else "entries"
-                    results.append(
-                        CheckResult(
-                            "references-well-formed", True, references_well_formed_rule, f"{ref_count} {ref_noun}"
-                        )
-                    )
             results.append(_references_grammar_check(references))
-            if isinstance(references, list) and references:
-                ref_texts = []
-                for r in references:
-                    if not isinstance(r, dict):
-                        continue
-                    ref_texts.append(str(r.get("anchor", "")))
-                    ref_texts.append(str(r.get("summary", "")))
-                    outcome = r.get("outcome")
-                    if isinstance(outcome, dict):
-                        ref_texts.extend(str(v) for v in outcome.values())
-                sidecar_citation_sources.append(("metadata/gitapex.yaml:spec.references", "\n".join(ref_texts)))
+            reference_source = _references_citation_source(references)
+            if reference_source is not None:
+                sidecar_citation_sources.append(reference_source)
             external_citations = spec.get("externalCitations")
-            external_citations_well_formed_rule = (
-                "spec.externalCitations, if present, is a non-empty list of "
-                "item mappings, each with a path rooted at evals/ or docs/ "
-                "and a role one of "
-                f"{EXTERNAL_CITATION_ROLES}, and no unrecognized key"
+            ext_well_formed_result, external_citations_declared = _external_citations_well_formed_result(
+                spec_is_mapping,
+                spec_raw,
+                malformed_external_citation_items,
+                unknown_external_citation_item_keys,
+                external_citations,
             )
-            is_ext_citation_item = lambda c: (  # noqa: E731 -- local, single use
-                isinstance(c, dict)
-                and isinstance(c.get("path"), str)
-                and bool(EXTERNAL_CITATION_PATH_RE.match(c["path"]))
-                and c.get("role") in EXTERNAL_CITATION_ROLES
-            )
-            if not spec_is_mapping:
-                results.append(
-                    CheckResult(
-                        "external-citations-well-formed",
-                        False,
-                        external_citations_well_formed_rule,
-                        f"spec is not a mapping: {spec_raw!r}",
-                    )
-                )
-            elif malformed_external_citation_items:
-                count = len(malformed_external_citation_items)
-                results.append(
-                    CheckResult(
-                        "external-citations-well-formed",
-                        False,
-                        external_citations_well_formed_rule,
-                        f"{count} malformed entr{'y' if count == 1 else 'ies'}: {malformed_external_citation_items[0]!r}",
-                    )
-                )
-            elif unknown_external_citation_item_keys:
-                count = len(unknown_external_citation_item_keys)
-                results.append(
-                    CheckResult(
-                        "external-citations-well-formed",
-                        False,
-                        external_citations_well_formed_rule,
-                        f"{count} unknown key{'' if count == 1 else 's'}: {unknown_external_citation_item_keys[0]!r}",
-                    )
-                )
-            elif external_citations is None:
-                results.append(
-                    CheckResult(
-                        "external-citations-well-formed",
-                        True,
-                        external_citations_well_formed_rule,
-                        "not declared (optional)",
-                    )
-                )
-            elif not (
-                isinstance(external_citations, list)
-                and external_citations
-                and all(is_ext_citation_item(c) for c in external_citations)
-            ):
-                ext_evidence = (
-                    "empty list"
-                    if external_citations == []
-                    else f"not a list of item mappings with a valid evals/docs path and role: {external_citations!r}"
-                )
-                results.append(
-                    CheckResult(
-                        "external-citations-well-formed", False, external_citations_well_formed_rule, ext_evidence
-                    )
-                )
-            else:
-                ext_count = len(external_citations)
-                ext_noun = "entry" if ext_count == 1 else "entries"
-                results.append(
-                    CheckResult(
-                        "external-citations-well-formed",
-                        True,
-                        external_citations_well_formed_rule,
-                        f"{ext_count} {ext_noun}",
-                    )
-                )
-                # Only a genuinely well-formed list feeds external-citations-
-                # resolve/the inline-citation rescue further down -- a
-                # malformed or absent declaration has nothing valid to
-                # resolve against, matching how a malformed spec.references
-                # never reaches sidecar_citation_sources above.
-                external_citations_declared = external_citations
+            results.append(ext_well_formed_result)
             lifecycle_raw = spec.get("lifecycle") if spec_is_mapping else None
             lifecycle_dict = lifecycle_raw if isinstance(lifecycle_raw, dict) else {}
-            for lifecycle_key in ("experimental", "deprecated"):
-                lifecycle_block = lifecycle_dict.get(lifecycle_key)
-                if isinstance(lifecycle_block, dict):
-                    reason_text = lifecycle_block.get("reason")
-                    if isinstance(reason_text, str) and reason_text:
-                        sidecar_citation_sources.append(
-                            (f"metadata/gitapex.yaml:spec.lifecycle.{lifecycle_key}.reason", reason_text)
-                        )
+            sidecar_citation_sources.extend(_lifecycle_reason_citation_sources(lifecycle_dict))
             results.extend(
                 _skill_dependency_checks(
                     spec_is_mapping,
@@ -1346,67 +961,7 @@ def check_shape(target: Path) -> list[CheckResult]:
         )
     )
 
-    refs_dir = skill_dir / "references"
-    if refs_dir.is_dir():
-        nested = sorted(
-            str(p.relative_to(refs_dir))
-            for p in refs_dir.rglob("*")
-            if p.is_file() and p.parent != refs_dir and not _is_ignorable(p)
-        )
-        results.append(
-            CheckResult(
-                "references-flat",
-                not nested,
-                "references/ files are one level deep",
-                "nested: " + ", ".join(nested) if nested else "flat",
-            )
-        )
-        for ref in sorted(refs_dir.iterdir()):
-            if not ref.is_file() or _is_ignorable(ref):
-                continue
-            if ref.suffix.lower() != ".md":
-                # A non-Markdown dependency file (e.g. a bundled JSON
-                # schema) still gets references-flat and the junk filter
-                # above, but TOC/link/anchor are Markdown-navigation
-                # concepts that do not apply to it -- skip rather than
-                # fail it against a heading convention it was never
-                # written to have.
-                continue
-            try:
-                ref_text = ref.read_text(encoding="utf-8")
-            except (UnicodeDecodeError, OSError):
-                continue  # skip binary/unreadable junk, don't abort the run
-            n = len(ref_text.splitlines())
-            if n > TOC_MIN_LINES:
-                has_toc = bool(TOC_RE.search(ref_text))
-                results.append(
-                    CheckResult(
-                        f"toc:{ref.name}",
-                        has_toc,
-                        f"reference over {TOC_MIN_LINES} lines has a TOC",
-                        f"{n} lines, " + ("TOC found" if has_toc else "no TOC"),
-                    )
-                )
-            ref_body = "\n".join(_body_after_frontmatter(ref_text))
-            ref_offenders = _out_of_skill_link_targets(ref_body, skill_dir, source_dir=ref.parent)
-            results.append(
-                CheckResult(
-                    f"links-inside-skill:{ref.name}",
-                    not ref_offenders,
-                    "Markdown link targets resolve inside the skill's own directory",
-                    "all inside" if not ref_offenders else "outside: " + ", ".join(ref_offenders),
-                )
-            )
-            anchor_slug_cache.setdefault(ref, _heading_slugs(ref_body))
-            ref_broken_anchors = _broken_anchor_targets(ref_body, ref, skill_dir, anchor_slug_cache)
-            results.append(
-                CheckResult(
-                    f"anchor-targets-resolve:{ref.name}",
-                    not ref_broken_anchors,
-                    "Markdown link #fragments resolve to a real heading anchor in their target file",
-                    "all resolve" if not ref_broken_anchors else "broken: " + ", ".join(ref_broken_anchors),
-                )
-            )
+    results.extend(_references_dir_checks(skill_dir, anchor_slug_cache))
 
     # A "manifest is None" (unreadable sidecar) already emitted a failed
     # external-citations-resolve above, alongside every sibling
@@ -1431,29 +986,7 @@ def check_shape(target: Path) -> list[CheckResult]:
     # false "not declared (optional)" PASS even with no sidecar at all
     # (issue #1064).
     if not external_citations_sidecar_unreadable and sidecar_present:
-        if not external_citations_declared:
-            results.append(
-                CheckResult(
-                    "external-citations-resolve",
-                    True,
-                    "every spec.externalCitations path literally appears somewhere "
-                    "in SKILL.md or references/*.md (no stale declaration)",
-                    "not declared (optional)",
-                )
-            )
-        else:
-            stale_external_citations = _external_citation_declaration_offenders(
-                external_citations_declared, skill_md, skill_dir, body
-            )
-            results.append(
-                CheckResult(
-                    "external-citations-resolve",
-                    not stale_external_citations,
-                    "every spec.externalCitations path literally appears somewhere "
-                    "in SKILL.md or references/*.md (no stale declaration)",
-                    "all resolve" if not stale_external_citations else "stale: " + ", ".join(stale_external_citations),
-                )
-            )
+        results.append(_external_citations_resolve_result(external_citations_declared, skill_md, skill_dir, body))
 
     results.extend(_issue_citation_checks(skill_md, skill_dir, body, extra_sources=sidecar_citation_sources))
     results.extend(_cross_skill_citation_checks(skill_md, skill_dir, body, anchor_slug_cache))

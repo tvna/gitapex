@@ -49,6 +49,122 @@ def _valid_tracking_issue(value: object) -> bool:
     return isinstance(value, str) and bool(LIFECYCLE_ISSUE_REF_RE.match(value))
 
 
+def _lifecycle_unknown_keys_problems(unknown_keys: list[str], unknown_fields: list[str]) -> list[str]:
+    """The top-level unknown-key/unknown-field problems, extracted
+    verbatim from ``_lifecycle_checks``."""
+    problems: list[str] = []
+    if unknown_keys:
+        count = len(unknown_keys)
+        problems.append(f"{count} unknown key{'' if count == 1 else 's'}: {unknown_keys[0]!r}")
+    if unknown_fields:
+        count = len(unknown_fields)
+        problems.append(f"{count} unknown field{'' if count == 1 else 's'}: {unknown_fields[0]!r}")
+    return problems
+
+
+def _lifecycle_sub_block_problems(key: str, block: dict[str, object]) -> list[str]:
+    """Per-sub-block field/date/reason/trackingIssue/compatibilityGuarantee
+    problems inside ``_lifecycle_checks``'s own ``for key in
+    LIFECYCLE_SUBKEYS`` loop, extracted verbatim -- one call per
+    already-confirmed-mapping sub-block (experimental/deprecated/stable)."""
+    problems: list[str] = []
+    for field in LIFECYCLE_REQUIRED_FIELDS[key]:
+        val = block.get(field)
+        if not (isinstance(val, str) and val.strip()):
+            problems.append(f"{key}.{field} is missing or not a non-empty string: {val!r}")
+    for field in ("since", "removeAfter"):
+        if field in block and not _valid_lifecycle_date(block[field]):
+            problems.append(f"{key}.{field} is not a YYYY-MM-DD date: {block[field]!r}")
+    reason_val = block.get("reason")
+    if isinstance(reason_val, str) and len(reason_val) > REFERENCES_ENTRY_MAX_CHARS:
+        problems.append(f"{key}.reason is {len(reason_val)} chars, over the {REFERENCES_ENTRY_MAX_CHARS}-char limit")
+    if key == "experimental" and "trackingIssue" in block and not _valid_tracking_issue(block["trackingIssue"]):
+        problems.append(
+            f"experimental.trackingIssue is not a full "
+            f"https://github.com/OWNER/REPO/issues/<N> (or /pull/<N>) "
+            f"URL: {block['trackingIssue']!r}"
+        )
+    if (
+        key == "stable"
+        and "compatibilityGuarantee" in block
+        and block["compatibilityGuarantee"] not in COMPATIBILITY_GUARANTEE_LEVELS
+    ):
+        problems.append(
+            f"stable.compatibilityGuarantee is not one of "
+            f"{COMPATIBILITY_GUARANTEE_LEVELS}: "
+            f"{block['compatibilityGuarantee']!r}"
+        )
+    return problems
+
+
+def _lifecycle_sub_blocks_problems(
+    lifecycle: dict[str, object],
+) -> tuple[list[str], dict[str, dict[str, object]]]:
+    """The ``for key in LIFECYCLE_SUBKEYS`` loop of ``_lifecycle_checks``,
+    extracted verbatim: collects both the accumulated problem strings and
+    the well-formed ``sub_blocks`` mapping the caller needs afterward
+    (deprecated-replacement resolution, experimental/stable contradiction
+    check)."""
+    problems: list[str] = []
+    sub_blocks: dict[str, dict[str, object]] = {}
+    for key in LIFECYCLE_SUBKEYS:
+        if key not in lifecycle:
+            continue
+        block = lifecycle[key]
+        if not isinstance(block, dict):
+            problems.append(f"{key} is not a mapping: {block!r}")
+            continue
+        sub_blocks[key] = block
+        problems.extend(_lifecycle_sub_block_problems(key, block))
+    return problems, sub_blocks
+
+
+def _lifecycle_renamed_from_problems(lifecycle: dict[str, object]) -> list[str]:
+    """The ``renamedFrom`` scalar-shape problem, extracted verbatim from
+    ``_lifecycle_checks``."""
+    problems: list[str] = []
+    if "renamedFrom" in lifecycle:
+        renamed_from = lifecycle["renamedFrom"]
+        if not (isinstance(renamed_from, str) and renamed_from.strip()):
+            problems.append(f"renamedFrom is not a non-empty string: {renamed_from!r}")
+    return problems
+
+
+def _lifecycle_deprecated_replacement_result(
+    sub_blocks: dict[str, dict[str, object]], skill_dir: Path, resolve_rule: str
+) -> CheckResult:
+    """The ``lifecycle-deprecated-replacement-resolves`` CheckResult,
+    extracted verbatim from ``_lifecycle_checks``."""
+    deprecated = sub_blocks.get("deprecated")
+    replacement = deprecated.get("replacement") if deprecated else None
+    if isinstance(replacement, str) and replacement.strip():
+        exists = _resolves_to_sibling_skill(replacement, skill_dir.parent)
+        return CheckResult(
+            "lifecycle-deprecated-replacement-resolves",
+            exists,
+            resolve_rule,
+            "resolves" if exists else f"dangling: {replacement!r}",
+        )
+    return CheckResult(
+        "lifecycle-deprecated-replacement-resolves",
+        True,
+        resolve_rule,
+        "nothing to check (replacement missing or invalid)",
+    )
+
+
+def _lifecycle_contradiction_result(sub_blocks: dict[str, dict[str, object]], contradiction_rule: str) -> CheckResult:
+    """The ``experimental-stable-compatible`` CheckResult, extracted
+    verbatim from ``_lifecycle_checks``."""
+    contradiction = "experimental" in sub_blocks and "stable" in sub_blocks
+    return CheckResult(
+        "experimental-stable-compatible",
+        not contradiction,
+        contradiction_rule,
+        "ok" if not contradiction else "both experimental and stable are present",
+    )
+
+
 def _lifecycle_checks(
     spec_is_mapping: bool,
     spec_raw: object,
@@ -140,55 +256,12 @@ def _lifecycle_checks(
         ]
 
     problems: list[str] = []
-    if unknown_keys:
-        count = len(unknown_keys)
-        problems.append(f"{count} unknown key{'' if count == 1 else 's'}: {unknown_keys[0]!r}")
-    if unknown_fields:
-        count = len(unknown_fields)
-        problems.append(f"{count} unknown field{'' if count == 1 else 's'}: {unknown_fields[0]!r}")
+    problems.extend(_lifecycle_unknown_keys_problems(unknown_keys, unknown_fields))
 
-    sub_blocks: dict[str, dict[str, object]] = {}
-    for key in LIFECYCLE_SUBKEYS:
-        if key not in lifecycle:
-            continue
-        block = lifecycle[key]
-        if not isinstance(block, dict):
-            problems.append(f"{key} is not a mapping: {block!r}")
-            continue
-        sub_blocks[key] = block
-        for field in LIFECYCLE_REQUIRED_FIELDS[key]:
-            val = block.get(field)
-            if not (isinstance(val, str) and val.strip()):
-                problems.append(f"{key}.{field} is missing or not a non-empty string: {val!r}")
-        for field in ("since", "removeAfter"):
-            if field in block and not _valid_lifecycle_date(block[field]):
-                problems.append(f"{key}.{field} is not a YYYY-MM-DD date: {block[field]!r}")
-        reason_val = block.get("reason")
-        if isinstance(reason_val, str) and len(reason_val) > REFERENCES_ENTRY_MAX_CHARS:
-            problems.append(
-                f"{key}.reason is {len(reason_val)} chars, over the {REFERENCES_ENTRY_MAX_CHARS}-char limit"
-            )
-        if key == "experimental" and "trackingIssue" in block and not _valid_tracking_issue(block["trackingIssue"]):
-            problems.append(
-                f"experimental.trackingIssue is not a full "
-                f"https://github.com/OWNER/REPO/issues/<N> (or /pull/<N>) "
-                f"URL: {block['trackingIssue']!r}"
-            )
-        if (
-            key == "stable"
-            and "compatibilityGuarantee" in block
-            and block["compatibilityGuarantee"] not in COMPATIBILITY_GUARANTEE_LEVELS
-        ):
-            problems.append(
-                f"stable.compatibilityGuarantee is not one of "
-                f"{COMPATIBILITY_GUARANTEE_LEVELS}: "
-                f"{block['compatibilityGuarantee']!r}"
-            )
+    sub_block_problems, sub_blocks = _lifecycle_sub_blocks_problems(lifecycle)
+    problems.extend(sub_block_problems)
 
-    if "renamedFrom" in lifecycle:
-        renamed_from = lifecycle["renamedFrom"]
-        if not (isinstance(renamed_from, str) and renamed_from.strip()):
-            problems.append(f"renamedFrom is not a non-empty string: {renamed_from!r}")
+    problems.extend(_lifecycle_renamed_from_problems(lifecycle))
 
     if problems:
         results = [CheckResult("lifecycle-well-formed", False, well_formed_rule, "; ".join(problems))]
@@ -199,35 +272,6 @@ def _lifecycle_checks(
         evidence = f"{', '.join(declared)} declared" if declared else "no keys declared"
         results = [CheckResult("lifecycle-well-formed", True, well_formed_rule, evidence)]
 
-    deprecated = sub_blocks.get("deprecated")
-    replacement = deprecated.get("replacement") if deprecated else None
-    if isinstance(replacement, str) and replacement.strip():
-        exists = _resolves_to_sibling_skill(replacement, skill_dir.parent)
-        results.append(
-            CheckResult(
-                "lifecycle-deprecated-replacement-resolves",
-                exists,
-                resolve_rule,
-                "resolves" if exists else f"dangling: {replacement!r}",
-            )
-        )
-    else:
-        results.append(
-            CheckResult(
-                "lifecycle-deprecated-replacement-resolves",
-                True,
-                resolve_rule,
-                "nothing to check (replacement missing or invalid)",
-            )
-        )
-
-    contradiction = "experimental" in sub_blocks and "stable" in sub_blocks
-    results.append(
-        CheckResult(
-            "experimental-stable-compatible",
-            not contradiction,
-            contradiction_rule,
-            "ok" if not contradiction else "both experimental and stable are present",
-        )
-    )
+    results.append(_lifecycle_deprecated_replacement_result(sub_blocks, skill_dir, resolve_rule))
+    results.append(_lifecycle_contradiction_result(sub_blocks, contradiction_rule))
     return results
