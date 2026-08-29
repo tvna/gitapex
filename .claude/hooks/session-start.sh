@@ -100,7 +100,7 @@ fi
 if [ ! -f "${CLAUDE_PROJECT_DIR:-.}/apm.yml" ]; then
   echo "gitapex: ${CLAUDE_PROJECT_DIR:-.}/apm.yml not found; skipping prek install (not a gitapex checkout)." >&2
 elif command -v uv >/dev/null 2>&1; then
-  uv run --directory "${CLAUDE_PROJECT_DIR:-.}" prek -q install --allow-missing-config \
+  uv run --directory "${CLAUDE_PROJECT_DIR:-.}" prek -q install --allow-missing-config -t pre-commit -t pre-push \
     || echo "gitapex: prek install reported a failure; the local pre-commit hook may not be active this session." >&2
 else
   echo "gitapex: uv not found; cannot install the local pre-commit hook this session." >&2

@@ -136,7 +136,43 @@ first, not skimmed.
    (found by a Codex review pass on this PR; step 4's own push is the
    *first* push, not the *only* one). All of this is main-thread-only,
    never delegated into a task `agent()`. The next wave's run dispatches
-   only once this settles. An irreversible task (step 3's flag) gets a fresh step-1-
+   only once this settles.
+
+   **Check `origin/main` drift (issue `#1387`) once every wave's own push
+   lands** -- including the last wave, where "before the next wave
+   dispatches" has no next wave to gate on; run it before step 9
+   concludes instead, so a single-wave Branch Plan (a valid degenerate
+   case this skill already executes) still gets checked at least once,
+   not zero times. Never mid-wave, since a wave's own task worktrees are
+   forked from one head and merging `origin/main` in mid-wave would fork
+   later tasks from a different base than earlier ones in the same wave.
+   Run `uv run --frozen python3
+   .github/scripts/gitapex_gate_behind_base.py` (exit 0: clean, proceed;
+   exit 1: behind; exit 2: the fetch/comparison itself cannot be trusted).
+   On exit 1: fetch and merge (or fast-forward) `origin/main` into the
+   shared branch. A clean merge needs no further action. A conflicted one
+   is resolved, then every already-completed task's own Red-Green
+   regression check (step 8's own rule for a code-touching fix) is re-run
+   before continuing, and the resolution is disclosed via a PR comment --
+   this skill had no equivalent to `drafting-a-pr-to-merge` step 7's own
+   `"dirty"`-resolution comment rule until now; it does going forward. A
+   conflict that cannot actually be resolved (a genuine semantic clash,
+   not a mechanical one) dispatches through step 7's own failure rule
+   below, the same as any other blocker this loop cannot resolve
+   unilaterally -- never left half-merged. On exit 2: proceed with a
+   disclosed note rather than blocking -- this check is detective, not
+   preventive, and re-runs at the next checkpoint (the next wave, or the
+   next Step 8 round), so one transient fetch/comparison failure
+   self-heals without holding up the loop; if exit 2 recurs at the
+   following checkpoint too, that is no longer transient -- treat it as a
+   real blocker and dispatch through step 7 instead of continuing
+   indefinitely. Any exit code other than 0, 1, or 2 (a missing or
+   non-executable script, an environment failure) is likewise a screening
+   flag for step 7, never silently read as one of the three defined
+   outcomes. Step 8's own fix-round loop repeats this same check between
+   rounds, per its own text below.
+
+   An irreversible task (step 3's flag) gets a fresh step-1-
    equivalent confirmation for that specific task before its own wave
    dispatches. Full execution/wave/worktree mechanics: [execution and
    dispatch reference](references/execution-and-dispatch.md).
@@ -168,7 +204,20 @@ first, not skimmed.
    to the fix. **Push every fix commit to the remote branch as it lands**
    -- same reasoning as step 6's per-wave push: a fix applied only
    locally would leave the ready-for-review PR (step 9) not actually
-   containing the fix it claims to. An outstanding CONFIRMED finding, or
+   containing the fix it claims to. **Between fix rounds** (never
+   mid-round), also repeat step 6's own `origin/main` drift check and
+   resolution procedure (issue `#1387`) -- the motivating incident for that
+   rule (`#1361` repair 2) happened specifically during a Step 8 fix round,
+   not only at a wave boundary, so a wave-boundary-only check would not
+   have caught it. Run it once more, unconditionally, right before step
+   9's own remote-state check -- even when this step's own two-layer
+   review found zero CONFIRMED findings and so produced no fix round at
+   all (the common clean-pass outcome): "between rounds" alone would
+   never fire for that case, and step 6's own last-wave check (which by
+   now already ran once, per its own fix above) only covers drift up to
+   the point the waves finished, not drift accumulated during step 8's
+   own review/fix work itself -- exactly the gap the motivating incident
+   above sits in. An outstanding CONFIRMED finding, or
    a re-verification failure, blocks step 9. Detail: [refactor and review
    gate reference](references/refactor-and-review-gate.md).
 9. **On all tasks complete, step 8 clean, and the branch's remote state
@@ -353,6 +402,15 @@ normalization helper before comparing paths as strings -- see
 `_gitapex_path_normalize.py` for the normalization logic itself;
 `gitapex_check_branch_plan_reverified.py` checks issue-body text, not a
 file path, so it has no need of that helper.
+
+Steps 6 and 8's own `origin/main`-drift check (issue `#1387`) calls
+`.github/scripts/gitapex_gate_behind_base.py` -- unlike the bundled
+scripts just above, this one is not vendored under this skill's own
+`scripts/` directory; it is repo-root tooling this Mixed-declared skill
+assumes is present, an environment-provided dependency in the same vein
+as the GitHub connector calls and the Workflow tool this Notes section
+already discusses above, not a new kind of dependency this skill did not
+already have.
 
 Capability assumption: **Adaptive**. Was declared `Frontier` by review
 oversight, with no `model:`/`effort:` pin anywhere to justify targeting

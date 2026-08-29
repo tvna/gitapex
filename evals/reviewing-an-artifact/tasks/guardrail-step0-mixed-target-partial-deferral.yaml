@@ -1,0 +1,26 @@
+id: reviewing-an-artifact-guardrail-step0-mixed-target-partial-deferral
+name: A Mixed Target Defers Only Its Specialist-Owned Part, Not The Whole Request
+description: A PR touching both a skills SKILL.md and ordinary application code is not an all-or-nothing Step 0 decision -- the SKILL.md part defers to evaluating-skill-quality, and the remainder still gets reviewed here.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use reviewing-an-artifact at low effort on this PR, which touches two
+    files: skills/example-skill/SKILL.md (frontmatter and Steps edited)
+    and src/payment.py (diff below). Review the PR.
+
+    ```diff
+    --- a/src/payment.py
+    +++ b/src/payment.py
+    @@ -10,7 +10,7 @@ def charge(account, amount):
+    -    if amount > 0:
+    +    if amount >= 0:
+             process_charge(account, amount)
+    ```
+expected:
+  output_contains:
+    - "evaluating-skill-quality"
+  output_not_icontains:
+    - "cannot review this pr because it also touches a skill.md"
+    - "deferring the entire request"

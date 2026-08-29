@@ -490,18 +490,115 @@ def test_short_non_markdown_reference_is_unaffected(tmp_path):
     assert "anchor-targets-resolve:small.json" not in names
 
 
-def test_missing_argument_exits_2(tmp_path):
+def test_missing_argument_exits_2():
     # argparse exits (raises SystemExit) with code 2 when the required
-    # target is absent or extra positionals are given.
+    # target is absent -- nargs="+" (issue #1387) still requires at least
+    # one positional, unlike the extra-positionals case it now accepts (see
+    # test_multiple_targets_are_each_graded below).
     with pytest.raises(SystemExit) as exc:
         css.main([])
     assert exc.value.code == 2
-    with pytest.raises(SystemExit):
-        css.main([str(tmp_path), str(tmp_path)])
 
 
 def test_nonexistent_target_returns_2(tmp_path):
     assert css.main([str(tmp_path / "nope")]) == 2
+
+
+def test_multiple_targets_are_each_graded(tmp_path, capsys):
+    good_base = tmp_path / "good"
+    good_base.mkdir()
+    good = _write_skill(good_base, name="good")
+    bad_base = tmp_path / "bad"
+    bad_base.mkdir()
+    bad = _write_skill(bad_base, name="bad", description=None)
+    # Aggregate exit code is 1 (a failing check), not 2, even though one of
+    # two targets fails -- guard-level errors (2) only come from a missing
+    # SKILL.md or an unreadable target, never from a failing check.
+    assert css.main([str(good), str(bad)]) == 1
+    out = capsys.readouterr().out
+    assert str(good) in out
+    assert str(bad) in out
+    assert "description-present" in out
+
+
+def test_guard_error_on_one_target_does_not_stop_grading_the_rest(tmp_path, capsys):
+    # A missing SKILL.md on one target must not prevent a sibling target
+    # from being graded -- main() continues past a guard-level error rather
+    # than stopping at the first one.
+    good_base = tmp_path / "good"
+    good_base.mkdir()
+    good = _write_skill(good_base, name="good")
+    missing = tmp_path / "missing"
+    assert css.main([str(missing), str(good)]) == 2
+    captured = capsys.readouterr()
+    assert "no SKILL.md found" in captured.err
+    assert "checks passed" in captured.out
+
+
+def test_check_shape_raising_is_a_guard_error_not_a_crash(tmp_path, monkeypatch, capsys):
+    # main()'s own try/except (OSError, UnicodeDecodeError) around
+    # check_shape() -- distinct from check_shape()'s own internal
+    # per-check decode-error handling (covered elsewhere) -- must turn an
+    # escaping exception into a reported guard error, never propagate.
+    d = _write_skill(tmp_path)
+
+    def _raise(_target):
+        raise OSError("simulated unreadable skill file")
+
+    monkeypatch.setattr(css, "check_shape", _raise)
+    assert css.main([str(d)]) == 2
+    assert "could not read skill files" in capsys.readouterr().err
+
+
+def test_duplicate_targets_are_deduplicated_and_graded_once(tmp_path, capsys):
+    # A commit touching both a skill's SKILL.md and its own
+    # references/*.md file normalizes both to the same owning skill
+    # directory (issue #1387 item A) -- graded once, not twice, with the
+    # report naming every raw path that mapped there.
+    d = _write_skill(tmp_path, references={"notes.md": "# notes\n"})
+    skill_md_arg = str(d / "SKILL.md")
+    reference_arg = str(d / "references" / "notes.md")
+    assert css.main([skill_md_arg, reference_arg]) == 0
+    out = capsys.readouterr().out
+    assert out.count("checks passed") == 1
+    assert skill_md_arg in out
+    assert reference_arg in out
+
+
+def test_metadata_sidecar_path_normalizes_to_owning_skill_dir(tmp_path):
+    d = _write_skill(tmp_path)
+    sidecar_arg = str(d / "metadata" / "gitapex.yaml")
+    assert css.main([sidecar_arg]) == 0
+
+
+def test_nested_reference_path_normalizes_to_owning_skill_dir(tmp_path, capsys):
+    # Adversarial review finding (issue #1387): .pre-commit-config.yaml's
+    # own files: pattern for this hook (references/.*\.md) matches a
+    # NESTED references path too, since .* crosses "/" -- a real commit
+    # touching only such a file must still normalize to the real owning
+    # skill directory (walking up through every ancestor, not just the
+    # immediate parent), so the genuine references-flat violation that
+    # nesting itself causes is reported -- not silently misresolved to the
+    # wrong ancestor and reported as a false pass.
+    d = _write_skill(tmp_path, references={"sub/deep.md": "# nested\n"})
+    nested_arg = str(d / "references" / "sub" / "deep.md")
+    assert css.main([nested_arg]) == 1
+    out = capsys.readouterr().out
+    assert str(d) in out
+    assert "references-flat" in out
+    assert "FAIL" in out
+
+
+def test_single_target_header_has_no_touched_suffix(tmp_path, capsys):
+    # Finding C (adversarial review, issue #1387): the header must not
+    # show "(touched: ...)" for an ordinary single-target run just because
+    # the raw argv spelling (e.g. a SKILL.md-suffixed path) differs from
+    # the normalized directory -- only when more than one raw source
+    # actually mapped to the same owning skill.
+    d = _write_skill(tmp_path)
+    assert css.main([str(d / "SKILL.md")]) == 0
+    out = capsys.readouterr().out
+    assert "(touched:" not in out
 
 
 def test_cli_subprocess_well_formed_skill_exits_0(tmp_path):
