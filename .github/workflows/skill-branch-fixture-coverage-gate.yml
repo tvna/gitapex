@@ -129,6 +129,14 @@ jobs:
 
       - name: Check decision-branch fixture coverage
         if: steps.diff.outputs.applicable == 'true'
+        env:
+          # The entries-file path reaches the shell through env rather than a
+          # `${{ }}` interpolation inside `run:`; interpolating a context
+          # directly into a script body is the template-injection shape
+          # zizmor flags, and there is no reason to hand-wave it as safe here
+          # when an env var costs nothing (see apply-rulesets.yml's own
+          # identical "Guard dispatch ref" step for the same reasoning).
+          ENTRIES_FILE: ${{ steps.diff.outputs.entries-file }}
         run: |
           set -euo pipefail
-          uv run --frozen python3 .github/scripts/gitapex_gate_skill_branch_fixture_coverage.py --entries "${{ steps.diff.outputs.entries-file }}"
+          uv run --frozen python3 .github/scripts/gitapex_gate_skill_branch_fixture_coverage.py --entries "$ENTRIES_FILE"
