@@ -375,6 +375,20 @@ segment (via B1a/B1b's own gate). Closed by `_fold_array_literal_spans`,
 folding the whole span into one still-`NAME=`-shaped token (so `_strip_
 leading_assignments` removes it entirely) BEFORE segmenting.
 
+Closed by issue #1350, filed separately from #1326 (a materially
+different bypass shape -- segment-boundary loss, not verb-token-
+splitting): `segment_tokens`'s own `_SINGLE_OPS` set was written from the
+start to include a literal newline, showing clear intent to treat it as a
+real bash statement separator exactly like `;` -- but `tokenize()`'s own
+shlex configuration silently absorbed a bare newline as ordinary
+whitespace instead of ever emitting it as a token, making that `"\n"`
+member unreachable dead code (confirmed live: a newline-joined two-
+statement command collapsed into one flat token run with no trace of the
+newline at all). See `tokenize()`'s and `_strip_line_continuations`'s own
+docstrings for the full live-verified fix, covering both the statement-
+separator gap itself and a second, related gap the fix's own verification
+against the backslash-newline continuation case turned up along the way.
+
 Deliberately stdlib-only (shlex, re, json) -- no new third-party
 dependency, matching this repository's declarative module-management
 convention and python3's already-accepted-hook-dependency status (see
@@ -392,7 +406,12 @@ from typing import NamedTuple
 
 # --- Tokenization ------------------------------------------------------
 
-# shlex's own default punctuation set under punctuation_chars=True.
+# shlex's own default punctuation set under punctuation_chars=True
+# ('();<>|&'), plus a literal newline -- passed as an explicit string to
+# `shlex.shlex` in `tokenize()` below, rather than relying on the `True`
+# shortcut, specifically so newline can join it (issue #1350: see
+# `tokenize()`'s own docstring for why the `True` shortcut alone leaves
+# this set's own "\n" member unreachable).
 _SINGLE_OPS = {";", "|", "&", "(", ")", "\n"}
 _MULTI_OPS = {"&&", "||"}
 _ASSIGN_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
@@ -862,6 +881,223 @@ def _rule_command_substitution_content(tokens: list[str]) -> tuple[str | None, b
     return None, is_git_push
 
 
+_COMMENT_BOUNDARY_CHARS = frozenset(" \t\r\n;|&()<>")
+
+
+def _strip_comments(command: str) -> str:
+    """Delete every bash `#`-comment span from COMMAND -- from an unescaped,
+    unquoted `#` sitting at a bash WORD-BOUNDARY position, up to (but NOT
+    including) the next raw newline, or the end of COMMAND if there is no
+    further newline. Must run BEFORE `_strip_line_continuations` (and
+    before shlex, which is also never told about `#` at all -- see
+    `tokenize()`'s own docstring) on the fully raw command text, so a
+    comment's own content can never interact with continuation-stripping
+    or be exposed to shlex's own literal-token scan at all.
+
+    Found live by issue #1350, during independent adversarial review of
+    this same issue's own newline fix: Python's `shlex` (posix mode)
+    defaults `commenters` to `'#'`, a setting this module never touched --
+    an unquoted `#` at a word boundary makes shlex consume everything up
+    to and INCLUDING the next newline as an inert comment, silently
+    discarding that newline along with the comment text. This reopens the
+    exact bug class issue #1350 exists to close, just triggered by `#`
+    instead of a bare newline: confirmed live that `VERB=install; echo hi
+    #x` + a real newline + `pip $VERB foo` (two real bash statements,
+    confirmed live via a real bash proxy that the second one genuinely
+    reaches `pip install foo`) tokenized with NO trace of the separating
+    newline at all before this fix, collapsing both statements into one
+    flat segment and returning `deny=False` in both classifier modules --
+    identical in shape to this issue's own original finding, just routed
+    through `#` rather than a silently-absorbed bare newline.
+
+    WORD-BOUNDARY position (an unquoted `#` is a comment-starter only
+    here, matching real bash's own grammar, confirmed live for every case
+    below rather than assumed): the very start of COMMAND, or immediately
+    after whitespace (` \\t\\r\\n`) or a control-operator character (`;|&()<>`,
+    `_COMMENT_BOUNDARY_CHARS` above -- POSIX's own full control-operator
+    character set, so a comment right after `;`/`|` with no intervening
+    space is recognized exactly like real bash: `dump a;#comment` + a real
+    newline + `dump b` real-runs as two separate statements, and `dump a |
+    dump b #comment` real-runs `dump b` with the comment stripped, its
+    output unaffected). A `#` FUSED onto a preceding non-boundary
+    character is NOT a comment (`foo#bar baz` real-runs as one word
+    `foo#bar` plus `baz`, confirmed live) -- also confirmed live for the
+    ESCAPED case (`\\#notacomment` real-runs as one literal word
+    `#notacomment`, the backslash consumed and the `#` never treated as a
+    comment-starter at all).
+
+    Never recognizes `#` as a comment-starter inside an open single OR
+    double quote (`"a#b"` and `'a#b'` both real-run as one literal word
+    `a#b`, confirmed live) -- quote state is tracked here independently of
+    `_strip_line_continuations`'s own (single-quote-only) tracking, since
+    THIS function additionally needs double-quote awareness `_strip_line_
+    continuations` does not (`#` is literal inside double quotes too,
+    unlike backslash-newline continuation, which real bash still honors
+    there). A backslash is always consumed together with whatever
+    character immediately follows it (inside or outside a double quote),
+    for the same reason `_strip_line_continuations` does this for
+    continuation pairs -- so an escaped quote character never wrongly
+    toggles this function's own quote-tracking state, and an escaped `#`
+    is correctly read as ordinary word content, never a boundary.
+
+    Deliberately does NOT treat a trailing backslash at the very end of a
+    comment's own text as a continuation into the next physical line --
+    confirmed live that bash's own comment grammar gives backslash NO
+    special meaning once a comment has started (`dump c #comment ends
+    here \\` + a real newline + `dump d` real-runs as two separate
+    statements, `dump c` and `dump d`, the comment's own trailing
+    backslash inert) -- a comment always ends at the very next raw
+    newline in COMMAND, full stop, which is exactly what searching for the
+    next raw `\\n` (rather than delegating to `_strip_line_continuations`
+    first) gives here."""
+    out: list[str] = []
+    in_single_quote = False
+    in_double_quote = False
+    at_boundary = True
+    i = 0
+    n = len(command)
+    while i < n:
+        char = command[i]
+        if in_single_quote:
+            out.append(char)
+            if char == "'":
+                in_single_quote = False
+                at_boundary = False
+            i += 1
+            continue
+        if in_double_quote:
+            if char == "\\" and i + 1 < n:
+                out.append(char)
+                out.append(command[i + 1])
+                i += 2
+                at_boundary = False
+                continue
+            out.append(char)
+            if char == '"':
+                in_double_quote = False
+                at_boundary = False
+            i += 1
+            continue
+        if char == "\\" and i + 1 < n:
+            out.append(char)
+            out.append(command[i + 1])
+            i += 2
+            at_boundary = False
+            continue
+        if char == "'":
+            in_single_quote = True
+            out.append(char)
+            i += 1
+            at_boundary = False
+            continue
+        if char == '"':
+            in_double_quote = True
+            out.append(char)
+            i += 1
+            at_boundary = False
+            continue
+        if char == "#" and at_boundary:
+            end = command.find("\n", i)
+            i = n if end == -1 else end
+            continue
+        out.append(char)
+        at_boundary = char in _COMMENT_BOUNDARY_CHARS
+        i += 1
+    return "".join(out)
+
+
+def _strip_line_continuations(command: str) -> str:
+    """Delete every bash line-continuation pair (an unescaped `\\` directly
+    followed by a real newline) from COMMAND, outside single-quoted spans --
+    a raw, character-level preprocessing pass that must run BEFORE shlex
+    ever sees the text, mirroring bash's own lexical join of the two
+    physical source lines into one logical line with NOTHING inserted in
+    the continuation's place (not even a space).
+
+    Found live by issue #1350, filed separately from #1326 (a materially
+    different bypass shape -- segment-boundary loss, not verb-token-
+    splitting) after `tokenize()`'s own attempted fix for that issue's own
+    newline-as-statement-separator gap (see this function's caller) turned
+    up a second, related gap while verifying the fix against the backslash-
+    newline continuation case: Python's `shlex` (posix mode) treats a
+    backslash as a generic single-character escape -- `\\<newline>` keeps
+    the escaped newline CHARACTER verbatim in the token (`tokenize("echo a
+    \\\\\\nb")` produced `['echo', 'a', '\\nb']` before this fix) -- but
+    real bash's own line-continuation rule instead DELETES both the
+    backslash and the newline entirely, with no character left behind
+    (confirmed live via a real bash proxy: `dump() { for a in "$@"; do
+    printf '[%s]\\n' "$a"; done; }` then `dump echo a \\` + a real newline +
+    `b` prints `[echo][a][b]`, three plain args, never a fused `\\nb`).
+    Left uncorrected, this divergence was on track to become a NEW
+    false-negative once newline was wired up as a real statement-separator
+    token: a line-continued command spanning two physical lines would have
+    tokenized with a stray literal `\\n` character glued onto the next
+    word, which is a plain literal token indistinguishable from any other
+    -- not, on its own, a bypass of this fix -- but a design that special-
+    cased only the "real separator" newline shape while leaving the
+    "continuation" newline shape producing wrong tokens is exactly the kind
+    of unverified partial fix issue #1350's own body flagged as needing a
+    dedicated pass before landing, rather than being carried forward
+    silently.
+
+    Single quotes are the ONE bash quoting context where backslash has NO
+    special meaning at all (confirmed live: `dump 'a \\` + a real newline +
+    `b'` prints the backslash and the newline both preserved literally,
+    `[a \\` + newline + `b]`) -- tracked here via a simple, un-nestable
+    toggle on each `'` character encountered outside an already-open single
+    quote, independent of any double-quote/`$(...)`/array-literal nesting
+    elsewhere in COMMAND, since bash's own single-quote rule is exactly
+    that simple regardless of surrounding structure. Continuation removal
+    is applied uniformly everywhere else (unquoted AND double-quoted alike)
+    -- confirmed live that both shapes delete the pair identically (`dump
+    "a \\` + newline + `b"` also prints `[a b]`).
+
+    A backslash is consumed together with whatever character immediately
+    follows it (newline or not) so an already-escaped backslash can never
+    be mistaken for a fresh, "available" one two positions later -- real
+    bash's own even/odd backslash-run parity rule before a newline,
+    confirmed live across three cases: an EVEN run of backslashes directly
+    before a newline is NOT a continuation (`dump a\\\\\\\\` + newline +
+    `b` -- 4 backslashes -- prints `[a\\\\]` then a SEPARATE, failing `b`
+    command, i.e. the newline stayed a real separator), while an ODD run
+    IS (`dump a\\\\\\` + newline + `b` -- 3 backslashes -- prints the
+    single fused arg `[a\\b]`, one literal backslash between `a` and `b`,
+    the final backslash's own newline deleted). This function does not
+    itself collapse a surviving escaped-backslash pair into one literal
+    backslash character -- it only decides which raw newline bytes to
+    delete before shlex ever runs; shlex's own existing, unmodified escape
+    handling still performs that collapse exactly as it already did."""
+    out: list[str] = []
+    in_single_quote = False
+    i = 0
+    n = len(command)
+    while i < n:
+        char = command[i]
+        if in_single_quote:
+            out.append(char)
+            if char == "'":
+                in_single_quote = False
+            i += 1
+            continue
+        if char == "'":
+            in_single_quote = True
+            out.append(char)
+            i += 1
+            continue
+        if char == "\\" and i + 1 < n:
+            nxt = command[i + 1]
+            if nxt == "\n":
+                i += 2
+                continue
+            out.append(char)
+            out.append(nxt)
+            i += 2
+            continue
+        out.append(char)
+        i += 1
+    return "".join(out)
+
+
 def tokenize(command: str) -> list[str]:
     """Raises TokenizeError on anything shlex cannot parse (e.g. an
     unbalanced quote) -- the caller must fail closed on that, the same
@@ -870,9 +1106,72 @@ def tokenize(command: str) -> list[str]:
     spans here -- `_classify_tokens` applies `_fold_command_substitution_
     spans` itself, AFTER first running `_rule_command_substitution_
     content` against these still-unfolded tokens, which needs each
-    span's own inner tokens still separable."""
+    span's own inner tokens still separable.
+
+    Found live by issue #1350: `segment_tokens`'s own `_SINGLE_OPS` set
+    was deliberately written to include a literal `"\\n"`, showing clear
+    intent to treat a newline as a real bash statement separator exactly
+    like `;` -- but this function's own shlex configuration never actually
+    produced one. shlex's DEFAULT `whitespace` attribute (`' \\t\\r\\n'`)
+    absorbs a bare, unquoted newline as ordinary inter-word whitespace, the
+    same as a plain space, so it was silently discarded before ever
+    reaching `_split_punct_run`/`segment_tokens` -- confirmed live
+    (`shlex.shlex("echo hi\\nFAKETOOL sub cmd 1", posix=True,
+    punctuation_chars=True)` with `whitespace_split = True` yields
+    `['echo', 'hi', 'FAKETOOL', 'sub', 'cmd', '1']`, one flat run with no
+    trace of the newline at all) and, live against this module's own
+    `classify()`, that a two-real-bash-statement newline-joined command
+    (the second one alone denied) collapsed into ONE segment here, letting
+    a `seg[0]`-anchored rule in the task-scoped sibling module (this
+    module's own literal-adjacency scan happened to still catch the
+    specific case that surfaced the bug) miss the second statement's own
+    denied verb entirely, since it never sat at `seg[0]` of its own
+    segment.
+
+    Closed two ways together, since fixing one alone would have left the
+    other as either a live gap or a newly wrong tokenization (see each
+    helper's own docstring for the live verification backing it): (1)
+    `_strip_line_continuations` above removes every genuine bash line-
+    continuation (`\\<newline>`) from the raw source FIRST, so a
+    continued logical line never reaches shlex carrying a real newline
+    character at all; (2) the lexer below is constructed with an explicit
+    `punctuation_chars` string (shlex's own default `'();<>|&'` plus a
+    literal `\\n`) instead of the `True` shortcut, and has `\\n` removed
+    from its own `whitespace` attribute -- turning every REMAINING raw
+    newline (by construction, now only a genuine statement separator, or a
+    literal newline already safely enclosed in an open quote) into its own
+    recognized operator token, exactly like `;`, `|`, or `&` already are,
+    rather than silently-absorbed whitespace. Confirmed live that a quoted
+    embedded newline (`echo "a\\nb"`, a literal multi-line string argument
+    with no backslash at all) is unaffected -- shlex's own quote-parsing
+    state machine consumes it as ordinary literal content of the open
+    quote before `punctuation_chars` membership is ever consulted, the
+    same way it already did for any other operator character appearing
+    inside a quote.
+
+    Found live during independent adversarial review of this same fix
+    (issue #1350): shlex's own DEFAULT `commenters` attribute (`'#'`,
+    never touched by this module before now) reopens the identical bug
+    class via a different route -- an unquoted `#` at a word boundary
+    makes shlex consume everything up to and INCLUDING the next newline
+    as an inert comment, silently discarding that newline right along
+    with the comment text, exactly the same collapse this fix's own
+    newline-as-token change exists to prevent. Closed by `_strip_
+    comments` above, run FIRST (before `_strip_line_continuations`, on
+    the still-fully-raw command text, so a comment's own content can
+    never interact with continuation-stripping or reach shlex at all) --
+    see that function's own docstring for the full live-verified word-
+    boundary/quoting/escaping rules it implements. `lexer.commenters` is
+    then explicitly cleared below (rather than left at its default) so
+    shlex never independently re-derives comment boundaries through its
+    own, separately-verified-only-by-upstream logic -- comment semantics
+    are owned exclusively by `_strip_comments` from here on."""
+    command = _strip_comments(command)
+    command = _strip_line_continuations(command)
     try:
-        lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+        lexer = shlex.shlex(command, posix=True, punctuation_chars="();<>|&\n")
+        lexer.whitespace = lexer.whitespace.replace("\n", "")
+        lexer.commenters = ""
         lexer.whitespace_split = True
         raw_tokens = list(lexer)
     except ValueError as error:
@@ -1563,6 +1862,32 @@ def _strip_leading_unassigned_bare_refs(tokens: list[str], name_to_raw_value: di
     return tokens[i:]
 
 
+def _strip_array_literal_newlines(tokens: list[str]) -> list[str]:
+    """Remove every DEPTH-0 literal `"\\n"` token from TOKENS (an array
+    literal's own inner element list, as `_rule_array_literal_content`
+    below extracts it) -- see that function's own docstring (issue #1350)
+    for why a newline there is ordinary IFS whitespace between array
+    elements, never a statement separator, unlike everywhere else in this
+    module. Depth-aware: tracks `(`/`)` nesting the same way `_array_
+    literal_token_span`/`_command_substitution_token_span` already do, so
+    a newline found at depth > 0 -- genuinely inside a NESTED `$(...)`/
+    `(...)` construct within the array's own inner content, itself a real
+    command list -- is left untouched, for the caller's own recursive
+    `_classify_tokens` call to still see and correctly treat as a real
+    separator there."""
+    out: list[str] = []
+    depth = 0
+    for tok in tokens:
+        if tok == "(":
+            depth += 1
+        elif tok == ")":
+            depth = max(0, depth - 1)
+        if tok == "\n" and depth == 0:
+            continue
+        out.append(tok)
+    return out
+
+
 def _rule_array_literal_content(
     tokens: list[str], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
 ) -> tuple[str | None, bool]:
@@ -1637,7 +1962,34 @@ def _rule_array_literal_content(
     text is still invisible to that recursive check. Not closed here:
     closing it needs `classify()`'s own string-based entry point (used
     for the quoted/fused `$(...)` shape) to also accept an outer scope,
-    a larger change than this round's own confirmed finding warranted."""
+    a larger change than this round's own confirmed finding warranted.
+
+    Found live during independent adversarial review of issue #1350's own
+    newline fix: `NAME=(...)` parens denote a bash WORD LIST (a compound
+    assignment), not a command list, so a literal newline typed between
+    two array elements (bash happily accepts one, spanning the assignment
+    across physical source lines) is ordinary IFS whitespace separating
+    ELEMENTS, exactly like a plain space -- never a statement separator,
+    unlike a `$(...)` command substitution's own content (a real command
+    list, where `_rule_command_substitution_content`'s identical newline-
+    as-separator treatment is correct and unchanged). Left as a raw token
+    the recursive `_classify_tokens` call below would treat like any
+    top-level newline, splitting a fully literal array into fake
+    "segments" the same way this issue's own original bug did at the top
+    level -- confirmed live that `A=(gh` + a real newline + `pr merge 1);
+    "${A[@]}"` genuinely expands to a denied `gh pr merge 1` invocation at
+    real bash runtime, yet was wrongly ALLOWED here without this strip
+    (this module's own `_rule_a_literal` needs `gh`/`pr`/`merge` adjacent
+    in the SAME segment; the task-scoped sibling module's own absolute,
+    position-independent `gh` deny happened to still catch this one
+    specific example, but not the equivalent `pip`/`install` shape,
+    confirmed live to also wrongly ALLOW there). Closed by `_strip_array_
+    literal_newlines` below, applied to INNER immediately at extraction,
+    before either reading is built -- depth-aware (tracks `(`/`)` nesting
+    the same way `_array_literal_token_span` itself does), so a newline
+    genuinely nested inside a `$(...)`/`(...)` construct WITHIN the
+    array's own inner content (still a real command list there) is left
+    untouched for the recursive call to classify correctly."""
     is_git_push = False
     i = 0
     n = len(tokens)
@@ -1646,7 +1998,7 @@ def _rule_array_literal_content(
         if end is None:
             i += 1
             continue
-        inner = tokens[i + 2 : end - 1]
+        inner = _strip_array_literal_newlines(tokens[i + 2 : end - 1])
         if inner:
             readings = [(inner, "")]
             collapsed = _strip_leading_unassigned_bare_refs(inner, name_to_raw_value)

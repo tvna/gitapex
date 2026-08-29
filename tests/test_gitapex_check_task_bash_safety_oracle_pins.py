@@ -518,6 +518,23 @@ def test_array_literal_content_denied_for_a_literal_gh_verb(tmp_path: pathlib.Pa
     assert verdict.deny is True
 
 
+def test_strip_array_literal_newlines_preserves_nested_depth() -> None:
+    """`_strip_array_literal_newlines` (issue #1350) strips only DEPTH-0
+    newlines from an array literal's own inner token list -- a newline
+    nested inside a `$(...)`/`(...)` construct WITHIN that content must
+    survive untouched, since it is still a real statement separator for
+    that nested command list at real bash runtime."""
+    assert checker._strip_array_literal_newlines(["x", "(", "a", "\n", "b", ")", "\n", "c"]) == [
+        "x",
+        "(",
+        "a",
+        "\n",
+        "b",
+        ")",
+        "c",
+    ]
+
+
 def test_array_literal_content_denied_via_outer_scope_indirection(tmp_path: pathlib.Path) -> None:
     """Nineteenth-round finding (`:1557-1567`): the eighteenth round's own
     recursive array-content check dropped the OUTER scope entirely,
@@ -531,3 +548,120 @@ def test_array_literal_content_denied_via_outer_scope_indirection(tmp_path: path
     observations, verdict = _pin(command, ["pip"], tmp_path)
     assert _unordered(observations) == _unordered([("pip", ["install"])])
     assert verdict.deny is True
+
+
+# --- newline statement separator: seg[0]-anchored rules across a real
+# newline, and line-continuation must not be mistaken for one (issue
+# #1350) -----------------------------------------------------------------
+
+
+def test_gh_denied_across_a_bare_newline_statement_separator(tmp_path: pathlib.Path) -> None:
+    """Issue #1350's own reproduction: a bare, unquoted newline is a real
+    bash statement separator exactly like `;`, but this module's own
+    `tokenize()` used to silently absorb it as ordinary whitespace instead
+    of emitting it as its own token, collapsing two real, separate
+    statements into one flat segment. `_rule_gh_any` is purely `seg[0]`-
+    anchored with no phrase-list adjacency fallback the way the main
+    hook's own `_rule_a_literal` has (by design -- `gh` is an absolute
+    deny here, any subcommand) -- `echo hi` + a real newline + `gh pr
+    merge 1` real-runs as two separate statements (confirmed live), yet
+    `gh` sat at index 2 of one newline-collapsed segment before this fix,
+    never at `seg[0]`, so the rule never fired."""
+    command = "echo hi\ngh pr merge 1"
+    observations, verdict = _pin(command, ["gh"], tmp_path)
+    assert _unordered(observations) == _unordered([("gh", ["pr", "merge", "1"])])
+    assert verdict.deny is True
+
+
+def test_git_push_denied_despite_backslash_newline_continuation_before_push(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A genuine bash line continuation (`\\` immediately followed by a
+    real newline) is NOT a statement separator -- real bash deletes both
+    characters and joins the two physical lines into one logical line with
+    nothing left behind, confirmed live via a real bash proxy that `git \\`
+    + a real newline + `push origin main` real-runs as one single `git
+    push origin main` invocation, never two. Before `_strip_line_
+    continuations` (issue #1350), this module's own shlex-based `tokenize()`
+    left a stray, unescaped literal newline character fused onto the next
+    word instead (`git`, `\\npush`, `origin`, `main`) -- `_rule_git_push`'s
+    own exact-literal-`push`-token scan never matched the corrupted
+    `\\npush` token, a hard-deny bypass distinct from the bare-newline
+    statement-separator gap above (this one needs no second statement at
+    all, just a continuation landing directly in front of the one literal
+    token the rule is looking for)."""
+    command = "git \\\npush origin main"
+    observations, verdict = _pin(command, ["git"], tmp_path)
+    assert _unordered(observations) == _unordered([("git", ["push", "origin", "main"])])
+    assert verdict.deny is True
+
+
+def test_single_quote_preserves_backslash_newline_literally(tmp_path: pathlib.Path) -> None:
+    """Single quotes are the one bash quoting context where backslash has
+    NO special meaning at all -- `_strip_line_continuations` must not treat
+    a backslash-newline pair inside an open single quote as a continuation.
+    Confirmed live via a real bash proxy that `foo 'a \\` + a real newline +
+    `b'` genuinely passes ONE argument with both the backslash and the
+    newline preserved literally, never joining the two physical lines."""
+    command = "foo 'a \\\nb'"
+    observations, verdict = _pin(command, ["foo"], tmp_path)
+    assert _unordered(observations) == _unordered([("foo", ["a \\\nb"])])
+    assert verdict.deny is False
+
+
+def test_gh_denied_despite_hash_comment_swallowing_the_separator_newline(tmp_path: pathlib.Path) -> None:
+    """Found live during independent adversarial review of this same fix:
+    Python's `shlex` (posix mode) defaults `commenters` to `'#'`, never
+    touched by this module before now -- an unquoted `#` at a word
+    boundary made shlex consume everything up to and INCLUDING the next
+    newline as an inert comment, silently discarding that newline too,
+    reopening the exact bug class this issue exists to close via a
+    different route. Confirmed live that `echo hi #x` + a real newline +
+    `gh pr merge 1` real-runs as two separate statements, the comment
+    text never reaching the second one."""
+    command = "echo hi #x\ngh pr merge 1"
+    observations, verdict = _pin(command, ["gh"], tmp_path)
+    assert _unordered(observations) == _unordered([("gh", ["pr", "merge", "1"])])
+    assert verdict.deny is True
+
+
+def test_array_literal_newline_is_not_a_statement_separator(tmp_path: pathlib.Path) -> None:
+    """`NAME=(...)` parens denote a bash WORD LIST, not a command list --
+    found live during independent adversarial review of this same fix
+    that a literal newline typed between two array elements is ordinary
+    IFS whitespace separating ELEMENTS, never a statement separator,
+    unlike everywhere else in this module. Confirmed live that `A=(pip`
+    + a real newline + `install foo); "${A[@]}"` genuinely expands to a
+    denied `pip install foo` invocation at real bash runtime, yet was
+    wrongly ALLOWED without `_strip_array_literal_newlines`."""
+    command = 'A=(pip\ninstall foo); "${A[@]}"'
+    observations, verdict = _pin(command, ["pip"], tmp_path)
+    assert _unordered(observations) == _unordered([("pip", ["install", "foo"])])
+    assert verdict.deny is True
+
+
+def test_escaped_double_quote_then_hash_stays_literal(tmp_path: pathlib.Path) -> None:
+    """Inside an open double-quoted string, a backslash-escaped quote
+    (`\\"`) stays literal without closing the string, and a `#` later in
+    the SAME still-open string never starts a comment. Confirmed live
+    that `foo "a\\"b#c"` real-runs as one literal argument `a"b#c`."""
+    command = 'foo "a\\"b#c"'
+    observations, verdict = _pin(command, ["foo"], tmp_path)
+    assert _unordered(observations) == _unordered([("foo", ['a"b#c'])])
+    assert verdict.deny is False
+
+
+def test_even_backslash_run_before_newline_is_not_a_continuation(tmp_path: pathlib.Path) -> None:
+    """Real bash's own even/odd backslash-run parity rule: an EVEN run of
+    backslashes directly before a newline is NOT a continuation (each pair
+    escapes to one literal backslash, with no backslash left over to
+    continue the line) -- confirmed live that `foo a` + 4 backslashes + a
+    real newline + `foo c` genuinely runs as TWO separate statements, the
+    first passing one argument with two literal backslashes fused onto
+    `a`. `_strip_line_continuations` must consume a backslash together with
+    whatever immediately follows it, so an already-escaped backslash is
+    never mistaken for a fresh, "available" one two positions later."""
+    command = "foo a" + "\\" * 4 + "\nfoo c"
+    observations, verdict = _pin(command, ["foo"], tmp_path)
+    assert _unordered(observations) == _unordered([("foo", ["a\\\\"]), ("foo", ["c"])])
+    assert verdict.deny is False
