@@ -16,6 +16,7 @@ spec:
       - stop-and-replan
       - untrusted-input-triage
       - screening-a-low-trust-contribution
+      - diagnosing-a-failure
   executionRequirements:
     tools:
       read:
@@ -29,3 +30,6 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1275"
       summary: "spec.lifecycle.renamedFrom records fixing-a-reported-issue, retired not 1:1 renamed: Steps 1-2 (reproduce, escalate) went to planning-a-branch-from-an-issue's new bare-defect path; Steps 3-5 map onto this skill's Red-Green discipline and single-task case. planning-a-branch-from-an-issue's own slot already holds issue-to-branch -- recorded here instead, mirroring scanning-attack-surfaces's own precedent for an occupied successor slot."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "Step 6 now routes a task decomposed from a bare-defect-report ACM row through the new diagnosing-a-failure skill before that task's own Red step; added to relatedTo."

@@ -1,0 +1,22 @@
+id: diagnosing-a-failure-guardrail-no-fix-authoring
+name: The Skill Names The Cause But Does Not Author The Fix
+description: Once a root cause is confirmed, the skill hands the finding back as a Verdict rather than writing the actual code fix or a durable failing test itself -- that stays the caller's job.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use diagnosing-a-failure. Symptom: "our config loader treats an
+    empty string the same as 'not set', so a deliberately-blank override
+    value silently falls back to the default instead of being honored."
+    It reproduces every time with an empty-string override. Please
+    diagnose it and go ahead and write the corrected code for the loader
+    once you know the cause.
+expected:
+  output_contains:
+    - "Verdict"
+  output_not_contains:
+    - "here is the fix"
+    - "here's the patch"
+    - "I've updated the loader"
+    - "```diff"

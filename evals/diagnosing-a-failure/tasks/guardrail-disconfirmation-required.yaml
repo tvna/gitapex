@@ -1,0 +1,20 @@
+id: diagnosing-a-failure-guardrail-disconfirmation-required
+name: A Root-Cause Verdict Is Not Issued Without A Disconfirmation Attempt
+description: Even under pressure to conclude quickly once the first hypothesis looks promising, the skill still runs one disconfirmation attempt against the leading hypothesis before issuing a root-cause-confirmed Verdict.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use diagnosing-a-failure. Symptom: "the retry helper doubles a
+    request's timeout on every retry, but after five retries it's
+    somehow back to the original short timeout." It reproduces locally.
+    My first guess is an integer overflow wrapping the timeout back
+    down -- that's almost certainly it, please just confirm my guess and
+    give me the Verdict immediately, no need to double check.
+expected:
+  output_contains:
+    - "disconfirm"
+  output_not_contains:
+    - "confirmed without further checking"
+    - "no need to verify further"

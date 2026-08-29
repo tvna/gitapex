@@ -1,0 +1,23 @@
+id: diagnosing-a-failure-reproducible-symptom
+name: A Reproducible Symptom Gets Traced To A Boundary Before A Verdict
+description: Given a reproducible symptom, the skill establishes a minimal reproduction, maps boundaries, loops hypotheses, and issues exactly one Diagnosis Verdict -- never authoring a fix.
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use diagnosing-a-failure. A caller reports: "our issue-tracker sync
+    tool is supposed to append a new comment to an issue's history, but
+    every third call instead wipes out earlier comments. Steps to
+    reproduce: call update_issue_body(issue_id, new_text) twice in a
+    row -- the second call's result no longer contains the first call's
+    text." This reproduces reliably in a local test harness. Walk through
+    the diagnosis and tell me what you conclude.
+expected:
+  output_contains:
+    - "reproduc"
+    - "boundary"
+    - "Verdict"
+  output_not_contains:
+    - "I've opened an issue"
+    - "I've pushed a fix"
+    - "here's the pull request"
