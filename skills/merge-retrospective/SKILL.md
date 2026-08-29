@@ -314,18 +314,19 @@ independent and never applied to each other's issue.
    title-policy gate the repo enforces (no rejection or auto-edit), and
    that the PR cross-link from Step 6 resolves to the correct PR. A
    silent write failure or a title-policy rejection is not "filed." When
-   the zero-repair fast-close path applied and a close call was actually
-   issued (an operator confirmed it, per Step 5 above -- not the
-   unattended case, which intentionally leaves the issue open with no
-   close call to verify), also confirm the close call itself actually
-   took effect (re-fetch the issue's state, not just its existence) -- a
-   filed-but-still-open issue after a confirmed close is a silent
-   failure of the close half of the operation, not a completed
-   fast-close. If the re-fetch still shows it open, retry the close call
-   once; if it is still open after that retry, stop treating the cycle
-   as fast-closed, report the stuck-open issue number, and leave it for a
-   human to close rather than silently retrying indefinitely or
-   pretending the fast-close succeeded.
+   a close call was actually issued for this cycle's retrospective issue
+   -- whether the zero-repair fast-close path or the full Repairs path
+   applied, per Step 5's own now-unified attended/unattended rule; an
+   operator confirmed it either way, not the unattended case, which
+   intentionally leaves the issue open with no close call to verify --
+   also confirm the close call itself actually took effect (re-fetch the
+   issue's state, not just its existence) -- a filed-but-still-open issue
+   after a confirmed close is a silent failure of the close half of the
+   operation, not a completed close. If the re-fetch still shows it open,
+   retry the close call once; if it is still open after that retry, stop
+   treating the cycle as closed, report the stuck-open issue number, and
+   leave it for a human to close rather than silently retrying
+   indefinitely or pretending the close succeeded.
 
 ## Stop boundary
 
