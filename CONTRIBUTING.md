@@ -143,7 +143,7 @@ gate, this runner's first gate that makes a network call -- it fetches
 warm). Run it by hand any time with:
 
 ```console
-python3 .github/scripts/gitapex_gate_local_preflight.py
+uv run --frozen python3 .github/scripts/gitapex_gate_local_preflight.py
 ```
 
 It prints a pass/fail line per gate, the captured output of each failing
@@ -154,10 +154,13 @@ If a clone predates this hook, re-run the install command above once to pick
 it up, then confirm both shims with the check in the previous section.
 `git push --no-verify` skips it, as with any pre-push hook.
 
-The runner itself needs no dependencies, but all 42 wired gates run through
-`uv` (the same `uv run` pins CI uses). Without `uv` on PATH every one of
-them reports `FAIL ... failed to run` -- that is one missing tool, not a
-whole broken wired set.
+The runner itself also resolves through `uv run --frozen` (issue #1485): it
+imports `_gitapex_schema_validation.py`, which imports `jsonschema`, a
+project dependency installed in this repository's own `uv`-managed
+`.venv`, not necessarily present on an unmanaged system `python3`. All 42
+wired gates likewise run through `uv` (the same `uv run` pins CI uses).
+Without `uv` on PATH every one of them reports `FAIL ... failed to run` --
+that is one missing tool, not a whole broken wired set.
 
 The wired set is not a list inside that script: it is every gate in
 `.gitapex/ssot.json` whose `planes` array contains `"local"`, run with the

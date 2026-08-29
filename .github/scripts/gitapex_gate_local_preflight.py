@@ -85,14 +85,20 @@ reasons.
   enforcement, with no CI-side backstop. Named as a real gap in
   ``behind-base``'s own docstring and issue #985's Acceptance Criteria
   Map; the same gap now applies to ``real-checkout-git-write`` too.
-- **Every wired gate runs through ``uv``.** CONTRIBUTING.md invokes this
-  file with plain ``python3``, and so does the pre-push hook, because the
-  runner itself needs no dependencies -- but all 42 wired argvs begin with
-  ``uv``, since each gate carries its own pinned invocation. Without ``uv``
-  on PATH every one of them reports ``FAIL ... failed to run``, which
-  reads as a whole broken wired set rather than one missing tool. ``uv`` is
-  already a documented prerequisite for this repository; it is named here so
-  the failure mode is legible.
+- **Every wired gate runs through ``uv`` -- and so does this runner itself
+  (issue #1485).** This module imports ``_gitapex_schema_validation.py``,
+  which imports ``jsonschema``, a project dependency declared in
+  ``pyproject.toml`` and installed in this repository's own ``uv``-managed
+  ``.venv`` -- not a Python stdlib module, and not necessarily present on an
+  unmanaged system ``python3``. CONTRIBUTING.md invokes this file with
+  ``uv run --frozen python3``, and so does the pre-push hook, so this
+  runner resolves against the same pinned environment its own wired gates
+  already require. All 42 wired argvs likewise begin with ``uv``, since
+  each gate carries its own pinned invocation. Without ``uv`` on PATH every
+  one of them reports ``FAIL ... failed to run``, which reads as a whole
+  broken wired set rather than one missing tool. ``uv`` is already a
+  documented prerequisite for this repository; it is named here so the
+  failure mode is legible.
 - Gates run **sequentially**, in registry-id order, for legible output on a
   terminal. ``mypy-type-check`` and ``cyclomatic-complexity-floor`` dominate
   the wall clock; parallelism was not added because interleaved failure

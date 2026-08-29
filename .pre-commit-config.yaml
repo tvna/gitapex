@@ -151,11 +151,17 @@ repos:
       # enforcement for the ordinary path, not a command a contributor has
       # to remember to type.
       #
-      # `python3`, not `uv run`: the runner itself is stdlib-only, and each
-      # gate's own local_invocation carries whatever `uv run` pin it needs.
+      # Issue #1485: the runner itself is not stdlib-only after all -- it
+      # imports `_gitapex_schema_validation.py`, which imports `jsonschema`,
+      # a project dependency that lives in this repo's own `uv`-managed
+      # `.venv`, not on an unmanaged system `python3`. This entry routes
+      # through `uv run --frozen`, matching every wired gate's own
+      # `local_invocation` shape, so it resolves the same dependency
+      # correctly regardless of what the system-level `python3` happens to
+      # have installed.
       - id: local-preflight
         name: local preflight (every working-tree-runnable gate)
-        entry: python3 .github/scripts/gitapex_gate_local_preflight.py
+        entry: uv run --frozen python3 .github/scripts/gitapex_gate_local_preflight.py
         language: system
         stages: [pre-push]
         pass_filenames: false
