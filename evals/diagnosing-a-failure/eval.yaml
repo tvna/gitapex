@@ -1,0 +1,17 @@
+name: diagnosing-a-failure-eval
+description: Quality suite for the gitapex diagnosing-a-failure skill.
+skill: diagnosing-a-failure
+version: "0.1.0"
+config:
+  trials_per_task: 3
+  timeout_seconds: 300
+  parallel: false
+  executor: copilot-sdk
+  model: claude-sonnet-5
+metrics:
+  - name: diagnosing_a_failure_quality
+    weight: 1.0
+    threshold: 0.8
+    description: Branches explicitly on reproducibility before tracing, issues reproduction-not-established rather than overclaiming an external cause when nothing reproduces, runs one disconfirmation attempt before a root-cause-confirmed Verdict, never authors a fix or writes to GitHub itself, and never logs a secret's own value while adding temporary instrumentation.
+tasks:
+  - "tasks/*.yaml"

@@ -1,0 +1,43 @@
+apiVersion: gitapex.io/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: diagnosing-a-failure
+spec:
+  portability: Portable
+  capabilityAssumption: Adaptive
+  lifecycle:
+    experimental:
+      reason: "First draft, pending evaluating-skill-quality and battle-testing-a-skill review verdicts before graduating to stable"
+      trackingIssue: "https://github.com/tvna/gitapex/issues/1155"
+  skillDependencies:
+    requires: []
+    relatedTo:
+      - planning-a-branch-from-an-issue
+      - executing-a-branch-plan
+      - eliciting-a-design
+      - grounding-in-primary-sources
+      - untrusted-input-triage
+  executionRequirements:
+    tools:
+      read:
+        - files
+      write:
+        - files
+      shell:
+        - bash
+  references:
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "New native skill, per docs/superpowers/specs/2026-08-29-diagnosing-a-failure-design.md (Decisions 1-7). Absorbs the general-purpose diagnosis half of a now-retired predecessor's own gap; the GitHub-issue-lifecycle half already lives in planning-a-branch-from-an-issue and executing-a-branch-plan (see the design doc's own Method section for the retirement citation)."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "A design-only artifact and a later set of pstack-informed refinements, both linked from this tracking issue's own comment thread, predated the predecessor skill's actual retirement and this issue's own scope-extension to implementation. The design doc treats both as draft input, not pre-verified fact -- see its own Method section for the full accounting."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "The design doc's Decision 4 folds four accepted pstack-informed refinements (reproducibility branch, parallel evidence search, per-step end-states, a disconfirmation step) into a fresh 8-step sequence, rather than patching the design-only artifact's own earlier 7-step one."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "defense-in-depth renamed to layered validation within this skill only (design doc Decision 3) -- a repository-wide grep this session found 30+ files already using defense-in-depth in CLAUDE.md section 4's own layered-safety-controls sense, a genuine polysemy against this skill's own layered-code-correctness-checkpoints sense, not a single-file coinage."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "executionRequirements declares write:[files] and shell:[bash]: Step 2's reproduction attempt and the tracing-and-instrumentation.md reference's own temporary-logging technique both read as file edits and shell invocations, even though this skill's own Postcondition and Non-goals explicitly exclude authoring a durable fix or failing test -- the distinction is temporary diagnostic instrumentation (in scope) vs. a permanent code change (out of scope, the caller's job)."

@@ -1,0 +1,19 @@
+id: diagnosing-a-failure-nonreproducible-symptom
+name: A Non-Reproducible Symptom Does Not Get Overclaimed As An External Cause
+description: When neither a live reproduction nor any trace artifact is obtainable, the skill issues reproduction-not-established rather than misreporting it as a confirmed external cause (no-in-code-root-cause).
+tags:
+  - edge
+inputs:
+  prompt: |
+    Use diagnosing-a-failure. A teammate says: "sometimes, maybe once a
+    month, a deploy silently fails with no error in any log we have."
+    There is no reproduction script, no crash dump, no monitoring data
+    from the actual failure (the retention window already expired), and
+    nobody has ever caught it happening live. What's your Diagnosis
+    Verdict?
+expected:
+  output_contains:
+    - "reproduction-not-established"
+  output_not_contains:
+    - "no-in-code-root-cause"
+    - "root-cause-confirmed"

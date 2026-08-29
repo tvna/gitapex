@@ -46,7 +46,12 @@ without losing the issue's acceptance criteria.
      bare-defect-reproduction procedure used. Do not fabricate an
      Acceptance Criteria Map for a defect that did not reproduce — see
      this skill's own Stop boundaries below.
-   - **On successful reproduction:** continue to Step 5, which states this
+   - **On successful reproduction:** route through `diagnosing-a-failure`
+     to establish root cause before Step 5 begins -- its Diagnosis
+     Verdict becomes Step 5's own Interpretation column. On an
+     `architecture-question` Verdict, stop here (comment on the issue
+     per that Verdict's own two-option framing) rather than proceeding
+     to a normal ACM row. Otherwise continue to Step 5, which states this
      path's own Proof-method requirement.
 5. Produce an Acceptance Criteria Map before any branch work begins:
    criterion -> interpretation -> planned files/operations -> proof method
@@ -202,6 +207,10 @@ propose a branch. No PR follows this outcome.
   is the authoring method for that row -- name it in the Branch Plan
   rather than treating "write the skill" as an undifferentiated
   implementation task.
+- **vs. `diagnosing-a-failure`:** Step 4's bare-defect-report path routes
+  a successfully-reproduced issue through it before Step 5 begins -- see
+  Step 4 above for the exact handoff and the architecture-question
+  Verdict's own short-circuit.
 
 ## Notes
 

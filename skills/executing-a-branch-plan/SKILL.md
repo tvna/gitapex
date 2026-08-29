@@ -106,7 +106,13 @@ first, not skimmed.
    for the full, honest accounting of both) and `isolation: 'worktree'`. Use the sequential main-thread fallback
    (one task per turn, no wave/run boundary) when the Workflow tool is
    unavailable (`CLAUDE_CODE_DISABLE_WORKFLOWS=1` or otherwise absent).
-   Within each task, apply Red-Green order when the task's inherited proof
+   For a task decomposed from a bare-defect-report ACM row, route through
+   `diagnosing-a-failure` before that task's own Red step, so the failing
+   test encodes its confirmed root cause rather than a guess; a
+   `reproduction-not-established` Verdict here dispatches through this
+   step's own failure-handling rule below as a
+   `StageDeviated{action: escalate}` event, not a silent retry. Within
+   each task, apply Red-Green order when the task's inherited proof
    method is an automatable test; Refactor is never per-task, deferred
    entirely to step 8. Once a wave's run returns, in the main thread (the
    Workflow script itself has no filesystem/shell access): screen each
@@ -288,6 +294,10 @@ combined diff, then the draft PR converts to ready-for-review.
   scratch -- still routed through this skill's own step 8 refactor/
   adversarial-review gate and the PR-body skill-audit disclosure
   convention unchanged, not a separate review path.
+- **vs. `diagnosing-a-failure`:** step 6 routes a task decomposed from a
+  bare-defect-report ACM row through it immediately before that task's
+  own Red step -- see step 6 above for the exact handoff and its
+  reproduction-not-established Verdict's own dispatch.
 
 ## Notes
 

@@ -11,6 +11,7 @@ spec:
     requires: []
     relatedTo:
       - drafting-issues
+      - diagnosing-a-failure
   executionRequirements:
     tools:
       read:
@@ -21,3 +22,6 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/818"
       summary: "Declared spec.executionRequirements.tools (W3 second slice, https://github.com/tvna/gitapex/issues/307): gitapex_check_acm_present.py reads a drafted body via --body/stdin; no writes, no subprocess/shell calls."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "Step 4's bare-defect-report path now routes a successfully-reproduced issue through the new diagnosing-a-failure skill before Step 5 begins; added to relatedTo."
