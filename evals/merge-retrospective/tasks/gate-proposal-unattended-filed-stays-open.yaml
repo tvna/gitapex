@@ -1,0 +1,48 @@
+id: merge-retrospective-gate-proposal-unattended-filed-stays-open
+name: Unattended Cycle -- Gate Repair Filed and Verified, Retrospective Stays Open
+description: A missing-deterministic-gate repair is filed as its own standalone gate-proposal issue and its filing confirmed, but with no operator able to respond this run must leave the retrospective issue open for a human to close after review, rather than closing it unattended.
+tags:
+  - quality
+  - gate-proposal
+  - unattended
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #360 ("fix: correct pagination cursor
+    overflow in the search-results endpoint") just merged into main.
+
+    Step 0 dedup check (already run for you): a CI-opened stub
+    retrospective issue, #361, already exists for PR #360 (still carrying
+    the "Automated stub opened by the post-merge-auto-retro gate" marker
+    text -- nothing has enriched it yet).
+
+    Here is the one repair that happened between open and merge for PR
+    #360 itself: CI run #1 failed: `golangci-lint` reported
+    `SA4006: this value of x is never used` in `search/paginate.go`. The
+    author pushed a follow-up commit removing the dead assignment, and CI
+    run #2 passed clean.
+
+    This is a missing-deterministic-gate repair. Calling
+    `gitapex_file_gate_proposal.py` for it returns title `gate-proposal:
+    retro #361 repair 1: Failed CI rerun (golangci-lint unused value)`, an
+    ACM-shaped body, label `gate-proposal`. Searching
+    `mcp__github__list_issues` (label `gate-proposal`) for that exact
+    title finds no existing match. Calling `issue_write` method `create`,
+    then re-fetching via `issue_read` to confirm: the issue is confirmed
+    created as #410.
+
+    This session is running fully unattended, triggered by an automated
+    post-merge hook -- no operator is present or able to respond.
+
+    Run the retrospective now that PR #360 has merged.
+expected:
+  output_contains:
+    - "missing deterministic gate"
+    - "gate-proposal: retro #361 repair 1"
+    - "Filed as: #410"
+    - "Refs #360"
+    - "leave the retrospective issue open"
+    - "for a human to close after review"
+  output_not_contains:
+    - "the retrospective issue is now closed"
+    - "I've closed the retrospective issue"
+    - "Carried-forward gate"
