@@ -851,3 +851,27 @@ def test_parse_registry_gate_tracking_issue_accepts_list_value():
     registry = drift._parse_registry(instance)
     assert registry is not None
     assert registry.gates[0].tracking_issue == [297, 422, 426]
+
+
+def test_tracking_issue_rejects_an_empty_array(tmp_path):
+    # Defeat case: an empty array is neither "one issue" (the plain-int
+    # form) nor "at least two issues" (minItems: 2) -- it must be
+    # rejected, not silently treated as equivalent to null.
+    instance = json.loads(json.dumps(_VALID_INSTANCE))
+    instance["gates"][0]["tracking_issue"] = []
+    instance_path = _write_instance(tmp_path, instance)
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+    assert any("schema:" in f and "tracking_issue" in f for f in findings)
+
+
+def test_tracking_issue_rejects_a_non_integer_list_item(tmp_path):
+    # Defeat case: a list item that is not an integer (a string that
+    # merely looks like one) must be rejected at the schema layer, not
+    # silently coerced -- the layered design this module's own docstring
+    # states (jsonschema is the strict validator; pydantic is a secondary
+    # typed-access layer that runs only after schema validation passes).
+    instance = json.loads(json.dumps(_VALID_INSTANCE))
+    instance["gates"][0]["tracking_issue"] = [520, "344"]
+    instance_path = _write_instance(tmp_path, instance)
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+    assert any("schema:" in f and "tracking_issue" in f for f in findings)

@@ -393,6 +393,27 @@ def test_load_gate_tracking_issues_flattens_list_values(tmp_path: pathlib.Path) 
     assert checker.load_gate_tracking_issues(str(ssot)) == {520, 350, 297, 422, 426, 650, 999}
 
 
+def test_load_gate_tracking_issues_flatten_rejects_nested_list_and_empty_list(tmp_path: pathlib.Path) -> None:
+    # Defeat case (dimension 15, fail-closed on malformed input): a
+    # schema-invalid but not-impossible hand-edited shape -- a list
+    # nested inside the tracking_issue list, or an empty list -- must be
+    # excluded rather than crashing the flatten loop or silently
+    # corroborating something it never named.
+    ssot = tmp_path / "ssot.json"
+    ssot.write_text(
+        json.dumps(
+            {
+                "gates": [
+                    {"id": "a", "tracking_issue": [[297], 344]},
+                    {"id": "b", "tracking_issue": []},
+                    {"id": "c", "tracking_issue": 650},
+                ]
+            }
+        )
+    )
+    assert checker.load_gate_tracking_issues(str(ssot)) == {344, 650}
+
+
 # ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
