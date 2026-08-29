@@ -575,9 +575,10 @@ differentiation from shape check 1 and dimension 15 below.
     execution* of otherwise well-formed input): this dimension's own
     failure mode is a specific interrupted-then-retried run leaving
     behind state a clean run never would.
-    *Domains:* generalizes directly -- retry after partial failure is a
-    realistic operational event in all four domains, not a
-    domain-specific mechanism. CI job step: does a re-run after a
+    *Domains:* generalizes with adaptation -- retry after partial failure
+    is a realistic operational event in all four domains, but what counts
+    as "leftover partial state" is domain-specific vocabulary, not a
+    single domain-generic check. CI job step: does a re-run after a
     simulated mid-step timeout (kill the check process partway through,
     then re-trigger the job) reach the same pass/fail decision and leave
     no leftover partial state (a half-written cache, a partially posted

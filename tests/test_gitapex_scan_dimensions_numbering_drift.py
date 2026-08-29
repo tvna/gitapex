@@ -80,7 +80,7 @@ def test_duplicate_dimension_numbering_fails(tmp_path: Path) -> None:
 
 def test_out_of_order_dimension_numbering_fails(tmp_path: Path) -> None:
     """Swap two adjacent dimension numbers' document position (21 and 22),
-    keeping the set itself contiguous 7-24 so the gap/duplicate checks stay
+    keeping the set itself contiguous 7-25 so the gap/duplicate checks stay
     silent -- isolates the ascending-order check on its own."""
     skill_dir = _copy_skill(tmp_path)
     path = skill_dir / G.DIMENSIONS_MD
