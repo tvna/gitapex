@@ -5,6 +5,7 @@ metadata:
 spec:
   portability: Portable
   capabilityAssumption: Broad
+  dependencyPolicy: Declared
   references:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/32"
@@ -554,6 +555,9 @@ spec:
         found: 2
         fixed: 2
         new_gaps_found: 2
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/758"
+      summary: "Migrated gitapex_check_skill_shape.py's 12 schema-expressible manifest checks onto the bundled schema.json via jsonschema, reversing its stdlib-only property. Declared dependencyPolicy: Declared and executionRequirements.packages.pip: [pyyaml, jsonschema]; portability stays Portable, per the dependency-vs-portability resolution referenced above. Incidentally closes the pre-existing undeclared-PyYAML-import gap the entries above named for this skill's own scripts/, not separately re-verified."
   skillDependencies:
     requires: []
     relatedTo:
@@ -568,3 +572,7 @@ spec:
         - files
       shell:
         - python3
+    packages:
+      pip:
+        - pyyaml
+        - jsonschema

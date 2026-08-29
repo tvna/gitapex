@@ -15,7 +15,7 @@ skill artifact itself is good, not whether a change is correct.
   Run the bundled checker on the target skill dir, giving both paths from
   the same working directory -- e.g. from the repo root:
   `python3 skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py --allowed-root <approved-root> <skill-dir>`
-  (stdlib-only, read-only). See `gitapex_check_skill_shape.py` for the
+  (read-only; `uv run python3 ...` -- needs `pyyaml`/`jsonschema`, per `spec.dependencyPolicy: Declared` here). See `gitapex_check_skill_shape.py` for the
   exact rules and limits; it prints PASS/FAIL per check. On a
   Python-less surface, apply the same rules by reading that script's
   check list (its module docstring enumerates them). The nine maturity
