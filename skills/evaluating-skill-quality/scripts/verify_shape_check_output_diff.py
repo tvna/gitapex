@@ -19,6 +19,19 @@ CLAUDE.md's Decision 1 gate-completion rule). A real difference reported
 here is a genuine regression introduced by the move, not a problem with this
 script -- fix the move, not this comparison.
 
+The one way to silently defeat this oracle is to point BASE_SHA at a
+POST-split commit. The "OLD" module fetched from such a commit is itself
+shape_checks/-backed, and its own `from shape_checks... import ...` lines
+resolve against the very same live, on-disk package "NEW" uses (this
+script's own directory is on sys.path), so the comparison degenerates to
+comparing the working tree against itself and passes no matter how badly
+detection has regressed. Reproduced live, not theorized: a deliberate
+evidence-string regression injected into shape_checks/orchestrator.py makes
+this script report all 29 skills differing at the real BASE_SHA, and report
+a clean PASS the moment BASE_SHA is moved to a post-split commit.
+``_assert_pre_split_source`` below closes that hole by refusing any fetched
+OLD source that imports shape_checks at all.
+
 Usage:
   python3 skills/evaluating-skill-quality/scripts/verify_shape_check_output_diff.py
 
@@ -30,6 +43,7 @@ version.
 from __future__ import annotations
 
 import importlib.util
+import re
 import subprocess
 import sys
 import tempfile
@@ -48,6 +62,14 @@ NEW_SCRIPTS_DIR = Path(__file__).resolve().parent
 # Repo-relative so it works the same from `git show BASE:<path>` regardless
 # of REPO_ROOT's own absolute location on disk.
 OLD_RELATIVE_PATH = "skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py"
+# The marker that tells a genuinely pre-split OLD source apart from a
+# post-split one: the pre-split checker is a single stdlib-only file that
+# never mentions the shape_checks package, while every post-split revision
+# of the same path imports it. Matched as an import statement rather than a
+# bare substring so a future prose mention of the name in a comment or
+# docstring cannot trip the guard -- it is specifically the IMPORT that
+# makes this script's comparison vacuous (see the module docstring).
+_SHAPE_CHECKS_IMPORT_RE = re.compile(r"^\s*(?:from|import)\s+shape_checks\b", re.MULTILINE)
 
 
 def _load_module_from_source(module_name: str, source_path: Path) -> types.ModuleType:
@@ -65,6 +87,27 @@ def _load_module_from_source(module_name: str, source_path: Path) -> types.Modul
     return module
 
 
+def _assert_pre_split_source(source: str) -> None:
+    """Fail loudly when the source fetched for "OLD" is not the pre-split,
+    self-contained single-file checker.
+
+    Without this, pointing BASE_SHA at any post-split commit silently turns
+    this whole script into a no-op: that revision's own
+    ``from shape_checks... import ...`` lines resolve against the same live,
+    on-disk package the NEW module uses, so OLD and NEW run identical code
+    and agree unconditionally -- a green PASS that proves nothing. A gate
+    that cannot fail is worse than no gate, so this raises rather than
+    warning or degrading to a partial comparison."""
+    if _SHAPE_CHECKS_IMPORT_RE.search(source):
+        raise RuntimeError(
+            f"the source fetched from BASE_SHA={BASE_SHA} imports the shape_checks package, so it is a "
+            f"POST-split revision of {OLD_RELATIVE_PATH}, not the pre-split single-file checker this "
+            "comparison needs. Its imports would resolve against the same live package the NEW module "
+            "uses, making every comparison below vacuously identical. Point BASE_SHA at a commit that "
+            "predates the shape_checks/ split instead."
+        )
+
+
 def _load_old_module(tmp_dir: Path) -> types.ModuleType:
     """The pre-refactor, single-file gitapex_check_skill_shape.py exactly as
     it stood at this branch's own BASE commit -- fetched via `git show`
@@ -78,6 +121,10 @@ def _load_old_module(tmp_dir: Path) -> types.ModuleType:
         capture_output=True,
         text=True,
     )
+    # Checked BEFORE the source is written or imported: a post-split source
+    # would otherwise pull the live shape_checks package in on import and
+    # make the whole comparison vacuous (see _assert_pre_split_source).
+    _assert_pre_split_source(result.stdout)
     old_source_path = tmp_dir / "gitapex_check_skill_shape_old.py"
     old_source_path.write_text(result.stdout, encoding="utf-8")
     return _load_module_from_source("gitapex_check_skill_shape_old", old_source_path)

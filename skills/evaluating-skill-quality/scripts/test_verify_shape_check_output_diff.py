@@ -221,3 +221,76 @@ def test_main_end_to_end_against_the_real_repository() -> None:
     exit_code = vsc.main()
 
     assert exit_code == 0
+
+
+# ---- BASE_SHA-drift defeat case (adversarial-review regression, issue
+# ---- #1330) ----
+#
+# The one way to silently defeat this oracle: point BASE_SHA at a POST-split
+# commit. The "OLD" source fetched from such a commit imports shape_checks,
+# which resolves against the same live on-disk package "NEW" uses, so the
+# comparison degenerates to comparing the working tree against itself and
+# passes unconditionally. Reproduced live before this guard existed: a
+# deliberate evidence-string regression in shape_checks/orchestrator.py made
+# main() report all 29 skills differing at the real BASE_SHA, and report a
+# clean PASS the moment BASE_SHA was moved to a post-split commit.
+
+
+def test_assert_pre_split_source_accepts_a_stdlib_only_pre_split_source() -> None:
+    # The real pre-split checker is a single stdlib-only file that never
+    # imports shape_checks -- this must not be a false positive.
+    vsc._assert_pre_split_source("import argparse\nimport sys\nfrom pathlib import Path\n")
+
+
+def test_assert_pre_split_source_tolerates_a_prose_mention_of_the_package() -> None:
+    # The guard matches an IMPORT, not a bare substring: a docstring or
+    # comment naming shape_checks does not make the comparison vacuous, and
+    # flagging it would block a legitimate pre-split revision.
+    vsc._assert_pre_split_source('"""Superseded by the shape_checks package."""\nimport sys\n')
+
+
+@pytest.mark.parametrize(
+    "post_split_source",
+    [
+        "from shape_checks.constants import CheckResult\n",
+        "import shape_checks.manifest\n",
+        "import argparse\n\nfrom shape_checks.frontmatter import _parse_frontmatter\n",
+    ],
+)
+def test_assert_pre_split_source_rejects_a_post_split_source(post_split_source: str) -> None:
+    with pytest.raises(RuntimeError, match="POST-split revision"):
+        vsc._assert_pre_split_source(post_split_source)
+
+
+def test_load_old_module_refuses_a_post_split_base_sha(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # End of the wiring: a drifted BASE_SHA must fail loudly out of
+    # _load_old_module rather than importing a shape_checks-backed "OLD"
+    # module and producing a vacuous PASS.
+    def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            argv, 0, stdout="from shape_checks.constants import CheckResult\n", stderr=""
+        )
+
+    monkeypatch.setattr(vsc.subprocess, "run", fake_run)
+
+    with pytest.raises(RuntimeError, match="POST-split revision"):
+        vsc._load_old_module(tmp_path)
+
+    # And it refuses BEFORE writing the source out, so no half-materialized
+    # OLD module is left behind for a later step to pick up.
+    assert not (tmp_path / "gitapex_check_skill_shape_old.py").exists()
+
+
+def test_the_real_base_sha_still_points_at_a_pre_split_revision() -> None:
+    """The committed BASE_SHA constant itself must satisfy the guard --
+    otherwise every run of this script is vacuous and the end-to-end test
+    below passes for the wrong reason."""
+    source = subprocess.run(
+        ["git", "show", f"{vsc.BASE_SHA}:{vsc.OLD_RELATIVE_PATH}"],
+        cwd=vsc.REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+
+    vsc._assert_pre_split_source(source)
