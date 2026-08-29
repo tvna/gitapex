@@ -55,9 +55,24 @@ SCAN_SCRIPT_RELATIVE = "skills/outward-artifact-preflight/scripts/gitapex_scan_p
 
 
 def run(
-    command: str, tool_name: object = "Bash", extra_env: dict[str, str] | None = None
+    command: str,
+    tool_name: object = "Bash",
+    extra_env: dict[str, str] | None = None,
+    payload_cwd: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    payload = json.dumps({"tool_name": tool_name, "tool_input": {"command": command}})
+    """PAYLOAD_CWD (issue #1375) sets the PreToolUse payload's own `.cwd`
+    field -- the Bash tool call's own working directory, as Claude Code's
+    real hook JSON carries it -- kept distinct from this `subprocess.run`
+    call's own `cwd=` below (always REPO_ROOT, so the script can find its
+    own classifier companion file via `BASH_SOURCE`), the same split
+    hooks/check-bash-safety.sh's own new git checkout/restore wrapper step
+    relies on: it reads `.cwd` from the payload for its live `git diff`
+    check, never `${CLAUDE_PROJECT_DIR:-$(pwd)}`."""
+    tool_input: dict[str, object] = {"command": command}
+    payload_obj: dict[str, object] = {"tool_name": tool_name, "tool_input": tool_input}
+    if payload_cwd is not None:
+        payload_obj["cwd"] = payload_cwd
+    payload = json.dumps(payload_obj)
     env = dict(os.environ)
     env.pop("CLAUDE_PROJECT_DIR", None)
     if extra_env:
@@ -1258,3 +1273,199 @@ def test_git_push_silent_when_scan_finds_nothing(tmp_path: Path) -> None:
     assert result.returncode == 0
     assert result.stdout == ""
     assert result.stderr == ""
+
+
+# --- Finding 5: git checkout/restore gated on a live git-diff check (issue
+# #1375). End-to-end regression suite for hooks/check-bash-safety.sh's own
+# new wrapper step, matching this file's own established convention: run
+# the shipped script via subprocess against a real scratch git repo, rather
+# than re-deriving its behavior in Python.
+
+
+def _git(repo_dir: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", "-c", "commit.gpgsign=false", *args],
+        cwd=str(repo_dir),
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env={**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"},
+    )
+
+
+def _init_repo_with_committed_file(repo_dir: Path, filename: str = "f.py", content: str = "hello\n") -> Path:
+    repo_dir.mkdir(parents=True, exist_ok=True)
+    _git(repo_dir, "init", "-q")
+    # Pinned explicitly rather than relying on the host's own
+    # `init.defaultBranch` (matches `_init_diverged_repo`'s own established
+    # convention above, for the identical determinism reason): a test that
+    # later checks out a branch literally named "main" must not depend on
+    # what a given git installation happens to default to.
+    _git(repo_dir, "symbolic-ref", "HEAD", "refs/heads/main")
+    _git(repo_dir, "config", "user.email", "test@example.com")
+    _git(repo_dir, "config", "user.name", "Test")
+    file_path = repo_dir / filename
+    file_path.write_text(content)
+    _git(repo_dir, "add", filename)
+    _git(repo_dir, "commit", "-q", "-m", "base commit")
+    return file_path
+
+
+def test_checkout_denied_when_target_has_uncommitted_changes(tmp_path: Path) -> None:
+    repo_dir = tmp_path / "repo"
+    file_path = _init_repo_with_committed_file(repo_dir)
+    file_path.write_text("hello\ndirty\n")
+    result = run("git checkout -- f.py", payload_cwd=str(repo_dir))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+    payload = json.loads(result.stderr)
+    assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "f.py" in payload["systemMessage"]
+    assert "git stash" in payload["systemMessage"]
+
+
+def test_checkout_denied_from_a_subdirectory_when_target_has_uncommitted_changes(tmp_path: Path) -> None:
+    """The near-miss's own exact shape (issue #1375, issue #1128 repair 4):
+    replayed from a SUBDIRECTORY of the repo, not just the repo root --
+    `.cwd` (Claude Code's own record of the Bash tool call's actual
+    working directory) must be what the live check resolves the pathspec
+    against, not this hook runner's own `${CLAUDE_PROJECT_DIR:-$(pwd)}`."""
+    repo_dir = tmp_path / "repo"
+    file_path = _init_repo_with_committed_file(repo_dir)
+    file_path.write_text("hello\ndirty\n")
+    subdir = repo_dir / "sub"
+    subdir.mkdir()
+    result = run("git checkout -- ../f.py", payload_cwd=str(subdir))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+    payload = json.loads(result.stderr)
+    assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_checkout_allowed_when_target_is_clean(tmp_path: Path) -> None:
+    repo_dir = tmp_path / "repo"
+    _init_repo_with_committed_file(repo_dir)
+    result = run("git checkout -- f.py", payload_cwd=str(repo_dir))
+    assert result.returncode == 0, f"stderr={result.stderr!r}"
+    assert result.stdout == ""
+    assert result.stderr == ""
+
+
+def test_checkout_dot_denied_when_a_tracked_file_is_dirty(tmp_path: Path) -> None:
+    repo_dir = tmp_path / "repo"
+    file_path = _init_repo_with_committed_file(repo_dir)
+    file_path.write_text("hello\ndirty\n")
+    result = run("git checkout .", payload_cwd=str(repo_dir))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+
+
+def test_ordinary_branch_switch_allowed(tmp_path: Path) -> None:
+    repo_dir = tmp_path / "repo"
+    _init_repo_with_committed_file(repo_dir)
+    result = run("git checkout -b feature-x", payload_cwd=str(repo_dir))
+    assert result.returncode == 0, f"stderr={result.stderr!r}"
+    assert result.stdout == ""
+    assert result.stderr == ""
+
+
+def test_restore_denied_when_target_has_uncommitted_changes(tmp_path: Path) -> None:
+    repo_dir = tmp_path / "repo"
+    file_path = _init_repo_with_committed_file(repo_dir)
+    file_path.write_text("hello\ndirty\n")
+    result = run("git restore f.py", payload_cwd=str(repo_dir))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+
+
+def test_restore_staged_allowed_even_when_worktree_is_dirty(tmp_path: Path) -> None:
+    """`git restore --staged PATH` never touches the working tree --
+    `checkout_restore_paths` stays empty for it (never live-checked), so
+    this must be allowed regardless of the file's own working-tree
+    dirtiness."""
+    repo_dir = tmp_path / "repo"
+    file_path = _init_repo_with_committed_file(repo_dir)
+    file_path.write_text("hello\ndirty\n")
+    result = run("git restore --staged f.py", payload_cwd=str(repo_dir))
+    assert result.returncode == 0, f"stderr={result.stderr!r}"
+    assert result.stdout == ""
+    assert result.stderr == ""
+
+
+def test_checkout_denied_when_payload_cwd_is_missing(tmp_path: Path) -> None:
+    repo_dir = tmp_path / "repo"
+    _init_repo_with_committed_file(repo_dir)
+    result = run("git checkout -- f.py", payload_cwd=None)
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+    payload = json.loads(result.stderr)
+    assert ".cwd" in payload["systemMessage"]
+
+
+def test_checkout_denied_when_payload_cwd_is_not_a_git_repo(tmp_path: Path) -> None:
+    not_a_repo = tmp_path / "not-a-repo"
+    not_a_repo.mkdir()
+    result = run("git checkout -- f.py", payload_cwd=str(not_a_repo))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+    payload = json.loads(result.stderr)
+    assert "not inside a git working tree" in payload["systemMessage"]
+
+
+def test_checkout_allowed_on_unborn_head_with_no_conflicting_content(tmp_path: Path) -> None:
+    """A fresh repo with no commits yet has no HEAD to diff against --
+    must fall back to the empty-tree hash rather than spuriously denying a
+    genuinely clean fresh repo (issue #1375's own Acceptance Criteria
+    Map)."""
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+    _git(repo_dir, "init", "-q")
+    result = run("git checkout -- x.txt", payload_cwd=str(repo_dir))
+    assert result.returncode == 0, f"stderr={result.stderr!r}"
+
+
+def test_checkout_denied_on_unborn_head_when_staged(tmp_path: Path) -> None:
+    """The empty-tree-hash fallback still denies when the target genuinely
+    differs from an empty tree (staged on a fresh, commit-less repo)."""
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+    _git(repo_dir, "init", "-q")
+    (repo_dir / "x.txt").write_text("hello\n")
+    _git(repo_dir, "add", "x.txt")
+    result = run("git checkout -- x.txt", payload_cwd=str(repo_dir))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+
+
+def test_checkout_with_tree_relocation_flag_denied_end_to_end(tmp_path: Path) -> None:
+    """The classifier's own denial (found before this wrapper step ever
+    runs a live git call) reaches the operator through the full shell
+    pipeline too: a `-C` global flag makes the wrapper's own fixed `.cwd`
+    unsound for this invocation."""
+    repo_dir = tmp_path / "repo"
+    _init_repo_with_committed_file(repo_dir)
+    result = run(f"git -C {repo_dir} checkout -- f.py", payload_cwd=str(repo_dir))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+    payload = json.loads(result.stderr)
+    assert "working tree is at risk" in payload["systemMessage"]
+
+
+def test_checkout_denied_in_a_real_merge_conflict_names_the_conflict_remedy(tmp_path: Path) -> None:
+    """A real merge conflict (issue #1375's own Acceptance Criteria Map):
+    the deny message names a remedy that actually works mid-conflict
+    (`git checkout -m -- PATH`), not only `git stash` (which fails with
+    "needs merge" while a conflict is unresolved)."""
+    repo_dir = tmp_path / "repo"
+    file_path = _init_repo_with_committed_file(repo_dir, filename="f.txt", content="line1\n")
+    _git(repo_dir, "checkout", "-q", "-b", "branch-a")
+    file_path.write_text("line1-a\n")
+    _git(repo_dir, "commit", "-q", "-am", "change on a")
+    _git(repo_dir, "checkout", "-q", "-b", "branch-main", "main")
+    file_path.write_text("line1-main\n")
+    _git(repo_dir, "commit", "-q", "-am", "change on main")
+    subprocess.run(
+        ["git", "merge", "branch-a", "-q"],
+        cwd=str(repo_dir),
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env={**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"},
+    )
+    result = run("git checkout -- f.txt", payload_cwd=str(repo_dir))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+    payload = json.loads(result.stderr)
+    assert "git checkout -m" in payload["systemMessage"]
