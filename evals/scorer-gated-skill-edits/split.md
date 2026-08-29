@@ -42,15 +42,18 @@ boundaries stating both rules normatively. Both close
 `unclear-agent-instruction` gaps found by issue #343's own retrospective
 (see gitapex#1444's Acceptance Criteria Map).
 
-Precondition and splits: reused unchanged (the assignment above); no new
-fixture was added this iteration -- issue #1444's own Constraints scoped
-authoring a purpose-built fixture out of this change.
+### Precondition and splits
 
-**Blind spot pass (scorer-gated precondition gate):** named explicitly.
-Directly read all 7 selection-split fixtures
-(`edge.yaml`, `split-leak.yaml`, `llm-judge-without-adversarial-pass.yaml`,
-`heldout-ordinary-scalar-tie.yaml`, `heldout-correctness-drop-reject.yaml`,
-`heldout-runner-version-absent-stop.yaml`,
+Reused unchanged (the assignment above); no new fixture was added this
+iteration -- issue #1444's own Constraints scoped authoring a
+purpose-built fixture out of this change.
+
+### Blind spot pass
+
+Named explicitly (scorer-gated precondition gate). Directly read all 7
+selection-split fixtures (`edge.yaml`, `split-leak.yaml`,
+`llm-judge-without-adversarial-pass.yaml`, `heldout-ordinary-scalar-tie.yaml`,
+`heldout-correctness-drop-reject.yaml`, `heldout-runner-version-absent-stop.yaml`,
 `heldout-run-record-cannot-be-skipped.yaml`): none probes ordinal/count
 cross-reference staleness (the new step 3 sub-step) or named-fixture
 corroboration integrity (the new step 5/7 language and Stop boundaries).
@@ -61,8 +64,12 @@ actually touches") -- a REJECT tie, or more precisely an unmeasurable
 run, is the expected outcome here, not an anomalous one, unless a new
 purpose-built fixture is authored first.
 
-Classification: ordinary (adds and rewords prose across step 3/5/7 and
-adds two Stop-boundary bullets; not pruning-only).
+### Classification
+
+Ordinary (adds and rewords prose across step 3/5/7 and adds two
+Stop-boundary bullets; not pruning-only).
+
+### Gate result
 
 No live measured run was performed this iteration: per the Blind spot
 pass above, no fixture in the current corpus can register a score change
@@ -71,11 +78,33 @@ with no diagnostic value, and gitapex#1444's own Constraints did not
 include authoring one. Verified instead via this repository's
 deterministic tooling: `gitapex_check_skill_shape.py` (47/47 on
 `scorer-gated-skill-edits`, including `body-length`,
-`no-step-location-contradiction`, and `anchor-targets-resolve`) and the
-full `pytest` suite, both green against the candidate.
+`no-step-location-contradiction`, and `anchor-targets-resolve`), the
+full `pytest` suite, and `.github/scripts/gitapex_gate_skill_branch_fixture_coverage.py`
+(the two new Stop-boundary bullets bring this skill's own decision-branch
+count to 13, against 15 existing fixtures in `evals/scorer-gated-skill-edits/tasks/`
+-- PASS, no new fixture required by that gate's own absolute
+count-comparison rule), all green against the candidate.
 
-**Verdict: NOT MEASURED (disclosed).** Extending the corpus with
-fixtures that actually probe the step 3 cross-reference-sweep rule and
-the step 5/7 restraint-check-corroboration rule is the honest next step
-if this edit's real effect is ever to be measured -- not treating this
-disclosed gap as a KEEP by default.
+### Transfer check
+
+Not run this iteration: this edit changes `scorer-gated-skill-edits`'s
+own procedure text, not a target skill's behavioral output, so there is
+no adjacent model/harness output to re-run and compare against a
+no-skill baseline the way step 6 means for an ordinary skill edit.
+Disclosed rather than silently assumed satisfied.
+
+### Rejected-edit log
+
+None this iteration.
+
+### Verdict
+
+**NOT MEASURED (disclosed).** Extending the corpus with fixtures that
+actually probe the step 3 cross-reference-sweep rule and the step 5/7
+restraint-check-corroboration rule is the honest next step if this
+edit's real effect is ever to be measured -- not treating this disclosed
+gap as a KEEP by default. The edit itself is applied to
+`skills/scorer-gated-skill-edits/SKILL.md` on its own merits (verified
+deterministically per Gate result above), the same "gate honestly
+disclosed as unmeasurable, shipped on independent deterministic
+verification instead" pattern gitapex#406's own iteration entry used.
