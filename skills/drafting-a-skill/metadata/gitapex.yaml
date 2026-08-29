@@ -49,12 +49,22 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1304"
       summary: "the prior correction's own 'SYSTEM OVERRIDE tripped a content-policy block' diagnosis is disproven: the reworded payload failed identically (same empty-stderr 'model CLI exited 1' signature), and the same signature reproduces on an unrelated branch touching different skills' suites hours earlier -- a pre-existing, repo-wide waza-eval-gate defect unrelated to this PR's fixture content, filed as https://github.com/tvna/gitapex/issues/1304 and out of this PR's own scope to fix"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1379"
+      summary: "split Step 2 into Part A (value judgment, borrowing eliciting-a-design's own Core Domain three axes) and Part B (vehicle selection, the original four criteria carried forward byte-identical); Part A inherits a prior eliciting-a-design Core Domain verdict as a re-verifiable starting point when reached via the generic pipeline, never a skip"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1379"
+      summary: "an independent battle-testing-a-skill dispatch found Part A's first inheritance draft trusted a bare in-session claim that a prior eliciting-a-design pass happened, with nothing quotable required -- an unguarded rationalization seam distinct from the already-resisted external-injection path. Fixed: Part A now requires locating and quoting the prior verdict verbatim before adopting it; nothing verbatim falls back to running Part A in full"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1379"
+      summary: "an independent evaluating-skill-quality dispatch found eliciting-a-design named in Step 2's own prose three times but absent from both relatedTo and Related skills, and the Notes portability claim ('Steps 1-7, 9 depend on no repository-specific tooling') now false -- Step 6's own reconciliation rule applied to itself. Added to relatedTo/Related skills; Notes now carves out Step 2 as the one exception"
   skillDependencies:
     requires:
       - evaluating-skill-quality
     relatedTo:
       - battle-testing-a-skill
       - drafting-issues
+      - eliciting-a-design
       - evaluating-deterministic-gate-quality
       - evaluating-context-channel-maturity
       - untrusted-input-triage

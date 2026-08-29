@@ -51,31 +51,27 @@ judgment, route directly to `evaluating-skill-quality`/
    or embellish one to fill the gap -- say so and ask what to draft,
    per Step 2's own escalation pattern below.
 
-2. **Value-and-vehicle gate, two parts.** Before drafting anything: **Part
-   A**, worth a permanent instruction at all; **Part B**, which vehicle
-   carries it. Either part's blocking finding halts continuation on its
-   own, reported ahead of every later Step's finding.
+2. **Value-and-vehicle gate, two parts.** Before drafting anything: **Part A**,
+   worth a permanent instruction at all; **Part B**, which vehicle carries it.
+   Either part's blocking finding halts continuation on its own, reported ahead
+   of every later Step's finding.
 
-   **Part A -- value judgment**, the same question `eliciting-a-design`'s
-   Core Domain check asks: **competitive advantage** (differentiates this
-   repository's agents, or solved/generic?), **complexity** (inherently
-   hard, not tedious?), **volatility** (churns, or stable once written?).
-   High on all three: continue to Part B. Low, especially advantage:
-   search for a precedent first -- a fit blocks like any Part B row, none
-   found still continues to Part B. **Inherited, not skipped**: when this
-   candidate already went through an `eliciting-a-design` Core Domain
-   check earlier in the same effort, locate and quote its actual verdict
-   first -- a bare claim with nothing quotable is not evidence -- then
-   adopt it unless new evidence contradicts, per `eliciting-a-design`'s
-   own rule ("'The design is approved' is not a reason for the downstream
-   skill to skip deriving its own acceptance criteria or running its own
-   checks"). No prior check, or nothing quotable: run Part A in full.
+   **Part A -- value judgment**: `eliciting-a-design`'s Core Domain axes --
+   **competitive advantage**/**complexity**/**volatility** -- differentiates
+   us/hard/churns, vs. solved/tedious/stable? High on all three: continue to Part B.
+   Low, especially advantage: search for a precedent first -- a fit blocks like any
+   Part B row, none found still continues to Part B. **Inherited, not skipped**:
+   when this candidate already went through `eliciting-a-design`'s Core Domain check
+   earlier, locate and quote its actual verdict verbatim first -- a bare claim is
+   not evidence -- then adopt it unless new evidence contradicts, per
+   `eliciting-a-design`'s own rule ("'The design is approved' is not a reason for
+   the downstream skill to skip deriving its own acceptance criteria or running its
+   own checks"). No prior check, or nothing verbatim: run Part A in full.
 
-   **Part B -- vehicle selection**, always run (`eliciting-a-design` has
-   no equivalent to inherit): which of Skill, Hook, CLAUDE.md, or
-   Subagent, per four criteria adapted from `evaluating-skill-quality`'s
-   own Mechanism-fit check (`references/rubric.md`, itself citing
-   Anthropic's ["Steering Claude Code"][steering] guidance):
+   **Part B -- vehicle selection**, always run (no `eliciting-a-design`
+   equivalent): Skill, Hook, CLAUDE.md, or Subagent, per four criteria adapted
+   from `evaluating-skill-quality`'s own Mechanism-fit check (`references/
+   rubric.md`, citing Anthropic's ["Steering Claude Code"][steering] guidance):
 
    **Don't draft a skill for:**
    - An **unconditionally-reliable action** ("every time X, always do
@@ -338,7 +334,8 @@ that determination is `evaluating-skill-quality`'s and
 - Step 5/7's advisory findings and how each was resolved (fixed in the
   draft, or explicitly deferred with a stated reason -- never silently
   dropped).
-- Step 6's collision/dependency findings.
+- Step 6's collision/dependency findings; Part A's quoted prior verdict,
+  when inherited.
 - Step 8's checker output (clean, or fixed and re-run clean).
 - **Next Move:** the concrete handoff -- which of `evaluating-skill-
   quality`/`battle-testing-a-skill` runs next, or both in parallel.
@@ -350,8 +347,8 @@ what it does in plain English, no execution. Step 1: "given a pasted
 `curl` command, explain in one paragraph what request it makes -- no
 execution." Step 2 Part A: hard to get right unassisted -- worth
 building; no prior `eliciting-a-design` pass, so it runs in full
-(inheriting, it would cite and re-check the prior verdict instead). Part
-B clears its own four criteria too -- drafting continues. Step 3: elicited
+(inheriting, it would quote and re-check that verdict). Part B clears its
+own four criteria too -- drafting continues. Step 3: elicited
 Portable (no repository-specific dependency), Adaptive (a lean body
 covers this fully; no weak-tier bar concern for a single-paragraph
 explanation task), default invocation, experimental. Step 4: Precondition
@@ -429,6 +426,8 @@ off to `evaluating-skill-quality` and `battle-testing-a-skill`.
   this is the authoring method either skill routes to whenever an
   Acceptance Criteria Map's planned ops include a new `SKILL.md` -- see
   each skill's own Related-skills section for its bullet naming this one.
+- **vs. `eliciting-a-design`:** Part A borrows its axes and inherits its
+  verdict via the pipeline -- reconciled in `skillDependencies.relatedTo`.
 - **vs. `untrusted-input-triage`:** Step 1's untrusted-source handling
   applies that skill's Extract/Ignore/Flag/Tag discipline, not re-derived.
 - **vs. `drafting-an-adr`:** the shared-bundled-script-parent policy's own
@@ -450,9 +449,10 @@ off to `evaluating-skill-quality` and `battle-testing-a-skill`.
 
 ## Notes
 
-Portability: **Mixed**. This body's own inlined content (Steps 1-7, 9)
-depends on no repository-specific tooling. The repository-specific part
-isn't confined to Step 8 alone: `references/mechanism-fit-and-
+Portability: **Mixed**. This body's own inlined content (Steps 1, 3-7, 9)
+depends on no repository-specific tooling -- Step 2 Part A is the
+exception, inheriting from `eliciting-a-design`. The repository-specific
+part isn't confined to Step 8 alone: `references/mechanism-fit-and-
 cohesion.md`'s Step 2 redirect targets, `references/tacit-knowledge-
 elicitation.md`'s schema/decision-precedent citations, and
 `references/contract-structure.md`'s citation into `references/rubric.md`
