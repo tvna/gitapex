@@ -66,17 +66,26 @@ jobs:
       # absolute respectively (confirmed against xenon's own source,
       # xenon/core.py, not assumed from the flag names' surface reading).
       # gitapex_check_skill_shape.py (CC 99/64, rank F, MI 0.00) is excluded as
-      # pre-existing, already-tracked debt -- re-measure trigger: drop the
-      # exclude once its two named functions (_parse_manifest,
-      # check_shape) are refactored below rank F. apm_modules/* is
-      # excluded defensively even though no workflow here populates it
-      # (it is apm's gitignored package cache), consistent with every
-      # other gate's scope never reaching into it. Source-tree-based, not
-      # test-result-based -- unaffected by the pytest-job split above.
+      # pre-existing, already-tracked debt. Issue #1330: this file's own
+      # check-family functions moved verbatim (zero behavior change) into
+      # shape_checks/*.py, carrying their pre-existing complexity with them
+      # -- so shape_checks/* is excluded too, as an interim state, while
+      # check_shape() itself stays in gitapex_check_skill_shape.py (still
+      # covered by its own exclude entry). Re-measure trigger: narrow or
+      # drop the shape_checks/* entry once its own worst offenders
+      # (currently _parse_manifest in shape_checks/manifest.py and
+      # _execution_requirements_checks in shape_checks/execution_requirements.py,
+      # both rank F) are internally decomposed below rank F; drop the
+      # gitapex_check_skill_shape.py entry once check_shape() itself is.
+      # apm_modules/* is excluded defensively even though no workflow here
+      # populates it (it is apm's gitignored package cache), consistent
+      # with every other gate's scope never reaching into it.
+      # Source-tree-based, not test-result-based -- unaffected by the
+      # pytest-job split above.
       - name: Enforce cyclomatic-complexity ceiling
         run: |
           uv run --frozen xenon --max-absolute E --max-modules B --max-average A \
-            --exclude "apm_modules/*,skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py" \
+            --exclude "apm_modules/*,skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py,skills/evaluating-skill-quality/scripts/shape_checks/*" \
             .
 
       # Uploaded as a raw coverage DATA file (never a report -- see the
