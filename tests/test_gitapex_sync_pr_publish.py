@@ -4,6 +4,7 @@ import json
 import urllib.error
 import urllib.request
 
+import _gitapex_github_http
 import gitapex_sync_pr_publish as spp
 import pytest
 
@@ -136,7 +137,13 @@ def test_apply_call_uses_default_opener(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(spp.urllib.request, "urlopen", fake_urlopen)
     code, _body = spp.apply_call(method="GET", url="https://api.github.com/x", payload=None, token="tok")
     assert code == 200
-    assert captured["timeout"] == spp._HTTP_TIMEOUT_SECONDS
+    # Issue #729: the timeout now comes from the shared module's own
+    # constant (apply_call defaults `opener` to
+    # `_gitapex_github_http.default_opener`), not a local copy -- this
+    # module's own `_HTTP_TIMEOUT_SECONDS` was deleted with the inline
+    # retry loop it belonged to, so asserting against it here would have
+    # been asserting one number happens to equal another.
+    assert captured["timeout"] == _gitapex_github_http._HTTP_TIMEOUT_SECONDS
 
 
 # ---------------------------------------------------------------------------
@@ -224,16 +231,6 @@ def test_graphql_call_uses_default_opener(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr(spp.urllib.request, "urlopen", fake_urlopen)
     code, _body = spp.graphql_call(query="q", variables={}, token="tok")
     assert code == 200
-
-
-# ---------------------------------------------------------------------------
-# _format_code
-# ---------------------------------------------------------------------------
-
-
-def test_format_code() -> None:
-    assert spp._format_code(0) == "000"
-    assert spp._format_code(404) == "404"
 
 
 # ---------------------------------------------------------------------------

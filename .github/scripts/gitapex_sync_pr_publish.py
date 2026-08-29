@@ -22,6 +22,20 @@ owns the branch, since every commit it makes is already signed.
 Scoped to this one workflow's needs (small, fixed file set; no deletions; no
 multi-commit batching) rather than a general-purpose PR-publishing library.
 
+Issue #729: the retry/backoff HTTP machinery this script needs (previously
+a hand-copied local ``apply_call`` loop plus a local ``graphql_call``) now
+delegates to ``_gitapex_github_http.request_with_retry`` and
+``_gitapex_github_http.graphql_call`` -- the latter moved there wholesale,
+since this script's copy was the correct one every other carrier's was
+measured against. That module is the one deliberate, generic exception to
+this repository's ``.github/scripts/*.py`` independence convention (see its
+own docstring, and gitapex_scan_retrospective_gate_drift.py's docstring for
+the convention itself) -- this script otherwise stays dependency-light
+(stdlib plus ``pydantic``, this repository's own pinned CLI-arg validation
+dependency) and does not import any other carrier script. Public function
+signatures are unchanged; ``apply_call``'s own docstring notes the one
+observable difference the delegation introduces.
+
 Usage::
 
     uv run --frozen python3 .github/scripts/gitapex_sync_pr_publish.py \\
@@ -57,7 +71,6 @@ from _gitapex_github_http import default_opener, graphql_call, request_with_retr
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 _API_ROOT = "https://api.github.com"
-_HTTP_TIMEOUT_SECONDS = 30
 
 _CREATE_COMMIT_ON_BRANCH_MUTATION = """
 mutation($input: CreateCommitOnBranchInput!) {
@@ -88,13 +101,17 @@ def apply_call(
     internal functions (`_get_ref_sha`, `_get_branch_head_oid`,
     `_create_branch_ref`, `_delete_branch`, and others), whose own
     signatures and `apply_call=apply_call` wiring are untouched.
+
+    One disclosed, accepted difference: on a network failure the returned
+    body text is now urllib's own `"<urlopen error boom>"` wrapper rather
+    than the bare `"boom"` this function's former `URLError`-specific
+    handler read off `error.reason`, because `request_with_retry` catches
+    the same failure one level higher as a plain `OSError`. No caller
+    branches on that text -- every one of them branches on the status
+    code, which (like the retry count and backoff timing) is unchanged.
     """
     sleeper = sleeper if sleeper is not None else time.sleep
     return request_with_retry(method, url, token, opener, sleeper, body=payload)
-
-
-def _format_code(code: int) -> str:
-    return "000" if code == 0 else str(code)
 
 
 def _get_ref_sha(*, repo: str, ref: str, token: str, apply_call: Callable[..., tuple[int, str]] = apply_call) -> str:
