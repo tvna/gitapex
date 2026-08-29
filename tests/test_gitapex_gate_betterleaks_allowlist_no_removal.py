@@ -74,6 +74,20 @@ def test_extract_allowlist_paths_raises_when_paths_is_not_an_array() -> None:
         gate.extract_allowlist_paths("[allowlist]\npaths = 'not-a-list'\n")
 
 
+def test_extract_allowlist_paths_fails_closed_on_a_recursion_error() -> None:
+    """Defeat test (adversarial security review): `tomllib.loads` raises a
+    bare `RecursionError`, not `TOMLDecodeError`, for a document nested
+    deeply enough to blow the interpreter's own recursion limit -- an
+    uncaught `except tomllib.TOMLDecodeError` alone would let this crash
+    with an unhandled traceback (Python's default exit 1), colliding with
+    this gate's own documented exit-1 "unwaived removal found" meaning.
+    Must instead raise GateError (exit 2), the same fail-closed path every
+    other malformed-input case here takes."""
+    deeply_nested = "x = " + "[" * 3000 + "]" * 3000
+    with pytest.raises(gate.GateError, match=r"cannot parse \.betterleaks\.toml as TOML"):
+        gate.extract_allowlist_paths(deeply_nested)
+
+
 # --- waiver_bodies / find_unwaived_removals --------------------------------
 
 
@@ -407,17 +421,25 @@ def test_the_workflow_uses_merge_base_not_base_sha() -> None:
     `git` subcommand, so this is a bespoke check for the same invariant.
     `$BASE_SHA` legitimately appears elsewhere in the step (the
     `git merge-base` call itself, and the failure message naming both
-    SHAs) -- only the line invoking the gate script is checked for it."""
+    SHAs) -- only the line(s) invoking the gate script are checked for it.
+
+    The real workflow's own invocation wraps across two lines with a `\\`
+    continuation (the script-path line, then a separate `--merge-base
+    "$merge_base"` line) -- checked as two distinct line classes below,
+    not one combined "any of these lines" pool: a decoy line elsewhere in
+    the matched set (e.g. a comment quoting `"$merge_base"` in prose) must
+    not let a real regression on the `--merge-base` flag's own line pass
+    unnoticed, the exact gap an earlier revision of this test had (an
+    adversarial-review finding, issue #1427)."""
     scripts = _run_scripts(_WORKFLOW_NAME)
     combined = "\n".join(scripts)
     assert 'merge_base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")' in combined, combined
-    invocation_lines = [
-        line
-        for script in scripts
-        for line in script.split("\n")
-        if "gitapex_gate_betterleaks" in line or "--merge-base" in line
-    ]
-    assert invocation_lines, combined
-    for line in invocation_lines:
-        assert '"$merge_base"' in " ".join(invocation_lines), combined
+    all_lines = [line for script in scripts for line in script.split("\n")]
+    script_path_lines = [line for line in all_lines if "gitapex_gate_betterleaks" in line]
+    merge_base_flag_lines = [line for line in all_lines if "--merge-base" in line]
+    assert script_path_lines, combined
+    assert merge_base_flag_lines, combined
+    for line in merge_base_flag_lines:
+        assert '"$merge_base"' in line, line
+    for line in script_path_lines + merge_base_flag_lines:
         assert "$BASE_SHA" not in line, line

@@ -96,11 +96,19 @@ def extract_allowlist_paths(toml_text: str) -> list[str]:
     failure -- since a base commit predating the block, or a head commit
     that deletes the block entirely, are both meaningful states for the
     comparison to catch, not malformed input. A document that is not valid
-    TOML at all raises :class:`GateError`."""
+    TOML at all raises :class:`GateError`, including one whose nesting is
+    deep enough to blow the interpreter's own recursion limit (`tomllib`'s
+    recursive-descent parser raises a bare `RecursionError` for that case,
+    not `TOMLDecodeError` -- confirmed live against a ~3000-level-deep
+    array literal; caught here so this still exits the documented 2, not
+    an unhandled-traceback exit 1 that would read as a false "unwaived
+    removal found" against this gate's own 0/1/2 convention)."""
     try:
         data = tomllib.loads(toml_text)
     except tomllib.TOMLDecodeError as error:
         raise GateError(f"cannot parse .betterleaks.toml as TOML: {error}") from error
+    except RecursionError as error:
+        raise GateError(f"cannot parse .betterleaks.toml as TOML: too deeply nested: {error}") from error
     allowlist = data.get("allowlist", {})
     paths = allowlist.get("paths", []) if isinstance(allowlist, dict) else []
     if not isinstance(paths, list):
@@ -151,8 +159,8 @@ def show_file_at_ref(root: pathlib.Path, ref: str, relative_path: str) -> str:
     the same "meaningful absence" :func:`extract_allowlist_paths` accepts
     for a pre-existing or block-deleted file). A ref that cannot be
     resolved at all was already caught earlier, by
-    :func:`_gitapex_base_ref.require_common_ancestor` or the caller's own
-    `--merge-base` validation."""
+    :func:`resolve_merge_base`'s own `git merge-base` failure check or the
+    caller's own `--merge-base` validation."""
     result = _gitapex_base_ref.run_git(
         root,
         ["show", f"{ref}:{relative_path}"],
@@ -169,10 +177,19 @@ def show_file_at_ref(root: pathlib.Path, ref: str, relative_path: str) -> str:
 
 
 def resolve_merge_base(root: pathlib.Path, base_ref: str) -> str:
-    """`git merge-base <base_ref> HEAD`'s own stdout, stripped. Callers run
-    :func:`_gitapex_base_ref.require_common_ancestor` first, so a genuine
-    "no common ancestor" case is already raised with that function's own
-    message before this one ever runs."""
+    """`git merge-base <base_ref> HEAD`'s own stdout, stripped -- the sole
+    `git merge-base` invocation this gate makes (an earlier revision also
+    called `_gitapex_base_ref.require_common_ancestor` first, discarding
+    its own identical `git merge-base` call's stdout just to get a
+    dedicated "no common ancestor" message; a reuse/simplification review
+    found that redundant, so this function's own nonzero-exit check below
+    is now the sole failure path). A shallow clone's own genuinely-empty
+    `git merge-base` stderr (confirmed live: it prints nothing at all on
+    that specific failure) means this function's own message may read as
+    a bare `git merge-base ... failed: ` with no further detail in that
+    one case -- a known, accepted trade-off for not running the same git
+    command twice, not a regression: the gate still fails closed
+    (:class:`GateError`) either way, only the diagnostic detail differs."""
     result = _gitapex_base_ref.run_git(
         root,
         ["merge-base", base_ref, "HEAD"],
@@ -198,7 +215,6 @@ def check(root: pathlib.Path, *, merge_base: str | None = None) -> list[str]:
             root, BASE_REMOTE, BASE_BRANCH, timeout=GIT_TIMEOUT_SECONDS, error_cls=GateError
         )
         qualified_ref = f"refs/remotes/{BASE_REMOTE}/{BASE_BRANCH}"
-        _gitapex_base_ref.require_common_ancestor(root, qualified_ref, timeout=GIT_TIMEOUT_SECONDS, error_cls=GateError)
         merge_base = resolve_merge_base(root, qualified_ref)
 
     base_text = show_file_at_ref(root, merge_base, ALLOWLIST_RELATIVE_PATH)
