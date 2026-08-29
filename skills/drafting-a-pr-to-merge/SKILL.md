@@ -186,8 +186,9 @@ truth for the procedure regardless of platform naming.
    and explicitly disclose, wherever this layer's outcome is recorded, that
    Copilot's review is Comment-only with no pass/fail signal of its own — a
    materially weaker guarantee than the App's severity summary, not equivalent.
-   Where neither mechanism is configured or reachable, record that this
-   layer did not run at all; never silently omit that disclosure.
+   Where neither mechanism is configured, reachable, or responsive
+   within 30 minutes of being requested, record that this layer did
+   not run at all; never silently omit that disclosure.
 
    **Inner layer (always runs, regardless of the outer layer's
    availability or outcome).** Determine the diff's complexity: read a
