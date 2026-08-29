@@ -806,3 +806,48 @@ def test_main_prints_message_and_returns_one_on_registry_read_error(capsys, monk
     assert rc == 1
     assert "ssot.json drift:" in out
     assert "/fake/ssot.json: is not valid UTF-8: boom" in out
+
+
+# ---------------------------------------------------------------------------
+# tracking_issue: single issue / multiple issues / null (issue #1425)
+# ---------------------------------------------------------------------------
+
+
+def test_tracking_issue_accepts_a_single_integer(tmp_path):
+    instance = json.loads(json.dumps(_VALID_INSTANCE))
+    instance["gates"][0]["tracking_issue"] = 344
+    instance_path = _write_instance(tmp_path, instance)
+    assert drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT) == []
+
+
+def test_tracking_issue_accepts_null(tmp_path):
+    instance = json.loads(json.dumps(_VALID_INSTANCE))
+    instance["gates"][0]["tracking_issue"] = None
+    instance_path = _write_instance(tmp_path, instance)
+    assert drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT) == []
+
+
+def test_tracking_issue_accepts_a_list_of_at_least_two_issue_numbers(tmp_path):
+    instance = json.loads(json.dumps(_VALID_INSTANCE))
+    instance["gates"][0]["tracking_issue"] = [520, 344]
+    instance_path = _write_instance(tmp_path, instance)
+    assert drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT) == []
+
+
+def test_tracking_issue_rejects_a_single_element_array(tmp_path):
+    # A one-element array is rejected so the plain-integer form stays the
+    # only way to express "tracked under exactly one issue" -- otherwise
+    # `344` and `[344]` would be two ways to say the same thing.
+    instance = json.loads(json.dumps(_VALID_INSTANCE))
+    instance["gates"][0]["tracking_issue"] = [344]
+    instance_path = _write_instance(tmp_path, instance)
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+    assert any("schema:" in f and "tracking_issue" in f for f in findings)
+
+
+def test_parse_registry_gate_tracking_issue_accepts_list_value():
+    instance = json.loads(json.dumps(_VALID_INSTANCE))
+    instance["gates"][0]["tracking_issue"] = [297, 422, 426]
+    registry = drift._parse_registry(instance)
+    assert registry is not None
+    assert registry.gates[0].tracking_issue == [297, 422, 426]
