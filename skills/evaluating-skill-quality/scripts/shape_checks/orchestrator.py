@@ -64,9 +64,10 @@ def _skill_md_read_result(skill_md: Path) -> tuple[str | None, CheckResult]:
         # ``skill_md.is_file()`` before ever calling check_shape() and
         # returns exit 2 for that case (see test_directory_without_skill_md_
         # returns_2), the same "missing" vs. "present but corrupt" split the
-        # sidecar's own is_file() check below draws. Re-raising here (rather
-        # than folding "missing" into the "present but unreadable" evidence
-        # below) keeps that split intact for any other direct caller too.
+        # sidecar's own is_file() check in check_shape draws. Re-raising
+        # here (rather than folding "missing" into the "present but
+        # unreadable" evidence below) keeps that split intact for any
+        # other direct caller too.
         raise
     except (OSError, UnicodeDecodeError) as exc:
         return None, CheckResult(
@@ -258,7 +259,7 @@ def _dependency_policy_declared_result(spec_is_mapping: bool, spec_raw: object, 
     dependency_policy = spec.get("dependencyPolicy")
     if not spec_is_mapping:
         # Same precondition failure portability-declared/
-        # capability-assumption-declared already report above --
+        # capability-assumption-declared already report in check_shape --
         # "not declared (optional)" would misreport a non-mapping
         # spec as the ordinary optional-and-absent case, mirroring
         # references-well-formed's own guard below.
@@ -317,8 +318,8 @@ def _references_well_formed_result(
         # spec itself failed to parse as a mapping (e.g. "spec:
         # some-scalar"), the same precondition failure
         # portability-declared/capability-assumption-declared
-        # already report above -- "not declared" would misreport
-        # this as the ordinary optional-and-absent case.
+        # already report in check_shape -- "not declared" would
+        # misreport this as the ordinary optional-and-absent case.
         result = CheckResult(
             "references-well-formed", False, references_well_formed_rule, f"spec is not a mapping: {spec_raw!r}"
         )

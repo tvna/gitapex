@@ -103,9 +103,10 @@ def _citation_sources(skill_md: Path, skill_dir: Path, body: list[str]) -> list[
     when this exemption was first tried (issue #834 follow-up). The
     Markdown-syntax-specific checks (TOC-heading presence,
     links-inside-skill, anchor-targets-resolve) stay .md-only, in the
-    separate references/ loop below this function -- those really are
-    Markdown conventions a non-Markdown file has no notion of; the prose
-    checks built on this function are not.
+    separate references/ loop (``shape_checks/orchestrator.py``'s
+    ``_references_dir_checks``) -- those really are Markdown conventions a
+    non-Markdown file has no notion of; the prose checks built on this
+    function are not.
     """
     sources: list[tuple[str, str]] = [(skill_md.name, "\n".join(body))]
     refs_dir = skill_dir / "references"
@@ -378,9 +379,10 @@ def _step_location_offenders(body_text: str) -> list[str]:
     the main thread" while its Subagent dispatch section required step 6
     to "execute inside" the dispatch, with nothing reconciling the two).
 
-    Scans sentence-by-sentence (``_SENTENCE_SPLIT_RE``, this file's own
-    sentence tokenizer, shared with the skill-fact-claim hedge-proximity
-    check) rather than the whole document at once: a step number and a
+    Scans sentence-by-sentence (``shape_checks/constants.py``'s
+    ``_SENTENCE_SPLIT_RE``, this checker's own sentence tokenizer, shared
+    with the skill-fact-claim hedge-proximity check) rather than the whole
+    document at once: a step number and a
     location assertion are only read as related when they co-occur in the
     SAME sentence -- two unrelated sentences that separately happen to
     mention some step number and some location phrase, with no shared

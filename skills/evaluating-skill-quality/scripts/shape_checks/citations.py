@@ -180,9 +180,10 @@ def _inline_citation_offenders(
     and both pass. Distinguishing that shape from the legitimate "one
     hedge, a list of several citations" shape above would require more
     than a punctuation-based tokenizer can resolve; this checker is a
-    deliberately simple, practical approximation (see the module's own
-    established tolerance for this tokenizer's "e.g." over-split,
-    elsewhere in this file), not a full parser.
+    deliberately simple, practical approximation (see the same established
+    tolerance for this tokenizer's "e.g." over-split, on
+    ``shape_checks/constants.py``'s own ``_SENTENCE_SPLIT_RE``), not a full
+    parser.
 
     Fenced code blocks are already excluded by the caller via
     ``_blank_fenced_blocks`` -- a citation inside a fenced illustrative

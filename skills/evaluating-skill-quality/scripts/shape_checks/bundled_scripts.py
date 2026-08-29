@@ -94,7 +94,7 @@ def _is_simple_literal_node(node: ast.expr) -> bool:
     """Whether ``node`` (an assignment's RHS value) is a "simple literal"
     for the no-voodoo-constant check: a bare ``ast.Constant``, an
     ``ast.Tuple``/``ast.List``/``ast.Set`` whose every element is itself an
-    ``ast.Constant`` (covers e.g. this file's own
+    ``ast.Constant`` (covers e.g. ``shape_checks/constants.py``'s own
     ``EXEC_REQ_NETWORK_MODES = ("disabled", "allowlist", "unrestricted")``-
     shaped constants), or an ``ast.Dict`` whose every key and value is
     itself an ``ast.Constant`` (a literal-keys-and-values config mapping is
@@ -224,8 +224,9 @@ def _voodoo_constant_offenders(scripts: list[Path]) -> list[str]:
     is guaranteed to notice a bundled script that is simply unreadable,
     so silently skipping it here would let the check pass vacuously for
     a script nobody actually scanned -- reported as an offender instead,
-    matching this file's own ``skill-md-readable`` check's fail-loud
-    precedent for the same failure mode on ``SKILL.md`` itself.
+    matching this checker's own ``skill-md-readable`` check's fail-loud
+    precedent (``shape_checks/orchestrator.py``'s ``_skill_md_read_result``)
+    for the same failure mode on ``SKILL.md`` itself.
     """
     offenders: list[str] = []
     for script in scripts:

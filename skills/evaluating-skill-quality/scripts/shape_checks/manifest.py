@@ -1166,7 +1166,7 @@ def _handle_indented_line(line: str, state: _ParseState) -> None:
             # dependencyPolicy is a closed-vocabulary scalar, not a
             # block key like the four above -- but it still needs its
             # own explicit branch: dependency-policy-declared is the
-            # first check in this file to treat "spec.get(key) is
+            # first check in this checker to treat "spec.get(key) is
             # None" as "absent, therefore fine" for an *optional*
             # field (contrast with the reserved, silently-ignored
             # spec.evalStatus, see

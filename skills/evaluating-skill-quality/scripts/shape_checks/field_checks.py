@@ -105,7 +105,7 @@ def _owning_skill_dir(target: Path) -> Path:
 
 def _validate_read_scope(target: Path, allowed_root: Path) -> None:
     """Reject an escaped or symlinked CLI target before reading any content."""
-    # PTH100 waived on all three abspath calls in this file: Path.resolve()
+    # PTH100 waived on both abspath calls in this file: Path.resolve()
     # follows symlinks, os.path.abspath does not. This function depends on
     # that difference -- it absolutizes without resolving so the loop below
     # can still see each symlinked component and reject it. Rewriting to

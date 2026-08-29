@@ -183,9 +183,10 @@ def _execution_requirements_checks(
     resolve against sibling skill directories, and no rule ties this field
     to portability/capabilityAssumption/lifecycle. network.mode/domains
     DO carry one cross-field rule of their own (domains non-empty iff mode
-    is allowlist), checked below the same way requires-portability-
-    compatible is checked elsewhere in this file, just folded into this
-    same well-formed check rather than earning its own separate
+    is allowlist), checked in ``_execution_requirements_network_problems``
+    above the same way requires-portability-compatible is checked in
+    ``shape_checks/skill_dependencies.py``, just folded into this same
+    well-formed check rather than earning its own separate
     CheckResult -- tools has no analogous cross-subkey rule to justify the
     same split. packages' own allowlist-membership resolution (whether a
     declared package name is one gitapex permits at all) is not part of

@@ -824,9 +824,11 @@ def check_shape(target: Path) -> list[CheckResult]:
             )
             meta = manifest.get("metadata")
             meta_name = meta.get("name") if isinstance(meta, dict) else None
-            # Same waiver: the name compared here must be the symlink's own
-            # basename, not the real directory it points to (see the
-            # metadata-name-matches-dir test for a symlinked skill dir).
+            # Same PTH100 waiver shape_checks/field_checks.py's own
+            # _validate_read_scope documents: the name compared here must
+            # be the symlink's own basename, not the real directory it
+            # points to (see the metadata-name-matches-dir test for a
+            # symlinked skill dir).
             resolved_dir_name = Path(os.path.abspath(skill_dir)).name  # noqa: PTH100
             results.append(
                 CheckResult(

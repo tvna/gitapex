@@ -330,12 +330,12 @@ def _resolves_to_sibling_skill(name: str, siblings_dir: Path) -> bool:
     ``SKILL.md`` check, any non-skill directory under ``siblings_dir`` (a
     docs folder, a work-in-progress directory with no ``SKILL.md`` yet, a
     stray build artifact) would incorrectly read as a resolved reference.
-    Shared by this file's four dangling-reference resolve checks
+    Shared by this checker's four dangling-reference resolve checks
     (related-skill-references-resolve, portable-no-unhedged-skill-fact-claim,
     skill-dependencies-resolve, lifecycle-deprecated-replacement-resolves)
     so the one safety-critical "does this reference resolve" predicate has
-    exactly one implementation in this file, not four copies that could
-    silently diverge. Backports the identical gap fixed in
+    exactly one implementation across the whole package, not four copies
+    that could silently diverge. Backports the identical gap fixed in
     ``gitapex_scan_skill_metadata_schema.py``'s own
     ``_resolves_to_sibling_skill`` (issue #757)."""
     return _is_bare_skill_name(name) and (siblings_dir / name / "SKILL.md").is_file()
