@@ -7,6 +7,12 @@ doc, per this repo's own plan-first discipline. Supersedes this file's own
 first version (a GitHub-native sub-issues design), rejected after adversarial
 review -- see "Rejected: GitHub-native sub-issue hierarchy" below.
 
+Formalized, after this design settled through four rounds of adversarial
+review, into issue #1406 (reframed by this design from its own original,
+narrower "close an existing stub after a zero-repair cycle" scope) via the
+`drafting-issues` skill; that issue's own Acceptance Criteria Map is the
+implementation-ready form of the Components below.
+
 ## Context
 
 `skills/merge-retrospective/SKILL.md`'s Step 1 requires, every cycle, a
