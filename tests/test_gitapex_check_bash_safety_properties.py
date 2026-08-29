@@ -2182,6 +2182,327 @@ def test_names_with_dynamic_assignment_matches_model_for_a_static_then_dynamic_r
     assert other_name not in result
 
 
+def test_names_with_dynamic_assignment_finds_an_array_element_reassignment() -> None:
+    """Regression pin for the real bypass found live by Step 8 independent
+    review, twenty-sixth round (issue #1375): neither `_ASSIGN_RE` nor
+    `_APPEND_ASSIGN_RE` matches bash's own array-element assignment
+    (`NAME[i]=value`/`NAME[i]+=value`) at all -- both anchor immediately
+    after NAME's own bare identifier characters, with no `[...]` in
+    between. Confirmed live: `bash -c 'arr=x; arr[0]=other; echo
+    "arr=[$arr]"'` -> `arr=[other]`."""
+    assert checker._names_with_dynamic_assignment(["arr=x", "arr[0]=other"]) == {"arr"}
+
+
+def test_names_with_dynamic_assignment_finds_an_array_element_append() -> None:
+    """Companion to the plain array-element-assignment pin above, for the
+    `+=` compound form (`NAME[i]+=value`)."""
+    assert checker._names_with_dynamic_assignment(["arr=x", "arr[0]+=other"]) == {"arr"}
+
+
+def test_names_with_dynamic_assignment_array_element_ignores_an_unrelated_name() -> None:
+    """No false positive: an array-element assignment to one name does not
+    poison a completely different name."""
+    assert checker._names_with_dynamic_assignment(["DIR=sub", "arr[0]=other"]) == {"arr"}
+
+
+def test_names_with_dynamic_assignment_finds_a_read_reassignment() -> None:
+    """Regression pin for the real bypass found live by Step 8 independent
+    review, twenty-sixth round (issue #1375): `read NAME` reassigns NAME
+    from runtime input, invisible to `_ASSIGN_RE`/`_APPEND_ASSIGN_RE`
+    entirely. Confirmed live: `bash -c 'DIR=sub; read DIR <<< "other";
+    echo "DIR=[$DIR]"'` -> `DIR=[other]`."""
+    assert checker._names_with_dynamic_assignment(["DIR=sub", ";", "read", "DIR"]) == {"DIR"}
+
+
+def test_names_with_dynamic_assignment_finds_a_readarray_reassignment() -> None:
+    """Companion to the `read` pin above, for `readarray`/`mapfile`'s own
+    equivalent target-operand shape."""
+    assert checker._names_with_dynamic_assignment(["ARR=x", ";", "readarray", "ARR"]) == {"ARR"}
+    assert checker._names_with_dynamic_assignment(["ARR=x", ";", "mapfile", "ARR"]) == {"ARR"}
+
+
+def test_names_with_dynamic_assignment_read_ignores_flag_tokens() -> None:
+    """No false positive from the flag tokens themselves: `-r`/`-a` never
+    match `_BARE_IDENTIFIER_RE` (both start with `-`), so only the real
+    target name is poisoned."""
+    assert checker._names_with_dynamic_assignment(["DIR=sub", ";", "read", "-r", "DIR"]) == {"DIR"}
+
+
+def test_names_with_dynamic_assignment_read_command_word_must_start_its_own_segment() -> None:
+    """No false positive: the literal word `read` appearing as an ordinary
+    argument (not as a command word starting its own segment) must not be
+    treated as the `read` builtin."""
+    assert checker._names_with_dynamic_assignment(["echo", "read", "DIR"]) == set()
+
+
+def test_names_with_dynamic_assignment_finds_a_printf_v_reassignment() -> None:
+    """Regression pin for the real bypass found live by Step 8 independent
+    review, twenty-sixth round (issue #1375): `printf -v NAME` writes a
+    formatted result into NAME, invisible to `_ASSIGN_RE`/`_APPEND_
+    ASSIGN_RE` entirely. Confirmed live: `bash -c 'DIR=sub; printf -v DIR
+    "%s" other; echo "DIR=[$DIR]"'` -> `DIR=[other]`."""
+    assert checker._names_with_dynamic_assignment(["DIR=sub", ";", "printf", "-v", "DIR", "%s", "other"]) == {"DIR"}
+
+
+def test_names_with_dynamic_assignment_printf_without_v_flag_is_unaffected() -> None:
+    """No false positive: an ordinary `printf` call with no `-v` flag at
+    all must not poison any name."""
+    assert checker._names_with_dynamic_assignment(["DIR=sub", ";", "printf", "%s\\n", "DIR"]) == set()
+
+
+def test_names_reassigned_by_read_or_printf_ignores_a_dynamic_printf_v_target() -> None:
+    """No false positive, and an inherent limit disclosed rather than
+    silently mishandled: `printf -v $UNKNOWN ...` names its OWN
+    reassignment target dynamically -- this function cannot know which
+    real name that resolves to, so it poisons nothing (the same posture
+    `read $UNKNOWN` would need, though this module does not attempt that
+    shape either). Confirmed via `tokenize` that `-v`'s own following
+    token here is genuinely dynamic, not a bare identifier."""
+    assert checker._names_reassigned_by_read_or_printf(checker.tokenize('printf -v $X "%s" y')) == set()
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, static_value=_VALUES, other_value=_VALUES)
+def test_names_with_dynamic_assignment_matches_model_for_a_read_reassignment(
+    name: str, static_value: str, other_value: str
+) -> None:
+    """Model-based: for ANY identifier assigned a static value and then
+    reassigned via `read`, `_names_with_dynamic_assignment` always
+    includes it -- and a second, entirely unrelated identifier that is
+    only ever assigned statically is never included alongside it."""
+    other_name = name + "_OTHER"
+    tokens = [f"{name}={static_value}", ";", "read", name, ";", f"{other_name}={other_value}"]
+    result = checker._names_with_dynamic_assignment(tokens)
+    assert name in result
+    assert other_name not in result
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, static_value=_VALUES, other_value=_VALUES)
+def test_names_reassigned_by_untracked_construct_matches_model_for_a_read_reassignment(
+    name: str, static_value: str, other_value: str
+) -> None:
+    """Model-based, exercising the DEDICATED (narrower) round-26 function
+    directly rather than only through `_names_with_dynamic_assignment`'s
+    own wider union: for ANY identifier assigned a static value and then
+    reassigned via `read`, `_names_reassigned_by_untracked_construct`
+    always includes it -- and a second, entirely unrelated identifier
+    that is only ever assigned statically is never included alongside
+    it."""
+    other_name = name + "_OTHER"
+    tokens = [f"{name}={static_value}", ";", "read", name, ";", f"{other_name}={other_value}"]
+    result = checker._names_reassigned_by_untracked_construct(tokens)
+    assert name in result
+    assert other_name not in result
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, subscript=st.sampled_from(["0", "1", "@", "i"]), value=_VALUES)
+def test_names_reassigned_by_untracked_construct_matches_model_for_an_array_element_assignment(
+    name: str, subscript: str, value: str
+) -> None:
+    """Model-based: for ANY identifier assigned an array-element value
+    (`NAME[subscript]=value`), `_names_reassigned_by_untracked_construct`
+    always includes NAME -- and a second, entirely unrelated identifier
+    that is never array-assigned is never included alongside it."""
+    other_name = name + "_OTHER"
+    tokens = [f"{name}[{subscript}]={value}", f"{other_name}={value}"]
+    result = checker._names_reassigned_by_untracked_construct(tokens)
+    assert name in result
+    assert other_name not in result
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, target_value=_VALUES)
+def test_names_reassigned_by_read_or_printf_matches_model_for_a_read_target(name: str, target_value: str) -> None:
+    """Model-based, exercising `_names_reassigned_by_read_or_printf`
+    directly: for ANY identifier that `read` targets, it is always
+    included -- and a second, entirely unrelated identifier only ever
+    assigned statically is never included alongside it."""
+    other_name = name + "_OTHER"
+    tokens = ["read", name, ";", f"{other_name}={target_value}"]
+    result = checker._names_reassigned_by_read_or_printf(tokens)
+    assert name in result
+    assert other_name not in result
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, format_value=_VALUES)
+def test_names_reassigned_by_read_or_printf_matches_model_for_a_printf_v_target(name: str, format_value: str) -> None:
+    """Model-based: for ANY identifier `printf -v` targets, it is always
+    included -- and a second, entirely unrelated identifier is never
+    included alongside it."""
+    other_name = name + "_OTHER"
+    tokens = ["printf", "-v", name, "%s", format_value, ";", f"{other_name}={format_value}"]
+    result = checker._names_reassigned_by_read_or_printf(tokens)
+    assert name in result
+    assert other_name not in result
+
+
+def test_segment_references_a_name_finds_a_bare_reference() -> None:
+    """`_segment_references_a_name` recognizes a plain `$NAME` reference
+    to a poisoned name."""
+    assert checker._segment_references_a_name(["gh", "api", "repos/x/y", "-X", "$M"], {"M"}) is True
+
+
+def test_segment_references_a_name_finds_a_braced_reference() -> None:
+    assert checker._segment_references_a_name(["echo", "${M}"], {"M"}) is True
+
+
+def test_segment_references_a_name_ignores_an_unrelated_reference() -> None:
+    """No false positive: a reference to a name that is NOT in the
+    poisoned set is ignored."""
+    assert checker._segment_references_a_name(["echo", "$OTHER"], {"M"}) is False
+
+
+def test_segment_references_a_name_empty_names_is_always_false() -> None:
+    """No poisoned names at all -- the common case for every pre-existing
+    call site -- never reports a reference, regardless of segment
+    content."""
+    assert checker._segment_references_a_name(["gh", "api", "repos/x/y", "-X", "$M"], set()) is False
+
+
+def test_rule_gh_api_write_denies_a_reference_to_a_poisoned_name() -> None:
+    """Regression pin for the real bypass found live by Step 8 independent
+    review, twenty-sixth round (issue #1375): `_rule_gh_api_write` used to
+    consume only NAME_TO_VALUE/NAME_TO_RAW_VALUE, both of which stay
+    STALE across a `read`/`printf -v`/array-element reassignment -- so a
+    `-X $M` write-method flag resolved through a poisoned M silently read
+    as the name's OLD, pre-reassignment value. Confirmed live: `M=GET;
+    read M <<< "POST"; gh api repos/x/y/issues -X $M` classified as "no
+    denied pattern matched" before this fix."""
+    segments = [["gh", "api", "repos/x/y/issues", "-X", "$M"]]
+    reason = checker._rule_gh_api_write(segments, "gh api repos/x/y/issues -x $m", {"m": "get"}, {}, {"M"})
+    assert reason is not None
+    assert "reassigned" in reason
+
+
+def test_rule_gh_api_write_ignores_a_poisoned_name_outside_a_gh_api_segment() -> None:
+    """No false positive: a poisoned name referenced in a segment that is
+    not itself a `gh api` call must not be flagged by this rule."""
+    segments = [["echo", "$M"]]
+    reason = checker._rule_gh_api_write(segments, "echo $m", {}, {}, {"M"})
+    assert reason is None
+
+
+def test_rule_gh_api_write_default_poisoned_names_is_empty() -> None:
+    """Every pre-existing call site (this module's own test file included)
+    omits NAMES_WITH_DYNAMIC_ASSIGNMENT entirely -- confirm the default
+    is treated as empty, not as a mysterious universal deny."""
+    segments = [["gh", "api", "repos/x/y/issues", "-X", "$M"]]
+    reason = checker._rule_gh_api_write(segments, "gh api repos/x/y/issues -x $m", {"m": "get"}, {})
+    assert reason is None
+
+
+def test_segment_loop_hit_denies_a_dynamic_command_word_referencing_a_poisoned_name() -> None:
+    """Regression pin for the real bypass found live by Step 8 independent
+    review, twenty-sixth round (issue #1375): B1a/B1b's own tool+verb
+    resolution reads NAME_TO_VALUE/NAME_TO_RAW_VALUE, both stale across a
+    `read`/`printf -v`/array-element reassignment. Confirmed live via a
+    stand-in `uv` binary on PATH that `A=harmless; read A <<< "uv";
+    B=harmless2; read B <<< "install"; $A $B foo` genuinely runs `uv
+    install foo` (captured argv: "install foo")."""
+    segments = [["$A", "$B", "foo"]]
+    reason, _ = checker._segment_loop_hit(segments, {"a": "harmless", "b": "harmless2"}, {}, {"A", "B"})
+    assert reason is not None
+    assert "reassigned" in reason
+
+
+def test_segment_loop_hit_ignores_a_poisoned_name_in_a_literal_command_word_segment() -> None:
+    """No false positive: B1a/B1b's own precondition (`seg[0]` itself
+    dynamic) still gates this poisoning check -- a poisoned name merely
+    referenced in an otherwise-ordinary, literal-command-word segment
+    (`echo $M`) must not be flagged, since B1a/B1b would never have fired
+    on that shape regardless of M's value."""
+    segments = [["echo", "$M"]]
+    reason, _ = checker._segment_loop_hit(segments, {}, {}, {"M"})
+    assert reason is None
+
+
+def test_segment_loop_hit_default_poisoned_names_is_empty() -> None:
+    """Every pre-existing call site omits NAMES_WITH_DYNAMIC_ASSIGNMENT
+    entirely -- confirm the default is treated as empty."""
+    segments = [["$A", "$B", "foo"]]
+    reason, _ = checker._segment_loop_hit(segments, {"a": "harmless", "b": "harmless2"}, {})
+    assert reason is None
+
+
+def test_classify_denies_a_checkout_path_reassigned_via_read() -> None:
+    """End-to-end regression pin for the round-26 `read`-reassignment
+    finding at the `classify()` level. Confirmed live before this fix:
+    `DIR=sub; read DIR <<< "other"; git checkout -- $DIR` resolved
+    `checkout_restore_paths` to `('sub',)` -- the STALE, pre-reassignment
+    value (real bash: `$DIR` genuinely becomes "other")."""
+    verdict = checker.classify('DIR=sub; read DIR <<< "other"; git checkout -- $DIR')
+    assert verdict.deny is True
+    assert "cannot be soundly trusted" in verdict.reason
+
+
+def test_classify_denies_a_restore_path_reassigned_via_read() -> None:
+    """Companion to the checkout pin above, for `git restore`."""
+    verdict = checker.classify('DIR=sub; read DIR <<< "other"; git restore $DIR')
+    assert verdict.deny is True
+    assert "cannot be soundly trusted" in verdict.reason
+
+
+def test_classify_denies_a_checkout_path_reassigned_via_array_element() -> None:
+    """End-to-end regression pin for the round-26 array-element-assignment
+    finding at the `classify()` level. Confirmed live before this fix:
+    `arr=x; arr[0]=other; git checkout -- $arr` resolved `checkout_
+    restore_paths` to `('x',)` -- the STALE, pre-reassignment value (real
+    bash: `$arr` genuinely becomes "other")."""
+    verdict = checker.classify("arr=x; arr[0]=other; git checkout -- $arr")
+    assert verdict.deny is True
+    assert "cannot be soundly trusted" in verdict.reason
+
+
+def test_classify_denies_a_checkout_path_reassigned_via_printf_v() -> None:
+    """End-to-end regression pin for the round-26 `printf -v` finding at
+    the `classify()` level. Confirmed live before this fix: `DIR=sub;
+    printf -v DIR "%s" other; git checkout -- $DIR` resolved `checkout_
+    restore_paths` to `('sub',)` -- the STALE, pre-reassignment value
+    (real bash: `$DIR` genuinely becomes "other")."""
+    verdict = checker.classify('DIR=sub; printf -v DIR "%s" other; git checkout -- $DIR')
+    assert verdict.deny is True
+    assert "cannot be soundly trusted" in verdict.reason
+
+
+def test_classify_denies_a_gh_api_write_method_reassigned_via_read() -> None:
+    """End-to-end regression pin for the round-26 `read`-reassignment
+    finding against `_rule_gh_api_write`. Confirmed live before this fix:
+    `M=GET; read M <<< "POST"; gh api repos/x/y/issues -X $M` classified
+    as "no denied pattern matched" -- a full HARD-DENY bypass."""
+    verdict = checker.classify('M=GET; read M <<< "POST"; gh api repos/x/y/issues -X $M')
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_gh_api_write_method_reassigned_via_array_element() -> None:
+    """Companion to the `read` pin above, for array-element assignment.
+    Confirmed live before this fix: `M=GET; M[0]=POST; gh api
+    repos/x/y/issues -X $M` classified as "no denied pattern matched"."""
+    verdict = checker.classify("M=GET; M[0]=POST; gh api repos/x/y/issues -X $M")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_via_read() -> None:
+    """End-to-end regression pin for the round-26 `read`-reassignment
+    finding against B1b (`_rule_b1b_dynamic_word_assigned_tool_and_verb`).
+    Confirmed live before this fix via a stand-in `uv` binary on PATH:
+    `A=harmless; read A <<< "uv"; B=harmless2; read B <<< "install"; $A
+    $B foo` genuinely runs `uv install foo`, but classified as allowed."""
+    verdict = checker.classify('A=harmless; read A <<< "uv"; B=harmless2; read B <<< "install"; $A $B foo')
+    assert verdict.deny is True
+
+
+def test_classify_leaves_a_read_of_an_unrelated_name_unaffected() -> None:
+    """No false positive: `read`-ing into a name never referenced by a
+    checkout/restore path, a `gh api` write flag, or a dynamic command
+    word must not affect classification at all."""
+    verdict = checker.classify('read NAME <<< "value"; echo $NAME; git checkout -- sub/file.txt')
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("sub/file.txt",)
+
+
 def test_resolve_path_tokens_denies_a_name_with_a_dynamic_assignment_elsewhere() -> None:
     """End-to-end regression pin for the round-24 finding at the
     `_resolve_path_tokens` level. Confirmed live before this fix: `DIR=

@@ -230,6 +230,12 @@ ALLOWED_GH_COMMANDS = [
     # (issue #1326, ninth round): a default-clause value resolving to a
     # read method must stay allowed.
     ("gh api repos/x/y -X${UNSET_VAR-GET}", "gh-api-method-value-default-clause-read"),
+    # False-positive guard for the round-26 `read`/array-element/
+    # `printf -v` reassignment-poisoning fix (issue #1375): `read`-ing (or
+    # array-assigning, or `printf -v`-ing) into a name never referenced by
+    # this call at all -- a totally unrelated name -- must not poison this
+    # unrelated `gh api` read call.
+    ('read UNRELATED <<< "x"; gh api repos/o/r/issues', "gh-api-get-unrelated-name-read-into"),
 ]
 
 ALLOWED_ORDINARY_COMMANDS = [
@@ -315,6 +321,12 @@ ALLOWED_DYNAMIC_COMMANDS = [
     # `IFS=x; REAL=foo; $REAL uv $VERB` real-expands to `foo uv`, never
     # touching the watched `uv` tool in dynamic-verb position.
     ("IFS=x; REAL=foo; $REAL uv $VERB", "dynamic-wrapper-stays-allowed-despite-unrelated-ifs-reassignment"),
+    # False-positive guard for the round-26 `read`/array-element/
+    # `printf -v` reassignment-poisoning fix (issue #1375): the new
+    # poisoning check in `_segment_loop_hit` is scoped to segments whose
+    # OWN command word (`seg[0]`) is itself dynamic -- an unrelated `read`
+    # elsewhere in the command must stay allowed.
+    ('read UNRELATED <<< "x"; echo hello', "read-into-unrelated-name-stays-allowed"),
 ]
 
 # --- Known, disclosed, unresolved regex/token-gate bypasses ----------------
@@ -891,6 +903,41 @@ DENIED_INDIRECTION_COMMANDS = [
     (
         "A=uv; x=$($A install foo); A=somethingelse",
         "var-split-tool-and-verb-reassigned-after-use-across-command-substitution",
+    ),
+    # Found live by Step 8 independent review, twenty-sixth round (issue
+    # #1375): neither `_ASSIGN_RE` nor `_APPEND_ASSIGN_RE` recognizes
+    # bash's own `read NAME` builtin or `NAME[i]=value` array-element
+    # assignment as a reassignment at all -- round 22's own fix (the two
+    # cases immediately above) only closed the reassignment-ambiguity gap
+    # for RECOGNIZED assignment tokens (plain `=`/`+=`), leaving both of
+    # these completely unrecognized shapes open. Confirmed live via a
+    # stand-in `uv` binary on PATH (captured argv: "install foo") that
+    # `A=harmless; read A <<< "uv"; B=harmless2; read B <<< "install"; $A
+    # $B foo` genuinely runs `uv install foo`.
+    (
+        'A=harmless; read A <<< "uv"; B=harmless2; read B <<< "install"; $A $B foo',
+        "var-split-tool-and-verb-reassigned-via-read",
+    ),
+    # Same round, the array-element-assignment counterpart.
+    (
+        "A=harmless; A[0]=uv; B=harmless2; B[0]=install; $A $B foo",
+        "var-split-tool-and-verb-reassigned-via-array-element",
+    ),
+    # Same round, the gh-api-write counterpart for `read`: `$M` genuinely
+    # was "POST" at its actual point of use; real bash genuinely ran `gh
+    # api repos/o/r/pulls/1/merge -X POST`.
+    (
+        'M=GET; read M <<< "POST"; gh api repos/o/r/pulls/1/merge -X $M',
+        "gh-api-method-value-reassigned-via-read",
+    ),
+    # Same round, the gh-api-write counterpart for array-element
+    # assignment.
+    ("M=GET; M[0]=POST; gh api repos/o/r/pulls/1/merge -X $M", "gh-api-method-value-reassigned-via-array-element"),
+    # Same round, the `printf -v` counterpart (writes a formatted result
+    # into NAME, equally invisible to `_ASSIGN_RE`/`_APPEND_ASSIGN_RE`).
+    (
+        'M=GET; printf -v M "%s" POST; gh api repos/o/r/pulls/1/merge -X $M',
+        "gh-api-method-value-reassigned-via-printf-v",
     ),
 ]
 
@@ -2197,6 +2244,55 @@ def test_restore_denied_when_the_path_name_is_dynamically_appended_to_after_use(
         "DIR=dirty.py; for i in 1; do DIR+=$(echo .bak); done; git restore $DIR",
         payload_cwd=str(repo_dir),
     )
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+
+
+def test_checkout_denied_when_the_path_name_is_reassigned_via_read_after_use(tmp_path: Path) -> None:
+    """CRITICAL bypass regression pin (round-26 independent review, issue
+    #1375). Neither `_ASSIGN_RE` nor `_APPEND_ASSIGN_RE` recognizes bash's
+    own `read NAME` builtin as a reassignment at all, so round 25's own
+    `_names_with_dynamic_assignment` was completely blind to a name
+    reassigned this way. Live-verified before this fix: `DIR=sub; read
+    DIR <<< "other"; git checkout -- $DIR` resolved `checkout_restore_
+    paths` to `('sub',)` -- the STALE, pre-reassignment value, since real
+    bash genuinely resolves `$DIR` to `other` at its actual point of use
+    (confirmed via `bash -c 'DIR=sub; read DIR <<< "other"; echo
+    "DIR=[$DIR]"'` -> `DIR=[other]`)."""
+    repo_dir = tmp_path / "repo"
+    file_path = _init_repo_with_committed_file(repo_dir, filename="other")
+    file_path.write_text("UNCOMMITTED WORK -- must not be discarded\n")
+    result = run(
+        'DIR=sub; read DIR <<< "other"; git checkout -- $DIR',
+        payload_cwd=str(repo_dir),
+    )
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+
+
+def test_restore_denied_when_the_path_name_is_reassigned_via_read_after_use(tmp_path: Path) -> None:
+    """Companion to the checkout pin above, for `git restore`."""
+    repo_dir = tmp_path / "repo"
+    file_path = _init_repo_with_committed_file(repo_dir, filename="other")
+    file_path.write_text("UNCOMMITTED WORK -- must not be discarded\n")
+    result = run(
+        'DIR=sub; read DIR <<< "other"; git restore $DIR',
+        payload_cwd=str(repo_dir),
+    )
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+
+
+def test_checkout_denied_when_the_path_name_is_reassigned_via_an_array_element_after_use(tmp_path: Path) -> None:
+    """CRITICAL bypass regression pin (round-26 independent review, issue
+    #1375). Bash's own array-element assignment (`NAME[i]=value`) is
+    invisible to `_ASSIGN_RE`/`_APPEND_ASSIGN_RE` -- both anchor
+    immediately after NAME's own identifier characters, with no `[...]`
+    in between. Live-verified before this fix: `arr=x; arr[0]=other; git
+    checkout -- $arr` resolved `checkout_restore_paths` to `('x',)` --
+    the STALE, pre-reassignment value (confirmed via `bash -c 'arr=x;
+    arr[0]=other; echo "arr=[$arr]"'` -> `arr=[other]`)."""
+    repo_dir = tmp_path / "repo"
+    file_path = _init_repo_with_committed_file(repo_dir, filename="other")
+    file_path.write_text("UNCOMMITTED WORK -- must not be discarded\n")
+    result = run("arr=x; arr[0]=other; git checkout -- $arr", payload_cwd=str(repo_dir))
     assert result.returncode == 2, f"stderr={result.stderr!r}"
 
 

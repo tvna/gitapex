@@ -513,6 +513,25 @@ _ASSIGN_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
 # function's own docstring for the live bypass this closes.
 _APPEND_ASSIGN_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\+=")
 
+# Matches bash's own array-element assignment (`NAME[subscript]=value` or
+# `NAME[subscript]+=value`) by NAME alone -- neither `_ASSIGN_RE` nor
+# `_APPEND_ASSIGN_RE` matches this shape at all (both anchor immediately
+# after NAME's own identifier characters, with no `[...]` in between) --
+# used only by `_names_with_dynamic_assignment`, see that function's own
+# docstring (round 26) for the live bypass this closes.
+_ARRAY_ELEMENT_ASSIGN_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\[[^\]]*\]\+?=")
+
+# Command words whose whole purpose is to reassign one or more existing
+# names from runtime input (`read`/`readarray`/`mapfile`'s own target
+# operands) -- see `_names_with_dynamic_assignment`'s own docstring
+# (round 26) for how these are scanned and why.
+_READ_COMMAND_WORDS = frozenset({"read", "readarray", "mapfile"})
+
+# A bare, unqualified bash identifier -- used only to recognize a `read`/
+# `readarray`/`mapfile`/`printf -v` operand as a plausible reassignment
+# target, not to validate real bash identifier rules exhaustively.
+_BARE_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
 # Matches one `$NAME`/`${NAME}`/`${NAME:-default}`/`${!NAME}` reference
 # anywhere in a token, capturing its full span (including the braces, when
 # present) so _substitute_var_refs_candidates below can replace exactly
@@ -3449,8 +3468,50 @@ def _gh_api_field_fused_flagname_dynamic_hit(
     return False
 
 
+def _segment_references_a_name(seg: list[str], names: set[str]) -> bool:
+    """True when any token in SEG references (as a bare `$NAME`, braced
+    `${NAME}`, default-clause `${NAME:-x}`, or indirect `${!NAME}`
+    reference) any name in NAMES. A coarse, single-level scan via the
+    same `_VAR_REF_FULL_RE` `_referenced_names` uses for its own first
+    level -- deliberately NOT that function's full two-level indirect
+    expansion (this only needs to know whether a POISONED name itself is
+    mentioned, not what an indirect reference through it might resolve
+    to), so it needs neither NAME_TO_RAW_VALUE nor NAME_TO_RAW_VALUE_
+    HISTORY -- both absent from `_rule_gh_api_write`'s and `_segment_
+    loop_hit`'s own signatures.
+
+    Added by round 26 (issue #1375) alongside `_names_with_dynamic_
+    assignment`'s own extension -- see that function's own docstring for
+    the live `_rule_gh_api_write`/B1a/B1b bypasses this closes, and for
+    why simply deleting a poisoned name's dict entry (the first approach
+    considered) would have made those two consumers LESS safe rather
+    than more."""
+    if not names:
+        return False
+    for token in seg:
+        for match in _VAR_REF_FULL_RE.finditer(token):
+            braced_name, default_name, _default_text, indirect_name, unbraced_run = match.groups()
+            for name in (braced_name, default_name, indirect_name):
+                if name is not None and name in names:
+                    return True
+            if unbraced_run is not None and any(unbraced_run[:i] in names for i in range(len(unbraced_run), 0, -1)):
+                return True
+    return False
+
+
+_POISONED_REASSIGNMENT_GH_API_HIT = (
+    "a 'gh api' call references a variable whose value was reassigned via a construct this classifier "
+    "cannot track (`read`/`readarray`/`mapfile`, `printf -v`, or an array-element assignment) -- rewrite "
+    "as a plain literal command so it can be checked"
+)
+
+
 def _rule_gh_api_write(
-    segments: list[list[str]], lowered_command: str, name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
+    segments: list[list[str]],
+    lowered_command: str,
+    name_to_value: dict[str, str],
+    name_to_raw_value: dict[str, str],
+    names_reassigned_by_untracked_construct: set[str] | None = None,
 ) -> str | None:
     """`literals` is already lowercased, matching the predecessor script's
     own case-insensitive match against its whole lowered command -- so
@@ -3460,12 +3521,26 @@ def _rule_gh_api_write(
     --raw-field field flag -- literal, dynamic-value, dynamic-flag-name,
     and fused-flag-name-and-value, per side); kept deliberately thin
     (each pass owns its own branching) so this function's own cyclomatic
-    complexity stays low."""
+    complexity stays low.
+
+    NAMES_REASSIGNED_BY_UNTRACKED_CONSTRUCT (round 26, issue #1375)
+    defaults to `None` (treated as empty) so every pre-existing call site
+    keeps its exact prior behavior; `_classify_tokens`'s own call sites
+    are the only ones that supply it, deliberately NOT the same (wider)
+    NAMES_WITH_DYNAMIC_ASSIGNMENT `_resolve_path_tokens` (checkout/
+    restore) consumes -- see `_names_reassigned_by_untracked_construct`'s
+    own docstring for why. See `_segment_references_a_name`'s own
+    docstring for why a poisoned name is checked here, once has_gh_api is
+    already confirmed, rather than by deleting the name from NAME_TO_
+    VALUE/NAME_TO_RAW_VALUE."""
+    poisoned = names_reassigned_by_untracked_construct or set()
     for seg in segments:
         literals = [t.lower() for t in seg if not _is_dynamic(t)]
         has_gh_api = any(literals[i : i + 2] == ["gh", "api"] for i in range(len(literals) - 1))
         if not has_gh_api:
             continue
+        if _segment_references_a_name(seg, poisoned):
+            return _POISONED_REASSIGNMENT_GH_API_HIT
         has_graphql = any(literals[i : i + 3] == ["gh", "api", "graphql"] for i in range(len(literals) - 2))
         if has_graphql and "mutation" in lowered_command:
             return "a 'gh api graphql' call containing a 'mutation' keyword"
@@ -3827,7 +3902,63 @@ def _names_with_dynamic_assignment(tokens: list[str]) -> set[str]:
     assignments, or no history, resolves exactly as before; a name with
     even one dynamic OR append assignment anywhere loses all confidence,
     matching how this classifier already treats a name with NO recorded
-    static value)."""
+    static value).
+
+    CRITICAL bug found by independent adversarial review (round 26, issue
+    #1375) and independently reproduced live, both via `classify()` and
+    via real bash execution: this function's own round-24/25 form, keyed
+    entirely off `_ASSIGN_RE`/`_APPEND_ASSIGN_RE`, is completely BLIND to
+    every OTHER bash construct that reassigns an existing name -- `read
+    NAME`/`readarray NAME`/`mapfile NAME` (reading runtime input into
+    NAME), `printf -v NAME ...` (writing a formatted result into NAME),
+    and `NAME[i]=value`/`NAME[i]+=value` (array-element assignment)
+    neither of `_ASSIGN_RE`/`_APPEND_ASSIGN_RE` matches at all (both
+    anchor immediately after NAME's own bare identifier characters, with
+    no `read `/`-v `/`[i]` in between). `DIR=sub; read DIR <<< "other";
+    git checkout -- $DIR` and `DIR=sub; DIR[0]=other; git checkout --
+    $DIR` both resolved `checkout_restore_paths` to `('sub',)` -- the
+    STALE, pre-reassignment value (real bash: `$DIR` genuinely becomes
+    "other" in both cases, confirmed live via `bash -c 'DIR=sub; read DIR
+    <<< "other"; echo "DIR=[$DIR]"'` -> `DIR=[other]` and `bash -c
+    'arr=x; arr[0]=other; echo "arr=[$arr]"'` -> `arr=[other]`).
+    Independently confirmed live end-to-end through the real wrapper
+    against a scratch repo, same wrongly-allowed-then-silently-discarded
+    shape as every prior round in this family.
+
+    More severely, the SAME shapes (`read`/`readarray`/`mapfile`/
+    `printf -v`/array-element assignment) ALSO defeat `_rule_gh_api_write`
+    and `_segment_loop_hit` (B1a/B1b): `A=harmless; read A <<< "uv";
+    B=harmless2; read B <<< "install"; $A $B foo` and `M=GET; M[0]=POST;
+    gh api repos/x/y/issues -X $M` were both wrongly ALLOWED -- confirmed
+    live via a stand-in `uv` binary on PATH (captured argv: `uv called
+    with: install foo`, the genuine `pip`/`uv install` bypass B1a/B1b
+    exist specifically to deny) and via direct `classify()` calls
+    (`reason == 'no denied pattern matched'` for the `gh api` case).
+    `_names_reassigned_by_untracked_construct` (see its own docstring) is
+    the DEDICATED, NARROWER function those two consumers actually use --
+    NOT this function's own full union. Threading the FULL union used
+    here (which also includes the round-24/25 dynamic-RHS-assignment/
+    append classes) into gh-api-write/B1a-B1b was tried first and
+    reverted: `A=muta; B=tion; Q="${A}${B} { x }"; gh api graphql -f
+    query="$Q"` -- an EXISTING, deliberately-disclosed, unrelated bypass
+    (`KNOWN_BYPASS_COMMANDS`'s own `graphql-mutation-keyword-variable-
+    concatenation` case, predating round 26 entirely) -- regressed to a
+    wrongly-denied false positive, since `Q`'s own single dynamic
+    assignment already satisfied the round-24 class (ANY dynamic-RHS `=`
+    assignment, not specifically a REASSIGNMENT after a static one) even
+    though gh-api-write's own EXISTING `_substitute_var_refs_candidates`-
+    based resolution already handles that class soundly (an unresolvable
+    candidate list reads as "no evidence of a write," not "deny
+    outright" -- the deliberately different, narrower posture this rule
+    already had for that specific, previously-accepted gap). `_segment_
+    references_a_name` (see its own docstring) is the mechanism `_rule_
+    gh_api_write`/`_segment_loop_hit` use to apply the NARROWER poisoned-
+    names set to their own scope, since simply deleting a poisoned name's
+    dict entry -- traced through `_write_method_candidate_hit`'s own
+    `candidates is None: True` vs. `candidates == []: False` branches
+    before writing any code -- would make those two consumers LESS safe
+    (an empty candidate list reads as "vacuously safe," the opposite of
+    the fail-closed direction this fix needs)."""
     names: set[str] = set()
     for token in tokens:
         append_match = _APPEND_ASSIGN_RE.match(token)
@@ -3839,6 +3970,74 @@ def _names_with_dynamic_assignment(tokens: list[str]) -> set[str]:
         match = _ASSIGN_RE.match(token)
         if match:
             names.add(match.group(1))
+    names.update(_names_reassigned_by_untracked_construct(tokens))
+    return names
+
+
+def _names_reassigned_by_untracked_construct(tokens: list[str]) -> set[str]:
+    """Every NAME reassigned in TOKENS via a bash construct this
+    classifier's `_ASSIGN_RE`/`_APPEND_ASSIGN_RE` (the round-24/25 classes
+    `_names_with_dynamic_assignment` also covers) do not recognize AT
+    ALL: array-element assignment (`NAME[i]=value`/`NAME[i]+=value`, via
+    `_ARRAY_ELEMENT_ASSIGN_RE`) and `read`/`readarray`/`mapfile`/
+    `printf -v` reassignment (via `_names_reassigned_by_read_or_printf`).
+
+    Deliberately NARROWER than `_names_with_dynamic_assignment`'s own
+    full union -- this is the set `_rule_gh_api_write`/`_segment_loop_
+    hit` (B1a/B1b) actually consume, NOT the full one `_resolve_path_
+    tokens` (checkout/restore) consumes -- see `_names_with_dynamic_
+    assignment`'s own round-26 paragraph for why threading the FULL union
+    into those two HARD-DENY consumers regressed an existing, unrelated,
+    deliberately-disclosed bypass. Computed fresh from TOKENS only (no
+    outer-scope union, unlike `_names_with_dynamic_assignment`'s own
+    recursive threading) -- a `read`/array-element reassignment occurring
+    OUTSIDE a `$(...)`/array-literal span but referenced only INSIDE it
+    is a disclosed, narrower residual this pass does not cover; every
+    round-26 finding actually verified live was a flat, top-level case,
+    which this fully covers."""
+    names: set[str] = set()
+    for token in tokens:
+        array_match = _ARRAY_ELEMENT_ASSIGN_RE.match(token)
+        if array_match:
+            names.add(array_match.group(1))
+    names.update(_names_reassigned_by_read_or_printf(tokens))
+    return names
+
+
+def _names_reassigned_by_read_or_printf(tokens: list[str]) -> set[str]:
+    """Every NAME that `read`/`readarray`/`mapfile` (any bare-identifier-
+    shaped operand following the command word, skipping option flags,
+    which never match `_BARE_IDENTIFIER_RE` since they start with `-`) or
+    `printf -v NAME` (the separate-token `-v` form only -- the fused
+    `-vNAME` form is a known, disclosed residual, not attempted here) can
+    reassign somewhere in TOKENS. Segment-aware (via `segment_tokens`) so
+    a `read`/`printf` command word is only recognized as one when it
+    genuinely starts its own simple command, not merely because the
+    literal word appears as an ordinary argument elsewhere.
+
+    Deliberately coarse and over-inclusive rather than modeling each
+    command's own exact flag grammar (e.g. `read -d END VAR` also treats
+    "END" as a candidate name, since this function does not know `-d`
+    takes its own value argument): see `_names_with_dynamic_assignment`'s
+    own docstring for why a name added here only ever makes this
+    classifier MORE conservative wherever it is later referenced, never
+    less -- over-including a flag's own literal argument costs nothing
+    but a redundant, harmless entry."""
+    names: set[str] = set()
+    for seg in segment_tokens(tokens):
+        if not seg or _is_dynamic(seg[0]):
+            continue
+        head = seg[0].lower()
+        if head in _READ_COMMAND_WORDS:
+            for tok in seg[1:]:
+                if not _is_dynamic(tok) and _BARE_IDENTIFIER_RE.match(tok):
+                    names.add(tok)
+        elif head == "printf":
+            for i, tok in enumerate(seg):
+                if tok == "-v" and i + 1 < len(seg):
+                    target = seg[i + 1]
+                    if not _is_dynamic(target) and _BARE_IDENTIFIER_RE.match(target):
+                        names.add(target)
     return names
 
 
@@ -5084,7 +5283,10 @@ def _rule_b2_watched_tool_dynamic_verb_position(seg: list[str]) -> bool:
 
 
 def _segment_loop_hit(
-    segments: list[list[str]], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
+    segments: list[list[str]],
+    name_to_value: dict[str, str],
+    name_to_raw_value: dict[str, str],
+    names_reassigned_by_untracked_construct: set[str] | None = None,
 ) -> tuple[str | None, bool]:
     """The B1a/B1b/B2/obfuscated-git-push-second-token loop -- factored
     out of `_classify_tokens` so it can be run TWICE: once against
@@ -5109,9 +5311,34 @@ def _segment_loop_hit(
     rule at all (confirmed live: even a plain `curl <url> | bash` with no
     decoy already classifies "no denied pattern matched" here), so there
     is no equivalent gap for that shape in this file specifically -- only
-    B2's own literal-`seg[0]` requirement is affected."""
+    B2's own literal-`seg[0]` requirement is affected.
+
+    NAMES_REASSIGNED_BY_UNTRACKED_CONSTRUCT (round 26, issue #1375)
+    defaults to `None` (treated as empty) so every pre-existing call site
+    keeps its exact prior behavior; `_classify_tokens`'s own call sites
+    are the only ones that supply it, deliberately NOT the same (wider)
+    NAMES_WITH_DYNAMIC_ASSIGNMENT `_resolve_path_tokens` (checkout/
+    restore) consumes -- see `_names_reassigned_by_untracked_construct`'s
+    own docstring for why. Checked ONLY when `seg[0]` is itself dynamic
+    -- the same precondition B1a/B1b already require before either even
+    runs (see each rule's own docstring) -- so a poisoned name referenced
+    in an otherwise-harmless, literal-command-word segment (e.g. `echo
+    $M` where M was reassigned via `read`) is never flagged here: B1a/
+    B1b's own bypass only exists where a poisoned name feeds the SAME
+    position (the dynamically-constructed command word itself, or a
+    same-segment verb token) those two rules already resolve, so this
+    check is scoped identically rather than treating every reference
+    anywhere as a hit."""
     is_git_push = False
+    poisoned = names_reassigned_by_untracked_construct or set()
     for seg in segments:
+        if seg and _is_dynamic(seg[0]) and _segment_references_a_name(seg, poisoned):
+            return (
+                "a Bash command word is dynamically constructed from a variable whose value was "
+                "reassigned via a construct this classifier cannot track (`read`, `printf -v`, or an "
+                "array-element assignment) -- rewrite as a plain literal command so it can be checked",
+                is_git_push,
+            )
         if _rule_b1a_dynamic_word_same_segment_verb(seg, _WATCHED_VERBS, name_to_value, name_to_raw_value):
             return (
                 "a Bash command word is dynamically constructed, alongside a denied verb literally "
@@ -5371,6 +5598,12 @@ def _classify_tokens(
         **_assigned_raw_values_biased_toward(tokens, _WATCHED_WRITE_BIAS),
     }
     names_with_dynamic_assignment = outer_dynamic_names | _names_with_dynamic_assignment(tokens)
+    # Deliberately narrower than NAMES_WITH_DYNAMIC_ASSIGNMENT above, and
+    # computed fresh from TOKENS only (no outer-scope union) -- see
+    # `_names_reassigned_by_untracked_construct`'s own docstring for why
+    # `_rule_gh_api_write`/`_segment_loop_hit` below consume THIS set,
+    # not the full one just above.
+    names_reassigned_by_untracked_construct = _names_reassigned_by_untracked_construct(tokens)
     lowered_command = " ".join(tokens).lower()
 
     is_git_push = is_git_push or any(_is_git_push_segment(seg, raw_assigned) for seg in segments)
@@ -5379,17 +5612,25 @@ def _classify_tokens(
     if literal_hit:
         return Verdict(True, literal_hit, is_git_push, checkout_restore_paths)
 
-    gh_api_hit = _rule_gh_api_write(segments, lowered_command, assigned, raw_assigned) or _rule_gh_api_write(
-        segments, lowered_command, assigned_write_biased, raw_assigned_write_biased
+    gh_api_hit = _rule_gh_api_write(
+        segments, lowered_command, assigned, raw_assigned, names_reassigned_by_untracked_construct
+    ) or _rule_gh_api_write(
+        segments,
+        lowered_command,
+        assigned_write_biased,
+        raw_assigned_write_biased,
+        names_reassigned_by_untracked_construct,
     )
     if gh_api_hit:
         return Verdict(True, gh_api_hit, is_git_push, checkout_restore_paths)
 
-    loop_hit, loop_is_git_push = _segment_loop_hit(segments, assigned, raw_assigned)
+    loop_hit, loop_is_git_push = _segment_loop_hit(
+        segments, assigned, raw_assigned, names_reassigned_by_untracked_construct
+    )
     is_git_push = is_git_push or loop_is_git_push
     if not loop_hit:
         loop_hit, biased_loop_is_git_push = _segment_loop_hit(
-            segments, assigned_write_biased, raw_assigned_write_biased
+            segments, assigned_write_biased, raw_assigned_write_biased, names_reassigned_by_untracked_construct
         )
         is_git_push = is_git_push or biased_loop_is_git_push
     if loop_hit:
@@ -5399,11 +5640,16 @@ def _classify_tokens(
         collapsed for seg in segments if (collapsed := _strip_leading_unassigned_bare_refs(seg, raw_assigned))
     ]
     if collapsed_segments != segments:
-        collapsed_hit, collapsed_is_git_push = _segment_loop_hit(collapsed_segments, assigned, raw_assigned)
+        collapsed_hit, collapsed_is_git_push = _segment_loop_hit(
+            collapsed_segments, assigned, raw_assigned, names_reassigned_by_untracked_construct
+        )
         is_git_push = is_git_push or collapsed_is_git_push
         if not collapsed_hit:
             collapsed_hit, collapsed_biased_is_git_push = _segment_loop_hit(
-                collapsed_segments, assigned_write_biased, raw_assigned_write_biased
+                collapsed_segments,
+                assigned_write_biased,
+                raw_assigned_write_biased,
+                names_reassigned_by_untracked_construct,
             )
             is_git_push = is_git_push or collapsed_biased_is_git_push
         if collapsed_hit:
