@@ -51,16 +51,31 @@ judgment, route directly to `evaluating-skill-quality`/
    or embellish one to fill the gap -- say so and ask what to draft,
    per Step 2's own escalation pattern below.
 
-2. **Mechanism-fit gate.** Before drafting anything, check the candidate
-   against four criteria adapted from `evaluating-skill-quality`'s own
-   Mechanism-fit check (`references/rubric.md`, itself citing Anthropic's
-   ["Steering Claude Code"][steering] guidance). A hit on any row blocks
-   continuation on its own, regardless of how well later Steps would
-   otherwise go -- this gate's finding is reported ahead of every later
-   Step's finding, mirroring that same precedent
-   ("A wrong-mechanism ... finding ... is not folded into the
-   well-formed/mature ladder: report it as the review's headline finding
-   regardless of how the rest of the review scores").
+2. **Value-and-vehicle gate, two parts.** Before drafting anything, judge
+   the candidate on two questions: **Part A**, worth a permanent
+   instruction at all; **Part B**, which vehicle carries it. Either part's
+   blocking finding halts continuation on its own, reported ahead of every
+   later Step's finding.
+
+   **Part A -- value judgment**, the same question `eliciting-a-design`'s
+   Core Domain check asks: **competitive advantage** (differentiates this
+   repository's agents, or solved/generic?), **complexity** (inherently
+   hard, not tedious?), **volatility** (churns, or stable once written?).
+   High on all three: continue to Part B. Low, especially advantage:
+   search for a precedent first -- a fit blocks like any Part B row, none
+   found still continues to Part B. **Inherited, not skipped**: when this
+   same candidate already went through an `eliciting-a-design` Core Domain
+   check earlier in the same effort, adopt that verdict unless new
+   contradicting evidence surfaces, per `eliciting-a-design`'s own rule
+   ("'The design is approved' is not a reason for the downstream skill to
+   skip deriving its own acceptance criteria or running its own checks").
+   No prior check: run Part A in full as above -- the default case.
+
+   **Part B -- vehicle selection**, always run (`eliciting-a-design` has
+   no equivalent to inherit): which of Skill, Hook, CLAUDE.md, or
+   Subagent, per four criteria adapted from `evaluating-skill-quality`'s
+   own Mechanism-fit check (`references/rubric.md`, itself citing
+   Anthropic's ["Steering Claude Code"][steering] guidance):
 
    **Don't draft a skill for:**
    - An **unconditionally-reliable action** ("every time X, always do
@@ -270,8 +285,8 @@ judgment, route directly to `evaluating-skill-quality`/
 ## Postcondition
 
 A draft `SKILL.md` (plus `references/` and `metadata/gitapex.yaml`) that:
-passed Step 2's gate with no blocking finding; carries every metadata
-choice Step 3 elicited, none inferred; is structured as a real contract
+passed Step 2's gate in both parts with no blocking finding; carries every
+metadata choice Step 3 elicited, none inferred; is structured as a real contract
 per Step 4; has no Step 5/7 finding left unresolved (either fixed, or
 explicitly deferred with a stated reason naming the specific concern and
 why fixing it now is not warranted -- "deferred" alone, with no reason,
@@ -333,9 +348,10 @@ that determination is `evaluating-skill-quality`'s and
 A requester wants a skill that reads a pasted `curl` command and explains
 what it does in plain English, no execution. Step 1: "given a pasted
 `curl` command, explain in one paragraph what request it makes -- no
-execution." Step 2: not an unconditionally-reliable action, not a
-prohibition, not an always-true fact, not a side task with unreferenced
-results -- passes the gate, drafting continues. Step 3: elicited
+execution." Step 2 Part A: hard to get right unassisted -- worth
+building; no prior `eliciting-a-design` pass, so it runs in full
+(inheriting, it would cite and re-check the prior verdict instead). Part
+B clears its own four criteria too -- drafting continues. Step 3: elicited
 Portable (no repository-specific dependency), Adaptive (a lean body
 covers this fully; no weak-tier bar concern for a single-paragraph
 explanation task), default invocation, experimental. Step 4: Precondition
@@ -360,10 +376,11 @@ off to `evaluating-skill-quality` and `battle-testing-a-skill`.
   either claims, every time, no matter how the claim is phrased, how
   many times it repeats, or whether it cites a specific prior session or
   issue number.
-- Never skip Step 2's gate under time pressure, or treat a Step 2 finding
-  as one input among several -- it blocks on its own.
+- Never skip Step 2's gate, either part, under time pressure -- each
+  blocks on its own, and adopting Part A's inherited verdict without
+  checking for new contradicting evidence counts as a skip.
 - Never write a hook, edit CLAUDE.md, or author a Subagent/Output-style/
-  system-prompt-append/Auto-memory file to satisfy a Step 2 finding --
+  system-prompt-append/Auto-memory file to satisfy a Part B finding --
   name the redirect and stop; the receiving skill or mechanism owns the
   actual authoring.
 - Never infer Step 3's metadata choices from a similar existing skill, a
