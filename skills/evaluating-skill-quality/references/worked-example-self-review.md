@@ -365,55 +365,83 @@ than tested. The portability audit above (this dimension's newest
 addition) is the substantive check here, and it found and fixed two real
 issues rather than passing by default.
 
-**State-management sub-check: applicable, and it does not clear.** The
-bullets above grade text durability; `state-management-quality.md` grades
-whether the *procedure* survives a context reset, and this skill's own
+**State-management sub-check: applicable, and it still does not fully
+clear.** The bullets above grade text durability; `state-management-quality.md`
+grades whether the *procedure* survives a context reset, and this skill's own
 procedure fires its trigger. `SKILL.md`'s Subagent dispatch step sends every
 review to consult the Isolation verification registry in
-`adversarial-self-audit.md` "for the current platform's verified mechanism,
-running its Verification procedure and recording a new entry if none exists
-yet" -- a record this procedure writes at review time and a later review
+`adversarial-self-audit.md` "for the current platform's verified mechanism:
+unconditionally compare this session's own identifying signals against any
+existing Known entry before trusting it, and run the Verification procedure
+in full -- recording a new entry -- whenever none matches or a signal
+differs" -- a record this procedure writes at review time and a later review
 reads back to decide how to dispatch. Trigger clauses (b) and (d) both fire.
 
 Named gaps, graded against that file's axes:
 
-- **Axis 9 (the record as a trust boundary) -- closed since this section was
-  first written.** The gap was that registry entries are written in
-  fact-shaped prose and are the sole basis a later dispatch uses to pick its
-  isolation mechanism, while nothing stated a trust class for them: the
-  registry is both governance-gated and runtime-written, so an entry a
-  dispatch just appended had passed no review even though the file it sits in
-  had passed one. `adversarial-self-audit.md` now carries a `Trust class of an entry`
-  subsection naming both populations, and its Verification procedure step 4
-  requires the marker: "Mark it **Same-run, unreviewed** until it merges, per
-  Trust class above." Re-graded: the axis clears, with the file's own stated
-  limit (nothing deterministic separates the two once both sit in one working
-  tree) recorded rather than papered over.
-- **Axis 3 (freshness).** The registry's own re-verification hedge fires only
-  "if this entry looks stale" -- discretionary, where the step it guards
-  (whether a dispatch is isolated at all) cannot afford discretion.
-- **Axis 2 (identity binding).** Entries are keyed by platform signal, not by
-  who wrote them or when they were last confirmed against a live control, so
-  a stale entry and a fresh one are indistinguishable on read. The Same-run
-  marker above is a partial answer only: it binds *this run's* entry, not
-  authorship or last-confirmation of the entries already there.
+- **Axis 9 (the record as a trust boundary) -- now closed in full.** Axis 9
+  has two halves. The governance-gating half closed earlier: registry
+  entries are written in fact-shaped prose and are the sole basis a later
+  dispatch uses to pick its isolation mechanism, and `adversarial-self-audit.md`
+  carries a `Trust class of an entry` subsection naming both populations
+  (Reviewed vs. Same-run), with its Verification procedure step 4 requiring
+  the marker: "Mark it **Same-run, unreviewed** until it merges, per Trust
+  class above." A later isolated pass found the *unconditional-recheck*
+  half still open: the registry's Caveat text read "Re-run the Verification
+  procedure above if this entry looks stale ... or the result seems
+  inconsistent with current behavior" -- exactly the discretionary hedge
+  axis 9's own Pass bar disqualifies ("A hedge that leaves it to the
+  reader's own judgment ... is discretionary, and discretion is what the
+  guarded step cannot afford"). Both files now open with an unconditional,
+  mechanical field-by-field comparison of identifying signals against the
+  Known entries record, run every time before trusting an entry -- never
+  conditioned on whether it "looks" stale -- with a live re-run mandated on
+  any mismatch. Re-graded: the axis clears in full.
+- **Axis 3 (freshness) -- now closed.** The prior gap was the same root
+  cause as axis 9's unconditional-recheck half: `SKILL.md`'s own dispatch
+  text read "recording a new entry if none exists yet," so an existing
+  entry was read once and trusted with no mandated re-check -- axis 3's
+  Fail shape ("a single read at skill start with no later re-read, where
+  the operation the record guards happens many turns after that read"), the
+  boundary here being each fresh invocation of this skill, not a single
+  run. `SKILL.md`'s quoted span above now requires the same unconditional
+  signal comparison on every dispatch, regardless of whether an entry
+  already exists.
+- **Axis 2 (identity binding) -- still open, unaddressed by this pass.**
+  Entries are keyed by platform signal, not by who wrote them or when they
+  were last confirmed against a live control, so a stale entry and a fresh
+  one are indistinguishable on read. The Same-run marker is a partial
+  answer only: it binds *this run's* entry, not authorship or
+  last-confirmation of the entries already there. The new signal-comparison
+  check narrows this gap's practical reach (a version bump now forces a
+  live re-run) but does not close it: two entries recorded under identical
+  signals by different, unstated authors remain indistinguishable.
 
-This dimension therefore still does not clear -- on axes 3 and 2, no longer
-on axis 9. Both remaining axes are changes to the registry's platform-keying
-and freshness contract, out of scope for the change that closed axis 9.
+This dimension therefore still does not clear -- on axis 2 alone, no longer
+on axes 3 or 9.
 
 Citation check on this subsection's own quotations, per `SKILL.md`'s Procedure
 step 5 and the Citation fidelity rule it resolves to: each span above was
 matched against the file it cites, both reduced by collapsing whitespace runs
 to single spaces, and each matched *within one block* -- no span crosses a
 blank line, a fence, or a heading, which is the rule's own limit and the
-reason the reduction is per block rather than per file. Both cross a soft
-wrap, the accepted case: the `SKILL.md` span "for the current platform's
-verified mechanism, running its Verification procedure and recording a new
-entry if none exists yet" spans three physical lines, and the step-4 span two.
-Both counts were derived from the files, not stated alongside the quotation
-from recall: an ancillary claim *about* a verified match is still an
-unverified claim until it is matched too.
+reason the reduction is per block rather than per file. All quoted spans
+cross only soft wraps, the accepted case: the `SKILL.md` span spans five
+physical lines, and `state-management-quality.md`'s axis 9 Pass-bar span
+crosses its own paragraph's soft wraps only. Four spans were re-derived
+from the current files for this update: `SKILL.md`'s dispatch bullet (the
+opening quote above), `adversarial-self-audit.md`'s pre-existing, unchanged
+"Mark it **Same-run, unreviewed**..." step-4 marker text, and the axis 3
+Fail and axis 9 Pass-bar criteria from `state-management-quality.md`, which
+this fix does not edit. Two spans are deliberately historical, not
+current-file, quotes: `adversarial-self-audit.md`'s old Caveat text and
+`SKILL.md`'s old "recording a new entry if none exists yet" wording, both
+quoted as evidence of the pre-fix gap this subsection records as now
+closed -- each was matched against that file's actual pre-fix content
+(this same change's own diff), not against the file as it reads today, and
+neither is re-derivable from the current files by construction. An
+ancillary claim *about* a verified match is still an unverified claim until
+it is matched too.
 
 ### 7. Bundled scripts
 
