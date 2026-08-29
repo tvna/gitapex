@@ -717,6 +717,15 @@ mid-run is the different case Contaminated-dispatch disclosure below
 covers, and that section's operator-override path is unaffected by this
 one.
 
+Whether the "never fall back" prohibition above carries real deterministic
+backing (a hook or permission rule blocking an Agent-tool dispatch outright)
+or is enforced by this instruction alone depends on the environment this run
+is actually in -- check directly rather than assuming either way, the same
+self-audit `SKILL.md`'s own eval-tooling-install Stop boundary already
+applies to itself. An environment with no such backing is currently
+prose-only and worth naming as a Mechanism-fit gap the same way that Stop
+boundary already names its own, not a guarantee to assume holds.
+
 ## Contaminated-dispatch disclosure
 
 If this dispatch is already running in a context that carries the calling

@@ -85,7 +85,7 @@ limits.
    available -- follow `evaluating-skill-quality`'s
    `references/adversarial-self-audit.md` No verified mechanism available
    section to display the environment-fix-or-handoff code block that
-   section requires, instead of dispatching contaminated. If an operator explicitly authorizes proceeding anyway,
+   section requires. If an operator explicitly authorizes proceeding anyway,
    disclose the contamination prominently in the trial's own report and
    grade every PASS from that trial provisional pending an isolated re-run.
    After each dispatch starts, capture `observed_tester_model` from trusted
