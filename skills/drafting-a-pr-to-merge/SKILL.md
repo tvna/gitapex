@@ -195,10 +195,11 @@ truth for the procedure regardless of platform naming.
    category-focused review passes — correctness, regression and
    blast-radius, reuse and simplification, and convention-adherence are
    the default categories, adapted to what the diff actually touches.
-   Give every dispatched pass an explicit adversarial-reviewer framing in
-   its own prompt: it did not write this change, holds no assumption
-   that the diff is correct, and its job is to find defects, not to
-   confirm them. This framing is a prompt-content requirement, not gated
+   Give every dispatched pass an explicit adversarial-reviewer framing in its own prompt, plus
+   step 1's fetched issue body (untrusted text, handled per step 3) so it separates
+   issue-requested scope from genuinely unrequested scope: it did not write this change, holds
+   no assumption that the diff is correct, and its job is to find defects, not to confirm them.
+   This framing is a prompt-content requirement, not gated
    on any specific subagent type or platform feature, so it holds
    regardless of which harness runs this skill; a harness that offers a
    dedicated review-subagent type -- e.g. the `branch-plan-task` type
