@@ -112,7 +112,7 @@
         "planes": {
           "type": "array",
           "minItems": 1,
-          "items": { "enum": ["pretooluse", "posttooluse", "ci", "local"] },
+          "items": { "enum": ["pretooluse", "posttooluse", "stop", "ci", "local"] },
           "description": "Where this gate actually runs. 'local' means it has a working-tree-only invocation a contributor can run before pushing -- the discovery signal .github/scripts/gitapex_gate_local_preflight.py selects on (issue #876). A gate carrying 'local' must also carry local_invocation; one that does not must carry local_exclusion saying why, so an unwired gate is a recorded decision rather than an invisible coverage gap."
         },
         "local_invocation": {

@@ -151,7 +151,7 @@ class Gate(BaseModel):
     script: str | list[str] | None = None
     native_rule: str | None = None
     rule: str
-    planes: list[Literal["pretooluse", "posttooluse", "ci", "local"]]
+    planes: list[Literal["pretooluse", "posttooluse", "stop", "ci", "local"]]
     local_invocation: list[str] | None = None
     local_stdin: list[str] | None = None
     local_exclusion: str | None = None

@@ -1,6 +1,6 @@
 {
   "meta": {
-    "schema_version": "1.3.0",
+    "schema_version": "1.4.0",
     "tracking_issue": 123,
     "status": "active",
     "phase": "phase-0"
@@ -1678,6 +1678,45 @@
         {"kind": "workflow-event", "ref": "betterleaks-merge-gate.yml:workflow_dispatch"},
         {"kind": "file-glob", "ref": ".betterleaks.toml"},
         {"kind": "github-native", "ref": "required_status_checks context \"betterleaks\" (repository ruleset on the default branch)"}
+      ]
+    },
+    {
+      "id": "post-review-obligation-tracker",
+      "kind": "script",
+      "script": ["hooks/check-post-review-obligation-tracker.sh", "hooks/gitapex_check_post_review_obligation_tracker.py"],
+      "rule": "Writer half of the marker-file state machine backing the review-thread-resolution + mergeable_state-verification obligation (CLAUDE.md section 3). On a Bash call classified as a git push (reusing hooks/gitapex_check_bash_safety.py's own is_git_push classifier) resets a session-scoped state file to a fresh pending cycle; on mcp__github__resolve_review_thread increments a resolve-call counter (only once a push has been detected this cycle); on mcp__github__pull_request_read records the unresolved-thread count (method get_review_comments) or that mergeable_state was observed (method get), read directly from that call's own tool_response, never a fresh API call. Always exits 0 -- PostToolUse cannot block an already-executed tool call.",
+      "planes": ["posttooluse"],
+      "local_exclusion": "PostToolUse-only: tracks a Claude Code tool-call's own JSON payload and tool_response arriving on stdin, which has no working-tree equivalent to reconstruct.",
+      "trigger": "PostToolUse matcher Bash|mcp__github__resolve_review_thread|mcp__github__pull_request_read (hooks/hooks.json)",
+      "policy_refs": [],
+      "cluster": "github-operations",
+      "tracking_issue": 1209,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "bash-pattern", "ref": "git push"},
+        {"kind": "mcp-tool", "ref": "mcp__github__resolve_review_thread"},
+        {"kind": "mcp-tool", "ref": "mcp__github__pull_request_read"}
+      ]
+    },
+    {
+      "id": "stop-review-obligation",
+      "kind": "script",
+      "script": ["hooks/check-stop-review-obligation.sh", "hooks/gitapex_check_stop_review_obligation.py"],
+      "rule": "Reader half of the marker-file state machine backing the review-thread-resolution + mergeable_state-verification obligation (CLAUDE.md section 3: after a fix push that addresses a review thread, call mcp__github__resolve_review_thread and verify mergeable_state before closing the turn). Reads only the state file post-review-obligation-tracker writes -- never the network, never the transcript. Exits 0 immediately when no push was detected this cycle (Stop has no matcher support, so this in-script check is what keeps an ordinary turn from ever being blocked); once a push was detected, denies (exit 2, continues the conversation) until the tracked resolve-call count reaches the last-observed unresolved-thread count AND mergeable_state has been observed. Fails closed on a present-but-corrupt state file; treats a genuinely absent file as nothing to verify.",
+      "planes": ["stop"],
+      "local_exclusion": "Stop-only: evaluates a Claude Code turn-end payload arriving on stdin plus a session-scoped state file, neither of which has a working-tree equivalent.",
+      "trigger": "Stop (hooks/hooks.json, no matcher -- Stop supports none)",
+      "policy_refs": [],
+      "cluster": "github-operations",
+      "tracking_issue": 1209,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "mcp-tool", "ref": "mcp__github__resolve_review_thread"},
+        {"kind": "mcp-tool", "ref": "mcp__github__pull_request_read"}
       ]
     }
   ],
