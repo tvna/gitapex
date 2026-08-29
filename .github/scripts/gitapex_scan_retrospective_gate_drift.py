@@ -370,9 +370,13 @@ def load_gate_tracking_issues(path: str) -> set[int]:
         # `bool` is an `int` subclass in Python, so `isinstance(True, int)`
         # is True -- without the extra check, a stray `"tracking_issue":
         # true` would silently corroborate issue #1 instead of being
-        # skipped as the malformed value it is.
-        if isinstance(tracking_issue, int) and not isinstance(tracking_issue, bool):
-            tracking_issues.add(tracking_issue)
+        # skipped as the malformed value it is. A gate legitimately
+        # tracked under more than one issue (issue #1425) stores a list;
+        # flatten it the same way a bare int is added.
+        candidates = tracking_issue if isinstance(tracking_issue, list) else [tracking_issue]
+        for candidate in candidates:
+            if isinstance(candidate, int) and not isinstance(candidate, bool):
+                tracking_issues.add(candidate)
     return tracking_issues
 
 
