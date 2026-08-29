@@ -87,9 +87,9 @@ step in `SKILL.md`'s "Two lanes" and "Procedure" sections resolves inside
 this skill's own folder or cites general, product-level primary sources
 (`platform.claude.com`, `code.claude.com`); no step tells the model to
 read or branch on a path outside `skills/evaluating-skill-quality/` in
-this origin repository. (Step 4 reads a path inside the *target* skill's
+the origin repository. (Step 4 reads a path inside the *target* skill's
 own directory -- its `metadata/gitapex.yaml`, when present -- but that is
-the review's parameterized subject, not a dependency on this origin
+the review's parameterized subject, not a dependency on the origin
 repository's tree, so the portability claim still holds.)
 Illustrative mentions of "gitapex" in `rubric.md` (dimensions 8 and the
 SkillOpt paragraph) are examples of applying a generic rule to the

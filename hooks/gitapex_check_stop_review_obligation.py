@@ -87,7 +87,7 @@ def _load_state(path: Path) -> dict[str, Any] | None:
     try:
         raw = path.read_text(encoding="utf-8")
         data = json.loads(raw)
-    except (OSError, json.JSONDecodeError) as error:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise StateUnreadable(str(error)) from error
     if not isinstance(data, dict):
         raise StateUnreadable(f"state file is not a JSON object (got {type(data).__name__})")

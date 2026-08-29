@@ -2825,6 +2825,108 @@ def test_hedge_in_prior_paragraph_does_not_count(tmp_path):
     assert result.passed is False
 
 
+# ---- Portable demonstrative "this origin repository" citation scan (issue
+# ---- #218 Repair 3 / #1399) ----
+#
+# The real incident (evals/evaluating-skill-quality/split.md's "Iteration:
+# issue #200" entry, Correction item 3): a new Dimension 6 bullet said
+# "this origin repository", which either dangles or narrows the check to
+# the rubric's own host once vendored, and was corrected to "the origin
+# repository" -- the established convention the sibling issue/PR-number-
+# citation bullet already uses. Deliberately scoped to the bare three-word
+# phrase, not the broader "this repository's own" pattern issue #218's own
+# retrospective text also floated: that broader phrase is this
+# repository's own single most common way to cite itself in disclosure
+# prose (e.g. this file's own "labelled here as this repository's own
+# reasoned extension"), and a full-repo scan performed while designing
+# this check confirmed banning it outright would false-positive across
+# nearly every Portable skill.
+
+
+def test_demonstrative_origin_repository_citation_fails(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        _portable_body(
+            "A skill's issue-filing step must not hardcode this origin "
+            "repository's own title/body convention as universal."
+        ),
+    )
+    result = _by_name(css.check_shape(d))["portable-no-demonstrative-origin-repository-citation"]
+    assert result.passed is False
+    assert "this origin repository" in result.evidence
+
+
+def test_definite_article_origin_repository_citation_passes(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        _portable_body(
+            "A skill's issue-filing step must not hardcode the origin "
+            "repository's own title/body convention as universal."
+        ),
+    )
+    result = _by_name(css.check_shape(d))["portable-no-demonstrative-origin-repository-citation"]
+    assert result.passed is True
+
+
+def test_demonstrative_origin_repository_citation_in_reference_file_fails(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        _portable_body("Clean body."),
+        references={"notes.md": "No step depends on a path outside this origin repository.\n"},
+    )
+    result = _by_name(css.check_shape(d))["portable-no-demonstrative-origin-repository-citation"]
+    assert result.passed is False
+    assert "references/notes.md:" in result.evidence
+
+
+def test_non_portable_skill_skips_demonstrative_origin_repository_scan(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        _portable_body(
+            "No step depends on a path outside this origin repository.",
+            marker="**Portability: Mixed.** Repo-specific detail is split out.",
+        ),
+    )
+    names = _by_name(css.check_shape(d))
+    assert "portable-no-demonstrative-origin-repository-citation" not in names
+
+
+def test_demonstrative_origin_repository_hard_wrapped_across_line_break_still_flagged(tmp_path):
+    # Regression guard for a defect found while validating this check
+    # against the real corpus: this repository's own Markdown source is
+    # hard-wrapped at roughly 80 columns, so a live occurrence
+    # (references/worked-example-self-review.md, since fixed) had a literal
+    # newline between "origin" and "repository" -- a rendered reader sees
+    # one continuous phrase, but a literal-space pattern would silently
+    # miss it.
+    d = _write_raw(
+        tmp_path,
+        _portable_body("Not a dependency on this origin\nrepository's tree, so the claim still holds."),
+    )
+    result = _by_name(css.check_shape(d))["portable-no-demonstrative-origin-repository-citation"]
+    assert result.passed is False
+
+
+def test_repository_scoped_skill_may_use_demonstrative_origin_repository(tmp_path):
+    # Explicitly pins the Repository-scoped declared level, not just Mixed
+    # (test_non_portable_skill_skips_demonstrative_origin_repository_scan
+    # above): _is_portable() takes the same False branch for both today, so
+    # this is currently redundant with that test rather than a distinct
+    # code path -- kept as a named regression guard for this specific
+    # declared level (per rubric.md's own Dimension 6 Repository-scoped
+    # carve-out, issue #200/#218) in case the two levels' handling ever
+    # diverges.
+    d = _write_raw(
+        tmp_path,
+        _portable_body(
+            "No step depends on a path outside this origin repository.",
+            marker="**Portability: Repository-scoped.** Assumes this repository's own layout.",
+        ),
+    )
+    names = _by_name(css.check_shape(d))
+    assert "portable-no-demonstrative-origin-repository-citation" not in names
+
+
 # ---- Portability source precedence: sidecar first, body marker as fallback ----
 
 # The three Portable-only citation checks -- gated by _is_portable, unlike

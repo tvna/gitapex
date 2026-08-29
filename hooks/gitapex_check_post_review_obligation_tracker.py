@@ -116,7 +116,7 @@ def _read_state(path: Path) -> dict[str, Any]:
         data = json.loads(raw)
         if isinstance(data, dict):
             return {**_DEFAULT_STATE, **data}
-    except (OSError, json.JSONDecodeError):
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         pass
     return dict(_DEFAULT_STATE)
 
