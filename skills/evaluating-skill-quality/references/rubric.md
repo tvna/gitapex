@@ -2343,6 +2343,18 @@ is labeled as such.
 A verdict without cited evidence per dimension is not a review -- it is a
 guess wearing a review's shape.
 
+**Per-dimension grading convention, not a fifth verdict:** a dimension's
+own grade prose must state explicitly whether it clears, never leave that
+to be inferred from a descriptive label alone. A forward-looking
+watch-point -- a dimension that clears now, with a noted item to re-check
+on a future edit -- is explicitly distinct from a "minor gap" under the
+Mature rule above, which always leaves that dimension uncleared. A label
+like "Mixed" or "not a clean pass by default" is ambiguous between the
+two unless the grade's own prose states which one applies and why: the
+explicit clear/not-clear conclusion must appear in words -- before or
+after any watch-point or gap commentary -- never replaced by the label
+alone.
+
 The Compatibility awareness axis is reported alongside the verdict but
 never participates in it. A skill can therefore be **Mature** with a
 compatibility warning when every existing maturity requirement clears.
