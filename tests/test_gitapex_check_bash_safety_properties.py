@@ -3266,6 +3266,48 @@ def test_classify_denies_a_line_continued_checkout_path_that_used_to_bypass() ->
     assert verdict.checkout_restore_paths == ("file.py",)
 
 
+def test_strip_comments_preserves_boundary_status_across_a_line_continuation() -> None:
+    """CRITICAL regression pin (round-6 independent review, issue #1375).
+    A genuine line continuation vanishes with nothing left behind once
+    `_strip_line_continuations` runs afterward -- `_strip_comments` only
+    passes the pair through unchanged, so the boundary status right after
+    it must be whatever it was right BEFORE the backslash, not forced to
+    False the way every other escaped pair correctly is. A `#` right
+    after a continuation must still start a comment."""
+    result = checker._strip_comments("echo a \\\n#comment\necho b")
+    assert result == "echo a \\\n\necho b"
+
+
+def test_strip_comments_passes_through_a_double_quoted_line_continuation_unchanged() -> None:
+    """The round-6 fix's own double-quoted branch: a continuation pair
+    INSIDE an open double-quoted string is passed through unchanged (no
+    comment can start there regardless of boundary status, since `#` is
+    only ever checked in the top-level unquoted branch), covering the
+    `nxt == "\\n"` skip-path this function's double-quoted backslash
+    handling shares with its unquoted twin."""
+    result = checker._strip_comments('echo "a \\\nb"')
+    assert result == 'echo "a \\\nb"'
+
+
+def test_strip_comments_still_clears_boundary_for_a_non_continuation_escape() -> None:
+    """No regression from the round-6 fix: an escaped, non-newline
+    character is still real word content, not a boundary -- `\\#` right
+    after it must NOT be read as a comment-starter."""
+    result = checker._strip_comments("echo a\\x#notacomment")
+    assert result == "echo a\\x#notacomment"
+
+
+def test_classify_no_longer_leaks_a_comment_past_a_line_continuation() -> None:
+    """End-to-end regression pin for the round-6 independent-review
+    finding: a `#`-comment sitting on the continued line right after a
+    `\\<newline>` must be recognized and stripped, not swept into
+    `checkout_restore_paths` as a phantom path candidate that could name
+    an unrelated, genuinely dirty file and produce a misleading deny."""
+    verdict = checker.classify("git checkout -- clean.py \\\n# TODO revisit auth.py later\n")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("clean.py",)
+
+
 @pytest.mark.parametrize("flag", ["-b", "-B", "--orphan"])
 def test_git_checkout_paths_folds_branch_creation_flags_into_the_non_goal(flag: str) -> None:
     """CRITICAL regression pin (round-4 independent review, issue #1375).

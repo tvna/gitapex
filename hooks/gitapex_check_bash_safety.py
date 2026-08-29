@@ -959,7 +959,30 @@ def _strip_comments(command: str) -> str:
     backslash inert) -- a comment always ends at the very next raw
     newline in COMMAND, full stop, which is exactly what searching for the
     next raw `\\n` (rather than delegating to `_strip_line_continuations`
-    first) gives here."""
+    first) gives here.
+
+    A genuine line continuation (`\\` immediately followed by a raw
+    newline) is the ONE backslash-pair shape that does NOT clear
+    AT_BOUNDARY -- CRITICAL bug found by independent adversarial review
+    (round 6, issue #1375, during this PR's own merge with issue #1350's
+    already-merged `_strip_comments`): a continuation vanishes with
+    NOTHING left behind once `_strip_line_continuations` runs afterward
+    (this function only passes the pair through unchanged; it does not
+    itself delete it), so the boundary status right after a continuation
+    must be whatever it was right BEFORE the backslash, exactly as if the
+    continuation were not there at all -- every OTHER escaped pair (an
+    escaped literal character that genuinely survives into the output,
+    like `\\#`) correctly still clears it, since that character is real,
+    non-boundary word content. Confirmed live this was a real, security-
+    relevant leak once combined with issue #1375's own checkout/restore
+    feature: `git checkout -- clean.py \\` + newline + `# TODO revisit
+    auth.py later` used to tokenize with `#` never recognized as a
+    comment-starter (AT_BOUNDARY wrongly cleared by the continuation
+    pair), sweeping `auth.py` (an unrelated filename that merely happens
+    to appear in the comment text) into `checkout_restore_paths` as a
+    phantom candidate, and denying an entirely safe checkout with a
+    misleading message naming a file the command never referenced. Only
+    an over-denial (never a missed real discard), but a confusing one."""
     out: list[str] = []
     in_single_quote = False
     in_double_quote = False
@@ -977,10 +1000,12 @@ def _strip_comments(command: str) -> str:
             continue
         if in_double_quote:
             if char == "\\" and i + 1 < n:
+                nxt = command[i + 1]
                 out.append(char)
-                out.append(command[i + 1])
+                out.append(nxt)
                 i += 2
-                at_boundary = False
+                if nxt != "\n":
+                    at_boundary = False
                 continue
             out.append(char)
             if char == '"':
@@ -989,10 +1014,12 @@ def _strip_comments(command: str) -> str:
             i += 1
             continue
         if char == "\\" and i + 1 < n:
+            nxt = command[i + 1]
             out.append(char)
-            out.append(command[i + 1])
+            out.append(nxt)
             i += 2
-            at_boundary = False
+            if nxt != "\n":
+                at_boundary = False
             continue
         if char == "'":
             in_single_quote = True

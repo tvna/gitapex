@@ -1413,6 +1413,32 @@ def test_checkout_denied_for_pathspec_from_file(tmp_path: Path) -> None:
     assert "pathspec-from-file" in payload["systemMessage"]
 
 
+def test_checkout_allowed_when_a_comment_after_a_line_continuation_names_an_unrelated_dirty_file(
+    tmp_path: Path,
+) -> None:
+    """CRITICAL regression pin (round-6 independent review, issue #1375).
+    `_strip_comments` used to wrongly clear its own boundary status across
+    a genuine line continuation, so a `#`-comment sitting on the continued
+    line was never recognized as a comment -- its text (here naming an
+    unrelated, genuinely dirty file) got swept into `checkout_restore_paths`
+    as a phantom candidate and produced a misleading deny. The real
+    checkout target (`f.py`) is untouched; `auth.py` is dirty but never
+    referenced by the actual command, only by the comment text."""
+    repo_dir = tmp_path / "repo"
+    _init_repo_with_committed_file(repo_dir)
+    (repo_dir / "auth.py").write_text("hello\n")
+    _git(repo_dir, "add", "auth.py")
+    _git(repo_dir, "commit", "-q", "-m", "add auth.py")
+    (repo_dir / "auth.py").write_text("hello\ndirty\n")
+    result = run(
+        "git checkout -- f.py \\\n# TODO revisit auth.py later\n",
+        payload_cwd=str(repo_dir),
+    )
+    assert result.returncode == 0, f"stderr={result.stderr!r}"
+    assert result.stdout == ""
+    assert result.stderr == ""
+
+
 def test_checkout_denied_from_a_subdirectory_when_target_has_uncommitted_changes(tmp_path: Path) -> None:
     """The near-miss's own exact shape (issue #1375, issue #1128 repair 4):
     replayed from a SUBDIRECTORY of the repo, not just the repo root --
