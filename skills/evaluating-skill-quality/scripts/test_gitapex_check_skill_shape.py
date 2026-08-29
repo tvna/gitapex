@@ -535,6 +535,21 @@ def test_guard_error_on_one_target_does_not_stop_grading_the_rest(tmp_path, caps
     assert "checks passed" in captured.out
 
 
+def test_check_shape_raising_is_a_guard_error_not_a_crash(tmp_path, monkeypatch, capsys):
+    # main()'s own try/except (OSError, UnicodeDecodeError) around
+    # check_shape() -- distinct from check_shape()'s own internal
+    # per-check decode-error handling (covered elsewhere) -- must turn an
+    # escaping exception into a reported guard error, never propagate.
+    d = _write_skill(tmp_path)
+
+    def _raise(_target):
+        raise OSError("simulated unreadable skill file")
+
+    monkeypatch.setattr(css, "check_shape", _raise)
+    assert css.main([str(d)]) == 2
+    assert "could not read skill files" in capsys.readouterr().err
+
+
 def test_duplicate_targets_are_deduplicated_and_graded_once(tmp_path, capsys):
     # A commit touching both a skill's SKILL.md and its own
     # references/*.md file normalizes both to the same owning skill
