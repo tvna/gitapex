@@ -135,7 +135,7 @@ repos:
       # the last local moment before a gap becomes a CI round-trip, and
       # deliberately not pre-commit: it grades committed state (HEAD vs
       # origin/main), not a staged index, and at ~17 s
-      # warm end to end for all 40 wired gates it is too slow to sit on every
+      # warm end to end for all 41 wired gates it is too slow to sit on every
       # single commit.
       #
       # The wired set is not listed here: the runner discovers it from
