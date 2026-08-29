@@ -365,6 +365,35 @@ KNOWN_BYPASS_COMMANDS = [
         'A=muta; B=tion; Q="${A}${B} { x }"; gh api graphql -f query="$Q"',
         "graphql-mutation-keyword-variable-concatenation",
     ),
+    (
+        # Issue #1375's own checkout/restore path extraction closes every
+        # ORDINARY, honest-accident-shaped way a decoy token between `git`
+        # and `checkout`/`restore` vanishes at real bash runtime: a bare
+        # `$NAME`/`${NAME}` reference, and the default/assign-default/
+        # alt-value clause forms (`${NAME:-}`/`${NAME-}`, `${NAME:=}`/
+        # `${NAME=}`, `${NAME:+x}`/`${NAME+x}`) -- all common defensive-
+        # scripting idioms for "reference a variable that might not be
+        # set." Bash's OTHER parameter-expansion operators that also
+        # evaluate to the empty string on an unset variable -- substring
+        # (`${NAME:0:5}`), prefix/suffix removal (`${NAME#x}`/
+        # `${NAME%x}`), pattern substitution (`${NAME/x/y}`), and case
+        # modification (`${NAME^^}`) among others -- are NOT recognized:
+        # confirmed live these are not honest-accident-shaped the way the
+        # closed forms are (an ordinary script does not reach for prefix
+        # removal or case-folding just to guard against an unset
+        # variable), matching this file's own established convention for
+        # "exotic non-literal indirection" (issue #1375's own Non-goals
+        # section) rather than the near-zero-effort, ordinary-idiom bypass
+        # class the closed forms addressed. Confirmed live: this decoy is
+        # NOT silently allowed as if `checkout` were genuinely resolved --
+        # the `git` occurrence is correctly treated as ambiguous and the
+        # command is simply never recognized as a checkout/restore
+        # invocation at all (checkout_restore_paths stays empty, matching
+        # the SAME disclosed-residual shape `V=checkout; git $V -- f.py`
+        # already carries), not a distinct or worse failure mode.
+        "git ${NEVERSET#x} checkout -- file.py",
+        "checkout-restore-exotic-parameter-expansion-decoy",
+    ),
 ]
 
 

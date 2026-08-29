@@ -2521,6 +2521,20 @@ def _is_git_push_segment(seg: list[str], name_to_raw_value: dict[str, str]) -> b
 # `git diff --quiet HEAD -- PATH` exits 0 (clean) for a path that does not
 # exist, so treating an unresolved token as "nothing to check" would be
 # fail-OPEN, not fail-closed (confirmed live, git 2.43.0).
+#
+# Disclosed residual, matching this module's own established convention
+# (see the module docstring's own "Known, disclosed limitation" paragraph
+# above): a decoy token between `git` and `checkout`/`restore` that
+# vanishes via a bash parameter-expansion operator OTHER than a bare
+# reference or the default/assign-default/alt-value clauses (`${NAME:-}`/
+# `${NAME-}`, `${NAME:=}`/`${NAME=}`, `${NAME:+x}`/`${NAME+x}`) -- e.g.
+# substring expansion, prefix/suffix removal, pattern substitution, or
+# case modification, all of which also evaluate to the empty string on an
+# unset variable -- is not recognized as vanishing; that `git` occurrence
+# is correctly treated as ambiguous rather than silently misread as a safe
+# checkout/restore. Pinned as `checkout-restore-exotic-parameter-
+# expansion-decoy` in hooks/test_gitapex_check_bash_safety.py's own
+# `KNOWN_BYPASS_COMMANDS`.
 
 _GIT_TREE_RELOCATION_LONG_FLAGS = {"--git-dir", "--work-tree"}
 _GIT_GLOBAL_SHORT_VALUE_FLAGS = {"-c", "-C"}
