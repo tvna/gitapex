@@ -1,16 +1,64 @@
 #!/usr/bin/env python3
-"""Report (and fail CI on) retrospective issues with no citing commit.
+"""Report (and fail CI on) `gate-proposal`-labelled issue drift.
 
-Issue #297 (refs #187, #242, #246): `merge-retrospective`'s Step 0
-requires, every cycle, a manual search of every `retrospective`-labelled
-issue for a commit on `main` citing it. Issue #187 proposed automating
-this as a meta-gate; #242 and #246 each ran that search by hand again and
-confirmed the meta-gate itself was never built. This script mechanizes
-Step 0's own method (list `retrospective`-labelled issues, unfiltered by
-state; search `main`'s commit history for a citing `#N`) and fails when
-the count of issues with zero citing commits exceeds a threshold.
+Issue #1406 (refs #297, #187, #242, #246, #709, #1297; supersedes this
+script's own prior scope): the flat gate-proposal-issues design
+(`docs/superpowers/specs/2026-08-29-flat-gate-proposal-issues-design.md`)
+files every `missing-deterministic-gate` retrospective finding as its own
+standalone, `gate-proposal`-labelled issue (Decision 1) rather than
+leaving it embedded in an ever-growing `retrospective`-labelled issue.
+This script is rescoped to audit *that* new label instead of sweeping
+every `retrospective`-labelled issue for a citing commit -- the prior
+345-issue-wide citation-drift sweep this docstring used to describe is
+retired along with the design it audited.
 
-Design: docs/superpowers/specs/2026-07-22-retrospective-gate-drift-design.md
+Two passes, both gated by a label-liveness guard that must pass first:
+
+  (a) Primary, threshold-gated: count of currently-open `gate-proposal`-
+      labelled issues (a plain `state=open` + label search -- the actual
+      backlog size). Threshold unchanged from before this rescope (20).
+  (b) Secondary, unbounded and zero-tolerance: every issue in state
+      `closed` carrying the label -- no `closed_at` time window, no
+      filtering by age -- re-run the existing two-signal check (issue
+      #709: a commit on the checked ref citing the issue's own number,
+      AND a corroborating `.gitapex/ssot.json` `gates[].tracking_issue`
+      entry naming that same number) on each, after excluding any whose
+      own `state_reason` is `not_planned` or `duplicate` (a legitimately
+      declined proposal, not a silent-close failure). Any remaining,
+      non-exempt issue that closed without passing the check fails this
+      run. There is no reopen action of any kind -- this pass only
+      detects and fails loudly; a human resolves it by hand afterward
+      (Decision 5's own scope: detection, not remediation).
+
+**Label-liveness guard**: both passes assume `gate-proposal` itself still
+exists as a repository label. Before either runs, `label_exists` confirms
+it via a plain `GET /repos/{owner}/{repo}/labels/{name}` lookup; a
+missing label fails loudly, naming it explicitly, rather than reporting a
+clean zero-count pass that cannot be told apart from "the label was
+renamed or deleted out from under this check."
+
+`GATE_PROPOSAL_LABEL` (Decision 6) is this script's own independent copy
+of the literal string `"gate-proposal"` -- a parallel copy of the same
+constant `skills/merge-retrospective/scripts/gitapex_file_gate_proposal.py`
+defines, never an import of it: `docs/repository-layout.md` states
+`.github/` never ships with the installed plugin, so a cross-tree import
+would break at install time exactly like
+`hooks/gitapex_check_pr_title_convention.py` and
+`.github/scripts/gitapex_gate_pr_title_convention.py`'s own pre-existing
+independent-copy pair for the identical structural reason. A dedicated
+sync test, `tests/test_gitapex_retro_gate_label_sync.py`, keeps the two
+copies from silently drifting apart -- not owned by this file.
+
+`DEFAULT_LABEL` (`"retrospective"`) is kept, unrescoped, purely because
+`gitapex_compute_gprr.py` imports it as its own CLI default for an
+unrelated concern (the Gate-Preventable Repair Rate, computed over
+`retrospective`-labelled issues regardless of this script's own scope) --
+this script's own CLI no longer defaults to it anywhere.
+
+The two-signal check itself (issue #709) is unchanged in *logic*, only in
+*scope*: `find_no_citation_issues` is the same function this script
+always had, now run over the `gate-proposal`-labelled closed set instead
+of the full `retrospective`-labelled sweep.
 
 Split into pure logic (fixture-testable, no I/O) and I/O glue (GitHub REST
 API over `urllib`, a local `git log`, plus a `.gitapex/ssot.json` read).
@@ -21,26 +69,6 @@ repository keeps `.github/scripts/*.py` files independently self-contained
 (see `gitapex_gate_skill_rename_lifecycle.py`'s own docstring for the same
 rationale) even though the retry-with-backoff shape below mirrors
 `gitapex_sync_pr_publish.apply_call`.
-
-Issue #709: a citing commit alone is not proof the issue's proposed gate
-was actually built -- `#N` in a commit message only shows someone worked
-on *something related to* issue N. An issue now clears the no-citation
-report only when a citing commit AND a corroborating
-`.gitapex/ssot.json` `gates[].tracking_issue == N` entry both agree
-(`load_gate_tracking_issues`, wired into `find_no_citation_issues`).
-
-Issue #1297: a `retrospective` issue can legitimately close with no gate
-to ever propose -- a bare CI-opened stub, or a `merge-retrospective`
-Step 5 zero-repair fast-close -- and such an issue can never satisfy the
-two-signal check above by construction, inflating the no-citation report
-with backlog that was never real. `partition_gate_less` excludes any
-issue whose body carries either literal marker *before*
-`find_no_citation_issues` runs; `main` fetches full records (`body`
-included) via `list_labelled_issue_records` for this reason, and
-`format_report`'s new `gate_less_count` parameter discloses how many were
-excluded rather than silently shrinking the denominator. Mirrors
-`skills/merge-retrospective/scripts/gitapex_check_retro_gate_resolved.py`'s
-own identical `gate_less` bucket -- keep both in sync.
 
 Usage::
 
@@ -54,13 +82,19 @@ invocation.
 
 Environment variables:
     GITHUB_TOKEN  GitHub token with read access to issues (the default
-                  Actions token's `issues: read` permission suffices).
+                  Actions token's `issues: read` permission suffices --
+                  this script never writes, so no elevated scope is ever
+                  requested).
 
 Exit codes:
-    0  No-citation count does not exceed the threshold.
-    1  No-citation count exceeds the threshold, or a GitHub API / git
-       error prevented the check from completing (never silently
-       reported as "zero issues found").
+    0  The open-issue count does not exceed the threshold, and every
+       closed labelled issue either passed the two-signal check or was
+       exempt.
+    1  The open-issue count exceeds the threshold, or at least one closed
+       labelled issue never passed the two-signal check and was not
+       exempt, or the `gate-proposal` label itself does not exist, or a
+       GitHub API / git error prevented the check from completing (never
+       silently reported as "zero issues found").
 """
 
 from __future__ import annotations
@@ -74,6 +108,7 @@ import subprocess
 import sys
 import time
 import unicodedata
+import urllib.parse
 import urllib.request
 from collections.abc import Callable
 from typing import Any
@@ -83,10 +118,25 @@ from _gitapex_github_http import GitHubApiError
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
 DEFAULT_THRESHOLD = 20
+
+# Kept solely because gitapex_compute_gprr.py imports this name as its own
+# CLI default (an unrelated GPRR concern over `retrospective`-labelled
+# issues) -- see module docstring. Not used as this script's own CLI
+# default any more; that is GATE_PROPOSAL_LABEL below.
 DEFAULT_LABEL = "retrospective"
+
+# Decision 6: this script's own independent copy of the label literal --
+# never imported from skills/merge-retrospective/scripts/
+# gitapex_file_gate_proposal.py. See module docstring for why.
+GATE_PROPOSAL_LABEL = "gate-proposal"
 
 _API_ROOT = "https://api.github.com"
 _PER_PAGE = 100
+
+# Decision 5: a closed gate-proposal issue with either state_reason is a
+# legitimately declined proposal, not a silent-close failure -- exempted
+# from the zero-tolerance integrity pass rather than flagged forever.
+_EXEMPT_CLOSED_STATE_REASONS = frozenset({"not_planned", "duplicate"})
 
 # Record separator (0x1e) / unit separator (0x1f): neither appears in real
 # commit messages, so they safely delimit `git log` entries and fields
@@ -104,34 +154,6 @@ class SsotLedgerError(RuntimeError):
     registry. Never caught and silently downgraded to an empty
     corroboration set -- that would reopen the exact bare-citation
     false-negative issue #709 exists to close."""
-
-
-# Issue #1297: a `retrospective` issue can legitimately close with no gate
-# to ever propose -- a bare CI-opened stub, or a zero-repair fast-close
-# (merge-retrospective/SKILL.md Step 5). Neither can ever satisfy the
-# two-signal check below by construction, so both are excluded from the
-# no-citation report entirely rather than counted as unresolved backlog.
-# Mirrors skills/merge-retrospective/scripts/gitapex_check_retro_gate_resolved.py's
-# own identical markers -- keep both in sync (per this repository's own
-# established independent-duplication convention for this script pair).
-_CI_STUB_MARKER = "Automated stub opened by the post-merge-auto-retro gate"
-_ZERO_REPAIR_MARKER = "Retrospective status: zero-repair-fast-close"
-
-# `_ZERO_REPAIR_MARKER` is checked as a standalone line, not a bare
-# substring like `_CI_STUB_MARKER` above: this repo's own retrospectives
-# routinely re-quote an earlier issue's text verbatim inside a later
-# issue's free-prose Repairs/Carried-forward section (issue #1297's own
-# investigation cites #1038 re-quoting a "Proposed gate:" line 63 times) --
-# a bare substring match would misclassify a later, real retrospective as
-# gate-less merely for quoting a fast-closed one. `_CI_STUB_MARKER` stays
-# a bare substring on purpose: `gitapex_post_merge_retro.py`'s own stub body
-# embeds it mid-paragraph, not on its own line, and
-# `gitapex_stale_retro_stub_autoclose.py`'s own `is_unenriched_stub` already
-# matches it the same way -- anchoring it here would silently stop
-# recognizing the real stub shape.
-_ZERO_REPAIR_MARKER_LINE_RE = re.compile(
-    r"^[ \t]*[-*]?[ \t]*" + re.escape(_ZERO_REPAIR_MARKER) + r"[ \t]*$", re.MULTILINE
-)
 
 
 # ---------------------------------------------------------------------------
@@ -162,83 +184,84 @@ def find_no_citation_issues(
     """Return the subset of `issue_numbers` that lack either a citing
     commit or a corroborating `.gitapex/ssot.json` `tracking_issue` entry.
 
-    Issue #709: a bare citing commit is not sufficient on its own -- it is
-    evidence someone touched *something related to* the issue, not proof
-    its proposed gate was built. An issue number clears (is excluded from
-    the returned list) only when both signals agree: at least one commit
-    cites it AND `tracking_issues` contains it.
-    """
+    The two-signal check (issue #709): a bare citing commit is not
+    sufficient on its own -- it is evidence someone touched *something
+    related to* the issue, not proof its proposed gate was built. An
+    issue number clears (is excluded from the returned list) only when
+    both signals agree: at least one commit cites it AND
+    `tracking_issues` contains it.
+
+    Used by `main` below for the closed-issue zero-tolerance integrity
+    pass (b) -- unchanged logic from this script's prior, wider
+    `retrospective`-label sweep, only the caller's own issue-number set
+    has changed scope."""
     return [n for n in issue_numbers if citation_count(commit_messages, n) == 0 or n not in tracking_issues]
 
 
-def is_gate_less(body: str) -> bool:
-    """Return `True` iff `body` carries either literal gate-less marker
-    (issue #1297): the CI-opened stub marker (bare substring), or the
-    zero-repair fast-close marker `merge-retrospective/SKILL.md`'s Step 5
-    requires (matched only as its own line -- see
-    `_ZERO_REPAIR_MARKER_LINE_RE`'s own comment for why the two markers
-    are checked differently). `body` is normalized to bare LF line
-    endings first: GitHub is known to deliver an issue body with CRLF
-    endings for one authored or edited via the web UI, and
-    `_ZERO_REPAIR_MARKER_LINE_RE` assumes bare LF -- the same
-    normalization `gitapex_gate_skill_audit_disclosure.py`'s own
-    `_normalize_body` already applies for the identical reason."""
-    normalized = body.replace("\r\n", "\n").replace("\r", "\n")
-    return _CI_STUB_MARKER in normalized or bool(_ZERO_REPAIR_MARKER_LINE_RE.search(normalized))
+def evaluate(count: int, threshold: int) -> bool:
+    """Return True iff `count` exceeds `threshold`. Used for the open-issue
+    backlog size in pass (a)."""
+    return count > threshold
 
 
-def partition_gate_less(records: list[dict[str, Any]]) -> tuple[list[int], list[int]]:
-    """Partition full issue `records` (each carrying `number` and `body`)
-    into `(gate_less, remaining)` issue numbers, preserving order. Run
-    *before* `find_no_citation_issues` below -- a gate-less issue never
-    had a gate to cite or register, so it cannot clear that check by
-    construction and must not inflate the no-citation report. A missing
-    or `None` body (GitHub allows an empty issue body) is never treated as
-    gate-less -- absence of a body is not evidence of gate-less-ness."""
-    gate_less: list[int] = []
+def format_open_count_report(open_count: int, threshold: int, label: str) -> str:
+    """Human-readable report for pass (a), printed to stdout and captured
+    in the CI step summary."""
+    lines = [
+        f"Retrospective gate-drift report: {open_count} currently-open '{label}'-labelled "
+        f"issue(s) (threshold: {threshold}).",
+    ]
+    if evaluate(open_count, threshold):
+        lines.append(f"FAIL: {open_count} exceeds threshold {threshold}.")
+    else:
+        lines.append(f"PASS: {open_count} does not exceed threshold {threshold}.")
+    return "\n".join(lines)
+
+
+def is_exempt_closed_issue(state_reason: str | None) -> bool:
+    """True iff `state_reason` legitimately excuses a closed
+    `gate-proposal` issue from the two-signal integrity check (Decision
+    5) -- a declined proposal is not a silent-close failure."""
+    return state_reason in _EXEMPT_CLOSED_STATE_REASONS
+
+
+def partition_exempt_closed_issues(records: list[dict[str, Any]]) -> tuple[list[int], list[int]]:
+    """Partition full closed-issue `records` (each carrying `number` and
+    `state_reason`) into `(exempt, remaining)` issue numbers, preserving
+    order. Run *before* `find_no_citation_issues` -- an exempt issue must
+    never inflate the integrity-failure report just because it closed
+    without a citing commit or tracking entry; it was never expected to
+    have either."""
+    exempt: list[int] = []
     remaining: list[int] = []
     for record in records:
         number = record["number"]
-        if is_gate_less(record.get("body") or ""):
-            gate_less.append(number)
+        if is_exempt_closed_issue(record.get("state_reason")):
+            exempt.append(number)
         else:
             remaining.append(number)
-    return gate_less, remaining
+    return exempt, remaining
 
 
-def evaluate(no_citation_count: int, threshold: int) -> bool:
-    """Return True iff `no_citation_count` exceeds `threshold`."""
-    return no_citation_count > threshold
-
-
-def format_report(no_citation_issues: list[int], total_issues: int, threshold: int, gate_less_count: int = 0) -> str:
-    """Human-readable report, printed to stdout and captured in the CI step summary.
-
-    `gate_less_count` (issue #1297) discloses how many of `total_issues`
-    were excluded from `no_citation_issues` before this report was built,
-    because they matched a gate-less marker -- printed only when nonzero,
-    so a caller not yet passing bodies (or a fixture predating this
-    parameter) sees the identical report as before this bucket existed."""
-    no_citation_count = len(no_citation_issues)
+def format_closed_integrity_report(
+    unverified_issues: list[int], total_closed: int, exempt_count: int, label: str
+) -> str:
+    """Human-readable report for pass (b), printed to stdout and captured
+    in the CI step summary. Zero-tolerance: any non-exempt entry in
+    `unverified_issues` fails this pass, regardless of how small it is
+    relative to `total_closed` -- unlike pass (a), this is not
+    threshold-gated (Decision 5)."""
     lines = [
-        f"Retrospective gate-drift report: {no_citation_count} of {total_issues} "
-        f"'{DEFAULT_LABEL}'-labelled issues have no citing commit on main "
-        f"(threshold: {threshold}).",
+        f"Closed '{label}'-labelled issue integrity: {len(unverified_issues)} of {total_closed} closed "
+        f"issue(s) closed without passing the two-signal check ({exempt_count} exempted by state_reason "
+        "not_planned/duplicate).",
     ]
-    if gate_less_count:
-        lines.append(
-            f"{gate_less_count} of {total_issues} were excluded as gate-less by construction "
-            "(CI-opened stub or zero-repair fast-close) and were never checked for a citation."
-        )
-    if no_citation_issues:
-        lines.append("Issues with no citing commit:")
-        lines.extend(f"  #{n}" for n in sorted(no_citation_issues))
+    if unverified_issues:
+        lines.append("Closed issues with no verified gate (no reopen action taken -- resolve by hand):")
+        lines.extend(f"  #{n}" for n in sorted(unverified_issues))
+        lines.append(f"FAIL: {len(unverified_issues)} closed issue(s) never passed the two-signal check.")
     else:
-        lines.append(f"Every '{DEFAULT_LABEL}'-labelled issue has at least one citing commit.")
-    if evaluate(no_citation_count, threshold):
-        lines.append(f"FAIL: {no_citation_count} exceeds threshold {threshold}.")
-    else:
-        lines.append(f"PASS: {no_citation_count} does not exceed threshold {threshold}.")
+        lines.append("PASS: every closed issue either passed the two-signal check or was exempt.")
     return "\n".join(lines)
 
 
@@ -257,6 +280,39 @@ _default_opener = _gitapex_github_http.default_opener
 fetch_json_page = _gitapex_github_http.fetch_json_page
 
 
+def label_exists(
+    owner: str,
+    repo: str,
+    label: str,
+    token: str,
+    opener: Callable[[urllib.request.Request], Any] = _default_opener,
+    sleeper: Callable[[float], None] | None = None,
+) -> bool:
+    """Return True iff `label` exists on the repository -- a plain
+    `GET /repos/{owner}/{repo}/labels/{name}` lookup (the label-liveness
+    guard both passes below require before running).
+
+    An HTTP 404 is the only outcome treated as "does not exist"; any
+    other non-2xx status or a persistent network failure still raises
+    `GitHubApiError` via `_gitapex_github_http.fetch_json_document`'s own
+    retry/backoff, rather than being silently folded into "missing" --
+    this guard must itself fail loudly on an inconclusive result, the
+    same fail-closed posture it exists to give the two passes that depend
+    on it. Mirrors `gitapex_gate_acm_issue_disclosure.py`'s own
+    `ensure_label_exists`, which checks its analogous idempotent-422 case
+    the identical way: catch, inspect the HTTP code in the message, only
+    then decide."""
+    sleeper = sleeper if sleeper is not None else time.sleep
+    url = f"{_API_ROOT}/repos/{owner}/{repo}/labels/{urllib.parse.quote(label, safe='')}"
+    try:
+        _gitapex_github_http.fetch_json_document(url, token, opener, sleeper)
+    except GitHubApiError as error:
+        if "HTTP 404" in str(error):
+            return False
+        raise
+    return True
+
+
 def list_labelled_issue_records(
     owner: str,
     repo: str,
@@ -264,27 +320,36 @@ def list_labelled_issue_records(
     token: str,
     opener: Callable[[urllib.request.Request], Any] = _default_opener,
     sleeper: Callable[[float], None] | None = None,
+    state: str = "all",
 ) -> list[dict[str, Any]]:
     """Return the full issue record (as GitHub's REST API returns it) for
-    every issue carrying `label`, unfiltered by state (matches
-    merge-retrospective's own Step 0 method, which deliberately does not
-    limit the search to open issues). Issue #726: this is the shared fetch
-    both `list_labelled_issues` below (bare issue numbers, for the
-    citation-drift check) and `gitapex_compute_gprr.py` (full records -- it needs
-    `body` and `created_at`, not just `number`) build on, so pagination and
-    retry logic exists exactly once."""
+    every issue carrying `label` in the given `state` (`"all"` by
+    default, matching this function's own pre-rescope behavior --
+    `gitapex_compute_gprr.py` calls this positionally with exactly four
+    arguments and depends on that default staying "all"). `state` is
+    appended after the pre-existing `opener`/`sleeper` parameters rather
+    than inserted before them, so every pre-existing positional call site
+    (including `list_labelled_issues` below, which calls this
+    positionally through `sleeper`) is unaffected.
+
+    `main` below passes `state="open"` and `state="closed"` explicitly
+    for its own two passes. Issue #726: this is the shared fetch both
+    `list_labelled_issues` below (bare issue numbers) and
+    `gitapex_compute_gprr.py` (full records -- it needs `body` and
+    `created_at`, not just `number`) build on, so pagination and retry
+    logic exists exactly once."""
     sleeper = sleeper if sleeper is not None else time.sleep
     records: list[dict[str, Any]] = []
     page = 1
     while True:
-        url = f"{_API_ROOT}/repos/{owner}/{repo}/issues?labels={label}&state=all&per_page={_PER_PAGE}&page={page}"
+        url = f"{_API_ROOT}/repos/{owner}/{repo}/issues?labels={label}&state={state}&per_page={_PER_PAGE}&page={page}"
         items = fetch_json_page(url, token, opener, sleeper)
         if not items:
             break
         for item in items:
             # The issues-list endpoint also returns pull requests; a
-            # retrospective issue is never a PR, so this is a defensive
-            # exclusion rather than an expected real-world hit.
+            # retrospective/gate-proposal issue is never a PR, so this is
+            # a defensive exclusion rather than an expected real-world hit.
             if "pull_request" in item:
                 continue
             records.append(item)
@@ -340,7 +405,7 @@ def load_gate_tracking_issues(path: str) -> set[int]:
 
     Issue #709's corroborating signal. Raises `SsotLedgerError` rather
     than returning an empty set on a missing/malformed registry -- an
-    empty set here would silently widen the no-citation report back to
+    empty set here would silently widen the integrity report back to
     bare-citation-only behavior, the exact false-negative class this
     check exists to close. Mirrors `gitapex_detect_changed_gate_scripts.py`'s
     `registered_gate_paths()` fail-closed shape.
@@ -444,13 +509,19 @@ class ScanRetrospectiveGateDriftArgs(BaseModel):
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Report and fail on retrospective-labelled issues with no citing commit."
+        description="Confirm the gate-proposal label exists, then report (and fail CI on) its "
+        "open-issue backlog size and any closed issue that never passed the two-signal "
+        "gate-resolution check."
     )
     parser.add_argument("--owner", required=True, help="Repository owner, e.g. tvna")
     parser.add_argument("--repo", required=True, help="Repository name, e.g. gitapex")
     parser.add_argument("--ref", default="HEAD", help="Git ref to search for citing commits (default: HEAD)")
     parser.add_argument("--cwd", default=".", help="Repository working directory for git log (default: .)")
-    parser.add_argument("--label", default=DEFAULT_LABEL, help=f"Issue label to search (default: {DEFAULT_LABEL})")
+    parser.add_argument(
+        "--label",
+        default=GATE_PROPOSAL_LABEL,
+        help=f"Issue label to search (default: {GATE_PROPOSAL_LABEL})",
+    )
     parser.add_argument(
         "--ssot-path",
         default=".gitapex/ssot.json",
@@ -461,7 +532,7 @@ def main(argv: list[str] | None = None) -> int:
         "--threshold",
         type=int,
         default=DEFAULT_THRESHOLD,
-        help=f"Fail if the no-citation count exceeds this value (default: {DEFAULT_THRESHOLD})",
+        help=f"Fail if the open-issue count exceeds this value (default: {DEFAULT_THRESHOLD})",
     )
     args = parser.parse_args(argv)
     try:
@@ -490,17 +561,34 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        records = list_labelled_issue_records(args.owner, args.repo, args.label, token)
+        if not label_exists(args.owner, args.repo, args.label, token):
+            print(
+                f"error: label '{args.label}' does not exist on {args.owner}/{args.repo} -- "
+                "cannot tell a genuinely empty backlog apart from a renamed/deleted label; "
+                "create the label (or fix --label) before this check can run",
+                file=sys.stderr,
+            )
+            return 1
+        open_records = list_labelled_issue_records(args.owner, args.repo, args.label, token, state="open")
+        closed_records = list_labelled_issue_records(args.owner, args.repo, args.label, token, state="closed")
         commit_messages = git_commit_messages(args.ref, args.cwd)
         tracking_issues = load_gate_tracking_issues(str(pathlib.Path(args.cwd) / args.ssot_path))
     except (GitHubApiError, GitLogError, SsotLedgerError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 
-    gate_less_numbers, remaining_numbers = partition_gate_less(records)
-    no_citation_issues = find_no_citation_issues(remaining_numbers, commit_messages, tracking_issues)
-    print(format_report(no_citation_issues, len(records), args.threshold, len(gate_less_numbers)))
-    return 1 if evaluate(len(no_citation_issues), args.threshold) else 0
+    open_count = len(open_records)
+    exempt_numbers, remaining_numbers = partition_exempt_closed_issues(closed_records)
+    unverified_closed_issues = find_no_citation_issues(remaining_numbers, commit_messages, tracking_issues)
+
+    print(format_open_count_report(open_count, args.threshold, args.label))
+    print(
+        format_closed_integrity_report(unverified_closed_issues, len(closed_records), len(exempt_numbers), args.label)
+    )
+
+    open_over_threshold = evaluate(open_count, args.threshold)
+    closed_integrity_failed = bool(unverified_closed_issues)
+    return 1 if (open_over_threshold or closed_integrity_failed) else 0
 
 
 if __name__ == "__main__":
