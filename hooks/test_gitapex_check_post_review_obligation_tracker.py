@@ -16,17 +16,22 @@ in hooks/test_gitapex_check_stop_review_obligation.py) reads it back.
 Direct-import unit tests exercise `process()` (fast, no subprocess); a
 smaller shell-level suite runs the shipped .sh wrapper via subprocess with
 the same PostToolUse JSON shape Claude Code sends on stdin, confirming the
-wrapper's own jq/shape-guard prologue and its always-exit-0 contract
-(PostToolUse cannot block an already-executed call).
+wrapper's own missing-script/missing-python3 guards and its always-exit-0
+contract (PostToolUse cannot block an already-executed call). The wrapper
+carries no jq dependency at all -- see its own header for why -- so there
+is no jq-missing case to test here (contrast with the Stop-hook sibling's
+own suite, which specifically tests that a jq-missing environment no
+longer denies).
 """
 
 from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import gitapex_check_post_review_obligation_tracker as tracker
 import pytest
@@ -207,6 +212,21 @@ def test_missing_session_id_is_ignored() -> None:
     assert tracker.process({"tool_name": "Bash", "tool_input": {"command": "git push"}}) is None
 
 
+def test_write_state_cleans_up_temp_file_on_replace_failure(tmp_path: Path, monkeypatch: Any) -> None:
+    # Independent-review finding: the write path must not leave a stray
+    # temp file behind (or swallow the failure) when the final atomic
+    # rename itself fails.
+    path = tmp_path / "state.json"
+
+    def _raise(self: Path, target: object) -> None:
+        raise OSError("simulated replace failure")
+
+    monkeypatch.setattr(Path, "replace", _raise)
+    with pytest.raises(OSError):
+        tracker._write_state(path, {"push_detected": True})
+    assert list(tmp_path.glob(".state.json.*.tmp")) == []
+
+
 def test_state_path_sanitizes_session_id() -> None:
     # tempfile.gettempdir() caches its result on first call, so this does
     # not attempt to redirect it via TMPDIR -- only the basename's own
@@ -301,6 +321,55 @@ def test_pr_key_requires_a_real_int_pull_number() -> None:
 def test_pr_key_falls_back_to_bare_number_without_owner_repo() -> None:
     assert tracker._pr_key({"pullNumber": 1209}) == "#1209"
     assert tracker._pr_key({"owner": "tvna", "repo": "gitapex", "pullNumber": 1209}) == "tvna/gitapex#1209"
+
+
+def test_same_pr_matches_bare_and_qualified_keys_for_the_same_number() -> None:
+    assert tracker._same_pr("#1209", "tvna/gitapex#1209") is True
+    assert tracker._same_pr("tvna/gitapex#1209", "#1209") is True
+    assert tracker._same_pr("tvna/gitapex#1209", "tvna/gitapex#1209") is True
+    assert tracker._same_pr("#1209", "#1209") is True
+
+
+def test_same_pr_rejects_different_numbers_regardless_of_qualification() -> None:
+    assert tracker._same_pr("#1209", "#999") is False
+    assert tracker._same_pr("tvna/gitapex#1209", "tvna/gitapex#999") is False
+    assert tracker._same_pr("tvna/gitapex#1209", "#999") is False
+
+
+def test_same_pr_rejects_same_number_different_owner_repo() -> None:
+    # The one case both sides are qualified AND disagree -- a genuinely
+    # different repository reusing the same PR number.
+    assert tracker._same_pr("tvna/gitapex#1209", "other/repo#1209") is False
+
+
+def test_pull_request_read_same_pr_with_and_without_owner_repo_preserves_progress() -> None:
+    # Independent-review finding (third round): plain string equality
+    # treated "tvna/gitapex#1209" and "#1209" -- the SAME real PR, just
+    # observed with owner/repo present on one call and absent on
+    # another -- as a PR switch, discarding already-confirmed progress.
+    session_id = "s18"
+    _push(session_id)
+    established = _read_pr(session_id, response={"threads": [{"isResolved": False}]})  # target_pr = "tvna/gitapex#1209"
+    assert established is not None
+    assert established["target_pr"] == "tvna/gitapex#1209"
+    resolved = tracker.process({"session_id": session_id, "tool_name": "mcp__github__resolve_review_thread"})
+    assert resolved is not None
+    assert resolved["resolve_calls"] == 1
+
+    # Same PR, same session, but this call's tool_input omits owner/repo.
+    result = tracker.process(
+        {
+            "session_id": session_id,
+            "tool_name": "mcp__github__pull_request_read",
+            "tool_input": {"pullNumber": 1209, "method": "get"},
+            "tool_response": {"mergeable_state": "clean"},
+        }
+    )
+    assert result is not None
+    assert result["target_pr"] == "tvna/gitapex#1209"
+    assert result["open_review_threads"] == 1  # NOT reset -- still the same PR
+    assert result["resolve_calls"] == 1  # NOT reset -- still the same PR
+    assert result["mergeable_checked"] is True
 
 
 # --- MCP response-envelope unwrapping -------------------------------------
@@ -418,18 +487,22 @@ def test_main_processes_valid_payload_and_writes_state(monkeypatch: Any) -> None
     assert state["push_detected"] is True
 
 
-def test_main_handles_invalid_json_payload(monkeypatch: Any) -> None:
+def test_main_handles_invalid_json_payload(monkeypatch: Any, capsys: Any) -> None:
     import io as _io
 
     monkeypatch.setattr("sys.stdin", type("S", (), {"buffer": _io.BytesIO(b"not json{{{")})())
     assert tracker.main() == 0
+    # The .sh wrapper no longer pre-validates payload shape via jq (see its
+    # own header) -- this systemMessage is now the only surviving signal.
+    assert "systemMessage" in capsys.readouterr().out
 
 
-def test_main_handles_non_object_payload(monkeypatch: Any) -> None:
+def test_main_handles_non_object_payload(monkeypatch: Any, capsys: Any) -> None:
     import io as _io
 
     monkeypatch.setattr("sys.stdin", type("S", (), {"buffer": _io.BytesIO(b"[1, 2, 3]")})())
     assert tracker.main() == 0
+    assert "systemMessage" in capsys.readouterr().out
 
 
 def test_main_suppresses_oserror_from_process(monkeypatch: Any) -> None:
@@ -492,3 +565,23 @@ def test_shell_exits_zero_on_non_matching_tool(tmp_path: Path) -> None:
     result = _run({"session_id": "shell2", "tool_name": "Read", "tool_input": {}}, env)
     assert result.returncode == 0
     assert not (tmp_path / "gitapex-review-obligation-shell2.json").exists()
+
+
+def test_shell_exits_zero_when_python3_is_missing(tmp_path: Path) -> None:
+    # New guard added when this wrapper's own jq dependency was removed
+    # (see its header): python3 is now the one hard dependency, so its
+    # absence must still fail OPEN with a systemMessage, never block.
+    stub_bin = tmp_path / "bin"
+    stub_bin.mkdir()
+    for tool in ("bash", "cat", "dirname", "pwd"):
+        # cast(), not an `if source:` guard -- these are standard system
+        # tools always present wherever this suite itself can run, so a
+        # runtime None-check here would be a permanently-untaken branch,
+        # not real robustness.
+        (stub_bin / tool).symlink_to(cast(str, shutil.which(tool)))
+    env = _env(tmp_path)
+    env["PATH"] = str(stub_bin)
+    result = _run({"session_id": "shell-no-python3", "tool_name": "Bash", "tool_input": {"command": "git push"}}, env)
+    assert result.returncode == 0
+    assert "python3 is not available on PATH" in result.stdout
+    assert not (tmp_path / "gitapex-review-obligation-shell-no-python3.json").exists()

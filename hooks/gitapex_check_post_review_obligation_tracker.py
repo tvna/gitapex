@@ -40,7 +40,14 @@ Fields:
         mergeable_checked to their initial values -- see `_pr_key` and
         `handle_pull_request_read`'s own docstring for why this is a
         deliberate design choice, not an incidental reset, and for the
-        residual gap it does not close.
+        residual gap it does not close. "Different PR" is decided by
+        `_same_pr`, not plain string equality: a bare "#1209" and a
+        qualified "tvna/gitapex#1209" naming the same pull number are
+        the same PR, tolerating owner/repo appearing on some calls and
+        not others (see `_same_pr`'s own docstring for the bug this
+        closes -- a third independent-review round found plain equality
+        treated the identical PR, observed with and without owner/repo
+        across two calls, as a switch).
     open_review_threads: int | None -- unresolved-thread count last
         observed from a get_review_comments response for `target_pr`;
         None means "never observed this cycle," not "zero."
@@ -127,6 +134,42 @@ Known, disclosed limitations (not fixed here):
   the always-reset-on-switch design (see above) closes the specific gap
   a second independent-review round found and reproduced (a wrong first
   PR permanently blocking the real one), not this broader one.
+- The entire gate lives in state the same agent it gates can freely
+  read, tamper with, or delete (a third independent-review round's own
+  security-axis finding, confidence 0.9): the state-file path pattern
+  and its sanitization are both readable in this module's own source,
+  and nothing beyond ordinary filesystem permissions stops an agent
+  from clearing or rewriting it directly. This is not a gap specific to
+  this module -- it is a property this repository's entire hooks-as-
+  deterministic-gate architecture already shares (an agent with Bash
+  access can equally well edit or delete `hooks/check-bash-safety.sh`,
+  `hooks/hooks.json`, or this very file), and is out of scope to close
+  here: these hooks are a process safeguard against an honest agent
+  forgetting a step, not a sandboxing boundary against one that has
+  already decided to defeat its own tooling -- CLAUDE.md's own defense-
+  in-depth framing (hooks are one layer among several, not the sole
+  enforcement mechanism) already names this posture. Disclosed, not
+  fixed, the same as the heuristic limitation above.
+- `_reports_error`'s marker vocabulary (`status`/`is_error`/`isError`)
+  may not recognize every failure shape the GitHub MCP server's
+  `resolve_review_thread` call can actually return -- a raw GraphQL
+  `{"errors": [...]}` array, in particular, carries none of those three
+  keys. Unconfirmed (a third independent-review round's own security-axis
+  finding, confidence 0.45, explicitly not verified against the live MCP
+  server's actual envelope): this vocabulary already mirrors
+  hooks/gitapex_check_post_write_provenance.py's own, already-merged
+  `_reports_error()`, so if this gap is real it is not new to this
+  module. Not fixed here absent primary-source confirmation of the
+  actual failure envelope.
+- `_contains_mergeable_state`'s recursive tree walk matches
+  `mergeable_state`/`mergeableState` anywhere in the unwrapped response,
+  not only on the target PR's own top-level object; a response embedding
+  an unrelated nested object that happens to carry the same key name
+  would satisfy `mergeable_checked` without the target PR's own field
+  ever being present. Unconfirmed (confidence 0.3, speculative -- not
+  verified against a real `pull_request_read(method="get")` response
+  shape), and the same shape-tolerance trade-off `_count_unresolved_threads`
+  already accepts deliberately (see above).
 
 Fails OPEN on every error path (malformed payload, missing jq is handled
 by the .sh wrapper, unwritable state dir, unreadable prior state) --
@@ -151,6 +194,7 @@ import json
 import os
 import sys
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -188,9 +232,22 @@ def _read_state(path: Path) -> dict[str, Any]:
 
 
 def _write_state(path: Path, state: dict[str, Any]) -> None:
-    tmp_path = path.with_suffix(f".{os.getpid()}.tmp")
-    tmp_path.write_text(json.dumps(state), encoding="utf-8")
-    tmp_path.replace(path)
+    # tempfile.mkstemp's own O_CREAT|O_EXCL open -- not a predictable,
+    # PID-based filename this process then opens in a second step -- is
+    # what closes a TOCTOU/symlink-following gap an independent review
+    # found: a predictable temp name in a shared TMPDIR can be pre-planted
+    # as a symlink by another process sharing that directory, redirecting
+    # this write to an attacker-chosen path once opened. mkstemp's random
+    # suffix cannot be predicted or pre-planted the same way.
+    fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(state))
+        Path(tmp_name).replace(path)
+    except OSError:
+        with contextlib.suppress(OSError):
+            Path(tmp_name).unlink()
+        raise
 
 
 def _pr_key(tool_input: dict[str, Any]) -> str | None:
@@ -217,6 +274,26 @@ def _pr_key(tool_input: dict[str, Any]) -> str | None:
     if isinstance(owner, str) and owner and isinstance(repo, str) and repo:
         return f"{owner}/{repo}#{pull_number}"
     return f"#{pull_number}"
+
+
+def _same_pr(call_pr: str, target_pr: str) -> bool:
+    """True when CALL_PR and TARGET_PR (both `_pr_key`-shaped strings) name
+    the same pull request, tolerating the owner/repo-optional key format
+    `_pr_key` produces: a bare "#1209" and a qualified "tvna/gitapex#1209"
+    naming the same pull number are the SAME PR whenever at least one side
+    lacks owner/repo to disagree with -- only two BOTH-qualified keys
+    naming different owner/repo pairs count as a genuine different-PR
+    switch. Independent review found and reproduced the bug this closes:
+    plain string equality treated two calls naming the identical PR --
+    one with owner/repo present, one without (the GitHub MCP server's own
+    schema marks them `x-mcp-header`, so their presence can vary call to
+    call -- see `_pr_key`'s own docstring) -- as a PR switch, discarding
+    already-confirmed progress and forcing redundant re-verification."""
+    call_owner_repo, _, call_number = call_pr.rpartition("#")
+    target_owner_repo, _, target_number = target_pr.rpartition("#")
+    if call_number != target_number:
+        return False
+    return not call_owner_repo or not target_owner_repo or call_owner_repo == target_owner_repo
 
 
 def _unwrap_tool_response(tool_response: Any) -> Any:
@@ -271,31 +348,37 @@ def _reports_error(node: Any) -> bool:
     return node.get("status") == "error" or node.get("is_error") is True or node.get("isError") is True
 
 
-def _count_unresolved_threads(node: Any) -> int:
-    """Recursively count every dict in NODE carrying `isResolved: false`,
-    tolerating any surrounding envelope shape (a bare list of threads, a
-    `{"threads": [...]}` wrapper, a paginated `{"nodes": [...], "pageInfo":
-    ...}` shape, or anything else) -- see module docstring."""
-    count = 0
+def _iter_dicts(node: Any) -> Iterator[dict[str, Any]]:
+    """Recursively yield every dict reachable within NODE, tolerating any
+    surrounding envelope shape (a bare list, a `{"threads": [...]}`
+    wrapper, a paginated `{"nodes": [...], "pageInfo": ...}` shape, or
+    anything else) -- the exact response envelope is the MCP server's own
+    contract, not this repository's (see module docstring). Factored out
+    of `_count_unresolved_threads` and `_contains_mergeable_state`, which
+    independent review found had each hand-rolled this identical
+    recursive walk, differing only in their own leaf predicate."""
     if isinstance(node, dict):
-        if node.get("isResolved") is False:
-            count += 1
+        yield node
         for value in node.values():
-            count += _count_unresolved_threads(value)
+            yield from _iter_dicts(value)
     elif isinstance(node, list):
         for item in node:
-            count += _count_unresolved_threads(item)
-    return count
+            yield from _iter_dicts(item)
+
+
+def _count_unresolved_threads(node: Any) -> int:
+    """Count every dict in NODE carrying `isResolved: false` -- see
+    `_iter_dicts` for the envelope-tolerant walk this counts over."""
+    return sum(1 for candidate in _iter_dicts(node) if candidate.get("isResolved") is False)
 
 
 def _contains_mergeable_state(node: Any) -> bool:
-    if isinstance(node, dict):
-        if "mergeable_state" in node or "mergeableState" in node:
-            return True
-        return any(_contains_mergeable_state(value) for value in node.values())
-    if isinstance(node, list):
-        return any(_contains_mergeable_state(item) for item in node)
-    return False
+    """True when some dict in NODE carries a `mergeable_state`/
+    `mergeableState` key anywhere -- see `_iter_dicts` for the
+    envelope-tolerant walk this searches, and the module docstring's
+    "Known, disclosed limitations" for why this is unscoped rather than
+    limited to NODE's own top-level object."""
+    return any("mergeable_state" in candidate or "mergeableState" in candidate for candidate in _iter_dicts(node))
 
 
 def handle_bash(state: dict[str, Any], tool_input: dict[str, Any]) -> dict[str, Any]:
@@ -323,7 +406,7 @@ def handle_pull_request_read(state: dict[str, Any], tool_input: dict[str, Any], 
 
     call_pr = _pr_key(tool_input)
     target_pr = state.get("target_pr")
-    if call_pr is not None and call_pr != target_pr:
+    if call_pr is not None and (target_pr is None or not _same_pr(call_pr, target_pr)):
         # Switching to a different PR than the one this cycle was already
         # tracking (including the first PR ever observed this cycle)
         # resets every piece of tracked progress, not just target_pr
@@ -339,6 +422,10 @@ def handle_pull_request_read(state: dict[str, Any], tool_input: dict[str, Any], 
         # would reopen the original cross-PR gap from the other
         # direction (an unrelated PR's already-satisfied state leaking
         # into the newly-tracked one), so a switch clears all three.
+        # `_same_pr`, not plain string equality, decides "different PR":
+        # a third independent review round found and reproduced a
+        # related gap this specific comparison closes -- see that
+        # helper's own docstring.
         state = {
             **state,
             "target_pr": call_pr,
@@ -394,8 +481,26 @@ def main() -> int:
     try:
         payload = json.loads(raw.decode("utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError):
+        # The .sh wrapper no longer pre-validates payload shape via jq
+        # (see that script's own header for why) -- this systemMessage is
+        # now the only surviving signal that a cycle's tracking silently
+        # no-opped on a malformed payload.
+        print(
+            json.dumps(
+                {
+                    "systemMessage": "hooks/check-post-review-obligation-tracker.sh: the tool-call payload on stdin could not be parsed as JSON. Skipping this cycle's obligation tracking."
+                }
+            )
+        )
         return 0
     if not isinstance(payload, dict):
+        print(
+            json.dumps(
+                {
+                    "systemMessage": "hooks/check-post-review-obligation-tracker.sh: the tool-call payload on stdin is not a JSON object. Skipping this cycle's obligation tracking."
+                }
+            )
+        )
         return 0
     # Fail open: PostToolUse cannot block an already-executed tool call,
     # and an unwritable state dir is the Stop hook's own fail-closed

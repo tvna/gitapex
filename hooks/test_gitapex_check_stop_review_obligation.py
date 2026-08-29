@@ -11,17 +11,23 @@ on a present-but-corrupt one.
 Direct-import unit tests exercise `evaluate()` against hand-built state
 dicts (fast, no subprocess, no filesystem). A smaller shell-level suite
 runs the shipped .sh wrapper via subprocess with the same Stop JSON shape
-Claude Code sends on stdin, confirming the wrapper's own jq/shape-guard
-prologue and its exit-2/hookSpecificOutput deny contract.
+Claude Code sends on stdin, confirming the wrapper's own missing-python3/
+missing-check-script guards and its exit-2/hookSpecificOutput deny
+contract. The wrapper carries no jq dependency at all (see its own
+header for the deadlock this fixed -- a jq-missing environment used to
+deny every turn end unconditionally, together with
+hooks/check-bash-safety.sh's own jq-missing fail-closed posture on Bash,
+a full deadlock); a dedicated jq-missing test below proves that fix.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import gitapex_check_post_review_obligation_tracker as tracker
 import gitapex_check_stop_review_obligation as stop_checker
@@ -207,6 +213,81 @@ def test_shell_denies_after_push_with_no_followup(tmp_path: Path) -> None:
     payload = json.loads(result.stderr)
     assert payload["hookSpecificOutput"]["decision"] == "block"
     assert "mergeable_state" in payload["hookSpecificOutput"]["reason"]
+
+
+def _stub_bin_without(tmp_path: Path, *, exclude: str) -> Path:
+    """A directory on PATH containing every ordinary tool this wrapper (or
+    the tracker script it may also invoke in the same test) needs, EXCEPT
+    `exclude` -- used to simulate that one tool being entirely absent from
+    the environment, rather than merely unconfigured."""
+    stub_bin = tmp_path / "bin"
+    stub_bin.mkdir(exist_ok=True)
+    for tool in ("bash", "cat", "dirname", "pwd", "python3"):
+        if tool == exclude:
+            continue
+        # cast(), not an `if source:` guard -- these are standard system
+        # tools always present wherever this suite itself can run, so a
+        # runtime None-check here would be a permanently-untaken branch,
+        # not real robustness.
+        (stub_bin / tool).symlink_to(cast(str, shutil.which(tool)))
+    return stub_bin
+
+
+def test_shell_stop_hook_does_not_block_unrelated_turn_when_jq_is_missing(tmp_path: Path) -> None:
+    # Independent-review finding, reproduced live: this wrapper used to
+    # pre-validate payload shape via jq and deny (exit 2) whenever jq
+    # itself was missing -- unconditionally, even for a turn that never
+    # touched a push or a review thread. Combined with
+    # hooks/check-bash-safety.sh's own jq-missing fail-closed posture on
+    # Bash, this created a full deadlock (Bash denied, Stop denied, no way
+    # to self-heal). This wrapper no longer depends on jq at all -- see its
+    # own header -- so an ordinary turn with no state file must still pass
+    # cleanly even with jq entirely absent from PATH.
+    stub_bin = _stub_bin_without(tmp_path, exclude="jq")
+    env = _env(tmp_path)
+    env["PATH"] = str(stub_bin)
+    result = _run_stop({"session_id": "shell-no-jq-unrelated"}, env)
+    assert result.returncode == 0
+    assert result.stdout == ""
+    assert result.stderr == ""
+
+
+def test_shell_stop_hook_still_blocks_when_jq_missing_and_obligation_outstanding(tmp_path: Path) -> None:
+    # The other half of the fix above: a jq-missing environment must not
+    # become universally permissive either -- a genuinely outstanding
+    # obligation still has to deny, jq or no jq, since jq was never what
+    # determined push_detected in the first place (that's read entirely
+    # in python, from the state file the tracker script -- also jq-free,
+    # see its own header -- already wrote).
+    stub_bin = _stub_bin_without(tmp_path, exclude="jq")
+    env = _env(tmp_path)
+    env["PATH"] = str(stub_bin)
+    tracker_script = Path(__file__).parent / "check-post-review-obligation-tracker.sh"
+    subprocess.run(
+        ["bash", str(tracker_script)],
+        input=json.dumps(
+            {"session_id": "shell-no-jq-deny", "tool_name": "Bash", "tool_input": {"command": "git push"}}
+        ),
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env=env,
+    )
+    result = _run_stop({"session_id": "shell-no-jq-deny"}, env)
+    assert result.returncode == 2
+    payload = json.loads(result.stderr)
+    assert payload["hookSpecificOutput"]["decision"] == "block"
+
+
+def test_shell_fails_closed_when_python3_is_missing(tmp_path: Path) -> None:
+    stub_bin = _stub_bin_without(tmp_path, exclude="python3")
+    env = _env(tmp_path)
+    env["PATH"] = str(stub_bin)
+    result = _run_stop({"session_id": "shell-no-python3"}, env)
+    assert result.returncode == 2
+    payload = json.loads(result.stderr)
+    assert payload["hookSpecificOutput"]["decision"] == "block"
+    assert "python3 is not available on PATH" in payload["hookSpecificOutput"]["reason"]
 
 
 def test_shell_allows_and_clears_state_once_satisfied(tmp_path: Path) -> None:
