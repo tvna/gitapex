@@ -363,13 +363,55 @@ def test_load_gate_tracking_issues_excludes_non_int_and_bool_values(tmp_path: pa
                     {"id": "b", "tracking_issue": False},
                     {"id": "c", "tracking_issue": "297"},
                     {"id": "d", "tracking_issue": 297.0},
-                    {"id": "e", "tracking_issue": [297]},
                     {"id": "f", "tracking_issue": 650},
                 ]
             }
         )
     )
     assert checker.load_gate_tracking_issues(str(ssot)) == {650}
+
+
+def test_load_gate_tracking_issues_flattens_list_values(tmp_path: pathlib.Path) -> None:
+    # Issue #1425: a gate legitimately tracked under more than one issue
+    # (a shared umbrella issue plus the issue whose repair actually
+    # implemented it) stores tracking_issue as a list -- every int in it
+    # corroborates, and non-int/bool entries within the list are excluded
+    # the same as a bare scalar value would be.
+    ssot = tmp_path / "ssot.json"
+    ssot.write_text(
+        json.dumps(
+            {
+                "gates": [
+                    {"id": "a", "tracking_issue": [520, 350]},
+                    {"id": "b", "tracking_issue": [297, 422, 426]},
+                    {"id": "c", "tracking_issue": [650, True, "297", 297.0]},
+                    {"id": "d", "tracking_issue": 999},
+                ]
+            }
+        )
+    )
+    assert checker.load_gate_tracking_issues(str(ssot)) == {520, 350, 297, 422, 426, 650, 999}
+
+
+def test_load_gate_tracking_issues_flatten_rejects_nested_list_and_empty_list(tmp_path: pathlib.Path) -> None:
+    # Defeat case (dimension 15, fail-closed on malformed input): a
+    # schema-invalid but not-impossible hand-edited shape -- a list
+    # nested inside the tracking_issue list, or an empty list -- must be
+    # excluded rather than crashing the flatten loop or silently
+    # corroborating something it never named.
+    ssot = tmp_path / "ssot.json"
+    ssot.write_text(
+        json.dumps(
+            {
+                "gates": [
+                    {"id": "a", "tracking_issue": [[297], 344]},
+                    {"id": "b", "tracking_issue": []},
+                    {"id": "c", "tracking_issue": 650},
+                ]
+            }
+        )
+    )
+    assert checker.load_gate_tracking_issues(str(ssot)) == {344, 650}
 
 
 # ---------------------------------------------------------------------------
