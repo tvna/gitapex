@@ -768,7 +768,7 @@ spec:
       anchor: "https://github.com/tvna/gitapex/issues/1456"
       summary: "Added a new 'Worked example: dimension 12, redistribution-boundary-aware resolution' section to references/gitapex-worked-examples.md, citing hooks/gitapex_check_skill_audit_disclosure_or_waiver.py and its parity test as the concrete instance. Updated the file's own Contents list to match."
       outcome:
-        lines: "gitapex-worked-examples.md +23 (new section), dimensions.md +18 (dimension 12 clarification)"
+        lines: "branch-final, measured against the working tree at the final commit: gitapex-worked-examples.md 561->595 (new section, elision fix, retitled heading), dimensions.md 602->638 (dimension 12 clarification)"
     - kind: audit
       anchor: "method:evaluating-skill-quality"
       summary: "First gitapex_check_skill_shape.py run against skills/evaluating-deterministic-gate-quality after the issue-1456 edit returned 59/61: references-well-formed failed (a spec.references summary over 500 chars) and no-bare-issue-citation failed (a bare issue-number citation in a summary string instead of the full issue URL)."
