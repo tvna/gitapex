@@ -126,16 +126,6 @@ def test_uniformly_hard_requires_agreement_below_one(tmp_path: Path) -> None:
     assert [f.fixture_id for f in report.uniformly_hard] == ["agree-low"]
 
 
-def test_spread_is_zero_when_every_model_agreed(tmp_path: Path) -> None:
-    write_result(tmp_path, "a.json", "model-a", [entry("f", 0.5)])
-    write_result(tmp_path, "b.json", "model-b", [entry("f", 0.9)])
-
-    report = mod.compute_saturation(tmp_path)
-    (verdict,) = report.complete
-
-    assert verdict.spread == pytest.approx(0.4)
-
-
 def test_fixture_missing_from_one_model_is_excluded_and_listed(tmp_path: Path) -> None:
     write_result(tmp_path, "a.json", "model-a", [entry("shared", 1.0), entry("only-a", 1.0)])
     write_result(tmp_path, "b.json", "model-b", [entry("shared", 1.0)])
@@ -355,6 +345,21 @@ def test_two_models_sharing_no_fixture_are_not_computable(tmp_path: Path) -> Non
     assert report.computable is False
     assert "NOT COMPUTABLE" in text
     assert "fixtures not scored by every model: 2" in text
+    # The stated reason must name the condition that actually failed, not
+    # the model minimum -- which is satisfied here.
+    assert "no fixture was scored by every model" in text
+    assert "needs at least" not in text
+
+
+def test_not_computable_names_the_model_minimum_when_that_is_what_failed(
+    tmp_path: Path,
+) -> None:
+    write_result(tmp_path, "a.json", "model-a", [entry("f", 1.0)])
+
+    text = mod.format_report(mod.compute_saturation(tmp_path))
+
+    assert "needs at least 2 models" in text
+    assert "no fixture was scored by every model" not in text
 
 
 def test_report_disclaims_being_an_irt_estimate(tmp_path: Path) -> None:

@@ -163,11 +163,6 @@ class FixtureVerdict:
         distinct = set(self.scores.values())
         return len(distinct) == 1 and distinct != {PERFECT_SCORE}
 
-    @property
-    def spread(self) -> float:
-        """Max minus min across models -- 0.0 when every model agreed."""
-        return max(self.scores.values()) - min(self.scores.values())
-
 
 @dataclass(frozen=True)
 class SaturationReport:
@@ -332,10 +327,16 @@ def format_report(report: SaturationReport) -> str:
         )
 
     if not report.computable:
+        # Name the condition that actually failed. Stating the model
+        # minimum unconditionally contradicted the counts printed beside
+        # it whenever two models were present but shared no fixture.
+        if len(report.model_ids) < MIN_MODELS_FOR_A_RATE:
+            reason = f"a cross-model rate needs at least {MIN_MODELS_FOR_A_RATE} models"
+        else:
+            reason = "no fixture was scored by every model, so there is nothing to rate"
         lines.append(
             f"saturation: NOT COMPUTABLE -- {len(report.model_ids)} model(s) and "
-            f"{len(report.complete)} fixture(s) scored by all of them; "
-            f"a cross-model rate needs at least {MIN_MODELS_FOR_A_RATE} models"
+            f"{len(report.complete)} fixture(s) scored by all of them; {reason}"
         )
         if report.incomplete:
             lines.append(f"fixtures not scored by every model: {len(report.incomplete)}")
