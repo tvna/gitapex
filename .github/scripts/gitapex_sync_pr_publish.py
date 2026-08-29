@@ -48,17 +48,15 @@ import os
 import sys
 import time
 import unicodedata
-import urllib.error
 import urllib.request
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from _gitapex_github_http import default_opener, graphql_call, request_with_retry
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 _API_ROOT = "https://api.github.com"
-_GRAPHQL_URL = "https://api.github.com/graphql"
-_API_VERSION = "2022-11-28"
 _HTTP_TIMEOUT_SECONDS = 30
 
 _CREATE_COMMIT_ON_BRANCH_MUTATION = """
@@ -69,14 +67,6 @@ mutation($input: CreateCommitOnBranchInput!) {
 }
 """
 
-_GRAPHQL_TRANSIENT_ERROR_MARKER = "something went wrong while executing your query"
-
-
-def _default_opener(request: urllib.request.Request) -> Any:
-    # S310 justification: every caller in this module builds `request` from a
-    # fixed https://api.github.com URL plus trusted env-var-derived segments.
-    return urllib.request.urlopen(request, timeout=_HTTP_TIMEOUT_SECONDS)  # noqa: S310
-
 
 def apply_call(
     *,
@@ -84,101 +74,23 @@ def apply_call(
     url: str,
     payload: dict[str, Any] | None,
     token: str,
-    opener: Callable[[urllib.request.Request], Any] = _default_opener,
+    opener: Callable[[urllib.request.Request], Any] = default_opener,
     sleeper: Callable[[float], None] | None = None,
 ) -> tuple[int, str]:
-    """Call the GitHub REST API, retrying transient (5xx/network) failures."""
+    """Call the GitHub REST API, retrying transient (5xx/network) failures.
+
+    Issue #729: delegates its retry loop to
+    `_gitapex_github_http.request_with_retry`, the generalized retry
+    primitive this function's own former inline loop was extracted into
+    (wave 1). Public signature and return contract (a `(status_code,
+    body_text)` tuple, never raising) stay unchanged -- this function is
+    dependency-injected as `apply_call` deep into this module's own
+    internal functions (`_get_ref_sha`, `_get_branch_head_oid`,
+    `_create_branch_ref`, `_delete_branch`, and others), whose own
+    signatures and `apply_call=apply_call` wiring are untouched.
+    """
     sleeper = sleeper if sleeper is not None else time.sleep
-    last_code = 0
-    last_body = ""
-
-    for attempt in range(1, 4):
-        data = json.dumps(payload, separators=(",", ":")).encode("utf-8") if payload is not None else None
-        request = urllib.request.Request(url, data=data, method=method)  # noqa: S310 -- fixed https://api.github.com endpoint
-        request.add_header("Authorization", f"Bearer {token}")
-        request.add_header("Accept", "application/vnd.github+json")
-        request.add_header("X-GitHub-Api-Version", _API_VERSION)
-        if payload is not None:
-            request.add_header("Content-Type", "application/json")
-
-        try:
-            with opener(request) as response:
-                last_code = int(response.status)
-                last_body = response.read().decode("utf-8", errors="replace")
-        except urllib.error.HTTPError as error:
-            last_code = int(error.code)
-            last_body = error.read().decode("utf-8", errors="replace")
-        except urllib.error.URLError as error:
-            last_code = 0
-            last_body = str(error.reason)
-
-        if 200 <= last_code < 300:
-            break
-        print(f"Attempt {attempt}: HTTP {_format_code(last_code)} for {method} {url}", file=sys.stderr)
-        if last_code != 0 and last_code < 500:
-            break
-        if attempt < 3:
-            sleeper(attempt * 5)
-
-    return last_code, last_body
-
-
-def _graphql_is_transient(code: int, body: dict[str, Any]) -> bool:
-    if code == 0 or code >= 500:
-        return True
-    errors = body.get("errors")
-    if isinstance(errors, list):
-        for err in errors:
-            message = err.get("message", "") if isinstance(err, dict) else ""
-            if isinstance(message, str) and _GRAPHQL_TRANSIENT_ERROR_MARKER in message.lower():
-                return True
-    return False
-
-
-def graphql_call(
-    *,
-    query: str,
-    variables: dict[str, Any],
-    token: str,
-    opener: Callable[[urllib.request.Request], Any] = _default_opener,
-    sleeper: Callable[[float], None] | None = None,
-) -> tuple[int, dict[str, Any]]:
-    """Execute a GitHub GraphQL query/mutation, retrying transient failures."""
-    sleeper = sleeper if sleeper is not None else time.sleep
-    payload = json.dumps({"query": query, "variables": variables}, separators=(",", ":"))
-    last_code = 0
-    last_body: dict[str, Any] = {}
-
-    for attempt in range(1, 4):
-        request = urllib.request.Request(_GRAPHQL_URL, data=payload.encode("utf-8"), method="POST")
-        request.add_header("Authorization", f"Bearer {token}")
-        request.add_header("Accept", "application/vnd.github+json")
-        request.add_header("X-GitHub-Api-Version", _API_VERSION)
-        request.add_header("Content-Type", "application/json")
-        try:
-            with opener(request) as response:
-                code = int(response.status)
-                body_str = response.read().decode("utf-8", errors="replace")
-        except urllib.error.HTTPError as error:
-            code = int(error.code)
-            body_str = error.read().decode("utf-8", errors="replace")
-        except urllib.error.URLError:
-            code = 0
-            body_str = ""
-        try:
-            parsed = json.loads(body_str) if body_str else {}
-        except json.JSONDecodeError:
-            parsed = {}
-        last_code = code
-        last_body = parsed if isinstance(parsed, dict) else {}
-
-        if not _graphql_is_transient(last_code, last_body):
-            break
-        print(f"Attempt {attempt}: transient GraphQL response HTTP {_format_code(last_code)}", file=sys.stderr)
-        if attempt < 3:
-            sleeper(attempt * 5)
-
-    return last_code, last_body
+    return request_with_retry(method, url, token, opener, sleeper, body=payload)
 
 
 def _format_code(code: int) -> str:
