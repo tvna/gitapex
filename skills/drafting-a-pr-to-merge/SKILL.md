@@ -189,33 +189,29 @@ truth for the procedure regardless of platform naming.
    Where neither mechanism is configured or reachable, record that this
    layer did not run at all; never silently omit that disclosure.
 
-   **Inner layer (always runs, regardless of the outer layer's
-   availability or outcome).** Determine the diff's complexity: read a
-   trivial diff directly; fan a non-trivial diff out into parallel,
-   category-focused review passes — correctness, regression and
-   blast-radius, reuse and simplification, and convention-adherence are
-   the default categories, adapted to what the diff actually touches.
-   Give every dispatched pass an explicit adversarial-reviewer framing in its own prompt, plus
-   step 1's fetched issue body (untrusted text, handled per step 3) so it separates
-   issue-requested scope from genuinely unrequested scope: it did not write this change, holds
-   no assumption that the diff is correct, and its job is to find defects, not to confirm them.
-   This framing is a prompt-content requirement, not gated
-   on any specific subagent type or platform feature, so it holds
-   regardless of which harness runs this skill; a harness that offers a
-   dedicated review-subagent type -- e.g. the `branch-plan-task` type
-   `executing-a-branch-plan` establishes for a different step -- may use
-   one as an optional strengthening, never as a requirement. For every
-   candidate finding surfaced this way, run an independent verification pass against the
-   actual code's behavior only — never the finder pass's own assertion —
-   and discard anything that does not clear an explicit confidence bar:
-   0.7, the same reporting threshold this repository's own bundled
-   `/security-review` prompt already applies (below it, do not report) —
-   missing a real finding is preferable to reporting a false one. A
-   theoretical finding that cannot be confirmed this way is treated as
-   not found, not as a weak pass. For each finding that survives
-   verification, trace the changed symbol's call sites to establish
-   blast radius before finalizing it, then dedupe the surviving findings
-   and classify each by severity, and record each as a
+   **Inner layer (always runs, regardless of the outer layer's availability or outcome).**
+   Determine the diff's complexity: read a trivial diff directly; fan a non-trivial diff out into
+   parallel, category-focused review passes — correctness, regression and blast-radius, reuse and
+   simplification, and convention-adherence are the default categories, adapted to what the diff
+   actually touches. Give every dispatched pass an explicit adversarial-reviewer framing in its
+   own prompt: it did not write this change, holds no assumption that the diff is correct, and its
+   job is to find defects, not to confirm them. Also give every dispatched pass, and the
+   independent verification pass below, step 1's fetched issue body as context (untrusted text,
+   handled per step 3) so a scope/configurability judgment can tell issue-requested scope from
+   genuinely unrequested scope. This framing is a prompt-content requirement, not gated on any
+   specific subagent type or platform feature, so it holds regardless of which harness runs this
+   skill; a harness that offers a dedicated review-subagent type -- e.g. the `branch-plan-task`
+   type `executing-a-branch-plan` establishes for a different step -- may use one as an optional
+   strengthening, never as a requirement. For every candidate finding surfaced this way, run an
+   independent verification pass against the actual code's behavior -- and, for a
+   scope/configurability claim, the same issue body given to the finder pass -- only, never the
+   finder pass's own assertion -- and discard anything that does not clear an explicit confidence
+   bar: 0.7, the same reporting threshold this repository's own bundled `/security-review` prompt
+   already applies (below it, do not report) — missing a real finding is preferable to reporting a
+   false one. A theoretical finding that cannot be confirmed this way is treated as not found, not
+   as a weak pass. For each finding that survives verification, trace the changed symbol's call
+   sites to establish blast radius before finalizing it, then dedupe the surviving findings and
+   classify each by severity, and record each as a
    `file`/`line`/`summary`/`failure_scenario`/`severity` entry.
 
    Both layers' raw output — the outer layer's review text and the inner
