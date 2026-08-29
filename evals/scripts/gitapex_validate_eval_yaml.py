@@ -73,6 +73,23 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 _EVAL_YAML_GLOB = "evals/*/eval.yaml"
 _TASK_YAML_GLOB = "evals/*/tasks/*.yaml"
 
+#: Fail-closed floor on discovery itself (adversarial-review finding,
+#: mirroring `gitapex_gate_skill_eval_yaml_parity.py`'s own
+#: `MIN_EXPECTED_SKILL_NAMES` pattern): with no floor, a wrong working
+#: directory, a moved `evals/` tree, or a typo'd glob pattern would make
+#: `find_yaml_files()` return an empty list, and this gate would then
+#: silently report "no invalid files" -- a clean-looking PASS that never
+#: actually checked anything, exactly the fail-open shape
+#: `gitapex_run_eval_suite.discover_task_fixtures` already refuses for a
+#: single suite's own `tasks:` glob and `find_parity_drift` already
+#: refuses for skill/eval-suite discovery. Set well below the real
+#: repository's current count (29 `eval.yaml` files at authoring time) so
+#: legitimate future suite removal never trips it, while a total
+#: discovery failure still does. A caller exercising a deliberately small
+#: fixture directory (this module's own tests) must pass a lower value
+#: explicitly.
+MIN_EXPECTED_YAML_FILES = 15
+
 
 def find_yaml_files(root: Path = REPO_ROOT) -> list[Path]:
     """Return the sorted, deduped list of every eval-suite YAML file under
@@ -81,14 +98,34 @@ def find_yaml_files(root: Path = REPO_ROOT) -> list[Path]:
     return sorted(matched)
 
 
-def find_invalid_yaml_files(root: Path = REPO_ROOT) -> list[tuple[Path, str]]:
+def find_invalid_yaml_files(
+    root: Path = REPO_ROOT, min_expected_files: int = MIN_EXPECTED_YAML_FILES
+) -> list[tuple[Path, str]]:
     """Return `(path, error message)` for every file `find_yaml_files(root)`
     finds that is unreadable or fails to parse as YAML. Every matched file
     is checked -- a parse failure in one file never stops the sweep, so a
     PR that breaks two files sees both reported at once, not one at a time
-    across two round-trips."""
+    across two round-trips.
+
+    `min_expected_files` is a fail-closed floor on discovery itself,
+    checked before any file is read: fewer than this many matched files is
+    treated as a discovery failure, not silently reported as "nothing
+    invalid" -- see `MIN_EXPECTED_YAML_FILES`'s own docstring."""
+    files = find_yaml_files(root)
+    if len(files) < min_expected_files:
+        evals_dir = root / "evals"
+        return [
+            (
+                evals_dir,
+                f"only {len(files)} eval YAML file(s) discovered under {evals_dir} "
+                f"(expected at least {min_expected_files}) -- treating this as a discovery "
+                "failure (wrong working directory, a moved evals/ directory, or a glob typo) "
+                "rather than silently reporting a vacuously clean sweep",
+            )
+        ]
+
     failures: list[tuple[Path, str]] = []
-    for path in find_yaml_files(root):
+    for path in files:
         try:
             text = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError) as exc:

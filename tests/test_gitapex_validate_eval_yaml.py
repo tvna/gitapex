@@ -80,7 +80,7 @@ def test_all_valid_files_report_no_failures(tmp_path: pathlib.Path) -> None:
     evals_dir = tmp_path / "evals"
     _write_eval_yaml(evals_dir, "foo", "name: foo-eval\nmetrics:\n  - threshold: 0.8\n")
     _write_task_yaml(evals_dir, "foo", "normal.yaml", "id: normal\ninputs:\n  prompt: hi\n")
-    assert validate_eval_yaml.find_invalid_yaml_files(tmp_path) == []
+    assert validate_eval_yaml.find_invalid_yaml_files(tmp_path, min_expected_files=0) == []
 
 
 def test_unquoted_colon_scalar_is_reported_invalid(tmp_path: pathlib.Path) -> None:
@@ -94,7 +94,7 @@ def test_unquoted_colon_scalar_is_reported_invalid(tmp_path: pathlib.Path) -> No
         "vetting-attack-surface",
         "metrics:\n  - name: m\n    description: attack surface: OK\n",
     )
-    failures = validate_eval_yaml.find_invalid_yaml_files(tmp_path)
+    failures = validate_eval_yaml.find_invalid_yaml_files(tmp_path, min_expected_files=0)
     assert len(failures) == 1
     path, message = failures[0]
     assert path == broken
@@ -112,7 +112,7 @@ def test_fixing_the_unquoted_scalar_makes_it_pass(tmp_path: pathlib.Path) -> Non
         "vetting-attack-surface",
         "metrics:\n  - name: m\n    description: 'attack surface: OK'\n",
     )
-    assert validate_eval_yaml.find_invalid_yaml_files(tmp_path) == []
+    assert validate_eval_yaml.find_invalid_yaml_files(tmp_path, min_expected_files=0) == []
 
 
 def test_non_mapping_yaml_is_not_flagged_syntax_only_scope(tmp_path: pathlib.Path) -> None:
@@ -122,15 +122,42 @@ def test_non_mapping_yaml_is_not_flagged_syntax_only_scope(tmp_path: pathlib.Pat
     # check's concern.
     evals_dir = tmp_path / "evals"
     _write_eval_yaml(evals_dir, "foo", "- just\n- a\n- list\n")
-    assert validate_eval_yaml.find_invalid_yaml_files(tmp_path) == []
+    assert validate_eval_yaml.find_invalid_yaml_files(tmp_path, min_expected_files=0) == []
 
 
 def test_multiple_broken_files_are_all_reported_not_just_the_first(tmp_path: pathlib.Path) -> None:
     evals_dir = tmp_path / "evals"
     first = _write_eval_yaml(evals_dir, "foo", "description: broken: one\n")
     second = _write_task_yaml(evals_dir, "foo", "bad.yaml", "description: broken: two\n")
-    failures = validate_eval_yaml.find_invalid_yaml_files(tmp_path)
+    failures = validate_eval_yaml.find_invalid_yaml_files(tmp_path, min_expected_files=0)
     assert {path for path, _ in failures} == {first, second}
+
+
+def test_discovery_floor_fails_closed_not_vacuously(tmp_path: pathlib.Path) -> None:
+    # Adversarial-review finding, mirroring
+    # gitapex_gate_skill_eval_yaml_parity.py's own
+    # test_below_min_expected_floor_fails_closed_not_vacuously: with no
+    # floor, a wrong working directory or a moved evals/ tree would make
+    # find_yaml_files() return too few (or zero) files, and this function
+    # would then report "nothing invalid" -- a clean-looking pass that
+    # never actually checked anything. Below the default floor (a handful
+    # of files, not the production MIN_EXPECTED_YAML_FILES=15), this must
+    # be reported as a failure, not silently accepted.
+    evals_dir = tmp_path / "evals"
+    _write_eval_yaml(evals_dir, "foo")
+    _write_task_yaml(evals_dir, "foo", "normal.yaml")
+    failures = validate_eval_yaml.find_invalid_yaml_files(tmp_path)
+    assert len(failures) == 1
+    path, message = failures[0]
+    assert path == evals_dir
+    assert "discovery failure" in message
+    assert "2 eval YAML file(s) discovered" in message
+
+
+def test_completely_empty_dir_fails_closed(tmp_path: pathlib.Path) -> None:
+    failures = validate_eval_yaml.find_invalid_yaml_files(tmp_path)
+    assert len(failures) == 1
+    assert "discovery failure" in failures[0][1]
 
 
 def test_non_utf8_file_is_reported_as_unreadable(tmp_path: pathlib.Path) -> None:
@@ -139,7 +166,7 @@ def test_non_utf8_file_is_reported_as_unreadable(tmp_path: pathlib.Path) -> None
     skill_dir.mkdir(parents=True)
     path = skill_dir / "eval.yaml"
     path.write_bytes(b"\xff\xfe not valid utf-8 \x80\x81")
-    failures = validate_eval_yaml.find_invalid_yaml_files(tmp_path)
+    failures = validate_eval_yaml.find_invalid_yaml_files(tmp_path, min_expected_files=0)
     assert len(failures) == 1
     found_path, message = failures[0]
     assert found_path == path
@@ -160,7 +187,7 @@ def test_unreadable_path_from_a_stale_listing_is_reported_not_raised(
         return [missing]
 
     monkeypatch.setattr(validate_eval_yaml, "find_yaml_files", fake_find_yaml_files)
-    failures = validate_eval_yaml.find_invalid_yaml_files(tmp_path)
+    failures = validate_eval_yaml.find_invalid_yaml_files(tmp_path, min_expected_files=0)
     assert len(failures) == 1
     found_path, message = failures[0]
     assert found_path == missing
