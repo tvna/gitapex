@@ -359,6 +359,24 @@ def test_undisclosed_fixtures_raises_runtime_error_outside_a_git_repo(tmp_path: 
         gate.undisclosed_fixtures("HEAD^", "HEAD", tmp_path)
 
 
+def test_changed_task_files_skips_a_blank_line_in_name_status_output(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # `git diff --name-status` does not produce a blank line between real
+    # entries in practice, so this defensive branch has no naturally
+    # occurring real-world trigger -- covered directly here via a stubbed
+    # _run_git rather than contrived real git input.
+    monkeypatch.setattr(
+        gate,
+        "_run_git",
+        lambda args, root: f"M\t{gate.TASKS_GLOB_PREFIX}edge.yaml\n\nA\t{gate.TASKS_GLOB_PREFIX}new.yaml\n",
+    )
+    assert gate.changed_task_files("HEAD^", "HEAD", tmp_path) == [
+        f"{gate.TASKS_GLOB_PREFIX}edge.yaml",
+        f"{gate.TASKS_GLOB_PREFIX}new.yaml",
+    ]
+
+
 # --- _validate_revision_arg (CWE-88 argument-injection hardening) ----------
 #
 # Found by an adversarial security review of this file's own diff: --base/
