@@ -53,3 +53,6 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1155"
       summary: "Same dispatch's Blind spot pass found two gaps, fixed: (A) Step 2 now checks reproduction-side-effect idempotency before a live run against a non-idempotent operation; (B) Postcondition now requires confirmed removal of any Step 4/6 temporary instrumentation before the Verdict, not merely an intent to remove it."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1155"
+      summary: "An isolated design-doc-adversarial-review dispatch found the design doc's own Decision 4 text had drifted stale against the two prior audit-fix commits (5 additions never folded back). Fixed: a Post-design revisions addendum added to Decision 4; the Acceptance-criteria checklist's overclaiming matches wording softened; planning-a-branch-from-an-issue Step 4 gained the reproduction-not-established carve-out Decision 6 had promised but the shipped text omitted."

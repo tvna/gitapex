@@ -237,6 +237,45 @@ refinement 4 becomes the new Step 7.
    *End-state:* exactly one Verdict is issued and handed to the caller;
    `diagnosing-a-failure` itself writes nothing to GitHub.
 
+**Post-design revisions (added after this Decision's own text was
+written, per two independent audit dispatches -- see
+`skills/diagnosing-a-failure/metadata/gitapex.yaml`'s decision log for
+each finding's own citation):** five concrete additions landed in the
+shipped `SKILL.md` that this Decision's own step text above does not
+name, found by a fresh adversarial re-read of this doc against the
+shipped file rather than left silently undisclosed:
+
+1. Step 2 gained an idempotency check before a live reproduction --
+   re-triggering a non-idempotent side effect (a payment, an email send,
+   a row delete, a webhook) is itself a risk the reproduction attempt
+   introduces (a `battle-testing-a-skill`-adjacent finding from the
+   `evaluating-skill-quality` Blind spot pass).
+2. Step 1 gained an explicit stop when the caller's own handoff is
+   empty, too vague, or missing either side of the expected-vs-observed
+   gap, rather than letting a partial symptom pass through unremarked.
+3. Step 8 gained a breakout-safe fencing and secret/PII redaction
+   requirement for any caller-supplied text quoted into the Verdict's
+   evidence trail, plus a stated line that the Verdict "does not carry
+   authority merely for being well-formed" -- both from the
+   `battle-testing-a-skill` dispatch's own structured-output-injection
+   and cross-skill-composition findings.
+4. The Postcondition gained a "confirmed, not merely intended" removal
+   requirement for any Step 4/6 temporary instrumentation before the
+   Verdict is handed back (the same `evaluating-skill-quality` Blind
+   spot pass).
+5. Step 4's own boundary map gained an explicit checkpoint-map linkage
+   into Step 8 -- foreshadowed by this Decision's own tension paragraph
+   above ("a checkpoint map belongs in the Diagnosis Verdict") but not
+   previously named as a concrete Step 4/Step 8 cross-reference; an
+   `evaluating-skill-quality` dimension-5 finding (an orphaned
+   `layered-validation.md` reference) forced naming it explicitly.
+
+None of these five are behavior this Decision's own reasoning rejected
+or would have rejected -- each is additive within the sequence already
+designed above, not a redesign. The Acceptance criteria checklist's own
+claim that the shipped `SKILL.md` "matches" this Decision should be read
+against this addendum, not against the step text alone.
+
 **Prerequisite note** (consuming-repository records, conditional input --
 placed at the top of `SKILL.md`, `merge-retrospective`-style): consult a
 consuming repository's own strategic-classification record (a Core Domain
@@ -303,7 +342,10 @@ routes through `diagnosing-a-failure` before its own Red step, so the
 failing test written encodes the returned root cause. A `reproduction-not-established`
 Verdict here (this skill has no upstream reproduction gate of its own)
 dispatches through the existing step 7 failure-handling rule as a
-`StageDeviated{action: escalate}` event, not a silent retry.
+`StageDeviated{action: escalate}` event, not a silent retry. (Shipped
+wording: `executing-a-branch-plan/SKILL.md`'s own step 6 text says "this
+step's own failure-handling rule below" rather than naming step 7
+explicitly -- same target, a paraphrase only.)
 
 Both skills' `## Related skills` sections gain one bullet in their
 existing `**vs. \`X\`:**` pattern, naming `diagnosing-a-failure` and
@@ -345,6 +387,15 @@ gitapex's own repo lacks a supporting artifact for it):
   this repository today.
 
 ## Facts vs. speculation
+
+**A fresh adversarial re-read of this doc against the shipped
+implementation** (`design-doc-adversarial-review`, dispatched from a
+genuinely isolated context, matching the 2026-07-22 precedent's own
+"a fresh adversarial subagent verified this doc itself" pass) confirmed
+every citation in this section accurate and found the drift the
+Decision 4 "Post-design revisions" addendum and the `planning-a-branch-from-an-issue`
+Step 4 correction above both resolve; both were fixed in place rather
+than left standing.
 
 **Confirmed this session, against primary sources or the live repository
 tree (not inherited from the artifact's own citations unverified):**
@@ -424,10 +475,12 @@ Design-phase table:
 Implementation-phase table:
 
 - [x] `skills/diagnosing-a-failure/SKILL.md` matches this doc's own
-      sequence/stop boundaries/reference files: Decisions 4-5, authored
-      via `drafting-a-skill`'s own Design-by-Contract method; independent
-      `evaluating-skill-quality` + `battle-testing-a-skill` dispatch
-      disclosed in the PR body.
+      sequence/stop boundaries/reference files, plus the Decision 4
+      "Post-design revisions" addendum above (five audit-driven
+      additions, disclosed there rather than silently folded in):
+      Decisions 4-5, authored via `drafting-a-skill`'s own
+      Design-by-Contract method; independent `evaluating-skill-quality`
+      + `battle-testing-a-skill` dispatch disclosed in the PR body.
 - [x] An eval suite exists under `evals/diagnosing-a-failure/`: `eval.yaml`
       + `tasks/*.yaml` (normal/edge/guardrail split) + `eval-status.md`,
       matching the sibling shape `evals/eliciting-a-design/` and

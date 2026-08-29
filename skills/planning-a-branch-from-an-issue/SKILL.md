@@ -51,7 +51,11 @@ without losing the issue's acceptance criteria.
      Verdict becomes Step 5's own Interpretation column. On an
      `architecture-question` Verdict, stop here (comment on the issue
      per that Verdict's own two-option framing) rather than proceeding
-     to a normal ACM row. Otherwise continue to Step 5, which states this
+     to a normal ACM row. A `reproduction-not-established` Verdict here
+     should not recur in practice (this step's own reproduction gate
+     already screened that case out upstream), but if it does, treat it
+     the same as a failed reproduction above -- stop, comment, no ACM.
+     Otherwise continue to Step 5, which states this
      path's own Proof-method requirement.
 5. Produce an Acceptance Criteria Map before any branch work begins:
    criterion -> interpretation -> planned files/operations -> proof method
