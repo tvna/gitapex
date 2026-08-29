@@ -124,7 +124,7 @@ destined for a public sink.
       this artifact to resolve it, rewrite to avoid the trigger:
       prefer a full URL citation over the bare `#`-number, or a verb
       outside every platform's list above (for example "addressed",
-      "landed", "shipped"). See the worked example below.
+      "landed", "shipped"). See the third worked example below.
    4. If it is unclear from the sentence alone whether the author
       means to close the cited issue or only narrate it, do not
       decide silently either way: treat it the same as any other
