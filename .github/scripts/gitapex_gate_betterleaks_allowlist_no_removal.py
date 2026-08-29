@@ -48,8 +48,8 @@ check could not be trusted (fetch failure, no common ancestor, malformed
 TOML, or `--root` not a usable directory) -- mirrors
 `gitapex_gate_behind_base.py`'s own 0/1/2 convention.
 
-Run via `uv run` (needed for the pydantic import): `uv run --frozen
-python3 .github/scripts/gitapex_gate_betterleaks_allowlist_no_removal.py`
+Run via `uv run` (needed for the pydantic import):
+``uv run --frozen python3 .github/scripts/gitapex_gate_betterleaks_allowlist_no_removal.py``
 (local plane, fetches `origin/main` itself), or with `--merge-base <sha>`
 (CI plane, no fetch).
 """
