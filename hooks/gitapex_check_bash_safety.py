@@ -856,6 +856,7 @@ def _rule_command_substitution_content(
     name_to_raw_value_history: dict[str, tuple[str, ...]],
     name_to_value_write_biased: dict[str, str],
     name_to_raw_value_write_biased: dict[str, str],
+    names_with_dynamic_assignment: set[str],
 ) -> tuple[str | None, bool, tuple[str, ...]]:
     """Recursively classify each `$(...)` command-substitution span's OWN
     inner content through this module's full rule set -- bash genuinely
@@ -987,7 +988,13 @@ def _rule_command_substitution_content(
     same way round 21 found for the cd-biased case, still resolves
     correctly once the inner content reaches ITS OWN recursive
     `_classify_tokens`/`classify` call's own local `_rule_gh_api_write`/
-    `_segment_loop_hit` invocations)."""
+    `_segment_loop_hit` invocations).
+
+    NAMES_WITH_DYNAMIC_ASSIGNMENT (round 24, issue #1375) is threaded the
+    same way, so a name assigned a dynamic value inside a `$(...)` span
+    still poisons confidence in a checkout/restore path resolved from
+    that same name OUTSIDE the span (or vice versa) -- see `_names_with_
+    dynamic_assignment`'s own docstring for the live bypass it closes."""
     is_git_push = False
     checkout_restore_paths: list[str] = []
     i = 0
@@ -1024,6 +1031,7 @@ def _rule_command_substitution_content(
                     name_to_raw_value_history,
                     name_to_value_write_biased,
                     name_to_raw_value_write_biased,
+                    names_with_dynamic_assignment,
                 )
                 is_git_push = is_git_push or inner_verdict.is_git_push
                 checkout_restore_paths.extend(inner_verdict.checkout_restore_paths)
@@ -1047,6 +1055,7 @@ def _rule_command_substitution_content(
                     name_to_raw_value_history,
                     name_to_value_write_biased,
                     name_to_raw_value_write_biased,
+                    names_with_dynamic_assignment,
                 )
                 is_git_push = is_git_push or inner_verdict.is_git_push
                 checkout_restore_paths.extend(inner_verdict.checkout_restore_paths)
@@ -2635,6 +2644,7 @@ def _rule_array_literal_content(
     name_to_raw_value_history: dict[str, tuple[str, ...]],
     name_to_value_write_biased: dict[str, str],
     name_to_raw_value_write_biased: dict[str, str],
+    names_with_dynamic_assignment: set[str],
 ) -> tuple[str | None, bool, tuple[str, ...]]:
     """Recursively classify each `NAME=(...)` array-literal span's OWN
     inner content through this module's full rule set -- bash genuinely
@@ -2753,7 +2763,9 @@ def _rule_array_literal_content(
     substitution_content`'s own identical parameters' docstring paragraph
     for what they mean and why they are threaded here even though this
     function's own recursive call site does not itself invoke
-    `_rule_gh_api_write`/`_segment_loop_hit` directly."""
+    `_rule_gh_api_write`/`_segment_loop_hit` directly. NAMES_WITH_
+    DYNAMIC_ASSIGNMENT (round 24, issue #1375) is threaded the same way
+    -- see `_names_with_dynamic_assignment`'s own docstring."""
     is_git_push = False
     checkout_restore_paths: list[str] = []
     i = 0
@@ -2779,6 +2791,7 @@ def _rule_array_literal_content(
                     name_to_raw_value_history,
                     name_to_value_write_biased,
                     name_to_raw_value_write_biased,
+                    names_with_dynamic_assignment,
                 )
                 is_git_push = is_git_push or reading_verdict.is_git_push
                 checkout_restore_paths.extend(reading_verdict.checkout_restore_paths)
@@ -3670,29 +3683,116 @@ _RESTORE_VALUE_FLAGS = {"--source", "-s", "--conflict"}
 _CHECKOUT_BRANCH_CREATION_FLAGS = {"-b", "-B", "--orphan"}
 
 
-def _multi_valued_names_referenced(token: str, name_to_raw_value_history: dict[str, tuple[str, ...]]) -> set[str]:
+def _referenced_names(
+    token: str, name_to_raw_value: dict[str, str], name_to_raw_value_history: dict[str, tuple[str, ...]]
+) -> set[str]:
     """Every variable NAME referenced anywhere in TOKEN -- braced
-    (`${NAME}`), default-clause (`${NAME:-x}`), indirect (`${!NAME}`), or
+    (`${NAME}`), default-clause (`${NAME:-x}`), indirect (`${!NAME}`,
+    TWO levels: NAME itself, PLUS every name NAME's own current or
+    historical value could itself name -- see the CRITICAL-bug paragraph
+    below for why the second level is the one that actually matters), or
     unbraced (`$NAME`, including every non-empty PREFIX of an unbraced
     run, mirroring `_unbraced_ref_options`'s own prefix enumeration,
-    since an unbraced reference is ambiguous about where the name ends)
-    -- whose own NAME_TO_RAW_VALUE_HISTORY entry carries MORE than one
-    distinct value. A name assigned only once (or never) is excluded: its
-    single reading already matches the ordinary, un-widened resolution,
-    so there is nothing to widen. Used by `_resolve_path_tokens`'s own
-    fused-reference history widening (see that function's own docstring)
-    to find which names' history actually needs enumerating, not to
-    resolve the token itself -- `_substitute_var_refs_candidates` still
-    does the real, quote/fusion-aware resolution, once per combination."""
+    since an unbraced reference is ambiguous about where the name ends).
+
+    CRITICAL bug found by independent adversarial review (round 24, issue
+    #1375) and independently reproduced live, in this function's own
+    prior form (then named `_multi_valued_names_referenced`, collecting
+    only names with multi-valued history directly): for an indirect
+    `${!C}` reference, only C ITSELF was ever checked for multi-valued
+    history -- never the SECOND-level name C's own value actually points
+    to, which is the one `_substitute_var_refs_candidates`'s own
+    indirect-reference resolution (see that function's own docstring)
+    genuinely reads at the point of use. `TARGET=sub; C=TARGET; git
+    checkout -- ${!C}; TARGET=other` -- `${!C}` resolves through C (which
+    has only ONE historical value, "TARGET", so C itself was never a
+    widening candidate) to TARGET, which DOES have two historical values
+    ("sub" then "other") -- but TARGET was never added to the widening
+    set at all, so `checkout_restore_paths` resolved to `('other',)`
+    alone, the WRONG, order-blind-collapsed last value of TARGET (real
+    bash: `${!C}` genuinely was `sub` at its actual point of use).
+    Confirmed live end-to-end through the real wrapper against a scratch
+    repo with `sub` genuinely dirty and `other` clean: wrongly allowed
+    with exit 0, and actually running the command afterward silently
+    discarded the uncommitted edit to `sub`. Closed by treating EVERY
+    name C's own current value (NAME_TO_RAW_VALUE) or any historical
+    value (NAME_TO_RAW_VALUE_HISTORY) could itself name as a referenced
+    name in its own right, not just C."""
     names: set[str] = set()
     for match in _VAR_REF_FULL_RE.finditer(token):
         braced_name, default_name, _default_text, indirect_name, unbraced_run = match.groups()
-        candidate_names = [n for n in (braced_name, default_name, indirect_name) if n is not None]
-        if unbraced_run is not None:
-            candidate_names.extend(unbraced_run[:i] for i in range(len(unbraced_run), 0, -1))
-        for name in candidate_names:
-            if len(name_to_raw_value_history.get(name, ())) > 1:
+        for name in (braced_name, default_name):
+            if name is not None:
                 names.add(name)
+        if indirect_name is not None:
+            names.add(indirect_name)
+            second_level = set(name_to_raw_value_history.get(indirect_name, ()))
+            current = name_to_raw_value.get(indirect_name)
+            if current is not None:
+                second_level.add(current)
+            names.update(second_level)
+        if unbraced_run is not None:
+            names.update(unbraced_run[:i] for i in range(len(unbraced_run), 0, -1))
+    return names
+
+
+def _multi_valued_names_referenced(
+    token: str, name_to_raw_value: dict[str, str], name_to_raw_value_history: dict[str, tuple[str, ...]]
+) -> set[str]:
+    """Every name `_referenced_names` finds in TOKEN whose own NAME_TO_
+    RAW_VALUE_HISTORY entry carries MORE than one distinct value. A name
+    assigned only once (or never) is excluded: its single reading already
+    matches the ordinary, un-widened resolution, so there is nothing to
+    widen. Used by `_resolve_path_tokens`'s own fused-reference history
+    widening (see that function's own docstring) to find which names'
+    history actually needs enumerating, not to resolve the token itself
+    -- `_substitute_var_refs_candidates` still does the real, quote/
+    fusion-aware resolution, once per combination."""
+    return {
+        name
+        for name in _referenced_names(token, name_to_raw_value, name_to_raw_value_history)
+        if len(name_to_raw_value_history.get(name, ())) > 1
+    }
+
+
+def _names_with_dynamic_assignment(tokens: list[str]) -> set[str]:
+    """Every NAME assigned a DYNAMIC value (containing `$`/backtick)
+    anywhere in TOKENS.
+
+    CRITICAL bug found by independent adversarial review (round 24, issue
+    #1375) and independently reproduced live: `_assigned_raw_values`/
+    `_assigned_raw_value_history` both skip a dynamic-RHS assignment
+    token entirely (`if _is_dynamic(token): continue`) -- correct in
+    isolation (this classifier genuinely cannot know what a `$(...)`
+    substitution will evaluate to), but this means a name's own EARLIER,
+    STATIC assignment stays in NAME_TO_RAW_VALUE/NAME_TO_RAW_VALUE_
+    HISTORY completely untouched, silently trusted as still current, even
+    though a LATER, dynamic reassignment of the SAME name means its
+    actual value at the point of use is genuinely unknown. `DIR=sub;
+    DIR=$(echo other); git checkout -- $DIR` resolved `checkout_restore_
+    paths` to `('sub',)` -- confidently the WRONG, STALE value (real
+    bash: `$DIR` genuinely was `other`, whatever the substitution
+    evaluates to, at its actual point of use). Confirmed live end-to-end
+    through the real wrapper against a scratch repo with `other`
+    genuinely dirty and `sub` clean: wrongly allowed with exit 0, and
+    actually running the command afterward silently discarded the
+    uncommitted edit to `other`. Also reproduced identically for the
+    fused-reference form (`"$DIR/f"`).
+
+    Closed by `_resolve_path_tokens` treating a name in this set as
+    forced-unresolvable (deny outright) wherever referenced -- the same
+    posture this module already takes for a name that was NEVER assigned
+    any value at all (a name with a static-only history, or no history,
+    resolves exactly as before; a name with even one dynamic assignment
+    anywhere loses all confidence, matching how this classifier already
+    treats a name with NO recorded static value)."""
+    names: set[str] = set()
+    for token in tokens:
+        if not _is_dynamic(token):
+            continue
+        match = _ASSIGN_RE.match(token)
+        if match:
+            names.add(match.group(1))
     return names
 
 
@@ -3720,7 +3820,10 @@ def _bounded_history_combinations(
 
 
 def _resolve_path_tokens(
-    tokens: list[str], name_to_raw_value: dict[str, str], name_to_raw_value_history: dict[str, tuple[str, ...]]
+    tokens: list[str],
+    name_to_raw_value: dict[str, str],
+    name_to_raw_value_history: dict[str, tuple[str, ...]],
+    names_with_dynamic_assignment: set[str],
 ) -> tuple[str | None, tuple[str, ...]]:
     """Resolve every token in TOKENS to one or more literal path
     candidates for a `git checkout`/`git restore` invocation. A literal
@@ -3796,13 +3899,38 @@ def _resolve_path_tokens(
     own candidates unioned together. A name with only one historical
     value (or none) contributes no combinations of its own, so a token
     referencing no multiply-assigned name resolves in exactly one pass,
-    identical to before this fix."""
+    identical to before this fix.
+
+    NAMES_WITH_DYNAMIC_ASSIGNMENT (round 24, issue #1375) closes a
+    DIFFERENT bug in the same family, found live independently of the
+    fused-reference fix above: `_assigned_raw_values`/`_assigned_raw_
+    value_history` both build NAME_TO_RAW_VALUE/NAME_TO_RAW_VALUE_HISTORY
+    by skipping a dynamic-RHS assignment token entirely, so a name's
+    EARLIER, static assignment stays on file completely untouched by a
+    LATER, dynamic reassignment of the SAME name -- silently trusted as
+    still current, even though the real value at the point of use is now
+    genuinely unknown. See `_names_with_dynamic_assignment`'s own
+    docstring for the live reproduction. Every name a dynamic token
+    references (via `_referenced_names`, the same two-level-indirect-
+    aware extraction `_multi_valued_names_referenced` itself now uses) is
+    checked against this set BEFORE any resolution is attempted; a match
+    denies outright, the same posture this function already takes for a
+    name with no recorded value at all -- a dynamic reassignment does not
+    get to silently fall back to a stale earlier reading."""
     paths: list[str] = []
     for tok in tokens:
         if not _is_dynamic(tok):
             paths.append(tok)
             continue
-        multi_valued = _multi_valued_names_referenced(tok, name_to_raw_value_history)
+        referenced = _referenced_names(tok, name_to_raw_value, name_to_raw_value_history)
+        if referenced & names_with_dynamic_assignment:
+            return (
+                f"a git checkout/restore command has a dynamic path argument ({tok!r}) that references a name "
+                "also assigned a dynamically-constructed value elsewhere in the command -- that name's actual "
+                "value at the point of use cannot be soundly trusted, so this is denied outright",
+                (),
+            )
+        multi_valued = _multi_valued_names_referenced(tok, name_to_raw_value, name_to_raw_value_history)
         combinations = _bounded_history_combinations(multi_valued, name_to_raw_value_history)
         if combinations is None:
             return (
@@ -3835,6 +3963,7 @@ def _git_checkout_paths(
     tokens_after: list[str],
     name_to_raw_value: dict[str, str],
     name_to_raw_value_history: dict[str, tuple[str, ...]],
+    names_with_dynamic_assignment: set[str],
 ) -> tuple[str | None, tuple[str, ...]]:
     """checkout_restore_paths for a `git checkout` invocation, TOKENS_AFTER
     being every segment token following the literal `checkout` word.
@@ -3955,12 +4084,16 @@ def _git_checkout_paths(
                 "could append paths at runtime this classifier cannot see, so this is denied outright",
                 (),
             )
-        return _resolve_path_tokens(after, name_to_raw_value, name_to_raw_value_history)
+        return _resolve_path_tokens(after, name_to_raw_value, name_to_raw_value_history, names_with_dynamic_assignment)
     positionals = [t for t in tokens_after if not t.startswith("-")]
     if len(positionals) >= 2:
-        return _resolve_path_tokens(positionals, name_to_raw_value, name_to_raw_value_history)
+        return _resolve_path_tokens(
+            positionals, name_to_raw_value, name_to_raw_value_history, names_with_dynamic_assignment
+        )
     if len(positionals) == 1 and not _is_dynamic(positionals[0]) and positionals[0] in (".", ".."):
-        return _resolve_path_tokens(positionals, name_to_raw_value, name_to_raw_value_history)
+        return _resolve_path_tokens(
+            positionals, name_to_raw_value, name_to_raw_value_history, names_with_dynamic_assignment
+        )
     return None, ()
 
 
@@ -3968,6 +4101,7 @@ def _git_restore_paths(
     tokens_after: list[str],
     name_to_raw_value: dict[str, str],
     name_to_raw_value_history: dict[str, tuple[str, ...]],
+    names_with_dynamic_assignment: set[str],
 ) -> tuple[str | None, tuple[str, ...]]:
     """checkout_restore_paths for a `git restore` invocation, TOKENS_AFTER
     being every segment token following the literal `restore` word.
@@ -4061,7 +4195,9 @@ def _git_restore_paths(
         i += 1
     if saw_staged and not saw_worktree:
         return None, ()
-    return _resolve_path_tokens(path_tokens, name_to_raw_value, name_to_raw_value_history)
+    return _resolve_path_tokens(
+        path_tokens, name_to_raw_value, name_to_raw_value_history, names_with_dynamic_assignment
+    )
 
 
 # A whole token that is EXACTLY one `${NAME-}`/`${NAME:-}` (empty default
@@ -4628,6 +4764,7 @@ def _rule_git_checkout_restore(
     raw_assigned_git_biased: dict[str, str],
     raw_assigned_cd_biased: dict[str, str],
     raw_assigned_history: dict[str, tuple[str, ...]],
+    names_with_dynamic_assignment: set[str],
 ) -> tuple[str | None, tuple[str, ...]]:
     """Extract every `checkout_restore_paths` candidate across every
     segment of one command, denying outright on any segment where this
@@ -4720,7 +4857,10 @@ def _rule_git_checkout_restore(
     paragraph for the live bypass this one closes. RAW_ASSIGNED_HISTORY
     is passed straight through into `_git_checkout_paths`/`_git_restore_
     paths` (round 21, issue #1375) -- see `_assigned_raw_value_history`'s
-    own docstring for what it means and the live bypass it closes."""
+    own docstring for what it means and the live bypass it closes.
+    NAMES_WITH_DYNAMIC_ASSIGNMENT (round 24, issue #1375) is threaded the
+    same way into both -- see `_names_with_dynamic_assignment`'s own
+    docstring for what it means and the live bypass it closes."""
     saw_cd = False
     all_paths: list[str] = []
     for seg in segments:
@@ -4748,9 +4888,13 @@ def _rule_git_checkout_restore(
                 (),
             )
         if subcommand == "checkout":
-            deny_reason, paths = _git_checkout_paths(tokens_after, raw_assigned, raw_assigned_history)
+            deny_reason, paths = _git_checkout_paths(
+                tokens_after, raw_assigned, raw_assigned_history, names_with_dynamic_assignment
+            )
         else:
-            deny_reason, paths = _git_restore_paths(tokens_after, raw_assigned, raw_assigned_history)
+            deny_reason, paths = _git_restore_paths(
+                tokens_after, raw_assigned, raw_assigned_history, names_with_dynamic_assignment
+            )
         if deny_reason:
             return deny_reason, ()
         all_paths.extend(paths)
@@ -4961,6 +5105,7 @@ def classify(
     outer_name_to_raw_value_history: dict[str, tuple[str, ...]] | None = None,
     outer_name_to_value_write_biased: dict[str, str] | None = None,
     outer_name_to_raw_value_write_biased: dict[str, str] | None = None,
+    outer_names_with_dynamic_assignment: set[str] | None = None,
 ) -> Verdict:
     """Classify one Bash tool_input.command string. Fails closed (deny) on
     anything shlex cannot tokenize -- an unparseable command is exactly the
@@ -4979,12 +5124,14 @@ def classify(
 
     OUTER_NAME_TO_RAW_VALUE_GIT_BIASED (round 19, issue #1375),
     OUTER_NAME_TO_RAW_VALUE_CD_BIASED and OUTER_NAME_TO_RAW_VALUE_HISTORY
-    (round 21, issue #1375), and OUTER_NAME_TO_VALUE_WRITE_BIASED/
-    OUTER_NAME_TO_RAW_VALUE_WRITE_BIASED (round 22, issue #1375) are the
+    (round 21, issue #1375), OUTER_NAME_TO_VALUE_WRITE_BIASED/
+    OUTER_NAME_TO_RAW_VALUE_WRITE_BIASED (round 22, issue #1375), and
+    OUTER_NAMES_WITH_DYNAMIC_ASSIGNMENT (round 24, issue #1375) are the
     same recursive call's own analogous further arguments -- see
     `_classify_tokens`'s own docstring and `_find_git_checkout_restore`'s/
-    `_assigned_raw_value_history`'s/`_assigned_literals_biased_toward`'s
-    own docstrings for what each means and the live bypass each closes."""
+    `_assigned_raw_value_history`'s/`_assigned_literals_biased_toward`'s/
+    `_names_with_dynamic_assignment`'s own docstrings for what each means
+    and the live bypass each closes."""
     try:
         tokens = tokenize(command)
     except TokenizeError as error:
@@ -4998,6 +5145,7 @@ def classify(
         outer_name_to_raw_value_history,
         outer_name_to_value_write_biased,
         outer_name_to_raw_value_write_biased,
+        outer_names_with_dynamic_assignment,
     )
 
 
@@ -5010,6 +5158,7 @@ def _classify_tokens(
     outer_name_to_raw_value_history: dict[str, tuple[str, ...]] | None = None,
     outer_name_to_value_write_biased: dict[str, str] | None = None,
     outer_name_to_raw_value_write_biased: dict[str, str] | None = None,
+    outer_names_with_dynamic_assignment: set[str] | None = None,
 ) -> Verdict:
     """The token-level core of `classify` -- split out so `_rule_command_
     substitution_content` can recurse into a `$(...)` span's own inner
@@ -5080,7 +5229,19 @@ def _classify_tokens(
     write` and `_segment_loop_hit` below, alongside the ordinary ASSIGNED/
     RAW_ASSIGNED attempt -- see `_assigned_literals_biased_toward`'s own
     docstring for the live bypass this closes on those two HARD-DENY
-    consumers specifically."""
+    consumers specifically.
+
+    OUTER_NAMES_WITH_DYNAMIC_ASSIGNMENT (round 24, issue #1375) is a
+    further, parallel outer-scope argument -- a UNION merge (`outer |
+    _names_with_dynamic_assignment(tokens)`, the same union convention
+    OUTER_NAME_TO_RAW_VALUE_HISTORY already uses, not the plain
+    `{**outer, **inner}` shadowing every dict-shaped pair above uses),
+    threaded the same way into the same two recursive calls plus `_rule_
+    git_checkout_restore`'s own sixth argument. Unlike the write-biased
+    pair above, this one IS threaded into `_rule_git_checkout_restore`
+    (this bug lives in checkout/restore path resolution specifically) --
+    see `_names_with_dynamic_assignment`'s own docstring for the live
+    bypass this closes."""
     outer_literals = outer_name_to_value or {}
     outer_raw = outer_name_to_raw_value or {}
     outer_raw_git_biased = outer_name_to_raw_value_git_biased or {}
@@ -5088,6 +5249,7 @@ def _classify_tokens(
     outer_raw_history = outer_name_to_raw_value_history or {}
     outer_write_biased = outer_name_to_value_write_biased or {}
     outer_raw_write_biased = outer_name_to_raw_value_write_biased or {}
+    outer_dynamic_names = outer_names_with_dynamic_assignment or set()
     merged_name_to_value = {**outer_literals, **_assigned_literals(tokens)}
     merged_name_to_raw_value = {**outer_raw, **_assigned_raw_values(tokens)}
     merged_name_to_raw_value_git_biased = {
@@ -5109,6 +5271,7 @@ def _classify_tokens(
         **outer_raw_write_biased,
         **_assigned_raw_values_biased_toward(tokens, _WATCHED_WRITE_BIAS),
     }
+    merged_names_with_dynamic_assignment = outer_dynamic_names | _names_with_dynamic_assignment(tokens)
 
     content_reason, content_is_git_push, content_checkout_restore_paths = _rule_command_substitution_content(
         tokens,
@@ -5119,6 +5282,7 @@ def _classify_tokens(
         merged_name_to_raw_value_history,
         merged_name_to_value_write_biased,
         merged_name_to_raw_value_write_biased,
+        merged_names_with_dynamic_assignment,
     )
     if content_reason:
         return Verdict(True, content_reason, content_is_git_push, content_checkout_restore_paths)
@@ -5132,6 +5296,7 @@ def _classify_tokens(
         merged_name_to_raw_value_history,
         merged_name_to_value_write_biased,
         merged_name_to_raw_value_write_biased,
+        merged_names_with_dynamic_assignment,
     )
     is_git_push = content_is_git_push or array_content_is_git_push
     checkout_restore_paths = content_checkout_restore_paths + array_content_checkout_restore_paths
@@ -5159,6 +5324,7 @@ def _classify_tokens(
         **outer_raw_write_biased,
         **_assigned_raw_values_biased_toward(tokens, _WATCHED_WRITE_BIAS),
     }
+    names_with_dynamic_assignment = outer_dynamic_names | _names_with_dynamic_assignment(tokens)
     lowered_command = " ".join(tokens).lower()
 
     is_git_push = is_git_push or any(_is_git_push_segment(seg, raw_assigned) for seg in segments)
@@ -5203,7 +5369,12 @@ def _classify_tokens(
             )
 
     own_checkout_restore_hit, own_checkout_restore_paths = _rule_git_checkout_restore(
-        segments, raw_assigned, raw_assigned_git_biased, raw_assigned_cd_biased, raw_assigned_history
+        segments,
+        raw_assigned,
+        raw_assigned_git_biased,
+        raw_assigned_cd_biased,
+        raw_assigned_history,
+        names_with_dynamic_assignment,
     )
     checkout_restore_paths = checkout_restore_paths + own_checkout_restore_paths
     if own_checkout_restore_hit:

@@ -2111,6 +2111,62 @@ def test_restore_denied_when_a_fused_path_reference_is_reassigned_after_use(tmp_
     assert result.returncode == 2, f"stderr={result.stderr!r}"
 
 
+def test_checkout_denied_when_the_path_name_is_reassigned_to_a_dynamic_value_after_use(tmp_path: Path) -> None:
+    """CRITICAL bypass regression pin (round-24 independent review, issue
+    #1375). `_assigned_raw_values`/`_assigned_raw_value_history` both skip
+    a dynamic-RHS assignment token entirely, so a name's own EARLIER,
+    static assignment stayed on file untouched by a LATER, dynamic
+    reassignment of the SAME name -- silently trusted as still current.
+    Live-verified before this fix: `DIR=sub; DIR=$(echo other); git
+    checkout -- $DIR` resolved `checkout_restore_paths` to `('sub',)` --
+    confidently the WRONG, STALE value, since real bash genuinely
+    resolves `$DIR` to whatever the substitution evaluates to at its
+    actual point of use, not `sub`."""
+    repo_dir = tmp_path / "repo"
+    file_path = _init_repo_with_committed_file(repo_dir, filename="dirty.py")
+    file_path.write_text("UNCOMMITTED WORK -- must not be discarded\n")
+    result = run("DIR=dirty.py; DIR=$(echo other.py); git checkout -- $DIR", payload_cwd=str(repo_dir))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+
+
+def test_restore_denied_when_the_path_name_is_reassigned_to_a_dynamic_value_after_use(tmp_path: Path) -> None:
+    """Companion to the checkout pin above, for `git restore` -- the
+    round-24 finding was confirmed live for both subcommands."""
+    repo_dir = tmp_path / "repo"
+    file_path = _init_repo_with_committed_file(repo_dir, filename="dirty.py")
+    file_path.write_text("UNCOMMITTED WORK -- must not be discarded\n")
+    result = run("DIR=dirty.py; DIR=$(echo other.py); git restore $DIR", payload_cwd=str(repo_dir))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+
+
+def test_checkout_denied_when_an_indirect_reference_target_is_reassigned_after_use(tmp_path: Path) -> None:
+    """CRITICAL bypass regression pin (round-24 independent review, issue
+    #1375), second class: round 23's own `_multi_valued_names_referenced`
+    widened only the FIRST-level name of a `${!NAME}` indirect reference,
+    never the SECOND-level target it actually points to at the point of
+    use. Live-verified before this fix: `TARGET=dirty.py; C=TARGET; git
+    checkout -- ${!C}; TARGET=other.py` resolved `checkout_restore_paths`
+    to `('other.py',)` alone -- the WRONG, order-blind-collapsed last
+    value of TARGET, since real bash genuinely resolves `${!C}` to
+    `dirty.py` at its actual point of use."""
+    repo_dir = tmp_path / "repo"
+    file_path = _init_repo_with_committed_file(repo_dir, filename="dirty.py")
+    file_path.write_text("UNCOMMITTED WORK -- must not be discarded\n")
+    result = run("TARGET=dirty.py; C=TARGET; git checkout -- ${!C}; TARGET=other.py", payload_cwd=str(repo_dir))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+
+
+def test_restore_denied_when_an_indirect_reference_target_is_reassigned_after_use(tmp_path: Path) -> None:
+    """Companion to the checkout pin above, for `git restore` -- the
+    round-24 finding's second class was confirmed live for both
+    subcommands."""
+    repo_dir = tmp_path / "repo"
+    file_path = _init_repo_with_committed_file(repo_dir, filename="dirty.py")
+    file_path.write_text("UNCOMMITTED WORK -- must not be discarded\n")
+    result = run("TARGET=dirty.py; C=TARGET; git restore ${!C}; TARGET=other.py", payload_cwd=str(repo_dir))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+
+
 def test_checkout_denied_in_a_real_merge_conflict_names_the_conflict_remedy(tmp_path: Path) -> None:
     """A real merge conflict (issue #1375's own Acceptance Criteria Map):
     the deny message names a remedy that actually works mid-conflict
