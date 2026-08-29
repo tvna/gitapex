@@ -6,15 +6,20 @@ compliance, not gap-closure. Only `claude-sonnet-4.6` has been evaluated;
 cross-model behavior is currently unmeasured.
 
 As of issue #312/#328 (a held-out fixture corpus, following the
-`evaluating-skill-quality/split.md` precedent), the suite has **25
+`evaluating-skill-quality/split.md` precedent), the suite has **26
 committed task files**: 20 across the 10:6:4 train/selection/test split
 (see `evals/merge-retrospective/split.md` for the full equivalence-class
-table and blind-spot pass), plus 5 new, not-yet-split-assigned fixtures
+table and blind-spot pass), plus 6 new, not-yet-split-assigned fixtures
 issue #1406 added covering the flat gate-proposal-issues redesign's own
 five named scenarios (zero-repair fast-close unchanged; zero-repair
 fast-close despite an out-of-scope legacy backlog; attended multi-repair
 filing-and-close; unattended filing-with-stay-open; a resumed run after a
-partial filing failure). The former Step 0 carry-forward check (added to
+partial filing failure) plus one added during this PR's own Step 8
+adversarial-review pass (a resumed run must re-verify a pre-existing
+`Filed as:` line by re-fetch before trusting it, rather than treating its
+mere presence in an externally-editable issue body as proof of a
+completed filing -- `battle-testing-a-skill`'s dimension 13 finding,
+fixed in the same PR that found it). The former Step 0 carry-forward check (added to
 `SKILL.md`, Refs #108) had committed eval coverage from two of the 20
 split fixtures (`carried-forward-gate-unimplemented-train.yaml`,
 `carried-forward-gate-implemented-test.yaml`), exercising a prior
