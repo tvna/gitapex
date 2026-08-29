@@ -32,11 +32,11 @@ GitHub MCP server (`mcp__github__*` tools). Where the environment lacks
 one, fall back to the repo's own approved read-only REST API wrapper for
 Step 0's dedup search and Step 2's history reconstruction, and to
 whatever write path the repo already uses for filing issues in Step 5.
-Step 5's own bundled `gitapex_file_gate_proposal.py` helper needs local
-shell access only (`uv run` or equivalent) and makes no network calls of
-its own -- every actual GitHub write in this skill stays a direct
-`mcp__github__*` tool call, so the repository's existing issue-filing
-safety hook keeps seeing it.
+See `gitapex_file_gate_proposal.py` for what Step 5's own bundled helper
+needs: local shell access only (`uv run` or equivalent) and no network
+calls of its own -- every actual GitHub write in this skill stays a
+direct `mcp__github__*` tool call, so the repository's existing
+issue-filing safety hook keeps seeing it.
 
 ## Classification taxonomy (fixed -- never invent a fourth category)
 

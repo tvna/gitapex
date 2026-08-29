@@ -1,15 +1,23 @@
 """Drift gate for merge-retrospective's Repair record format (issue #313).
 
 Codex review on PR #359 found that the "Repair record format" section
-declares a fixed, machine-readable shape for repair and carried-forward
-entries, but nothing checked that shape stayed intact -- the skill's own
-Worked example had already drifted from its declared carried-forward
-schema (a `Proposed gate (repeated from issue #N):` label instead of the
-fixed `Proposed gate:`, see the corrected schema below) with nothing to
-catch it. This parses SKILL.md's own Worked example the same way a real
-drift-check script would and asserts every entry matches the format
-`SKILL.md` itself declares, so a future edit that silently breaks the
-fixed shape fails CI instead of shipping unnoticed.
+declares a fixed, machine-readable shape for repair entries, but nothing
+checked that shape stayed intact -- the skill's own Worked example had
+already drifted from its declared shape with nothing to catch it. This
+parses SKILL.md's own Worked example the same way a real drift-check
+script would and asserts every entry matches the format `SKILL.md` itself
+declares, so a future edit that silently breaks the fixed shape fails CI
+instead of shipping unnoticed.
+
+Issue #1406's flat gate-proposal-issues redesign unified "this cycle's
+own Repairs" and "carried-forward from history" into one filing path
+(Decision 2), removing the separate two-field carried-forward schema this
+file used to also cover -- a carried-forward finding is no longer a
+distinct record shape, it is filed the same way any other
+missing-deterministic-gate repair is. This file's scope narrowed to match:
+the fixed `Filed as: #<N>` field (Decision 1) that Step 5 now records
+against a missing-deterministic-gate repair once its own standalone issue
+is filed.
 """
 
 from __future__ import annotations
@@ -31,7 +39,6 @@ _REPAIR_ENTRY_RE = re.compile(r"^\d+\.\s\[[^\]]+\].*?(?=\n\d+\.\s\[|\Z)", re.MUL
 _CLASSIFICATION_RE = re.compile(r"^\s*Classification:\s*([^\n]+?)\.?$", re.MULTILINE)
 _STATUS_RE = re.compile(r"^\s*Status:\s*`([^`]+)`", re.MULTILINE)
 _PROPOSED_GATE_LINE_RE = re.compile(r"^\s*Proposed gate[^:]*:", re.MULTILINE)
-_PROPOSED_GATE_FIXED_LABEL_RE = re.compile(r"^\s*Proposed gate:", re.MULTILINE)
 
 
 def _skill_text() -> str:
@@ -48,14 +55,11 @@ def _worked_example_issue_body() -> str:
 
 def _repairs_section(issue_body: str) -> str:
     start = issue_body.index("## Repairs") + len("## Repairs")
-    end = issue_body.index("## Carried-forward gate")
-    return issue_body[start:end]
-
-
-def _carried_forward_section(issue_body: str) -> str:
-    start = issue_body.index("## Carried-forward gate") + len("## Carried-forward gate")
     end = issue_body.index("## Notes")
     return issue_body[start:end]
+
+
+_FILED_AS_RE = re.compile(r"^\s*Filed as:\s*#(\d+)\s*$", re.MULTILINE)
 
 
 def test_repair_record_format_declares_the_three_fixed_fields():
@@ -121,33 +125,17 @@ def test_worked_example_repairs_match_the_declared_record_format():
                 "external-human-decision categories."
             )
 
-
-def test_carried_forward_entry_uses_its_own_two_field_schema():
-    section = _carried_forward_section(_worked_example_issue_body())
-
-    assert not _CLASSIFICATION_RE.search(section), (
-        "the Carried-forward gate entry carries a 'Classification:' line, "
-        "but the carried-forward schema never classifies -- it only "
-        "re-reports a prior issue's still-unimplemented gate."
-    )
-
-    status_match = _STATUS_RE.search(section)
-    assert status_match is not None, "the Carried-forward gate entry has no 'Status: `carried-forward`' line."
-    assert status_match.group(1) == "carried-forward", (
-        f"the Carried-forward gate entry's Status is `{status_match.group(1)}`, "
-        "not the fixed literal `carried-forward` token."
-    )
-
-    assert _PROPOSED_GATE_FIXED_LABEL_RE.search(section), (
-        "the Carried-forward gate entry has no line with the exact fixed "
-        "label 'Proposed gate:' -- the schema requires this literal label "
-        "(e.g. never 'Proposed gate (repeated from issue #N):') so a "
-        "drift-check can match the field name."
-    )
-    assert "repeated from issue" not in section, (
-        "the Carried-forward gate entry annotates the 'Proposed gate' "
-        "field label itself (e.g. 'repeated from issue #N') instead of "
-        "putting the prior issue's number in the prose 'what happened' "
-        "clause -- this breaks the fixed field-label shape a drift-check "
-        "matches on."
-    )
+        has_filed_as = bool(_FILED_AS_RE.search(entry))
+        if slug == "missing-deterministic-gate":
+            assert has_filed_as, (
+                f"repair entry {label!r} is classified "
+                "missing-deterministic-gate but has no 'Filed as: #<N>' "
+                "line -- Step 5 records this once its own standalone "
+                "gate-proposal issue is filed and confirmed."
+            )
+        else:
+            assert not has_filed_as, (
+                f"repair entry {label!r} is classified `{slug}` but carries "
+                "a 'Filed as:' line -- only a missing-deterministic-gate "
+                "repair ever gets a standalone filed issue."
+            )
