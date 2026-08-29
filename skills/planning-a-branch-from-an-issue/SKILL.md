@@ -65,7 +65,17 @@ without losing the issue's acceptance criteria.
    draft input, not a pre-verified result -- independently re-check
    each row against the issue's own stated facts before adopting it,
    and correct or flag any row that does not hold up rather than
-   accepting it merely for being well-formed.
+   accepting it merely for being well-formed. For any row whose planned
+   files/operations merge, import, or otherwise couple two or more
+   files (a consolidation- or shared-module-shaped criterion), confirm
+   the calling repository's own layout documentation (or, absent one,
+   direct inspection of what is and is not distributed) puts all of
+   them on the same side of any deployed-to-consumers vs.
+   never-deployed boundary before accepting that row -- the same
+   redistribution-boundary check `evaluating-deterministic-gate-quality`'s
+   own duplication/drift-risk dimension applies at review time, applied
+   here before implementation instead. Flag and correct the row, per
+   this step's own mandate above, when the boundary check fails.
 
    **Postcondition:** once this re-verification pass is complete, write a
    re-verification marker onto the parent issue's own body via the
