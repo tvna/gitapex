@@ -496,6 +496,50 @@ covering the full corpus, `trials_per_task: 3`, and/or the compatibility
 axis specifically (given where Phase 1's gap concentrated) is the natural
 next step, not yet scheduled. Refs #500.
 
+## Corpus saturation, computed from the Phase 1 run (issue #1461)
+
+Phase 1's committed per-model scores answer a question its own headline did
+not ask: how much of this corpus can still separate one model from another.
+`evals/scripts/gitapex_compute_corpus_saturation.py` computes that from the
+committed JSON alone -- no model invocation, no credential -- by counting,
+per fixture, how many distinct `model_id` results scored exactly 1.0.
+Reproduce with:
+
+    uv run --frozen python3 evals/scripts/gitapex_compute_corpus_saturation.py \
+        evals/evaluating-skill-quality/results/2026-07-28-issue-500-phase1
+
+**Measured, over the 23 fixtures all three tiers scored:**
+
+- **saturated (every model 1.0): 5 of 23, 21.7 percent.** These cannot
+  separate any two models in this run; more fixtures like them grow the
+  case count without growing the information.
+- **discriminating (at least one model below 1.0): 18 of 23, 78.3 percent.**
+  The corpus is not exhausted of discriminating power.
+- **uniformly hard: 2**, a labelled subset of those 18 --
+  `scoring-axis-uncontrolled-speed-claim` (0.833333 on all three tiers) and
+  `tool-capability-verification-selection` (0.750000 on all three). Every
+  model scored the same value below 1.0, so neither separates anything
+  either. Flagged as assertion-defect candidates rather than as difficulty,
+  following Swayamdipta et al.'s finding that hard-to-learn instances often
+  correspond to labeling errors; whether their assertions are actually
+  defective is a separate read, deliberately not made here.
+
+Read alongside the ceiling entry below (three consecutive held-out gates
+tied at 1.0): the ceiling is a property of the *subset each gate scored*,
+not of the corpus, which still discriminates on 78.3 percent of its
+fixtures at a weaker tier.
+
+Scope and limits, disclosed rather than assumed. This figure exists for
+exactly one run: the 2026-07-28 Phase 1 directory is the only committed run
+repository-wide carrying more than one `model_id`, and every gate run
+committed since (issues #1124, #1142, #1346, #1347) is `claude-sonnet-5`
+only, for which the script reports the rate as not computable rather than
+as zero. Three responses per fixture is far below the roughly 90 per item
+Vania et al. use to fit an item-response model, so this is a count over the
+tiers this run happened to include, never a difficulty or discrimination
+parameter. No threshold is attached and nothing gates on the number: that
+decision needs more than one run. Refs #1461, #500.
+
 ## Confidentiality awareness (issue #537)
 
 Found via conversational Q&A, not a proactive audit: no axis checked
