@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import importlib.util
 import pathlib
-import re
 import types
 
 import gitapex_file_gate_proposal as builder
@@ -133,6 +132,27 @@ def test_build_acm_body_maps_repair_fields_per_decision_4() -> None:
     assert "Refs #1405" in body
 
 
+def test_build_acm_body_puts_each_field_in_its_own_declared_column() -> None:
+    # The test above asserts only that each value appears *somewhere* in
+    # the body, which a swapped Interpretation/Planned-ops mapping would
+    # still satisfy -- and a swap is silent, since both cells are free
+    # prose. Decision 4 fixes the column order, so assert it by position.
+    body = builder.build_gate_proposal_acm_body(
+        retrospective_issue_number=1405,
+        repair_label="CRITERION",
+        classification_rationale="INTERPRETATION",
+        proposed_gate_text="PLANNED-OPS",
+        residual_risk="RESIDUAL-RISK",
+    )
+    data_row = body.split("\n")[2]
+    cells = [cell.strip() for cell in data_row.strip().strip("|").split("|")]
+    assert cells[0] == "CRITERION"
+    assert cells[1] == "INTERPRETATION"
+    assert cells[2] == "PLANNED-OPS"
+    assert cells[3] == builder._PROOF_METHOD
+    assert cells[4] == "RESIDUAL-RISK"
+
+
 def test_build_acm_body_defaults_residual_risk_when_none_named() -> None:
     body_from_none = builder.build_gate_proposal_acm_body(
         retrospective_issue_number=1,
@@ -163,6 +183,29 @@ def test_build_acm_body_refs_line_uses_retrospective_issue_number() -> None:
     assert "Refs #9999" in body
 
 
+def _delimiter_pipe_count(row: str) -> int:
+    """Count the pipes a Markdown renderer would treat as real column
+    delimiters in `row`.
+
+    Models Markdown's own escaping rule directly rather than approximating
+    it with a `(?<!\\)\\|` lookbehind: a backslash escapes *whatever*
+    character follows it, so `\\|` is a literal pipe (not a delimiter)
+    while `\\\\|` is an escaped backslash followed by a live delimiter --
+    a distinction the lookbehind gets exactly backwards, and precisely the
+    case `_sanitize_cell`'s own backslash pass exists to prevent.
+    """
+    count = 0
+    index = 0
+    while index < len(row):
+        if row[index] == "\\":
+            index += 2
+            continue
+        if row[index] == "|":
+            count += 1
+        index += 1
+    return count
+
+
 def test_build_acm_body_sanitizes_pipe_and_newline_in_free_text_fields() -> None:
     body = builder.build_gate_proposal_acm_body(
         retrospective_issue_number=1,
@@ -172,15 +215,30 @@ def test_build_acm_body_sanitizes_pipe_and_newline_in_free_text_fields() -> None
         residual_risk=None,
     )
     _header, _divider, data_row, _blank, _refs = body.split("\n")
-    # The data row must stay exactly one line with exactly 6 unescaped
-    # column-delimiter pipes -- an embedded "|" left unescaped, or a
-    # literal newline, would otherwise misalign the table when rendered.
-    # The originally-embedded "|" is expected to survive as an *escaped*
-    # "\|" (still containing the character "|", just backslash-prefixed),
-    # so count only pipes not preceded by a backslash.
-    assert len(re.findall(r"(?<!\\)\|", data_row)) == 6
+    # The data row must stay exactly one line with exactly 6 real column
+    # delimiters -- an embedded "|" left unescaped, or a literal newline,
+    # would otherwise misalign the table when rendered.
+    assert _delimiter_pipe_count(data_row) == 6
     assert "\\|" in data_row
     assert "\n" not in data_row
+
+
+def test_build_acm_body_keeps_one_cell_when_free_text_already_contains_an_escaped_pipe() -> None:
+    # Defeat case for the pipe-escaping pass: escaping "|" alone turns an
+    # input that already reads "\|" -- a proposed gate naming a regex or a
+    # `grep 'a\|b'` alternation, the realistic shape for a gate proposal --
+    # into "\\|", an escaped backslash plus a live delimiter, silently
+    # adding a seventh column and shifting every cell after it. The
+    # backslash must be escaped first so the row keeps exactly 6.
+    body = builder.build_gate_proposal_acm_body(
+        retrospective_issue_number=1,
+        repair_label="x",
+        classification_rationale="y",
+        proposed_gate_text=r"add a pre-commit grep for 'foo\|bar' in the changed files",
+        residual_risk=None,
+    )
+    data_row = body.split("\n")[2]
+    assert _delimiter_pipe_count(data_row) == 6
 
 
 # ---------------------------------------------------------------------------

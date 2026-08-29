@@ -102,7 +102,8 @@ def build_gate_proposal_title(
 
 
 def _sanitize_cell(value: str) -> str:
-    """Collapse embedded newlines to spaces and escape a literal `|`.
+    """Collapse embedded newlines to spaces and escape a literal `\\` and
+    `|`.
 
     `has_acm_disclosure()`'s own `_HEADER_RE` only inspects the header
     row (unaffected either way by this function, which is only ever
@@ -111,9 +112,21 @@ def _sanitize_cell(value: str) -> str:
     raw newline or `|` in practice -- left unescaped, either would break
     the Markdown table's column alignment when the issue body actually
     renders on GitHub, not merely fail a downstream check.
+
+    The backslash pass runs **first, and is not optional**: a Markdown
+    backslash escapes whatever character follows it, so escaping only the
+    pipe turns an input that already reads `\\|` (a proposed gate naming a
+    regex, or a `grep 'a\\|b'` alternation -- the realistic shape for a
+    gate proposal, not a contrived one) into `\\\\|`: an escaped
+    *backslash* followed by a live, unescaped column delimiter, silently
+    adding a column and shifting every cell after it. Escaping the
+    backslash first makes that same input `\\\\\\|` -- one literal
+    backslash, one literal pipe, one cell. Order matters: swapping these
+    two `replace` calls would re-escape the backslashes the first pass
+    just introduced.
     """
     collapsed = " ".join(value.replace("\r\n", "\n").replace("\r", "\n").split("\n"))
-    return collapsed.replace("|", "\\|").strip()
+    return collapsed.replace("\\", "\\\\").replace("|", "\\|").strip()
 
 
 def build_gate_proposal_acm_body(

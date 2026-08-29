@@ -337,12 +337,26 @@ def list_labelled_issue_records(
     `list_labelled_issues` below (bare issue numbers) and
     `gitapex_compute_gprr.py` (full records -- it needs `body` and
     `created_at`, not just `number`) build on, so pagination and retry
-    logic exists exactly once."""
+    logic exists exactly once.
+
+    `label` is percent-quoted before it reaches the query string, exactly
+    as `label_exists` above already quotes it. Interpolating it raw made
+    the liveness guard and the passes it guards disagree about which
+    label they were even asking for: a GitHub label name may contain a
+    space or an `&` (`good first issue` is GitHub's own default), so a
+    raw `labels={label}` either emitted a space into the request line or
+    let the label's own text inject a second `state=` parameter ahead of
+    this function's -- a silently-wrong answer of exactly the class the
+    liveness guard exists to rule out, reported as a clean count."""
     sleeper = sleeper if sleeper is not None else time.sleep
+    quoted_label = urllib.parse.quote(label, safe="")
     records: list[dict[str, Any]] = []
     page = 1
     while True:
-        url = f"{_API_ROOT}/repos/{owner}/{repo}/issues?labels={label}&state={state}&per_page={_PER_PAGE}&page={page}"
+        url = (
+            f"{_API_ROOT}/repos/{owner}/{repo}/issues"
+            f"?labels={quoted_label}&state={state}&per_page={_PER_PAGE}&page={page}"
+        )
         items = fetch_json_page(url, token, opener, sleeper)
         if not items:
             break

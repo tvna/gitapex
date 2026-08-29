@@ -229,8 +229,21 @@ def test_format_closed_integrity_report_fails_and_lists_unverified_issues():
 def test_format_closed_integrity_report_never_mentions_reopening():
     # Decision 5: no reopen action of any kind -- this pass only detects
     # and fails loudly.
-    report = gate.format_closed_integrity_report([118], 5, 0, "gate-proposal")
-    assert "reopen" not in report.lower() or "no reopen action taken" in report.lower()
+    #
+    # Asserted as an occurrence count, not as
+    # `"reopen" not in report or "no reopen action taken" in report`: that
+    # disjunction is satisfied outright by the disclaimer the FAIL branch
+    # already prints, so it would still pass after a line promising or
+    # describing a reopen was added right next to it. Counting pins the
+    # disclaimer as the *only* place the word may appear.
+    fail_report = gate.format_closed_integrity_report([118], 5, 0, "gate-proposal").lower()
+    assert fail_report.count("reopen") == 1
+    assert "no reopen action taken" in fail_report
+
+    # The PASS branch has no disclaimer line at all, so it must not
+    # mention reopening even once.
+    pass_report = gate.format_closed_integrity_report([], 5, 0, "gate-proposal").lower()
+    assert pass_report.count("reopen") == 0
 
 
 # ---------------------------------------------------------------------------
@@ -483,6 +496,35 @@ def test_list_labelled_issue_records_uses_given_state(state):
         "tvna", "gitapex", "gate-proposal", "tok", opener=_url_capturing_opener(captured), state=state
     )
     assert f"state={state}" in captured["url"]
+
+
+def test_list_labelled_issue_records_quotes_a_label_containing_a_space():
+    # Defeat case for the label-liveness guard: `label_exists` quotes the
+    # label, so a space-bearing label name (GitHub's own default
+    # "good first issue" has two) passes the guard. If this fetch then
+    # interpolated the label raw, it would emit a bare space into the
+    # request line -- the guard reporting "the label is live" while the
+    # pass it guards asks a malformed question.
+    captured = {}
+    gate.list_labelled_issue_records(
+        "tvna", "gitapex", "gate proposal", "tok", opener=_url_capturing_opener(captured), state="open"
+    )
+    assert " " not in captured["url"]
+    assert "labels=gate%20proposal" in captured["url"]
+
+
+def test_list_labelled_issue_records_label_cannot_inject_a_second_query_parameter():
+    # The sharper half of the same defeat: a label named `x&state=all`
+    # passes the (quoting) liveness guard, and a raw interpolation here
+    # would silently query label `x` with an injected `state=all` ahead of
+    # this call's own `state=closed` -- a clean-looking report about a
+    # label and state neither pass ever asked for.
+    captured = {}
+    gate.list_labelled_issue_records(
+        "tvna", "gitapex", "x&state=all", "tok", opener=_url_capturing_opener(captured), state="closed"
+    )
+    assert captured["url"].count("state=") == 1
+    assert "labels=x%26state%3Dall" in captured["url"]
 
 
 # ---------------------------------------------------------------------------
@@ -773,6 +815,62 @@ def test_main_fails_when_single_non_exempt_closed_issue_is_unverified(monkeypatc
     assert "#201" in out
     assert "#200" not in out.split("Closed issues with no verified gate")[-1]
     assert "FAIL" in out
+
+
+def test_main_fails_a_closed_issue_that_has_a_citing_commit_but_no_ssot_entry(monkeypatch, capsys):
+    # Defeat case for the closed-issue integrity pass: half of the
+    # two-signal check is not enough. A closed issue whose number is cited
+    # by a commit on the checked ref, but which no `.gitapex/ssot.json`
+    # `gates[].tracking_issue` entry names, is exactly issue #709's
+    # false-negative shape -- it must still fail here.
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setattr(gate, "label_exists", lambda *a, **k: True)
+    monkeypatch.setattr(
+        gate, "list_labelled_issue_records", _fake_records_by_state(closed_records=[_closed_record(910)])
+    )
+    monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: ["feat(gates): something related (Refs #910)"])
+    monkeypatch.setattr(gate, "load_gate_tracking_issues", lambda *a, **k: set())
+    assert gate.main(["--owner", "tvna", "--repo", "gitapex"]) == 1
+    assert "#910" in capsys.readouterr().out
+
+
+def test_main_fails_a_closed_issue_that_has_an_ssot_entry_but_no_citing_commit(monkeypatch, capsys):
+    # The mirror-image half of the same defeat: a registry entry alone,
+    # with no commit on the checked ref citing the issue, must also still
+    # fail. Both signals are required, never either.
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setattr(gate, "label_exists", lambda *a, **k: True)
+    monkeypatch.setattr(
+        gate, "list_labelled_issue_records", _fake_records_by_state(closed_records=[_closed_record(911)])
+    )
+    monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: ["chore: unrelated"])
+    monkeypatch.setattr(gate, "load_gate_tracking_issues", lambda *a, **k: {911})
+    assert gate.main(["--owner", "tvna", "--repo", "gitapex"]) == 1
+    assert "#911" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("state_reason", ["reopened", "completed", "resolved", "NOT_PLANNED", "not_planned "])
+def test_main_fails_a_closed_issue_whose_state_reason_is_not_one_of_the_two_exempt_values(
+    monkeypatch, capsys, state_reason
+):
+    # Defeat case for the exemption: only the two literal values
+    # `not_planned` and `duplicate` excuse a closed issue. A different
+    # GitHub value, a future one, and a case- or whitespace-variant of an
+    # exempt one all stay non-exempt -- the exemption fails closed rather
+    # than widening on anything that merely resembles a declined proposal.
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setattr(gate, "label_exists", lambda *a, **k: True)
+    monkeypatch.setattr(
+        gate,
+        "list_labelled_issue_records",
+        _fake_records_by_state(closed_records=[_closed_record(912, state_reason=state_reason)]),
+    )
+    monkeypatch.setattr(gate, "git_commit_messages", lambda *a, **k: [])
+    monkeypatch.setattr(gate, "load_gate_tracking_issues", lambda *a, **k: set())
+    assert gate.main(["--owner", "tvna", "--repo", "gitapex"]) == 1
+    out = capsys.readouterr().out
+    assert "#912" in out
+    assert "0 exempted by state_reason" in out
 
 
 def test_main_exempts_declined_closed_issues_while_still_failing_on_a_genuine_unverified_one(monkeypatch, capsys):

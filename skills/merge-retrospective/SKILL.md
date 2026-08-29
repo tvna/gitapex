@@ -70,7 +70,9 @@ Each entry's own `N.` prefix is this cycle's 1-based index, assigned
 during Steps 2-4 and held only in memory -- a `missing-deterministic-gate`
 entry's index is reused verbatim in that repair's own filed-issue title
 (Step 5); nothing about the index is written anywhere before Step 5's own
-single body write.
+first body write. That first write is not necessarily the only one: each
+`Filed as:` line below is added to the same body afterwards, once its own
+filing is confirmed.
 
 ```
 N. [one-line label] <what happened and how it was fixed, in prose>
@@ -175,9 +177,15 @@ independent and never applied to each other's issue.
        verification (Step 7) still apply to the updated issue.
      - **Match found, body no longer carries the marker** -> a prior run (this
        skill, an earlier pass, or a human) already enriched this PR's
-       retrospective; nothing is left to file. Do not overwrite real content or
-       create a duplicate -- stop here, before Step 1's carry-forward check or
-       Step 2's repair enumeration ever runs.
+       retrospective. Do not overwrite real content and do not create a
+       duplicate. One case still has work left: if that enriched body records a
+       `missing-deterministic-gate` repair that carries no `Filed as:` line, a
+       prior run's filing never finished -- resume at Step 5's filing bullets
+       for exactly those repairs (per Step 5's own resumed-run rule), skipping
+       Steps 1-4 entirely, skipping every repair that already carries a
+       `Filed as:` line, and leaving the rest of the existing body untouched.
+       Otherwise nothing is left to file -- stop here, before Step 2's repair
+       enumeration ever runs.
      - **No match** -> nothing to dedup against; continue into Step 1 below,
        and when Step 5 files, proceed to `create` per its remaining bullets,
        same as a repository with no stub-opening CI script at all.
@@ -238,6 +246,10 @@ independent and never applied to each other's issue.
      `missing-deterministic-gate` repair's own standalone filed issue
      below carries a different, independent label, `gate-proposal`
      (never `retrospective`) -- the two label vocabularies never mix.
+     Create `gate-proposal` first via that same label-management path
+     when it does not yet exist, for the same reason `retrospective` is
+     created first rather than assumed: a filing that lands without its
+     label is invisible to every later search and audit keyed on it.
    - **Repair list, up front.** Open the body with every repair found in
      Step 2, index and one-line label only, in index order (e.g.
      `1. Failed CI rerun`), before the full record entries. Then record
