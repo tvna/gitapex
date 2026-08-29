@@ -104,19 +104,16 @@ def test_has_dedup_disclosure_before_an_unrelated_fence_still_counts() -> None:
 
 def test_has_dedup_disclosure_accepts_a_fence_shaped_reason() -> None:
     """Regression test (issue #1432): a `Dedup:` line whose own disclosed
-    reason is exactly a bare triple-backtick sequence (or otherwise starts
-    with/contains fence-marker characters) must still be detected, because
-    that marker is mid-line after "Dedup: " -- not the first non-whitespace
-    content on its own line -- so it never actually opens a real,
-    GitHub-rendered code fence per CommonMark/GitHub fence syntax.
+    reason is itself shaped like a fence marker must still be detected --
+    the marker sits mid-line after "Dedup: ", never as the first
+    non-whitespace content of its own line, so per CommonMark/GitHub fence
+    syntax it opens no real code fence and `_strip_fenced_blocks()` must
+    leave the reason alone.
 
-    Before the fix, `_UNTERMINATED_FENCE_RE`/`_FENCE_RE` matched the fence
-    marker anywhere in the text (not anchored to the start of its own
-    line), so `_strip_fenced_blocks()` silently swallowed the reason text
-    before `_DEDUP_RE` ever saw it. Also covers the paired-fence variant of
-    the same bug: `_FENCE_RE` shares the identical unanchored shape, so a
-    fence-shaped reason immediately followed by a genuine, later paired
-    fence swallowed the reason too.
+    Before the fix both fence regexes matched a marker anywhere in the
+    text, so each swallowed the reason before `_DEDUP_RE` ever saw it; the
+    two cases below pin one regex apiece -- the first
+    `_UNTERMINATED_FENCE_RE`, the second `_FENCE_RE`.
     """
     assert checker.has_dedup_disclosure("Some drafted issue body.\n\nDedup: ```\n")
     assert checker.has_dedup_disclosure("Dedup: ```\nreal content after\n```\n")
