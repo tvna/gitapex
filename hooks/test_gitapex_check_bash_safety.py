@@ -2073,6 +2073,44 @@ def test_restore_denied_when_a_path_argument_is_reassigned_after_use(tmp_path: P
     assert result.returncode == 2, f"stderr={result.stderr!r}"
 
 
+def test_checkout_denied_when_a_fused_path_reference_is_reassigned_after_use(tmp_path: Path) -> None:
+    """CRITICAL bypass regression pin (round-23 independent review, issue
+    #1375). Round 21's own history-widening fix was scoped to a token
+    that is EXACTLY one bare/braced whole-token reference -- the ordinary
+    `"$DIR/$FILE"` path-join idiom (a reference FUSED with a literal `/`
+    and another reference in the SAME token) fell through to the
+    ordinary, un-widened, order-blind resolution, producing a CONFIDENT,
+    WRONG `checkout_restore_paths` claim: `DIR=sub; FILE=dirty.py; git
+    checkout -- "$DIR/$FILE"; DIR=other` resolved to `('other/dirty.py',)`
+    alone, even though `$DIR` genuinely was `sub` at its actual point of
+    use one statement earlier -- so the live `git diff --quiet` check ran
+    against the wrong, nonexistent `other/dirty.py` and the genuinely
+    dirty `sub/dirty.py` was never checked at all."""
+    repo_dir = tmp_path / "repo"
+    (repo_dir / "sub").mkdir(parents=True)
+    file_path = _init_repo_with_committed_file(repo_dir, filename="sub/dirty.py")
+    file_path.write_text("UNCOMMITTED WORK -- must not be discarded\n")
+    result = run(
+        'DIR=sub; FILE=dirty.py; git checkout -- "$DIR/$FILE"; DIR=other',
+        payload_cwd=str(repo_dir),
+    )
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+
+
+def test_restore_denied_when_a_fused_path_reference_is_reassigned_after_use(tmp_path: Path) -> None:
+    """Companion to the checkout pin above, for `git restore` -- the
+    round-23 finding was confirmed live for both subcommands."""
+    repo_dir = tmp_path / "repo"
+    (repo_dir / "sub").mkdir(parents=True)
+    file_path = _init_repo_with_committed_file(repo_dir, filename="sub/dirty.py")
+    file_path.write_text("UNCOMMITTED WORK -- must not be discarded\n")
+    result = run(
+        'DIR=sub; FILE=dirty.py; git restore "$DIR/$FILE"; DIR=other',
+        payload_cwd=str(repo_dir),
+    )
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+
+
 def test_checkout_denied_in_a_real_merge_conflict_names_the_conflict_remedy(tmp_path: Path) -> None:
     """A real merge conflict (issue #1375's own Acceptance Criteria Map):
     the deny message names a remedy that actually works mid-conflict

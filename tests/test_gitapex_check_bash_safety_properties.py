@@ -1976,16 +1976,81 @@ def test_resolve_path_tokens_history_widening_deduplicates_against_existing_path
     assert resolved == ("dirty.py", "other.py")
 
 
-def test_resolve_path_tokens_does_not_widen_a_fused_reference() -> None:
-    """No false positive: a token that FUSES a reference with literal
-    text is NOT widened by the history mechanism (`_BARE_OR_BRACED_VAR_
-    REF_RE` only matches a WHOLE-token bare/braced reference) -- it keeps
-    the ordinary, single-candidate resolution unchanged, the same
-    documented, deliberately narrower-than-full-soundness scoping this
-    fix uses everywhere else."""
+def test_resolve_path_tokens_widens_a_fused_reference() -> None:
+    """Regression pin for the real bypass found live by Step 8
+    independent review, twenty-third round (issue #1375): round 21's own
+    widening was scoped to a token that is EXACTLY one bare/braced
+    whole-token reference, so a token that FUSES a reference with literal
+    text (the ordinary `"$DIR/$FILE"` path-join idiom, or `"${F}.py"`
+    here) fell through to the ordinary, un-widened, order-blind
+    resolution -- a CONFIDENT, WRONG single-candidate claim, not merely a
+    narrower-but-safe one. Every historical value for a name referenced
+    anywhere in the token -- fused or not -- is now widened."""
     reason, resolved = checker._resolve_path_tokens(["${F}.py"], {"F": "dirty"}, {"F": ("dirty", "other")})
     assert reason is None
+    assert resolved == ("dirty.py", "other.py")
+
+
+def test_resolve_path_tokens_widens_two_fused_references_via_cartesian_product() -> None:
+    """The `"$DIR/$FILE"` path-join idiom itself, live-confirmed as this
+    round's own reproduction: two DIFFERENT names, each with its own
+    multi-valued history, both fused into the SAME token -- every
+    combination is widened, not just one name at a time."""
+    reason, resolved = checker._resolve_path_tokens(
+        ["$DIR/$FILE"],
+        {"DIR": "other", "FILE": "dirty.py"},
+        {"DIR": ("sub", "other"), "FILE": ("dirty.py",)},
+    )
+    assert reason is None
+    assert resolved == ("sub/dirty.py", "other/dirty.py")
+
+
+def test_resolve_path_tokens_a_single_historical_value_widens_to_one_candidate_only() -> None:
+    """No false positive: a name with only ONE historical value (assigned
+    exactly once, or reassigned to the SAME value) contributes no extra
+    combinations -- the fused case degenerates to the same single
+    candidate the ordinary, un-widened resolution already gives."""
+    reason, resolved = checker._resolve_path_tokens(["${F}.py"], {"F": "dirty"}, {"F": ("dirty",)})
+    assert reason is None
     assert resolved == ("dirty.py",)
+
+
+def test_bounded_history_combinations_returns_one_empty_combination_for_no_names() -> None:
+    """An empty NAMES set (no multi-valued name referenced) still yields
+    exactly one, no-op combination -- never `None` -- so a caller with
+    nothing to widen gets a single ordinary resolution pass, not a
+    spurious deny."""
+    assert checker._bounded_history_combinations(set(), {}) == [{}]
+
+
+def test_bounded_history_combinations_denies_when_the_product_is_too_large() -> None:
+    """Fail closed, matching `_substitute_var_refs_candidates`'s own
+    quote-boundary-expansion bound: a cartesian product exceeding
+    `_MAX_SUBSTITUTION_CANDIDATES` returns `None` rather than silently
+    enumerating only part of it."""
+    history = {
+        "A": tuple(f"a{i}" for i in range(10)),
+        "B": tuple(f"b{i}" for i in range(10)),
+    }
+    assert checker._bounded_history_combinations({"A", "B"}, history) is None
+
+
+def test_resolve_path_tokens_denies_when_the_combination_product_is_too_large() -> None:
+    """End-to-end (within `_resolve_path_tokens` itself, not just the
+    `_bounded_history_combinations` unit above): a token referencing two
+    names whose combined historical-value product exceeds `_MAX_
+    SUBSTITUTION_CANDIDATES` is denied outright as unresolvable, rather
+    than silently enumerating only part of the combination space -- the
+    same fail-closed posture this module already takes for a
+    quote-boundary explosion."""
+    history = {
+        "A": tuple(f"a{i}" for i in range(10)),
+        "B": tuple(f"b{i}" for i in range(10)),
+    }
+    reason, resolved = checker._resolve_path_tokens(["$A/$B"], {"A": "a0", "B": "b0"}, history)
+    assert reason is not None
+    assert "too many historically-assigned readings" in reason
+    assert resolved == ()
 
 
 def test_classify_extracts_every_historical_path_when_a_checkout_path_is_reassigned_after_use() -> None:

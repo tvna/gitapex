@@ -482,6 +482,7 @@ hooks that already shell out to python3).
 
 from __future__ import annotations
 
+import itertools
 import json
 import re
 import shlex
@@ -1850,17 +1851,6 @@ def _assigned_literals_biased_toward(tokens: list[str], literals: frozenset[str]
     return {name: value.lower() for name, value in _assigned_raw_values_biased_toward(tokens, literals).items()}
 
 
-# Matches a token that is EXACTLY one bare `$NAME` or braced `${NAME}`
-# reference and nothing else -- no surrounding literal text, no default
-# clause, no indirect `${!NAME}` reference. Used only by `_resolve_path_
-# tokens`'s own history-widening (see `_assigned_raw_value_history`'s own
-# docstring): for this narrow, unambiguous whole-token shape, the token's
-# real bash value is exactly NAME's own raw value, with no risk of the
-# unbraced-prefix ambiguity `_substitute_var_refs_candidates` itself
-# exists to handle for a token containing MORE than just the reference.
-_BARE_OR_BRACED_VAR_REF_RE = re.compile(r"^\$([A-Za-z_][A-Za-z0-9_]*)$|^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$")
-
-
 def _assigned_raw_value_history(tokens: list[str]) -> dict[str, tuple[str, ...]]:
     """Like `_assigned_raw_values`, but maps each assigned name to the
     TUPLE of every DISTINCT raw value assigned to it anywhere in TOKENS
@@ -1897,20 +1887,31 @@ def _assigned_raw_value_history(tokens: list[str]) -> dict[str, tuple[str, ...]]
     `cd`/`pushd`/`popd` -- an arbitrary path has no small, enumerable
     target set), so the fix this history dict feeds is different in kind
     from `_assigned_raw_values_biased_toward`'s own single-reading bias:
-    `_resolve_path_tokens` extracts EVERY distinct historical value for a
-    name referenced by a bare/braced whole-token reference (see
-    `_BARE_OR_BRACED_VAR_REF_RE`) as its own SEPARATE candidate path,
-    rather than picking one. This over-includes (an extra, harmless
+    `_resolve_path_tokens` extracts EVERY distinct historical value for
+    every name a dynamic token references as its own SEPARATE candidate
+    path, rather than picking one. This over-includes (an extra, harmless
     candidate path gets checked for dirtiness) rather than ever silently
     dropping the one that matters -- the same safe direction every other
-    ambiguity in this module resolves toward. Deliberately narrower than
-    full soundness: a token that FUSES a reference with literal text, a
-    default-value clause, or an indirect `${!NAME}` reference is NOT
-    widened by this mechanism and keeps whatever single reading
-    `_substitute_var_refs_candidates` already gives it -- the same
-    "handle the common, simple bare-reference shape narrowly, don't
-    attempt full generality" scoping this module's own reassignment-bias
-    fixes already use elsewhere."""
+    ambiguity in this module resolves toward.
+
+    CORRECTION (round 23, issue #1375): this paragraph previously claimed
+    the widening was deliberately narrowed to a token that is EXACTLY one
+    bare/braced whole-token reference, with a token that FUSES a
+    reference with literal text, a default-value clause, or an indirect
+    `${!NAME}` reference left un-widened as an accepted scoping choice.
+    That scoping was not merely narrower-but-safe -- it was itself the
+    identical order-blind-collapse bug class, just left open for the
+    fused case: `DIR=sub; FILE=dirty.py; git checkout -- "$DIR/$FILE";
+    DIR=other` (the ordinary path-join idiom) produced a CONFIDENT, WRONG
+    `checkout_restore_paths` claim, live-confirmed to silently discard
+    real uncommitted work -- see `_resolve_path_tokens`'s own docstring
+    for the full reproduction and fix. Every name a dynamic token
+    references (bare, braced, default-clause, or indirect, including
+    every reference fused with other text in the same token) with more
+    than one historical value is now widened, via the cartesian product
+    of `_multi_valued_names_referenced`'s own found names
+    (`_bounded_history_combinations`, bounded the same way `_substitute_
+    var_refs_candidates`'s own quote-boundary expansion already is)."""
     history: dict[str, list[str]] = {}
     for token in tokens:
         if _is_dynamic(token):
@@ -3669,6 +3670,55 @@ _RESTORE_VALUE_FLAGS = {"--source", "-s", "--conflict"}
 _CHECKOUT_BRANCH_CREATION_FLAGS = {"-b", "-B", "--orphan"}
 
 
+def _multi_valued_names_referenced(token: str, name_to_raw_value_history: dict[str, tuple[str, ...]]) -> set[str]:
+    """Every variable NAME referenced anywhere in TOKEN -- braced
+    (`${NAME}`), default-clause (`${NAME:-x}`), indirect (`${!NAME}`), or
+    unbraced (`$NAME`, including every non-empty PREFIX of an unbraced
+    run, mirroring `_unbraced_ref_options`'s own prefix enumeration,
+    since an unbraced reference is ambiguous about where the name ends)
+    -- whose own NAME_TO_RAW_VALUE_HISTORY entry carries MORE than one
+    distinct value. A name assigned only once (or never) is excluded: its
+    single reading already matches the ordinary, un-widened resolution,
+    so there is nothing to widen. Used by `_resolve_path_tokens`'s own
+    fused-reference history widening (see that function's own docstring)
+    to find which names' history actually needs enumerating, not to
+    resolve the token itself -- `_substitute_var_refs_candidates` still
+    does the real, quote/fusion-aware resolution, once per combination."""
+    names: set[str] = set()
+    for match in _VAR_REF_FULL_RE.finditer(token):
+        braced_name, default_name, _default_text, indirect_name, unbraced_run = match.groups()
+        candidate_names = [n for n in (braced_name, default_name, indirect_name) if n is not None]
+        if unbraced_run is not None:
+            candidate_names.extend(unbraced_run[:i] for i in range(len(unbraced_run), 0, -1))
+        for name in candidate_names:
+            if len(name_to_raw_value_history.get(name, ())) > 1:
+                names.add(name)
+    return names
+
+
+def _bounded_history_combinations(
+    names: set[str], name_to_raw_value_history: dict[str, tuple[str, ...]]
+) -> list[dict[str, str]] | None:
+    """Every combination of one historical value per NAME in NAMES, as a
+    NAME -> value override dict ready to merge over an existing
+    NAME_TO_RAW_VALUE for one `_substitute_var_refs_candidates` call per
+    combination -- the cartesian product across each name's own history
+    tuple. Returns `None` (too many combinations to enumerate soundly) if
+    the product would exceed `_MAX_SUBSTITUTION_CANDIDATES`, the same
+    bound and the same fail-closed convention `_substitute_var_refs_
+    candidates`'s own quote-boundary expansion already uses -- an empty
+    NAMES returns `[{}]` (exactly one, no-op combination), never `None`,
+    so a caller with nothing to widen still gets a single pass through."""
+    ordered = sorted(names)
+    histories = [name_to_raw_value_history[name] for name in ordered]
+    total = 1
+    for history in histories:
+        total *= len(history)
+        if total > _MAX_SUBSTITUTION_CANDIDATES:
+            return None
+    return [dict(zip(ordered, combo, strict=True)) for combo in itertools.product(*histories)]
+
+
 def _resolve_path_tokens(
     tokens: list[str], name_to_raw_value: dict[str, str], name_to_raw_value_history: dict[str, tuple[str, ...]]
 ) -> tuple[str | None, tuple[str, ...]]:
@@ -3704,21 +3754,70 @@ def _resolve_path_tokens(
     Confirmed live during this function's own development (before this
     check was added).
 
-    NAME_TO_RAW_VALUE_HISTORY (round 21, issue #1375) widens a BARE or
-    braced whole-token reference (`_BARE_OR_BRACED_VAR_REF_RE`) to every
-    DISTINCT value ever assigned to that name, not just the single,
-    possibly-stale one NAME_TO_RAW_VALUE's own order-blind collapse
-    gives -- see `_assigned_raw_value_history`'s own docstring for the
-    live bypass this closes. A token that is not exactly a bare/braced
-    reference (fused with literal text, a default clause, or an indirect
-    reference) keeps the ordinary, un-widened CANDIDATES resolution
-    below unchanged."""
+    NAME_TO_RAW_VALUE_HISTORY (round 21, issue #1375) widens a dynamic
+    token to every DISTINCT value ever assigned to each name it
+    references, not just the single, possibly-stale one NAME_TO_RAW_
+    VALUE's own order-blind collapse gives -- see `_assigned_raw_value_
+    history`'s own docstring for the live bypass this originally closed.
+
+    CRITICAL bug found by independent adversarial review (round 23, issue
+    #1375) and independently reproduced live: round 21's own widening was
+    scoped to a token that is EXACTLY one bare/braced whole-token
+    reference (`_BARE_OR_BRACED_VAR_REF_RE`) -- a token that fuses a
+    reference with other text (the ordinary `"$DIR/$FILE"` path-join
+    idiom, or `"${F}.bak"`) fell through to the ordinary, un-widened,
+    order-blind resolution below, unchanged. `DIR=sub; FILE=dirty.py; git
+    checkout -- "$DIR/$FILE"; DIR=other` resolved to `checkout_restore_
+    paths=('other/dirty.py',)` -- a CONFIDENT, WRONG claim, not merely a
+    missed one: `$DIR` genuinely was `sub` at its actual point of use one
+    statement earlier. Confirmed live via a real bash proxy (stand-in
+    `git` binary on PATH, capturing its own argv) that real bash resolves
+    this to `checkout -- sub/dirty.py`, and end-to-end through the real
+    wrapper against a scratch repo with `sub/dirty.py` genuinely dirty:
+    the control command (no trailing reassignment) correctly denies
+    citing `sub/dirty.py`; the same command with the trailing `DIR=other`
+    wrongly ALLOWED (the live `git diff --quiet` check ran against the
+    wrong, nonexistent `other/dirty.py` and found it "clean"), while the
+    real, dirty file was never checked at all -- worse than the
+    already-accepted single-positional-ref Non-goal elsewhere in this
+    module, which at least makes NO claim rather than a wrong one (see
+    `_git_checkout_paths`'s own fourth-round paragraph for that same
+    "confident-wrong beats honest-silent" severity distinction).
+
+    Closed by widening EVERY name referenced anywhere in a dynamic token
+    (not only a whole-token reference) that has more than one historical
+    value: `_multi_valued_names_referenced` finds those names,
+    `_bounded_history_combinations` builds the cartesian product of one
+    historical value per name (bounded by `_MAX_SUBSTITUTION_CANDIDATES`,
+    the same bound `_substitute_var_refs_candidates`'s own quote-boundary
+    expansion already uses), and `_substitute_var_refs_candidates` itself
+    -- unchanged, still the sole authority on quote/fusion-aware
+    resolution -- is called once per combination, with every combination's
+    own candidates unioned together. A name with only one historical
+    value (or none) contributes no combinations of its own, so a token
+    referencing no multiply-assigned name resolves in exactly one pass,
+    identical to before this fix."""
     paths: list[str] = []
     for tok in tokens:
         if not _is_dynamic(tok):
             paths.append(tok)
             continue
-        candidates = _substitute_var_refs_candidates(tok, name_to_raw_value, name_to_raw_value)
+        multi_valued = _multi_valued_names_referenced(tok, name_to_raw_value_history)
+        combinations = _bounded_history_combinations(multi_valued, name_to_raw_value_history)
+        if combinations is None:
+            return (
+                f"a git checkout/restore command has a dynamic path argument ({tok!r}) with too many "
+                "historically-assigned readings to soundly enumerate -- an unresolved path cannot be safely "
+                "checked against the working tree, so this is denied outright",
+                (),
+            )
+        candidates: list[str] = []
+        for override in combinations:
+            variant = {**name_to_raw_value, **override}
+            variant_candidates = _substitute_var_refs_candidates(tok, variant, variant)
+            if not variant_candidates:
+                continue
+            candidates.extend(candidate for candidate in variant_candidates if candidate not in candidates)
         if not candidates or any(_is_dynamic(candidate) for candidate in candidates):
             return (
                 f"a git checkout/restore command has a dynamic path argument ({tok!r}) that could not be "
@@ -3726,14 +3825,9 @@ def _resolve_path_tokens(
                 "working tree, so this is denied outright",
                 (),
             )
-        bare_match = _BARE_OR_BRACED_VAR_REF_RE.fullmatch(tok)
-        history = name_to_raw_value_history.get(bare_match.group(1) or bare_match.group(2)) if bare_match else None
-        if history:
-            for value in history:
-                if value not in paths:
-                    paths.append(value)
-            continue
-        paths.extend(candidates)
+        for candidate in candidates:
+            if candidate not in paths:
+                paths.append(candidate)
     return None, tuple(paths)
 
 
