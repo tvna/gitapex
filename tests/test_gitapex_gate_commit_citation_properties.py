@@ -36,8 +36,18 @@ _CITATION_TEMPLATES = ("Closes #{n}", "Fixes #{n}", "Resolves #{n}", "Refs #{n}"
 # Free text with no digit at all, so it can never accidentally contain a
 # `#N`-shaped citation of its own -- used as filler/surrounding prose in the
 # properties below.
+#
+# `~` is excluded for the same reason `` ` `` already was, and this is not a
+# hypothetical (issue #1212's own adversarial review found it live, as an
+# intermittent failure of
+# test_any_citation_form_is_recognized_in_pr_title_or_body): extract_citations
+# strips *both* fence syntaxes, ``` and ~~~, so filler free to contain `~`
+# lets Hypothesis generate prefix='~~~'/suffix='~~~' and wrap the citation
+# these properties inject in a genuine ~~~ fenced block. The citation is then
+# correctly *not* detected, and the recognition property fails against wholly
+# correct behavior. Excluding the backtick alone closed only half of that.
 _NO_DIGIT_TEXT = st.text(
-    alphabet=st.characters(blacklist_categories=("Cc", "Cs"), blacklist_characters="#0123456789`"),
+    alphabet=st.characters(blacklist_categories=("Cc", "Cs"), blacklist_characters="#0123456789`~"),
     max_size=60,
 )
 

@@ -10,8 +10,10 @@ commit, not only assumed from `git log`'s documented behavior.
 
 from __future__ import annotations
 
+import os
 import pathlib
 import subprocess
+import sys
 
 import gitapex_gate_commit_citation as gate
 import pytest
@@ -49,6 +51,45 @@ def _checkout_new_branch(root: pathlib.Path, branch: str, start_point: str | Non
 def _merge_no_ff(root: pathlib.Path, branch: str, message: str) -> str:
     _run(["git", "merge", "-q", "--no-ff", "-m", message, branch], root)
     return _run(["git", "rev-parse", "HEAD"], root).stdout.strip()
+
+
+def _raw_hook_commit_editmsg(subject: str, staged_diff_citation: str) -> str:
+    """A `COMMIT_EDITMSG` shaped exactly the way git itself writes it at
+    `commit-msg`-hook invocation time, under `commit.verbose=true` -- the
+    subject the contributor typed, then git's own comment block, then the
+    scissors line, then the verbatim staged diff.
+
+    Captured from a real `git commit` against a real repo with a real
+    `.git/hooks/commit-msg` (issue #1212's own adversarial review), not
+    hand-imagined: git strips the comments and everything from the
+    scissors line down *after* the hook returns, so this raw shape is
+    genuinely what the hook receives. `test_commit_msg_hook_receives_the_raw_
+    uncleaned_file_from_real_git` below re-derives it live from real git
+    rather than trusting this constant to stay accurate."""
+    return (
+        f"{subject}\n"
+        "\n"
+        "# Please enter the commit message for your changes. Lines starting\n"
+        "# with '#' will be ignored, and an empty message aborts the commit.\n"
+        "#\n"
+        "# On branch main\n"
+        "#\n"
+        "# Changes to be committed:\n"
+        "#\tnew file:   mod.py\n"
+        "#\n"
+        f"# {gate.SCISSORS_MARKER}\n"
+        "# Do not modify or remove the line above.\n"
+        "# Everything below it will be ignored.\n"
+        "diff --git a/mod.py b/mod.py\n"
+        "new file mode 100644\n"
+        "index 0000000..52643d8\n"
+        "--- /dev/null\n"
+        "+++ b/mod.py\n"
+        "@@ -0,0 +1,3 @@\n"
+        "+def f():\n"
+        f"+    # {staged_diff_citation}\n"
+        "+    return 1\n"
+    )
 
 
 def _build_range_repo(tmp_path: pathlib.Path, *, citing_commit: bool) -> tuple[pathlib.Path, str, str]:
@@ -289,6 +330,43 @@ def test_evaluate_pr_range_citation_only_in_pr_body_passes_without_touching_comm
 
 
 @pytest.mark.slow
+def test_commit_range_messages_counts_an_empty_message_commit_as_a_commit(tmp_path: pathlib.Path) -> None:
+    """`git commit --allow-empty-message` produces a real, genuinely
+    uncited commit whose `%B` is empty. Filtering empty entries out (the
+    pre-review form) made a range of two such commits indistinguishable
+    from an *empty range*, which `evaluate_pr_range` now passes as
+    "nothing to check" -- so an uncited commit would have slipped the gate
+    entirely. The list must have one entry per commit, empty or not."""
+    root = _init_repo(tmp_path / "empty-messages")
+    _commit(root, "a.txt", "chore: base")
+    _run(["git", "checkout", "-q", "-b", "feature"], root)
+    for name in ("b.txt", "c.txt"):
+        (root / name).write_text(f"{name}\n", encoding="utf-8")
+        _run(["git", "add", "--", name], root)
+        _run(["git", "commit", "-q", "--allow-empty-message", "-m", ""], root)
+
+    assert gate.commit_range_messages(root, "main", "feature") == ["", ""]
+
+
+@pytest.mark.slow
+def test_evaluate_pr_range_uncited_empty_message_commits_still_fail(tmp_path: pathlib.Path) -> None:
+    """The end of the same defect: those two commits are uncited, so even
+    the lenient `pr_text_supplied=False` local shape must still FAIL --
+    "nothing to check" means an empty *range*, never "every commit's
+    message happened to be empty"."""
+    root = _init_repo(tmp_path / "empty-messages-verdict")
+    _commit(root, "a.txt", "chore: base")
+    _run(["git", "checkout", "-q", "-b", "feature"], root)
+    (root / "b.txt").write_text("b\n", encoding="utf-8")
+    _run(["git", "add", "--", "b.txt"], root)
+    _run(["git", "commit", "-q", "--allow-empty-message", "-m", ""], root)
+
+    passed, message = gate.evaluate_pr_range(root, "", "", "", "", "main", "feature", pr_text_supplied=False)
+    assert passed is False
+    assert "nothing to check" not in message
+
+
+@pytest.mark.slow
 def test_commit_range_messages_raises_on_an_unusable_range(tmp_path: pathlib.Path) -> None:
     root = _init_repo(tmp_path / "repo")
     _commit(root, "a.txt", "chore: init")
@@ -383,6 +461,233 @@ def test_main_commit_msg_a_fenced_citation_still_fails(tmp_path: pathlib.Path) -
     assert gate.main(["--mode", "commit-msg", str(msg_file)]) == 1
 
 
+# --- issue #1212 adversarial review: the raw-COMMIT_EDITMSG false PASS ------
+
+
+def test_truncate_at_scissors_cuts_the_line_itself_and_everything_below() -> None:
+    text = f"fix: real subject\n\n# {gate.SCISSORS_MARKER}\n# ignored\ndiff --git a/x b/x\n+#42\n"
+    assert gate.truncate_at_scissors(text) == "fix: real subject\n\n"
+
+
+def test_truncate_at_scissors_leaves_an_ordinary_message_untouched() -> None:
+    text = "fix: real subject\n\nCloses #42\n"
+    assert gate.truncate_at_scissors(text) == text
+
+
+def test_clean_commit_message_strips_git_comments_and_the_scissors_diff(tmp_path: pathlib.Path) -> None:
+    root = _init_repo(tmp_path / "repo")
+    cleaned = gate.clean_commit_message(root, _raw_hook_commit_editmsg("chore: tidy up formatting", "See #1212"))
+    assert cleaned.strip() == "chore: tidy up formatting"
+
+
+def test_clean_commit_message_honors_a_custom_core_comment_char(tmp_path: pathlib.Path) -> None:
+    """`git stripspace` resolves core.commentChar itself, which is exactly
+    why the comment strip is delegated to git rather than hardcoding `#`:
+    a repository configuring `;` would defeat a hardcoded strip outright."""
+    root = _init_repo(tmp_path / "repo-semicolon")
+    _run(["git", "config", "core.commentChar", ";"], root)
+    raw = "chore: tidy up formatting\n\n; Please enter the commit message ; Refs #1212\n"
+    assert gate.clean_commit_message(root, raw).strip() == "chore: tidy up formatting"
+
+
+def test_clean_commit_message_raises_rather_than_falling_back_when_stripspace_fails(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A `git stripspace` that cannot run must be exit-2 "the check could
+    not be trusted", never a silent fallback to the *unstripped* text --
+    that fallback would restore the false PASS below, invisibly, on
+    exactly the broken-environment path nobody is watching."""
+
+    class _Failed:
+        returncode = 1
+        stdout = ""
+        stderr = "git: 'stripspace' is not a git command"
+
+    monkeypatch.setattr(gate._gitapex_base_ref, "run_git", lambda *_a, **_k: _Failed())
+    with pytest.raises(gate.CitationGateError, match="git stripspace --strip-comments failed"):
+        gate.clean_commit_message(tmp_path, "chore: tidy\n")
+
+
+def test_main_commit_msg_a_citation_only_in_the_staged_diff_below_scissors_still_fails(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The exact false-PASS issue #1212's own adversarial review
+    reproduced live: with `commit.verbose=true`, the file git hands a
+    `commit-msg` hook still carries the whole staged diff below the
+    scissors line, and a *source file* containing a citation-shaped
+    comment (`# See issue #1212 for the rationale.`) made this gate report
+    PASS for a commit whose actually-stored message was the uncited
+    `chore: tidy up formatting`. Git strips comments and the scissors
+    block only *after* the hook returns, so the gate has to do it itself.
+    Confirmed to have teeth: reverting `_run_commit_msg` to check the raw
+    text makes this test PASS the gate (exit 0) again."""
+    msg_file = tmp_path / "COMMIT_EDITMSG"
+    msg_file.write_text(
+        _raw_hook_commit_editmsg("chore: tidy up formatting", "See issue #1212 for the rationale."),
+        encoding="utf-8",
+    )
+    assert gate.main(["--mode", "commit-msg", str(msg_file), "--root", str(tmp_path)]) == 1
+    assert "FAIL" in capsys.readouterr().err
+
+
+def test_main_commit_msg_a_real_citation_survives_the_cleaning(tmp_path: pathlib.Path) -> None:
+    """The other half of the same fix: cleaning must not eat a genuine
+    citation sitting in the real message, above git's own comment block."""
+    msg_file = tmp_path / "COMMIT_EDITMSG"
+    msg_file.write_text(
+        _raw_hook_commit_editmsg("fix: correct the bug\n\nCloses #42", "unrelated prose"), encoding="utf-8"
+    )
+    assert gate.main(["--mode", "commit-msg", str(msg_file), "--root", str(tmp_path)]) == 0
+
+
+def test_main_commit_msg_a_citation_only_inside_gits_own_comment_block_still_fails(tmp_path: pathlib.Path) -> None:
+    """The no-scissors half of the same class: a `commit.template` (or any
+    `#`-prefixed guidance line) documenting the convention as `Refs #123`
+    is a comment git will discard, not a citation."""
+    msg_file = tmp_path / "COMMIT_EDITMSG"
+    msg_file.write_text("chore: tidy up formatting\n\n# Cite the issue, e.g. Refs #123\n", encoding="utf-8")
+    assert gate.main(["--mode", "commit-msg", str(msg_file), "--root", str(tmp_path)]) == 1
+
+
+@pytest.mark.slow
+def test_commit_msg_hook_receives_the_raw_uncleaned_file_from_real_git(tmp_path: pathlib.Path) -> None:
+    """Live end-to-end proof against real git rather than a hand-built
+    fixture: a real repo, a real `.git/hooks/commit-msg`, `commit.verbose
+    = true`, a staged file whose own content carries a citation-shaped
+    line, and an uncited subject. Asserts both halves of the defect --
+    that the file the hook receives really does still contain the
+    uncleaned comment block, scissors line, and staged diff, and that the
+    commit git actually stored cites nothing -- then runs the real gate
+    over that captured file and requires a FAIL."""
+    root = _init_repo(tmp_path / "live")
+    _run(["git", "config", "commit.verbose", "true"], root)
+    captured = tmp_path / "captured.txt"
+    hook = root / ".git" / "hooks" / "commit-msg"
+    hook.write_text(f'#!/bin/sh\ncp "$1" {captured}\nexit 0\n', encoding="utf-8")
+    hook.chmod(0o755)
+
+    # A non-interactive stand-in for the contributor's editor: it prepends an
+    # uncited subject and leaves everything git itself prepared below it
+    # untouched, which is exactly what a real editor session produces.
+    editor = tmp_path / "editor.sh"
+    editor.write_text(
+        '#!/bin/sh\nprintf \'chore: tidy up formatting\\n%s\' "$(cat "$1")" > "$1.new"\nmv "$1.new" "$1"\n',
+        encoding="utf-8",
+    )
+    editor.chmod(0o755)
+
+    (root / "mod.py").write_text("def f():\n    # See issue #1212 for the rationale.\n    return 1\n", encoding="utf-8")
+    _run(["git", "add", "--", "mod.py"], root)
+    # GIT_EDITOR in the environment, not `git config core.editor`: the env var
+    # wins over the config key, and some environments (this repository's own
+    # container among them) already export GIT_EDITOR=true, which would
+    # silently skip the editor entirely and abort on an empty message.
+    subprocess.run(
+        ["git", "commit", "-q"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+        env={**os.environ, "GIT_EDITOR": str(editor)},
+    )
+
+    raw = captured.read_text(encoding="utf-8")
+    assert gate.SCISSORS_MARKER in raw  # git had NOT yet stripped the scissors block
+    assert "See issue #1212" in raw  # the staged diff's own citation-shaped line is present
+    stored = _run(["git", "log", "-1", "--format=%B"], root).stdout
+    assert "#1212" not in stored  # ...but the commit git really stored cites nothing
+
+    assert gate.main(["--mode", "commit-msg", str(captured), "--root", str(root)]) == 1
+
+
+# --- issue #1212 adversarial review: the two layers must agree on merges ----
+
+
+@pytest.mark.slow
+def test_merge_in_progress_is_false_on_an_ordinary_checkout(tmp_path: pathlib.Path) -> None:
+    root = _init_repo(tmp_path / "ordinary")
+    _commit(root, "a.txt", "chore: init")
+    assert gate.merge_in_progress(root) is False
+
+
+@pytest.mark.slow
+def test_main_commit_msg_exempts_a_merge_commit_matching_ci_no_merges(tmp_path: pathlib.Path) -> None:
+    """`--mode pr-range` exempts merge commits via `git log --no-merges`
+    (this issue's own stated non-goal). `--mode commit-msg` must reach the
+    same verdict, or the two layers disagree and every ordinary `git
+    merge` is rejected locally -- live-reproduced before this fix, with
+    git left mid-merge ("Not committing merge; use 'git commit' to
+    complete the merge"), which breaks this repository's own documented
+    `git pull --no-rebase` shared-branch workflow.
+
+    Left genuinely mid-merge here, with a real `MERGE_HEAD`, rather than
+    faking the state: the merge is started with `--no-commit` so the gate
+    runs against the same repository state a real `commit-msg` hook sees."""
+    root = _init_repo(tmp_path / "merging")
+    _commit(root, "a.txt", "chore: base (Refs #1)")
+    _checkout_new_branch(root, "side")
+    _commit(root, "s.txt", "feat: side (Refs #2)")
+    _run(["git", "checkout", "-q", "main"], root)
+    _commit(root, "m.txt", "chore: main moves on (Refs #3)")
+    _run(["git", "merge", "-q", "--no-ff", "--no-commit", "side"], root)
+    assert gate.merge_in_progress(root) is True
+
+    # git's own default merge message, which cites nothing.
+    msg_file = tmp_path / "MERGE_MSG"
+    msg_file.write_text("Merge branch 'side'\n", encoding="utf-8")
+    assert gate.main(["--mode", "commit-msg", str(msg_file), "--root", str(root)]) == 0
+
+
+@pytest.mark.slow
+def test_main_commit_msg_still_gates_an_ordinary_commit_in_the_same_repo(tmp_path: pathlib.Path) -> None:
+    """The guard on the exemption above: once the merge is concluded the
+    same repo gates an uncited ordinary commit again, so the exemption is
+    scoped to a real in-progress merge rather than to the repository."""
+    root = _init_repo(tmp_path / "merged-then-ordinary")
+    _commit(root, "a.txt", "chore: base (Refs #1)")
+    _checkout_new_branch(root, "side")
+    _commit(root, "s.txt", "feat: side (Refs #2)")
+    _run(["git", "checkout", "-q", "main"], root)
+    _commit(root, "m.txt", "chore: main moves on (Refs #3)")
+    _merge_no_ff(root, "side", "Merge branch 'side'")
+    assert gate.merge_in_progress(root) is False
+
+    msg_file = tmp_path / "COMMIT_EDITMSG"
+    msg_file.write_text("chore: tidy up formatting\n", encoding="utf-8")
+    assert gate.main(["--mode", "commit-msg", str(msg_file), "--root", str(root)]) == 1
+
+
+@pytest.mark.slow
+def test_a_real_git_merge_succeeds_with_the_gate_installed_as_a_real_hook(tmp_path: pathlib.Path) -> None:
+    """End-to-end against real git with the real script wired in as a real
+    `.git/hooks/commit-msg`: the exact command that failed before this fix
+    (`git merge --no-ff`, git's own default merge message) must now
+    complete, while an uncited ordinary commit in the same repo is still
+    rejected by the same installed hook."""
+    root = _init_repo(tmp_path / "real-hook")
+    hook = root / ".git" / "hooks" / "commit-msg"
+    script = pathlib.Path(gate.__file__).resolve()
+    hook.write_text(f'#!/bin/sh\nexec {sys.executable} {script} --mode commit-msg "$1" --root {root}\n', "utf-8")
+    hook.chmod(0o755)
+
+    _commit(root, "a.txt", "chore: base (Refs #1)")
+    _checkout_new_branch(root, "side")
+    _commit(root, "s.txt", "feat: side (Refs #2)")
+    _run(["git", "checkout", "-q", "main"], root)
+    _commit(root, "m.txt", "chore: main moves on (Refs #3)")
+
+    _run(["git", "merge", "--no-ff", "-m", "Merge branch 'side'", "side"], root)
+    assert _run(["git", "rev-list", "--count", "--merges", "HEAD"], root).stdout.strip() == "1"
+
+    (root / "z.txt").write_text("z\n", encoding="utf-8")
+    _run(["git", "add", "--", "z.txt"], root)
+    rejected = subprocess.run(
+        ["git", "commit", "-q", "-m", "chore: tidy up formatting"], cwd=root, capture_output=True, text=True
+    )
+    assert rejected.returncode != 0
+    assert "cites no issue" in rejected.stdout + rejected.stderr
+
+
 def test_main_commit_msg_without_a_file_argument_exits_two(capsys: pytest.CaptureFixture[str]) -> None:
     assert gate.main(["--mode", "commit-msg"]) == 2
     assert "invalid CLI arguments" in capsys.readouterr().err
@@ -468,6 +773,139 @@ def test_main_pr_range_end_to_end_fails_with_no_citation_anywhere(
     )
     assert exit_code == 1
     assert "FAIL" in capsys.readouterr().err
+
+
+# --- issue #1212 adversarial review: "nothing to check" is not a FAIL -------
+
+
+def _empty_range_repo(tmp_path: pathlib.Path) -> tuple[pathlib.Path, str]:
+    """A repo whose `<ref>..HEAD` range is genuinely empty -- the state a
+    checkout is in right after a fast-forward, or on a branch whose own
+    commits are all already merged into `main`."""
+    root = _init_repo(tmp_path / "empty-range")
+    head = _commit(root, "a.txt", "chore: init")
+    return root, head
+
+
+@pytest.mark.slow
+def test_evaluate_pr_range_an_empty_range_with_no_pr_text_supplied_is_not_a_failure(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`.gitapex/ssot.json`'s own `local_invocation` runs `--mode pr-range`
+    with neither `--title` nor `--body`, and feeds the `pre-push` hook's
+    `local-preflight` runner, which reads any non-zero exit as a blocked
+    push. An empty range there has no commit and no PR text to evaluate at
+    all, so there is nothing that *could* carry a citation -- reporting it
+    as "you cited nothing" (live-reproduced as exit 1, issue #1212's own
+    adversarial review) blocks a push over a non-violation."""
+    root, head = _empty_range_repo(tmp_path)
+    passed, message = gate.evaluate_pr_range(root, "", "", "", "", head, head, pr_text_supplied=False)
+    assert passed is True
+    assert "nothing to check" in message
+
+
+@pytest.mark.slow
+def test_evaluate_pr_range_an_empty_range_still_fails_when_pr_text_was_supplied(tmp_path: pathlib.Path) -> None:
+    """The guard on the fix above: `pr_text_supplied` tracks whether the
+    *flags were passed*, never whether their text is non-empty, so CI --
+    which always passes both -- keeps its previous verdict even for an
+    empty range. This is the branch that keeps the fix from becoming a
+    blanket "empty range always passes"."""
+    root, head = _empty_range_repo(tmp_path)
+    passed, message = gate.evaluate_pr_range(root, "", "", "", "", head, head, pr_text_supplied=True)
+    assert passed is False
+    assert "neither the PR title/body nor any non-merge commit" in message
+
+
+@pytest.mark.slow
+def test_evaluate_pr_range_defaults_to_the_strict_pr_text_supplied(tmp_path: pathlib.Path) -> None:
+    """Fail-closed default: a caller that omits `pr_text_supplied`
+    entirely gets the strict verdict, not the lenient one."""
+    root, head = _empty_range_repo(tmp_path)
+    passed, _ = gate.evaluate_pr_range(root, "", "", "", "", head, head)
+    assert passed is False
+
+
+@pytest.mark.slow
+def test_main_pr_range_empty_range_with_no_title_or_body_exits_zero(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """End-to-end through `main`, in the exact `local_invocation` argv
+    shape: no `--title`, no `--body`, empty range -> exit 0, with a
+    message that names "nothing to check" rather than claiming a citation
+    was missing."""
+    root, head = _empty_range_repo(tmp_path)
+    exit_code = gate.main(["--mode", "pr-range", "--base-ref", head, "--head-ref", head, "--root", str(root)])
+    assert exit_code == 0
+    assert "nothing to check" in capsys.readouterr().out
+
+
+@pytest.mark.slow
+def test_main_pr_range_empty_range_with_an_uncited_body_file_still_exits_one(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The CI-shaped guard, end to end: the same empty range, but with a
+    `--body` file supplied that cites nothing, still FAILs."""
+    root, head = _empty_range_repo(tmp_path)
+    body_file = tmp_path / "body.txt"
+    body_file.write_text("no citation in this body", encoding="utf-8")
+    exit_code = gate.main(
+        [
+            "--mode",
+            "pr-range",
+            "--base-ref",
+            head,
+            "--head-ref",
+            head,
+            "--root",
+            str(root),
+            "--body",
+            str(body_file),
+        ]
+    )
+    assert exit_code == 1
+    assert "FAIL" in capsys.readouterr().err
+
+
+# --- issue #1212 adversarial review: dimension-15 fail-closed input handling -
+
+
+@pytest.mark.parametrize("mode_argv", [["--mode", "commit-msg"], ["--mode", "pr-range", "--body"]])
+def test_main_a_path_argument_naming_a_directory_exits_two(
+    mode_argv: list[str], tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Dimension 15 (`skills/evaluating-deterministic-gate-quality`):
+    before this fix `_read_input_file` caught only `FileNotFoundError` and
+    `UnicodeDecodeError`, so pointing any path flag at a *directory*
+    raised `IsADirectoryError` straight out of `main` -- an uncaught
+    traceback whose Python exit code is 1, the very code this module
+    reserves for a *confirmed* no-citation policy FAIL. A broken
+    invocation reported itself as a real citation violation."""
+    a_directory = tmp_path / "adir"
+    a_directory.mkdir()
+    assert gate.main([*mode_argv, str(a_directory)]) == 2
+    assert "could not be read" in capsys.readouterr().err
+
+
+def test_main_commit_msg_an_unreadable_file_exits_two(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The same dimension-15 arm reached through `PermissionError` rather
+    than `IsADirectoryError` -- a file that exists and is valid UTF-8 but
+    that this process cannot open at all. Raised through a monkeypatched
+    `read_text` rather than a real `chmod(0o000)`: this repository's own
+    container runs the suite as uid 0, where the mode bits are bypassed
+    and the read simply succeeds, so a chmod-based fixture would assert
+    nothing here while passing on a non-root CI runner."""
+
+    def _deny(*_args: object, **_kwargs: object) -> str:
+        raise PermissionError(13, "Permission denied")
+
+    msg_file = tmp_path / "COMMIT_EDITMSG"
+    msg_file.write_text("chore: tidy up formatting\n", encoding="utf-8")
+    monkeypatch.setattr(pathlib.Path, "read_text", _deny)
+    assert gate.main(["--mode", "commit-msg", str(msg_file)]) == 2
+    assert "could not be read" in capsys.readouterr().err
 
 
 def test_main_pr_range_reports_a_base_ref_resolution_failure_as_exit_two(
