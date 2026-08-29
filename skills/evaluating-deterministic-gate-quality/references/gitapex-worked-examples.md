@@ -22,13 +22,14 @@ copied from the report's own text.
 1. [Worked example: Reproducibility / Domain-coverage axis](#worked-example-reproducibility--domain-coverage-axis-argued-multi-domain-coverage)
 2. [Worked example: retrospective-identity, single-source-of-truth predicate](#worked-example-retrospective-identity-single-source-of-truth-predicate)
 3. [Worked example: dimension 12 and sibling-repository provenance](#worked-example-dimension-12-deployment-mode-portability-and-sibling-repository-provenance)
-4. [Smoke test: this skill applied to a real Domain-2 gate](#smoke-test-this-skill-applied-to-a-real-domain-2-gate)
-5. [Worked example: Security-level / Zero-Trust maturity classification axis](#worked-example-security-level--zero-trust-maturity-classification-axis-this-repositorys-own-established-ceiling)
-6. [Worked example: dimension 19 (runtime-cost optimization) applied to the same Domain-2 gate pair](#worked-example-dimension-19-runtime-cost-optimization-applied-to-the-same-domain-2-gate-pair)
-7. [Audit history: Security-level axis hardening round](#audit-history-security-level-axis-hardening-round)
-8. [Worked example: dimension 21 (gate precision audit), cited from the source paper](#worked-example-dimension-21-gate-precision-audit-cited-from-the-source-paper)
-9. [Worked example: dimension 22 (firing-share attribution), cited from the source paper](#worked-example-dimension-22-firing-share-attribution-cited-from-the-source-paper)
-10. [Worked example: Contract role / input-domain closure axis, and its sibling-repository prior art](#worked-example-contract-role--input-domain-closure-axis-and-its-sibling-repository-prior-art)
+4. [Worked example: dimension 12, redistribution-boundary-aware resolution](#worked-example-dimension-12-redistribution-boundary-aware-resolution)
+5. [Smoke test: this skill applied to a real Domain-2 gate](#smoke-test-this-skill-applied-to-a-real-domain-2-gate)
+6. [Worked example: Security-level / Zero-Trust maturity classification axis](#worked-example-security-level--zero-trust-maturity-classification-axis-this-repositorys-own-established-ceiling)
+7. [Worked example: dimension 19 (runtime-cost optimization) applied to the same Domain-2 gate pair](#worked-example-dimension-19-runtime-cost-optimization-applied-to-the-same-domain-2-gate-pair)
+8. [Audit history: Security-level axis hardening round](#audit-history-security-level-axis-hardening-round)
+9. [Worked example: dimension 21 (gate precision audit), cited from the source paper](#worked-example-dimension-21-gate-precision-audit-cited-from-the-source-paper)
+10. [Worked example: dimension 22 (firing-share attribution), cited from the source paper](#worked-example-dimension-22-firing-share-attribution-cited-from-the-source-paper)
+11. [Worked example: Contract role / input-domain closure axis, and its sibling-repository prior art](#worked-example-contract-role--input-domain-closure-axis-and-its-sibling-repository-prior-art)
 
 ## Worked example: Reproducibility / Domain-coverage axis (argued, multi-domain coverage)
 
@@ -97,6 +98,37 @@ repository (`tvna/claude-md`) rather than inventing gitapex's own from
 scratch -- a real example of mechanism-fit criterion 5 (precedent reuse,
 adapted for local constraints): reusing an already-battle-tested pattern
 from elsewhere rather than re-deriving one.
+
+## Worked example: dimension 12, redistribution-boundary-aware resolution
+
+`hooks/gitapex_check_skill_audit_disclosure_or_waiver.py`'s own docstring
+(verified verbatim): "Per docs/repository-layout.md, only skills/ and
+hooks/ are deployed runtime primitives when this repository is installed
+as a plugin -- .github/ is dev-only CI tooling and is never installed
+into a consumer repository. **Deliberately not imported** from
+.github/scripts/gitapex_gate_skill_audit_disclosure.py or any other copy:
+this file must work standalone from inside a distributed plugin bundle
+with no access to .github/. **Kept in sync** with that script's own
+logic by `tests/test_gitapex_check_skill_audit_disclosure_hook_sync.py`."
+
+This is dimension 12 resolved correctly under a redistribution-boundary
+mismatch: `.github/scripts/gitapex_gate_skill_audit_disclosure.py` (never
+deployed) and `hooks/gitapex_check_skill_audit_disclosure_or_waiver.py`
+(deployed, or being engineered ahead of the boundary going live) implement
+overlapping policy logic. Consolidating them into one shared module would
+force the never-deployed side's import path onto the deployed side,
+breaking its standalone-execution guarantee. Instead, the two stay
+deliberately independent, and a dedicated parity test
+(`tests/test_gitapex_check_skill_audit_disclosure_hook_sync.py`) asserts
+their policy-relevant logic stays in sync -- duplication named and backed
+by an automated synchronization check, exactly this dimension's bar,
+without crossing the boundary. A ponytail-audit-style pass (a generic,
+product-code-oriented minimalism sweep -- see `dimensions.md` dimension
+12's own redistribution-boundary clause) proposed consolidating a
+different, `.github/scripts/`-only cluster of duplicated GitHub-API-retry
+logic and initially missed that one of the proposed carriers had this
+exact same hooks/-vs-.github/ mismatch; the sibling pattern above is what
+caught it on review.
 
 ## Smoke test: this skill applied to a real Domain-2 gate
 

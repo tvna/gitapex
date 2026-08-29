@@ -207,6 +207,30 @@ differentiation from shape check 1 and dimension 15 below.
     policy logic exist in more than one place (more than one script, more
     than one domain) without a synchronization check, risking silent
     drift between copies?
+
+    A comment or docstring disclosing the duplication's origin ("copied
+    from X") documents the risk but is not itself a synchronization
+    check -- grade this dimension against whether an automated mechanism
+    (a drift-detection script, a parity-asserting test, a
+    generated-from-single-source build step) would actually catch the
+    two copies diverging, not against whether the duplication is merely
+    named in prose.
+
+    Before recommending consolidation into a shared module as this
+    dimension's resolution, check whether the duplicate-bearing
+    artifacts sit on different sides of a redistribution boundary the
+    target repository's own layout documentation declares (a path
+    deployed to consumers vs. one that is dev-only and never deployed).
+    A shared module placed on the never-deployed side breaks the
+    deployed side's own standalone-execution guarantee the moment that
+    boundary is crossed -- including a boundary the target is actively
+    building toward but has not yet made live. Where a
+    redistribution-boundary mismatch exists, consolidation is not an
+    available resolution; the correct one is deliberate, disclosed
+    duplication plus an automated parity/synchronization test asserting
+    the two copies' policy-relevant logic stays identical -- satisfying
+    this dimension's "named... with a synchronization check" bar without
+    violating either side's own distribution constraint.
     *Domains:* generalizes directly.
 13. **Side-effect independence from the deny decision.** For a gate that
     also logs, notifies, or writes as well as classifies: does a

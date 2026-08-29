@@ -755,6 +755,39 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1385"
       summary: "eval-status.md's coverage headline and uncovered-dimensions sentence bumped (13/24 -> 13/25) and a paragraph added explaining Dimension 25 has no fixture yet, mirroring Dimension 24's own paragraph -- required by test_gitapex_evaluating_deterministic_gate_quality_dimension_coverage.py (https://github.com/tvna/gitapex/issues/511), confirmed passing after this change. Not in this issue's own scope constraint; same hard-CI-gate reason as the schema bump above."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1456"
+      summary: "Extended dimension 12 (duplication/drift risk), references/dimensions.md: a docstring disclosure alone does not satisfy the 'synchronization check' bar. No new numbered dimension; dimensionId range unchanged."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1456"
+      summary: "Same dimension-12 edit, second clause: a redistribution-boundary mismatch between duplicate-bearing artifacts (deployed-to-consumers vs. never-deployed, including a boundary the target is building toward but has not made live) blocks consolidation; deliberate duplication plus an automated parity test is the correct fix instead."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1456"
+      summary: "Prompted by a ponytail-audit-style pass (github.com/dietrichgebert/ponytail) that recommended consolidating a hooks/ script into a .github/scripts/ shared module, which would have violated this repository's own hooks/-vs-.github/ standalone-execution convention -- caught by hand-finding a sibling file already resolving the identical situation with a parity test, not by this skill's own procedure. Full incident: https://github.com/tvna/gitapex/issues/729."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1456"
+      summary: "Added a new 'Worked example: dimension 12, redistribution-boundary-aware resolution' section to references/gitapex-worked-examples.md, citing hooks/gitapex_check_skill_audit_disclosure_or_waiver.py and its parity test as the concrete instance. Updated the file's own Contents list to match."
+      outcome:
+        lines: "gitapex-worked-examples.md +23 (new section), dimensions.md +18 (dimension 12 clarification)"
+    - kind: audit
+      anchor: "method:evaluating-skill-quality"
+      summary: "First gitapex_check_skill_shape.py run against skills/evaluating-deterministic-gate-quality after the issue-1456 edit returned 59/61: references-well-formed failed (a spec.references summary over 500 chars) and no-bare-issue-citation failed (a bare issue-number citation in a summary string instead of the full issue URL)."
+      outcome:
+        verdict: FAIL
+        checks: "59/61"
+        found: 2
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1456"
+      summary: "Fixed both findings above: split the over-length spec.references summary into shorter entries, and replaced the bare issue-number citation in this sidecar's own new entries with the full issue URL. Re-run confirmed 61/61."
+      outcome:
+        verdict: PASS
+        checks: "61/61"
+    - kind: audit
+      anchor: "method:pytest"
+      summary: "tests/test_gitapex_scan_dimensions_numbering_drift.py and tests/test_gitapex_evaluating_deterministic_gate_quality_dimension_coverage.py both green after the edit (43 tests total) -- confirms the dimension-12 text extension introduced no numbering drift and no dimension-coverage regression, since no new dimension was added."
+      outcome:
+        verdict: PASS
+        tests: 43
   skillDependencies:
     requires:
       - evaluating-skill-quality
