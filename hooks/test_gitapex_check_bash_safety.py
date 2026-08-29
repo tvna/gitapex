@@ -1439,6 +1439,33 @@ def test_checkout_allowed_when_a_comment_after_a_line_continuation_names_an_unre
     assert result.stderr == ""
 
 
+def test_checkout_denied_for_a_real_checkout_hidden_behind_a_commented_paren_in_a_substitution(
+    tmp_path: Path,
+) -> None:
+    """CRITICAL, full-classifier-bypass regression pin (round-7
+    independent review, issue #1375). A `$(...)` embedded inside an
+    outer double-quoted string re-enters ordinary, comment-aware command
+    parsing in real bash -- a `)` inside a `#`-comment inside it does
+    NOT end the substitution. The classifier used to not know this,
+    leaving the comment (and its embedded `)`) unstripped; that stray
+    `)` then made the command-substitution paren counter mistake it for
+    the real closing paren, silently dropping everything after it --
+    including the real `git checkout` on the next line -- from all
+    classification. Live-verified before the fix: the embedded checkout
+    ran for real and discarded an uncommitted change while this wrapper
+    allowed the command outright."""
+    repo_dir = tmp_path / "repo"
+    file_path = _init_repo_with_committed_file(repo_dir, filename="dirty.py", content="ORIGINAL CONTENT\n")
+    file_path.write_text("UNCOMMITTED LOCAL EDIT\n")
+    command = 'x="$(echo hi #comment with paren ) here\ngit checkout -- dirty.py)"'
+    result = run(command, payload_cwd=str(repo_dir))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+    payload = json.loads(result.stderr)
+    assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "dirty.py" in payload["systemMessage"]
+    assert file_path.read_text() == "UNCOMMITTED LOCAL EDIT\n"
+
+
 def test_checkout_denied_from_a_subdirectory_when_target_has_uncommitted_changes(tmp_path: Path) -> None:
     """The near-miss's own exact shape (issue #1375, issue #1128 repair 4):
     replayed from a SUBDIRECTORY of the repo, not just the repo root --

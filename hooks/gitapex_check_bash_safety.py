@@ -982,10 +982,46 @@ def _strip_comments(command: str) -> str:
     to appear in the comment text) into `checkout_restore_paths` as a
     phantom candidate, and denying an entirely safe checkout with a
     misleading message naming a file the command never referenced. Only
-    an over-denial (never a missed real discard), but a confusing one."""
+    an over-denial (never a missed real discard), but a confusing one.
+
+    A double-quoted string's own content delegates to `_consume_double_
+    quoted_content` rather than being handled inline -- CRITICAL, full-
+    classifier-bypass bug found by independent adversarial review (round
+    7, issue #1375): the PRIOR inline double-quote handling treated
+    everything inside an open double quote as opaque literal text with
+    NO comment recognition at all, correct for genuine literal content
+    (`"a#b"` really is one literal word in real bash) but WRONG for a
+    `$(...)` embedded inside that double-quoted string -- real bash
+    recursively re-enters full, ordinary command grammar for a
+    substitution's own content regardless of what quote encloses the
+    `$(` that opened it, so a `#` inside it DOES start a real comment
+    (confirmed live: a `)` inside a `#`-comment inside `"$(...)"` does
+    NOT end the substitution). Left unstripped, that comment's own
+    embedded `)` survived into shlex's dequoted token, where
+    `_find_fused_command_substitution`'s own paren-depth counter (see
+    that function's own docstring) -- comment- and quote-blind by
+    design -- mistook it for the substitution's REAL closing paren,
+    silently truncating everything after that point, INCLUDING a
+    genuine, undisguised `git checkout` on the next physical line, from
+    ALL classification, not merely this module's own checkout/restore
+    rule. Live-verified real, silent data loss: `x="$(echo hi #comment
+    with paren ) here` + a real newline + `git checkout -- dirty.py)"`
+    ran the embedded checkout for real and discarded an uncommitted
+    change, while `classify()` reported `deny=False` with an EMPTY
+    `checkout_restore_paths` -- a confident, wrong "nothing to see here"
+    instead of an honest non-goal, precisely the failure class this
+    whole module exists to avoid. The analogous decoy built from a
+    literal `)` inside a nested QUOTED span (rather than a comment) does
+    NOT need this fix and was checked live: any balanced quoted span
+    containing a literal `)` necessarily leaves an ODD, unbalanced quote
+    count in text naively truncated partway through it, which already
+    trips `tokenize()`'s own `TokenizeError` fail-closed path -- only a
+    comment can hide an unbalanced `)` without requiring an unbalanced
+    quote in the truncated prefix, which is why this fix is scoped to
+    comment-handling specifically rather than a general rewrite of the
+    paren-depth counter itself."""
     out: list[str] = []
     in_single_quote = False
-    in_double_quote = False
     at_boundary = True
     i = 0
     n = len(command)
@@ -998,20 +1034,12 @@ def _strip_comments(command: str) -> str:
                 at_boundary = False
             i += 1
             continue
-        if in_double_quote:
-            if char == "\\" and i + 1 < n:
-                nxt = command[i + 1]
-                out.append(char)
-                out.append(nxt)
-                i += 2
-                if nxt != "\n":
-                    at_boundary = False
-                continue
+        if char == '"':
             out.append(char)
-            if char == '"':
-                in_double_quote = False
-                at_boundary = False
             i += 1
+            inner, i = _consume_double_quoted_content(command, i)
+            out.append(inner)
+            at_boundary = False
             continue
         if char == "\\" and i + 1 < n:
             nxt = command[i + 1]
@@ -1027,10 +1055,134 @@ def _strip_comments(command: str) -> str:
             i += 1
             at_boundary = False
             continue
+        if char == "#" and at_boundary:
+            end = command.find("\n", i)
+            i = n if end == -1 else end
+            continue
+        out.append(char)
+        at_boundary = char in _COMMENT_BOUNDARY_CHARS
+        i += 1
+    return "".join(out)
+
+
+def _consume_double_quoted_content(command: str, i: int) -> tuple[str, int]:
+    """Process the content of a double-quoted string starting at
+    COMMAND[i] (the character right after the opening `"`, already
+    appended by the caller): everything is literal EXCEPT a nested
+    `$(...)`, which re-enters ordinary, comment-aware command parsing
+    via `_consume_command_substitution_content` -- see that function's
+    own docstring, and `_strip_comments`'s own round-7 addendum, for the
+    live-verified bypass this closes. Returns (the content up to and
+    including its own matching `"`, or the remainder of COMMAND if
+    unterminated -- an unbalanced double quote is `tokenize()`'s own
+    concern to fail closed on via `TokenizeError`, not this function's,
+    which only strips comments and never itself validates quote
+    balance -- the index one past that point)."""
+    out: list[str] = []
+    n = len(command)
+    while i < n:
+        char = command[i]
         if char == '"':
-            in_double_quote = True
             out.append(char)
             i += 1
+            return "".join(out), i
+        if char == "\\" and i + 1 < n:
+            out.append(char)
+            out.append(command[i + 1])
+            i += 2
+            continue
+        if char == "$" and i + 1 < n and command[i + 1] == "(":
+            out.append("$(")
+            i += 2
+            inner, i = _consume_command_substitution_content(command, i)
+            out.append(inner)
+            continue
+        out.append(char)
+        i += 1
+    return "".join(out), i
+
+
+def _consume_command_substitution_content(command: str, i: int) -> tuple[str, int]:
+    """Process the content of a `$(...)` starting at COMMAND[i] (the
+    character right after the opening `$(`, already appended by the
+    caller), mirroring real bash's own re-entrant grammar: a command
+    substitution's own content is parsed as ordinary, top-level shell
+    text regardless of what quote (if any) encloses the `$(` that opened
+    it -- comments are live again, and a nested `'`/`"`/`$(` inside gets
+    its own, independent handling (a nested `"..."` delegates back to
+    `_consume_double_quoted_content`, which can itself contain a FURTHER
+    nested `$(...)`, exactly mirroring bash's own mutual recursion
+    between quote parsing and command parsing). Tracks its own raw,
+    unquoted paren DEPTH (starting at 1, for the substitution this call
+    itself is inside) to find its own matching closing `)` -- a nested
+    unquoted `(`/`)` (a subshell, or arithmetic-looking text this module
+    does not otherwise interpret) increments/decrements it exactly like
+    `_find_fused_command_substitution`'s own counter does, but unlike
+    that counter, a `(`/`)` sitting inside a quote or a stripped comment
+    here is correctly never counted at all, since this function consumes
+    those spans as opaque units before ever inspecting their content for
+    a bare paren. Returns (the content up to and including its own
+    matching `)`, with every comment inside it deleted, the index one
+    past that `)`) -- or, if COMMAND ends before depth returns to 0, the
+    remainder of COMMAND with whatever comments were found still
+    stripped (an unbalanced `$(...)` is `tokenize()`'s own concern to
+    fail closed on via `TokenizeError`, not this function's).
+
+    See `_strip_comments`'s own round-7 docstring addendum (issue #1375)
+    for the live-verified, real-data-loss bypass this function exists to
+    close, and for why the analogous decoy built from a quoted (rather
+    than commented) literal `)` needs no fix here."""
+    out: list[str] = []
+    at_boundary = True
+    depth = 1
+    n = len(command)
+    while i < n:
+        char = command[i]
+        if char == "'":
+            out.append(char)
+            i += 1
+            while i < n and command[i] != "'":
+                out.append(command[i])
+                i += 1
+            if i < n:
+                out.append(command[i])
+                i += 1
+            at_boundary = False
+            continue
+        if char == '"':
+            out.append(char)
+            i += 1
+            inner, i = _consume_double_quoted_content(command, i)
+            out.append(inner)
+            at_boundary = False
+            continue
+        if char == "\\" and i + 1 < n:
+            nxt = command[i + 1]
+            out.append(char)
+            out.append(nxt)
+            i += 2
+            if nxt != "\n":
+                at_boundary = False
+            continue
+        if char == "$" and i + 1 < n and command[i + 1] == "(":
+            out.append("$(")
+            i += 2
+            inner, i = _consume_command_substitution_content(command, i)
+            out.append(inner)
+            at_boundary = False
+            continue
+        if char == "(":
+            depth += 1
+            out.append(char)
+            at_boundary = False
+            i += 1
+            continue
+        if char == ")":
+            depth -= 1
+            out.append(char)
+            i += 1
+            if depth == 0:
+                return "".join(out), i
             at_boundary = False
             continue
         if char == "#" and at_boundary:
@@ -1040,7 +1192,7 @@ def _strip_comments(command: str) -> str:
         out.append(char)
         at_boundary = char in _COMMENT_BOUNDARY_CHARS
         i += 1
-    return "".join(out)
+    return "".join(out), i
 
 
 def _strip_line_continuations(command: str) -> str:

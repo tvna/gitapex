@@ -3308,6 +3308,88 @@ def test_classify_no_longer_leaks_a_comment_past_a_line_continuation() -> None:
     assert verdict.checkout_restore_paths == ("clean.py",)
 
 
+def test_strip_comments_strips_a_comment_nested_inside_a_double_quoted_substitution() -> None:
+    """CRITICAL, full-classifier-bypass regression pin (round-7
+    independent review, issue #1375). Real bash recursively re-enters
+    ordinary, comment-aware command parsing for a `$(...)` embedded
+    inside an outer double-quoted string -- a `)` inside a `#`-comment
+    inside such a substitution does NOT end the substitution. The old
+    inline double-quote handling here did not know this, leaving the
+    comment (and its embedded `)`) unstripped; that stray `)` then made
+    `_find_fused_command_substitution`'s own naive paren counter mistake
+    it for the substitution's real closing paren, silently truncating
+    everything after it -- including a real `git checkout` on the next
+    line -- from all classification. Live-verified this let a genuine,
+    dirty-file checkout run for real while `classify()` reported
+    `deny=False` with an empty `checkout_restore_paths`."""
+    result = checker._strip_comments('x="$(echo hi #comment with paren ) here\ngit checkout -- dirty.py)"')
+    assert result == 'x="$(echo hi \ngit checkout -- dirty.py)"'
+
+
+def test_classify_no_longer_loses_a_checkout_behind_a_commented_paren_in_a_substitution() -> None:
+    """End-to-end regression pin for the round-7 finding at the
+    `classify()` level: the real `git checkout -- dirty.py` embedded
+    past the decoy comment must be found, not silently dropped."""
+    verdict = checker.classify('x="$(echo hi #comment with paren ) here\ngit checkout -- dirty.py)"')
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("dirty.py",)
+
+
+def test_strip_comments_strips_a_comment_inside_a_substitution_nested_two_levels_deep() -> None:
+    """No shortcut taken for nesting depth: a comment inside a `$(...)`
+    that is itself nested inside ANOTHER `$(...)` inside the outer
+    double-quoted string must also be recognized and stripped, mirroring
+    bash's own arbitrarily-recursive re-entrant grammar."""
+    result = checker._strip_comments('x="$(echo $(echo hi #comment\n) tail)"')
+    assert result == 'x="$(echo $(echo hi \n) tail)"'
+
+
+def test_strip_comments_still_treats_a_literal_hash_inside_a_substitution_string_as_literal() -> None:
+    """No over-stripping regression: a `#` inside a QUOTED span within
+    the substitution's own content is still ordinary literal text, not a
+    comment-starter -- matching the same rule this function already
+    enforces at the top level."""
+    result = checker._strip_comments("x=\"$(echo 'a#b' tail)\"")
+    assert result == "x=\"$(echo 'a#b' tail)\""
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        'x="$(echo \'abc)"',
+        'x="$(echo "inner" tail)"',
+        'x="$(echo a\\\\x)"',
+        'x="$(echo (nested) tail)"',
+        'x="$(echo abc',
+    ],
+    ids=[
+        "unterminated-single-quote-inside-substitution",
+        "nested-double-quote-inside-substitution",
+        "non-newline-escape-inside-substitution",
+        "nested-unquoted-parens-inside-substitution",
+        "unterminated-substitution",
+    ],
+)
+def test_strip_comments_is_a_no_op_without_a_comment_inside_a_substitution(command: str) -> None:
+    """No crash and no unintended stripping on every other shape
+    `_consume_command_substitution_content` must walk through correctly
+    to find (or fail to find, for the unterminated case) its own
+    matching close-paren -- none of these contain a `#`, so the result
+    must be byte-for-byte identical to the input; a real unbalanced
+    quote/substitution is `tokenize()`'s own concern to fail closed on,
+    not this function's, which never itself validates balance."""
+    assert checker._strip_comments(command) == command
+
+
+def test_strip_comments_preserves_a_line_continuation_inside_a_substitution() -> None:
+    """The round-6 boundary-preserving fix applies inside a substitution
+    too, not only at the top level: a genuine `\\<newline>` there must
+    not clear AT_BOUNDARY, so a `#`-comment right after it is still
+    correctly recognized and stripped."""
+    result = checker._strip_comments('x="$(echo a \\\nb #c\nd)"')
+    assert result == 'x="$(echo a \\\nb \nd)"'
+
+
 @pytest.mark.parametrize("flag", ["-b", "-B", "--orphan"])
 def test_git_checkout_paths_folds_branch_creation_flags_into_the_non_goal(flag: str) -> None:
     """CRITICAL regression pin (round-4 independent review, issue #1375).
