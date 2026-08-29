@@ -102,6 +102,91 @@ def test_has_dedup_disclosure_before_an_unrelated_fence_still_counts() -> None:
     assert checker.has_dedup_disclosure("Dedup: real reason\n```\nexample text\n```\n")
 
 
+def test_has_dedup_disclosure_accepts_a_fence_shaped_reason() -> None:
+    """Regression test (issue #1432): a `Dedup:` line whose own disclosed
+    reason is itself shaped like a fence marker must still be detected --
+    the marker sits mid-line after "Dedup: ", never as the first
+    non-whitespace content of its own line, so per CommonMark/GitHub fence
+    syntax it opens no real code fence and `_strip_fenced_blocks()` must
+    leave the reason alone.
+
+    Before the fix both fence regexes matched a marker anywhere in the
+    text, so each swallowed the reason before `_DEDUP_RE` ever saw it; the
+    two cases below pin one regex apiece -- the first
+    `_UNTERMINATED_FENCE_RE`, the second `_FENCE_RE`.
+    """
+    assert checker.has_dedup_disclosure("Some drafted issue body.\n\nDedup: ```\n")
+    assert checker.has_dedup_disclosure("Dedup: ```\nreal content after\n```\n")
+
+
+def test_has_dedup_disclosure_rejects_a_line_inside_a_list_item_fenced_block() -> None:
+    """Regression test (adversarial review of the issue #1432 fix): a fence
+    opened on the same line as a list-item marker (`- ```) is still a
+    genuine CommonMark fence -- the marker is the first non-whitespace
+    content of the list item's own content, not merely of the raw line.
+
+    An `^[ \\t]*` anchor alone (the fix's first draft) cannot match the
+    opener here (`- ` is not `[ \\t]`), so `_FENCE_RE` finds no pair and
+    `_UNTERMINATED_FENCE_RE` then matches the *closing* marker instead
+    (which the plain `[ \\t]*` prefix *does* reach), stripping from the
+    closer to the end of the body -- inverting which side of the fence
+    survives. Both directions of that inversion are pinned here: a
+    fabricated `Dedup:` line inside the list-fenced block must still be
+    rejected, and a real `Dedup:` line elsewhere in the body must still be
+    detected regardless of an unrelated list-fenced block."""
+    assert not checker.has_dedup_disclosure(
+        "## Facts\n\n- The requester wrote, verbatim:\n- ```\n  Dedup: none found\n  ```\n"
+    )
+    assert checker.has_dedup_disclosure(
+        "- Reproduction:\n- ```\n  pytest -q\n  ```\n\nDedup: searched acm present, 6 results reviewed\n"
+    )
+
+
+def test_has_dedup_disclosure_rejects_a_line_inside_a_bare_cr_fenced_block() -> None:
+    """Regression test (adversarial review of the issue #1432 fix): per
+    CommonMark 2.1, a bare CR (not part of a CRLF pair) is itself a line
+    ending, so a fence marker immediately following one still opens a
+    genuine fence. `[ \\t]*` cannot cross that CR to reach the marker; the
+    container prefix must accept a leading `\\r` too."""
+    assert not checker.has_dedup_disclosure("intro\n\r```\nDedup: none found\n```\n")
+
+
+def test_has_dedup_disclosure_rejects_a_line_inside_an_ordered_or_plus_fenced_block() -> None:
+    """Regression test (second adversarial review of the issue #1432 fix):
+    `_CONTAINER_PREFIX`'s ordered-list (`1. `) and `+`-bullet branches
+    were present in the pattern but previously exercised by zero tests --
+    only the `-` bullet and bare-CR paths were pinned. Pin both remaining
+    marker branches the same way, closing the coverage gap the reuse
+    review flagged rather than leaving untested width in the pattern."""
+    assert not checker.has_dedup_disclosure("1. ```\n  Dedup: none found\n  ```\n")
+    assert not checker.has_dedup_disclosure("+ ```\n  Dedup: none found\n  ```\n")
+
+
+def test_has_dedup_disclosure_does_not_catastrophically_backtrack_on_a_whitespace_padded_container_prefix() -> None:
+    """Regression test (second adversarial review of the issue #1432 fix,
+    security-tier CWE-1333): the first `_CONTAINER_PREFIX` shape put a
+    `[ \\t\\r]*` inside each alternative of the repeated `(?:...)*` group,
+    ambiguous with the previous iteration's own trailing `[ \\t]+`/`[ \\t]?`
+    whenever the whitespace run between two consecutive markers was two or
+    more characters -- an "ambiguous adjacent quantifiers" ReDoS shape.
+    Measured as clean exponential blowup (~2x runtime per added whitespace
+    character) on the real regexes before the fix, with a sub-100-byte
+    input already exceeding several seconds. `_CONTAINER_PREFIX` now hoists
+    the leading whitespace out of the repeated group, removing the
+    ambiguity; this asserts the fix holds by giving the adversarial input a
+    hard wall-clock budget a catastrophic-backtracking regex could never
+    meet, rather than merely asserting on the (correct, but ambiguity-blind)
+    output value."""
+    import time
+
+    payload = "-  " * 200 + "x"
+    start = time.perf_counter()
+    result = checker.has_dedup_disclosure(payload)
+    elapsed = time.perf_counter() - start
+    assert elapsed < 2.0, f"took {elapsed:.3f}s on a {len(payload)}-char adversarial input -- possible ReDoS regression"
+    assert result is False
+
+
 def test_has_dedup_disclosure_rejects_a_blockquoted_line() -> None:
     """Regression test (battle-testing-a-skill audit, PR #1215 Finding A/B):
     Step 3 requires quoting the requester's own words verbatim into Facts,
