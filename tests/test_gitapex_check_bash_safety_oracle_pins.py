@@ -307,7 +307,7 @@ _DENIED_CASES = [
     PinnedCase(
         "issue1350-hash-comment-swallows-the-separator-newline",
         "VERB=install; echo hi #x\npip $VERB foo",
-        "hooks/gitapex_check_bash_safety.py:_strip_comments (issue #1350, independent adversarial review finding)",
+        "hooks/gitapex_check_bash_safety.py:887-1008 (_strip_comments, issue #1350, independent adversarial review finding)",
         [("pip", ["install", "foo"])],
         True,
         True,
@@ -317,7 +317,7 @@ _DENIED_CASES = [
     PinnedCase(
         "issue1350-array-literal-newline-is-not-a-statement-separator",
         'A=(pip\ninstall foo); "${A[@]}"',
-        "hooks/gitapex_check_bash_safety.py:_strip_array_literal_newlines (issue #1350, independent adversarial review finding)",
+        "hooks/gitapex_check_bash_safety.py:1865-1890 (_strip_array_literal_newlines, issue #1350, independent adversarial review finding)",
         [("pip", ["install", "foo"])],
         True,
         True,
@@ -454,7 +454,7 @@ _ALLOWED_CASES = [
     PinnedCase(
         "issue1350-escaped-double-quote-then-hash-stays-literal",
         'foo "a\\"b#c"',
-        "hooks/gitapex_check_bash_safety.py:_strip_comments (issue #1350, independent adversarial review finding)",
+        "hooks/gitapex_check_bash_safety.py:887-1008 (_strip_comments, issue #1350, independent adversarial review finding)",
         [("foo", ['a"b#c'])],
         True,
         False,
