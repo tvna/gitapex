@@ -2814,6 +2814,62 @@ def test_git_restore_paths_last_occurrence_wins_for_staged(last: str) -> None:
 
 
 @_PROPERTIES
+@given(paths=st.lists(_PATH_TOKENS, min_size=1, max_size=3))
+def test_git_restore_paths_last_occurrence_wins_for_worktree(paths: list[str]) -> None:
+    """Model-based: `saw_worktree` is last-occurrence-wins too --
+    `--staged --worktree --no-worktree` ends with `saw_worktree=False`,
+    so the invocation is safe (staged, not worktree) and never
+    live-checked -- exercises the `--no-worktree` branch directly."""
+    reason, resolved = checker._git_restore_paths(["--staged", "--worktree", "--no-worktree", *paths], {})
+    assert reason is None
+    assert resolved == ()
+
+
+@_PROPERTIES
+@given(
+    flag=st.sampled_from(sorted(checker._RESTORE_BOOLEAN_FLAGS)),
+    paths=st.lists(_PATH_TOKENS, min_size=1, max_size=3),
+)
+def test_git_restore_paths_every_boolean_flag_consumes_no_value(flag: str, paths: list[str]) -> None:
+    """Model-based: every flag in the enumerated boolean vocabulary
+    (`--quiet`/`-q`, `--progress`/`--no-progress`, `--overlay`/
+    `--no-overlay`, `--ours`/`--theirs`, `--merge`/`-m`,
+    `--ignore-unmerged`, `--ignore-skip-worktree-bits`) is skipped without
+    consuming the token after it as a value -- the following path tokens
+    are still extracted."""
+    reason, resolved = checker._git_restore_paths([flag, *paths], {})
+    assert reason is None
+    assert resolved == tuple(paths)
+
+
+@_PROPERTIES
+@given(value=st.sampled_from(["yes", "no"]), paths=st.lists(_PATH_TOKENS, min_size=1, max_size=3))
+def test_git_restore_paths_recurse_submodules_bare_and_fused(value: str, paths: list[str]) -> None:
+    """Model-based: `--recurse-submodules` (bare, consumes nothing) and
+    `--recurse-submodules=VALUE` (fused, self-contained) are both skipped
+    without treating the next token as a value or as part of the flag."""
+    reason, resolved = checker._git_restore_paths(["--recurse-submodules", *paths], {})
+    assert reason is None
+    assert resolved == tuple(paths)
+    reason, resolved = checker._git_restore_paths([f"--recurse-submodules={value}", *paths], {})
+    assert reason is None
+    assert resolved == tuple(paths)
+
+
+def test_find_git_checkout_restore_none_when_only_global_flags_and_no_subcommand_follow() -> None:
+    """No false positive, and direct coverage for the flag-skip loop's own
+    normal (non-`break`, non-ambiguous) exit: `git -C /tmp/x` with global
+    flags consuming every remaining token and nothing left over is not a
+    checkout/restore invocation -- the while loop runs off the end of the
+    segment (`j == n`) rather than finding a literal `checkout`/`restore`
+    token."""
+    subcommand, tokens_after, saw_tree_relocation = checker._find_git_checkout_restore(["git", "-C", "/tmp/x"])
+    assert subcommand is None
+    assert tokens_after == []
+    assert saw_tree_relocation is False
+
+
+@_PROPERTIES
 @given(flag=st.sampled_from(["--pathspec-from-file=list.txt", "--pathspec-from-file", "--pathspec-file-nul"]))
 def test_git_restore_paths_denies_pathspec_from_file(flag: str) -> None:
     """Paths sourced from a file this classifier cannot inspect deny
