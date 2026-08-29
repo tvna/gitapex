@@ -1602,15 +1602,22 @@ def _assigned_raw_values(tokens: list[str]) -> dict[str, str]:
     return values
 
 
-def _assigned_raw_values_biased_toward(tokens: list[str], literal: str) -> dict[str, str]:
-    """Like `_assigned_raw_values`, but once a name is assigned LITERAL
-    (case-insensitively) at ANY point among TOKENS, that name STAYS
-    LITERAL here regardless of any later, different reassignment --
-    unlike `_assigned_raw_values`'s own plain last-occurrence-in-token-
-    order-wins collapse, which has no concept of which assignment is
-    actually in effect at bash's own real, sequential runtime relative to
-    a specific point of use. A name never assigned LITERAL anywhere
-    resolves exactly as `_assigned_raw_values` itself would.
+def _assigned_raw_values_biased_toward(tokens: list[str], literals: frozenset[str]) -> dict[str, str]:
+    """Like `_assigned_raw_values`, but once a name is assigned a value
+    that is a member of LITERALS (case-insensitively) at ANY point among
+    TOKENS, that name STAYS on that member here regardless of any later,
+    different reassignment -- unlike `_assigned_raw_values`'s own plain
+    last-occurrence-in-token-order-wins collapse, which has no concept of
+    which assignment is actually in effect at bash's own real, sequential
+    runtime relative to a specific point of use. A name never assigned
+    any member of LITERALS anywhere resolves exactly as `_assigned_raw_
+    values` itself would. LITERALS is a set rather than a single string
+    so one caller can bias toward several interchangeable candidates at
+    once (round 20, issue #1375: `_CWD_RELOCATING_COMMANDS` -- `cd`,
+    `pushd`, `popd` are three DIFFERENT literals that all answer the same
+    "was the working tree possibly relocated" question, see this
+    function's own second CRITICAL-bug paragraph below); round 19's own
+    single-literal `git` caller passes a one-element set.
 
     CRITICAL bug found by independent adversarial review (round 19, issue
     #1375) and independently reproduced live: `_find_git_checkout_
@@ -1652,15 +1659,52 @@ def _assigned_raw_values_biased_toward(tokens: list[str], literal: str) -> dict[
     reversible live `git diff` check and possible false deny -- the same
     safe direction every other ambiguity in this module resolves toward
     -- never toward silently missing a real git invocation, which is the
-    unsafe direction here). Used ONLY to feed the outer git-token-
-    recognition fallback in `_find_git_checkout_restore` -- every other
-    consumer of `name_to_raw_value` in this module keeps using the
-    ordinary, order-blind `_assigned_raw_values` unchanged, since a
-    reassignment-ambiguity miss elsewhere in this module risks a missed
+    unsafe direction here). Used to feed the outer git-token-recognition
+    fallback in `_find_git_checkout_restore`, AND (round 20, below) the
+    cd/pushd/popd-relocation fallback in `_rule_git_checkout_restore` --
+    every OTHER consumer of `name_to_raw_value` in this module keeps
+    using the ordinary, order-blind `_assigned_raw_values` unchanged,
+    since a reassignment-ambiguity miss for one of those risks a missed
     advisory warning or an unrecognized non-destructive write, not
-    irreversible data loss."""
+    irreversible data loss -- the same reasoning that scoped round 19's
+    own original, narrower fix.
+
+    CRITICAL bug found by independent adversarial review (round 20, issue
+    #1375) and independently reproduced live: `_rule_git_checkout_
+    restore`'s own dynamic-cd-relocation check
+    (`_dynamic_word_may_resolve_to_a_cwd_relocator`) was fed only the
+    ordinary, order-blind `raw_assigned` -- the IDENTICAL gap round 19
+    closed for the sibling git-token-recognition consumer in the same
+    function, just left open here. `X=cd; $X sub; git checkout --
+    dirty.py; X=somethingelse` (reusing a variable name for a later,
+    unrelated purpose, the same ordinary idiom round 19's own finding
+    used) resolved to a CONFIDENT, WRONG `checkout_restore_paths` claim
+    -- `$X` genuinely was `cd` at its actual point of use one statement
+    earlier, but the trailing reassignment made the collapsed dict show
+    `"somethingelse"` instead, so the earlier relocation was silently
+    missed entirely. Confirmed live end-to-end through the real wrapper
+    against a scratch repo with `sub/dirty.py` genuinely dirty relative
+    to `sub`: the control command (no trailing reassignment) correctly
+    denies with exit 2; the same command with a trailing
+    `X=somethingelse` wrongly allows with exit 0, and actually running it
+    afterward silently discarded the uncommitted edit. Identically
+    reproducible for `pushd`. Closed the same way round 19 closed the
+    git-token case: `_rule_git_checkout_restore`'s own cd-relocation
+    check now also tries `_dynamic_word_may_resolve_to_a_cwd_relocator`
+    against a `raw_assigned_cd_biased` reading -- `_assigned_raw_values_
+    biased_toward(tokens, _CWD_RELOCATING_COMMANDS)` -- as a fallback
+    when the ordinary reading declines. Scoped to the current
+    `_classify_tokens` invocation's own top-level segments only (merged
+    with plain OUTER_RAW, not a THIRD `..._cd_biased` outer-scope
+    parameter threaded through the whole recursive chain the way round
+    19's git-biased fix was): a `cd`/`pushd`/`popd` occurring INSIDE a
+    `$(...)`/array-literal span runs in an isolated subshell and never
+    relocates the OUTER shell's own cwd at real bash runtime regardless
+    of any outer reassignment, so there is no equivalent live bypass to
+    close by threading further -- unlike a `git` token, whose own
+    resolved identity is unaffected by which shell (sub- or otherwise)
+    evaluates it."""
     values: dict[str, str] = {}
-    literal_lower = literal.lower()
     for token in tokens:
         if _is_dynamic(token):
             continue
@@ -1668,7 +1712,7 @@ def _assigned_raw_values_biased_toward(tokens: list[str], literal: str) -> dict[
         if not match:
             continue
         name = match.group(1)
-        if values.get(name, "").lower() == literal_lower:
+        if values.get(name, "").lower() in literals:
             continue
         values[name] = match.group(2)
     return values
@@ -4055,7 +4099,7 @@ def _find_git_checkout_restore(
     return None, [], False
 
 
-_CWD_RELOCATING_COMMANDS = {"cd", "pushd", "popd"}
+_CWD_RELOCATING_COMMANDS = frozenset({"cd", "pushd", "popd"})
 
 
 def _dynamic_word_may_resolve_to_a_cwd_relocator(token: str, name_to_raw_value: dict[str, str]) -> bool:
@@ -4185,7 +4229,10 @@ def _first_surviving_segment_word(seg: list[str], name_to_raw_value: dict[str, s
 
 
 def _rule_git_checkout_restore(
-    segments: list[list[str]], raw_assigned: dict[str, str], raw_assigned_git_biased: dict[str, str]
+    segments: list[list[str]],
+    raw_assigned: dict[str, str],
+    raw_assigned_git_biased: dict[str, str],
+    raw_assigned_cd_biased: dict[str, str],
 ) -> tuple[str | None, tuple[str, ...]]:
     """Extract every `checkout_restore_paths` candidate across every
     segment of one command, denying outright on any segment where this
@@ -4272,7 +4319,10 @@ def _rule_git_checkout_restore(
     RAW_ASSIGNED_GIT_BIASED is passed straight through as `_find_git_
     checkout_restore`'s own third argument -- see that function's own
     docstring for what it means and the live bypass it closes (round 19,
-    issue #1375)."""
+    issue #1375). RAW_ASSIGNED_CD_BIASED feeds a SECOND fallback, for the
+    cd/pushd/popd-relocation check just below (round 20, issue #1375) --
+    see `_assigned_raw_values_biased_toward`'s own second CRITICAL-bug
+    paragraph for the live bypass this one closes."""
     saw_cd = False
     all_paths: list[str] = []
     for seg in segments:
@@ -4284,7 +4334,10 @@ def _rule_git_checkout_restore(
             if any(not _is_dynamic(t) and t in _CWD_RELOCATING_COMMANDS for t in seg) or (
                 first is not None
                 and _is_dynamic(first)
-                and _dynamic_word_may_resolve_to_a_cwd_relocator(first, raw_assigned)
+                and (
+                    _dynamic_word_may_resolve_to_a_cwd_relocator(first, raw_assigned)
+                    or _dynamic_word_may_resolve_to_a_cwd_relocator(first, raw_assigned_cd_biased)
+                )
             ):
                 saw_cd = True
             continue
@@ -4586,7 +4639,7 @@ def _classify_tokens(
     merged_name_to_raw_value = {**outer_raw, **_assigned_raw_values(tokens)}
     merged_name_to_raw_value_git_biased = {
         **outer_raw_git_biased,
-        **_assigned_raw_values_biased_toward(tokens, "git"),
+        **_assigned_raw_values_biased_toward(tokens, frozenset({"git"})),
     }
 
     content_reason, content_is_git_push, content_checkout_restore_paths = _rule_command_substitution_content(
@@ -4607,7 +4660,11 @@ def _classify_tokens(
     segments = [s for s in (_strip_leading_assignments(seg) for seg in segment_tokens(tokens)) if s]
     assigned = {**outer_literals, **_assigned_literals(tokens)}
     raw_assigned = {**outer_raw, **_assigned_raw_values(tokens)}
-    raw_assigned_git_biased = {**outer_raw_git_biased, **_assigned_raw_values_biased_toward(tokens, "git")}
+    raw_assigned_git_biased = {
+        **outer_raw_git_biased,
+        **_assigned_raw_values_biased_toward(tokens, frozenset({"git"})),
+    }
+    raw_assigned_cd_biased = {**outer_raw, **_assigned_raw_values_biased_toward(tokens, _CWD_RELOCATING_COMMANDS)}
     lowered_command = " ".join(tokens).lower()
 
     is_git_push = is_git_push or any(_is_git_push_segment(seg, raw_assigned) for seg in segments)
@@ -4640,7 +4697,7 @@ def _classify_tokens(
             )
 
     own_checkout_restore_hit, own_checkout_restore_paths = _rule_git_checkout_restore(
-        segments, raw_assigned, raw_assigned_git_biased
+        segments, raw_assigned, raw_assigned_git_biased, raw_assigned_cd_biased
     )
     checkout_restore_paths = checkout_restore_paths + own_checkout_restore_paths
     if own_checkout_restore_hit:

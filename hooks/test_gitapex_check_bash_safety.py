@@ -1956,6 +1956,41 @@ def test_checkout_denied_when_a_dynamic_git_token_inside_a_command_substitution_
     assert result.returncode == 2, f"stderr={result.stderr!r}"
 
 
+def test_checkout_denied_when_a_dynamic_cd_relocator_is_reassigned_after_use(tmp_path: Path) -> None:
+    """CRITICAL bypass regression pin (round-20 independent review, issue
+    #1375). `_rule_git_checkout_restore`'s own dynamic-cd-relocation
+    check was fed only the ordinary, order-blind `raw_assigned` -- the
+    IDENTICAL reassignment-after-use gap round 19 closed for the sibling
+    git-token-recognition consumer in the same function, just left open
+    here. Live-verified before this fix: `X=cd; $X sub; git checkout --
+    dirty.py; X=somethingelse` (reusing a variable name for a later,
+    unrelated purpose, the same ordinary idiom round 19's own finding
+    used) resolved to a CONFIDENT, WRONG `checkout_restore_paths` claim
+    -- `$X` genuinely was `cd` at its actual point of use one statement
+    earlier -- and was wrongly allowed outright through the real wrapper.
+    The deny here is classifier-level (a token-shape fact, no live git
+    call), so no such file needs to actually exist for this regression
+    pin."""
+    repo_dir = tmp_path / "repo"
+    _init_repo_with_committed_file(repo_dir)
+    result = run("X=cd; $X sub; git checkout -- dirty.py; X=somethingelse", payload_cwd=str(repo_dir))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+    payload = json.loads(result.stderr)
+    assert "working tree is at risk" in payload["systemMessage"]
+
+
+def test_restore_denied_when_a_dynamic_pushd_relocator_is_reassigned_after_use(tmp_path: Path) -> None:
+    """Companion to the `cd` pin above, for `pushd` and `git restore` --
+    the round-20 finding was confirmed live for all three
+    `_CWD_RELOCATING_COMMANDS` members and both subcommands."""
+    repo_dir = tmp_path / "repo"
+    _init_repo_with_committed_file(repo_dir)
+    result = run("X=pushd; $X sub; git restore dirty.py; X=somethingelse", payload_cwd=str(repo_dir))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+    payload = json.loads(result.stderr)
+    assert "working tree is at risk" in payload["systemMessage"]
+
+
 def test_checkout_denied_in_a_real_merge_conflict_names_the_conflict_remedy(tmp_path: Path) -> None:
     """A real merge conflict (issue #1375's own Acceptance Criteria Map):
     the deny message names a remedy that actually works mid-conflict

@@ -1727,7 +1727,7 @@ def test_assigned_raw_values_biased_toward_stays_on_literal_once_assigned() -> N
     `TOOL=git; ...; TOOL=npm` must still resolve `TOOL` to `git` here,
     unlike `_assigned_raw_values`'s own plain last-occurrence-wins
     collapse."""
-    assert checker._assigned_raw_values_biased_toward(["TOOL=git", "TOOL=npm"], "git") == {"TOOL": "git"}
+    assert checker._assigned_raw_values_biased_toward(["TOOL=git", "TOOL=npm"], frozenset({"git"})) == {"TOOL": "git"}
 
 
 def test_assigned_raw_values_biased_toward_locks_on_regardless_of_order() -> None:
@@ -1735,7 +1735,7 @@ def test_assigned_raw_values_biased_toward_locks_on_regardless_of_order() -> Non
     reassignment of the same name and the end result is the same -- this
     function does not attempt real execution-order tracking, only a
     bounded "was LITERAL ever assigned to this name" bias."""
-    assert checker._assigned_raw_values_biased_toward(["TOOL=npm", "TOOL=git"], "git") == {"TOOL": "git"}
+    assert checker._assigned_raw_values_biased_toward(["TOOL=npm", "TOOL=git"], frozenset({"git"})) == {"TOOL": "git"}
 
 
 def test_assigned_raw_values_biased_toward_falls_back_to_last_assignment_when_literal_never_seen() -> None:
@@ -1743,7 +1743,7 @@ def test_assigned_raw_values_biased_toward_falls_back_to_last_assignment_when_li
     exactly as `_assigned_raw_values`'s own plain last-occurrence-wins
     collapse would -- this function only ever WIDENS toward the literal,
     never changes behavior for a name that was never a candidate."""
-    assert checker._assigned_raw_values_biased_toward(["TOOL=npm", "TOOL=yarn"], "git") == {"TOOL": "yarn"}
+    assert checker._assigned_raw_values_biased_toward(["TOOL=npm", "TOOL=yarn"], frozenset({"git"})) == {"TOOL": "yarn"}
 
 
 @_PROPERTIES
@@ -1756,7 +1756,9 @@ def test_assigned_raw_values_biased_toward_matches_plain_collapse_when_never_rea
     with the plain, order-blind `_assigned_raw_values`."""
     assume(decoy_value.lower() != "git")
     tokens = [f"{name}={decoy_value}", *tail]
-    assert checker._assigned_raw_values_biased_toward(tokens, "git") == checker._assigned_raw_values(tokens)
+    assert checker._assigned_raw_values_biased_toward(tokens, frozenset({"git"})) == checker._assigned_raw_values(
+        tokens
+    )
 
 
 def test_find_git_checkout_restore_recognizes_a_git_biased_reassigned_token() -> None:
@@ -1813,6 +1815,69 @@ def test_classify_extracts_checkout_paths_when_git_token_is_reassigned_after_a_c
     x=$($G checkout -- dirty.py); G=notgit` resolved to an EMPTY
     `checkout_restore_paths`."""
     verdict = checker.classify("G=git; x=$($G checkout -- dirty.py); G=notgit")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("dirty.py",)
+
+
+def test_assigned_raw_values_biased_toward_accepts_several_interchangeable_literals() -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, twentieth round (issue #1375): LITERALS is a
+    SET, not a single string, so `cd`, `pushd`, and `popd` -- three
+    different literals that all answer the same "was the working tree
+    possibly relocated" question -- are all sticky against a later
+    reassignment, not just one of them."""
+    assert checker._assigned_raw_values_biased_toward(["X=cd", "X=elsewhere"], checker._CWD_RELOCATING_COMMANDS) == {
+        "X": "cd"
+    }
+    assert checker._assigned_raw_values_biased_toward(["X=pushd", "X=elsewhere"], checker._CWD_RELOCATING_COMMANDS) == {
+        "X": "pushd"
+    }
+
+
+def test_rule_git_checkout_restore_recognizes_a_cd_biased_reassigned_relocator() -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, twentieth round (issue #1375): `_rule_git_
+    checkout_restore`'s own dynamic-cd-relocation check was fed only the
+    ordinary, order-blind RAW_ASSIGNED, the IDENTICAL gap round 19 closed
+    for the sibling git-token-recognition consumer in the same function,
+    just left open here -- the ordinary reading declines (X's own
+    collapsed value is "elsewhere", not a relocator), but the
+    RAW_ASSIGNED_CD_BIASED reading recognizes `cd` was assigned to X at
+    some point, so the earlier relocation is still flagged and the
+    checkout is denied rather than confidently, wrongly resolved."""
+    segments = [["$X", "sub"], ["git", "checkout", "--", "dirty.py"]]
+    reason, resolved = checker._rule_git_checkout_restore(segments, {"X": "elsewhere"}, {}, {"X": "cd"})
+    assert reason is not None
+    assert "cd" in reason or "pushd" in reason or "popd" in reason
+    assert resolved == ()
+
+
+def test_classify_denies_checkout_when_a_cd_token_is_reassigned_after_use() -> None:
+    """End-to-end regression pin for the round-20 finding at the
+    `classify()` level. Confirmed live before this fix: `X=cd; $X sub;
+    git checkout -- dirty.py; X=somethingelse` resolved to `deny=False`
+    with a CONFIDENT, WRONG `checkout_restore_paths` claim, even though
+    `$X` genuinely was `cd` at its actual point of use one statement
+    earlier."""
+    verdict = checker.classify("X=cd; $X sub; git checkout -- dirty.py; X=somethingelse")
+    assert verdict.deny is True
+
+
+def test_classify_denies_checkout_when_a_pushd_token_is_reassigned_after_use() -> None:
+    """Companion to the `cd` pin above, for `pushd` -- the round-20
+    finding was confirmed live for all three `_CWD_RELOCATING_COMMANDS`
+    members."""
+    verdict = checker.classify("X=pushd; $X sub; git checkout -- dirty.py; X=somethingelse")
+    assert verdict.deny is True
+
+
+def test_classify_does_not_flag_cd_relocation_for_an_unrelated_reassigned_tool() -> None:
+    """No false positive: a variable reassigned but NEVER assigned
+    `cd`/`pushd`/`popd` anywhere in the command must not be flagged as a
+    possible relocator -- the cd-biased fallback only ever widens
+    recognition of a name that really was a relocator at some point,
+    never invents one out of nothing."""
+    verdict = checker.classify("X=curl; $X sub; git checkout -- dirty.py; X=wget")
     assert verdict.deny is False
     assert verdict.checkout_restore_paths == ("dirty.py",)
 
@@ -3618,7 +3683,7 @@ def test_rule_git_checkout_restore_accumulates_paths_across_segments(command_pat
     command (`git checkout -- a.py; git restore b.py`) accumulate paths
     from every segment, not just the first."""
     segments = [["git", "checkout", "--", *command_paths], ["git", "restore", *command_paths]]
-    reason, resolved = checker._rule_git_checkout_restore(segments, {}, {})
+    reason, resolved = checker._rule_git_checkout_restore(segments, {}, {}, {})
     assert reason is None
     assert resolved == (*command_paths, *command_paths)
 
@@ -3631,7 +3696,7 @@ def test_rule_git_checkout_restore_denies_when_git_dir_env_var_assigned() -> Non
     token-shape fact) rather than letting the live wrapper check the
     wrong tree."""
     segments = [["git", "checkout", "--", "f.py"]]
-    reason, resolved = checker._rule_git_checkout_restore(segments, {"GIT_DIR": "/tmp/x.git"}, {})
+    reason, resolved = checker._rule_git_checkout_restore(segments, {"GIT_DIR": "/tmp/x.git"}, {}, {})
     assert reason is not None
     assert resolved == ()
 
@@ -3642,7 +3707,7 @@ def test_rule_git_checkout_restore_denies_when_an_earlier_segment_is_cd() -> Non
     the wrapper's own fixed `.cwd` unsound for a LATER checkout/restore
     segment -- denied outright."""
     segments = [["cd", "/tmp"], ["git", "checkout", "--", "f.py"]]
-    reason, resolved = checker._rule_git_checkout_restore(segments, {}, {})
+    reason, resolved = checker._rule_git_checkout_restore(segments, {}, {}, {})
     assert reason is not None
     assert resolved == ()
 
@@ -3652,7 +3717,7 @@ def test_rule_git_checkout_restore_allows_cd_after_the_checkout_segment() -> Non
     `cd` in an EARLIER segment -- a `cd` AFTER the checkout/restore segment
     does not retroactively make the already-scanned segment unsound."""
     segments = [["git", "checkout", "--", "f.py"], ["cd", "/tmp"]]
-    reason, resolved = checker._rule_git_checkout_restore(segments, {}, {})
+    reason, resolved = checker._rule_git_checkout_restore(segments, {}, {}, {})
     assert reason is None
     assert resolved == ("f.py",)
 
@@ -3668,7 +3733,7 @@ def test_rule_git_checkout_restore_denies_when_an_earlier_segment_is_pushd_or_po
     claim that the wrapper's live check then found clean at the wrong
     `.cwd`, silently allowing a real, uncommitted-change discard."""
     segments = [[relocator, "/tmp"], ["git", "checkout", "--", "f.py"]]
-    reason, resolved = checker._rule_git_checkout_restore(segments, {}, {})
+    reason, resolved = checker._rule_git_checkout_restore(segments, {}, {}, {})
     assert reason is not None
     assert resolved == ()
 
@@ -3693,7 +3758,7 @@ def test_rule_git_checkout_restore_denies_when_an_earlier_segment_starts_with_a_
     `checkout_restore_paths` claim the same way round 9's own fix closed
     for the literal case."""
     segments = [["$X", "sub"], ["git", "checkout", "--", "f.py"]]
-    reason, resolved = checker._rule_git_checkout_restore(segments, {"X": "cd"}, {})
+    reason, resolved = checker._rule_git_checkout_restore(segments, {"X": "cd"}, {}, {})
     assert reason is not None
     assert resolved == ()
 
@@ -3705,7 +3770,7 @@ def test_rule_git_checkout_restore_allows_a_genuinely_vanishing_dynamic_word() -
     real bash would run whatever token follows as the actual command
     word instead, and that token is scanned on its own merits."""
     segments = [["${NEVERSET}", "sub"], ["git", "checkout", "--", "f.py"]]
-    reason, resolved = checker._rule_git_checkout_restore(segments, {}, {})
+    reason, resolved = checker._rule_git_checkout_restore(segments, {}, {}, {})
     assert reason is None
     assert resolved == ("f.py",)
 
@@ -3733,9 +3798,23 @@ def test_rule_git_checkout_restore_allows_a_dynamic_word_resolving_to_something_
     checkout), purely because `$EDITOR` is dynamic and non-vanishing.
     `_dynamic_word_may_resolve_to_a_cwd_relocator` must resolve the
     word's actual candidate value and only flag when it could genuinely
-    be `cd`/`pushd`/`popd`."""
+    be `cd`/`pushd`/`popd`.
+
+    RAW_ASSIGNED_CD_BIASED here mirrors RAW_ASSIGNED exactly (round 20,
+    issue #1375's own fourth argument) -- in real production use it is
+    always built from the SAME token stream as RAW_ASSIGNED and so
+    always carries the SAME entry for a name never assigned `cd`/`pushd`/
+    `popd`; an EMPTY dict here would NOT be equivalent (unlike the
+    git-biased fallback's own fail-toward-"not git" posture, `_dynamic_
+    word_may_resolve_to_a_cwd_relocator`'s own posture fails toward
+    "might be a relocator" on an unresolvable name, so a dict missing
+    EDITOR's own entry would wrongly flag it once the first, correctly-
+    resolving `raw_assigned` reading is bypassed by this test's own
+    construction -- this is a hand-built-test-consistency requirement,
+    not a live production gap, since production always keeps the two
+    dicts' own key sets in sync)."""
     segments = [["$EDITOR", "sub"], ["git", "checkout", "--", "f.py"]]
-    reason, resolved = checker._rule_git_checkout_restore(segments, {"EDITOR": "vim"}, {})
+    reason, resolved = checker._rule_git_checkout_restore(segments, {"EDITOR": "vim"}, {}, {"EDITOR": "vim"})
     assert reason is None
     assert resolved == ("f.py",)
 
@@ -3814,7 +3893,7 @@ def test_dynamic_word_may_resolve_to_a_cwd_relocator_true_for_a_still_dynamic_ca
 
 def test_rule_git_checkout_restore_denies_a_still_dynamic_candidate() -> None:
     segments = [["${UNSET:-$OTHER}", "sub"], ["git", "checkout", "--", "f.py"]]
-    reason, resolved = checker._rule_git_checkout_restore(segments, {"OTHER": "cd"}, {})
+    reason, resolved = checker._rule_git_checkout_restore(segments, {"OTHER": "cd"}, {}, {})
     assert reason is not None
     assert resolved == ()
 
@@ -3849,7 +3928,7 @@ def test_rule_git_checkout_restore_denies_a_dynamic_relocator_behind_a_leading_v
     assigned) resolved to a CONFIDENT, WRONG `checkout_restore_paths`
     claim -- real bash genuinely runs `cd sub` there."""
     segments = [["$NEVERSET", "$X", "sub"], ["git", "checkout", "--", "f.py"]]
-    reason, resolved = checker._rule_git_checkout_restore(segments, {"X": "cd"}, {})
+    reason, resolved = checker._rule_git_checkout_restore(segments, {"X": "cd"}, {}, {})
     assert reason is not None
     assert resolved == ()
 
@@ -3892,7 +3971,7 @@ def test_rule_git_checkout_restore_denies_a_dynamic_relocator_behind_a_leading_r
     Live-verified before this fix: `X=cd; > /dev/null $X sub; git
     checkout -- dirty.py` resolved to a confident, wrong ALLOW."""
     segments = [[">", "/dev/null", "$X", "sub"], ["git", "checkout", "--", "f.py"]]
-    reason, resolved = checker._rule_git_checkout_restore(segments, {"X": "cd"}, {})
+    reason, resolved = checker._rule_git_checkout_restore(segments, {"X": "cd"}, {}, {})
     assert reason is not None
     assert resolved == ()
 
