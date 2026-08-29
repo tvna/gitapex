@@ -58,6 +58,15 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1379"
       summary: "an independent evaluating-skill-quality dispatch found eliciting-a-design named in Step 2's own prose three times but absent from both relatedTo and Related skills, and the Notes portability claim ('Steps 1-7, 9 depend on no repository-specific tooling') now false -- Step 6's own reconciliation rule applied to itself. Added to relatedTo/Related skills; Notes now carves out Step 2 as the one exception"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1379"
+      summary: "a second battle-testing-a-skill dispatch confirmed the bare-claim gap closed but found two residual gaps: 'quote' didn't distinguish verbatim from a self-generated paraphrase, and Output had no line requiring the inherited verdict be recorded for audit. Fixed: the inheritance clause now requires a verbatim quote, and Output gained a bullet recording it when inherited"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1379"
+      summary: "deferred, not fixed: this skill's own description still names no relationship to eliciting-a-design, despite eliciting-a-design's reciprocal edit -- adding one would need this skill's own exact 500-line body-length ceiling and would trigger this repo's eval-coverage-disclosure audit-gate. Leaves this dimension-1 gap open, keeping this skill WELL-FORMED-NOT-MATURE; tracked under this skill's own existing lifecycle.experimental.trackingIssue graduation, not this issue's own scope"
+    - kind: caveat
+      anchor: "https://github.com/tvna/gitapex/issues/1379"
+      summary: "two of this issue's four entries above (same anchor) were appended once an independent evaluating-skill-quality dispatch caught their absence, not inline as their own commits landed -- a process lapse against this file's own Step 3 claim that entries are 'never backfilled,' disclosed here rather than silently left, not a retraction of that principle going forward"
   skillDependencies:
     requires:
       - evaluating-skill-quality
