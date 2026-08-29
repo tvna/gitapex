@@ -207,7 +207,7 @@ truth for the procedure regardless of platform naming.
    scope/configurability claim, the same issue body given to the finder pass -- only, never the
    finder pass's own assertion -- and discard anything that does not clear an explicit confidence
    bar: 0.7, the same reporting threshold this repository's own bundled `/security-review` prompt
-   already applies (below it, do not report) — missing a real finding is preferable to reporting a
+   already applies (below it, do not report) — omitting a real finding is preferable to reporting a
    false one. A theoretical finding that cannot be confirmed this way is treated as not found, not
    as a weak pass. For each finding that survives verification, trace the changed symbol's call
    sites to establish blast radius before finalizing it, then dedupe the surviving findings and
