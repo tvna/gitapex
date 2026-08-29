@@ -1,4 +1,4 @@
-id: reviewing-an-artifact-guardrail-security-tier-unconditional-report
+id: reviewing-an-artifact-guardrail-security-tier-unconditional
 name: A Security-Tier Finding Is Reported Even Below The Confidence Bar
 description: A plausible but not fully pinned-down SQL-injection-shaped finding, at low effort, does not clear the ordinary 0.7 confidence bar on its own -- but Step 4's unconditional security-tier rule still reports it as an unconfirmed concern rather than silently dropping it.
 tags:

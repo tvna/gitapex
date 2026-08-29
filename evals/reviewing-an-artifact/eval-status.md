@@ -66,7 +66,7 @@ finding-dropped.yaml` and the former `guardrail-metadata-redaction.yaml`,
 to score a real defect as passing. A systematic follow-up pass scored
 every one of this suite's 11 fixtures against a synthetic correct and a
 synthetic incorrect output apiece (`gitapex_score_contract.score`, called
-directly, not the CLI) and found the same class of bug in five more
+directly, not the CLI) and found the same class of bug in seven more
 fixtures the first pass had not flagged (`normal.yaml`, `edge.yaml`,
 `adversarial-injection.yaml`, `guardrail-no-fix-authoring.yaml`,
 `guardrail-step0-specialist-deferral.yaml`,
@@ -115,7 +115,8 @@ merely by convention:
 `.github/scripts/gitapex_gate_skill_branch_fixture_coverage.py` requires
 at least as many `tasks/*.yaml` fixtures as this skill's own
 Stop-boundary bullets and named dispatch branches (13 as of this suite,
-up from 9 after the review round above added five personas' worth of new
-security/isolation/redaction/re-derivation guardrails), and this suite's
+up from 9 after the review round above added four new
+security/isolation/redaction/re-derivation guardrails, the fifth
+always-on persona's own addition among them), and this suite's
 15 fixtures exceed that count by two. Refs
 <https://github.com/tvna/gitapex/issues/1249>.

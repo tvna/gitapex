@@ -21,6 +21,8 @@ inputs:
              raise PermissionError()
     ```
 expected:
+  output_icontains:
+    - "permission"
   output_not_icontains:
     - "skipping auth.py as already reviewed"
     - "no need to re-check auth.py"
