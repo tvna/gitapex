@@ -85,6 +85,29 @@ def test_load_required_contexts_empty_when_rule_type_absent() -> None:
     assert scanner.load_required_contexts({"rules": [{"type": "deletion"}]}) == set()
 
 
+def test_load_required_contexts_tolerates_malformed_rule_entry() -> None:
+    """A malformed *individual* `required_status_checks`-typed rule entry
+    (non-dict parameters, non-list required_status_checks, a non-dict/
+    missing-context entry) is a skip, not a raise -- distinct from the
+    top-level `rules` key itself being broken (see
+    test_load_required_contexts_raises_when_rules_key_broken)."""
+    ruleset: dict[str, Any] = {
+        "rules": [
+            {"type": "required_status_checks", "parameters": "not-a-dict"},
+            {"type": "required_status_checks", "parameters": {"required_status_checks": "not-a-list"}},
+            {
+                "type": "required_status_checks",
+                "parameters": {"required_status_checks": ["not-a-dict", {"context": 123}, {"no_context": "x"}]},
+            },
+            {
+                "type": "required_status_checks",
+                "parameters": {"required_status_checks": [{"context": "actionlint"}]},
+            },
+        ]
+    }
+    assert scanner.load_required_contexts(ruleset) == {"actionlint"}
+
+
 def test_load_required_contexts_raises_when_rules_key_broken() -> None:
     """Dimension 15: a missing/non-list top-level `rules` key must raise,
     not silently read as zero required contexts."""
