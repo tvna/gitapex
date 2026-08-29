@@ -317,8 +317,18 @@ _DENIED_CASES = [
     PinnedCase(
         "issue1350-array-literal-newline-is-not-a-statement-separator",
         'A=(pip\ninstall foo); "${A[@]}"',
-        "hooks/gitapex_check_bash_safety.py:1865-1890 (_strip_array_literal_newlines, issue #1350, independent adversarial review finding)",
+        "hooks/gitapex_check_bash_safety.py:1865-1917 (_strip_array_literal_newlines, issue #1350, independent adversarial review finding)",
         [("pip", ["install", "foo"])],
+        True,
+        True,
+        False,
+        "an array literal NAME=(...) embeds a denied command",
+    ),
+    PinnedCase(
+        "issue1350-quoted-literal-paren-data-does-not-hide-a-later-newline",
+        "A=(pip\ninstall foo '('); \"${A[@]}\"",
+        "hooks/gitapex_check_bash_safety.py:1865-1917 (_strip_array_literal_newlines, issue #1350, independent adversarial review finding)",
+        [("pip", ["install", "foo", "("])],
         True,
         True,
         False,
@@ -493,22 +503,43 @@ _ALLOWED_CASES = [
 PINNED_CASES = _DENIED_CASES + _GIT_PUSH_WARN_CASES + _ALLOWED_CASES
 
 
-def test_strip_array_literal_newlines_preserves_nested_depth() -> None:
-    """`_strip_array_literal_newlines` (issue #1350) strips only DEPTH-0
-    newlines from an array literal's own inner token list -- a newline
-    nested inside a `$(...)`/`(...)` construct WITHIN that content (still
-    a real command list there, unlike the array's own top-level word
-    list) must survive untouched, or the recursive `_classify_tokens`
-    call that consumes this function's own output could no longer see it
-    as the real statement separator it is at real bash runtime."""
-    assert checker._strip_array_literal_newlines(["x", "(", "a", "\n", "b", ")", "\n", "c"]) == [
+def test_strip_array_literal_newlines_preserves_nested_command_substitution() -> None:
+    """`_strip_array_literal_newlines` (issue #1350) strips a newline from
+    an array literal's own inner token list EXCEPT one genuinely inside a
+    nested `$(...)` command-substitution span (still a real command list
+    there, unlike the array's own top-level word list) -- that one must
+    survive untouched, or the recursive `_classify_tokens` call that
+    consumes this function's own output could no longer see it as the
+    real statement separator it is at real bash runtime. Token shape
+    matches `_command_substitution_token_span`'s own documented form: a
+    `$`-suffixed token immediately followed by its own `(` token."""
+    assert checker._strip_array_literal_newlines(["x", "$", "(", "a", "\n", "b", ")", "\n", "c"]) == [
         "x",
+        "$",
         "(",
         "a",
         "\n",
         "b",
         ")",
         "c",
+    ]
+
+
+def test_strip_array_literal_newlines_ignores_bare_unquoted_looking_paren() -> None:
+    """Found live during independent adversarial review of this same
+    fix's own first version: a bare `(`/`)` token is indistinguishable,
+    once shlex has dequoted it, from a QUOTED literal parenthesis
+    CHARACTER used as ordinary array-element data -- tracking generic
+    paren nesting depth by bare token equality (this function's own
+    first version) misread such a token as opening an unclosed subshell,
+    leaving every later newline wrongly un-stripped. A bare, non-`$`-
+    prefixed `(` must never be treated as opening a protected span."""
+    assert checker._strip_array_literal_newlines(["x", "(", "pip", "\n", "install", "foo"]) == [
+        "x",
+        "(",
+        "pip",
+        "install",
+        "foo",
     ]
 
 

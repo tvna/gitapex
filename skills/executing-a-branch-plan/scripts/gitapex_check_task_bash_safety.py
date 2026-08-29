@@ -1640,24 +1640,37 @@ def _strip_leading_unassigned_bare_refs(tokens: list[str], name_to_raw_value: di
 
 
 def _strip_array_literal_newlines(tokens: list[str]) -> list[str]:
-    """Remove every DEPTH-0 literal `"\\n"` token from TOKENS (an array
-    literal's own inner element list, as `_rule_array_literal_content`
-    below extracts it). Ported from hooks/gitapex_check_bash_safety.py's
-    own function of the same name -- see that module's own docstring
-    (issue #1350) for why a newline there is ordinary IFS whitespace
-    between array elements, never a statement separator, and why a
-    newline at depth > 0 (nested inside a `$(...)`/`(...)` construct
-    within the array's own content) must be left untouched instead."""
+    """Remove every literal `"\\n"` token from TOKENS (an array literal's
+    own inner element list, as `_rule_array_literal_content` below
+    extracts it) EXCEPT one genuinely inside a nested `$(...)` command-
+    substitution span within that content. Ported from hooks/gitapex_
+    check_bash_safety.py's own function of the same name -- see that
+    module's own docstring (issue #1350) for the full live-verified
+    reasoning: an earlier version tracked generic `(`/`)` nesting depth
+    by bare token equality instead, which a QUOTED literal parenthesis
+    CHARACTER used as ordinary array-element data is indistinguishable
+    from once shlex has dequoted it -- confirmed live via `declare -p`
+    that real bash parses `A=(x '(' pip` + a real newline + `install
+    foo); "${A[@]}"` as a plain five-element array, the quoted `(` never
+    nesting anything, while the depth-counting version misread it as an
+    unclosed subshell and left the following newline wrongly un-
+    stripped, splitting `pip`+`install` into two segments and reopening
+    this same issue's own bug class. Recognizing only the unambiguous
+    `$(` shape via `_command_substitution_token_span` (never a bare,
+    unqualified `(`) matches how real bash's own parser is never
+    confused by a quoted character in the first place."""
     out: list[str] = []
-    depth = 0
-    for tok in tokens:
-        if tok == "(":
-            depth += 1
-        elif tok == ")":
-            depth = max(0, depth - 1)
-        if tok == "\n" and depth == 0:
+    i = 0
+    n = len(tokens)
+    while i < n:
+        span_end = _command_substitution_token_span(tokens, i)
+        if span_end is not None:
+            out.extend(tokens[i:span_end])
+            i = span_end
             continue
-        out.append(tok)
+        if tokens[i] != "\n":
+            out.append(tokens[i])
+        i += 1
     return out
 
 

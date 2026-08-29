@@ -518,20 +518,42 @@ def test_array_literal_content_denied_for_a_literal_gh_verb(tmp_path: pathlib.Pa
     assert verdict.deny is True
 
 
-def test_strip_array_literal_newlines_preserves_nested_depth() -> None:
-    """`_strip_array_literal_newlines` (issue #1350) strips only DEPTH-0
-    newlines from an array literal's own inner token list -- a newline
-    nested inside a `$(...)`/`(...)` construct WITHIN that content must
-    survive untouched, since it is still a real statement separator for
-    that nested command list at real bash runtime."""
-    assert checker._strip_array_literal_newlines(["x", "(", "a", "\n", "b", ")", "\n", "c"]) == [
+def test_strip_array_literal_newlines_preserves_nested_command_substitution() -> None:
+    """`_strip_array_literal_newlines` (issue #1350) strips a newline from
+    an array literal's own inner token list EXCEPT one genuinely inside a
+    nested `$(...)` command-substitution span -- that one must survive
+    untouched, since it is still a real statement separator for that
+    nested command list at real bash runtime. Token shape matches
+    `_command_substitution_token_span`'s own documented form: a
+    `$`-suffixed token immediately followed by its own `(` token."""
+    assert checker._strip_array_literal_newlines(["x", "$", "(", "a", "\n", "b", ")", "\n", "c"]) == [
         "x",
+        "$",
         "(",
         "a",
         "\n",
         "b",
         ")",
         "c",
+    ]
+
+
+def test_strip_array_literal_newlines_ignores_bare_unquoted_looking_paren() -> None:
+    """Found live during independent adversarial review of this same
+    fix's own first version, ported from the sibling module's own fix of
+    the same finding: a bare `(`/`)` token is indistinguishable, once
+    shlex has dequoted it, from a QUOTED literal parenthesis CHARACTER
+    used as ordinary array-element data -- tracking generic paren nesting
+    depth by bare token equality (this function's own first version)
+    misread such a token as opening an unclosed subshell, leaving every
+    later newline wrongly un-stripped. A bare, non-`$`-prefixed `(` must
+    never be treated as opening a protected span."""
+    assert checker._strip_array_literal_newlines(["x", "(", "pip", "\n", "install", "foo"]) == [
+        "x",
+        "(",
+        "pip",
+        "install",
+        "foo",
     ]
 
 
@@ -637,6 +659,26 @@ def test_array_literal_newline_is_not_a_statement_separator(tmp_path: pathlib.Pa
     command = 'A=(pip\ninstall foo); "${A[@]}"'
     observations, verdict = _pin(command, ["pip"], tmp_path)
     assert _unordered(observations) == _unordered([("pip", ["install", "foo"])])
+    assert verdict.deny is True
+
+
+def test_array_literal_quoted_paren_data_does_not_hide_a_later_newline(tmp_path: pathlib.Path) -> None:
+    """Found live during independent adversarial review of this same
+    fix's own first version, ported from the sibling module's own fix of
+    the same finding: a QUOTED literal parenthesis CHARACTER used as
+    ordinary array-element data is indistinguishable, once shlex has
+    dequoted it, from a bare structural `(`/`)` token -- an earlier
+    version of `_strip_array_literal_newlines` tracked generic paren
+    nesting depth by bare token equality and was fooled by exactly this
+    into leaving a LATER, genuinely depth-0 newline un-stripped.
+    Confirmed live that `A=(pip` + a real newline + `install foo '(');
+    "${A[@]}"` genuinely expands to a denied `pip install foo (`
+    invocation at real bash runtime (real bash parses the quoted `(` as
+    a plain fifth array element, never nesting anything), yet was
+    wrongly ALLOWED by that earlier, too-permissive depth heuristic."""
+    command = "A=(pip\ninstall foo '('); \"${A[@]}\""
+    observations, verdict = _pin(command, ["pip"], tmp_path)
+    assert _unordered(observations) == _unordered([("pip", ["install", "foo", "("])])
     assert verdict.deny is True
 
 

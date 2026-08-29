@@ -1863,28 +1863,55 @@ def _strip_leading_unassigned_bare_refs(tokens: list[str], name_to_raw_value: di
 
 
 def _strip_array_literal_newlines(tokens: list[str]) -> list[str]:
-    """Remove every DEPTH-0 literal `"\\n"` token from TOKENS (an array
-    literal's own inner element list, as `_rule_array_literal_content`
-    below extracts it) -- see that function's own docstring (issue #1350)
-    for why a newline there is ordinary IFS whitespace between array
-    elements, never a statement separator, unlike everywhere else in this
-    module. Depth-aware: tracks `(`/`)` nesting the same way `_array_
-    literal_token_span`/`_command_substitution_token_span` already do, so
-    a newline found at depth > 0 -- genuinely inside a NESTED `$(...)`/
-    `(...)` construct within the array's own inner content, itself a real
-    command list -- is left untouched, for the caller's own recursive
-    `_classify_tokens` call to still see and correctly treat as a real
-    separator there."""
+    """Remove every literal `"\\n"` token from TOKENS (an array literal's
+    own inner element list, as `_rule_array_literal_content` below
+    extracts it) EXCEPT one genuinely inside a nested `$(...)` command-
+    substitution span within that content -- see that function's own
+    docstring (issue #1350) for why a newline elsewhere there is ordinary
+    IFS whitespace between array elements, never a statement separator,
+    unlike everywhere else in this module, while a `$(...)` span's own
+    content is still a real command list where the same newline is a
+    genuine statement separator.
+
+    Recognizes a nested span via `_command_substitution_token_span`
+    (the SAME `$`-prefixed-token-then-`(` detector `_fold_command_
+    substitution_spans`/`_rule_command_substitution_content` already use
+    elsewhere in this module) and copies it through untouched, rather
+    than tracking generic `(`/`)` nesting depth by bare token equality --
+    found live during independent adversarial review of this same fix's
+    own first version, which did track depth that way: a bare `(`/`)`
+    token is indistinguishable, once shlex has dequoted it, from a
+    QUOTED literal parenthesis CHARACTER used as ordinary array-element
+    DATA (`A=(x '(' pip` + a real newline + `install foo); "${A[@]}"` --
+    confirmed live via `declare -p` that real bash parses this as a
+    plain five-element array, `x`, `(`, `pip`, `install`, `foo`, the
+    quoted `(` never nesting anything at all) -- the depth-counting
+    version therefore misread that one stray data element as opening an
+    unclosed subshell, leaving every later newline (here, the one real
+    bash treats as ordinary whitespace between `pip` and `install`)
+    wrongly un-stripped, which then split `pip`+`install` into two
+    segments and defeated `_rule_a_literal`'s own same-segment adjacency
+    check -- the exact bug class this issue exists to close, reopened by
+    this function's own first, too-permissive nesting heuristic. Real
+    bash's own parser never confuses a quoted character with a structural
+    operator; recognizing only the unambiguous `$(` shape (never a bare,
+    unqualified `(`) is what actually matches that distinction, and a
+    bare non-`$`-prefixed `(...)` has no real use as array-element DATA
+    in bash in the first place (an uncaptured subshell contributes no
+    word at all), so nothing genuine is lost by no longer treating one as
+    a protected span."""
     out: list[str] = []
-    depth = 0
-    for tok in tokens:
-        if tok == "(":
-            depth += 1
-        elif tok == ")":
-            depth = max(0, depth - 1)
-        if tok == "\n" and depth == 0:
+    i = 0
+    n = len(tokens)
+    while i < n:
+        span_end = _command_substitution_token_span(tokens, i)
+        if span_end is not None:
+            out.extend(tokens[i:span_end])
+            i = span_end
             continue
-        out.append(tok)
+        if tokens[i] != "\n":
+            out.append(tokens[i])
+        i += 1
     return out
 
 
