@@ -157,7 +157,7 @@ suites still assert on final text only).
 | `executing-a-branch-plan` | 3 | 9 | none | no | [evals/executing-a-branch-plan/eval-status.md](../evals/executing-a-branch-plan/eval-status.md) |
 | `explaining-the-work` | 3 | 14 | none | no | [evals/explaining-the-work/eval-status.md](../evals/explaining-the-work/eval-status.md) |
 | `grounding-in-primary-sources` | 3 | 23 | none | no | [evals/grounding-in-primary-sources/eval-status.md](../evals/grounding-in-primary-sources/eval-status.md) |
-| `merge-retrospective` | 3 | 20 | none | no | [evals/merge-retrospective/eval-status.md](../evals/merge-retrospective/eval-status.md) |
+| `merge-retrospective` | 3 | 26 | none | no | [evals/merge-retrospective/eval-status.md](../evals/merge-retrospective/eval-status.md) |
 | `outward-artifact-preflight` | 3 | 7 | none | no | [evals/outward-artifact-preflight/eval-status.md](../evals/outward-artifact-preflight/eval-status.md) |
 | `planning-a-branch-from-an-issue` | 3 | 6 | none | no | [evals/planning-a-branch-from-an-issue/eval-status.md](../evals/planning-a-branch-from-an-issue/eval-status.md) |
 | `ranking-the-open-queue` | 1 | 3 | none | no | [evals/ranking-the-open-queue/eval-status.md](../evals/ranking-the-open-queue/eval-status.md) |

@@ -6,7 +6,7 @@ the *drafted* text, before `mcp__github__create_pull_request` /
 `mcp__github__update_pull_request` / `mcp__github__issue_write` executes
 -- `hooks/check-bash-safety.sh`'s `git push` path scans the outgoing
 commit range, and `skills/outward-artifact-preflight/SKILL.md`'s checks 1
-and 3 are a manual checklist applied to the draft. Nothing re-scanned
+and 2 are a manual checklist applied to the draft. Nothing re-scanned
 what the platform actually stored afterwards, so a template
 substitution, a downstream trailer injection, or an API-side transform
 between drafting and posting shipped unscanned. That is not
@@ -60,13 +60,13 @@ ones, not parallel copies:
   checkout.
 
 The one scan authored here is the ASCII check (outward-artifact-preflight
-checklist item 3), which had no reusable implementation: the repository's
+checklist item 2), which had no reusable implementation: the repository's
 existing character checks are `gitapex_gate_hidden_characters.py` (tracked
 *files*, and only the invisible subset) and the raw-angle-bracket
 placeholder check in `gitapex_check_skill_shape.py` (SKILL.md prose,
 via a `Path`-taking checker) -- neither is a PR/issue-body check. Issue
 #878's Acceptance Criteria Map cited the latter as the reusable pair
-member; that citation does not hold up, and the checklist's own item 3
+member; that citation does not hold up, and the checklist's own item 2
 (ASCII-only) is what actually applies to an outward-facing body.
 
 **Endpoint.** Always `/repos/{owner}/{repo}/issues/{number}`, for pull
@@ -241,8 +241,8 @@ _MAX_REPORTED_HITS = 20
 
 # ASCII characters an outward-facing body may legitimately carry:
 # printable ASCII plus the three whitespace characters a Markdown body
-# really does contain. Everything else is a check-3 hit. Mirrors
-# outward-artifact-preflight checklist item 3's own `[^ -~\t]` class, plus
+# really does contain. Everything else is a check-2 hit. Mirrors
+# outward-artifact-preflight checklist item 2's own `[^ -~\t]` class, plus
 # newline/carriage-return, which that checklist's line-oriented `grep`
 # never sees as content but a whole-body scan does.
 _ALLOWED_CONTROL_CHARACTERS = frozenset("\t\n\r")
@@ -738,7 +738,7 @@ def evaluate(
         "items 2 and 5, first check whether each hit is a disclosure trailer this repository has already "
         "ratified in its own contributor-facing docs -- if so, it is agreed, not a leak, and must not be "
         "suppressed with an ignore pattern or allowlist. Otherwise the content is already public: per that "
-        "skill's check 2, strip it via mcp__github__update_pull_request / mcp__github__issue_write, then "
+        "skill's check 4, strip it via mcp__github__update_pull_request / mcp__github__issue_write, then "
         "re-fetch and re-scan to confirm it was not force-reinjected."
     )
 
