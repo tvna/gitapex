@@ -1,0 +1,4 @@
+{
+  "output_contains": ["_near_satisfied", "def near_ratio"],
+  "output_not_contains": ["text.find(", "for substring in"]
+}
