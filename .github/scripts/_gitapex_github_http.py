@@ -29,6 +29,7 @@ from __future__ import annotations
 import http.client
 import json
 import sys
+import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable
@@ -36,6 +37,8 @@ from typing import Any
 
 _API_VERSION = "2022-11-28"
 _HTTP_TIMEOUT_SECONDS = 30
+_GRAPHQL_URL = "https://api.github.com/graphql"
+_GRAPHQL_TRANSIENT_ERROR_MARKER = "something went wrong while executing your query"
 
 
 class GitHubApiError(RuntimeError):
@@ -119,12 +122,64 @@ def fetch_json_document(
     Contract: like `fetch_json_page`, the return value is unvalidated
     parsed JSON -- every caller must shape-check it before use.
     `_gitapex_rulesets.py` is the existing example to follow (issue #995).
+
+    Issue #729: the HTTP/retry work itself now delegates to
+    `request_with_retry` (the generalized, non-raising core this and
+    `call_json` both sit on top of) -- this function's own public
+    behaviour and raise conditions are unchanged, only the retry loop's
+    body moved.
     """
+    last_code, last_body = request_with_retry("GET", url, token, opener, sleeper)
+    if 200 <= last_code < 300:
+        try:
+            document: Any = json.loads(last_body)
+        except json.JSONDecodeError as error:
+            # A 200 response is not proof of a parseable body -- a
+            # flaky proxy/CDN in front of api.github.com can return
+            # HTTP 200 with a truncated or empty body. Without this,
+            # a JSONDecodeError would escape every caller's own
+            # `except GitHubApiError` and crash as a raw traceback
+            # instead of the documented clean error/exit-1 path.
+            raise GitHubApiError(f"GET {url} returned HTTP {last_code} with unparseable JSON: {error}") from error
+        return document
+    raise GitHubApiError(f"GET {url} failed: HTTP {_format_code(last_code)}: {last_body}")
+
+
+def request_with_retry(
+    method: str,
+    url: str,
+    token: str,
+    opener: Callable[[urllib.request.Request], Any],
+    sleeper: Callable[[float], None],
+    *,
+    body: dict[str, Any] | None = None,
+    max_attempts: int = 3,
+) -> tuple[int, str]:
+    """Call the GitHub REST API with `method`, retrying transient
+    (network / 5xx) failures up to `max_attempts` times. This is the core
+    retry/backoff primitive `fetch_json_document` and `call_json` both sit
+    on top of -- generalized from `fetch_json_document`'s own former
+    inline loop plus the near-identical `_call` implementations
+    hand-copied across `gitapex_gate_acm_issue_disclosure.py`,
+    `gitapex_post_merge_retro.py`, and `gitapex_stale_retro_stub_autoclose.py`
+    (issue #729).
+
+    Unlike `fetch_json_document`/`call_json`, this function does NOT raise
+    on a non-2xx status after retries are exhausted -- it always returns
+    the final `(status_code, body_text)` pair, success or not. That is
+    the key design difference enabling a caller that needs to branch on
+    the raw status code itself (a 404-special-case check, for instance,
+    the way `gitapex_gate_retro_title_convention_citation.py`'s own
+    `is_resolvable_issue` does) to call this directly instead of catching
+    `GitHubApiError`.
+    """
+    data = json.dumps(body).encode("utf-8") if body is not None else None
+    content_type = "application/json" if body is not None else None
     last_code = 0
     last_body = ""
-    for attempt in range(1, 4):
-        request = urllib.request.Request(url, method="GET")  # noqa: S310 -- fixed https://api.github.com URL
-        for name, value in build_headers(token).items():
+    for attempt in range(1, max_attempts + 1):
+        request = urllib.request.Request(url, data=data, method=method)  # noqa: S310 -- fixed https://api.github.com URL
+        for name, value in build_headers(token, content_type=content_type).items():
             request.add_header(name, value)
         try:
             with opener(request) as response:
@@ -140,29 +195,122 @@ def fetch_json_document(
             # but stalls or is cut short -- IncompleteRead is not an OSError
             # subclass, so it needs its own arm. Without this, a body-read
             # failure escapes retry entirely and crashes the whole scan
-            # instead of getting the three attempts promised below.
+            # instead of getting the attempts promised below.
             last_code = 0
             last_body = str(error)
 
         if 200 <= last_code < 300:
-            try:
-                document: Any = json.loads(last_body)
-            except json.JSONDecodeError as error:
-                # A 200 response is not proof of a parseable body -- a
-                # flaky proxy/CDN in front of api.github.com can return
-                # HTTP 200 with a truncated or empty body. Without this,
-                # a JSONDecodeError would escape every caller's own
-                # `except GitHubApiError` and crash as a raw traceback
-                # instead of the documented clean error/exit-1 path.
-                raise GitHubApiError(f"GET {url} returned HTTP {last_code} with unparseable JSON: {error}") from error
-            return document
-        print(f"Attempt {attempt}: HTTP {_format_code(last_code)} for GET {url}", file=sys.stderr)
+            break
+        print(f"Attempt {attempt}: HTTP {_format_code(last_code)} for {method} {url}", file=sys.stderr)
         if last_code != 0 and last_code < 500:
             break
+        if attempt < max_attempts:
+            sleeper(attempt * 5)
+
+    return last_code, last_body
+
+
+def call_json(
+    method: str,
+    url: str,
+    token: str,
+    opener: Callable[[urllib.request.Request], Any],
+    sleeper: Callable[[float], None],
+    *,
+    body: dict[str, Any] | None = None,
+    max_attempts: int = 3,
+) -> Any:
+    """Call the GitHub REST API via `request_with_retry`, returning the
+    parsed JSON body on a 2xx status, or raising `GitHubApiError` (with
+    the exact message text `gitapex_gate_acm_issue_disclosure.py`,
+    `gitapex_post_merge_retro.py`, and `gitapex_stale_retro_stub_autoclose.py`'s
+    own `_call` functions already raise) once retries are exhausted on a
+    non-2xx status.
+
+    Deliberately does NOT guard the `json.loads` call below with a
+    try/except: this preserves an existing, deliberately-not-fixed-in-
+    this-PR bug already present in every one of those three carriers'
+    own `_call` functions -- a 2xx response with an unparseable body
+    raises a raw `json.JSONDecodeError` here, not `GitHubApiError`.
+    Issue #729's criterion 3, a separate later PR, owns fixing it; adding
+    a guard here would silently fix it early and diverge from what those
+    carriers are being migrated to reproduce exactly.
+    """
+    last_code, last_body = request_with_retry(method, url, token, opener, sleeper, body=body, max_attempts=max_attempts)
+    if 200 <= last_code < 300:
+        return json.loads(last_body) if last_body else {}
+    raise GitHubApiError(f"{method} {url} failed: HTTP {_format_code(last_code)}: {last_body}")
+
+
+def _graphql_is_transient(code: int, body: dict[str, Any]) -> bool:
+    if code == 0 or code >= 500:
+        return True
+    errors = body.get("errors")
+    if isinstance(errors, list):
+        for err in errors:
+            message = err.get("message", "") if isinstance(err, dict) else ""
+            if isinstance(message, str) and _GRAPHQL_TRANSIENT_ERROR_MARKER in message.lower():
+                return True
+    return False
+
+
+def graphql_call(
+    *,
+    query: str,
+    variables: dict[str, Any],
+    token: str,
+    opener: Callable[[urllib.request.Request], Any] = default_opener,
+    sleeper: Callable[[float], None] | None = None,
+) -> tuple[int, dict[str, Any]]:
+    """Execute a GitHub GraphQL query/mutation, retrying transient
+    failures.
+
+    Moved verbatim from `gitapex_sync_pr_publish.py` (issue #729,
+    criterion 1) -- not redesigned, it was already correct: it retries on
+    5xx/network failures AND on a 200 response whose body contains a
+    GraphQL transient-error marker (`_GRAPHQL_TRANSIENT_ERROR_MARKER`,
+    via `_graphql_is_transient`), and it already guards its own
+    `json.loads` with `try/except json.JSONDecodeError`, degrading to an
+    empty dict on an unparseable/empty body.
+    `gitapex_sync_pr_publish.py`'s own `_CREATE_COMMIT_ON_BRANCH_MUTATION`
+    string stays there -- it is business logic specific to that carrier,
+    not generic retry-client mechanics.
+    """
+    sleeper = sleeper if sleeper is not None else time.sleep
+    payload = json.dumps({"query": query, "variables": variables}, separators=(",", ":"))
+    last_code = 0
+    last_body: dict[str, Any] = {}
+
+    for attempt in range(1, 4):
+        request = urllib.request.Request(_GRAPHQL_URL, data=payload.encode("utf-8"), method="POST")
+        request.add_header("Authorization", f"Bearer {token}")
+        request.add_header("Accept", "application/vnd.github+json")
+        request.add_header("X-GitHub-Api-Version", _API_VERSION)
+        request.add_header("Content-Type", "application/json")
+        try:
+            with opener(request) as response:
+                code = int(response.status)
+                body_str = response.read().decode("utf-8", errors="replace")
+        except urllib.error.HTTPError as error:
+            code = int(error.code)
+            body_str = error.read().decode("utf-8", errors="replace")
+        except urllib.error.URLError:
+            code = 0
+            body_str = ""
+        try:
+            parsed = json.loads(body_str) if body_str else {}
+        except json.JSONDecodeError:
+            parsed = {}
+        last_code = code
+        last_body = parsed if isinstance(parsed, dict) else {}
+
+        if not _graphql_is_transient(last_code, last_body):
+            break
+        print(f"Attempt {attempt}: transient GraphQL response HTTP {_format_code(last_code)}", file=sys.stderr)
         if attempt < 3:
             sleeper(attempt * 5)
 
-    raise GitHubApiError(f"GET {url} failed: HTTP {_format_code(last_code)}: {last_body}")
+    return last_code, last_body
 
 
 def _format_code(code: int) -> str:
