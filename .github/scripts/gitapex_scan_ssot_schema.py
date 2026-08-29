@@ -158,7 +158,7 @@ class Gate(BaseModel):
     trigger: str
     policy_refs: list[str]
     cluster: str | list[str]
-    tracking_issue: int | None
+    tracking_issue: int | list[int] | None
     status: Literal["experimental", "active", "deprecated"]
     supersedes: str | None
     fail_mode: GateFailMode | None = None
