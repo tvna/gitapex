@@ -138,11 +138,15 @@ first, not skimmed.
    never delegated into a task `agent()`. The next wave's run dispatches
    only once this settles.
 
-   **Check `origin/main` drift (issue `#1387`) once the wave's own push
-   lands, before the next wave dispatches** -- never mid-wave, since a
-   wave's own task worktrees are forked from one head and merging
-   `origin/main` in mid-wave would fork later tasks from a different base
-   than earlier ones in the same wave. Run `uv run --frozen python3
+   **Check `origin/main` drift (issue `#1387`) once every wave's own push
+   lands** -- including the last wave, where "before the next wave
+   dispatches" has no next wave to gate on; run it before step 9
+   concludes instead, so a single-wave Branch Plan (a valid degenerate
+   case this skill already executes) still gets checked at least once,
+   not zero times. Never mid-wave, since a wave's own task worktrees are
+   forked from one head and merging `origin/main` in mid-wave would fork
+   later tasks from a different base than earlier ones in the same wave.
+   Run `uv run --frozen python3
    .github/scripts/gitapex_gate_behind_base.py` (exit 0: clean, proceed;
    exit 1: behind; exit 2: the fetch/comparison itself cannot be trusted).
    On exit 1: fetch and merge (or fast-forward) `origin/main` into the
@@ -205,7 +209,15 @@ first, not skimmed.
    resolution procedure (issue `#1387`) -- the motivating incident for that
    rule (`#1361` repair 2) happened specifically during a Step 8 fix round,
    not only at a wave boundary, so a wave-boundary-only check would not
-   have caught it. An outstanding CONFIRMED finding, or
+   have caught it. Run it once more, unconditionally, right before step
+   9's own remote-state check -- even when this step's own two-layer
+   review found zero CONFIRMED findings and so produced no fix round at
+   all (the common clean-pass outcome): "between rounds" alone would
+   never fire for that case, and step 6's own last-wave check (which by
+   now already ran once, per its own fix above) only covers drift up to
+   the point the waves finished, not drift accumulated during step 8's
+   own review/fix work itself -- exactly the gap the motivating incident
+   above sits in. An outstanding CONFIRMED finding, or
    a re-verification failure, blocks step 9. Detail: [refactor and review
    gate reference](references/refactor-and-review-gate.md).
 9. **On all tasks complete, step 8 clean, and the branch's remote state

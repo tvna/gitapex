@@ -3,7 +3,9 @@
 ``LIFECYCLE_ISSUE_REF_RE``/``_valid_tracking_issue`` (issue #1347, closing
 issue #1178's own ``detection-logic-property-coverage`` gap for the
 regex's generalization from a ``tvna/gitapex``-only pattern to an
-any-owner/any-repo shape).
+any-owner/any-repo shape) and its ``_owning_skill_dir`` path-normalization
+helper (issue #1387, closing the same gap for that function's own
+string-comparison allowlist checks).
 
 Reproducibility: ``derandomize=True`` with an explicit ``max_examples`` and
 ``deadline=None``, matching
