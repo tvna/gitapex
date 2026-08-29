@@ -1467,6 +1467,26 @@ def test_checkout_allowed_when_a_comment_after_a_line_continuation_names_an_unre
     )
     assert result.returncode == 0, f"stderr={result.stderr!r}"
     assert result.stdout == ""
+
+
+def test_checkout_allowed_when_a_trailing_redirect_names_an_unrelated_dirty_file(tmp_path: Path) -> None:
+    """CRITICAL false-positive regression pin (round-15 independent
+    review, issue #1375). Round 14 taught `_find_git_checkout_restore`
+    and `_first_surviving_segment_word` to skip a redirect clause, but
+    never taught the path-extraction functions the same lesson -- a
+    redirect operator and its target were swept into
+    `checkout_restore_paths` as if they were real git path arguments.
+    The real checkout target (`f.py`) is untouched; `unrelated.log` is
+    dirty but only ever used as an append-redirect target, which can
+    never discard its existing content."""
+    repo_dir = tmp_path / "repo"
+    _init_repo_with_committed_file(repo_dir)
+    (repo_dir / "unrelated.log").write_text("hello\n")
+    _git(repo_dir, "add", "unrelated.log")
+    _git(repo_dir, "commit", "-q", "-m", "add unrelated.log")
+    (repo_dir / "unrelated.log").write_text("hello\ndirty\n")
+    result = run("git checkout -- f.py >> unrelated.log", payload_cwd=str(repo_dir))
+    assert result.returncode == 0, f"stderr={result.stderr!r}"
     assert result.stderr == ""
 
 

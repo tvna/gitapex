@@ -3852,6 +3852,49 @@ def test_classify_does_not_extract_paths_from_an_unrelated_dynamic_tool() -> Non
     assert verdict.checkout_restore_paths == ()
 
 
+def test_strip_redirect_clauses_removes_a_redirect_wherever_it_occurs() -> None:
+    assert checker._strip_redirect_clauses(["f.py", ">>", "log.txt"]) == ["f.py"]
+    assert checker._strip_redirect_clauses([">>", "log.txt", "f.py"]) == ["f.py"]
+    assert checker._strip_redirect_clauses(["f.py", "2", ">&", "1"]) == ["f.py"]
+    assert checker._strip_redirect_clauses(["f.py", "g.py"]) == ["f.py", "g.py"]
+
+
+def test_git_checkout_paths_excludes_a_trailing_redirect_clause() -> None:
+    """CRITICAL false-positive regression pin (round-15 independent
+    review, issue #1375). Round 14 taught `_find_git_checkout_restore`
+    and `_first_surviving_segment_word` to skip a redirect clause, but
+    never taught the path-extraction functions the same lesson -- a
+    redirect operator and its target were swept into
+    `checkout_restore_paths` as if they were real git path arguments.
+    Live-verified before this fix: `git checkout -- f.py >>
+    unrelated_append_target.py` resolved to `checkout_restore_paths=
+    ('f.py', '>>', 'unrelated_append_target.py')`, causing the live
+    wrapper check to wrongly deny whenever the unrelated append target
+    happened to be dirty, even though an append redirect can never
+    discard that file's existing content."""
+    deny_reason, paths = checker._git_checkout_paths(["--", "f.py", ">>", "unrelated_append_target.py"], {})
+    assert deny_reason is None
+    assert paths == ("f.py",)
+
+
+def test_git_restore_paths_excludes_a_trailing_redirect_clause() -> None:
+    deny_reason, paths = checker._git_restore_paths(["f.py", ">>", "unrelated_append_target.py"], {})
+    assert deny_reason is None
+    assert paths == ("f.py",)
+
+
+def test_classify_does_not_flag_a_redirect_target_as_a_checkout_path() -> None:
+    """End-to-end regression pin for the round-15 finding at the
+    `classify()` level."""
+    for cmd in (
+        "git checkout -- f.py >> unrelated_append_target.py",
+        "git restore f.py >> unrelated_append_target.py",
+    ):
+        verdict = checker.classify(cmd)
+        assert verdict.deny is False, cmd
+        assert verdict.checkout_restore_paths == ("f.py",), cmd
+
+
 # --- End-to-end classify() coverage, pinning every explicit safe/deny case
 # issue #1375's own Acceptance Criteria Map and "Explicit safe cases"
 # section name by hand.

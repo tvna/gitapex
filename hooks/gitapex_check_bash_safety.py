@@ -3298,7 +3298,14 @@ def _git_checkout_paths(
     this classifier simply cannot read the named file -- so silently
     granting no-claim safety here would under-serve the exact opaque-path
     threat model this whole feature exists to close, not merely decline
-    to extend coverage."""
+    to extend coverage.
+
+    A redirect clause (`_strip_redirect_clauses`, see its own docstring)
+    is stripped from TOKENS_AFTER FIRST, before any check below runs --
+    CRITICAL bug found by independent adversarial review (round 15, issue
+    #1375): a redirect operator and its target were otherwise swept into
+    `checkout_restore_paths` as if they were real git path arguments."""
+    tokens_after = _strip_redirect_clauses(tokens_after)
     if any(tok in _CHECKOUT_BRANCH_CREATION_FLAGS or tok.startswith("--orphan=") for tok in tokens_after):
         return None, ()
     if any(
@@ -3345,7 +3352,14 @@ def _git_restore_paths(
     including `--pathspec-from-file`/`--pathspec-file-nul`, whose paths
     come from a file this classifier cannot inspect -- denies outright
     rather than risk under-extracting paths past a flag whose own
-    value-consumption behavior is unknown here."""
+    value-consumption behavior is unknown here.
+
+    A redirect clause (`_strip_redirect_clauses`, see its own docstring)
+    is stripped from TOKENS_AFTER FIRST, before this walk runs -- CRITICAL
+    bug found by independent adversarial review (round 15, issue #1375):
+    a redirect operator and its target were otherwise swept into
+    `checkout_restore_paths` as if they were real git path arguments."""
+    tokens_after = _strip_redirect_clauses(tokens_after)
     saw_staged = False
     saw_worktree = False
     path_tokens: list[str] = []
@@ -3546,6 +3560,54 @@ def _redirect_span_length(seg: list[str], j: int) -> int:
     if i < n and seg[i] in _REDIRECT_OPERATORS and i + 1 < n:
         return i + 2 - j
     return 0
+
+
+def _strip_redirect_clauses(tokens: list[str]) -> list[str]:
+    """TOKENS with every I/O-redirection clause (`_redirect_span_length`,
+    see its own docstring) removed, wherever it occurs -- the shell
+    consumes a redirect clause itself; it is never passed to the command
+    (here, `git checkout`/`git restore`) as one of its own arguments.
+
+    CRITICAL bug found by independent adversarial review (round 15, issue
+    #1375) and independently reproduced live: round 14 taught
+    `_find_git_checkout_restore` (finding the `checkout`/`restore` word
+    itself) and `_first_surviving_segment_word` (finding a possible cwd
+    relocator) to skip a redirect clause, but never taught the PATH-
+    EXTRACTION functions (`_git_checkout_paths`, `_git_restore_paths`,
+    both of which call this on TOKENS_AFTER before doing anything else)
+    the same lesson -- so a redirect operator and its target token were
+    swept into `checkout_restore_paths` as if they were real git path
+    arguments. `git checkout -- f.py >> unrelated_append_target.py`
+    resolved to `checkout_restore_paths=('f.py', '>>',
+    'unrelated_append_target.py')` -- a CONFIDENT, WRONG claim (redirect
+    operators never start with `-`, so every existing positional/path
+    filter in this section swept them in) that made the live wrapper
+    check deny a checkout that provably never touches
+    `unrelated_append_target.py` at all (an append redirect can only add
+    to a file, never discard its existing content) whenever that
+    unrelated file happened to be dirty. Confirmed live end-to-end
+    through the real wrapper against a scratch git repo: the flagged
+    file's content was byte-for-byte unchanged after the real command
+    actually ran.
+
+    Applied ONCE, up front, to the whole TOKENS_AFTER in both callers --
+    before any `--`-split, positional-count, or flag walk runs -- rather
+    than taught separately to `_resolve_path_tokens` and each caller's
+    own positional-gathering logic: stripping late would still leave a
+    redirect's own token COUNT distorting `_git_checkout_paths`'s own
+    sub-case (b) decision (2+ real positionals with no `--`), since real
+    git never sees the redirect's tokens as positionals at all."""
+    result: list[str] = []
+    i = 0
+    n = len(tokens)
+    while i < n:
+        redirect_len = _redirect_span_length(tokens, i)
+        if redirect_len:
+            i += redirect_len
+            continue
+        result.append(tokens[i])
+        i += 1
+    return result
 
 
 def _dynamic_token_resolves_only_to_literal(token: str, name_to_raw_value: dict[str, str], literal: str) -> bool:
