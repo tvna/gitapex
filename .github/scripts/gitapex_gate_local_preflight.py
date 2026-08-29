@@ -78,7 +78,7 @@ reasons.
   (issue #890), which closes the "configured here but never actually
   installed" half; nothing closes the ``--no-verify`` half. CI remains the
   authoritative merge gate for every gate carrying a ``ci`` plane -- true
-  for 39 of the 41 wired gates. ``behind-base`` (issue #985) and
+  for 40 of the 42 wired gates. ``behind-base`` (issue #985) and
   ``real-checkout-git-write`` (issue #991) are the two exceptions: each
   carries only ``local``, so for those two gates specifically this
   pre-push hook -- bypassable the same way as any other -- is the *only*
@@ -87,7 +87,7 @@ reasons.
   Map; the same gap now applies to ``real-checkout-git-write`` too.
 - **Every wired gate runs through ``uv``.** CONTRIBUTING.md invokes this
   file with plain ``python3``, and so does the pre-push hook, because the
-  runner itself needs no dependencies -- but all 41 wired argvs begin with
+  runner itself needs no dependencies -- but all 42 wired argvs begin with
   ``uv``, since each gate carries its own pinned invocation. Without ``uv``
   on PATH every one of them reports ``FAIL ... failed to run``, which
   reads as a whole broken wired set rather than one missing tool. ``uv`` is
@@ -171,8 +171,9 @@ SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
 # own _GROUP_TIMEOUT_SECONDS = 600 -- so that one gate's own theoretical
 # worst case is ~4200 s, not 600 s. A ceiling matching that would be useless
 # as a hang guard (80 minutes of a silent pre-push), so this is a judgment
-# call in the other direction. For scale: a warm run of all 41 wired gates
-# combined measures roughly 18 s end to end (the
+# call in the other direction. For scale: a warm run of all 42 wired gates
+# combined measures roughly PLACEHOLDER s end to end (the
+# prior 41-gate set measured roughly 18 s, the
 # prior 40-gate set measured roughly 18 s, the
 # prior 39-gate set measured roughly 12 s, the 38-gate set before that
 # measured roughly 11 s, the 37-gate set before that measured roughly 11 s,
