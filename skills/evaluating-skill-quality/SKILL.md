@@ -134,20 +134,21 @@ is still grading from a contaminated context.
   hardcode -- consult
   [references/adversarial-self-audit.md](references/adversarial-self-audit.md)'s
   Isolation verification section for the current platform's verified
-  mechanism, running its Verification procedure and recording a new
-  entry if none exists yet. The omission must not depend on a human
-  asking whether it happened, and requesting the exclusion is not proof
-  it held; only that section's own two-part behavioral test counts as
-  verification, and it records why a filesystem-only check does not. Read
-  what that section's Trust class rule says about an entry the current
-  run wrote before relying on one. If no platform mechanism can be
-  verified this way, stop and escalate rather than dispatching into a
-  contaminated context. Whether
-  the exclusion, once verified, carries real deterministic backing (a
-  hook, a permission rule) or is enforced by this instruction alone
-  still depends on the environment -- check directly, the same self-audit
-  this skill already applies to its eval-tooling-install Stop boundary
-  below.
+  mechanism: unconditionally compare this session's own identifying
+  signals against any existing Known entry before trusting it, and run
+  the Verification procedure in full -- recording a new entry -- whenever
+  none matches or a signal differs. The omission must not depend on a
+  human asking whether it happened, and requesting the exclusion is not
+  proof it held; only that section's own two-part behavioral test counts
+  as verification, and it records why a filesystem-only check does not.
+  Read what that section's Trust class rule says about an entry the
+  current run wrote before relying on one. If no platform mechanism can
+  be verified this way, stop and escalate rather than dispatching into a
+  contaminated context. Whether the exclusion, once verified, carries
+  real deterministic backing (a hook, a permission rule) or is enforced
+  by this instruction alone still depends on the environment -- check
+  directly, the same self-audit this skill already applies to its
+  eval-tooling-install Stop boundary below.
 - Hand the dispatch step 3's shape-checker output as an established fact
   rather than having it re-run the script itself (Contract discipline's
   "never both" rule, `references/rubric.md`).
@@ -481,11 +482,10 @@ actually specifies.
 ## Notes
 
 Portability rationale: self-contained -- carries its own rubric and bundled
-read-only `gitapex_check_skill_shape.py`, with no control dependency on a
-path outside its own directory; the next paragraph names this skill's
-own output destination, not a control input (rubric.md's Portability
-level section). `evals`/`docs` citations are barred unconditionally
-regardless of role. Declared level: `metadata/gitapex.yaml`.
+read-only `gitapex_check_skill_shape.py`, with no control dependency outside
+its own directory; the next paragraph names an output destination, not a
+control input (rubric.md's Portability level section). `evals`/`docs`
+citations are barred unconditionally. Declared level: `metadata/gitapex.yaml`.
 
 Downstream verdict consumption, for readers working in this repository
 (gitapex): `.github/scripts/gitapex_gate_skill_audit_disclosure.py`, wired by
