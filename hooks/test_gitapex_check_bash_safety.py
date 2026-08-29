@@ -1877,6 +1877,41 @@ def test_checkout_denied_when_git_itself_is_a_dynamic_word(tmp_path: Path) -> No
     assert result.returncode == 2, f"stderr={result.stderr!r}"
 
 
+def test_checkout_denied_when_a_dynamic_git_token_sits_inside_a_command_substitution(tmp_path: Path) -> None:
+    """CRITICAL bypass regression pin (round-18 independent review, issue
+    #1375). A `git` token held in a variable assigned OUTSIDE a `$(...)`
+    command substitution -- an ordinary "hold the tool name in a
+    variable" idiom, not an exotic precondition -- defeated checkout/
+    restore recognition entirely, not merely under-extracted it: the
+    recursive classification of a substitution's own inner content
+    passed no outer scope, so `$G` could never resolve to `git` there
+    even though it unambiguously does at real bash runtime. Live-verified
+    before this fix: `G=git; x=$($G checkout -- dirty.py)` was wrongly
+    allowed outright through the real wrapper, and the real command
+    afterward silently discarded a genuinely dirty `dirty.py`."""
+    repo_dir = tmp_path / "repo"
+    file_path = _init_repo_with_committed_file(repo_dir, filename="dirty.py")
+    file_path.write_text("UNCOMMITTED WORK -- must not be discarded\n")
+    result = run("G=git; x=$($G checkout -- dirty.py)", payload_cwd=str(repo_dir))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+
+
+def test_checkout_denied_when_a_dynamic_git_token_sits_inside_a_quoted_command_substitution(
+    tmp_path: Path,
+) -> None:
+    """Companion to the unquoted-form pin above, for the quoted/fused
+    `$(...)` shape (`_find_fused_command_substitution`, recursed into via
+    `classify()` on the inner TEXT rather than `_classify_tokens` on
+    inner TOKENS) -- the two shapes are handled by separate code paths in
+    `_rule_command_substitution_content`, both needed the outer-scope fix
+    (round-18 independent review, issue #1375)."""
+    repo_dir = tmp_path / "repo"
+    file_path = _init_repo_with_committed_file(repo_dir, filename="dirty.py")
+    file_path.write_text("UNCOMMITTED WORK -- must not be discarded\n")
+    result = run('G=git; x="$($G checkout -- dirty.py)"', payload_cwd=str(repo_dir))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+
+
 def test_checkout_denied_in_a_real_merge_conflict_names_the_conflict_remedy(tmp_path: Path) -> None:
     """A real merge conflict (issue #1375's own Acceptance Criteria Map):
     the deny message names a remedy that actually works mid-conflict

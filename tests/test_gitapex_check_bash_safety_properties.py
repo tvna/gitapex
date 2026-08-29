@@ -1358,7 +1358,7 @@ def test_rule_command_substitution_content_detects_an_embedded_install(tool: str
     a punctuation character shlex breaks a word at, so an assignment's
     `NAME=` prefix stays fused onto the leading `$` in the same token."""
     tokens = ["x=$", "(", tool, "install", "evil-pkg", ")"]
-    reason, _, _ = checker._rule_command_substitution_content(tokens)
+    reason, _, _ = checker._rule_command_substitution_content(tokens, {}, {})
     assert reason is not None
 
 
@@ -1374,7 +1374,7 @@ def test_rule_command_substitution_content_allows_harmless_inner_content(value: 
     silently dropping a non-denying inner `is_git_push=True` signal (see
     the function's own docstring)."""
     tokens = ["echo", "$", "(", "date", value, ")"]
-    assert checker._rule_command_substitution_content(tokens) == (None, False, ())
+    assert checker._rule_command_substitution_content(tokens, {}, {}) == (None, False, ())
 
 
 # --- Issue #1326 Stage 1, fifteenth round: bash's own leading-assignment ----
@@ -1670,6 +1670,55 @@ def test_classify_denies_array_literal_content_with_braced_decoy_end_to_end() ->
     assert verdict.deny is True
 
 
+def test_rule_command_substitution_content_detects_an_outer_scope_resolved_checkout() -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, eighteenth round (issue #1375): a `git` token
+    built from a variable assigned OUTSIDE the `$(...)` span's own
+    text (NAME_TO_VALUE's own entries, not anything the substitution's
+    own inner tokens assign) must still be recognized -- `G=git; x=$($G
+    checkout -- dirty.py)` was wrongly ALLOWED, with an EMPTY
+    `checkout_restore_paths`, before outer scope was threaded into the
+    recursive `_classify_tokens` call below. Mirrors `_rule_array_
+    literal_content`'s own nineteenth-round test of the identical shape
+    for the array-literal span."""
+    tokens = ["x=$", "(", "$G", "checkout", "--", "dirty.py", ")"]
+    outer = {"G": "git"}
+    reason, _, checkout_restore_paths = checker._rule_command_substitution_content(tokens, outer, outer)
+    assert reason is None
+    assert checkout_restore_paths == ("dirty.py",)
+
+
+def test_classify_extracts_command_substitution_checkout_paths_with_outer_scope_end_to_end() -> None:
+    """`classify()`'s own `checkout_restore_paths` extraction, reached
+    end-to-end -- not just the recursive rule's own unit test above.
+    Regression pin for the real bypass found live by Step 8 independent
+    review, eighteenth round (issue #1375): before the outer-scope fix,
+    this resolved to an EMPTY `checkout_restore_paths`, the same silent
+    "nothing to see here" this classifier's own `deny=False` gives every
+    ordinary checkout/restore invocation -- `deny` itself stays False
+    here regardless (this module never unconditionally denies checkout/
+    restore; the live wrapper's own `git diff --quiet` check is what
+    turns a non-empty `checkout_restore_paths` into an actual deny, see
+    `hooks/check-bash-safety.sh`). Exercises the unquoted, cross-token
+    `$(...)` shape (`_command_substitution_token_span`, recursed into via
+    `_classify_tokens` on inner TOKENS)."""
+    verdict = checker.classify("G=git; x=$($G checkout -- dirty.py)")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("dirty.py",)
+
+
+def test_classify_extracts_quoted_command_substitution_checkout_paths_with_outer_scope_end_to_end() -> None:
+    """Companion to the end-to-end pin above, for the quoted/fused
+    `$(...)` shape (`_find_fused_command_substitution`, recursed into via
+    `classify()` on the inner TEXT rather than `_classify_tokens` on
+    inner TOKENS) -- the two shapes are separate code paths in `_rule_
+    command_substitution_content`, both needed the outer-scope fix
+    (eighteenth round, issue #1375)."""
+    verdict = checker.classify('G=git; x="$($G checkout -- dirty.py)"')
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("dirty.py",)
+
+
 @_PROPERTIES
 @given(name=_IDENTIFIERS, subscript=st.sampled_from(["0", "1", "@", "*", "$i"]))
 def test_token_is_all_unassigned_refs_recognizes_a_braced_subscript(name: str, subscript: str) -> None:
@@ -1888,7 +1937,7 @@ def test_rule_command_substitution_content_scans_second_fused_span_in_same_token
     this test only proves that fix reached end-to-end through
     `_rule_command_substitution_content`'s own scan loop."""
     tokens = ["echo", "$(echo ok)$(pip install evil-pkg)"]
-    reason, _, _ = checker._rule_command_substitution_content(tokens)
+    reason, _, _ = checker._rule_command_substitution_content(tokens, {}, {})
     assert reason is not None
 
 
@@ -1897,20 +1946,20 @@ def test_rule_command_substitution_content_skips_blank_fused_span_then_finds_den
     skipped without denying by itself, but scanning continues to the next
     fused span in the same token."""
     tokens = ["echo", "$( )$(pip install evil-pkg)"]
-    reason, _, _ = checker._rule_command_substitution_content(tokens)
+    reason, _, _ = checker._rule_command_substitution_content(tokens, {}, {})
     assert reason is not None
 
 
 def test_rule_command_substitution_content_both_fused_spans_harmless() -> None:
     tokens = ["echo", "$(echo ok)$(echo also-ok)"]
-    assert checker._rule_command_substitution_content(tokens) == (None, False, ())
+    assert checker._rule_command_substitution_content(tokens, {}, {}) == (None, False, ())
 
 
 def test_rule_command_substitution_content_empty_unquoted_span_skipped() -> None:
     """An empty, unquoted `$()` substitution has no inner tokens to
     recurse into -- distinct from the fused/quoted empty-span case above."""
     tokens = ["$", "(", ")"]
-    assert checker._rule_command_substitution_content(tokens) == (None, False, ())
+    assert checker._rule_command_substitution_content(tokens, {}, {}) == (None, False, ())
 
 
 def test_tokenize_raises_on_unbalanced_quote() -> None:

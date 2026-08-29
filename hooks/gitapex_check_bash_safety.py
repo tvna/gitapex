@@ -846,7 +846,9 @@ def _is_unresolvable_substitution(token: str) -> bool:
     return "$(" in token or "`" in token
 
 
-def _rule_command_substitution_content(tokens: list[str]) -> tuple[str | None, bool, tuple[str, ...]]:
+def _rule_command_substitution_content(
+    tokens: list[str], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
+) -> tuple[str | None, bool, tuple[str, ...]]:
     """Recursively classify each `$(...)` command-substitution span's OWN
     inner content through this module's full rule set -- bash genuinely
     RUNS that inner text as a complete command the instant the
@@ -910,18 +912,44 @@ def _rule_command_substitution_content(tokens: list[str]) -> tuple[str | None, b
     `is_git_push` bug would have dropped it -- the identical bug class,
     for a tuple instead of a bool.
 
-    Disclosed residual (found live by Step 8 independent review,
-    nineteenth round, issue #1326): unlike `_rule_array_literal_content`'s
-    own nineteenth-round fix, the recursive `_classify_tokens(inner_
-    tokens)`/`classify(inner_text)` calls below pass no outer scope, so a
-    tool/verb built from a variable assigned OUTSIDE a `$(...)` span's own
-    text (e.g. `T=pip; V=install; x=$($T $V foo)`) is still invisible to
-    this recursive check, even though it resolves to a real denied
-    invocation at bash runtime. Not fixed here: closing it needs the
-    string-based `classify()` entry point (used for the quoted/fused
-    `$(...)` shape) to also accept an outer scope, a larger change than
-    the finding that prompted `_rule_array_literal_content`'s own fix
-    warranted."""
+    NAME_TO_VALUE/NAME_TO_RAW_VALUE are the OUTER command's own assigned
+    variables, already merged with this span's own containing token
+    list's assignments by `_classify_tokens` before this function is ever
+    called -- mirrors `_rule_array_literal_content`'s own NAME_TO_VALUE/
+    NAME_TO_RAW_VALUE parameters exactly (see that function's own
+    docstring), since a bare `$G` inside a `$(...)` span genuinely
+    resolves against the SAME shell scope as the rest of the command at
+    real bash runtime, not just against whatever the substitution's own
+    inner tokens happen to assign.
+
+    CRITICAL bug found live by Step 8 independent review, eighteenth
+    round (issue #1375): an earlier version of this function passed no
+    scope at all to either recursive call, re-deriving nothing from the
+    substitution's own inner tokens either -- so a `git` token itself
+    held in a variable assigned OUTSIDE the `$(...)` span (e.g. `G=git;
+    x=$($G checkout -- dirty.py)`, an ordinary "hold the tool name in a
+    variable" idiom, not an exotic precondition) defeated checkout/
+    restore recognition ENTIRELY, not merely under-extracted it: since
+    "checkout"/"restore" are not in `_WATCHED_VERBS`, there is no B1a/B1b
+    fallback the way there might be for a `pip install`-shaped denial,
+    so an unresolvable `$G` left the substitution's own inner content
+    invisible to `_find_git_checkout_restore`'s own git-token recognition
+    entirely, producing a silently EMPTY `checkout_restore_paths` and
+    `deny=False` -- the exact failure mode issue #1375 exists to prevent.
+    Confirmed live end-to-end through the real wrapper against a scratch
+    git repo with a genuinely dirty, tracked `dirty.py`: the wrapper
+    returned exit 0 (allow) for `G=git; x=$($G checkout -- dirty.py)`,
+    and actually running that command afterward reverted `dirty.py` to
+    its committed content, discarding the uncommitted edit. Closed by
+    threading NAME_TO_VALUE/NAME_TO_RAW_VALUE into both the unquoted
+    `_classify_tokens(inner_tokens, ...)` and the quoted/fused
+    `classify(inner_text, ...)` recursive calls below -- the latter
+    required extending `classify()`'s own public, string-based entry
+    point to accept the same optional outer-scope pair
+    `_classify_tokens` already did -- the exact extension
+    `_rule_array_literal_content`'s own nineteenth-round paragraph (see
+    that function's docstring) once deferred as a larger change than its
+    own, narrower finding warranted."""
     is_git_push = False
     checkout_restore_paths: list[str] = []
     i = 0
@@ -949,7 +977,7 @@ def _rule_command_substitution_content(tokens: list[str]) -> tuple[str | None, b
             # check would only change how often an empty-content recursive
             # `classify()` call is skipped, never a real verdict.
             if inner_text.strip():
-                inner_verdict = classify(inner_text)
+                inner_verdict = classify(inner_text, name_to_value, name_to_raw_value)
                 is_git_push = is_git_push or inner_verdict.is_git_push
                 checkout_restore_paths.extend(inner_verdict.checkout_restore_paths)
                 if inner_verdict.deny:
@@ -963,7 +991,7 @@ def _rule_command_substitution_content(tokens: list[str]) -> tuple[str | None, b
         if span_end is not None:
             inner_tokens = tokens[i + 2 : span_end - 1]
             if inner_tokens:
-                inner_verdict = _classify_tokens(inner_tokens)
+                inner_verdict = _classify_tokens(inner_tokens, name_to_value, name_to_raw_value)
                 is_git_push = is_git_push or inner_verdict.is_git_push
                 checkout_restore_paths.extend(inner_verdict.checkout_restore_paths)
                 if inner_verdict.deny:
@@ -2301,14 +2329,17 @@ def _rule_array_literal_content(
     (confirmed live via `declare -p`) the SAME way they would if `$G $P
     $M` appeared directly at the top level of the command instead of
     inside an array literal. Closed by threading the outer scope through.
-    Disclosed residual: `_rule_command_substitution_content`'s own,
-    pre-existing (since the fourteenth round) recursive checks have the
-    identical outer-scope gap and are NOT fixed by this round -- a tool/
-    verb built from a variable assigned outside a `$(...)` span's own
-    text is still invisible to that recursive check. Not closed here:
-    closing it needs `classify()`'s own string-based entry point (used
-    for the quoted/fused `$(...)` shape) to also accept an outer scope,
-    a larger change than this round's own confirmed finding warranted.
+    At the time of this round, `_rule_command_substitution_content`'s own,
+    pre-existing (since the fourteenth round) recursive checks had the
+    identical outer-scope gap and were left as a disclosed residual, since
+    closing it needed `classify()`'s own string-based entry point (used
+    for the quoted/fused `$(...)` shape) to also accept an outer scope --
+    a larger change than this round's own confirmed finding warranted. A
+    later round (eighteenth, issue #1375) found that gap defeated
+    checkout/restore recognition entirely, not merely under-extracted it,
+    and closed it the same way this round closed the array-literal
+    equivalent -- see `_rule_command_substitution_content`'s own
+    docstring for that finding and fix.
 
     Found live during independent adversarial review of issue #1350's own
     newline fix: `NAME=(...)` parens denote a bash WORD LIST (a compound
@@ -4341,16 +4372,30 @@ def _segment_loop_hit(
     return None, is_git_push
 
 
-def classify(command: str) -> Verdict:
+def classify(
+    command: str,
+    outer_name_to_value: dict[str, str] | None = None,
+    outer_name_to_raw_value: dict[str, str] | None = None,
+) -> Verdict:
     """Classify one Bash tool_input.command string. Fails closed (deny) on
     anything shlex cannot tokenize -- an unparseable command is exactly the
     "cannot confidently classify" case dimension 15 requires denying, not
-    silently allowing."""
+    silently allowing.
+
+    OUTER_NAME_TO_VALUE/OUTER_NAME_TO_RAW_VALUE, when given, are passed
+    straight through to `_classify_tokens` -- see that function's own
+    docstring for what they mean and who supplies them. Every ordinary
+    caller (the module's own entrypoint, tests) omits them and gets this
+    function's original, scope-free behavior exactly; `_rule_command_
+    substitution_content`'s own recursive call (issue #1375, eighteenth
+    round) is the one caller that supplies them, so a quoted/fused
+    `$(...)` span's own inner content can resolve a variable assigned
+    OUTSIDE the span against the same shell scope real bash would use."""
     try:
         tokens = tokenize(command)
     except TokenizeError as error:
         return Verdict(True, f"the command could not be parsed as shell syntax ({error}). Failing closed", False)
-    return _classify_tokens(tokens)
+    return _classify_tokens(tokens, outer_name_to_value, outer_name_to_raw_value)
 
 
 def _classify_tokens(
@@ -4376,26 +4421,29 @@ def _classify_tokens(
     inner-scope reassignment does shadow the outer one). Named to match
     every other function in this module that takes this same pair
     (`name_to_value`/`name_to_raw_value`), not a new vocabulary of their
-    own. Used only by `_rule_array_literal_content`'s own recursive call,
-    to give an array literal's own inner content access to the SAME
-    shell scope as the rest of the command (see that function's own
-    docstring, nineteenth-round paragraph, for the live bypass this
-    closes) -- `None` (every other caller, including the top-level
-    `classify` and `_rule_command_substitution_content`'s own recursive
-    calls -- see that function's own docstring for the disclosed residual
-    this leaves there) preserves this function's prior, scope-free
-    behavior exactly."""
+    own. Threaded into BOTH `_rule_array_literal_content`'s and
+    `_rule_command_substitution_content`'s own recursive calls, so an
+    array literal's or a `$(...)` span's own inner content each get
+    access to the SAME shell scope as the rest of the command (see each
+    function's own docstring -- the nineteenth-round paragraph for the
+    array-literal fix, the eighteenth-round paragraph for the command-
+    substitution fix -- for the live bypass each closes) -- `None` (the
+    top-level `classify` entry point, when its own caller has no outer
+    scope of its own to supply) preserves this function's behavior for a
+    genuinely top-level command exactly."""
     outer_literals = outer_name_to_value or {}
     outer_raw = outer_name_to_raw_value or {}
+    merged_name_to_value = {**outer_literals, **_assigned_literals(tokens)}
+    merged_name_to_raw_value = {**outer_raw, **_assigned_raw_values(tokens)}
 
-    content_reason, content_is_git_push, content_checkout_restore_paths = _rule_command_substitution_content(tokens)
+    content_reason, content_is_git_push, content_checkout_restore_paths = _rule_command_substitution_content(
+        tokens, merged_name_to_value, merged_name_to_raw_value
+    )
     if content_reason:
         return Verdict(True, content_reason, content_is_git_push, content_checkout_restore_paths)
 
     array_content_reason, array_content_is_git_push, array_content_checkout_restore_paths = _rule_array_literal_content(
-        tokens,
-        {**outer_literals, **_assigned_literals(tokens)},
-        {**outer_raw, **_assigned_raw_values(tokens)},
+        tokens, merged_name_to_value, merged_name_to_raw_value
     )
     is_git_push = content_is_git_push or array_content_is_git_push
     checkout_restore_paths = content_checkout_restore_paths + array_content_checkout_restore_paths
