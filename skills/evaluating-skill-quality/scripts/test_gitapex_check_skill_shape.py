@@ -123,9 +123,23 @@ def _known_static_check_names():
     toc:{name}/anchor-targets-resolve:{name}) -- those are generated from
     caller-supplied runtime data (a field name, a reference filename), not
     a fixed literal a source scan can enumerate.
+
+    Most ``CheckResult(...)`` call sites now live in the shape_checks/
+    submodules the checks were moved into (issue #1330's package split),
+    not in css.__file__'s own hub-module text, so every shape_checks/*.py
+    file (globbed relative to css.__file__'s own directory, not
+    hand-listed) is scanned too and the literal names found across all of
+    them are unioned -- otherwise this completeness gate would silently
+    cover only the handful of CheckResult(...) sites still left in the hub.
     """
-    source = Path(css.__file__).read_text(encoding="utf-8")
-    literal_names = set(re.findall(r'CheckResult\(\s*\n?\s*"([a-zA-Z0-9-]+)"', source))
+    scripts_dir = Path(css.__file__).resolve().parent
+    sources = [Path(css.__file__).read_text(encoding="utf-8")]
+    sources.extend(
+        submodule.read_text(encoding="utf-8") for submodule in sorted((scripts_dir / "shape_checks").glob("*.py"))
+    )
+    literal_names: set[str] = set()
+    for source in sources:
+        literal_names.update(re.findall(r'CheckResult\(\s*\n?\s*"([a-zA-Z0-9-]+)"', source))
     literal_names.update(spec[0] for spec in css._INLINE_CITATION_CHECK_SPECS)
     return literal_names
 
