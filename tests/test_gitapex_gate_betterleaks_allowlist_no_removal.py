@@ -181,6 +181,28 @@ def test_show_file_at_ref_returns_empty_string_for_a_missing_path(tmp_path: path
     assert gate.show_file_at_ref(head, "HEAD", "does-not-exist.toml") == ""
 
 
+def test_show_file_at_ref_fails_closed_on_a_real_git_failure_not_a_missing_path(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Defeat test (dimension 15, fail-closed on malformed/incomplete input):
+    a `git show` failure that is NOT the fixed missing-path stderr shape
+    (a corrupted object, a transient I/O error) must raise GateError, not
+    silently read as an empty allowlist -- which would otherwise let a
+    real base-side removal go undetected because the comparison saw a
+    fabricated "nothing was ever there" base state. Regression test for
+    the pre-fix behavior, which treated every nonzero `git show` exit as
+    "path absent" regardless of stderr."""
+
+    def _fake_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            args=[], returncode=128, stdout="", stderr="fatal: loose object abcd1234 is corrupt"
+        )
+
+    monkeypatch.setattr(gate._gitapex_base_ref, "run_git", lambda *a, **k: _fake_run())
+    with pytest.raises(gate.GateError, match=r"git show .* failed"):
+        gate.show_file_at_ref(tmp_path, "HEAD", ".betterleaks.toml")
+
+
 @pytest.mark.slow
 def test_resolve_merge_base_returns_the_common_ancestor(tmp_path: pathlib.Path) -> None:
     origin, head = _synced_head(tmp_path)

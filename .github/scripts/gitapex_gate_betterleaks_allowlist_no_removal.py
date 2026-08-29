@@ -138,15 +138,21 @@ def find_unwaived_removals(base_text: str, head_text: str) -> list[str]:
 
 def show_file_at_ref(root: pathlib.Path, ref: str, relative_path: str) -> str:
     """`git show <ref>:<relative_path>`'s content, or `""` when the path
-    did not exist at that ref -- `git show` exits nonzero for a missing
-    path the same way it does for a genuine failure, and distinguishing
-    the two reliably from stderr text alone is not portable across git
-    versions, so this treats every nonzero exit as "not present at that
-    ref" (a meaningful, legitimate state for the comparison itself to
-    read, per :func:`extract_allowlist_paths`'s own docstring) rather than
-    raising. A ref that cannot be resolved at all was already caught
-    earlier, by :func:`_gitapex_base_ref.require_common_ancestor` or the
-    caller's own `--merge-base` validation."""
+    genuinely did not exist at that ref. `git show` exits nonzero both for
+    a missing path and for a real failure (a transient I/O error, object
+    corruption), so a nonzero exit is treated as "absent" only when
+    stderr carries one of git's own two fixed fatal-path-lookup messages
+    (`fatal: path '<path>' does not exist in '<ref>'` or `... exists on
+    disk, but not in '<ref>'` -- confirmed live against a real repository,
+    not assumed); any other nonzero exit raises :class:`GateError` instead
+    of silently reading as an empty (zero-entry) allowlist, which would
+    otherwise let a base-side removal go undetected on dimension 15's own
+    fail-closed-on-malformed-input principle (a real git failure is not
+    the same "meaningful absence" :func:`extract_allowlist_paths` accepts
+    for a pre-existing or block-deleted file). A ref that cannot be
+    resolved at all was already caught earlier, by
+    :func:`_gitapex_base_ref.require_common_ancestor` or the caller's own
+    `--merge-base` validation."""
     result = _gitapex_base_ref.run_git(
         root,
         ["show", f"{ref}:{relative_path}"],
@@ -155,7 +161,10 @@ def show_file_at_ref(root: pathlib.Path, ref: str, relative_path: str) -> str:
         error_cls=GateError,
     )
     if result.returncode != 0:
-        return ""
+        stderr = result.stderr
+        if "does not exist in" in stderr or "exists on disk, but not in" in stderr:
+            return ""
+        raise GateError(f"git show {ref}:{relative_path} failed: {stderr.strip()}")
     return result.stdout
 
 
