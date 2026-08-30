@@ -23,6 +23,61 @@ def _valid_skill_dependency_list(value: object) -> TypeGuard[list[str]]:
     return isinstance(value, list) and all(isinstance(v, str) and v.strip() for v in value)
 
 
+def _skill_dependency_well_formed_result(
+    deps: object, well_formed_errors: list[jsonschema.exceptions.ValidationError], well_formed_rule: str
+) -> CheckResult:
+    """The ``skill-dependencies-well-formed`` CheckResult, once
+    ``spec.skillDependencies`` is confirmed declared."""
+    if well_formed_errors:
+        return CheckResult(
+            "skill-dependencies-well-formed", False, well_formed_rule, _join_schema_errors(well_formed_errors)
+        )
+    declared = [k for k in SKILL_DEPENDENCY_SUBKEYS if isinstance(deps, dict) and k in deps]
+    evidence = f"{', '.join(declared)} declared" if declared else "no keys declared"
+    return CheckResult("skill-dependencies-well-formed", True, well_formed_rule, evidence)
+
+
+def _skill_dependency_resolve_result(deps: object, skill_dir: Path, resolve_rule: str) -> tuple[CheckResult, list[str]]:
+    """The ``skill-dependencies-resolve`` CheckResult -- also returns the
+    already-validated ``requires`` list, which the caller's own
+    requires-portability-compatible check needs next."""
+    if not isinstance(deps, dict):
+        return CheckResult("skill-dependencies-resolve", True, resolve_rule, "nothing to check (not a mapping)"), []
+    requires_raw = deps.get("requires")
+    requires = requires_raw if _valid_skill_dependency_list(requires_raw) else []
+    related_raw = deps.get("relatedTo")
+    related = related_raw if _valid_skill_dependency_list(related_raw) else []
+    named = list(dict.fromkeys(requires + related))
+    dangling = [n for n in named if not _resolves_to_sibling_skill(n, skill_dir.parent)]
+    result = CheckResult(
+        "skill-dependencies-resolve",
+        not dangling,
+        resolve_rule,
+        "all resolve" if not dangling else "dangling: " + ", ".join(dangling),
+    )
+    return result, requires
+
+
+def _skill_dependency_portability_result(
+    contradiction_errors: list[jsonschema.exceptions.ValidationError],
+    requires: list[str],
+    portability: object,
+    contradiction_rule: str,
+) -> CheckResult:
+    """The ``requires-portability-compatible`` CheckResult."""
+    if contradiction_errors:
+        return CheckResult(
+            "requires-portability-compatible", False, contradiction_rule, _join_schema_errors(contradiction_errors)
+        )
+    contradiction = bool(requires) and portability == "Portable"
+    return CheckResult(
+        "requires-portability-compatible",
+        not contradiction,
+        contradiction_rule,
+        "ok" if not contradiction else f"non-empty requires with portability={portability!r}",
+    )
+
+
 def _skill_dependency_checks(
     spec_is_mapping: bool,
     spec_raw: object,
@@ -79,54 +134,9 @@ def _skill_dependency_checks(
     well_formed_errors = [e for e in deps_errors if "allOf" not in e.absolute_schema_path]
     contradiction_errors = [e for e in deps_errors if "allOf" in e.absolute_schema_path]
 
-    results: list[CheckResult] = []
-    if well_formed_errors:
-        results.append(
-            CheckResult(
-                "skill-dependencies-well-formed", False, well_formed_rule, _join_schema_errors(well_formed_errors)
-            )
-        )
-    else:
-        declared = [k for k in SKILL_DEPENDENCY_SUBKEYS if isinstance(deps, dict) and k in deps]
-        evidence = f"{', '.join(declared)} declared" if declared else "no keys declared"
-        results.append(CheckResult("skill-dependencies-well-formed", True, well_formed_rule, evidence))
-
-    if isinstance(deps, dict):
-        requires_raw = deps.get("requires")
-        requires = requires_raw if _valid_skill_dependency_list(requires_raw) else []
-        related_raw = deps.get("relatedTo")
-        related = related_raw if _valid_skill_dependency_list(related_raw) else []
-        named = list(dict.fromkeys(requires + related))
-        dangling = [n for n in named if not _resolves_to_sibling_skill(n, skill_dir.parent)]
-        results.append(
-            CheckResult(
-                "skill-dependencies-resolve",
-                not dangling,
-                resolve_rule,
-                "all resolve" if not dangling else "dangling: " + ", ".join(dangling),
-            )
-        )
-    else:
-        requires = []
-        results.append(
-            CheckResult("skill-dependencies-resolve", True, resolve_rule, "nothing to check (not a mapping)")
-        )
-
-    if contradiction_errors:
-        results.append(
-            CheckResult(
-                "requires-portability-compatible", False, contradiction_rule, _join_schema_errors(contradiction_errors)
-            )
-        )
-    else:
-        contradiction = bool(requires) and portability == "Portable"
-        results.append(
-            CheckResult(
-                "requires-portability-compatible",
-                not contradiction,
-                contradiction_rule,
-                "ok" if not contradiction else f"non-empty requires with portability={portability!r}",
-            )
-        )
-
-    return results
+    resolve_result, requires = _skill_dependency_resolve_result(deps, skill_dir, resolve_rule)
+    return [
+        _skill_dependency_well_formed_result(deps, well_formed_errors, well_formed_rule),
+        resolve_result,
+        _skill_dependency_portability_result(contradiction_errors, requires, portability, contradiction_rule),
+    ]

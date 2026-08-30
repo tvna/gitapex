@@ -34,6 +34,34 @@ def _lifecycle_deprecated_replacement_result(
     )
 
 
+def _lifecycle_well_formed_result(
+    lifecycle: object, well_formed_errors: list[jsonschema.exceptions.ValidationError], well_formed_rule: str
+) -> CheckResult:
+    """The ``lifecycle-well-formed`` CheckResult, once ``spec.lifecycle``
+    is confirmed declared."""
+    if well_formed_errors:
+        return CheckResult("lifecycle-well-formed", False, well_formed_rule, _join_schema_errors(well_formed_errors))
+    declared = [k for k in LIFECYCLE_SUBKEYS if isinstance(lifecycle, dict) and k in lifecycle]
+    if isinstance(lifecycle, dict) and "renamedFrom" in lifecycle:
+        declared.append("renamedFrom")
+    evidence = f"{', '.join(declared)} declared" if declared else "no keys declared"
+    return CheckResult("lifecycle-well-formed", True, well_formed_rule, evidence)
+
+
+def _lifecycle_contradiction_result(
+    contradiction_errors: list[jsonschema.exceptions.ValidationError], contradiction_rule: str
+) -> CheckResult:
+    """The ``experimental-stable-compatible`` CheckResult."""
+    if contradiction_errors:
+        return CheckResult(
+            "experimental-stable-compatible",
+            False,
+            contradiction_rule,
+            "both experimental and stable are declared, which is a logical contradiction",
+        )
+    return CheckResult("experimental-stable-compatible", True, contradiction_rule, "ok")
+
+
 def _lifecycle_checks(
     spec_is_mapping: bool,
     spec_raw: object,
@@ -109,29 +137,9 @@ def _lifecycle_checks(
     # wrong-type lifecycle field is reported solely by well_formed_errors.
     contradiction_errors = [e for e in lifecycle_errors if e.validator == "not"] if isinstance(lifecycle, dict) else []
 
-    if well_formed_errors:
-        results = [
-            CheckResult("lifecycle-well-formed", False, well_formed_rule, _join_schema_errors(well_formed_errors))
-        ]
-    else:
-        declared = [k for k in LIFECYCLE_SUBKEYS if isinstance(lifecycle, dict) and k in lifecycle]
-        if isinstance(lifecycle, dict) and "renamedFrom" in lifecycle:
-            declared.append("renamedFrom")
-        evidence = f"{', '.join(declared)} declared" if declared else "no keys declared"
-        results = [CheckResult("lifecycle-well-formed", True, well_formed_rule, evidence)]
-
     lifecycle_dict = lifecycle if isinstance(lifecycle, dict) else {}
-    results.append(_lifecycle_deprecated_replacement_result(lifecycle_dict, skill_dir, resolve_rule))
-
-    if contradiction_errors:
-        results.append(
-            CheckResult(
-                "experimental-stable-compatible",
-                False,
-                contradiction_rule,
-                "both experimental and stable are declared, which is a logical contradiction",
-            )
-        )
-    else:
-        results.append(CheckResult("experimental-stable-compatible", True, contradiction_rule, "ok"))
-    return results
+    return [
+        _lifecycle_well_formed_result(lifecycle, well_formed_errors, well_formed_rule),
+        _lifecycle_deprecated_replacement_result(lifecycle_dict, skill_dir, resolve_rule),
+        _lifecycle_contradiction_result(contradiction_errors, contradiction_rule),
+    ]
