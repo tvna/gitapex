@@ -23,7 +23,10 @@ below.
    turn clears before anything else runs, not a factor weighed against how
    simple the task looks. If it turns out wrong for the situation once
    invoked, stop using it; that later correction does not retroactively
-   excuse skipping the check itself.
+   excuse skipping the check itself. When the check genuinely finds no
+   applicable skill, say so explicitly rather than proceeding silently --
+   the observable proof that the check ran is stating its result, not
+   just acting as if it had.
 
 2. **Skill Priority.** Route to the skill matching the current situation:
 

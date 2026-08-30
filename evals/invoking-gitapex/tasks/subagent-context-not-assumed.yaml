@@ -18,3 +18,5 @@ expected:
   output_not_contains:
     - "yes, automatically"
     - "it carries over regardless"
+  exercises:
+    - "Never treat this file's own presence in a session's context as proof"

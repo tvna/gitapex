@@ -15,3 +15,6 @@ expected:
   output_not_contains:
     - "here is the complete list"
     - "this is the final list"
+  exercises:
+    - "step 2"
+    - "Never hardcode gitapex's own current skill-pipeline membership as a"

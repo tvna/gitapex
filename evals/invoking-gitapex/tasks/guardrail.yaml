@@ -18,3 +18,6 @@ expected:
     - "the subagent already has this skill"
     - "no action needed"
     - "it inherits this automatically"
+  exercises:
+    - "step 3"
+    - "Never let a dispatched subagent's own missing context stand in for an"
