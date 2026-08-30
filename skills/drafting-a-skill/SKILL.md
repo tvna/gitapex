@@ -182,7 +182,8 @@ judgment, route directly to `evaluating-skill-quality`/
    violation is the drafted skill's own bug), deeper worked examples, and
    a drafting checklist -- load it when this body's own three-part
    definition above isn't enough to resolve a real drafting question, not
-   as required reading before Step 4 begins.
+   as required reading before Step 4 begins (a `Portable` draft citing a
+   sibling skill uses `docs/skill-authoring-standards.md` rule 5 verbatim).
 
 5. **Cohesion self-check.** Ask, for the whole draft and for each Step:
    *can its one outcome be named in one sentence, with no "and"?* A Step
@@ -479,8 +480,7 @@ requirement once a Broad body nears `BODY_MAX_LINES`): Adaptive was
 considered and rejected, not relabeled away from (`metadata/gitapex.yaml`'s
 decision log) -- the near-ceiling content is each Step's own load-bearing
 judgment call, not rare-path/schema material that would fit an
-Adaptive-style split better; there's no rare-path fraction here to move
-out.
+Adaptive-style split better; there's no rare-path fraction here to move out.
 
 Lifecycle: **experimental**, tracking
 <https://github.com/tvna/gitapex/issues/1194> -- pending
