@@ -9,9 +9,9 @@
 # pyproject.toml/uv.lock, rather than declaring a second copy of
 # select/ignore/strict settings here -- see issue #725's own "Constraints".
 #
-# Setup: `uv run prek install -t pre-commit -t pre-push` (documented in
-# CONTRIBUTING.md; also wired into flake.nix's devShell so `nix develop`
-# installs it automatically).
+# Setup: `uv run prek install -t pre-commit -t pre-push -t commit-msg`
+# (documented in CONTRIBUTING.md; also wired into flake.nix's devShell so
+# `nix develop` installs it automatically).
 
 # Issue #890 installs a pre-push shim as well as a pre-commit one. Without
 # this, the ruff/mypy hooks below -- which declare no `stages` -- would start

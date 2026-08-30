@@ -300,6 +300,29 @@ def merge_in_progress(root: pathlib.Path) -> bool:
     return result.returncode == 0
 
 
+def _extract_citations_or_raise(
+    owner: str | None, repo: str | None, title: str | None, body: str | None
+) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    """`extract_citations`, with one failure mode converted to this
+    module's own exit-2 contract rather than an uncaught traceback (issue
+    #1212's own adversarial review, dimension 15 of
+    `skills/evaluating-deterministic-gate-quality`): Python 3.12's default
+    integer-string-conversion digit limit (`sys.get_int_max_str_digits`,
+    4300) makes `extract_citations`' own `int(n)` calls raise `ValueError`
+    for a citation whose digit run is implausibly long (a PR title/body or
+    commit message containing `#` followed by thousands of digits -- live-
+    reproduced: `int('9' * 5000)` raises). Uncaught, that `ValueError`
+    exits 1 -- the code this module reserves for a *confirmed* no-citation
+    policy FAIL -- so a malformed/adversarial input would report itself as
+    a real citation violation instead of "the check itself could not be
+    trusted." No other `extract_citations` failure mode is known; this is
+    not a blanket except-and-hide."""
+    try:
+        return extract_citations(owner, repo, title, body)
+    except ValueError as error:
+        raise CitationGateError(f"could not parse a citation number in the input text: {error}") from error
+
+
 def check_commit_message(text: str) -> bool:
     """True iff one commit's own message `text` carries any citation --
     resolving or context-only, either counts here: this gate only asks
@@ -313,8 +336,10 @@ def check_commit_message(text: str) -> bool:
     `--mode pr-range`, or :func:`clean_commit_message`'s output in
     `--mode commit-msg`. Cleaning stays the caller's job rather than
     moving in here, so `--mode pr-range` does not pay a `git stripspace`
-    subprocess per commit re-cleaning text git already cleaned."""
-    resolving, context = extract_citations(None, None, None, text)
+    subprocess per commit re-cleaning text git already cleaned.
+
+    May raise :class:`CitationGateError` -- see `_extract_citations_or_raise`."""
+    resolving, context = _extract_citations_or_raise(None, None, None, text)
     return bool(resolving or context)
 
 
@@ -322,8 +347,10 @@ def check_pr_text(owner: str, repo: str, title: str, body: str) -> bool:
     """True iff the PR's own `title`/`body` together carry any citation.
     `owner`/`repo` (the PR's own target repo) are passed through so
     `extract_citations` can normalize a same-repo-qualified
-    `owner/repo#N` citation down to a bare `#N` -- see its own docstring."""
-    resolving, context = extract_citations(owner or None, repo or None, title or None, body or None)
+    `owner/repo#N` citation down to a bare `#N` -- see its own docstring.
+
+    May raise :class:`CitationGateError` -- see `_extract_citations_or_raise`."""
+    resolving, context = _extract_citations_or_raise(owner or None, repo or None, title or None, body or None)
     return bool(resolving or context)
 
 
@@ -539,11 +566,12 @@ def _run_commit_msg(args: CommitCitationArgs) -> int:
         # commit.verbose) the whole staged diff -- see the module docstring's
         # own live-reproduced false-PASS.
         message = clean_commit_message(args.root, raw)
+        cited = check_commit_message(message)
     except CitationGateError as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
 
-    if check_commit_message(message):
+    if cited:
         print("PASS: commit message cites an issue")
         return 0
     print(

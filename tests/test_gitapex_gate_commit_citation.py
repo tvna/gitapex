@@ -741,6 +741,41 @@ def test_main_commit_msg_non_utf8_file_exits_two(tmp_path: pathlib.Path, capsys:
     assert "not valid UTF-8" in capsys.readouterr().err
 
 
+def test_check_commit_message_an_implausibly_long_digit_run_raises_not_crashes() -> None:
+    """Dimension 15 (`skills/evaluating-deterministic-gate-quality`): before
+    this fix, a citation-shaped `#<thousands of digits>` string made
+    `extract_citations`' own `int(n)` call raise an uncaught `ValueError`
+    (Python's default integer-string-conversion digit limit, 4300) --
+    escaping as exit 1, the code this module reserves for a *confirmed*
+    no-citation FAIL, not a broken/adversarial input."""
+    huge_digit_run = "9" * 5000
+    with pytest.raises(gate.CitationGateError, match="could not parse a citation number"):
+        gate.check_commit_message(f"Closes #{huge_digit_run}")
+
+
+def test_main_commit_msg_an_implausibly_long_digit_run_exits_two(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    huge_digit_run = "9" * 5000
+    msg_file = tmp_path / "COMMIT_EDITMSG"
+    msg_file.write_text(f"fix: bug\n\nCloses #{huge_digit_run}\n", encoding="utf-8")
+    assert gate.main(["--mode", "commit-msg", str(msg_file)]) == 2
+    assert "could not parse a citation number" in capsys.readouterr().err
+
+
+def test_main_pr_range_an_implausibly_long_digit_run_in_the_body_exits_two(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    huge_digit_run = "9" * 5000
+    body_file = tmp_path / "body.txt"
+    body_file.write_text(f"Closes #{huge_digit_run}\n", encoding="utf-8")
+    exit_code = gate.main(
+        ["--mode", "pr-range", "--root", str(tmp_path), "--body", str(body_file), "--head-ref", "HEAD"]
+    )
+    assert exit_code == 2
+    assert "could not parse a citation number" in capsys.readouterr().err
+
+
 # --- main(): --mode pr-range --------------------------------------------------
 
 
