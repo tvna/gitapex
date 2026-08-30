@@ -27,14 +27,15 @@ below.
 2. **Skill Priority.** Route by stage in gitapex's own Issue-to-PR
    lifecycle:
 
-   - New work, no issue yet -- type it via `.github/ISSUE_TEMPLATE/`
-     (feat/fix/docs/chore/ci/refactor/generic/tracking)
-   - Issue exists, no plan yet -- `planning-a-branch-from-an-issue`
-   - Plan approved -- `executing-a-branch-plan`
-   - PR open -- `drafting-a-pr-to-merge`
-   - PR merged -- `merge-retrospective`
+   | Stage | Skill |
+   |---|---|
+   | No issue yet | `drafting-issues` |
+   | Issue exists, no plan yet | `planning-a-branch-from-an-issue` |
+   | Plan approved | `executing-a-branch-plan` |
+   | PR open | `drafting-a-pr-to-merge` |
+   | PR merged | `merge-retrospective` |
 
-   Each skill's own text cites the next, so this list is illustrative,
+   Each skill's own text cites the next, so this table is illustrative,
    not the canonical source -- a fuller diagram lives in a separate
    `merge-pipeline-redesign` design record, not yet checked into this
    repository.
@@ -116,10 +117,10 @@ below.
 - **vs. `untrusted-input-triage`:** Step 5's own untrusted-external-text
   handling applies that skill's Extract/Ignore/Flag/Tag discipline, not
   re-derived here.
-- **vs. `planning-a-branch-from-an-issue`, `drafting-a-pr-to-merge`,
-  `merge-retrospective`:** named together with `executing-a-branch-plan`
-  in Step 2 above as this repository's own current illustrative pipeline
-  shape (process and planning before implementation) -- cited as that
-  pipeline's own current membership, not as a fixed list this file
-  re-derives; see Step 2 for the disclosed residual risk on why no skill
-  list is hardcoded here instead.
+- **vs. `drafting-issues`, `planning-a-branch-from-an-issue`,
+  `drafting-a-pr-to-merge`, `merge-retrospective`:** named together with
+  `executing-a-branch-plan` in Step 2 above as this repository's own
+  current illustrative pipeline shape (process and planning before
+  implementation) -- cited as that pipeline's own current membership, not
+  as a fixed list this file re-derives; see Step 2 for the disclosed
+  residual risk on why no skill list is hardcoded here instead.

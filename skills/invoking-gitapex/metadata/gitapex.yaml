@@ -17,6 +17,7 @@ spec:
       - planning-a-branch-from-an-issue
       - drafting-a-pr-to-merge
       - merge-retrospective
+      - drafting-issues
   executionRequirements:
     tools:
       read: []
@@ -35,3 +36,6 @@ spec:
     - kind: elision
       anchor: "https://github.com/tvna/gitapex/issues/1173"
       summary: "Precondition, Postcondition, Non-goals, and Output sections were drafted, then removed across several operator-directed passes -- none stated a real caller-side gate, handoff guarantee, or a fact a running model needed; each restated a Step or disclosed scope only. Root cause (drafting-a-skill's Step 4 has no branch for a standing skill, no stated metadata home for scope disclosure) is a separate fix, out of this issue's own scope: https://github.com/tvna/gitapex/issues/1583."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1173"
+      summary: "Step 2's 'no issue yet' row named `.github/ISSUE_TEMPLATE/` type selection instead of a skill -- that enumeration is drafting-issues' own internal Step 2 classification, not a routing target. Re-checked against merge-pipeline-redesign's Section 0 diagram, which names `drafting-issues` as the real entry-point skill (already implemented here). Restored to a table naming `drafting-issues`; added to relatedTo and Related skills."
