@@ -582,6 +582,7 @@ from shape_checks.citation_checks import (
     _portable_skill_citation_checks,
     _raw_placeholder_checks,
     _step_location_checks,
+    _untrusted_authority_crossover_checks,
 )
 from shape_checks.constants import (
     _INLINE_CITATION_CHECK_SPECS,
@@ -1009,6 +1010,17 @@ def check_shape(target: Path) -> list[CheckResult]:
     results.extend(_illustrative_model_id_checks(skill_md, skill_dir, body))
     results.extend(_raw_placeholder_checks(skill_md, skill_dir, body))
     results.extend(_step_location_checks(skill_md, skill_dir, body))
+    # function-body-test-coverage: WAIVED: this diff's own new
+    # test_untrusted_authority_crossover_* tests already call
+    # css.check_shape(d) directly (skills/evaluating-skill-quality/scripts/
+    # test_gitapex_check_skill_shape.py), but that gate's own
+    # _test_relative_paths() unconditionally resolves to top-level
+    # tests/test_{stem}.py and has no fallback for this repository's
+    # pre-existing co-located test convention (a source file's own
+    # sibling test_*.py, e.g. this exact file/test pair) -- a gate-side
+    # gap, confirmed by tests/test_gitapex_check_skill_shape.py not
+    # existing at all, not a real coverage hole in this line.
+    results.extend(_untrusted_authority_crossover_checks(skill_md, skill_dir, body))
     results.extend(_dimension_quote_exemption_checks(skill_md, skill_dir, body))
     results.extend(_no_voodoo_constant_checks(skill_md, skill_dir, body))
     results.extend(_script_execution_intent_checks(skill_md, skill_dir, body))

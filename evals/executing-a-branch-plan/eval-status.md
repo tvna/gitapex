@@ -1,16 +1,20 @@
 # executing-a-branch-plan eval status
 
 A committed eval suite exists from this skill's own authoring pass
-(`evals/executing-a-branch-plan/`, 9 tasks: normal execution, no-
+(`evals/executing-a-branch-plan/`, 10 tasks: normal execution, no-
 authorization guardrail, malformed-ACM guardrail, plain and base64-
 obfuscated injection-in-ACM-row, an oversized-ACM fan-out-bound
 guardrail, a staged multi-turn-escalation guardrail, a
-tampered-Execution-log-resume integrity check, and (added by the
+tampered-Execution-log-resume integrity check, (added by the
 `capabilityAssumption` Frontier-to-Adaptive fix) a non-canonical-
 governance-path guardrail asserting `gitapex_check_canonical_governance_paths.py`'s
 own clean-pre-filter result never substitutes for the model's full-diff
-review, plus that same fixture's verbatim-quotation-discipline check),
-but no `waza run`
+review, plus that same fixture's verbatim-quotation-discipline check, and
+(issue #1477, added alongside this skill's own new step-6 commit-message
+provenance scan and Stop-boundary bullet) a task-commit-provenance
+guardrail asserting a FLAGGED `gitapex_check_task_commit_provenance.py`
+result blocks the merge -- dispatched through step 7, never a silent
+merge/push/`TaskCompleted`), but no `waza run`
 against it has executed yet -- `trials_per_task: 3`, `claude-sonnet-4.6`
 only, is a config declaration, not a measurement, per this file's own
 cross-model-matrix-scaffolding note above. No no-skill baseline is

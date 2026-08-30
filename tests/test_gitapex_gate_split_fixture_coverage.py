@@ -778,6 +778,753 @@ def test_check_partition_arithmetic_flags_a_cross_split_mention():
 
 
 # ---------------------------------------------------------------------------
+# Check E (issue #192 item 6, Refs #49 repair 1, #115 repair 1):
+# Procedure/Steps item + Stop-boundary bullet exercises-label resolution
+# ---------------------------------------------------------------------------
+
+_PROCEDURE_STOP_BOUNDARY_SKILL_MD = (
+    "## Procedure\n\n"
+    "1. **Reproduce.** Attempt the reported repro steps.\n"
+    "2. **Dedupe.** Search for likely duplicates.\n"
+    "3. **Label.** Apply the repo's existing issue-type labels.\n\n"
+    "## Stop boundaries\n\n"
+    "- Never skip step 2 under time pressure.\n"
+    "- Never label content before dedupe completes.\n"
+)
+
+_PROCEDURE_ITEMS = [
+    "**Reproduce.** Attempt the reported repro steps.",
+    "**Dedupe.** Search for likely duplicates.",
+    "**Label.** Apply the repo's existing issue-type labels.",
+]
+
+
+def test_parse_procedure_steps_extracts_ordered_items():
+    assert gate.parse_procedure_steps(_PROCEDURE_STOP_BOUNDARY_SKILL_MD) == _PROCEDURE_ITEMS
+
+
+def test_parse_procedure_steps_recognizes_steps_heading_too():
+    text = "## Steps\n\n1. First.\n2. Second.\n"
+    assert gate.parse_procedure_steps(text) == ["First.", "Second."]
+
+
+def test_parse_procedure_steps_empty_when_no_heading():
+    assert gate.parse_procedure_steps("No procedure heading here.\n1. Not counted.\n") == []
+
+
+def test_parse_procedure_steps_stops_at_next_heading():
+    text = "## Procedure\n\n1. Only this one.\n\n## Notes\n\n2. Not a procedure item.\n"
+    assert gate.parse_procedure_steps(text) == ["Only this one."]
+
+
+def test_stop_boundary_identity_counter_matches_49_gate_convention():
+    # Mirrors gitapex_gate_skill_branch_fixture_coverage.py's own
+    # stop_boundary_bullet_counter -- same key shape ("stop-boundary:<full
+    # bullet line, marker included>"), so the two gates agree on identity.
+    counter = gate.stop_boundary_identity_counter(_PROCEDURE_STOP_BOUNDARY_SKILL_MD)
+    assert counter["stop-boundary:- Never skip step 2 under time pressure."] == 1
+    assert counter["stop-boundary:- Never label content before dedupe completes."] == 1
+    assert sum(counter.values()) == 2
+
+
+def test_normalize_for_span_scan_splits_lines_and_blanks_fences():
+    text = "a\n```\nsecret\n```\nb"
+    assert gate._normalize_for_span_scan(text) == ["a", "", "", "", "b"]
+
+
+def test_normalize_for_span_scan_normalizes_crlf():
+    assert gate._normalize_for_span_scan("a\r\nb\r\n") == ["a", "b", ""]
+
+
+def test_procedure_step_identity_counter_keys_on_content_not_position():
+    counter = gate.procedure_step_identity_counter(_PROCEDURE_STOP_BOUNDARY_SKILL_MD)
+    assert counter[f"procedure-step:{_PROCEDURE_ITEMS[0]}"] == 1
+    assert sum(counter.values()) == len(_PROCEDURE_ITEMS)
+
+
+def test_procedure_step_identity_counter_empty_with_no_heading():
+    assert gate.procedure_step_identity_counter("No procedure heading here.\n1. Not counted.\n") == {}
+
+
+def test_stop_boundary_bullet_label_strips_marker_and_casefolds():
+    assert gate._stop_boundary_bullet_label("stop-boundary:- Never Skip Step 2.") == "never skip step 2."
+
+
+def test_resolvable_exercise_labels_step_ordinal():
+    labels = gate.resolvable_exercise_labels(_PROCEDURE_STOP_BOUNDARY_SKILL_MD)
+    assert "step 1" in labels
+    assert "step 3" in labels
+    assert "step 4" not in labels
+
+
+def test_resolvable_exercise_labels_literal_procedure_item_text():
+    labels = gate.resolvable_exercise_labels(_PROCEDURE_STOP_BOUNDARY_SKILL_MD)
+    assert "**dedupe.** search for likely duplicates.".casefold() in labels
+
+
+def test_resolvable_exercise_labels_stop_boundary_bullet_text_marker_stripped():
+    labels = gate.resolvable_exercise_labels(_PROCEDURE_STOP_BOUNDARY_SKILL_MD)
+    assert "never skip step 2 under time pressure." in labels
+
+
+def test_resolvable_exercise_labels_includes_section_headings_too():
+    # explaining-the-work's own real shape: ### headings AND a Stop
+    # boundaries heading coexist -- the union must include both kinds.
+    text = _ROUTING_SKILL_MD + "\n## Stop boundaries\n\n- A bullet.\n"
+    labels = gate.resolvable_exercise_labels(text)
+    assert "commit log" in labels
+    assert "a bullet." in labels
+
+
+def test_resolvable_exercise_labels_empty_when_no_convention_used():
+    assert gate.resolvable_exercise_labels("No headings or lists here.\n") == set()
+
+
+def test_procedure_stop_boundary_coverage_none_when_no_convention(tmp_path: pathlib.Path):
+    skill_md = _write_skill_and_tasks(tmp_path, "widget-polisher", "Nothing here.\n", {})
+    offender = gate.check_procedure_stop_boundary_exercises_coverage(skill_md, "Nothing here.\n", tmp_path)
+    assert offender is None
+
+
+def test_procedure_stop_boundary_coverage_passes_untouched_with_no_exercises_field(tmp_path: pathlib.Path):
+    # No-retrofit: a fixture with no exercises field at all is never
+    # required to add one.
+    skill_md = _write_skill_and_tasks(
+        tmp_path,
+        "widget-polisher",
+        _PROCEDURE_STOP_BOUNDARY_SKILL_MD,
+        {"a.yaml": 'expected:\n  output_contains:\n    - "x"\n'},
+    )
+    offender = gate.check_procedure_stop_boundary_exercises_coverage(
+        skill_md, _PROCEDURE_STOP_BOUNDARY_SKILL_MD, tmp_path
+    )
+    assert offender is None
+
+
+def test_procedure_stop_boundary_coverage_resolves_via_step_ordinal(tmp_path: pathlib.Path):
+    skill_md = _write_skill_and_tasks(
+        tmp_path,
+        "widget-polisher",
+        _PROCEDURE_STOP_BOUNDARY_SKILL_MD,
+        {"a.yaml": 'expected:\n  exercises:\n    - "Step 2"\n'},
+    )
+    offender = gate.check_procedure_stop_boundary_exercises_coverage(
+        skill_md, _PROCEDURE_STOP_BOUNDARY_SKILL_MD, tmp_path
+    )
+    assert offender is None
+
+
+def test_procedure_stop_boundary_coverage_resolves_via_literal_procedure_item_text(tmp_path: pathlib.Path):
+    skill_md = _write_skill_and_tasks(
+        tmp_path,
+        "widget-polisher",
+        _PROCEDURE_STOP_BOUNDARY_SKILL_MD,
+        {"a.yaml": 'expected:\n  exercises:\n    - "**Dedupe.** Search for likely duplicates."\n'},
+    )
+    offender = gate.check_procedure_stop_boundary_exercises_coverage(
+        skill_md, _PROCEDURE_STOP_BOUNDARY_SKILL_MD, tmp_path
+    )
+    assert offender is None
+
+
+def test_procedure_stop_boundary_coverage_resolves_via_stop_boundary_bullet_text(tmp_path: pathlib.Path):
+    skill_md = _write_skill_and_tasks(
+        tmp_path,
+        "widget-polisher",
+        _PROCEDURE_STOP_BOUNDARY_SKILL_MD,
+        {"a.yaml": 'expected:\n  exercises:\n    - "Never skip step 2 under time pressure."\n'},
+    )
+    offender = gate.check_procedure_stop_boundary_exercises_coverage(
+        skill_md, _PROCEDURE_STOP_BOUNDARY_SKILL_MD, tmp_path
+    )
+    assert offender is None
+
+
+def test_procedure_stop_boundary_coverage_fails_when_label_resolves_to_nothing(tmp_path: pathlib.Path):
+    skill_md = _write_skill_and_tasks(
+        tmp_path,
+        "widget-polisher",
+        _PROCEDURE_STOP_BOUNDARY_SKILL_MD,
+        {"a.yaml": 'expected:\n  exercises:\n    - "Nonexistent step"\n'},
+    )
+    offender = gate.check_procedure_stop_boundary_exercises_coverage(
+        skill_md, _PROCEDURE_STOP_BOUNDARY_SKILL_MD, tmp_path
+    )
+    assert offender is not None
+    assert "a.yaml" in offender
+    assert "Nonexistent step" in offender
+
+
+def test_procedure_stop_boundary_coverage_fails_on_malformed_declaration(tmp_path: pathlib.Path):
+    skill_md = _write_skill_and_tasks(
+        tmp_path,
+        "widget-polisher",
+        _PROCEDURE_STOP_BOUNDARY_SKILL_MD,
+        {"a.yaml": "expected:\n  exercises: true\n"},
+    )
+    offender = gate.check_procedure_stop_boundary_exercises_coverage(
+        skill_md, _PROCEDURE_STOP_BOUNDARY_SKILL_MD, tmp_path
+    )
+    assert offender is not None
+    assert "no well-formed exercises declaration" in offender
+
+
+def test_procedure_stop_boundary_coverage_fails_loudly_on_unparseable_yaml(tmp_path: pathlib.Path):
+    skill_md = _write_skill_and_tasks(
+        tmp_path,
+        "widget-polisher",
+        _PROCEDURE_STOP_BOUNDARY_SKILL_MD,
+        {"a.yaml": "expected:\n  exercises: [\n"},
+    )
+    offender = gate.check_procedure_stop_boundary_exercises_coverage(
+        skill_md, _PROCEDURE_STOP_BOUNDARY_SKILL_MD, tmp_path
+    )
+    assert offender is not None
+    assert "could not parse YAML" in offender
+
+
+def test_procedure_stop_boundary_coverage_skips_directory_named_like_a_fixture(tmp_path: pathlib.Path):
+    # Regression (issue #192 step 8 adversarial review, live-reproduced):
+    # a directory named `*.yaml` under tasks/ (e.g. a stray checkout
+    # artifact) matches the `tasks_dir.glob("*.yaml")` scan but is not a
+    # readable fixture file -- read_text on it raises IsADirectoryError.
+    # This must be skipped, not crash the gate.
+    skill_md = _write_skill_and_tasks(tmp_path, "widget-polisher", _PROCEDURE_STOP_BOUNDARY_SKILL_MD, {})
+    (tmp_path / "evals" / "widget-polisher" / "tasks" / "evil.yaml").mkdir()
+    offender = gate.check_procedure_stop_boundary_exercises_coverage(
+        skill_md, _PROCEDURE_STOP_BOUNDARY_SKILL_MD, tmp_path
+    )
+    assert offender is None
+
+
+def test_procedure_stop_boundary_coverage_none_when_no_tasks_dir(tmp_path: pathlib.Path):
+    skill_md = tmp_path / "skills" / "widget-polisher" / "SKILL.md"
+    skill_md.parent.mkdir(parents=True)
+    skill_md.write_text(_PROCEDURE_STOP_BOUNDARY_SKILL_MD, encoding="utf-8")
+    offender = gate.check_procedure_stop_boundary_exercises_coverage(
+        skill_md, _PROCEDURE_STOP_BOUNDARY_SKILL_MD, tmp_path
+    )
+    assert offender is None
+
+
+def test_new_procedure_stop_boundary_content_empty_when_unchanged():
+    assert (
+        gate.new_procedure_stop_boundary_content(_PROCEDURE_STOP_BOUNDARY_SKILL_MD, _PROCEDURE_STOP_BOUNDARY_SKILL_MD)
+        == []
+    )
+
+
+def test_new_procedure_stop_boundary_content_detects_new_stop_boundary_bullet():
+    after = _PROCEDURE_STOP_BOUNDARY_SKILL_MD + "- A brand new boundary.\n"
+    new_content = gate.new_procedure_stop_boundary_content(_PROCEDURE_STOP_BOUNDARY_SKILL_MD, after)
+    assert new_content == ["stop-boundary:- A brand new boundary."]
+
+
+def test_new_procedure_stop_boundary_content_detects_new_procedure_item():
+    after = _PROCEDURE_STOP_BOUNDARY_SKILL_MD.replace("3. **Label.**", "3. **Triage.** A new item.\n4. **Label.**")
+    new_content = gate.new_procedure_stop_boundary_content(_PROCEDURE_STOP_BOUNDARY_SKILL_MD, after)
+    assert "procedure-step:**Triage.** A new item." in new_content
+
+
+def test_new_procedure_stop_boundary_content_brand_new_file_counts_everything():
+    new_content = gate.new_procedure_stop_boundary_content(None, _PROCEDURE_STOP_BOUNDARY_SKILL_MD)
+    assert len(new_content) == 5  # 3 procedure items + 2 stop-boundary bullets
+
+
+def test_new_procedure_stop_boundary_content_renumbering_alone_is_not_new():
+    # Content-keyed, not positional: reordering the same three items must
+    # not register any of them as new.
+    after = (
+        "## Procedure\n\n"
+        "1. **Dedupe.** Search for likely duplicates.\n"
+        "2. **Reproduce.** Attempt the reported repro steps.\n"
+        "3. **Label.** Apply the repo's existing issue-type labels.\n\n"
+        "## Stop boundaries\n\n"
+        "- Never skip step 2 under time pressure.\n"
+        "- Never label content before dedupe completes.\n"
+    )
+    assert gate.new_procedure_stop_boundary_content(_PROCEDURE_STOP_BOUNDARY_SKILL_MD, after) == []
+
+
+def test_fixture_demand_fails_when_new_bullet_has_no_covering_fixture(tmp_path: pathlib.Path):
+    after = _PROCEDURE_STOP_BOUNDARY_SKILL_MD + "- A brand new boundary.\n"
+    skill_md = _write_skill_and_tasks(tmp_path, "widget-polisher", after, {})
+    offender = gate.check_new_procedure_stop_boundary_fixture_demand(
+        skill_md, _PROCEDURE_STOP_BOUNDARY_SKILL_MD, after, tmp_path
+    )
+    assert offender is not None
+    assert "A brand new boundary." in offender
+
+
+def test_fixture_demand_passes_when_new_bullet_has_a_covering_fixture(tmp_path: pathlib.Path):
+    after = _PROCEDURE_STOP_BOUNDARY_SKILL_MD + "- A brand new boundary.\n"
+    skill_md = _write_skill_and_tasks(
+        tmp_path,
+        "widget-polisher",
+        after,
+        {"a.yaml": 'expected:\n  exercises:\n    - "A brand new boundary."\n'},
+    )
+    offender = gate.check_new_procedure_stop_boundary_fixture_demand(
+        skill_md, _PROCEDURE_STOP_BOUNDARY_SKILL_MD, after, tmp_path
+    )
+    assert offender is None
+
+
+def test_fixture_demand_passes_when_new_procedure_item_covered_by_step_ordinal(tmp_path: pathlib.Path):
+    after = _PROCEDURE_STOP_BOUNDARY_SKILL_MD.replace("3. **Label.**", "3. **Triage.** A new item.\n4. **Label.**")
+    skill_md = _write_skill_and_tasks(
+        tmp_path,
+        "widget-polisher",
+        after,
+        {"a.yaml": 'expected:\n  exercises:\n    - "Step 3"\n'},
+    )
+    offender = gate.check_new_procedure_stop_boundary_fixture_demand(
+        skill_md, _PROCEDURE_STOP_BOUNDARY_SKILL_MD, after, tmp_path
+    )
+    assert offender is None
+
+
+def test_fixture_demand_never_retroactively_flags_a_preexisting_gap(tmp_path: pathlib.Path):
+    # A skill whose Stop-boundary count already exceeded its fixture
+    # coverage before this diff, with no relevant content change in this
+    # diff, is never retroactively flagged -- which is also the
+    # "nothing new in this diff, so nothing to demand" guard's own case
+    # (`new_procedure_stop_boundary_content` returns []).
+    skill_md = _write_skill_and_tasks(tmp_path, "widget-polisher", _PROCEDURE_STOP_BOUNDARY_SKILL_MD, {})
+    offender = gate.check_new_procedure_stop_boundary_fixture_demand(
+        skill_md, _PROCEDURE_STOP_BOUNDARY_SKILL_MD, _PROCEDURE_STOP_BOUNDARY_SKILL_MD, tmp_path
+    )
+    assert offender is None
+
+
+def test_fixture_demand_brand_new_skill_md_requires_coverage(tmp_path: pathlib.Path):
+    skill_md = _write_skill_and_tasks(tmp_path, "widget-polisher", _PROCEDURE_STOP_BOUNDARY_SKILL_MD, {})
+    offender = gate.check_new_procedure_stop_boundary_fixture_demand(
+        skill_md, None, _PROCEDURE_STOP_BOUNDARY_SKILL_MD, tmp_path
+    )
+    assert offender is not None
+
+
+def test_fixture_demand_uncovered_when_no_tasks_dir_at_all(tmp_path: pathlib.Path):
+    after = _PROCEDURE_STOP_BOUNDARY_SKILL_MD + "- A brand new boundary.\n"
+    skill_md = tmp_path / "skills" / "widget-polisher" / "SKILL.md"
+    skill_md.parent.mkdir(parents=True)
+    skill_md.write_text(after, encoding="utf-8")
+    offender = gate.check_new_procedure_stop_boundary_fixture_demand(
+        skill_md, _PROCEDURE_STOP_BOUNDARY_SKILL_MD, after, tmp_path
+    )
+    assert offender is not None
+    assert "A brand new boundary." in offender
+
+
+def test_fixture_demand_skips_an_unparseable_fixture_when_scanning_for_coverage(tmp_path: pathlib.Path):
+    after = _PROCEDURE_STOP_BOUNDARY_SKILL_MD + "- A brand new boundary.\n"
+    skill_md = _write_skill_and_tasks(
+        tmp_path,
+        "widget-polisher",
+        after,
+        {"a.yaml": "expected:\n  exercises: [\n"},
+    )
+    offender = gate.check_new_procedure_stop_boundary_fixture_demand(
+        skill_md, _PROCEDURE_STOP_BOUNDARY_SKILL_MD, after, tmp_path
+    )
+    assert offender is not None
+    assert "A brand new boundary." in offender
+
+
+def test_fixture_demand_skips_directory_named_like_a_fixture(tmp_path: pathlib.Path):
+    # Regression (issue #192 step 8 adversarial review, live-reproduced):
+    # same IsADirectoryError guard as
+    # test_procedure_stop_boundary_coverage_skips_directory_named_like_a_fixture,
+    # for this function's own separate tasks_dir.glob("*.yaml") scan.
+    after = _PROCEDURE_STOP_BOUNDARY_SKILL_MD + "- A brand new boundary.\n"
+    skill_md = _write_skill_and_tasks(tmp_path, "widget-polisher", after, {})
+    (tmp_path / "evals" / "widget-polisher" / "tasks" / "evil.yaml").mkdir()
+    offender = gate.check_new_procedure_stop_boundary_fixture_demand(
+        skill_md, _PROCEDURE_STOP_BOUNDARY_SKILL_MD, after, tmp_path
+    )
+    assert offender is not None
+    assert "A brand new boundary." in offender
+
+
+def test_fixture_demand_skips_a_malformed_exercises_declaration_when_scanning_for_coverage(
+    tmp_path: pathlib.Path,
+):
+    after = _PROCEDURE_STOP_BOUNDARY_SKILL_MD + "- A brand new boundary.\n"
+    skill_md = _write_skill_and_tasks(
+        tmp_path,
+        "widget-polisher",
+        after,
+        {"a.yaml": "expected:\n  exercises: true\n"},
+    )
+    offender = gate.check_new_procedure_stop_boundary_fixture_demand(
+        skill_md, _PROCEDURE_STOP_BOUNDARY_SKILL_MD, after, tmp_path
+    )
+    assert offender is not None
+    assert "A brand new boundary." in offender
+
+
+def test_main_wires_check_e_absolute_resolution(tmp_path: pathlib.Path):
+    skill_md = _write_skill_and_tasks(
+        tmp_path,
+        "widget-polisher",
+        _PROCEDURE_STOP_BOUNDARY_SKILL_MD,
+        {"a.yaml": 'expected:\n  exercises:\n    - "Nonexistent step"\n'},
+    )
+    rc = gate.main(["--skill-md", str(skill_md), "--repo-root", str(tmp_path)])
+    assert rc == 1
+
+
+def test_main_skips_delta_demand_without_before_map(tmp_path: pathlib.Path):
+    # Omitting --skill-md-before-map must skip the delta-scoped demand
+    # check entirely (Check E's absolute resolution check still runs).
+    after = _PROCEDURE_STOP_BOUNDARY_SKILL_MD + "- A brand new boundary.\n"
+    skill_md = _write_skill_and_tasks(tmp_path, "widget-polisher", after, {})
+    rc = gate.main(["--skill-md", str(skill_md), "--repo-root", str(tmp_path)])
+    assert rc == 0
+
+
+def test_main_wires_check_e_delta_demand_via_before_map(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]):
+    after = _PROCEDURE_STOP_BOUNDARY_SKILL_MD + "- A brand new boundary.\n"
+    skill_md = _write_skill_and_tasks(tmp_path, "widget-polisher", after, {})
+    before_file = tmp_path / "before.md"
+    before_file.write_text(_PROCEDURE_STOP_BOUNDARY_SKILL_MD, encoding="utf-8")
+    before_map_file = tmp_path / "before_map.tsv"
+    before_map_file.write_text(f"{skill_md}\t{before_file}\n", encoding="utf-8")
+    rc = gate.main(
+        [
+            "--skill-md",
+            str(skill_md),
+            "--skill-md-before-map",
+            str(before_map_file),
+            "--repo-root",
+            str(tmp_path),
+        ]
+    )
+    assert rc == 1
+    stderr = capsys.readouterr().err
+    assert "A brand new boundary." in stderr
+
+
+def test_main_before_map_new_file_treated_as_brand_new(tmp_path: pathlib.Path):
+    skill_md = _write_skill_and_tasks(tmp_path, "widget-polisher", _PROCEDURE_STOP_BOUNDARY_SKILL_MD, {})
+    before_map_file = tmp_path / "before_map.tsv"
+    before_map_file.write_text(f"{skill_md}\t\n", encoding="utf-8")
+    rc = gate.main(
+        [
+            "--skill-md",
+            str(skill_md),
+            "--skill-md-before-map",
+            str(before_map_file),
+            "--repo-root",
+            str(tmp_path),
+        ]
+    )
+    assert rc == 1
+
+
+def test_main_before_map_ignores_a_blank_line(tmp_path: pathlib.Path):
+    skill_md = _write_skill_and_tasks(tmp_path, "widget-polisher", _PROCEDURE_STOP_BOUNDARY_SKILL_MD, {})
+    before_map_file = tmp_path / "before_map.tsv"
+    before_map_file.write_text(f"\n{skill_md}\t\n\n", encoding="utf-8")
+    rc = gate.main(
+        [
+            "--skill-md",
+            str(skill_md),
+            "--skill-md-before-map",
+            str(before_map_file),
+            "--repo-root",
+            str(tmp_path),
+        ]
+    )
+    assert rc == 1
+
+
+def test_main_processes_a_second_skill_md_after_a_clean_delta_demand(tmp_path: pathlib.Path):
+    # Regression: the offender-collection loop must continue to a second
+    # --skill-md file after the delta-demand check for the first finds
+    # nothing new, not stop short. Both skill_md_1 and skill_md_2's own
+    # delta-demand checks see no change (before == after for each) --
+    # every --skill-md file carries its own before-map entry, required
+    # since the self-revalidation fix that fails closed when a supplied
+    # before-map is missing an entry for one of the --skill-md paths.
+    # rc == 0 confirms the loop actually reached and finished processing
+    # skill_md_2 rather than silently stopping after skill_md_1.
+    skill_md_1 = _write_skill_and_tasks(tmp_path, "widget-polisher", _PROCEDURE_STOP_BOUNDARY_SKILL_MD, {})
+    skill_md_2 = _write_skill_and_tasks(tmp_path, "second-widget", _PROCEDURE_STOP_BOUNDARY_SKILL_MD, {})
+    before_map_file = tmp_path / "before_map.tsv"
+    before_1 = tmp_path / "before_1.md"
+    before_1.write_text(_PROCEDURE_STOP_BOUNDARY_SKILL_MD, encoding="utf-8")
+    before_2 = tmp_path / "before_2.md"
+    before_2.write_text(_PROCEDURE_STOP_BOUNDARY_SKILL_MD, encoding="utf-8")
+    before_map_file.write_text(f"{skill_md_1}\t{before_1}\n{skill_md_2}\t{before_2}\n", encoding="utf-8")
+    rc = gate.main(
+        [
+            "--skill-md",
+            str(skill_md_1),
+            str(skill_md_2),
+            "--skill-md-before-map",
+            str(before_map_file),
+            "--repo-root",
+            str(tmp_path),
+        ]
+    )
+    assert rc == 0
+
+
+def test_main_before_map_malformed_line_fails_closed(tmp_path: pathlib.Path):
+    skill_md = _write_skill_and_tasks(tmp_path, "widget-polisher", _PROCEDURE_STOP_BOUNDARY_SKILL_MD, {})
+    before_map_file = tmp_path / "before_map.tsv"
+    before_map_file.write_text("not-a-well-formed-line\n", encoding="utf-8")
+    rc = gate.main(
+        [
+            "--skill-md",
+            str(skill_md),
+            "--skill-md-before-map",
+            str(before_map_file),
+            "--repo-root",
+            str(tmp_path),
+        ]
+    )
+    assert rc == 1
+
+
+def test_main_before_map_missing_file_fails_closed(tmp_path: pathlib.Path):
+    skill_md = _write_skill_and_tasks(tmp_path, "widget-polisher", _PROCEDURE_STOP_BOUNDARY_SKILL_MD, {})
+    rc = gate.main(
+        [
+            "--skill-md",
+            str(skill_md),
+            "--skill-md-before-map",
+            str(tmp_path / "nonexistent.tsv"),
+            "--repo-root",
+            str(tmp_path),
+        ]
+    )
+    assert rc == 1
+
+
+def test_main_before_map_missing_entry_for_skill_md_fails_closed(tmp_path: pathlib.Path):
+    # Self-revalidation regression (issue #192 step 8 adversarial review):
+    # once --skill-md-before-map is supplied at all, every --skill-md path
+    # must have its own entry. Silently skipping the delta-demand check for
+    # a --skill-md file the map forgot to cover would mask exactly the kind
+    # of workflow/gate drift Check E exists to catch elsewhere -- so a
+    # missing entry must fail closed (rc == 1) with a clear error, never
+    # pass through as though the demand check ran and found nothing.
+    skill_md_1 = _write_skill_and_tasks(tmp_path, "widget-polisher", _PROCEDURE_STOP_BOUNDARY_SKILL_MD, {})
+    skill_md_2 = _write_skill_and_tasks(tmp_path, "second-widget", _PROCEDURE_STOP_BOUNDARY_SKILL_MD, {})
+    before_map_file = tmp_path / "before_map.tsv"
+    before_1 = tmp_path / "before_1.md"
+    before_1.write_text(_PROCEDURE_STOP_BOUNDARY_SKILL_MD, encoding="utf-8")
+    # Only skill_md_1 gets an entry; skill_md_2 is the missing one.
+    before_map_file.write_text(f"{skill_md_1}\t{before_1}\n", encoding="utf-8")
+    rc = gate.main(
+        [
+            "--skill-md",
+            str(skill_md_1),
+            str(skill_md_2),
+            "--skill-md-before-map",
+            str(before_map_file),
+            "--repo-root",
+            str(tmp_path),
+        ]
+    )
+    assert rc == 1
+
+
+def test_no_real_skill_md_newly_fails_check_e_absolute_resolution():
+    # Regression: none of the 467 pre-existing task files across every
+    # real skill are retroactively required to add an exercises
+    # declaration, and every one that already declares it still resolves.
+    for path in _REAL_SKILL_MD_FILES:
+        offender = gate.check_procedure_stop_boundary_exercises_coverage(
+            path, path.read_text(encoding="utf-8"), REPO_ROOT
+        )
+        assert offender is None, offender
+
+
+# ---------------------------------------------------------------------------
+# Check E adversarial defeat cases (issue #192 step 8 review)
+#
+# Each case below was constructed specifically to defeat Check E's own
+# detection logic, confirmed to actually do so against the shipped
+# revision, and is pinned here asserting the CORRECT outcome so a later
+# edit that reintroduces the hole fails loudly instead of silently.
+# ---------------------------------------------------------------------------
+
+
+def test_step_ordinals_follow_the_lists_own_source_numbering():
+    # Defeat case (confirmed to defeat the pre-fix revision): "Step N" was
+    # resolved by a running 1..N index over the flattened item list, not
+    # by the item's own written number. On a list starting at `0.` every
+    # ordinal was off by one -- "Step 0" resolved against nothing, a
+    # non-existent "Step 4" resolved successfully, and "Step 1" silently
+    # pointed at the item numbered `0.`.
+    text = "## Procedure\n\n0. Zeroth.\n1. First.\n2. Second.\n3. Third.\n"
+    assert gate.parse_procedure_step_items(text) == [
+        (0, "Zeroth."),
+        (1, "First."),
+        (2, "Second."),
+        (3, "Third."),
+    ]
+    labels = gate.resolvable_exercise_labels(text)
+    assert "step 0" in labels
+    assert "step 3" in labels
+    assert "step 4" not in labels
+
+
+def test_real_skill_md_with_a_step_zero_resolves_step_zero_not_step_seven():
+    # The same defeat case against real, shipped content rather than a
+    # synthetic fixture: reviewing-an-artifact/SKILL.md numbers its
+    # Procedure `0.`..`6.` (its own frontmatter says "the eight Step 0
+    # deferral targets"), so "Step 0" must resolve and "Step 7" must not.
+    path = REPO_ROOT / "skills" / "reviewing-an-artifact" / "SKILL.md"
+    assert path.is_file(), path
+    labels = gate.resolvable_exercise_labels(path.read_text(encoding="utf-8"))
+    assert "step 0" in labels
+    assert "step 6" in labels
+    assert "step 7" not in labels
+
+
+def test_step_ordinals_are_not_flattened_across_two_procedure_headings():
+    # Same root cause, second symptom: a running index accumulated across
+    # every Procedure/Steps heading in the file, so a 2-item Procedure
+    # followed by a 2-item Steps section made "Step 3"/"Step 4" resolve
+    # against the second section's own items 1 and 2.
+    text = "## Procedure\n\n1. Alpha.\n2. Beta.\n\n## Notes\n\nprose\n\n## Steps\n\n1. Gamma.\n2. Delta.\n"
+    labels = gate.resolvable_exercise_labels(text)
+    assert "step 1" in labels
+    assert "step 2" in labels
+    assert "step 3" not in labels
+    assert "step 4" not in labels
+    # The literal-text targets are unaffected -- both sections contribute.
+    assert "gamma." in labels
+    assert "delta." in labels
+
+
+def test_procedure_steps_heading_does_not_over_match_an_unrelated_heading():
+    # Regression (issue #192 step 8 adversarial review, live-reproduced):
+    # `_PROCEDURE_STEPS_HEADING_RE` used to match any heading merely
+    # STARTING with "Procedure"/"Steps" (a `\b`-anchored, not
+    # `$`-anchored, pattern) -- e.g. the real heading
+    # "## Steps 2-3 -- a secret reachable only through history" in
+    # skills/scanning-leaked-secrets/references/worked-examples.md:344.
+    # Numbered items under such an unrelated heading must not be read as
+    # Procedure/Steps items; a genuine "## Steps" heading elsewhere in
+    # the same file still resolves normally.
+    text = (
+        "## Steps 2-3 -- a secret reachable only through history\n\n"
+        "1. Not a real step.\n2. Also not a real step.\n\n"
+        "## Steps\n\n1. Alpha.\n2. Beta.\n"
+    )
+    assert gate.parse_procedure_step_items(text) == [(1, "Alpha."), (2, "Beta.")]
+    labels = gate.resolvable_exercise_labels(text)
+    assert "step 1" in labels
+    assert "step 2" in labels
+    assert "not a real step." not in labels
+    assert "also not a real step." not in labels
+
+
+def test_check_c_and_check_e_accept_the_same_exercises_vocabulary(tmp_path: pathlib.Path):
+    # Defeat case (confirmed to defeat the pre-fix revision): Check C
+    # resolved a selection fixture's labels against `###` headings ALONE
+    # while Check E advertised Step-N/Procedure-item/Stop-boundary targets
+    # as legal, so one fixture declaring "Step 2" passed Check E and was
+    # simultaneously failed by Check C -- and Check E's delta demand could
+    # ask for a label Check C would then reject.
+    body = _ROUTING_SKILL_MD + _PROCEDURE_STOP_BOUNDARY_SKILL_MD
+    skill_md = _write_skill_and_tasks(
+        tmp_path,
+        "widget-polisher",
+        body,
+        {"a.yaml": 'expected:\n  exercises:\n    - "Step 2"\n    - "Never skip step 2 under time pressure."\n'},
+    )
+    split_json = tmp_path / "evals" / "widget-polisher" / "split.json"
+    split_json.write_text(json.dumps({"assignment": {"selection": ["a.yaml"]}}), encoding="utf-8")
+    data, error = gate.load_split_json(split_json)
+    assert error is None, error
+    assert data is not None
+    assert gate.check_exercises_declaration_coverage(split_json, data, tmp_path) is None
+    assert gate.check_procedure_stop_boundary_exercises_coverage(skill_md, body, tmp_path) is None
+    assert gate.main(["--skill-md", str(skill_md), "--repo-root", str(tmp_path)]) == 0
+
+
+def test_check_c_still_rejects_a_label_resolving_to_nothing_after_the_widening(tmp_path: pathlib.Path):
+    # The counterpart guard for the widening above: Check C's own purpose
+    # (issue #631 -- a declared label is never resolved by staleness) must
+    # survive it. A label matching none of the widened target kinds still
+    # fails.
+    body = _ROUTING_SKILL_MD + _PROCEDURE_STOP_BOUNDARY_SKILL_MD
+    _write_skill_and_tasks(
+        tmp_path,
+        "widget-polisher",
+        body,
+        {"a.yaml": 'expected:\n  exercises:\n    - "Step 9"\n'},
+    )
+    split_json = tmp_path / "evals" / "widget-polisher" / "split.json"
+    split_json.write_text(json.dumps({"assignment": {"selection": ["a.yaml"]}}), encoding="utf-8")
+    data, error = gate.load_split_json(split_json)
+    assert error is None, error
+    assert data is not None
+    offender = gate.check_exercises_declaration_coverage(split_json, data, tmp_path)
+    assert offender is not None
+    assert "Step 9" in offender
+
+
+def test_same_count_stop_boundary_and_procedure_content_swap_registers_as_new():
+    # The exact defeat class gitapex_gate_skill_branch_fixture_coverage.py's
+    # own module docstring names as the reason it keys Counters on content
+    # instead of bare totals: deleting N bullets/items and adding N
+    # DIFFERENT ones leaves the totals equal, so a bare-total comparison
+    # would see no change at all. Content keying must still report every
+    # swapped-in item as new.
+    before = "## Stop boundaries\n\n- A.\n- B.\n- C.\n\n## Procedure\n\n1. P1.\n2. P2.\n"
+    after = "## Stop boundaries\n\n- X.\n- Y.\n- Z.\n\n## Procedure\n\n1. Q1.\n2. Q2.\n"
+    assert gate.new_procedure_stop_boundary_content(before, after) == [
+        "procedure-step:Q1.",
+        "procedure-step:Q2.",
+        "stop-boundary:- X.",
+        "stop-boundary:- Y.",
+        "stop-boundary:- Z.",
+    ]
+    # A pure reorder of the same content is NOT new (position-independent
+    # identity), and a duplicated bullet is caught by the multiset, not
+    # collapsed by a set.
+    reordered = "## Stop boundaries\n\n- C.\n- B.\n- A.\n\n## Procedure\n\n1. P2.\n2. P1.\n"
+    assert gate.new_procedure_stop_boundary_content(before, reordered) == []
+    assert gate.new_procedure_stop_boundary_content(
+        "## Stop boundaries\n\n- A.\n", "## Stop boundaries\n\n- A.\n- A.\n"
+    ) == ["stop-boundary:- A."]
+
+
+def test_main_warns_on_unreadable_before_content_instead_of_swallowing_it(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+):
+    # An unreadable before-file fails CLOSED (every item counts as new),
+    # but silently: the resulting whole-file coverage demand was
+    # inexplicable from the job log. Every sibling error path in main()
+    # already prints; this one must too.
+    skill_md = _write_skill_and_tasks(tmp_path, "widget-polisher", _PROCEDURE_STOP_BOUNDARY_SKILL_MD, {})
+    before_map_file = tmp_path / "before_map.tsv"
+    before_map_file.write_text(f"{skill_md}\t{tmp_path / 'gone.md'}\n", encoding="utf-8")
+    rc = gate.main(
+        [
+            "--skill-md",
+            str(skill_md),
+            "--skill-md-before-map",
+            str(before_map_file),
+            "--repo-root",
+            str(tmp_path),
+        ]
+    )
+    assert rc == 1
+    stderr = capsys.readouterr().err
+    assert "warning: could not read before-content" in stderr
+    assert "treating as newly added" in stderr
+
+
+# ---------------------------------------------------------------------------
 # main()
 # ---------------------------------------------------------------------------
 

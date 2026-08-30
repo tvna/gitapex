@@ -84,7 +84,7 @@
       "id": "bash-cli-write-and-install-guard",
       "kind": "script",
       "script": "hooks/check-bash-safety.sh",
-      "rule": "Delegates classification to hooks/gitapex_check_bash_safety.py, a token-based classifier (Python stdlib shlex, POSIX mode) that matches against bash's own dequoted, operator-segmented token stream -- closing the quote-splitting, ${IFS}/$IFS substitution, and variable/array/positional-parameter indirection bypass classes a prior raw-text regex substring scan was live-confirmed vulnerable to (issue #1326). Denies a Bash call matching a package/plugin-install verb (uv add/uv remove and apm install/apm uninstall stay allowed as declarative, visibly-mutating commands); denies gh issue/gh pr write subcommands and gh api writes (POST/PUT/PATCH/DELETE, a field flag, or 'mutation' in gh api graphql); on git push (including an obfuscated/indirected one that still resolves to git push), runs skills/outward-artifact-preflight/scripts/gitapex_scan_provenance.py against the outgoing commit range and warns (never blocks) if it flags something. Fails closed (denies) rather than allowing the call through when jq or python3 is missing from PATH, the payload or tool_input is not a JSON object, tool_name is present but not a string, tool_input.command is present but not a string, the classifier exits non-zero, or the classifier's own output is not a JSON object with a recognized decision. Disclosed residual (not closed by this classifier): verb-token-splitting that never places the tool/verb name as its own literal token anywhere, e.g. string-slice reconstruction (cmd=uvinstall; eval \"${cmd:0:2} ${cmd:2}\") or array-literal-assignment indirection (A=(uv); V=(install); \"${A[@]}\" \"${V[@]}\") -- see hooks/gitapex_check_bash_safety.py's own module docstring.",
+      "rule": "Delegates classification to hooks/gitapex_check_bash_safety.py, a token-based classifier (Python stdlib shlex, POSIX mode) that matches against bash's own dequoted, operator-segmented token stream -- closing the quote-splitting, ${IFS}/$IFS substitution, and variable/array/positional-parameter indirection bypass classes a prior raw-text regex substring scan was live-confirmed vulnerable to (issue #1326). Denies a Bash call matching a package/plugin-install verb (uv add/uv remove and apm install/apm uninstall stay allowed as declarative, visibly-mutating commands); denies gh issue/gh pr write subcommands and gh api writes (POST/PUT/PATCH/DELETE, a field flag, or 'mutation' in gh api graphql); on git push (including an obfuscated/indirected one that still resolves to git push), runs skills/outward-artifact-preflight/scripts/gitapex_scan_provenance.py against the outgoing commit range and warns (never blocks) if it flags something. Since issue #1375: the classifier also extracts every path a git checkout/git restore invocation could discard (git checkout -- PATH, git checkout ./.., git checkout with 2+ positionals and no --, or git restore PATH/--staged --worktree PATH, a case-sensitive enumerated restore flag vocabulary), denying outright (no live I/O) when a path token is dynamic and cannot be soundly resolved to a literal, when an otherwise-risky shape yields zero paths (e.g. bare 'git checkout --'), when a restore segment carries --pathspec-from-file/--pathspec-file-nul or an unrecognized flag, or when the classifier cannot soundly determine which working tree is at risk (a -C/--git-dir/--work-tree flag, a GIT_DIR=/GIT_WORK_TREE=/GIT_INDEX_FILE= assignment, or an earlier cd/pushd/popd -- literal, or dynamic and resolvable to one via a reassignment-biased reading -- in the same command); when paths are extracted, hooks/check-bash-safety.sh reads .cwd from the PreToolUse payload itself (not $CLAUDE_PROJECT_DIR) and denies if `git -C \"$cwd\" diff --quiet <HEAD-or-empty-tree> -- \"$path\"` reports any of them dirty. Fails closed (denies) rather than allowing the call through when jq or python3 is missing from PATH, the payload or tool_input is not a JSON object, tool_name is present but not a string, tool_input.command is present but not a string, the classifier exits non-zero, the classifier's own output is not a JSON object with a recognized decision, .cwd is missing/not a git working tree, or a checkout/restore path's own live git-diff check cannot be verified. Disclosed residual (not closed by this classifier): verb-token-splitting that never places the tool/verb name as its own literal token anywhere, e.g. string-slice reconstruction (cmd=uvinstall; eval \"${cmd:0:2} ${cmd:2}\") or array-literal-assignment indirection (A=(uv); V=(install); \"${A[@]}\" \"${V[@]}\") -- see hooks/gitapex_check_bash_safety.py's own module docstring. A bare 'git checkout SOMENAME' (single positional, not '.'/'..', no --) is a deliberate Non-goal: disambiguating a branch/ref name from a path needs a live ref-existence lookup this pure classifier does not perform.",
       "planes": ["pretooluse"],
       "local_exclusion": "PreToolUse-only: grades a Claude Code tool-call JSON payload arriving on stdin, which has no working-tree equivalent to reconstruct ahead of a push.",
       "trigger": "PreToolUse matcher Bash (hooks/hooks.json)",
@@ -101,7 +101,10 @@
         {"kind": "bash-pattern", "ref": "gh api -X|--method POST|PUT|PATCH|DELETE"},
         {"kind": "bash-pattern", "ref": "gh api -f|-F|--field|--raw-field"},
         {"kind": "bash-pattern", "ref": "gh api graphql ... mutation"},
-        {"kind": "bash-pattern", "ref": "git push"}
+        {"kind": "bash-pattern", "ref": "git push"},
+        {"kind": "bash-pattern", "ref": "git checkout -- PATH..."},
+        {"kind": "bash-pattern", "ref": "git checkout ."},
+        {"kind": "bash-pattern", "ref": "git restore [FLAGS] PATH..."}
       ]
     },
     {
@@ -1805,6 +1808,53 @@
         {"kind": "file-glob", "ref": "skills/**/*.md"},
         {"kind": "runtime-resolved-reference", "ref": "github.event.pull_request.body"},
         {"kind": "workflow-event", "ref": "design-doc-pattern-dryrun-gate.yml:pull_request"}
+      ]
+    },
+    {
+      "id": "function-body-test-coverage",
+      "kind": "script",
+      "script": [
+        ".github/scripts/gitapex_gate_function_body_test_coverage.py",
+        ".github/scripts/gitapex_run_base_diff.py",
+        ".github/scripts/_gitapex_base_ref.py",
+        ".github/workflows/function-body-test-coverage-gate.yml"
+      ],
+      "rule": "A FunctionDef/AsyncFunctionDef (at any nesting depth) whose own body -- not a nested function's -- contains a line newly added by a PR diff inside a skills/*/scripts/*.py or .github/scripts/*.py file (test_*.py and conftest.py excluded) must be covered by this same diff also adding or changing a line, inside tests/test_<source-stem>.py or tests/test_<source-stem>_properties.py, that falls inside a test_-named function whose own body references the touched function by name. Unlike detection-logic-property-coverage, module-level changes are never graded and a pre-existing test that already covered the function but that this diff does not itself touch does not clear it -- generalizes that gate (issue #1178) past its own narrower regex/path-resolution/string-comparison AST trigger set, per merge-retrospective issue #1492's own repair 11 (commit 379c0fde shipped a function-body fix with zero test changes in the same diff). Scope is the diff, not the repository. An inline '# function-body-test-coverage: WAIVED: <reason>' comment anywhere within the touched function's own line range waives it. Exits 2 rather than pass silently on a malformed diff or an in-scope file that cannot be read or parsed. See the script's own module docstring for the disclosed known misses and over-reports.",
+      "planes": ["ci", "local"],
+      "local_invocation": [
+        "uv",
+        "run",
+        "--frozen",
+        "python3",
+        ".github/scripts/gitapex_gate_function_body_test_coverage.py"
+      ],
+      "local_stdin": [
+        "uv",
+        "run",
+        "--frozen",
+        "python3",
+        ".github/scripts/gitapex_run_base_diff.py",
+        "--",
+        "*.py"
+      ],
+      "trigger": ".github/workflows/function-body-test-coverage-gate.yml on pull_request, plus tests/test_gitapex_gate_function_body_test_coverage.py and tests/test_gitapex_gate_function_body_test_coverage_properties.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "test-integrity",
+      "tracking_issue": 1498,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "skills/*/scripts/*.py"},
+        {"kind": "file-glob", "ref": ".github/scripts/*.py"},
+        {"kind": "file-glob", "ref": "tests/test_*.py"},
+        {
+          "kind": "cross-registry-consistency",
+          "ref": "new/changed function bodies in skills/*/scripts/*.py, .github/scripts/*.py <-> a new/changed test_-named test in the same diff, in the co-located tests/test_<stem>.py or tests/test_<stem>_properties.py"
+        },
+        {"kind": "workflow-event", "ref": "function-body-test-coverage-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
     }
   ],
