@@ -4073,6 +4073,63 @@ def _names_reassigned_by_untracked_construct(tokens: list[str]) -> set[str]:
     return names
 
 
+def _paren_depths(tokens: list[str]) -> list[int]:
+    """The `(...)`-subshell nesting depth of each token in TOKENS, as a
+    list the same length and order as TOKENS itself (0 = top-level
+    scope, 1+ = inside one or more subshell groupings). `(`/`)`
+    themselves each get the depth in effect AT that boundary token (the
+    new, deeper depth for `(`; the old, shallower depth for `)`) --
+    irrelevant in practice since a caller only ever consults the depth
+    of an actual assignment-shaped content token, never a bare `(`/`)`.
+
+    Added by round 31 (issue #1375): `segment_tokens` treats `(`/`)`
+    as pure sequencing boundaries with no depth tracking at all --
+    correct for simple-command splitting, but insufficient for a caller
+    that needs to know whether a given assignment can actually affect a
+    reference OUTSIDE its own subshell scope. Real bash's own subshell
+    semantics: a `(...)` grouping runs in a forked, isolated shell whose
+    own assignments never propagate back to the parent -- see
+    `_names_reassigned_from_a_static_value`'s own docstring for the live
+    bypass this closes."""
+    depths: list[int] = []
+    depth = 0
+    for tok in tokens:
+        if tok == "(":
+            depth += 1
+            depths.append(depth)
+        elif tok == ")":
+            depths.append(depth)
+            depth = max(depth - 1, 0)
+        else:
+            depths.append(depth)
+    return depths
+
+
+def _segment_tokens_with_subshell_depth(tokens: list[str]) -> list[tuple[list[str], int]]:
+    """Like `segment_tokens`, but pairs each returned segment with its
+    own `(...)`-subshell nesting DEPTH (see `_paren_depths`'s own
+    docstring) at the point it appears in TOKENS. A single segment's own
+    depth is always internally consistent -- `(`/`)` are pure segment
+    boundaries in `segment_tokens` too, so no segment can itself
+    straddle a depth change -- added by round 31 (issue #1375) for
+    `_names_cleared_by_a_later_static_reassignment`'s own use; see that
+    function's own docstring for the live bypass this closes."""
+    segments: list[tuple[list[str], int]] = [([], 0)]
+    depth = 0
+    for tok in tokens:
+        if tok == "(":
+            depth += 1
+            segments.append(([], depth))
+        elif tok == ")":
+            depth = max(depth - 1, 0)
+            segments.append(([], depth))
+        elif tok in _SINGLE_OPS or tok in _MULTI_OPS:
+            segments.append(([], depth))
+        else:
+            segments[-1][0].append(tok)
+    return [(seg, d) for seg, d in segments if seg]
+
+
 def _names_reassigned_from_a_static_value(tokens: list[str]) -> set[str]:
     """Every NAME that carried a trustworthy STATIC value at some point
     in TOKENS and was LATER reassigned a DYNAMIC (`$`/backtick-
@@ -4164,18 +4221,51 @@ def _names_reassigned_from_a_static_value(tokens: list[str]) -> set[str]:
     reassignment after this one still correctly re-poisons the name --
     verified live: `M=GET; M=$(echo x); M=HEAD; M=$(echo other)` leaves
     `M` poisoned again, matching real bash's own final, genuinely-
-    dynamic value)."""
+    dynamic value).
+
+    CRITICAL bypass found by independent adversarial review (round 31,
+    issue #1375) and independently reproduced live, both via
+    `classify()` and via real bash execution with a stand-in `uv`/`gh`
+    binary on PATH: round 28's own "clear on later static reassignment"
+    fix above did not account for bash's own subshell scoping at all --
+    a `(...)` grouping runs in a forked, isolated shell whose own
+    assignments never propagate back to the parent, but this function's
+    own flat, depth-blind scan over TOKENS treated a static assignment
+    written INSIDE `(...)` exactly like an ordinary top-level one,
+    letting it wrongly clear a genuinely poisoned name. `TOOL=uv;
+    VERB=harmless; VERB=$(echo install); (VERB=safe); $TOOL $VERB foo`
+    resolved to `deny=False, reason='no denied pattern matched'` even
+    though real bash genuinely runs `uv install foo` -- the parenthesized
+    `VERB=safe` never actually reaches the parent shell's own `$VERB` at
+    all (confirmed live via a stand-in `uv` binary on PATH: captured
+    argv `uv called with: install foo`, NOT `safe foo`). Reproduced
+    identically for `_rule_gh_api_write`: `M=safe; M=$(echo POST);
+    (M=GET); gh api repos/o/r/pulls/1/merge -X $M` also resolved to
+    `deny=False` -- real bash genuinely runs `-X POST` (captured argv
+    confirms it), a genuine unreviewed write. Closed by tracking each
+    assignment token's own `(...)`-nesting depth via `_paren_depths` and
+    only letting a static reassignment clear POISONED when it occurs at
+    depth 0 (true top-level scope, the only scope whose own reassignment
+    can actually affect a top-level reference); a static assignment
+    found at depth 1+ is treated as invisible to the parent scope --
+    neither clearing nor registering EVER_STATIC -- while a DYNAMIC
+    reassignment at ANY depth still poisons unconditionally, since
+    staying conservative about what a subshell might have done is always
+    the safe direction, never the dangerous one. Checkout/restore's own
+    `_names_with_dynamic_assignment` was independently confirmed
+    unaffected by this exact bypass shape (it never clears at all,
+    regardless of depth, so it already denied this shape correctly)."""
     ever_static: set[str] = set()
     poisoned: set[str] = set()
-    for token in tokens:
-        match = _ASSIGN_RE.match(token)
+    for tok, depth in zip(tokens, _paren_depths(tokens), strict=True):
+        match = _ASSIGN_RE.match(tok)
         if not match:
             continue
         name = match.group(1)
-        if _is_dynamic(token):
+        if _is_dynamic(tok):
             if name in ever_static:
                 poisoned.add(name)
-        else:
+        elif depth == 0:
             ever_static.add(name)
             poisoned.discard(name)
     return poisoned
@@ -4231,11 +4321,38 @@ def _names_cleared_by_a_later_static_reassignment(tokens: list[str], candidates:
     docstring); this function instead post-processes only the poisoned
     set `_names_poisoned_for_gh_api_and_b1` itself returns, leaving
     those two shared functions -- and checkout/restore's own
-    consumption of them -- completely unchanged."""
+    consumption of them -- completely unchanged.
+
+    CRITICAL bypass found by independent adversarial review (round 31,
+    issue #1375) and independently reproduced live, both via
+    `classify()` and via real bash execution with a stand-in `uv`/`gh`
+    binary on PATH: this function's own original form was, like
+    `_names_reassigned_from_a_static_value`'s own pre-round-31 form,
+    completely blind to bash's own subshell scoping -- a static
+    assignment written INSIDE a `(...)` grouping never actually reaches
+    the parent shell's own copy of the name, but the original per-
+    segment scan treated it exactly like an ordinary top-level clearing
+    assignment. `TOOL=uv; VERB=inst; VERB+=all; (VERB=safe); $TOOL
+    $VERB foo` resolved to `deny=False` even though real bash genuinely
+    runs `uv install foo`, NOT `safe foo` (confirmed live via a stand-in
+    `uv` binary on PATH: captured argv `uv called with: install foo`);
+    the `read`- and array-element-reassigned counterparts reproduce
+    identically. Closed the same way as `_names_reassigned_from_a_
+    static_value`'s own round-31 fix: each segment's own `(...)`-nesting
+    depth (via `_segment_tokens_with_subshell_depth`) gates whether a
+    plain static assignment in that segment may set a candidate's own
+    LAST-event state to "cleared" -- only a depth-0 (true top-level)
+    static assignment may do so; a depth-1+ one is treated as invisible
+    to the parent scope, leaving whatever state a prior event already
+    recorded untouched. Every OTHER event class (append, array-element,
+    read/printf-v, and a dynamic plain assignment) still marks the
+    candidate "not cleared" regardless of depth, since staying
+    conservative about what a subshell might have done is always the
+    safe direction, never the dangerous one."""
     if not candidates:
         return set()
     last_is_static: dict[str, bool] = {}
-    for seg in segment_tokens(tokens):
+    for seg, depth in _segment_tokens_with_subshell_depth(tokens):
         if seg and not _is_dynamic(seg[0]):
             head = seg[0].lower()
             if head in _READ_COMMAND_WORDS:
@@ -4264,8 +4381,15 @@ def _names_cleared_by_a_later_static_reassignment(tokens: list[str], candidates:
             match = _ASSIGN_RE.match(token)
             if match:
                 name = match.group(1)
-                if name in candidates:
-                    last_is_static[name] = not _is_dynamic(token)
+                if name not in candidates:
+                    continue
+                if _is_dynamic(token):
+                    last_is_static[name] = False
+                elif depth == 0:
+                    last_is_static[name] = True
+                # depth > 0 and static: a subshell-scoped reassignment
+                # never reaches the parent scope -- leave any existing
+                # state untouched (round 31).
     return {name for name, is_static in last_is_static.items() if is_static}
 
 

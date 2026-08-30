@@ -2606,6 +2606,60 @@ def test_names_reassigned_from_a_static_value_re_poisons_after_a_further_dynamic
     assert checker._names_reassigned_from_a_static_value(tokens) == {"M"}
 
 
+def test_paren_depths_tracks_nesting() -> None:
+    """`_paren_depths` returns one depth per token, incrementing at each
+    `(` and decrementing at each `)`, never going negative."""
+    tokens = ["A=1", "(", "B=2", "(", "C=3", ")", "D=4", ")", "E=5"]
+    assert checker._paren_depths(tokens) == [0, 1, 1, 2, 2, 2, 1, 1, 0]
+
+
+def test_paren_depths_never_goes_negative_on_an_unmatched_close_paren() -> None:
+    assert checker._paren_depths([")", "A=1"]) == [0, 0]
+
+
+def test_segment_tokens_with_subshell_depth_pairs_each_segment_with_its_own_depth() -> None:
+    tokens = ["TOOL=uv", ";", "(", "VERB=safe", ")", ";", "echo", "hi"]
+    result = checker._segment_tokens_with_subshell_depth(tokens)
+    assert result == [(["TOOL=uv"], 0), (["VERB=safe"], 1), (["echo", "hi"], 0)]
+
+
+def test_names_reassigned_from_a_static_value_stays_poisoned_despite_a_subshell_clear() -> None:
+    """CRITICAL bypass regression pin (round-31 independent review, issue
+    #1375): a static reassignment written INSIDE a `(...)` subshell
+    grouping never actually reaches the parent shell's own copy of the
+    name -- this function must not let it clear a genuinely poisoned
+    name."""
+    tokens = ["VERB=harmless", "VERB=$(echo install)", "(", "VERB=safe", ")"]
+    assert checker._names_reassigned_from_a_static_value(tokens) == {"VERB"}
+
+
+def test_names_reassigned_from_a_static_value_allows_a_real_top_level_clear_after_a_harmless_subshell() -> None:
+    """No over-correction: an EARLIER, harmless subshell must not block a
+    LATER, genuine top-level static reassignment from clearing poisoning
+    normally."""
+    tokens = ["VERB=harmless", "VERB=$(echo install)", "(", "VERB=whatever", ")", "VERB=safe"]
+    assert checker._names_reassigned_from_a_static_value(tokens) == set()
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, static_value=_VALUES, dynamic_value=_VALUES, subshell_value=_VALUES)
+def test_names_reassigned_from_a_static_value_matches_model_for_a_subshell_clear_attempt(
+    name: str, static_value: str, dynamic_value: str, subshell_value: str
+) -> None:
+    """Model-based: for ANY identifier reassigned static -> dynamic and
+    then given a static value ONLY inside a `(...)` subshell, the name
+    stays poisoned regardless of the subshell's own assigned value --
+    that assignment can never reach the parent scope."""
+    tokens = [
+        f"{name}={static_value}",
+        f"{name}=$({dynamic_value})",
+        "(",
+        f"{name}={subshell_value}",
+        ")",
+    ]
+    assert name in checker._names_reassigned_from_a_static_value(tokens)
+
+
 @_PROPERTIES
 @given(name=_IDENTIFIERS, static_value=_VALUES, dynamic_value=_VALUES, final_static_value=_VALUES)
 def test_names_reassigned_from_a_static_value_matches_model_for_a_static_dynamic_static_sequence(
@@ -2719,6 +2773,38 @@ def test_names_cleared_by_a_later_static_reassignment_ignores_an_unrelated_name(
     CANDIDATES must not spuriously clear anything."""
     tokens = ["OTHER+=x", "OTHER=safe"]
     assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == set()
+
+
+def test_names_cleared_by_a_later_static_reassignment_does_not_clear_via_a_subshell_assignment() -> None:
+    """CRITICAL bypass regression pin (round-31 independent review, issue
+    #1375): a static reassignment written INSIDE a `(...)` subshell
+    grouping never actually reaches the parent shell's own copy of the
+    name -- must not clear an append-poisoned candidate."""
+    tokens = ["VERB=inst", "VERB+=all", "(", "VERB=safe", ")"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == set()
+
+
+def test_names_cleared_by_a_later_static_reassignment_still_clears_a_real_top_level_assignment_after_a_subshell() -> (
+    None
+):
+    """No over-correction: a harmless subshell earlier in the command
+    must not block a LATER, genuine top-level static reassignment from
+    clearing normally."""
+    tokens = ["VERB=inst", "VERB+=all", "(", "VERB=whatever", ")", "VERB=safe"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == {"VERB"}
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, appended_value=_VALUES, subshell_value=_VALUES)
+def test_names_cleared_by_a_later_static_reassignment_matches_model_for_a_subshell_clear_attempt(
+    name: str, appended_value: str, subshell_value: str
+) -> None:
+    """Model-based: for ANY identifier appended to and then given a
+    static value ONLY inside a `(...)` subshell, the name is never
+    included in the cleared set -- that assignment can never reach the
+    parent scope."""
+    tokens = [f"{name}=x", f"{name}+={appended_value}", "(", f"{name}={subshell_value}", ")"]
+    assert name not in checker._names_cleared_by_a_later_static_reassignment(tokens, {name})
 
 
 def test_names_cleared_by_a_later_static_reassignment_clears_after_a_printf_v() -> None:
@@ -2967,6 +3053,62 @@ def test_classify_still_denies_a_b1b_tool_and_verb_given_a_static_value_then_app
     looked."""
     verdict = checker.classify("TOOL=uv; VERB=safe; VERB+=x; $TOOL $VERB foo")
     assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_subshell_clear() -> None:
+    """CRITICAL bypass regression pin (round-31 independent review,
+    issue #1375): a static reassignment written INSIDE a `(...)`
+    subshell grouping never actually reaches the parent shell's own
+    copy of the name -- `_names_reassigned_from_a_static_value`'s own
+    pre-round-31 form let it wrongly clear a genuinely poisoned name.
+    Confirmed live via a stand-in `uv` binary on PATH that this
+    genuinely runs `uv install foo`, NOT `safe foo`."""
+    verdict = checker.classify("TOOL=uv; VERB=harmless; VERB=$(echo install); (VERB=safe); $TOOL $VERB foo")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_gh_api_method_reassigned_from_a_static_value_via_a_subshell_clear() -> None:
+    """Companion to the B1b pin above, for `_rule_gh_api_write`.
+    Confirmed live via a stand-in `gh` binary on PATH that this
+    genuinely runs `gh api repos/o/r/pulls/1/merge -X POST`, a genuine
+    unreviewed write."""
+    verdict = checker.classify("M=safe; M=$(echo POST); (M=GET); gh api repos/o/r/pulls/1/merge -X $M")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_appended_then_cleared_via_a_subshell() -> None:
+    """Same round, the append counterpart (`_names_cleared_by_a_later_
+    static_reassignment`'s own subshell-blindness). Confirmed live via a
+    stand-in `uv` binary on PATH that this genuinely runs `uv install
+    foo`, NOT `safe foo`."""
+    verdict = checker.classify("TOOL=uv; VERB=inst; VERB+=all; (VERB=safe); $TOOL $VERB foo")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_array_element_assigned_then_cleared_via_a_subshell() -> None:
+    verdict = checker.classify("TOOL=uv; VERB=x; VERB[0]=install; (VERB=safe); $TOOL $VERB foo")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_read_into_then_cleared_via_a_subshell() -> None:
+    verdict = checker.classify("TOOL=uv; read VERB <<< install; (VERB=safe); $TOOL $VERB foo")
+    assert verdict.deny is True
+
+
+def test_classify_allows_an_unrelated_harmless_subshell_alongside_a_never_poisoned_name() -> None:
+    """No over-correction: an ordinary, unrelated subshell elsewhere in
+    the command must not spuriously deny a command whose watched name
+    was never poisoned at all."""
+    verdict = checker.classify("TOOL=uv; VERB=safe; (echo hi); $TOOL $VERB foo")
+    assert verdict.deny is False
+
+
+def test_classify_allows_a_real_top_level_static_clear_after_a_harmless_subshell() -> None:
+    """No over-correction: a harmless subshell assignment earlier in the
+    command must not block a LATER, genuine top-level static
+    reassignment from clearing poisoning normally."""
+    verdict = checker.classify("TOOL=uv; (VERB=harmless); VERB=safe; $TOOL $VERB foo")
+    assert verdict.deny is False
 
 
 def test_resolve_path_tokens_denies_a_name_with_a_dynamic_assignment_elsewhere() -> None:

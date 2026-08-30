@@ -392,6 +392,20 @@ ALLOWED_DYNAMIC_COMMANDS = [
         "M=P; M+=OST; M=GET; gh api repos/o/r/issues -X $M",
         "gh-api-method-value-appended-then-given-a-later-static-value-stays-allowed",
     ),
+    # False-positive guards for the thirty-first-round subshell-scoping
+    # fix (issue #1375): an ordinary, unrelated subshell elsewhere in the
+    # command must not spuriously deny a command whose watched name was
+    # never poisoned at all, and a harmless subshell assignment earlier
+    # in the command must not block a LATER, genuine top-level static
+    # reassignment from clearing poisoning normally.
+    (
+        "TOOL=uv; VERB=safe; (echo hi); $TOOL $VERB foo",
+        "unrelated-harmless-subshell-alongside-a-never-poisoned-name-stays-allowed",
+    ),
+    (
+        "TOOL=uv; (VERB=harmless); VERB=safe; $TOOL $VERB foo",
+        "real-top-level-static-clear-after-a-harmless-subshell-stays-allowed",
+    ),
 ]
 
 # --- Known, disclosed, unresolved regex/token-gate bypasses ----------------
@@ -1088,6 +1102,44 @@ DENIED_INDIRECTION_COMMANDS = [
     (
         "TOOL=uv; VERB=safe; VERB+=x; $TOOL $VERB foo",
         "var-split-tool-and-verb-given-a-static-value-then-appended-to-stays-denied",
+    ),
+    # Found live by Step 8 independent review, thirty-first round (issue
+    # #1375): `_names_reassigned_from_a_static_value` and `_names_
+    # cleared_by_a_later_static_reassignment` were both completely blind
+    # to bash's own subshell scoping -- a `(...)` grouping runs in a
+    # forked, isolated shell whose own assignments never propagate back
+    # to the parent, but both functions' own flat/per-segment scans
+    # treated a static assignment written INSIDE `(...)` exactly like an
+    # ordinary top-level one, letting it wrongly clear a genuinely
+    # poisoned name. Confirmed live via a stand-in `uv` binary on PATH
+    # that this genuinely runs `uv install foo`, NOT `safe foo` -- the
+    # parenthesized `VERB=safe` never reaches the parent shell's own
+    # `$VERB` at all.
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); (VERB=safe); $TOOL $VERB foo",
+        "var-split-tool-and-verb-reassigned-from-a-static-value-cleared-via-a-subshell",
+    ),
+    # Same round, the append counterpart.
+    (
+        "TOOL=uv; VERB=inst; VERB+=all; (VERB=safe); $TOOL $VERB foo",
+        "var-split-tool-and-verb-appended-then-cleared-via-a-subshell",
+    ),
+    # Same round, the array-element-assignment counterpart.
+    (
+        "TOOL=uv; VERB=x; VERB[0]=install; (VERB=safe); $TOOL $VERB foo",
+        "var-split-tool-and-verb-array-element-assigned-then-cleared-via-a-subshell",
+    ),
+    # Same round, the `read` counterpart.
+    (
+        "TOOL=uv; read VERB <<< install; (VERB=safe); $TOOL $VERB foo",
+        "var-split-tool-and-verb-read-into-then-cleared-via-a-subshell",
+    ),
+    # Same round, the gh-api-write counterpart: real bash genuinely runs
+    # `gh api repos/o/r/pulls/1/merge -X POST`, a genuine unreviewed
+    # write API call (e.g. merging a pull request).
+    (
+        "M=safe; M=$(echo POST); (M=GET); gh api repos/o/r/pulls/1/merge -X $M",
+        "gh-api-method-value-reassigned-from-a-static-value-cleared-via-a-subshell",
     ),
 ]
 
