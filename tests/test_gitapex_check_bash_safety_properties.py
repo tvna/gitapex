@@ -5660,6 +5660,36 @@ def test_git_checkout_paths_allows_a_flag_only_invocation() -> None:
 
 
 @_PROPERTIES
+@given(flag=st.sampled_from(["--ours", "--theirs", "-2", "-3"]), name=_PATH_TOKENS)
+def test_git_checkout_paths_treats_a_single_positional_as_a_path_with_a_conflict_side_flag(
+    flag: str, name: str
+) -> None:
+    """CRITICAL bypass regression pin (round-40 independent review, issue
+    #1375): unlike `-b`/`-B`/`--orphan`, `--ours`/`--theirs`/`-2`/`-3`
+    do NOT preserve the ref-vs-path ambiguity that justifies the
+    bare-SOMENAME Non-goal -- real git flatly refuses to combine them
+    with branch switching (confirmed live: `git checkout --ours
+    otherbranch`, where `otherbranch` is a real ref, reports `fatal:
+    '--ours/--theirs' cannot be used with switching branches`), so a
+    single remaining positional is unambiguously a path."""
+    assume(name not in (".", ".."))
+    reason, resolved = checker._git_checkout_paths([flag, name], {}, {}, set())
+    assert reason is None
+    assert resolved == (name,)
+
+
+def test_git_checkout_paths_stays_a_non_goal_for_conflict_style_value_flag() -> None:
+    """No over-correction: `--conflict=<style>` (unlike `--ours`/
+    `--theirs`/`-2`/`-3`) does NOT remove the ref-vs-path ambiguity --
+    confirmed live that `git checkout --conflict=merge otherbranch`, with
+    `otherbranch` a real ref, genuinely still switches branches -- so a
+    single remaining positional stays the bare-SOMENAME Non-goal."""
+    reason, resolved = checker._git_checkout_paths(["--conflict=merge", "otherbranch"], {}, {}, set())
+    assert reason is None
+    assert resolved == ()
+
+
+@_PROPERTIES
 @given(staged=st.sampled_from(["--staged", "-S"]), paths=st.lists(_PATH_TOKENS, min_size=0, max_size=3))
 def test_git_restore_paths_empty_when_staged_without_worktree(staged: str, paths: list[str]) -> None:
     """Model-based: `--staged`/`-S` without `--worktree` never touches the
@@ -6943,6 +6973,37 @@ def test_classify_extracts_path_for_bare_restore() -> None:
     verdict = checker.classify("git restore f.py")
     assert verdict.deny is False
     assert verdict.checkout_restore_paths == ("f.py",)
+
+
+@_PROPERTIES
+@given(flag=st.sampled_from(["--ours", "--theirs", "-2", "-3"]))
+def test_classify_surfaces_a_conflict_side_flag_checkout_path(flag: str) -> None:
+    """Regression pin (round-40 independent review, issue #1375): before
+    this fix, `git checkout --ours/--theirs/-2/-3 realfile.py` resolved
+    to an EMPTY `checkout_restore_paths`, the same as the genuinely
+    ref-ambiguous `-b`/`-B`/`--orphan` Non-goal -- silently skipping the
+    wrapper's own live dirty-file check even though real git flatly
+    refuses to combine a conflict side flag with branch switching (live-
+    confirmed: `git checkout --ours otherbranch` on a real ref reports
+    `fatal: '--ours/--theirs' cannot be used with switching branches`),
+    so the single remaining positional is unambiguously a path, never a
+    ref. Must surface it as a candidate so the wrapper's live check can
+    catch a genuinely dirty `realfile.py`."""
+    verdict = checker.classify(f"git checkout {flag} realfile.py")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("realfile.py",)
+
+
+def test_classify_stays_a_non_goal_for_conflict_style_value_flag_checkout() -> None:
+    """Negative control for the round-40 fix above: `--conflict=<style>`
+    does NOT share the `--ours`/`--theirs`/`-2`/`-3` property -- live-
+    confirmed that `git checkout --conflict=merge otherbranch`, with
+    `otherbranch` a real ref, genuinely still switches branches -- so a
+    single remaining positional correctly stays the bare-SOMENAME
+    Non-goal, unresolved, exactly as before this fix."""
+    verdict = checker.classify("git checkout --conflict=merge otherbranch")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ()
 
 
 def test_classify_resolves_a_same_command_assignment_to_a_literal_path() -> None:

@@ -3837,6 +3837,7 @@ _RESTORE_BOOLEAN_FLAGS = {
 }
 _RESTORE_VALUE_FLAGS = {"--source", "-s", "--conflict"}
 _CHECKOUT_BRANCH_CREATION_FLAGS = {"-b", "-B", "--orphan"}
+_CHECKOUT_CONFLICT_SIDE_FLAGS = {"--ours", "--theirs", "-2", "-3"}
 
 
 def _referenced_names(
@@ -5428,7 +5429,37 @@ def _git_checkout_paths(
     is stripped from TOKENS_AFTER FIRST, before any check below runs --
     CRITICAL bug found by independent adversarial review (round 15, issue
     #1375): a redirect operator and its target were otherwise swept into
-    `checkout_restore_paths` as if they were real git path arguments."""
+    `checkout_restore_paths` as if they were real git path arguments.
+
+    `--ours`/`--theirs`/`-2`/`-3` (git's own conflict-resolution side
+    flags) resolve a SINGLE remaining positional as a path, not folded
+    into the bare-SOMENAME Non-goal above -- CRITICAL bug found by
+    independent adversarial review (round 40, issue #1375) and
+    independently reproduced live, both via `classify()` and via a real
+    `git checkout` against a genuinely dirty tracked file: unlike
+    `-b`/`-B`/`--orphan`, these flags do NOT preserve the ref-vs-path
+    ambiguity that justifies the Non-goal -- real git flatly REFUSES to
+    combine them with branch switching (confirmed live: `git checkout
+    --conflict=merge otherbranch`, where `otherbranch` is a real ref,
+    still genuinely switches branches, so `--conflict` stays correctly
+    folded into the Non-goal; but `git checkout --ours otherbranch`
+    where `otherbranch` is a real ref reports `fatal: '--ours/--theirs'
+    cannot be used with switching branches` -- there is no ref
+    interpretation left once one of these four flags is present, only a
+    path). `git checkout --ours realfile.py` (also `-2`/`--theirs`/`-3`
+    in place of `--ours`) -- the exact idiom shown in git's own docs for
+    resolving a merge conflict, fully reachable outside any active
+    merge too -- resolved to `checkout_restore_paths=()` even with a
+    genuinely dirty `realfile.py`, because the single positional fell
+    through every sub-case above to the bare-SOMENAME Non-goal.
+    Live-verified real, silent data loss through the actual shipped
+    `hooks/check-bash-safety.sh` wrapper (not just `classify()` in
+    isolation): with `realfile.py` tracked and genuinely dirty, no
+    active merge conflict, the wrapper allowed `git checkout --ours
+    realfile.py` outright (exit 0, no live check performed), and running
+    it for real silently discarded the dirty content (`git diff --stat
+    realfile.py` empty afterward) -- reproduced identically for `-2`,
+    `--theirs`, and `-3`."""
     tokens_after = _strip_redirect_clauses(tokens_after)
     if any(tok in _CHECKOUT_BRANCH_CREATION_FLAGS or tok.startswith("--orphan=") for tok in tokens_after):
         return None, ()
@@ -5456,6 +5487,10 @@ def _git_checkout_paths(
             positionals, name_to_raw_value, name_to_raw_value_history, names_with_dynamic_assignment
         )
     if len(positionals) == 1 and not _is_dynamic(positionals[0]) and positionals[0] in (".", ".."):
+        return _resolve_path_tokens(
+            positionals, name_to_raw_value, name_to_raw_value_history, names_with_dynamic_assignment
+        )
+    if len(positionals) == 1 and any(tok in _CHECKOUT_CONFLICT_SIDE_FLAGS for tok in tokens_after):
         return _resolve_path_tokens(
             positionals, name_to_raw_value, name_to_raw_value_history, names_with_dynamic_assignment
         )

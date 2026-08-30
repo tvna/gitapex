@@ -2323,6 +2323,37 @@ def test_checkout_dot_denied_when_a_tracked_file_is_dirty(tmp_path: Path) -> Non
     assert result.returncode == 2, f"stderr={result.stderr!r}"
 
 
+@pytest.mark.parametrize("flag", ["--ours", "--theirs", "-2", "-3"])
+def test_checkout_conflict_side_flag_denied_when_the_path_is_dirty(tmp_path: Path, flag: str) -> None:
+    """Regression pin (round-40 independent review, issue #1375): before
+    this fix, `git checkout --ours/--theirs/-2/-3 f.py` fell through to
+    the bare-SOMENAME Non-goal (unresolved, never live-checked), even
+    though real git flatly refuses to combine a conflict side flag with
+    branch switching -- so the single remaining positional is
+    unambiguously a path. Must now be denied against a genuinely dirty
+    tracked file, the same as plain `git checkout f.py`."""
+    repo_dir = tmp_path / "repo"
+    file_path = _init_repo_with_committed_file(repo_dir)
+    file_path.write_text("hello\ndirty\n")
+    result = run(f"git checkout {flag} f.py", payload_cwd=str(repo_dir))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+
+
+def test_checkout_conflict_style_value_flag_stays_a_non_goal(tmp_path: Path) -> None:
+    """Negative control for the round-40 fix above: `--conflict=<style>`
+    does NOT share the `--ours`/`--theirs`/`-2`/`-3` property -- real git
+    still genuinely switches branches with it, so a single remaining
+    positional stays the bare-SOMENAME Non-goal and is allowed even
+    though it happens to name a real, dirty tracked file."""
+    repo_dir = tmp_path / "repo"
+    file_path = _init_repo_with_committed_file(repo_dir)
+    file_path.write_text("hello\ndirty\n")
+    result = run("git checkout --conflict=merge f.py", payload_cwd=str(repo_dir))
+    assert result.returncode == 0, f"stderr={result.stderr!r}"
+    assert result.stdout == ""
+    assert result.stderr == ""
+
+
 def test_ordinary_branch_switch_allowed(tmp_path: Path) -> None:
     repo_dir = tmp_path / "repo"
     _init_repo_with_committed_file(repo_dir)
