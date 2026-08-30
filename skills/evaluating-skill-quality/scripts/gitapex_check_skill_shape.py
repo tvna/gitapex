@@ -582,6 +582,7 @@ from shape_checks.citation_checks import (
     _portable_skill_citation_checks,
     _raw_placeholder_checks,
     _step_location_checks,
+    _untrusted_authority_crossover_checks,
 )
 from shape_checks.constants import (
     _INLINE_CITATION_CHECK_SPECS,
@@ -1009,6 +1010,7 @@ def check_shape(target: Path) -> list[CheckResult]:
     results.extend(_illustrative_model_id_checks(skill_md, skill_dir, body))
     results.extend(_raw_placeholder_checks(skill_md, skill_dir, body))
     results.extend(_step_location_checks(skill_md, skill_dir, body))
+    results.extend(_untrusted_authority_crossover_checks(skill_md, skill_dir, body))
     results.extend(_dimension_quote_exemption_checks(skill_md, skill_dir, body))
     results.extend(_no_voodoo_constant_checks(skill_md, skill_dir, body))
     results.extend(_script_execution_intent_checks(skill_md, skill_dir, body))

@@ -20,6 +20,9 @@ from shape_checks.constants import (
     _PARAGRAPH_SPLIT_RE,
     _SENTENCE_SPLIT_RE,
     ANTHROPIC_DOC_CITATION_RE,
+    AUTHORITY_VIOLATION_HEDGE_PHRASES,
+    AUTHORITY_VIOLATION_NEGATION_RE,
+    AUTHORITY_VIOLATION_RE,
     CATALOG_QUOTE_EXEMPTION_MARKER_RE,
     CROSS_SKILL_CITATION_RE,
     DEMONSTRATIVE_ORIGIN_REPOSITORY_RE,
@@ -39,6 +42,7 @@ from shape_checks.constants import (
     STEP_LOCATION_ASSERTION_RE,
     STEP_LOCATION_CEDING_PHRASE,
     STEP_NUM_RE,
+    UNTRUSTED_DECLARATION_RE,
     CheckResult,
 )
 from shape_checks.links_portability import (
@@ -473,6 +477,85 @@ def _step_location_checks(skill_md: Path, skill_dir: Path, body: list[str]) -> l
             "No 'step N'/'steps N-M' reference is asserted to execute in "
             "two different locations without one explicitly ceding "
             f"authority (a nearby {STEP_LOCATION_CEDING_PHRASE!r})",
+            "none" if not offenders else "found: " + ", ".join(offenders),
+        ),
+    ]
+
+
+def _untrusted_authority_crossover_offenders(body_text: str) -> list[str]:
+    """Issue #192 item 4 (Refs #24 repairs 1, 4): flag a file that both
+    declares some content untrusted (``UNTRUSTED_DECLARATION_RE``) and
+    also applies an authority-granting verb to it
+    (``AUTHORITY_VIOLATION_RE``) with no nearby hedge or negation -- the
+    exact defect shape issue #24 repair 1's own incident found
+    (``issue-to-branch``'s Step 1 declared comments untrusted; Step 3 let
+    any comment narrow/override the issue body's scope with no
+    restriction).
+
+    File-level, not sentence-level, co-occurrence -- deliberately broader
+    than ``_step_location_offenders`` above's own sentence-level scope.
+    This check's own grounding incident spans different Procedure steps
+    (a declaration in one step, a violation in another), so scanning only
+    within one sentence would very likely miss the exact incident this
+    check exists to catch; see the design doc
+    (``docs/superpowers/specs/2026-08-30-issue-192-untrusted-consistency-and-item-coverage-design.md``,
+    "Scope and shipping bar") for the considered reasoning behind this
+    deliberate asymmetry with the sibling check's own scope.
+
+    Illustrative spans (inline code, Markdown links, absolute URLs) and
+    fenced code blocks are stripped before scanning, the same discipline
+    every other bare-prose check in this file already applies.
+
+    Each violation match is evaluated against its own containing
+    sentence only: a negation (``AUTHORITY_VIOLATION_NEGATION_RE``) or
+    hedge phrase (``AUTHORITY_VIOLATION_HEDGE_PHRASES``) anywhere in that
+    sentence suppresses every violation match in that same sentence, the
+    same simple sentence-substring suppression
+    ``STEP_LOCATION_CEDING_PHRASE`` above already uses -- never a
+    file-wide suppression, which would let one unrelated hedged sentence
+    silently clear a genuine, unhedged violation elsewhere in the file.
+    """
+    bare = _strip_illustrative_spans(_blank_fenced_blocks(body_text))
+    if not UNTRUSTED_DECLARATION_RE.search(bare):
+        return []
+    offenders: list[str] = []
+    for sentence in _SENTENCE_SPLIT_RE.split(bare):
+        if not AUTHORITY_VIOLATION_RE.search(sentence):
+            continue
+        if AUTHORITY_VIOLATION_NEGATION_RE.search(sentence):
+            continue
+        sentence_lower = sentence.lower()
+        if any(phrase in sentence_lower for phrase in AUTHORITY_VIOLATION_HEDGE_PHRASES):
+            continue
+        for match in AUTHORITY_VIOLATION_RE.finditer(sentence):
+            offenders.append(" ".join(match.group(0).split()))
+    return _dedup(offenders)
+
+
+def _untrusted_authority_crossover_checks(skill_md: Path, skill_dir: Path, body: list[str]) -> list[CheckResult]:
+    """The check_shape() entry point for
+    _untrusted_authority_crossover_offenders, scanning SKILL.md and every
+    references/*.md file the same way every other _citation_sources-based
+    check does -- each file checked independently, never pairing a
+    declaration in one file with a violation in a different file. Runs
+    unconditionally, at every portability level -- a same-file internal
+    declaration/violation contradiction is a completeness/consistency
+    defect, not a portability one, the same reasoning
+    mechanism-fit-subsections-cite-sources and _step_location_checks
+    above already use.
+    """
+    offenders: list[str] = []
+    for label, source_text in _citation_sources(skill_md, skill_dir, body):
+        for offender in _untrusted_authority_crossover_offenders(source_text):
+            offenders.append(f"{label}: {offender!r}")
+    offenders = _dedup(offenders)
+    return [
+        CheckResult(
+            "no-untrusted-authority-crossover",
+            not offenders,
+            "No already-declared-untrusted content has an authority-granting "
+            "verb (override/narrow the scope) applied to it with no nearby "
+            "hedge or negation",
             "none" if not offenders else "found: " + ", ".join(offenders),
         ),
     ]
