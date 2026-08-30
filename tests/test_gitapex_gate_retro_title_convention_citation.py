@@ -227,13 +227,18 @@ def test_check_only_end_to_end_pass_does_not_touch_network(tmp_path, capsys):
 
 def test_full_mode_end_to_end_pass(tmp_path, monkeypatch, capsys):
     # main()'s full mode forwards to find_unresolvable_offenders with no
-    # injected opener, so it always resolves to the real _default_opener.
-    # Unlike _default_opener itself (a default *argument value*, bound once
-    # at function-definition time -- monkeypatching the module-level name
-    # afterward never reaches an already-bound default), _default_opener's
-    # own body looks up urllib.request.urlopen fresh on every call, so
-    # patching that attribute IS the correct seam for exercising main()'s
-    # full-mode wiring end to end without a real network call.
+    # injected opener, so it always resolves to the real
+    # _gitapex_github_http.default_opener (issue #729: gate.is_resolvable_issue
+    # and gate.find_unresolvable_offenders both default `opener` to that
+    # shared-module function now, not a local one). Unlike default_opener
+    # itself (a default *argument value*, bound once at function-definition
+    # time -- monkeypatching the module-level name afterward never reaches
+    # an already-bound default), default_opener's own body looks up
+    # urllib.request.urlopen fresh on every call -- and `gate.urllib.request`
+    # is the very same module object `_gitapex_github_http` looks that
+    # attribute up on -- so patching it here IS the correct seam for
+    # exercising main()'s full-mode wiring end to end without a real
+    # network call.
     path = tmp_path / "doc.md"
     path.write_text(_CITED_TITLE_CLAIM, encoding="utf-8")
     monkeypatch.setenv("GITHUB_TOKEN", "tok")

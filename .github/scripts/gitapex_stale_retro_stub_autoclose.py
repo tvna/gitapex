@@ -32,10 +32,17 @@ the literal marker text still appears in `gitapex_post_merge_retro.py`'s source,
 so the two cannot silently re-diverge the way the title/query pair did
 before issue #341's fix.
 
-Deliberately dependency-light (stdlib plus `pydantic`, this repository's own
-pinned CLI-arg validation dependency), mirroring `gitapex_post_merge_retro.py`
-and `gitapex_scan_retrospective_gate_drift.py`'s own shape and
-retry-with-backoff logic.
+Issue #729: the retry/backoff-with-`GitHubApiError` HTTP calls this script
+needs (previously two hand-copied local implementations, `_call` and
+`_fetch_issues_page`, near-identical to `gitapex_gate_acm_issue_disclosure.py`
+and `gitapex_post_merge_retro.py`'s own former copies) now delegate to
+`_gitapex_github_http.call_json` and `_gitapex_github_http.fetch_json_page`
+respectively. That module is the one deliberate, generic exception to this
+repository's `.github/scripts/*.py` independence convention (see its own
+docstring, and `gitapex_scan_retrospective_gate_drift.py`'s docstring for the
+convention itself) -- this script otherwise stays dependency-light (stdlib
+plus `pydantic`, this repository's own pinned CLI-arg validation dependency)
+and does not import any other carrier script.
 
 Usage::
 
@@ -60,24 +67,20 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
-import http.client
-import json
 import os
 import sys
 import time
 import unicodedata
-import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from _gitapex_github_http import GitHubApiError, call_json, default_opener, fetch_json_page
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
 _API_ROOT = "https://api.github.com"
-_API_VERSION = "2022-11-28"
-_HTTP_TIMEOUT_SECONDS = 30
 _PER_PAGE = 100
 _RETRO_LABEL = "retrospective"
 _DEFAULT_STALE_HOURS = 48
@@ -91,10 +94,6 @@ _STUB_MARKER = "Automated stub opened by the post-merge-auto-retro gate"
 # used by `close_stub_issue` to detect a close comment already posted on a
 # prior run (see that function's own docstring for why this check exists).
 _CLOSE_COMMENT_MARKER = "Closing this retrospective stub:"
-
-
-class GitHubApiError(RuntimeError):
-    """Raised when the GitHub REST API returns a non-recoverable error."""
 
 
 # ---------------------------------------------------------------------------
@@ -162,110 +161,11 @@ def format_report(closed_issue_numbers: list[int]) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _default_opener(request: urllib.request.Request) -> Any:
-    # S310 justification: every caller builds `request` from a fixed
-    # https://api.github.com URL plus trusted env-var-derived segments --
-    # no attacker-influenced value ever reaches this function.
-    return urllib.request.urlopen(request, timeout=_HTTP_TIMEOUT_SECONDS)  # noqa: S310
-
-
-def _format_code(code: int) -> str:
-    return str(code) if code else "network error"
-
-
-def _call(
-    method: str,
-    url: str,
-    token: str,
-    opener: Callable[[urllib.request.Request], Any],
-    sleeper: Callable[[float], None],
-    body: dict[str, Any] | None = None,
-    max_attempts: int = 3,
-) -> dict[str, Any]:
-    """Call the GitHub API, retrying transient (network / 5xx) failures up
-    to `max_attempts` attempts -- mirrors `gitapex_post_merge_retro.py`'s own
-    `_call` shape."""
-    data = json.dumps(body).encode("utf-8") if body is not None else None
-    last_code = 0
-    last_body = ""
-    for attempt in range(1, max_attempts + 1):
-        request = urllib.request.Request(url, data=data, method=method)  # noqa: S310 -- fixed https://api.github.com URL
-        request.add_header("Authorization", f"Bearer {token}")
-        request.add_header("Accept", "application/vnd.github+json")
-        request.add_header("X-GitHub-Api-Version", _API_VERSION)
-        if data is not None:
-            request.add_header("Content-Type", "application/json")
-        try:
-            with opener(request) as response:
-                last_code = int(response.status)
-                last_body = response.read().decode("utf-8", errors="replace")
-        except urllib.error.HTTPError as error:
-            last_code = int(error.code)
-            last_body = error.read().decode("utf-8", errors="replace")
-        except (OSError, http.client.IncompleteRead) as error:
-            last_code = 0
-            last_body = str(error)
-
-        if 200 <= last_code < 300:
-            return json.loads(last_body) if last_body else {}
-        print(f"Attempt {attempt}: HTTP {_format_code(last_code)} for {method} {url}", file=sys.stderr)
-        if last_code != 0 and last_code < 500:
-            break
-        if attempt < max_attempts:
-            sleeper(attempt * 5)
-
-    raise GitHubApiError(f"{method} {url} failed: HTTP {_format_code(last_code)}: {last_body}")
-
-
-def _fetch_issues_page(
-    url: str,
-    token: str,
-    opener: Callable[[urllib.request.Request], Any],
-    sleeper: Callable[[float], None],
-    max_attempts: int = 3,
-) -> list[dict[str, Any]]:
-    """GET one page of a list endpoint (issues or comments), retrying
-    transient failures -- mirrors `gitapex_scan_retrospective_gate_drift.py`'s own
-    function of the same name (a list response, not the single-object
-    shape `_call` above assumes, so it cannot reuse `_call` directly). GET
-    is naturally idempotent, so `max_attempts` defaults to 3 like `_call`'s
-    own default; the parameter exists so the two functions' retry shape
-    stays structurally consistent, not because a GET here ever needs 1."""
-    last_code = 0
-    last_body = ""
-    for attempt in range(1, max_attempts + 1):
-        request = urllib.request.Request(url, method="GET")  # noqa: S310 -- fixed https://api.github.com URL
-        request.add_header("Authorization", f"Bearer {token}")
-        request.add_header("Accept", "application/vnd.github+json")
-        request.add_header("X-GitHub-Api-Version", _API_VERSION)
-        try:
-            with opener(request) as response:
-                last_code = int(response.status)
-                last_body = response.read().decode("utf-8", errors="replace")
-        except urllib.error.HTTPError as error:
-            last_code = int(error.code)
-            last_body = error.read().decode("utf-8", errors="replace")
-        except (OSError, http.client.IncompleteRead) as error:
-            last_code = 0
-            last_body = str(error)
-
-        if 200 <= last_code < 300:
-            page: list[dict[str, Any]] = json.loads(last_body) if last_body else []
-            return page
-        print(f"Attempt {attempt}: HTTP {_format_code(last_code)} for GET {url}", file=sys.stderr)
-        if last_code != 0 and last_code < 500:
-            break
-        if attempt < max_attempts:
-            sleeper(attempt * 5)
-
-    raise GitHubApiError(f"GET {url} failed: HTTP {_format_code(last_code)}: {last_body}")
-
-
 def list_open_retro_issues(
     owner: str,
     repo: str,
     token: str,
-    opener: Callable[[urllib.request.Request], Any] = _default_opener,
+    opener: Callable[[urllib.request.Request], Any] = default_opener,
     sleeper: Callable[[float], None] | None = None,
 ) -> list[dict[str, Any]]:
     """Return every open `retrospective`-labelled issue (not PR), paginated.
@@ -278,7 +178,7 @@ def list_open_retro_issues(
     while True:
         query = urllib.parse.urlencode({"labels": _RETRO_LABEL, "state": "open", "per_page": _PER_PAGE, "page": page})
         url = f"{_API_ROOT}/repos/{owner}/{repo}/issues?{query}"
-        page_items = _fetch_issues_page(url, token, opener, sleeper)
+        page_items = fetch_json_page(url, token, opener, sleeper)
         if not page_items:
             break
         # The issues-list endpoint also returns pull requests carrying the
@@ -305,7 +205,7 @@ def _has_close_comment(
     A single page (up to 100 comments) is more than sufficient for a stub
     issue, which only ever accumulates a handful of bot comments."""
     url = f"{_API_ROOT}/repos/{owner}/{repo}/issues/{issue_number}/comments?per_page={_PER_PAGE}"
-    comments = _fetch_issues_page(url, token, opener, sleeper)
+    comments = fetch_json_page(url, token, opener, sleeper)
     return any(_CLOSE_COMMENT_MARKER in (comment.get("body") or "") for comment in comments)
 
 
@@ -315,7 +215,7 @@ def close_stub_issue(
     issue_number: int,
     stale_hours: int,
     token: str,
-    opener: Callable[[urllib.request.Request], Any] = _default_opener,
+    opener: Callable[[urllib.request.Request], Any] = default_opener,
     sleeper: Callable[[float], None] | None = None,
 ) -> None:
     """Post the explanatory comment (unless a prior run already posted
@@ -341,7 +241,7 @@ def close_stub_issue(
     sleeper = sleeper if sleeper is not None else time.sleep
     comment_url = f"{_API_ROOT}/repos/{owner}/{repo}/issues/{issue_number}/comments"
     if not _has_close_comment(owner, repo, issue_number, token, opener, sleeper):
-        _call(
+        call_json(
             "POST",
             comment_url,
             token,
@@ -351,7 +251,7 @@ def close_stub_issue(
             max_attempts=1,
         )
     issue_url = f"{_API_ROOT}/repos/{owner}/{repo}/issues/{issue_number}"
-    _call("PATCH", issue_url, token, opener, sleeper, body={"state": "closed", "state_reason": "not_planned"})
+    call_json("PATCH", issue_url, token, opener, sleeper, body={"state": "closed", "state_reason": "not_planned"})
 
 
 # ---------------------------------------------------------------------------
