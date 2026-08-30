@@ -612,3 +612,27 @@ def test_main_exit_code_stays_one_with_a_workflow_finding_regardless_of_hooks(
 def test_this_repositorys_own_workflows_have_no_bare_invocation() -> None:
     findings = gate.find_bare_invocations(REPO_ROOT / ".github" / "workflows")
     assert findings == [], findings
+
+
+# --- _scan_hook's own WARNING-tier read-failure fallback (issue #1446) ---
+
+
+def test_scan_hook_missing_file_returns_empty(tmp_path: pathlib.Path) -> None:
+    """A hook path that does not exist raises FileNotFoundError (an
+    OSError subclass) inside read_text() -- caught and degraded to no
+    findings, matching this WARNING-tier scan's own report-only contract
+    (there is no exit-code fail-closed guarantee here to protect, unlike
+    find_bare_invocations's own missing-directory finding)."""
+    assert gate._scan_hook(tmp_path / "does-not-exist.sh") == []
+
+
+def test_scan_hook_invalid_utf8_returns_empty(tmp_path: pathlib.Path) -> None:
+    """A hook file that is not valid UTF-8 raises UnicodeDecodeError inside
+    read_text() -- caught alongside OSError and degraded to no findings,
+    the same graceful-degradation contract
+    ratified_trailer_disclosure_text() in hooks/gitapex_check_post_write_provenance.py
+    uses for the same failure class (confirmed consistent during this
+    issue's own step-8 adversarial review)."""
+    bad = tmp_path / "bad.sh"
+    bad.write_bytes(b"\xff\xfe not valid utf-8")
+    assert gate._scan_hook(bad) == []
