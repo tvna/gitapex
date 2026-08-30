@@ -9,8 +9,8 @@ read one red check, fix, push again. Issue #876 records that same proposal
 being independently re-raised and left unresolved across #707, #622, #616
 (twice) and #670.
 
-``python3 .github/scripts/gitapex_gate_local_preflight.py`` runs every such gate
-in one pass and prints one aggregate verdict.
+``uv run --frozen python3 .github/scripts/gitapex_gate_local_preflight.py``
+runs every such gate in one pass and prints one aggregate verdict.
 
 **The wired set is discovered, never hardcoded here.** ``.gitapex/ssot.json``
 is already this repository's registry of its own gates; issue #876's third
@@ -85,14 +85,19 @@ reasons.
   enforcement, with no CI-side backstop. Named as a real gap in
   ``behind-base``'s own docstring and issue #985's Acceptance Criteria
   Map; the same gap now applies to ``real-checkout-git-write`` too.
-- **Every wired gate runs through ``uv``.** CONTRIBUTING.md invokes this
-  file with plain ``python3``, and so does the pre-push hook, because the
-  runner itself needs no dependencies -- but all 42 wired argvs begin with
-  ``uv``, since each gate carries its own pinned invocation. Without ``uv``
-  on PATH every one of them reports ``FAIL ... failed to run``, which
-  reads as a whole broken wired set rather than one missing tool. ``uv`` is
-  already a documented prerequisite for this repository; it is named here so
-  the failure mode is legible.
+- **The runner itself, and every wired gate, runs through ``uv``.** Issue
+  #1485: the runner imports ``_gitapex_schema_validation.py``, which needs
+  ``jsonschema`` -- a real, non-stdlib dependency, contrary to an earlier
+  revision of this paragraph's own "the runner itself needs no
+  dependencies" claim. A bare system ``python3`` with no ``jsonschema``
+  installed crashed the whole runner on import before any of the 42 wired
+  gates got a chance to run individually, so CONTRIBUTING.md's standalone
+  example and the pre-push hook's own ``entry`` both now invoke it as ``uv
+  run --frozen python3`` too, the same pin every wired gate's own argv
+  already begins with. Without ``uv`` on PATH every wired gate still
+  reports ``FAIL ... failed to run`` for its own subprocess, which reads as
+  a whole broken wired set rather than one missing tool; ``uv`` is already
+  a documented prerequisite for this repository.
 - Gates run **sequentially**, in registry-id order, for legible output on a
   terminal. ``mypy-type-check`` and ``cyclomatic-complexity-floor`` dominate
   the wall clock; parallelism was not added because interleaved failure
@@ -141,9 +146,10 @@ other name every future edit to a module that executes registry-declared
 argv on contributor machines would escape this repository's own
 gate-quality disclosure requirement.
 
-Run standalone: ``python3 .github/scripts/gitapex_gate_local_preflight.py``
-(exit 1 if any wired gate fails, exit 0 when all pass), ``--list`` to print
-the wired set without running anything, or via the pytest gate in
+Run standalone: ``uv run --frozen python3
+.github/scripts/gitapex_gate_local_preflight.py`` (exit 1 if any wired gate
+fails, exit 0 when all pass), ``--list`` to print the wired set without
+running anything, or via the pytest gate in
 ``tests/test_gitapex_gate_local_preflight.py``.
 """
 
