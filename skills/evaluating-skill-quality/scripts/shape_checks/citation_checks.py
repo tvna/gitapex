@@ -20,7 +20,8 @@ from shape_checks.constants import (
     _PARAGRAPH_SPLIT_RE,
     _SENTENCE_SPLIT_RE,
     ANTHROPIC_DOC_CITATION_RE,
-    AUTHORITY_VIOLATION_HEDGE_PHRASES,
+    AUTHORITY_SUPPRESSION_UNIT_BREAK_RE,
+    AUTHORITY_VIOLATION_HEDGE_RE,
     AUTHORITY_VIOLATION_NEGATION_RE,
     AUTHORITY_VIOLATION_RE,
     CATALOG_QUOTE_EXEMPTION_MARKER_RE,
@@ -507,28 +508,39 @@ def _untrusted_authority_crossover_offenders(body_text: str) -> list[str]:
     every other bare-prose check in this file already applies.
 
     Each violation match is evaluated against its own containing
-    sentence only: a negation (``AUTHORITY_VIOLATION_NEGATION_RE``) or
-    hedge phrase (``AUTHORITY_VIOLATION_HEDGE_PHRASES``) anywhere in that
-    sentence suppresses every violation match in that same sentence, the
-    same simple sentence-substring suppression
-    ``STEP_LOCATION_CEDING_PHRASE`` above already uses -- never a
-    file-wide suppression, which would let one unrelated hedged sentence
-    silently clear a genuine, unhedged violation elsewhere in the file.
+    suppression unit only: a negation (``AUTHORITY_VIOLATION_NEGATION_RE``)
+    or hedge (``AUTHORITY_VIOLATION_HEDGE_RE``) anywhere in that unit
+    suppresses every violation match in that same unit, the same simple
+    substring-style suppression ``STEP_LOCATION_CEDING_PHRASE`` above
+    already uses -- never a file-wide suppression, which would let one
+    unrelated hedged sentence silently clear a genuine, unhedged violation
+    elsewhere in the file.
+
+    A unit is a sentence (``_SENTENCE_SPLIT_RE``) that additionally never
+    spans two Markdown list items (``AUTHORITY_SUPPRESSION_UNIT_BREAK_RE``).
+    The list-item break is load-bearing, not cosmetic: ``_SENTENCE_SPLIT_RE``
+    only breaks after ``.``/``!``/``?``, so a Procedure or Stop-boundaries
+    list written without terminal punctuation is one single "sentence", and
+    a ``- Never ...`` bullet would then clear a genuine violation stated in
+    a different bullet -- reaching the file-wide-suppression failure mode
+    this docstring rules out, through the back door (found by the issue
+    #192 step 8 adversarial review, whose defeat case is pinned as a
+    regression test in the sibling test module).
     """
     bare = _strip_illustrative_spans(_blank_fenced_blocks(body_text))
     if not UNTRUSTED_DECLARATION_RE.search(bare):
         return []
     offenders: list[str] = []
-    for sentence in _SENTENCE_SPLIT_RE.split(bare):
-        if not AUTHORITY_VIOLATION_RE.search(sentence):
-            continue
-        if AUTHORITY_VIOLATION_NEGATION_RE.search(sentence):
-            continue
-        sentence_lower = sentence.lower()
-        if any(phrase in sentence_lower for phrase in AUTHORITY_VIOLATION_HEDGE_PHRASES):
-            continue
-        for match in AUTHORITY_VIOLATION_RE.finditer(sentence):
-            offenders.append(" ".join(match.group(0).split()))
+    for block in AUTHORITY_SUPPRESSION_UNIT_BREAK_RE.split(bare):
+        for unit in _SENTENCE_SPLIT_RE.split(block):
+            if not AUTHORITY_VIOLATION_RE.search(unit):
+                continue
+            if AUTHORITY_VIOLATION_NEGATION_RE.search(unit):
+                continue
+            if AUTHORITY_VIOLATION_HEDGE_RE.search(unit):
+                continue
+            for match in AUTHORITY_VIOLATION_RE.finditer(unit):
+                offenders.append(" ".join(match.group(0).split()))
     return _dedup(offenders)
 
 

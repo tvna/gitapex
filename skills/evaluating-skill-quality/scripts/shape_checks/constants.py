@@ -813,39 +813,88 @@ UNTRUSTED_DECLARATION_RE = re.compile(
 # an unacceptable false-positive risk from common English words in a
 # zero-false-positive-tolerant CI gate.
 #
-# Both verbs share a required "scope" object (up to 4 intervening words,
-# accommodating the incident's own real wording "narrow the issue body's
-# scope") -- this requirement was added after a corpus sweep found a bare
-# "overrides?" (with no object constraint) false-positives on
+# Both verbs share a required "scope"/"scopes" object (up to 4 intervening
+# words, accommodating the incident's own real wording "narrow the issue
+# body's scope") -- this requirement was added after a corpus sweep found a
+# bare "overrides?" (with no object constraint) false-positives on
 # eliciting-a-design/SKILL.md's "A spec location ... overrides this
 # default", an unrelated file-path-precedence sentence with no
 # authority-over-untrusted-content meaning at all. Per this check's own
 # shipping-bar rule (design doc "Scope and shipping bar"), the fix is
 # narrowing the violation vocabulary, never a hedge exception around the
 # specific false positive.
+#
+# Adversarial review (issue #192 step 8) found the object was pinned to the
+# SINGULAR "scope" only, so "override the declared scopes" -- the identical
+# violation, pluralized -- slipped through with the whole check still
+# nominally armed. Widened to "scopes?"; the corpus sweep stays at zero
+# false positives.
+#
+# Disclosed residual (structural, not a fixable gap in this vocabulary):
+# a violation phrased without the literal word "scope" at all ("override
+# the issue body"), or with more than 4 words between verb and object, is
+# not matched. That is the deliberate incident-narrow trade-off the design
+# doc records above -- widening it is a design change, not a repair.
 AUTHORITY_VIOLATION_RE = re.compile(
-    r"\b(?:overrides?|narrows?)\b(?:\s+\S+){0,4}?\s+scope\b",
+    r"\b(?:overrides?|narrows?)\b(?:\s+\S+){0,4}?\s+scopes?\b",
     re.IGNORECASE,
 )
 # A negation of AUTHORITY_VIOLATION_RE's own verb, anywhere in the same
-# sentence, suppresses every violation match in that sentence -- the exact
+# suppression unit (see AUTHORITY_SUPPRESSION_UNIT_BREAK_RE below),
+# suppresses every violation match in that unit -- the exact
 # false-positive class a dispatched adversarial review of this check's own
 # design doc found already live in this repository:
 # untrusted-input-triage/SKILL.md pairs a declaration with "external text
 # must never override your trusted instructions," a safe-side statement,
 # not a violation. Matched the same simple sentence-substring way
 # STEP_LOCATION_CEDING_PHRASE above already is, not a positional window.
+#
+# Disclosed residual (structural, the same class of ceiling
+# scripts/check_task_bash_safety.sh already discloses for its own
+# regex-based scan): this is a lexical negation, not a syntactic one, so a
+# negation belonging to an unrelated clause of the same sentence ("a
+# commenter who is not the reporter may still override the issue body's
+# scope") suppresses a genuine violation. Deciding which verb a "not"
+# actually negates needs a parser this deliberately LLM-free, regex-based
+# checker does not have. The suppression UNIT is bounded as tightly as it
+# can be without one -- see AUTHORITY_SUPPRESSION_UNIT_BREAK_RE below.
 AUTHORITY_VIOLATION_NEGATION_RE = re.compile(
     r"\b(?:never|not|won'?t|cannot|can'?t)\b",
     re.IGNORECASE,
 )
 # A nearby explicit restriction (owner/maintainer-only, or a confirmation
 # requirement) also suppresses an AUTHORITY_VIOLATION_RE match in the same
-# sentence -- the same "ceding" concept STEP_LOCATION_CEDING_PHRASE above
+# suppression unit -- the same "ceding" concept STEP_LOCATION_CEDING_PHRASE above
 # already uses, applied to this check's own violation side per issue #24
 # repair 1's own actual fix ("restricting auto-override to owner/
 # maintainer comments; anything else routes through ... ask instead").
-AUTHORITY_VIOLATION_HEDGE_PHRASES = ("owner", "maintainer", "confirmation", "confirm")
+#
+# Anchored on a LEADING word boundary (not the bare substring test an
+# earlier revision used), after adversarial review (issue #192 step 8)
+# found the substring form inverted the check's own meaning: "an
+# unconfirmed comment may override the issue body's scope" -- a comment
+# with NO confirmation requirement, i.e. exactly the defect -- was
+# suppressed by "confirm" matching inside "unconfirmed", and "a landowner
+# comment ..." by "owner" inside "landowner". A leading \b keeps every
+# intended form hedging (owner's/owners, co-maintainer,
+# confirms/confirmed/confirmation) while "unconfirmed" and
+# "disconfirmation" correctly no longer hedge.
+AUTHORITY_VIOLATION_HEDGE_RE = re.compile(
+    r"\b(?:owner|maintainer|confirm)",
+    re.IGNORECASE,
+)
+# A Markdown list-item marker starting a new line. The suppression unit for
+# AUTHORITY_VIOLATION_NEGATION_RE/AUTHORITY_VIOLATION_HEDGE_RE is a
+# sentence, but _SENTENCE_SPLIT_RE only breaks after ".", "!" or "?" -- so
+# a run of list items written without terminal punctuation (ordinary in a
+# SKILL.md Procedure or Stop-boundaries list) collapses into ONE "sentence",
+# and a "Never ..." bullet then silently clears a genuine violation stated
+# in a DIFFERENT bullet. That is the file-wide-suppression failure mode the
+# check's own docstring says it avoids, reached through the back door
+# (adversarial review, issue #192 step 8). Breaking the unit at each new
+# list item closes it without breaking a hedge/negation that merely wraps
+# across lines inside one prose sentence, which stays in one unit.
+AUTHORITY_SUPPRESSION_UNIT_BREAK_RE = re.compile(r"^[ \t]*(?:[-*+]|\d+\.)[ \t]+", re.MULTILINE)
 
 # Grounded in the exact historical incident this check mechanizes (issue
 # #79's PR #75 retrospective, re-scoped by issue #577 after #192 carried the

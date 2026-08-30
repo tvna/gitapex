@@ -146,9 +146,16 @@ use: an absolute resolution check with no retrofit (any
 `###` heading included, per the file's own shape; a fixture with no
 `exercises` field is never required to add one), and a delta-scoped
 coverage demand reusing the `#49` gate's own `after_counter -
-before_counter` machinery (a diff introducing a *new* Stop-boundary bullet
-or Procedure/Steps item must, in that same diff, add a fixture whose
-`exercises` resolves to it). Deliberately excludes the `#49` gate's OTHER
+before_counter` machinery (when a diff introduces a *new* Stop-boundary
+bullet or Procedure/Steps item, the skill must carry a fixture whose
+`exercises` resolves to it -- the fixture set is read at head, not from
+the diff, the same way the `#49` gate counts fixtures via `git ls-tree`;
+see `check_new_procedure_stop_boundary_fixture_demand`'s own docstring for
+the residual that leaves). Check E's vocabulary is also what Check C
+resolves against, per this item's own ACM row ("extend
+`check_exercises_declaration_coverage` and its label-resolution logic"):
+the two never disagree about which labels are legal.
+Deliberately excludes the `#49` gate's OTHER
 decision-branch kind, named dispatch branches -- no `expected.exercises`
 resolution target is defined for one anywhere in this design, so that kind
 stays covered exclusively by that gate's own pre-existing count-based
@@ -513,6 +520,23 @@ def check_exercises_declaration_coverage(split_json_path: Path, data: dict[str, 
     itself when that fixture entry uses the `fixtureWithExpected` object
     form, else from the fixture's own task YAML's `expected.exercises`
     field (this repository's pre-existing, still-dominant convention).
+
+    Label resolution goes through `resolvable_exercise_labels` (defined in
+    the Check E section below -- issue #192 item 6, whose ACM row is
+    literally "extend `check_exercises_declaration_coverage` and its
+    label-resolution logic"), so this check accepts exactly the vocabulary
+    Check E advertises: `###` section label, `Step N` ordinal or literal
+    Procedure/Steps item text, or Stop-boundary bullet text. Keeping the
+    two vocabularies apart -- as an earlier revision did, resolving here
+    against `parse_section_labels` alone -- made a selection fixture
+    declaring "Step 2" simultaneously pass Check E and fail Check C, and
+    could make Check E's own delta-scoped demand unsatisfiable for a skill
+    that has both `###` headings and a `split.json` (the demanded label
+    would trip this check). The SCOPE gate below stays `###`-only, so this
+    check reaches exactly the skills it reached before; only what it
+    ACCEPTS widened. The widening cannot smuggle a stale pointer past
+    Check C's own purpose (issue #631): every accepted label still has to
+    resolve against a real current target in the sibling SKILL.md.
     """
     assignment = data.get("assignment")
     selection_items = assignment.get("selection") if isinstance(assignment, dict) else None
@@ -529,6 +553,7 @@ def check_exercises_declaration_coverage(split_json_path: Path, data: dict[str, 
     section_labels = parse_section_labels(skill_text)
     if not section_labels:
         return None
+    resolvable_labels = resolvable_exercise_labels(skill_text)
 
     tasks_dir = repo_root / "evals" / skill_name / "tasks"
     problems: list[str] = []
@@ -564,10 +589,11 @@ def check_exercises_declaration_coverage(split_json_path: Path, data: dict[str, 
                 f"{fixture_name}: no well-formed exercises declaration (a non-empty list of section labels)"
             )
             continue
-        unmatched = [label for label in exercises if label.casefold() not in section_labels]
+        unmatched = [label for label in exercises if label.casefold() not in resolvable_labels]
         if unmatched:
             problems.append(
-                f"{fixture_name}: exercises {unmatched!r} match no real ###-level section in {skill_md_path}"
+                f"{fixture_name}: exercises {unmatched!r} match no real ###-level section, Step-N ordinal, "
+                f"Procedure/Steps item, or Stop-boundary bullet in {skill_md_path}"
             )
     if not problems:
         return None
@@ -750,24 +776,46 @@ def stop_boundary_identity_counter(skill_md_text: str) -> Counter[str]:
     return counter
 
 
-def parse_procedure_steps(skill_md_text: str) -> list[str]:
-    """Ordered (source order) list of every top-level (column-0) numbered
-    item's own stripped text, from every '## Procedure'/'## Steps' heading
-    (any heading level, case-insensitive). Positional: item text at index
-    N-1 is what a declared 'Step N' label resolves against (issue #192
-    item 6's own design -- positional resolution is the only viable
-    reading, since no skill in this repository writes a Procedure/Steps
-    item's own text as literal 'Step N:')."""
+def parse_procedure_step_items(skill_md_text: str) -> list[tuple[int, str]]:
+    """Ordered (source order) list of ``(source ordinal, item text)`` for
+    every top-level (column-0) numbered item under every
+    '## Procedure'/'## Steps' heading (any heading level,
+    case-insensitive).
+
+    The ordinal is the item's OWN number as written in the Markdown, not a
+    running 1..N index over the flattened list. Issue #192 item 6's design
+    specifies "the Nth numbered item (1-indexed, *matching the list's own
+    source numbering*)", and a running index does not: the adversarial
+    review (issue #192 step 8) found three shipped skills in this
+    repository -- `reviewing-an-artifact`, `merge-retrospective`,
+    `battle-testing-a-skill` -- whose Procedure lists start at `0.`, this
+    repository's own convention for a pre-flight step (`reviewing-an-
+    artifact`'s own frontmatter says "the eight Step 0 deferral targets").
+    Under a running index every one of their ordinals was off by one:
+    a fixture correctly declaring "Step 0" resolved against nothing, a
+    non-existent "Step 7" resolved successfully, and "Step 3" silently
+    resolved to the item actually numbered `2.` -- defeating the very
+    resolve-against-a-real-target guarantee this check exists to give.
+    Reading the source ordinal also fixes the flattening the same review
+    named: two Procedure/Steps sections in one file, or a restarted
+    numbered list inside one, no longer inflate later ordinals."""
     lines = _normalize_for_span_scan(skill_md_text)
-    items: list[str] = []
+    items: list[tuple[int, str]] = []
     for i, line in enumerate(lines):
         if _PROCEDURE_STEPS_HEADING_RE.match(line):
             start, end = _heading_section_span(lines, i)
             for j in range(start, end):
                 match = _TOP_LEVEL_NUMBERED_ITEM_RE.match(lines[j])
                 if match:
-                    items.append(match.group(2).strip())
+                    items.append((int(match.group(1)), match.group(2).strip()))
     return items
+
+
+def parse_procedure_steps(skill_md_text: str) -> list[str]:
+    """Just the item texts from `parse_procedure_step_items`, in source
+    order -- the position-independent view `procedure_step_identity_counter`
+    keys its content identity on."""
+    return [item_text for _ordinal, item_text in parse_procedure_step_items(skill_md_text)]
 
 
 def procedure_step_identity_counter(skill_md_text: str) -> Counter[str]:
@@ -801,11 +849,14 @@ def resolvable_exercise_labels(skill_md_text: str) -> set[str]:
     ordinal or the literal text of a Procedure/Steps item, and a
     Stop-boundary bullet's own first-line text (marker stripped). Empty
     when the file uses none of the three conventions -- callers treat
-    that as out of scope."""
+    that as out of scope.
+
+    A 'Step N' label resolves against the item's OWN source ordinal -- see
+    `parse_procedure_step_items` for why a running 1..N index is wrong
+    against this repository's real content."""
     labels: set[str] = set(parse_section_labels(skill_md_text))
-    steps = parse_procedure_steps(skill_md_text)
-    for index, item_text in enumerate(steps, start=1):
-        labels.add(f"step {index}")
+    for ordinal, item_text in parse_procedure_step_items(skill_md_text):
+        labels.add(f"step {ordinal}")
         labels.add(item_text.casefold())
     for key in stop_boundary_identity_counter(skill_md_text):
         labels.add(_stop_boundary_bullet_label(key))
@@ -881,17 +932,35 @@ def new_procedure_stop_boundary_content(before_text: str | None, after_text: str
 def check_new_procedure_stop_boundary_fixture_demand(
     skill_md_path: Path, before_text: str | None, after_text: str, repo_root: Path
 ) -> str | None:
-    """Issue #192 item 6: delta-scoped coverage demand. A diff that
+    """Issue #192 item 6: delta-scoped coverage demand. When a diff
     introduces a new Stop-boundary bullet or Procedure/Steps item (per
-    `new_procedure_stop_boundary_content`) must, in that same diff, add at
-    least one `evals/<skill>/tasks/*.yaml` fixture whose declared
+    `new_procedure_stop_boundary_content`), the skill must have at least
+    one `evals/<skill>/tasks/*.yaml` fixture whose declared
     `expected.exercises` resolves to it. A pre-existing gap this diff did
     not create is never retroactively flagged -- when nothing is new,
     there is nothing to check. Deliberately scoped to only the two kinds
     this design built a resolution target for; a new named dispatch
     branch stays covered exclusively by the `#49` gate's own pre-existing
     count-based check (see this Check E section's own module-docstring
-    paragraph)."""
+    paragraph).
+
+    Disclosed structural limit -- the covering fixture is read from the
+    skill's CURRENT `tasks/` directory, so this cannot require that the
+    fixture was ADDED BY THE SAME DIFF; the workflow hands this gate no
+    diff-side fixture information, exactly as the `#49` gate it mirrors
+    counts the head-revision fixture set via `git ls-tree` rather than
+    diff-added files. An earlier revision of this docstring claimed the
+    stronger "must, in that same diff, add ..." rule; the issue #192 step
+    8 adversarial review found the code never enforced it, and the claim
+    is corrected here rather than left as an unverified behavioural
+    assertion. The concrete residual this leaves: inserting a new item
+    into the MIDDLE of a Procedure list is satisfied by a pre-existing
+    fixture that declared that ordinal for the item previously at that
+    position -- a consequence of ordinal labels being positional, which
+    the design doc's own author guidance already warns about ("prefer a
+    heading or bullet-prefix label over a `Step N` ordinal where
+    practical"). Closing it needs diff-side fixture data this gate is not
+    given; a literal-text label is unaffected."""
     new_content = new_procedure_stop_boundary_content(before_text, after_text)
     if not new_content:
         return None
@@ -910,7 +979,7 @@ def check_new_procedure_stop_boundary_fixture_demand(
                 continue
             covered_labels.update(label.casefold() for label in exercises)
 
-    after_items = parse_procedure_steps(after_text)
+    after_items = parse_procedure_step_items(after_text)
     uncovered: list[str] = []
     for key in new_content:
         kind, _, text = key.partition(":")
@@ -918,9 +987,7 @@ def check_new_procedure_stop_boundary_fixture_demand(
             resolved = _stop_boundary_bullet_label(key) in covered_labels
         else:
             resolved = text.casefold() in covered_labels or any(
-                f"step {index}" in covered_labels
-                for index, item_text in enumerate(after_items, start=1)
-                if item_text == text
+                f"step {ordinal}" in covered_labels for ordinal, item_text in after_items if item_text == text
             )
         if not resolved:
             uncovered.append(f"{kind}: {text!r}")
@@ -1052,7 +1119,19 @@ def main(argv: list[str] | None = None) -> int:
             if before_raw:
                 try:
                     before_text = Path(before_raw).read_text(encoding="utf-8")
-                except (OSError, UnicodeDecodeError):
+                except (OSError, UnicodeDecodeError) as before_read_error:
+                    # Fails CLOSED (a None before-text counts every item as
+                    # new, i.e. stricter), but must still say so: an
+                    # unreadable before-file turns an ordinary edit into a
+                    # whole-file coverage demand, and swallowing the reason
+                    # leaves that inexplicable in the job log. Same warning
+                    # shape as the sibling `#49` gate's own
+                    # `_read_entries` before-content fallback.
+                    print(
+                        f"warning: could not read before-content for {raw_path!r} ({before_raw}): "
+                        f"{before_read_error} -- treating as newly added",
+                        file=sys.stderr,
+                    )
                     before_text = None
             offender = check_new_procedure_stop_boundary_fixture_demand(path, before_text, text, repo_root)
             if offender:

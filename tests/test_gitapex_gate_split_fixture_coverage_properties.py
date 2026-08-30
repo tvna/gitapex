@@ -25,23 +25,67 @@ _PLAIN_LINE = st.text(
     alphabet=st.characters(blacklist_categories=("Cc", "Cs"), blacklist_characters="`~#\n"), max_size=20
 )
 
+# Lines drawn from a vocabulary that DOES include real fence markers of
+# both characters and several lengths, plus near-miss and indented forms --
+# so a generated document actually opens, nests, and closes fences instead
+# of only ever taking the unfenced branch. The issue #192 step 8
+# adversarial review found the line-count property below was pinned to a
+# backtick/tilde-free strategy, which made its own stated teeth ("fails as
+# soon as a generated example contains a fence-open line") unreachable: no
+# example could ever contain one.
+_FENCE_ISH_LINE = st.one_of(
+    _PLAIN_LINE,
+    st.sampled_from(
+        [
+            "```",
+            "````",
+            "~~~",
+            "~~~~",
+            "```python",
+            "   ```",
+            "``",  # near miss: only 2 backticks, never a fence
+            "``` trailing text",  # never a valid CLOSER (length-aware close is bare)
+            "## H",
+            "- bullet",
+            "",
+        ]
+    ),
+)
+_FENCE_ISH_DOC = st.lists(_FENCE_ISH_LINE, max_size=12).map("\n".join)
+
 
 @_PROPERTIES
-@given(text=st.text(alphabet=st.characters(blacklist_characters="`~"), max_size=300))
+@given(text=_FENCE_ISH_DOC)
 def test_blank_fenced_blocks_never_changes_line_count(text: str) -> None:
     """Robustness: `_blank_fenced_blocks_length_aware` blanks lines in
-    place, never adds or removes one -- confirmed across arbitrary text
-    with no fence markers at all (so every line takes the "unfenced,
-    append verbatim" branch), which already exercises every non-fence
-    control-flow path the function has.
+    place, never adds or removes one -- including for documents that
+    really do open, nest, and close fences, and for a document whose
+    fence is left unclosed at EOF.
 
-    Confirmed to have teeth: replacing the function body with a naive
-    `"\\n".join(l for l in lines if not in_fence)` (dropping blanked
-    lines instead of blanking them) makes this property FAIL as soon as
-    a generated example contains a fence-open line, since the returned
+    Confirmed to have teeth: replacing the fence-open branch's
+    `out.append("")` with a bare `continue` (dropping the blanked line
+    instead of blanking it) makes this property FAIL, since the returned
     line count then no longer matches the input's."""
     result = gate._blank_fenced_blocks_length_aware(text)
     assert len(result.split("\n")) == len(text.split("\n"))
+
+
+@_PROPERTIES
+@given(text=_FENCE_ISH_DOC)
+def test_blank_fenced_blocks_leaves_no_fence_marker_in_its_output(text: str) -> None:
+    """Soundness over fence-bearing documents: no line of the output can
+    still match `_PROC_FENCE_OPEN_RE`. Every opener, interior and closer
+    line is blanked, and a line that survives verbatim is by construction
+    one that sat outside any fence -- where a fence marker would have
+    opened one. This is what makes the downstream Stop-boundary/Procedure
+    scans safe to run over the blanked text.
+
+    Confirmed to have teeth: making the fence-open branch emit its own
+    marker back (`out.append(line)` in place of `out.append("")`) still
+    satisfies the line-count property above, but FAILS here on every
+    generated example that opens a fence."""
+    for line in gate._blank_fenced_blocks_length_aware(text).split("\n"):
+        assert not gate._PROC_FENCE_OPEN_RE.match(line)
 
 
 @_PROPERTIES
@@ -147,3 +191,39 @@ def test_parse_procedure_steps_returns_items_in_source_order(n_items: int, headi
     numbered = [f"{i + 1}. {text}" for i, text in enumerate(items)]
     text = "\n".join([f"## {heading}", "", *numbered])
     assert gate.parse_procedure_steps(text) == items
+
+
+@_PROPERTIES
+@given(
+    first=st.integers(min_value=0, max_value=3),
+    n_items=st.integers(min_value=1, max_value=8),
+    heading=st.sampled_from(["Procedure", "Steps"]),
+)
+def test_parse_procedure_step_items_reads_the_lists_own_source_numbering(
+    first: int, n_items: int, heading: str
+) -> None:
+    """Model-based: each item's reported ordinal is the number literally
+    written in the Markdown, never a running 1..N index over the parsed
+    list -- checked across lists that start at 0, 1, 2 or 3, both
+    recognized heading spellings, and a range of item counts.
+
+    This is the property the issue #192 step 8 adversarial defeat case
+    turns on: three shipped skills in this repository number their
+    Procedure lists from `0.`, so a running index reported every one of
+    their ordinals off by one -- "Step 0" resolving against nothing and a
+    non-existent final "Step N+1" resolving successfully.
+
+    Confirmed to have teeth: restoring the running index
+    (`items.append((len(items) + 1, ...))`) makes this property FAIL on
+    every generated example whose list does not happen to start at 1.
+    """
+    ordinals = [first + i for i in range(n_items)]
+    lines = [f"## {heading}", ""] + [f"{n}. item {n}" for n in ordinals]
+    parsed = gate.parse_procedure_step_items("\n".join(lines))
+    assert [ordinal for ordinal, _text in parsed] == ordinals
+    assert [text for _ordinal, text in parsed] == [f"item {n}" for n in ordinals]
+    # And the label set exposed to fixture authors follows those same
+    # ordinals -- no phantom ordinal above the list's own last one.
+    labels = gate.resolvable_exercise_labels("\n".join(lines))
+    assert all(f"step {n}" in labels for n in ordinals)
+    assert f"step {ordinals[-1] + 1}" not in labels

@@ -1157,6 +1157,163 @@ def test_no_real_skill_md_newly_fails_check_e_absolute_resolution():
 
 
 # ---------------------------------------------------------------------------
+# Check E adversarial defeat cases (issue #192 step 8 review)
+#
+# Each case below was constructed specifically to defeat Check E's own
+# detection logic, confirmed to actually do so against the shipped
+# revision, and is pinned here asserting the CORRECT outcome so a later
+# edit that reintroduces the hole fails loudly instead of silently.
+# ---------------------------------------------------------------------------
+
+
+def test_step_ordinals_follow_the_lists_own_source_numbering():
+    # Defeat case (confirmed to defeat the pre-fix revision): "Step N" was
+    # resolved by a running 1..N index over the flattened item list, not
+    # by the item's own written number. On a list starting at `0.` every
+    # ordinal was off by one -- "Step 0" resolved against nothing, a
+    # non-existent "Step 4" resolved successfully, and "Step 1" silently
+    # pointed at the item numbered `0.`.
+    text = "## Procedure\n\n0. Zeroth.\n1. First.\n2. Second.\n3. Third.\n"
+    assert gate.parse_procedure_step_items(text) == [
+        (0, "Zeroth."),
+        (1, "First."),
+        (2, "Second."),
+        (3, "Third."),
+    ]
+    labels = gate.resolvable_exercise_labels(text)
+    assert "step 0" in labels
+    assert "step 3" in labels
+    assert "step 4" not in labels
+
+
+def test_real_skill_md_with_a_step_zero_resolves_step_zero_not_step_seven():
+    # The same defeat case against real, shipped content rather than a
+    # synthetic fixture: reviewing-an-artifact/SKILL.md numbers its
+    # Procedure `0.`..`6.` (its own frontmatter says "the eight Step 0
+    # deferral targets"), so "Step 0" must resolve and "Step 7" must not.
+    path = REPO_ROOT / "skills" / "reviewing-an-artifact" / "SKILL.md"
+    assert path.is_file(), path
+    labels = gate.resolvable_exercise_labels(path.read_text(encoding="utf-8"))
+    assert "step 0" in labels
+    assert "step 6" in labels
+    assert "step 7" not in labels
+
+
+def test_step_ordinals_are_not_flattened_across_two_procedure_headings():
+    # Same root cause, second symptom: a running index accumulated across
+    # every Procedure/Steps heading in the file, so a 2-item Procedure
+    # followed by a 2-item Steps section made "Step 3"/"Step 4" resolve
+    # against the second section's own items 1 and 2.
+    text = "## Procedure\n\n1. Alpha.\n2. Beta.\n\n## Notes\n\nprose\n\n## Steps\n\n1. Gamma.\n2. Delta.\n"
+    labels = gate.resolvable_exercise_labels(text)
+    assert "step 1" in labels
+    assert "step 2" in labels
+    assert "step 3" not in labels
+    assert "step 4" not in labels
+    # The literal-text targets are unaffected -- both sections contribute.
+    assert "gamma." in labels
+    assert "delta." in labels
+
+
+def test_check_c_and_check_e_accept_the_same_exercises_vocabulary(tmp_path: pathlib.Path):
+    # Defeat case (confirmed to defeat the pre-fix revision): Check C
+    # resolved a selection fixture's labels against `###` headings ALONE
+    # while Check E advertised Step-N/Procedure-item/Stop-boundary targets
+    # as legal, so one fixture declaring "Step 2" passed Check E and was
+    # simultaneously failed by Check C -- and Check E's delta demand could
+    # ask for a label Check C would then reject.
+    body = _ROUTING_SKILL_MD + _PROCEDURE_STOP_BOUNDARY_SKILL_MD
+    skill_md = _write_skill_and_tasks(
+        tmp_path,
+        "widget-polisher",
+        body,
+        {"a.yaml": 'expected:\n  exercises:\n    - "Step 2"\n    - "Never skip step 2 under time pressure."\n'},
+    )
+    split_json = tmp_path / "evals" / "widget-polisher" / "split.json"
+    split_json.write_text(json.dumps({"assignment": {"selection": ["a.yaml"]}}), encoding="utf-8")
+    data, error = gate.load_split_json(split_json)
+    assert error is None, error
+    assert data is not None
+    assert gate.check_exercises_declaration_coverage(split_json, data, tmp_path) is None
+    assert gate.check_procedure_stop_boundary_exercises_coverage(skill_md, body, tmp_path) is None
+    assert gate.main(["--skill-md", str(skill_md), "--repo-root", str(tmp_path)]) == 0
+
+
+def test_check_c_still_rejects_a_label_resolving_to_nothing_after_the_widening(tmp_path: pathlib.Path):
+    # The counterpart guard for the widening above: Check C's own purpose
+    # (issue #631 -- a declared label is never resolved by staleness) must
+    # survive it. A label matching none of the widened target kinds still
+    # fails.
+    body = _ROUTING_SKILL_MD + _PROCEDURE_STOP_BOUNDARY_SKILL_MD
+    _write_skill_and_tasks(
+        tmp_path,
+        "widget-polisher",
+        body,
+        {"a.yaml": 'expected:\n  exercises:\n    - "Step 9"\n'},
+    )
+    split_json = tmp_path / "evals" / "widget-polisher" / "split.json"
+    split_json.write_text(json.dumps({"assignment": {"selection": ["a.yaml"]}}), encoding="utf-8")
+    data, error = gate.load_split_json(split_json)
+    assert error is None, error
+    assert data is not None
+    offender = gate.check_exercises_declaration_coverage(split_json, data, tmp_path)
+    assert offender is not None
+    assert "Step 9" in offender
+
+
+def test_same_count_stop_boundary_and_procedure_content_swap_registers_as_new():
+    # The exact defeat class gitapex_gate_skill_branch_fixture_coverage.py's
+    # own module docstring names as the reason it keys Counters on content
+    # instead of bare totals: deleting N bullets/items and adding N
+    # DIFFERENT ones leaves the totals equal, so a bare-total comparison
+    # would see no change at all. Content keying must still report every
+    # swapped-in item as new.
+    before = "## Stop boundaries\n\n- A.\n- B.\n- C.\n\n## Procedure\n\n1. P1.\n2. P2.\n"
+    after = "## Stop boundaries\n\n- X.\n- Y.\n- Z.\n\n## Procedure\n\n1. Q1.\n2. Q2.\n"
+    assert gate.new_procedure_stop_boundary_content(before, after) == [
+        "procedure-step:Q1.",
+        "procedure-step:Q2.",
+        "stop-boundary:- X.",
+        "stop-boundary:- Y.",
+        "stop-boundary:- Z.",
+    ]
+    # A pure reorder of the same content is NOT new (position-independent
+    # identity), and a duplicated bullet is caught by the multiset, not
+    # collapsed by a set.
+    reordered = "## Stop boundaries\n\n- C.\n- B.\n- A.\n\n## Procedure\n\n1. P2.\n2. P1.\n"
+    assert gate.new_procedure_stop_boundary_content(before, reordered) == []
+    assert gate.new_procedure_stop_boundary_content(
+        "## Stop boundaries\n\n- A.\n", "## Stop boundaries\n\n- A.\n- A.\n"
+    ) == ["stop-boundary:- A."]
+
+
+def test_main_warns_on_unreadable_before_content_instead_of_swallowing_it(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+):
+    # An unreadable before-file fails CLOSED (every item counts as new),
+    # but silently: the resulting whole-file coverage demand was
+    # inexplicable from the job log. Every sibling error path in main()
+    # already prints; this one must too.
+    skill_md = _write_skill_and_tasks(tmp_path, "widget-polisher", _PROCEDURE_STOP_BOUNDARY_SKILL_MD, {})
+    before_map_file = tmp_path / "before_map.tsv"
+    before_map_file.write_text(f"{skill_md}\t{tmp_path / 'gone.md'}\n", encoding="utf-8")
+    rc = gate.main(
+        [
+            "--skill-md",
+            str(skill_md),
+            "--skill-md-before-map",
+            str(before_map_file),
+            "--repo-root",
+            str(tmp_path),
+        ]
+    )
+    assert rc == 1
+    stderr = capsys.readouterr().err
+    assert "warning: could not read before-content" in stderr
+    assert "treating as newly added" in stderr
+
+
+# ---------------------------------------------------------------------------
 # main()
 # ---------------------------------------------------------------------------
 
