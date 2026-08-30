@@ -160,9 +160,36 @@ disallow_any_generics = false
 # (matches Tier A/B's own "a real error inside typed code is still
 # caught" principle) -- only the specific narrowing-error codes actually
 # observed against this file are disabled, not the broader flags.
+#
+# Issue #1330's split moved the "operator" (_skill_dependency_checks) and
+# "no-untyped-call" (check_shape's local lambdas) sites out of this module
+# into shape_checks/, so only the two codes still observed against it stay
+# disabled here -- each override lists the codes its OWN module actually
+# needs rather than the union of two modules' needs, so a newly introduced
+# error of a code this module no longer produces is caught, not silently
+# absorbed.
 [[tool.mypy.overrides]]
 module = "gitapex_check_skill_shape"
-disable_error_code = ["attr-defined", "arg-type", "operator", "no-untyped-call"]
+disable_error_code = ["attr-defined", "arg-type"]
+# tracking: issue #684 (skills/evaluating-skill-quality/scripts/)
+
+# shape_checks.skill_dependencies (issue #1330 ACM row 1): gitapex_check_skill_shape.py's
+# own _skill_dependency_checks moved here verbatim -- byte-identical body,
+# see that module's own docstring -- carrying its one pre-existing "operator"
+# narrowing gap (deps.get("requires")/deps.get("relatedTo") each typed
+# object | None post-isinstance-narrowing; _valid_skill_dependency_list
+# returns a plain bool, not a TypeGuard, so mypy cannot narrow the
+# `requires if _valid_skill_dependency_list(requires) else []` ternary) with
+# it, plus the "arg-type" that same un-narrowed value produces when passed
+# on to _skill_dependency_portability_result. Verified empirically, not
+# assumed: every other shape_checks/*.py submodule mypy-strict-clean without
+# needing this override (checked individually, same as
+# gitapex_gate_skill_audit_disclosure.py's own precedent above) -- only
+# skill_dependencies actually needs it, so only it is listed, not a broader
+# shape_checks.* glob.
+[[tool.mypy.overrides]]
+module = "shape_checks.skill_dependencies"
+disable_error_code = ["arg-type", "operator"]
 # tracking: issue #684 (skills/evaluating-skill-quality/scripts/)
 
 # Issue #684, task T8: gitapex_run_ablation.py/gitapex_check_dimension_coverage.py's own CLI

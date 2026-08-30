@@ -123,9 +123,23 @@ def _known_static_check_names():
     toc:{name}/anchor-targets-resolve:{name}) -- those are generated from
     caller-supplied runtime data (a field name, a reference filename), not
     a fixed literal a source scan can enumerate.
+
+    Most ``CheckResult(...)`` call sites now live in the shape_checks/
+    submodules the checks were moved into (issue #1330's package split),
+    not in css.__file__'s own hub-module text, so every shape_checks/*.py
+    file (globbed relative to css.__file__'s own directory, not
+    hand-listed) is scanned too and the literal names found across all of
+    them are unioned -- otherwise this completeness gate would silently
+    cover only the handful of CheckResult(...) sites still left in the hub.
     """
-    source = Path(css.__file__).read_text(encoding="utf-8")
-    literal_names = set(re.findall(r'CheckResult\(\s*\n?\s*"([a-zA-Z0-9-]+)"', source))
+    scripts_dir = Path(css.__file__).resolve().parent
+    sources = [Path(css.__file__).read_text(encoding="utf-8")]
+    sources.extend(
+        submodule.read_text(encoding="utf-8") for submodule in sorted((scripts_dir / "shape_checks").glob("*.py"))
+    )
+    literal_names: set[str] = set()
+    for source in sources:
+        literal_names.update(re.findall(r'CheckResult\(\s*\n?\s*"([a-zA-Z0-9-]+)"', source))
     literal_names.update(spec[0] for spec in css._INLINE_CITATION_CHECK_SPECS)
     return literal_names
 
@@ -7471,6 +7485,149 @@ def test_script_execution_intent_unmentioned_script_not_flagged(tmp_path):
     d = _write_raw(tmp_path, _simple_body("Nothing about scripts here."))
     (d / "scripts").mkdir()
     (d / "scripts" / "checker.py").write_text("# stub\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["script-execution-intent-stated"]
+    assert result.passed is True
+    assert result.evidence == "none"
+
+
+# ---- Bundled-script enumeration is RECURSIVE (adversarial-review
+# ---- regression, issue #1330) ----
+#
+# Both bundled-script checks used to enumerate scripts/ with a
+# non-recursive iterdir(), so a skill shipping its scripts as a package
+# (scripts/<name>/*.py) had that whole subpackage silently exempted. This
+# checker's own skill demonstrated the failure live: issue #1330's split
+# moved ~5000 lines -- constants.py among them -- into
+# scripts/shape_checks/, and every one of those modules' module-level
+# constants fell out of no-voodoo-constant's scope overnight without a
+# single check changing. These cases pin the recursive scope so the same
+# narrowing cannot silently return.
+
+
+def test_voodoo_constant_in_scripts_subpackage_is_flagged(tmp_path):
+    d = _write_raw(tmp_path, _simple_body("No prose reference needed."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "helperpkg").mkdir()
+    (d / "scripts" / "helperpkg" / "config.py").write_text("TIMEOUT_SECONDS = 30\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is False
+    # Reported by its path relative to the skill directory, not a bare
+    # "scripts/<basename>" -- two subdirectories can hold a same-named
+    # module, so the evidence must still point at the real file.
+    assert "scripts/helperpkg/config.py:1:TIMEOUT_SECONDS" in result.evidence
+
+
+def test_voodoo_constant_flat_script_keeps_its_bare_scripts_label(tmp_path):
+    # The relative-path label above must be identical to the historical
+    # "scripts/<basename>" spelling for a script sitting directly under
+    # scripts/ -- recursion changed the scope, not the flat-file evidence.
+    d = _write_raw(tmp_path, _simple_body("No prose reference needed."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text("TIMEOUT_SECONDS = 30\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is False
+    assert result.evidence == "found: scripts/checker.py:1:TIMEOUT_SECONDS"
+
+
+def test_voodoo_constant_subpackage_test_file_still_excluded(tmp_path):
+    # The test_*.py exclusion applies by basename at ANY depth -- a test
+    # file's fixture literals are not "configuration" wherever it lives.
+    d = _write_raw(tmp_path, _simple_body("No prose reference needed."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "helperpkg").mkdir()
+    (d / "scripts" / "helperpkg" / "test_config.py").write_text("TIMEOUT_SECONDS = 30\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is True
+    assert result.evidence == "not declared (optional)"
+
+
+def test_bundled_script_scan_ignores_pycache_junk(tmp_path):
+    # __pycache__ holds build artifacts, not bundled scripts. It matters
+    # most for script-execution-intent-stated, whose scope is "any
+    # extension" and would otherwise treat compiled .pyc bytecode as a
+    # bundled script.
+    d = _write_raw(tmp_path, _simple_body("No prose reference needed."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "__pycache__").mkdir()
+    (d / "scripts" / "__pycache__" / "stale.cpython-312.pyc").write_bytes(b"\x00\x01binary")
+    (d / "scripts" / "__pycache__" / "leftover.py").write_text("TIMEOUT_SECONDS = 30\n", encoding="utf-8")
+    results = _by_name(css.check_shape(d))
+    assert results["no-voodoo-constant"].passed is True
+    assert results["no-voodoo-constant"].evidence == "not declared (optional)"
+    assert results["script-execution-intent-stated"].passed is True
+    assert results["script-execution-intent-stated"].evidence == "not declared (optional)"
+
+
+def test_script_execution_intent_covers_scripts_subpackage(tmp_path):
+    # The execution-intent rule follows the same recursive scope: a cited
+    # script nested in a subpackage is in scope, not silently exempt.
+    d = _write_raw(tmp_path, _simple_body("The `helper.sh` file exists."))
+    (d / "scripts").mkdir()
+    (d / "scripts" / "helperpkg").mkdir()
+    (d / "scripts" / "helperpkg" / "helper.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["script-execution-intent-stated"]
+    assert result.passed is False
+    assert "helper.sh" in result.evidence
+
+
+# ---- Basename collisions across scripts/ subdirectories are ambiguous
+# ---- (drafting-a-pr-to-merge Step 8 adversarial-review regression,
+# ---- issue #1330) ----
+#
+# Reachable only since the recursion fixed above: two scripts in different
+# scripts/ subdirectories can share a basename. The check's own doc-match
+# token (`` `filename` ``) carries no directory information, so a
+# paragraph naming that bare filename could not previously be attributed
+# to one specific colliding file -- one genuinely documented file was
+# silently letting an unrelated, undocumented same-named file pass too.
+
+
+def test_script_execution_intent_basename_collision_is_flagged(tmp_path):
+    # bar/tool.py is genuinely documented; foo/tool.py is never documented
+    # on its own -- but shares bar/tool.py's bare basename. Before the fix,
+    # the shared token let foo/tool.py silently inherit bar/tool.py's own
+    # qualifying "Run `tool.py`" mention. The ambiguous basename must now
+    # be flagged rather than silently passed.
+    d = _write_raw(tmp_path, _simple_body("Run `tool.py` to do X."))
+    (d / "scripts" / "bar").mkdir(parents=True)
+    (d / "scripts" / "foo").mkdir(parents=True)
+    (d / "scripts" / "bar" / "tool.py").write_text("# bar\n", encoding="utf-8")
+    (d / "scripts" / "foo" / "tool.py").write_text("# foo\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["script-execution-intent-stated"]
+    assert result.passed is False
+    assert "tool.py" in result.evidence
+
+
+def test_script_execution_intent_basename_collision_flags_even_when_both_qualify(tmp_path):
+    # Disclosed trade-off, not a bug: the bare-basename token cannot tell
+    # the two colliding files apart even when EACH is individually,
+    # unambiguously documented with its own qualifying paragraph -- both
+    # paragraphs contain the exact same `` `tool.py` `` token, so the
+    # collision is still flagged rather than silently trusted. A skill
+    # hitting this is expected to disambiguate its own prose (e.g. cite
+    # the full relative path) rather than rely on the bare basename.
+    d = _write_raw(
+        tmp_path,
+        _simple_body("In scripts/foo/, run `tool.py` to do X.\n\nIn scripts/bar/, run `tool.py` to do Y."),
+    )
+    (d / "scripts" / "bar").mkdir(parents=True)
+    (d / "scripts" / "foo").mkdir(parents=True)
+    (d / "scripts" / "bar" / "tool.py").write_text("# bar\n", encoding="utf-8")
+    (d / "scripts" / "foo" / "tool.py").write_text("# foo\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["script-execution-intent-stated"]
+    assert result.passed is False
+    assert "tool.py" in result.evidence
+
+
+def test_script_execution_intent_no_collision_when_basenames_differ(tmp_path):
+    # Control: distinctly-named scripts across subdirectories are
+    # unaffected by the collision guard -- each is graded independently,
+    # matching pre-fix behavior exactly.
+    d = _write_raw(tmp_path, _simple_body("Run `bar_tool.py` to do X."))
+    (d / "scripts" / "bar").mkdir(parents=True)
+    (d / "scripts" / "foo").mkdir(parents=True)
+    (d / "scripts" / "bar" / "bar_tool.py").write_text("# bar\n", encoding="utf-8")
+    (d / "scripts" / "foo" / "foo_tool.py").write_text("# foo\n", encoding="utf-8")
     result = _by_name(css.check_shape(d))["script-execution-intent-stated"]
     assert result.passed is True
     assert result.evidence == "none"
