@@ -148,22 +148,20 @@ disallow_untyped_calls = false
 disallow_any_generics = false
 # tracking: issue #684 (.github/scripts/)
 
-# Tier C: skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py
-# (~4,440 lines, ~30% of this repo's non-test in-scope LOC by itself) is
-# already fully annotated at the def-signature level (unlike every Tier-A
-# file above), so the four flags above do not apply to it -- its live
-# mypy errors are genuine narrowing issues deep inside an already-typed,
-# deliberately adversarial-input-tolerant hand-rolled parser (issue #684's
-# own Acceptance Criteria Map named this exact file as the highest-
-# friction one and flagged it as likely needing its own override rather
-# than a full fix within this change). check_untyped_defs stays enabled
-# (matches Tier A/B's own "a real error inside typed code is still
-# caught" principle) -- only the specific narrowing-error codes actually
-# observed against this file are disabled, not the broader flags.
-[[tool.mypy.overrides]]
-module = "gitapex_check_skill_shape"
-disable_error_code = ["attr-defined", "arg-type", "operator", "no-untyped-call"]
-# tracking: issue #684 (skills/evaluating-skill-quality/scripts/)
+# Issue #758: the Tier C override formerly here for
+# skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py
+# (issue #684) is retired. That override existed for genuine mypy
+# narrowing issues deep inside a hand-rolled, adversarial-input-tolerant
+# YAML-like parser (~1,150 lines of it, deleted by this migration in
+# favor of yaml.safe_load + jsonschema.Draft202012Validator). The
+# migration's own new code hit a handful of real narrowing issues too
+# (an untyped dict.get() result flowing into functions typed against
+# dict[str, object], and a TypeGuard-shaped helper that was returning a
+# bare bool) -- each was fixed at its own call site (explicit
+# isinstance-narrowed local variables, converting
+# _valid_skill_dependency_list to TypeGuard[list[str]]) rather than
+# re-suppressed, so this file now passes mypy under this project's
+# ordinary, non-overridden settings like every other Tier A/B module.
 
 # Issue #684, task T8: gitapex_run_ablation.py/gitapex_check_dimension_coverage.py's own CLI
 # args are now validated through a pydantic model immediately after

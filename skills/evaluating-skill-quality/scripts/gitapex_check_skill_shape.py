@@ -154,16 +154,16 @@ Checks (the canonical list -- the manual fallback is to apply these):
     spec.executionRequirements.packages): the key never appearing at all
     means "not declared" (optional, passes); the key appearing with a
     blank value and no child key ever following at the next indent level
-    is real YAML null -- a real YAML parser never reads a bare block
-    header followed by a dedent as an empty mapping, so this checker
-    fails it as the wrong type rather than reading it as "declared,
-    nothing inside"; and the key appearing with at least one real child key
-    (however that child's own value turns out) is a genuine, non-null
-    mapping, checked normally -- there is no way to spell "declared, but
-    deliberately an empty mapping" in this parser's supported block-style
-    subset (it has no inline flow-mapping "{}" support anywhere), so that
-    third state does not exist for these fields the way an explicit empty
-    *list* (read: []) does for list-valued fields. This distinction does
+    is real YAML null -- fails the schema's own type: object constraint,
+    not read as "declared, nothing inside"; and the key appearing with at
+    least one real child key (however that child's own value turns out)
+    is a genuine, non-null mapping, checked normally. Issue #758: a real
+    YAML parser (unlike the hand-rolled block-style-only reader this
+    migration replaces) does support inline flow-mapping ("{}"), so
+    "declared, but deliberately an empty mapping" is now a real,
+    schema-valid third state for these fields, distinct from both absence
+    and null -- a genuine behavior change from the block-style-only
+    parser this replaces, not previously expressible. This distinction does
     NOT extend to list-valued keys (spec.references;
     spec.skillDependencies.requires/relatedTo;
     spec.executionRequirements.tools.read/write/shell;
@@ -171,12 +171,14 @@ Checks (the canonical list -- the manual fallback is to apply these):
     header is still read as an empty list, unchanged, matching each
     field's own already-established "explicit empty list is a deliberate
     statement" semantics documented above. Other
-    ungated sidecar fields (e.g. spec.evalStatus) are parsed into the spec
-    map by _parse_manifest only if written as a single inline scalar; a
-    nested/block-shaped field (e.g. evalStatus's documented baseline:/lift:
-    children) is dropped entirely, not gated/checked here or anywhere --
-    only nested maps and list items under them are skipped by the parser,
-    and indented lines are never flagged as malformed regardless of shape.
+    ungated sidecar fields (e.g. spec.evalStatus) are read into the parsed
+    spec mapping by yaml.safe_load exactly as written (issue #758: a real
+    YAML parser, not the hand-rolled one this migration replaces, which
+    had its own inline-scalar-only limitation) and never gated/checked
+    here or anywhere, regardless of shape -- the schema's own
+    additionalProperties: true at the spec level (unlike the six gated
+    keys) leaves this field, and any other unrecognized one, deliberately
+    unenforced free-form space.
     spec.externalCitations (issue #1055), if present, is a non-empty list
     of item mappings, each a flat path/role pair (path rooted at evals/ or
     docs/; role one of input-source/output-destination) with no
@@ -550,7 +552,6 @@ from __future__ import annotations
 
 import argparse
 import ast
-import datetime
 import json
 import os.path
 import re
@@ -560,6 +561,81 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from io import StringIO
 from pathlib import Path
+from typing import TypeGuard
+
+import jsonschema
+import yaml
+
+# Issue #758: the bundled skill-metadata.schema.json (kept alongside this
+# script under references/ so it travels with the skill when vendored, per
+# issue #834) is the one source of truth for the sidecar's structural
+# shape. Loaded once at import time; a missing or malformed schema file is
+# a real environment defect, not a per-check finding, so it is allowed to
+# raise here rather than being caught and silently degraded.
+_SCHEMA_PATH = Path(__file__).resolve().parent.parent / "references" / "skill-metadata.schema.json"
+SKILL_METADATA_SCHEMA: dict[str, object] = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
+_SCHEMA_VALIDATOR = jsonschema.Draft202012Validator(SKILL_METADATA_SCHEMA, format_checker=jsonschema.FormatChecker())
+
+
+def _schema_dict(node: object, *path: str) -> dict[str, object]:
+    """``node`` narrowed to ``dict[str, object]``, raising ``TypeError``
+    (naming ``path`` for context) if the bundled schema's own shape does
+    not actually hold -- a malformed bundled schema is an environment
+    defect this module should fail loudly on, not silently coerce."""
+    if not isinstance(node, dict):
+        raise TypeError(f"expected a mapping at schema path {path!r}, got {type(node).__name__}")
+    return node
+
+
+def _schema_defs() -> dict[str, object]:
+    """``SKILL_METADATA_SCHEMA["$defs"]`` -- typed as a plain dict access
+    since the schema's own top-level shape is trusted (loaded from this
+    skill's own bundled file, not untrusted input)."""
+    return _schema_dict(SKILL_METADATA_SCHEMA["$defs"], "$defs")
+
+
+def _schema_enum(*path: str) -> tuple[str, ...]:
+    """The ``enum`` (or a single-value ``const`` as a one-tuple) at
+    ``$defs<path>`` in the bundled schema, as an immutable tuple -- derives
+    a closed vocabulary from the schema itself rather than a second,
+    separately hand-maintained Python tuple that could silently drift from
+    it (the exact risk issue #734/#758 named)."""
+    node: dict[str, object] = _schema_defs()
+    for key in path:
+        node = _schema_dict(node[key], *path)
+    if "enum" in node:
+        values = node["enum"]
+        if not isinstance(values, list):
+            raise TypeError(f"expected a list at schema path {path!r}'s enum, got {type(values).__name__}")
+        return tuple(values)
+    return (node["const"],)  # type: ignore[return-value]
+
+
+def _errors_under(
+    errors: list[jsonschema.exceptions.ValidationError], *prefix: str
+) -> list[jsonschema.exceptions.ValidationError]:
+    """Every error in ``errors`` (from ``_SCHEMA_VALIDATOR.iter_errors``)
+    whose own instance path starts with ``prefix`` (e.g. ``("spec",
+    "references")``) -- how each MIGRATE-classified check (issue #758's
+    design doc, section 4.3) attributes one field's worth of schema
+    violations to its own ``CheckResult``, since a single validation pass
+    over the whole instance is cheaper than one pass per field."""
+    return [e for e in errors if tuple(str(p) for p in e.absolute_path)[: len(prefix)] == prefix]
+
+
+def _join_schema_errors(errors: list[jsonschema.exceptions.ValidationError]) -> str:
+    """One evidence string for a non-empty list of schema errors: a count
+    plus the first violation's own instance location and message. Exact
+    wording differs from the hand-rolled reader's own evidence strings
+    this migration replaces -- disclosed, expected churn (design doc
+    section 4.5), not a regression; each CheckResult's own PASS/FAIL
+    boolean and check name are what the external contract actually
+    promises, not the evidence string's exact prose."""
+    count = len(errors)
+    first = errors[0]
+    location = "/".join(str(p) for p in first.absolute_path) or "<root>"
+    return f"{count} schema violation{'' if count == 1 else 's'}: {location}: {first.message}"
+
 
 # The Claude Developer Platform Skills API enforces description <= 1024
 # chars and name <= 64 lowercase-hyphen chars (platform.claude.com/docs/
@@ -586,11 +662,6 @@ REFERENCES_ENTRY_MAX_CHARS = 500
 # mapping (outcome, free-form key/value atoms -- verdict, found, fixed,
 # open, ... -- with no closed vocabulary of its own, since real entries use
 # too varied a set of outcome facts for a fixed schema to fit).
-REFERENCES_ITEM_SUBKEYS = ("kind", "anchor", "summary", "outcome")
-REFERENCES_ITEM_REQUIRED_SUBKEYS = ("kind", "anchor", "summary")  # outcome is the one optional subkey
-# Exactly 4 spaces -- one level under spec.references' own 2-space key,
-# matching every other gated block's own fixed-indent convention.
-REFERENCES_ITEM_INDENT = 4
 # Closed vocabulary for the "kind" field, derived from the recurring entry
 # shapes actually found across every sidecar's spec.references: a
 # decision/change record, an audit-round record (a named
@@ -599,15 +670,7 @@ REFERENCES_ITEM_INDENT = 4
 # caveat, a citation-elision disclosure, or a correction/retraction of an
 # earlier entry. Not speculative -- no kind is included that the corpus
 # does not already contain an example of.
-REFERENCES_KIND_VOCAB = (
-    "decision",
-    "audit",
-    "deferral",
-    "corroboration",
-    "caveat",
-    "elision",
-    "correction",
-)
+REFERENCES_KIND_VOCAB = _schema_enum("referenceItem", "properties", "kind")
 # spec.externalCitations (issue #1055): a Portable skill's own opt-in
 # declaration that a specific evals/docs/CLAUDE.md-chapter path citation
 # names an input source or output destination, not a control dependency --
@@ -616,29 +679,13 @@ REFERENCES_KIND_VOCAB = (
 # is a flat two-field mapping (no nested "outcome" sub-block, unlike
 # spec.references' own items), structurally the simpler of the two list-of-
 # mappings fields this sidecar has.
-EXTERNAL_CITATION_ITEM_SUBKEYS = ("path", "role")
-EXTERNAL_CITATION_ITEM_REQUIRED_SUBKEYS = ("path", "role")  # both subkeys are required; no optional field here
-# Exactly 4 spaces, matching REFERENCES_ITEM_INDENT's own convention -- one
-# level under spec.externalCitations' own 2-space key.
-EXTERNAL_CITATION_ITEM_INDENT = 4
 # A repo-external path cited only as an input source (read whatever the
 # calling repository has) or an output destination (this skill's own
 # result is consumed downstream by X) is not a control dependency -- see
 # rubric.md's Portability level section. Closed vocabulary; not
 # speculative -- both values are already this repository's own established
 # vocabulary from that section's prose.
-EXTERNAL_CITATION_ROLES = ("input-source", "output-destination")
-# A declared spec.externalCitations path must be rooted at evals/ or docs/,
-# the same two prefixes REPO_PATH_CITATION_RE's own evals/docs alternative
-# gates -- this mechanism exists to rescue exactly that check's own
-# citations, so a path outside both prefixes could never be a real rescue
-# target in the first place (code-review finding, issue #1055). Mirrors
-# skill-metadata.schema.json's own externalCitationItem.path pattern; kept
-# as a separate, hand-duplicated regex here rather than shared, matching
-# this module's own established convention for a schema constraint that
-# also needs enforcing in this dependency-free parser (see
-# EXEC_REQ_NETWORK_SUBKEYS' own comment for the precedent).
-EXTERNAL_CITATION_PATH_RE = re.compile(r"^(?:evals|docs)/[A-Za-z0-9._/-]+$")
+EXTERNAL_CITATION_ROLES = _schema_enum("externalCitationItem", "properties", "role")
 # "Keep SKILL.md body under 500 lines for optimal performance" (same doc;
 # also code.claude.com/docs/en/skills).
 BODY_MAX_LINES = 500
@@ -674,84 +721,20 @@ INVOCATION_FIELD_DEFAULTS = {
 # runtime, so it can never change skill behavior.
 SIDECAR_RELATIVE_PATH = "metadata/gitapex.yaml"
 # Kubernetes-manifest-shaped envelope, borrowed as a convention only; the
-# version lets the schema grow without breaking older sidecars.
-EXPECTED_API_VERSION = "gitapex.io/v1alpha1"
-EXPECTED_KIND = "SkillMetadata"  # the sidecar's fixed manifest kind, alongside EXPECTED_API_VERSION above
-PORTABILITY_LEVELS = ("Portable", "Repository-scoped", "Mixed")  # closed vocabulary for spec.portability
-CAPABILITY_ASSUMPTIONS = ("Broad", "Frontier", "Adaptive")  # closed vocabulary for spec.capabilityAssumption
-DEPENDENCY_POLICY_LEVELS = ("StdlibOnly", "Declared")  # closed vocabulary for spec.dependencyPolicy
-# A plain "- <value>" list item, indented 2 or more spaces -- real YAML
-# accepts a block sequence indented level with its mapping key (2 spaces,
-# same as spec.references' own key) or further indented (4 spaces, this
-# repo's convention); requiring one exact width would silently drop an
-# otherwise-valid item at a different indent instead of reading it. The
-# only list shape this parser understands, and only under spec.references
-# specifically.
-REFERENCES_LIST_ITEM_RE = re.compile(r"^[ ]{2,}-\s*(.*)$")
-# An unquoted item that itself looks like a YAML mapping key ("key: value"
-# or a bare "key:"), e.g. "- path: references/rubric.md" -- real YAML
-# parses that as a single-key mapping, not a scalar string, and this
-# parser has no map-shaped-item support. A quoted string starting with
-# this same text (e.g. "\"path: something\"") is a deliberate scalar and
-# is excluded by the caller checking for a wrapping quote first.
-REFERENCES_MAPPING_LIKE_RE = re.compile(r"^[A-Za-z0-9_.-]+:(\s|$)")
-# An unquoted plain scalar that YAML's core schema resolves to something
-# OTHER than a string -- null, boolean, or numeric -- rather than the
-# string every list-of-scalar-strings field (spec.references,
-# spec.skillDependencies.requires/relatedTo,
-# spec.executionRequirements.tools.read/write/shell,
-# spec.executionRequirements.packages.<ecosystem>) assumes each of its
-# items is. Deliberately the common, uncontroversial
-# subset -- not YAML 1.1's yes/no/on/off, which are also ordinary English
-# words a legitimate capability-tag or reference string could contain --
-# rather than a full type resolver. Checked only against an UNQUOTED
-# item's raw text; a caller already tests for a wrapping quote first (the
-# same way REFERENCES_MAPPING_LIKE_RE above is only checked when
-# unquoted), since a quoted item (e.g. "\"true\"") is a deliberate string
-# regardless of its contents.
-YAML_NON_STRING_SCALAR_RE = re.compile(
-    r"^(?:~|[Nn]ull|NULL"
-    r"|[Tt]rue|TRUE|[Ff]alse|FALSE"
-    r"|[-+]?[0-9]+"
-    r"|[-+]?(?:[0-9]+\.[0-9]*|\.[0-9]+)(?:[eE][-+]?[0-9]+)?"
-    r"|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN))$"
-)
-# A real YAML comment: an unquoted "#" preceded by start-of-string or
-# whitespace -- YAML never treats a "#" glued directly onto a preceding
-# non-space character as a comment marker (e.g. "true#tag" is the
-# literal string "true#tag", not "true" plus a comment). Used only to
-# strip a trailing comment before classifying an unquoted list item's own
-# scalar type in _is_non_string_plain_scalar below -- the item's stored
-# value is unaffected either way, only the type classification is --
-# a comment-bearing item such as "true # rationale" would otherwise defeat
-# YAML_NON_STRING_SCALAR_RE's own full-string anchor, silently certifying
-# a real YAML boolean/null/numeric as a string whenever it carries a
-# trailing comment.
-_INLINE_COMMENT_RE = re.compile(r"(?:^|\s)#.*$")
-
-
-def _is_non_string_plain_scalar(raw_text: str) -> bool:
-    """Whether an UNQUOTED list item's raw text is a YAML null/boolean/
-    numeric scalar rather than a string, comment stripped first the same
-    way a real YAML parser would before resolving the item's type.
-    Shared by every gated list-of-scalar-strings site (spec.references;
-    spec.skillDependencies.requires/relatedTo;
-    spec.executionRequirements.tools.read/write/shell;
-    spec.executionRequirements.packages.<ecosystem>)."""
-    stripped = _INLINE_COMMENT_RE.sub("", raw_text).strip()
-    return bool(YAML_NON_STRING_SCALAR_RE.match(stripped))
-
-
-# spec.skillDependencies's two recognized subkeys, and the shape of their
-# lines. Subkeys sit at 4 spaces (one level under skillDependencies' own
-# 2-space key). List items accept 4 or more spaces -- real YAML allows a
-# block sequence indented level with its own key (4 spaces, same as
-# "requires:"/"relatedTo:" themselves) or further indented (this repo's
-# convention); requiring one exact width would silently drop an otherwise-
-# valid item at a different indent instead of reading it, the same
-# accommodation REFERENCES_LIST_ITEM_RE already makes for spec.references.
+# version lets the schema grow without breaking older sidecars. Derived
+# from the schema's own apiVersion/kind const values (single source of
+# truth), not a second hand-maintained literal.
+EXPECTED_API_VERSION = SKILL_METADATA_SCHEMA["properties"]["apiVersion"]["const"]  # type: ignore[index]
+EXPECTED_KIND = SKILL_METADATA_SCHEMA["properties"]["kind"]["const"]  # type: ignore[index]
+PORTABILITY_LEVELS = _schema_enum("spec", "properties", "portability")  # closed vocabulary for spec.portability
+CAPABILITY_ASSUMPTIONS = _schema_enum(
+    "spec", "properties", "capabilityAssumption"
+)  # closed vocabulary for spec.capabilityAssumption
+DEPENDENCY_POLICY_LEVELS = _schema_enum(
+    "spec", "properties", "dependencyPolicy"
+)  # closed vocabulary for spec.dependencyPolicy
+# spec.skillDependencies's two recognized subkeys.
 SKILL_DEPENDENCY_SUBKEYS = ("requires", "relatedTo")
-SKILL_DEP_LIST_ITEM_RE = re.compile(r"^[ ]{4,}-\s*(.*)$")
 
 # spec.lifecycle's three recognized sub-blocks -- "experimental" (entry
 # side: not yet proven, mirrors Rust's #[unstable(feature, issue)],
@@ -772,173 +755,22 @@ SKILL_DEP_LIST_ITEM_RE = re.compile(r"^[ ]{4,}-\s*(.*)$")
 # requires/relatedTo), but each subkey opens ANOTHER nested block of
 # scalar fields at 6 spaces, rather than a list.
 LIFECYCLE_SUBKEYS = ("experimental", "deprecated", "stable")
-LIFECYCLE_FIELDS = {
-    "experimental": ("reason", "trackingIssue", "since"),
-    "deprecated": ("reason", "replacement", "since", "removeAfter"),
-    "stable": ("since", "compatibilityGuarantee"),
-}
-LIFECYCLE_REQUIRED_FIELDS = {
-    "experimental": ("reason", "trackingIssue"),
-    "deprecated": ("reason", "replacement"),
-    "stable": ("since",),
-}
 # Kubernetes' alpha/beta/GA API-stability tiers, borrowed as spec.
 # lifecycle.stable's optional compatibilityGuarantee enum -- shape-gated
 # only; no rule ties a sibling's spec.skillDependencies.requires to this
 # value (that would be new cross-skill coupling beyond what was asked).
-COMPATIBILITY_GUARANTEE_LEVELS = ("Alpha", "Beta", "GA")
-# spec.lifecycle.renamedFrom is different in kind from the three
-# sub-blocks above: a plain scalar directly under lifecycle: (like
-# metadata.name under metadata:), never opening a nested block. Backward-
-# pointing by deliberate choice -- it lives on the *surviving* (new)
-# skill's sidecar, naming the old, now-nonexistent directory, because
-# `git mv` deletes the old directory itself, leaving nowhere to host a
-# forward-pointing renamedTo/tombstone sidecar. Free-form and NOT
-# resolved against sibling directories (unlike deprecated.replacement) --
-# the whole point is that the old name is expected to no longer exist.
-LIFECYCLE_SCALAR_KEYS = ("renamedFrom",)
-# Strict calendar-date shape for spec.lifecycle's since/removeAfter
-# fields: YYYY-MM-DD only. Real-date validity (rejecting e.g. 2026-02-30)
-# is checked separately via datetime.date.fromisoformat in
-# _valid_lifecycle_date -- this regex only gates the shape first, so that
-# lenient ISO-variant parsing in Python 3.11+ never gets a chance to
-# accept an off-shape string.
-LIFECYCLE_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-# A full GitHub issue/PR URL anchoring the whole string: any owner/repo
-# segment (metadata/gitapex.yaml is maintainer-facing provenance for
-# whichever repository actually hosts the skill directory at the time --
-# this repository today, a different one once vendored -- never something
-# a portable skill body depends on), an "issues" or "pull" segment, then a
-# digit run. Deliberately a full URL, not a bare "#123"/"owner/repo#123"
-# shape: a bare issue number means nothing once this sidecar travels with
-# its skill directory to another repository (e.g. plugin vendoring); a
-# full URL still resolves to the right place wherever it lands -- but only
-# if the owner/repo segment itself is not hardcoded to this repository's
-# own name, which would defeat that same vendoring case. Shape-only --
-# never resolved against a live GitHub API call, since this checker is
-# offline/read-only by design.
-LIFECYCLE_ISSUE_REF_RE = re.compile(
-    r"^https://github\.com/[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?/[A-Za-z0-9._-]+/(?:issues|pull)/\d+$"
-)
-
-# A YAML mapping key at a given indent, however it was written: a bare
-# scalar key (any run of characters up to the first unquoted ":" that
-# does not start with whitespace, a quote, or "#") or a single/double-
-# quoted string key. Shared by every gated block's key-recognition site
-# (spec.skillDependencies' requires/relatedTo, spec.lifecycle's
-# experimental/deprecated/stable/renamedFrom and their own nested fields).
-# Earlier per-field pairs -- a specific-name alternation regex for
-# recognized keys, plus a [A-Za-z0-9_-]+ catch-all for unrecognized ones --
-# shared one blind spot: a quoted key (`"extra": foo`) or a key containing
-# a character outside that narrow class matched NEITHER regex, so it fell
-# through both checks into the "stray content, skip silently" branch
-# instead of ever reaching unknown-key detection. Matching
-# broadly here and leaving "recognized vs. unknown" entirely to the
-# caller's own membership check closes that gap: every syntactically
-# key-shaped line at this indent is now seen as A key, so an unrecognized
-# one can no longer hide behind a narrow character class the way a
-# recognized one never had to. Still not a real YAML string lexer, though
-# -- it has no escape-sequence support and requires the closing quote to
-# be immediately followed by ":" -- so a key using an escaped quote
-# (`"ex\"tra": foo`) or whitespace before its colon (`"extra" : foo`) does
-# not match this regex either. Each of this regex's three call sites
-# handles that residual gap the same way: a line at the gated indent that
-# matches neither a list item currently being collected nor this key
-# pattern is itself flagged as unknown/malformed, not silently skipped --
-# rejecting every unmatched line at that indent, rather than only the
-# ones this regex happens to parse, is the actual fail-closed contract.
-KEY_LINE_RE_4 = re.compile(r'^[ ]{4}(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'#][^:]*?)):[ \t]*(.*)$')
-KEY_LINE_RE_6 = re.compile(r'^[ ]{6}(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'#][^:]*?)):[ \t]*(.*)$')
-# One nesting level deeper than KEY_LINE_RE_6: spec.references' own item
-# mappings nest an optional "outcome" sub-mapping (8-space indent, one
-# level under the item's own 6-space fields) -- the only field in this
-# sidecar three levels deep under spec.
-KEY_LINE_RE_8 = re.compile(r'^[ ]{8}(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'#][^:]*?)):[ \t]*(.*)$')
-# Matches a spec.references list item's own first field, given inline
-# right after its "- " marker (e.g. "kind: decision" from
-# "- kind: decision") -- same key-shape alternation as KEY_LINE_RE_4/6, but
-# with no anchored leading indent, since the "- " prefix itself already
-# consumed a variable amount of the line before this text was isolated.
-INLINE_KEY_VALUE_RE = re.compile(r'^(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'#][^:]*?)):[ \t]*(.*)$')
-
-# spec.executionRequirements' two recognized subkeys so far: "tools" and
-# "network" (issue #845), each at 4-space indent -- same depth as
-# spec.skillDependencies' requires/relatedTo and spec.lifecycle's
-# experimental/deprecated/stable. Recognized via the same shared
-# KEY_LINE_RE_4 matcher those two fields use, not a field-specific regex --
-# for consistency across all three gated blocks.
+COMPATIBILITY_GUARANTEE_LEVELS = _schema_enum("lifecycleStable", "properties", "compatibilityGuarantee")
+# spec.executionRequirements' recognized tools subkeys.
 EXEC_REQ_TOOLS_SUBKEYS = ("read", "write", "shell")
-# List items accept 6 or more spaces -- the same indent-drift tolerance
-# REFERENCES_LIST_ITEM_RE/SKILL_DEP_LIST_ITEM_RE already give their own
-# lists (an item at their own subkey's depth, or deeper). Reused verbatim
-# by spec.executionRequirements.network's own domains list below --
-# domains sits at the identical 6-space depth tools' own read/write/shell
-# lists do, so a second, byte-identical regex would add nothing.
-EXEC_REQ_TOOLS_LIST_ITEM_RE = re.compile(r"^[ ]{6,}-\s*(.*)$")
 
 # spec.executionRequirements.network's two recognized subkeys (issue #845,
 # resolving the mixed scalar-plus-list shape issue #349 deferred): "mode"
 # (a scalar enum) and "domains" (a list), in the SAME sub-block -- unlike
-# tools, whose read/write/shell are all list-valued. The parser layer below
-# does not judge which subkey should hold a scalar vs. a list; each subkey
-# is captured exactly as written (an inline value is stored as a raw
-# scalar, a blank value opens a list), the same per-subkey mechanism
-# tools' own read/write/shell already use -- type validity (mode must be a
-# recognized enum string; domains must be a list) is entirely a
-# checker-layer question (_execution_requirements_checks), never a
-# parser-layer one. This slice hand-duplicates tools' own state machine
-# (in_exec_tools/exec_tools/... -> in_exec_network/exec_network/...) rather
-# than extracting a shared generic-subblock helper both could call -- the
-# existing tools state machine is threaded through this loop via several
-# mutually exclusive `nonlocal` flags, and a real extraction touching that
-# already-proven path was judged higher regression risk than the size of
-# this slice's own scope justifies. A future mixed-shape category (mcp,
-# per issue #349's own deferral) can copy this block's shape directly, but
-# still cannot literally reuse it as a function without that extraction --
-# stated explicitly here per this issue's own disclosure requirement,
-# rather than silently claiming a generalization that was not attempted.
+# tools, whose read/write/shell are all list-valued.
 EXEC_REQ_NETWORK_SUBKEYS = ("mode", "domains")
-EXEC_REQ_NETWORK_MODES = ("disabled", "allowlist", "unrestricted")  # closed vocabulary for network.mode
-
-# spec.executionRequirements' third recognized block sub-key: "packages" --
-# the first whose own subkeys are NOT a fixed, closed tuple the way tools'
-# read/write/shell (EXEC_REQ_TOOLS_SUBKEYS) and network's mode/domains
-# (EXEC_REQ_NETWORK_SUBKEYS) are. A package ecosystem (pip, npm, cargo, ...)
-# is an open-ended set by design -- skill-metadata.schema.json's own
-# executionRequirementsPackages deliberately declares no closed enum of
-# supported ecosystems, via propertyNames rather than a fixed properties
-# list -- so unknown-subkey detection here must be a REGEX match against
-# that same pattern, not a tuple-membership check: a future ecosystem
-# becomes usable with no parser change, matching the schema's own design
-# intent. Kept as a separate, hand-duplicated regex here rather than
-# imported from the schema (the same precedent EXTERNAL_CITATION_PATH_RE
-# already established for a schema constraint that also needs enforcing in
-# this dependency-free, no-YAML-library parser).
-EXEC_REQ_PACKAGES_KEY_RE = re.compile(r"^[a-z][a-z0-9-]*$")
-# Detects a line that LOOKS like an attempted "- <value>" packages list item
-# (a "-" as its first non-whitespace character, tabs included) but whose
-# leading whitespace fails EXEC_REQ_TOOLS_LIST_ITEM_RE's own strict "6 or
-# more literal SPACE characters" requirement -- a tab anywhere in the
-# indent, or fewer than 6 spaces. Used only to distinguish that case from a
-# packages ecosystem list genuinely ending (a real dedent, or a new sibling
-# ecosystem key) while collecting_exec_packages_list is open: without it, a
-# line like "\t- some-package" (or "  - some-package", 2 spaces) silently
-# finalizes the list as empty -- indistinguishable from the package truly
-# never having been declared -- instead of being recorded into
-# malformed_execution_requirement_packages_items the way an item
-# EXEC_REQ_TOOLS_LIST_ITEM_RE itself rejects (mapping-shaped, wrong type)
-# already is. Cannot collide with a legitimate new KEY_LINE_RE_6 sibling
-# key: whenever this matches AND the strict item regex already failed, the
-# leading whitespace run is provably not "exactly 6 literal spaces" (either
-# shorter, or tab-containing), which KEY_LINE_RE_6 requires verbatim -- so
-# the two can never both match the same line. Scoped to packages only, per
-# this fix's own issue: tools' and network's own sibling list-item blocks
-# (collecting_exec_tools_list/collecting_exec_network_list below) share this
-# exact latent gap -- no equivalent fail-closed check exists at their own
-# list-item level either, only at the surrounding key level -- and are
-# deliberately left as-is here rather than silently duplicating the fix
-# beyond this issue's own scope.
-EXEC_REQ_PACKAGES_MISINDENTED_ITEM_RE = re.compile(r"^[ \t]*-\s*(.*)$")
+EXEC_REQ_NETWORK_MODES = _schema_enum(
+    "executionRequirementsNetwork", "properties", "mode"
+)  # closed vocabulary for network.mode
 
 TAG_RE = re.compile(r"</?[A-Za-z][^>]*>")
 # A YAML plain (unquoted) scalar cannot safely contain ": " (colon followed
@@ -1445,1354 +1277,21 @@ def _unquote(value: str) -> str:
     return value
 
 
-def _strip_bare_comment(value: str) -> str:
-    """Return ``value`` unchanged, unless it is an UNQUOTED value that
-    starts with ``#`` -- real YAML never allows an unquoted scalar to
-    start with ``#`` (that always opens a comment, making the actual
-    value null/absent), so such a ``value`` must read as empty here too.
-
-    This parser otherwise deliberately does not strip inline comments
-    (see ``_parse_manifest``'s docstring: trailing ``# comment`` text
-    after a real value is read as part of that value, "safe" because it
-    fails closed against the expected enum/literal). That reasoning does
-    NOT hold when the field's own valid shape can itself start with
-    ``#`` -- e.g. ``spec.lifecycle.experimental.trackingIssue: #123``
-    (unquoted) is real YAML for "trackingIssue is null", not the literal
-    string ``"#123"``, yet ``"#123"`` is exactly this field's valid
-    shape, so the old fails-closed argument fails open here instead.
-    Used only by the three ``spec.lifecycle`` value-extraction sites
-    (block-open decision, leaf fields, ``renamedFrom``) -- not applied
-    to every other sidecar scalar, since none of their valid shapes start
-    with ``#`` the way an issue reference does, and rewriting the whole
-    parser's comment handling is a larger, separate change than this
-    field's specific collision.
-    """
-    return "" if value.startswith("#") else value
-
-
-def _match_key_line(pattern: re.Pattern[str], line: str) -> tuple[str, str] | None:
-    """Match ``line`` against ``pattern`` (``KEY_LINE_RE_4`` or
-    ``KEY_LINE_RE_6``). Returns ``(key, value)`` with the key already
-    unquoted (a quoted key's own quote characters are never part of the
-    key name) and the value right-stripped, or ``None`` if ``line`` is not
-    a key-shaped line at that indent. The one shared recognition site
-    every gated block's key handling uses -- callers decide
-    "recognized vs. unknown" themselves via membership in their own set of
-    valid names; this function only decides "is this syntactically a key
-    at all," so an unrecognized key can never again bypass detection by
-    virtue of being quoted or containing a character a narrower per-field
-    regex did not anticipate.
-    """
-    m = pattern.match(line)
-    if not m:
-        return None
-    key = m.group(1) if m.group(1) is not None else (m.group(2) if m.group(2) is not None else m.group(3))
-    return key, m.group(4).strip()
-
-
-@dataclass(frozen=True)
-class ManifestParse:
-    """Result of ``_parse_manifest``: the parsed top-level mapping plus any
-    malformed top-level lines found alongside it.
-
-    ``malformed_lines`` holds each offending line (trimmed), in file order --
-    empty when the sidecar's top-level structure is clean. See
-    ``_parse_manifest`` for the exact malformed-line rule.
-
-    ``malformed_reference_items`` holds each spec.references list item's
-    own opening line (trimmed) that could not be read as a well-formed
-    item mapping -- an indent inconsistent with the rest of its own list,
-    an opening line not shaped like "<key>: <value>" at all (e.g. the
-    plain-scalar or pipe-delimited-string shapes this field used before),
-    an opening key outside REFERENCES_ITEM_SUBKEYS, or an otherwise
-    well-opened item missing one of REFERENCES_ITEM_REQUIRED_SUBKEYS
-    (``kind``/``anchor``/``summary``) by the time it closes. Empty when
-    every item in every spec.references list parsed cleanly. Unlike
-    ``malformed_lines``, these are indented lines; they would otherwise be
-    silently skipped by this parser's own "indented lines are never
-    malformed" rule, which is why they need this separate, explicit
-    channel rather than reusing ``malformed_lines``.
-
-    ``unknown_reference_item_keys`` holds each key found inside an
-    otherwise-well-opened spec.references item that is not one of
-    REFERENCES_ITEM_SUBKEYS (trimmed line, e.g. "notes: foo") -- the
-    item's other recognized fields still parse normally; only the stray
-    key itself is flagged, the same asymmetry
-    ``unknown_lifecycle_fields``/``unknown_skill_dependency_keys`` already
-    use for their own sibling fields.
-
-    ``malformed_skill_dependency_items`` and ``unknown_skill_dependency_keys``
-    are spec.skillDependencies' equivalents: the former holds each
-    requires/relatedTo list item that is mapping-shaped or inconsistently
-    indented (same rule as ``malformed_reference_items``, one nesting level
-    deeper); the latter holds each key found directly under
-    spec.skillDependencies that is not ``requires`` or ``relatedTo``
-    (trimmed line, e.g. "extra: foo"). Both empty when the field is absent
-    or parsed cleanly.
-
-    ``unknown_lifecycle_keys`` and ``unknown_lifecycle_fields`` are
-    spec.lifecycle's equivalents, one nesting level deeper again:
-    ``unknown_lifecycle_keys`` holds each key found directly under
-    spec.lifecycle that is not ``experimental``, ``deprecated``,
-    ``stable``, or ``renamedFrom`` (trimmed line); ``unknown_lifecycle_fields``
-    holds each key found inside any of the three block sub-keys
-    (``experimental``/``deprecated``/``stable``) that is not one of its
-    own recognized fields (e.g. "extra: foo" under experimental). Both
-    empty when the field is absent or parsed cleanly. There is no
-    malformed-item channel for spec.lifecycle the way
-    spec.references/spec.skillDependencies have one for list items --
-    every leaf under spec.lifecycle is a plain scalar, so a wrong-type
-    value is simply stored as the raw string by the field parser and
-    fails the downstream well-formed check on shape, with nothing that
-    needs a separate parse-time detection channel.
-
-    ``unknown_execution_requirement_keys``, ``unknown_execution_requirement_tools_keys``,
-    and ``malformed_execution_requirement_tools_items`` are
-    spec.executionRequirements' equivalents: the first holds each key found directly under
-    spec.executionRequirements that is not ``tools``, ``packages``, or
-    ``network`` (only three recognized keys exist so far -- further
-    categories are deferred to sibling child issues, and any other key
-    here is unknown, not reserved space); the second holds each key found
-    directly under ``tools`` that is not ``read``, ``write``, or
-    ``shell``; the third holds each
-    read/write/shell list item that is mapping-shaped or inconsistently
-    indented, the same rule ``malformed_reference_items``/
-    ``malformed_skill_dependency_items`` use one nesting level shallower.
-    All three empty when the field is absent or parsed cleanly.
-
-    ``unknown_execution_requirement_network_keys`` and
-    ``malformed_execution_requirement_network_items`` are ``network``'s own
-    equivalents to ``unknown_execution_requirement_tools_keys``/
-    ``malformed_execution_requirement_tools_items``: the first holds each
-    key found directly under ``network`` that is not ``mode`` or
-    ``domains``; the second holds each ``domains`` list item that is
-    mapping-shaped or inconsistently indented. Both empty when the field
-    is absent or parsed cleanly.
-
-    ``unknown_execution_requirement_packages_keys`` and
-    ``malformed_execution_requirement_packages_items`` are ``packages``'s
-    own equivalents, differing from ``tools``'/``network``'s in HOW both
-    are populated: since ``packages``' own subkeys are free-form
-    ecosystem identifiers rather than a fixed tuple (see
-    EXEC_REQ_PACKAGES_KEY_RE), the first holds each key found directly
-    under ``packages`` that does NOT match EXEC_REQ_PACKAGES_KEY_RE's own
-    pattern (a regex mismatch, not a tuple-membership miss); the second
-    holds each per-ecosystem list item that is mapping-shaped or
-    inconsistently indented, the same rule every other malformed-item
-    channel above uses, PLUS one packages-only addition
-    (EXEC_REQ_PACKAGES_MISINDENTED_ITEM_RE, see its own comment): a line
-    that looks like an attempted "- <value>" item (a "-" as its first
-    non-whitespace character) but whose leading whitespace fails the
-    strict list-item regex's own "6 or more literal spaces" requirement
-    -- a tab, or fewer than 6 spaces -- is ALSO recorded here rather than
-    silently finalizing the list as empty, indistinguishable from the
-    package never having been declared at all. tools'/network's own
-    sibling list-item blocks do not have this addition; see
-    EXEC_REQ_PACKAGES_MISINDENTED_ITEM_RE's own comment for why that gap
-    is deliberately left as-is there. Both empty when the field is absent
-    or parsed cleanly.
-
-    ``malformed_external_citation_items`` and
-    ``unknown_external_citation_item_keys`` are spec.externalCitations'
-    equivalents to ``malformed_reference_items``/
-    ``unknown_reference_item_keys`` (issue #1055): the former holds each
-    externalCitations list item's own opening line (trimmed) that could
-    not be read as a well-formed item mapping (bad indent, not "<key>:
-    <value>" shaped, an opening key outside EXTERNAL_CITATION_ITEM_SUBKEYS,
-    or missing ``path``/``role`` by the time it closes); the latter holds
-    each key found inside an otherwise-well-opened item that is not
-    ``path``/``role``. Both empty when the field is absent or parsed
-    cleanly.
-    """
-
-    root: dict[str, object]
-    malformed_lines: list[str]
-    malformed_reference_items: list[str]
-    unknown_reference_item_keys: list[str]
-    malformed_skill_dependency_items: list[str]
-    unknown_skill_dependency_keys: list[str]
-    unknown_lifecycle_keys: list[str]
-    unknown_lifecycle_fields: list[str]
-    unknown_execution_requirement_keys: list[str]
-    unknown_execution_requirement_tools_keys: list[str]
-    malformed_execution_requirement_tools_items: list[str]
-    unknown_execution_requirement_packages_keys: list[str]
-    malformed_execution_requirement_packages_items: list[str]
-    unknown_execution_requirement_network_keys: list[str]
-    malformed_execution_requirement_network_items: list[str]
-    malformed_external_citation_items: list[str]
-    unknown_external_citation_item_keys: list[str]
-
-
-def _parse_manifest(text: str) -> ManifestParse:
-    """Parse the YAML subset the metadata sidecar is specified to use.
-
-    Reads top-level 'key: value' scalars and exactly-two-space-indented
-    scalars under a top-level map (metadata:, spec:). Two exceptions:
-
-    - spec.references (and only that key, and only directly under spec) is
-      read as a list whose items are themselves mappings -- one
-      maintainer-facing provenance event each (see the design spec's
-      Sub-project C and its issue #488 follow-up). Each item opens with a
-      "- <key>: <value>" line (its first field given inline right after
-      the dash) at exactly 4-space indent, with further recognized fields
-      as "<key>: <value>" continuation lines at exactly 6-space indent --
-      one level deeper, matching every other gated block's own indent-
-      doubling convention. Recognized keys: ``kind`` (required, a closed
-      vocabulary -- REFERENCES_KIND_VOCAB), ``anchor`` (required, the
-      provenance source), ``summary`` (required, free prose), and
-      ``outcome`` (optional, itself an empty-value key opening a further
-      nested mapping of free-form key/value atoms at 8-space indent --
-      KEY_LINE_RE_8 -- with no closed vocabulary of its own). A key inside
-      an item other than these four is collected into
-      ``ManifestParse.unknown_reference_item_keys`` instead of being
-      silently skipped, the same reasoning
-      ``unknown_skill_dependency_keys`` documents below; an item whose own
-      opening line is not "<key>: <value>" shaped at all, opens with an
-      unrecognized key, is indented inconsistently with the rest of its
-      own list, or is missing one of the three required keys by the time
-      it closes is collected (its opening line, trimmed) into
-      ``ManifestParse.malformed_reference_items`` and excluded from the
-      parsed list entirely, rather than kept as a partial or garbled item.
-    - spec.skillDependencies (and only that key, and only directly under
-      spec) is read as a mapping with exactly two recognized subkeys,
-      ``requires`` and ``relatedTo`` (see the design spec's Sub-project D).
-      Each subkey, at exactly 4-space indent, is either an inline empty
-      list (``requires: []``) or an empty value opening a block list of
-      "- <value>" items at 4 or more spaces indent -- the same depth as
-      the subkey's own line, or deeper, with the same per-item shape rules
-      (mapping-like-item and indent-consistency detection) and the same
-      indent-drift tolerance as spec.references' items. A key inside
-      spec.skillDependencies other than ``requires``/``relatedTo`` is
-      collected into ``ManifestParse.unknown_skill_dependency_keys``
-      instead of being silently skipped, since an unrecognized key here is
-      a real shape defect the checker is expected to catch, not reserved
-      space. Every gated block's key recognition (this one, spec.lifecycle's
-      below, and any future one) shares one key-line matcher,
-      ``_match_key_line`` over ``KEY_LINE_RE_4``/``KEY_LINE_RE_6`` --
-      it recognizes a bare OR quoted YAML key as A key regardless of its
-      characters, leaving "recognized vs. unknown" entirely to the
-      caller's own membership check. A narrower, name-specific regex used
-      to do both jobs at once (matching only the recognized names, with a
-      separate ``[A-Za-z0-9_-]+`` catch-all for everything else); a quoted
-      key (``"extra": foo``) or a key containing a character outside that
-      narrow class matched neither regex and fell through both into the
-      "stray content, skip silently" branch instead of ever reaching
-      unknown-key detection (issue #356).
-    - spec.lifecycle (and only that key, and only directly under spec) is
-      read as a mapping with exactly three recognized block sub-keys --
-      ``experimental``, ``deprecated``, ``stable`` -- plus one recognized
-      plain scalar key, ``renamedFrom``. Each block sub-key, at exactly
-      4-space indent, is an empty value opening a nested block of scalar
-      fields at exactly 6-space indent (``reason``/``trackingIssue``/
-      ``since`` for ``experimental``; ``reason``/``replacement``/
-      ``since``/``removeAfter`` for ``deprecated``; ``since``/
-      ``compatibilityGuarantee`` for ``stable``). ``renamedFrom``, also
-      at 4-space indent, takes an inline scalar value directly instead of
-      opening a block -- structurally like ``metadata.name`` under
-      ``metadata:``, not like the other three. One nesting level deeper
-      than spec.skillDependencies, but with scalar leaves instead of a
-      list -- there is no list-item shape inside spec.lifecycle at all. A
-      key directly under spec.lifecycle other than one of these four is
-      collected into ``ManifestParse.unknown_lifecycle_keys``; a key
-      inside any of the three block sub-keys that is not one of its own
-      recognized fields is collected into
-      ``ManifestParse.unknown_lifecycle_fields`` -- both instead of being
-      silently skipped, for the same reason
-      ``unknown_skill_dependency_keys`` exists. A block sub-key header
-      written as an inline scalar instead of opening a block (e.g.
-      ``experimental: true``) is stored as that raw scalar under its own
-      key, exactly as spec.skillDependencies' non-list scalar fallback
-      works, so the checker layer reports it as the wrong type rather
-      than silently dropping it -- and symmetrically, ``renamedFrom``
-      given a block instead of a scalar (e.g. nested children under
-      ``renamedFrom:``) is detected one line later (see
-      ``lifecycle_scalar_pending`` in the parsing loop below) and stored
-      as an empty mapping, so it fails the same way in reverse.
-    - spec.executionRequirements (and only that key, and only directly
-      under spec) is read as a mapping with exactly one recognized
-      block sub-key so far, ``tools`` (issue #349, #307 Workstream W1
-      first slice -- further categories are deferred to sibling child
-      issues). ``tools``, at exactly 4-space indent, is an empty value
-      opening a nested block of list-of-scalars fields at exactly
-      6-space indent: ``read``/``write``/``shell``, each either an
-      inline empty list (``read: []``) or an empty value opening a
-      block list of "- <value>" items at 6 or more spaces indent -- the
-      same per-item shape rules and indent-drift tolerance
-      spec.skillDependencies' requires/relatedTo already use, one
-      nesting level deeper. A key directly under
-      spec.executionRequirements other than ``tools`` is collected into
-      ``ManifestParse.unknown_execution_requirement_keys``; a key inside
-      ``tools`` other than ``read``/``write``/``shell`` is collected into
-      ``ManifestParse.unknown_execution_requirement_tools_keys`` -- both
-      instead of being silently skipped, for the same reason
-      ``unknown_skill_dependency_keys`` exists. A malformed (mapping-shaped
-      or inconsistently indented) list item under any of the three tools
-      subkeys is collected into
-      ``ManifestParse.malformed_execution_requirement_tools_items``.
-    - spec.executionRequirements' second recognized block sub-key (issue
-      #845): ``network``, structurally parallel to ``tools`` above -- also
-      an empty value opening a nested block at 6-space indent, also
-      finalizing to real YAML null when its own header sees zero child
-      key lines. Its own two subkeys, ``mode``/``domains``, are each
-      captured the identical way tools' own read/write/shell are: an
-      inline non-blank value is stored as a raw scalar (``mode``'s normal,
-      valid case: ``mode: disabled``); a blank value opens a list of
-      "- <value>" items at 6-or-more-space indent, reusing
-      ``EXEC_REQ_TOOLS_LIST_ITEM_RE`` verbatim (``domains``'s normal, valid
-      case). The parser draws no distinction between the two subkeys --
-      whether a stored value is the "right" shape for its own key (mode as
-      a scalar, domains as a list) is left entirely to
-      ``_execution_requirements_checks``, exactly as it already is for
-      tools' own three list-only subkeys. A key inside ``network`` other
-      than ``mode``/``domains`` is collected into
-      ``ManifestParse.unknown_execution_requirement_network_keys``; a
-      malformed ``domains`` list item is collected into
-      ``ManifestParse.malformed_execution_requirement_network_items``.
-    - spec.executionRequirements' third recognized block sub-key:
-      ``packages``, also an empty value opening a nested block at 6-space
-      indent, also finalizing to real YAML null when its own header sees
-      zero child key lines -- but unlike ``tools``' fixed
-      read/write/shell and ``network``'s fixed mode/domains, ``packages``'
-      own subkeys are free-form ecosystem identifiers (``pip``, ``npm``,
-      ...) matching ``EXEC_REQ_PACKAGES_KEY_RE``, not a closed tuple,
-      mirroring skill-metadata.schema.json's own
-      executionRequirementsPackages.propertyNames pattern (no closed enum
-      of supported ecosystems, so a future ecosystem needs no parser
-      change to become recognized). Each ecosystem key matching that
-      pattern is captured the same way tools' own read/write/shell are:
-      an inline non-blank value is stored as a raw scalar (the wrong
-      shape for a package list, caught downstream by
-      ``_execution_requirements_checks``); a blank value opens a list of
-      "- <value>" items at 6-or-more-space indent, reusing
-      ``EXEC_REQ_TOOLS_LIST_ITEM_RE`` verbatim (the same depth-reuse
-      ``domains`` above already established -- an ecosystem key sits at
-      the identical 6-space depth tools' own read/write/shell and
-      network's mode/domains do). A key under ``packages`` NOT matching
-      ``EXEC_REQ_PACKAGES_KEY_RE`` is collected into
-      ``ManifestParse.unknown_execution_requirement_packages_keys``
-      instead of being silently skipped; a malformed per-ecosystem list
-      item is collected into
-      ``ManifestParse.malformed_execution_requirement_packages_items``.
-
-    Every other nested map or list (e.g. spec.evalStatus) is still
-    deliberately skipped, exactly as before: skipping keeps this
-    stdlib-only with no YAML dependency. Inline '# comment' text after a
-    value on the same line is not stripped -- it is read as part of the
-    value, which is safe (fails closed against the expected enum/literal)
-    but is not a supported way to annotate a sidecar field. Exception:
-    every gated-block-opening site (the top-level ``nested`` dispatch for
-    spec.references/skillDependencies/lifecycle/executionRequirements;
-    spec.skillDependencies' own requires/relatedTo; spec.lifecycle's
-    experimental/deprecated/stable and their own value-extraction sites;
-    spec.executionRequirements' own tools; and tools' own
-    read/write/shell) strips a value that is NOTHING BUT a comment
-    (starts with ``#`` unquoted) down to empty via
-    ``_strip_bare_comment`` before deciding whether that value is blank,
-    since real YAML never allows an unquoted scalar to start with ``#``
-    (it always opens a comment there) -- the general "fails closed"
-    reasoning above does not hold when a blank-vs-not decision gates
-    whether a whole nested block opens at all: a code-review finding
-    caught that ``executionRequirements:  # not yet fully specified``
-    (and the equivalent for every other gated block/list-opening key)
-    read the comment as a literal, wrong-type scalar value instead of a
-    blank one, silently discarding everything nested underneath it
-    before this fix. Applies one level deeper too, for the same reason:
-    ``experimental.trackingIssue``'s ``#123``/``owner/repo#123`` shape
-    means an unquoted ``trackingIssue: #123`` must read as absent, not as
-    the literal string ``"#123"`` a quoted value would give.
-
-    A top-level (column-0) line that is not blank, not a '#' comment, not a
-    YAML document marker ('---' or '...'), and does not match the top-level
-    'key:' pattern is malformed -- e.g. a stray '- invalid mapping entry'
-    that real PyYAML would reject with a ParserError. Every such line is
-    collected (trimmed) into the returned ``ManifestParse.malformed_lines``,
-    so a caller can fail the sidecar even though this permissive parser
-    itself does not raise. Indented lines are NEVER considered malformed
-    this same way -- every indented line belongs to nested/list structures
-    this parser deliberately does not interpret, and flagging them would
-    defeat that reserved-field design. spec.references and
-    spec.skillDependencies list items are the exceptions with their own
-    malformed channels, though the two fields' own item shapes differ
-    (references' own items are mappings; skillDependencies.requires/
-    relatedTo's are still plain scalar strings): a spec.references item
-    not shaped like "<key>: <value>" at all, indented inconsistently with
-    the rest of its own list, opening with an unrecognized key, or missing
-    a required field by the time it closes is collected (its opening
-    line, trimmed) into ``ManifestParse.malformed_reference_items`` (see
-    this field's own fuller description above); a
-    spec.skillDependencies.requires/relatedTo item shaped like an
-    unquoted YAML mapping key ("path: foo", real YAML would read that as
-    a nested mapping, not the scalar string this list still expects), one
-    indented inconsistently with the rest of its own list, or an unquoted
-    null/boolean/numeric scalar (issue #356: real YAML resolves e.g.
-    "true"/"123"/"null" to that type, not a string) is collected the same
-    way into ``ManifestParse.malformed_skill_dependency_items`` -- both
-    instead of being silently accepted as a garbled or wrongly-typed
-    value.
-
-    Every gated *mapping*-valued block (spec.skillDependencies,
-    spec.lifecycle and its experimental/deprecated/stable sub-blocks,
-    spec.executionRequirements, spec.executionRequirements.tools,
-    spec.executionRequirements.network) stores
-    ``None`` -- real YAML null -- rather than ``{}`` when its own block
-    header was seen with zero child key lines ever following it at the
-    next indent level (issue #356, ACM row 2): a bare block header
-    immediately followed by a dedent is null under any real YAML parser,
-    never an empty-but-present mapping, so this parser must not silently
-    promote that shape to ``{}`` the way an earlier version of it did. A
-    block that does see at least one child key line (however that
-    child's own value turns out) still stores a real, non-null ``dict``.
-    This null/non-null distinction is orthogonal to whether the key
-    appears in its parent dict at all -- a key that never appears means
-    "not declared" (the pre-existing, unaffected "absent" state); only a
-    key that DOES appear, with nothing under it, newly resolves to
-    ``None`` instead of ``{}``. List-valued keys under these same blocks
-    (requires/relatedTo, tools.read/write/shell, network.domains) are NOT
-    affected by this change -- a blank list header still parses to ``[]``, per each
-    field's own pre-existing "explicit empty list" semantics.
-    """
-    text = text.lstrip("\ufeff")  # strip a leading UTF-8 BOM, as _parse_frontmatter does
-    root: dict[str, object] = {}
-    current: dict[str, object] | None = None
-    collecting_refs: list[dict[str, object]] | None = None
-    # The spec.references item mapping currently being read (between its
-    # own "- <key>: <value>" opening line and either the next item, a
-    # dedent, or end of file); None between items. current_ref_item_valid
-    # goes False the moment the item's own opening line or any of its
-    # fields turns out malformed, so the item is excluded at finalization
-    # even though its now-known-garbage lines are still consumed here
-    # (not left to desync the references list's own end-of-block
-    # detection). current_ref_open_line is the item's own opening line
-    # (trimmed), kept only for evidence messages.
-    current_ref_item: dict[str, object] | None = None
-    current_ref_item_valid = True
-    current_ref_open_line = ""
-    # Non-None while inside that item's own optional "outcome:" nested
-    # mapping (one level deeper still -- see KEY_LINE_RE_8).
-    current_ref_outcome: dict[str, object] | None = None
-    malformed: list[str] = []
-    malformed_refs: list[str] = []
-    unknown_ref_item_keys: list[str] = []
-    # spec.externalCitations' own state, structurally parallel to
-    # spec.references' above but simpler -- each item is a flat two-field
-    # mapping (path/role) with no nested "outcome" sub-block.
-    collecting_ext_citations: list[dict[str, object]] | None = None
-    current_ext_citation_item: dict[str, object] | None = None
-    current_ext_citation_item_valid = True
-    current_ext_citation_open_line = ""
-    malformed_ext_citations: list[str] = []
-    unknown_ext_citation_item_keys: list[str] = []
-    in_skill_deps = False
-    skill_deps: dict[str, object] = {}
-    # Whether spec.skillDependencies has seen at least one real child line
-    # (a recognized or unknown key) since it was opened -- distinguishes a
-    # block header left with nothing under it (real YAML null) from one
-    # that genuinely has content, however malformed.
-    # Mirrored by lifecycle_has_content/lifecycle_subkey_has_content/
-    # exec_req_has_content/exec_tools_has_content below, one per gated
-    # mapping block.
-    skill_deps_has_content = False
-    collecting_dep_list: list[str] | None = None
-    collecting_dep_key: str | None = None
-    dep_list_indent: int | None = None
-    malformed_deps: list[str] = []
-    unknown_dep_keys: list[str] = []
-    in_lifecycle = False
-    lifecycle: dict[str, object] = {}
-    lifecycle_has_content = False
-    lifecycle_subkey: str | None = None
-    lifecycle_field_buffer: dict[str, object] = {}
-    lifecycle_subkey_has_content = False
-    unknown_lifecycle_keys: list[str] = []
-    unknown_lifecycle_fields: list[str] = []
-    # Set when a scalar-only lifecycle key (currently only renamedFrom) is
-    # seen with a blank/comment-only value -- deferred one line, since that
-    # shape is ambiguous until the next line is known: it is either a
-    # legitimately absent declaration (next line dedents or is a sibling),
-    # or the start of a wrongly block-shaped value (next line is more
-    # deeply indented than spec.lifecycle's own 4-space level). See the
-    # "if lifecycle_scalar_pending is not None:" handling below.
-    lifecycle_scalar_pending: str | None = None
-    in_execution_requirements = False
-    execution_requirements: dict[str, object] = {}
-    exec_req_has_content = False
-    in_exec_tools = False
-    exec_tools: dict[str, object] = {}
-    exec_tools_has_content = False
-    collecting_exec_tools_list: list[str] | None = None
-    collecting_exec_tools_key: str | None = None
-    exec_tools_list_indent: int | None = None
-    malformed_exec_tools_items: list[str] = []
-    unknown_exec_req_keys: list[str] = []
-    unknown_exec_tools_keys: list[str] = []
-    # packages' own state, structurally parallel to exec_tools' above (see
-    # EXEC_REQ_NETWORK_SUBKEYS' own comment for why this is a hand-
-    # duplicated analog rather than a shared helper -- a third parallel
-    # block here rather than an extraction, same precedent, same
-    # regression-risk-vs-scope tradeoff). Unlike exec_tools/exec_network,
-    # unknown_exec_packages_keys is populated by a REGEX mismatch
-    # (EXEC_REQ_PACKAGES_KEY_RE), not a tuple-membership miss -- see the
-    # parsing loop below.
-    in_exec_packages = False
-    exec_packages: dict[str, object] = {}
-    exec_packages_has_content = False
-    collecting_exec_packages_list: list[str] | None = None
-    collecting_exec_packages_key: str | None = None
-    exec_packages_list_indent: int | None = None
-    malformed_exec_packages_items: list[str] = []
-    unknown_exec_packages_keys: list[str] = []
-    # network's own state, structurally parallel to exec_tools' above (see
-    # EXEC_REQ_NETWORK_SUBKEYS' own comment for why this is a hand-
-    # duplicated analog rather than a shared helper).
-    in_exec_network = False
-    exec_network: dict[str, object] = {}
-    exec_network_has_content = False
-    collecting_exec_network_list: list[str] | None = None
-    collecting_exec_network_key: str | None = None
-    exec_network_list_indent: int | None = None
-    malformed_exec_network_items: list[str] = []
-    unknown_exec_network_keys: list[str] = []
-
-    def _finalize_ref_outcome() -> None:
-        nonlocal current_ref_outcome
-        if current_ref_outcome is not None and current_ref_item is not None:
-            current_ref_item["outcome"] = current_ref_outcome if current_ref_outcome else None
-        current_ref_outcome = None
-
-    def _finalize_current_ref_item() -> None:
-        nonlocal current_ref_item, current_ref_item_valid, current_ref_open_line
-        _finalize_ref_outcome()
-        if current_ref_item is not None:
-            missing = [k for k in REFERENCES_ITEM_REQUIRED_SUBKEYS if k not in current_ref_item]
-            if current_ref_item_valid and missing:
-                joined = ", ".join(missing)
-                malformed_refs.append(f"{current_ref_open_line} (missing required field(s): {joined})")
-            elif current_ref_item_valid and collecting_refs is not None:
-                collecting_refs.append(current_ref_item)
-        current_ref_item = None
-        current_ref_item_valid = True
-        current_ref_open_line = ""
-
-    def _finalize_refs() -> None:
-        nonlocal collecting_refs
-        _finalize_current_ref_item()
-        if collecting_refs is not None and current is not None:
-            current["references"] = collecting_refs
-        collecting_refs = None
-
-    def _finalize_current_ext_citation_item() -> None:
-        nonlocal current_ext_citation_item, current_ext_citation_item_valid, current_ext_citation_open_line
-        if current_ext_citation_item is not None:
-            missing = [k for k in EXTERNAL_CITATION_ITEM_REQUIRED_SUBKEYS if k not in current_ext_citation_item]
-            if current_ext_citation_item_valid and missing:
-                joined = ", ".join(missing)
-                malformed_ext_citations.append(
-                    f"{current_ext_citation_open_line} (missing required field(s): {joined})"
-                )
-            elif current_ext_citation_item_valid and collecting_ext_citations is not None:
-                collecting_ext_citations.append(current_ext_citation_item)
-        current_ext_citation_item = None
-        current_ext_citation_item_valid = True
-        current_ext_citation_open_line = ""
-
-    def _finalize_ext_citations() -> None:
-        nonlocal collecting_ext_citations
-        _finalize_current_ext_citation_item()
-        if collecting_ext_citations is not None and current is not None:
-            current["externalCitations"] = collecting_ext_citations
-        collecting_ext_citations = None
-
-    def _finalize_dep_list() -> None:
-        nonlocal collecting_dep_list, collecting_dep_key, dep_list_indent
-        if collecting_dep_list is not None and collecting_dep_key is not None:
-            skill_deps[collecting_dep_key] = collecting_dep_list
-        collecting_dep_list = None
-        collecting_dep_key = None
-        dep_list_indent = None
-
-    def _finalize_skill_deps() -> None:
-        nonlocal in_skill_deps, skill_deps, skill_deps_has_content
-        _finalize_dep_list()
-        if in_skill_deps and current is not None:
-            # A block header with zero real children ever seen is real
-            # YAML null, not an empty-but-present mapping.
-            current["skillDependencies"] = skill_deps if skill_deps_has_content else None
-        in_skill_deps = False
-        skill_deps = {}
-        skill_deps_has_content = False
-
-    def _finalize_lifecycle_subkey() -> None:
-        nonlocal lifecycle_subkey, lifecycle_field_buffer, lifecycle_subkey_has_content
-        if lifecycle_subkey is not None:
-            lifecycle[lifecycle_subkey] = lifecycle_field_buffer if lifecycle_subkey_has_content else None
-        lifecycle_subkey = None
-        lifecycle_field_buffer = {}
-        lifecycle_subkey_has_content = False
-
-    def _finalize_lifecycle() -> None:
-        nonlocal in_lifecycle, lifecycle, lifecycle_has_content
-        _finalize_lifecycle_subkey()
-        if in_lifecycle and current is not None:
-            current["lifecycle"] = lifecycle if lifecycle_has_content else None
-        in_lifecycle = False
-        lifecycle = {}
-        lifecycle_has_content = False
-
-    def _finalize_exec_tools_list() -> None:
-        nonlocal collecting_exec_tools_list, collecting_exec_tools_key, exec_tools_list_indent
-        if collecting_exec_tools_list is not None and collecting_exec_tools_key is not None:
-            exec_tools[collecting_exec_tools_key] = collecting_exec_tools_list
-        collecting_exec_tools_list = None
-        collecting_exec_tools_key = None
-        exec_tools_list_indent = None
-
-    def _finalize_exec_tools() -> None:
-        nonlocal in_exec_tools, exec_tools, exec_tools_has_content
-        _finalize_exec_tools_list()
-        if in_exec_tools:
-            execution_requirements["tools"] = exec_tools if exec_tools_has_content else None
-        in_exec_tools = False
-        exec_tools = {}
-        exec_tools_has_content = False
-
-    def _finalize_exec_packages_list() -> None:
-        nonlocal collecting_exec_packages_list, collecting_exec_packages_key, exec_packages_list_indent
-        if collecting_exec_packages_list is not None and collecting_exec_packages_key is not None:
-            exec_packages[collecting_exec_packages_key] = collecting_exec_packages_list
-        collecting_exec_packages_list = None
-        collecting_exec_packages_key = None
-        exec_packages_list_indent = None
-
-    def _finalize_exec_packages() -> None:
-        nonlocal in_exec_packages, exec_packages, exec_packages_has_content
-        _finalize_exec_packages_list()
-        if in_exec_packages:
-            execution_requirements["packages"] = exec_packages if exec_packages_has_content else None
-        in_exec_packages = False
-        exec_packages = {}
-        exec_packages_has_content = False
-
-    def _finalize_exec_network_list() -> None:
-        nonlocal collecting_exec_network_list, collecting_exec_network_key, exec_network_list_indent
-        if collecting_exec_network_list is not None and collecting_exec_network_key is not None:
-            exec_network[collecting_exec_network_key] = collecting_exec_network_list
-        collecting_exec_network_list = None
-        collecting_exec_network_key = None
-        exec_network_list_indent = None
-
-    def _finalize_exec_network() -> None:
-        nonlocal in_exec_network, exec_network, exec_network_has_content
-        _finalize_exec_network_list()
-        if in_exec_network:
-            execution_requirements["network"] = exec_network if exec_network_has_content else None
-        in_exec_network = False
-        exec_network = {}
-        exec_network_has_content = False
-
-    def _finalize_execution_requirements() -> None:
-        nonlocal in_execution_requirements, execution_requirements, exec_req_has_content
-        _finalize_exec_tools()
-        _finalize_exec_packages()
-        _finalize_exec_network()
-        if in_execution_requirements and current is not None:
-            current["executionRequirements"] = execution_requirements if exec_req_has_content else None
-        in_execution_requirements = False
-        execution_requirements = {}
-        exec_req_has_content = False
-
-    for raw in text.splitlines():
-        line = raw.rstrip()
-        if not line.strip() or line.lstrip().startswith("#"):
-            continue
-        if collecting_refs is not None:
-            item = REFERENCES_LIST_ITEM_RE.match(line)
-            if item:
-                # A new "- <key>: <value>" item marker always closes
-                # whatever item (and its own outcome sub-block, if open)
-                # came before it.
-                _finalize_current_ref_item()
-                item_indent = len(line) - len(line.lstrip(" "))
-                raw_text = item.group(1).strip()
-                opened = _match_key_line(INLINE_KEY_VALUE_RE, raw_text)
-                current_ref_open_line = line.strip()
-                if item_indent != REFERENCES_ITEM_INDENT or opened is None or opened[0] not in REFERENCES_ITEM_SUBKEYS:
-                    # Wrong indent (exactly 4 spaces required -- one level
-                    # under spec.references' own 2-space key, matching
-                    # every other gated block's own fixed-indent
-                    # convention, not the old bare-scalar-list design's
-                    # "2 or more spaces" tolerance), not a "key: value"
-                    # shape at all (the old pipe-string/bare-scalar shape
-                    # this field used before, or other garbage), or an
-                    # unrecognized first
-                    # key -- flag the whole item rather than silently
-                    # misreading it. Still track it as "an item is open"
-                    # so its own (now-known-garbage) continuation lines
-                    # are consumed here instead of desyncing this block's
-                    # own end-of-list detection.
-                    malformed_refs.append(line.strip())
-                    current_ref_item = {}
-                    current_ref_item_valid = False
-                else:
-                    key, value = opened
-                    current_ref_item = {}
-                    current_ref_item_valid = True
-                    if value:
-                        current_ref_item[key] = _unquote(value)
-                continue
-            if current_ref_outcome is not None:
-                matched = _match_key_line(KEY_LINE_RE_8, line)
-                if matched:
-                    key, value = matched
-                    if value:
-                        current_ref_outcome[key] = _unquote(value)
-                    continue
-                indent = len(line) - len(line.lstrip(" "))
-                if line[:1] in (" ", "\t") and indent >= 8:
-                    # Same fail-closed reasoning as every other gated
-                    # block's own equivalent branch: an unmatched line at
-                    # outcome's own indent invalidates the item rather
-                    # than being silently tolerated or misread.
-                    current_ref_item_valid = False
-                    continue
-                # Not more deeply indented: outcome's own block ends here.
-                # Finalize it and fall through to re-check this same line
-                # against the item's own 6-space fields below.
-                _finalize_ref_outcome()
-            if current_ref_item is not None:
-                matched = _match_key_line(KEY_LINE_RE_6, line)
-                if matched:
-                    key, value = matched
-                    value = _strip_bare_comment(value)
-                    if key not in REFERENCES_ITEM_SUBKEYS:
-                        unknown_ref_item_keys.append(line.strip())
-                    elif key == "outcome" and not value:
-                        current_ref_outcome = {}
-                    elif value:
-                        current_ref_item[key] = _unquote(value)
-                    continue
-                indent = len(line) - len(line.lstrip(" "))
-                if line[:1] in (" ", "\t") and indent >= 6:
-                    # Same fail-closed reasoning as every other gated
-                    # block's own equivalent branch.
-                    current_ref_item_valid = False
-                    unknown_ref_item_keys.append(line.strip())
-                    continue
-            # Neither a new item marker nor a continuation of the current
-            # one: the references list ends here (there is no legitimate
-            # content under spec.references besides its own items).
-            # Finalize it and fall through to process this line normally
-            # below.
-            _finalize_refs()
-        if collecting_ext_citations is not None:
-            item = REFERENCES_LIST_ITEM_RE.match(line)
-            if item:
-                # A new "- <key>: <value>" item marker always closes
-                # whatever item came before it -- same rule as
-                # spec.references' own items above.
-                _finalize_current_ext_citation_item()
-                item_indent = len(line) - len(line.lstrip(" "))
-                raw_text = item.group(1).strip()
-                opened = _match_key_line(INLINE_KEY_VALUE_RE, raw_text)
-                current_ext_citation_open_line = line.strip()
-                if (
-                    item_indent != EXTERNAL_CITATION_ITEM_INDENT
-                    or opened is None
-                    or opened[0] not in EXTERNAL_CITATION_ITEM_SUBKEYS
-                ):
-                    malformed_ext_citations.append(line.strip())
-                    current_ext_citation_item = {}
-                    current_ext_citation_item_valid = False
-                else:
-                    key, value = opened
-                    current_ext_citation_item = {}
-                    current_ext_citation_item_valid = True
-                    if value:
-                        current_ext_citation_item[key] = _unquote(value)
-                continue
-            if current_ext_citation_item is not None:
-                matched = _match_key_line(KEY_LINE_RE_6, line)
-                if matched:
-                    key, value = matched
-                    value = _strip_bare_comment(value)
-                    if key not in EXTERNAL_CITATION_ITEM_SUBKEYS:
-                        unknown_ext_citation_item_keys.append(line.strip())
-                    elif value:
-                        current_ext_citation_item[key] = _unquote(value)
-                    continue
-                indent = len(line) - len(line.lstrip(" "))
-                if line[:1] in (" ", "\t") and indent >= 6:
-                    # Same fail-closed reasoning as spec.references' own
-                    # equivalent branch.
-                    current_ext_citation_item_valid = False
-                    unknown_ext_citation_item_keys.append(line.strip())
-                    continue
-            # Neither a new item marker nor a continuation of the current
-            # one: the externalCitations list ends here. Finalize it and
-            # fall through to process this line normally below.
-            _finalize_ext_citations()
-        if collecting_dep_list is not None:
-            item = SKILL_DEP_LIST_ITEM_RE.match(line)
-            if item:
-                item_indent = len(line) - len(line.lstrip(" "))
-                if dep_list_indent is None:
-                    dep_list_indent = item_indent
-                if item_indent != dep_list_indent:
-                    malformed_deps.append(line.strip())
-                    continue
-                raw_text = item.group(1).strip()
-                is_quoted = len(raw_text) >= 2 and raw_text[0] == raw_text[-1] and raw_text[0] in "\"'"
-                if (not is_quoted and REFERENCES_MAPPING_LIKE_RE.match(raw_text)) or (
-                    not is_quoted and _is_non_string_plain_scalar(raw_text)
-                ):
-                    malformed_deps.append(line.strip())
-                else:
-                    collecting_dep_list.append(_unquote(raw_text))
-                continue
-            # Not a list item: this requires/relatedTo list ends here.
-            _finalize_dep_list()
-        if in_skill_deps:
-            matched = _match_key_line(KEY_LINE_RE_4, line)
-            if matched:
-                skill_deps_has_content = True
-                key, value = matched
-                # A value that is NOTHING BUT a comment (e.g. "requires:
-                # # comment") must read as blank/absent, not as the
-                # literal comment text -- otherwise it neither opens the
-                # list nor equals "[]" and is instead stored as a raw,
-                # wrong-type scalar.
-                value = _strip_bare_comment(value)
-                if key not in SKILL_DEPENDENCY_SUBKEYS:
-                    unknown_dep_keys.append(line.strip())
-                elif value == "[]":
-                    skill_deps[key] = []
-                elif not value:
-                    collecting_dep_list = []
-                    collecting_dep_key = key
-                    dep_list_indent = None
-                else:
-                    # Not an empty list and not "[]" -- this narrow parser
-                    # has no flow-sequence support; store the raw scalar so
-                    # the shape gate can fail it as the wrong type rather
-                    # than silently dropping it.
-                    skill_deps[key] = value
-                continue
-            indent = len(line) - len(line.lstrip(" "))
-            if line[:1] in (" ", "\t") and indent >= 4:
-                # An indented line reaching here is neither an active list
-                # item nor a key line KEY_LINE_RE_4 recognizes -- including
-                # a key using YAML quoting/escaping that regex cannot
-                # parse (an escaped quote, or whitespace between a closing
-                # quote and its colon). spec.skillDependencies has no
-                # legitimate reserved nested structure beyond its own two
-                # list-valued keys, so flag it as unknown rather than
-                # silently tolerating it: rejecting every unmatched line at
-                # this indent, not just the ones a regex happens to parse,
-                # is the actual fail-closed contract.
-                skill_deps_has_content = True
-                unknown_dep_keys.append(line.strip())
-                continue
-            # Dedented below the block's own indent: skillDependencies ends
-            # here. Finalize it and fall through to process this line
-            # normally below.
-            _finalize_skill_deps()
-        if lifecycle_subkey is not None:
-            matched = _match_key_line(KEY_LINE_RE_6, line)
-            if matched:
-                lifecycle_subkey_has_content = True
-                key, value = matched
-                value = _strip_bare_comment(value)
-                if key in LIFECYCLE_FIELDS.get(lifecycle_subkey, ()):
-                    if value:
-                        lifecycle_field_buffer[key] = _unquote(value)
-                else:
-                    unknown_lifecycle_fields.append(line.strip())
-                continue
-            indent = len(line) - len(line.lstrip(" "))
-            if line[:1] in (" ", "\t") and indent >= 6:
-                # Same fail-closed reasoning as spec.skillDependencies'
-                # equivalent branch above -- an unmatched line at this
-                # indent (including one KEY_LINE_RE_6 cannot parse due to
-                # quoting/escaping) is flagged, not silently tolerated.
-                lifecycle_subkey_has_content = True
-                unknown_lifecycle_fields.append(line.strip())
-                continue
-            # Dedented below the sub-block's own indent: this
-            # experimental/deprecated block ends here. Finalize it and
-            # fall through to process this line normally below (it may be
-            # the other sub-block's header, or a dedent out of lifecycle
-            # entirely).
-            _finalize_lifecycle_subkey()
-        if lifecycle_scalar_pending is not None:
-            indent = len(line) - len(line.lstrip(" "))
-            if line[:1] in (" ", "\t") and indent > 4:
-                # A block followed a scalar-only key (e.g. renamedFrom
-                # given nested children instead of a plain value) -- the
-                # wrong type, not the documented plain scalar. Store a
-                # non-string sentinel so the checker layer reports it as
-                # such; deeper sibling lines of this same mistaken block
-                # are then silently absorbed by the existing "stray
-                # content" fallback below (their own internal shape does
-                # not matter -- the type error is already captured).
-                lifecycle[lifecycle_scalar_pending] = {}
-                lifecycle_scalar_pending = None
-                continue
-            # Not more deeply indented: the key really was declared blank
-            # (or comment-only) with nothing following -- matches this
-            # parser's "blank scalar assignment means not declared"
-            # convention. Fall through to process the current line
-            # normally below.
-            lifecycle_scalar_pending = None
-        if in_lifecycle:
-            matched = _match_key_line(KEY_LINE_RE_4, line)
-            if matched:
-                lifecycle_has_content = True
-                key, value = matched
-                value = _strip_bare_comment(value)
-                if key in LIFECYCLE_SUBKEYS:
-                    if value:
-                        # Not opening a block -- a bare scalar written where a
-                        # mapping is expected (e.g. "experimental: true").
-                        # Store the raw scalar under the subkey itself so the
-                        # checker layer reports it as the wrong type, exactly
-                        # as spec.skillDependencies' non-list scalar fallback
-                        # works.
-                        lifecycle[key] = value
-                    else:
-                        lifecycle_subkey = key
-                        lifecycle_field_buffer = {}
-                elif key in LIFECYCLE_SCALAR_KEYS:
-                    if value:
-                        lifecycle[key] = _unquote(value)
-                    else:
-                        # Blank (or comment-only) value: ambiguous until the
-                        # next line is seen -- see the
-                        # "lifecycle_scalar_pending is not None" handling above.
-                        lifecycle_scalar_pending = key
-                else:
-                    unknown_lifecycle_keys.append(line.strip())
-                continue
-            indent = len(line) - len(line.lstrip(" "))
-            if line[:1] in (" ", "\t") and indent >= 4:
-                # Same fail-closed reasoning as spec.skillDependencies'
-                # equivalent branch above.
-                lifecycle_has_content = True
-                unknown_lifecycle_keys.append(line.strip())
-                continue
-            # Dedented below spec.lifecycle's own indent: the block ends
-            # here. Finalize it and fall through to process this line
-            # normally below.
-            _finalize_lifecycle()
-        if collecting_exec_tools_list is not None:
-            item = EXEC_REQ_TOOLS_LIST_ITEM_RE.match(line)
-            if item:
-                item_indent = len(line) - len(line.lstrip(" "))
-                if exec_tools_list_indent is None:
-                    exec_tools_list_indent = item_indent
-                if item_indent != exec_tools_list_indent:
-                    # Same list, different indent than its own first item --
-                    # real YAML would reject this outright.
-                    malformed_exec_tools_items.append(line.strip())
-                    continue
-                raw_text = item.group(1).strip()
-                is_quoted = len(raw_text) >= 2 and raw_text[0] == raw_text[-1] and raw_text[0] in "\"'"
-                if (not is_quoted and REFERENCES_MAPPING_LIKE_RE.match(raw_text)) or (
-                    not is_quoted and _is_non_string_plain_scalar(raw_text)
-                ):
-                    malformed_exec_tools_items.append(line.strip())
-                else:
-                    collecting_exec_tools_list.append(_unquote(raw_text))
-                continue
-            # Not a list item: this read/write/shell list ends here.
-            _finalize_exec_tools_list()
-        if in_exec_tools:
-            matched = _match_key_line(KEY_LINE_RE_6, line)
-            if matched:
-                exec_tools_has_content = True
-                key, value = matched
-                # Same comment-only-value fix as spec.skillDependencies'
-                # equivalent branch above (e.g. "read:  # comment").
-                value = _strip_bare_comment(value)
-                if key not in EXEC_REQ_TOOLS_SUBKEYS:
-                    unknown_exec_tools_keys.append(line.strip())
-                elif value == "[]":
-                    exec_tools[key] = []
-                elif not value:
-                    collecting_exec_tools_list = []
-                    collecting_exec_tools_key = key
-                    exec_tools_list_indent = None
-                else:
-                    # Not an empty list and not "[]" -- no flow-sequence
-                    # support; store the raw scalar so the shape gate can
-                    # fail it as the wrong type rather than silently
-                    # dropping it, exactly as spec.skillDependencies does.
-                    exec_tools[key] = value
-                continue
-            indent = len(line) - len(line.lstrip(" "))
-            if line[:1] in (" ", "\t") and indent >= 6:
-                # Same fail-closed reasoning as spec.skillDependencies'/
-                # spec.lifecycle's equivalent branches -- an unmatched
-                # line at this indent is flagged, not silently tolerated.
-                exec_tools_has_content = True
-                unknown_exec_tools_keys.append(line.strip())
-                continue
-            # Dedented below tools' own indent: the block ends here.
-            # Finalize it and fall through to process this line normally
-            # below.
-            _finalize_exec_tools()
-        if collecting_exec_packages_list is not None:
-            item = EXEC_REQ_TOOLS_LIST_ITEM_RE.match(line)
-            if item:
-                item_indent = len(line) - len(line.lstrip(" "))
-                if exec_packages_list_indent is None:
-                    exec_packages_list_indent = item_indent
-                if item_indent != exec_packages_list_indent:
-                    # Same list, different indent than its own first item --
-                    # real YAML would reject this outright.
-                    malformed_exec_packages_items.append(line.strip())
-                    continue
-                raw_text = item.group(1).strip()
-                is_quoted = len(raw_text) >= 2 and raw_text[0] == raw_text[-1] and raw_text[0] in "\"'"
-                if not is_quoted:
-                    # A trailing "# comment" on an otherwise-valid item
-                    # (e.g. "- requests  # transitively needed") must not
-                    # become part of the stored package name. Real YAML's
-                    # own comment rule -- an unquoted "#" preceded by
-                    # start-of-string or whitespace -- is exactly what
-                    # _INLINE_COMMENT_RE already encodes for
-                    # _is_non_string_plain_scalar's own type-classification
-                    # use below; that stripped copy was never fed back into
-                    # the STORED value before this fix, so a trailing
-                    # comment silently became part of the parsed package
-                    # name and then failed the allowlist check with
-                    # nothing pointing at the comment as the actual
-                    # problem. Gated on is_quoted the same way
-                    # REFERENCES_MAPPING_LIKE_RE/_is_non_string_plain_scalar
-                    # below already are -- a quoted item's own "#" is never
-                    # a real comment marker, so stripping must not touch
-                    # it. Scoped to packages only, per this fix's own
-                    # issue: tools'/network's own sibling item-storage
-                    # sites below share this same "stored value keeps a
-                    # trailing comment" gap and are deliberately left as-is
-                    # here.
-                    raw_text = _INLINE_COMMENT_RE.sub("", raw_text).strip()
-                if (not is_quoted and REFERENCES_MAPPING_LIKE_RE.match(raw_text)) or (
-                    not is_quoted and _is_non_string_plain_scalar(raw_text)
-                ):
-                    malformed_exec_packages_items.append(line.strip())
-                else:
-                    collecting_exec_packages_list.append(_unquote(raw_text))
-                continue
-            if (
-                line[:1] in (" ", "\t")
-                and line.strip() not in ("---", "...")
-                and EXEC_REQ_PACKAGES_MISINDENTED_ITEM_RE.match(line)
-            ):
-                # Looks like an attempted list item that the strict regex
-                # above rejected on indentation alone (a tab, or fewer
-                # than 6 spaces) -- see
-                # EXEC_REQ_PACKAGES_MISINDENTED_ITEM_RE's own comment. A
-                # real YAML parser (and a human reading the file) would
-                # still see a declared package here, so this must fail
-                # loudly as a malformed item like any other malformed
-                # packages entry, rather than silently finalizing the list
-                # as empty -- indistinguishable from the package never
-                # having been declared at all.
-                #
-                # The line[:1] guard (found live by an independent
-                # adversarial review) is required because
-                # EXEC_REQ_PACKAGES_MISINDENTED_ITEM_RE's own leading
-                # "[ \t]*" is zero-or-more, deliberately looser than
-                # EXEC_REQ_TOOLS_LIST_ITEM_RE's own "{6,}" -- exactly the
-                # width this branch needs to catch an under-indented item
-                # (the bug the comment above already describes), but that
-                # same width also matches a column-0 "---"/"..." YAML
-                # document marker (both start with "-") and a bare
-                # column-0 "- stray" line, neither of which is an
-                # attempted list item at all. Excluding both here lets
-                # them fall through to their own correct handling instead
-                # (the document-marker skip below, or the generic
-                # top-level malformed-line catch-all) rather than being
-                # misreported as a malformed *packages* item and spuriously
-                # failing a sidecar whose packages list is actually
-                # well-formed. A real, indented-but-under-6-spaces item
-                # (the tab/two-space regression fixtures this branch
-                # already has) always starts with a space or tab, so this
-                # guard does not narrow the original fix's own coverage.
-                malformed_exec_packages_items.append(line.strip())
-                continue
-            # Not a list item: this per-ecosystem package-name list ends here.
-            _finalize_exec_packages_list()
-        if in_exec_packages:
-            matched = _match_key_line(KEY_LINE_RE_6, line)
-            if matched:
-                exec_packages_has_content = True
-                key, value = matched
-                # Same comment-only-value fix as tools'/network's own
-                # equivalent branches above (e.g. "pip:  # comment").
-                value = _strip_bare_comment(value)
-                # REGEX match, not tuple membership -- packages' own
-                # subkeys are free-form ecosystem identifiers
-                # (EXEC_REQ_PACKAGES_KEY_RE), unlike tools'/network's own
-                # fixed EXEC_REQ_TOOLS_SUBKEYS/EXEC_REQ_NETWORK_SUBKEYS
-                # tuples (see EXEC_REQ_PACKAGES_KEY_RE's own comment).
-                # fullmatch(), not match(): Python's trailing "$" (unlike
-                # JSON Schema's own ECMA-262 "$", which EXEC_REQ_PACKAGES_KEY_RE
-                # is hand-duplicated from -- see its own comment) also
-                # matches immediately before a trailing "\n", which
-                # match() would silently accept. key can never actually
-                # carry a "\n" here (every line is rstrip()-ped before
-                # this point in the parsing loop), so this is defense in
-                # depth against unintended reuse of this pattern with
-                # unstripped input, not a reachable bug today. Deliberately
-                # NOT rewritten to "\Z" in the regex source itself: that
-                # would desync EXEC_REQ_PACKAGES_KEY_RE.pattern from
-                # skill-metadata.schema.json's own propertyNames.pattern,
-                # which test_execution_requirement_packages_key_pattern_matches_schema
-                # asserts stay byte-identical -- and "\Z" is not a valid
-                # ECMA-262 escape, so mirroring it into the JSON Schema
-                # file would break every real downstream JSON-Schema
-                # validator that consumes it. fullmatch() gets the same
-                # exact-end semantics without touching the shared pattern
-                # text.
-                if not EXEC_REQ_PACKAGES_KEY_RE.fullmatch(key):
-                    unknown_exec_packages_keys.append(line.strip())
-                elif value == "[]":
-                    exec_packages[key] = []
-                elif not value:
-                    collecting_exec_packages_list = []
-                    collecting_exec_packages_key = key
-                    exec_packages_list_indent = None
-                else:
-                    # Not an empty list and not "[]" -- no flow-sequence
-                    # support; store the raw scalar so the shape gate can
-                    # fail it as the wrong type rather than silently
-                    # dropping it, exactly as tools'/network's own
-                    # equivalent branches do.
-                    exec_packages[key] = value
-                continue
-            indent = len(line) - len(line.lstrip(" "))
-            if line[:1] in (" ", "\t") and indent >= 6:
-                # Same fail-closed reasoning as tools'/network's own
-                # equivalent branches -- an unmatched line at this indent
-                # is flagged, not silently tolerated.
-                exec_packages_has_content = True
-                unknown_exec_packages_keys.append(line.strip())
-                continue
-            # Dedented below packages' own indent: the block ends here.
-            # Finalize it and fall through to process this line normally
-            # below.
-            _finalize_exec_packages()
-        if collecting_exec_network_list is not None:
-            item = EXEC_REQ_TOOLS_LIST_ITEM_RE.match(line)
-            if item:
-                item_indent = len(line) - len(line.lstrip(" "))
-                if exec_network_list_indent is None:
-                    exec_network_list_indent = item_indent
-                if item_indent != exec_network_list_indent:
-                    # Same list, different indent than its own first item --
-                    # real YAML would reject this outright.
-                    malformed_exec_network_items.append(line.strip())
-                    continue
-                raw_text = item.group(1).strip()
-                is_quoted = len(raw_text) >= 2 and raw_text[0] == raw_text[-1] and raw_text[0] in "\"'"
-                if (not is_quoted and REFERENCES_MAPPING_LIKE_RE.match(raw_text)) or (
-                    not is_quoted and _is_non_string_plain_scalar(raw_text)
-                ):
-                    malformed_exec_network_items.append(line.strip())
-                else:
-                    collecting_exec_network_list.append(_unquote(raw_text))
-                continue
-            # Not a list item: this domains list ends here.
-            _finalize_exec_network_list()
-        if in_exec_network:
-            matched = _match_key_line(KEY_LINE_RE_6, line)
-            if matched:
-                exec_network_has_content = True
-                key, value = matched
-                # Same comment-only-value fix as tools' equivalent branch
-                # above (e.g. "domains:  # comment").
-                value = _strip_bare_comment(value)
-                if key not in EXEC_REQ_NETWORK_SUBKEYS:
-                    unknown_exec_network_keys.append(line.strip())
-                elif value == "[]":
-                    exec_network[key] = []
-                elif not value:
-                    # Blank value: opens a list for "domains" (its normal,
-                    # valid case) or, for "mode", wrongly opens a list
-                    # where a scalar is expected -- the parser stores
-                    # either the same way and leaves that judgment to
-                    # _execution_requirements_checks, per this block's own
-                    # module-docstring note above.
-                    collecting_exec_network_list = []
-                    collecting_exec_network_key = key
-                    exec_network_list_indent = None
-                else:
-                    # Not an empty list and not "[]" -- store the raw
-                    # scalar. This is "mode"'s own normal, valid case
-                    # (e.g. "mode: disabled"); for "domains", an inline
-                    # scalar here is the wrong type, caught downstream the
-                    # same way tools' own list-only subkeys already are.
-                    exec_network[key] = value
-                continue
-            indent = len(line) - len(line.lstrip(" "))
-            if line[:1] in (" ", "\t") and indent >= 6:
-                # Same fail-closed reasoning as tools'/spec.skillDependencies'/
-                # spec.lifecycle's equivalent branches.
-                exec_network_has_content = True
-                unknown_exec_network_keys.append(line.strip())
-                continue
-            # Dedented below network's own indent: the block ends here.
-            # Finalize it and fall through to process this line normally
-            # below.
-            _finalize_exec_network()
-        if in_execution_requirements:
-            matched = _match_key_line(KEY_LINE_RE_4, line)
-            if matched:
-                exec_req_has_content = True
-                key, value = matched
-                # Same comment-only-value fix as spec.skillDependencies'
-                # equivalent branch above (e.g. "tools:  # comment").
-                value = _strip_bare_comment(value)
-                if key not in ("tools", "packages", "network"):
-                    unknown_exec_req_keys.append(line.strip())
-                elif value:
-                    # Not opening a block -- a bare scalar written where a
-                    # mapping is expected (e.g. "tools: true"). Store the
-                    # raw scalar so the checker layer reports it as the
-                    # wrong type rather than silently dropping it.
-                    execution_requirements[key] = value
-                elif key == "tools":
-                    in_exec_tools = True
-                    exec_tools = {}
-                elif key == "packages":
-                    in_exec_packages = True
-                    exec_packages = {}
-                else:
-                    in_exec_network = True
-                    exec_network = {}
-                continue
-            indent = len(line) - len(line.lstrip(" "))
-            if line[:1] in (" ", "\t") and indent >= 4:
-                # Same fail-closed reasoning as spec.skillDependencies'/
-                # spec.lifecycle's equivalent branches.
-                exec_req_has_content = True
-                unknown_exec_req_keys.append(line.strip())
-                continue
-            # Dedented below spec.executionRequirements' own indent: the
-            # block ends here. Finalize it and fall through to process
-            # this line normally below.
-            _finalize_execution_requirements()
-        if line[:1] in (" ", "\t"):
-            # Indented: nested/list content this parser does not interpret,
-            # except spec.references and spec.skillDependencies (handled
-            # above once each starts). Exactly two spaces: a four-space
-            # line (a child of a nested map) has a space where this
-            # expects a key character, so it will not match and is
-            # skipped -- never malformed either way.
-            nested = re.match(r"[ ]{2}([A-Za-z0-9_-]+):\s*(.*)$", line)
-            if nested and current is not None:
-                key, value = nested.group(1), nested.group(2).strip()
-                # A value that is NOTHING BUT a comment (e.g.
-                # "executionRequirements:  # not yet fully specified")
-                # must read as blank, the same way a real YAML parser
-                # reads it -- otherwise `not value` is False, none of
-                # these four gated blocks ever opens, and the entire
-                # nested block underneath is discarded as a raw,
-                # wrong-type scalar string instead.
-                value = _strip_bare_comment(value)
-                # current is root["spec"] by identity exactly while inside
-                # the spec: block, so this is "are we directly under spec"
-                # without tracking a separate current-top-key variable.
-                if key == "references" and current is root.get("spec") and not value:
-                    collecting_refs = []
-                elif key == "externalCitations" and current is root.get("spec") and not value:
-                    collecting_ext_citations = []
-                elif key == "skillDependencies" and current is root.get("spec") and not value:
-                    in_skill_deps = True
-                    skill_deps = {}
-                elif key == "lifecycle" and current is root.get("spec") and not value:
-                    in_lifecycle = True
-                    lifecycle = {}
-                elif key == "executionRequirements" and current is root.get("spec") and not value:
-                    in_execution_requirements = True
-                    execution_requirements = {}
-                elif key == "dependencyPolicy" and current is root.get("spec") and not value:
-                    # dependencyPolicy is a closed-vocabulary scalar, not a
-                    # block key like the four above -- but it still needs its
-                    # own explicit branch: dependency-policy-declared is the
-                    # first check in this file to treat "spec.get(key) is
-                    # None" as "absent, therefore fine" for an *optional*
-                    # field (contrast with the reserved, silently-ignored
-                    # spec.evalStatus, see
-                    # test_manifest_parser_still_ignores_eval_status).
-                    # Falling through here would leave a bare
-                    # "dependencyPolicy:" (or one followed by list/mapping
-                    # content this parser does not interpret at this key's
-                    # own indent) completely unregistered, indistinguishable
-                    # from the key never having been written at all --
-                    # dependency-policy-declared would then silently PASS a
-                    # present-and-malformed declaration as if it were
-                    # absent. Registering it as an empty string keeps it
-                    # distinct from real absence while still failing the
-                    # DEPENDENCY_POLICY_LEVELS membership check (empty
-                    # string is not StdlibOnly/Declared).
-                    current[key] = ""
-                elif value:
-                    current[key] = _unquote(value)
-            continue
-        if line.strip() in ("---", "..."):
-            continue
-        top = re.match(r"([A-Za-z0-9_-]+):\s*(.*)$", line)
-        if top:
-            key, value = top.group(1), top.group(2).strip()
-            if value:
-                root[key] = _unquote(value)
-                current = None
-            else:
-                child: dict[str, object] = {}
-                root[key] = child
-                current = child
-            continue
-        malformed.append(line.strip())
-    _finalize_refs()
-    _finalize_ext_citations()
-    _finalize_skill_deps()
-    _finalize_lifecycle()
-    _finalize_execution_requirements()
-    return ManifestParse(
-        root=root,
-        malformed_lines=malformed,
-        malformed_reference_items=malformed_refs,
-        unknown_reference_item_keys=unknown_ref_item_keys,
-        malformed_skill_dependency_items=malformed_deps,
-        unknown_skill_dependency_keys=unknown_dep_keys,
-        unknown_lifecycle_keys=unknown_lifecycle_keys,
-        unknown_lifecycle_fields=unknown_lifecycle_fields,
-        unknown_execution_requirement_keys=unknown_exec_req_keys,
-        unknown_execution_requirement_tools_keys=unknown_exec_tools_keys,
-        malformed_execution_requirement_tools_items=malformed_exec_tools_items,
-        unknown_execution_requirement_packages_keys=unknown_exec_packages_keys,
-        malformed_execution_requirement_packages_items=malformed_exec_packages_items,
-        unknown_execution_requirement_network_keys=unknown_exec_network_keys,
-        malformed_execution_requirement_network_items=malformed_exec_network_items,
-        malformed_external_citation_items=malformed_ext_citations,
-        unknown_external_citation_item_keys=unknown_ext_citation_item_keys,
-    )
-
-
-def spec_of(parsed: ManifestParse) -> dict[str, object] | None:
-    """Return ``parsed.root["spec"]`` if present and a mapping, else None.
+def spec_of(manifest: dict[str, object]) -> dict[str, object] | None:
+    """Return ``manifest["spec"]`` if present and a mapping, else None.
 
     A malformed sidecar can write ``spec:`` as a scalar or list rather than
     a mapping; every consumer that only cares about "does this sidecar have
     a real spec mapping" needs the same isinstance guard around
-    ``root.get("spec")``; sharing this guard avoids the pattern regressing
-    independently at each call site. Callers outside this module (e.g.
-    tests/test_gitapex_skill_metadata_sidecar.py) should use this instead of
-    inlining ``parsed.root.get("spec")`` themselves.
+    ``manifest.get("spec")``; sharing this guard avoids the pattern
+    regressing independently at each call site. Callers outside this
+    module (e.g. tests/test_gitapex_skill_metadata_sidecar.py) should use
+    this instead of inlining ``manifest.get("spec")`` themselves. Issue
+    #758: takes the plain dict ``yaml.safe_load`` returns directly, no
+    longer a ``ManifestParse`` wrapper -- callers that used to pass
+    ``parsed`` now pass ``parsed`` itself (the loaded dict).
     """
-    spec = parsed.root.get("spec")
+    spec = manifest.get("spec")
     return spec if isinstance(spec, dict) else None
 
 
@@ -3965,53 +2464,43 @@ def check_shape(target: Path) -> list[CheckResult]:
         # SidecarPortability docstring): a corrupt (non-UTF-8) or otherwise
         # unreadable sidecar must not raise out of check_shape -- it is a
         # shape defect, reported as FAILed checks, not a usage error.
+        # Issue #758: the sidecar's own YAML-to-dict parsing is delegated
+        # to PyYAML (yaml.safe_load) rather than a hand-rolled reader.
+        # manifest_unusable covers both failure shapes that make every
+        # downstream check meaningless: a real YAML syntax error (raises
+        # yaml.YAMLError) and, since yaml.safe_load can legitimately
+        # return any YAML value (a list, a bare scalar, null for an empty
+        # file), a root that parses cleanly but is not a mapping -- the
+        # hand-rolled reader this replaces could never produce that second
+        # case (it only ever built a dict), but a real YAML parser can.
+        # manifest-parsable's own contract (does this file parse as YAML
+        # at all) does not cover the second case; every other check below
+        # does, via manifest_unusable's own combined guard.
         try:
-            parsed = _parse_manifest(sidecar.read_text(encoding="utf-8"))
-            manifest: dict[str, object] | None = parsed.root
-            malformed_lines = parsed.malformed_lines
-            malformed_reference_items = parsed.malformed_reference_items
-            unknown_reference_item_keys = parsed.unknown_reference_item_keys
-            malformed_skill_dependency_items = parsed.malformed_skill_dependency_items
-            unknown_skill_dependency_keys = parsed.unknown_skill_dependency_keys
-            unknown_lifecycle_keys = parsed.unknown_lifecycle_keys
-            unknown_lifecycle_fields = parsed.unknown_lifecycle_fields
-            unknown_execution_requirement_keys = parsed.unknown_execution_requirement_keys
-            unknown_execution_requirement_tools_keys = parsed.unknown_execution_requirement_tools_keys
-            malformed_execution_requirement_tools_items = parsed.malformed_execution_requirement_tools_items
-            unknown_execution_requirement_packages_keys = parsed.unknown_execution_requirement_packages_keys
-            malformed_execution_requirement_packages_items = parsed.malformed_execution_requirement_packages_items
-            unknown_execution_requirement_network_keys = parsed.unknown_execution_requirement_network_keys
-            malformed_execution_requirement_network_items = parsed.malformed_execution_requirement_network_items
-            malformed_external_citation_items = parsed.malformed_external_citation_items
-            unknown_external_citation_item_keys = parsed.unknown_external_citation_item_keys
+            manifest_raw: object = yaml.safe_load(sidecar.read_text(encoding="utf-8"))
             read_error: str | None = None
-        except (OSError, UnicodeDecodeError) as exc:
-            manifest = None
-            malformed_lines = []
-            malformed_reference_items = []
-            unknown_reference_item_keys = []
-            malformed_skill_dependency_items = []
-            unknown_skill_dependency_keys = []
-            unknown_lifecycle_keys = []
-            unknown_lifecycle_fields = []
-            unknown_execution_requirement_keys = []
-            unknown_execution_requirement_tools_keys = []
-            malformed_execution_requirement_tools_items = []
-            unknown_execution_requirement_packages_keys = []
-            malformed_execution_requirement_packages_items = []
-            unknown_execution_requirement_network_keys = []
-            malformed_external_citation_items = []
-            unknown_external_citation_item_keys = []
-            malformed_execution_requirement_network_items = []
+        except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
+            manifest_raw = None
             read_error = type(exc).__name__
 
-        if manifest is None:
+        manifest_unusable = read_error is not None or not isinstance(manifest_raw, dict)
+        manifest: dict[str, object] = manifest_raw if isinstance(manifest_raw, dict) else {}
+
+        results.append(
+            CheckResult(
+                "manifest-parsable",
+                read_error is None,
+                f"{SIDECAR_RELATIVE_PATH} is valid YAML",
+                "valid" if read_error is None else f"{SIDECAR_RELATIVE_PATH} could not be read/parsed: {read_error}",
+            )
+        )
+
+        if manifest_unusable:
             external_citations_sidecar_unreadable = True
-            evidence = f"unreadable: {read_error}"
-            results.append(
-                CheckResult(
-                    "manifest-parsable", False, f"{SIDECAR_RELATIVE_PATH} has no malformed top-level lines", evidence
-                )
+            evidence = (
+                f"unreadable: {read_error}"
+                if read_error is not None
+                else f"parsed root is not a mapping: {manifest_raw!r}"
             )
             results.append(
                 CheckResult(
@@ -4164,20 +2653,10 @@ def check_shape(target: Path) -> list[CheckResult]:
             # negative in the gate is worse than a false positive.
             sidecar_portability = SidecarPortability(state="unusable")
         else:
-            if malformed_lines:
-                count = len(malformed_lines)
-                plural = "" if count == 1 else "s"
-                manifest_parsable_evidence = f"{count} malformed line{plural}: {malformed_lines[0]!r}"
-            else:
-                manifest_parsable_evidence = "no malformed lines"
-            results.append(
-                CheckResult(
-                    "manifest-parsable",
-                    not malformed_lines,
-                    f"{SIDECAR_RELATIVE_PATH} has no malformed top-level lines",
-                    manifest_parsable_evidence,
-                )
-            )
+            # Every jsonschema validation error against this sidecar
+            # instance, computed once and consulted by field-scoped prefix
+            # below rather than re-validating per check.
+            schema_errors = list(_SCHEMA_VALIDATOR.iter_errors(manifest))
             api = manifest.get("apiVersion")
             kind_value = manifest.get("kind")
             envelope_ok = api == EXPECTED_API_VERSION and kind_value == EXPECTED_KIND
@@ -4205,7 +2684,7 @@ def check_shape(target: Path) -> list[CheckResult]:
             )
             spec_raw = manifest.get("spec")
             spec_is_mapping = isinstance(spec_raw, dict)
-            spec = spec_raw if spec_is_mapping else {}
+            spec: dict[str, object] = spec_raw if isinstance(spec_raw, dict) else {}
             portability = spec.get("portability")
             results.append(
                 CheckResult(
@@ -4240,7 +2719,7 @@ def check_shape(target: Path) -> list[CheckResult]:
                         f"spec is not a mapping: {spec_raw!r}",
                     )
                 )
-            elif dependency_policy is None:
+            elif "dependencyPolicy" not in spec:
                 results.append(
                     CheckResult(
                         "dependency-policy-declared",
@@ -4265,12 +2744,6 @@ def check_shape(target: Path) -> list[CheckResult]:
                 f"unrecognized key), summary <= {REFERENCES_ENTRY_MAX_CHARS} "
                 "chars"
             )
-            is_ref_item = lambda r: (  # noqa: E731 -- local, single use
-                isinstance(r, dict)
-                and isinstance(r.get("kind"), str)
-                and isinstance(r.get("anchor"), str)
-                and isinstance(r.get("summary"), str)
-            )
             if not spec_is_mapping:
                 # spec itself failed to parse as a mapping (e.g. "spec:
                 # some-scalar"), the same precondition failure
@@ -4285,56 +2758,25 @@ def check_shape(target: Path) -> list[CheckResult]:
                         f"spec is not a mapping: {spec_raw!r}",
                     )
                 )
-            elif malformed_reference_items:
-                # An item whose own opening line was unrecognizable, whose
-                # first key was unrecognized, whose indent didn't match the
-                # rest of its own list, or that was missing a required
-                # field by the time it closed was already flagged by the
-                # parser -- fail loudly instead of reporting on whatever
-                # partial item it was excluded in favor of, even if the
-                # rest of the list otherwise looks clean.
-                count = len(malformed_reference_items)
-                results.append(
-                    CheckResult(
-                        "references-well-formed",
-                        False,
-                        references_well_formed_rule,
-                        f"{count} malformed entr{'y' if count == 1 else 'ies'}: {malformed_reference_items[0]!r}",
-                    )
-                )
-            elif unknown_reference_item_keys:
-                count = len(unknown_reference_item_keys)
-                results.append(
-                    CheckResult(
-                        "references-well-formed",
-                        False,
-                        references_well_formed_rule,
-                        f"{count} unknown key{'' if count == 1 else 's'}: {unknown_reference_item_keys[0]!r}",
-                    )
-                )
-            elif references is None:
-                results.append(
-                    CheckResult("references-well-formed", True, references_well_formed_rule, "not declared (optional)")
-                )
-            elif not (isinstance(references, list) and references and all(is_ref_item(r) for r in references)):
-                ref_evidence = "empty list" if references == [] else f"not a list of item mappings: {references!r}"
-                results.append(CheckResult("references-well-formed", False, references_well_formed_rule, ref_evidence))
             else:
-                oversized = [r for r in references if len(r["summary"]) > REFERENCES_ENTRY_MAX_CHARS]
-                if oversized:
+                references_errors = _errors_under(schema_errors, "spec", "references")
+                if references_errors:
                     results.append(
                         CheckResult(
                             "references-well-formed",
                             False,
                             references_well_formed_rule,
-                            f"{len(oversized)} entr{'y' if len(oversized) == 1 else 'ies'} "
-                            f"over {REFERENCES_ENTRY_MAX_CHARS} chars: "
-                            f"{len(oversized[0]['summary'])} chars, kind="
-                            f"{oversized[0].get('kind')!r}",
+                            _join_schema_errors(references_errors),
+                        )
+                    )
+                elif references is None:
+                    results.append(
+                        CheckResult(
+                            "references-well-formed", True, references_well_formed_rule, "not declared (optional)"
                         )
                     )
                 else:
-                    ref_count = len(references)
+                    ref_count = len(references) if isinstance(references, list) else 0
                     ref_noun = "entry" if ref_count == 1 else "entries"
                     results.append(
                         CheckResult(
@@ -4360,12 +2802,6 @@ def check_shape(target: Path) -> list[CheckResult]:
                 "and a role one of "
                 f"{EXTERNAL_CITATION_ROLES}, and no unrecognized key"
             )
-            is_ext_citation_item = lambda c: (  # noqa: E731 -- local, single use
-                isinstance(c, dict)
-                and isinstance(c.get("path"), str)
-                and bool(EXTERNAL_CITATION_PATH_RE.match(c["path"]))
-                and c.get("role") in EXTERNAL_CITATION_ROLES
-            )
             if not spec_is_mapping:
                 results.append(
                     CheckResult(
@@ -4375,67 +2811,49 @@ def check_shape(target: Path) -> list[CheckResult]:
                         f"spec is not a mapping: {spec_raw!r}",
                     )
                 )
-            elif malformed_external_citation_items:
-                count = len(malformed_external_citation_items)
-                results.append(
-                    CheckResult(
-                        "external-citations-well-formed",
-                        False,
-                        external_citations_well_formed_rule,
-                        f"{count} malformed entr{'y' if count == 1 else 'ies'}: {malformed_external_citation_items[0]!r}",
-                    )
-                )
-            elif unknown_external_citation_item_keys:
-                count = len(unknown_external_citation_item_keys)
-                results.append(
-                    CheckResult(
-                        "external-citations-well-formed",
-                        False,
-                        external_citations_well_formed_rule,
-                        f"{count} unknown key{'' if count == 1 else 's'}: {unknown_external_citation_item_keys[0]!r}",
-                    )
-                )
-            elif external_citations is None:
-                results.append(
-                    CheckResult(
-                        "external-citations-well-formed",
-                        True,
-                        external_citations_well_formed_rule,
-                        "not declared (optional)",
-                    )
-                )
-            elif not (
-                isinstance(external_citations, list)
-                and external_citations
-                and all(is_ext_citation_item(c) for c in external_citations)
-            ):
-                ext_evidence = (
-                    "empty list"
-                    if external_citations == []
-                    else f"not a list of item mappings with a valid evals/docs path and role: {external_citations!r}"
-                )
-                results.append(
-                    CheckResult(
-                        "external-citations-well-formed", False, external_citations_well_formed_rule, ext_evidence
-                    )
-                )
             else:
-                ext_count = len(external_citations)
-                ext_noun = "entry" if ext_count == 1 else "entries"
-                results.append(
-                    CheckResult(
-                        "external-citations-well-formed",
-                        True,
-                        external_citations_well_formed_rule,
-                        f"{ext_count} {ext_noun}",
+                external_citations_errors = _errors_under(schema_errors, "spec", "externalCitations")
+                if external_citations_errors:
+                    results.append(
+                        CheckResult(
+                            "external-citations-well-formed",
+                            False,
+                            external_citations_well_formed_rule,
+                            _join_schema_errors(external_citations_errors),
+                        )
                     )
-                )
-                # Only a genuinely well-formed list feeds external-citations-
-                # resolve/the inline-citation rescue further down -- a
-                # malformed or absent declaration has nothing valid to
-                # resolve against, matching how a malformed spec.references
-                # never reaches sidecar_citation_sources above.
-                external_citations_declared = external_citations
+                elif external_citations is None:
+                    results.append(
+                        CheckResult(
+                            "external-citations-well-formed",
+                            True,
+                            external_citations_well_formed_rule,
+                            "not declared (optional)",
+                        )
+                    )
+                else:
+                    ext_count = len(external_citations) if isinstance(external_citations, list) else 0
+                    ext_noun = "entry" if ext_count == 1 else "entries"
+                    results.append(
+                        CheckResult(
+                            "external-citations-well-formed",
+                            True,
+                            external_citations_well_formed_rule,
+                            f"{ext_count} {ext_noun}",
+                        )
+                    )
+                    # Only a genuinely well-formed list feeds
+                    # external-citations-resolve/the inline-citation rescue
+                    # further down -- a malformed or absent declaration has
+                    # nothing valid to resolve against, matching how a
+                    # malformed spec.references never reaches
+                    # sidecar_citation_sources above. The schema already
+                    # guarantees every entry is a mapping here (no
+                    # external_citations_errors reached this branch); the
+                    # isinstance filter is for mypy's own narrowing, not a
+                    # behavior change.
+                    if isinstance(external_citations, list):
+                        external_citations_declared = [c for c in external_citations if isinstance(c, dict)]
             lifecycle_raw = spec.get("lifecycle") if spec_is_mapping else None
             lifecycle_dict = lifecycle_raw if isinstance(lifecycle_raw, dict) else {}
             for lifecycle_key in ("experimental", "deprecated"):
@@ -4447,35 +2865,10 @@ def check_shape(target: Path) -> list[CheckResult]:
                             (f"metadata/gitapex.yaml:spec.lifecycle.{lifecycle_key}.reason", reason_text)
                         )
             results.extend(
-                _skill_dependency_checks(
-                    spec_is_mapping,
-                    spec_raw,
-                    spec,
-                    malformed_skill_dependency_items,
-                    unknown_skill_dependency_keys,
-                    skill_dir,
-                    portability,
-                )
+                _skill_dependency_checks(spec_is_mapping, spec_raw, spec, schema_errors, skill_dir, portability)
             )
-            results.extend(
-                _lifecycle_checks(
-                    spec_is_mapping, spec_raw, spec, unknown_lifecycle_keys, unknown_lifecycle_fields, skill_dir
-                )
-            )
-            results.extend(
-                _execution_requirements_checks(
-                    spec_is_mapping,
-                    spec_raw,
-                    spec,
-                    unknown_execution_requirement_keys,
-                    unknown_execution_requirement_tools_keys,
-                    malformed_execution_requirement_tools_items,
-                    unknown_execution_requirement_packages_keys,
-                    malformed_execution_requirement_packages_items,
-                    unknown_execution_requirement_network_keys,
-                    malformed_execution_requirement_network_items,
-                )
-            )
+            results.extend(_lifecycle_checks(spec_is_mapping, spec_raw, spec, schema_errors, skill_dir))
+            results.extend(_execution_requirements_checks(spec_is_mapping, spec_raw, spec, schema_errors))
             if portability in PORTABILITY_LEVELS:
                 sidecar_portability = SidecarPortability(state="usable", level=portability)
             else:
@@ -4645,7 +3038,7 @@ def check_shape(target: Path) -> list[CheckResult]:
     results.extend(_script_execution_intent_checks(skill_md, skill_dir, body))
     if _is_portable(body, sidecar_portability):
         declared_citation_paths = frozenset(
-            c["path"] for c in external_citations_declared if isinstance(c.get("path"), str)
+            path for c in external_citations_declared if isinstance(path := c.get("path"), str)
         )
         results.extend(_portable_path_citation_checks(skill_md, skill_dir, body, declared_citation_paths))
         results.extend(_portable_skill_citation_checks(skill_md, skill_dir, body))
@@ -5702,11 +4095,14 @@ def _script_execution_intent_checks(skill_md: Path, skill_dir: Path, body: list[
     ]
 
 
-def _valid_skill_dependency_list(value: object) -> bool:
+def _valid_skill_dependency_list(value: object) -> TypeGuard[list[str]]:
     """Whether ``value`` is a valid requires/relatedTo list: a list of
-    non-empty strings. Unlike spec.references, an empty list is valid here
-    -- most skills' spec.skillDependencies.requires is expected to be
-    empty (see the design spec's Sub-project D rationale)."""
+    non-empty strings. Retained (not schema-delegated) purely as a
+    best-effort accessor for ``skill-dependencies-resolve``, a cross-file
+    RETAIN check the schema cannot itself express -- it needs *some*
+    usable list to check dangling references against even when
+    ``skill-dependencies-well-formed`` (schema-backed) has already failed
+    the field overall."""
     return isinstance(value, list) and all(isinstance(v, str) and v.strip() for v in value)
 
 
@@ -5714,24 +4110,25 @@ def _skill_dependency_checks(
     spec_is_mapping: bool,
     spec_raw: object,
     spec: dict[str, object],
-    malformed_items: list[str],
-    unknown_keys: list[str],
+    schema_errors: list[jsonschema.exceptions.ValidationError],
     skill_dir: Path,
     portability: object,
 ) -> list[CheckResult]:
-    """The three spec.skillDependencies checks (Sub-project D):
-    ``skill-dependencies-well-formed`` (shape), ``skill-dependencies-resolve``
-    (every named sibling exists -- the dangling-reference gate), and
+    """The three spec.skillDependencies checks: ``skill-dependencies-well-formed``
+    (shape, schema-backed, issue #758), ``skill-dependencies-resolve``
+    (every named sibling exists -- the dangling-reference gate, a
+    cross-file RETAIN check no schema instance can itself express), and
     ``requires-portability-compatible`` (a non-empty ``requires`` cannot
-    coexist with ``spec.portability: Portable`` -- a portable skill cannot
-    hard-depend on a sibling that does not travel with it).
+    coexist with ``spec.portability: Portable`` -- also schema-backed, via
+    the schema's own ``allOf``/``if``/``then`` cross-field rule).
 
-    Mirrors the spec.references cascade in ``check_shape``: shape is
-    checked first, since a badly-shaped field has nothing sensible to
-    resolve or contradict against -- in every early-return branch below,
-    ``skill-dependencies-resolve`` and ``requires-portability-compatible``
-    report "nothing to check" rather than silently passing on data that was
-    never actually a list.
+    ``skill-dependencies-well-formed``'s own schema errors and
+    ``requires-portability-compatible``'s can report at the identical
+    instance path (``spec.skillDependencies.requires``) when both fire --
+    distinguished by whether ``"allOf"`` appears in the violating error's
+    own schema path (only the cross-field rule's schema branch includes
+    it; the field's own ``$ref``-based shape constraints never do),
+    confirmed live against the real schema (design doc section 4.3).
     """
     well_formed_rule = (
         "spec.skillDependencies, if present, is a mapping "
@@ -5761,128 +4158,78 @@ def _skill_dependency_checks(
         ]
 
     deps = spec.get("skillDependencies")
-    # deps is None here means the key was present with a blank (YAML null)
-    # value, not absent -- distinct from the "not in spec" case above.
-    # isinstance(None, dict) is already False, so the
-    # existing "not a mapping" branch below fails it correctly without
-    # further special-casing.
-    if not isinstance(deps, dict):
-        evidence = f"not a mapping: {deps!r}"
-        return [
-            CheckResult("skill-dependencies-well-formed", False, well_formed_rule, evidence),
-            CheckResult("skill-dependencies-resolve", True, resolve_rule, "nothing to check (not a mapping)"),
-            CheckResult(
-                "requires-portability-compatible", True, contradiction_rule, "nothing to check (not a mapping)"
-            ),
-        ]
+    deps_errors = _errors_under(schema_errors, "spec", "skillDependencies")
+    well_formed_errors = [e for e in deps_errors if "allOf" not in e.absolute_schema_path]
+    contradiction_errors = [e for e in deps_errors if "allOf" in e.absolute_schema_path]
 
     results: list[CheckResult] = []
-    problems: list[str] = []
-    if unknown_keys:
-        count = len(unknown_keys)
-        problems.append(f"{count} unknown key{'' if count == 1 else 's'}: {unknown_keys[0]!r}")
-    if malformed_items:
-        count = len(malformed_items)
-        problems.append(f"{count} malformed entr{'y' if count == 1 else 'ies'}: {malformed_items[0]!r}")
-    for key in SKILL_DEPENDENCY_SUBKEYS:
-        if key in deps and not _valid_skill_dependency_list(deps[key]):
-            problems.append(f"{key} is not a list of non-empty strings: {deps[key]!r}")
-
-    if problems:
-        results.append(CheckResult("skill-dependencies-well-formed", False, well_formed_rule, "; ".join(problems)))
+    if well_formed_errors:
+        results.append(
+            CheckResult(
+                "skill-dependencies-well-formed", False, well_formed_rule, _join_schema_errors(well_formed_errors)
+            )
+        )
     else:
-        declared = [k for k in SKILL_DEPENDENCY_SUBKEYS if k in deps]
+        declared = [k for k in SKILL_DEPENDENCY_SUBKEYS if isinstance(deps, dict) and k in deps]
         evidence = f"{', '.join(declared)} declared" if declared else "no keys declared"
         results.append(CheckResult("skill-dependencies-well-formed", True, well_formed_rule, evidence))
 
-    requires = deps.get("requires")
-    requires = requires if _valid_skill_dependency_list(requires) else []
-    related = deps.get("relatedTo")
-    related = related if _valid_skill_dependency_list(related) else []
-    named = list(dict.fromkeys(requires + related))
-    dangling = [n for n in named if not _resolves_to_sibling_skill(n, skill_dir.parent)]
-    results.append(
-        CheckResult(
-            "skill-dependencies-resolve",
-            not dangling,
-            resolve_rule,
-            "all resolve" if not dangling else "dangling: " + ", ".join(dangling),
+    if isinstance(deps, dict):
+        requires = deps.get("requires")
+        requires = requires if _valid_skill_dependency_list(requires) else []
+        related = deps.get("relatedTo")
+        related = related if _valid_skill_dependency_list(related) else []
+        named = list(dict.fromkeys(requires + related))
+        dangling = [n for n in named if not _resolves_to_sibling_skill(n, skill_dir.parent)]
+        results.append(
+            CheckResult(
+                "skill-dependencies-resolve",
+                not dangling,
+                resolve_rule,
+                "all resolve" if not dangling else "dangling: " + ", ".join(dangling),
+            )
         )
-    )
+    else:
+        results.append(
+            CheckResult("skill-dependencies-resolve", True, resolve_rule, "nothing to check (not a mapping)")
+        )
 
-    contradiction = bool(requires) and portability == "Portable"
-    results.append(
-        CheckResult(
-            "requires-portability-compatible",
-            not contradiction,
-            contradiction_rule,
-            "ok" if not contradiction else f"non-empty requires with portability={portability!r}",
+    if contradiction_errors:
+        results.append(
+            CheckResult(
+                "requires-portability-compatible", False, contradiction_rule, _join_schema_errors(contradiction_errors)
+            )
         )
-    )
+    else:
+        results.append(CheckResult("requires-portability-compatible", True, contradiction_rule, "ok"))
 
     return results
-
-
-def _valid_lifecycle_date(value: object) -> bool:
-    """Whether ``value`` is a real calendar date in strict YYYY-MM-DD
-    shape, for spec.lifecycle's since/removeAfter fields.
-
-    Regex first (rejects any non-dashed or wrong-width shape outright),
-    then ``datetime.date.fromisoformat`` (rejects a shape-valid but
-    non-existent date, e.g. "2026-13-45" or "2026-02-30", that a
-    regex-only check would silently accept). Gating the regex first also
-    blocks ``fromisoformat``'s lenient Python 3.11+ ISO-variant parsing
-    from accepting an off-shape string that happens to still be valid
-    ISO 8601.
-    """
-    if not (isinstance(value, str) and LIFECYCLE_DATE_RE.match(value)):
-        return False
-    try:
-        datetime.date.fromisoformat(value)
-    except ValueError:
-        return False
-    return True
-
-
-def _valid_tracking_issue(value: object) -> bool:
-    """Shape-only check for spec.lifecycle.experimental.trackingIssue: a
-    full ``https://github.com/OWNER/REPO/issues/123`` (or ``/pull/123``)
-    URL -- any owner/repo, not only this repository's own. Never resolved
-    against a live GitHub API call -- this checker is offline/read-only
-    by design.
-    """
-    return isinstance(value, str) and bool(LIFECYCLE_ISSUE_REF_RE.match(value))
 
 
 def _lifecycle_checks(
     spec_is_mapping: bool,
     spec_raw: object,
     spec: dict[str, object],
-    unknown_keys: list[str],
-    unknown_fields: list[str],
+    schema_errors: list[jsonschema.exceptions.ValidationError],
     skill_dir: Path,
 ) -> list[CheckResult]:
-    """The three spec.lifecycle checks: ``lifecycle-well-formed`` (shape),
-    ``lifecycle-deprecated-replacement-resolves`` (the dangling-reference
-    gate for ``deprecated.replacement``, mirroring
-    ``skill-dependencies-resolve``), and
-    ``experimental-stable-compatible`` (the one cross-field rule: a skill
-    cannot be simultaneously "not yet graduated" and "already graduated on
-    some date").
+    """The three spec.lifecycle checks: ``lifecycle-well-formed`` (shape,
+    schema-backed, issue #758), ``lifecycle-deprecated-replacement-resolves``
+    (the dangling-reference gate for ``deprecated.replacement`` -- a
+    cross-file RETAIN check no schema instance can itself express), and
+    ``experimental-stable-compatible`` (the one cross-field rule, also
+    schema-backed via the schema's own ``not: {required: [...]}``
+    constraint: a skill cannot be simultaneously "not yet graduated" and
+    "already graduated on some date").
 
-    ``experimental``, ``deprecated``, and ``stable`` are independent,
-    optional sub-blocks; ``renamedFrom`` is a plain scalar directly under
-    ``spec.lifecycle``, never a sub-block. ``experimental`` and
-    ``deprecated`` do not exclude each other (an experimental skill can
-    legitimately be superseded by a different experiment) -- but
-    ``experimental`` and ``stable`` are a real logical contradiction, so
-    unlike the ``deprecated`` pairing, that combination is gated. Mirrors
-    the ``_skill_dependency_checks`` cascade: shape is checked first,
-    since a badly-shaped field has nothing sensible to resolve or
-    contradict against -- every early-return branch below reports both
-    ``lifecycle-deprecated-replacement-resolves`` and
-    ``experimental-stable-compatible`` as "nothing to check" rather than
-    silently passing on data that was never actually a mapping.
+    ``lifecycle-well-formed``'s own schema errors and
+    ``experimental-stable-compatible``'s both report at the identical
+    instance path (``spec.lifecycle``) when both fire -- distinguished by
+    the violating error's own ``validator`` name: only the cross-field
+    rule's own schema keyword is ``"not"`` (used exactly once, for this
+    one rule, in the whole bundled schema, confirmed live), so any other
+    validator name at that path belongs to ``lifecycle-well-formed``
+    instead (design doc section 4.3).
     """
     well_formed_rule = (
         "spec.lifecycle, if present, is a mapping with only "
@@ -5931,81 +4278,28 @@ def _lifecycle_checks(
         ]
 
     lifecycle = spec.get("lifecycle")
-    # lifecycle is None here means present-but-blank (YAML null), distinct
-    # from absent above -- isinstance(None, dict) is already
-    # False, so the existing "not a mapping" branch below fails it.
-    if not isinstance(lifecycle, dict):
-        evidence = f"not a mapping: {lifecycle!r}"
-        return [
-            CheckResult("lifecycle-well-formed", False, well_formed_rule, evidence),
-            CheckResult(
-                "lifecycle-deprecated-replacement-resolves", True, resolve_rule, "nothing to check (not a mapping)"
-            ),
-            CheckResult("experimental-stable-compatible", True, contradiction_rule, "nothing to check (not a mapping)"),
+    lifecycle_errors = _errors_under(schema_errors, "spec", "lifecycle")
+    well_formed_errors = [e for e in lifecycle_errors if e.validator != "not"]
+    # A "not: {required: [...]}" constraint is vacuously satisfied (so its
+    # "not" is vacuously violated) whenever the instance isn't an object at
+    # all -- required is only meaningful against a mapping. Only evaluate
+    # the contradiction when lifecycle is actually a mapping, so a
+    # wrong-type lifecycle field is reported solely by well_formed_errors.
+    contradiction_errors = [e for e in lifecycle_errors if e.validator == "not"] if isinstance(lifecycle, dict) else []
+
+    if well_formed_errors:
+        results = [
+            CheckResult("lifecycle-well-formed", False, well_formed_rule, _join_schema_errors(well_formed_errors))
         ]
-
-    problems: list[str] = []
-    if unknown_keys:
-        count = len(unknown_keys)
-        problems.append(f"{count} unknown key{'' if count == 1 else 's'}: {unknown_keys[0]!r}")
-    if unknown_fields:
-        count = len(unknown_fields)
-        problems.append(f"{count} unknown field{'' if count == 1 else 's'}: {unknown_fields[0]!r}")
-
-    sub_blocks: dict[str, dict[str, object]] = {}
-    for key in LIFECYCLE_SUBKEYS:
-        if key not in lifecycle:
-            continue
-        block = lifecycle[key]
-        if not isinstance(block, dict):
-            problems.append(f"{key} is not a mapping: {block!r}")
-            continue
-        sub_blocks[key] = block
-        for field in LIFECYCLE_REQUIRED_FIELDS[key]:
-            val = block.get(field)
-            if not (isinstance(val, str) and val.strip()):
-                problems.append(f"{key}.{field} is missing or not a non-empty string: {val!r}")
-        for field in ("since", "removeAfter"):
-            if field in block and not _valid_lifecycle_date(block[field]):
-                problems.append(f"{key}.{field} is not a YYYY-MM-DD date: {block[field]!r}")
-        reason_val = block.get("reason")
-        if isinstance(reason_val, str) and len(reason_val) > REFERENCES_ENTRY_MAX_CHARS:
-            problems.append(
-                f"{key}.reason is {len(reason_val)} chars, over the {REFERENCES_ENTRY_MAX_CHARS}-char limit"
-            )
-        if key == "experimental" and "trackingIssue" in block and not _valid_tracking_issue(block["trackingIssue"]):
-            problems.append(
-                f"experimental.trackingIssue is not a full "
-                f"https://github.com/OWNER/REPO/issues/<N> (or /pull/<N>) "
-                f"URL: {block['trackingIssue']!r}"
-            )
-        if (
-            key == "stable"
-            and "compatibilityGuarantee" in block
-            and block["compatibilityGuarantee"] not in COMPATIBILITY_GUARANTEE_LEVELS
-        ):
-            problems.append(
-                f"stable.compatibilityGuarantee is not one of "
-                f"{COMPATIBILITY_GUARANTEE_LEVELS}: "
-                f"{block['compatibilityGuarantee']!r}"
-            )
-
-    if "renamedFrom" in lifecycle:
-        renamed_from = lifecycle["renamedFrom"]
-        if not (isinstance(renamed_from, str) and renamed_from.strip()):
-            problems.append(f"renamedFrom is not a non-empty string: {renamed_from!r}")
-
-    if problems:
-        results = [CheckResult("lifecycle-well-formed", False, well_formed_rule, "; ".join(problems))]
     else:
-        declared = [k for k in LIFECYCLE_SUBKEYS if k in sub_blocks]
-        if "renamedFrom" in lifecycle:
+        declared = [k for k in LIFECYCLE_SUBKEYS if isinstance(lifecycle, dict) and k in lifecycle]
+        if isinstance(lifecycle, dict) and "renamedFrom" in lifecycle:
             declared.append("renamedFrom")
         evidence = f"{', '.join(declared)} declared" if declared else "no keys declared"
         results = [CheckResult("lifecycle-well-formed", True, well_formed_rule, evidence)]
 
-    deprecated = sub_blocks.get("deprecated")
-    replacement = deprecated.get("replacement") if deprecated else None
+    deprecated = lifecycle.get("deprecated") if isinstance(lifecycle, dict) else None
+    replacement = deprecated.get("replacement") if isinstance(deprecated, dict) else None
     if isinstance(replacement, str) and replacement.strip():
         exists = _resolves_to_sibling_skill(replacement, skill_dir.parent)
         results.append(
@@ -6026,69 +4320,44 @@ def _lifecycle_checks(
             )
         )
 
-    contradiction = "experimental" in sub_blocks and "stable" in sub_blocks
-    results.append(
-        CheckResult(
-            "experimental-stable-compatible",
-            not contradiction,
-            contradiction_rule,
-            "ok" if not contradiction else "both experimental and stable are present",
+    if contradiction_errors:
+        results.append(
+            CheckResult(
+                "experimental-stable-compatible",
+                False,
+                contradiction_rule,
+                "both experimental and stable are declared, which is a logical contradiction",
+            )
         )
-    )
+    else:
+        results.append(CheckResult("experimental-stable-compatible", True, contradiction_rule, "ok"))
     return results
-
-
-def _valid_execution_requirements_tools_list(value: object) -> bool:
-    """Whether ``value`` is a valid tools.read/write/shell list: a list of
-    non-empty strings. Mirrors ``_valid_skill_dependency_list`` -- an empty
-    list is valid here too, since it is a deliberate "zero tools of this
-    kind needed" statement, distinct from the subkey being absent
-    entirely."""
-    return isinstance(value, list) and all(isinstance(v, str) and v.strip() for v in value)
 
 
 def _execution_requirements_checks(
     spec_is_mapping: bool,
     spec_raw: object,
     spec: dict[str, object],
-    unknown_keys: list[str],
-    unknown_tools_keys: list[str],
-    malformed_tools_items: list[str],
-    unknown_packages_keys: list[str],
-    malformed_packages_items: list[str],
-    unknown_network_keys: list[str],
-    malformed_network_items: list[str],
+    schema_errors: list[jsonschema.exceptions.ValidationError],
 ) -> list[CheckResult]:
     """The one spec.executionRequirements check landed so far:
-    ``execution-requirements-well-formed``.
+    ``execution-requirements-well-formed`` (schema-backed, issue #758).
 
-    Mirrors ``_skill_dependency_checks``'s early-return ladder (spec not a
-    mapping / not declared / not a mapping) before real validation, and its
-    problem-accumulation-then-single-CheckResult pattern. Unlike
-    spec.skillDependencies or spec.lifecycle, this field has only three
-    recognized top-level subkeys so far, ``tools``, ``packages``, and
-    ``network`` (issue #845; #1115's own ADR follow-up added ``packages``)
-    -- the remaining categories (filesystem, mcp, credentials, browser,
-    externalServices, context) are deferred; any key here other than
-    ``tools``/``packages``/``network`` fails closed via ``unknown_keys``
-    rather than being silently accepted as reserved space. There is no
-    dangling-reference or cross-field check the way
-    spec.skillDependencies/spec.lifecycle have one each -- tools'
+    Unlike spec.skillDependencies or spec.lifecycle, this field has no
+    dangling-reference or cross-field CheckResult of its own -- tools'
     read/write/shell entries are free-form capability tags, not names that
-    resolve against sibling skill directories, and no rule ties this field
-    to portability/capabilityAssumption/lifecycle. network.mode/domains
-    DO carry one cross-field rule of their own (domains non-empty iff mode
-    is allowlist), checked below the same way requires-portability-
-    compatible is checked elsewhere in this file, just folded into this
-    same well-formed check rather than earning its own separate
-    CheckResult -- tools has no analogous cross-subkey rule to justify the
-    same split. packages' own allowlist-membership resolution (whether a
-    declared package name is one gitapex permits at all) is not part of
-    this check: it is enforced entirely outside this portable script, by
-    a repository-owned CI gate
+    resolve against sibling skill directories, and network.mode/domains'
+    own cross-field rule (domains non-empty iff mode is allowlist) is
+    folded into this same well-formed check by the schema itself (its own
+    nested ``allOf``/``if``/``then`` inside ``executionRequirementsNetwork``),
+    not split into a separate CheckResult the way
+    requires-portability-compatible is. packages' own allowlist-membership
+    resolution (whether a declared package name is one gitapex permits at
+    all) is not part of this check: it is enforced entirely outside this
+    portable script, by a repository-owned CI gate
     (``.github/scripts/gitapex_gate_dependency_allowlist.py``) that never
-    produces a CheckResult here. This function validates only packages'
-    own internal SHAPE, the same as tools and network.
+    produces a CheckResult here. This function validates only
+    executionRequirements' own internal SHAPE.
     """
     well_formed_rule = (
         "spec.executionRequirements, if present, is a "
@@ -6112,130 +4381,23 @@ def _execution_requirements_checks(
             )
         ]
 
+    execution_requirements = spec.get("executionRequirements")
     if "executionRequirements" not in spec:
         return [CheckResult("execution-requirements-well-formed", True, well_formed_rule, "not declared (optional)")]
 
-    execution_requirements = spec.get("executionRequirements")
-    # None here means present-but-blank (YAML null), distinct from absent
-    # above -- isinstance(None, dict) is already False, so
-    # the existing "not a mapping" branch below fails it correctly.
-    if not isinstance(execution_requirements, dict):
-        return [
-            CheckResult(
-                "execution-requirements-well-formed",
-                False,
-                well_formed_rule,
-                f"not a mapping: {execution_requirements!r}",
-            )
-        ]
+    errors = _errors_under(schema_errors, "spec", "executionRequirements")
+    if errors:
+        return [CheckResult("execution-requirements-well-formed", False, well_formed_rule, _join_schema_errors(errors))]
 
-    problems: list[str] = []
-    if unknown_keys:
-        count = len(unknown_keys)
-        problems.append(f"{count} unknown key{'' if count == 1 else 's'}: {unknown_keys[0]!r}")
-
-    tools_present = "tools" in execution_requirements
-    tools = execution_requirements.get("tools")
-    # tools_present with tools is None means present-but-blank (YAML
-    # null), distinct from tools being absent entirely -- both must fail
-    # closed here rather than silently passing as an empty mapping.
-    if tools_present and not isinstance(tools, dict):
-        problems.append(f"tools is not a mapping: {tools!r}")
-    elif isinstance(tools, dict):
-        if unknown_tools_keys:
-            count = len(unknown_tools_keys)
-            problems.append(f"{count} unknown tools key{'' if count == 1 else 's'}: {unknown_tools_keys[0]!r}")
-        if malformed_tools_items:
-            count = len(malformed_tools_items)
-            problems.append(f"{count} malformed tools entr{'y' if count == 1 else 'ies'}: {malformed_tools_items[0]!r}")
-        for key in EXEC_REQ_TOOLS_SUBKEYS:
-            if key in tools and not _valid_execution_requirements_tools_list(tools[key]):
-                problems.append(f"tools.{key} is not a list of non-empty strings: {tools[key]!r}")
-
-    packages_present = "packages" in execution_requirements
-    packages = execution_requirements.get("packages")
-    # Same present-but-null-vs-absent distinction tools' own branch above
-    # already draws.
-    if packages_present and not isinstance(packages, dict):
-        problems.append(f"packages is not a mapping: {packages!r}")
-    elif isinstance(packages, dict):
-        if unknown_packages_keys:
-            count = len(unknown_packages_keys)
-            problems.append(f"{count} unknown packages key{'' if count == 1 else 's'}: {unknown_packages_keys[0]!r}")
-        if malformed_packages_items:
-            count = len(malformed_packages_items)
-            problems.append(
-                f"{count} malformed packages entr{'y' if count == 1 else 'ies'}: {malformed_packages_items[0]!r}"
-            )
-        # packages' own subkeys are free-form ecosystem identifiers, not a
-        # fixed tuple like EXEC_REQ_TOOLS_SUBKEYS -- iterate the parsed
-        # mapping's own keys (already guaranteed to match
-        # EXEC_REQ_PACKAGES_KEY_RE by the parser; a non-matching key never
-        # reaches this dict at all, landing in unknown_packages_keys
-        # instead, per _parse_manifest) rather than a fixed vocabulary, so
-        # only each key's own VALUE shape remains to check here.
-        for key in packages:
-            if not _valid_execution_requirements_tools_list(packages[key]):
-                problems.append(f"packages.{key} is not a list of non-empty strings: {packages[key]!r}")
-        # KNOWN, DISCLOSED GAP (not fixed here): $defs.packageList in
-        # skill-metadata.schema.json declares "uniqueItems": true, but
-        # this checker does not enforce it -- a package name repeated
-        # twice under the same ecosystem (e.g. "pip: [pyyaml, pyyaml]")
-        # currently still passes execution-requirements-well-formed.
-        # Fail-open only in the sense of "does not additionally flag a
-        # redundant duplicate as its own defect"; it is not an
-        # allowlist-bypass gap (the CI gate that resolves allowlist
-        # membership dedupes by normalized name before checking, so a
-        # duplicate cannot inflate or hide an offender there). Left
-        # unimplemented rather than folded into
-        # _valid_execution_requirements_tools_list, which tools.read/
-        # write/shell and network.domains also share -- enforcing
-        # uniqueItems there too is a broader, separate change this
-        # finding did not ask for and risks failing existing skills that
-        # currently rely on tolerated duplicates in those other lists.
-
-    network_present = "network" in execution_requirements
-    network = execution_requirements.get("network")
-    # Same present-but-null-vs-absent distinction tools' own branch above
-    # already draws.
-    if network_present and not isinstance(network, dict):
-        problems.append(f"network is not a mapping: {network!r}")
-    elif isinstance(network, dict):
-        if unknown_network_keys:
-            count = len(unknown_network_keys)
-            problems.append(f"{count} unknown network key{'' if count == 1 else 's'}: {unknown_network_keys[0]!r}")
-        if malformed_network_items:
-            count = len(malformed_network_items)
-            problems.append(
-                f"{count} malformed network entr{'y' if count == 1 else 'ies'}: {malformed_network_items[0]!r}"
-            )
-        mode_present = "mode" in network
-        mode = network.get("mode")
-        if not mode_present:
-            problems.append("network.mode is required when network is declared")
-        elif not (isinstance(mode, str) and mode in EXEC_REQ_NETWORK_MODES):
-            problems.append(f"network.mode is not one of {EXEC_REQ_NETWORK_MODES}: {mode!r}")
-        domains_present = "domains" in network
-        domains = network.get("domains")
-        # Reuses _valid_execution_requirements_tools_list: the same "list
-        # of non-empty strings" shape tools.read/write/shell already
-        # validate, generic despite its tools-scoped name.
-        if domains_present and not _valid_execution_requirements_tools_list(domains):
-            problems.append(f"network.domains is not a list of non-empty strings: {domains!r}")
-        elif mode == "allowlist" and not (isinstance(domains, list) and domains):
-            problems.append("network.domains must be a non-empty list when network.mode is allowlist")
-        elif mode in ("disabled", "unrestricted") and isinstance(domains, list) and domains:
-            problems.append(f"network.domains must be empty when network.mode is {mode!r}")
-
-    if problems:
-        return [CheckResult("execution-requirements-well-formed", False, well_formed_rule, "; ".join(problems))]
-
-    declared = [f"tools.{k}" for k in EXEC_REQ_TOOLS_SUBKEYS if k in tools] if isinstance(tools, dict) else []
-    # packages has no fixed subkey tuple to iterate (see the loop above) --
-    # walk the parsed mapping's own keys instead, in file order (Python
-    # dict iteration order is insertion order, which here is parse order).
+    tools = execution_requirements.get("tools") if isinstance(execution_requirements, dict) else None
+    packages = execution_requirements.get("packages") if isinstance(execution_requirements, dict) else None
+    network = execution_requirements.get("network") if isinstance(execution_requirements, dict) else None
+    declared = [f"tools.{k}" for k in EXEC_REQ_TOOLS_SUBKEYS if isinstance(tools, dict) and k in tools]
+    # packages has no fixed subkey tuple -- walk the parsed mapping's own
+    # keys instead, in file order (Python dict iteration order is
+    # insertion order, which here is parse order).
     declared += [f"packages.{k}" for k in packages] if isinstance(packages, dict) else []
-    declared += [f"network.{k}" for k in EXEC_REQ_NETWORK_SUBKEYS if k in network] if isinstance(network, dict) else []
+    declared += [f"network.{k}" for k in EXEC_REQ_NETWORK_SUBKEYS if isinstance(network, dict) and k in network]
     evidence = ", ".join(declared) + " declared" if declared else "no keys declared"
     return [CheckResult("execution-requirements-well-formed", True, well_formed_rule, evidence)]
 
