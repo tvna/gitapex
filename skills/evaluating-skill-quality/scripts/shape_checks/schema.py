@@ -32,19 +32,21 @@ def _schema_defs() -> dict[str, object]:
 
 
 def _schema_enum(*path: str) -> tuple[str, ...]:
-    """Read a schema ``$defs`` node's own ``enum`` (or single ``const``) as
-    a tuple, following ``path`` through nested ``properties``/mapping keys
-    -- lets this module's own vocabulary constants (``PORTABILITY_LEVELS``,
-    etc.) derive directly from the schema instead of hand-duplicating it."""
+    """Read a schema ``$defs`` node's own ``enum`` as a tuple, following
+    ``path`` through nested ``properties``/mapping keys -- lets this
+    module's own vocabulary constants (``PORTABILITY_LEVELS``, etc.)
+    derive directly from the schema instead of hand-duplicating it.
+    ``EXPECTED_API_VERSION``/``EXPECTED_KIND`` read a bare ``const``
+    directly off ``SKILL_METADATA_SCHEMA`` instead of going through this
+    helper -- every ``path`` a caller passes here targets a real ``enum``
+    node, not a single-value ``const`` one."""
     node: dict[str, object] = _schema_defs()
     for key in path:
         node = _schema_dict(node[key], *path)
-    if "enum" in node:
-        values = node["enum"]
-        if not isinstance(values, list):
-            raise TypeError(f"expected a list at schema path {path!r}'s enum, got {type(values).__name__}")
-        return tuple(values)
-    return (node["const"],)  # type: ignore[return-value]
+    values = node["enum"]
+    if not isinstance(values, list):
+        raise TypeError(f"expected a list at schema path {path!r}'s enum, got {type(values).__name__}")
+    return tuple(values)
 
 
 def _errors_under(

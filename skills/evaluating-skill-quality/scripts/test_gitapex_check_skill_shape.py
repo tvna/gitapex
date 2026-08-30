@@ -13,6 +13,7 @@ from pathlib import Path
 
 import gitapex_check_skill_shape as css
 import pytest
+import shape_checks.schema
 
 _SCRIPT_PATH = Path(css.__file__).resolve()
 
@@ -100,6 +101,33 @@ def _write_skill(
 
 def _by_name(results):
     return {r.name: r for r in results}
+
+
+# ---- shape_checks.schema: _schema_dict/_schema_enum's own defensive
+# TypeError branches (issue #758) ----
+#
+# Both branches guard against a malformed skill-metadata.schema.json (a
+# node that should be a mapping isn't, or an "enum" value that should be
+# a list isn't) -- not reachable through the real, version-controlled
+# schema file (which this repository's own skill-metadata-schema-drift
+# CI gate already keeps valid), but real, fail-loud guards worth testing
+# directly as the pure functions they are, rather than left uncovered.
+
+
+def test_schema_dict_raises_on_non_mapping_node():
+    with pytest.raises(TypeError, match="expected a mapping at schema path"):
+        shape_checks.schema._schema_dict("not-a-mapping", "some", "path")
+
+
+def test_schema_enum_raises_when_enum_value_is_not_a_list():
+    fake_schema = {"$defs": {"fakeDef": {"properties": {"fakeField": {"enum": "not-a-list"}}}}}
+    original = shape_checks.schema.SKILL_METADATA_SCHEMA
+    shape_checks.schema.SKILL_METADATA_SCHEMA = fake_schema
+    try:
+        with pytest.raises(TypeError, match="expected a list at schema path"):
+            shape_checks.schema._schema_enum("fakeDef", "properties", "fakeField")
+    finally:
+        shape_checks.schema.SKILL_METADATA_SCHEMA = original
 
 
 def test_well_formed_skill_passes(tmp_path):
