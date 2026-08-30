@@ -1,0 +1,93 @@
+# Issue #1212: CLAUDE.md section 3 requires an issue citation ("Closes #N",
+# "Fixes #N", "Refs #N", or a bare "#N") in every commit, but nothing
+# enforced it. `.pre-commit-config.yaml`'s `commit-citation` hook (stages:
+# [commit-msg]) is the fast local first pass; this job is the actual
+# no-exceptions backstop, per this issue's own Acceptance Criteria Map --
+# the local hook is bypassable with `git commit --no-verify` and only exists
+# in a clone where `prek install -t commit-msg` has actually run, but this
+# check runs unconditionally on the PR itself.
+#
+# Passes when a citation is found in at least one *non-merge* commit in the
+# PR's own range (`git log --no-merges`, so an uncited merge commit in that
+# range never fails this on its own), OR in the PR's own title/body.
+#
+# Deliberately no `paths:` filter -- same reasoning as lint.yml's and
+# hidden-characters-gate.yml's own stated headers (see also
+# gitapex_gate_ruleset_required_checks.py's module docstring): a required
+# status check backed by a workflow that never fires for a given pull
+# request leaves that check `Pending` forever, with no in-repository fix. A
+# citation can be missing regardless of which files a PR touches, so there
+# is no path this job could safely skip anyway.
+name: Commit citation gate
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  commit-citation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      # fetch-depth: '0' -- this job computes a real `git merge-base` and
+      # then walks `git log --no-merges` over the resulting range, so it
+      # needs full history locally, not the shallow default. `ref: head.sha`
+      # pins exactly which commit is checked out, matching
+      # exception-handler-gap-gate.yml's own established pin.
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+        with:
+          fetch-depth: '0'
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      # PR_TITLE/PR_BODY carry untrusted external text (anyone with
+      # PR-author access controls them) -- written to files via `env:`
+      # indirection, never interpolated directly into a shell command line,
+      # mirroring provenance-disclosure-gate.yml's own PR_BODY handling.
+      # gitapex_gate_commit_citation.py's own --title/--body take file paths
+      # (not stdin) because this mode needs both pieces of text at once.
+      - name: Write PR title/body to files
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$PR_TITLE" > "$RUNNER_TEMP/pr_title.txt"
+          printf '%s' "$PR_BODY" > "$RUNNER_TEMP/pr_body.txt"
+
+      # git merge-base below -- never logs base.sha directly, which can go
+      # stale relative to a main that advanced after the PR opened; mirrors
+      # exception-handler-gap-gate.yml's own established
+      # merge-base-not-base.sha pattern.
+      #
+      # --owner/--repo are hardcoded literals, matching acm-issue-gate.yml's
+      # own convention, rather than interpolating a workflow expression
+      # directly into this shell script.
+      - name: Check for an issue citation in the PR's own commits or title/body
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if ! merge_base=$(git merge-base "$BASE_SHA" "$HEAD_SHA"); then
+            echo "::error::git merge-base failed between $BASE_SHA and $HEAD_SHA" >&2
+            exit 1
+          fi
+          uv run --frozen python3 .github/scripts/gitapex_gate_commit_citation.py \
+            --mode pr-range --owner tvna --repo gitapex \
+            --base-ref "$merge_base" --head-ref "$HEAD_SHA" \
+            --title "$RUNNER_TEMP/pr_title.txt" --body "$RUNNER_TEMP/pr_body.txt"

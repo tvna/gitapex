@@ -78,7 +78,7 @@ reasons.
   (issue #890), which closes the "configured here but never actually
   installed" half; nothing closes the ``--no-verify`` half. CI remains the
   authoritative merge gate for every gate carrying a ``ci`` plane -- true
-  for 41 of the 43 wired gates. ``behind-base`` (issue #985) and
+  for 42 of the 44 wired gates. ``behind-base`` (issue #985) and
   ``real-checkout-git-write`` (issue #991) are the two exceptions: each
   carries only ``local``, so for those two gates specifically this
   pre-push hook -- bypassable the same way as any other -- is the *only*
@@ -90,7 +90,7 @@ reasons.
   ``jsonschema`` -- a real, non-stdlib dependency, contrary to an earlier
   revision of this paragraph's own "the runner itself needs no
   dependencies" claim. A bare system ``python3`` with no ``jsonschema``
-  installed crashed the whole runner on import before any of the 43 wired
+  installed crashed the whole runner on import before any of the 44 wired
   gates got a chance to run individually, so CONTRIBUTING.md's standalone
   example and the pre-push hook's own ``entry`` both now invoke it as ``uv
   run --frozen python3`` too, the same pin every wired gate's own argv
@@ -177,9 +177,10 @@ SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
 # own _GROUP_TIMEOUT_SECONDS = 600 -- so that one gate's own theoretical
 # worst case is ~4200 s, not 600 s. A ceiling matching that would be useless
 # as a hang guard (80 minutes of a silent pre-push), so this is a judgment
-# call in the other direction. For scale: a warm run of all 43 wired gates
-# combined measures roughly 15 s end to end in this measurement (the
-# prior 42-gate set measured roughly 18 s, the 41-gate set before that
+# call in the other direction. For scale: a warm run of all 44 wired gates
+# combined measures roughly 15 s end to end (the
+# prior 43-gate set measured roughly 15 s, the 42-gate set before that
+# measured roughly 18 s, the 41-gate set before that
 # measured roughly 18 s, the 40-gate set before that
 # measured roughly 17 s, the 39-gate set before that
 # measured roughly 12 s, the 38-gate set before that
