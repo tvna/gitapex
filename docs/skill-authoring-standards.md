@@ -14,14 +14,15 @@ in the first place. Rules 1 and 4 are enforced by
 `no-illustrative-model-identifier` and `no-raw-angle-bracket-placeholder`
 checks) against every `SKILL.md` and `references/*.md` file in this
 repository's own `skills/` tree, run by `tests/test_gitapex_repository_skill_shape.py`
-on every push and PR. Rules 2 and 3 stay judgment calls -- detecting a
-git-log-position assertion or grading test-fixture completeness needs
-semantic understanding a script cannot reliably provide -- apply them by
-hand at authoring and review time, the same way this file's own source
-retrospectives (#20, #122) already did, until a broader eval-suite or
-`check_skills.py`-equivalent gate exists for that category (tracked
-separately, see issue #11 and #20's gate proposal 1). Content outside
-`skills/` (this file included) is not covered by the deterministic
+on every push and PR. Rules 2, 3, and 5 stay judgment calls -- detecting
+a git-log-position assertion, grading test-fixture completeness, or
+judging whether a given body section is genuinely load-bearing for an
+invoking model all need semantic understanding a script cannot reliably
+provide -- apply them by hand at authoring and review time, the same way
+this file's own source retrospectives (#20, #122) already did, until a
+broader eval-suite or `check_skills.py`-equivalent gate exists for that
+category (tracked separately, see issue #11 and #20's gate proposal 1).
+Content outside `skills/` (this file included) is not covered by the deterministic
 checker; the outward-artifact-preflight checklist's own scope is
 different again (an outgoing artifact's text, not a skill's source
 files).
@@ -147,3 +148,44 @@ shape is a deliberate open/close tag pair, not a fill-in-the-blank
 placeholder (see `skills/untrusted-input-triage/SKILL.md`'s own worked
 example, which quotes a fake `<system-reminder>...</system-reminder>`
 payload as adversarial-input content).
+
+## 5. A skill's body is behavior, not disclosure
+
+A `SKILL.md` body section (Precondition, Postcondition, Non-goals,
+Output, or any other named section) earns its place only when a model
+reading the drafted skill at invocation time needs it to act -- a real
+caller-side gate, a real handoff guarantee, or a real report the
+conductor must hand back. Body content is earned by being Steps a model
+executes, or one of two confirmed-operative non-Step exceptions: `Stop
+boundaries` (real execution-time constraints) and `Related skills`
+(real collision or dependency information a model needs to route
+correctly). Everything else non-behavioral -- creation background,
+change history, a deliberate scope cut, why a rejected alternative
+lost, that a discipline is passively injected with no discrete
+entry/exit condition -- belongs in the skill's own
+`metadata/gitapex.yaml` sidecar (its `references` decision log, `kind:
+elision` for a deliberate scope cut, or `executionRequirements`), never
+restated in the body.
+
+This rule is background/rationale for a skill author to apply by hand
+while drafting or reviewing; no skill body may cite this document to
+satisfy it -- `skills/drafting-a-skill/SKILL.md`'s own Step 4 states the
+operative version of this rule directly, inline, consistent with that
+skill's own `Broad` capability declaration (a `Broad` skill inlines
+enough guidance directly rather than relying only on an on-demand
+reference). When a repository-level prohibition would otherwise
+invalidate a piece of content a skill's body wants to carry (this file's
+own non-redistribution outside `skills/`, for example), try a
+conditional reference first -- a stated fallback such as "if X, treat
+this as illustrative and substitute Y" -- before falling back to
+metadata-only recording; that fallback never rescues a citation to
+something categorically absent regardless of context (a bare-prose
+`docs/*.md` citation, since this directory is never redistributed to
+any consumer of a skill as a plugin), only content whose validity
+genuinely varies by context.
+
+Found via: `skills/drafting-a-skill/SKILL.md`'s own Step 4 forced every
+drafted skill to carry Precondition/Postcondition sections
+unconditionally, and its own Non-goals section was itself an example of
+reviewer-only content sitting in the body instead of the metadata
+sidecar (issue #1583).

@@ -5,10 +5,11 @@ own option lists directly in the body -- load this file for the deeper
 "why elicit, not infer" rationale and phrasing guidance beyond those
 options, when the body's own definitions aren't enough to actually word
 the question round. Format only -- the literal question wording is
-deliberately not finalized here (see this skill's own `SKILL.md`
-Non-goals); what's fixed is the shape the elicitation takes and why it
-takes that shape, so a drafting agent composes the actual questions from
-the requester's own real context rather than reading a canned script.
+deliberately not finalized here (see this skill's own `metadata/
+gitapex.yaml` `references` decision log, `kind: elision`); what's fixed
+is the shape the elicitation takes and why it takes that shape, so a
+drafting agent composes the actual questions from the requester's own
+real context rather than reading a canned script.
 
 ## Why elicit rather than infer
 

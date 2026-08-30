@@ -67,6 +67,24 @@ spec:
     - kind: caveat
       anchor: "https://github.com/tvna/gitapex/issues/1379"
       summary: "two of this issue's four entries above (same anchor) were appended once an independent evaluating-skill-quality dispatch caught their absence, not inline as their own commits landed -- a process lapse against this file's own Step 3 claim that entries are 'never backfilled,' disclosed here rather than silently left, not a retraction of that principle going forward"
+    - kind: elision
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "Non-goals migrated out of SKILL.md's body: does not finalize the literal tacit-knowledge-elicitation probe wording beyond the option lists Step 3 already inlines -- the exact phrasing a drafting agent uses to ask each question is references/tacit-knowledge-elicitation.md's own job to guide, judged fresh per draft, not a fixed script this skill hands out"
+    - kind: elision
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "Non-goals migrated out of SKILL.md's body: does not decide the shared-bundled-script-parent policy's future blocking-gate threshold, or mechanize that policy into gitapex_check_skill_shape.py -- both deferred to a future issue, once explicit stable lifecycle declarations become common enough in this repository to judge readiness"
+    - kind: elision
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "Non-goals migrated out of SKILL.md's body: does not build a Red Flags / rationalization-pattern table for this skill's own Stop boundaries -- the plain-bullet form is this draft's own choice, not a placeholder for an undelivered table; a future revision may still add one if a real rationalization pattern surfaces in practice"
+    - kind: elision
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "Non-goals migrated out of SKILL.md's body: does not modify evaluating-skill-quality, battle-testing-a-skill, or scorer-gated-skill-edits themselves -- only the routing-text additions named in Related skills, in planning-a-branch-from-an-issue and executing-a-branch-plan"
+    - kind: elision
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "Non-goals migrated out of SKILL.md's body: does not implement invoking-gitapex, a separate sibling skill design tracked at https://github.com/tvna/gitapex/issues/1173 -- re-verified during this issue's own planning as still unmerged, so this remains live, accurate content, not a moot bullet to drop"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "root-cause fix: Step 4's Design-by-Contract mandate stopped forcing Precondition/Postcondition (and by extension Non-goals/Output) onto a drafted skill unconditionally -- a body section now earns its place only when a model needs it to act at invocation time; added an explicit pre-Step-10 human-approval gate (new Step 9) requiring the requester see the current draft and acknowledge before either review dispatch proceeds"
   skillDependencies:
     requires:
       - evaluating-skill-quality
