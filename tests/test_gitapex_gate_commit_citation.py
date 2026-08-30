@@ -437,6 +437,42 @@ def test_args_rejects_an_invalid_mode(tmp_path: pathlib.Path) -> None:
         )
 
 
+def test_root_must_exist_rejects_a_file_path_directly(tmp_path: pathlib.Path) -> None:
+    # Calls the pydantic validator directly (not only through CommitCitationArgs
+    # construction above), so a not-a-directory root is rejected even when it
+    # names an existing file rather than a missing path.
+    not_a_dir = tmp_path / "a-file.txt"
+    not_a_dir.write_text("x", encoding="utf-8")
+    with pytest.raises(ValueError, match="must be an existing directory"):
+        gate.CommitCitationArgs._root_must_exist(not_a_dir)
+
+
+def test_root_must_exist_accepts_a_real_directory(tmp_path: pathlib.Path) -> None:
+    assert gate.CommitCitationArgs._root_must_exist(tmp_path) == tmp_path
+
+
+def test_commit_msg_file_required_in_commit_msg_mode_direct_call(tmp_path: pathlib.Path) -> None:
+    # Calls the model_validator directly against an already-constructed
+    # instance -- pydantic normally runs it during __init__ (asserted via
+    # CommitCitationArgs above), but this exercises the method itself.
+    pr_range_args = gate.CommitCitationArgs(
+        mode="pr-range",
+        commit_msg_file=None,
+        owner="",
+        repo="",
+        title=None,
+        body=None,
+        base_ref=None,
+        head_ref="HEAD",
+        root=tmp_path,
+    )
+    # pydantic wraps a `@model_validator` method in a descriptor proxy mypy's
+    # stubs do not model as callable on an instance -- a real runtime call
+    # (pydantic's own `__get__` returns the bound method), not a static-typing
+    # gap in the call itself.
+    assert pr_range_args._commit_msg_file_required_in_commit_msg_mode() is pr_range_args  # type: ignore[operator]
+
+
 # --- main(): --mode commit-msg ------------------------------------------------
 
 
@@ -906,6 +942,92 @@ def test_main_commit_msg_an_unreadable_file_exits_two(
     monkeypatch.setattr(pathlib.Path, "read_text", _deny)
     assert gate.main(["--mode", "commit-msg", str(msg_file)]) == 2
     assert "could not be read" in capsys.readouterr().err
+
+
+def test_read_input_file_direct_call_returns_empty_text_for_none() -> None:
+    assert gate._read_input_file(None) == ""
+
+
+def test_read_input_file_direct_call_reads_a_real_file(tmp_path: pathlib.Path) -> None:
+    path = tmp_path / "body.txt"
+    path.write_text("Closes #1212\n", encoding="utf-8")
+    assert gate._read_input_file(str(path), label="pr body") == "Closes #1212\n"
+
+
+def test_read_input_file_direct_call_raises_on_a_directory(tmp_path: pathlib.Path) -> None:
+    with pytest.raises(gate.CitationGateError, match="could not be read"):
+        gate._read_input_file(str(tmp_path), label="pr body")
+
+
+def test_run_commit_msg_direct_call_passes_on_a_cited_message(tmp_path: pathlib.Path) -> None:
+    msg_file = tmp_path / "COMMIT_EDITMSG"
+    msg_file.write_text("fix: correct the bug\n\nCloses #1212\n", encoding="utf-8")
+    args = gate.CommitCitationArgs(
+        mode="commit-msg",
+        commit_msg_file=str(msg_file),
+        owner="",
+        repo="",
+        title=None,
+        body=None,
+        base_ref=None,
+        head_ref="HEAD",
+        root=tmp_path,
+    )
+    assert gate._run_commit_msg(args) == 0
+
+
+def test_run_commit_msg_direct_call_fails_on_an_uncited_message(tmp_path: pathlib.Path) -> None:
+    msg_file = tmp_path / "COMMIT_EDITMSG"
+    msg_file.write_text("chore: tidy up formatting\n", encoding="utf-8")
+    args = gate.CommitCitationArgs(
+        mode="commit-msg",
+        commit_msg_file=str(msg_file),
+        owner="",
+        repo="",
+        title=None,
+        body=None,
+        base_ref=None,
+        head_ref="HEAD",
+        root=tmp_path,
+    )
+    assert gate._run_commit_msg(args) == 1
+
+
+def test_run_pr_range_direct_call_passes_on_a_cited_body(tmp_path: pathlib.Path) -> None:
+    body_file = tmp_path / "body.txt"
+    body_file.write_text("Closes #1212\n", encoding="utf-8")
+    args = gate.CommitCitationArgs(
+        mode="pr-range",
+        commit_msg_file=None,
+        owner="tvna",
+        repo="gitapex",
+        title=None,
+        body=str(body_file),
+        base_ref="HEAD",
+        head_ref="HEAD",
+        root=tmp_path,
+    )
+    assert gate._run_pr_range(args) == 0
+
+
+def test_run_pr_range_direct_call_fails_with_no_citation_anywhere(tmp_path: pathlib.Path) -> None:
+    root, base_sha, head_sha = _build_range_repo(tmp_path, citing_commit=False)
+    args = gate.CommitCitationArgs(
+        mode="pr-range",
+        commit_msg_file=None,
+        owner="",
+        repo="",
+        title=None,
+        body=None,
+        base_ref=base_sha,
+        head_ref=head_sha,
+        root=root,
+    )
+    # A genuinely non-empty, genuinely uncited commit range: neither
+    # --title nor --body was passed (pr_text_supplied defaults to True per
+    # evaluate_pr_range's own strict default), so this is the ordinary
+    # policy FAIL, not the empty-range "nothing to check" PASS.
+    assert gate._run_pr_range(args) == 1
 
 
 def test_main_pr_range_reports_a_base_ref_resolution_failure_as_exit_two(

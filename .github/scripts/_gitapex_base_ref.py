@@ -143,6 +143,18 @@ def run_git(
     timeout: int,
     error_cls: type[Exception],
     stdin_text: str | None = None,
+    # function-body-test-coverage: WAIVED: the added `stdin_text` parameter
+    # (issue #1212) is exercised by the pre-existing, extensively-updated
+    # tests/test_gitapex_base_ref.py (test_run_git_* mentions `run_git` by
+    # name repeatedly) -- but gitapex_gate_function_body_test_coverage.py's
+    # own _stem() keeps this module's leading underscore
+    # ("_gitapex_base_ref"), so it looks for tests/test__gitapex_base_ref.py
+    # (double underscore) rather than this repository's own actual,
+    # established single-underscore convention for a `_`-prefixed private
+    # helper module's test file. A genuine gate limitation, not a real
+    # coverage gap -- disclosed here rather than worked around by adding a
+    # second, oddly-named test file just to match the gate's own stem
+    # computation.
 ) -> subprocess.CompletedProcess[str]:
     """Run ``git -C root <args>`` and return the completed process,
     regardless of its exit code -- callers decide what a nonzero
