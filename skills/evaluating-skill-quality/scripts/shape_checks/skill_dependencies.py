@@ -132,7 +132,15 @@ def _skill_dependency_checks(
     deps = spec.get("skillDependencies")
     deps_errors = _errors_under(schema_errors, "spec", "skillDependencies")
     well_formed_errors = [e for e in deps_errors if "allOf" not in e.absolute_schema_path]
-    contradiction_errors = [e for e in deps_errors if "allOf" in e.absolute_schema_path]
+    # The allOf/if/then contradiction branch re-asserts skillDependencies'
+    # own type, so a non-mapping skillDependencies fires its own "allOf"
+    # schema error too -- the same vacuous-cross-field-constraint hazard
+    # lifecycle.py's isinstance guard (line 138) already exists for. Only
+    # evaluate the contradiction once skillDependencies is actually a
+    # mapping, so a wrong-type field is reported solely by well_formed_errors.
+    contradiction_errors = (
+        [e for e in deps_errors if "allOf" in e.absolute_schema_path] if isinstance(deps, dict) else []
+    )
 
     resolve_result, requires = _skill_dependency_resolve_result(deps, skill_dir, resolve_rule)
     return [

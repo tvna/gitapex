@@ -367,36 +367,43 @@ def _external_citations_well_formed_result(
         "and a role one of "
         f"{EXTERNAL_CITATION_ROLES}, and no unrecognized key"
     )
-    external_citations_declared: list[dict[str, object]] = []
     if not spec_is_mapping:
-        result = CheckResult(
-            "external-citations-well-formed",
-            False,
-            external_citations_well_formed_rule,
-            f"spec is not a mapping: {spec_raw!r}",
+        return (
+            CheckResult(
+                "external-citations-well-formed",
+                False,
+                external_citations_well_formed_rule,
+                f"spec is not a mapping: {spec_raw!r}",
+            ),
+            [],
         )
-    else:
-        errors = _errors_under(schema_errors, "spec", "externalCitations")
-        if errors:
-            result = CheckResult(
+    errors = _errors_under(schema_errors, "spec", "externalCitations")
+    if errors:
+        return (
+            CheckResult(
                 "external-citations-well-formed",
                 False,
                 external_citations_well_formed_rule,
                 _join_schema_errors(errors),
-            )
-        elif external_citations is None:
-            result = CheckResult(
+            ),
+            [],
+        )
+    if external_citations is None:
+        return (
+            CheckResult(
                 "external-citations-well-formed", True, external_citations_well_formed_rule, "not declared (optional)"
-            )
-        else:
-            ext_count = len(external_citations) if isinstance(external_citations, list) else 0
-            ext_noun = "entry" if ext_count == 1 else "entries"
-            result = CheckResult(
-                "external-citations-well-formed", True, external_citations_well_formed_rule, f"{ext_count} {ext_noun}"
-            )
-            if isinstance(external_citations, list):
-                external_citations_declared = [c for c in external_citations if isinstance(c, dict)]
-    return result, external_citations_declared
+            ),
+            [],
+        )
+    ext_count = len(external_citations) if isinstance(external_citations, list) else 0
+    ext_noun = "entry" if ext_count == 1 else "entries"
+    declared = [c for c in external_citations if isinstance(c, dict)] if isinstance(external_citations, list) else []
+    return (
+        CheckResult(
+            "external-citations-well-formed", True, external_citations_well_formed_rule, f"{ext_count} {ext_noun}"
+        ),
+        declared,
+    )
 
 
 def _lifecycle_reason_citation_sources(lifecycle_dict: dict[str, object]) -> list[tuple[str, str]]:

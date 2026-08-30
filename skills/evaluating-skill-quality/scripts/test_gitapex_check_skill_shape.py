@@ -2031,6 +2031,23 @@ def test_unreadable_sidecar_fails_manifest_parsable(tmp_path):
     assert css.main([str(d)]) == 1
 
 
+def test_deeply_nested_sidecar_fails_manifest_parsable_not_a_crash(tmp_path):
+    # Regression guard: yaml.safe_load blocks arbitrary object construction
+    # but still resolves anchors/aliases and recurses into deep nesting, so
+    # a hostile or malformed sidecar (e.g. a vendored skill) can raise
+    # RecursionError rather than yaml.YAMLError. Before this guard, that
+    # propagated out of check_shape() as a raw traceback instead of the
+    # graceful manifest-parsable FAIL every other malformed-sidecar case
+    # gets.
+    d = _write_skill(tmp_path)
+    depth = 3000
+    (d / "metadata/gitapex.yaml").write_text("a: " + "[" * depth + "]" * depth + "\n", encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["manifest-parsable"].passed is False
+    assert "RecursionError" in by["manifest-parsable"].evidence
+    assert css.main([str(d)]) == 1
+
+
 # ---- Portable self-citation scan (issue #171) ----
 
 
@@ -4317,6 +4334,22 @@ def test_skill_dependencies_whole_field_wrong_type_fails_well_formed(tmp_path):
     assert "is not of type 'object'" in by["skill-dependencies-well-formed"].evidence
     assert by["skill-dependencies-resolve"].passed is True
     assert by["requires-portability-compatible"].passed is True
+
+
+def test_skill_dependencies_wrong_type_with_portable_does_not_spuriously_fail_contradiction_check(tmp_path):
+    # Regression guard: the allOf/if/then contradiction branch re-asserts
+    # skillDependencies' own type, so a non-mapping skillDependencies with
+    # portability: Portable used to fire its own "allOf" schema error and
+    # get misattributed to requires-portability-compatible as a false
+    # contradiction FAIL -- mirrors lifecycle.py's isinstance guard for the
+    # analogous experimental-stable-compatible vacuous-not-constraint case
+    # (test_lifecycle_whole_field_wrong_type_fails_well_formed).
+    d = _write_skill_deps_sidecar(_write_skill(tmp_path), "  skillDependencies: oops\n", portability="Portable")
+    by = _by_name(css.check_shape(d))
+    assert by["skill-dependencies-well-formed"].passed is False
+    assert by["skill-dependencies-resolve"].passed is True
+    assert by["requires-portability-compatible"].passed is True
+    assert by["requires-portability-compatible"].evidence == "ok"
 
 
 def test_skill_dependencies_dangling_requires_fails_resolve(tmp_path):

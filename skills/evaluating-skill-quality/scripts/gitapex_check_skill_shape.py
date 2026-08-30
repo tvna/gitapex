@@ -766,7 +766,13 @@ def check_shape(target: Path) -> list[CheckResult]:
         try:
             manifest_raw: object = yaml.safe_load(sidecar.read_text(encoding="utf-8"))
             read_error: str | None = None
-        except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
+        except (OSError, UnicodeDecodeError, yaml.YAMLError, RecursionError, MemoryError) as exc:
+            # RecursionError/MemoryError: safe_load blocks arbitrary object
+            # construction but still resolves anchors/aliases, so a hostile
+            # or malformed sidecar (e.g. a vendored skill) can still exhaust
+            # stack or memory via alias-expansion -- report the same graceful
+            # manifest-parsable FAIL as a real YAML syntax error, not a raw
+            # traceback.
             manifest_raw = None
             read_error = type(exc).__name__
 
