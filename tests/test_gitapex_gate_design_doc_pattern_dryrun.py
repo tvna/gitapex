@@ -51,6 +51,19 @@ _REAL_FIXED_PARAGRAPH = (
 _NO_CUE_PARAGRAPH = 'This paragraph merely quotes "Step N" as an example label, nothing more.\n'
 
 
+def test_paragraphs_splits_on_blank_lines_and_normalizes_crlf() -> None:
+    """Direct unit test for `_paragraphs`, the helper `find_candidate_patterns`
+    and `find_zero_match_candidates` both build on: splits on blank-line
+    boundaries, drops whitespace-only paragraphs, and normalizes CRLF/CR
+    line endings to LF before splitting."""
+    text = "First paragraph.\r\n\r\nSecond paragraph,\r\nstill one paragraph.\n\n   \n\nThird.\r"
+    assert gate._paragraphs(text) == [
+        "First paragraph.",
+        "Second paragraph,\nstill one paragraph.",
+        "Third.\n",
+    ]
+
+
 def test_find_candidate_patterns_detects_hyphen_space_form() -> None:
     """_ORIGINAL_DEFECTIVE_PARAGRAPH also carries a second, incidental
     quoted heading name ("`## Procedure`") within the target window --
