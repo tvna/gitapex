@@ -264,11 +264,10 @@ judgment, route directly to `evaluating-skill-quality`/
    `evaluating-skill-quality`'s own Blind spot pass runs as a
    precondition step regardless of what this Step already found, and
    stays authoritative. This Step's own observable result: either "worth
-   covering before handoff" (a finding,
-   with the specific gap named), or an explicit "no domain gap found"
-   recorded in the Output -- never "blind spot: none" (that verdict
-   belongs to `evaluating-skill-quality`'s own Blind spot pass, not this
-   Step), and never silence.
+   covering before handoff" (a finding, with the specific gap named), or
+   an explicit "no domain gap found" recorded in the Output -- never
+   "blind spot: none" (that verdict belongs to `evaluating-skill-quality`'s
+   own Blind spot pass, not this Step), and never silence.
 
 8. **Sweep the draft against `references/formative-quality-
    dimensions.md`**'s nine formative dimensions -- a prose quality pass
@@ -461,6 +460,7 @@ cohesion.md`'s Step 2 redirect targets, `references/tacit-knowledge-
 elicitation.md`'s schema/decision-precedent citations, and
 `references/contract-structure.md`'s citation into `references/rubric.md`
 are all gitapex-specific -- named here rather than narrowed to Step 8,
+since each is a real dependency a vendoring consumer needs to substitute,
 per `references/gitapex-cross-links.md`'s own opening note (that
 substitution's designated home, not the only place such content lives).
 
