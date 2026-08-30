@@ -1,6 +1,6 @@
 ---
 name: invoking-gitapex
-description: Use at every session start (or explicitly, via the Skill tool) to establish gitapex's own skill-invocation discipline -- check for and invoke a relevant skill before any response, exploration, or action, including a clarifying question. Makes the dispatching skill responsible for embedding needed discipline into a subagent's own task prompt, rather than exempting every dispatched subagent from this discipline outright.
+description: Use at every session start -- establishes gitapex's own skill-invocation discipline, requiring a relevant skill be checked for and invoked before any response or action, including a clarifying question.
 ---
 
 # Invoking gitapex
@@ -12,13 +12,6 @@ skill-invocation discipline: checking for and invoking whatever skill
 applies before anything else happens, and never exempting a dispatched
 subagent from that discipline outright -- addressed directly in Step 3
 below.
-
-## Precondition
-
-This file's content is present in the current session's context -- either
-injected by `hooks/gitapex-session-start.sh` at session start, or read
-directly via an explicit `Skill` tool invocation -- and a new user
-request, response, exploration step, or tool call is about to begin.
 
 ## Steps
 
@@ -110,31 +103,6 @@ session is bound by this same postcondition only to the extent its own
 dispatching skill embedded it into that subagent's own task prompt, per
 Step 3 above -- this file's own injection into the parent session's
 context does not, by itself, reach a subagent's separate context.
-
-## Non-goals
-
-- Does not author `hooks/gitapex-session-start.sh` -- a separate, sibling
-  deliverable of the same parent issue. This file is content that hook
-  reads and injects; it is not the hook itself.
-- Does not decide or execute a session's actual business task -- it only
-  decides whether a skill applies before that task proceeds.
-- Does not itself remove or retire any other still-installed session-start
-  content -- that is tracked separately, outside this skill's own scope.
-- Does not route an already-investigated owner decision to a human -- its
-  own job is the general discipline of checking for and invoking whatever
-  skill applies, not deciding among prepared options for one.
-- Does not hardcode gitapex's own current skill-pipeline membership as a
-  fixed list -- see Step 2's own disclosed residual risk: the fuller
-  `merge-pipeline-redesign` diagram is not yet checked into this
-  repository.
-
-## Output
-
-No artifact. This is a passively-read discipline statement, not a task
-with a deliverable -- its only observable effect is the decision each
-session makes (which skill, if any, applies) before its own next response
-or action, visible in that session's subsequent behavior rather than in
-any return value here.
 
 ## Stop boundaries
 
