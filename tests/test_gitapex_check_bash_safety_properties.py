@@ -2679,6 +2679,127 @@ def test_names_poisoned_for_gh_api_and_b1_excludes_a_dynamic_only_name() -> None
     assert checker._names_poisoned_for_gh_api_and_b1(["Q=$A$B"]) == set()
 
 
+def test_names_cleared_by_a_later_static_reassignment_empty_candidates_is_always_empty() -> None:
+    """No candidates, no work: the common case for a command with no
+    poisoned names at all never scans TOKENS."""
+    assert checker._names_cleared_by_a_later_static_reassignment(["VERB=safe"], set()) == set()
+
+
+def test_names_cleared_by_a_later_static_reassignment_clears_after_an_append() -> None:
+    """Regression pin for the real false-positive over-denial found live
+    by Step 8 independent review, thirtieth round (issue #1375): a name
+    appended to and THEN given a later, ordinary static value must be
+    cleared -- the append is no longer the name's latest assignment-
+    class event."""
+    tokens = ["VERB=inst", "VERB+=all", "VERB=safe"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == {"VERB"}
+
+
+def test_names_cleared_by_a_later_static_reassignment_clears_after_a_read() -> None:
+    tokens = ["read", "VERB", "VERB=safe"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == {"VERB"}
+
+
+def test_names_cleared_by_a_later_static_reassignment_clears_after_an_array_element_assignment() -> None:
+    tokens = ["VERB[0]=install", "VERB=safe"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == {"VERB"}
+
+
+def test_names_cleared_by_a_later_static_reassignment_does_not_clear_when_the_append_is_last() -> None:
+    """No under-correction: a name given a static value and THEN
+    appended to must NOT be cleared -- the append is the name's latest
+    assignment-class event, so its own combined value is still
+    unrecoverable."""
+    tokens = ["VERB=safe", "VERB+=x"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == set()
+
+
+def test_names_cleared_by_a_later_static_reassignment_ignores_an_unrelated_name() -> None:
+    """No false positive: a static reassignment to a name NOT in
+    CANDIDATES must not spuriously clear anything."""
+    tokens = ["OTHER+=x", "OTHER=safe"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == set()
+
+
+def test_names_cleared_by_a_later_static_reassignment_clears_after_a_printf_v() -> None:
+    tokens = ["printf", "-v", "VERB", "%s", "install", ";", "VERB=safe"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == {"VERB"}
+
+
+def test_names_cleared_by_a_later_static_reassignment_ignores_an_unrelated_printf_v_target() -> None:
+    """No false positive: a `printf -v` target NOT in CANDIDATES must
+    not spuriously mark it for clearing."""
+    tokens = ["printf", "-v", "OTHER", "%s", "x", ";", "OTHER=safe"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == set()
+
+
+def test_names_cleared_by_a_later_static_reassignment_ignores_an_unrelated_array_element_assignment() -> None:
+    """No false positive: an array-element assignment to a name NOT in
+    CANDIDATES must not spuriously mark it for clearing."""
+    tokens = ["OTHER[0]=x", "OTHER=safe"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == set()
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, appended_value=_VALUES, final_static_value=_VALUES)
+def test_names_cleared_by_a_later_static_reassignment_matches_model_for_an_append_then_a_later_static_value(
+    name: str, appended_value: str, final_static_value: str
+) -> None:
+    """Model-based, exercising `_names_cleared_by_a_later_static_
+    reassignment` directly (issue #1178's own detection-logic property-
+    coverage requirement): for ANY identifier appended to and then given
+    a later static value, the function always includes it in the
+    cleared set -- and a second, entirely unrelated identifier whose OWN
+    latest event is an append with no later static value is never
+    included alongside it, even though it is a member of CANDIDATES
+    too."""
+    other_name = name + "_OTHER"
+    tokens = [
+        f"{name}=x",
+        f"{name}+={appended_value}",
+        f"{name}={final_static_value}",
+        f"{other_name}=x",
+        f"{other_name}+={appended_value}",
+    ]
+    result = checker._names_cleared_by_a_later_static_reassignment(tokens, {name, other_name})
+    assert name in result
+    assert other_name not in result
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, appended_value=_VALUES, final_static_value=_VALUES)
+def test_names_poisoned_for_gh_api_and_b1_matches_model_for_an_append_then_a_later_static_value(
+    name: str, appended_value: str, final_static_value: str
+) -> None:
+    """Model-based: for ANY identifier appended to and then given a
+    later static value, `_names_poisoned_for_gh_api_and_b1` never
+    includes it -- the round-30 fix's own generalized "trust only the
+    name's latest assignment" principle must hold for every identifier
+    shape `_IDENTIFIERS` generates, not just the specific example pinned
+    above."""
+    tokens = [f"{name}=x", f"{name}+={appended_value}", f"{name}={final_static_value}"]
+    assert name not in checker._names_poisoned_for_gh_api_and_b1(tokens)
+
+
+def test_names_poisoned_for_gh_api_and_b1_clears_an_append_given_a_later_static_value() -> None:
+    """Integration-level pin: the round-30 fix's subtraction actually
+    reaches `_names_poisoned_for_gh_api_and_b1`'s own combined result,
+    not just the standalone `_names_cleared_by_a_later_static_
+    reassignment` helper."""
+    tokens = ["VERB=inst", "VERB+=all", "VERB=safe"]
+    assert checker._names_poisoned_for_gh_api_and_b1(tokens) == set()
+
+
+def test_names_poisoned_for_gh_api_and_b1_clears_a_read_reassignment_given_a_later_static_value() -> None:
+    tokens = ["read", "VERB", "VERB=safe"]
+    assert checker._names_poisoned_for_gh_api_and_b1(tokens) == set()
+
+
+def test_names_poisoned_for_gh_api_and_b1_clears_an_array_element_assignment_given_a_later_static_value() -> None:
+    tokens = ["VERB[0]=install", "VERB=safe"]
+    assert checker._names_poisoned_for_gh_api_and_b1(tokens) == set()
+
+
 def test_classify_denies_a_b1b_tool_and_verb_reassigned_via_plain_dynamic_reassignment() -> None:
     """End-to-end regression pin for the round-27 finding at the
     `classify()` level, against B1b. Confirmed live before this fix via
@@ -2799,6 +2920,53 @@ def test_classify_allows_an_indirect_reference_to_an_unrelated_name_despite_a_po
         "TOOL=uv; VERB=harmless; VERB=$(echo install); OTHER=status; MREF=OTHER; $TOOL ${!MREF} foo"
     )
     assert verdict.deny is False
+
+
+def test_classify_allows_a_b1b_tool_and_verb_appended_then_given_a_later_static_value() -> None:
+    """CRITICAL false-positive regression pin (round-30 independent
+    review, issue #1375): round 28's own "clear on later static
+    reassignment" fix was applied only inside `_names_reassigned_from_
+    a_static_value`, leaving `_names_appended_to`/`_names_reassigned_by_
+    untracked_construct` (the OTHER two components of `_names_poisoned_
+    for_gh_api_and_b1`'s own union) poisoning a name forever once
+    appended to, even after a later static value fully restores trust.
+    Confirmed live via a stand-in `uv` binary on PATH that this
+    genuinely runs `uv safe foo` -- "safe" is not a watched verb."""
+    verdict = checker.classify("TOOL=uv; VERB=inst; VERB+=all; VERB=safe; $TOOL $VERB foo")
+    assert verdict.deny is False
+
+
+def test_classify_allows_a_gh_api_method_appended_then_given_a_later_static_value() -> None:
+    """Companion to the B1b pin above, for `_rule_gh_api_write`.
+    Confirmed live via a stand-in `gh` binary on PATH that this
+    genuinely runs `gh api repos/o/r/issues -X GET`, a read method."""
+    verdict = checker.classify("M=P; M+=OST; M=GET; gh api repos/o/r/issues -X $M")
+    assert verdict.deny is False
+
+
+def test_classify_allows_a_b1b_tool_and_verb_read_into_then_given_a_later_static_value() -> None:
+    """Same round, the `read` counterpart. Confirmed live via a stand-in
+    `uv` binary on PATH that this genuinely runs `uv safe foo`."""
+    verdict = checker.classify("TOOL=uv; read VERB <<< status; VERB=safe; $TOOL $VERB foo")
+    assert verdict.deny is False
+
+
+def test_classify_allows_a_b1b_tool_and_verb_array_element_assigned_then_given_a_later_static_value() -> None:
+    """Same round, the array-element-assignment counterpart. Confirmed
+    live via a stand-in `uv` binary on PATH that this genuinely runs
+    `uv safe foo`."""
+    verdict = checker.classify("TOOL=uv; VERB[0]=install; VERB=safe; $TOOL $VERB foo")
+    assert verdict.deny is False
+
+
+def test_classify_still_denies_a_b1b_tool_and_verb_given_a_static_value_then_appended_to() -> None:
+    """No under-correction: a name given a static value and THEN
+    appended to must stay denied -- the append is the name's latest
+    assignment-class event, so its own combined value is still
+    unrecoverable, regardless of how harmless the earlier static value
+    looked."""
+    verdict = checker.classify("TOOL=uv; VERB=safe; VERB+=x; $TOOL $VERB foo")
+    assert verdict.deny is True
 
 
 def test_resolve_path_tokens_denies_a_name_with_a_dynamic_assignment_elsewhere() -> None:

@@ -4181,6 +4181,94 @@ def _names_reassigned_from_a_static_value(tokens: list[str]) -> set[str]:
     return poisoned
 
 
+def _names_cleared_by_a_later_static_reassignment(tokens: list[str], candidates: set[str]) -> set[str]:
+    """Every NAME in CANDIDATES whose LAST reassignment-class event
+    anywhere in TOKENS -- a compound `+=` append, an array-element
+    assignment, a `read`/`readarray`/`mapfile`/`printf -v` reassignment,
+    or a plain `NAME=value` assignment (static or dynamic) -- is a
+    plain, non-dynamic assignment, strictly after every other kind of
+    event for that name. A later static assignment fully overwrites and
+    restores a known, trustworthy value -- the genuine value real bash
+    uses at the point of use -- regardless of what unresolvable state
+    came before it: the same "trust only the name's LATEST assignment"
+    principle round 28 already established for `_names_reassigned_
+    from_a_static_value`'s own narrower static-then-dynamic class,
+    generalized here across ALL of `_names_poisoned_for_gh_api_and_b1`'s
+    own component classes.
+
+    CRITICAL bug found by independent adversarial review (round 30,
+    issue #1375) and independently reproduced live, both via
+    `classify()` and via real bash execution with a stand-in `uv`/`gh`
+    binary on PATH: round 28's own "clear on later static reassignment"
+    fix was applied ONLY inside `_names_reassigned_from_a_static_value`
+    -- `_names_appended_to` and `_names_reassigned_by_untracked_
+    construct` (the OTHER two components of `_names_poisoned_for_gh_
+    api_and_b1`'s own union) still only ever ADD to their own result,
+    never clear it, so a name reassigned via append/`read`/an array-
+    element assignment and THEN later given an ordinary, fully-
+    trustworthy static value stayed poisoned forever -- the identical
+    false-positive over-denial shape round 28 already fixed, just left
+    open for these two other classes. `TOOL=uv; VERB=inst; VERB+=all;
+    VERB=safe; $TOOL $VERB foo` -- real bash's final value of `$VERB` is
+    `safe`, not a watched verb at all (confirmed live via a stand-in
+    `uv` binary on PATH: captured argv `uv called with: safe foo`) --
+    was wrongly denied by B1a/B1b before this fix. `M=P; M+=OST; M=GET;
+    gh api repos/o/r/issues -X $M` reproduces the identical shape for
+    `_rule_gh_api_write` (GET is a read method, confirmed live via a
+    stand-in `gh` binary on PATH: captured argv `gh called with: api
+    repos/o/r/issues -X GET`). The `read`- and array-element-reassigned
+    counterparts (`TOOL=uv; read VERB <<< status; VERB=safe; $TOOL
+    $VERB foo` and `TOOL=uv; VERB[0]=install; VERB=safe; $TOOL $VERB
+    foo`) reproduce identically (captured argv: `uv called with: safe
+    foo` for both).
+
+    Deliberately NOT applied to `_names_appended_to`/`_names_
+    reassigned_by_untracked_construct` themselves -- those two functions
+    are also shared by `_names_with_dynamic_assignment` (checkout/
+    restore's own full union), whose own "poison outright, never clear"
+    posture for these classes was independently confirmed correct and
+    deliberate during round 27's own review (see that function's own
+    docstring); this function instead post-processes only the poisoned
+    set `_names_poisoned_for_gh_api_and_b1` itself returns, leaving
+    those two shared functions -- and checkout/restore's own
+    consumption of them -- completely unchanged."""
+    if not candidates:
+        return set()
+    last_is_static: dict[str, bool] = {}
+    for seg in segment_tokens(tokens):
+        if seg and not _is_dynamic(seg[0]):
+            head = seg[0].lower()
+            if head in _READ_COMMAND_WORDS:
+                for tok in seg[1:]:
+                    if not _is_dynamic(tok) and tok in candidates and _BARE_IDENTIFIER_RE.match(tok):
+                        last_is_static[tok] = False
+            elif head == "printf":
+                for i, tok in enumerate(seg):
+                    if tok == "-v" and i + 1 < len(seg):
+                        target = seg[i + 1]
+                        if not _is_dynamic(target) and target in candidates and _BARE_IDENTIFIER_RE.match(target):
+                            last_is_static[target] = False
+        for token in seg:
+            array_match = _ARRAY_ELEMENT_ASSIGN_RE.match(token)
+            if array_match:
+                name = array_match.group(1)
+                if name in candidates:
+                    last_is_static[name] = False
+                continue
+            append_match = _APPEND_ASSIGN_RE.match(token)
+            if append_match:
+                name = append_match.group(1)
+                if name in candidates:
+                    last_is_static[name] = False
+                continue
+            match = _ASSIGN_RE.match(token)
+            if match:
+                name = match.group(1)
+                if name in candidates:
+                    last_is_static[name] = not _is_dynamic(token)
+    return {name for name, is_static in last_is_static.items() if is_static}
+
+
 def _names_poisoned_for_gh_api_and_b1(tokens: list[str]) -> set[str]:
     """The full poisoned-names set `_rule_gh_api_write` and `_segment_
     loop_hit` (B1a/B1b) actually consume -- the union of every class of
@@ -4208,12 +4296,22 @@ def _names_poisoned_for_gh_api_and_b1(tokens: list[str]) -> set[str]:
     candidate list reads as "no evidence of a write," the deliberately-
     accepted posture for that specific, disclosed gap) -- poisoning it
     here would regress that case into a false-positive deny, exactly
-    what round 26's own (too-broad) exclusion was trying to prevent."""
-    return (
+    what round 26's own (too-broad) exclusion was trying to prevent.
+
+    Round 30 (issue #1375): the raw union above still only ever ADDS a
+    name -- `_names_reassigned_from_a_static_value`'s own internal
+    clearing only covers ITS OWN static-then-dynamic class, not the
+    append/untracked-construct classes. `_names_cleared_by_a_later_
+    static_reassignment` (see that function's own docstring for the
+    live bypass this restores) is applied as a final subtraction so the
+    combined result genuinely tracks each name's LATEST assignment-class
+    event, whichever of the three classes it came from."""
+    poisoned = (
         _names_appended_to(tokens)
         | _names_reassigned_from_a_static_value(tokens)
         | _names_reassigned_by_untracked_construct(tokens)
     )
+    return poisoned - _names_cleared_by_a_later_static_reassignment(tokens, poisoned)
 
 
 def _names_reassigned_by_read_or_printf(tokens: list[str]) -> set[str]:

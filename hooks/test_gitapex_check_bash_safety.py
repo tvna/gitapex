@@ -364,6 +364,34 @@ ALLOWED_DYNAMIC_COMMANDS = [
         "TOOL=uv; VERB=harmless; VERB=$(echo install); OTHER=status; MREF=OTHER; $TOOL ${!MREF} foo",
         "indirect-ref-to-unrelated-name-stays-allowed-despite-a-poisoned-name-elsewhere",
     ),
+    # False-positive guard for the thirtieth-round `_names_cleared_by_a_
+    # later_static_reassignment` fix (issue #1375): round 28's own
+    # "clear on later static reassignment" fix was applied only inside
+    # `_names_reassigned_from_a_static_value`, leaving an append/`read`/
+    # array-element reassignment poisoned forever even after a later,
+    # fully-trustworthy static value. Confirmed live via a stand-in `uv`
+    # binary on PATH that this genuinely runs `uv safe foo` -- "safe" is
+    # not a watched verb.
+    (
+        "TOOL=uv; VERB=inst; VERB+=all; VERB=safe; $TOOL $VERB foo",
+        "var-split-tool-and-verb-appended-then-given-a-later-static-value-stays-allowed",
+    ),
+    # Same round, the `read` counterpart.
+    (
+        "TOOL=uv; read VERB <<< status; VERB=safe; $TOOL $VERB foo",
+        "var-split-tool-and-verb-read-into-then-given-a-later-static-value-stays-allowed",
+    ),
+    # Same round, the array-element-assignment counterpart.
+    (
+        "TOOL=uv; VERB[0]=install; VERB=safe; $TOOL $VERB foo",
+        "var-split-tool-and-verb-array-element-assigned-then-given-a-later-static-value-stays-allowed",
+    ),
+    # Same round, the gh-api-write counterpart: real bash genuinely runs
+    # `gh api repos/o/r/issues -X GET`, a read method.
+    (
+        "M=P; M+=OST; M=GET; gh api repos/o/r/issues -X $M",
+        "gh-api-method-value-appended-then-given-a-later-static-value-stays-allowed",
+    ),
 ]
 
 # --- Known, disclosed, unresolved regex/token-gate bypasses ----------------
@@ -1043,6 +1071,23 @@ DENIED_INDIRECTION_COMMANDS = [
     (
         "M=safe; M=$(echo POST); MREF=M; gh api repos/o/r/pulls/1/merge -X ${!MREF}",
         "gh-api-method-value-reassigned-from-a-static-value-referenced-indirectly",
+    ),
+    # Found live by Step 8 independent review, thirtieth round (issue
+    # #1375): the round-30 no-under-correction guard -- a name given a
+    # static value and THEN appended to must stay denied, since the
+    # append (not the earlier static value) is the name's latest
+    # assignment-class event and its own combined value is still
+    # unrecoverable in general, exactly as round 25's own original
+    # "poison unconditionally on any append" posture already requires.
+    # Confirmed live via a stand-in `uv` binary on PATH that this
+    # particular instance happens to resolve to the harmless `uv safex
+    # foo` -- the classifier's own deliberately conservative posture
+    # correctly denies it anyway, since it cannot in general predict a
+    # concatenation's own final value from a static prefix and a
+    # dynamic append alone.
+    (
+        "TOOL=uv; VERB=safe; VERB+=x; $TOOL $VERB foo",
+        "var-split-tool-and-verb-given-a-static-value-then-appended-to-stays-denied",
     ),
 ]
 
