@@ -1,6 +1,7 @@
 ---
 name: evaluating-skill-quality
 description: Review a SKILL.md (and its references/) against a nine-dimension quality rubric, separating deterministic shape from probabilistic maturity, citing concrete evidence per dimension. Use when reviewing any SKILL.md -- this repository's own or one vendored from elsewhere -- before merging, vendoring, or shipping it, for a one-shot static quality verdict; see battle-testing-a-skill for adversarial hostile-input probing, and scorer-gated-skill-edits for a measured edit loop, instead.
+compatibility: "Requires pyyaml and jsonschema for the bundled deterministic shape checker's manifest-sidecar YAML parsing and schema validation; no other runtime assumptions."
 ---
 
 # Evaluating Skill Quality
@@ -284,9 +285,8 @@ The `dependency-policy-declared` shape check PASSes on absence (matching `spec.r
 
 Optional. Three independent sub-blocks plus one plain scalar under
 `spec.lifecycle` in the skill's `metadata/gitapex.yaml` sidecar (the
-`lifecycle-well-formed` shape check enforces their shape when present) --
-a skill declaring none of them is implicitly **Stable**, the state every
-skill in this repository is in today:
+`lifecycle-well-formed` shape check enforces their shape when present) -- a
+skill declaring none of them is implicitly **Stable**, the state every skill in this repository is in today:
 
 ```yaml
 spec:
