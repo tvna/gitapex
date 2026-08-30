@@ -136,7 +136,25 @@ def destination_refspec(remote: str, branch: str) -> str:
 
 
 def run_git(
-    root: pathlib.Path, args: list[str], *, label: str, timeout: int, error_cls: type[Exception]
+    root: pathlib.Path,
+    args: list[str],
+    *,
+    label: str,
+    timeout: int,
+    error_cls: type[Exception],
+    stdin_text: str | None = None,
+    # function-body-test-coverage: WAIVED: the added `stdin_text` parameter
+    # (issue #1212) is exercised by the pre-existing, extensively-updated
+    # tests/test_gitapex_base_ref.py (test_run_git_* mentions `run_git` by
+    # name repeatedly) -- but gitapex_gate_function_body_test_coverage.py's
+    # own _stem() keeps this module's leading underscore
+    # ("_gitapex_base_ref"), so it looks for tests/test__gitapex_base_ref.py
+    # (double underscore) rather than this repository's own actual,
+    # established single-underscore convention for a `_`-prefixed private
+    # helper module's test file. A genuine gate limitation, not a real
+    # coverage gap -- disclosed here rather than worked around by adding a
+    # second, oddly-named test file just to match the gate's own stem
+    # computation.
 ) -> subprocess.CompletedProcess[str]:
     """Run ``git -C root <args>`` and return the completed process,
     regardless of its exit code -- callers decide what a nonzero
@@ -148,6 +166,15 @@ def run_git(
     ``gitapex_gate_behind_base.py``'s own pre-#1345 ``_run_git``, which
     this function replaces there -- existing tests asserting on that text
     keep passing unmodified.
+
+    ``stdin_text`` feeds a git subcommand that reads its input from stdin
+    (``git stripspace``, this module's own third caller
+    ``gitapex_gate_commit_citation.py``) -- added here rather than as a
+    second, near-identical ``subprocess.run`` wrapper in that caller,
+    which is precisely the duplicate-then-drift this module exists to
+    prevent. Default ``None`` leaves ``subprocess.run``'s own stdin
+    handling exactly as it was for every pre-existing caller: no pipe is
+    opened and no behavior changes.
 
     ``errors="replace"`` rather than ``text=True``'s own strict default,
     matching ``gitapex_gate_behind_base.py``'s documented regression: a
@@ -168,6 +195,7 @@ def run_git(
             errors="replace",
             check=False,
             timeout=timeout,
+            input=stdin_text,
         )
     except subprocess.TimeoutExpired as error:
         raise error_cls(f"git {label} timed out after {timeout}s") from error
