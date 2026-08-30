@@ -1750,8 +1750,8 @@ rotting or breaking once copied or revisited later.
   guidance with no explicit historical marking, or a bare `#149`
   issue/PR-number citation inside content declared Portable that silently
   resolves to the wrong issue once vendored, or annotating a stale
-  in-repo reference with its own commit provenance (`-- retired since,
-  commit abc1234 --`) instead of removing or generalizing it, when the
+  in-repo reference with its own commit provenance ("-- retired since,
+  commit `abc1234` --") instead of removing or generalizing it, when the
   repository's own `git log`/`git blame` already records the same fact
   durably.
 - **Pass:** time-bound content is explicitly marked historical, paths use
