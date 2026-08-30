@@ -76,11 +76,12 @@ already disclosed here):
   suppressed by a rejection phrase that actually describes the *other*
   mechanism.
 - `dry_run_corpus`'s case-insensitive matching uses `str.lower()`, which
-  applies Python's full Unicode special-casing (e.g. Turkish `İ` U+0130
-  lowercases to a two-codepoint sequence, `i` + a combining dot above) --
-  a quoted target containing such a character can fail to match plain-
-  ASCII corpus content a human would read as the same word. Not expected
-  to matter given this repository's own English-only corpus.
+  applies Python's full Unicode special-casing (e.g. the Turkish dotted
+  capital I, U+0130, lowercases to a two-codepoint sequence: a plain `i`
+  plus a combining dot above) -- a quoted target containing such a
+  character can fail to match plain-ASCII corpus content a human would
+  read as the same word. Not expected to matter given this repository's
+  own English-only corpus.
 - `_WAIVER_RE`'s line-anchored pattern (matching
   `gitapex_gate_provenance_disclosure.py` and
   `gitapex_gate_skill_audit_disclosure.py`'s own established convention
