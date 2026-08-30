@@ -5,6 +5,7 @@ metadata:
 spec:
   portability: Portable
   capabilityAssumption: Broad
+  dependencyPolicy: Declared
   references:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/32"
@@ -554,6 +555,18 @@ spec:
         found: 2
         fixed: 2
         new_gaps_found: 2
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/758"
+      summary: "Migrated gitapex_check_skill_shape.py's 12 schema-expressible manifest checks onto the bundled schema.json via jsonschema, reversing its stdlib-only property. Declared dependencyPolicy: Declared and executionRequirements.packages.pip: [pyyaml, jsonschema]; portability stays Portable, per the dependency-vs-portability resolution referenced above. Incidentally closes the pre-existing undeclared-PyYAML-import gap the entries above named for this skill's own scripts/, not separately re-verified."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/758"
+      summary: "battle-testing-a-skill dogfooding pass: FAIL, 2 of 20 applicable dimensions -- Input validation (yaml.safe_load's except tuple missed RecursionError/MemoryError, so a hostile sidecar could crash check_shape() with a raw traceback) and Supply-chain provenance (new pip deps unpinned in this skill's own text). Fixed: broadened the exception tuple, added a regression test, disclosed the pinning gap below."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/758"
+      summary: "evaluating-skill-quality self-review dogfooding pass: WELL-FORMED, NOT-MATURE. Isolation caveat: CLAUDE.md was present in the dispatch's own context via harness injection despite the exclusion instruction, so findings are provisional per adversarial-self-audit.md. Found Declared dependency-policy sub-criterion (b) unmet (no compatibility field); fixed by adding one."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/758"
+      summary: "Not blocking, deferred: Declared dependency-policy sub-criterion (c), the PEP 723 self-contained-script pattern, stays unmet for gitapex_check_skill_shape.py -- pyyaml/jsonschema instead resolve via this repository's own uv.lock. No script anywhere in this repository uses PEP 723 yet; adopting it unilaterally here would be scope creep beyond this migration."
   skillDependencies:
     requires: []
     relatedTo:
@@ -568,3 +581,7 @@ spec:
         - files
       shell:
         - python3
+    packages:
+      pip:
+        - pyyaml
+        - jsonschema

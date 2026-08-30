@@ -1,6 +1,7 @@
 ---
 name: evaluating-skill-quality
 description: Review a SKILL.md (and its references/) against a nine-dimension quality rubric, separating deterministic shape from probabilistic maturity, citing concrete evidence per dimension. Use when reviewing any SKILL.md -- this repository's own or one vendored from elsewhere -- before merging, vendoring, or shipping it, for a one-shot static quality verdict; see battle-testing-a-skill for adversarial hostile-input probing, and scorer-gated-skill-edits for a measured edit loop, instead.
+compatibility: "Requires pyyaml and jsonschema for the bundled deterministic shape checker's manifest-sidecar YAML parsing and schema validation; no other runtime assumptions."
 ---
 
 # Evaluating Skill Quality
@@ -15,7 +16,7 @@ skill artifact itself is good, not whether a change is correct.
   Run the bundled checker on the target skill dir, giving both paths from
   the same working directory -- e.g. from the repo root:
   `python3 skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py --allowed-root <approved-root> <skill-dir>`
-  (stdlib-only, read-only). See `gitapex_check_skill_shape.py` for the
+  (read-only; `uv run python3 ...` -- needs `pyyaml`/`jsonschema`, per `spec.dependencyPolicy: Declared` here). See `gitapex_check_skill_shape.py` for the
   exact rules and limits; it prints PASS/FAIL per check. On a
   Python-less surface, apply the same rules by reading that script's
   check list (its module docstring enumerates them). The nine maturity
@@ -284,9 +285,8 @@ The `dependency-policy-declared` shape check PASSes on absence (matching `spec.r
 
 Optional. Three independent sub-blocks plus one plain scalar under
 `spec.lifecycle` in the skill's `metadata/gitapex.yaml` sidecar (the
-`lifecycle-well-formed` shape check enforces their shape when present) --
-a skill declaring none of them is implicitly **Stable**, the state every
-skill in this repository is in today:
+`lifecycle-well-formed` shape check enforces their shape when present) -- a
+skill declaring none of them is implicitly **Stable**, the state every skill in this repository is in today:
 
 ```yaml
 spec:

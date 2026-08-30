@@ -3,62 +3,50 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TypeGuard
+
+import jsonschema
 
 from shape_checks.constants import SKILL_DEPENDENCY_SUBKEYS, CheckResult
 from shape_checks.links_portability import _resolves_to_sibling_skill
+from shape_checks.schema import _errors_under, _join_schema_errors
 
 
-def _valid_skill_dependency_list(value: object) -> bool:
+def _valid_skill_dependency_list(value: object) -> TypeGuard[list[str]]:
     """Whether ``value`` is a valid requires/relatedTo list: a list of
-    non-empty strings. Unlike spec.references, an empty list is valid here
-    -- most skills' spec.skillDependencies.requires is expected to be
-    empty (see the design spec's Sub-project D rationale)."""
+    non-empty strings. Retained (not schema-delegated) purely as a
+    best-effort accessor for ``skill-dependencies-resolve``, a cross-file
+    RETAIN check the schema cannot itself express -- it needs *some*
+    usable list to check dangling references against even when
+    ``skill-dependencies-well-formed`` (schema-backed) has already failed
+    the field overall."""
     return isinstance(value, list) and all(isinstance(v, str) and v.strip() for v in value)
 
 
-def _skill_dependency_well_formed_problems(
-    deps: dict[str, object], unknown_keys: list[str], malformed_items: list[str]
-) -> list[str]:
-    """The skill-dependencies-well-formed check's own problems, extracted
-    verbatim from ``_skill_dependency_checks``."""
-    problems: list[str] = []
-    if unknown_keys:
-        count = len(unknown_keys)
-        problems.append(f"{count} unknown key{'' if count == 1 else 's'}: {unknown_keys[0]!r}")
-    if malformed_items:
-        count = len(malformed_items)
-        problems.append(f"{count} malformed entr{'y' if count == 1 else 'ies'}: {malformed_items[0]!r}")
-    for key in SKILL_DEPENDENCY_SUBKEYS:
-        if key in deps and not _valid_skill_dependency_list(deps[key]):
-            problems.append(f"{key} is not a list of non-empty strings: {deps[key]!r}")
-    return problems
+def _skill_dependency_well_formed_result(
+    deps: object, well_formed_errors: list[jsonschema.exceptions.ValidationError], well_formed_rule: str
+) -> CheckResult:
+    """The ``skill-dependencies-well-formed`` CheckResult, once
+    ``spec.skillDependencies`` is confirmed declared."""
+    if well_formed_errors:
+        return CheckResult(
+            "skill-dependencies-well-formed", False, well_formed_rule, _join_schema_errors(well_formed_errors)
+        )
+    declared = [k for k in SKILL_DEPENDENCY_SUBKEYS if isinstance(deps, dict) and k in deps]
+    evidence = f"{', '.join(declared)} declared" if declared else "no keys declared"
+    return CheckResult("skill-dependencies-well-formed", True, well_formed_rule, evidence)
 
 
-def _skill_dependency_resolve_result(
-    deps: dict[str, object], skill_dir: Path, resolve_rule: str
-) -> tuple[CheckResult, object]:
-    """The ``skill-dependencies-resolve`` CheckResult, extracted verbatim
-    from ``_skill_dependency_checks`` -- also returns the already-validated
-    ``requires`` list, which the caller's own
-    requires-portability-compatible check needs next.
-
-    Returns ``object``, not ``list[str]``, for the second element: this
-    mirrors the module's own pre-existing narrowing gap (see this file's
-    pyproject.toml override note -- ``_valid_skill_dependency_list``
-    returns a plain ``bool``, not a ``TypeGuard``, so mypy cannot narrow
-    the ``requires if _valid_skill_dependency_list(requires) else []``
-    ternary below to ``list[str]``) -- stating the narrower, correct-at-
-    this-module's-own-override type rather than over-promising one mypy
-    cannot verify and that would need a NEW error-code exemption
-    (return-value) beyond the existing override's own
-    attr-defined/arg-type/operator/no-untyped-call list. The caller passes
-    this straight into ``_skill_dependency_portability_result``, whose own
-    ``list[str]``-typed parameter already relies on that same
-    already-covered ``arg-type`` exemption -- unchanged by this split."""
-    requires = deps.get("requires")
-    requires = requires if _valid_skill_dependency_list(requires) else []
-    related = deps.get("relatedTo")
-    related = related if _valid_skill_dependency_list(related) else []
+def _skill_dependency_resolve_result(deps: object, skill_dir: Path, resolve_rule: str) -> tuple[CheckResult, list[str]]:
+    """The ``skill-dependencies-resolve`` CheckResult -- also returns the
+    already-validated ``requires`` list, which the caller's own
+    requires-portability-compatible check needs next."""
+    if not isinstance(deps, dict):
+        return CheckResult("skill-dependencies-resolve", True, resolve_rule, "nothing to check (not a mapping)"), []
+    requires_raw = deps.get("requires")
+    requires = requires_raw if _valid_skill_dependency_list(requires_raw) else []
+    related_raw = deps.get("relatedTo")
+    related = related_raw if _valid_skill_dependency_list(related_raw) else []
     named = list(dict.fromkeys(requires + related))
     dangling = [n for n in named if not _resolves_to_sibling_skill(n, skill_dir.parent)]
     result = CheckResult(
@@ -71,10 +59,16 @@ def _skill_dependency_resolve_result(
 
 
 def _skill_dependency_portability_result(
-    requires: list[str], portability: object, contradiction_rule: str
+    contradiction_errors: list[jsonschema.exceptions.ValidationError],
+    requires: list[str],
+    portability: object,
+    contradiction_rule: str,
 ) -> CheckResult:
-    """The ``requires-portability-compatible`` CheckResult, extracted
-    verbatim from ``_skill_dependency_checks``."""
+    """The ``requires-portability-compatible`` CheckResult."""
+    if contradiction_errors:
+        return CheckResult(
+            "requires-portability-compatible", False, contradiction_rule, _join_schema_errors(contradiction_errors)
+        )
     contradiction = bool(requires) and portability == "Portable"
     return CheckResult(
         "requires-portability-compatible",
@@ -88,24 +82,25 @@ def _skill_dependency_checks(
     spec_is_mapping: bool,
     spec_raw: object,
     spec: dict[str, object],
-    malformed_items: list[str],
-    unknown_keys: list[str],
+    schema_errors: list[jsonschema.exceptions.ValidationError],
     skill_dir: Path,
     portability: object,
 ) -> list[CheckResult]:
     """The three spec.skillDependencies checks (Sub-project D):
-    ``skill-dependencies-well-formed`` (shape), ``skill-dependencies-resolve``
-    (every named sibling exists -- the dangling-reference gate), and
+    ``skill-dependencies-well-formed`` (shape, schema-backed, issue #758),
+    ``skill-dependencies-resolve`` (every named sibling exists -- a
+    cross-file RETAIN check no schema instance can itself express), and
     ``requires-portability-compatible`` (a non-empty ``requires`` cannot
-    coexist with ``spec.portability: Portable`` -- a portable skill cannot
-    hard-depend on a sibling that does not travel with it).
+    coexist with ``spec.portability: Portable``, also schema-backed via
+    the schema's own conditional ``allOf``).
 
-    Mirrors the spec.references cascade in ``check_shape``: shape is
-    checked first, since a badly-shaped field has nothing sensible to
-    resolve or contradict against -- in every early-return branch below,
-    ``skill-dependencies-resolve`` and ``requires-portability-compatible``
-    report "nothing to check" rather than silently passing on data that was
-    never actually a list.
+    ``skill-dependencies-well-formed``'s own schema errors and
+    ``requires-portability-compatible``'s both report at paths under
+    ``spec.skillDependencies`` -- distinguished by whether the violating
+    error's own schema path passes through the schema's ``allOf`` keyword:
+    only the cross-field contradiction rule lives inside that ``allOf``,
+    so any other schema error at this field belongs to
+    ``skill-dependencies-well-formed`` instead.
     """
     well_formed_rule = (
         "spec.skillDependencies, if present, is a mapping "
@@ -135,34 +130,21 @@ def _skill_dependency_checks(
         ]
 
     deps = spec.get("skillDependencies")
-    # deps is None here means the key was present with a blank (YAML null)
-    # value, not absent -- distinct from the "not in spec" case above.
-    # isinstance(None, dict) is already False, so the
-    # existing "not a mapping" branch below fails it correctly without
-    # further special-casing.
-    if not isinstance(deps, dict):
-        evidence = f"not a mapping: {deps!r}"
-        return [
-            CheckResult("skill-dependencies-well-formed", False, well_formed_rule, evidence),
-            CheckResult("skill-dependencies-resolve", True, resolve_rule, "nothing to check (not a mapping)"),
-            CheckResult(
-                "requires-portability-compatible", True, contradiction_rule, "nothing to check (not a mapping)"
-            ),
-        ]
-
-    results: list[CheckResult] = []
-    problems = _skill_dependency_well_formed_problems(deps, unknown_keys, malformed_items)
-
-    if problems:
-        results.append(CheckResult("skill-dependencies-well-formed", False, well_formed_rule, "; ".join(problems)))
-    else:
-        declared = [k for k in SKILL_DEPENDENCY_SUBKEYS if k in deps]
-        evidence = f"{', '.join(declared)} declared" if declared else "no keys declared"
-        results.append(CheckResult("skill-dependencies-well-formed", True, well_formed_rule, evidence))
+    deps_errors = _errors_under(schema_errors, "spec", "skillDependencies")
+    well_formed_errors = [e for e in deps_errors if "allOf" not in e.absolute_schema_path]
+    # The allOf/if/then contradiction branch re-asserts skillDependencies'
+    # own type, so a non-mapping skillDependencies fires its own "allOf"
+    # schema error too -- the same vacuous-cross-field-constraint hazard
+    # lifecycle.py's isinstance guard (line 138) already exists for. Only
+    # evaluate the contradiction once skillDependencies is actually a
+    # mapping, so a wrong-type field is reported solely by well_formed_errors.
+    contradiction_errors = (
+        [e for e in deps_errors if "allOf" in e.absolute_schema_path] if isinstance(deps, dict) else []
+    )
 
     resolve_result, requires = _skill_dependency_resolve_result(deps, skill_dir, resolve_rule)
-    results.append(resolve_result)
-
-    results.append(_skill_dependency_portability_result(requires, portability, contradiction_rule))
-
-    return results
+    return [
+        _skill_dependency_well_formed_result(deps, well_formed_errors, well_formed_rule),
+        resolve_result,
+        _skill_dependency_portability_result(contradiction_errors, requires, portability, contradiction_rule),
+    ]

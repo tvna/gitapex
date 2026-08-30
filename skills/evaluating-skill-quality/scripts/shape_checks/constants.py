@@ -6,6 +6,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from shape_checks.schema import SKILL_METADATA_SCHEMA, _schema_dict, _schema_enum
+
 # The Claude Developer Platform Skills API enforces description <= 1024
 # chars and name <= 64 lowercase-hyphen chars (platform.claude.com/docs/
 # en/agents-and-tools/agent-skills/best-practices) -- stricter than Claude
@@ -32,47 +34,23 @@ REFERENCES_ENTRY_MAX_CHARS = 500
 # open, ... -- with no closed vocabulary of its own, since real entries use
 # too varied a set of outcome facts for a fixed schema to fit).
 REFERENCES_ITEM_SUBKEYS = ("kind", "anchor", "summary", "outcome")
-REFERENCES_ITEM_REQUIRED_SUBKEYS = ("kind", "anchor", "summary")  # outcome is the one optional subkey
-# Exactly 4 spaces -- one level under spec.references' own 2-space key,
-# matching every other gated block's own fixed-indent convention.
-REFERENCES_ITEM_INDENT = 4
-# Closed vocabulary for the "kind" field, derived from the recurring entry
-# shapes actually found across every sidecar's spec.references: a
-# decision/change record, an audit-round record (a named
-# method/dispatch/verdict/finding-count), a deferral to a follow-up issue,
-# an external (non-gitapex) corroboration, a portability/worked-example
-# caveat, a citation-elision disclosure, or a correction/retraction of an
-# earlier entry. Not speculative -- no kind is included that the corpus
-# does not already contain an example of.
-REFERENCES_KIND_VOCAB = (
-    "decision",
-    "audit",
-    "deferral",
-    "corroboration",
-    "caveat",
-    "elision",
-    "correction",
-)
+# Issue #758: REFERENCES_KIND_VOCAB is now derived directly from
+# skill-metadata.schema.json's own referenceItem.kind enum -- the schema
+# is the sole source of truth for spec.references' shape (validated via
+# jsonschema.Draft202012Validator in check_shape()), so this constant
+# reads it back rather than hand-duplicating a second copy that could
+# drift.
+REFERENCES_KIND_VOCAB = _schema_enum("referenceItem", "properties", "kind")
 # spec.externalCitations (issue #1055): a Portable skill's own opt-in
 # declaration that a specific evals/docs/CLAUDE.md-chapter path citation
 # names an input source or output destination, not a control dependency --
 # see rubric.md's Portability level section for the underlying distinction
-# this supplements, not replaces, GENERIC_ROLE_HEDGE_PHRASES for. Each item
-# is a flat two-field mapping (no nested "outcome" sub-block, unlike
-# spec.references' own items), structurally the simpler of the two list-of-
-# mappings fields this sidecar has.
-EXTERNAL_CITATION_ITEM_SUBKEYS = ("path", "role")
-EXTERNAL_CITATION_ITEM_REQUIRED_SUBKEYS = ("path", "role")  # both subkeys are required; no optional field here
-# Exactly 4 spaces, matching REFERENCES_ITEM_INDENT's own convention -- one
-# level under spec.externalCitations' own 2-space key.
-EXTERNAL_CITATION_ITEM_INDENT = 4
-# A repo-external path cited only as an input source (read whatever the
-# calling repository has) or an output destination (this skill's own
-# result is consumed downstream by X) is not a control dependency -- see
-# rubric.md's Portability level section. Closed vocabulary; not
-# speculative -- both values are already this repository's own established
-# vocabulary from that section's prose.
-EXTERNAL_CITATION_ROLES = ("input-source", "output-destination")
+# this supplements, not replaces, GENERIC_ROLE_HEDGE_PHRASES for.
+#
+# EXTERNAL_CITATION_ROLES is derived directly from skill-metadata.schema.json's
+# own externalCitationItem.role enum (issue #758), for the same
+# single-source-of-truth reason REFERENCES_KIND_VOCAB above is.
+EXTERNAL_CITATION_ROLES = _schema_enum("externalCitationItem", "properties", "role")
 # A declared spec.externalCitations path must be rooted at evals/ or docs/,
 # the same two prefixes REPO_PATH_CITATION_RE's own evals/docs alternative
 # gates -- this mechanism exists to rescue exactly that check's own
@@ -118,73 +96,27 @@ INVOCATION_FIELD_DEFAULTS = {
 # and gitapex-labelled apiVersion. It is never auto-loaded by the skill
 # runtime, so it can never change skill behavior.
 SIDECAR_RELATIVE_PATH = "metadata/gitapex.yaml"
-# Kubernetes-manifest-shaped envelope, borrowed as a convention only; the
-# version lets the schema grow without breaking older sidecars.
-EXPECTED_API_VERSION = "gitapex.io/v1alpha1"
-EXPECTED_KIND = "SkillMetadata"  # the sidecar's fixed manifest kind, alongside EXPECTED_API_VERSION above
-PORTABILITY_LEVELS = ("Portable", "Repository-scoped", "Mixed")  # closed vocabulary for spec.portability
-CAPABILITY_ASSUMPTIONS = ("Broad", "Frontier", "Adaptive")  # closed vocabulary for spec.capabilityAssumption
-DEPENDENCY_POLICY_LEVELS = ("StdlibOnly", "Declared")  # closed vocabulary for spec.dependencyPolicy
-# A plain "- <value>" list item, indented 2 or more spaces -- real YAML
-# accepts a block sequence indented level with its mapping key (2 spaces,
-# same as spec.references' own key) or further indented (4 spaces, this
-# repo's convention); requiring one exact width would silently drop an
-# otherwise-valid item at a different indent instead of reading it. The
-# only list shape this parser understands, and only under spec.references
-# specifically.
-REFERENCES_LIST_ITEM_RE = re.compile(r"^[ ]{2,}-\s*(.*)$")
-# An unquoted item that itself looks like a YAML mapping key ("key: value"
-# or a bare "key:"), e.g. "- path: references/rubric.md" -- real YAML
-# parses that as a single-key mapping, not a scalar string, and this
-# parser has no map-shaped-item support. A quoted string starting with
-# this same text (e.g. "\"path: something\"") is a deliberate scalar and
-# is excluded by the caller checking for a wrapping quote first.
-REFERENCES_MAPPING_LIKE_RE = re.compile(r"^[A-Za-z0-9_.-]+:(\s|$)")
-# An unquoted plain scalar that YAML's core schema resolves to something
-# OTHER than a string -- null, boolean, or numeric -- rather than the
-# string every list-of-scalar-strings field (spec.references,
-# spec.skillDependencies.requires/relatedTo,
-# spec.executionRequirements.tools.read/write/shell,
-# spec.executionRequirements.packages.<ecosystem>) assumes each of its
-# items is. Deliberately the common, uncontroversial
-# subset -- not YAML 1.1's yes/no/on/off, which are also ordinary English
-# words a legitimate capability-tag or reference string could contain --
-# rather than a full type resolver. Checked only against an UNQUOTED
-# item's raw text; a caller already tests for a wrapping quote first (the
-# same way REFERENCES_MAPPING_LIKE_RE above is only checked when
-# unquoted), since a quoted item (e.g. "\"true\"") is a deliberate string
-# regardless of its contents.
-YAML_NON_STRING_SCALAR_RE = re.compile(
-    r"^(?:~|[Nn]ull|NULL"
-    r"|[Tt]rue|TRUE|[Ff]alse|FALSE"
-    r"|[-+]?[0-9]+"
-    r"|[-+]?(?:[0-9]+\.[0-9]*|\.[0-9]+)(?:[eE][-+]?[0-9]+)?"
-    r"|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN))$"
-)
-# A real YAML comment: an unquoted "#" preceded by start-of-string or
-# whitespace -- YAML never treats a "#" glued directly onto a preceding
-# non-space character as a comment marker (e.g. "true#tag" is the
-# literal string "true#tag", not "true" plus a comment). Used only to
-# strip a trailing comment before classifying an unquoted list item's own
-# scalar type in _is_non_string_plain_scalar below -- the item's stored
-# value is unaffected either way, only the type classification is --
-# a comment-bearing item such as "true # rationale" would otherwise defeat
-# YAML_NON_STRING_SCALAR_RE's own full-string anchor, silently certifying
-# a real YAML boolean/null/numeric as a string whenever it carries a
-# trailing comment.
-_INLINE_COMMENT_RE = re.compile(r"(?:^|\s)#.*$")
+# Issue #758: EXPECTED_API_VERSION/EXPECTED_KIND/PORTABILITY_LEVELS/
+# CAPABILITY_ASSUMPTIONS/DEPENDENCY_POLICY_LEVELS are now derived directly
+# from skill-metadata.schema.json rather than hand-duplicated -- the
+# schema is the sole source of truth for the sidecar's envelope/enum
+# shape (validated via jsonschema.Draft202012Validator in check_shape()),
+# eliminating the class of drift a hand-maintained second copy risked.
+_SCHEMA_PROPERTIES = _schema_dict(SKILL_METADATA_SCHEMA["properties"], "properties")
+EXPECTED_API_VERSION = _schema_dict(_SCHEMA_PROPERTIES["apiVersion"], "properties", "apiVersion")["const"]
+EXPECTED_KIND = _schema_dict(_SCHEMA_PROPERTIES["kind"], "properties", "kind")["const"]
+PORTABILITY_LEVELS = _schema_enum("spec", "properties", "portability")
+CAPABILITY_ASSUMPTIONS = _schema_enum("spec", "properties", "capabilityAssumption")
+DEPENDENCY_POLICY_LEVELS = _schema_enum("spec", "properties", "dependencyPolicy")
 
-
-# spec.skillDependencies's two recognized subkeys, and the shape of their
-# lines. Subkeys sit at 4 spaces (one level under skillDependencies' own
-# 2-space key). List items accept 4 or more spaces -- real YAML allows a
-# block sequence indented level with its own key (4 spaces, same as
-# "requires:"/"relatedTo:" themselves) or further indented (this repo's
-# convention); requiring one exact width would silently drop an otherwise-
-# valid item at a different indent instead of reading it, the same
-# accommodation REFERENCES_LIST_ITEM_RE already makes for spec.references.
+# spec.skillDependencies's two recognized subkeys (requires/relatedTo) --
+# still a plain Python tuple, not schema-derived: unlike an enum of
+# closed-vocabulary VALUES, these are the schema's own `properties` KEY
+# names, and skill-metadata.schema.json's own executionRequirements/
+# skillDependencies $defs express "recognized subkey" via `properties` +
+# `additionalProperties: false` together, not a single list a helper could
+# read back cleanly. Kept as a small, directly-stated tuple instead.
 SKILL_DEPENDENCY_SUBKEYS = ("requires", "relatedTo")
-SKILL_DEP_LIST_ITEM_RE = re.compile(r"^[ ]{4,}-\s*(.*)$")
 
 # spec.lifecycle's three recognized sub-blocks -- "experimental" (entry
 # side: not yet proven, mirrors Rust's #[unstable(feature, issue)],
@@ -205,21 +137,16 @@ SKILL_DEP_LIST_ITEM_RE = re.compile(r"^[ ]{4,}-\s*(.*)$")
 # requires/relatedTo), but each subkey opens ANOTHER nested block of
 # scalar fields at 6 spaces, rather than a list.
 LIFECYCLE_SUBKEYS = ("experimental", "deprecated", "stable")
-LIFECYCLE_FIELDS = {
-    "experimental": ("reason", "trackingIssue", "since"),
-    "deprecated": ("reason", "replacement", "since", "removeAfter"),
-    "stable": ("since", "compatibilityGuarantee"),
-}
-LIFECYCLE_REQUIRED_FIELDS = {
-    "experimental": ("reason", "trackingIssue"),
-    "deprecated": ("reason", "replacement"),
-    "stable": ("since",),
-}
-# Kubernetes' alpha/beta/GA API-stability tiers, borrowed as spec.
-# lifecycle.stable's optional compatibilityGuarantee enum -- shape-gated
-# only; no rule ties a sibling's spec.skillDependencies.requires to this
-# value (that would be new cross-skill coupling beyond what was asked).
-COMPATIBILITY_GUARANTEE_LEVELS = ("Alpha", "Beta", "GA")
+# Issue #758: COMPATIBILITY_GUARANTEE_LEVELS is now derived directly from
+# skill-metadata.schema.json's own lifecycleStable.compatibilityGuarantee
+# enum, for the same single-source-of-truth reason REFERENCES_KIND_VOCAB
+# above is. LIFECYCLE_FIELDS/LIFECYCLE_REQUIRED_FIELDS/LIFECYCLE_DATE_RE/
+# LIFECYCLE_ISSUE_REF_RE are retired outright: each hand-duplicated a
+# shape (required fields, YYYY-MM-DD date format, trackingIssue's own
+# full-URL pattern) the schema's own lifecycleExperimental/
+# lifecycleDeprecated/lifecycleStable/lifecycleDate $defs already state,
+# now enforced solely by jsonschema.Draft202012Validator.
+COMPATIBILITY_GUARANTEE_LEVELS = _schema_enum("lifecycleStable", "properties", "compatibilityGuarantee")
 # spec.lifecycle.renamedFrom is different in kind from the three
 # sub-blocks above: a plain scalar directly under lifecycle: (like
 # metadata.name under metadata:), never opening a nested block. Backward-
@@ -230,108 +157,20 @@ COMPATIBILITY_GUARANTEE_LEVELS = ("Alpha", "Beta", "GA")
 # resolved against sibling directories (unlike deprecated.replacement) --
 # the whole point is that the old name is expected to no longer exist.
 LIFECYCLE_SCALAR_KEYS = ("renamedFrom",)
-# Strict calendar-date shape for spec.lifecycle's since/removeAfter
-# fields: YYYY-MM-DD only. Real-date validity (rejecting e.g. 2026-02-30)
-# is checked separately via datetime.date.fromisoformat in
-# _valid_lifecycle_date -- this regex only gates the shape first, so that
-# lenient ISO-variant parsing in Python 3.11+ never gets a chance to
-# accept an off-shape string.
-LIFECYCLE_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-# A full GitHub issue/PR URL anchoring the whole string: any owner/repo
-# segment (metadata/gitapex.yaml is maintainer-facing provenance for
-# whichever repository actually hosts the skill directory at the time --
-# this repository today, a different one once vendored -- never something
-# a portable skill body depends on), an "issues" or "pull" segment, then a
-# digit run. Deliberately a full URL, not a bare "#123"/"owner/repo#123"
-# shape: a bare issue number means nothing once this sidecar travels with
-# its skill directory to another repository (e.g. plugin vendoring); a
-# full URL still resolves to the right place wherever it lands -- but only
-# if the owner/repo segment itself is not hardcoded to this repository's
-# own name, which would defeat that same vendoring case. Shape-only --
-# never resolved against a live GitHub API call, since this checker is
-# offline/read-only by design.
-LIFECYCLE_ISSUE_REF_RE = re.compile(
-    r"^https://github\.com/[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?/[A-Za-z0-9._-]+/(?:issues|pull)/\d+$"
-)
-
-# A YAML mapping key at a given indent, however it was written: a bare
-# scalar key (any run of characters up to the first unquoted ":" that
-# does not start with whitespace, a quote, or "#") or a single/double-
-# quoted string key. Shared by every gated block's key-recognition site
-# (spec.skillDependencies' requires/relatedTo, spec.lifecycle's
-# experimental/deprecated/stable/renamedFrom and their own nested fields).
-# Earlier per-field pairs -- a specific-name alternation regex for
-# recognized keys, plus a [A-Za-z0-9_-]+ catch-all for unrecognized ones --
-# shared one blind spot: a quoted key (`"extra": foo`) or a key containing
-# a character outside that narrow class matched NEITHER regex, so it fell
-# through both checks into the "stray content, skip silently" branch
-# instead of ever reaching unknown-key detection. Matching
-# broadly here and leaving "recognized vs. unknown" entirely to the
-# caller's own membership check closes that gap: every syntactically
-# key-shaped line at this indent is now seen as A key, so an unrecognized
-# one can no longer hide behind a narrow character class the way a
-# recognized one never had to. Still not a real YAML string lexer, though
-# -- it has no escape-sequence support and requires the closing quote to
-# be immediately followed by ":" -- so a key using an escaped quote
-# (`"ex\"tra": foo`) or whitespace before its colon (`"extra" : foo`) does
-# not match this regex either. Each of this regex's three call sites
-# handles that residual gap the same way: a line at the gated indent that
-# matches neither a list item currently being collected nor this key
-# pattern is itself flagged as unknown/malformed, not silently skipped --
-# rejecting every unmatched line at that indent, rather than only the
-# ones this regex happens to parse, is the actual fail-closed contract.
-KEY_LINE_RE_4 = re.compile(r'^[ ]{4}(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'#][^:]*?)):[ \t]*(.*)$')
-KEY_LINE_RE_6 = re.compile(r'^[ ]{6}(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'#][^:]*?)):[ \t]*(.*)$')
-# One nesting level deeper than KEY_LINE_RE_6: spec.references' own item
-# mappings nest an optional "outcome" sub-mapping (8-space indent, one
-# level under the item's own 6-space fields) -- the only field in this
-# sidecar three levels deep under spec.
-KEY_LINE_RE_8 = re.compile(r'^[ ]{8}(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'#][^:]*?)):[ \t]*(.*)$')
-# Matches a spec.references list item's own first field, given inline
-# right after its "- " marker (e.g. "kind: decision" from
-# "- kind: decision") -- same key-shape alternation as KEY_LINE_RE_4/6, but
-# with no anchored leading indent, since the "- " prefix itself already
-# consumed a variable amount of the line before this text was isolated.
-INLINE_KEY_VALUE_RE = re.compile(r'^(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'#][^:]*?)):[ \t]*(.*)$')
 
 # spec.executionRequirements' two recognized subkeys so far: "tools" and
-# "network" (issue #845), each at 4-space indent -- same depth as
-# spec.skillDependencies' requires/relatedTo and spec.lifecycle's
-# experimental/deprecated/stable. Recognized via the same shared
-# KEY_LINE_RE_4 matcher those two fields use, not a field-specific regex --
-# for consistency across all three gated blocks.
+# "network" (issue #845), each -- if present -- a mapping of their own
+# recognized scalar/list fields.
 EXEC_REQ_TOOLS_SUBKEYS = ("read", "write", "shell")
-# List items accept 6 or more spaces -- the same indent-drift tolerance
-# REFERENCES_LIST_ITEM_RE/SKILL_DEP_LIST_ITEM_RE already give their own
-# lists (an item at their own subkey's depth, or deeper). Reused verbatim
-# by spec.executionRequirements.network's own domains list below --
-# domains sits at the identical 6-space depth tools' own read/write/shell
-# lists do, so a second, byte-identical regex would add nothing.
-EXEC_REQ_TOOLS_LIST_ITEM_RE = re.compile(r"^[ ]{6,}-\s*(.*)$")
 
 # spec.executionRequirements.network's two recognized subkeys (issue #845,
 # resolving the mixed scalar-plus-list shape issue #349 deferred): "mode"
 # (a scalar enum) and "domains" (a list), in the SAME sub-block -- unlike
-# tools, whose read/write/shell are all list-valued. The parser layer below
-# does not judge which subkey should hold a scalar vs. a list; each subkey
-# is captured exactly as written (an inline value is stored as a raw
-# scalar, a blank value opens a list), the same per-subkey mechanism
-# tools' own read/write/shell already use -- type validity (mode must be a
-# recognized enum string; domains must be a list) is entirely a
-# checker-layer question (_execution_requirements_checks), never a
-# parser-layer one. This slice hand-duplicates tools' own state machine
-# (in_exec_tools/exec_tools/... -> in_exec_network/exec_network/...) rather
-# than extracting a shared generic-subblock helper both could call -- the
-# existing tools state machine is threaded through this loop via several
-# mutually exclusive `nonlocal` flags, and a real extraction touching that
-# already-proven path was judged higher regression risk than the size of
-# this slice's own scope justifies. A future mixed-shape category (mcp,
-# per issue #349's own deferral) can copy this block's shape directly, but
-# still cannot literally reuse it as a function without that extraction --
-# stated explicitly here per this issue's own disclosure requirement,
-# rather than silently claiming a generalization that was not attempted.
+# tools, whose read/write/shell are all list-valued.
 EXEC_REQ_NETWORK_SUBKEYS = ("mode", "domains")
-EXEC_REQ_NETWORK_MODES = ("disabled", "allowlist", "unrestricted")  # closed vocabulary for network.mode
+# Issue #758: EXEC_REQ_NETWORK_MODES is now derived directly from
+# skill-metadata.schema.json's own executionRequirementsNetwork.mode enum.
+EXEC_REQ_NETWORK_MODES = _schema_enum("executionRequirementsNetwork", "properties", "mode")
 
 # spec.executionRequirements' third recognized block sub-key: "packages" --
 # the first whose own subkeys are NOT a fixed, closed tuple the way tools'
@@ -340,38 +179,9 @@ EXEC_REQ_NETWORK_MODES = ("disabled", "allowlist", "unrestricted")  # closed voc
 # is an open-ended set by design -- skill-metadata.schema.json's own
 # executionRequirementsPackages deliberately declares no closed enum of
 # supported ecosystems, via propertyNames rather than a fixed properties
-# list -- so unknown-subkey detection here must be a REGEX match against
-# that same pattern, not a tuple-membership check: a future ecosystem
-# becomes usable with no parser change, matching the schema's own design
-# intent. Kept as a separate, hand-duplicated regex here rather than
-# imported from the schema (the same precedent EXTERNAL_CITATION_PATH_RE
-# already established for a schema constraint that also needs enforcing in
-# this dependency-free, no-YAML-library parser).
-EXEC_REQ_PACKAGES_KEY_RE = re.compile(r"^[a-z][a-z0-9-]*$")
-# Detects a line that LOOKS like an attempted "- <value>" packages list item
-# (a "-" as its first non-whitespace character, tabs included) but whose
-# leading whitespace fails EXEC_REQ_TOOLS_LIST_ITEM_RE's own strict "6 or
-# more literal SPACE characters" requirement -- a tab anywhere in the
-# indent, or fewer than 6 spaces. Used only to distinguish that case from a
-# packages ecosystem list genuinely ending (a real dedent, or a new sibling
-# ecosystem key) while collecting_exec_packages_list is open: without it, a
-# line like "\t- some-package" (or "  - some-package", 2 spaces) silently
-# finalizes the list as empty -- indistinguishable from the package truly
-# never having been declared -- instead of being recorded into
-# malformed_execution_requirement_packages_items the way an item
-# EXEC_REQ_TOOLS_LIST_ITEM_RE itself rejects (mapping-shaped, wrong type)
-# already is. Cannot collide with a legitimate new KEY_LINE_RE_6 sibling
-# key: whenever this matches AND the strict item regex already failed, the
-# leading whitespace run is provably not "exactly 6 literal spaces" (either
-# shorter, or tab-containing), which KEY_LINE_RE_6 requires verbatim -- so
-# the two can never both match the same line. Scoped to packages only, per
-# this fix's own issue: tools' and network's own sibling list-item blocks
-# (collecting_exec_tools_list/collecting_exec_network_list below) share this
-# exact latent gap -- no equivalent fail-closed check exists at their own
-# list-item level either, only at the surrounding key level -- and are
-# deliberately left as-is here rather than silently duplicating the fix
-# beyond this issue's own scope.
-EXEC_REQ_PACKAGES_MISINDENTED_ITEM_RE = re.compile(r"^[ \t]*-\s*(.*)$")
+# list, enforced solely by jsonschema.Draft202012Validator (issue #758;
+# EXEC_REQ_PACKAGES_KEY_RE, a hand-duplicated copy of that same
+# propertyNames.pattern, is retired).
 
 TAG_RE = re.compile(r"</?[A-Za-z][^>]*>")
 # A YAML plain (unquoted) scalar cannot safely contain ": " (colon followed

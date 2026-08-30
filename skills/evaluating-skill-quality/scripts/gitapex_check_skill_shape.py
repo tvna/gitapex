@@ -565,6 +565,7 @@ import os.path
 import sys
 from pathlib import Path
 
+import yaml
 from shape_checks.bundled_scripts import (
     _comment_line_numbers,
     _no_voodoo_constant_checks,
@@ -590,11 +591,9 @@ from shape_checks.constants import (
     CAPABILITY_ASSUMPTIONS,
     DESCRIPTION_MAX_CHARS,
     EXEC_REQ_NETWORK_SUBKEYS,
-    EXEC_REQ_PACKAGES_KEY_RE,
     EXEC_REQ_TOOLS_SUBKEYS,
     EXPECTED_API_VERSION,
     EXPECTED_KIND,
-    LIFECYCLE_ISSUE_REF_RE,
     LIFECYCLE_SCALAR_KEYS,
     LIFECYCLE_SUBKEYS,
     NAME_MAX_CHARS,
@@ -602,7 +601,6 @@ from shape_checks.constants import (
     REFERENCES_ENTRY_MAX_CHARS,
     REFERENCES_ITEM_SUBKEYS,
     SIDECAR_RELATIVE_PATH,
-    SKILL_DEP_LIST_ITEM_RE,
     SKILL_DEPENDENCY_SUBKEYS,
     TOC_MIN_LINES,
     CheckResult,
@@ -616,7 +614,7 @@ from shape_checks.field_checks import (
     _validate_read_scope,
 )
 from shape_checks.frontmatter import _parse_frontmatter, _unquote
-from shape_checks.lifecycle import _lifecycle_checks, _valid_tracking_issue
+from shape_checks.lifecycle import _lifecycle_checks
 from shape_checks.links_portability import (
     SidecarPortability,
     _body_after_frontmatter,
@@ -627,7 +625,7 @@ from shape_checks.links_portability import (
     _resolves_to_sibling_skill,
     _stale_related_skill_references,
 )
-from shape_checks.manifest import _is_non_string_plain_scalar, _parse_manifest, spec_of
+from shape_checks.manifest import spec_of
 from shape_checks.orchestrator import (
     _body_length_result,
     _dependency_policy_declared_result,
@@ -642,6 +640,7 @@ from shape_checks.orchestrator import (
     _sidecar_unreadable_results,
     _skill_md_read_result,
 )
+from shape_checks.schema import _SCHEMA_VALIDATOR
 from shape_checks.skill_dependencies import _skill_dependency_checks
 
 # Names this hub imports only to re-export -- never referenced by
@@ -668,23 +667,18 @@ __all__ = [
     "BODY_MAX_LINES",
     "DESCRIPTION_MAX_CHARS",
     "EXEC_REQ_NETWORK_SUBKEYS",
-    "EXEC_REQ_PACKAGES_KEY_RE",
     "EXEC_REQ_TOOLS_SUBKEYS",
-    "LIFECYCLE_ISSUE_REF_RE",
     "LIFECYCLE_SCALAR_KEYS",
     "LIFECYCLE_SUBKEYS",
     "NAME_MAX_CHARS",
     "REFERENCES_ENTRY_MAX_CHARS",
     "REFERENCES_ITEM_SUBKEYS",
     "SKILL_DEPENDENCY_SUBKEYS",
-    "SKILL_DEP_LIST_ITEM_RE",
     "TOC_MIN_LINES",
     "_INLINE_CITATION_CHECK_SPECS",
     "_comment_line_numbers",
-    "_is_non_string_plain_scalar",
     "_resolves_to_sibling_skill",
     "_unquote",
-    "_valid_tracking_issue",
     "spec_of",
 ]
 
@@ -760,49 +754,47 @@ def check_shape(target: Path) -> list[CheckResult]:
         # SidecarPortability docstring): a corrupt (non-UTF-8) or otherwise
         # unreadable sidecar must not raise out of check_shape -- it is a
         # shape defect, reported as FAILed checks, not a usage error.
+        # Issue #758: the sidecar's own YAML-to-dict parsing is delegated
+        # to PyYAML (yaml.safe_load) rather than a hand-rolled reader.
+        # manifest_unusable covers both failure shapes that make every
+        # downstream check meaningless: a real YAML syntax error (raises
+        # yaml.YAMLError) and, since yaml.safe_load can legitimately
+        # return any YAML value (a list, a bare scalar, null for an empty
+        # file), a root that parses cleanly but is not a mapping -- the
+        # hand-rolled reader this replaces could never produce that second
+        # case (it only ever built a dict), but a real YAML parser can.
         try:
-            parsed = _parse_manifest(sidecar.read_text(encoding="utf-8"))
-            manifest: dict[str, object] | None = parsed.root
-            malformed_lines = parsed.malformed_lines
-            malformed_reference_items = parsed.malformed_reference_items
-            unknown_reference_item_keys = parsed.unknown_reference_item_keys
-            malformed_skill_dependency_items = parsed.malformed_skill_dependency_items
-            unknown_skill_dependency_keys = parsed.unknown_skill_dependency_keys
-            unknown_lifecycle_keys = parsed.unknown_lifecycle_keys
-            unknown_lifecycle_fields = parsed.unknown_lifecycle_fields
-            unknown_execution_requirement_keys = parsed.unknown_execution_requirement_keys
-            unknown_execution_requirement_tools_keys = parsed.unknown_execution_requirement_tools_keys
-            malformed_execution_requirement_tools_items = parsed.malformed_execution_requirement_tools_items
-            unknown_execution_requirement_packages_keys = parsed.unknown_execution_requirement_packages_keys
-            malformed_execution_requirement_packages_items = parsed.malformed_execution_requirement_packages_items
-            unknown_execution_requirement_network_keys = parsed.unknown_execution_requirement_network_keys
-            malformed_execution_requirement_network_items = parsed.malformed_execution_requirement_network_items
-            malformed_external_citation_items = parsed.malformed_external_citation_items
-            unknown_external_citation_item_keys = parsed.unknown_external_citation_item_keys
+            manifest_raw: object = yaml.safe_load(sidecar.read_text(encoding="utf-8"))
             read_error: str | None = None
-        except (OSError, UnicodeDecodeError) as exc:
-            manifest = None
-            malformed_lines = []
-            malformed_reference_items = []
-            unknown_reference_item_keys = []
-            malformed_skill_dependency_items = []
-            unknown_skill_dependency_keys = []
-            unknown_lifecycle_keys = []
-            unknown_lifecycle_fields = []
-            unknown_execution_requirement_keys = []
-            unknown_execution_requirement_tools_keys = []
-            malformed_execution_requirement_tools_items = []
-            unknown_execution_requirement_packages_keys = []
-            malformed_execution_requirement_packages_items = []
-            unknown_execution_requirement_network_keys = []
-            malformed_external_citation_items = []
-            unknown_external_citation_item_keys = []
-            malformed_execution_requirement_network_items = []
+        except (OSError, UnicodeDecodeError, yaml.YAMLError, RecursionError, MemoryError) as exc:
+            # RecursionError/MemoryError: safe_load blocks arbitrary object
+            # construction but still resolves anchors/aliases, so a hostile
+            # or malformed sidecar (e.g. a vendored skill) can still exhaust
+            # stack or memory via alias-expansion -- report the same graceful
+            # manifest-parsable FAIL as a real YAML syntax error, not a raw
+            # traceback.
+            manifest_raw = None
             read_error = type(exc).__name__
 
-        if manifest is None:
+        manifest_unusable = read_error is not None or not isinstance(manifest_raw, dict)
+        manifest: dict[str, object] = manifest_raw if isinstance(manifest_raw, dict) else {}
+
+        results.append(
+            CheckResult(
+                "manifest-parsable",
+                read_error is None,
+                f"{SIDECAR_RELATIVE_PATH} is valid YAML",
+                "valid" if read_error is None else f"{SIDECAR_RELATIVE_PATH} could not be read/parsed: {read_error}",
+            )
+        )
+
+        if manifest_unusable:
             external_citations_sidecar_unreadable = True
-            evidence = f"unreadable: {read_error}"
+            evidence = (
+                f"unreadable: {read_error}"
+                if read_error is not None
+                else f"parsed root is not a mapping: {manifest_raw!r}"
+            )
             # Deliberately not the body-marker fallback: a present-but-broken
             # sidecar is authoritative-and-failing, not absent. Running the
             # scan (rather than skipping it) lands extra findings on a skill
@@ -811,20 +803,7 @@ def check_shape(target: Path) -> list[CheckResult]:
             results.extend(_sidecar_unreadable_results(evidence))
             sidecar_portability = SidecarPortability(state="unusable")
         else:
-            if malformed_lines:
-                count = len(malformed_lines)
-                plural = "" if count == 1 else "s"
-                manifest_parsable_evidence = f"{count} malformed line{plural}: {malformed_lines[0]!r}"
-            else:
-                manifest_parsable_evidence = "no malformed lines"
-            results.append(
-                CheckResult(
-                    "manifest-parsable",
-                    not malformed_lines,
-                    f"{SIDECAR_RELATIVE_PATH} has no malformed top-level lines",
-                    manifest_parsable_evidence,
-                )
-            )
+            schema_errors = list(_SCHEMA_VALIDATOR.iter_errors(manifest))
             api = manifest.get("apiVersion")
             kind_value = manifest.get("kind")
             envelope_ok = api == EXPECTED_API_VERSION and kind_value == EXPECTED_KIND
@@ -854,7 +833,7 @@ def check_shape(target: Path) -> list[CheckResult]:
             )
             spec_raw = manifest.get("spec")
             spec_is_mapping = isinstance(spec_raw, dict)
-            spec = spec_raw if spec_is_mapping else {}
+            spec: dict[str, object] = spec_raw if isinstance(spec_raw, dict) else {}
             portability = spec.get("portability")
             results.append(
                 CheckResult(
@@ -873,60 +852,27 @@ def check_shape(target: Path) -> list[CheckResult]:
                     repr(capability),
                 )
             )
-            results.append(_dependency_policy_declared_result(spec_is_mapping, spec_raw, spec))
+            results.append(_dependency_policy_declared_result(spec_is_mapping, spec_raw, spec, schema_errors))
 
             references = spec.get("references")
-            results.append(
-                _references_well_formed_result(
-                    spec_is_mapping, spec_raw, malformed_reference_items, unknown_reference_item_keys, references
-                )
-            )
+            results.append(_references_well_formed_result(spec_is_mapping, spec_raw, schema_errors, references))
             results.append(_references_grammar_check(references))
             reference_source = _references_citation_source(references)
             if reference_source is not None:
                 sidecar_citation_sources.append(reference_source)
             external_citations = spec.get("externalCitations")
             ext_well_formed_result, external_citations_declared = _external_citations_well_formed_result(
-                spec_is_mapping,
-                spec_raw,
-                malformed_external_citation_items,
-                unknown_external_citation_item_keys,
-                external_citations,
+                spec_is_mapping, spec_raw, schema_errors, external_citations
             )
             results.append(ext_well_formed_result)
             lifecycle_raw = spec.get("lifecycle") if spec_is_mapping else None
             lifecycle_dict = lifecycle_raw if isinstance(lifecycle_raw, dict) else {}
             sidecar_citation_sources.extend(_lifecycle_reason_citation_sources(lifecycle_dict))
             results.extend(
-                _skill_dependency_checks(
-                    spec_is_mapping,
-                    spec_raw,
-                    spec,
-                    malformed_skill_dependency_items,
-                    unknown_skill_dependency_keys,
-                    skill_dir,
-                    portability,
-                )
+                _skill_dependency_checks(spec_is_mapping, spec_raw, spec, schema_errors, skill_dir, portability)
             )
-            results.extend(
-                _lifecycle_checks(
-                    spec_is_mapping, spec_raw, spec, unknown_lifecycle_keys, unknown_lifecycle_fields, skill_dir
-                )
-            )
-            results.extend(
-                _execution_requirements_checks(
-                    spec_is_mapping,
-                    spec_raw,
-                    spec,
-                    unknown_execution_requirement_keys,
-                    unknown_execution_requirement_tools_keys,
-                    malformed_execution_requirement_tools_items,
-                    unknown_execution_requirement_packages_keys,
-                    malformed_execution_requirement_packages_items,
-                    unknown_execution_requirement_network_keys,
-                    malformed_execution_requirement_network_items,
-                )
-            )
+            results.extend(_lifecycle_checks(spec_is_mapping, spec_raw, spec, schema_errors, skill_dir))
+            results.extend(_execution_requirements_checks(spec_is_mapping, spec_raw, spec, schema_errors))
             if portability in PORTABILITY_LEVELS:
                 sidecar_portability = SidecarPortability(state="usable", level=portability)
             else:
@@ -1026,7 +972,7 @@ def check_shape(target: Path) -> list[CheckResult]:
     results.extend(_script_execution_intent_checks(skill_md, skill_dir, body))
     if _is_portable(body, sidecar_portability):
         declared_citation_paths = frozenset(
-            c["path"] for c in external_citations_declared if isinstance(c.get("path"), str)
+            path for c in external_citations_declared if isinstance(path := c.get("path"), str)
         )
         results.extend(_portable_path_citation_checks(skill_md, skill_dir, body, declared_citation_paths))
         results.extend(_portable_skill_citation_checks(skill_md, skill_dir, body))

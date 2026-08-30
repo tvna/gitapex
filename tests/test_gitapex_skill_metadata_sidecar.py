@@ -18,7 +18,7 @@ import re
 import gitapex_check_skill_shape as css
 import gitapex_scan_skill_metadata_schema as scanner
 import pytest
-import shape_checks.constants as shape_checks_constants
+import yaml
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 SKILLS_DIR = REPO_ROOT / "skills"
@@ -86,8 +86,8 @@ def test_skill_provenance_file_stays_retired():
 @pytest.mark.parametrize("skill_name", SKILLS_WITH_MIGRATED_PROVENANCE)
 def test_migrated_provenance_stays_populated(skill_name):
     skill_dir = SKILLS_DIR / skill_name
-    parsed = css._parse_manifest((skill_dir / css.SIDECAR_RELATIVE_PATH).read_text(encoding="utf-8"))
-    spec = css.spec_of(parsed)
+    manifest = yaml.safe_load((skill_dir / css.SIDECAR_RELATIVE_PATH).read_text(encoding="utf-8"))
+    spec = css.spec_of(manifest)
     references = spec.get("references") if spec is not None else None
     assert isinstance(references, list) and references, (
         f"{skill_name}'s metadata/gitapex.yaml lost its migrated "
@@ -167,8 +167,11 @@ def _real_requires_graph(
         sidecar = skill_dir / css.SIDECAR_RELATIVE_PATH
         if not sidecar.is_file():
             continue
-        parsed = css._parse_manifest(sidecar.read_text(encoding="utf-8"))
-        spec = css.spec_of(parsed)
+        try:
+            manifest = yaml.safe_load(sidecar.read_text(encoding="utf-8"))
+        except yaml.YAMLError:
+            manifest = None
+        spec = css.spec_of(manifest) if isinstance(manifest, dict) else None
         deps = spec.get("skillDependencies") if spec is not None else None
         requires = deps.get("requires") if isinstance(deps, dict) else None
         graph[skill_dir.name] = requires if isinstance(requires, list) else []
@@ -290,88 +293,15 @@ def test_scan_for_bare_get_spec_ignores_non_test_files_in_skill_scripts(tmp_path
     assert _scan_for_bare_get_spec(tmp_path) == []
 
 
-# ---- SKILL_DEP_LIST_ITEM_RE docstring-consistency gate (#228 repair 3) ----
+# ---- SKILL_DEP_LIST_ITEM_RE docstring-consistency gate: retired (issue #758) ----
 #
-# gitapex_check_skill_shape.py has two independent prose descriptions of
-# SKILL_DEP_LIST_ITEM_RE's minimum indent width: a comment block directly
-# above its definition, and _parse_manifest's own docstring. Only one was
-# updated when the regex's width last changed (#228 repair 3), so this
-# extracts the regex's actual {N,} numeral and asserts both prose sites
-# still state the same number, instead of relying on a second review pass
-# to notice a stale one.
-
-_MIN_INDENT_RE = re.compile(r"\{(\d+),\}")
-_STATED_MIN_INDENT_RE = re.compile(r"(\d+) or more spaces")
-
-
-def _preceding_prose_block(source_lines: list[str], target_line_index: int) -> str:
-    """Every line immediately above ``source_lines[target_line_index]``
-    (0-based) up to (not including) the nearest blank line -- the
-    paragraph-style comment block documenting it, tolerating an
-    intervening sibling constant assignment line (as sits between
-    SKILL_DEP_LIST_ITEM_RE and its comment block's own SKILL_DEPENDENCY_SUBKEYS
-    line)."""
-    block: list[str] = []
-    i = target_line_index - 1
-    while i >= 0 and source_lines[i].strip() != "":
-        block.insert(0, source_lines[i])
-        i -= 1
-    return "\n".join(block)
-
-
-def test_skill_dep_list_item_re_indent_matches_its_docstrings():
-    numeral_match = _MIN_INDENT_RE.search(css.SKILL_DEP_LIST_ITEM_RE.pattern)
-    assert numeral_match is not None, (
-        "SKILL_DEP_LIST_ITEM_RE.pattern no longer has a {N,} minimum-indent "
-        "quantifier -- update this test's extraction logic to match its "
-        "new shape."
-    )
-    numeral = numeral_match.group(1)
-
-    # SKILL_DEP_LIST_ITEM_RE's own definition (and the comment block above
-    # it) now live in shape_checks/constants.py, not in css.__file__ itself
-    # (issue #1330's package split) -- css.SKILL_DEP_LIST_ITEM_RE still
-    # resolves fine as a re-exported attribute, but this drift check scans
-    # physical source text, so it must follow the definition to its actual
-    # file. Imported (rather than path-joined off css.__file__'s directory)
-    # so it tracks the real module location the same way css's own
-    # `from shape_checks.constants import ...` does.
-    source_lines = pathlib.Path(shape_checks_constants.__file__).read_text(encoding="utf-8").splitlines()
-    definition_index = next(
-        i for i, line in enumerate(source_lines) if line.startswith("SKILL_DEP_LIST_ITEM_RE = re.compile(")
-    )
-    comment_block = _preceding_prose_block(source_lines, definition_index)
-    comment_stated = _STATED_MIN_INDENT_RE.search(comment_block)
-    assert comment_stated is not None, (
-        "the comment block above SKILL_DEP_LIST_ITEM_RE's definition no "
-        "longer states an 'N or more spaces' minimum indent -- update this "
-        "test's extraction logic to match its new wording."
-    )
-    assert comment_stated.group(1) == numeral, (
-        f"SKILL_DEP_LIST_ITEM_RE now requires {numeral}+ spaces, but the "
-        f"comment above its definition still says {comment_stated.group(1)}+ "
-        "-- issue #228 repair 3's exact drift, recurring."
-    )
-
-    docstring = css._parse_manifest.__doc__
-    # The docstring also describes spec.references' "2 or more spaces" rule
-    # before this bullet and spec.executionRequirements.tools' "6 or more
-    # spaces" rule after it; bound the search to the spec.skillDependencies
-    # bullet's own span (up to the next "- spec.*" bullet, or end of string
-    # if it is the last one) so neither neighbor's unrelated numeral can be
-    # matched instead if this bullet's own numeral goes missing (Codex
-    # review, PR #402).
-    skill_deps_index = docstring.index("spec.skillDependencies")
-    next_bullet = re.search(r"\n {4}- spec\.\w+", docstring[skill_deps_index:])
-    skill_deps_end = skill_deps_index + next_bullet.start() if next_bullet else len(docstring)
-    docstring_stated = _STATED_MIN_INDENT_RE.search(docstring, skill_deps_index, skill_deps_end)
-    assert docstring_stated is not None, (
-        "_parse_manifest's docstring no longer states an 'N or more spaces' "
-        "minimum indent for spec.skillDependencies list items -- update "
-        "this test's extraction logic to match its new wording."
-    )
-    assert docstring_stated.group(1) == numeral, (
-        f"SKILL_DEP_LIST_ITEM_RE now requires {numeral}+ spaces, but "
-        f"_parse_manifest's docstring still says {docstring_stated.group(1)}+ "
-        "-- issue #228 repair 3's exact drift, recurring."
-    )
+# test_skill_dep_list_item_re_indent_matches_its_docstrings used to guard
+# two independent hand-written prose descriptions of SKILL_DEP_LIST_ITEM_RE's
+# minimum indent width (a comment block above its definition, and
+# _parse_manifest's own docstring) against drifting apart (#228 repair 3).
+# This migration deletes both SKILL_DEP_LIST_ITEM_RE and _parse_manifest
+# entirely: spec.skillDependencies' list-item shape is enforced solely by
+# jsonschema.Draft202012Validator reading skill-metadata.schema.json
+# directly, which carries exactly one prose description of the rule (the
+# schema's own JSON, not a hand-duplicated regex plus two comments), so
+# there is no second copy left to drift from the first.
