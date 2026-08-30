@@ -558,6 +558,9 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/758"
       summary: "Migrated gitapex_check_skill_shape.py's 12 schema-expressible manifest checks onto the bundled schema.json via jsonschema, reversing its stdlib-only property. Declared dependencyPolicy: Declared and executionRequirements.packages.pip: [pyyaml, jsonschema]; portability stays Portable, per the dependency-vs-portability resolution referenced above. Incidentally closes the pre-existing undeclared-PyYAML-import gap the entries above named for this skill's own scripts/, not separately re-verified."
+    - kind: caveat
+      anchor: "https://github.com/tvna/gitapex/issues/758"
+      summary: "The migration's own dogfooding pass confirmed pyyaml/jsonschema are pinned via this repository's uv.lock, not a per-script PEP 723 block; rubric.md's Declared-policy criterion (c) (the self-contained-script pattern) stays unmet -- disclosed, not silently implied met, since no script here uses that pattern yet."
   skillDependencies:
     requires: []
     relatedTo:
