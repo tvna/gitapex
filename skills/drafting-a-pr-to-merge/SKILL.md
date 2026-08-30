@@ -178,19 +178,19 @@ truth for the procedure regardless of platform naming.
    the current thread, which authored or discussed the fix, is not a
    substitute for either layer.
 
-   **Outer layer (GitHub-native reviewer).** Where the operator has confirmed this
-   repository has Anthropic's "Claude Code Review" GitHub App installed, request its
-   review (e.g. a PR comment mentioning `@claude review`, via `github:add_issue_comment`)
-   — its check run reports a machine-parseable severity summary, a real pass/fail signal.
-   Where that App is not configured, request GitHub Copilot's
-   `copilot-pull-request-reviewer[bot]` instead (`github:request_copilot_review`) and
-   explicitly disclose, wherever this layer's outcome is recorded, that Copilot's review
-   is Comment-only with no pass/fail signal of its own — a materially weaker guarantee
-   than the App's severity summary, not equivalent. Where a requested outer-layer review
-   posts no response within 30 minutes, treat that layer as unreachable for this step.
-   Where neither mechanism is configured or reachable, record that this layer did not run
-   at all; never silently omit that disclosure -- see Related skills for why this layer
-   stays here rather than migrating.
+   **Outer layer (GitHub-native reviewer).** Where the operator has confirmed this repository
+   has Anthropic's "Claude Code Review" GitHub App installed, request its review (e.g. a PR
+   comment mentioning `@claude review`, via `github:add_issue_comment`) — its check run
+   reports a machine-parseable severity summary, a real pass/fail signal. Where that App is
+   not configured, request GitHub Copilot's `copilot-pull-request-reviewer[bot]` instead
+   (`github:request_copilot_review`) and explicitly disclose, wherever this layer's outcome
+   is recorded, that Copilot's review is Comment-only with no pass/fail signal of its own — a
+   materially weaker guarantee than the App's severity summary, not equivalent. Where a
+   requested outer-layer review posts no response within 30 minutes of the request, confirmed
+   via a fresh `github:pull_request_read` timestamp check rather than estimated from memory,
+   treat that layer as unreachable for this step. Where neither mechanism is configured or
+   reachable, record that this layer did not run at all; never silently omit that disclosure
+   -- see Related skills for why this layer stays here rather than migrating.
 
    **Inner layer (always runs, regardless of the outer layer's availability or outcome): invoke
    `reviewing-an-artifact`** (see `skills/reviewing-an-artifact/SKILL.md`) against the PR's
