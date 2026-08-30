@@ -33,14 +33,19 @@ false-pass a since-closed/renumbered issue) is checked two ways:
   offending file is unresolvable (deleted, or never existed).
 
 Self-contained, matching this repository's existing .github/scripts/*.py
-convention of not importing across files -- except for a real `pydantic`
-import (issue #1040) used to validate the parsed CLI namespace. This
-gate's own production invocation (`retro-title-convention-citation-gate.yml`)
-runs under `uv run`, so that import is safe here (refs #1035's `uv run`
+convention of not importing across *gate/report* files -- except for a
+real `pydantic` import (issue #1040) used to validate the parsed CLI
+namespace, and `_gitapex_github_http` (issue #729), the shared generic
+GitHub REST retry/error client every `.github/scripts/*.py` caller may
+import without breaking that convention (see `_gitapex_github_http.py`'s
+own docstring for why a small shared low-level client is not the same
+thing as one gate script depending on another). This gate's own
+production invocation (`retro-title-convention-citation-gate.yml`) runs
+under `uv run`, so both imports are safe here (refs #1035's `uv run`
 standardization that made this class of dependency safe repo-wide).
-The GitHub API retry/error shape is copied from gitapex_scan_retrospective_gate_drift.py
-rather than shared, for the same reason that script gives for not importing
-gitapex_sync_pr_publish.py.
+`is_resolvable_issue`'s own docstring explains why it calls
+`_gitapex_github_http.request_with_retry` directly rather than
+`call_json`/`fetch_json_document`.
 
 Usage (the check alone, no network calls, no side effects)::
 
@@ -67,22 +72,19 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
-import http.client
 import os
 import re
 import sys
 import time
-import urllib.error
 import urllib.request
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
 
+from _gitapex_github_http import GitHubApiError, default_opener, format_code, request_with_retry
 from pydantic import BaseModel, ValidationError, model_validator
 
 _API_ROOT = "https://api.github.com"
-_API_VERSION = "2022-11-28"
-_HTTP_TIMEOUT_SECONDS = 30
 
 # A convention-claim phrase: "this repo('s)? own/actual/established
 # convention" (repo/repository, with or without a possessive apostrophe --
@@ -109,10 +111,6 @@ _TITLE_IDENTITY_RE = re.compile(r"\b(titles?|identit(?:y|ies))\b", re.IGNORECASE
 # _citation_pattern rationale: "#341" must not match inside "#3410" or
 # "#12341".
 _CITATION_RE = re.compile(r"(?<!\d)#(\d+)(?!\d)")
-
-
-class GitHubApiError(RuntimeError):
-    """Raised when the GitHub REST API returns a non-recoverable error."""
 
 
 def _paragraphs(text: str) -> list[str]:
@@ -163,23 +161,12 @@ def _no_citation_message(path: Path) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _default_opener(request: urllib.request.Request) -> Any:
-    # S310 justification: every caller builds `request` from a fixed
-    # https://api.github.com URL plus trusted owner/repo/issue-number
-    # segments.
-    return urllib.request.urlopen(request, timeout=_HTTP_TIMEOUT_SECONDS)  # noqa: S310
-
-
-def _format_code(code: int) -> str:
-    return str(code) if code else "network error"
-
-
 def is_resolvable_issue(
     owner: str,
     repo: str,
     issue_number: int,
     token: str,
-    opener: Callable[[urllib.request.Request], Any] = _default_opener,
+    opener: Callable[[urllib.request.Request], Any] = default_opener,
     sleeper: Callable[[float], None] | None = None,
 ) -> bool:
     """Return True iff `issue_number` resolves to a real issue or PR
@@ -188,38 +175,23 @@ def is_resolvable_issue(
     other non-2xx status after retries raises, since that is a check
     failure, not a citation failure, and must not be silently reported as
     "not resolvable".
+
+    Issue #729: the retry loop itself now delegates to
+    `_gitapex_github_http.request_with_retry`, the non-raising primitive
+    that returns the final `(status_code, body_text)` pair regardless of
+    outcome -- exactly what this function needs to special-case 404
+    without raising, unlike `call_json`/`fetch_json_document`. This
+    function's own branching (404 -> False, 2xx -> True, else -> raise)
+    and raised-message text are unchanged.
     """
     sleeper = sleeper if sleeper is not None else time.sleep
     url = f"{_API_ROOT}/repos/{owner}/{repo}/issues/{issue_number}"
-    last_code = 0
-    last_body = ""
-    for attempt in range(1, 4):
-        request = urllib.request.Request(url, method="GET")  # noqa: S310 -- fixed https://api.github.com URL
-        request.add_header("Authorization", f"Bearer {token}")
-        request.add_header("Accept", "application/vnd.github+json")
-        request.add_header("X-GitHub-Api-Version", _API_VERSION)
-        try:
-            with opener(request) as response:
-                last_code = int(response.status)
-                last_body = response.read().decode("utf-8", errors="replace")
-        except urllib.error.HTTPError as error:
-            last_code = int(error.code)
-            last_body = error.read().decode("utf-8", errors="replace")
-        except (OSError, http.client.IncompleteRead) as error:
-            last_code = 0
-            last_body = str(error)
-
-        if last_code == 404:
-            return False
-        if 200 <= last_code < 300:
-            return True
-        print(f"Attempt {attempt}: HTTP {_format_code(last_code)} for GET {url}", file=sys.stderr)
-        if last_code != 0 and last_code < 500:
-            break
-        if attempt < 3:
-            sleeper(attempt * 5)
-
-    raise GitHubApiError(f"GET {url} failed: HTTP {_format_code(last_code)}: {last_body}")
+    last_code, last_body = request_with_retry("GET", url, token, opener, sleeper)
+    if last_code == 404:
+        return False
+    if 200 <= last_code < 300:
+        return True
+    raise GitHubApiError(f"GET {url} failed: HTTP {format_code(last_code)}: {last_body}")
 
 
 def find_unresolvable_offenders(
@@ -228,7 +200,7 @@ def find_unresolvable_offenders(
     owner: str,
     repo: str,
     token: str,
-    opener: Callable[[urllib.request.Request], Any] = _default_opener,
+    opener: Callable[[urllib.request.Request], Any] = default_opener,
     sleeper: Callable[[float], None] | None = None,
 ) -> str | None:
     """Return a human-readable offender line for `path` if it has an

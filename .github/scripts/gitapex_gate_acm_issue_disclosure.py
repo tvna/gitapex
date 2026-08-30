@@ -64,8 +64,16 @@ PreToolUse hook path (`hooks/check-issue-acm-disclosure.sh`) never
 touches this file at all, calling its own stdlib-only sibling
 `hooks/gitapex_check_acm_present_or_waiver.py` instead (see that hook's
 own comment), so it is unaffected by this import.
-The GitHub API retry/error shape (`_call`, `GitHubApiError`) is copied
-from gitapex_post_merge_retro.py rather than shared, for the same reason.
+The GitHub API retry/error shape (`GitHubApiError`, `default_opener`, the
+retry loop itself) is imported from the shared, endpoint-agnostic
+`.github/scripts/_gitapex_github_http.py` module (issue #729) rather than
+hand-copied -- that module's own docstring documents why it is the one
+declared exception to the "independent scripts" convention, the same way
+the `pydantic` import above is. This gate's own public function
+signatures and observable behavior (return values, raised exceptions and
+their exact message text, default parameter values) are unchanged; only
+the retry-loop implementation now delegates to
+`_gitapex_github_http.call_json`.
 
 Usage (the check alone, no network calls, no side effects)::
 
@@ -92,24 +100,20 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
-import http.client
-import json
 import os
 import re
 import sys
 import time
-import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
 
+from _gitapex_github_http import GitHubApiError, call_json, default_opener
 from pydantic import BaseModel, ValidationError, model_validator
 
 _API_ROOT = "https://api.github.com"
-_API_VERSION = "2022-11-28"
-_HTTP_TIMEOUT_SECONDS = 30
 
 _ACM_LABEL = "needs-acm"
 _ACM_LABEL_COLOR = "fbca04"
@@ -155,10 +159,6 @@ _ACM_WAIVER_RE = re.compile(
 )
 
 
-class GitHubApiError(RuntimeError):
-    """Raised when the GitHub REST API returns a non-recoverable error."""
-
-
 def has_acm_disclosure(body_text: str | None) -> bool:
     """Return True iff `body_text` carries the ACM table or a valid waiver line."""
     # Normalize CRLF/CR line endings before matching, same rationale as
@@ -169,71 +169,20 @@ def has_acm_disclosure(body_text: str | None) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# GitHub API side effects (label + comment), copied in shape from
-# gitapex_post_merge_retro.py's own _call/_default_opener/_format_code.
+# GitHub API side effects (label + comment). The retry/error primitive
+# (`GitHubApiError`, `default_opener`, the retry loop) is imported from the
+# shared `_gitapex_github_http.py` module (issue #729) rather than
+# hand-copied from gitapex_post_merge_retro.py -- see this module's own
+# docstring for why that shared module is the declared exception to this
+# repository's independent-scripts convention.
 # ---------------------------------------------------------------------------
-
-
-def _default_opener(request: urllib.request.Request) -> Any:
-    # S310 justification: every caller builds `request` from a fixed
-    # https://api.github.com URL plus trusted owner/repo/issue-number
-    # segments; the untrusted issue body never touches a URL, only a JSON
-    # request body.
-    return urllib.request.urlopen(request, timeout=_HTTP_TIMEOUT_SECONDS)  # noqa: S310
-
-
-def _format_code(code: int) -> str:
-    return str(code) if code else "network error"
-
-
-def _call(
-    method: str,
-    url: str,
-    token: str,
-    opener: Callable[[urllib.request.Request], Any],
-    sleeper: Callable[[float], None],
-    body: dict[str, Any] | None = None,
-    max_attempts: int = 3,
-) -> Any:
-    """Call the GitHub API, retrying transient (network / 5xx) failures up
-    to `max_attempts` attempts -- mirrors gitapex_post_merge_retro.py's own `_call`."""
-    data = json.dumps(body).encode("utf-8") if body is not None else None
-    last_code = 0
-    last_body = ""
-    for attempt in range(1, max_attempts + 1):
-        request = urllib.request.Request(url, data=data, method=method)  # noqa: S310 -- fixed https://api.github.com URL
-        request.add_header("Authorization", f"Bearer {token}")
-        request.add_header("Accept", "application/vnd.github+json")
-        request.add_header("X-GitHub-Api-Version", _API_VERSION)
-        if data is not None:
-            request.add_header("Content-Type", "application/json")
-        try:
-            with opener(request) as response:
-                last_code = int(response.status)
-                last_body = response.read().decode("utf-8", errors="replace")
-        except urllib.error.HTTPError as error:
-            last_code = int(error.code)
-            last_body = error.read().decode("utf-8", errors="replace")
-        except (OSError, http.client.IncompleteRead) as error:
-            last_code = 0
-            last_body = str(error)
-
-        if 200 <= last_code < 300:
-            return json.loads(last_body) if last_body else {}
-        print(f"Attempt {attempt}: HTTP {_format_code(last_code)} for {method} {url}", file=sys.stderr)
-        if last_code != 0 and last_code < 500:
-            break
-        if attempt < max_attempts:
-            sleeper(attempt * 5)
-
-    raise GitHubApiError(f"{method} {url} failed: HTTP {_format_code(last_code)}: {last_body}")
 
 
 def ensure_label_exists(
     owner: str,
     repo: str,
     token: str,
-    opener: Callable[[urllib.request.Request], Any] = _default_opener,
+    opener: Callable[[urllib.request.Request], Any] = default_opener,
     sleeper: Callable[[float], None] | None = None,
 ) -> None:
     """Create the `needs-acm` label repo-wide if it does not already exist.
@@ -245,7 +194,7 @@ def ensure_label_exists(
     url = f"{_API_ROOT}/repos/{owner}/{repo}/labels"
     payload = {"name": _ACM_LABEL, "color": _ACM_LABEL_COLOR, "description": _ACM_LABEL_DESCRIPTION}
     try:
-        _call("POST", url, token, opener, sleeper, body=payload, max_attempts=1)
+        call_json("POST", url, token, opener, sleeper, body=payload, max_attempts=1)
     except GitHubApiError as error:
         if "HTTP 422" not in str(error):
             raise
@@ -256,14 +205,14 @@ def add_label(
     repo: str,
     issue_number: int,
     token: str,
-    opener: Callable[[urllib.request.Request], Any] = _default_opener,
+    opener: Callable[[urllib.request.Request], Any] = default_opener,
     sleeper: Callable[[float], None] | None = None,
 ) -> None:
     """Add the `needs-acm` label to the issue. Idempotent -- adding a
     label the issue already carries is a no-op per the GitHub API."""
     sleeper = sleeper if sleeper is not None else time.sleep
     url = f"{_API_ROOT}/repos/{owner}/{repo}/issues/{issue_number}/labels"
-    _call("POST", url, token, opener, sleeper, body={"labels": [_ACM_LABEL]})
+    call_json("POST", url, token, opener, sleeper, body={"labels": [_ACM_LABEL]})
 
 
 def remove_label(
@@ -271,7 +220,7 @@ def remove_label(
     repo: str,
     issue_number: int,
     token: str,
-    opener: Callable[[urllib.request.Request], Any] = _default_opener,
+    opener: Callable[[urllib.request.Request], Any] = default_opener,
     sleeper: Callable[[float], None] | None = None,
 ) -> None:
     """Remove the `needs-acm` label from the issue, if present. An HTTP
@@ -280,7 +229,7 @@ def remove_label(
     sleeper = sleeper if sleeper is not None else time.sleep
     url = f"{_API_ROOT}/repos/{owner}/{repo}/issues/{issue_number}/labels/{urllib.parse.quote(_ACM_LABEL)}"
     try:
-        _call("DELETE", url, token, opener, sleeper, max_attempts=1)
+        call_json("DELETE", url, token, opener, sleeper, max_attempts=1)
     except GitHubApiError as error:
         if "HTTP 404" not in str(error):
             raise
@@ -294,7 +243,7 @@ def has_marker_comment(
     repo: str,
     issue_number: int,
     token: str,
-    opener: Callable[[urllib.request.Request], Any] = _default_opener,
+    opener: Callable[[urllib.request.Request], Any] = default_opener,
     sleeper: Callable[[float], None] | None = None,
 ) -> bool:
     """Return True iff this gate has already commented on this issue --
@@ -314,7 +263,7 @@ def has_marker_comment(
             f"{_API_ROOT}/repos/{owner}/{repo}/issues/{issue_number}/comments"
             f"?per_page={_COMMENTS_PAGE_SIZE}&page={page}"
         )
-        comments = _call("GET", url, token, opener, sleeper)
+        comments = call_json("GET", url, token, opener, sleeper)
         if not isinstance(comments, list):
             raise GitHubApiError(f"GET {url} returned {type(comments).__name__}, expected a JSON array")
         for comment in comments:
@@ -351,7 +300,7 @@ def post_comment(
     repo: str,
     issue_number: int,
     token: str,
-    opener: Callable[[urllib.request.Request], Any] = _default_opener,
+    opener: Callable[[urllib.request.Request], Any] = default_opener,
     sleeper: Callable[[float], None] | None = None,
 ) -> None:
     """Post the disclosure-gate comment on the issue, once (guarded by
@@ -371,7 +320,7 @@ def post_comment(
         "prevent this issue from being worked on, and applies regardless of "
         "who or what opened it."
     )
-    _call("POST", url, token, opener, sleeper, body={"body": body})
+    call_json("POST", url, token, opener, sleeper, body={"body": body})
 
 
 class AcmIssueDisclosureArgs(BaseModel):
