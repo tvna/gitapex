@@ -237,8 +237,9 @@ def _scan_workflow(workflow: pathlib.Path) -> list[tuple[str, int, str]]:
 
 def find_hooks_shell_indirected_invocations(hooks_dir: pathlib.Path = HOOKS_DIR) -> list[tuple[str, int, str]]:
     """Return (file, line_number, line) for each `hooks/*.sh` bare
-    `python3 "$var"` invocation of a shell variable whose own assignment
-    targets a `.github/scripts/*.py` path. WARNING tier (report-only, see
+    `python3 "$var"` invocation (quoted or unquoted, `${var}` brace form
+    or bare `$var`) of a shell variable whose own assignment targets a
+    `.github/scripts/*.py` path. WARNING tier (report-only, see
     module docstring): unlike `find_bare_invocations`, a missing or
     unreadable `hooks_dir` is simply nothing to warn about, not a
     fail-closed finding -- there is no exit-code contract here to protect.
@@ -277,16 +278,24 @@ def _scan_hook(hook: pathlib.Path) -> list[tuple[str, int, str]]:
         return []
 
     # Pass 2: for each tracked variable, find a bare `python3 "$var"` (or
-    # unquoted `python3 $var`) invocation not immediately preceded by
-    # `uv run` -- the same end-position-comparison technique
-    # `_scan_workflow` uses above, rebuilt per variable name since the
-    # invoked name varies.
+    # unquoted `python3 $var`, or brace-wrapped `python3 "${var}"`)
+    # invocation not immediately preceded by `uv run` -- the same
+    # end-position-comparison technique `_scan_workflow` uses above,
+    # rebuilt per variable name since the invoked name varies. The
+    # optional `\{?`/`\}?` pair (found live in review: this repository's
+    # own hooks/*.sh files already brace-wrap the variable at its
+    # *assignment* site, e.g. `full_gate="${repo_root}/..."` -- the same
+    # habit at the *invocation* site is an equally plausible shell idiom)
+    # relies on the same backtracking `\b` already depends on for the
+    # trailing `"?`: the engine can match the boundary right after the
+    # variable name without consuming a trailing `}` or `"`, so adding the
+    # brace pair does not require touching the boundary logic itself.
     findings: list[tuple[str, int, str]] = []
     for lineno, line in enumerate(lines, start=1):
         if line.lstrip().startswith("#"):
             continue
         for varname in sorted(tracked_vars):
-            var_ref = r'"?\$' + re.escape(varname) + r'"?\b'
+            var_ref = r'"?\$\{?' + re.escape(varname) + r'\}?"?\b'
             bare_re = re.compile(r"python3\s+" + var_ref)
             wrapped_re = re.compile(_UV_RUN_PREFIX + r"python3\s+" + var_ref)
             wrapped_ends = {m.end() for m in wrapped_re.finditer(line)}

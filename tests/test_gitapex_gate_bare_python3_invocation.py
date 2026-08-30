@@ -481,6 +481,73 @@ def test_hooks_shell_indirected_unquoted_invocation_is_flagged(tmp_path: pathlib
     assert "gate_script" in findings[0][2]
 
 
+def test_hooks_shell_indirected_brace_wrapped_invocation_is_flagged(tmp_path: pathlib.Path) -> None:
+    # Defeat case found in adversarial review (issue #1446 step 8): the
+    # variable reference at the *invocation* site can be brace-wrapped
+    # (`python3 "${var}"`), not just the bare `$var` form
+    # test_hooks_shell_indirected_bare_invocation_is_flagged already
+    # covers -- a plausible shell idiom this repository's own hooks/*.sh
+    # files already use at *assignment* sites (e.g.
+    # `full_gate="${repo_root}/..."`). Confirmed to previously slip past
+    # var_ref undetected before the fix.
+    hooks_dir = _write_hook(
+        tmp_path,
+        "brace-wrapped.sh",
+        '#!/bin/bash\nfull_gate="${repo_root}/.github/scripts/gitapex_gate_foo.py"\npython3 "${full_gate}"\n',
+    )
+    findings = gate.find_hooks_shell_indirected_invocations(hooks_dir)
+    assert len(findings) == 1
+    assert "full_gate" in findings[0][2]
+
+
+def test_hooks_shell_indirected_brace_wrapped_uv_run_wrapped_is_not_flagged(tmp_path: pathlib.Path) -> None:
+    hooks_dir = _write_hook(
+        tmp_path,
+        "brace-wrapped-ok.sh",
+        '#!/bin/bash\nfull_gate="${repo_root}/.github/scripts/gitapex_gate_foo.py"\nuv run --frozen python3 "${full_gate}" --flag\n',
+    )
+    assert gate.find_hooks_shell_indirected_invocations(hooks_dir) == []
+
+
+def test_hooks_shell_indirected_variable_name_substring_does_not_cross_match(tmp_path: pathlib.Path) -> None:
+    # Defeat case: "gate" is a substring of "full_gate". Both get assigned
+    # a `.github/scripts/*.py` path, but only "full_gate" is invoked --
+    # the word-boundary anchor in var_ref must prevent the "gate" tracked
+    # variable from falsely matching inside "$full_gate".
+    hooks_dir = _write_hook(
+        tmp_path,
+        "substring.sh",
+        "#!/bin/bash\n"
+        'gate="${repo_root}/.github/scripts/gate_a.py"\n'
+        'full_gate="${repo_root}/.github/scripts/gate_b.py"\n'
+        'python3 "$full_gate"\n',
+    )
+    findings = gate.find_hooks_shell_indirected_invocations(hooks_dir)
+    assert len(findings) == 1
+    assert "full_gate" in findings[0][2]
+
+
+def test_hooks_shell_indirected_reassignment_is_whole_file_not_ordered(tmp_path: pathlib.Path) -> None:
+    # Disclosed limitation (see _scan_hook's own Pass-1 comment), pinned
+    # here rather than left as prose: tracking is whole-file, not
+    # ordered. A variable assigned a `.github/scripts/*.py` path and then
+    # reassigned to something unrelated before the bare invocation is
+    # still flagged, the mirror image of
+    # test_hooks_shell_indirected_bare_invocation_is_flagged's own
+    # hooks/*.py-then-.github/scripts/*.py order. Both directions are
+    # graded identically because no assignment-order dataflow is
+    # attempted -- confirmed here as intentional behavior, not a defect,
+    # per the module's own "no ... multi-hop reassignment tracing"
+    # non-goal.
+    hooks_dir = _write_hook(
+        tmp_path,
+        "reassigned.sh",
+        '#!/bin/bash\nvar="${repo_root}/.github/scripts/gate.py"\nvar="hooks/unrelated.py"\npython3 "$var"\n',
+    )
+    findings = gate.find_hooks_shell_indirected_invocations(hooks_dir)
+    assert len(findings) == 1
+
+
 def test_hooks_shell_indirected_no_matching_assignment_passes(tmp_path: pathlib.Path) -> None:
     hooks_dir = _write_hook(
         tmp_path,

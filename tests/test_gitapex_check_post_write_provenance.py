@@ -170,6 +170,35 @@ def test_extract_markdown_section_requires_an_exact_line_match() -> None:
     assert checker.extract_markdown_section(text, "## first") is None
 
 
+def test_extract_markdown_section_heading_with_trailing_whitespace_does_not_match() -> None:
+    """Defeat case (issue #1446 step 8 adversarial review): a heading line
+    carrying trailing whitespace must NOT match the clean heading constant
+    -- `lines.index(heading)` requires byte-for-byte equality, by design
+    (see this function's own docstring), so a stray trailing space
+    silently degrades extraction to None rather than matching loosely.
+    Confirmed today's real CONTRIBUTING.md heading carries no such
+    whitespace, so this is a live non-issue, not a live bug."""
+    text = "# Title\n\n## first   \n\nbody\n\n## second\n"
+    assert checker.extract_markdown_section(text, "## first") is None
+
+
+def test_extract_markdown_section_duplicate_heading_returns_first_occurrence() -> None:
+    """Defeat case: when a heading text appears twice, `list.index()`
+    picks the first occurrence deterministically. Pinned as the intended
+    behavior (not a defect) -- a well-formed CONTRIBUTING.md has no
+    duplicate headings, and "first wins" is a reasonable, deterministic
+    default for the degenerate case where one does."""
+    text = "## dup\n\nfirst body\n\n## other\n\n## dup\n\nsecond body\n"
+    assert checker.extract_markdown_section(text, "## dup") == "first body"
+
+
+def test_extract_markdown_section_final_line_at_eof_is_not_truncated() -> None:
+    """Defeat case: the last section in a file, with no trailing newline
+    at all, must not off-by-one drop its final line."""
+    text = "## only\n\nlast body line"
+    assert checker.extract_markdown_section(text, "## only") == "last body line"
+
+
 def test_default_contributing_path_extracts_the_real_ratified_section() -> None:
     """The relative path this hook resolves for CONTRIBUTING.md must
     really find the ratified section in this repository's own checkout --
