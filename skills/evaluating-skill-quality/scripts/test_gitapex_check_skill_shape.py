@@ -7568,3 +7568,66 @@ def test_script_execution_intent_covers_scripts_subpackage(tmp_path):
     result = _by_name(css.check_shape(d))["script-execution-intent-stated"]
     assert result.passed is False
     assert "helper.sh" in result.evidence
+
+
+# ---- Basename collisions across scripts/ subdirectories are ambiguous
+# ---- (drafting-a-pr-to-merge Step 8 adversarial-review regression,
+# ---- issue #1330) ----
+#
+# Reachable only since the recursion fixed above: two scripts in different
+# scripts/ subdirectories can share a basename. The check's own doc-match
+# token (`` `filename` ``) carries no directory information, so a
+# paragraph naming that bare filename could not previously be attributed
+# to one specific colliding file -- one genuinely documented file was
+# silently letting an unrelated, undocumented same-named file pass too.
+
+
+def test_script_execution_intent_basename_collision_is_flagged(tmp_path):
+    # bar/tool.py is genuinely documented; foo/tool.py is never documented
+    # on its own -- but shares bar/tool.py's bare basename. Before the fix,
+    # the shared token let foo/tool.py silently inherit bar/tool.py's own
+    # qualifying "Run `tool.py`" mention. The ambiguous basename must now
+    # be flagged rather than silently passed.
+    d = _write_raw(tmp_path, _simple_body("Run `tool.py` to do X."))
+    (d / "scripts" / "bar").mkdir(parents=True)
+    (d / "scripts" / "foo").mkdir(parents=True)
+    (d / "scripts" / "bar" / "tool.py").write_text("# bar\n", encoding="utf-8")
+    (d / "scripts" / "foo" / "tool.py").write_text("# foo\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["script-execution-intent-stated"]
+    assert result.passed is False
+    assert "tool.py" in result.evidence
+
+
+def test_script_execution_intent_basename_collision_flags_even_when_both_qualify(tmp_path):
+    # Disclosed trade-off, not a bug: the bare-basename token cannot tell
+    # the two colliding files apart even when EACH is individually,
+    # unambiguously documented with its own qualifying paragraph -- both
+    # paragraphs contain the exact same `` `tool.py` `` token, so the
+    # collision is still flagged rather than silently trusted. A skill
+    # hitting this is expected to disambiguate its own prose (e.g. cite
+    # the full relative path) rather than rely on the bare basename.
+    d = _write_raw(
+        tmp_path,
+        _simple_body("In scripts/foo/, run `tool.py` to do X.\n\nIn scripts/bar/, run `tool.py` to do Y."),
+    )
+    (d / "scripts" / "bar").mkdir(parents=True)
+    (d / "scripts" / "foo").mkdir(parents=True)
+    (d / "scripts" / "bar" / "tool.py").write_text("# bar\n", encoding="utf-8")
+    (d / "scripts" / "foo" / "tool.py").write_text("# foo\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["script-execution-intent-stated"]
+    assert result.passed is False
+    assert "tool.py" in result.evidence
+
+
+def test_script_execution_intent_no_collision_when_basenames_differ(tmp_path):
+    # Control: distinctly-named scripts across subdirectories are
+    # unaffected by the collision guard -- each is graded independently,
+    # matching pre-fix behavior exactly.
+    d = _write_raw(tmp_path, _simple_body("Run `bar_tool.py` to do X."))
+    (d / "scripts" / "bar").mkdir(parents=True)
+    (d / "scripts" / "foo").mkdir(parents=True)
+    (d / "scripts" / "bar" / "bar_tool.py").write_text("# bar\n", encoding="utf-8")
+    (d / "scripts" / "foo" / "foo_tool.py").write_text("# foo\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["script-execution-intent-stated"]
+    assert result.passed is True
+    assert result.evidence == "none"
