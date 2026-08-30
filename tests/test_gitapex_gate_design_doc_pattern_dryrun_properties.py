@@ -11,6 +11,9 @@ Reproducibility: ``derandomize=True`` with an explicit ``max_examples`` and
 
 from __future__ import annotations
 
+import tempfile
+from pathlib import Path
+
 import gitapex_gate_design_doc_pattern_dryrun as gate
 from hypothesis import given, settings
 from hypothesis import strategies as st
@@ -123,6 +126,40 @@ def test_has_disclosure_marker_detects_any_non_empty_reason(reason: str, bullet:
     """
     body = f"Some PR body prose.\n\n{bullet}corpus-dryrun-disclosure: WAIVED: {reason}\n"
     assert gate.has_disclosure_marker(body)
+
+
+@_PROPERTIES
+@given(pattern=_NON_EMPTY_SAFE_TEXT)
+def test_dry_run_corpus_never_matches_via_a_symlink(pattern: str) -> None:
+    """**Model-based:** `dry_run_corpus`'s path-resolution logic
+    (`is_symlink()`) never lets a symlink under the corpus root report a
+    match -- regardless of the pattern content being searched for -- even
+    when an identical real file (a positive control generated in the same
+    run) does.
+
+    Confirmed to have teeth: removing the `is_symlink()` check makes this
+    property fail on every generated example, since the symlink's target
+    always contains the same generated pattern the positive-control real
+    file does -- this is the exact shape of the arbitrary-file-read gap a
+    dispatched `checker-script-adversarial-review` found and this check
+    closes.
+    """
+    bounded_pattern = pattern[: gate._QUOTED_LITERAL_MAX_LEN]
+    with tempfile.TemporaryDirectory() as outer:
+        outer_path = Path(outer)
+        repo_root = outer_path / "repo"
+        skill_dir = repo_root / "skills" / "example"
+        skill_dir.mkdir(parents=True)
+        real_file = skill_dir / "real.md"
+        real_file.write_text(f"content mentioning {bounded_pattern} here.\n", encoding="utf-8")
+        outside_target = outer_path / "outside.txt"
+        outside_target.write_text(f"content mentioning {bounded_pattern} here.\n", encoding="utf-8")
+        symlink_file = skill_dir / "link.md"
+        symlink_file.symlink_to(outside_target)
+
+        matches = gate.dry_run_corpus(bounded_pattern, repo_root, gate._DEFAULT_CORPUS_GLOB)
+        assert real_file in matches
+        assert symlink_file not in matches
 
 
 @_PROPERTIES
