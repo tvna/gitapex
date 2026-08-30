@@ -1,6 +1,17 @@
 {
   "description": "Deterministic PreToolUse/PostToolUse gates wiring this repository's own hook scripts to Claude Code tool-call matchers. Each gate's own rationale, tracking issue, and enforced rule live in .gitapex/ssot.json's gates[] registry (match on the trigger field naming this file) -- not duplicated here.",
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/gitapex-session-start.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Bash",

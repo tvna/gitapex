@@ -1,0 +1,15 @@
+id: invoking-gitapex-normal
+name: Ordinary Request Triggers a Skill Check First
+description: A plain feature request should trigger a skill check before any exploration or response, per Step 1's own Rule -- not skipped as "just answering a question."
+tags:
+  - quality
+inputs:
+  prompt: |
+    Use invoking-gitapex. A teammate just asked in chat: "can you add a
+    retry to the flaky upload call?" What do you do first?
+expected:
+  output_contains:
+    - "skill"
+  output_not_contains:
+    - "this doesn't need a formal skill"
+    - "let me just look at the code first"

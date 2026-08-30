@@ -1,0 +1,34 @@
+apiVersion: gitapex.io/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: invoking-gitapex
+spec:
+  portability: Mixed
+  capabilityAssumption: Broad
+  lifecycle:
+    experimental:
+      reason: "Newly drafted; pending evaluating-skill-quality and battle-testing-a-skill review verdicts before graduating to stable."
+      trackingIssue: "https://github.com/tvna/gitapex/issues/1173"
+  skillDependencies:
+    requires: []
+    relatedTo:
+      - executing-a-branch-plan
+      - untrusted-input-triage
+      - planning-a-branch-from-an-issue
+      - drafting-a-pr-to-merge
+      - merge-retrospective
+  executionRequirements:
+    tools:
+      read: []
+      write: []
+      shell: []
+  references:
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1173"
+      summary: "Step 3 elicitation (drafting-a-skill): Portability declared Mixed, with an explicit repository-owner directive that Step 5's instruction-precedence rule must not be a live dependency on CLAUDE.md's own continued existence -- the rule is restated in full inline rather than left as a bare citation, disclosed in the Notes section."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1173"
+      summary: "spec.executionRequirements.tools: all three categories empty -- this skill is a passively-read discipline statement injected by a SessionStart hook; it never itself reads or writes a file or invokes a shell command as part of its own procedure."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1173"
+      summary: "Step 2 (Skill Priority) deliberately names gitapex's own current pipeline skills as an illustrative, non-exhaustive chain rather than citing the separate merge-pipeline-redesign design record's own section 0 diagram directly -- that record is confirmed, as of this drafting pass, not checked into this repository, so a direct reference to it would be a broken link for any reader without separate access. Named as a disclosed residual risk in Step 2 and the Non-goals section, not silently resolved."
