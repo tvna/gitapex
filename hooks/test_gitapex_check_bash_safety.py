@@ -406,6 +406,33 @@ ALLOWED_DYNAMIC_COMMANDS = [
         "TOOL=uv; (VERB=harmless); VERB=safe; $TOOL $VERB foo",
         "real-top-level-static-clear-after-a-harmless-subshell-stays-allowed",
     ),
+    # False-positive guards for the thirty-second-round scope-isolation
+    # generalization (issue #1375): an ordinary, unrelated pipeline,
+    # background job, or function call elsewhere in the command must not
+    # spuriously deny a command whose watched name was never poisoned at
+    # all, and a harmless pipeline earlier in the command must not block
+    # a LATER, genuine top-level static reassignment from clearing
+    # poisoning normally.
+    (
+        "TOOL=uv; VERB=safe; true | cat; $TOOL $VERB foo",
+        "unrelated-harmless-pipeline-alongside-a-never-poisoned-name-stays-allowed",
+    ),
+    (
+        "TOOL=uv; VERB=safe; sleep 0 & wait; $TOOL $VERB foo",
+        "unrelated-harmless-background-job-alongside-a-never-poisoned-name-stays-allowed",
+    ),
+    (
+        "TOOL=uv; f() { echo hi; }; f; VERB=safe; $TOOL $VERB foo",
+        "unrelated-harmless-function-call-alongside-a-never-poisoned-name-stays-allowed",
+    ),
+    (
+        "TOOL=uv; g() { VERB=notlocal; }; VERB=safe; $TOOL $VERB foo",
+        "unrelated-function-bodys-own-plain-non-local-assignment-does-not-interfere",
+    ),
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); true | echo hi; VERB=safe; $TOOL $VERB foo",
+        "real-top-level-static-clear-after-a-harmless-pipeline-stays-allowed",
+    ),
 ]
 
 # --- Known, disclosed, unresolved regex/token-gate bypasses ----------------
@@ -1140,6 +1167,50 @@ DENIED_INDIRECTION_COMMANDS = [
     (
         "M=safe; M=$(echo POST); (M=GET); gh api repos/o/r/pulls/1/merge -X $M",
         "gh-api-method-value-reassigned-from-a-static-value-cleared-via-a-subshell",
+    ),
+    # Found live by Step 8 independent review, thirty-second round (issue
+    # #1375): round 31's own subshell-scoping fix covered ONLY `(...)`
+    # grouping, leaving three sibling scope-isolating bash constructs
+    # equally exploitable via the identical trick. Confirmed live via a
+    # stand-in `uv`/`gh` binary on PATH that each genuinely runs the
+    # dangerous command, NOT the parenthesized/piped/backgrounded/local
+    # distractor value.
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); true | VERB=safe; $TOOL $VERB foo",
+        "var-split-tool-and-verb-reassigned-from-a-static-value-cleared-via-a-pipe-stage",
+    ),
+    (
+        "M=safe; M=$(echo POST); true | M=GET; gh api repos/o/r/pulls/1/merge -X $M",
+        "gh-api-method-value-reassigned-from-a-static-value-cleared-via-a-pipe-stage",
+    ),
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); VERB=safe & wait; $TOOL $VERB foo",
+        "var-split-tool-and-verb-reassigned-from-a-static-value-cleared-via-a-background-job",
+    ),
+    (
+        "M=safe; M=$(echo POST); M=GET & wait; gh api repos/o/r/pulls/1/merge -X $M",
+        "gh-api-method-value-reassigned-from-a-static-value-cleared-via-a-background-job",
+    ),
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); f() { local VERB=safe; }; f; $TOOL $VERB foo",
+        "var-split-tool-and-verb-reassigned-from-a-static-value-cleared-via-a-local-declaration",
+    ),
+    (
+        "M=safe; M=$(echo POST); f() { local M=GET; }; f; gh api repos/o/r/pulls/1/merge -X $M",
+        "gh-api-method-value-reassigned-from-a-static-value-cleared-via-a-local-declaration",
+    ),
+    # Same round, the disclosed arithmetic-vs-double-subshell ambiguity
+    # residual: `((VERB=1))` stays denied on purpose (see `_segment_
+    # tokens_with_scope_isolation`'s own docstring for why the naive fix
+    # was rejected as unsafe), and a genuinely double-nested, spaced
+    # subshell carrying a distractor value must stay denied too.
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); ((VERB=1)); $TOOL $VERB foo",
+        "arithmetic-double-paren-content-stays-denied-as-a-disclosed-residual",
+    ),
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); ( (VERB=totallysafe) ); $TOOL $VERB foo",
+        "deliberately-spaced-double-subshell-distractor-stays-denied",
     ),
 ]
 

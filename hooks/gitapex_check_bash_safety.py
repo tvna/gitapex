@@ -4073,61 +4073,156 @@ def _names_reassigned_by_untracked_construct(tokens: list[str]) -> set[str]:
     return names
 
 
-def _paren_depths(tokens: list[str]) -> list[int]:
-    """The `(...)`-subshell nesting depth of each token in TOKENS, as a
-    list the same length and order as TOKENS itself (0 = top-level
-    scope, 1+ = inside one or more subshell groupings). `(`/`)`
-    themselves each get the depth in effect AT that boundary token (the
-    new, deeper depth for `(`; the old, shallower depth for `)`) --
-    irrelevant in practice since a caller only ever consults the depth
-    of an actual assignment-shaped content token, never a bare `(`/`)`.
-
-    Added by round 31 (issue #1375): `segment_tokens` treats `(`/`)`
-    as pure sequencing boundaries with no depth tracking at all --
-    correct for simple-command splitting, but insufficient for a caller
-    that needs to know whether a given assignment can actually affect a
-    reference OUTSIDE its own subshell scope. Real bash's own subshell
-    semantics: a `(...)` grouping runs in a forked, isolated shell whose
-    own assignments never propagate back to the parent -- see
-    `_names_reassigned_from_a_static_value`'s own docstring for the live
-    bypass this closes."""
-    depths: list[int] = []
+def _raw_segments_with_boundaries(tokens: list[str]) -> list[tuple[list[str], int, str | None]]:
+    """Every segment TOKENS splits into (including EMPTY ones, unlike
+    `segment_tokens`'s own filtered output -- an empty segment, e.g.
+    between `(` and `)` in a parameterless `f()` function definition,
+    still needs to occupy its own position in this list so a caller can
+    look at its neighbors), each paired with its own `(...)`-nesting
+    depth (see the round-31 paragraph in `_names_reassigned_from_a_
+    static_value`'s own docstring) and the single boundary token that
+    TERMINATES it (`None` for the final segment, which runs to the end
+    of TOKENS with no terminator). Building block for `_segment_tokens_
+    with_scope_isolation`'s own pipe/background-job detection, which
+    needs to know each segment's own NEIGHBORING boundary tokens, not
+    just its depth."""
+    segments: list[list[str]] = [[]]
+    seg_depths: list[int] = [0]
+    terminators: list[str | None] = []
     depth = 0
     for tok in tokens:
         if tok == "(":
+            terminators.append(tok)
             depth += 1
-            depths.append(depth)
+            segments.append([])
+            seg_depths.append(depth)
         elif tok == ")":
-            depths.append(depth)
+            terminators.append(tok)
             depth = max(depth - 1, 0)
-        else:
-            depths.append(depth)
-    return depths
-
-
-def _segment_tokens_with_subshell_depth(tokens: list[str]) -> list[tuple[list[str], int]]:
-    """Like `segment_tokens`, but pairs each returned segment with its
-    own `(...)`-subshell nesting DEPTH (see `_paren_depths`'s own
-    docstring) at the point it appears in TOKENS. A single segment's own
-    depth is always internally consistent -- `(`/`)` are pure segment
-    boundaries in `segment_tokens` too, so no segment can itself
-    straddle a depth change -- added by round 31 (issue #1375) for
-    `_names_cleared_by_a_later_static_reassignment`'s own use; see that
-    function's own docstring for the live bypass this closes."""
-    segments: list[tuple[list[str], int]] = [([], 0)]
-    depth = 0
-    for tok in tokens:
-        if tok == "(":
-            depth += 1
-            segments.append(([], depth))
-        elif tok == ")":
-            depth = max(depth - 1, 0)
-            segments.append(([], depth))
+            segments.append([])
+            seg_depths.append(depth)
         elif tok in _SINGLE_OPS or tok in _MULTI_OPS:
-            segments.append(([], depth))
+            terminators.append(tok)
+            segments.append([])
+            seg_depths.append(depth)
         else:
-            segments[-1][0].append(tok)
-    return [(seg, d) for seg, d in segments if seg]
+            segments[-1].append(tok)
+    terminators.append(None)
+    return list(zip(segments, seg_depths, terminators, strict=True))
+
+
+def _segment_tokens_with_scope_isolation(tokens: list[str]) -> list[tuple[list[str], bool]]:
+    """Like `segment_tokens`, but pairs each returned (non-empty)
+    segment with whether it is ISOLATED from the parent shell's own
+    scope -- unable to affect a reference outside itself, so any plain
+    static assignment inside it must never be trusted to CLEAR an
+    earlier poisoning (though a dynamic/append/array-element/read/
+    printf-v event inside it may still POISON, staying conservative is
+    always the safe direction). A segment is isolated when:
+
+    - its own `(...)`-subshell nesting depth is 1+ (round 31's own
+      mechanism, generalized here rather than replaced);
+    - it is any stage of a `|` pipeline -- bash forks a SEPARATE
+      subshell for EVERY pipeline stage by default, INCLUDING THE LAST
+      ONE, absent `shopt -s lastpipe` (which this classifier has no way
+      to know is set), so a caller must never trust a pipe stage's own
+      assignment regardless of its position in the pipe chain;
+    - it is itself backgrounded via a trailing `&` (the segment BEFORE
+      `&` forks into its own subshell; the segment AFTER `&` runs in the
+      parent shell as normal and is NOT isolated by that `&` alone --
+      only what precedes it is);
+    - it contains the literal `local` keyword as one of its own tokens
+      anywhere, not necessarily first -- a function body's own opening
+      `{` (not itself a `segment_tokens` boundary, so it shares the
+      SAME segment as the `local` statement that follows it, e.g.
+      `["{", "local", "VERB=safe"]` for `f() { local VERB=safe; }`)
+      would otherwise sit at position 0 and hide the keyword from a
+      first-token-only check (bash's own function-local variable
+      scoping: a `local NAME=value` inside a function body never leaks
+      to the function's caller, unlike a plain `NAME=value` in the same
+      position, which WOULD leak).
+
+    CRITICAL bypasses found by independent adversarial review (round
+    32, issue #1375) and independently reproduced live, both via
+    `classify()` and via real bash execution with a stand-in `uv`/`gh`
+    binary on PATH: round 31's own `_paren_depths`/`_segment_tokens_
+    with_subshell_depth` covered ONLY `(...)` subshell grouping, leaving
+    three SIBLING scope-isolating constructs equally exploitable via the
+    identical trick -- wrap a fake "the value is safe now" reassignment
+    in one of them to escape a genuine poisoning a prior append/read/
+    array-element/dynamic reassignment already established.
+    `TOOL=uv; VERB=harmless; VERB=$(echo install); true | VERB=safe;
+    $TOOL $VERB foo` resolved to `deny=False` even though real bash
+    genuinely runs `uv install foo`, NOT `safe foo` (confirmed live via
+    a stand-in `uv` binary on PATH: captured argv `uv called with:
+    install foo`) -- the pipe stage's own `VERB=safe` never reaches the
+    parent shell. `TOOL=uv; VERB=harmless; VERB=$(echo install);
+    VERB=safe & wait; $TOOL $VERB foo` reproduces identically for a
+    backgrounded job (captured argv: `uv called with: install foo`,
+    NOT `safe foo`). `TOOL=uv; VERB=harmless; VERB=$(echo install); f()
+    { local VERB=safe; }; f; $TOOL $VERB foo` reproduces identically for
+    a function-local reassignment (captured argv: `uv called with:
+    install foo`) -- bash functions do NOT get their own variable scope
+    by default (a plain `VERB=safe` inside a function body genuinely
+    WOULD leak to the caller), but `local` explicitly opts a single
+    assignment out of that leak, and the pre-round-32 code had no
+    concept of `local` at all, so it trusted the assignment exactly like
+    an ordinary top-level one. All three reproduce identically for
+    `_rule_gh_api_write` too (e.g. `M=safe; M=$(echo POST); true | M=GET;
+    gh api repos/o/r/pulls/1/merge -X $M` -- real bash genuinely runs
+    `-X POST`, a genuine unreviewed write). Confirmed through the real
+    wrapper: all six (three constructs x two consumers) now deny with
+    exit 2 where they previously allowed with exit 0.
+
+    A FOURTH candidate was investigated and deliberately NOT folded into
+    this isolation model: bash's `((EXPR))` arithmetic-command syntax
+    also uses two characters that individually tokenize as bare `(`/`)`
+    in this file's own tokenizer (confirmed directly: `tokenize()`
+    produces the IDENTICAL token sequence `['(', '(', 'VERB=1', ')',
+    ')']` for BOTH `((VERB=1))` and the deliberately-spaced `( (VERB=1)
+    )` -- real bash's own lexer distinguishes the two by the ABSENCE or
+    PRESENCE of a space between the parens, a distinction this
+    classifier's tokenizer already discards before this function ever
+    runs), so `((VERB=1))` is currently treated as TWO nested subshells
+    (depth 2), denying a harmless, genuinely-numeric arithmetic
+    assignment (`TOOL=uv; VERB=harmless; VERB=$(echo install);
+    ((VERB=1)); $TOOL $VERB foo` -- real bash genuinely sets `$VERB` to
+    the number `1`, never a watched verb) -- but the naive fix (treating
+    adjacent `((`/`))` as depth-neutral, since REAL arithmetic never
+    leaks a non-numeric value to the parent) was independently tried and
+    REJECTED after live verification proved it unsafe: `((VERB=safe))`
+    (a non-numeric RHS) does NOT set `$VERB` to
+    the string "safe" in real bash at all -- arithmetic context
+    evaluates the bare word "safe" as an (unset) variable reference,
+    defaulting to `0`, so `$VERB` becomes `"0"`, never a watched-verb-
+    matching string -- but the deliberately-spaced double-subshell
+    `( (VERB=totallysafe) )`, which this tokenizer cannot distinguish
+    from `((VERB=totallysafe))` at all, genuinely assigns the STRING
+    "totallysafe" INSIDE the isolated inner subshell while leaving the
+    parent's own `$VERB` completely untouched (confirmed live: `TOOL=uv;
+    VERB=harmless; VERB=$(echo install); ( (VERB=totallysafe) );
+    echo "VERB is now: $VERB"` prints `VERB is now: install` -- the
+    parent's own poisoned value survives unchanged). Treating the
+    ambiguous adjacent-paren pair as depth-neutral would have let THIS
+    classifier's own literal-text extraction read "totallysafe" as
+    VERB's new, trusted value and clear the poisoning -- a NEW security
+    bypass, reopening exactly the class of defect this whole function
+    exists to close, in exchange for fixing an over-denial. The
+    over-denial on genuine `((...))` arithmetic usage is therefore kept,
+    deliberately NOT fixed -- the same deny-on-genuine-ambiguity posture
+    this file has followed in every prior round; closing it soundly
+    would require the upstream tokenizer to preserve the presence/
+    absence of a space between adjacent parens, which is out of this
+    round's scope."""
+    raw = _raw_segments_with_boundaries(tokens)
+    result: list[tuple[list[str], bool]] = []
+    for i, (seg, depth, terminator) in enumerate(raw):
+        if not seg:
+            continue
+        preceding = raw[i - 1][2] if i > 0 else None
+        isolated = depth > 0 or terminator in ("|", "&") or preceding == "|" or "local" in seg
+        result.append((seg, isolated))
+    return result
 
 
 def _names_reassigned_from_a_static_value(tokens: list[str]) -> set[str]:
@@ -4243,31 +4338,34 @@ def _names_reassigned_from_a_static_value(tokens: list[str]) -> set[str]:
     (M=GET); gh api repos/o/r/pulls/1/merge -X $M` also resolved to
     `deny=False` -- real bash genuinely runs `-X POST` (captured argv
     confirms it), a genuine unreviewed write. Closed by tracking each
-    assignment token's own `(...)`-nesting depth via `_paren_depths` and
-    only letting a static reassignment clear POISONED when it occurs at
-    depth 0 (true top-level scope, the only scope whose own reassignment
-    can actually affect a top-level reference); a static assignment
-    found at depth 1+ is treated as invisible to the parent scope --
-    neither clearing nor registering EVER_STATIC -- while a DYNAMIC
-    reassignment at ANY depth still poisons unconditionally, since
-    staying conservative about what a subshell might have done is always
-    the safe direction, never the dangerous one. Checkout/restore's own
-    `_names_with_dynamic_assignment` was independently confirmed
-    unaffected by this exact bypass shape (it never clears at all,
-    regardless of depth, so it already denied this shape correctly)."""
+    assignment token's own scope isolation (originally just `(...)`-
+    nesting depth via `_paren_depths`, GENERALIZED by round 32 -- see
+    `_segment_tokens_with_scope_isolation`'s own docstring -- to also
+    cover pipe stages, backgrounded jobs, and `local` scoping) and only
+    letting a static reassignment clear POISONED when it occurs in a
+    non-isolated (true top-level) segment; an isolated one is treated as
+    invisible to the parent scope -- neither clearing nor registering
+    EVER_STATIC -- while a DYNAMIC reassignment in ANY segment still
+    poisons unconditionally, since staying conservative about what an
+    isolated context might have done is always the safe direction, never
+    the dangerous one. Checkout/restore's own `_names_with_dynamic_
+    assignment` was independently confirmed unaffected by this exact
+    bypass shape (it never clears at all, regardless of scope, so it
+    already denied this shape correctly)."""
     ever_static: set[str] = set()
     poisoned: set[str] = set()
-    for tok, depth in zip(tokens, _paren_depths(tokens), strict=True):
-        match = _ASSIGN_RE.match(tok)
-        if not match:
-            continue
-        name = match.group(1)
-        if _is_dynamic(tok):
-            if name in ever_static:
-                poisoned.add(name)
-        elif depth == 0:
-            ever_static.add(name)
-            poisoned.discard(name)
+    for seg, isolated in _segment_tokens_with_scope_isolation(tokens):
+        for tok in seg:
+            match = _ASSIGN_RE.match(tok)
+            if not match:
+                continue
+            name = match.group(1)
+            if _is_dynamic(tok):
+                if name in ever_static:
+                    poisoned.add(name)
+            elif not isolated:
+                ever_static.add(name)
+                poisoned.discard(name)
     return poisoned
 
 
@@ -4338,21 +4436,24 @@ def _names_cleared_by_a_later_static_reassignment(tokens: list[str], candidates:
     `uv` binary on PATH: captured argv `uv called with: install foo`);
     the `read`- and array-element-reassigned counterparts reproduce
     identically. Closed the same way as `_names_reassigned_from_a_
-    static_value`'s own round-31 fix: each segment's own `(...)`-nesting
-    depth (via `_segment_tokens_with_subshell_depth`) gates whether a
-    plain static assignment in that segment may set a candidate's own
-    LAST-event state to "cleared" -- only a depth-0 (true top-level)
-    static assignment may do so; a depth-1+ one is treated as invisible
-    to the parent scope, leaving whatever state a prior event already
-    recorded untouched. Every OTHER event class (append, array-element,
-    read/printf-v, and a dynamic plain assignment) still marks the
-    candidate "not cleared" regardless of depth, since staying
-    conservative about what a subshell might have done is always the
-    safe direction, never the dangerous one."""
+    static_value`'s own round-31 fix: each segment's own scope isolation
+    (originally just `(...)`-nesting depth via `_segment_tokens_with_
+    subshell_depth`, GENERALIZED by round 32 -- see `_segment_tokens_
+    with_scope_isolation`'s own docstring -- to also cover pipe stages,
+    backgrounded jobs, and `local` scoping) gates whether a plain static
+    assignment in that segment may set a candidate's own LAST-event
+    state to "cleared" -- only a non-isolated (true top-level) static
+    assignment may do so; an isolated one is treated as invisible to the
+    parent scope, leaving whatever state a prior event already recorded
+    untouched. Every OTHER event class (append, array-element, read/
+    printf-v, and a dynamic plain assignment) still marks the candidate
+    "not cleared" regardless of scope, since staying conservative about
+    what an isolated context might have done is always the safe
+    direction, never the dangerous one."""
     if not candidates:
         return set()
     last_is_static: dict[str, bool] = {}
-    for seg, depth in _segment_tokens_with_subshell_depth(tokens):
+    for seg, isolated in _segment_tokens_with_scope_isolation(tokens):
         if seg and not _is_dynamic(seg[0]):
             head = seg[0].lower()
             if head in _READ_COMMAND_WORDS:
@@ -4385,11 +4486,12 @@ def _names_cleared_by_a_later_static_reassignment(tokens: list[str], candidates:
                     continue
                 if _is_dynamic(token):
                     last_is_static[name] = False
-                elif depth == 0:
+                elif not isolated:
                     last_is_static[name] = True
-                # depth > 0 and static: a subshell-scoped reassignment
-                # never reaches the parent scope -- leave any existing
-                # state untouched (round 31).
+                # isolated and static: a scope-isolated reassignment
+                # (subshell/pipe-stage/background job/`local`) never
+                # reaches the parent scope -- leave any existing state
+                # untouched (round 31/32).
     return {name for name, is_static in last_is_static.items() if is_static}
 
 

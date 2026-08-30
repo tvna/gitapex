@@ -2606,21 +2606,78 @@ def test_names_reassigned_from_a_static_value_re_poisons_after_a_further_dynamic
     assert checker._names_reassigned_from_a_static_value(tokens) == {"M"}
 
 
-def test_paren_depths_tracks_nesting() -> None:
-    """`_paren_depths` returns one depth per token, incrementing at each
-    `(` and decrementing at each `)`, never going negative."""
-    tokens = ["A=1", "(", "B=2", "(", "C=3", ")", "D=4", ")", "E=5"]
-    assert checker._paren_depths(tokens) == [0, 1, 1, 2, 2, 2, 1, 1, 0]
+def test_raw_segments_with_boundaries_tracks_nesting_and_terminators() -> None:
+    """`_raw_segments_with_boundaries` returns one (segment, depth,
+    terminator) triple per segment, including empty ones, with depth
+    incrementing at each `(` and decrementing at each `)` (never
+    negative), and each non-final entry's own terminator naming the
+    boundary token that ended it."""
+    tokens = ["A=1", "(", "B=2", ")", "C=3"]
+    result = checker._raw_segments_with_boundaries(tokens)
+    assert result == [
+        (["A=1"], 0, "("),
+        (["B=2"], 1, ")"),
+        (["C=3"], 0, None),
+    ]
 
 
-def test_paren_depths_never_goes_negative_on_an_unmatched_close_paren() -> None:
-    assert checker._paren_depths([")", "A=1"]) == [0, 0]
+def test_raw_segments_with_boundaries_never_goes_negative_on_an_unmatched_close_paren() -> None:
+    result = checker._raw_segments_with_boundaries([")", "A=1"])
+    assert result == [([], 0, ")"), (["A=1"], 0, None)]
 
 
-def test_segment_tokens_with_subshell_depth_pairs_each_segment_with_its_own_depth() -> None:
+def test_segment_tokens_with_scope_isolation_marks_subshell_content_isolated() -> None:
     tokens = ["TOOL=uv", ";", "(", "VERB=safe", ")", ";", "echo", "hi"]
-    result = checker._segment_tokens_with_subshell_depth(tokens)
-    assert result == [(["TOOL=uv"], 0), (["VERB=safe"], 1), (["echo", "hi"], 0)]
+    result = checker._segment_tokens_with_scope_isolation(tokens)
+    assert result == [(["TOOL=uv"], False), (["VERB=safe"], True), (["echo", "hi"], False)]
+
+
+def test_segment_tokens_with_scope_isolation_marks_every_pipe_stage_isolated() -> None:
+    """Every stage of a `|` pipeline is isolated, including the LAST
+    one -- bash forks a subshell for each stage by default, absent
+    `shopt -s lastpipe`, which this classifier has no way to know is
+    set."""
+    tokens = ["cmd1", "|", "cmd2", "|", "cmd3"]
+    result = checker._segment_tokens_with_scope_isolation(tokens)
+    assert result == [(["cmd1"], True), (["cmd2"], True), (["cmd3"], True)]
+
+
+def test_segment_tokens_with_scope_isolation_marks_only_the_backgrounded_segment_isolated() -> None:
+    """`cmd1 & cmd2` backgrounds ONLY cmd1 -- cmd2 runs in the parent
+    shell as normal immediately afterward, so it must NOT be marked
+    isolated merely for following a `&`."""
+    tokens = ["cmd1", "&", "cmd2"]
+    result = checker._segment_tokens_with_scope_isolation(tokens)
+    assert result == [(["cmd1"], True), (["cmd2"], False)]
+
+
+def test_segment_tokens_with_scope_isolation_marks_a_local_declaration_isolated() -> None:
+    """A segment containing the literal `local` keyword anywhere (not
+    necessarily first -- a function body's own opening `{` shares the
+    same segment) is isolated."""
+    tokens = ["{", "local", "VERB=safe"]
+    result = checker._segment_tokens_with_scope_isolation(tokens)
+    assert result == [(["{", "local", "VERB=safe"], True)]
+
+
+def test_segment_tokens_with_scope_isolation_leaves_ordinary_segments_unisolated() -> None:
+    tokens = ["VERB=inst", ";", "VERB+=all", ";", "VERB=safe"]
+    result = checker._segment_tokens_with_scope_isolation(tokens)
+    assert result == [(["VERB=inst"], False), (["VERB+=all"], False), (["VERB=safe"], False)]
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value=_VALUES)
+def test_segment_tokens_with_scope_isolation_matches_model_for_a_pipe_stage(name: str, value: str) -> None:
+    """Model-based, exercising `_segment_tokens_with_scope_isolation`
+    directly (issue #1178's own detection-logic property-coverage
+    requirement): for ANY identifier assigned a value as the SECOND
+    stage of a two-stage `|` pipeline, that segment is marked isolated
+    -- and the FIRST, ordinary top-level segment preceding the whole
+    pipeline is not."""
+    tokens = [f"{name}=first", ";", "true", "|", f"{name}={value}"]
+    result = checker._segment_tokens_with_scope_isolation(tokens)
+    assert result == [([f"{name}=first"], False), (["true"], True), ([f"{name}={value}"], True)]
 
 
 def test_names_reassigned_from_a_static_value_stays_poisoned_despite_a_subshell_clear() -> None:
@@ -2657,6 +2714,50 @@ def test_names_reassigned_from_a_static_value_matches_model_for_a_subshell_clear
         f"{name}={subshell_value}",
         ")",
     ]
+    assert name in checker._names_reassigned_from_a_static_value(tokens)
+
+
+def test_names_reassigned_from_a_static_value_stays_poisoned_despite_a_pipe_stage_clear() -> None:
+    """CRITICAL bypass regression pin (round-32 independent review,
+    issue #1375): every stage of a `|` pipeline runs in its OWN forked
+    subshell by default (including the LAST stage, absent `shopt -s
+    lastpipe`) -- a static reassignment inside any stage can never reach
+    the parent shell's own copy of the name."""
+    tokens = ["VERB=harmless", ";", "VERB=$(echo install)", ";", "true", "|", "VERB=safe"]
+    assert checker._names_reassigned_from_a_static_value(tokens) == {"VERB"}
+
+
+def test_names_reassigned_from_a_static_value_stays_poisoned_despite_a_background_job_clear() -> None:
+    """Same round, the backgrounded-job counterpart: `cmd &` forks a
+    subshell for `cmd` alone."""
+    tokens = ["VERB=harmless", ";", "VERB=$(echo install)", ";", "VERB=safe", "&", "wait"]
+    assert checker._names_reassigned_from_a_static_value(tokens) == {"VERB"}
+
+
+def test_names_reassigned_from_a_static_value_stays_poisoned_despite_a_local_declaration_clear() -> None:
+    """Same round, the function-local counterpart: bash functions do NOT
+    get their own variable scope by default, but `local` explicitly
+    opts a single assignment out of leaking to the caller."""
+    tokens = ["VERB=harmless", ";", "VERB=$(echo install)", ";", "{", "local", "VERB=safe", "}"]
+    assert checker._names_reassigned_from_a_static_value(tokens) == {"VERB"}
+
+
+def test_names_reassigned_from_a_static_value_allows_a_real_top_level_clear_after_a_harmless_pipeline() -> None:
+    """No over-correction: an EARLIER, harmless pipeline must not block a
+    LATER, genuine top-level static reassignment from clearing normally."""
+    tokens = ["VERB=harmless", ";", "VERB=$(echo install)", ";", "true", "|", "echo", "hi", ";", "VERB=safe"]
+    assert checker._names_reassigned_from_a_static_value(tokens) == set()
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, static_value=_VALUES, dynamic_value=_VALUES, isolated_value=_VALUES)
+def test_names_reassigned_from_a_static_value_matches_model_for_a_pipe_stage_clear_attempt(
+    name: str, static_value: str, dynamic_value: str, isolated_value: str
+) -> None:
+    """Model-based: for ANY identifier reassigned static -> dynamic and
+    then given a static value ONLY inside a pipe stage, the name stays
+    poisoned regardless of the pipe stage's own assigned value."""
+    tokens = [f"{name}={static_value}", ";", f"{name}=$({dynamic_value})", ";", "true", "|", f"{name}={isolated_value}"]
     assert name in checker._names_reassigned_from_a_static_value(tokens)
 
 
@@ -2804,6 +2905,47 @@ def test_names_cleared_by_a_later_static_reassignment_matches_model_for_a_subshe
     included in the cleared set -- that assignment can never reach the
     parent scope."""
     tokens = [f"{name}=x", f"{name}+={appended_value}", "(", f"{name}={subshell_value}", ")"]
+    assert name not in checker._names_cleared_by_a_later_static_reassignment(tokens, {name})
+
+
+def test_names_cleared_by_a_later_static_reassignment_does_not_clear_via_a_pipe_stage() -> None:
+    """CRITICAL bypass regression pin (round-32 independent review,
+    issue #1375): a static reassignment inside any pipe stage never
+    reaches the parent shell's own copy of the name -- must not clear
+    an append-poisoned candidate."""
+    tokens = ["VERB=inst", "VERB+=all", ";", "true", "|", "VERB=safe"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == set()
+
+
+def test_names_cleared_by_a_later_static_reassignment_does_not_clear_via_a_background_job() -> None:
+    tokens = ["VERB=inst", "VERB+=all", ";", "VERB=safe", "&", "wait"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == set()
+
+
+def test_names_cleared_by_a_later_static_reassignment_does_not_clear_via_a_local_declaration() -> None:
+    tokens = ["VERB=inst", "VERB+=all", ";", "{", "local", "VERB=safe", "}"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == set()
+
+
+def test_names_cleared_by_a_later_static_reassignment_still_clears_a_real_top_level_assignment_after_a_pipeline() -> (
+    None
+):
+    """No over-correction: a harmless pipeline earlier in the command
+    must not block a LATER, genuine top-level static reassignment from
+    clearing normally."""
+    tokens = ["VERB=inst", "VERB+=all", ";", "true", "|", "echo", "hi", ";", "VERB=safe"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == {"VERB"}
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, appended_value=_VALUES, isolated_value=_VALUES)
+def test_names_cleared_by_a_later_static_reassignment_matches_model_for_a_pipe_stage_clear_attempt(
+    name: str, appended_value: str, isolated_value: str
+) -> None:
+    """Model-based: for ANY identifier appended to and then given a
+    static value ONLY inside a pipe stage, the name is never included
+    in the cleared set."""
+    tokens = [f"{name}=x", f"{name}+={appended_value}", ";", "true", "|", f"{name}={isolated_value}"]
     assert name not in checker._names_cleared_by_a_later_static_reassignment(tokens, {name})
 
 
@@ -3109,6 +3251,123 @@ def test_classify_allows_a_real_top_level_static_clear_after_a_harmless_subshell
     reassignment from clearing poisoning normally."""
     verdict = checker.classify("TOOL=uv; (VERB=harmless); VERB=safe; $TOOL $VERB foo")
     assert verdict.deny is False
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_pipe_stage_clear() -> None:
+    """CRITICAL bypass regression pin (round-32 independent review,
+    issue #1375): every stage of a `|` pipeline runs in its OWN forked
+    subshell by default (including the LAST stage, absent `shopt -s
+    lastpipe`), so a static reassignment inside a pipe stage never
+    reaches the parent shell's own copy of the name. Confirmed live via
+    a stand-in `uv` binary on PATH that this genuinely runs `uv install
+    foo`, NOT `safe foo`."""
+    verdict = checker.classify("TOOL=uv; VERB=harmless; VERB=$(echo install); true | VERB=safe; $TOOL $VERB foo")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_gh_api_method_reassigned_from_a_static_value_via_a_pipe_stage_clear() -> None:
+    """Companion to the B1b pin above, for `_rule_gh_api_write`.
+    Confirmed live via a stand-in `gh` binary on PATH that this
+    genuinely runs `gh api repos/o/r/pulls/1/merge -X POST`, a genuine
+    unreviewed write."""
+    verdict = checker.classify("M=safe; M=$(echo POST); true | M=GET; gh api repos/o/r/pulls/1/merge -X $M")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_background_job_clear() -> None:
+    """Same round, the backgrounded-job counterpart: `cmd &` forks a
+    subshell for `cmd` alone. Confirmed live via a stand-in `uv` binary
+    on PATH that this genuinely runs `uv install foo`, NOT `safe foo`."""
+    verdict = checker.classify("TOOL=uv; VERB=harmless; VERB=$(echo install); VERB=safe & wait; $TOOL $VERB foo")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_gh_api_method_reassigned_from_a_static_value_via_a_background_job_clear() -> None:
+    verdict = checker.classify("M=safe; M=$(echo POST); M=GET & wait; gh api repos/o/r/pulls/1/merge -X $M")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_local_declaration_clear() -> None:
+    """Same round, the function-local counterpart: bash functions do NOT
+    get their own variable scope by default, but `local` explicitly
+    opts a single assignment out of leaking to the caller. Confirmed
+    live via a stand-in `uv` binary on PATH that this genuinely runs `uv
+    install foo`, NOT `safe foo`."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); f() { local VERB=safe; }; f; $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_gh_api_method_reassigned_from_a_static_value_via_a_local_declaration_clear() -> None:
+    verdict = checker.classify("M=safe; M=$(echo POST); f() { local M=GET; }; f; gh api repos/o/r/pulls/1/merge -X $M")
+    assert verdict.deny is True
+
+
+def test_classify_allows_an_unrelated_harmless_pipeline_alongside_a_never_poisoned_name() -> None:
+    """No over-correction: an ordinary, unrelated pipeline elsewhere in
+    the command must not spuriously deny a command whose watched name
+    was never poisoned at all."""
+    verdict = checker.classify("TOOL=uv; VERB=safe; true | cat; $TOOL $VERB foo")
+    assert verdict.deny is False
+
+
+def test_classify_allows_an_unrelated_harmless_background_job_alongside_a_never_poisoned_name() -> None:
+    verdict = checker.classify("TOOL=uv; VERB=safe; sleep 0 & wait; $TOOL $VERB foo")
+    assert verdict.deny is False
+
+
+def test_classify_allows_an_unrelated_harmless_function_call_alongside_a_never_poisoned_name() -> None:
+    verdict = checker.classify("TOOL=uv; f() { echo hi; }; f; VERB=safe; $TOOL $VERB foo")
+    assert verdict.deny is False
+
+
+def test_classify_allows_a_real_top_level_static_clear_after_a_harmless_pipeline() -> None:
+    """No over-correction: a harmless pipeline earlier in the command
+    must not block a LATER, genuine top-level static reassignment from
+    clearing poisoning normally."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); true | echo hi; VERB=safe; $TOOL $VERB foo"
+    )
+    assert verdict.deny is False
+
+
+def test_classify_denies_arithmetic_double_paren_content_as_a_disclosed_residual() -> None:
+    """DISCLOSED, deliberately NOT fixed (round 32, issue #1375): this
+    classifier's own tokenizer produces the IDENTICAL token sequence for
+    bash's `((EXPR))` arithmetic-command syntax and a deliberately-
+    spaced, genuinely double-nested `( (cmd) )` subshell grouping,
+    discarding the space that real bash's own lexer uses to disambiguate
+    them. Treating adjacent `((`/`))` as depth-neutral (the "obviously
+    correct" fix for the resulting over-denial on harmless arithmetic
+    usage) was independently tried and REJECTED: real bash's own
+    arithmetic evaluation can only ever assign a NUMBER to the target
+    name (confirmed live: `((VERB=safe))` sets `$VERB` to `"0"`, not the
+    string "safe" -- bash reads the bare word as an unset variable
+    reference), but the genuinely-double-nested-subshell reading of the
+    SAME tokens can assign an ARBITRARY STRING that stays fully isolated
+    from the parent scope (confirmed live: `( (VERB=totallysafe) )`
+    leaves the parent's own `$VERB` completely unchanged). Treating the
+    ambiguous pair as depth-neutral would let this classifier's own
+    literal-text extraction trust that arbitrary string as VERB's new
+    value and wrongly clear a genuine poisoning -- a NEW bypass, reopening
+    exactly the class of defect `_names_reassigned_from_a_static_value`
+    exists to close. The over-denial on genuine arithmetic usage is kept
+    deliberately, matching this file's own established deny-on-
+    ambiguity posture; closing it soundly would require the upstream
+    tokenizer to preserve the presence/absence of a space between
+    adjacent parens."""
+    verdict = checker.classify("TOOL=uv; VERB=harmless; VERB=$(echo install); ((VERB=1)); $TOOL $VERB foo")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_deliberately_spaced_double_subshell_distractor() -> None:
+    """No under-correction: confirms the rejected "arithmetic-neutral"
+    fix was correctly NOT applied -- a genuinely double-nested, spaced
+    subshell carrying a plausible-looking distractor value must stay
+    denied, since real bash's own parent scope is unaffected by it."""
+    verdict = checker.classify("TOOL=uv; VERB=harmless; VERB=$(echo install); ( (VERB=totallysafe) ); $TOOL $VERB foo")
+    assert verdict.deny is True
 
 
 def test_resolve_path_tokens_denies_a_name_with_a_dynamic_assignment_elsewhere() -> None:
