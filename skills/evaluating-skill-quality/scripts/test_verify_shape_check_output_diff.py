@@ -294,3 +294,60 @@ def test_the_real_base_sha_still_points_at_a_pre_split_revision() -> None:
     ).stdout
 
     vsc._assert_pre_split_source(source)
+
+
+def test_main_reports_the_first_divergence_when_only_the_order_changed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Check ORDER is part of the contract this script asserts, and
+    # reordering results is exactly what a decomposition of check_shape()
+    # can get wrong. Both "only" lists are membership-based, so they come
+    # back empty for a pure reorder -- without a positional fallback the
+    # operator gets a bare "output differs." headline and nothing else.
+    (tmp_path / "skills" / "skill-six").mkdir(parents=True)
+    (tmp_path / "skills" / "skill-six" / "SKILL.md").write_text("---\nname: skill-six\n---\n", encoding="utf-8")
+    monkeypatch.setattr(vsc, "REPO_ROOT", tmp_path)
+
+    first = _FakeResult(name="check-a", passed=True, rule="r", evidence="e")
+    second = _FakeResult(name="check-b", passed=True, rule="r", evidence="e")
+    monkeypatch.setattr(vsc, "_load_old_module", lambda _tmp: _stub_module(lambda _md: [first, second]))
+    monkeypatch.setattr(vsc, "_load_new_module", lambda: _stub_module(lambda _md: [second, first]))
+
+    exit_code = vsc.main()
+
+    out = capsys.readouterr().out
+    assert exit_code == 1
+    assert "differ in ORDER or multiplicity" in out
+    assert "first divergence at index 0:" in out
+    assert "OLD: ('check-a', True, 'r', 'e')" in out
+    assert "NEW: ('check-b', True, 'r', 'e')" in out
+
+
+def test_main_still_reports_a_plain_value_diff_without_the_order_fallback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The ordinary OLD-only/NEW-only path must not start emitting the
+    # order-fallback text: an evidence change is a value difference, not a
+    # reorder, and mislabelling it would send a reader looking for the
+    # wrong kind of regression.
+    (tmp_path / "skills" / "skill-seven").mkdir(parents=True)
+    (tmp_path / "skills" / "skill-seven" / "SKILL.md").write_text("---\nname: skill-seven\n---\n", encoding="utf-8")
+    monkeypatch.setattr(vsc, "REPO_ROOT", tmp_path)
+
+    monkeypatch.setattr(
+        vsc,
+        "_load_old_module",
+        lambda _tmp: _stub_module(lambda _md: [_FakeResult(name="check-a", passed=True, rule="r", evidence="old")]),
+    )
+    monkeypatch.setattr(
+        vsc,
+        "_load_new_module",
+        lambda: _stub_module(lambda _md: [_FakeResult(name="check-a", passed=True, rule="r", evidence="new")]),
+    )
+
+    exit_code = vsc.main()
+
+    out = capsys.readouterr().out
+    assert exit_code == 1
+    assert "OLD only:" in out
+    assert "differ in ORDER or multiplicity" not in out

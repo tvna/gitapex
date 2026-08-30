@@ -188,6 +188,36 @@ def main() -> int:
                     detail.append(f"  OLD only: {r}")
                 for r in new_only:
                     detail.append(f"  NEW only: {r}")
+                if not old_only and not new_only:
+                    # Both "only" lists are membership-based, so they come
+                    # back empty whenever the two lists hold the same
+                    # tuples but in a different ORDER (or with different
+                    # multiplicity). Check ORDER is part of the contract
+                    # this script asserts -- and reordering results is
+                    # exactly what a decomposition of check_shape() can get
+                    # wrong -- so without this branch such a regression is
+                    # correctly detected (exit 1) but reported as a bare
+                    # "output differs." headline with no actionable detail
+                    # at all. Report the first positional divergence
+                    # instead. zip() stops at the shorter list, so the
+                    # generator can legitimately find nothing when one list
+                    # is a strict prefix of the other; the result-count line
+                    # above already covers that case.
+                    # strict=False on purpose: the two lists can legitimately
+                    # differ in length here (one a strict prefix of the
+                    # other), which is a diff to REPORT, not an exception to
+                    # raise out of the reporting path itself.
+                    first_divergence = next(
+                        (i for i, (o, n) in enumerate(zip(old_results, new_results, strict=False)) if o != n),
+                        None,
+                    )
+                    if first_divergence is not None:
+                        detail.append(
+                            "  no result is unique to either side -- the lists differ in ORDER or multiplicity."
+                        )
+                        detail.append(f"  first divergence at index {first_divergence}:")
+                        detail.append(f"    OLD: {old_results[first_divergence]}")
+                        detail.append(f"    NEW: {new_results[first_divergence]}")
                 failures.append("\n".join(detail))
 
         print(
