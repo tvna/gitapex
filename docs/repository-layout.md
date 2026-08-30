@@ -15,9 +15,9 @@ subdirectory.
 
 Only **skills** (and, later, hooks) are deployed as runtime primitives;
 everything else — contributor instructions (`AGENTS.md`/`CLAUDE.md`,
-synced from `tvna/claude-md`), CI tooling, tests, and docs — is carried in
-the repository for development but is never deployed into a consumer's
-agent.
+owned and edited directly by gitapex), CI tooling, tests, and docs — is
+carried in the repository for development but is never deployed into a
+consumer's agent.
 
 ```
 plugin.json        Agent Plugins Specification (agent-plugins.org) v1.0.0 manifest — the plugin-identity source of truth (name, version, description, author, homepage, repository, license); .claude-plugin/plugin.json below is generated from it, never hand-edited
@@ -28,7 +28,7 @@ skills/            one directory per skill (SKILL.md, metadata/gitapex.yaml, opt
   drafting-issues/  drafts a new GitHub issue with an Acceptance Criteria Map before creation, so planning-a-branch-from-an-issue can read one instead of building it
 docs/              documentation (this file, versioning policy, design specs, motivation.md) — not deployed
 tests/             pytest suite for the internal CI tooling — not deployed
-.github/           CI workflows and their internal tooling (.github/scripts/gitapex_sync_pr_publish.py) — not deployed
+.github/           CI workflows and their internal tooling (.github/scripts/gitapex_gate_local_preflight.py) — not deployed
 ```
 
 > **Why the root, not a `plugin/` subdirectory?** apm installs a dependency
