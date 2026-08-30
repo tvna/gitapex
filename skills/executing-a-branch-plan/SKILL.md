@@ -9,7 +9,7 @@ Turns an approved Branch Plan and Acceptance Criteria Map into committed
 code, a decomposed task history, and an opened PR that
 `drafting-a-pr-to-merge` picks up from its own "PR has just been opened"
 entry point. Design source: `docs/superpowers/specs/2026-07-22-plan-
-execution-handoff-design.md` (19 Decisions; this SKILL.md and its
+execution-handoff-design.md` (20 Decisions; this SKILL.md and its
 `references/` implement the doc's own "New skill: consolidated sequence"
 section verbatim in structure, citing each Decision by number rather than
 re-deriving it).
@@ -130,8 +130,19 @@ first, not skimmed.
    reference](references/threat-model-and-authorization.md#the-branch-plan-task-subagent-type));
    the dispatched agent retains Read access (its own exclusion list bars
    `mcp__github__*` and specific Bash patterns, not file reads) and reads
-   the reference from its own worktree checkout once cited. Once a wave's
-   run returns, in the main thread (the Workflow script itself has no
+   the reference from its own worktree checkout once cited. **Before a
+   task may report complete, the full repo verification suite (pytest
+   plus every deterministic shape/gate checker, via
+   `gitapex_gate_local_preflight.py`) must pass inside that task's own
+   worktree** (Decision 20, issue `#1476`, retro `#1475` repair 2) -- not
+   deferred solely to this step's own merge-back screening below, which
+   let a stale test outside a task's own scope surface only after the
+   wave already reported complete. Project-local: a `SubagentStop` hook
+   backstop (`check_task_full_verification.sh`); plugin-distributed:
+   prompt-only, the same asymmetry as Decision 17's Bash exclusion -- see
+   [the threat-model
+   reference](references/threat-model-and-authorization.md#the-branch-plan-task-subagent-type).
+   Once a wave's run returns, in the main thread (the Workflow script itself has no
    filesystem/shell access): screen each
    task's own `BASE..HEAD` diff -- `scripts/gitapex_check_canonical_governance_paths.py`
    pre-filters the literal/canonical cases first, then the model's own
@@ -441,8 +452,12 @@ to mechanize step 3's own file-ownership pre-filter on its own; run
 literal/canonical governance-path pre-filter on its own; run
 `gitapex_check_branch_plan_reverified.py` to mechanize step 1's own
 re-verification-marker structural precondition on its own (issue `#1306`);
-and run `gitapex_check_task_commit_provenance.py` to mechanize step 6's own
-task-commit-message provenance scan on its own, fed via `--messages` with
+run `check_task_full_verification.sh` (or, for just its own pytest/local-
+preflight orchestration, run `gitapex_check_task_full_verification.py`)
+to exercise step 6's own Decision 20 exit-condition hook in isolation,
+outside a real `SubagentStop` firing (issue `#1476`); and run
+`gitapex_check_task_commit_provenance.py` to mechanize step 6's own
+task-commit-message provenance scan, fed via `--messages` with
 `git log --format=%B -z BASE..HEAD` output captured to a file -- never
 piped directly, per that script's own docstring -- (issue `#1477`).
 `gitapex_check_file_ownership_conflicts.py` and
