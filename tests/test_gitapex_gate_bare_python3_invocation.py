@@ -14,20 +14,22 @@ import pytest
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
+def _write_in(target_dir: pathlib.Path, name: str, content: str) -> pathlib.Path:
+    """Write `content` to `target_dir / name`, creating `target_dir` (and
+    any missing parents) first. Returns `target_dir` -- both `_write` and
+    `_write_hook` below hand this back to their own callers, which is why
+    this shared helper returns the directory rather than the file path."""
+    target_dir.mkdir(parents=True, exist_ok=True)
+    (target_dir / name).write_text(content, encoding="utf-8")
+    return target_dir
+
+
 def _write(tmp_path: pathlib.Path, name: str, content: str) -> pathlib.Path:
-    workflows_dir = tmp_path / ".github" / "workflows"
-    workflows_dir.mkdir(parents=True, exist_ok=True)
-    path = workflows_dir / name
-    path.write_text(content, encoding="utf-8")
-    return workflows_dir
+    return _write_in(tmp_path / ".github" / "workflows", name, content)
 
 
 def _write_hook(tmp_path: pathlib.Path, name: str, content: str) -> pathlib.Path:
-    hooks_dir = tmp_path / "hooks"
-    hooks_dir.mkdir(parents=True, exist_ok=True)
-    path = hooks_dir / name
-    path.write_text(content, encoding="utf-8")
-    return hooks_dir
+    return _write_in(tmp_path / "hooks", name, content)
 
 
 # --- happy paths ---
