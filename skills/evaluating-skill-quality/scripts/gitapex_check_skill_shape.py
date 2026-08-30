@@ -690,6 +690,16 @@ __all__ = [
 
 
 def check_shape(target: Path) -> list[CheckResult]:
+    # function-body-test-coverage: WAIVED: this diff's own new
+    # test_untrusted_authority_crossover_* tests already call
+    # css.check_shape(d) directly (skills/evaluating-skill-quality/scripts/
+    # test_gitapex_check_skill_shape.py), but that gate's own
+    # _test_relative_paths() unconditionally resolves to top-level
+    # tests/test_{stem}.py and has no fallback for this repository's
+    # pre-existing co-located test convention (a source file's own
+    # sibling test_*.py, e.g. this exact file/test pair) -- a gate-side
+    # gap, confirmed by tests/test_gitapex_check_skill_shape.py not
+    # existing at all, not a real coverage hole in this function.
     skill_md = _resolve_skill_md(target)
     skill_dir = skill_md.parent
     results: list[CheckResult] = []

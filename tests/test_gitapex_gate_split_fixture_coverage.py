@@ -827,6 +827,29 @@ def test_stop_boundary_identity_counter_matches_49_gate_convention():
     assert sum(counter.values()) == 2
 
 
+def test_normalize_for_span_scan_splits_lines_and_blanks_fences():
+    text = "a\n```\nsecret\n```\nb"
+    assert gate._normalize_for_span_scan(text) == ["a", "", "", "", "b"]
+
+
+def test_normalize_for_span_scan_normalizes_crlf():
+    assert gate._normalize_for_span_scan("a\r\nb\r\n") == ["a", "b", ""]
+
+
+def test_procedure_step_identity_counter_keys_on_content_not_position():
+    counter = gate.procedure_step_identity_counter(_PROCEDURE_STOP_BOUNDARY_SKILL_MD)
+    assert counter[f"procedure-step:{_PROCEDURE_ITEMS[0]}"] == 1
+    assert sum(counter.values()) == len(_PROCEDURE_ITEMS)
+
+
+def test_procedure_step_identity_counter_empty_with_no_heading():
+    assert gate.procedure_step_identity_counter("No procedure heading here.\n1. Not counted.\n") == {}
+
+
+def test_stop_boundary_bullet_label_strips_marker_and_casefolds():
+    assert gate._stop_boundary_bullet_label("stop-boundary:- Never Skip Step 2.") == "never skip step 2."
+
+
 def test_resolvable_exercise_labels_step_ordinal():
     labels = gate.resolvable_exercise_labels(_PROCEDURE_STOP_BOUNDARY_SKILL_MD)
     assert "step 1" in labels
