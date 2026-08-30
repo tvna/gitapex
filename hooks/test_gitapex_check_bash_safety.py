@@ -1543,6 +1543,16 @@ DENIED_INDIRECTION_COMMANDS = [
         'TOOL=uv; VERB=harmless; VERB=$(echo install); echo "("; VERB=safe; $TOOL $VERB foo',
         "quoted-open-paren-inflates-depth-stays-denied-as-a-disclosed-residual",
     ),
+    # Round 41 (the PR's own designated final review round), the disclosed
+    # heredoc-body-tokenized-as-live-command-text over-denial residual
+    # (issue #1520): a denied phrase sitting inside pure heredoc DATA
+    # triggers a denial even though bash only hands that text to the
+    # receiving command's stdin, never re-parses it as shell syntax. See
+    # `tokenize()`'s own module-docstring disclosure.
+    (
+        "cat <<EOF\npip install foo\nEOF",
+        "heredoc-body-text-mistaken-for-a-live-pip-install-stays-denied-as-a-disclosed-residual",
+    ),
 ]
 
 
@@ -2352,6 +2362,28 @@ def test_checkout_conflict_style_value_flag_stays_a_non_goal(tmp_path: Path) -> 
     assert result.returncode == 0, f"stderr={result.stderr!r}"
     assert result.stdout == ""
     assert result.stderr == ""
+
+
+def test_checkout_denied_for_a_branch_creation_flag_shaped_path_after_double_dash(tmp_path: Path) -> None:
+    """CRITICAL bypass regression pin (round-41 independent review, issue
+    #1375, the PR's own final review round): a tracked file literally
+    NAMED `-b` (or `-B`/`--orphan`/`--pathspec-from-file`), referenced
+    after a literal `--` (`git checkout -- -b`, an ordinary, unambiguous
+    path reference -- real git guarantees every token after `--` is a
+    pathspec, never a flag), used to fold the WHOLE invocation into the
+    bare-SOMENAME Non-goal because the pre-fix branch-creation-flag check
+    scanned the entire token list, not just the region before `--`. Before
+    this fix, the shipped wrapper allowed this command outright (no live
+    dirty-file check performed) and a real `git checkout -- -b` silently
+    discarded the dirty content."""
+    repo_dir = tmp_path / "repo"
+    file_path = _init_repo_with_committed_file(repo_dir, filename="./-b")
+    file_path.write_text("hello\ndirty\n")
+    result = run("git checkout -- -b", payload_cwd=str(repo_dir))
+    assert result.returncode == 2, f"stderr={result.stderr!r}"
+    payload = json.loads(result.stderr)
+    assert payload["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "-b" in payload["systemMessage"]
 
 
 def test_ordinary_branch_switch_allowed(tmp_path: Path) -> None:

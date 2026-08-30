@@ -4049,6 +4049,37 @@ def test_classify_allows_a_quoted_open_paren_as_a_disclosed_over_denial_residual
     assert verdict.deny is True
 
 
+def test_classify_denies_a_heredoc_body_phrase_as_a_disclosed_over_denial_residual() -> None:
+    """DISCLOSED, deliberately NOT fixed (round 41 independent review,
+    issue #1375, the PR's own designated final review round; tracked as
+    https://github.com/tvna/gitapex/issues/1520): `tokenize()` has no
+    here-document boundary awareness at all -- a heredoc body's own text
+    is tokenized as if it were live command source, so a denied phrase
+    sitting in pure heredoc DATA (handed to the receiving command's
+    stdin, never re-parsed as shell syntax by real bash) triggers a
+    denial. A DIFFERENT mechanism from the #1404/#1412/#1502 shlex
+    quote-information-loss class (a missing lexical construct, not
+    quote-provenance loss on an otherwise-correctly-segmented stream) --
+    deliberately not attempted here, matching this module's own
+    established convention for a broad, cross-rule tokenizer limitation.
+    This is currently expected (denied) behavior, not a should-be-fixed
+    assertion -- if this ever starts passing, the underlying gap closed;
+    update this test (and issue #1520) together."""
+    verdict = checker.classify("cat <<EOF\npip install foo\nEOF")
+    assert verdict.deny is True
+
+
+def test_classify_surfaces_a_heredoc_body_checkout_path_as_a_disclosed_over_denial_residual() -> None:
+    """Companion to the residual above, specific to issue #1375's own new
+    detection surface: a heredoc body merely DESCRIBING a checkout
+    command in prose populates `checkout_restore_paths`, even though the
+    heredoc never actually runs that checkout -- the same missing
+    heredoc-body-boundary gap, reaching into this PR's own new feature."""
+    verdict = checker.classify("cat <<EOF\ngit checkout -- file.py\nEOF")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("file.py",)
+
+
 def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_process_substitution_clear() -> None:
     """CRITICAL bypass regression pin (round-33 independent review,
     issue #1375): a process substitution runs its own content in a
@@ -6356,6 +6387,43 @@ def test_git_checkout_paths_branch_creation_flag_wins_even_with_a_double_dash() 
     assert paths == ()
 
 
+@_PROPERTIES
+@given(flag=st.sampled_from(["-b", "-B", "--orphan", "--orphan=x"]))
+def test_git_checkout_paths_resolves_a_branch_creation_flag_shaped_path_after_double_dash(flag: str) -> None:
+    """CRITICAL bypass regression pin (round-41 independent review, issue
+    #1375, the PR's own final review round): unlike a genuine `-b`/`-B`/
+    `--orphan` flag appearing BEFORE `--` (which stays the honest Non-goal,
+    per the sibling test above), a token that merely LOOKS like one of
+    these flags but sits AFTER a literal `--` is unambiguously a path --
+    real git guarantees every token after `--` is a pathspec, never a
+    flag. Live-verified end-to-end through the actual shipped wrapper
+    against a real, genuinely dirty tracked file literally named `-b`:
+    before this fix, `git checkout -- -b` folded the whole invocation into
+    the bare-SOMENAME Non-goal (empty `checkout_restore_paths`), silently
+    skipping the wrapper's own live dirty-file check, and running the real
+    checkout discarded the dirty content."""
+    reason, paths = checker._git_checkout_paths(["--", flag], {}, {}, set())
+    assert reason is None
+    assert paths == (flag,)
+
+
+def test_git_checkout_paths_resolves_every_path_after_double_dash_even_beside_a_flag_shaped_one() -> None:
+    """Companion to the property test above: a flag-shaped decoy after
+    `--` must not suppress extraction of the OTHER, ordinarily-named paths
+    listed alongside it in the same invocation."""
+    reason, paths = checker._git_checkout_paths(["--", "-b", "realfile.py"], {}, {}, set())
+    assert reason is None
+    assert paths == ("-b", "realfile.py")
+
+
+def test_classify_surfaces_a_branch_creation_flag_shaped_path_after_double_dash() -> None:
+    """End-to-end regression pin for the round-41 finding at the
+    `classify()` level."""
+    verdict = checker.classify("git checkout -- -b realfile.py")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("-b", "realfile.py")
+
+
 def test_git_checkout_paths_still_extracts_a_real_path_without_a_branch_creation_flag() -> None:
     """No regression from the branch-creation fold: an ordinary two-
     positional pathspec checkout with no `-b`/`-B`/`--orphan` present is
@@ -6398,6 +6466,18 @@ def test_classify_denies_checkout_pathspec_from_file() -> None:
     verdict = checker.classify("git checkout --pathspec-from-file files.txt")
     assert verdict.deny is True
     assert "pathspec-from-file" in verdict.reason
+
+
+def test_git_checkout_paths_treats_a_pathspec_from_file_shaped_token_after_double_dash_as_a_path() -> None:
+    """Companion no-over-denial fix pinned alongside the round-41 bypass
+    fix above: a file merely NAMED `--pathspec-from-file` after a literal
+    `--` is an ordinary, unambiguous path (real git guarantees every token
+    after `--` is a pathspec, never a flag) -- must resolve as a path
+    candidate, not deny the whole invocation the way the pre-fix
+    whole-list scan did."""
+    reason, paths = checker._git_checkout_paths(["--", "--pathspec-from-file"], {}, {}, set())
+    assert reason is None
+    assert paths == ("--pathspec-from-file",)
 
 
 @_PROPERTIES

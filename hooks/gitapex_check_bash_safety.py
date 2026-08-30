@@ -184,6 +184,39 @@ hooks/test_gitapex_check_bash_safety.py's own `KNOWN_BYPASS_COMMANDS`
 false-positive direction) alongside this module's own other accepted
 over-denials.
 
+CRITICAL, disclosed, whole-module limitation, a DIFFERENT mechanism from
+the #1404/#1412/#1502 shlex quote-information-loss class above (found
+live by Step 8 independent review, round 41 of issue #1375's own
+checkout/restore feature review, the PR's own designated final review
+round, while auditing areas outside the heavily-reviewed scope-isolation
+and checkout/restore-path-resolution areas): `tokenize()` has no
+here-document (`<<DELIM`/`<<'DELIM'`/`<<-DELIM`) or here-string (`<<<`)
+awareness at all. Real bash treats a heredoc's body as inert data handed
+to the receiving command's stdin, never re-parsed as shell syntax -- but
+this classifier's shlex-based tokenizer keeps tokenizing straight
+through the `<<DELIM` marker into the body text as if it were more
+command source, so any denied phrase appearing in pure heredoc DATA
+triggers a denial bash never actually executes. Unlike #1404/#1412/#1502
+(quote-provenance loss on an otherwise-correctly-segmented token
+stream), this is a missing LEXICAL CONSTRUCT entirely -- the tokenizer
+has no representation of "text after `<<DELIM` up to the closing
+delimiter line is not shell syntax." Live-verified: `cat <<EOF\npip
+install foo\nEOF` returns `deny=True` naming the pip+install denied verb
+sequence, though real bash only prints the two lines via `cat`; `cat
+<<EOF\ngit checkout -- file.py\nEOF` populates `checkout_restore_paths=
+('file.py',)` even though the heredoc never runs that checkout, meaning
+this PR's own new detection surface also reaches into heredoc bodies.
+Safe direction only (over-denial, never a bypass): no shape was found
+where a heredoc body causes an under-detection. Deliberately NOT
+attempted here -- a genuine fix needs a heredoc-body-boundary
+pre-processing pass (structurally similar to, but distinct from, this
+module's own existing `_strip_comments`/`_strip_line_continuations`
+passes) whose own edge cases (an unterminated heredoc, multiple
+heredocs on one line, `<<-`'s own leading-tab-stripping rule, quoted-
+vs-unquoted `DELIM` controlling body expansion) deserve their own
+dedicated verification pass rather than a rushed patch; tracked as its
+own dedicated issue, https://github.com/tvna/gitapex/issues/1520.
+
 A second, distinct, round-17 finding in the SAME redirect-handling area
 is NOT a bypass and is NOT tracked separately: `_redirect_span_length`'s
 own deliberate choice (round 16) to leave a leading digit token OUT of
@@ -5459,21 +5492,51 @@ def _git_checkout_paths(
     realfile.py` outright (exit 0, no live check performed), and running
     it for real silently discarded the dirty content (`git diff --stat
     realfile.py` empty afterward) -- reproduced identically for `-2`,
-    `--theirs`, and `-3`."""
+    `--theirs`, and `-3`.
+
+    The branch-creation-flag and `--pathspec-from-file`/`--pathspec-file-nul`
+    checks above scan only the region BEFORE a `--`, never the tokens after
+    it -- CRITICAL bug found by independent adversarial review (round 41,
+    issue #1375, the PR's own final review round) and independently
+    reproduced live, both via `classify()` and via the actual shipped
+    `hooks/check-bash-safety.sh` wrapper against a real, genuinely dirty
+    tracked file: real git guarantees every token after a literal `--` is a
+    pathspec, never a flag (case (a) above), but the pre-fix code scanned
+    the WHOLE `tokens_after` list for `-b`/`-B`/`--orphan` and
+    `--pathspec-from-file` before ever honoring that boundary. A tracked
+    file that happens to be NAMED `-b` (or `-B`/`--orphan`/`--pathspec-
+    from-file`) and is referenced after `--` (`git checkout -- -b`, a
+    syntactically ordinary, fully unambiguous path reference) made the
+    branch-creation-flag check fire on that positional's own name, folding
+    the WHOLE invocation into the Non-goal (`None, ()`) -- silently
+    skipping the wrapper's own live dirty-file check for `-b` and every
+    other path listed alongside it. Live-verified: with a tracked file
+    literally named `-b` genuinely dirty, no branch-creation flag actually
+    present, the wrapper allowed `git checkout -- -b` outright (exit 0, no
+    live check performed), and running it for real silently discarded the
+    dirty content. The `--pathspec-from-file` counterpart has the same
+    boundary flaw but denies rather than allows (a file positionally named
+    `--pathspec-from-file` after `--` triggers an over-denial, the safe
+    direction, not a bypass) -- fixed in the same change for correctness.
+    Fixed by restricting both checks to the tokens strictly before the
+    first `--`, matching every other sub-case's own treatment of that
+    boundary."""
     tokens_after = _strip_redirect_clauses(tokens_after)
-    if any(tok in _CHECKOUT_BRANCH_CREATION_FLAGS or tok.startswith("--orphan=") for tok in tokens_after):
+    double_dash_index = tokens_after.index("--") if "--" in tokens_after else None
+    flag_region = tokens_after[:double_dash_index] if double_dash_index is not None else tokens_after
+    if any(tok in _CHECKOUT_BRANCH_CREATION_FLAGS or tok.startswith("--orphan=") for tok in flag_region):
         return None, ()
     if any(
         tok == "--pathspec-from-file" or tok.startswith("--pathspec-from-file=") or tok == "--pathspec-file-nul"
-        for tok in tokens_after
+        for tok in flag_region
     ):
         return (
             "a 'git checkout --pathspec-from-file'/'--pathspec-file-nul' flag reads paths from a file this "
             "classifier cannot inspect, so this is denied outright",
             (),
         )
-    if "--" in tokens_after:
-        after = tokens_after[tokens_after.index("--") + 1 :]
+    if double_dash_index is not None:
+        after = tokens_after[double_dash_index + 1 :]
         if not after:
             return (
                 "a 'git checkout --' with no paths following it in this command -- a downstream pipe or loop "
