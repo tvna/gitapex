@@ -7,6 +7,7 @@ docstring for the incident this gate exists to prevent from recurring.
 from __future__ import annotations
 
 import pathlib
+import time
 
 import gitapex_gate_bare_python3_invocation as gate
 import pytest
@@ -636,3 +637,49 @@ def test_scan_hook_invalid_utf8_returns_empty(tmp_path: pathlib.Path) -> None:
     bad = tmp_path / "bad.sh"
     bad.write_bytes(b"\xff\xfe not valid utf-8")
     assert gate._scan_hook(bad) == []
+
+
+# --- Independent-review defeat cases (issue #1446, drafting-a-pr-to-merge
+# Step 8 inner-layer review) ---
+
+
+def test_uv_run_prefix_does_not_catastrophically_backtrack_on_a_long_flag_run() -> None:
+    """CWE-1333 regression: `_UV_RUN_PREFIX`'s old `-{1,2}[\\w-]+` shape let
+    the `-{1,2}` quantifier and the following `[\\w-]+` class both claim a
+    `-` character, giving a run of N `--flag=value` tokens 2**N equivalent
+    parses that the regex engine exhausted on a non-matching tail --
+    reproduced live pre-fix at ~40s for a 25-flag line (up from ~1ms at 10
+    flags). A CI job scanning this pattern against every PR's own
+    workflow/hooks content (no path filter, 5-minute timeout) could be
+    hung by a single crafted line. This asserts the fix (`-[\\w-]+`, no
+    overlap) stays well under a generous ceiling at 5x the size that used
+    to take ~40s."""
+    line = "uv run" + (" --flag=xxx" * 125) + " NOMATCHTAIL"
+    start = time.monotonic()
+    result = gate._UV_WRAPPED_INVOCATION_RE.search(line)
+    elapsed = time.monotonic() - start
+    assert result is None
+    assert elapsed < 2.0, f"took {elapsed:.2f}s -- catastrophic backtracking may have regressed"
+
+
+def test_scan_hook_ignores_a_github_scripts_path_mentioned_only_in_a_trailing_comment(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Correctness regression: Pass 1 used to search an assignment's
+    *entire* right-hand side (including any trailing `# comment`) for a
+    `.github/scripts/*.py`-shaped substring, so a variable holding an
+    unrelated value could still get tracked -- and later flagged -- purely
+    because its assignment line's own trailing comment happened to mention
+    a different gate script's path (an ordinary documentation habit).
+    Found live in review: `other_var="unrelated_value"  # see also
+    .github/scripts/some_other_gate.py` tracked `other_var`, and its later
+    bare `python3 "$other_var"` invocation was reported as a false
+    positive."""
+    hooks_dir = _write_hook(
+        tmp_path,
+        "demo.sh",
+        'other_var="unrelated_value"  # see also .github/scripts/some_other_gate.py for context\n'
+        "echo noop\n"
+        'python3 "$other_var"\n',
+    )
+    assert gate.find_hooks_shell_indirected_invocations(hooks_dir) == []

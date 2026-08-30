@@ -126,7 +126,21 @@ HOOKS_DIR = pathlib.Path("hooks")
 # Shared by both the workflow same-line scan and the hooks/*.sh
 # shell-variable-indirected scan below, so the two adjacency checks stay
 # in lockstep rather than drifting apart.
-_UV_RUN_PREFIX = r"\buv\s+run(?:\s+-{1,2}[\w-]+(?:=\S+)?)*\s+"
+#
+# `-[\w-]+`, not `-{1,2}[\w-]+`: the earlier two-hyphen-then-word-class
+# form let `-{1,2}` and the following `[\w-]+` both claim a `-` character,
+# so a run of N `--flag=value` tokens had 2**N equivalent parses and the
+# regex engine exhausted them all on a non-matching tail -- catastrophic
+# backtracking (issue #1446 review: reproduced live, a 25-flag line took
+# over 40s against this exact repo's own compiled pattern, up from ~1ms at
+# 10 flags). Requiring exactly one leading `-` and letting `[\w-]+` own
+# every character after it (a second literal `-` included) removes the
+# overlap -- every character belongs to exactly one sub-pattern, so there
+# is only one parse to try. Matches the identical set of real flag shapes
+# (`-x`, `--frozen`, `--flag=value`) with the same overall match span;
+# verified byte-for-byte identical `.end()` against the old pattern for
+# every real call site in this repository's own workflow files.
+_UV_RUN_PREFIX = r"\buv\s+run(?:\s+-[\w-]+(?:=\S+)?)*\s+"
 
 # A literal `python3 .github/scripts/<name>.py` invocation anywhere on a
 # line. Deliberately loose (no anchoring on line start) so it matches
@@ -155,6 +169,18 @@ _SHELL_ASSIGNMENT_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
 # `python3\s+` prefix, since here it is matched against an assignment's
 # RHS, not an invocation.
 _GITHUB_SCRIPTS_PATH_RE = re.compile(r"\.github/scripts/\S+\.py")
+# A trailing shell comment: `#` at the very start of the (already-stripped)
+# RHS, or preceded by whitespace. Applied to an assignment's RHS before
+# `_GITHUB_SCRIPTS_PATH_RE` runs, so a `.github/scripts/*.py` path merely
+# *mentioned in a comment* after the real value (e.g.
+# `other_var="unrelated"  # see also .github/scripts/other_gate.py`) is
+# never mistaken for the value itself -- found live in review: without
+# this, that exact shape tracked `other_var` and reported a false-positive
+# WARNING on its own later bare invocation. Crude, matching this module's
+# own documented "no real shell parsing" scope (a literal `#` inside a
+# quoted value is not distinguished from a real comment marker) -- not a
+# gap this narrow WARNING-tier scan needs to close exactly.
+_TRAILING_COMMENT_RE = re.compile(r"(?:^|\s)#")
 
 
 def find_bare_invocations(workflows_dir: pathlib.Path = WORKFLOWS_DIR) -> list[tuple[str, int, str]]:
@@ -271,7 +297,13 @@ def _scan_hook(hook: pathlib.Path) -> list[tuple[str, int, str]]:
         if line.lstrip().startswith("#"):
             continue
         assignment = _SHELL_ASSIGNMENT_RE.match(line)
-        if assignment and _GITHUB_SCRIPTS_PATH_RE.search(assignment.group(2)):
+        if not assignment:
+            continue
+        rhs = assignment.group(2)
+        comment = _TRAILING_COMMENT_RE.search(rhs)
+        if comment:
+            rhs = rhs[: comment.start()]
+        if _GITHUB_SCRIPTS_PATH_RE.search(rhs):
             tracked_vars.add(assignment.group(1))
 
     if not tracked_vars:
