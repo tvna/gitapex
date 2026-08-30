@@ -45,3 +45,12 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1173"
       summary: "Operator review found the table still missed three real, already-implemented gitapex situations: an unshaped idea (`eliciting-a-design`), a direct review request on any artifact (`reviewing-an-artifact`), and an unknown-cause failure (`diagnosing-a-failure`). Added all three rows; renamed the column from Stage to Situation since these are not linear lifecycle stages. Added to relatedTo and Related skills."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1173"
+      summary: "An independent battle-testing-a-skill dispatch found Step 5 lacked a flag/report clause and a claimed-prior-approval fixture, used 'trusted instruction source' undefined in-file, and Step 2/4 lacked a no-matching-row fallback and a per-session-not-per-turn Red Flags row. Fixed all four inline."
+    - kind: caveat
+      anchor: "https://github.com/tvna/gitapex/issues/1173"
+      summary: "Same dispatch found Step 3's own subagent-dispatch discipline structurally cannot cover an ad hoc Task/Agent call made outside any dispatching skill's own procedure -- such a call is invisible to this file and has no self-detection mechanism. Disclosed as a residual limitation, not fixed: no in-file rule can bind a dispatch this file's own discipline was never consulted for in the first place."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/1173"
+      summary: "An independent, non-isolated evaluating-skill-quality dispatch returned WELL-FORMED-NOT-MATURE, blocked solely by Dimension 5: Mixed portability's own requirement that repository-specific content live in a references/ file, not the portable core. Proposed a `compatibility` field disclosing the SessionStart-hook dependency; added verbatim. The routing-table/Related-skills split is a separate, larger call, not applied here."
