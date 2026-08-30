@@ -263,7 +263,14 @@ def dry_run_corpus(pattern: str, repo_root: Path, corpus_glob: str) -> list[Path
     arbitrary runner filesystem content. `is_symlink()` is checked before
     `is_file()` (a symlink to a real file passes `is_file()`, so checking
     only that would not catch this) to keep every matched candidate
-    genuinely inside `repo_root`.
+    genuinely inside `repo_root`. A *symlinked intermediate directory*
+    under the corpus root (e.g. `skills/evil` itself a symlink, containing
+    a real, non-symlink `.md` file) needs no separate check: live-verified
+    on this repository's own Python 3.11 and 3.12 runtimes that
+    `Path.glob()`'s `**` traversal does not follow a symlinked directory
+    at all -- no match is ever produced for a file reached only through
+    one, so `is_symlink()` on each matched leaf is already a complete
+    check, not merely the common case.
     """
     needle = pattern.lower()
     matches: list[Path] = []
