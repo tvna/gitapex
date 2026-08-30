@@ -99,11 +99,18 @@ iff, in at least one of the two test files above:
    pre-existing test that already mentioned the fixed function, but was
    never itself touched by the fixing commit, does not clear this gate);
    and
-3. that added/changed line falls inside a function whose own name starts
-   with ``test_`` (pytest's own default collection prefix; this repository's
-   own ``pyproject.toml`` sets no ``python_functions`` override) and whose
-   own body -- not its decorators, not the rest of the file -- contains a
-   ``Name``/``Attribute`` node whose final name equals ``F``.
+3. that added/changed line is itself one of the specific lines a
+   ``test_``-named function's own body (pytest's own default collection
+   prefix; this repository's own ``pyproject.toml`` sets no
+   ``python_functions`` override) mentions ``F`` at -- a ``Name``/
+   ``Attribute`` node whose final name equals ``F``, matched only in the
+   function's own body, never its decorators or the rest of the file.
+   Deliberately the *mentioning* line itself, not merely some added line
+   anywhere inside the mentioning function's own range: the latter let a
+   diff whose only change to the test file was unrelated to ``F`` -- but
+   landed inside a function that happened to mention ``F`` on some other,
+   untouched line -- silently clear coverage, confirmed live during
+   review rather than hypothesised.
 
 **Known misses, disclosed rather than found later** -- the same class of
 heuristic limit ``gitapex_gate_detection_logic_property_coverage.py``'s own
@@ -120,26 +127,30 @@ check:
   same-named methods, for instance) are indistinguishable to this check,
   which resolves coverage by name alone, not by which specific function a
   test's author had in mind: a test covering one same-named function clears
-  both. This repository does not currently define two same-named functions
-  in one in-scope file, so this is latent rather than currently
-  false-clearing anything -- the same status ``gitapex_gate_detection_logic_
-  property_coverage.py``'s own basename-collision-across-files miss
-  describes for the identical reason (resolving to the true, lexically
-  distinct definition needs the same name-resolution machinery
+  both. Confirmed live rather than hypothesised, and reachable two ways:
+  within one file (this repository does not currently define two
+  same-named functions in one in-scope file, so that half is latent) and
+  *across* files, via ``_stem``/``_test_relative_paths``' own basename-only
+  keying -- ``skills/drafting-issues/scripts/gitapex_check_acm_present.py``
+  and ``skills/planning-a-branch-from-an-issue/scripts/gitapex_check_acm_
+  present.py`` already exist, already share several function names, and
+  already resolve to the identical ``tests/test_gitapex_check_acm_
+  present.py`` under this gate's own broader, unprefixed scope -- so this
+  half is live now, not latent. Resolving to the true, lexically distinct
+  definition either way needs the same name-resolution machinery
   ``gitapex_gate_exception_handler_gaps.py``'s own ``_handler_names``
-  docstring records three separate attempts at, each reverted).
-* A change that touches only a function's ``def`` line or decorators (a
-  rename, an added type hint, a new decorator) with no line inside the
-  function's own body actually added counts as untouched by this gate:
-  ``_function_ranges`` keys a function's range on its ``lineno`` (the
-  ``def`` line) through ``end_lineno`` inclusive, the same range
-  ``gitapex_gate_detection_logic_property_coverage.py`` already uses for
-  scope attribution, so a signature-only or decorator-only change is graded
-  exactly like a body change under this gate. This is a deliberate,
-  disclosed widening past a literal reading of "body": distinguishing a
-  signature edit from a body edit needs finer-grained ranges than Python's
-  own grammar hands over for free, and a signature change is exactly the
-  kind of change that most needs a test update.
+  docstring records three separate attempts at, each reverted.
+* A change that touches only a function's ``def`` line, a decorator line,
+  or a multi-line parameter list still counts as touched: `_function_
+  ranges` widens a decorated function's own range to start at its
+  earliest decorator line (never merely `node.lineno`, which Python's own
+  grammar sets to the `def` line, excluding every decorator above it), and
+  a multi-line signature's own continuation lines already sit inside
+  `lineno` through `end_lineno` with no widening needed. This is a
+  deliberate widening past a literal reading of "body": a signature or
+  decorator change is exactly the kind of change that most needs a test
+  update, and Python's own grammar hands over no finer-grained range to
+  distinguish it from one.
 
 Waiver
 ------
@@ -150,12 +161,18 @@ token. Unlike either sibling gate, which anchor a waiver to the single line
 a trigger sits on, this gate's own finding unit is a whole function -- often
 spanning a multi-line ``def`` signature no inline trailing comment can
 attach to cleanly -- so a waiver is honoured anywhere within the touched
-function's own line range (``lineno`` through ``end_lineno`` inclusive), not
-only the exact line ``Finding.line`` reports. This is a deliberate,
-disclosed deviation from the "put the comment exactly where the error
-points" convention both sibling gates apply, justified by the same
-generalization: a whole-function finding has no single natural comment
-anchor the way a one-line call site does.
+function's own lines, not only the exact line ``Finding.line`` reports.
+This is a deliberate, disclosed deviation from the "put the comment exactly
+where the error points" convention both sibling gates apply, justified by
+the same generalization: a whole-function finding has no single natural
+comment anchor the way a one-line call site does. "The touched function's
+own lines" deliberately excludes any more deeply nested function's own
+lines (``_own_lines``, the same innermost-attribution rule
+``_touched_functions`` already applies per added line): a waiver comment
+living inside a nested function's own body -- written for that nested
+function, or predating it entirely -- must not silently clear an unrelated
+finding on the *enclosing* function merely because a naive
+``lineno``-through-``end_lineno`` span would have spanned over it too.
 
 Exit codes
 ----------
@@ -413,49 +430,102 @@ class _FunctionRange(NamedTuple):
 
 def _function_ranges(tree: ast.Module) -> list[_FunctionRange]:
     """Every function's own line range in `tree`, including nested ones.
-    Identical to `gitapex_gate_detection_logic_property_coverage.py`'s own
-    `_function_ranges`: nested functions get their own, narrower range, a
-    property of Python's own grammar."""
+    Nested functions get their own, narrower range, a property of Python's
+    own grammar.
+
+    A decorated function's range starts at its *earliest* decorator line,
+    not merely `node.lineno` (the `def` line): `ast.FunctionDef.lineno`
+    excludes decorator lines by construction, so without this widening a
+    change touching only an added/changed decorator line would fall
+    outside every function's own range and go entirely ungraded -- neither
+    attributed to the function it decorates nor to any enclosing scope.
+    Widening-only: `node.lineno` is still the lower bound whenever no
+    decorator is present, so this can only ever pull a range's start
+    earlier, never later.
+    """
     ranges = []
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
             end = node.end_lineno if node.end_lineno is not None else node.lineno
-            ranges.append(_FunctionRange(node.lineno, end, node.name))
+            start = node.lineno
+            if node.decorator_list:
+                start = min(start, min(decorator.lineno for decorator in node.decorator_list))
+            ranges.append(_FunctionRange(start, end, node.name))
     return ranges
+
+
+def _innermost_range(line: int, ranges: list[_FunctionRange]) -> _FunctionRange | None:
+    """The smallest-span range in `ranges` containing `line`, or None if no
+    range contains it. Nested functions get their own, narrower range,
+    always fully contained within their parent's -- a property of Python's
+    own grammar -- so the smallest containing range is always the
+    innermost enclosing function."""
+    containing = [r for r in ranges if r.lineno <= line <= r.end_lineno]
+    if not containing:
+        return None
+    return min(containing, key=lambda r: r.end_lineno - r.lineno)
 
 
 def _touched_functions(ranges: list[_FunctionRange], added: set[int]) -> list[_FunctionRange]:
     """Every function range in `ranges` whose own body -- not a nested
     function's -- contains at least one line in `added`.
 
-    For each added line, the innermost (smallest-span) range containing it
-    is the function truly touched, the same rule `gitapex_gate_detection_
-    logic_property_coverage.py`'s own `_enclosing_scope` already applies for
-    trigger attribution. Deduplicated by `(lineno, name)` so a function
-    touched by several added lines is graded once.
+    For each added line, `_innermost_range` finds the function truly
+    touched, the same rule `gitapex_gate_detection_logic_property_
+    coverage.py`'s own `_enclosing_scope` already applies for trigger
+    attribution. Deduplicated by `(lineno, name)` so a function touched by
+    several added lines is graded once.
     """
     touched: dict[tuple[int, str], _FunctionRange] = {}
     for line in added:
-        containing = [r for r in ranges if r.lineno <= line <= r.end_lineno]
-        if not containing:
+        innermost = _innermost_range(line, ranges)
+        if innermost is None:
             continue
-        innermost = min(containing, key=lambda r: r.end_lineno - r.lineno)
         touched[(innermost.lineno, innermost.name)] = innermost
     return sorted(touched.values())
 
 
-def _mentions_name_in_body(func: ast.FunctionDef | ast.AsyncFunctionDef, name: str) -> bool:
-    """True iff `name` appears as a `Name`/`Attribute` node's final name
-    anywhere in `func`'s own body -- only the body, not its decorators or
-    argument defaults. Identical to `gitapex_gate_detection_logic_property_
-    coverage.py`'s own `_mentions_name_in_body`; see its module docstring's
-    "Known misses" section for the false-clear/false-flag this heuristic
-    accepts."""
-    return any(
-        (isinstance(node, ast.Name) and node.id == name) or (isinstance(node, ast.Attribute) and node.attr == name)
-        for statement in func.body
-        for node in ast.walk(statement)
-    )
+def _own_lines(func: _FunctionRange, ranges: list[_FunctionRange]) -> set[int]:
+    """Every line in `func`'s own range that does not also fall inside a
+    more deeply nested function's own range -- the same innermost-
+    attribution rule `_touched_functions` already applies per added line,
+    computed here for every line in `func`'s own range instead.
+
+    Used to scope a waiver comment to the function it was actually written
+    for: without this, a waiver comment sitting inside a nested function's
+    own body -- written for that nested function, or predating it entirely
+    -- would silently clear an unrelated finding on the *enclosing*
+    function too, since a naive `range(func.lineno, func.end_lineno + 1)`
+    also spans every nested function's own body.
+    """
+    return {line for line in range(func.lineno, func.end_lineno + 1) if _innermost_range(line, ranges) == func}
+
+
+def _mention_lines(func: ast.FunctionDef | ast.AsyncFunctionDef, name: str) -> set[int]:
+    """Every line number a `Name`/`Attribute` node whose final name equals
+    `name` occupies within `func`'s own body -- only the body, not its
+    decorators or argument defaults.
+
+    Pinpoints exactly which lines genuinely correspond to a mention of
+    `name`, rather than only reporting whether one exists anywhere in the
+    function (a plain boolean would let a diff that touches *any* other
+    line inside a covering-shaped function -- one that happens to mention
+    `name` somewhere unrelated -- silently clear coverage; see
+    `_diff_adds_a_covering_test`'s own docstring for why line-level
+    precision, not function-level, is what closes that gap). A multi-line
+    `Attribute` chain's own `end_lineno` is included too, matching
+    `gitapex_gate_detection_logic_property_coverage.py`'s own `_span`
+    convention for a multi-line trigger site.
+    """
+    lines: set[int] = set()
+    for statement in func.body:
+        for node in ast.walk(statement):
+            if (isinstance(node, ast.Name) and node.id == name) or (
+                isinstance(node, ast.Attribute) and node.attr == name
+            ):
+                end = node.end_lineno if node.end_lineno is not None else node.lineno
+                lines.update(range(node.lineno, end + 1))
+    return lines
 
 
 def _test_tree(path: pathlib.Path) -> ast.Module | None:
@@ -480,10 +550,20 @@ def _diff_adds_a_covering_test(
     root: pathlib.Path, stem: str, function_name: str, added_by_path: dict[str, set[int]]
 ) -> bool:
     """True iff this same diff adds or changes a line, inside one of
-    `stem`'s two corresponding test files, that falls inside a `test_`-named
-    function whose own body mentions `function_name`. See the module
-    docstring's own "Existing-coverage check" section for the exact 3-part
-    condition this implements."""
+    `stem`'s two corresponding test files, that falls on one of the exact
+    lines a `test_`-named function's own body mentions `function_name` at.
+    See the module docstring's own "Existing-coverage check" section for
+    the exact 3-part condition this implements.
+
+    Deliberately checked against `_mention_lines`' own specific line
+    numbers, not merely "some added line anywhere inside the covering
+    function's own range": the latter let a diff whose only change to a
+    test file was an unrelated, unrelated-to-`function_name` edit inside a
+    function that happened to mention `function_name` on some other,
+    untouched line silently clear coverage -- confirmed live during
+    review, not hypothesised. Requiring the touched line and the mentioning
+    line to coincide closes that gap.
+    """
     for relative in _test_relative_paths(stem):
         test_added = added_by_path.get(relative, set())
         if not test_added:
@@ -494,10 +574,7 @@ def _diff_adds_a_covering_test(
         for node in ast.walk(tree):
             if not (isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name.startswith("test_")):
                 continue
-            if not _mentions_name_in_body(node, function_name):
-                continue
-            end = node.end_lineno if node.end_lineno is not None else node.lineno
-            if test_added & set(range(node.lineno, end + 1)):
+            if test_added & _mention_lines(node, function_name):
                 return True
     return False
 
@@ -554,8 +631,7 @@ def findings_for_source(
             f"same diff adds no new or changed test in tests/test_{stem}.py or "
             f"tests/test_{stem}_properties.py whose own body mentions `{func.name}` by name",
         )
-        function_lines = set(range(func.lineno, func.end_lineno + 1))
-        target = waived if (waived_lines & function_lines) else violations
+        target = waived if (waived_lines & _own_lines(func, ranges)) else violations
         target.append(finding)
     return sorted(set(violations)), sorted(set(waived))
 

@@ -78,6 +78,19 @@ _TEST_SOURCE_WITH_TWO_FUNCTIONS = (
     "    assert True\n"
 )
 
+# A covering function that genuinely mentions check_value (line 6) but also
+# carries an unrelated comment line (line 5) this diff can touch instead --
+# the Bug 1 regression fixture: the diff must land ON the mentioning line
+# itself, not merely somewhere inside the function that mentions it.
+_TEST_SOURCE_MENTION_PLUS_UNRELATED_LINE = (
+    "import gitapex_check_fixture\n"
+    "\n"
+    "\n"
+    "def test_check_value():\n"
+    "    # unrelated comment edit\n"
+    "    assert gitapex_check_fixture.check_value(1)\n"
+)
+
 _MODULE_LEVEL_SOURCE = "X = 1\nY = 2\n"
 
 _NESTED_FUNCTION_SOURCE = "def outer():\n    def inner():\n        return 1\n    return inner()\n"
@@ -275,6 +288,17 @@ def test_a_signature_only_change_still_counts_as_a_touched_function(tmp_path: pa
     assert [finding.rule for finding in violations] == ["function-body-test-coverage-gap"]
 
 
+def test_a_decorator_only_change_still_counts_as_a_touched_function(tmp_path: pathlib.Path) -> None:
+    """`_function_ranges` widens a decorated function's own range to start
+    at its earliest decorator line: `ast.FunctionDef.lineno` is the `def`
+    line alone and excludes decorator lines by construction, so without
+    that widening a decorator-only change would fall outside every
+    function's own range and go entirely ungraded."""
+    source = "@some_decorator\ndef check_value(x):\n    return x > 0\n"
+    violations, _waived = _grade_added(tmp_path, source, [1])
+    assert [finding.rule for finding in violations] == ["function-body-test-coverage-gap"]
+
+
 # --- coverage clears it when the same diff adds a corresponding test -------
 
 
@@ -326,6 +350,27 @@ def test_defeat_a_test_covering_the_wrong_function_does_not_clear_it(tmp_path: p
     violations = _grade_with_covering_diff(
         tmp_path, _SIMPLE_FUNCTION_SOURCE, test_relative=_TEST_PATH, test_source=_WRONG_FUNCTION_TEST_SOURCE
     )
+    assert [finding.rule for finding in violations] == ["function-body-test-coverage-gap"]
+
+
+def test_defeat_an_unrelated_touched_line_in_a_mentioning_function_does_not_clear_it(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The covering test function genuinely mentions check_value (line 6),
+    and this diff genuinely touches a line inside that same function -- but
+    the touched line (an unrelated comment edit, line 5) is not the
+    mentioning line itself. A diff whose only test-file change has nothing
+    to do with check_value must not be read as adding coverage for it --
+    otherwise a routine, incidental touch to a test file (a comment fix, a
+    reformat) landing in the same PR as an unrelated real source change
+    would silently satisfy this gate."""
+    _write(tmp_path, _FIXTURE_PATH, _SIMPLE_FUNCTION_SOURCE)
+    _write(tmp_path, _TEST_PATH, _TEST_SOURCE_MENTION_PLUS_UNRELATED_LINE)
+    diff_text = _whole_file_diff(_FIXTURE_PATH, _SIMPLE_FUNCTION_SOURCE) + _partial_diff(
+        _TEST_PATH, _TEST_SOURCE_MENTION_PLUS_UNRELATED_LINE, [5]
+    )
+    violations, _waived, graded = gate.find_violations(diff_text, tmp_path)
+    assert graded == 1
     assert [finding.rule for finding in violations] == ["function-body-test-coverage-gap"]
 
 
@@ -394,6 +439,24 @@ def test_a_waived_finding_is_reported_separately_via_main(
     exit_code = gate.main(["--root", str(tmp_path), "--diff", str(diff_path)])
     assert exit_code == 0
     assert "waived inline" in capsys.readouterr().err
+
+
+def test_defeat_a_waiver_inside_a_nested_function_does_not_clear_the_outer_function(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A waiver comment living inside a nested function's own body must not
+    silently clear an unrelated finding on the *enclosing* function: the
+    outer function's own touched line (its real, untested `+ 999` change)
+    has nothing to do with the nested helper's own, unrelated waiver."""
+    source = (
+        "def outer(x):\n"
+        "    def _nested_helper():\n"
+        "        return 1  # function-body-test-coverage: WAIVED: unrelated nested waiver\n"
+        "    return _nested_helper() + x + 999\n"
+    )
+    violations, waived = _grade_added(tmp_path, source, [4])
+    assert [finding.rule for finding in violations] == ["function-body-test-coverage-gap"]
+    assert waived == []
 
 
 def test_a_bare_waiver_with_no_reason_is_not_honoured(tmp_path: pathlib.Path) -> None:
@@ -550,14 +613,43 @@ def test_touched_functions_attributes_to_the_innermost_range() -> None:
     ranges = gate._function_ranges(tree)
     touched = gate._touched_functions(ranges, {3})
     assert [r.name for r in touched] == ["inner"]
+    # Several added lines inside the same function dedupe to one entry, and
+    # an added line matching no range at all contributes nothing.
+    touched_multi = gate._touched_functions(ranges, {2, 3, 100})
+    assert [r.name for r in touched_multi] == ["inner"]
 
 
-def test_mentions_name_in_body_finds_a_call_by_name() -> None:
-    tree = ast.parse("def test_something():\n    check_value(1)\n")
+def test_innermost_range_returns_none_outside_every_range() -> None:
+    tree = ast.parse(_NESTED_FUNCTION_SOURCE)
+    ranges = gate._function_ranges(tree)
+    assert gate._innermost_range(100, ranges) is None  # well past the whole 4-line fixture
+    innermost = gate._innermost_range(3, ranges)
+    assert innermost is not None
+    assert innermost.name == "inner"
+
+
+def test_own_lines_excludes_a_nested_functions_own_lines() -> None:
+    tree = ast.parse(_NESTED_FUNCTION_SOURCE)
+    ranges = gate._function_ranges(tree)
+    outer = next(r for r in ranges if r.name == "outer")
+    inner = next(r for r in ranges if r.name == "inner")
+    own = gate._own_lines(outer, ranges)
+    assert inner.lineno not in own
+    assert outer.end_lineno in own
+
+
+def test_function_ranges_widens_to_the_earliest_decorator_line() -> None:
+    tree = ast.parse("@first\n@second\ndef check_value(x):\n    return x\n")
+    ranges = gate._function_ranges(tree)
+    assert ranges == [gate._FunctionRange(1, 4, "check_value")]
+
+
+def test_mention_lines_finds_the_call_sites_own_line() -> None:
+    tree = ast.parse("def test_something():\n    check_value(1)\n    other_name(2)\n")
     func = tree.body[0]
     assert isinstance(func, ast.FunctionDef)
-    assert gate._mentions_name_in_body(func, "check_value")
-    assert not gate._mentions_name_in_body(func, "other_name")
+    assert gate._mention_lines(func, "check_value") == {2}
+    assert gate._mention_lines(func, "unrelated") == set()
 
 
 def test_test_tree_parses_a_real_file(tmp_path: pathlib.Path) -> None:
@@ -581,6 +673,11 @@ def test_diff_adds_a_covering_test_direct_call(tmp_path: pathlib.Path) -> None:
     added_by_path = {_TEST_PATH: {4, 5}}
     assert gate._diff_adds_a_covering_test(tmp_path, "gitapex_check_fixture", "check_value", added_by_path)
     assert not gate._diff_adds_a_covering_test(tmp_path, "gitapex_check_fixture", "other_function", added_by_path)
+    # Bug 1's own regression, exercised directly: the covering function's
+    # own mention sits on line 5, so an `added_by_path` naming only line 4
+    # (inside the same function, but not the mentioning line) must not
+    # satisfy coverage -- line-precise matching, not whole-function-range.
+    assert not gate._diff_adds_a_covering_test(tmp_path, "gitapex_check_fixture", "check_value", {_TEST_PATH: {4}})
 
 
 def test_waived_lines_finds_the_commented_line() -> None:
@@ -597,6 +694,23 @@ def test_findings_for_source_direct_call(tmp_path: pathlib.Path) -> None:
         _FIXTURE_PATH, _SIMPLE_FUNCTION_SOURCE, {1, 2}, added_by_path, tmp_path
     )
     assert [finding.rule for finding in violations] == ["function-body-test-coverage-gap"]
+    assert waived == []
+
+    # The waived path, direct: Bug 2's own regression -- a waiver inside a
+    # nested function must land in `waived` only for that nested function,
+    # never silently clearing the enclosing one's own separate finding.
+    nested_source = (
+        "def outer(x):\n"
+        "    def _nested_helper():\n"
+        "        return 1  # function-body-test-coverage: WAIVED: reason\n"
+        "    return _nested_helper() + x\n"
+    )
+    nested_added_by_path: dict[str, set[int]] = {_FIXTURE_PATH: {3}}
+    nested_violations, nested_waived = gate.findings_for_source(
+        _FIXTURE_PATH, nested_source, {3}, nested_added_by_path, tmp_path
+    )
+    assert nested_violations == []
+    assert [finding.rule for finding in nested_waived] == ["function-body-test-coverage-gap"]
     assert waived == []
 
 
