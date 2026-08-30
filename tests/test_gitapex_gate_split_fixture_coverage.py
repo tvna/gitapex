@@ -995,14 +995,6 @@ def test_new_procedure_stop_boundary_content_renumbering_alone_is_not_new():
     assert gate.new_procedure_stop_boundary_content(_PROCEDURE_STOP_BOUNDARY_SKILL_MD, after) == []
 
 
-def test_fixture_demand_none_when_nothing_new(tmp_path: pathlib.Path):
-    skill_md = _write_skill_and_tasks(tmp_path, "widget-polisher", _PROCEDURE_STOP_BOUNDARY_SKILL_MD, {})
-    offender = gate.check_new_procedure_stop_boundary_fixture_demand(
-        skill_md, _PROCEDURE_STOP_BOUNDARY_SKILL_MD, _PROCEDURE_STOP_BOUNDARY_SKILL_MD, tmp_path
-    )
-    assert offender is None
-
-
 def test_fixture_demand_fails_when_new_bullet_has_no_covering_fixture(tmp_path: pathlib.Path):
     after = _PROCEDURE_STOP_BOUNDARY_SKILL_MD + "- A brand new boundary.\n"
     skill_md = _write_skill_and_tasks(tmp_path, "widget-polisher", after, {})
@@ -1044,7 +1036,9 @@ def test_fixture_demand_passes_when_new_procedure_item_covered_by_step_ordinal(t
 def test_fixture_demand_never_retroactively_flags_a_preexisting_gap(tmp_path: pathlib.Path):
     # A skill whose Stop-boundary count already exceeded its fixture
     # coverage before this diff, with no relevant content change in this
-    # diff, is never retroactively flagged.
+    # diff, is never retroactively flagged -- which is also the
+    # "nothing new in this diff, so nothing to demand" guard's own case
+    # (`new_procedure_stop_boundary_content` returns []).
     skill_md = _write_skill_and_tasks(tmp_path, "widget-polisher", _PROCEDURE_STOP_BOUNDARY_SKILL_MD, {})
     offender = gate.check_new_procedure_stop_boundary_fixture_demand(
         skill_md, _PROCEDURE_STOP_BOUNDARY_SKILL_MD, _PROCEDURE_STOP_BOUNDARY_SKILL_MD, tmp_path
