@@ -25,10 +25,13 @@ spec:
   references:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1173"
-      summary: "Step 3 elicitation (drafting-a-skill): Portability declared Mixed, with an explicit repository-owner directive that Step 5's instruction-precedence rule must not be a live dependency on CLAUDE.md's own continued existence -- the rule is restated in full inline rather than left as a bare citation, disclosed in the Notes section."
+      summary: "Step 3 elicitation (drafting-a-skill): Portability declared Mixed, with an explicit repository-owner directive that Step 5's instruction-precedence rule must not be a live dependency on CLAUDE.md's own continued existence -- the rule is restated in full inline rather than left as a bare citation in Step 5 itself."
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1173"
       summary: "spec.executionRequirements.tools: all three categories empty -- this skill is a passively-read discipline statement injected by a SessionStart hook; it never itself reads or writes a file or invokes a shell command as part of its own procedure."
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1173"
-      summary: "Step 2 (Skill Priority) deliberately names gitapex's own current pipeline skills as an illustrative, non-exhaustive chain rather than citing the separate merge-pipeline-redesign design record's own section 0 diagram directly -- that record is confirmed, as of this drafting pass, not checked into this repository, so a direct reference to it would be a broken link for any reader without separate access. Named as a disclosed residual risk in Step 2 and the Non-goals section, not silently resolved."
+      summary: "Step 2 (Skill Priority) deliberately names gitapex's own current pipeline skills as an illustrative, non-exhaustive chain rather than citing the separate merge-pipeline-redesign design record's own section 0 diagram directly -- that record is confirmed, as of this drafting pass, not checked into this repository, so a direct reference to it would be a broken link for any reader without separate access. Named as a disclosed residual risk in Step 2 itself, not silently resolved."
+    - kind: elision
+      anchor: "https://github.com/tvna/gitapex/issues/1173"
+      summary: "Precondition, Postcondition, Non-goals, and Output sections were drafted, then removed across several operator-directed passes -- none stated a real caller-side gate, handoff guarantee, or a fact a running model needed; each restated a Step or disclosed scope only. Root cause (drafting-a-skill's Step 4 has no branch for a standing skill, no stated metadata home for scope disclosure) is a separate fix, out of this issue's own scope: https://github.com/tvna/gitapex/issues/1583."
