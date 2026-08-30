@@ -2718,6 +2718,34 @@ def test_segment_tokens_with_scope_isolation_marks_a_typeset_declaration_isolate
     assert result == [(["{", "typeset", "VERB=safe"], True)]
 
 
+def test_segment_tokens_with_scope_isolation_marks_a_coproc_body_isolated() -> None:
+    """CRITICAL bypass regression pin (round-34 independent review, issue
+    #1375): `coproc { ... }` forks its body to run asynchronously in a
+    subshell connected by a pipe, exactly like `cmd &`, with no
+    non-isolating usage at all."""
+    tokens = ["coproc", "{", "VERB=safe"]
+    result = checker._segment_tokens_with_scope_isolation(tokens)
+    assert result == [(["coproc", "{", "VERB=safe"], True)]
+
+
+def test_segment_tokens_with_scope_isolation_marks_a_dollar_quoted_local_isolated() -> None:
+    """CRITICAL bypass regression pin (round-34 independent review, issue
+    #1375): bash's `$"..."` locale-translated-string syntax fuses the
+    `$` prefix onto the dequoted string content -- `$"local"` tokenizes
+    as the single token `$local`, never a bare `local` -- but genuinely
+    invokes the `local` builtin in command-starting position."""
+    tokens = ["{", "$local", "VERB=safe"]
+    result = checker._segment_tokens_with_scope_isolation(tokens)
+    assert result == [(["{", "$local", "VERB=safe"], True)]
+
+
+def test_seg_has_a_scope_localizing_keyword_ignores_an_unrelated_dollar_reference() -> None:
+    """No false positive: an ordinary `$NAME` reference to a variable
+    that is NOT one of the localizing keywords must not match, with or
+    without the leading `$` stripped."""
+    assert checker._seg_has_a_scope_localizing_keyword(["echo", "$localvar"]) is False
+
+
 @_PROPERTIES
 @given(name=_IDENTIFIERS, value=_VALUES)
 def test_segment_tokens_with_scope_isolation_matches_model_for_a_process_substitution(name: str, value: str) -> None:
@@ -2728,6 +2756,19 @@ def test_segment_tokens_with_scope_isolation_matches_model_for_a_process_substit
     tokens = ["cat", "<(", f"{name}={value}", ")"]
     result = checker._segment_tokens_with_scope_isolation(tokens)
     assert result == [(["cat"], False), ([f"{name}={value}"], True)]
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value=_VALUES)
+def test_seg_has_a_scope_localizing_keyword_matches_model_for_a_dollar_quoted_keyword(name: str, value: str) -> None:
+    """Model-based, exercising `_seg_has_a_scope_localizing_keyword`
+    directly (issue #1178's own detection-logic property-coverage
+    requirement): for ANY identifier, a segment containing the `$"..."`-
+    fused form of any of the four localizing keywords is recognized --
+    and a segment with no such keyword, fused or bare, is not."""
+    for keyword in ("local", "declare", "typeset", "coproc"):
+        assert checker._seg_has_a_scope_localizing_keyword(["{", f"${keyword}", f"{name}={value}"]) is True
+    assert checker._seg_has_a_scope_localizing_keyword([f"{name}={value}"]) is False
 
 
 def test_names_reassigned_from_a_static_value_stays_poisoned_despite_a_subshell_clear() -> None:
@@ -2826,6 +2867,22 @@ def test_names_reassigned_from_a_static_value_stays_poisoned_despite_a_declare_c
     localizes `declare`/`typeset` inside a function body exactly like
     `local`."""
     tokens = ["VERB=harmless", ";", "VERB=$(echo install)", ";", "{", "declare", "VERB=safe", "}"]
+    assert checker._names_reassigned_from_a_static_value(tokens) == {"VERB"}
+
+
+def test_names_reassigned_from_a_static_value_stays_poisoned_despite_a_coproc_clear() -> None:
+    """CRITICAL bypass regression pin (round-34 independent review, issue
+    #1375): `coproc { ... }` forks its body into an asynchronous
+    subshell connected by a pipe, exactly like `cmd &` -- a static
+    reassignment inside it never reaches the parent shell's own copy of
+    the name."""
+    tokens = ["VERB=harmless", ";", "VERB=$(echo install)", ";", "coproc", "{", "VERB=safe", "}"]
+    assert checker._names_reassigned_from_a_static_value(tokens) == {"VERB"}
+
+
+def test_names_reassigned_from_a_static_value_stays_poisoned_despite_a_dollar_quoted_local_clear() -> None:
+    """Same round, the `$"local"`-fused-token counterpart."""
+    tokens = ["VERB=harmless", ";", "VERB=$(echo install)", ";", "{", "$local", "VERB=safe", "}"]
     assert checker._names_reassigned_from_a_static_value(tokens) == {"VERB"}
 
 
@@ -3028,6 +3085,20 @@ def test_names_cleared_by_a_later_static_reassignment_does_not_clear_via_a_proce
 
 def test_names_cleared_by_a_later_static_reassignment_does_not_clear_via_a_declare_declaration() -> None:
     tokens = ["VERB=inst", "VERB+=all", ";", "{", "declare", "VERB=safe", "}"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == set()
+
+
+def test_names_cleared_by_a_later_static_reassignment_does_not_clear_via_a_coproc() -> None:
+    """CRITICAL bypass regression pin (round-34 independent review, issue
+    #1375): a static reassignment inside a `coproc { ... }` body never
+    reaches the parent shell's own copy of the name -- must not clear an
+    append-poisoned candidate."""
+    tokens = ["VERB=inst", "VERB+=all", ";", "coproc", "{", "VERB=safe", "}"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == set()
+
+
+def test_names_cleared_by_a_later_static_reassignment_does_not_clear_via_a_dollar_quoted_local() -> None:
+    tokens = ["VERB=inst", "VERB+=all", ";", "{", "$local", "VERB=safe", "}"]
     assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == set()
 
 
@@ -3539,6 +3610,68 @@ def test_classify_allows_a_real_top_level_static_clear_after_a_harmless_process_
     reassignment from clearing poisoning normally."""
     verdict = checker.classify(
         "TOOL=uv; VERB=harmless; VERB=$(echo install); cat <(echo hi) >/dev/null; VERB=safe; $TOOL $VERB foo"
+    )
+    assert verdict.deny is False
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_coproc_clear() -> None:
+    """CRITICAL bypass regression pin (round-34 independent review,
+    issue #1375): `coproc { ... }` forks its body to run asynchronously
+    in a subshell connected by a pipe, exactly like `cmd &`, with no
+    non-isolating usage at all. Confirmed live via a stand-in `uv`
+    binary on PATH that this genuinely runs `uv install foo`, NOT
+    `safe foo`."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); coproc { VERB=safe; }; wait; $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_gh_api_method_reassigned_from_a_static_value_via_a_coproc_clear() -> None:
+    """Companion to the B1b pin above, for `_rule_gh_api_write`.
+    Confirmed live via a stand-in `gh` binary on PATH that this
+    genuinely runs `gh api repos/o/r/pulls/1/merge -X POST`, a genuine
+    unreviewed write."""
+    verdict = checker.classify("M=safe; M=$(echo POST); coproc { M=GET; }; wait; gh api repos/o/r/pulls/1/merge -X $M")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_dollar_quoted_local_clear() -> None:
+    """Same round, the `$"local"`-fused-token counterpart: bash's own
+    locale-translated-string syntax fuses the `$` prefix onto the
+    dequoted string content, so `$"local"` tokenizes as a single token
+    `$local`, never a bare `local`, but genuinely invokes the `local`
+    builtin in command-starting position. Confirmed live via a stand-in
+    `uv` binary on PATH that this genuinely runs `uv install foo`, NOT
+    `safe foo`."""
+    verdict = checker.classify(
+        'TOOL=uv; VERB=harmless; VERB=$(echo install); f() { $"local" VERB=safe; }; f; $TOOL $VERB foo'
+    )
+    assert verdict.deny is True
+
+
+def test_classify_allows_an_unrelated_harmless_coproc_alongside_a_never_poisoned_name() -> None:
+    """No over-correction: an ordinary, unrelated coproc elsewhere in
+    the command must not spuriously deny a command whose watched name
+    was never poisoned at all."""
+    verdict = checker.classify("TOOL=uv; VERB=safe; coproc { echo hi; }; wait; $TOOL $VERB foo")
+    assert verdict.deny is False
+
+
+def test_classify_allows_an_unrelated_plain_dollar_local_variable_reference() -> None:
+    """No over-correction: an ordinary `$local` variable reference (not
+    the `$"local"` locale-string form) in a DIFFERENT segment from a
+    genuine top-level clearing assignment must not spuriously deny."""
+    verdict = checker.classify("TOOL=uv; echo $local; VERB=safe; $TOOL $VERB foo")
+    assert verdict.deny is False
+
+
+def test_classify_allows_a_real_top_level_static_clear_after_a_harmless_coproc() -> None:
+    """No over-correction: a harmless coproc earlier in the command must
+    not block a LATER, genuine top-level static reassignment from
+    clearing poisoning normally."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); coproc { echo hi; }; wait; VERB=safe; $TOOL $VERB foo"
     )
     assert verdict.deny is False
 

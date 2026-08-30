@@ -453,6 +453,26 @@ ALLOWED_DYNAMIC_COMMANDS = [
         "TOOL=uv; VERB=harmless; VERB=$(echo install); cat <(echo hi) >/dev/null; VERB=safe; $TOOL $VERB foo",
         "real-top-level-static-clear-after-a-harmless-process-substitution-stays-allowed",
     ),
+    # False-positive guards for the thirty-fourth-round coproc and
+    # `$"local"` fixes (issue #1375): an ordinary, unrelated coproc
+    # elsewhere in the command must not spuriously deny a command whose
+    # watched name was never poisoned at all, an ordinary `$local`
+    # variable reference (not the `$"local"` locale-string form) in a
+    # DIFFERENT segment must not either, and a harmless coproc earlier in
+    # the command must not block a LATER, genuine top-level static
+    # reassignment from clearing normally.
+    (
+        "TOOL=uv; VERB=safe; coproc { echo hi; }; wait; $TOOL $VERB foo",
+        "unrelated-harmless-coproc-alongside-a-never-poisoned-name-stays-allowed",
+    ),
+    (
+        "TOOL=uv; echo $local; VERB=safe; $TOOL $VERB foo",
+        "unrelated-plain-dollar-local-variable-reference-stays-allowed",
+    ),
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); coproc { echo hi; }; wait; VERB=safe; $TOOL $VERB foo",
+        "real-top-level-static-clear-after-a-harmless-coproc-stays-allowed",
+    ),
 ]
 
 # --- Known, disclosed, unresolved regex/token-gate bypasses ----------------
@@ -1268,6 +1288,33 @@ DENIED_INDIRECTION_COMMANDS = [
     (
         "M=safe; M=$(echo POST); f() { declare M=GET; }; f; gh api repos/o/r/pulls/1/merge -X $M",
         "gh-api-method-value-reassigned-from-a-static-value-cleared-via-a-declare-declaration",
+    ),
+    # Found live by Step 8 independent review, thirty-fourth round (issue
+    # #1375): `coproc { ... }` forks its body to run asynchronously in a
+    # subshell connected by a pipe, exactly like `cmd &`, with no
+    # non-isolating usage at all -- the pre-round-34 isolation check had
+    # no concept of `coproc` whatsoever. Bash's `$"..."` locale-
+    # translated-string syntax also fuses the `$` prefix onto the
+    # dequoted string content -- `$"local"` tokenizes as a single token
+    # `$local`, never a bare `local`, but genuinely invokes the `local`
+    # builtin in command-starting position. Confirmed live via a stand-in
+    # `uv`/`gh` binary on PATH that each genuinely runs the dangerous
+    # command, NOT the coproc/`$"local"`-scoped distractor value.
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); coproc { VERB=safe; }; wait; $TOOL $VERB foo",
+        "var-split-tool-and-verb-reassigned-from-a-static-value-cleared-via-a-coproc",
+    ),
+    (
+        "M=safe; M=$(echo POST); coproc { M=GET; }; wait; gh api repos/o/r/pulls/1/merge -X $M",
+        "gh-api-method-value-reassigned-from-a-static-value-cleared-via-a-coproc",
+    ),
+    (
+        'TOOL=uv; VERB=harmless; VERB=$(echo install); f() { $"local" VERB=safe; }; f; $TOOL $VERB foo',
+        "var-split-tool-and-verb-reassigned-from-a-static-value-cleared-via-a-dollar-quoted-local",
+    ),
+    (
+        'M=safe; M=$(echo POST); f() { $"local" M=GET; }; f; gh api repos/o/r/pulls/1/merge -X $M',
+        "gh-api-method-value-reassigned-from-a-static-value-cleared-via-a-dollar-quoted-local",
     ),
 ]
 

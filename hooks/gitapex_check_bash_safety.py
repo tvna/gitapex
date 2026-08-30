@@ -4155,6 +4155,33 @@ def _raw_segments_with_boundaries(tokens: list[str]) -> list[tuple[list[str], in
     return list(zip(segments, seg_depths, terminators, strict=True))
 
 
+_SCOPE_LOCALIZING_KEYWORDS = frozenset({"local", "declare", "typeset", "coproc"})
+"""Every bash keyword `_segment_tokens_with_scope_isolation` treats as
+ALWAYS scope-isolating wherever it appears in a segment (see that
+function's own docstring for why each is safe to treat this way even
+though `declare`/`typeset` are genuinely ambiguous outside a function).
+Added by round 32 (`local`/`declare`/`typeset`) and round 34 (`coproc`),
+issue #1375."""
+
+
+def _seg_has_a_scope_localizing_keyword(seg: list[str]) -> bool:
+    """True when SEG contains any of `_SCOPE_LOCALIZING_KEYWORDS` as one
+    of its own tokens, checking each token BOTH as-is and with a single
+    leading `$` stripped -- bash's own `$"..."` locale-translated-string
+    syntax fuses the `$` prefix onto the dequoted string content (e.g.
+    `$"local"` tokenizes as the single token `$local`, never a bare
+    `local`), so an exact, unstripped membership check misses it even
+    though it genuinely invokes the keyword in real bash when used in
+    command-starting position. Added by round 34 (issue #1375) -- see
+    `_segment_tokens_with_scope_isolation`'s own docstring for the live
+    bypass this closes."""
+    for tok in seg:
+        bare = tok[1:] if tok.startswith("$") else tok
+        if bare in _SCOPE_LOCALIZING_KEYWORDS:
+            return True
+    return False
+
+
 def _segment_tokens_with_scope_isolation(tokens: list[str]) -> list[tuple[list[str], bool]]:
     """Like `segment_tokens`, but pairs each returned (non-empty)
     segment with whether it is ISOLATED from the parent shell's own
@@ -4175,15 +4202,22 @@ def _segment_tokens_with_scope_isolation(tokens: list[str]) -> list[tuple[list[s
       `&` forks into its own subshell; the segment AFTER `&` runs in the
       parent shell as normal and is NOT isolated by that `&` alone --
       only what precedes it is);
-    - it contains the literal `local`, `declare`, or `typeset` keyword
-      as one of its own tokens anywhere, not necessarily first -- a
-      function body's own opening `{` (not itself a `segment_tokens`
-      boundary, so it shares the SAME segment as the statement that
-      follows it, e.g. `["{", "local", "VERB=safe"]` for `f() { local
-      VERB=safe; }`) would otherwise sit at position 0 and hide the
-      keyword from a first-token-only check. `local` is ALWAYS function-
-      scoped in real bash (using it outside a function is invalid), so
-      treating it as isolating is never wrong; `declare`/`typeset` are
+    - it contains the literal `local`, `declare`, `typeset`, or `coproc`
+      keyword as one of its own tokens anywhere, not necessarily first
+      -- a function body's own opening `{` (not itself a `segment_
+      tokens` boundary, so it shares the SAME segment as the statement
+      that follows it, e.g. `["{", "local", "VERB=safe"]` for `f() {
+      local VERB=safe; }`) would otherwise sit at position 0 and hide
+      the keyword from a first-token-only check; a token is also
+      checked with a single leading `$` stripped (see `_SCOPE_
+      LOCALIZING_KEYWORDS`'s own docstring for why -- bash's `$"..."`
+      locale-string syntax fuses onto the dequoted keyword text, e.g.
+      `$"local"` tokenizes as `$local`, never a bare `local`). `local`
+      and `coproc` are ALWAYS isolating in real bash (`local` outside a
+      function is invalid; `coproc`'s own body always runs
+      asynchronously in a forked subshell connected by a pipe, exactly
+      like `cmd &`, with no non-isolating usage at all), so treating
+      either as isolating is never wrong; `declare`/`typeset` are
       genuinely AMBIGUOUS -- they localize a variable ONLY when used
       INSIDE a function, and behave as an ordinary, non-isolating global
       assignment at the top level of a script, a distinction this
@@ -4306,21 +4340,46 @@ def _segment_tokens_with_scope_isolation(tokens: list[str]) -> list[tuple[list[s
     checking for `declare`/`typeset` anywhere in the segment, treated
     identically to `local` -- see this function's own docstring bullet
     above for why both are conservatively treated as ALWAYS isolating
-    even though real bash only localizes them inside a function body."""
+    even though real bash only localizes them inside a function body.
+
+    TWO further gaps found by independent adversarial review (round 34,
+    issue #1375) and independently reproduced live, both via
+    `classify()` and via real bash execution with a stand-in `uv`/`gh`
+    binary on PATH:
+
+    `coproc { ... }` (bash's own coprocess syntax) forks its body to run
+    asynchronously in a subshell connected by a pipe, exactly like
+    `cmd &`, with no non-isolating usage at all -- but the pre-round-34
+    isolation check had no concept of `coproc` whatsoever. `TOOL=uv;
+    VERB=harmless; VERB=$(echo install); coproc { VERB=safe; }; wait;
+    $TOOL $VERB foo` resolved to `deny=False` even though real bash
+    genuinely runs `uv install foo` (confirmed live via a stand-in `uv`
+    binary on PATH: captured argv `uv called with: install foo`).
+    Closed by also checking for `coproc` anywhere in the segment,
+    treated the same as `local` (always isolating, no ambiguous usage).
+
+    Bash's `$"..."` locale-translated-string syntax fuses the `$` prefix
+    onto the dequoted string content -- `$"local"` tokenizes as a SINGLE
+    token `$local`, never a bare `local`, so the exact-membership check
+    above (`"local" in seg`) never matched it, even though `$"local"`
+    genuinely invokes the `local` builtin in real bash when used in
+    command-starting position (confirmed live: `f() { $"local" VERB=
+    safe; }; f` leaves the caller's own `$VERB` untouched, exactly like
+    a bare `local VERB=safe` would). `TOOL=uv; VERB=harmless; VERB=
+    $(echo install); f() { $"local" VERB=safe; }; f; $TOOL $VERB foo`
+    resolved to `deny=False` even though real bash genuinely runs `uv
+    install foo` (confirmed live via a stand-in `uv` binary on PATH:
+    captured argv `uv called with: install foo`). Closed by checking
+    each token with a single leading `$` stripped too (via
+    `_SCOPE_LOCALIZING_KEYWORDS`/`_seg_has_a_scope_localizing_keyword`),
+    catching the fused `$"..."` form for all four keywords uniformly."""
     raw = _raw_segments_with_boundaries(tokens)
     result: list[tuple[list[str], bool]] = []
     for i, (seg, depth, terminator) in enumerate(raw):
         if not seg:
             continue
         preceding = raw[i - 1][2] if i > 0 else None
-        isolated = (
-            depth > 0
-            or terminator in ("|", "&")
-            or preceding == "|"
-            or "local" in seg
-            or "declare" in seg
-            or "typeset" in seg
-        )
+        isolated = depth > 0 or terminator in ("|", "&") or preceding == "|" or _seg_has_a_scope_localizing_keyword(seg)
         result.append((seg, isolated))
     return result
 
