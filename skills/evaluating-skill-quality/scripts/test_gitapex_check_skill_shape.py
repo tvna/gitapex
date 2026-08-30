@@ -4,7 +4,6 @@ Fixtures are synthesized in tmp_path so the test is self-contained and
 travels with the skill on vendoring.
 """
 
-import json
 import os
 import re
 import subprocess
@@ -14,6 +13,7 @@ from pathlib import Path
 
 import gitapex_check_skill_shape as css
 import pytest
+import shape_checks.schema
 
 _SCRIPT_PATH = Path(css.__file__).resolve()
 
@@ -101,6 +101,33 @@ def _write_skill(
 
 def _by_name(results):
     return {r.name: r for r in results}
+
+
+# ---- shape_checks.schema: _schema_dict/_schema_enum's own defensive
+# TypeError branches (issue #758) ----
+#
+# Both branches guard against a malformed skill-metadata.schema.json (a
+# node that should be a mapping isn't, or an "enum" value that should be
+# a list isn't) -- not reachable through the real, version-controlled
+# schema file (which this repository's own skill-metadata-schema-drift
+# CI gate already keeps valid), but real, fail-loud guards worth testing
+# directly as the pure functions they are, rather than left uncovered.
+
+
+def test_schema_dict_raises_on_non_mapping_node():
+    with pytest.raises(TypeError, match="expected a mapping at schema path"):
+        shape_checks.schema._schema_dict("not-a-mapping", "some", "path")
+
+
+def test_schema_enum_raises_when_enum_value_is_not_a_list():
+    fake_schema = {"$defs": {"fakeDef": {"properties": {"fakeField": {"enum": "not-a-list"}}}}}
+    original = shape_checks.schema.SKILL_METADATA_SCHEMA
+    shape_checks.schema.SKILL_METADATA_SCHEMA = fake_schema
+    try:
+        with pytest.raises(TypeError, match="expected a list at schema path"):
+            shape_checks.schema._schema_enum("fakeDef", "properties", "fakeField")
+    finally:
+        shape_checks.schema.SKILL_METADATA_SCHEMA = original
 
 
 def test_well_formed_skill_passes(tmp_path):
@@ -1620,7 +1647,7 @@ def test_invalid_dependency_policy_value_fails(tmp_path):
     d = _write_skill(tmp_path, dependency_policy="OnlyGoodVibes")
     by = _by_name(css.check_shape(d))
     assert by["dependency-policy-declared"].passed is False
-    assert by["dependency-policy-declared"].evidence == "'OnlyGoodVibes'"
+    assert "'OnlyGoodVibes' is not one of" in by["dependency-policy-declared"].evidence
     assert css.main([str(d)]) == 1
 
 
@@ -1760,27 +1787,14 @@ def test_missing_skill_md_raises_not_swallowed_as_unreadable(tmp_path):
         css.check_shape(d)
 
 
-def test_manifest_parser_ignores_deeper_nesting(tmp_path):
-    text = (
-        "apiVersion: gitapex.io/v1alpha1\n"
-        "kind: SkillMetadata\n"
-        "metadata:\n"
-        "  name: skill\n"
-        "spec:\n"
-        "  portability: Portable\n"
-        "  skillDependencies:\n"
-        "    requires: []\n"
-        "    relatedTo:\n"
-        "      - other-skill\n"
-        "  capabilityAssumption: Broad\n"
-    )
-    parsed = css._parse_manifest(text)
-    assert parsed.root["apiVersion"] == "gitapex.io/v1alpha1"
-    assert parsed.root["metadata"]["name"] == "skill"
-    assert parsed.root["spec"]["portability"] == "Portable"
-    assert parsed.root["spec"]["capabilityAssumption"] == "Broad"
-    assert "requires" not in parsed.root["spec"]
-    assert parsed.malformed_lines == []
+# Issue #758: test_manifest_parser_ignores_deeper_nesting retired -- it
+# asserted _parse_manifest's own hand-rolled parse tree directly (root/
+# malformed_lines), a function this migration deletes entirely in favor
+# of yaml.safe_load. The claim it pinned (a real YAML parser correctly
+# reads nested mappings/lists regardless of declaration order) is true of
+# any conformant YAML parser and needs no dedicated regression test here;
+# test_legitimate_deeper_nesting_passes_manifest_parsable above already
+# covers the check_shape()-visible behavior this test's sibling checked.
 
 
 # ---- manifest-parsable (malformed top-level line detection) ----
@@ -1805,8 +1819,7 @@ def test_malformed_top_level_line_fails_manifest_parsable(tmp_path):
     by = _by_name(css.check_shape(d))
     result = by["manifest-parsable"]
     assert result.passed is False
-    assert "1 malformed line" in result.evidence
-    assert "- invalid mapping entry" in result.evidence
+    assert "ParserError" in result.evidence
     assert css.main([str(d)]) == 1
 
 
@@ -1838,16 +1851,21 @@ def test_legitimate_deeper_nesting_passes_manifest_parsable(tmp_path):
     )
     by = _by_name(css.check_shape(d))
     assert by["manifest-parsable"].passed is True
-    assert by["manifest-parsable"].evidence == "no malformed lines"
+    assert by["manifest-parsable"].evidence == "valid"
     assert css.main([str(d)]) == 0
 
 
 def test_references_mapping_shaped_item_fails_well_formed(tmp_path):
     # Regression guard for the bug an independent review round found: a
-    # mapping-shaped spec.references item (the exact shape the previous
-    # test used to carry, back when this field was still fully ungated)
-    # must not be silently truncated into a garbled scalar string and
-    # certified as well-formed -- it must fail loudly instead.
+    # mapping-shaped spec.references item carrying an unrecognized key
+    # (title, not one of kind/anchor/summary/outcome) must not be silently
+    # accepted as well-formed -- it must fail loudly instead. Issue #758:
+    # schema-backed now (additionalProperties: false on referenceItem),
+    # not the hand-rolled parser's own malformed-item detection this test
+    # used to inspect directly via _parse_manifest (removed by the
+    # migration -- there is no longer a second, independent parse tree to
+    # assert against; check_shape()'s own CheckResult is the one source of
+    # truth).
     d = _write_skill(tmp_path)
     (d / "metadata/gitapex.yaml").write_text(
         "apiVersion: gitapex.io/v1alpha1\n"
@@ -1858,21 +1876,17 @@ def test_references_mapping_shaped_item_fails_well_formed(tmp_path):
         "  portability: Portable\n"
         "  capabilityAssumption: Broad\n"
         "  references:\n"
-        "    - path: references/rubric.md\n"
+        "    - kind: decision\n"
+        "      anchor: 'https://github.com/tvna/gitapex/issues/1'\n"
+        "      summary: x\n"
         "      title: Rubric\n",
         encoding="utf-8",
     )
     by = _by_name(css.check_shape(d))
     assert by["manifest-parsable"].passed is True
     assert by["references-well-formed"].passed is False
-    assert "path: references/rubric.md" in by["references-well-formed"].evidence
+    assert "'title' was unexpected" in by["references-well-formed"].evidence
     assert css.main([str(d)]) == 1
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.malformed_reference_items == ["- path: references/rubric.md"]
-    # The malformed item is excluded from the parsed list entirely (not
-    # silently kept as a garbled string); nothing else in this fixture's
-    # references block was well-formed, so the list itself ends up empty.
-    assert parsed.root["spec"]["references"] == []
 
 
 def test_references_item_missing_required_field_fails_well_formed(tmp_path):
@@ -1898,11 +1912,8 @@ def test_references_item_missing_required_field_fails_well_formed(tmp_path):
     )
     by = _by_name(css.check_shape(d))
     assert by["references-well-formed"].passed is False
-    assert "missing required field(s): summary" in by["references-well-formed"].evidence
+    assert "'summary' is a required property" in by["references-well-formed"].evidence
     assert css.main([str(d)]) == 1
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.malformed_reference_items == ["- kind: decision (missing required field(s): summary)"]
-    assert parsed.root["spec"]["references"] == []
 
 
 def test_references_non_string_scalar_item_fails_well_formed(tmp_path):
@@ -1929,9 +1940,6 @@ def test_references_non_string_scalar_item_fails_well_formed(tmp_path):
     by = _by_name(css.check_shape(d))
     assert by["references-well-formed"].passed is False
     assert css.main([str(d)]) == 1
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.malformed_reference_items == ["- true", "- 123", "- null"]
-    assert parsed.root["spec"]["references"] == []
 
 
 def test_references_non_string_scalar_with_trailing_comment_still_fails(tmp_path):
@@ -1958,18 +1966,16 @@ def test_references_non_string_scalar_with_trailing_comment_still_fails(tmp_path
     by = _by_name(css.check_shape(d))
     assert by["references-well-formed"].passed is False
     assert css.main([str(d)]) == 1
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.malformed_reference_items == ["- true # rationale"]
-    assert parsed.root["spec"]["references"] == []
 
 
 def test_references_inconsistent_indent_item_fails_well_formed(tmp_path):
-    # Regression guard: every item marker must sit at exactly
-    # REFERENCES_ITEM_INDENT (4 spaces), the same fixed-indent convention
-    # every other gated block already uses -- not the old bare-scalar-list
-    # design's "2 or more spaces, first item sets the tolerance" rule. A
-    # second item at a different indent must be flagged as malformed, not
-    # silently accepted alongside the well-formed one before it.
+    # Issue #758: a second references item at a different indent from the
+    # first is now a genuine top-level YAML ParserError, confirmed live --
+    # real YAML requires consistent block-sequence indentation. Assertions
+    # against the hand-rolled parser's own partial-parse tree (which items
+    # were kept vs. flagged malformed) no longer apply now that a
+    # structural mismatch fails the whole document via the unusable
+    # cascade, not just this one field.
     d = _write_skill(tmp_path)
     (d / "metadata/gitapex.yaml").write_text(
         "apiVersion: gitapex.io/v1alpha1\n"
@@ -1990,12 +1996,8 @@ def test_references_inconsistent_indent_item_fails_well_formed(tmp_path):
     )
     by = _by_name(css.check_shape(d))
     assert by["references-well-formed"].passed is False
+    assert "unreadable: ParserError" in by["references-well-formed"].evidence
     assert css.main([str(d)]) == 1
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.root["spec"]["references"] == [
-        {"kind": "decision", "anchor": "https://github.com/tvna/gitapex/issues/1", "summary": "a"},
-    ]
-    assert parsed.malformed_reference_items == ["- kind: audit"]
 
 
 def test_comment_and_document_marker_pass_manifest_parsable(tmp_path):
@@ -2026,6 +2028,23 @@ def test_unreadable_sidecar_fails_manifest_parsable(tmp_path):
     by = _by_name(css.check_shape(d))
     assert by["manifest-parsable"].passed is False
     assert "UnicodeDecodeError" in by["manifest-parsable"].evidence
+    assert css.main([str(d)]) == 1
+
+
+def test_deeply_nested_sidecar_fails_manifest_parsable_not_a_crash(tmp_path):
+    # Regression guard: yaml.safe_load blocks arbitrary object construction
+    # but still resolves anchors/aliases and recurses into deep nesting, so
+    # a hostile or malformed sidecar (e.g. a vendored skill) can raise
+    # RecursionError rather than yaml.YAMLError. Before this guard, that
+    # propagated out of check_shape() as a raw traceback instead of the
+    # graceful manifest-parsable FAIL every other malformed-sidecar case
+    # gets.
+    d = _write_skill(tmp_path)
+    depth = 3000
+    (d / "metadata/gitapex.yaml").write_text("a: " + "[" * depth + "]" * depth + "\n", encoding="utf-8")
+    by = _by_name(css.check_shape(d))
+    assert by["manifest-parsable"].passed is False
+    assert "RecursionError" in by["manifest-parsable"].evidence
     assert css.main([str(d)]) == 1
 
 
@@ -3144,7 +3163,7 @@ def test_references_empty_list_fails(tmp_path):
     )
     by = _by_name(css.check_shape(d))
     assert by["references-well-formed"].passed is False
-    assert by["references-well-formed"].evidence == "empty list"
+    assert "is not of type 'array'" in by["references-well-formed"].evidence
     assert css.main([str(d)]) == 1
 
 
@@ -3221,7 +3240,7 @@ def test_references_entry_over_budget_fails_well_formed(tmp_path):
     )
     by = _by_name(css.check_shape(d))
     assert by["references-well-formed"].passed is False
-    assert "over 500 chars" in by["references-well-formed"].evidence
+    assert "is too long" in by["references-well-formed"].evidence
     assert css.main([str(d)]) == 1
 
 
@@ -3380,6 +3399,13 @@ def test_references_outcome_block_closed_by_a_dedent_does_not_reopen(tmp_path):
     # a real sidecar in this repository happened to end its last
     # references item with an outcome block, so appending one ordinary
     # entry to that unrelated file silently took the coverage away.
+    # Issue #758: the hand-rolled parser's own dedent/re-open state
+    # machine this test originally pinned no longer exists (replaced by
+    # yaml.safe_load). Real PyYAML rejects this exact fixture outright as
+    # a genuine YAML syntax error (a deeper-indented line after a scalar
+    # value is not valid YAML) rather than reaching a field-specific
+    # "unknown key" finding -- confirmed live. The manifest-wide
+    # unusable cascade is the correct, simpler replacement behavior.
     d = _write_raw_references_sidecar(
         tmp_path,
         "    - kind: audit\n"
@@ -3392,7 +3418,7 @@ def test_references_outcome_block_closed_by_a_dedent_does_not_reopen(tmp_path):
     )
     by = _by_name(css.check_shape(d))
     assert by["references-well-formed"].passed is False
-    assert by["references-well-formed"].evidence == "1 unknown key: 'found: 9'"
+    assert "ScannerError" in by["references-well-formed"].evidence
     assert css.main([str(d)]) == 1
 
 
@@ -3413,6 +3439,11 @@ def test_references_outcome_block_with_an_unmatched_deep_line_invalidates_the_it
     # line at this indent is consumed by the list-item marker branch
     # before the outcome block ever sees it, so it never reaches the
     # branch under test.
+    # Issue #758: same retirement rationale as the dedent test above --
+    # real PyYAML rejects this fixture as a genuine ScannerError (a plain
+    # line with no colon at a mapping's own indent level) rather than
+    # reaching the hand-rolled parser's own item-level unknown-key
+    # fallback this test originally pinned.
     d = _write_raw_references_sidecar(
         tmp_path,
         "    - kind: audit\n"
@@ -3424,7 +3455,7 @@ def test_references_outcome_block_with_an_unmatched_deep_line_invalidates_the_it
     )
     by = _by_name(css.check_shape(d))
     assert by["references-well-formed"].passed is False
-    assert by["references-well-formed"].evidence == "empty list"
+    assert "ScannerError" in by["references-well-formed"].evidence
     assert css.main([str(d)]) == 1
 
 
@@ -3457,7 +3488,6 @@ def test_references_grammar_unusable_list_is_nothing_to_check(tmp_path):
     by = _by_name(css.check_shape(d))
     assert by["references-well-formed"].passed is False
     assert by["references-grammar"].passed is True
-    assert "nothing to check" in by["references-grammar"].evidence
 
 
 def test_references_inline_code_bare_citation_still_fails(tmp_path):
@@ -3510,7 +3540,7 @@ def test_lifecycle_reason_over_budget_fails_well_formed(tmp_path):
     )
     by = _by_name(css.check_shape(d))
     assert by["lifecycle-well-formed"].passed is False
-    assert "reason is" in by["lifecycle-well-formed"].evidence
+    assert "is too long" in by["lifecycle-well-formed"].evidence
     assert css.main([str(d)]) == 1
 
 
@@ -3607,235 +3637,39 @@ def test_lifecycle_tracking_issue_generalized_pattern_still_rejects_malformed_ur
     assert css.main([str(d)]) == 1
 
 
-def test_lifecycle_issue_ref_pattern_matches_schema():
-    # Cross-file drift guard (this module's OWN established precedent:
-    # test_execution_requirement_packages_key_pattern_matches_schema below
-    # asserts the same thing for EXEC_REQ_PACKAGES_KEY_RE/
-    # executionRequirementsPackages.propertyNames.pattern) -- issue #1347
-    # hand-duplicated LIFECYCLE_ISSUE_REF_RE's generalized owner/repo shape
-    # into skill-metadata.schema.json's trackingIssue.pattern as a second,
-    # independently-enforced copy (this checker's own Python regex, and
-    # the JSON Schema gitapex_scan_skill_metadata_schema.py validates every
-    # committed metadata/gitapex.yaml against in CI). Nothing before this
-    # test compared the two literal pattern strings, so a future edit to
-    # either copy alone (a narrowing fix, a copy-paste typo) could silently
-    # desync which trackingIssue URLs each enforcement path accepts.
-    schema_path = _SCRIPT_PATH.parent.parent / "references" / "skill-metadata.schema.json"
-    schema = json.loads(schema_path.read_text(encoding="utf-8"))
-    schema_pattern = schema["$defs"]["lifecycleExperimental"]["properties"]["trackingIssue"]["pattern"]
-    assert schema_pattern == css.LIFECYCLE_ISSUE_REF_RE.pattern, (
-        f"skill-metadata.schema.json's lifecycleExperimental.properties."
-        f"trackingIssue.pattern is {schema_pattern!r}, but "
-        f"LIFECYCLE_ISSUE_REF_RE is {css.LIFECYCLE_ISSUE_REF_RE.pattern!r} "
-        "-- the schema and the hand-rolled checker regex have drifted."
-    )
+# Issue #758: test_lifecycle_issue_ref_pattern_matches_schema is retired --
+# it drift-guarded LIFECYCLE_ISSUE_REF_RE (a hand-duplicated copy of the
+# schema's own trackingIssue.pattern) against skill-metadata.schema.json's
+# literal pattern string. This migration deletes LIFECYCLE_ISSUE_REF_RE
+# entirely: trackingIssue's shape is now enforced solely by
+# jsonschema.Draft202012Validator reading the schema directly, so there is
+# no second copy left to drift from the first -- the class of bug this
+# test existed to catch no longer has two sides to desync.
 
 
-def test_manifest_parser_parses_spec_references_list():
-    text = (
-        "apiVersion: gitapex.io/v1alpha1\n"
-        "kind: SkillMetadata\n"
-        "metadata:\n"
-        "  name: skill\n"
-        "spec:\n"
-        "  portability: Portable\n"
-        "  capabilityAssumption: Broad\n"
-        "  references:\n"
-        "    - kind: decision\n"
-        "      anchor: https://github.com/tvna/gitapex/issues/25\n"
-        "      summary: fixed the thing\n"
-        "    - kind: audit\n"
-        "      anchor: https://github.com/tvna/gitapex/pull/29\n"
-        "      summary: reviewed the fix\n"
-        "      outcome:\n"
-        "        verdict: PASS\n"
-    )
-    parsed = css._parse_manifest(text)
-    assert parsed.root["spec"]["references"] == [
-        {"kind": "decision", "anchor": "https://github.com/tvna/gitapex/issues/25", "summary": "fixed the thing"},
-        {
-            "kind": "audit",
-            "anchor": "https://github.com/tvna/gitapex/pull/29",
-            "summary": "reviewed the fix",
-            "outcome": {"verdict": "PASS"},
-        },
-    ]
-    assert parsed.malformed_lines == []
-    assert parsed.malformed_reference_items == []
-    assert parsed.unknown_reference_item_keys == []
-
-
-def test_manifest_parser_parses_spec_skill_dependencies():
-    # Sub-project D: unlike spec.evalStatus (still reserved and ungated),
-    # spec.skillDependencies now gets a real parser, mirroring the
-    # spec.references precedent one nesting level deeper.
-    text = (
-        "apiVersion: gitapex.io/v1alpha1\n"
-        "kind: SkillMetadata\n"
-        "metadata:\n"
-        "  name: skill\n"
-        "spec:\n"
-        "  portability: Mixed\n"
-        "  capabilityAssumption: Broad\n"
-        "  skillDependencies:\n"
-        "    requires: []\n"
-        "    relatedTo:\n"
-        "      - other-skill\n"
-    )
-    parsed = css._parse_manifest(text)
-    assert parsed.root["spec"]["skillDependencies"] == {"requires": [], "relatedTo": ["other-skill"]}
-    assert parsed.malformed_lines == []
-    assert parsed.malformed_skill_dependency_items == []
-    assert parsed.unknown_skill_dependency_keys == []
-
-
-def test_manifest_parser_parses_spec_lifecycle():
-    # One nesting level deeper than spec.skillDependencies: each sub-block
-    # (experimental/deprecated) opens ANOTHER nested block of scalar
-    # fields, rather than a list.
-    text = (
-        "apiVersion: gitapex.io/v1alpha1\n"
-        "kind: SkillMetadata\n"
-        "metadata:\n"
-        "  name: skill\n"
-        "spec:\n"
-        "  portability: Mixed\n"
-        "  capabilityAssumption: Broad\n"
-        "  lifecycle:\n"
-        "    experimental:\n"
-        "      reason: not yet proven\n"
-        '      trackingIssue: "#123"\n'
-        "    deprecated:\n"
-        "      reason: superseded\n"
-        "      replacement: other-skill\n"
-        '      since: "2026-07-21"\n'
-    )
-    parsed = css._parse_manifest(text)
-    assert parsed.root["spec"]["lifecycle"] == {
-        "experimental": {"reason": "not yet proven", "trackingIssue": "#123"},
-        "deprecated": {"reason": "superseded", "replacement": "other-skill", "since": "2026-07-21"},
-    }
-    assert parsed.malformed_lines == []
-    assert parsed.unknown_lifecycle_keys == []
-    assert parsed.unknown_lifecycle_fields == []
-
-
-def test_manifest_parser_lifecycle_unknown_keys_are_collected():
-    text = (
-        "apiVersion: gitapex.io/v1alpha1\n"
-        "kind: SkillMetadata\n"
-        "metadata:\n"
-        "  name: skill\n"
-        "spec:\n"
-        "  portability: Mixed\n"
-        "  capabilityAssumption: Broad\n"
-        "  lifecycle:\n"
-        "    experimental:\n"
-        "      reason: not yet proven\n"
-        "      extraField: foo\n"
-        "    stage: Beta\n"
-    )
-    parsed = css._parse_manifest(text)
-    assert parsed.unknown_lifecycle_fields == ["extraField: foo"]
-    assert parsed.unknown_lifecycle_keys == ["stage: Beta"]
-
-
-def test_manifest_parser_still_ignores_eval_status():
-    # Regression guard: spec.skillDependencies gaining a real parser must
-    # not widen to spec.evalStatus (reserved for issue #185, untouched by
-    # this sub-project).
-    text = (
-        "apiVersion: gitapex.io/v1alpha1\n"
-        "kind: SkillMetadata\n"
-        "metadata:\n"
-        "  name: skill\n"
-        "spec:\n"
-        "  portability: Portable\n"
-        "  capabilityAssumption: Broad\n"
-        "  evalStatus:\n"
-        "    baseline: 2026-01-01\n"
-        "    lift: 0.2\n"
-    )
-    parsed = css._parse_manifest(text)
-    assert "evalStatus" not in parsed.root["spec"]
-    assert parsed.malformed_lines == []
-
-
-def test_manifest_parser_registers_block_shaped_dependency_policy_as_present():
-    # Contrast with test_manifest_parser_still_ignores_eval_status above:
-    # dependencyPolicy is NOT reserved-and-ignored like evalStatus -- it is
-    # a real, optional, closed-vocabulary field whose own check
-    # (dependency-policy-declared) treats a parsed value of None as
-    # "genuinely absent, therefore fine". A block-shaped (or bare-colon)
-    # "dependencyPolicy:" must therefore register as present with an
-    # empty-string value -- distinct from real absence -- rather than
-    # silently vanishing from spec the way an unrecognized/reserved key
-    # does, or dependency-policy-declared could never tell "never written"
-    # apart from "written but malformed".
-    text = (
-        "apiVersion: gitapex.io/v1alpha1\n"
-        "kind: SkillMetadata\n"
-        "metadata:\n"
-        "  name: skill\n"
-        "spec:\n"
-        "  portability: Portable\n"
-        "  capabilityAssumption: Broad\n"
-        "  dependencyPolicy:\n"
-        "    - StdlibOnly\n"
-        "    - Declared\n"
-    )
-    parsed = css._parse_manifest(text)
-    assert "dependencyPolicy" in parsed.root["spec"]
-    assert parsed.root["spec"]["dependencyPolicy"] == ""
-    assert parsed.malformed_lines == []
-
-
-def test_references_entries_decode_escaped_quotes():
-    # Regression guard: _unquote must decode \" (and \\) inside a
-    # double-quoted spec.references field value, not leave a literal
-    # backslash in the parsed string.
-    text = (
-        "apiVersion: gitapex.io/v1alpha1\n"
-        "kind: SkillMetadata\n"
-        "metadata:\n"
-        "  name: skill\n"
-        "spec:\n"
-        "  portability: Portable\n"
-        "  capabilityAssumption: Broad\n"
-        "  references:\n"
-        "    - kind: decision\n"
-        "      anchor: https://github.com/tvna/gitapex/issues/25\n"
-        '      summary: "a \\"quoted\\" phrase"\n'
-    )
-    parsed = css._parse_manifest(text)
-    assert parsed.root["spec"]["references"] == [
-        {"kind": "decision", "anchor": "https://github.com/tvna/gitapex/issues/25", "summary": 'a "quoted" phrase'},
-    ]
-
-    # The \\ (literal double-backslash) half of the same claim, previously
-    # untested (issue #1395): a value containing an escaped backslash, not
-    # an escaped quote.
-    backslash_text = (
-        "apiVersion: gitapex.io/v1alpha1\n"
-        "kind: SkillMetadata\n"
-        "metadata:\n"
-        "  name: skill\n"
-        "spec:\n"
-        "  portability: Portable\n"
-        "  capabilityAssumption: Broad\n"
-        "  references:\n"
-        "    - kind: decision\n"
-        "      anchor: https://github.com/tvna/gitapex/issues/25\n"
-        '      summary: "a \\\\literal backslash\\\\ here"\n'
-    )
-    parsed_backslash = css._parse_manifest(backslash_text)
-    assert parsed_backslash.root["spec"]["references"] == [
-        {
-            "kind": "decision",
-            "anchor": "https://github.com/tvna/gitapex/issues/25",
-            "summary": "a \\literal backslash\\ here",
-        },
-    ]
+# Issue #758: the following _parse_manifest-internals tests are retired
+# together -- test_manifest_parser_parses_spec_references_list,
+# test_manifest_parser_parses_spec_skill_dependencies,
+# test_manifest_parser_parses_spec_lifecycle,
+# test_manifest_parser_lifecycle_unknown_keys_are_collected,
+# test_manifest_parser_still_ignores_eval_status,
+# test_manifest_parser_registers_block_shaped_dependency_policy_as_present,
+# and test_references_entries_decode_escaped_quotes. Each asserted
+# _parse_manifest's own return value (its malformed_lines/
+# malformed_reference_items/unknown_lifecycle_*/etc. side channels)
+# directly, never through check_shape() -- unit tests of the hand-rolled
+# reader's own internal state machine, which this migration deletes
+# entirely in favor of yaml.safe_load + jsonschema. A real YAML parser
+# has no equivalent internal state to assert against (no
+# malformed-item/unknown-key channels -- schema validation errors replace
+# them), and the underlying parsing claims each of these tests pinned
+# (nested mappings/lists parse correctly, an unrecognized top-level key is
+# untouched, escaped quotes/backslashes decode correctly) are true of any
+# conformant YAML parser, not a gitapex-specific behavior needing its own
+# regression test here. The still-relevant check_shape()-visible behavior
+# each of these partially overlapped with is already covered by this
+# file's references-well-formed/skill-dependencies-well-formed/
+# lifecycle-well-formed/dependency-policy-declared test groups elsewhere.
 
 
 def test_unquote_falls_back_on_invalid_json_escaping():
@@ -3845,13 +3679,23 @@ def test_unquote_falls_back_on_invalid_json_escaping():
     assert css._unquote('"bad "quote" here"') == 'bad "quote" here'
 
 
-def test_references_list_item_at_two_space_indent_fails_well_formed(tmp_path):
-    # Regression guard: unlike the old bare-scalar-list design (which
-    # tolerated any indent >= 2, set dynamically by the first item), an
-    # item marker now must sit at exactly REFERENCES_ITEM_INDENT (4
-    # spaces) -- the same fixed-indent convention every other gated block
-    # already uses. 2-space indent (aligned with "references:" itself) is
-    # valid *YAML* but must still be flagged as malformed here.
+def test_references_list_item_indent_is_yaml_flexible_now(tmp_path):
+    # Issue #758: the two tests this replaces
+    # (test_references_list_item_at_two_space_indent_fails_well_formed,
+    # test_references_list_item_at_three_space_indent_fails_well_formed)
+    # each asserted that a references list item indented at 2 or 3 spaces
+    # (rather than the hand-rolled parser's own fixed
+    # REFERENCES_ITEM_INDENT convention of exactly 4) must FAIL, with
+    # their own docstring disclosing this was "valid *YAML* but must
+    # still be flagged as malformed here" -- a deliberate restriction
+    # narrower than real YAML, enforceable only by a hand-rolled reader
+    # that tracked its own fixed indent width. JSON Schema validates a
+    # parsed value, not the byte-level indentation that produced it, so
+    # this restriction has no schema-expressible equivalent and does not
+    # survive the migration to yaml.safe_load -- confirmed live: both
+    # indent widths now parse and validate cleanly. This is the same
+    # class of disclosed relaxation the original design's empirical spike
+    # found for flow-style lists (design doc section 4.7, finding 6).
     d = _write_skill(tmp_path)
     (d / "metadata/gitapex.yaml").write_text(
         "apiVersion: gitapex.io/v1alpha1\n"
@@ -3868,33 +3712,8 @@ def test_references_list_item_at_two_space_indent_fails_well_formed(tmp_path):
         encoding="utf-8",
     )
     by = _by_name(css.check_shape(d))
-    assert by["references-well-formed"].passed is False
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.malformed_reference_items == ["- kind: decision"]
-    assert parsed.root["spec"]["references"] == []
-
-
-def test_references_list_item_at_three_space_indent_fails_well_formed(tmp_path):
-    d = _write_skill(tmp_path)
-    (d / "metadata/gitapex.yaml").write_text(
-        "apiVersion: gitapex.io/v1alpha1\n"
-        "kind: SkillMetadata\n"
-        "metadata:\n"
-        "  name: skill\n"
-        "spec:\n"
-        "  portability: Portable\n"
-        "  capabilityAssumption: Broad\n"
-        "  references:\n"
-        "   - kind: decision\n"
-        "     anchor: https://github.com/tvna/gitapex/issues/25\n"
-        "     summary: fixed this\n",
-        encoding="utf-8",
-    )
-    by = _by_name(css.check_shape(d))
-    assert by["references-well-formed"].passed is False
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.malformed_reference_items == ["- kind: decision"]
-    assert parsed.root["spec"]["references"] == []
+    assert by["references-well-formed"].passed is True
+    assert by["references-well-formed"].evidence == "1 entry"
 
 
 def test_references_list_ended_by_a_following_sibling_key(tmp_path):
@@ -4031,7 +3850,7 @@ def test_external_citations_empty_list_fails_well_formed(tmp_path):
     d = _write_external_citations_sidecar(_write_skill(tmp_path), "  externalCitations:\n")
     by = _by_name(css.check_shape(d))
     assert by["external-citations-well-formed"].passed is False
-    assert by["external-citations-well-formed"].evidence == "empty list"
+    assert "is not of type 'array'" in by["external-citations-well-formed"].evidence
     assert css.main([str(d)]) == 1
 
 
@@ -4042,14 +3861,14 @@ def test_external_citations_unknown_key_fails_well_formed(tmp_path):
     )
     by = _by_name(css.check_shape(d))
     assert by["external-citations-well-formed"].passed is False
-    assert "unknown key" in by["external-citations-well-formed"].evidence
+    assert "'extra' was unexpected" in by["external-citations-well-formed"].evidence
 
 
 def test_external_citations_missing_required_field_is_malformed(tmp_path):
     d = _write_external_citations_sidecar(_write_skill(tmp_path), "  externalCitations:\n    - path: docs/x.md\n")
     by = _by_name(css.check_shape(d))
     assert by["external-citations-well-formed"].passed is False
-    assert "malformed entry" in by["external-citations-well-formed"].evidence
+    assert "'role' is a required property" in by["external-citations-well-formed"].evidence
 
 
 def test_external_citations_invalid_role_fails_well_formed(tmp_path):
@@ -4061,10 +3880,7 @@ def test_external_citations_invalid_role_fails_well_formed(tmp_path):
     )
     by = _by_name(css.check_shape(d))
     assert by["external-citations-well-formed"].passed is False
-    assert (
-        "not a list of item mappings with a valid evals/docs path and role"
-        in by["external-citations-well-formed"].evidence
-    )
+    assert "is not one of" in by["external-citations-well-formed"].evidence
 
 
 def test_external_citations_path_outside_evals_docs_fails_well_formed(tmp_path):
@@ -4079,10 +3895,7 @@ def test_external_citations_path_outside_evals_docs_fails_well_formed(tmp_path):
     )
     by = _by_name(css.check_shape(d))
     assert by["external-citations-well-formed"].passed is False
-    assert (
-        "not a list of item mappings with a valid evals/docs path and role"
-        in by["external-citations-well-formed"].evidence
-    )
+    assert "does not match" in by["external-citations-well-formed"].evidence
 
 
 def test_external_citations_stale_declaration_fails_resolve(tmp_path):
@@ -4254,29 +4067,34 @@ def test_declared_external_citation_does_not_rescue_bare_prose_citation(tmp_path
 
 
 def test_external_citations_wrong_indent_item_is_malformed(tmp_path):
-    # item_indent (2) != EXTERNAL_CITATION_ITEM_INDENT (4) -- the same
-    # fixed-indent convention every other gated block enforces.
+    # Issue #758: two externalCitations list items at inconsistent indent
+    # widths (4 then 2 spaces) is now a genuine top-level YAML
+    # ParserError, confirmed live -- real YAML requires consistent
+    # sequence-item indentation, so this fixture no longer reaches a
+    # field-specific "malformed entry" finding the hand-rolled parser's
+    # own fixed-indent convention used to produce; it fails the whole
+    # manifest instead, via the same unusable cascade every other
+    # unreadable-sidecar test relies on.
     d = _write_external_citations_sidecar(
         _write_skill(tmp_path),
         "  externalCitations:\n    - path: docs/x.md\n      role: input-source\n  - path: docs/y.md\n    role: input-source\n",
     )
     by = _by_name(css.check_shape(d))
     assert by["external-citations-well-formed"].passed is False
-    assert "malformed entry" in by["external-citations-well-formed"].evidence
+    assert "unreadable: ParserError" in by["external-citations-well-formed"].evidence
 
 
 def test_external_citations_stray_continuation_line_fails_closed(tmp_path):
-    # A line at the item's own 6-space continuation depth that is not
-    # "<key>: <value>" shaped invalidates the item and is tracked as an
-    # unknown key -- the same fail-closed reasoning every other gated
-    # block's own continuation branch uses.
+    # Issue #758: same rationale as the wrong-indent test above -- a
+    # stray, colon-less line at an item's own continuation depth is now a
+    # genuine top-level YAML ScannerError, confirmed live.
     d = _write_external_citations_sidecar(
         _write_skill(tmp_path),
         "  externalCitations:\n    - path: docs/x.md\n      role: input-source\n      just some stray text\n",
     )
     by = _by_name(css.check_shape(d))
     assert by["external-citations-well-formed"].passed is False
-    assert "unknown key" in by["external-citations-well-formed"].evidence
+    assert "unreadable: ScannerError" in by["external-citations-well-formed"].evidence
 
 
 def test_external_citations_block_closes_before_sibling_key(tmp_path):
@@ -4354,16 +4172,15 @@ def test_skill_dependencies_blank_block_is_null_fails_well_formed(tmp_path):
     by = _by_name(css.check_shape(d))
     result = by["skill-dependencies-well-formed"]
     assert result.passed is False
-    assert "not a mapping: None" in result.evidence
+    assert "is not of type 'object'" in result.evidence
     assert css.main([str(d)]) == 1
 
 
 def test_skill_dependencies_block_header_trailing_comment_still_opens(tmp_path):
-    # Regression guard (code review finding), same defect class as the
-    # executionRequirements block-header case: "skillDependencies:  #
-    # comment" must still open the block -- before this fix, the comment
-    # text was read as the literal (wrong-type) value, discarding
-    # requires/relatedTo underneath entirely.
+    # A trailing inline comment on the skillDependencies: block header must
+    # still open the block, not be read as the literal value -- trivially
+    # true of any real YAML parser (issue #758), no longer a hand-rolled
+    # parser's own regression to guard.
     d = _write_skill_deps_sidecar(
         _write_skill(tmp_path),
         "  skillDependencies:  # not yet declared for real\n    requires: []\n    relatedTo: []\n",
@@ -4371,14 +4188,10 @@ def test_skill_dependencies_block_header_trailing_comment_still_opens(tmp_path):
     by = _by_name(css.check_shape(d))
     assert by["skill-dependencies-well-formed"].passed is True
     assert css.main([str(d)]) == 0
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.root["spec"]["skillDependencies"] == {"requires": [], "relatedTo": []}
 
 
 def test_skill_dependencies_requires_trailing_comment_still_opens(tmp_path):
-    # Same bug, one level deeper: "requires:  # comment" must still be
-    # read as blank and open the list, not stored as the literal comment
-    # string.
+    # Same rationale as the block-header test above, one level deeper.
     _mksibling(tmp_path, "other-skill")
     d = _write_skill_deps_sidecar(
         _write_skill(tmp_path),
@@ -4387,8 +4200,7 @@ def test_skill_dependencies_requires_trailing_comment_still_opens(tmp_path):
     by = _by_name(css.check_shape(d))
     assert by["skill-dependencies-well-formed"].passed is True
     assert css.main([str(d)]) == 0
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.root["spec"]["skillDependencies"]["requires"] == ["other-skill"]
+    assert by["skill-dependencies-resolve"].evidence == "all resolve"
 
 
 def test_skill_dependencies_valid_resolves_and_is_well_formed(tmp_path):
@@ -4420,59 +4232,53 @@ def test_skill_dependencies_unknown_key_fails_well_formed(tmp_path):
     d = _write_skill_deps_sidecar(_write_skill(tmp_path), "  skillDependencies:\n    requires: []\n    extra: foo\n")
     by = _by_name(css.check_shape(d))
     assert by["skill-dependencies-well-formed"].passed is False
-    assert "unknown key" in by["skill-dependencies-well-formed"].evidence
+    assert "'extra' was unexpected" in by["skill-dependencies-well-formed"].evidence
     assert css.main([str(d)]) == 1
 
 
 def test_skill_dependencies_quoted_unknown_key_fails_well_formed(tmp_path):
-    # Regression guard (issue #356): a quoted unknown key must not bypass
-    # detection just because it does not match the old [A-Za-z0-9_-]+
-    # catch-all -- it has to be reported the same as an unquoted one.
+    # A quoted unknown key must be reported the same as an unquoted one --
+    # trivially true of any real YAML parser + schema additionalProperties.
     d = _write_skill_deps_sidecar(_write_skill(tmp_path), '  skillDependencies:\n    requires: []\n    "extra": foo\n')
     by = _by_name(css.check_shape(d))
     assert by["skill-dependencies-well-formed"].passed is False
-    assert "unknown key" in by["skill-dependencies-well-formed"].evidence
+    assert "'extra' was unexpected" in by["skill-dependencies-well-formed"].evidence
     assert css.main([str(d)]) == 1
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.unknown_skill_dependency_keys == ['"extra": foo']
 
 
 def test_skill_dependencies_symbol_bearing_unknown_key_fails_well_formed(tmp_path):
     # A key containing a character outside [A-Za-z0-9_-] (here a space and
-    # "!") is equally unrecognized-but-undetected under the old regex.
+    # "!") is equally recognized as unknown.
     d = _write_skill_deps_sidecar(
         _write_skill(tmp_path), "  skillDependencies:\n    requires: []\n    'weird key!': foo\n"
     )
     by = _by_name(css.check_shape(d))
     assert by["skill-dependencies-well-formed"].passed is False
-    assert "unknown key" in by["skill-dependencies-well-formed"].evidence
+    assert "'weird key!' was unexpected" in by["skill-dependencies-well-formed"].evidence
     assert css.main([str(d)]) == 1
 
 
 def test_skill_dependencies_space_before_colon_key_fails_closed(tmp_path):
-    # Regression guard (Codex review on #358): a quoted key with
-    # whitespace between the closing quote and its colon ("extra" : foo)
-    # is valid YAML but KEY_LINE_RE_4 cannot parse it -- it must still
-    # fail closed via the indent-level fallback, not silently skip.
+    # A quoted key with whitespace between the closing quote and its colon
+    # ("extra" : foo) is valid YAML, correctly read as key "extra" by a
+    # real parser, and still reported as unknown by the schema.
     d = _write_skill_deps_sidecar(_write_skill(tmp_path), '  skillDependencies:\n    requires: []\n    "extra" : foo\n')
     by = _by_name(css.check_shape(d))
     assert by["skill-dependencies-well-formed"].passed is False
-    assert "unknown key" in by["skill-dependencies-well-formed"].evidence
+    assert "'extra' was unexpected" in by["skill-dependencies-well-formed"].evidence
     assert css.main([str(d)]) == 1
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.unknown_skill_dependency_keys == ['"extra" : foo']
 
 
 def test_skill_dependencies_escaped_quote_key_fails_closed(tmp_path):
-    # Regression guard (Codex review on #358): an escaped quote inside a
-    # quoted key ("ex\"tra": foo) is valid YAML but KEY_LINE_RE_4 has no
-    # escape support -- must still fail closed, not silently skip.
+    # An escaped quote inside a quoted key ("ex\"tra": foo) is valid YAML,
+    # correctly read as key 'ex"tra' by a real parser, and still reported
+    # as unknown by the schema.
     d = _write_skill_deps_sidecar(
         _write_skill(tmp_path), '  skillDependencies:\n    requires: []\n    "ex\\"tra": foo\n'
     )
     by = _by_name(css.check_shape(d))
     assert by["skill-dependencies-well-formed"].passed is False
-    assert "unknown key" in by["skill-dependencies-well-formed"].evidence
+    assert "was unexpected" in by["skill-dependencies-well-formed"].evidence
     assert css.main([str(d)]) == 1
 
 
@@ -4482,7 +4288,7 @@ def test_skill_dependencies_non_list_scalar_fails_well_formed(tmp_path):
     )
     by = _by_name(css.check_shape(d))
     assert by["skill-dependencies-well-formed"].passed is False
-    assert "requires is not a list" in by["skill-dependencies-well-formed"].evidence
+    assert "is not of type 'array'" in by["skill-dependencies-well-formed"].evidence
     # The malformed subkey is treated as empty for the other two gates,
     # not silently trusted -- no dangling/contradiction false negative.
     assert by["skill-dependencies-resolve"].passed is True
@@ -4496,20 +4302,19 @@ def test_skill_dependencies_mapping_shaped_item_fails_well_formed(tmp_path):
     )
     by = _by_name(css.check_shape(d))
     assert by["skill-dependencies-well-formed"].passed is False
-    assert "malformed entry" in by["skill-dependencies-well-formed"].evidence
+    assert "is not of type 'string'" in by["skill-dependencies-well-formed"].evidence
     assert css.main([str(d)]) == 1
 
 
 def test_skill_dependencies_non_string_scalar_item_fails_well_formed(tmp_path):
-    # Regression guard (issue #356, ACM row 3), one level deeper than
-    # spec.references: an unquoted null/boolean/numeric scalar in
-    # relatedTo must fail, not be certified as a valid dependency name.
+    # An unquoted null/boolean/numeric scalar in relatedTo must fail, not
+    # be certified as a valid dependency name.
     d = _write_skill_deps_sidecar(
         _write_skill(tmp_path), "  skillDependencies:\n    requires: []\n    relatedTo:\n      - true\n"
     )
     by = _by_name(css.check_shape(d))
     assert by["skill-dependencies-well-formed"].passed is False
-    assert "malformed entry" in by["skill-dependencies-well-formed"].evidence
+    assert "is not of type 'string'" in by["skill-dependencies-well-formed"].evidence
     assert css.main([str(d)]) == 1
 
 
@@ -4526,9 +4331,25 @@ def test_skill_dependencies_whole_field_wrong_type_fails_well_formed(tmp_path):
     d = _write_skill_deps_sidecar(_write_skill(tmp_path), "  skillDependencies: oops\n")
     by = _by_name(css.check_shape(d))
     assert by["skill-dependencies-well-formed"].passed is False
-    assert "not a mapping" in by["skill-dependencies-well-formed"].evidence
+    assert "is not of type 'object'" in by["skill-dependencies-well-formed"].evidence
     assert by["skill-dependencies-resolve"].passed is True
     assert by["requires-portability-compatible"].passed is True
+
+
+def test_skill_dependencies_wrong_type_with_portable_does_not_spuriously_fail_contradiction_check(tmp_path):
+    # Regression guard: the allOf/if/then contradiction branch re-asserts
+    # skillDependencies' own type, so a non-mapping skillDependencies with
+    # portability: Portable used to fire its own "allOf" schema error and
+    # get misattributed to requires-portability-compatible as a false
+    # contradiction FAIL -- mirrors lifecycle.py's isinstance guard for the
+    # analogous experimental-stable-compatible vacuous-not-constraint case
+    # (test_lifecycle_whole_field_wrong_type_fails_well_formed).
+    d = _write_skill_deps_sidecar(_write_skill(tmp_path), "  skillDependencies: oops\n", portability="Portable")
+    by = _by_name(css.check_shape(d))
+    assert by["skill-dependencies-well-formed"].passed is False
+    assert by["skill-dependencies-resolve"].passed is True
+    assert by["requires-portability-compatible"].passed is True
+    assert by["requires-portability-compatible"].evidence == "ok"
 
 
 def test_skill_dependencies_dangling_requires_fails_resolve(tmp_path):
@@ -4613,7 +4434,7 @@ def test_requires_portability_contradiction_fails_on_portable(tmp_path):
     by = _by_name(css.check_shape(d))
     assert by["skill-dependencies-resolve"].passed is True
     assert by["requires-portability-compatible"].passed is False
-    assert "Portable" in by["requires-portability-compatible"].evidence
+    assert "is expected to be empty" in by["requires-portability-compatible"].evidence
     assert css.main([str(d)]) == 1
 
 
@@ -4703,7 +4524,7 @@ def test_lifecycle_blank_block_is_null_fails_well_formed(tmp_path):
     by = _by_name(css.check_shape(d))
     result = by["lifecycle-well-formed"]
     assert result.passed is False
-    assert "not a mapping: None" in result.evidence
+    assert "is not of type 'object'" in result.evidence
     assert css.main([str(d)]) == 1
 
 
@@ -4716,7 +4537,7 @@ def test_lifecycle_blank_experimental_is_null_fails_well_formed(tmp_path):
     by = _by_name(css.check_shape(d))
     result = by["lifecycle-well-formed"]
     assert result.passed is False
-    assert "experimental is not a mapping: None" in result.evidence
+    assert "experimental" in result.evidence and "is not of type 'object'" in result.evidence
     assert css.main([str(d)]) == 1
 
 
@@ -4808,7 +4629,7 @@ def test_lifecycle_unknown_field_fails_well_formed(tmp_path):
     )
     by = _by_name(css.check_shape(d))
     assert by["lifecycle-well-formed"].passed is False
-    assert "unknown field" in by["lifecycle-well-formed"].evidence
+    assert "'extraField' was unexpected" in by["lifecycle-well-formed"].evidence
     assert css.main([str(d)]) == 1
 
 
@@ -4819,7 +4640,7 @@ def test_lifecycle_unknown_top_level_key_fails_well_formed(tmp_path):
     )
     by = _by_name(css.check_shape(d))
     assert by["lifecycle-well-formed"].passed is False
-    assert "unknown key" in by["lifecycle-well-formed"].evidence
+    assert "'stage' was unexpected" in by["lifecycle-well-formed"].evidence
     assert css.main([str(d)]) == 1
 
 
@@ -4838,7 +4659,7 @@ def test_lifecycle_quoted_unknown_top_level_key_fails_well_formed(tmp_path):
     )
     by = _by_name(css.check_shape(d))
     assert by["lifecycle-well-formed"].passed is False
-    assert "unknown key" in by["lifecycle-well-formed"].evidence
+    assert "'stage' was unexpected" in by["lifecycle-well-formed"].evidence
     assert css.main([str(d)]) == 1
 
 
@@ -4855,7 +4676,7 @@ def test_lifecycle_quoted_unknown_field_fails_well_formed(tmp_path):
     )
     by = _by_name(css.check_shape(d))
     assert by["lifecycle-well-formed"].passed is False
-    assert "unknown field" in by["lifecycle-well-formed"].evidence
+    assert "'extra field' was unexpected" in by["lifecycle-well-formed"].evidence
     assert css.main([str(d)]) == 1
 
 
@@ -4874,7 +4695,7 @@ def test_lifecycle_space_before_colon_key_fails_closed(tmp_path):
     )
     by = _by_name(css.check_shape(d))
     assert by["lifecycle-well-formed"].passed is False
-    assert "unknown key" in by["lifecycle-well-formed"].evidence
+    assert "'stage' was unexpected" in by["lifecycle-well-formed"].evidence
     assert css.main([str(d)]) == 1
 
 
@@ -4978,7 +4799,7 @@ def test_lifecycle_whole_field_wrong_type_fails_well_formed(tmp_path):
     d = _write_lifecycle_sidecar(_write_skill(tmp_path), "  lifecycle: oops\n")
     by = _by_name(css.check_shape(d))
     assert by["lifecycle-well-formed"].passed is False
-    assert "not a mapping" in by["lifecycle-well-formed"].evidence
+    assert "is not of type 'object'" in by["lifecycle-well-formed"].evidence
     assert by["lifecycle-deprecated-replacement-resolves"].passed is True
     assert by["experimental-stable-compatible"].passed is True
 
@@ -4987,7 +4808,10 @@ def test_lifecycle_sub_block_wrong_type_fails_well_formed(tmp_path):
     d = _write_lifecycle_sidecar(_write_skill(tmp_path), "  lifecycle:\n    experimental: true\n")
     by = _by_name(css.check_shape(d))
     assert by["lifecycle-well-formed"].passed is False
-    assert "experimental is not a mapping" in by["lifecycle-well-formed"].evidence
+    assert (
+        "experimental" in by["lifecycle-well-formed"].evidence
+        and "is not of type 'object'" in by["lifecycle-well-formed"].evidence
+    )
     assert css.main([str(d)]) == 1
 
 
@@ -5025,7 +4849,8 @@ def test_lifecycle_experimental_missing_reason_fails_well_formed(tmp_path):
     )
     by = _by_name(css.check_shape(d))
     assert by["lifecycle-well-formed"].passed is False
-    assert "experimental.reason" in by["lifecycle-well-formed"].evidence
+    assert "spec/lifecycle/experimental" in by["lifecycle-well-formed"].evidence
+    assert "'reason' is a required property" in by["lifecycle-well-formed"].evidence
     assert css.main([str(d)]) == 1
 
 
@@ -5036,7 +4861,8 @@ def test_lifecycle_deprecated_missing_reason_fails_well_formed(tmp_path):
     )
     by = _by_name(css.check_shape(d))
     assert by["lifecycle-well-formed"].passed is False
-    assert "deprecated.reason" in by["lifecycle-well-formed"].evidence
+    assert "spec/lifecycle/deprecated" in by["lifecycle-well-formed"].evidence
+    assert "'reason' is a required property" in by["lifecycle-well-formed"].evidence
     assert css.main([str(d)]) == 1
 
 
@@ -5046,7 +4872,8 @@ def test_lifecycle_stable_missing_since_fails_well_formed(tmp_path):
     )
     by = _by_name(css.check_shape(d))
     assert by["lifecycle-well-formed"].passed is False
-    assert "stable.since" in by["lifecycle-well-formed"].evidence
+    assert "spec/lifecycle/stable" in by["lifecycle-well-formed"].evidence
+    assert "'since' is a required property" in by["lifecycle-well-formed"].evidence
     assert css.main([str(d)]) == 1
 
 
@@ -5079,6 +4906,7 @@ def test_lifecycle_experimental_and_stable_fails_compatible(tmp_path):
     assert by["lifecycle-well-formed"].passed is True
     assert by["experimental-stable-compatible"].passed is False
     assert "both experimental and stable" in by["experimental-stable-compatible"].evidence
+    assert "logical contradiction" in by["experimental-stable-compatible"].evidence
     assert css.main([str(d)]) == 1
 
 
@@ -5093,19 +4921,24 @@ def test_lifecycle_renamed_from_valid_does_not_require_sibling_directory(tmp_pat
     assert css.main([str(d)]) == 0
 
 
-def test_lifecycle_renamed_from_blank_is_read_as_absent(tmp_path):
-    # Mirrors this parser's repo-wide convention: a blank scalar assignment
-    # (e.g. "portability:" with nothing after it) reads as "not declared",
-    # not as an explicit empty-string declaration.
+def test_lifecycle_renamed_from_blank_fails_well_formed(tmp_path):
+    # Issue #758: this test used to assert the hand-rolled parser's own
+    # "blank scalar reads as not declared" convention (matching
+    # portability:'s own repo-wide blank-means-absent rule) via a direct
+    # _parse_manifest internals check. Real YAML has no such special
+    # case: "renamedFrom:" with nothing after it is null, and the schema
+    # requires renamedFrom (when the key is present at all) to be a
+    # non-empty string -- a real, disclosed strengthening (a previously
+    # silent pass now correctly fails), not a regression.
     d = _write_lifecycle_sidecar(
         _write_skill(tmp_path),
         "  lifecycle:\n    renamedFrom:\n    deprecated:\n      reason: superseded\n      replacement: other-skill\n",
     )
     (tmp_path / "other-skill").mkdir()
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert "renamedFrom" not in parsed.root["spec"]["lifecycle"]
     by = _by_name(css.check_shape(d))
-    assert by["lifecycle-well-formed"].passed is True
+    assert by["lifecycle-well-formed"].passed is False
+    assert "renamedFrom" in by["lifecycle-well-formed"].evidence
+    assert "is not of type 'string'" in by["lifecycle-well-formed"].evidence
 
 
 def test_lifecycle_renamed_from_empty_string_fails_well_formed(tmp_path):
@@ -5131,7 +4964,8 @@ def test_lifecycle_unquoted_tracking_issue_is_read_as_bare_comment(tmp_path):
     )
     by = _by_name(css.check_shape(d))
     assert by["lifecycle-well-formed"].passed is False
-    assert "trackingIssue is missing" in by["lifecycle-well-formed"].evidence
+    assert "trackingIssue" in by["lifecycle-well-formed"].evidence
+    assert "is not of type 'string'" in by["lifecycle-well-formed"].evidence
     assert css.main([str(d)]) == 1
 
 
@@ -5170,7 +5004,10 @@ def test_lifecycle_renamed_from_given_a_block_fails_well_formed(tmp_path):
     )
     by = _by_name(css.check_shape(d))
     assert by["lifecycle-well-formed"].passed is False
-    assert "renamedFrom is not a non-empty string" in by["lifecycle-well-formed"].evidence
+    assert (
+        "renamedFrom" in by["lifecycle-well-formed"].evidence
+        and "is not of type 'string'" in by["lifecycle-well-formed"].evidence
+    )
     assert css.main([str(d)]) == 1
 
 
@@ -5272,7 +5109,7 @@ def test_execution_requirements_blank_tools_is_null_fails_well_formed(tmp_path):
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
-    assert "tools is not a mapping: None" in result.evidence
+    assert "tools" in result.evidence and "is not of type 'object'" in result.evidence
     assert css.main([str(d)]) == 1
 
 
@@ -5298,7 +5135,7 @@ def test_execution_requirements_blank_block_is_null_fails_well_formed(tmp_path):
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
-    assert "not a mapping: None" in result.evidence
+    assert "is not of type 'object'" in result.evidence
     assert css.main([str(d)]) == 1
 
 
@@ -5319,8 +5156,6 @@ def test_execution_requirements_block_header_trailing_comment_still_opens(tmp_pa
     assert result.passed is True
     assert result.evidence == "tools.read declared"
     assert css.main([str(d)]) == 0
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.root["spec"]["executionRequirements"]["tools"]["read"] == ["foo"]
 
 
 def test_execution_requirements_tools_subkey_trailing_comment_still_opens(tmp_path):
@@ -5335,8 +5170,6 @@ def test_execution_requirements_tools_subkey_trailing_comment_still_opens(tmp_pa
     assert result.passed is True
     assert result.evidence == "tools.read declared"
     assert css.main([str(d)]) == 0
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.root["spec"]["executionRequirements"]["tools"]["read"] == ["foo"]
 
 
 def test_execution_requirements_tools_all_subkeys_declared(tmp_path):
@@ -5378,7 +5211,7 @@ def test_execution_requirements_tools_not_a_mapping_fails(tmp_path):
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
-    assert "tools is not a mapping" in result.evidence
+    assert "tools" in result.evidence and "is not of type 'object'" in result.evidence
     assert css.main([str(d)]) == 1
 
 
@@ -5387,7 +5220,7 @@ def test_execution_requirements_not_a_mapping_fails(tmp_path):
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
-    assert "not a mapping" in result.evidence
+    assert "is not of type 'object'" in result.evidence
     assert css.main([str(d)]) == 1
 
 
@@ -5404,8 +5237,7 @@ def test_execution_requirements_unknown_top_level_key_fails(tmp_path):
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
-    assert "unknown key" in result.evidence
-    assert "mcp" in result.evidence
+    assert "'mcp' was unexpected" in result.evidence
     assert css.main([str(d)]) == 1
 
 
@@ -5416,8 +5248,7 @@ def test_execution_requirements_unknown_tools_key_fails(tmp_path):
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
-    assert "unknown tools key" in result.evidence
-    assert "bogus" in result.evidence
+    assert "'bogus' was unexpected" in result.evidence
     assert css.main([str(d)]) == 1
 
 
@@ -5435,22 +5266,27 @@ def test_execution_requirements_quoted_unknown_top_level_key_fails(tmp_path):
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
-    assert "unknown key" in result.evidence
+    assert "'mcp' was unexpected" in result.evidence
     assert css.main([str(d)]) == 1
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.unknown_execution_requirement_keys == ['"mcp": {}']
 
 
-def test_execution_requirements_unmatched_key_line_fails_closed(tmp_path):
-    # Regression guard for the residual gap KEY_LINE_RE_4/6 itself cannot
-    # parse (whitespace before a quoted key's colon) -- must still fail
-    # closed via the fallback, not silently skip.
+def test_execution_requirements_space_before_colon_key_still_well_formed(tmp_path):
+    # Issue #758: this test used to assert (as
+    # test_execution_requirements_unmatched_key_line_fails_closed) that a
+    # quoted key with whitespace before its colon fails closed, because the
+    # hand-rolled parser's own KEY_LINE_RE_4/6 regexes could not match that
+    # shape at all. Real YAML has no such limitation --
+    # yaml.safe_load('"read" : []') parses to {'read': []} exactly like the
+    # unquoted, unspaced form -- so this is a real, disclosed strengthening
+    # (a previously-required failure-closed fallback for a hand-rolled
+    # parser bug that a real YAML parser was never subject to): the fixture
+    # is well-formed now, not a defect.
     d = _write_exec_req_sidecar(_write_skill(tmp_path), '  executionRequirements:\n    tools:\n      "read" : []\n')
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
-    assert result.passed is False
-    assert "unknown tools key" in result.evidence
-    assert css.main([str(d)]) == 1
+    assert result.passed is True
+    assert result.evidence == "tools.read declared"
+    assert css.main([str(d)]) == 0
 
 
 def test_execution_requirements_mapping_shaped_list_item_fails(tmp_path):
@@ -5464,12 +5300,9 @@ def test_execution_requirements_mapping_shaped_list_item_fails(tmp_path):
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
-    assert "malformed tools entry" in result.evidence
-    assert "path: sneaky" in result.evidence
+    assert "tools/read/0" in result.evidence
+    assert "is not of type 'string'" in result.evidence
     assert css.main([str(d)]) == 1
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.malformed_execution_requirement_tools_items == ["- path: sneaky"]
-    assert parsed.root["spec"]["executionRequirements"]["tools"]["read"] == []
 
 
 def test_execution_requirements_non_string_scalar_item_fails(tmp_path):
@@ -5482,23 +5315,28 @@ def test_execution_requirements_non_string_scalar_item_fails(tmp_path):
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
-    assert "malformed tools entry" in result.evidence
+    assert "tools/read/0" in result.evidence
+    assert "is not of type 'string'" in result.evidence
     assert css.main([str(d)]) == 1
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.malformed_execution_requirement_tools_items == ["- null"]
 
 
-def test_execution_requirements_inconsistent_indent_item_fails(tmp_path):
+def test_execution_requirements_inconsistent_indent_item_fails_closed(tmp_path):
+    # Issue #758: the fixture below is no longer just a same-block
+    # mis-indented list item -- real YAML treats an item dedented back to
+    # the parent mapping's own indent level as a genuine syntax error (the
+    # parser expects either another "read:"-indented item or a block end),
+    # not a recoverable single-item defect the hand-rolled parser could
+    # isolate and discard. The whole sidecar becomes unreadable, cascading
+    # to every check via manifest_unusable -- disclosed strengthening
+    # (fails closed harder than before), not a regression.
     d = _write_exec_req_sidecar(
         _write_skill(tmp_path), '  executionRequirements:\n    tools:\n      read:\n        - "a"\n      - "b"\n'
     )
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
+    assert "unreadable: ParserError" in result.evidence
     assert css.main([str(d)]) == 1
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.root["spec"]["executionRequirements"]["tools"]["read"] == ["a"]
-    assert parsed.malformed_execution_requirement_tools_items == ['- "b"']
 
 
 # ---- execution-requirements-well-formed: network category (issue #845,
@@ -5546,7 +5384,7 @@ def test_execution_requirements_network_allowlist_without_domains_fails(tmp_path
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
-    assert "network.domains must be a non-empty list when network.mode is allowlist" in result.evidence
+    assert "'domains' is a required property" in result.evidence
     assert css.main([str(d)]) == 1
 
 
@@ -5557,7 +5395,7 @@ def test_execution_requirements_network_allowlist_empty_domains_fails(tmp_path):
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
-    assert "network.domains must be a non-empty list when network.mode is allowlist" in result.evidence
+    assert "should be non-empty" in result.evidence
     assert css.main([str(d)]) == 1
 
 
@@ -5573,7 +5411,7 @@ def test_execution_requirements_network_disabled_with_domains_fails(tmp_path):
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
-    assert "network.domains must be empty when network.mode is 'disabled'" in result.evidence
+    assert "is expected to be empty" in result.evidence
     assert css.main([str(d)]) == 1
 
 
@@ -5585,7 +5423,7 @@ def test_execution_requirements_network_unrestricted_with_domains_fails(tmp_path
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
-    assert "network.domains must be empty when network.mode is 'unrestricted'" in result.evidence
+    assert "is expected to be empty" in result.evidence
     assert css.main([str(d)]) == 1
 
 
@@ -5594,8 +5432,7 @@ def test_execution_requirements_network_invalid_mode_fails(tmp_path):
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
-    assert "network.mode is not one of" in result.evidence
-    assert "bogus" in result.evidence
+    assert "'bogus' is not one of" in result.evidence
     assert css.main([str(d)]) == 1
 
 
@@ -5609,27 +5446,27 @@ def test_execution_requirements_network_domains_inline_scalar_fails(tmp_path):
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
-    assert "network.domains is not a list of non-empty strings" in result.evidence
+    assert "domains" in result.evidence
+    assert "is not of type 'array'" in result.evidence
     assert "github.com" in result.evidence
     assert css.main([str(d)]) == 1
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.root["spec"]["executionRequirements"]["network"]["domains"] == "github.com"
 
 
-def test_execution_requirements_network_unmatched_key_line_fails_closed(tmp_path):
-    # Regression guard mirroring tools' own
-    # test_execution_requirements_unmatched_key_line_fails_closed: a line
-    # KEY_LINE_RE_6 cannot parse (whitespace before a quoted key's colon)
-    # must still fail closed via the unknown-key fallback, not be silently
-    # skipped.
+def test_execution_requirements_network_space_before_colon_key_still_well_formed(tmp_path):
+    # Issue #758: this test used to assert (as
+    # test_execution_requirements_network_unmatched_key_line_fails_closed)
+    # that a quoted key with whitespace before its colon fails closed, for
+    # the same hand-rolled-parser-limitation reason as the sibling tools
+    # test above. Real YAML parses '"mode" : disabled' identically to
+    # 'mode: disabled' -- a real, disclosed strengthening, not a defect.
     d = _write_exec_req_sidecar(
         _write_skill(tmp_path), '  executionRequirements:\n    network:\n      "mode" : disabled\n'
     )
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
-    assert result.passed is False
-    assert "unknown network key" in result.evidence
-    assert css.main([str(d)]) == 1
+    assert result.passed is True
+    assert result.evidence == "network.mode declared"
+    assert css.main([str(d)]) == 0
 
 
 def test_execution_requirements_network_missing_mode_fails(tmp_path):
@@ -5639,7 +5476,7 @@ def test_execution_requirements_network_missing_mode_fails(tmp_path):
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
-    assert "network.mode is required when network is declared" in result.evidence
+    assert "'mode' is a required property" in result.evidence
     assert css.main([str(d)]) == 1
 
 
@@ -5653,10 +5490,9 @@ def test_execution_requirements_network_mode_written_as_list_fails(tmp_path):
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
-    assert "network.mode is not one of" in result.evidence
+    assert "network/mode" in result.evidence
+    assert "is not of type 'string'" in result.evidence
     assert css.main([str(d)]) == 1
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.root["spec"]["executionRequirements"]["network"]["mode"] == ["oops"]
 
 
 def test_execution_requirements_network_blank_is_null_fails_well_formed(tmp_path):
@@ -5666,7 +5502,7 @@ def test_execution_requirements_network_blank_is_null_fails_well_formed(tmp_path
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
-    assert "network is not a mapping: None" in result.evidence
+    assert "network" in result.evidence and "is not of type 'object'" in result.evidence
     assert css.main([str(d)]) == 1
 
 
@@ -5675,7 +5511,7 @@ def test_execution_requirements_network_not_a_mapping_fails(tmp_path):
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
-    assert "network is not a mapping" in result.evidence
+    assert "network" in result.evidence and "is not of type 'object'" in result.evidence
     assert css.main([str(d)]) == 1
 
 
@@ -5686,8 +5522,7 @@ def test_execution_requirements_unknown_network_key_fails(tmp_path):
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
-    assert "unknown network key" in result.evidence
-    assert "bogus" in result.evidence
+    assert "'bogus' was unexpected" in result.evidence
     assert css.main([str(d)]) == 1
 
 
@@ -5706,14 +5541,13 @@ def test_execution_requirements_network_domains_then_mode_finalizes_list_mid_loo
     assert result.passed is True
     assert result.evidence == "network.mode, network.domains declared"
     assert css.main([str(d)]) == 0
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.root["spec"]["executionRequirements"]["network"] == {
-        "domains": ["github.com"],
-        "mode": "allowlist",
-    }
 
 
-def test_execution_requirements_network_domains_inconsistent_indent_item_fails(tmp_path):
+def test_execution_requirements_network_domains_inconsistent_indent_item_fails_closed(tmp_path):
+    # Issue #758: like the tools.read sibling above, a domains item
+    # dedented to the parent mapping's own indent is a real YAML syntax
+    # error, not a single-item defect the hand-rolled parser could isolate
+    # -- the whole sidecar becomes unreadable via manifest_unusable.
     d = _write_exec_req_sidecar(
         _write_skill(tmp_path),
         '  executionRequirements:\n    network:\n      mode: allowlist\n      domains:\n        - "a.com"\n      - "b.com"\n',
@@ -5721,10 +5555,8 @@ def test_execution_requirements_network_domains_inconsistent_indent_item_fails(t
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
+    assert "unreadable: ParserError" in result.evidence
     assert css.main([str(d)]) == 1
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.root["spec"]["executionRequirements"]["network"]["domains"] == ["a.com"]
-    assert parsed.malformed_execution_requirement_network_items == ['- "b.com"']
 
 
 def test_execution_requirements_network_mapping_shaped_domains_item_fails(tmp_path):
@@ -5735,12 +5567,9 @@ def test_execution_requirements_network_mapping_shaped_domains_item_fails(tmp_pa
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
-    assert "malformed network entry" in result.evidence
-    assert "path: sneaky" in result.evidence
+    assert "network/domains/0" in result.evidence
+    assert "is not of type 'string'" in result.evidence
     assert css.main([str(d)]) == 1
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.malformed_execution_requirement_network_items == ["- path: sneaky"]
-    assert parsed.root["spec"]["executionRequirements"]["network"]["domains"] == []
 
 
 def test_execution_requirements_network_non_string_scalar_domains_item_fails(tmp_path):
@@ -5751,10 +5580,9 @@ def test_execution_requirements_network_non_string_scalar_domains_item_fails(tmp
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
-    assert "malformed network entry" in result.evidence
+    assert "network/domains/0" in result.evidence
+    assert "is not of type 'string'" in result.evidence
     assert css.main([str(d)]) == 1
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.malformed_execution_requirement_network_items == ["- null"]
 
 
 def test_execution_requirements_network_dedent_to_sibling_key_falls_through(tmp_path):
@@ -5769,9 +5597,6 @@ def test_execution_requirements_network_dedent_to_sibling_key_falls_through(tmp_
     assert by["execution-requirements-well-formed"].passed is True
     assert by["skill-dependencies-well-formed"].passed is True
     assert css.main([str(d)]) == 0
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.root["spec"]["executionRequirements"]["network"] == {"mode": "disabled"}
-    assert parsed.root["spec"]["skillDependencies"] == {"requires": [], "relatedTo": []}
 
 
 def test_execution_requirements_tools_and_network_both_declared_is_well_formed(tmp_path):
@@ -5839,7 +5664,7 @@ def test_execution_requirements_blank_packages_is_null_fails_well_formed(tmp_pat
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
-    assert "packages is not a mapping: None" in result.evidence
+    assert "packages" in result.evidence and "is not of type 'object'" in result.evidence
     assert css.main([str(d)]) == 1
 
 
@@ -5850,7 +5675,7 @@ def test_execution_requirements_packages_not_a_mapping_fails(tmp_path):
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
-    assert "packages is not a mapping" in result.evidence
+    assert "packages" in result.evidence and "is not of type 'object'" in result.evidence
     assert css.main([str(d)]) == 1
 
 
@@ -5864,36 +5689,23 @@ def test_execution_requirements_packages_malformed_ecosystem_key_fails(tmp_path)
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
-    assert "unknown packages key" in result.evidence
-    assert "PIP" in result.evidence
+    assert "'PIP' does not match" in result.evidence
     assert css.main([str(d)]) == 1
 
 
 def test_execution_requirements_packages_quoted_invalid_ecosystem_key_fails(tmp_path):
     # Regression guard mirroring
     # test_execution_requirements_quoted_unknown_top_level_key_fails: a
-    # quoted invalid ecosystem key must not bypass the regex check --
-    # _match_key_line already strips the quote before
-    # EXEC_REQ_PACKAGES_KEY_RE ever sees the key text.
+    # quoted invalid ecosystem key must not bypass the propertyNames
+    # pattern check.
     d = _write_exec_req_sidecar(
         _write_skill(tmp_path), '  executionRequirements:\n    packages:\n      "PIP":\n        - pyyaml\n'
     )
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
-    assert "unknown packages key" in result.evidence
-    assert "PIP" in result.evidence
+    assert "'PIP' does not match" in result.evidence
     assert css.main([str(d)]) == 1
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    # Both the unrecognized key line AND its own child list-item line are
-    # flagged -- the same fail-closed behavior
-    # test_execution_requirements_unknown_tools_key_fails' own sibling
-    # fixture already exhibits for tools (an unrecognized key does not
-    # open a list, so its own "- <value>" children fall through to the
-    # generic "unmatched line at this indent" gate one line at a time,
-    # not just the key line itself).
-    assert parsed.unknown_execution_requirement_packages_keys == ['"PIP":', "- pyyaml"]
-    assert parsed.root["spec"]["executionRequirements"]["packages"] == {}
 
 
 def test_execution_requirements_packages_ecosystem_list_inline_scalar_fails(tmp_path):
@@ -5903,10 +5715,9 @@ def test_execution_requirements_packages_ecosystem_list_inline_scalar_fails(tmp_
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
-    assert "packages.pip is not a list of non-empty strings" in result.evidence
+    assert "packages/pip" in result.evidence
+    assert "is not of type 'array'" in result.evidence
     assert css.main([str(d)]) == 1
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.root["spec"]["executionRequirements"]["packages"]["pip"] == "not-a-list"
 
 
 def test_execution_requirements_packages_mapping_shaped_list_item_fails(tmp_path):
@@ -5916,12 +5727,9 @@ def test_execution_requirements_packages_mapping_shaped_list_item_fails(tmp_path
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
-    assert "malformed packages entry" in result.evidence
-    assert "path: sneaky" in result.evidence
+    assert "packages/pip/0" in result.evidence
+    assert "is not of type 'string'" in result.evidence
     assert css.main([str(d)]) == 1
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.malformed_execution_requirement_packages_items == ["- path: sneaky"]
-    assert parsed.root["spec"]["executionRequirements"]["packages"]["pip"] == []
 
 
 def test_execution_requirements_packages_non_string_scalar_item_fails(tmp_path):
@@ -5931,10 +5739,9 @@ def test_execution_requirements_packages_non_string_scalar_item_fails(tmp_path):
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
-    assert "malformed packages entry" in result.evidence
+    assert "packages/pip/0" in result.evidence
+    assert "is not of type 'string'" in result.evidence
     assert css.main([str(d)]) == 1
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.malformed_execution_requirement_packages_items == ["- null"]
 
 
 def test_execution_requirements_packages_empty_string_item_fails(tmp_path):
@@ -5950,13 +5757,16 @@ def test_execution_requirements_packages_empty_string_item_fails(tmp_path):
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
-    assert "packages.pip is not a list of non-empty strings" in result.evidence
+    assert "packages/pip/0" in result.evidence
+    assert "should be non-empty" in result.evidence
     assert css.main([str(d)]) == 1
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.root["spec"]["executionRequirements"]["packages"]["pip"] == [""]
 
 
-def test_execution_requirements_packages_inconsistent_indent_item_fails(tmp_path):
+def test_execution_requirements_packages_inconsistent_indent_item_fails_closed(tmp_path):
+    # Issue #758: like tools.read/network.domains above, a packages list
+    # item dedented to the parent mapping's own indent is a real YAML
+    # syntax error, not a single-item defect -- the whole sidecar becomes
+    # unreadable via manifest_unusable.
     d = _write_exec_req_sidecar(
         _write_skill(tmp_path),
         '  executionRequirements:\n    packages:\n      pip:\n        - "a"\n      - "b"\n',
@@ -5964,10 +5774,8 @@ def test_execution_requirements_packages_inconsistent_indent_item_fails(tmp_path
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
+    assert "unreadable: ParserError" in result.evidence
     assert css.main([str(d)]) == 1
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.root["spec"]["executionRequirements"]["packages"]["pip"] == ["a"]
-    assert parsed.malformed_execution_requirement_packages_items == ['- "b"']
 
 
 def test_execution_requirements_packages_empty_list_distinguished_from_absent(tmp_path):
@@ -5980,18 +5788,19 @@ def test_execution_requirements_packages_empty_list_distinguished_from_absent(tm
     assert css.main([str(d)]) == 0
 
 
-def test_execution_requirements_packages_unmatched_key_line_fails_closed(tmp_path):
-    # Regression guard mirroring tools'/network's own
-    # test_execution_requirements_unmatched_key_line_fails_closed: a line
-    # KEY_LINE_RE_6 cannot parse (whitespace before a quoted key's colon)
-    # must still fail closed via the unknown-key fallback, not be
-    # silently skipped.
+def test_execution_requirements_packages_space_before_colon_key_still_well_formed(tmp_path):
+    # Issue #758: this test used to assert (as
+    # test_execution_requirements_packages_unmatched_key_line_fails_closed)
+    # that a quoted key with whitespace before its colon fails closed, for
+    # the same hand-rolled-parser-limitation reason as the sibling
+    # tools/network tests above. Real YAML parses '"pip" : []' identically
+    # to 'pip: []' -- a real, disclosed strengthening, not a defect.
     d = _write_exec_req_sidecar(_write_skill(tmp_path), '  executionRequirements:\n    packages:\n      "pip" : []\n')
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
-    assert result.passed is False
-    assert "unknown packages key" in result.evidence
-    assert css.main([str(d)]) == 1
+    assert result.passed is True
+    assert result.evidence == "packages.pip declared"
+    assert css.main([str(d)]) == 0
 
 
 def test_execution_requirements_packages_trailing_comment_still_opens(tmp_path):
@@ -6007,8 +5816,6 @@ def test_execution_requirements_packages_trailing_comment_still_opens(tmp_path):
     assert result.passed is True
     assert result.evidence == "packages.pip declared"
     assert css.main([str(d)]) == 0
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.root["spec"]["executionRequirements"]["packages"]["pip"] == ["pyyaml"]
 
 
 def test_execution_requirements_packages_dedent_to_sibling_key_falls_through(tmp_path):
@@ -6021,9 +5828,6 @@ def test_execution_requirements_packages_dedent_to_sibling_key_falls_through(tmp
     by = _by_name(css.check_shape(d))
     assert by["execution-requirements-well-formed"].passed is True
     assert by["skill-dependencies-well-formed"].passed is True
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.root["spec"]["executionRequirements"]["packages"] == {"pip": ["pyyaml"]}
-    assert parsed.root["spec"]["skillDependencies"] == {"requires": [], "relatedTo": []}
 
 
 def test_execution_requirements_tools_packages_network_all_declared_is_well_formed(tmp_path):
@@ -6047,57 +5851,19 @@ def test_execution_requirements_tools_packages_network_all_declared_is_well_form
     assert css.main([str(d)]) == 0
 
 
-def test_docstring_execution_requirement_packages_key_pattern_names_constant():
-    docstring = css._parse_manifest.__doc__
-    m = re.search(r"matching\s+``(\w+)``,\s*not a closed tuple", docstring)
-    assert m is not None, (
-        "_parse_manifest's docstring no longer names its packages "
-        "ecosystem-key-pattern constant in the expected "
-        "'matching ``X``, not a closed tuple' shape -- update this test's "
-        "extraction logic."
-    )
-    assert m.group(1) == "EXEC_REQ_PACKAGES_KEY_RE", (
-        f"_parse_manifest's docstring names the packages key-pattern "
-        f"constant as {m.group(1)!r}, not EXEC_REQ_PACKAGES_KEY_RE -- a "
-        "rename landed in one but not the other."
-    )
-
-
-def test_execution_requirement_packages_key_pattern_matches_schema():
-    # Cross-file drift guard (this module's OWN established precedent:
-    # EXEC_REQ_PACKAGES_KEY_RE is deliberately hand-duplicated from
-    # skill-metadata.schema.json's own executionRequirementsPackages.
-    # propertyNames pattern, not imported, per EXEC_REQ_NETWORK_SUBKEYS'
-    # own comment precedent for why a schema constraint is re-expressed
-    # here rather than shared) -- a hand-duplicated pair can silently
-    # drift with no test watching it, so assert the two literal pattern
-    # strings stay equal.
-    schema_path = _SCRIPT_PATH.parent.parent / "references" / "skill-metadata.schema.json"
-    schema = json.loads(schema_path.read_text(encoding="utf-8"))
-    schema_pattern = schema["$defs"]["executionRequirementsPackages"]["propertyNames"]["pattern"]
-    assert schema_pattern == css.EXEC_REQ_PACKAGES_KEY_RE.pattern, (
-        f"skill-metadata.schema.json's executionRequirementsPackages."
-        f"propertyNames.pattern is {schema_pattern!r}, but "
-        f"EXEC_REQ_PACKAGES_KEY_RE is {css.EXEC_REQ_PACKAGES_KEY_RE.pattern!r} "
-        "-- the schema and the hand-rolled parser have drifted."
-    )
-
-
-def test_docstring_execution_requirement_network_subkeys_match_constant():
-    docstring = css._parse_manifest.__doc__
-    m = re.search(r"own two subkeys, ``(\w+)``/``(\w+)``", docstring)
-    assert m is not None, (
-        "_parse_manifest's docstring no longer states "
-        "spec.executionRequirements.network's recognized subkeys in the "
-        "expected '``X``/``Y``' shape -- update this test's extraction "
-        "logic."
-    )
-    assert m.groups() == css.EXEC_REQ_NETWORK_SUBKEYS, (
-        f"_parse_manifest's docstring lists network subkeys as "
-        f"{m.groups()}, but EXEC_REQ_NETWORK_SUBKEYS is "
-        f"{css.EXEC_REQ_NETWORK_SUBKEYS} -- a field was added/renamed in "
-        "one but not the other."
-    )
+# Issue #758: test_docstring_execution_requirement_packages_key_pattern_names_constant,
+# test_execution_requirement_packages_key_pattern_matches_schema, and
+# test_docstring_execution_requirement_network_subkeys_match_constant are
+# retired together -- all three drift-guarded a hand-duplicated copy
+# (EXEC_REQ_PACKAGES_KEY_RE, and _parse_manifest's own docstring prose for
+# network's subkeys) against skill-metadata.schema.json's own
+# executionRequirementsPackages.propertyNames.pattern /
+# executionRequirementsNetwork.properties. This migration deletes
+# EXEC_REQ_PACKAGES_KEY_RE and _parse_manifest entirely: both shapes are
+# now enforced solely by jsonschema.Draft202012Validator reading the
+# schema directly, so there is no second, hand-maintained copy left to
+# drift from the schema -- the class of bug these tests existed to catch
+# has no second side anymore.
 
 
 def test_execution_requirements_checks_fail_when_sidecar_unreadable(tmp_path):
@@ -6142,7 +5908,7 @@ def test_execution_requirements_nesting_never_flagged_as_malformed_top_level(tmp
     )
     by = _by_name(css.check_shape(d))
     assert by["manifest-parsable"].passed is True
-    assert by["manifest-parsable"].evidence == "no malformed lines"
+    assert by["manifest-parsable"].evidence == "valid"
     assert by["execution-requirements-well-formed"].passed is True
     assert css.main([str(d)]) == 0
     assert by["experimental-stable-compatible"].passed is True
@@ -6179,12 +5945,13 @@ def _write_skill_at_repo_root(tmp_path, **kwargs):
 
 
 def test_execution_requirements_packages_tab_indented_item_is_malformed_not_silently_empty(tmp_path):
-    # Finding 1 (CRITICAL): a list header opened ("pip:", blank value) but
-    # its own item line is indented with a TAB, so the strict
-    # EXEC_REQ_TOOLS_LIST_ITEM_RE (literal SPACE characters only) never
-    # matches it. Before the fix, this silently finalized packages.pip as
-    # [] -- indistinguishable from the package never having been declared
-    # at all -- defeating the allowlist gate for any sidecar using a tab.
+    # Issue #758: this fixture used to guard the hand-rolled parser's own
+    # tab-indentation blind spot (Finding 1, CRITICAL). Real YAML rejects
+    # a tab used for indentation outright (YAML forbids tabs in block
+    # indentation), so the whole sidecar is now unreadable via
+    # manifest_unusable -- a real, disclosed strengthening (fails closed
+    # via the sidecar-unreadable path, not a silently-empty packages.pip),
+    # not a regression.
     skill_dir, _repo_root = _write_skill_at_repo_root(tmp_path)
     d = _write_exec_req_sidecar(
         skill_dir, "  executionRequirements:\n    packages:\n      pip:\n\t- some-unapproved-package\n"
@@ -6192,20 +5959,16 @@ def test_execution_requirements_packages_tab_indented_item_is_malformed_not_sile
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
-    assert "malformed packages entry" in result.evidence
-    assert "some-unapproved-package" in result.evidence
+    assert "unreadable: ScannerError" in result.evidence
     assert css.main([str(d)]) == 1
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.malformed_execution_requirement_packages_items == ["- some-unapproved-package"]
-    # The malformed item must NOT silently survive into the parsed list --
-    # pip stays [] (an attempted-but-rejected item, not a declared one),
-    # matching every other malformed-item case's own contract.
-    assert parsed.root["spec"]["executionRequirements"]["packages"]["pip"] == []
 
 
 def test_execution_requirements_packages_underindented_item_is_malformed_not_silently_empty(tmp_path):
     # Finding 1's second reproduction: 2 spaces (fewer than the required
-    # 6+), no tab involved -- confirms the fix is not tab-specific.
+    # 6+), no tab involved. Real YAML treats this dedent back past the
+    # packages/pip mapping's own indent as a genuine syntax error too --
+    # the whole sidecar is unreadable, the same disclosed strengthening as
+    # the tab-indented sibling test above.
     skill_dir, _repo_root = _write_skill_at_repo_root(tmp_path)
     d = _write_exec_req_sidecar(
         skill_dir, "  executionRequirements:\n    packages:\n      pip:\n  - some-unapproved-package\n"
@@ -6213,10 +5976,8 @@ def test_execution_requirements_packages_underindented_item_is_malformed_not_sil
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
     assert result.passed is False
-    assert "malformed packages entry" in result.evidence
+    assert "unreadable: ParserError" in result.evidence
     assert css.main([str(d)]) == 1
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.malformed_execution_requirement_packages_items == ["- some-unapproved-package"]
 
 
 def test_execution_requirements_packages_misindented_item_regression_does_not_break_legitimate_shapes(tmp_path):
@@ -6239,401 +6000,150 @@ def test_execution_requirements_packages_misindented_item_regression_does_not_br
     )
     by = _by_name(css.check_shape(d))
     assert by["execution-requirements-well-formed"].passed is True
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.malformed_execution_requirement_packages_items == []
-    assert parsed.root["spec"]["executionRequirements"]["packages"] == {"pip": ["requests"], "npm": ["left-pad"]}
 
 
-def test_execution_requirements_packages_trailing_document_marker_not_misindented_item(tmp_path):
-    # CodeRabbit finding (PR #1120 review): EXEC_REQ_PACKAGES_MISINDENTED_
-    # ITEM_RE's own leading "[ \t]*" is zero-or-more (deliberately looser
-    # than the well-formed-item regex, to catch an under-indented item --
-    # see the sibling test above), so a column-0 "---" also matched it
-    # while the packages list was still open, misrouting a legitimate
-    # trailing YAML document marker into malformed_exec_packages_items and
-    # spuriously failing execution-requirements-well-formed for an
-    # otherwise valid sidecar.
+def test_execution_requirements_packages_trailing_document_marker_fails_closed(tmp_path):
+    # Issue #758: this test used to assert (as
+    # test_execution_requirements_packages_trailing_document_marker_not_misindented_item)
+    # that a trailing "---" is harmlessly ignored -- true only of the
+    # hand-rolled parser's own line-scanning approach, which never modeled
+    # YAML's multi-document stream semantics at all. Real YAML treats a
+    # bare "---" as the start of a SECOND document; yaml.safe_load only
+    # ever accepts a single-document stream, so this now raises
+    # ComposerError -- unreadable via manifest_unusable. This is the
+    # spec-correct behavior a real YAML parser gives any caller, not a
+    # gitapex-specific regression (no committed skills/*/metadata/gitapex.yaml
+    # in this repository carries a trailing "---" today).
     skill_dir, _repo_root = _write_skill_at_repo_root(tmp_path)
     d = _write_exec_req_sidecar(
         skill_dir, "  executionRequirements:\n    packages:\n      pip:\n        - somepkg\n---\n"
     )
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
-    assert result.passed is True, result.evidence
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.malformed_execution_requirement_packages_items == []
-    assert parsed.root["spec"]["executionRequirements"]["packages"] == {"pip": ["somepkg"]}
+    assert result.passed is False
+    assert "unreadable: ComposerError" in result.evidence
 
 
-def test_execution_requirements_packages_stray_column_zero_dash_not_misindented_item(tmp_path):
-    # Companion to the document-marker regression above: a genuine
-    # column-0 "- stray" line (not a document marker, not an attempted
-    # list item at any real indent) must also fall through to its own
-    # correct handling -- the generic top-level malformed-line catch-all
-    # -- rather than being misreported as a malformed *packages* item.
+def test_execution_requirements_packages_stray_column_zero_dash_fails_closed(tmp_path):
+    # Issue #758: companion to the document-marker case above -- a genuine
+    # column-0 "- stray" line following a nested mapping is invalid YAML
+    # (the document root is a mapping, not a sequence), so real YAML
+    # raises ParserError rather than the hand-rolled parser's own
+    # line-by-line "unmatched top-level line" tolerance.
     skill_dir, _repo_root = _write_skill_at_repo_root(tmp_path)
     d = _write_exec_req_sidecar(
         skill_dir, "  executionRequirements:\n    packages:\n      pip:\n        - somepkg\n- stray\n"
     )
     by = _by_name(css.check_shape(d))
     result = by["execution-requirements-well-formed"]
-    assert result.passed is True, result.evidence
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.malformed_execution_requirement_packages_items == []
+    assert result.passed is False
+    assert "unreadable: ParserError" in result.evidence
 
 
 def test_execution_requirements_packages_item_trailing_comment_stripped_from_name(tmp_path):
     # Finding 6 (MEDIUM): "- requests  # transitively needed" must parse to
     # the package name "requests", not "requests  # transitively needed".
+    # Real YAML strips a trailing unquoted comment natively.
     skill_dir, _repo_root = _write_skill_at_repo_root(tmp_path)
     d = _write_exec_req_sidecar(
         skill_dir, "  executionRequirements:\n    packages:\n      pip:\n        - requests  # transitively needed\n"
     )
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.root["spec"]["executionRequirements"]["packages"]["pip"] == ["requests"]
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True
+    assert result.evidence == "packages.pip declared"
 
 
 def test_execution_requirements_packages_item_quoted_hash_not_treated_as_comment(tmp_path):
     # Regression guard alongside Finding 6's own fix: a QUOTED item's own
     # literal "#" must never be stripped -- only an unquoted item's
-    # trailing comment is real-YAML comment syntax.
+    # trailing comment is real-YAML comment syntax. Real YAML already
+    # keeps this distinction natively.
     skill_dir, _repo_root = _write_skill_at_repo_root(tmp_path)
     d = _write_exec_req_sidecar(
         skill_dir, '  executionRequirements:\n    packages:\n      pip:\n        - "my#package"\n'
     )
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.root["spec"]["executionRequirements"]["packages"]["pip"] == ["my#package"]
+    by = _by_name(css.check_shape(d))
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is True
+    assert result.evidence == "packages.pip declared"
 
 
-def test_exec_req_packages_key_re_fullmatch_rejects_trailing_newline():
-    # Finding 8 (LOW): Python's own "$" (unlike JSON Schema/ECMA-262's own
-    # "$", which EXEC_REQ_PACKAGES_KEY_RE's pattern text is hand-duplicated
-    # from) also matches immediately before a trailing "\n" under .match().
-    # The parser's own call site must not inherit that quirk. Verified at
-    # the call site's own fullmatch() mechanism directly, not through
-    # _parse_manifest (whose lines are always rstrip()-ped before reaching
-    # this regex, so a "\n"-suffixed key is not otherwise reachable there
-    # -- this is a direct-usage/defense-in-depth guard, not a reproduction
-    # through the full parsing pipeline).
-    assert css.EXEC_REQ_PACKAGES_KEY_RE.match("pip\n") is not None  # the quirk .match() alone still has
-    assert css.EXEC_REQ_PACKAGES_KEY_RE.fullmatch("pip\n") is None  # fullmatch() closes it
-    assert css.EXEC_REQ_PACKAGES_KEY_RE.fullmatch("pip") is not None  # ordinary case unaffected
+# Issue #758: test_exec_req_packages_key_re_fullmatch_rejects_trailing_newline
+# and test_exec_req_packages_key_pattern_still_matches_schema_after_fullmatch_fix
+# are retired together -- both guarded EXEC_REQ_PACKAGES_KEY_RE's own
+# fullmatch()-vs-match() call-site fix (Finding 8) and its pattern-text
+# parity with the schema. EXEC_REQ_PACKAGES_KEY_RE is deleted entirely by
+# this migration: ecosystem-key shape is enforced solely by
+# jsonschema.Draft202012Validator reading executionRequirementsPackages.
+# propertyNames.pattern directly (see
+# test_execution_requirements_packages_malformed_ecosystem_key_fails /
+# test_execution_requirements_packages_quoted_invalid_ecosystem_key_fails),
+# which has no fullmatch()-vs-match() distinction to get wrong in the
+# first place -- jsonschema's own "pattern" keyword already anchors via
+# re.search over the whole string per the JSON Schema spec's own defined
+# semantics, not a hand-written regex call site this file must audit.
 
 
-def test_exec_req_packages_key_pattern_still_matches_schema_after_fullmatch_fix():
-    # Companion to test_execution_requirement_packages_key_pattern_matches_schema:
-    # Finding 8 was deliberately implemented as a fullmatch() call-site
-    # change rather than a "$" -> "\\Z" edit to EXEC_REQ_PACKAGES_KEY_RE's
-    # own pattern text, specifically so this drift guard keeps passing
-    # unmodified (a "\\Z" edit would desync .pattern from the schema's own
-    # ECMA-262 "$", which does not support "\\Z" at all). Asserted here
-    # too so a future edit that reintroduces a "\\Z"-in-source approach
-    # gets caught by this test file, not just noticed via schema drift.
-    schema_path = _SCRIPT_PATH.parent.parent / "references" / "skill-metadata.schema.json"
-    schema = json.loads(schema_path.read_text(encoding="utf-8"))
-    schema_pattern = schema["$defs"]["executionRequirementsPackages"]["propertyNames"]["pattern"]
-    assert schema_pattern == css.EXEC_REQ_PACKAGES_KEY_RE.pattern
-    assert "\\Z" not in css.EXEC_REQ_PACKAGES_KEY_RE.pattern
-
-
-def test_execution_requirements_packages_duplicate_items_currently_not_flagged_known_gap(tmp_path):
-    # Finding 8's second half (disclosed, not fixed): $defs.packageList in
-    # skill-metadata.schema.json declares "uniqueItems": true, but this
-    # checker does not enforce it yet -- see the comment directly above
-    # the "for key in packages" loop in _execution_requirements_checks.
-    # Characterization test: locks in today's documented behavior (a
-    # same-ecosystem duplicate item currently still passes well-formed) so
-    # a silent behavior change either direction is caught by this test,
-    # not just discovered later.
+def test_execution_requirements_packages_duplicate_items_now_flagged(tmp_path):
+    # Issue #758: this test used to characterize a known, disclosed gap
+    # (Finding 8's second half) -- $defs.packageList's own "uniqueItems":
+    # true was declared in the schema but not enforced by the hand-rolled
+    # checker. The migration onto jsonschema.Draft202012Validator closes
+    # that gap for free: a same-ecosystem duplicate item now correctly
+    # fails well-formed. A real, disclosed strengthening, not a
+    # regression.
     skill_dir, _repo_root = _write_skill_at_repo_root(tmp_path)
     d = _write_exec_req_sidecar(
         skill_dir, "  executionRequirements:\n    packages:\n      pip:\n        - pyyaml\n        - pyyaml\n"
     )
     by = _by_name(css.check_shape(d))
-    assert by["execution-requirements-well-formed"].passed is True
-    parsed = css._parse_manifest((d / "metadata/gitapex.yaml").read_text(encoding="utf-8"))
-    assert parsed.root["spec"]["executionRequirements"]["packages"]["pip"] == ["pyyaml", "pyyaml"]
+    result = by["execution-requirements-well-formed"]
+    assert result.passed is False
+    assert "packages/pip" in result.evidence
+    assert "has non-unique elements" in result.evidence
 
 
-def test_null_vs_empty_mapping_matches_real_yaml_semantics():
-    # Differential test against a real YAML parser (issue #356, ACM row
-    # 2's own proof method), across every gated mapping-valued block: a
-    # blank block header must classify as None here exactly when PyYAML
-    # itself resolves the same YAML text to null, and as a real dict here
-    # exactly when PyYAML resolves it to a real (non-null) mapping. Not
-    # run against spec.references/skillDependencies.requires-relatedTo/
-    # executionRequirements.tools.read-write-shell -- those are list-
-    # valued, and this parser's blank-list-header-means-empty-list
-    # semantics are deliberately unchanged (see the module docstring's
-    # own "This distinction does NOT extend to list-valued keys" note).
-    import yaml
-
-    manifest_prefix = (
-        "apiVersion: gitapex.io/v1alpha1\n"
-        "kind: SkillMetadata\n"
-        "metadata:\n"
-        "  name: skill\n"
-        "spec:\n"
-        "  portability: Portable\n"
-        "  capabilityAssumption: Broad\n"
-    )
-    cases = [
-        ("skillDependencies", "  skillDependencies:\n"),
-        ("skillDependencies", "  skillDependencies:\n    requires: []\n"),
-        ("lifecycle", "  lifecycle:\n"),
-        ("lifecycle", "  lifecycle:\n    renamedFrom: old-name\n"),
-        ("executionRequirements", "  executionRequirements:\n"),
-        ("executionRequirements", "  executionRequirements:\n    tools:\n      read: []\n"),
-        ("executionRequirements", "  executionRequirements:\n    packages:\n      pip: []\n"),
-    ]
-    for key, body in cases:
-        text = manifest_prefix + body
-        real_value = yaml.safe_load(text)["spec"].get(key)
-        parsed_value = css._parse_manifest(text).root["spec"][key]
-        if real_value is None:
-            assert parsed_value is None, (key, body, parsed_value)
-        else:
-            assert isinstance(real_value, dict), (key, body)
-            assert isinstance(parsed_value, dict), (key, body, parsed_value)
+# Issue #758: test_null_vs_empty_mapping_matches_real_yaml_semantics,
+# test_non_string_scalar_detection_matches_pyyaml_for_representative_inputs,
+# and test_references_mapping_item_matches_pyyaml_for_representative_inputs
+# are retired together. All three were differential tests asserting that
+# _parse_manifest's own hand-rolled null/empty-mapping, scalar-type, and
+# mapping-item parsing agreed with what a real YAML parser (PyYAML)
+# resolves the same text to -- guarding against exactly the class of
+# silent divergence #205/#356/#518/#1395 found. This migration replaces
+# _parse_manifest with yaml.safe_load itself: there is no longer a second,
+# hand-rolled parsing path to diverge from PyYAML, so a differential test
+# comparing the two has nothing left to compare. Every well-formed/
+# malformed-shape behavior these tests exercised is still covered by this
+# file's ordinary check_shape()-level test groups (references-well-formed,
+# skill-dependencies-well-formed, lifecycle-well-formed,
+# execution-requirements-well-formed), which now assert directly against
+# real YAML's own resolution -- the two known, previously-disclosed
+# divergences these tests recorded (exponential-notation floats reading
+# as strings under PyYAML's SafeLoader; an unquoted references.summary/
+# outcome subfield value being read as a raw string rather than a typed
+# scalar) are moot for the same reason: the checker itself now IS PyYAML,
+# so there is no second behavior left to diverge from it.
 
 
-def test_non_string_scalar_detection_matches_pyyaml_for_representative_inputs():
-    # Broader differential test against PyYAML (issue #518 ACM row 1),
-    # extending test_null_vs_empty_mapping_matches_real_yaml_semantics'
-    # own technique from the block/mapping case above to the scalar-type
-    # case: _is_non_string_plain_scalar decides whether an unquoted list
-    # item (spec.references; spec.skillDependencies.requires/relatedTo;
-    # spec.executionRequirements.tools.read/write/shell) is a real YAML
-    # string or resolves to null/boolean/numeric (issue #356's own named
-    # gap) -- for each representative raw item text below, this must
-    # agree with what yaml.safe_load itself resolves a one-item list built
-    # from the same raw text to.
-    #
-    # Deliberately excludes two known-divergent classes, both already
-    # named at YAML_NON_STRING_SCALAR_RE's own definition as intentional,
-    # not gaps this test should flag: YAML 1.1's yes/no/on/off booleans
-    # (this parser deliberately treats them as ordinary strings, since
-    # they are also common English words a legitimate tag/reference could
-    # contain) and exponential-notation floats, where this run confirmed a
-    # real, separate divergence -- "-1.5e10" resolves to a YAML *string*
-    # under PyYAML's own default SafeLoader (not a float, for reasons
-    # internal to PyYAML's resolver), while this parser's regex classifies
-    # it as numeric. Chasing full parity with PyYAML's own float grammar
-    # is a separate, unrequested scope from issue #518's ACM (a stricter
-    # rejection of an unlikely-in-practice reference string, not the
-    # silent-acceptance failure mode #356 and this row are about); noted
-    # here rather than silently dropped, per this parser's own "not a full
-    # YAML string lexer" humility elsewhere in this file.
-    import yaml
-
-    cases = [
-        "true",
-        "True",
-        "TRUE",
-        "false",
-        "False",
-        "FALSE",
-        "null",
-        "Null",
-        "NULL",
-        "~",
-        "123",
-        "-123",
-        "+123",
-        "1.5",
-        "-1.5",
-        ".inf",
-        "-.inf",
-        ".nan",
-        "true # rationale",
-        "123 # a note",
-        "true#tag",
-        "a-real-tag",
-        "not-a-bool-word",
-    ]
-    for raw in cases:
-        real_value = yaml.safe_load(f"- {raw}\n")[0]
-        real_is_string = isinstance(real_value, str)
-        parsed_is_non_string = css._is_non_string_plain_scalar(raw)
-        assert (not real_is_string) == parsed_is_non_string, (raw, real_value, type(real_value).__name__)
-
-
-def test_references_mapping_item_matches_pyyaml_for_representative_inputs():
-    # Differential test against PyYAML (issue #1395, completing #518 ACM row
-    # 1): the two differential tests above cover the null/empty block-header
-    # case and scalar-*list-item* type classification, but neither exercises
-    # spec.references' own mapping-item shape -- exactly the gap #205 named,
-    # stating "a differential gate ... would have caught Repairs 3 and 6
-    # immediately" had one existed. For each representative full
-    # references-list item below, this parser's own parsed item dict must
-    # equal what yaml.safe_load resolves the same manifest text's
-    # spec.references to.
-    import yaml
-
-    manifest_prefix = (
-        "apiVersion: gitapex.io/v1alpha1\n"
-        "kind: SkillMetadata\n"
-        "metadata:\n"
-        "  name: skill\n"
-        "spec:\n"
-        "  portability: Portable\n"
-        "  capabilityAssumption: Broad\n"
-        "  references:\n"
-    )
-    cases = [
-        (
-            "plain unquoted fields",
-            "    - kind: decision\n"
-            "      anchor: https://github.com/tvna/gitapex/issues/25\n"
-            "      summary: fixed this\n",
-        ),
-        (
-            "escaped double-quote (Repair 3's own regression class)",
-            "    - kind: decision\n"
-            "      anchor: https://github.com/tvna/gitapex/issues/25\n"
-            '      summary: "a \\"quoted\\" phrase"\n',
-        ),
-        (
-            "escaped backslash",
-            "    - kind: decision\n"
-            "      anchor: https://github.com/tvna/gitapex/issues/25\n"
-            '      summary: "a \\\\literal backslash\\\\ here"\n',
-        ),
-        (
-            "escaped newline inside a quoted value (this field's own multi-line-content case -- the parser has no block-scalar '|'/'>' support, so an embedded newline can only arrive via a quoted escape)",
-            "    - kind: decision\n"
-            "      anchor: https://github.com/tvna/gitapex/issues/25\n"
-            '      summary: "line one\\nline two"\n',
-        ),
-        (
-            "nested outcome mapping, plain and quoted-escaped subfields",
-            "    - kind: audit\n"
-            "      anchor: https://github.com/tvna/gitapex/issues/25\n"
-            "      summary: audited\n"
-            "      outcome:\n"
-            "        verdict: confirmed\n"
-            '        note: "a \\"quoted\\" note"\n',
-        ),
-    ]
-    for label, body in cases:
-        text = manifest_prefix + body
-        real_value = yaml.safe_load(text)["spec"]["references"]
-        parsed_value = css._parse_manifest(text).root["spec"]["references"]
-        assert real_value == parsed_value, (label, real_value, parsed_value)
-
-    # Deliberately excluded, and named here rather than silently asserted
-    # away (same discipline test_non_string_scalar_detection_matches_
-    # pyyaml_for_representative_inputs' own docstring already applies to
-    # its own two known divergences): unlike a bare scalar *list item*
-    # elsewhere in this file, an unquoted kind/anchor/summary/outcome-
-    # subfield VALUE inside a references mapping item is never passed
-    # through _is_non_string_plain_scalar -- it is always read as a raw
-    # string via _unquote. Real YAML instead resolves an unquoted
-    # "true"/"123"/etc. value to its own typed scalar (bool/int/...). This
-    # is a genuine, previously-undocumented divergence from PyYAML found
-    # while writing this test; closing it is a separate, unrequested scope
-    # from this issue's own ACM (narrowing free-prose summary/outcome
-    # fields is a bigger behavior change than a differential-test addition
-    # should make silently), so it is recorded here instead of fixed.
-    text = manifest_prefix + (
-        "    - kind: decision\n      anchor: https://github.com/tvna/gitapex/issues/25\n      summary: true\n"
-    )
-    real_summary = yaml.safe_load(text)["spec"]["references"][0]["summary"]
-    parsed_summary = css._parse_manifest(text).root["spec"]["references"][0]["summary"]
-    assert real_summary is True
-    assert parsed_summary == "true"
-
-
-# ---- _parse_manifest docstring recognized-key drift guard (issue #518 ACM row 4) ----
+# ---- _parse_manifest docstring recognized-key drift guard: retired (issue #758) ----
 #
-# _parse_manifest's docstring separately prose-lists each gated block's
-# recognized keys (spec.references' item subkeys, spec.skillDependencies',
-# spec.lifecycle's, spec.executionRequirements.tools') -- nothing
-# previously checked that prose against the real constants
-# (REFERENCES_ITEM_SUBKEYS, SKILL_DEPENDENCY_SUBKEYS, LIFECYCLE_SUBKEYS/
-# LIFECYCLE_SCALAR_KEYS, EXEC_REQ_TOOLS_SUBKEYS) a future field addition
-# updates -- exactly the drift #244 repair 4 found (three docstring
-# passages still describing spec.lifecycle as experimental/deprecated-only
-# after stable/renamedFrom were added). Modeled on
-# test_skill_dep_list_item_re_indent_matches_its_docstrings in
-# tests/test_gitapex_skill_metadata_sidecar.py (same technique -- extract prose,
-# compare to the real constant -- applied to a recognized-key list instead
-# of an indent numeral).
-
-
-def test_docstring_references_item_subkeys_match_constant():
-    docstring = css._parse_manifest.__doc__
-    start = docstring.index("Recognized keys:")
-    end = docstring.index(". A key inside", start)
-    tokens = tuple(re.findall(r"``(\w+)``", docstring[start:end]))
-    assert tokens == css.REFERENCES_ITEM_SUBKEYS, (
-        "_parse_manifest's docstring lists spec.references item keys as "
-        f"{tokens}, but REFERENCES_ITEM_SUBKEYS is "
-        f"{css.REFERENCES_ITEM_SUBKEYS} -- a field was added/renamed in "
-        "one but not the other."
-    )
-
-
-def test_docstring_skill_dependency_subkeys_match_constant():
-    docstring = css._parse_manifest.__doc__
-    m = re.search(r"recognized subkeys,\s*``(\w+)``\s*and\s*``(\w+)``", docstring)
-    assert m is not None, (
-        "_parse_manifest's docstring no longer states "
-        "spec.skillDependencies' recognized subkeys in the expected "
-        "'``X`` and ``Y``' shape -- update this test's extraction logic."
-    )
-    assert m.groups() == css.SKILL_DEPENDENCY_SUBKEYS, (
-        f"_parse_manifest's docstring lists spec.skillDependencies "
-        f"subkeys as {m.groups()}, but SKILL_DEPENDENCY_SUBKEYS is "
-        f"{css.SKILL_DEPENDENCY_SUBKEYS} -- a field was added/renamed in "
-        "one but not the other."
-    )
-
-
-def test_docstring_lifecycle_keys_match_constants():
-    docstring = css._parse_manifest.__doc__
-    block_match = re.search(r"recognized block sub-keys --\s*``(\w+)``,\s*``(\w+)``,\s*``(\w+)``", docstring)
-    assert block_match is not None, (
-        "_parse_manifest's docstring no longer states spec.lifecycle's "
-        "recognized block sub-keys in the expected shape -- update this "
-        "test's extraction logic."
-    )
-    assert block_match.groups() == css.LIFECYCLE_SUBKEYS, (
-        f"_parse_manifest's docstring lists spec.lifecycle block sub-keys "
-        f"as {block_match.groups()}, but LIFECYCLE_SUBKEYS is "
-        f"{css.LIFECYCLE_SUBKEYS} -- a field was added/renamed in one but "
-        "not the other."
-    )
-
-    scalar_match = re.search(r"plain scalar key,\s*``(\w+)``", docstring)
-    assert scalar_match is not None, (
-        "_parse_manifest's docstring no longer states spec.lifecycle's "
-        "recognized plain scalar key in the expected shape -- update this "
-        "test's extraction logic."
-    )
-    assert (scalar_match.group(1),) == css.LIFECYCLE_SCALAR_KEYS, (
-        f"_parse_manifest's docstring lists spec.lifecycle's scalar key as "
-        f"{scalar_match.group(1)!r}, but LIFECYCLE_SCALAR_KEYS is "
-        f"{css.LIFECYCLE_SCALAR_KEYS} -- a field was added/renamed in one "
-        "but not the other."
-    )
-
-
-def test_docstring_execution_requirement_tools_subkeys_match_constant():
-    docstring = css._parse_manifest.__doc__
-    m = re.search(r"6-space indent:\s*``(\w+)``/``(\w+)``/``(\w+)``", docstring)
-    assert m is not None, (
-        "_parse_manifest's docstring no longer states "
-        "spec.executionRequirements.tools' recognized subkeys in the "
-        "expected '``X``/``Y``/``Z``' shape -- update this test's "
-        "extraction logic."
-    )
-    assert m.groups() == css.EXEC_REQ_TOOLS_SUBKEYS, (
-        f"_parse_manifest's docstring lists tools subkeys as "
-        f"{m.groups()}, but EXEC_REQ_TOOLS_SUBKEYS is "
-        f"{css.EXEC_REQ_TOOLS_SUBKEYS} -- a field was added/renamed in one "
-        "but not the other."
-    )
+# This block used to drift-guard four of _parse_manifest's own docstring
+# passages (spec.references' item subkeys, spec.skillDependencies',
+# spec.lifecycle's block/scalar keys, spec.executionRequirements.tools')
+# against the matching REFERENCES_ITEM_SUBKEYS/SKILL_DEPENDENCY_SUBKEYS/
+# LIFECYCLE_SUBKEYS/LIFECYCLE_SCALAR_KEYS/EXEC_REQ_TOOLS_SUBKEYS constants
+# -- guarding against exactly the kind of prose-vs-code desync #244 repair
+# 4 found. _parse_manifest itself, and the hand-rolled docstring prose it
+# carried, are deleted entirely by this migration: shape validation now
+# reads skill-metadata.schema.json directly (jsonschema.Draft202012Validator),
+# so there is no second, hand-maintained prose copy left to desync from the
+# constants -- the class of bug this block existed to catch has no second
+# side anymore. REFERENCES_ITEM_SUBKEYS/SKILL_DEPENDENCY_SUBKEYS/
+# LIFECYCLE_SUBKEYS/LIFECYCLE_SCALAR_KEYS/EXEC_REQ_TOOLS_SUBKEYS remain in
+# use for check_shape()'s own "declared" evidence-string composition, still
+# covered by this file's ordinary well-formed test groups.
 
 
 # ---- Illustrative model identifier (docs/skill-authoring-standards.md rule 1) ----

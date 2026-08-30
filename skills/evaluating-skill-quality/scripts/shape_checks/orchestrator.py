@@ -19,8 +19,9 @@ recovers the retired script.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from pathlib import Path
+
+import jsonschema
 
 from shape_checks.citation_checks import _external_citation_declaration_offenders
 from shape_checks.constants import (
@@ -30,7 +31,6 @@ from shape_checks.constants import (
     DESCRIPTION_MAX_CHARS,
     EXPECTED_API_VERSION,
     EXPECTED_KIND,
-    EXTERNAL_CITATION_PATH_RE,
     EXTERNAL_CITATION_ROLES,
     NAME_MAX_CHARS,
     NAME_RE,
@@ -51,6 +51,7 @@ from shape_checks.links_portability import (
     _is_ignorable,
     _out_of_skill_link_targets,
 )
+from shape_checks.schema import _errors_under, _join_schema_errors
 
 
 def _skill_md_read_result(skill_md: Path) -> tuple[str | None, CheckResult]:
@@ -145,7 +146,7 @@ def _sidecar_unreadable_results(evidence: str) -> list[CheckResult]:
     all (``manifest is None`` in ``check_shape``), extracted verbatim --
     every sidecar-derived check FAILs with the same evidence string."""
     return [
-        CheckResult("manifest-parsable", False, f"{SIDECAR_RELATIVE_PATH} has no malformed top-level lines", evidence),
+        CheckResult("manifest-parsable", False, f"{SIDECAR_RELATIVE_PATH} is valid YAML", evidence),
         CheckResult(
             "manifest-envelope",
             False,
@@ -258,67 +259,56 @@ def _sidecar_unreadable_results(evidence: str) -> list[CheckResult]:
     ]
 
 
-def _dependency_policy_declared_result(spec_is_mapping: bool, spec_raw: object, spec: dict[str, object]) -> CheckResult:
-    """The ``dependency-policy-declared`` check, extracted verbatim from
-    ``check_shape``."""
+def _dependency_policy_declared_result(
+    spec_is_mapping: bool,
+    spec_raw: object,
+    spec: dict[str, object],
+    schema_errors: list[jsonschema.exceptions.ValidationError],
+) -> CheckResult:
+    """The ``dependency-policy-declared`` check (schema-backed, issue
+    #758)."""
     dependency_policy_declared_rule = f"spec.dependencyPolicy, if present, is one of {DEPENDENCY_POLICY_LEVELS}"
-    dependency_policy = spec.get("dependencyPolicy")
     if not spec_is_mapping:
         # Same precondition failure portability-declared/
         # capability-assumption-declared already report in check_shape --
         # "not declared (optional)" would misreport a non-mapping
         # spec as the ordinary optional-and-absent case, mirroring
         # references-well-formed's own guard below.
-        result = CheckResult(
+        return CheckResult(
             "dependency-policy-declared",
             False,
             dependency_policy_declared_rule,
             f"spec is not a mapping: {spec_raw!r}",
         )
-    elif dependency_policy is None:
-        result = CheckResult(
+    if "dependencyPolicy" not in spec:
+        return CheckResult(
             "dependency-policy-declared",
             True,
             dependency_policy_declared_rule,
             "not declared (optional, treated as StdlibOnly-equivalent)",
         )
-    else:
-        result = CheckResult(
-            "dependency-policy-declared",
-            dependency_policy in DEPENDENCY_POLICY_LEVELS,
-            dependency_policy_declared_rule,
-            repr(dependency_policy),
+    errors = _errors_under(schema_errors, "spec", "dependencyPolicy")
+    if errors:
+        return CheckResult(
+            "dependency-policy-declared", False, dependency_policy_declared_rule, _join_schema_errors(errors)
         )
-    return result
+    return CheckResult(
+        "dependency-policy-declared", True, dependency_policy_declared_rule, repr(spec.get("dependencyPolicy"))
+    )
 
 
 def _references_well_formed_result(
     spec_is_mapping: bool,
     spec_raw: object,
-    malformed_reference_items: list[str],
-    unknown_reference_item_keys: list[str],
+    schema_errors: list[jsonschema.exceptions.ValidationError],
     references: object,
 ) -> CheckResult:
-    """The ``references-well-formed`` check, extracted verbatim from
-    ``check_shape``."""
+    """The ``references-well-formed`` check (schema-backed, issue #758)."""
     references_well_formed_rule = (
         "spec.references, if present, is a non-empty list of "
         "item mappings, each with kind/anchor/summary (and no "
         f"unrecognized key), summary <= {REFERENCES_ENTRY_MAX_CHARS} "
         "chars"
-    )
-    # Annotated (rather than left implicit like an ordinary local lambda)
-    # solely so mypy strict's disallow_untyped_calls does not flag the
-    # `all(is_ref_item(r) for r in references)` call below as untyped --
-    # gitapex_check_skill_shape.py's own pre-decomposition pyproject.toml
-    # override already disabled no-untyped-call for this exact lambda
-    # shape; this module has no such override, so the type is spelled out
-    # explicitly instead. Zero behavior change either way.
-    is_ref_item: Callable[[object], bool] = lambda r: (  # noqa: E731 -- local, single use
-        isinstance(r, dict)
-        and isinstance(r.get("kind"), str)
-        and isinstance(r.get("anchor"), str)
-        and isinstance(r.get("summary"), str)
     )
     if not spec_is_mapping:
         # spec itself failed to parse as a mapping (e.g. "spec:
@@ -326,54 +316,17 @@ def _references_well_formed_result(
         # portability-declared/capability-assumption-declared
         # already report in check_shape -- "not declared" would
         # misreport this as the ordinary optional-and-absent case.
-        result = CheckResult(
+        return CheckResult(
             "references-well-formed", False, references_well_formed_rule, f"spec is not a mapping: {spec_raw!r}"
         )
-    elif malformed_reference_items:
-        # An item whose own opening line was unrecognizable, whose
-        # first key was unrecognized, whose indent didn't match the
-        # rest of its own list, or that was missing a required
-        # field by the time it closed was already flagged by the
-        # parser -- fail loudly instead of reporting on whatever
-        # partial item it was excluded in favor of, even if the
-        # rest of the list otherwise looks clean.
-        count = len(malformed_reference_items)
-        result = CheckResult(
-            "references-well-formed",
-            False,
-            references_well_formed_rule,
-            f"{count} malformed entr{'y' if count == 1 else 'ies'}: {malformed_reference_items[0]!r}",
-        )
-    elif unknown_reference_item_keys:
-        count = len(unknown_reference_item_keys)
-        result = CheckResult(
-            "references-well-formed",
-            False,
-            references_well_formed_rule,
-            f"{count} unknown key{'' if count == 1 else 's'}: {unknown_reference_item_keys[0]!r}",
-        )
-    elif references is None:
-        result = CheckResult("references-well-formed", True, references_well_formed_rule, "not declared (optional)")
-    elif not (isinstance(references, list) and references and all(is_ref_item(r) for r in references)):
-        ref_evidence = "empty list" if references == [] else f"not a list of item mappings: {references!r}"
-        result = CheckResult("references-well-formed", False, references_well_formed_rule, ref_evidence)
-    else:
-        oversized = [r for r in references if len(r["summary"]) > REFERENCES_ENTRY_MAX_CHARS]
-        if oversized:
-            result = CheckResult(
-                "references-well-formed",
-                False,
-                references_well_formed_rule,
-                f"{len(oversized)} entr{'y' if len(oversized) == 1 else 'ies'} "
-                f"over {REFERENCES_ENTRY_MAX_CHARS} chars: "
-                f"{len(oversized[0]['summary'])} chars, kind="
-                f"{oversized[0].get('kind')!r}",
-            )
-        else:
-            ref_count = len(references)
-            ref_noun = "entry" if ref_count == 1 else "entries"
-            result = CheckResult("references-well-formed", True, references_well_formed_rule, f"{ref_count} {ref_noun}")
-    return result
+    errors = _errors_under(schema_errors, "spec", "references")
+    if errors:
+        return CheckResult("references-well-formed", False, references_well_formed_rule, _join_schema_errors(errors))
+    if references is None:
+        return CheckResult("references-well-formed", True, references_well_formed_rule, "not declared (optional)")
+    ref_count = len(references) if isinstance(references, list) else 0
+    ref_noun = "entry" if ref_count == 1 else "entries"
+    return CheckResult("references-well-formed", True, references_well_formed_rule, f"{ref_count} {ref_noun}")
 
 
 def _references_citation_source(references: object) -> tuple[str, str] | None:
@@ -399,79 +352,58 @@ def _references_citation_source(references: object) -> tuple[str, str] | None:
 def _external_citations_well_formed_result(
     spec_is_mapping: bool,
     spec_raw: object,
-    malformed_external_citation_items: list[str],
-    unknown_external_citation_item_keys: list[str],
+    schema_errors: list[jsonschema.exceptions.ValidationError],
     external_citations: object,
 ) -> tuple[CheckResult, list[dict[str, object]]]:
-    """The ``external-citations-well-formed`` check, extracted verbatim
-    from ``check_shape`` -- also returns the ``external_citations_declared``
-    list the caller needs afterward, populated only on the well-formed-True
-    branch (only a genuinely well-formed list feeds external-citations-
-    resolve/the inline-citation rescue further down, matching how a
-    malformed spec.references never reaches sidecar_citation_sources)."""
+    """The ``external-citations-well-formed`` check (schema-backed, issue
+    #758) -- also returns the ``external_citations_declared`` list the
+    caller needs afterward, populated only on the well-formed-True branch
+    (only a genuinely well-formed list feeds external-citations-resolve/
+    the inline-citation rescue further down, matching how a malformed
+    spec.references never reaches sidecar_citation_sources)."""
     external_citations_well_formed_rule = (
         "spec.externalCitations, if present, is a non-empty list of "
         "item mappings, each with a path rooted at evals/ or docs/ "
         "and a role one of "
         f"{EXTERNAL_CITATION_ROLES}, and no unrecognized key"
     )
-    # Annotated for the same reason ``is_ref_item`` above is: satisfies
-    # mypy strict's disallow_untyped_calls for the
-    # `all(is_ext_citation_item(c) for c in external_citations)` call
-    # below without a module-level override. Zero behavior change.
-    is_ext_citation_item: Callable[[object], bool] = lambda c: (  # noqa: E731 -- local, single use
-        isinstance(c, dict)
-        and isinstance(c.get("path"), str)
-        and bool(EXTERNAL_CITATION_PATH_RE.match(c["path"]))
-        and c.get("role") in EXTERNAL_CITATION_ROLES
-    )
-    external_citations_declared: list[dict[str, object]] = []
     if not spec_is_mapping:
-        result = CheckResult(
-            "external-citations-well-formed",
-            False,
-            external_citations_well_formed_rule,
-            f"spec is not a mapping: {spec_raw!r}",
+        return (
+            CheckResult(
+                "external-citations-well-formed",
+                False,
+                external_citations_well_formed_rule,
+                f"spec is not a mapping: {spec_raw!r}",
+            ),
+            [],
         )
-    elif malformed_external_citation_items:
-        count = len(malformed_external_citation_items)
-        result = CheckResult(
-            "external-citations-well-formed",
-            False,
-            external_citations_well_formed_rule,
-            f"{count} malformed entr{'y' if count == 1 else 'ies'}: {malformed_external_citation_items[0]!r}",
+    errors = _errors_under(schema_errors, "spec", "externalCitations")
+    if errors:
+        return (
+            CheckResult(
+                "external-citations-well-formed",
+                False,
+                external_citations_well_formed_rule,
+                _join_schema_errors(errors),
+            ),
+            [],
         )
-    elif unknown_external_citation_item_keys:
-        count = len(unknown_external_citation_item_keys)
-        result = CheckResult(
-            "external-citations-well-formed",
-            False,
-            external_citations_well_formed_rule,
-            f"{count} unknown key{'' if count == 1 else 's'}: {unknown_external_citation_item_keys[0]!r}",
+    if external_citations is None:
+        return (
+            CheckResult(
+                "external-citations-well-formed", True, external_citations_well_formed_rule, "not declared (optional)"
+            ),
+            [],
         )
-    elif external_citations is None:
-        result = CheckResult(
-            "external-citations-well-formed", True, external_citations_well_formed_rule, "not declared (optional)"
-        )
-    elif not (
-        isinstance(external_citations, list)
-        and external_citations
-        and all(is_ext_citation_item(c) for c in external_citations)
-    ):
-        ext_evidence = (
-            "empty list"
-            if external_citations == []
-            else f"not a list of item mappings with a valid evals/docs path and role: {external_citations!r}"
-        )
-        result = CheckResult("external-citations-well-formed", False, external_citations_well_formed_rule, ext_evidence)
-    else:
-        ext_count = len(external_citations)
-        ext_noun = "entry" if ext_count == 1 else "entries"
-        result = CheckResult(
+    ext_count = len(external_citations) if isinstance(external_citations, list) else 0
+    ext_noun = "entry" if ext_count == 1 else "entries"
+    declared = [c for c in external_citations if isinstance(c, dict)] if isinstance(external_citations, list) else []
+    return (
+        CheckResult(
             "external-citations-well-formed", True, external_citations_well_formed_rule, f"{ext_count} {ext_noun}"
-        )
-        external_citations_declared = external_citations
-    return result, external_citations_declared
+        ),
+        declared,
+    )
 
 
 def _lifecycle_reason_citation_sources(lifecycle_dict: dict[str, object]) -> list[tuple[str, str]]:
