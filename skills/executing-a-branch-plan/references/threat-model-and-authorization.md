@@ -377,6 +377,33 @@ there before this skill relies on that separate hook for anything beyond
 the honest, weaker accounting just given for the plugin-distributed
 variant.
 
+**Issue `#1477` (gate-proposal, retro `#1475` repair 3) closed a related,
+narrower residual risk by routing around this exact asymmetry rather than
+resolving it.** A branch-plan-task subagent had appended a Claude-Session
+URL and a Co-Authored-By trailer naming a model to its own commit message
+-- a hit `hooks/check-bash-safety.sh`'s own `git push` path would only ever
+have *warned* about (advisory, per that scanner's own "surfaces candidates,
+it does not decide" design, since a PR/issue-body hit can legitimately be a
+ratified trailer). No such ratified exception exists for a commit message
+(CONTRIBUTING.md's own PR-body trailer disclosure section states a commit
+message and its kin "stay in scope by default"), and the hit had already reached the
+shared branch and the remote before merge-back review caught it, needing a
+history rewrite and a force-with-lease push to fix. The row-1 ACM entry for
+that issue asked whether a hook enforcing this inside the task's own
+isolated worktree would need the same tooling access as the
+outward-artifact-preflight scanner, and whether it would fire consistently
+across both `branch-plan-task` deployment variants above -- exactly the
+asymmetry this section spends its own length documenting. The chosen fix
+(step 6's own `scripts/gitapex_check_task_commit_provenance.py` scan,
+run in the main thread against each task's `BASE..HEAD` commit-message
+range, before that task's commit is merged onto the shared branch) makes
+that question moot rather than answering it: the main thread always has
+full filesystem/tool access and is identical across both deployment
+variants, so this specific gap is closed uniformly regardless of which
+`branch-plan-task` variant produced the flagged commit, and regardless of
+`hooks/check-bash-safety.sh`'s own binding status inside either variant's
+task-execution context.
+
 ## Full-verification exit condition (Decision 20)
 
 **The gap this closes (issue `#1476`, retro `#1475` repair 2).** A task's
