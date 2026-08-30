@@ -700,7 +700,13 @@ def check_partition_arithmetic(path: Path, data: dict[str, object]) -> str | Non
 _PROC_FENCE_OPEN_RE = re.compile(r"^[ \t]{0,3}(`{3,}|~{3,})")
 _PROC_FENCE_CLOSE_RE = re.compile(r"^[ \t]{0,3}(`{3,}|~{3,})[ \t]*$")
 _ANY_HEADING_RE = re.compile(r"^#{1,6}[ \t]+\S", re.MULTILINE)
-_PROCEDURE_STEPS_HEADING_RE = re.compile(r"^#{1,6}[ \t]+(?:Procedure|Steps)\b", re.IGNORECASE | re.MULTILINE)
+# Anchored with `[ \t]*$` (not `\b`) so the heading text is nothing but
+# "Procedure"/"Steps" plus trailing whitespace -- `\b` alone let this match
+# an unrelated heading merely starting with that word, e.g.
+# "## Steps 2-3 -- a secret reachable only through history" in
+# skills/scanning-leaked-secrets/references/worked-examples.md:344
+# (found live during independent review of this gate).
+_PROCEDURE_STEPS_HEADING_RE = re.compile(r"^#{1,6}[ \t]+(?:Procedure|Steps)[ \t]*$", re.IGNORECASE | re.MULTILINE)
 _STOP_BOUNDARY_HEADING_RE = re.compile(r"^#{1,6}[ \t]+Stop boundar(?:y|ies)\b", re.IGNORECASE | re.MULTILINE)
 _TOP_LEVEL_NUMBERED_ITEM_RE = re.compile(r"^(\d+)\.[ \t]+(.+?)[ \t]*$", re.MULTILINE)
 _TOP_LEVEL_DASH_BULLET_RE = re.compile(r"^-[ \t]+")
@@ -890,6 +896,12 @@ def check_procedure_stop_boundary_exercises_coverage(
         return None
     problems: list[str] = []
     for fixture_path in sorted(tasks_dir.glob("*.yaml")):
+        if not fixture_path.is_file():
+            # A `*.yaml`-named directory under tasks/ would otherwise raise
+            # IsADirectoryError out of read_text -- matches the established
+            # is_file() pre-check this file already uses above (Check C's
+            # own inline-vs-file fixture read).
+            continue
         try:
             fixture_data = yaml.safe_load(fixture_path.read_text(encoding="utf-8")) or {}
         except (yaml.YAMLError, UnicodeDecodeError) as error:
@@ -907,8 +919,8 @@ def check_procedure_stop_boundary_exercises_coverage(
         unmatched = [label for label in exercises if label.casefold() not in targets]
         if unmatched:
             problems.append(
-                f"{fixture_path.name}: exercises {unmatched!r} match no Step-N ordinal, Procedure/Steps "
-                f"item, or Stop-boundary bullet in {skill_md_path}"
+                f"{fixture_path.name}: exercises {unmatched!r} match no ### section label, Step-N ordinal, "
+                f"Procedure/Steps item, or Stop-boundary bullet in {skill_md_path}"
             )
     if not problems:
         return None
@@ -960,7 +972,18 @@ def check_new_procedure_stop_boundary_fixture_demand(
     the design doc's own author guidance already warns about ("prefer a
     heading or bullet-prefix label over a `Step N` ordinal where
     practical"). Closing it needs diff-side fixture data this gate is not
-    given; a literal-text label is unaffected."""
+    given; a literal-text label is unaffected.
+
+    Clarification on that guidance's own wording (issue #192 step 8
+    adversarial review): "bullet-prefix label" names WHICH label kind to
+    prefer (a Stop-boundary bullet or Procedure/Steps item, as opposed to
+    a `Step N` ordinal), not permission to declare only a truncated
+    PREFIX of the bullet's own text. Resolution here and in
+    `resolvable_exercise_labels` is an exact casefold match against the
+    item's own full first-line text (`_stop_boundary_bullet_label`,
+    `parse_procedure_step_items`'s `item_text`) -- a fixture author who
+    declares a shortened prefix of a long bullet/item will not resolve.
+    """
     new_content = new_procedure_stop_boundary_content(before_text, after_text)
     if not new_content:
         return None
@@ -969,6 +992,10 @@ def check_new_procedure_stop_boundary_fixture_demand(
     covered_labels: set[str] = set()
     if tasks_dir.is_dir():
         for fixture_path in sorted(tasks_dir.glob("*.yaml")):
+            if not fixture_path.is_file():
+                # Same IsADirectoryError guard as
+                # check_procedure_stop_boundary_exercises_coverage above.
+                continue
             try:
                 fixture_data = yaml.safe_load(fixture_path.read_text(encoding="utf-8")) or {}
             except (yaml.YAMLError, UnicodeDecodeError):
@@ -1113,7 +1140,25 @@ def main(argv: list[str] | None = None) -> int:
         if offender:
             offenders.append(offender)
 
-        if raw_path in before_map:
+        if args.skill_md_before_map:
+            if raw_path not in before_map:
+                # Fails CLOSED, not silently skipped: once a before-map file
+                # is supplied at all, every --skill-md path is expected to
+                # have its own entry (the calling workflow populates one line
+                # per --skill-md file). A missing entry here means the
+                # workflow's own map-building step is out of sync with its
+                # --skill-md list -- exactly the kind of drift Check E exists
+                # to catch elsewhere, so this gate must not pass it through
+                # silently. Use an empty before-content path (not a missing
+                # line) for a genuinely newly-added file.
+                print(
+                    f"error: --skill-md-before-map was supplied but has no entry for "
+                    f"--skill-md path {raw_path!r} -- every --skill-md file must have a "
+                    "corresponding before-map entry (use an empty before-content path "
+                    "for a newly added file)",
+                    file=sys.stderr,
+                )
+                return 1
             before_raw = before_map[raw_path]
             before_text: str | None = None
             if before_raw:

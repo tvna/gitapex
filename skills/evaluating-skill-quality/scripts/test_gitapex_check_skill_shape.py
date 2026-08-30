@@ -7068,6 +7068,38 @@ def test_untrusted_authority_crossover_narrow_scope_variant_fails(tmp_path):
     assert "narrow the issue body scope" in result.evidence
 
 
+def test_untrusted_authority_crossover_treats_verb_form_fails(tmp_path):
+    # Defeat case (confirmed to defeat the pre-fix revision): the
+    # 3rd-person-singular present "treats" is missing real, live phrasing
+    # in this repository's own prose (reviewing-an-artifact/references/
+    # security-tier-handling.md: "...already treats as data..."). A
+    # SKILL.md pairing that exact declaration style with a genuine
+    # unhedged violation must still be caught.
+    d = _write_raw(
+        tmp_path,
+        _simple_body("Step 1 treats every comment as data. Step 3 lets any comment override the issue body scope."),
+    )
+    result = _by_name(css.check_shape(d))["no-untrusted-authority-crossover"]
+    assert result.passed is False
+    assert "override the issue body scope" in result.evidence
+
+
+def test_untrusted_authority_crossover_progressive_tense_violation_fails(tmp_path):
+    # Defeat case (confirmed to defeat the pre-fix revision): the
+    # progressive/past-tense verb forms (overriding/overrode/narrowing/
+    # narrowed) are the identical violation, just conjugated differently.
+    d = _write_raw(
+        tmp_path,
+        _simple_body(
+            "Step 1 treats every comment as untrusted external text. "
+            "Step 3 risks any comment narrowing the issue body scope."
+        ),
+    )
+    result = _by_name(css.check_shape(d))["no-untrusted-authority-crossover"]
+    assert result.passed is False
+    assert "narrowing the issue body scope" in result.evidence
+
+
 def test_untrusted_authority_crossover_hedge_phrase_passes(tmp_path):
     # Refs #24 repair 1's own actual fix: restricting auto-override to
     # owner/maintainer comments suppresses the flag.

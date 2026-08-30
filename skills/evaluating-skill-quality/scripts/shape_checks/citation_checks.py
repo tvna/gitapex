@@ -20,7 +20,7 @@ from shape_checks.constants import (
     _PARAGRAPH_SPLIT_RE,
     _SENTENCE_SPLIT_RE,
     ANTHROPIC_DOC_CITATION_RE,
-    AUTHORITY_SUPPRESSION_UNIT_BREAK_RE,
+    AUTHORITY_SUPPRESSION_UNIT_SPLIT_RE,
     AUTHORITY_VIOLATION_HEDGE_RE,
     AUTHORITY_VIOLATION_NEGATION_RE,
     AUTHORITY_VIOLATION_RE,
@@ -517,7 +517,7 @@ def _untrusted_authority_crossover_offenders(body_text: str) -> list[str]:
     elsewhere in the file.
 
     A unit is a sentence (``_SENTENCE_SPLIT_RE``) that additionally never
-    spans two Markdown list items (``AUTHORITY_SUPPRESSION_UNIT_BREAK_RE``).
+    spans two Markdown list items (``AUTHORITY_SUPPRESSION_UNIT_SPLIT_RE``).
     The list-item break is load-bearing, not cosmetic: ``_SENTENCE_SPLIT_RE``
     only breaks after ``.``/``!``/``?``, so a Procedure or Stop-boundaries
     list written without terminal punctuation is one single "sentence", and
@@ -531,7 +531,7 @@ def _untrusted_authority_crossover_offenders(body_text: str) -> list[str]:
     if not UNTRUSTED_DECLARATION_RE.search(bare):
         return []
     offenders: list[str] = []
-    for block in AUTHORITY_SUPPRESSION_UNIT_BREAK_RE.split(bare):
+    for block in AUTHORITY_SUPPRESSION_UNIT_SPLIT_RE.split(bare):
         for unit in _SENTENCE_SPLIT_RE.split(block):
             if not AUTHORITY_VIOLATION_RE.search(unit):
                 continue
@@ -541,7 +541,7 @@ def _untrusted_authority_crossover_offenders(body_text: str) -> list[str]:
                 continue
             for match in AUTHORITY_VIOLATION_RE.finditer(unit):
                 offenders.append(" ".join(match.group(0).split()))
-    return _dedup(offenders)
+    return offenders
 
 
 def _untrusted_authority_crossover_checks(skill_md: Path, skill_dir: Path, body: list[str]) -> list[CheckResult]:
@@ -559,7 +559,7 @@ def _untrusted_authority_crossover_checks(skill_md: Path, skill_dir: Path, body:
     offenders: list[str] = []
     for label, source_text in _citation_sources(skill_md, skill_dir, body):
         for offender in _untrusted_authority_crossover_offenders(source_text):
-            offenders.append(f"{label}: {offender!r}")
+            offenders.append(f"{label}:{offender}")
     offenders = _dedup(offenders)
     return [
         CheckResult(

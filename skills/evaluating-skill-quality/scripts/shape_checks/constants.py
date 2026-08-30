@@ -792,15 +792,25 @@ STEP_LOCATION_CEDING_PHRASE = "authoritative"
 # declaration), reduced to three lexical roots the real phrasing there
 # reduces to: (a) "as untrusted" ("as untrusted data", "as untrusted by
 # default", "flags it as untrusted", "treats X as untrusted"); (b) a form
-# of treat/treated/treating, or "recorded", paired with "as data" ("treat
-# it as data", "treated as data", "recorded as data"); (c) "never
-# execute"/"never follow" applied to embedded instructions. Deliberately
-# broad on this side (unlike AUTHORITY_VIOLATION_RE below): missing a real
-# declaration only weakens this check's own coverage, while missing a real
-# violation would let the exact issue #24 repair 1 incident recur silently.
+# of treat/treats/treated/treating, or "recorded", paired with "as data"
+# ("treat it as data", "treats it as data", "treated as data", "recorded
+# as data"); (c) "never execute"/"never follow" applied to embedded
+# instructions. Deliberately broad on this side (unlike
+# AUTHORITY_VIOLATION_RE below): missing a real declaration only weakens
+# this check's own coverage, while missing a real violation would let the
+# exact issue #24 repair 1 incident recur silently.
+#
+# Adversarial review (issue #192 step 8) found the verb alternation
+# omitted the 3rd-person-singular present form "treats" -- present, live,
+# in this repository's own prose (e.g.
+# reviewing-an-artifact/references/security-tier-handling.md: "...exactly
+# the class of content untrusted-input-triage already treats as data...").
+# A SKILL.md pairing that exact declaration style with a genuine unhedged
+# override/narrow-scope violation would have passed this check silently,
+# precisely the incident class it exists to catch. Added.
 UNTRUSTED_DECLARATION_RE = re.compile(
     r"\bas\s+untrusted\b"
-    r"|\b(?:treat|treated|treating|recorded)\b(?:\s+\S+){0,6}?\s+as\s+data\b"
+    r"|\b(?:treats?|treated|treating|recorded)\b(?:\s+\S+){0,6}?\s+as\s+data\b"
     r"|\bnever\s+(?:execute|follow)\b",
     re.IGNORECASE,
 )
@@ -835,12 +845,21 @@ UNTRUSTED_DECLARATION_RE = re.compile(
 # the issue body"), or with more than 4 words between verb and object, is
 # not matched. That is the deliberate incident-narrow trade-off the design
 # doc records above -- widening it is a design change, not a repair.
+#
+# Adversarial review (issue #192 step 8) found the verb alternation only
+# covered the bare/3rd-person-singular forms, missing progressive and past
+# tense ("overriding", "overrode", "narrowing", "narrowed") -- the
+# identical violation, just conjugated differently. Not yet found live in
+# this repository's own corpus (a latent gap, not a currently-manifesting
+# false negative), but the same class of incidental omission the "treats"
+# fix above closed for the declaration side, so closed here too rather
+# than left for a future incident to surface it.
 AUTHORITY_VIOLATION_RE = re.compile(
-    r"\b(?:overrides?|narrows?)\b(?:\s+\S+){0,4}?\s+scopes?\b",
+    r"\b(?:overrides?|overriding|overrode|narrows?|narrowing|narrowed)\b(?:\s+\S+){0,4}?\s+scopes?\b",
     re.IGNORECASE,
 )
 # A negation of AUTHORITY_VIOLATION_RE's own verb, anywhere in the same
-# suppression unit (see AUTHORITY_SUPPRESSION_UNIT_BREAK_RE below),
+# suppression unit (see AUTHORITY_SUPPRESSION_UNIT_SPLIT_RE below),
 # suppresses every violation match in that unit -- the exact
 # false-positive class a dispatched adversarial review of this check's own
 # design doc found already live in this repository:
@@ -857,7 +876,7 @@ AUTHORITY_VIOLATION_RE = re.compile(
 # scope") suppresses a genuine violation. Deciding which verb a "not"
 # actually negates needs a parser this deliberately LLM-free, regex-based
 # checker does not have. The suppression UNIT is bounded as tightly as it
-# can be without one -- see AUTHORITY_SUPPRESSION_UNIT_BREAK_RE below.
+# can be without one -- see AUTHORITY_SUPPRESSION_UNIT_SPLIT_RE below.
 AUTHORITY_VIOLATION_NEGATION_RE = re.compile(
     r"\b(?:never|not|won'?t|cannot|can'?t)\b",
     re.IGNORECASE,
@@ -894,7 +913,7 @@ AUTHORITY_VIOLATION_HEDGE_RE = re.compile(
 # (adversarial review, issue #192 step 8). Breaking the unit at each new
 # list item closes it without breaking a hedge/negation that merely wraps
 # across lines inside one prose sentence, which stays in one unit.
-AUTHORITY_SUPPRESSION_UNIT_BREAK_RE = re.compile(r"^[ \t]*(?:[-*+]|\d+\.)[ \t]+", re.MULTILINE)
+AUTHORITY_SUPPRESSION_UNIT_SPLIT_RE = re.compile(r"^[ \t]*(?:[-*+]|\d+\.)[ \t]+", re.MULTILINE)
 
 # Grounded in the exact historical incident this check mechanizes (issue
 # #79's PR #75 retrospective, re-scoped by issue #577 after #192 carried the
