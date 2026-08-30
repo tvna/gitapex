@@ -126,7 +126,7 @@ used to be discovered one red check at a time on an already-open PR.
 The same `uv run prek install -t pre-commit -t pre-push -t commit-msg` above also installs
 a **pre-push** hook that runs every gate with a working-tree-only form in
 one pass, before the push leaves your machine. A warm run of all 44 wired
-gates measures roughly PLACEHOLDER seconds end to end (the
+gates measures roughly 15 seconds end to end (the
 prior 43-gate set measured roughly 15 seconds, the 42-gate set before that
 measured roughly 18 seconds, the 41-gate set before that
 measured roughly 18 seconds, the 40-gate set before that
