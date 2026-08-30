@@ -10,8 +10,7 @@ spec:
     relatedTo: []
   executionRequirements:
     tools:
-      read:
-        - files
+      read: []
       write: []
       shell:
         - subprocess
@@ -25,3 +24,6 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1196"
       summary: "spec.portability corrected from Portable to Repository-scoped: Step 1's own prose already discloses gitapex_check_retro_gate_resolved.py's .gitapex/ssot.json dependency has no repository-agnostic fallback yet -- a repository without that registry cannot run Step 1 as written, contradicting Portable's own 'vendorable as-is' definition."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1406"
+      summary: "Supersedes the entries above on tools.read only (append-only; portability left as-is, a future re-decision). Step 1 is now 'Nothing to sweep': no more gitapex_check_retro_gate_resolved.py or .gitapex/ssot.json (now unreferenced by SKILL.md; its removal is separate follow-on work). read corrected [files] -> []; shell stays [subprocess], now justified by Step 5's gitapex_file_gate_proposal.py call instead."

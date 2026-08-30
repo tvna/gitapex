@@ -43,8 +43,10 @@ economy, one train/selection/test fixture triple per sub-rule), a 0:1:0
 dispatch-self-guard-boundary addition (gitapex#1346: the new dimension-5
 content-independent-dispatch-self-guard boundary), and a 0:1:0
 structural-identifier-portability addition (gitapex#1347: the new
-dimension-6 narrative-citation-vs-structural-identifier bullet), for a
-resulting 35:40:18
+dimension-6 narrative-citation-vs-structural-identifier bullet), and a
+0:1:0 stale-reference-vs-commit-provenance-annotation addition
+(gitapex#1466: the new dimension-6 durability bullet naming that exact
+pattern), for a resulting 35:41:18
 partition. This is
 named explicitly as a deviation from the 2:1:7 default. The
 honest minimal groundwork, per that same worked example, is a larger
@@ -4549,3 +4551,25 @@ Not run this iteration, for the same reason as the #1346 entry above -- both fix
 ### Verdict
 
 KEEP. Refs #1347.
+
+## Iteration: issue #1466, dimension-6 stale-reference-vs-commit-provenance-annotation bullet
+
+Motivated by issue #260 (merge retrospective for PR #258), Repair 1: PR #258's first commit had fixed a stale/dangling reference (a retired sibling skill name) by *annotating* it in place with `-- retired since, commit 7c7ca82 --` instead of removing or generalizing it, duplicating what `git log --all --grep` already tracks permanently for no benefit. Issue #260 proposed a durable rubric example naming this exact pattern, classified as an instruction clarification rather than a deterministic gate ("a prose-provenance scanner would carry the identical false-positive risk").
+
+Candidate edit, ordinary class (a new rubric.md bullet, no deletion of existing text): `references/rubric.md`'s dimension 6 (Durability) gains a bullet, placed after the existing no-time-sensitive-content bullet, naming the pattern -- prefer removing or generalizing a stale in-repo reference over annotating it with commit provenance, since `git log`/`git blame` already carry that record durably -- plus one clause each added to the section's existing combined Fail:/Pass: block. `SKILL.md` needed no companion edit: it does not restate per-dimension rubric content, matching the #185 entry's own precedent above. Refs #1466, #260.
+
+### Gate result
+
+Went through `scorer-gated-skill-edits`'s own held-out gate: 1 new selection fixture added to `split.json`'s split (41 total selection, 35:41:18 -- the declared train figure of 35 accounts for `split_arithmetic_exclusions`'s one excluded fixture against a raw 36-entry train list, confirmed via `gitapex_gate_split_fixture_coverage.py`'s Check D rather than a naive list-length count, which this iteration's own first draft got wrong before the checker caught it). One fresh isolated `claude -p` dispatch pair against `durability-stale-reference-annotation-selection.yaml`'s own before/after transcript pair (the new selection fixture, a target skill excerpt handing off to a retired sibling skill annotated `-- retired since, commit 7c7ca82 --` instead of naming its live replacement) moved **0.833333 -> 1.000000, KEEP**. The before-edit dispatch already reasoned to the correct remedy (drop the commit hash) through general reasoning alone, independent of the new rubric text -- the same axis-did-not-exist-yet improvement shape several prior iterations in this file (confidentiality-awareness, dispatch-self-guard-boundary, structural-identifier-portability) already established: the surface Pass/Fail conclusion did not change, but only the after-edit transcript grounds it in the new rubric text's own Fail/Pass wording, quoted near-verbatim ("annotating a stale in-repo reference with its own commit provenance ... instead of removing or generalizing it").
+
+Isolation used the `claude -p` subprocess mechanism from `references/adversarial-self-audit.md`'s Isolation-verification registry, reusing the existing 2026-08-30/`2.1.251`/`CLAUDE_CODE_REMOTE=true`/`CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=cloud_default` Same-run entry after confirming this session's own identifying signal matches it exactly (no fresh Verification-procedure run needed, per that registry's own unconditional-comparison rule). The same ambient-session-state env-var unset and no-nested-dispatch prompt instruction this file's #1346/#1347 entries already record were applied as a precaution; no contamination symptom was actually observed this run. `gitapex_check_skill_shape.py`: 48/48 (run against every `skills/*/` directory). Full `pytest` suite: 7748 passed, 1 pre-existing unrelated failure (`test_gitapex_scan_harden_checkout_pin_drift.py`, a shallow-clone environment artifact -- this session's own checkout was shallow at the time the full suite first ran; unshallowing it via `git fetch --unshallow` made this specific test pass again, confirming the diagnosis directly rather than assuming it). Full record, both live transcripts: `results/2026-08-30-issue-1466-durability-stale-reference/manifest.json`.
+
+Two real, unrelated-to-content pre-push gate defects were found and fixed live during this iteration, before the gate result above was banked: (1) this iteration's own first-draft `split.json` edit computed the declared `partition` string as a naive `len()` of each `assignment` list, which is wrong when `split_arithmetic_exclusions` is non-empty (`dispatch-required-negative-control.yaml` is excluded from the train count) -- caught by `tests/test_gitapex_gate_split_fixture_coverage.py`'s own Check D and partition-pin tests, fixed to the correct `35:41:18`, with the test file's own hardcoded expectation tuple updated in the same commit; (2) `docs/skill-eval-status.md` (a generated, repository-wide index derived in part from `split.json`'s partition) needed regenerating via `.github/scripts/gitapex_generate_skill_eval_status.py` to match, caught by the same full-suite run and by the `skill-eval-status-doc-drift` local-preflight gate on `git push`.
+
+### Transfer check
+
+Not run this iteration, for the same reason as the #1346/#1347 entries above -- the one live-dispatched pair in this gate run was produced on the same model/harness (`claude-sonnet-5`, isolated `claude -p` subprocess). Disclosed as a known gap in `results/2026-08-30-issue-1466-durability-stale-reference/manifest.json`'s own `known_gaps`.
+
+### Verdict
+
+KEEP. Refs #1466, #260.

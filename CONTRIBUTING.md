@@ -125,14 +125,16 @@ used to be discovered one red check at a time on an already-open PR.
 
 The same `uv run prek install -t pre-commit -t pre-push -t commit-msg` above also installs
 a **pre-push** hook that runs every gate with a working-tree-only form in
-one pass, before the push leaves your machine. A warm run of all 42 wired
-gates measures roughly 18 seconds end to end (the
-prior 41-gate set measured roughly 18 seconds, the
-prior 40-gate set measured roughly 18 seconds, the
-prior 39-gate set measured roughly 12 seconds, the 38-gate set before that
-measured roughly 11 seconds, the 37-gate set before that measured roughly 11
-seconds, the 36-gate set before that measured roughly 11 seconds, the
-35-gate set before that measured roughly 13 seconds, the
+one pass, before the push leaves your machine. A warm run of all 44 wired
+gates measures roughly PLACEHOLDER seconds end to end (the
+prior 43-gate set measured roughly 15 seconds, the 42-gate set before that
+measured roughly 18 seconds, the 41-gate set before that
+measured roughly 18 seconds, the 40-gate set before that
+measured roughly 17 seconds, the 39-gate set before that
+measured roughly 12 seconds, the 38-gate set before that
+measured roughly 11 seconds, the 37-gate set before that
+measured roughly 11 seconds, the 36-gate set before that measured roughly 11
+seconds, the 35-gate set before that measured roughly 13 seconds, the
 34-gate set before that measured roughly 11 seconds,
 the 31-gate set before that measured roughly 7 seconds, and
 the 26-gate set before that measured ~8-9 seconds; all
@@ -143,7 +145,7 @@ gate, this runner's first gate that makes a network call -- it fetches
 warm). Run it by hand any time with:
 
 ```console
-python3 .github/scripts/gitapex_gate_local_preflight.py
+uv run --frozen python3 .github/scripts/gitapex_gate_local_preflight.py
 ```
 
 It prints a pass/fail line per gate, the captured output of each failing
@@ -154,10 +156,12 @@ If a clone predates this hook, re-run the install command above once to pick
 it up, then confirm both shims with the check in the previous section.
 `git push --no-verify` skips it, as with any pre-push hook.
 
-The runner itself needs no dependencies, but all 42 wired gates run through
-`uv` (the same `uv run` pins CI uses). Without `uv` on PATH every one of
-them reports `FAIL ... failed to run` -- that is one missing tool, not a
-whole broken wired set.
+The runner itself also resolves through `uv` (issue #1485: it imports
+`_gitapex_schema_validation.py`, which needs `jsonschema` -- a real,
+non-stdlib dependency a bare system `python3` is not guaranteed to have),
+and so do all 44 wired gates (the same `uv run` pins CI uses). Without `uv`
+on PATH every one of them reports `FAIL ... failed to run` -- that is one
+missing tool, not a whole broken wired set.
 
 The wired set is not a list inside that script: it is every gate in
 `.gitapex/ssot.json` whose `planes` array contains `"local"`, run with the

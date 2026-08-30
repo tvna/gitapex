@@ -1683,6 +1683,14 @@ rotting or breaking once copied or revisited later.
 
 - No time-sensitive content ("before August 2025 use the old API"). Any
   historical content is explicitly marked as such, not left to silently rot.
+- When fixing a stale or dangling reference to something the repository's
+  own commit history already tracks -- a rename, a retirement, a move --
+  prefer removing or generalizing the reference over annotating it with
+  commit provenance (for example, rewording "the `foo` skill" to "the
+  now-retired skill" rather than appending "-- retired since, commit
+  `abc1234` --"). `git log`/`git blame` already carry that record
+  durably; restating it in prose creates a second copy that must be kept
+  in sync for no benefit.
 - No assumption that a tool or package is installed without saying so, and
   no assumption that installing one is even possible: package-install
   capability differs by surface -- Claude Code allows local installs but
@@ -1741,11 +1749,17 @@ rotting or breaking once copied or revisited later.
 - **Fail:** "before August 2025 use the old API" stated as current
   guidance with no explicit historical marking, or a bare `#149`
   issue/PR-number citation inside content declared Portable that silently
-  resolves to the wrong issue once vendored.
+  resolves to the wrong issue once vendored, or annotating a stale
+  in-repo reference with its own commit provenance ("-- retired since,
+  commit `abc1234` --") instead of removing or generalizing it, when the
+  repository's own `git log`/`git blame` already records the same fact
+  durably.
 - **Pass:** time-bound content is explicitly marked historical, paths use
-  forward slashes throughout, and a Portable skill states its own
-  convention as an illustrative default with a stated fallback to the
-  consumer repository's real convention.
+  forward slashes throughout, a Portable skill states its own convention
+  as an illustrative default with a stated fallback to the consumer
+  repository's real convention, and a stale in-repo reference is removed
+  or generalized rather than annotated with a commit hash the
+  repository's own history already tracks.
 
 **State management quality, when the procedure carries state across a context
 boundary.** The bullets above grade whether the skill *text* still holds as

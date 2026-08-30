@@ -40,14 +40,22 @@ jobs:
         with:
           enable-cache: true
 
-      # Issue #297 (refs #187, #242, #246): mechanizes merge-retrospective's
-      # Step 0 (retrospective-labelled issues with no citing commit on
-      # main) instead of leaving it a manual audit every cycle. No
+      # Issue #1406 (refs #297, #187, #242, #246, #709, #1297; supersedes
+      # this step's own prior scope): the flat gate-proposal-issues design
+      # (docs/superpowers/specs/2026-08-29-flat-gate-proposal-issues-design.md)
+      # files every missing-deterministic-gate retrospective finding as its
+      # own standalone `gate-proposal`-labelled issue instead of leaving it
+      # embedded in an ever-growing `retrospective`-labelled issue, so this
+      # step is rescoped to audit that new label: confirm the label itself
+      # still exists, report (threshold-gated, unchanged at 20) its
+      # currently-open issue count, and fail on any closed labelled issue
+      # that never passed the existing two-signal check (no time window, no
+      # reopen action -- a human resolves that by hand). No
       # continue-on-error here -- unlike waza-check.yml (retired in issue
-      # #1135), this job is meant to actually fail when the backlog grows
-      # past its threshold. See
-      # docs/superpowers/specs/2026-07-22-retrospective-gate-drift-design.md.
-      - name: Scan for retrospective citation drift
+      # #1135), this job is meant to actually fail when either pass trips.
+      # `--label` is omitted deliberately: it now defaults to the script's
+      # own `GATE_PROPOSAL_LABEL` constant.
+      - name: Scan gate-proposal label for drift
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

@@ -42,6 +42,15 @@ jobs:
       # the base branch after this PR forked is never misattributed here.
       # A pure deletion has no new content to check, so it is excluded the
       # same way skill-audit-gate.yml excludes D/R100 statuses.
+      #
+      # Issue #192 item 6 (Check E's delta-scoped coverage demand): also
+      # computes a <skill-md-after-path><TAB><before-content-path-or-empty>
+      # entries file for the changed SKILL.md files, the same merge-base
+      # git-show approach skill-branch-fixture-coverage-gate.yml's own diff
+      # step already uses for the #49 gate -- passed to
+      # gitapex_gate_split_fixture_coverage.py as --skill-md-before-map so
+      # it can tell a genuinely new Stop-boundary bullet/Procedure item
+      # apart from a pre-existing one.
       - name: Determine changed split.md/SKILL.md files
         id: diff
         env:
@@ -66,6 +75,32 @@ jobs:
           echo "$split_files"
           echo "Added/modified SKILL.md files:"
           echo "$skill_files"
+
+          before_map_file=""
+          if [ -n "$skill_files" ]; then
+            merge_base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+            before_map_file="$RUNNER_TEMP/skill_md_before_map.tsv"
+            : > "$before_map_file"
+            skill_diff=$(printf '%s\n' "$diff_output" | grep -E '/SKILL\.md($|\t)' | grep -vE '^(D|R100)[[:space:]]' || true)
+            while IFS=$'\t' read -r status path newpath; do
+              [ -z "$status" ] && continue
+              case "$status" in
+                R*) old_path="$path"; new_path="$newpath" ;;
+                *) old_path="$path"; new_path="$path" ;;
+              esac
+              before_file=""
+              if [ "$status" != "A" ]; then
+                candidate_before_file=$(mktemp)
+                if git show "${merge_base}:${old_path}" > "$candidate_before_file" 2>/dev/null; then
+                  before_file="$candidate_before_file"
+                else
+                  rm -f "$candidate_before_file"
+                fi
+              fi
+              printf '%s\t%s\n' "$new_path" "$before_file" >> "$before_map_file"
+            done <<< "$skill_diff"
+          fi
+
           {
             echo "applicable=true"
             echo "split_files<<GITAPEX_EOF"
@@ -74,6 +109,7 @@ jobs:
             echo "skill_files<<GITAPEX_EOF"
             echo "$skill_files"
             echo "GITAPEX_EOF"
+            echo "before-map-file=${before_map_file}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Check split.md fixture-table coverage
@@ -81,6 +117,7 @@ jobs:
         env:
           SPLIT_FILES: ${{ steps.diff.outputs.split_files }}
           SKILL_FILES: ${{ steps.diff.outputs.skill_files }}
+          BEFORE_MAP_FILE: ${{ steps.diff.outputs.before-map-file }}
         run: |
           set -euo pipefail
           mapfile -t split_args < <(printf '%s\n' "$SPLIT_FILES" | grep -v '^$' || true)
@@ -91,6 +128,9 @@ jobs:
           fi
           if [ "${#skill_args[@]}" -gt 0 ]; then
             cmd+=(--skill-md "${skill_args[@]}")
+          fi
+          if [ -n "$BEFORE_MAP_FILE" ]; then
+            cmd+=(--skill-md-before-map "$BEFORE_MAP_FILE")
           fi
           # Issue #907 (gate review, dual-signal deny): the offender list went
           # only to stderr, so job status was the single channel -- while the

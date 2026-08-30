@@ -14,7 +14,6 @@ test_gitapex_scan_retrospective_gate_drift.py's own fixture style.
 
 from __future__ import annotations
 
-import http.client
 import json
 import pathlib
 import urllib.error
@@ -110,56 +109,31 @@ def test_find_existing_retro_issue_returns_none_when_no_match():
     assert result is None
 
 
-def test_find_existing_retro_issue_retries_5xx_then_succeeds():
-    responses = [http_error(503, "{}"), Response(200, json.dumps({"items": []}))]
-    sleeps: list[float] = []
-
-    def opener(request: urllib.request.Request) -> Response:
-        response = responses.pop(0)
-        if isinstance(response, urllib.error.HTTPError):
-            raise response
-        return response
-
-    result = pmr.find_existing_retro_issue("tvna", "gitapex", 314, "tok", opener=opener, sleeper=sleeps.append)
-    assert result is None
-    assert sleeps == [5]
-
-
-def test_find_existing_retro_issue_raises_on_persistent_4xx():
-    def opener(request: urllib.request.Request) -> Response:
-        raise http_error(422, "unprocessable")
-
-    with pytest.raises(pmr.GitHubApiError):
-        pmr.find_existing_retro_issue("tvna", "gitapex", 314, "tok", opener=opener)
+# ---------------------------------------------------------------------------
+# Retry-loop delegation (issue #729): the retry/backoff mechanics themselves
+# (5xx retry, IncompleteRead retry, repeated-network-failure raise) no
+# longer live in this module -- they were extracted to
+# `_gitapex_github_http.request_with_retry`/`call_json` and are covered
+# there by tests/test_gitapex_github_http.py. The one integration test
+# below confirms only that this module's own public API
+# (`find_existing_retro_issue`, which now delegates to
+# `_gitapex_github_http.call_json`) still surfaces `GitHubApiError`
+# correctly once retries are exhausted -- i.e. that the migration itself
+# didn't break this module's observable behavior.
+# ---------------------------------------------------------------------------
 
 
-def test_find_existing_retro_issue_raises_after_repeated_network_failure():
+def test_find_existing_retro_issue_raises_github_api_error_after_repeated_5xx():
     calls = 0
 
     def opener(request: urllib.request.Request) -> Response:
         nonlocal calls
         calls += 1
-        raise urllib.error.URLError("boom")
+        raise http_error(503, "{}")
 
     with pytest.raises(pmr.GitHubApiError):
         pmr.find_existing_retro_issue("tvna", "gitapex", 314, "tok", opener=opener, sleeper=lambda _: None)
     assert calls == 3
-
-
-def test_find_existing_retro_issue_retries_incomplete_body_read_then_succeeds():
-    class FlakyResponse(Response):
-        def read(self) -> bytes:
-            raise http.client.IncompleteRead(b"partial")
-
-    responses = [FlakyResponse(200), Response(200, json.dumps({"items": []}))]
-    sleeps: list[float] = []
-
-    def opener(request: urllib.request.Request) -> Response:
-        return responses.pop(0)
-
-    result = pmr.find_existing_retro_issue("tvna", "gitapex", 314, "tok", opener=opener, sleeper=sleeps.append)
-    assert result is None
-    assert sleeps == [5]
 
 
 # ---------------------------------------------------------------------------

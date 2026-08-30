@@ -7,6 +7,7 @@ docstring for the incident this gate exists to prevent from recurring.
 from __future__ import annotations
 
 import pathlib
+import time
 
 import gitapex_gate_bare_python3_invocation as gate
 import pytest
@@ -14,12 +15,22 @@ import pytest
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
+def _write_in(target_dir: pathlib.Path, name: str, content: str) -> pathlib.Path:
+    """Write `content` to `target_dir / name`, creating `target_dir` (and
+    any missing parents) first. Returns `target_dir` -- both `_write` and
+    `_write_hook` below hand this back to their own callers, which is why
+    this shared helper returns the directory rather than the file path."""
+    target_dir.mkdir(parents=True, exist_ok=True)
+    (target_dir / name).write_text(content, encoding="utf-8")
+    return target_dir
+
+
 def _write(tmp_path: pathlib.Path, name: str, content: str) -> pathlib.Path:
-    workflows_dir = tmp_path / ".github" / "workflows"
-    workflows_dir.mkdir(parents=True, exist_ok=True)
-    path = workflows_dir / name
-    path.write_text(content, encoding="utf-8")
-    return workflows_dir
+    return _write_in(tmp_path / ".github" / "workflows", name, content)
+
+
+def _write_hook(tmp_path: pathlib.Path, name: str, content: str) -> pathlib.Path:
+    return _write_in(tmp_path / "hooks", name, content)
 
 
 # --- happy paths ---
@@ -396,6 +407,202 @@ def test_main_returns_one_and_prints_findings_on_bare_invocation(
     assert "x.py" in out
 
 
+# --- hooks/*.sh shell-variable-indirected invocations (WARNING tier,
+# issue #1446 Item 2): a hooks/*.sh script almost never invokes a
+# `.github/scripts/*.py` gate directly on the same line -- it assigns the
+# path to a shell variable on one line, then invokes `python3 "$var"` on a
+# later line, which `find_bare_invocations`'s same-line regex cannot see.
+# `find_hooks_shell_indirected_invocations` closes that blind spot with a
+# two-step static scan scoped to the direct single-assignment-then-
+# invocation shape this repository's real hooks/*.sh files actually use. ---
+
+
+def test_hooks_shell_indirected_bare_invocation_is_flagged(tmp_path: pathlib.Path) -> None:
+    # Reproduces hooks/check-pr-skill-audit-disclosure.sh's real shape:
+    # a variable assignment targeting a .github/scripts/*.py path, then a
+    # bare `python3 "$var"` invocation several lines later.
+    hooks_dir = _write_hook(
+        tmp_path,
+        "check-pr-skill-audit-disclosure.sh",
+        "#!/bin/bash\n"
+        'repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || repo_root=""\n'
+        'full_gate="${repo_root}/.github/scripts/gitapex_gate_skill_audit_disclosure.py"\n'
+        "\n"
+        'if [ -f "$full_gate" ]; then\n'
+        '  if full_output=$(cd "$repo_root" && python3 "$full_gate" \\\n'
+        '      --check-diff "$merge_base" HEAD --body-file "$body_file" 2>&1); then\n'
+        "    full_exit=0\n"
+        "  fi\n"
+        "fi\n",
+    )
+    findings = gate.find_hooks_shell_indirected_invocations(hooks_dir)
+    assert len(findings) == 1
+    path, lineno, line = findings[0]
+    assert "check-pr-skill-audit-disclosure.sh" in path
+    assert lineno == 6
+    assert "full_gate" in line
+
+
+def test_hooks_shell_indirected_invocation_uv_run_wrapped_is_not_flagged(tmp_path: pathlib.Path) -> None:
+    hooks_dir = _write_hook(
+        tmp_path,
+        "wrapped.sh",
+        "#!/bin/bash\n"
+        'full_gate="${repo_root}/.github/scripts/gitapex_gate_skill_audit_disclosure.py"\n'
+        'uv run --frozen python3 "$full_gate" --check-diff a b\n',
+    )
+    assert gate.find_hooks_shell_indirected_invocations(hooks_dir) == []
+
+
+def test_hooks_shell_indirected_variable_targeting_hooks_py_is_not_flagged(tmp_path: pathlib.Path) -> None:
+    # A hooks/*.py sibling script is deliberately stdlib-only,
+    # self-contained, and bare-invoked by design (docs/repository-layout.md)
+    # -- a shell variable pointing at one must never be flagged even
+    # though it is invoked bare, exactly like every other real hooks/*.sh
+    # file in this repository (only .github/scripts/*.py targets are
+    # in scope).
+    hooks_dir = _write_hook(
+        tmp_path,
+        "check-bash-safety.sh",
+        "#!/bin/bash\n"
+        'classifier="${repo_root}/hooks/gitapex_check_bash_safety.py"\n'
+        'classifier_output=$(printf %s "$input" | python3 "$classifier" 2>/dev/null)\n',
+    )
+    assert gate.find_hooks_shell_indirected_invocations(hooks_dir) == []
+
+
+def test_hooks_shell_indirected_unquoted_invocation_is_flagged(tmp_path: pathlib.Path) -> None:
+    hooks_dir = _write_hook(
+        tmp_path,
+        "unquoted.sh",
+        '#!/bin/bash\ngate_script="${repo_root}/.github/scripts/gitapex_gate_foo.py"\npython3 $gate_script --flag\n',
+    )
+    findings = gate.find_hooks_shell_indirected_invocations(hooks_dir)
+    assert len(findings) == 1
+    assert "gate_script" in findings[0][2]
+
+
+def test_hooks_shell_indirected_brace_wrapped_invocation_is_flagged(tmp_path: pathlib.Path) -> None:
+    # Defeat case found in adversarial review (issue #1446 step 8): the
+    # variable reference at the *invocation* site can be brace-wrapped
+    # (`python3 "${var}"`), not just the bare `$var` form
+    # test_hooks_shell_indirected_bare_invocation_is_flagged already
+    # covers -- a plausible shell idiom this repository's own hooks/*.sh
+    # files already use at *assignment* sites (e.g.
+    # `full_gate="${repo_root}/..."`). Confirmed to previously slip past
+    # var_ref undetected before the fix.
+    hooks_dir = _write_hook(
+        tmp_path,
+        "brace-wrapped.sh",
+        '#!/bin/bash\nfull_gate="${repo_root}/.github/scripts/gitapex_gate_foo.py"\npython3 "${full_gate}"\n',
+    )
+    findings = gate.find_hooks_shell_indirected_invocations(hooks_dir)
+    assert len(findings) == 1
+    assert "full_gate" in findings[0][2]
+
+
+def test_hooks_shell_indirected_brace_wrapped_uv_run_wrapped_is_not_flagged(tmp_path: pathlib.Path) -> None:
+    hooks_dir = _write_hook(
+        tmp_path,
+        "brace-wrapped-ok.sh",
+        '#!/bin/bash\nfull_gate="${repo_root}/.github/scripts/gitapex_gate_foo.py"\nuv run --frozen python3 "${full_gate}" --flag\n',
+    )
+    assert gate.find_hooks_shell_indirected_invocations(hooks_dir) == []
+
+
+def test_hooks_shell_indirected_variable_name_substring_does_not_cross_match(tmp_path: pathlib.Path) -> None:
+    # Defeat case: "gate" is a substring of "full_gate". Both get assigned
+    # a `.github/scripts/*.py` path, but only "full_gate" is invoked --
+    # the word-boundary anchor in var_ref must prevent the "gate" tracked
+    # variable from falsely matching inside "$full_gate".
+    hooks_dir = _write_hook(
+        tmp_path,
+        "substring.sh",
+        "#!/bin/bash\n"
+        'gate="${repo_root}/.github/scripts/gate_a.py"\n'
+        'full_gate="${repo_root}/.github/scripts/gate_b.py"\n'
+        'python3 "$full_gate"\n',
+    )
+    findings = gate.find_hooks_shell_indirected_invocations(hooks_dir)
+    assert len(findings) == 1
+    assert "full_gate" in findings[0][2]
+
+
+def test_hooks_shell_indirected_reassignment_is_whole_file_not_ordered(tmp_path: pathlib.Path) -> None:
+    # Disclosed limitation (see _scan_hook's own Pass-1 comment), pinned
+    # here rather than left as prose: tracking is whole-file, not
+    # ordered. A variable assigned a `.github/scripts/*.py` path and then
+    # reassigned to something unrelated before the bare invocation is
+    # still flagged, the mirror image of
+    # test_hooks_shell_indirected_bare_invocation_is_flagged's own
+    # hooks/*.py-then-.github/scripts/*.py order. Both directions are
+    # graded identically because no assignment-order dataflow is
+    # attempted -- confirmed here as intentional behavior, not a defect,
+    # per the module's own "no ... multi-hop reassignment tracing"
+    # non-goal.
+    hooks_dir = _write_hook(
+        tmp_path,
+        "reassigned.sh",
+        '#!/bin/bash\nvar="${repo_root}/.github/scripts/gate.py"\nvar="hooks/unrelated.py"\npython3 "$var"\n',
+    )
+    findings = gate.find_hooks_shell_indirected_invocations(hooks_dir)
+    assert len(findings) == 1
+
+
+def test_hooks_shell_indirected_no_matching_assignment_passes(tmp_path: pathlib.Path) -> None:
+    hooks_dir = _write_hook(
+        tmp_path,
+        "clean.sh",
+        "#!/bin/bash\necho hi\n",
+    )
+    assert gate.find_hooks_shell_indirected_invocations(hooks_dir) == []
+
+
+def test_hooks_shell_indirected_missing_dir_returns_empty(tmp_path: pathlib.Path) -> None:
+    # Non-blocking WARNING tier: unlike find_bare_invocations's fail-closed
+    # hard-fail behavior for a missing workflows dir, a missing hooks dir
+    # simply has nothing to warn about.
+    assert gate.find_hooks_shell_indirected_invocations(tmp_path / "does-not-exist") == []
+
+
+# --- main() composition: the new WARNING-tier hooks/*.sh scan must never
+# change find_bare_invocations's existing hard-fail exit-code behavior ---
+
+
+def test_main_exit_code_stays_zero_with_only_a_hooks_warning_finding(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workflows_dir = _write(
+        tmp_path,
+        "clean.yml",
+        "jobs:\n  a:\n    steps:\n      - name: run\n        run: uv run --frozen python3 .github/scripts/x.py\n",
+    )
+    hooks_dir = _write_hook(
+        tmp_path,
+        "indirect.sh",
+        '#!/bin/bash\nfull_gate="${repo_root}/.github/scripts/gitapex_gate_foo.py"\npython3 "$full_gate"\n',
+    )
+    monkeypatch.setattr("sys.argv", ["prog", str(workflows_dir), str(hooks_dir)])
+    assert gate.main() == 0
+    out = capsys.readouterr().out
+    assert "full_gate" in out
+
+
+def test_main_exit_code_stays_one_with_a_workflow_finding_regardless_of_hooks(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workflows_dir = _write(
+        tmp_path,
+        "bare.yml",
+        "jobs:\n  a:\n    steps:\n      - name: run\n        run: python3 .github/scripts/x.py\n",
+    )
+    hooks_dir = _write_hook(tmp_path, "clean.sh", "#!/bin/bash\necho hi\n")
+    monkeypatch.setattr("sys.argv", ["prog", str(workflows_dir), str(hooks_dir)])
+    assert gate.main() == 1
+    out = capsys.readouterr().out
+    assert "bare.yml" in out
+
+
 # --- live proof against this repository's own real workflow files: after
 # issue #1035's own fix lands, this is the actual regression backstop.
 # Deliberately reads the real .github/workflows/ tree, not a fixture --
@@ -406,3 +613,73 @@ def test_main_returns_one_and_prints_findings_on_bare_invocation(
 def test_this_repositorys_own_workflows_have_no_bare_invocation() -> None:
     findings = gate.find_bare_invocations(REPO_ROOT / ".github" / "workflows")
     assert findings == [], findings
+
+
+# --- _scan_hook's own WARNING-tier read-failure fallback (issue #1446) ---
+
+
+def test_scan_hook_missing_file_returns_empty(tmp_path: pathlib.Path) -> None:
+    """A hook path that does not exist raises FileNotFoundError (an
+    OSError subclass) inside read_text() -- caught and degraded to no
+    findings, matching this WARNING-tier scan's own report-only contract
+    (there is no exit-code fail-closed guarantee here to protect, unlike
+    find_bare_invocations's own missing-directory finding)."""
+    assert gate._scan_hook(tmp_path / "does-not-exist.sh") == []
+
+
+def test_scan_hook_invalid_utf8_returns_empty(tmp_path: pathlib.Path) -> None:
+    """A hook file that is not valid UTF-8 raises UnicodeDecodeError inside
+    read_text() -- caught alongside OSError and degraded to no findings,
+    the same graceful-degradation contract
+    ratified_trailer_disclosure_text() in hooks/gitapex_check_post_write_provenance.py
+    uses for the same failure class (confirmed consistent during this
+    issue's own step-8 adversarial review)."""
+    bad = tmp_path / "bad.sh"
+    bad.write_bytes(b"\xff\xfe not valid utf-8")
+    assert gate._scan_hook(bad) == []
+
+
+# --- Independent-review defeat cases (issue #1446, drafting-a-pr-to-merge
+# Step 8 inner-layer review) ---
+
+
+def test_uv_run_prefix_does_not_catastrophically_backtrack_on_a_long_flag_run() -> None:
+    """CWE-1333 regression: `_UV_RUN_PREFIX`'s old `-{1,2}[\\w-]+` shape let
+    the `-{1,2}` quantifier and the following `[\\w-]+` class both claim a
+    `-` character, giving a run of N `--flag=value` tokens 2**N equivalent
+    parses that the regex engine exhausted on a non-matching tail --
+    reproduced live pre-fix at ~40s for a 25-flag line (up from ~1ms at 10
+    flags). A CI job scanning this pattern against every PR's own
+    workflow/hooks content (no path filter, 5-minute timeout) could be
+    hung by a single crafted line. This asserts the fix (`-[\\w-]+`, no
+    overlap) stays well under a generous ceiling at 5x the size that used
+    to take ~40s."""
+    line = "uv run" + (" --flag=xxx" * 125) + " NOMATCHTAIL"
+    start = time.monotonic()
+    result = gate._UV_WRAPPED_INVOCATION_RE.search(line)
+    elapsed = time.monotonic() - start
+    assert result is None
+    assert elapsed < 2.0, f"took {elapsed:.2f}s -- catastrophic backtracking may have regressed"
+
+
+def test_scan_hook_ignores_a_github_scripts_path_mentioned_only_in_a_trailing_comment(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Correctness regression: Pass 1 used to search an assignment's
+    *entire* right-hand side (including any trailing `# comment`) for a
+    `.github/scripts/*.py`-shaped substring, so a variable holding an
+    unrelated value could still get tracked -- and later flagged -- purely
+    because its assignment line's own trailing comment happened to mention
+    a different gate script's path (an ordinary documentation habit).
+    Found live in review: `other_var="unrelated_value"  # see also
+    .github/scripts/some_other_gate.py` tracked `other_var`, and its later
+    bare `python3 "$other_var"` invocation was reported as a false
+    positive."""
+    hooks_dir = _write_hook(
+        tmp_path,
+        "demo.sh",
+        'other_var="unrelated_value"  # see also .github/scripts/some_other_gate.py for context\n'
+        "echo noop\n"
+        'python3 "$other_var"\n',
+    )
+    assert gate.find_hooks_shell_indirected_invocations(hooks_dir) == []

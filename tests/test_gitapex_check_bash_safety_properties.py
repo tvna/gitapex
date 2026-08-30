@@ -20,6 +20,7 @@ Reproducibility: ``derandomize=True`` with an explicit ``max_examples`` and
 from __future__ import annotations
 
 import json
+import shlex
 import string
 import sys
 from typing import cast
@@ -1357,7 +1358,7 @@ def test_rule_command_substitution_content_detects_an_embedded_install(tool: str
     a punctuation character shlex breaks a word at, so an assignment's
     `NAME=` prefix stays fused onto the leading `$` in the same token."""
     tokens = ["x=$", "(", tool, "install", "evil-pkg", ")"]
-    reason, _ = checker._rule_command_substitution_content(tokens)
+    reason, _, _ = checker._rule_command_substitution_content(tokens, {}, {}, {}, {}, {}, {}, {}, set())
     assert reason is not None
 
 
@@ -1373,7 +1374,7 @@ def test_rule_command_substitution_content_allows_harmless_inner_content(value: 
     silently dropping a non-denying inner `is_git_push=True` signal (see
     the function's own docstring)."""
     tokens = ["echo", "$", "(", "date", value, ")"]
-    assert checker._rule_command_substitution_content(tokens) == (None, False)
+    assert checker._rule_command_substitution_content(tokens, {}, {}, {}, {}, {}, {}, {}, set()) == (None, False, ())
 
 
 # --- Issue #1326 Stage 1, fifteenth round: bash's own leading-assignment ----
@@ -1492,7 +1493,7 @@ def test_rule_array_literal_content_detects_a_denied_pair_regardless_of_a_leadin
     `Y=1; A=(uv install $Y); "${A[@]}"` was wrongly ALLOWED before this
     function existed."""
     tokens = ["dummy=", "(", f"${first}", "uv", "install", f"${second}", ")"]
-    reason, _ = checker._rule_array_literal_content(tokens, {}, {})
+    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {}, {}, {}, set())
     assert reason is not None
 
 
@@ -1511,7 +1512,7 @@ def test_rule_array_literal_content_collapses_a_leading_unassigned_bare_ref(unse
     fused with other text (not a bare whole-token reference), must NOT
     be collapsed -- that shape does not word-split away to nothing."""
     tokens = ["dummy=", "(", f"${unset_name}", verb_a, "install", ")"]
-    reason, _ = checker._rule_array_literal_content(tokens, {}, {})
+    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {}, {}, {}, set())
     assert reason is not None
 
 
@@ -1531,13 +1532,13 @@ def test_rule_array_literal_content_allows_harmless_content() -> None:
     denied pattern, with or without a leading unassigned reference,
     stays allowed."""
     tokens = ["dummy=", "(", "$NEVERSET", "echo", "harmless", ")"]
-    assert checker._rule_array_literal_content(tokens, {}, {}) == (None, False)
+    assert checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {}, {}, {}, set()) == (None, False, ())
 
 
 def test_rule_array_literal_content_no_span_present() -> None:
     """Robustness: a token stream with no array-literal span at all
     (e.g. an ordinary command) returns cleanly, never a crash."""
-    assert checker._rule_array_literal_content(["echo", "hi"], {}, {}) == (None, False)
+    assert checker._rule_array_literal_content(["echo", "hi"], {}, {}, {}, {}, {}, {}, {}, set()) == (None, False, ())
 
 
 def test_strip_leading_unassigned_bare_refs_stops_at_a_fused_token() -> None:
@@ -1563,7 +1564,7 @@ def test_rule_array_literal_content_empty_array_is_harmless() -> None:
     """No false positive / no crash: an empty array literal `NAME=()`
     has no inner content to recursively classify at all."""
     tokens = ["dummy=", "(", ")"]
-    assert checker._rule_array_literal_content(tokens, {}, {}) == (None, False)
+    assert checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {}, {}, {}, set()) == (None, False, ())
 
 
 def test_rule_array_literal_content_skips_the_collapsed_reading_without_a_leading_unassigned_ref() -> None:
@@ -1572,7 +1573,7 @@ def test_rule_array_literal_content_skips_the_collapsed_reading_without_a_leadin
     `_strip_leading_unassigned_bare_refs` to strip -- the collapsed
     reading equals the as-is one, so only one classification is needed."""
     tokens = ["dummy=", "(", "echo", "harmless", ")"]
-    assert checker._rule_array_literal_content(tokens, {}, {}) == (None, False)
+    assert checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {}, {}, {}, set()) == (None, False, ())
 
 
 def test_rule_array_literal_content_denies_only_on_the_collapsed_reading() -> None:
@@ -1589,7 +1590,7 @@ def test_rule_array_literal_content_denies_only_on_the_collapsed_reading() -> No
     real, with a dynamic verb argument right after it -- exactly B2's own
     watched shape."""
     tokens = ["dummy=", "(", "$NEVERSET", "uv", "$VERB", ")"]
-    reason, _ = checker._rule_array_literal_content(tokens, {}, {})
+    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {}, {}, {}, set())
     assert reason is not None
     assert "unassigned reference" in reason
 
@@ -1631,7 +1632,7 @@ def test_rule_array_literal_content_collapses_a_leading_unassigned_braced_bare_r
     this round, silently degrading the collapsed reading to a no-op for
     this shape."""
     tokens = ["dummy=", "(", f"${{{unset_name}}}", verb_a, "install", ")"]
-    reason, _ = checker._rule_array_literal_content(tokens, {}, {})
+    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {}, {}, {}, set())
     assert reason is not None
 
 
@@ -1646,7 +1647,7 @@ def test_rule_array_literal_content_detects_an_outer_scope_resolved_pair() -> No
     recursive `_classify_tokens` call."""
     tokens = ["dummy=", "(", "$G", "$P", "$M", ")"]
     outer = {"G": "gh", "P": "pr", "M": "merge"}
-    reason, _ = checker._rule_array_literal_content(tokens, outer, outer)
+    reason, _, _ = checker._rule_array_literal_content(tokens, outer, outer, outer, {}, {}, {}, {}, set())
     assert reason is not None
 
 
@@ -1667,6 +1668,2943 @@ def test_classify_denies_array_literal_content_with_braced_decoy_end_to_end() ->
     independent review, nineteenth round (issue #1326)."""
     verdict = checker.classify('A=(${NEVERSET} gh pr merge 1); "${A[@]}"')
     assert verdict.deny is True
+
+
+def test_rule_command_substitution_content_detects_an_outer_scope_resolved_checkout() -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, eighteenth round (issue #1375): a `git` token
+    built from a variable assigned OUTSIDE the `$(...)` span's own
+    text (NAME_TO_VALUE's own entries, not anything the substitution's
+    own inner tokens assign) must still be recognized -- `G=git; x=$($G
+    checkout -- dirty.py)` was wrongly ALLOWED, with an EMPTY
+    `checkout_restore_paths`, before outer scope was threaded into the
+    recursive `_classify_tokens` call below. Mirrors `_rule_array_
+    literal_content`'s own nineteenth-round test of the identical shape
+    for the array-literal span."""
+    tokens = ["x=$", "(", "$G", "checkout", "--", "dirty.py", ")"]
+    outer = {"G": "git"}
+    reason, _, checkout_restore_paths = checker._rule_command_substitution_content(
+        tokens, outer, outer, outer, {}, {}, {}, {}, set()
+    )
+    assert reason is None
+    assert checkout_restore_paths == ("dirty.py",)
+
+
+def test_classify_extracts_command_substitution_checkout_paths_with_outer_scope_end_to_end() -> None:
+    """`classify()`'s own `checkout_restore_paths` extraction, reached
+    end-to-end -- not just the recursive rule's own unit test above.
+    Regression pin for the real bypass found live by Step 8 independent
+    review, eighteenth round (issue #1375): before the outer-scope fix,
+    this resolved to an EMPTY `checkout_restore_paths`, the same silent
+    "nothing to see here" this classifier's own `deny=False` gives every
+    ordinary checkout/restore invocation -- `deny` itself stays False
+    here regardless (this module never unconditionally denies checkout/
+    restore; the live wrapper's own `git diff --quiet` check is what
+    turns a non-empty `checkout_restore_paths` into an actual deny, see
+    `hooks/check-bash-safety.sh`). Exercises the unquoted, cross-token
+    `$(...)` shape (`_command_substitution_token_span`, recursed into via
+    `_classify_tokens` on inner TOKENS)."""
+    verdict = checker.classify("G=git; x=$($G checkout -- dirty.py)")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("dirty.py",)
+
+
+def test_classify_extracts_quoted_command_substitution_checkout_paths_with_outer_scope_end_to_end() -> None:
+    """Companion to the end-to-end pin above, for the quoted/fused
+    `$(...)` shape (`_find_fused_command_substitution`, recursed into via
+    `classify()` on the inner TEXT rather than `_classify_tokens` on
+    inner TOKENS) -- the two shapes are separate code paths in `_rule_
+    command_substitution_content`, both needed the outer-scope fix
+    (eighteenth round, issue #1375)."""
+    verdict = checker.classify('G=git; x="$($G checkout -- dirty.py)"')
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("dirty.py",)
+
+
+def test_assigned_raw_values_biased_toward_stays_on_literal_once_assigned() -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, nineteenth round (issue #1375): once a name is
+    assigned the biased-toward literal at any point, a LATER, different
+    reassignment of the SAME name must not overwrite it back out --
+    `TOOL=git; ...; TOOL=npm` must still resolve `TOOL` to `git` here,
+    unlike `_assigned_raw_values`'s own plain last-occurrence-wins
+    collapse."""
+    assert checker._assigned_raw_values_biased_toward(["TOOL=git", "TOOL=npm"], frozenset({"git"})) == {"TOOL": "git"}
+
+
+def test_assigned_raw_values_biased_toward_locks_on_regardless_of_order() -> None:
+    """The literal-assignment can arrive BEFORE or AFTER a different
+    reassignment of the same name and the end result is the same -- this
+    function does not attempt real execution-order tracking, only a
+    bounded "was LITERAL ever assigned to this name" bias."""
+    assert checker._assigned_raw_values_biased_toward(["TOOL=npm", "TOOL=git"], frozenset({"git"})) == {"TOOL": "git"}
+
+
+def test_assigned_raw_values_biased_toward_falls_back_to_last_assignment_when_literal_never_seen() -> None:
+    """A name never assigned the biased-toward literal anywhere resolves
+    exactly as `_assigned_raw_values`'s own plain last-occurrence-wins
+    collapse would -- this function only ever WIDENS toward the literal,
+    never changes behavior for a name that was never a candidate."""
+    assert checker._assigned_raw_values_biased_toward(["TOOL=npm", "TOOL=yarn"], frozenset({"git"})) == {"TOOL": "yarn"}
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, decoy_value=_VALUES, tail=st.lists(_IDENTIFIERS, max_size=2))
+def test_assigned_raw_values_biased_toward_matches_plain_collapse_when_never_reassigned_to_literal(
+    name: str, decoy_value: str, tail: list[str]
+) -> None:
+    """Model-based: for a single assignment never matching the biased-
+    toward literal, `_assigned_raw_values_biased_toward` agrees exactly
+    with the plain, order-blind `_assigned_raw_values`."""
+    assume(decoy_value.lower() != "git")
+    tokens = [f"{name}={decoy_value}", *tail]
+    assert checker._assigned_raw_values_biased_toward(tokens, frozenset({"git"})) == checker._assigned_raw_values(
+        tokens
+    )
+
+
+def test_find_git_checkout_restore_recognizes_a_git_biased_reassigned_token() -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, nineteenth round (issue #1375): the ordinary
+    NAME_TO_RAW_VALUE reading declines (TOOL's own collapsed value is
+    "npm", not "git"), but the GIT_BIASED reading recognizes `git` was
+    assigned to TOOL at some point, so the occurrence is still found."""
+    seg = ["$TOOL", "checkout", "--", "f.py"]
+    subcommand, tokens_after, saw_tree_relocation = checker._find_git_checkout_restore(
+        seg, {"TOOL": "npm"}, {"TOOL": "git"}
+    )
+    assert subcommand == "checkout"
+    assert tokens_after == ["--", "f.py"]
+    assert saw_tree_relocation is False
+
+
+def test_find_git_checkout_restore_still_declines_when_neither_reading_resolves_to_git() -> None:
+    """No false positive: when NEITHER the ordinary nor the git-biased
+    reading resolves `tok` to `git`, the occurrence is still declined --
+    the git-biased reading only ever widens recognition, never invents a
+    match out of nothing."""
+    seg = ["$TOOL", "checkout", "--", "f.py"]
+    subcommand, _tokens_after, _saw = checker._find_git_checkout_restore(seg, {"TOOL": "svn"}, {"TOOL": "svn"})
+    assert subcommand is None
+
+
+def test_classify_extracts_checkout_paths_when_git_token_is_reassigned_after_use() -> None:
+    """End-to-end regression pin for the round-19 finding at the
+    `classify()` level, top-level shape (no command substitution needed
+    at all) -- an entirely ordinary "reuse a variable name for a later,
+    unrelated purpose" idiom. Confirmed live before this fix:
+    `TOOL=git; $TOOL checkout -- dirty.py; TOOL=npm` resolved to an EMPTY
+    `checkout_restore_paths`, even though `$TOOL` genuinely was `git` at
+    its actual point of use."""
+    verdict = checker.classify("TOOL=git; $TOOL checkout -- dirty.py; TOOL=npm")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("dirty.py",)
+
+
+def test_classify_extracts_restore_paths_when_git_token_is_reassigned_after_use() -> None:
+    """Companion to the checkout pin above, for `git restore` -- the
+    round-19 finding was confirmed live for both subcommands."""
+    verdict = checker.classify("TOOL=git; $TOOL restore dirty.py; TOOL=npm")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("dirty.py",)
+
+
+def test_classify_extracts_checkout_paths_when_git_token_is_reassigned_after_a_command_substitution() -> None:
+    """End-to-end regression pin for the round-19 finding's command-
+    substitution shape: the SAME reassignment-after-use gap, reached
+    through `_rule_command_substitution_content`'s own outer-scope
+    threading (round 18). Confirmed live before this fix: `G=git;
+    x=$($G checkout -- dirty.py); G=notgit` resolved to an EMPTY
+    `checkout_restore_paths`."""
+    verdict = checker.classify("G=git; x=$($G checkout -- dirty.py); G=notgit")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("dirty.py",)
+
+
+def test_assigned_raw_values_biased_toward_accepts_several_interchangeable_literals() -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, twentieth round (issue #1375): LITERALS is a
+    SET, not a single string, so `cd`, `pushd`, and `popd` -- three
+    different literals that all answer the same "was the working tree
+    possibly relocated" question -- are all sticky against a later
+    reassignment, not just one of them."""
+    assert checker._assigned_raw_values_biased_toward(["X=cd", "X=elsewhere"], checker._CWD_RELOCATING_COMMANDS) == {
+        "X": "cd"
+    }
+    assert checker._assigned_raw_values_biased_toward(["X=pushd", "X=elsewhere"], checker._CWD_RELOCATING_COMMANDS) == {
+        "X": "pushd"
+    }
+
+
+def test_rule_git_checkout_restore_recognizes_a_cd_biased_reassigned_relocator() -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, twentieth round (issue #1375): `_rule_git_
+    checkout_restore`'s own dynamic-cd-relocation check was fed only the
+    ordinary, order-blind RAW_ASSIGNED, the IDENTICAL gap round 19 closed
+    for the sibling git-token-recognition consumer in the same function,
+    just left open here -- the ordinary reading declines (X's own
+    collapsed value is "elsewhere", not a relocator), but the
+    RAW_ASSIGNED_CD_BIASED reading recognizes `cd` was assigned to X at
+    some point, so the earlier relocation is still flagged and the
+    checkout is denied rather than confidently, wrongly resolved."""
+    segments = [["$X", "sub"], ["git", "checkout", "--", "dirty.py"]]
+    reason, resolved = checker._rule_git_checkout_restore(segments, {"X": "elsewhere"}, {}, {"X": "cd"}, {}, set())
+    assert reason is not None
+    assert "cd" in reason or "pushd" in reason or "popd" in reason
+    assert resolved == ()
+
+
+def test_classify_denies_checkout_when_a_cd_token_is_reassigned_after_use() -> None:
+    """End-to-end regression pin for the round-20 finding at the
+    `classify()` level. Confirmed live before this fix: `X=cd; $X sub;
+    git checkout -- dirty.py; X=somethingelse` resolved to `deny=False`
+    with a CONFIDENT, WRONG `checkout_restore_paths` claim, even though
+    `$X` genuinely was `cd` at its actual point of use one statement
+    earlier."""
+    verdict = checker.classify("X=cd; $X sub; git checkout -- dirty.py; X=somethingelse")
+    assert verdict.deny is True
+
+
+def test_classify_denies_checkout_when_a_pushd_token_is_reassigned_after_use() -> None:
+    """Companion to the `cd` pin above, for `pushd` -- the round-20
+    finding was confirmed live for all three `_CWD_RELOCATING_COMMANDS`
+    members."""
+    verdict = checker.classify("X=pushd; $X sub; git checkout -- dirty.py; X=somethingelse")
+    assert verdict.deny is True
+
+
+def test_classify_does_not_flag_cd_relocation_for_an_unrelated_reassigned_tool() -> None:
+    """No false positive: a variable reassigned but NEVER assigned
+    `cd`/`pushd`/`popd` anywhere in the command must not be flagged as a
+    possible relocator -- the cd-biased fallback only ever widens
+    recognition of a name that really was a relocator at some point,
+    never invents one out of nothing."""
+    verdict = checker.classify("X=curl; $X sub; git checkout -- dirty.py; X=wget")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("dirty.py",)
+
+
+def test_classify_denies_checkout_when_a_cd_token_is_reassigned_across_a_command_substitution() -> None:
+    """End-to-end regression pin for the round-21 finding at the
+    `classify()` level: round 20's own cd-biased fix was scoped to the
+    current `_classify_tokens` invocation's own top-level segments only,
+    which missed a reassignment straddling a command substitution's OWN
+    boundary -- the relocator `$X` is used entirely WITHIN the
+    substitution, but the ambiguity lives in the OUTER token stream.
+    Confirmed live before this fix: `X=cd; y=$($X sub; git checkout --
+    dirty.py); X=somethingelse` resolved to `deny=False` with a
+    CONFIDENT, WRONG `checkout_restore_paths` claim."""
+    verdict = checker.classify("X=cd; y=$($X sub; git checkout -- dirty.py); X=somethingelse")
+    assert verdict.deny is True
+
+
+def test_assigned_raw_value_history_records_every_distinct_value() -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, twenty-first round (issue #1375): unlike
+    `_assigned_raw_values`'s own last-occurrence-wins collapse, every
+    DISTINCT value ever assigned to a name is kept, in first-seen order."""
+    assert checker._assigned_raw_value_history(["F=dirty.py", "F=other.py"]) == {"F": ("dirty.py", "other.py")}
+
+
+def test_assigned_raw_value_history_deduplicates_an_identical_reassignment() -> None:
+    """The SAME value assigned twice to the same name contributes only
+    ONE entry to its history, not a duplicate."""
+    assert checker._assigned_raw_value_history(["F=dirty.py", "F=dirty.py"]) == {"F": ("dirty.py",)}
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value1=_VALUES, value2=_VALUES, tail=st.lists(_IDENTIFIERS, max_size=2))
+def test_assigned_raw_value_history_matches_last_assignment_of_assigned_raw_values(
+    name: str, value1: str, value2: str, tail: list[str]
+) -> None:
+    """Model-based: `_assigned_raw_value_history`'s own last entry for a
+    name always agrees with `_assigned_raw_values`'s own single,
+    last-occurrence-wins value for that same name -- the history is a
+    strict widening (every value `_assigned_raw_values` itself could ever
+    report, plus every earlier one it silently discarded), never a
+    disagreement."""
+    tokens = [f"{name}={value1}", f"{name}={value2}", *tail]
+    history = checker._assigned_raw_value_history(tokens)
+    assert history[name][-1] == checker._assigned_raw_values(tokens)[name]
+
+
+def test_merge_raw_value_histories_unions_rather_than_shadows() -> None:
+    """Model-based: unlike the plain `{**outer, **inner}` shadowing
+    convention every other scope dict in this module uses, a name
+    appearing in BOTH outer and inner histories keeps candidates from
+    BOTH, not just inner's own -- an inner reassignment could genuinely
+    take effect only AFTER `$NAME` was already used with an outer value,
+    which this module's own static analysis cannot rule out (see this
+    function's own docstring)."""
+    merged = checker._merge_raw_value_histories({"F": ("dirty.py",)}, {"F": ("other.py",)})
+    assert merged == {"F": ("dirty.py", "other.py")}
+
+
+def test_merge_raw_value_histories_deduplicates_a_value_shared_by_both_scopes() -> None:
+    """A value present in BOTH outer's and inner's own history for the
+    same name contributes only one entry to the merged result."""
+    merged = checker._merge_raw_value_histories({"F": ("dirty.py", "other.py")}, {"F": ("other.py",)})
+    assert merged == {"F": ("dirty.py", "other.py")}
+
+
+def test_resolve_path_tokens_widens_a_bare_reference_to_its_full_history() -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, twenty-first round (issue #1375):
+    `_resolve_path_tokens`'s own dynamic-path-argument resolution is a
+    THIRD consumer of the order-blind `_assigned_raw_values` collapse,
+    with no bias mechanism at all before this fix -- `F=dirty.py; git
+    checkout -- $F; F=other.py` resolved `$F` to `"other.py"` (the LAST
+    assignment in token order) alone, even though `$F` genuinely was
+    `dirty.py` at its actual point of use, so the REAL dirty file was
+    never checked. A bare/braced whole-token reference to a name with
+    multiple distinct historical values now extracts ALL of them as
+    separate candidates, not just the single, possibly-stale one the
+    collapsed NAME_TO_RAW_VALUE dict gives."""
+    reason, resolved = checker._resolve_path_tokens(["$F"], {"F": "other.py"}, {"F": ("dirty.py", "other.py")}, set())
+    assert reason is None
+    assert resolved == ("dirty.py", "other.py")
+
+
+def test_resolve_path_tokens_history_widening_deduplicates_against_existing_paths() -> None:
+    """A historical value that coincides with a path already extracted
+    from an earlier, literal token in the same command is not appended
+    twice."""
+    reason, resolved = checker._resolve_path_tokens(
+        ["dirty.py", "$F"], {"F": "other.py"}, {"F": ("dirty.py", "other.py")}, set()
+    )
+    assert reason is None
+    assert resolved == ("dirty.py", "other.py")
+
+
+def test_resolve_path_tokens_widens_a_fused_reference() -> None:
+    """Regression pin for the real bypass found live by Step 8
+    independent review, twenty-third round (issue #1375): round 21's own
+    widening was scoped to a token that is EXACTLY one bare/braced
+    whole-token reference, so a token that FUSES a reference with literal
+    text (the ordinary `"$DIR/$FILE"` path-join idiom, or `"${F}.py"`
+    here) fell through to the ordinary, un-widened, order-blind
+    resolution -- a CONFIDENT, WRONG single-candidate claim, not merely a
+    narrower-but-safe one. Every historical value for a name referenced
+    anywhere in the token -- fused or not -- is now widened."""
+    reason, resolved = checker._resolve_path_tokens(["${F}.py"], {"F": "dirty"}, {"F": ("dirty", "other")}, set())
+    assert reason is None
+    assert resolved == ("dirty.py", "other.py")
+
+
+def test_resolve_path_tokens_widens_two_fused_references_via_cartesian_product() -> None:
+    """The `"$DIR/$FILE"` path-join idiom itself, live-confirmed as this
+    round's own reproduction: two DIFFERENT names, each with its own
+    multi-valued history, both fused into the SAME token -- every
+    combination is widened, not just one name at a time."""
+    reason, resolved = checker._resolve_path_tokens(
+        ["$DIR/$FILE"],
+        {"DIR": "other", "FILE": "dirty.py"},
+        {"DIR": ("sub", "other"), "FILE": ("dirty.py",)},
+        set(),
+    )
+    assert reason is None
+    assert resolved == ("sub/dirty.py", "other/dirty.py")
+
+
+def test_resolve_path_tokens_a_single_historical_value_widens_to_one_candidate_only() -> None:
+    """No false positive: a name with only ONE historical value (assigned
+    exactly once, or reassigned to the SAME value) contributes no extra
+    combinations -- the fused case degenerates to the same single
+    candidate the ordinary, un-widened resolution already gives."""
+    reason, resolved = checker._resolve_path_tokens(["${F}.py"], {"F": "dirty"}, {"F": ("dirty",)}, set())
+    assert reason is None
+    assert resolved == ("dirty.py",)
+
+
+def test_bounded_history_combinations_returns_one_empty_combination_for_no_names() -> None:
+    """An empty NAMES set (no multi-valued name referenced) still yields
+    exactly one, no-op combination -- never `None` -- so a caller with
+    nothing to widen gets a single ordinary resolution pass, not a
+    spurious deny."""
+    assert checker._bounded_history_combinations(set(), {}) == [{}]
+
+
+def test_bounded_history_combinations_denies_when_the_product_is_too_large() -> None:
+    """Fail closed, matching `_substitute_var_refs_candidates`'s own
+    quote-boundary-expansion bound: a cartesian product exceeding
+    `_MAX_SUBSTITUTION_CANDIDATES` returns `None` rather than silently
+    enumerating only part of it."""
+    history = {
+        "A": tuple(f"a{i}" for i in range(10)),
+        "B": tuple(f"b{i}" for i in range(10)),
+    }
+    assert checker._bounded_history_combinations({"A", "B"}, history) is None
+
+
+def test_resolve_path_tokens_denies_when_the_combination_product_is_too_large() -> None:
+    """End-to-end (within `_resolve_path_tokens` itself, not just the
+    `_bounded_history_combinations` unit above): a token referencing two
+    names whose combined historical-value product exceeds `_MAX_
+    SUBSTITUTION_CANDIDATES` is denied outright as unresolvable, rather
+    than silently enumerating only part of the combination space -- the
+    same fail-closed posture this module already takes for a
+    quote-boundary explosion."""
+    history = {
+        "A": tuple(f"a{i}" for i in range(10)),
+        "B": tuple(f"b{i}" for i in range(10)),
+    }
+    reason, resolved = checker._resolve_path_tokens(["$A/$B"], {"A": "a0", "B": "b0"}, history, set())
+    assert reason is not None
+    assert "too many historically-assigned readings" in reason
+    assert resolved == ()
+
+
+def test_referenced_names_resolves_an_indirect_reference_to_its_second_level_target() -> None:
+    """Regression pin for the real bypass found live by Step 8 independent
+    review, twenty-fourth round (issue #1375): `${!C}` is a TWO-level
+    reference (C's own value names a SECOND variable), but the prior
+    version of this extraction only ever checked C itself for multi-
+    valued history -- never the second-level name C's value actually
+    points to, which is the one genuinely read at the point of use. Both
+    C itself and the name it currently points to must be in the
+    referenced set."""
+    names = checker._referenced_names("${!C}", {"C": "TARGET"}, {})
+    assert names == {"C", "TARGET"}
+
+
+def test_referenced_names_resolves_every_historical_second_level_target() -> None:
+    """Companion to the pin above: C's own HISTORY (not just its current
+    reading) is also searched for second-level target names, since C
+    itself may have been reassigned to point somewhere else at an
+    earlier point."""
+    names = checker._referenced_names("${!C}", {"C": "OTHER"}, {"C": ("TARGET", "OTHER")})
+    assert names == {"C", "TARGET", "OTHER"}
+
+
+def test_referenced_names_resolves_a_second_level_target_with_no_current_reading() -> None:
+    """C's own history is searched even when C has no CURRENT reading at
+    all in NAME_TO_RAW_VALUE (e.g. C was only ever assigned inside a
+    scope this dict no longer reflects) -- only C's history need supply
+    the second-level name."""
+    names = checker._referenced_names("${!C}", {}, {"C": ("TARGET",)})
+    assert names == {"C", "TARGET"}
+
+
+def test_multi_valued_names_referenced_widens_a_second_level_indirect_target() -> None:
+    """End-to-end for `_multi_valued_names_referenced` itself: TARGET (the
+    second-level name `${!C}` actually resolves through) is included when
+    ITS OWN history is multi-valued, even though C's own history has only
+    one entry."""
+    history = {"C": ("TARGET",), "TARGET": ("sub", "other")}
+    assert checker._multi_valued_names_referenced("${!C}", {"C": "TARGET"}, history) == {"TARGET"}
+
+
+def test_resolve_path_tokens_widens_an_indirect_reference_second_level_target() -> None:
+    """End-to-end regression pin for the round-24 finding at the
+    `_resolve_path_tokens` level. Confirmed live before this fix:
+    `TARGET=sub; C=TARGET; git checkout -- ${!C}; TARGET=other` resolved
+    `checkout_restore_paths` to `('other',)` alone -- the WRONG,
+    order-blind-collapsed last value of TARGET (real bash: `${!C}`
+    genuinely was `sub` at its actual point of use)."""
+    reason, resolved = checker._resolve_path_tokens(
+        ["${!C}"], {"C": "TARGET", "TARGET": "other"}, {"TARGET": ("sub", "other")}, set()
+    )
+    assert reason is None
+    assert resolved == ("sub", "other")
+
+
+def test_names_with_dynamic_assignment_finds_a_dynamically_reassigned_name() -> None:
+    """Regression pin for the real bypass found live by Step 8 independent
+    review, twenty-fourth round (issue #1375): `_assigned_raw_values`/
+    `_assigned_raw_value_history` both skip a dynamic-RHS assignment
+    token entirely, so a name's own earlier static assignment stays on
+    file untouched by a later dynamic reassignment -- this function is
+    the dedicated detector that closes that gap."""
+    assert checker._names_with_dynamic_assignment(["DIR=sub", "DIR=$(echo other)"]) == {"DIR"}
+
+
+def test_names_with_dynamic_assignment_ignores_a_purely_static_name() -> None:
+    """No false positive: a name assigned only static values anywhere is
+    not flagged."""
+    assert checker._names_with_dynamic_assignment(["DIR=sub", "DIR=other"]) == set()
+
+
+def test_names_with_dynamic_assignment_finds_a_dynamic_compound_append() -> None:
+    """Regression pin for the real bypass found live by Step 8 independent
+    review, twenty-fifth round (issue #1375): `_ASSIGN_RE` never matches
+    bash's own `NAME+=value` compound/append-assignment operator at all,
+    so the round-24 form of this function -- keyed entirely off
+    `_ASSIGN_RE` -- was completely blind to an appended name regardless
+    of whether the appended text was itself dynamic."""
+    assert checker._names_with_dynamic_assignment(["DIR=sub", "DIR+=$other"]) == {"DIR"}
+
+
+def test_names_with_dynamic_assignment_finds_a_static_compound_append() -> None:
+    """A STATIC append (`DIR+=txt`, no `$`/backtick) shares the identical
+    exposure for a different reason: reconstructing the real concatenated
+    value would need genuine execution-order tracking this classifier
+    does not perform, so a static append is poisoned too, independent of
+    `_is_dynamic`."""
+    assert checker._names_with_dynamic_assignment(["DIR=sub", "DIR+=txt"]) == {"DIR"}
+
+
+def test_names_with_dynamic_assignment_append_ignores_an_unrelated_name() -> None:
+    """No false positive: an append to one name does not poison a
+    completely different name."""
+    assert checker._names_with_dynamic_assignment(["DIR=sub", "OTHER=x", "OTHER+=y"]) == {"OTHER"}
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, static_value=_VALUES, appended_value=_VALUES)
+def test_names_with_dynamic_assignment_matches_model_for_a_static_then_appended_reassignment(
+    name: str, static_value: str, appended_value: str
+) -> None:
+    """Model-based: for ANY identifier assigned a static value and then
+    appended to (`+=`) with a DYNAMIC value, `_names_with_dynamic_
+    assignment` always includes it -- and a second, entirely unrelated
+    identifier that is only ever assigned statically is never included
+    alongside it."""
+    other_name = name + "_OTHER"
+    tokens = [f"{name}={static_value}", f"{name}+=$({appended_value})", f"{other_name}={static_value}"]
+    result = checker._names_with_dynamic_assignment(tokens)
+    assert name in result
+    assert other_name not in result
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, static_value=_VALUES, dynamic_value=_VALUES)
+def test_names_with_dynamic_assignment_matches_model_for_a_static_then_dynamic_reassignment(
+    name: str, static_value: str, dynamic_value: str
+) -> None:
+    """Model-based: for ANY identifier assigned a static value and then
+    reassigned a dynamic one, `_names_with_dynamic_assignment` always
+    includes it -- and a second, entirely unrelated identifier that is
+    only ever assigned statically is never included alongside it."""
+    other_name = name + "_OTHER"
+    tokens = [f"{name}={static_value}", f"{name}=$({dynamic_value})", f"{other_name}={static_value}"]
+    result = checker._names_with_dynamic_assignment(tokens)
+    assert name in result
+    assert other_name not in result
+
+
+def test_names_with_dynamic_assignment_finds_an_array_element_reassignment() -> None:
+    """Regression pin for the real bypass found live by Step 8 independent
+    review, twenty-sixth round (issue #1375): neither `_ASSIGN_RE` nor
+    `_APPEND_ASSIGN_RE` matches bash's own array-element assignment
+    (`NAME[i]=value`/`NAME[i]+=value`) at all -- both anchor immediately
+    after NAME's own bare identifier characters, with no `[...]` in
+    between. Confirmed live: `bash -c 'arr=x; arr[0]=other; echo
+    "arr=[$arr]"'` -> `arr=[other]`."""
+    assert checker._names_with_dynamic_assignment(["arr=x", "arr[0]=other"]) == {"arr"}
+
+
+def test_names_with_dynamic_assignment_finds_an_array_element_append() -> None:
+    """Companion to the plain array-element-assignment pin above, for the
+    `+=` compound form (`NAME[i]+=value`)."""
+    assert checker._names_with_dynamic_assignment(["arr=x", "arr[0]+=other"]) == {"arr"}
+
+
+def test_names_with_dynamic_assignment_array_element_ignores_an_unrelated_name() -> None:
+    """No false positive: an array-element assignment to one name does not
+    poison a completely different name."""
+    assert checker._names_with_dynamic_assignment(["DIR=sub", "arr[0]=other"]) == {"arr"}
+
+
+def test_names_with_dynamic_assignment_finds_a_read_reassignment() -> None:
+    """Regression pin for the real bypass found live by Step 8 independent
+    review, twenty-sixth round (issue #1375): `read NAME` reassigns NAME
+    from runtime input, invisible to `_ASSIGN_RE`/`_APPEND_ASSIGN_RE`
+    entirely. Confirmed live: `bash -c 'DIR=sub; read DIR <<< "other";
+    echo "DIR=[$DIR]"'` -> `DIR=[other]`."""
+    assert checker._names_with_dynamic_assignment(["DIR=sub", ";", "read", "DIR"]) == {"DIR"}
+
+
+def test_names_with_dynamic_assignment_finds_a_readarray_reassignment() -> None:
+    """Companion to the `read` pin above, for `readarray`/`mapfile`'s own
+    equivalent target-operand shape."""
+    assert checker._names_with_dynamic_assignment(["ARR=x", ";", "readarray", "ARR"]) == {"ARR"}
+    assert checker._names_with_dynamic_assignment(["ARR=x", ";", "mapfile", "ARR"]) == {"ARR"}
+
+
+def test_names_with_dynamic_assignment_read_ignores_flag_tokens() -> None:
+    """No false positive from the flag tokens themselves: `-r`/`-a` never
+    match `_BARE_IDENTIFIER_RE` (both start with `-`), so only the real
+    target name is poisoned."""
+    assert checker._names_with_dynamic_assignment(["DIR=sub", ";", "read", "-r", "DIR"]) == {"DIR"}
+
+
+def test_names_with_dynamic_assignment_read_command_word_must_start_its_own_segment() -> None:
+    """No false positive: the literal word `read` appearing as an ordinary
+    argument (not as a command word starting its own segment) must not be
+    treated as the `read` builtin."""
+    assert checker._names_with_dynamic_assignment(["echo", "read", "DIR"]) == set()
+
+
+def test_names_with_dynamic_assignment_finds_a_printf_v_reassignment() -> None:
+    """Regression pin for the real bypass found live by Step 8 independent
+    review, twenty-sixth round (issue #1375): `printf -v NAME` writes a
+    formatted result into NAME, invisible to `_ASSIGN_RE`/`_APPEND_
+    ASSIGN_RE` entirely. Confirmed live: `bash -c 'DIR=sub; printf -v DIR
+    "%s" other; echo "DIR=[$DIR]"'` -> `DIR=[other]`."""
+    assert checker._names_with_dynamic_assignment(["DIR=sub", ";", "printf", "-v", "DIR", "%s", "other"]) == {"DIR"}
+
+
+def test_names_with_dynamic_assignment_printf_without_v_flag_is_unaffected() -> None:
+    """No false positive: an ordinary `printf` call with no `-v` flag at
+    all must not poison any name."""
+    assert checker._names_with_dynamic_assignment(["DIR=sub", ";", "printf", "%s\\n", "DIR"]) == set()
+
+
+def test_names_reassigned_by_read_or_printf_ignores_a_dynamic_printf_v_target() -> None:
+    """No false positive, and an inherent limit disclosed rather than
+    silently mishandled: `printf -v $UNKNOWN ...` names its OWN
+    reassignment target dynamically -- this function cannot know which
+    real name that resolves to, so it poisons nothing (the same posture
+    `read $UNKNOWN` would need, though this module does not attempt that
+    shape either). Confirmed via `tokenize` that `-v`'s own following
+    token here is genuinely dynamic, not a bare identifier."""
+    assert checker._names_reassigned_by_read_or_printf(checker.tokenize('printf -v $X "%s" y')) == set()
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, static_value=_VALUES, other_value=_VALUES)
+def test_names_with_dynamic_assignment_matches_model_for_a_read_reassignment(
+    name: str, static_value: str, other_value: str
+) -> None:
+    """Model-based: for ANY identifier assigned a static value and then
+    reassigned via `read`, `_names_with_dynamic_assignment` always
+    includes it -- and a second, entirely unrelated identifier that is
+    only ever assigned statically is never included alongside it."""
+    other_name = name + "_OTHER"
+    tokens = [f"{name}={static_value}", ";", "read", name, ";", f"{other_name}={other_value}"]
+    result = checker._names_with_dynamic_assignment(tokens)
+    assert name in result
+    assert other_name not in result
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, static_value=_VALUES, other_value=_VALUES)
+def test_names_reassigned_by_untracked_construct_matches_model_for_a_read_reassignment(
+    name: str, static_value: str, other_value: str
+) -> None:
+    """Model-based, exercising the DEDICATED (narrower) round-26 function
+    directly rather than only through `_names_with_dynamic_assignment`'s
+    own wider union: for ANY identifier assigned a static value and then
+    reassigned via `read`, `_names_reassigned_by_untracked_construct`
+    always includes it -- and a second, entirely unrelated identifier
+    that is only ever assigned statically is never included alongside
+    it."""
+    other_name = name + "_OTHER"
+    tokens = [f"{name}={static_value}", ";", "read", name, ";", f"{other_name}={other_value}"]
+    result = checker._names_reassigned_by_untracked_construct(tokens)
+    assert name in result
+    assert other_name not in result
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, subscript=st.sampled_from(["0", "1", "@", "i"]), value=_VALUES)
+def test_names_reassigned_by_untracked_construct_matches_model_for_an_array_element_assignment(
+    name: str, subscript: str, value: str
+) -> None:
+    """Model-based: for ANY identifier assigned an array-element value
+    (`NAME[subscript]=value`), `_names_reassigned_by_untracked_construct`
+    always includes NAME -- and a second, entirely unrelated identifier
+    that is never array-assigned is never included alongside it."""
+    other_name = name + "_OTHER"
+    tokens = [f"{name}[{subscript}]={value}", f"{other_name}={value}"]
+    result = checker._names_reassigned_by_untracked_construct(tokens)
+    assert name in result
+    assert other_name not in result
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, target_value=_VALUES)
+def test_names_reassigned_by_read_or_printf_matches_model_for_a_read_target(name: str, target_value: str) -> None:
+    """Model-based, exercising `_names_reassigned_by_read_or_printf`
+    directly: for ANY identifier that `read` targets, it is always
+    included -- and a second, entirely unrelated identifier only ever
+    assigned statically is never included alongside it."""
+    other_name = name + "_OTHER"
+    tokens = ["read", name, ";", f"{other_name}={target_value}"]
+    result = checker._names_reassigned_by_read_or_printf(tokens)
+    assert name in result
+    assert other_name not in result
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, format_value=_VALUES)
+def test_names_reassigned_by_read_or_printf_matches_model_for_a_printf_v_target(name: str, format_value: str) -> None:
+    """Model-based: for ANY identifier `printf -v` targets, it is always
+    included -- and a second, entirely unrelated identifier is never
+    included alongside it."""
+    other_name = name + "_OTHER"
+    tokens = ["printf", "-v", name, "%s", format_value, ";", f"{other_name}={format_value}"]
+    result = checker._names_reassigned_by_read_or_printf(tokens)
+    assert name in result
+    assert other_name not in result
+
+
+def test_segment_references_a_name_finds_a_bare_reference() -> None:
+    """`_segment_references_a_name` recognizes a plain `$NAME` reference
+    to a poisoned name."""
+    assert checker._segment_references_a_name(["gh", "api", "repos/x/y", "-X", "$M"], {"M"}, {}, {}) is True
+
+
+def test_segment_references_a_name_finds_a_braced_reference() -> None:
+    assert checker._segment_references_a_name(["echo", "${M}"], {"M"}, {}, {}) is True
+
+
+def test_segment_references_a_name_ignores_an_unrelated_reference() -> None:
+    """No false positive: a reference to a name that is NOT in the
+    poisoned set is ignored."""
+    assert checker._segment_references_a_name(["echo", "$OTHER"], {"M"}, {}, {}) is False
+
+
+def test_segment_references_a_name_empty_names_is_always_false() -> None:
+    """No poisoned names at all -- the common case for every pre-existing
+    call site -- never reports a reference, regardless of segment
+    content."""
+    assert checker._segment_references_a_name(["gh", "api", "repos/x/y", "-X", "$M"], set(), {}, {}) is False
+
+
+def test_segment_references_a_name_finds_an_indirect_reference() -> None:
+    """Round 29 (issue #1375): a poisoned name referenced through one
+    extra `${!MREF}` indirection layer is still found -- `_segment_
+    references_a_name` now delegates to `_referenced_names`'s own
+    two-level resolution instead of the round-26 single-level scan that
+    missed this. MREF's raw value is "M" (the poisoned name itself), so
+    `${!MREF}` resolves through MREF to M."""
+    assert (
+        checker._segment_references_a_name(
+            ["gh", "api", "repos/x/y", "-X", "${!MREF}"],
+            {"M"},
+            {"MREF": "M"},
+            {},
+        )
+        is True
+    )
+
+
+def test_segment_references_a_name_ignores_an_unrelated_indirect_reference() -> None:
+    """No false positive: an indirect reference through a name whose
+    value does NOT point at a poisoned name is ignored."""
+    assert (
+        checker._segment_references_a_name(
+            ["gh", "api", "repos/x/y", "-X", "${!MREF}"],
+            {"M"},
+            {"MREF": "OTHER"},
+            {},
+        )
+        is False
+    )
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, ref_name=_IDENTIFIERS)
+def test_segment_references_a_name_matches_model_for_any_indirect_reference(name: str, ref_name: str) -> None:
+    """Model-based: for ANY poisoned NAME and any distinct REF_NAME whose
+    own raw value names it, a segment referencing NAME only through
+    `${!REF_NAME}` is still found -- the round-29 fix's own two-level
+    delegation to `_referenced_names` must hold for every identifier
+    shape `_IDENTIFIERS` generates, not just the specific example pinned
+    above. A REF_NAME colliding with NAME itself degenerates to the
+    already-covered direct-reference case, so it is excluded here."""
+    assume(ref_name != name)
+    seg = ["gh", "api", "repos/x/y", "-X", f"${{!{ref_name}}}"]
+    assert checker._segment_references_a_name(seg, {name}, {ref_name: name}, {}) is True
+
+
+def test_rule_gh_api_write_denies_a_reference_to_a_poisoned_name() -> None:
+    """Regression pin for the real bypass found live by Step 8 independent
+    review, twenty-sixth round (issue #1375): `_rule_gh_api_write` used to
+    consume only NAME_TO_VALUE/NAME_TO_RAW_VALUE, both of which stay
+    STALE across a `read`/`printf -v`/array-element reassignment -- so a
+    `-X $M` write-method flag resolved through a poisoned M silently read
+    as the name's OLD, pre-reassignment value. Confirmed live: `M=GET;
+    read M <<< "POST"; gh api repos/x/y/issues -X $M` classified as "no
+    denied pattern matched" before this fix."""
+    segments = [["gh", "api", "repos/x/y/issues", "-X", "$M"]]
+    reason = checker._rule_gh_api_write(segments, "gh api repos/x/y/issues -x $m", {"m": "get"}, {}, {"M"})
+    assert reason is not None
+    assert "reassigned" in reason
+
+
+def test_rule_gh_api_write_ignores_a_poisoned_name_outside_a_gh_api_segment() -> None:
+    """No false positive: a poisoned name referenced in a segment that is
+    not itself a `gh api` call must not be flagged by this rule."""
+    segments = [["echo", "$M"]]
+    reason = checker._rule_gh_api_write(segments, "echo $m", {}, {}, {"M"})
+    assert reason is None
+
+
+def test_rule_gh_api_write_default_poisoned_names_is_empty() -> None:
+    """Every pre-existing call site (this module's own test file included)
+    omits NAMES_WITH_DYNAMIC_ASSIGNMENT entirely -- confirm the default
+    is treated as empty, not as a mysterious universal deny."""
+    segments = [["gh", "api", "repos/x/y/issues", "-X", "$M"]]
+    reason = checker._rule_gh_api_write(segments, "gh api repos/x/y/issues -x $m", {"m": "get"}, {})
+    assert reason is None
+
+
+def test_segment_loop_hit_denies_a_dynamic_command_word_referencing_a_poisoned_name() -> None:
+    """Regression pin for the real bypass found live by Step 8 independent
+    review, twenty-sixth round (issue #1375): B1a/B1b's own tool+verb
+    resolution reads NAME_TO_VALUE/NAME_TO_RAW_VALUE, both stale across a
+    `read`/`printf -v`/array-element reassignment. Confirmed live via a
+    stand-in `uv` binary on PATH that `A=harmless; read A <<< "uv";
+    B=harmless2; read B <<< "install"; $A $B foo` genuinely runs `uv
+    install foo` (captured argv: "install foo")."""
+    segments = [["$A", "$B", "foo"]]
+    reason, _ = checker._segment_loop_hit(segments, {"a": "harmless", "b": "harmless2"}, {}, {"A", "B"})
+    assert reason is not None
+    assert "reassigned" in reason
+
+
+def test_segment_loop_hit_ignores_a_poisoned_name_in_a_literal_command_word_segment() -> None:
+    """No false positive: B1a/B1b's own precondition (`seg[0]` itself
+    dynamic) still gates this poisoning check -- a poisoned name merely
+    referenced in an otherwise-ordinary, literal-command-word segment
+    (`echo $M`) must not be flagged, since B1a/B1b would never have fired
+    on that shape regardless of M's value."""
+    segments = [["echo", "$M"]]
+    reason, _ = checker._segment_loop_hit(segments, {}, {}, {"M"})
+    assert reason is None
+
+
+def test_segment_loop_hit_default_poisoned_names_is_empty() -> None:
+    """Every pre-existing call site omits NAMES_WITH_DYNAMIC_ASSIGNMENT
+    entirely -- confirm the default is treated as empty."""
+    segments = [["$A", "$B", "foo"]]
+    reason, _ = checker._segment_loop_hit(segments, {"a": "harmless", "b": "harmless2"}, {})
+    assert reason is None
+
+
+def test_classify_denies_a_checkout_path_reassigned_via_read() -> None:
+    """End-to-end regression pin for the round-26 `read`-reassignment
+    finding at the `classify()` level. Confirmed live before this fix:
+    `DIR=sub; read DIR <<< "other"; git checkout -- $DIR` resolved
+    `checkout_restore_paths` to `('sub',)` -- the STALE, pre-reassignment
+    value (real bash: `$DIR` genuinely becomes "other")."""
+    verdict = checker.classify('DIR=sub; read DIR <<< "other"; git checkout -- $DIR')
+    assert verdict.deny is True
+    assert "cannot be soundly trusted" in verdict.reason
+
+
+def test_classify_denies_a_restore_path_reassigned_via_read() -> None:
+    """Companion to the checkout pin above, for `git restore`."""
+    verdict = checker.classify('DIR=sub; read DIR <<< "other"; git restore $DIR')
+    assert verdict.deny is True
+    assert "cannot be soundly trusted" in verdict.reason
+
+
+def test_classify_denies_a_checkout_path_reassigned_via_array_element() -> None:
+    """End-to-end regression pin for the round-26 array-element-assignment
+    finding at the `classify()` level. Confirmed live before this fix:
+    `arr=x; arr[0]=other; git checkout -- $arr` resolved `checkout_
+    restore_paths` to `('x',)` -- the STALE, pre-reassignment value (real
+    bash: `$arr` genuinely becomes "other")."""
+    verdict = checker.classify("arr=x; arr[0]=other; git checkout -- $arr")
+    assert verdict.deny is True
+    assert "cannot be soundly trusted" in verdict.reason
+
+
+def test_classify_denies_a_checkout_path_reassigned_via_printf_v() -> None:
+    """End-to-end regression pin for the round-26 `printf -v` finding at
+    the `classify()` level. Confirmed live before this fix: `DIR=sub;
+    printf -v DIR "%s" other; git checkout -- $DIR` resolved `checkout_
+    restore_paths` to `('sub',)` -- the STALE, pre-reassignment value
+    (real bash: `$DIR` genuinely becomes "other")."""
+    verdict = checker.classify('DIR=sub; printf -v DIR "%s" other; git checkout -- $DIR')
+    assert verdict.deny is True
+    assert "cannot be soundly trusted" in verdict.reason
+
+
+def test_classify_denies_a_gh_api_write_method_reassigned_via_read() -> None:
+    """End-to-end regression pin for the round-26 `read`-reassignment
+    finding against `_rule_gh_api_write`. Confirmed live before this fix:
+    `M=GET; read M <<< "POST"; gh api repos/x/y/issues -X $M` classified
+    as "no denied pattern matched" -- a full HARD-DENY bypass."""
+    verdict = checker.classify('M=GET; read M <<< "POST"; gh api repos/x/y/issues -X $M')
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_gh_api_write_method_reassigned_via_array_element() -> None:
+    """Companion to the `read` pin above, for array-element assignment.
+    Confirmed live before this fix: `M=GET; M[0]=POST; gh api
+    repos/x/y/issues -X $M` classified as "no denied pattern matched"."""
+    verdict = checker.classify("M=GET; M[0]=POST; gh api repos/x/y/issues -X $M")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_via_read() -> None:
+    """End-to-end regression pin for the round-26 `read`-reassignment
+    finding against B1b (`_rule_b1b_dynamic_word_assigned_tool_and_verb`).
+    Confirmed live before this fix via a stand-in `uv` binary on PATH:
+    `A=harmless; read A <<< "uv"; B=harmless2; read B <<< "install"; $A
+    $B foo` genuinely runs `uv install foo`, but classified as allowed."""
+    verdict = checker.classify('A=harmless; read A <<< "uv"; B=harmless2; read B <<< "install"; $A $B foo')
+    assert verdict.deny is True
+
+
+def test_classify_leaves_a_read_of_an_unrelated_name_unaffected() -> None:
+    """No false positive: `read`-ing into a name never referenced by a
+    checkout/restore path, a `gh api` write flag, or a dynamic command
+    word must not affect classification at all."""
+    verdict = checker.classify('read NAME <<< "value"; echo $NAME; git checkout -- sub/file.txt')
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("sub/file.txt",)
+
+
+def test_names_reassigned_from_a_static_value_finds_a_static_then_dynamic_reassignment() -> None:
+    """Regression pin for the real bypass found live by Step 8 independent
+    review, twenty-seventh round (issue #1375): round 26's own
+    `_names_reassigned_by_untracked_construct` deliberately excluded the
+    ENTIRE round-24 dynamic-RHS-reassignment class from `_rule_gh_api_
+    write`/`_segment_loop_hit`, not just its genuinely-unresolvable
+    sub-case -- leaving a name with an earlier STATIC value, later
+    reassigned dynamically, with no protection at all in those two
+    consumers. This function restores exactly that narrower case."""
+    assert checker._names_reassigned_from_a_static_value(["VERB=harmless", "VERB=$(echo install)"]) == {"VERB"}
+
+
+def test_names_reassigned_from_a_static_value_ignores_a_dynamic_only_name() -> None:
+    """No false positive, and the exact distinction that keeps the
+    `graphql-mutation-keyword-variable-concatenation` known bypass
+    (`Q="${A}${B} { x }"`, Q never has an earlier static value) from
+    regressing: a name assigned ONLY dynamically, with no earlier static
+    value anywhere, is not poisoned by this function."""
+    assert checker._names_reassigned_from_a_static_value(["Q=$A$B"]) == set()
+
+
+def test_names_reassigned_from_a_static_value_ignores_a_static_only_name() -> None:
+    """No false positive: a name assigned only static values anywhere is
+    not flagged, matching every other reassignment-detector in this
+    module."""
+    assert checker._names_reassigned_from_a_static_value(["VERB=harmless", "VERB=other"]) == set()
+
+
+def test_names_reassigned_from_a_static_value_ignores_an_unrelated_name() -> None:
+    """No false positive: a static-then-dynamic reassignment of one name
+    does not poison a completely different name."""
+    result = checker._names_reassigned_from_a_static_value(["DIR=sub", "VERB=harmless", "VERB=$(echo install)"])
+    assert result == {"VERB"}
+
+
+def test_names_reassigned_from_a_static_value_clears_on_a_later_static_reassignment() -> None:
+    """Regression pin for the real false-positive over-denial found live
+    by Step 8 independent review, twenty-eighth round (issue #1375):
+    this function's own round-27 form only ever ADDED to POISONED, never
+    removed from it, so a name reassigned static -> dynamic -> static
+    again (a THIRD assignment that fully restores a trustworthy,
+    resolvable value) stayed poisoned forever, contradicting real bash's
+    own final, genuinely-static value at the point of use."""
+    assert checker._names_reassigned_from_a_static_value(["M=GET", "M=$(echo x)", "M=HEAD"]) == set()
+
+
+def test_names_reassigned_from_a_static_value_re_poisons_after_a_further_dynamic_reassignment() -> None:
+    """No under-correction: a name that IS poisoned, then briefly
+    cleared by a static reassignment, must be poisoned again by a
+    FURTHER dynamic reassignment after that -- EVER_STATIC alone must
+    not permanently disable poisoning for a name once it has ever seen
+    one static value."""
+    tokens = ["M=GET", "M=$(echo x)", "M=HEAD", "M=$(echo other)"]
+    assert checker._names_reassigned_from_a_static_value(tokens) == {"M"}
+
+
+def test_raw_segments_with_boundaries_tracks_nesting_and_terminators() -> None:
+    """`_raw_segments_with_boundaries` returns one (segment, depth,
+    terminator) triple per segment, including empty ones, with depth
+    incrementing at each `(` and decrementing at each `)` (never
+    negative), and each non-final entry's own terminator naming the
+    boundary token that ended it."""
+    tokens = ["A=1", "(", "B=2", ")", "C=3"]
+    result = checker._raw_segments_with_boundaries(tokens)
+    assert result == [
+        (["A=1"], 0, "("),
+        (["B=2"], 1, ")"),
+        (["C=3"], 0, None),
+    ]
+
+
+def test_raw_segments_with_boundaries_never_goes_negative_on_an_unmatched_close_paren() -> None:
+    result = checker._raw_segments_with_boundaries([")", "A=1"])
+    assert result == [([], 0, ")"), (["A=1"], 0, None)]
+
+
+def test_segment_tokens_with_scope_isolation_marks_subshell_content_isolated() -> None:
+    tokens = ["TOOL=uv", ";", "(", "VERB=safe", ")", ";", "echo", "hi"]
+    result = checker._segment_tokens_with_scope_isolation(tokens)
+    assert result == [(["TOOL=uv"], False), (["VERB=safe"], True), (["echo", "hi"], False)]
+
+
+def test_segment_tokens_with_scope_isolation_marks_every_pipe_stage_isolated() -> None:
+    """Every stage of a `|` pipeline is isolated, including the LAST
+    one -- bash forks a subshell for each stage by default, absent
+    `shopt -s lastpipe`, which this classifier has no way to know is
+    set."""
+    tokens = ["cmd1", "|", "cmd2", "|", "cmd3"]
+    result = checker._segment_tokens_with_scope_isolation(tokens)
+    assert result == [(["cmd1"], True), (["cmd2"], True), (["cmd3"], True)]
+
+
+def test_segment_tokens_with_scope_isolation_marks_only_the_backgrounded_segment_isolated() -> None:
+    """`cmd1 & cmd2` backgrounds ONLY cmd1 -- cmd2 runs in the parent
+    shell as normal immediately afterward, so it must NOT be marked
+    isolated merely for following a `&`."""
+    tokens = ["cmd1", "&", "cmd2"]
+    result = checker._segment_tokens_with_scope_isolation(tokens)
+    assert result == [(["cmd1"], True), (["cmd2"], False)]
+
+
+def test_segment_tokens_with_scope_isolation_marks_a_local_declaration_isolated() -> None:
+    """A segment containing the literal `local` keyword anywhere (not
+    necessarily first -- a function body's own opening `{` shares the
+    same segment) is isolated."""
+    tokens = ["{", "local", "VERB=safe"]
+    result = checker._segment_tokens_with_scope_isolation(tokens)
+    assert result == [(["{", "local", "VERB=safe"], True)]
+
+
+def test_segment_tokens_with_scope_isolation_leaves_ordinary_segments_unisolated() -> None:
+    tokens = ["VERB=inst", ";", "VERB+=all", ";", "VERB=safe"]
+    result = checker._segment_tokens_with_scope_isolation(tokens)
+    assert result == [(["VERB=inst"], False), (["VERB+=all"], False), (["VERB=safe"], False)]
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value=_VALUES)
+def test_segment_tokens_with_scope_isolation_matches_model_for_a_pipe_stage(name: str, value: str) -> None:
+    """Model-based, exercising `_segment_tokens_with_scope_isolation`
+    directly (issue #1178's own detection-logic property-coverage
+    requirement): for ANY identifier assigned a value as the SECOND
+    stage of a two-stage `|` pipeline, that segment is marked isolated
+    -- and the FIRST, ordinary top-level segment preceding the whole
+    pipeline is not."""
+    tokens = [f"{name}=first", ";", "true", "|", f"{name}={value}"]
+    result = checker._segment_tokens_with_scope_isolation(tokens)
+    assert result == [([f"{name}=first"], False), (["true"], True), ([f"{name}={value}"], True)]
+
+
+def test_raw_segments_with_boundaries_treats_process_substitution_open_as_a_depth_boundary() -> None:
+    """CRITICAL bypass regression pin (round-33 independent review, issue
+    #1375): `<(`/`>(` tokenize as their OWN fused tokens, never a bare
+    `(` -- `_raw_segments_with_boundaries` must recognize them as
+    depth-opening boundaries too, or a process substitution's own
+    content is swept into whatever segment was already active."""
+    tokens = ["cat", "<(", "VERB=safe", ")"]
+    result = checker._raw_segments_with_boundaries(tokens)
+    assert result == [(["cat"], 0, "<("), (["VERB=safe"], 1, ")"), ([], 0, None)]
+
+
+def test_raw_segments_with_boundaries_process_substitution_does_not_corrupt_an_enclosing_subshells_depth() -> None:
+    """A process substitution's own matching `)` must decrement depth by
+    exactly the amount its own `<(`/`>(` incremented it -- never
+    prematurely closing a GENUINELY enclosing `(...)` subshell around
+    it."""
+    tokens = ["(", "cat", "<(", "true", ")", ";", "VERB=safe", ")"]
+    result = checker._raw_segments_with_boundaries(tokens)
+    assert result[0] == ([], 0, "(")
+    assert result[1] == (["cat"], 1, "<(")
+    assert result[2] == (["true"], 2, ")")
+    assert result[3] == ([], 1, ";")
+    assert result[4] == (["VERB=safe"], 1, ")")
+    assert result[5] == ([], 0, None)
+
+
+def test_raw_segments_with_boundaries_treats_a_case_pattern_close_as_not_a_subshell_close() -> None:
+    """CRITICAL bypass regression pin (round-36 independent review, issue
+    #1375): a `case` arm's own pattern-terminating `)` is lexically
+    indistinguishable from a subshell-closing `)`, but must NOT
+    decrement `(...)`-nesting depth -- a case nested inside a GENUINELY
+    enclosing subshell must keep that subshell's own depth tracking
+    intact through the case's own pattern arms."""
+    tokens = ["(", "case", "1", "in", "1", ")", "true", ";", ";", "esac", ";", "VERB=safe", ")"]
+    result = checker._raw_segments_with_boundaries(tokens)
+    assert result[0] == ([], 0, "(")
+    assert result[1] == (["case", "1", "in", "1"], 1, ")")
+    assert result[5] == (["VERB=safe"], 1, ")")
+    assert result[6] == ([], 0, None)
+
+
+def test_raw_segments_with_boundaries_a_real_subshell_nested_inside_a_case_arm_still_decrements() -> None:
+    """No over-correction: a GENUINE `(...)` subshell lexically inside a
+    case arm's own body (after that arm's pattern-terminating `)` has
+    already been consumed) must still decrement depth normally."""
+    tokens = ["case", "1", "in", "1", ")", "(", "VERB=x", ")", ";", "true", ";", ";", "esac"]
+    result = checker._raw_segments_with_boundaries(tokens)
+    depths_by_segment = [depth for seg, depth, _term in result if seg]
+    assert depths_by_segment == [0, 1, 0, 0]
+
+
+def test_raw_segments_with_boundaries_a_case_patterns_leading_decorator_paren_does_not_inflate_depth() -> None:
+    """FALSE-POSITIVE regression pin (round-37 independent review, issue
+    #1375): bash's `case` syntax allows an OPTIONAL leading `(`
+    decorator on a pattern arm (`(1) cmd ;;`) -- lexically identical to
+    a real subshell opener, but must NOT increment depth, or the SAME
+    round-36 fix that correctly skips decrementing depth for the arm's
+    own matching `)` leaves that phantom `+1` permanently unbalanced."""
+    tokens = ["case", "1", "in", "(", "1", ")", "true", ";", ";", "esac", ";", "VERB=safe"]
+    result = checker._raw_segments_with_boundaries(tokens)
+    assert result[0] == (["case", "1", "in"], 0, "(")
+    assert result[1] == (["1"], 0, ")")
+    assert result[-1] == (["VERB=safe"], 0, None)
+
+
+def test_raw_segments_with_boundaries_a_decorated_case_pattern_stays_isolating_when_backgrounded() -> None:
+    """No over-correction: the decorator-paren fix must not disable the
+    round-35/36 group-isolation mechanism itself -- a decorated case
+    that is genuinely backgrounded or piped still needs its own segments
+    to carry depth 0 here (isolation for that case comes from
+    `_segment_indices_isolated_by_a_piped_or_backgrounded_compound_
+    group`, a separate mechanism, not from this function's own depth
+    field)."""
+    tokens = ["case", "1", "in", "(", "1", ")", "VERB=safe", ";", ";", "esac"]
+    result = checker._raw_segments_with_boundaries(tokens)
+    depths_by_segment = [depth for seg, depth, _term in result if seg]
+    assert depths_by_segment == [0, 0, 0, 0]
+
+
+def test_raw_segments_with_boundaries_a_case_subject_word_matching_esac_does_not_desync_pattern_tracking() -> None:
+    """CRITICAL bypass regression pin (round-38 independent review, issue
+    #1375): `case`/`esac` are only reserved words in COMMAND-starting
+    position -- the case statement's own SUBJECT word (between `case`
+    and `in`) is an ordinary word position where a literal `esac` is
+    valid, unremarkable bash. A literal `esac` subject must not be
+    mistaken for the real closing keyword, or the real enclosing
+    subshell's own tracked depth gets prematurely decremented on the
+    arm's own genuine pattern-terminating `)`."""
+    tokens = ["(", "case", "esac", "in", "a", ")", "true", ";", ";", "esac", ";", "VERB=safe", ")"]
+    result = checker._raw_segments_with_boundaries(tokens)
+    assert result[0] == ([], 0, "(")
+    assert result[1] == (["case", "esac", "in", "a"], 1, ")")
+    assert result[-2] == (["VERB=safe"], 1, ")")
+    assert result[-1] == ([], 0, None)
+
+
+def test_raw_segments_with_boundaries_a_case_subject_word_matching_case_does_not_desync_pattern_tracking() -> None:
+    """Same round, the `case`-as-its-own-subject counterpart -- a
+    literal `case` subject must not spuriously push a SECOND,
+    unmatched case-tracking stack frame."""
+    tokens = ["(", "case", "case", "in", "a", ")", "true", ";", ";", "esac", ";", "VERB=safe", ")"]
+    result = checker._raw_segments_with_boundaries(tokens)
+    assert result[1] == (["case", "case", "in", "a"], 1, ")")
+    assert result[-2] == (["VERB=safe"], 1, ")")
+
+
+def test_raw_segments_with_boundaries_a_nested_for_in_inside_a_case_arm_does_not_desync_pattern_tracking() -> None:
+    """SAFETY regression pin (round-36 own design review): only the
+    case's own FIRST `in` (right after `case WORD`) may arm the
+    pattern-close expectation -- a LATER, unrelated `in` from a nested
+    `for i in ...`/`select i in ...` lexically inside an arm's body must
+    never be mistaken for the case's own, or a genuinely enclosing
+    subshell's own real closing `)` would be wrongly swallowed as a
+    phantom case-pattern close instead of decrementing depth."""
+    tokens = [
+        "(",
+        "case",
+        "1",
+        "in",
+        "1",
+        ")",
+        "for",
+        "i",
+        "in",
+        "1",
+        ";",
+        "do",
+        "true",
+        ";",
+        "done",
+        ";",
+        ";",
+        "esac",
+        ")",
+    ]
+    result = checker._raw_segments_with_boundaries(tokens)
+    assert result[-1] == ([], 0, None)
+
+
+def test_segment_indices_isolated_by_a_piped_or_backgrounded_compound_group_marks_a_backgrounded_case() -> None:
+    """CRITICAL bypass regression pin (round-36 independent review, issue
+    #1375): `case ... esac` is bash's remaining compound-command form --
+    it forks as one unit when backgrounded, exactly like `{...}`/
+    `while`/`until`/`for`/`select`/`if` (round 35), but `case`/`esac`
+    were never added to `_GROUP_OPEN_KEYWORDS`/`_GROUP_CLOSE_KEYWORDS`."""
+    raw = checker._raw_segments_with_boundaries(
+        ["case", "1", "in", "1", ")", "VERB=safe", ";", ";", "esac", "&", "wait"]
+    )
+    result = checker._segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(raw)
+    isolated_segments = [raw[i][0] for i in sorted(result)]
+    assert ["VERB=safe"] in isolated_segments
+
+
+def test_segment_indices_isolated_by_a_piped_or_backgrounded_compound_group_allows_a_bare_case() -> None:
+    """No over-correction: a bare `case ... esac` with NO trailing
+    `&`/`|` genuinely LEAKS its assignments to the parent shell in real
+    bash -- must not be marked isolated."""
+    raw = checker._raw_segments_with_boundaries(["case", "1", "in", "1", ")", "VERB=safe", ";", ";", "esac"])
+    result = checker._segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(raw)
+    assert result == set()
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value=_VALUES)
+def test_segment_indices_isolated_by_a_piped_or_backgrounded_compound_group_matches_model_for_a_backgrounded_case(
+    name: str, value: str
+) -> None:
+    """Model-based, exercising `_segment_indices_isolated_by_a_piped_or_
+    backgrounded_compound_group` directly (issue #1178's own detection-
+    logic property-coverage requirement): for ANY identifier assigned a
+    value inside a `case ... esac` that is itself backgrounded, the
+    segment carrying that assignment is included in the isolated set --
+    and the same case with NO trailing `&`/`|` is not."""
+    backgrounded = checker._raw_segments_with_boundaries(
+        ["case", "1", "in", "1", ")", f"{name}={value}", ";", ";", "esac", "&", "wait"]
+    )
+    result = checker._segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(backgrounded)
+    isolated_segments = [backgrounded[i][0] for i in sorted(result)]
+    assert [f"{name}={value}"] in isolated_segments
+
+    bare = checker._raw_segments_with_boundaries(["case", "1", "in", "1", ")", f"{name}={value}", ";", ";", "esac"])
+    assert checker._segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(bare) == set()
+
+
+def test_segment_tokens_with_scope_isolation_marks_a_declare_declaration_isolated() -> None:
+    tokens = ["{", "declare", "VERB=safe"]
+    result = checker._segment_tokens_with_scope_isolation(tokens)
+    assert result == [(["{", "declare", "VERB=safe"], True)]
+
+
+def test_segment_tokens_with_scope_isolation_marks_a_typeset_declaration_isolated() -> None:
+    tokens = ["{", "typeset", "VERB=safe"]
+    result = checker._segment_tokens_with_scope_isolation(tokens)
+    assert result == [(["{", "typeset", "VERB=safe"], True)]
+
+
+def test_segment_tokens_with_scope_isolation_marks_a_coproc_body_isolated() -> None:
+    """CRITICAL bypass regression pin (round-34 independent review, issue
+    #1375): `coproc { ... }` forks its body to run asynchronously in a
+    subshell connected by a pipe, exactly like `cmd &`, with no
+    non-isolating usage at all."""
+    tokens = ["coproc", "{", "VERB=safe"]
+    result = checker._segment_tokens_with_scope_isolation(tokens)
+    assert result == [(["coproc", "{", "VERB=safe"], True)]
+
+
+def test_segment_tokens_with_scope_isolation_marks_a_dollar_quoted_local_isolated() -> None:
+    """CRITICAL bypass regression pin (round-34 independent review, issue
+    #1375): bash's `$"..."` locale-translated-string syntax fuses the
+    `$` prefix onto the dequoted string content -- `$"local"` tokenizes
+    as the single token `$local`, never a bare `local` -- but genuinely
+    invokes the `local` builtin in command-starting position."""
+    tokens = ["{", "$local", "VERB=safe"]
+    result = checker._segment_tokens_with_scope_isolation(tokens)
+    assert result == [(["{", "$local", "VERB=safe"], True)]
+
+
+def test_seg_has_a_scope_localizing_keyword_ignores_an_unrelated_dollar_reference() -> None:
+    """No false positive: an ordinary `$NAME` reference to a variable
+    that is NOT one of the localizing keywords must not match, with or
+    without the leading `$` stripped."""
+    assert checker._seg_has_a_scope_localizing_keyword(["echo", "$localvar"]) is False
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value=_VALUES)
+def test_segment_tokens_with_scope_isolation_matches_model_for_a_process_substitution(name: str, value: str) -> None:
+    """Model-based, exercising `_segment_tokens_with_scope_isolation`
+    directly (issue #1178's own detection-logic property-coverage
+    requirement): for ANY identifier assigned a value inside a `<(...)`
+    process substitution, that segment is marked isolated."""
+    tokens = ["cat", "<(", f"{name}={value}", ")"]
+    result = checker._segment_tokens_with_scope_isolation(tokens)
+    assert result == [(["cat"], False), ([f"{name}={value}"], True)]
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value=_VALUES)
+def test_seg_has_a_scope_localizing_keyword_matches_model_for_a_dollar_quoted_keyword(name: str, value: str) -> None:
+    """Model-based, exercising `_seg_has_a_scope_localizing_keyword`
+    directly (issue #1178's own detection-logic property-coverage
+    requirement): for ANY identifier, a segment containing the `$"..."`-
+    fused form of any of the four localizing keywords is recognized --
+    and a segment with no such keyword, fused or bare, is not."""
+    for keyword in ("local", "declare", "typeset", "coproc"):
+        assert checker._seg_has_a_scope_localizing_keyword(["{", f"${keyword}", f"{name}={value}"]) is True
+    assert checker._seg_has_a_scope_localizing_keyword([f"{name}={value}"]) is False
+
+
+def test_segment_indices_isolated_by_a_piped_or_backgrounded_compound_group_marks_a_backgrounded_brace_group() -> None:
+    """CRITICAL bypass regression pin (round-35 independent review, issue
+    #1375): a `{...}` brace group forks as one unit when backgrounded --
+    a plain static assignment anywhere inside it can never reach the
+    parent shell's own copy of the name."""
+    raw = checker._raw_segments_with_boundaries(["{", "VERB=safe", ";", "}", "&", "wait"])
+    result = checker._segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(raw)
+    isolated_segments = [raw[i][0] for i in sorted(result)]
+    assert ["{", "VERB=safe"] in isolated_segments
+    assert ["}"] in isolated_segments
+    assert ["wait"] not in isolated_segments
+
+
+def test_segment_indices_isolated_by_a_piped_or_backgrounded_compound_group_marks_a_piped_brace_group() -> None:
+    raw = checker._raw_segments_with_boundaries(["{", "VERB=safe", ";", "}", "|", "cat"])
+    result = checker._segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(raw)
+    isolated_segments = [raw[i][0] for i in sorted(result)]
+    assert ["{", "VERB=safe"] in isolated_segments
+
+
+def test_segment_indices_isolated_by_a_piped_or_backgrounded_compound_group_marks_a_piped_while_loop() -> None:
+    raw = checker._raw_segments_with_boundaries(
+        ["while", "true", ";", "do", "VERB=safe", ";", "break", ";", "done", "|", "cat"]
+    )
+    result = checker._segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(raw)
+    isolated_segments = [raw[i][0] for i in sorted(result)]
+    assert ["do", "VERB=safe"] in isolated_segments
+
+
+def test_segment_indices_isolated_by_a_piped_or_backgrounded_compound_group_marks_a_backgrounded_if() -> None:
+    raw = checker._raw_segments_with_boundaries(["if", "true", ";", "then", "VERB=safe", ";", "fi", "&", "wait"])
+    result = checker._segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(raw)
+    isolated_segments = [raw[i][0] for i in sorted(result)]
+    assert ["then", "VERB=safe"] in isolated_segments
+
+
+def test_segment_indices_isolated_by_a_piped_or_backgrounded_compound_group_marks_a_backgrounded_for_loop() -> None:
+    raw = checker._raw_segments_with_boundaries(
+        ["for", "i", "in", "1", ";", "do", "VERB=safe", ";", "done", "&", "wait"]
+    )
+    result = checker._segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(raw)
+    isolated_segments = [raw[i][0] for i in sorted(result)]
+    assert ["do", "VERB=safe"] in isolated_segments
+
+
+def test_segment_indices_isolated_by_a_piped_or_backgrounded_compound_group_marks_a_doubly_nested_piped_group() -> None:
+    """The double-open `{ {` case: bash's own grammar places no
+    requirement that a nested group's own opener be separated from an
+    enclosing group's opener by anything but whitespace, so both land in
+    the SAME raw segment -- the isolation scan must still count both."""
+    raw = checker._raw_segments_with_boundaries(["{", "{", "VERB=safe", ";", "}", ";", "}", "|", "cat"])
+    result = checker._segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(raw)
+    isolated_segments = [raw[i][0] for i in sorted(result)]
+    assert ["{", "{", "VERB=safe"] in isolated_segments
+
+
+def test_segment_indices_isolated_by_a_piped_or_backgrounded_compound_group_marks_a_pipe_receiving_groups_later_statement() -> (
+    None
+):
+    """The group is the RECEIVING side of a pipe, and the assignment is
+    not even the group's own first statement -- must still be isolated."""
+    raw = checker._raw_segments_with_boundaries(["echo", "x", "|", "{", "true", ";", "VERB=safe", ";", "}"])
+    result = checker._segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(raw)
+    isolated_segments = [raw[i][0] for i in sorted(result)]
+    assert ["VERB=safe"] in isolated_segments
+
+
+def test_segment_indices_isolated_by_a_piped_or_backgrounded_compound_group_survives_a_literal_close_keyword_argument() -> (
+    None
+):
+    """SAFETY regression pin (round-35 own design review): an earlier
+    stack-based design that scanned every token position (not just
+    position 0) for a close keyword desynced against a literal, non-
+    syntactic argument like `fi` inside `echo fi`'s own segment -- it
+    popped the real group's own stack entry against that spurious match,
+    leaving the REAL closing `}` unmatched and the assignment wrongly
+    left unisolated. The position-0-only close check must not reopen
+    this: `echo fi` inside the group must never desync detection of the
+    group's own real, later `}`."""
+    raw = checker._raw_segments_with_boundaries(["{", "echo", "fi", ";", "VERB=safe", ";", "}", "&", "wait"])
+    result = checker._segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(raw)
+    isolated_segments = [raw[i][0] for i in sorted(result)]
+    assert ["VERB=safe"] in isolated_segments
+
+
+def test_segment_indices_isolated_by_a_piped_or_backgrounded_compound_group_allows_a_bare_brace_group() -> None:
+    """No over-correction: a bare `{...}`/`if`/`for` with NO trailing
+    `&`/`|` genuinely LEAKS its assignments to the parent shell in real
+    bash -- must not be marked isolated."""
+    raw = checker._raw_segments_with_boundaries(["{", "VERB=safe", ";", "}", ";", "echo", "done"])
+    result = checker._segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(raw)
+    assert result == set()
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value=_VALUES)
+def test_segment_indices_isolated_by_a_piped_or_backgrounded_compound_group_matches_model_for_a_backgrounded_group(
+    name: str, value: str
+) -> None:
+    """Model-based, exercising `_segment_indices_isolated_by_a_piped_or_
+    backgrounded_compound_group` directly (issue #1178's own detection-
+    logic property-coverage requirement): for ANY identifier assigned a
+    value inside a `{...}` brace group that is itself backgrounded, the
+    segment carrying that assignment is included in the isolated set --
+    and the same group with NO trailing `&`/`|` is not."""
+    backgrounded = checker._raw_segments_with_boundaries(["{", f"{name}={value}", ";", "}", "&", "wait"])
+    result = checker._segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(backgrounded)
+    isolated_segments = [backgrounded[i][0] for i in sorted(result)]
+    assert ["{", f"{name}={value}"] in isolated_segments
+
+    bare = checker._raw_segments_with_boundaries(["{", f"{name}={value}", ";", "}"])
+    assert checker._segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(bare) == set()
+
+
+def test_names_reassigned_from_a_static_value_stays_poisoned_despite_a_subshell_clear() -> None:
+    """CRITICAL bypass regression pin (round-31 independent review, issue
+    #1375): a static reassignment written INSIDE a `(...)` subshell
+    grouping never actually reaches the parent shell's own copy of the
+    name -- this function must not let it clear a genuinely poisoned
+    name."""
+    tokens = ["VERB=harmless", "VERB=$(echo install)", "(", "VERB=safe", ")"]
+    assert checker._names_reassigned_from_a_static_value(tokens) == {"VERB"}
+
+
+def test_names_reassigned_from_a_static_value_allows_a_real_top_level_clear_after_a_harmless_subshell() -> None:
+    """No over-correction: an EARLIER, harmless subshell must not block a
+    LATER, genuine top-level static reassignment from clearing poisoning
+    normally."""
+    tokens = ["VERB=harmless", "VERB=$(echo install)", "(", "VERB=whatever", ")", "VERB=safe"]
+    assert checker._names_reassigned_from_a_static_value(tokens) == set()
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, static_value=_VALUES, dynamic_value=_VALUES, subshell_value=_VALUES)
+def test_names_reassigned_from_a_static_value_matches_model_for_a_subshell_clear_attempt(
+    name: str, static_value: str, dynamic_value: str, subshell_value: str
+) -> None:
+    """Model-based: for ANY identifier reassigned static -> dynamic and
+    then given a static value ONLY inside a `(...)` subshell, the name
+    stays poisoned regardless of the subshell's own assigned value --
+    that assignment can never reach the parent scope."""
+    tokens = [
+        f"{name}={static_value}",
+        f"{name}=$({dynamic_value})",
+        "(",
+        f"{name}={subshell_value}",
+        ")",
+    ]
+    assert name in checker._names_reassigned_from_a_static_value(tokens)
+
+
+def test_names_reassigned_from_a_static_value_stays_poisoned_despite_a_pipe_stage_clear() -> None:
+    """CRITICAL bypass regression pin (round-32 independent review,
+    issue #1375): every stage of a `|` pipeline runs in its OWN forked
+    subshell by default (including the LAST stage, absent `shopt -s
+    lastpipe`) -- a static reassignment inside any stage can never reach
+    the parent shell's own copy of the name."""
+    tokens = ["VERB=harmless", ";", "VERB=$(echo install)", ";", "true", "|", "VERB=safe"]
+    assert checker._names_reassigned_from_a_static_value(tokens) == {"VERB"}
+
+
+def test_names_reassigned_from_a_static_value_stays_poisoned_despite_a_background_job_clear() -> None:
+    """Same round, the backgrounded-job counterpart: `cmd &` forks a
+    subshell for `cmd` alone."""
+    tokens = ["VERB=harmless", ";", "VERB=$(echo install)", ";", "VERB=safe", "&", "wait"]
+    assert checker._names_reassigned_from_a_static_value(tokens) == {"VERB"}
+
+
+def test_names_reassigned_from_a_static_value_stays_poisoned_despite_a_local_declaration_clear() -> None:
+    """Same round, the function-local counterpart: bash functions do NOT
+    get their own variable scope by default, but `local` explicitly
+    opts a single assignment out of leaking to the caller."""
+    tokens = ["VERB=harmless", ";", "VERB=$(echo install)", ";", "{", "local", "VERB=safe", "}"]
+    assert checker._names_reassigned_from_a_static_value(tokens) == {"VERB"}
+
+
+def test_names_reassigned_from_a_static_value_allows_a_real_top_level_clear_after_a_harmless_pipeline() -> None:
+    """No over-correction: an EARLIER, harmless pipeline must not block a
+    LATER, genuine top-level static reassignment from clearing normally."""
+    tokens = ["VERB=harmless", ";", "VERB=$(echo install)", ";", "true", "|", "echo", "hi", ";", "VERB=safe"]
+    assert checker._names_reassigned_from_a_static_value(tokens) == set()
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, static_value=_VALUES, dynamic_value=_VALUES, isolated_value=_VALUES)
+def test_names_reassigned_from_a_static_value_matches_model_for_a_pipe_stage_clear_attempt(
+    name: str, static_value: str, dynamic_value: str, isolated_value: str
+) -> None:
+    """Model-based: for ANY identifier reassigned static -> dynamic and
+    then given a static value ONLY inside a pipe stage, the name stays
+    poisoned regardless of the pipe stage's own assigned value."""
+    tokens = [f"{name}={static_value}", ";", f"{name}=$({dynamic_value})", ";", "true", "|", f"{name}={isolated_value}"]
+    assert name in checker._names_reassigned_from_a_static_value(tokens)
+
+
+def test_names_reassigned_from_a_static_value_stays_poisoned_despite_a_process_substitution_clear() -> None:
+    """CRITICAL bypass regression pin (round-33 independent review, issue
+    #1375): a process substitution runs its own content in a separate,
+    isolated subshell, exactly like `$(...)` command substitution -- a
+    static reassignment inside `<(...)` can never reach the parent
+    shell's own copy of the name."""
+    tokens = ["VERB=harmless", ";", "VERB=$(echo install)", ";", "cat", "<(", "VERB=safe", ")"]
+    assert checker._names_reassigned_from_a_static_value(tokens) == {"VERB"}
+
+
+def test_names_reassigned_from_a_static_value_stays_poisoned_despite_a_declare_clear() -> None:
+    """Same round, the `declare`-inside-a-function counterpart: bash
+    localizes `declare`/`typeset` inside a function body exactly like
+    `local`."""
+    tokens = ["VERB=harmless", ";", "VERB=$(echo install)", ";", "{", "declare", "VERB=safe", "}"]
+    assert checker._names_reassigned_from_a_static_value(tokens) == {"VERB"}
+
+
+def test_names_reassigned_from_a_static_value_stays_poisoned_despite_a_coproc_clear() -> None:
+    """CRITICAL bypass regression pin (round-34 independent review, issue
+    #1375): `coproc { ... }` forks its body into an asynchronous
+    subshell connected by a pipe, exactly like `cmd &` -- a static
+    reassignment inside it never reaches the parent shell's own copy of
+    the name."""
+    tokens = ["VERB=harmless", ";", "VERB=$(echo install)", ";", "coproc", "{", "VERB=safe", "}"]
+    assert checker._names_reassigned_from_a_static_value(tokens) == {"VERB"}
+
+
+def test_names_reassigned_from_a_static_value_stays_poisoned_despite_a_dollar_quoted_local_clear() -> None:
+    """Same round, the `$"local"`-fused-token counterpart."""
+    tokens = ["VERB=harmless", ";", "VERB=$(echo install)", ";", "{", "$local", "VERB=safe", "}"]
+    assert checker._names_reassigned_from_a_static_value(tokens) == {"VERB"}
+
+
+def test_names_reassigned_from_a_static_value_stays_poisoned_despite_a_backgrounded_brace_group_clear() -> None:
+    """CRITICAL bypass regression pin (round-35 independent review, issue
+    #1375): a `{...}` brace group forks as one unit when backgrounded --
+    a static reassignment inside it never reaches the parent shell's own
+    copy of the name."""
+    tokens = ["VERB=harmless", ";", "VERB=$(echo install)", ";", "{", "VERB=safe", ";", "}", "&", "wait"]
+    assert checker._names_reassigned_from_a_static_value(tokens) == {"VERB"}
+
+
+def test_names_reassigned_from_a_static_value_stays_poisoned_despite_a_piped_while_loop_clear() -> None:
+    """Same round, the `while`-loop-as-a-piped-unit counterpart."""
+    tokens = [
+        "VERB=harmless",
+        ";",
+        "VERB=$(echo install)",
+        ";",
+        "while",
+        "true",
+        ";",
+        "do",
+        "VERB=safe",
+        ";",
+        "break",
+        ";",
+        "done",
+        "|",
+        "cat",
+    ]
+    assert checker._names_reassigned_from_a_static_value(tokens) == {"VERB"}
+
+
+def test_names_reassigned_from_a_static_value_allows_a_real_top_level_clear_after_a_harmless_brace_group() -> None:
+    """No over-correction: an EARLIER, harmless (bare, not backgrounded or
+    piped) brace group must not block a LATER, genuine top-level static
+    reassignment from clearing poisoning normally."""
+    tokens = ["VERB=harmless", ";", "VERB=$(echo install)", ";", "{", "true", ";", "}", ";", "VERB=safe"]
+    assert checker._names_reassigned_from_a_static_value(tokens) == set()
+
+
+def test_names_reassigned_from_a_static_value_stays_poisoned_despite_a_backgrounded_case_clear() -> None:
+    """CRITICAL bypass regression pin (round-36 independent review, issue
+    #1375): `case ... esac` forks as one unit when backgrounded, exactly
+    like `{...}`/`while`/`until`/`for`/`select`/`if` -- a static
+    reassignment inside it never reaches the parent shell's own copy of
+    the name."""
+    tokens = [
+        "VERB=harmless",
+        ";",
+        "VERB=$(echo install)",
+        ";",
+        "case",
+        "1",
+        "in",
+        "1",
+        ")",
+        "VERB=safe",
+        ";",
+        ";",
+        "esac",
+        "&",
+        "wait",
+    ]
+    assert checker._names_reassigned_from_a_static_value(tokens) == {"VERB"}
+
+
+def test_names_reassigned_from_a_static_value_stays_poisoned_despite_a_case_in_subshell_depth_corruption() -> None:
+    """CRITICAL bypass regression pin (round-36 independent review, issue
+    #1375): a case arm's own pattern-terminating `)` must not be
+    mistaken for a real subshell close -- a static reassignment inside a
+    GENUINELY enclosing subshell around a `case` must still stay
+    poisoned even with no `&`/`|` involved at all."""
+    tokens = [
+        "VERB=harmless",
+        ";",
+        "VERB=$(echo install)",
+        ";",
+        "(",
+        "case",
+        "1",
+        "in",
+        "1",
+        ")",
+        "true",
+        ";",
+        ";",
+        "esac",
+        ";",
+        "VERB=safe",
+        ")",
+    ]
+    assert checker._names_reassigned_from_a_static_value(tokens) == {"VERB"}
+
+
+def test_names_reassigned_from_a_static_value_allows_a_real_top_level_clear_after_a_harmless_decorated_case() -> None:
+    """FALSE-POSITIVE regression pin (round-37 independent review, issue
+    #1375): a case pattern's OPTIONAL leading `(` decorator (`(1) ...`)
+    must not inflate `(...)`-nesting depth -- an EARLIER, harmless
+    (bare, not backgrounded or piped) decorated case must not block a
+    LATER, genuine top-level static reassignment from clearing
+    poisoning normally."""
+    tokens = [
+        "VERB=harmless",
+        ";",
+        "VERB=$(echo install)",
+        ";",
+        "case",
+        "1",
+        "in",
+        "(",
+        "1",
+        ")",
+        "true",
+        ";",
+        ";",
+        "esac",
+        ";",
+        "VERB=safe",
+    ]
+    assert checker._names_reassigned_from_a_static_value(tokens) == set()
+
+
+def test_names_reassigned_from_a_static_value_stays_poisoned_despite_a_case_subject_word_matching_esac() -> None:
+    """CRITICAL bypass regression pin (round-38 independent review, issue
+    #1375): a literal `esac` used as a case statement's own SUBJECT
+    word (an ordinary word position, not the reserved-word position)
+    must not be mistaken for the real closing keyword -- a static
+    reassignment inside a GENUINELY enclosing subshell around such a
+    case must still stay poisoned even with no `&`/`|` involved at
+    all."""
+    tokens = [
+        "VERB=harmless",
+        ";",
+        "VERB=$(echo install)",
+        ";",
+        "(",
+        "case",
+        "esac",
+        "in",
+        "a",
+        ")",
+        "true",
+        ";",
+        ";",
+        "esac",
+        ";",
+        "VERB=safe",
+        ")",
+    ]
+    assert checker._names_reassigned_from_a_static_value(tokens) == {"VERB"}
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, static_value=_VALUES, dynamic_value=_VALUES, isolated_value=_VALUES)
+def test_names_reassigned_from_a_static_value_matches_model_for_a_backgrounded_brace_group_clear_attempt(
+    name: str, static_value: str, dynamic_value: str, isolated_value: str
+) -> None:
+    """Model-based: for ANY identifier reassigned static -> dynamic and
+    then given a static value ONLY inside a backgrounded `{...}` brace
+    group, the name stays poisoned regardless of the group's own
+    assigned value."""
+    tokens = [
+        f"{name}={static_value}",
+        ";",
+        f"{name}=$({dynamic_value})",
+        ";",
+        "{",
+        f"{name}={isolated_value}",
+        ";",
+        "}",
+        "&",
+        "wait",
+    ]
+    assert name in checker._names_reassigned_from_a_static_value(tokens)
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, static_value=_VALUES, dynamic_value=_VALUES, final_static_value=_VALUES)
+def test_names_reassigned_from_a_static_value_matches_model_for_a_static_dynamic_static_sequence(
+    name: str, static_value: str, dynamic_value: str, final_static_value: str
+) -> None:
+    """Model-based: for ANY identifier reassigned static -> dynamic ->
+    static again, `_names_reassigned_from_a_static_value` never includes
+    it -- the final static reassignment is the genuine, trustworthy
+    value real bash uses at the point of use, and this function must not
+    poison a name whose latest assignment is static."""
+    tokens = [f"{name}={static_value}", f"{name}=$({dynamic_value})", f"{name}={final_static_value}"]
+    assert name not in checker._names_reassigned_from_a_static_value(tokens)
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, static_value=_VALUES, dynamic_value=_VALUES)
+def test_names_reassigned_from_a_static_value_matches_model(name: str, static_value: str, dynamic_value: str) -> None:
+    """Model-based: for ANY identifier assigned a static value and then
+    reassigned a dynamic one, `_names_reassigned_from_a_static_value`
+    always includes it -- and a second, entirely unrelated identifier
+    that is only ever assigned dynamically (no earlier static value) is
+    never included alongside it."""
+    other_name = name + "_OTHER"
+    tokens = [f"{name}={static_value}", f"{name}=$({dynamic_value})", f"{other_name}=$({dynamic_value})"]
+    result = checker._names_reassigned_from_a_static_value(tokens)
+    assert name in result
+    assert other_name not in result
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, static_value=_VALUES, appended_value=_VALUES)
+def test_names_appended_to_matches_model(name: str, static_value: str, appended_value: str) -> None:
+    """Model-based, exercising the round-27-extracted `_names_appended_
+    to` helper directly (round 25's own append-detection logic, factored
+    out so `_names_with_dynamic_assignment` and `_names_poisoned_for_gh_
+    api_and_b1` can share it): for ANY identifier assigned a static value
+    and then appended to (`+=`), `_names_appended_to` always includes it
+    -- and a second, entirely unrelated identifier that is only ever
+    assigned statically is never included alongside it."""
+    other_name = name + "_OTHER"
+    tokens = [f"{name}={static_value}", f"{name}+=$({appended_value})", f"{other_name}={static_value}"]
+    result = checker._names_appended_to(tokens)
+    assert name in result
+    assert other_name not in result
+
+
+def test_names_poisoned_for_gh_api_and_b1_unions_all_three_components() -> None:
+    """`_names_poisoned_for_gh_api_and_b1` is the union of append
+    (round 25), static-then-dynamic reassignment (round 27), and
+    untracked-construct (round 26) poisoning -- confirm all three
+    classes are actually reachable through the single combined
+    function `_rule_gh_api_write`/`_segment_loop_hit` consume."""
+    tokens = [
+        "APPENDED=x",
+        "APPENDED+=y",
+        "STATIC_THEN_DYNAMIC=harmless",
+        "STATIC_THEN_DYNAMIC=$(echo install)",
+        "arr=x",
+        "arr[0]=other",
+    ]
+    result = checker._names_poisoned_for_gh_api_and_b1(tokens)
+    assert result == {"APPENDED", "STATIC_THEN_DYNAMIC", "arr"}
+
+
+def test_names_poisoned_for_gh_api_and_b1_excludes_a_dynamic_only_name() -> None:
+    """The whole point of round 27's narrowing: a name assigned ONLY
+    dynamically must still be excluded from the combined poisoned set,
+    exactly as `_names_reassigned_from_a_static_value` excludes it on
+    its own -- this is what keeps the graphql-mutation known bypass
+    from regressing."""
+    assert checker._names_poisoned_for_gh_api_and_b1(["Q=$A$B"]) == set()
+
+
+def test_names_cleared_by_a_later_static_reassignment_empty_candidates_is_always_empty() -> None:
+    """No candidates, no work: the common case for a command with no
+    poisoned names at all never scans TOKENS."""
+    assert checker._names_cleared_by_a_later_static_reassignment(["VERB=safe"], set()) == set()
+
+
+def test_names_cleared_by_a_later_static_reassignment_clears_after_an_append() -> None:
+    """Regression pin for the real false-positive over-denial found live
+    by Step 8 independent review, thirtieth round (issue #1375): a name
+    appended to and THEN given a later, ordinary static value must be
+    cleared -- the append is no longer the name's latest assignment-
+    class event."""
+    tokens = ["VERB=inst", "VERB+=all", "VERB=safe"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == {"VERB"}
+
+
+def test_names_cleared_by_a_later_static_reassignment_clears_after_a_read() -> None:
+    tokens = ["read", "VERB", "VERB=safe"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == {"VERB"}
+
+
+def test_names_cleared_by_a_later_static_reassignment_clears_after_an_array_element_assignment() -> None:
+    tokens = ["VERB[0]=install", "VERB=safe"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == {"VERB"}
+
+
+def test_names_cleared_by_a_later_static_reassignment_does_not_clear_when_the_append_is_last() -> None:
+    """No under-correction: a name given a static value and THEN
+    appended to must NOT be cleared -- the append is the name's latest
+    assignment-class event, so its own combined value is still
+    unrecoverable."""
+    tokens = ["VERB=safe", "VERB+=x"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == set()
+
+
+def test_names_cleared_by_a_later_static_reassignment_ignores_an_unrelated_name() -> None:
+    """No false positive: a static reassignment to a name NOT in
+    CANDIDATES must not spuriously clear anything."""
+    tokens = ["OTHER+=x", "OTHER=safe"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == set()
+
+
+def test_names_cleared_by_a_later_static_reassignment_does_not_clear_via_a_subshell_assignment() -> None:
+    """CRITICAL bypass regression pin (round-31 independent review, issue
+    #1375): a static reassignment written INSIDE a `(...)` subshell
+    grouping never actually reaches the parent shell's own copy of the
+    name -- must not clear an append-poisoned candidate."""
+    tokens = ["VERB=inst", "VERB+=all", "(", "VERB=safe", ")"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == set()
+
+
+def test_names_cleared_by_a_later_static_reassignment_still_clears_a_real_top_level_assignment_after_a_subshell() -> (
+    None
+):
+    """No over-correction: a harmless subshell earlier in the command
+    must not block a LATER, genuine top-level static reassignment from
+    clearing normally."""
+    tokens = ["VERB=inst", "VERB+=all", "(", "VERB=whatever", ")", "VERB=safe"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == {"VERB"}
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, appended_value=_VALUES, subshell_value=_VALUES)
+def test_names_cleared_by_a_later_static_reassignment_matches_model_for_a_subshell_clear_attempt(
+    name: str, appended_value: str, subshell_value: str
+) -> None:
+    """Model-based: for ANY identifier appended to and then given a
+    static value ONLY inside a `(...)` subshell, the name is never
+    included in the cleared set -- that assignment can never reach the
+    parent scope."""
+    tokens = [f"{name}=x", f"{name}+={appended_value}", "(", f"{name}={subshell_value}", ")"]
+    assert name not in checker._names_cleared_by_a_later_static_reassignment(tokens, {name})
+
+
+def test_names_cleared_by_a_later_static_reassignment_does_not_clear_via_a_pipe_stage() -> None:
+    """CRITICAL bypass regression pin (round-32 independent review,
+    issue #1375): a static reassignment inside any pipe stage never
+    reaches the parent shell's own copy of the name -- must not clear
+    an append-poisoned candidate."""
+    tokens = ["VERB=inst", "VERB+=all", ";", "true", "|", "VERB=safe"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == set()
+
+
+def test_names_cleared_by_a_later_static_reassignment_does_not_clear_via_a_background_job() -> None:
+    tokens = ["VERB=inst", "VERB+=all", ";", "VERB=safe", "&", "wait"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == set()
+
+
+def test_names_cleared_by_a_later_static_reassignment_does_not_clear_via_a_local_declaration() -> None:
+    tokens = ["VERB=inst", "VERB+=all", ";", "{", "local", "VERB=safe", "}"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == set()
+
+
+def test_names_cleared_by_a_later_static_reassignment_still_clears_a_real_top_level_assignment_after_a_pipeline() -> (
+    None
+):
+    """No over-correction: a harmless pipeline earlier in the command
+    must not block a LATER, genuine top-level static reassignment from
+    clearing normally."""
+    tokens = ["VERB=inst", "VERB+=all", ";", "true", "|", "echo", "hi", ";", "VERB=safe"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == {"VERB"}
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, appended_value=_VALUES, isolated_value=_VALUES)
+def test_names_cleared_by_a_later_static_reassignment_matches_model_for_a_pipe_stage_clear_attempt(
+    name: str, appended_value: str, isolated_value: str
+) -> None:
+    """Model-based: for ANY identifier appended to and then given a
+    static value ONLY inside a pipe stage, the name is never included
+    in the cleared set."""
+    tokens = [f"{name}=x", f"{name}+={appended_value}", ";", "true", "|", f"{name}={isolated_value}"]
+    assert name not in checker._names_cleared_by_a_later_static_reassignment(tokens, {name})
+
+
+def test_names_cleared_by_a_later_static_reassignment_does_not_clear_via_a_process_substitution() -> None:
+    """CRITICAL bypass regression pin (round-33 independent review, issue
+    #1375): a static reassignment inside a `<(...)` process substitution
+    never reaches the parent shell's own copy of the name -- must not
+    clear an append-poisoned candidate."""
+    tokens = ["VERB=inst", "VERB+=all", ";", "cat", "<(", "VERB=safe", ")"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == set()
+
+
+def test_names_cleared_by_a_later_static_reassignment_does_not_clear_via_a_declare_declaration() -> None:
+    tokens = ["VERB=inst", "VERB+=all", ";", "{", "declare", "VERB=safe", "}"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == set()
+
+
+def test_names_cleared_by_a_later_static_reassignment_does_not_clear_via_a_coproc() -> None:
+    """CRITICAL bypass regression pin (round-34 independent review, issue
+    #1375): a static reassignment inside a `coproc { ... }` body never
+    reaches the parent shell's own copy of the name -- must not clear an
+    append-poisoned candidate."""
+    tokens = ["VERB=inst", "VERB+=all", ";", "coproc", "{", "VERB=safe", "}"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == set()
+
+
+def test_names_cleared_by_a_later_static_reassignment_does_not_clear_via_a_dollar_quoted_local() -> None:
+    tokens = ["VERB=inst", "VERB+=all", ";", "{", "$local", "VERB=safe", "}"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == set()
+
+
+def test_names_cleared_by_a_later_static_reassignment_does_not_clear_via_a_backgrounded_brace_group() -> None:
+    """CRITICAL bypass regression pin (round-35 independent review, issue
+    #1375): a `{...}` brace group forks as one unit when backgrounded --
+    a static reassignment inside it never reaches the parent shell's own
+    copy of the name -- must not clear an append-poisoned candidate."""
+    tokens = ["VERB=inst", "VERB+=all", ";", "{", "VERB=safe", ";", "}", "&", "wait"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == set()
+
+
+def test_names_cleared_by_a_later_static_reassignment_does_not_clear_via_a_piped_if() -> None:
+    tokens = ["VERB=inst", "VERB+=all", ";", "if", "true", ";", "then", "VERB=safe", ";", "fi", "|", "cat"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == set()
+
+
+def test_names_cleared_by_a_later_static_reassignment_clears_after_a_harmless_bare_brace_group() -> None:
+    """No over-correction: a bare (not backgrounded or piped) brace group
+    genuinely leaks its assignment to the parent -- a name reassigned
+    static this way must be cleared normally."""
+    tokens = ["VERB=inst", "VERB+=all", ";", "{", "VERB=safe", ";", "}"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == {"VERB"}
+
+
+def test_names_cleared_by_a_later_static_reassignment_does_not_clear_via_a_backgrounded_case() -> None:
+    """CRITICAL bypass regression pin (round-36 independent review, issue
+    #1375): `case ... esac` forks as one unit when backgrounded -- a
+    static reassignment inside it never reaches the parent shell's own
+    copy of the name -- must not clear an append-poisoned candidate."""
+    tokens = ["VERB=inst", "VERB+=all", ";", "case", "1", "in", "1", ")", "VERB=safe", ";", ";", "esac", "&", "wait"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == set()
+
+
+def test_names_cleared_by_a_later_static_reassignment_clears_after_a_harmless_bare_case() -> None:
+    """No over-correction: a bare (not backgrounded or piped) `case ...
+    esac` genuinely leaks its assignment to the parent -- a name
+    reassigned static this way must be cleared normally."""
+    tokens = ["VERB=inst", "VERB+=all", ";", "case", "1", "in", "1", ")", "VERB=safe", ";", ";", "esac"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == {"VERB"}
+
+
+def test_names_cleared_by_a_later_static_reassignment_clears_after_a_harmless_decorated_case() -> None:
+    """FALSE-POSITIVE regression pin (round-37 independent review, issue
+    #1375): a case pattern's OPTIONAL leading `(` decorator (`(1) ...`)
+    must not inflate `(...)`-nesting depth -- a bare (not backgrounded
+    or piped) decorated case genuinely leaks its assignment to the
+    parent shell in real bash, so a name reassigned static this way
+    must be cleared normally."""
+    tokens = ["VERB=inst", "VERB+=all", ";", "case", "1", "in", "(", "1", ")", "VERB=safe", ";", ";", "esac"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == {"VERB"}
+
+
+def test_names_cleared_by_a_later_static_reassignment_clears_after_a_printf_v() -> None:
+    tokens = ["printf", "-v", "VERB", "%s", "install", ";", "VERB=safe"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == {"VERB"}
+
+
+def test_names_cleared_by_a_later_static_reassignment_ignores_an_unrelated_printf_v_target() -> None:
+    """No false positive: a `printf -v` target NOT in CANDIDATES must
+    not spuriously mark it for clearing."""
+    tokens = ["printf", "-v", "OTHER", "%s", "x", ";", "OTHER=safe"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == set()
+
+
+def test_names_cleared_by_a_later_static_reassignment_ignores_an_unrelated_array_element_assignment() -> None:
+    """No false positive: an array-element assignment to a name NOT in
+    CANDIDATES must not spuriously mark it for clearing."""
+    tokens = ["OTHER[0]=x", "OTHER=safe"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == set()
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, appended_value=_VALUES, final_static_value=_VALUES)
+def test_names_cleared_by_a_later_static_reassignment_matches_model_for_an_append_then_a_later_static_value(
+    name: str, appended_value: str, final_static_value: str
+) -> None:
+    """Model-based, exercising `_names_cleared_by_a_later_static_
+    reassignment` directly (issue #1178's own detection-logic property-
+    coverage requirement): for ANY identifier appended to and then given
+    a later static value, the function always includes it in the
+    cleared set -- and a second, entirely unrelated identifier whose OWN
+    latest event is an append with no later static value is never
+    included alongside it, even though it is a member of CANDIDATES
+    too."""
+    other_name = name + "_OTHER"
+    tokens = [
+        f"{name}=x",
+        f"{name}+={appended_value}",
+        f"{name}={final_static_value}",
+        f"{other_name}=x",
+        f"{other_name}+={appended_value}",
+    ]
+    result = checker._names_cleared_by_a_later_static_reassignment(tokens, {name, other_name})
+    assert name in result
+    assert other_name not in result
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, appended_value=_VALUES, final_static_value=_VALUES)
+def test_names_poisoned_for_gh_api_and_b1_matches_model_for_an_append_then_a_later_static_value(
+    name: str, appended_value: str, final_static_value: str
+) -> None:
+    """Model-based: for ANY identifier appended to and then given a
+    later static value, `_names_poisoned_for_gh_api_and_b1` never
+    includes it -- the round-30 fix's own generalized "trust only the
+    name's latest assignment" principle must hold for every identifier
+    shape `_IDENTIFIERS` generates, not just the specific example pinned
+    above."""
+    tokens = [f"{name}=x", f"{name}+={appended_value}", f"{name}={final_static_value}"]
+    assert name not in checker._names_poisoned_for_gh_api_and_b1(tokens)
+
+
+def test_names_poisoned_for_gh_api_and_b1_clears_an_append_given_a_later_static_value() -> None:
+    """Integration-level pin: the round-30 fix's subtraction actually
+    reaches `_names_poisoned_for_gh_api_and_b1`'s own combined result,
+    not just the standalone `_names_cleared_by_a_later_static_
+    reassignment` helper."""
+    tokens = ["VERB=inst", "VERB+=all", "VERB=safe"]
+    assert checker._names_poisoned_for_gh_api_and_b1(tokens) == set()
+
+
+def test_names_poisoned_for_gh_api_and_b1_clears_a_read_reassignment_given_a_later_static_value() -> None:
+    tokens = ["read", "VERB", "VERB=safe"]
+    assert checker._names_poisoned_for_gh_api_and_b1(tokens) == set()
+
+
+def test_names_poisoned_for_gh_api_and_b1_clears_an_array_element_assignment_given_a_later_static_value() -> None:
+    tokens = ["VERB[0]=install", "VERB=safe"]
+    assert checker._names_poisoned_for_gh_api_and_b1(tokens) == set()
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_via_plain_dynamic_reassignment() -> None:
+    """End-to-end regression pin for the round-27 finding at the
+    `classify()` level, against B1b. Confirmed live before this fix via
+    a stand-in `uv` binary on PATH: `TOOL=uv; VERB=harmless;
+    VERB=$(echo install); $TOOL $VERB foo` genuinely runs `uv install
+    foo` (captured argv: "install foo"), but classified as allowed
+    ('no denied pattern matched') -- VERB's stale static value
+    ('harmless') stayed trusted in `_assigned_raw_values`."""
+    verdict = checker.classify("TOOL=uv; VERB=harmless; VERB=$(echo install); $TOOL $VERB foo")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_via_a_static_append() -> None:
+    """Companion to the plain-dynamic-reassignment pin above, for the
+    append shape. Confirmed live before this fix via a stand-in `uv`
+    binary on PATH: `TOOL=uv; VERB=inst; VERB+=all; $TOOL $VERB foo`
+    genuinely runs `uv install foo` (captured argv: "install foo")."""
+    verdict = checker.classify("TOOL=uv; VERB=inst; VERB+=all; $TOOL $VERB foo")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_gh_api_write_method_reassigned_via_plain_dynamic_reassignment() -> None:
+    """Companion to the B1b pins above, for `_rule_gh_api_write`.
+    Confirmed live before this fix via a stand-in `gh` binary on PATH:
+    `M=safe; M=$(echo POST); gh api repos/o/r/pulls/1/merge -X $M`
+    genuinely runs `gh api repos/o/r/pulls/1/merge -X POST` (a real,
+    unreviewed write, e.g. merging a pull request), but classified as
+    allowed."""
+    verdict = checker.classify("M=safe; M=$(echo POST); gh api repos/o/r/pulls/1/merge -X $M")
+    assert verdict.deny is True
+
+
+def test_classify_leaves_the_graphql_mutation_known_bypass_unaffected() -> None:
+    """Regression guard: the round-27 fix must NOT reopen the pre-
+    existing, deliberately-disclosed `graphql-mutation-keyword-
+    variable-concatenation` known bypass (`KNOWN_BYPASS_COMMANDS`) --
+    `Q` here is assigned ONLY dynamically, with no earlier static value,
+    so it must stay outside the poisoned set and this command must stay
+    allowed exactly as before round 27."""
+    verdict = checker.classify('A=muta; B=tion; Q="${A}${B} { x }"; gh api graphql -f query="$Q"')
+    assert verdict.deny is False
+
+
+def test_classify_allows_a_b1b_tool_and_verb_reassigned_from_static_to_dynamic_to_static() -> None:
+    """End-to-end regression pin for the round-28 finding at the
+    `classify()` level, against B1b. Confirmed live before this fix via
+    a stand-in `uv` binary on PATH: `TOOL=uv; VERB=harmless;
+    VERB=$(echo x); VERB=status; $TOOL $VERB foo` genuinely runs `uv
+    status foo` (captured argv: "status foo") -- `status` is not a
+    watched verb -- but was wrongly denied (poisoned forever once ANY
+    dynamic reassignment was ever seen, regardless of a later static one
+    fully restoring a trustworthy value)."""
+    verdict = checker.classify("TOOL=uv; VERB=harmless; VERB=$(echo x); VERB=status; $TOOL $VERB foo")
+    assert verdict.deny is False
+
+
+def test_classify_allows_a_gh_api_method_reassigned_from_static_to_dynamic_to_static() -> None:
+    """Companion to the B1b pin above, for `_rule_gh_api_write`, using a
+    method pair (GET/HEAD) that never triggers the SEPARATE,
+    deliberately sticky `_assigned_raw_values_biased_toward` write-bias
+    mechanism (round 22) -- that mechanism keeps denying a POST-then-GET
+    sequence regardless of this fix, by its own independent, documented
+    design (a watched-write-method value seen at ANY point stays sticky),
+    which is not what this pin is testing. Confirmed live before this
+    fix via a stand-in `gh` binary on PATH: `M=GET; M=$(echo x); M=HEAD;
+    gh api repos/o/r/issues -X $M` genuinely runs `gh api
+    repos/o/r/issues -X HEAD` (captured argv confirms it) -- a read
+    method -- but was wrongly denied."""
+    verdict = checker.classify("M=GET; M=$(echo x); M=HEAD; gh api repos/o/r/issues -X $M")
+    assert verdict.deny is False
+
+
+def test_classify_still_denies_a_gh_api_method_that_was_ever_a_watched_write_method() -> None:
+    """No under-correction: the round-28 fix to `_names_reassigned_from_
+    a_static_value` must NOT weaken the SEPARATE, pre-existing,
+    deliberately sticky write-bias mechanism (`_assigned_raw_values_
+    biased_toward`, round 22) -- a name that carries a watched write
+    method (POST) at ANY point stays denied even after a later, static
+    reassignment to a read method (GET), by that mechanism's own
+    independent, documented design (extra scrutiny once a dangerous
+    value is ever seen, regardless of a later overwrite)."""
+    verdict = checker.classify("M=POST; M=$(echo x); M=GET; gh api repos/o/r/issues -X $M")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_static_then_dynamic_tool_and_verb_referenced_indirectly() -> None:
+    """CRITICAL bypass regression pin (round-29 independent review, issue
+    #1375): `_segment_references_a_name`'s own round-26 single-level
+    `${!NAME}` indirect-reference scan missed a poisoned name referenced
+    through one extra layer of indirection -- the direct reference
+    (round 27's own pin, `test_classify_denies_a_var_split_tool_and_verb_
+    reassigned_from_a_static_value` or equivalent) already denied
+    correctly; only wrapping it in `${!MREF}` bypassed detection.
+    Confirmed live via a stand-in `uv` binary on PATH that this genuinely
+    runs `uv install foo`."""
+    verdict = checker.classify("TOOL=uv; VERB=harmless; VERB=$(echo install); MREF=VERB; $TOOL ${!MREF} foo")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_gh_api_method_reassigned_from_a_static_value_referenced_indirectly() -> None:
+    """Companion to the B1b pin above, for `_rule_gh_api_write` (round 29,
+    issue #1375). Confirmed live via a stand-in `gh` binary on PATH: this
+    genuinely runs `gh api repos/o/r/pulls/1/merge -X POST`, a genuine,
+    unreviewed write API call."""
+    verdict = checker.classify("M=safe; M=$(echo POST); MREF=M; gh api repos/o/r/pulls/1/merge -X ${!MREF}")
+    assert verdict.deny is True
+
+
+def test_classify_allows_an_indirect_reference_to_an_unrelated_name_despite_a_poisoned_name_elsewhere() -> None:
+    """No over-denial: an indirect `${!MREF}` reference resolving to a
+    name that was never poisoned must stay allowed, even though a
+    DIFFERENT, genuinely poisoned name exists elsewhere in scope -- the
+    round-29 fix's two-level resolution must not treat every poisoned
+    name anywhere as reachable through an unrelated indirection.
+    Confirmed live via a stand-in `uv` binary on PATH that this genuinely
+    runs `uv status foo` -- "status" is not a watched verb."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); OTHER=status; MREF=OTHER; $TOOL ${!MREF} foo"
+    )
+    assert verdict.deny is False
+
+
+def test_classify_allows_a_b1b_tool_and_verb_appended_then_given_a_later_static_value() -> None:
+    """CRITICAL false-positive regression pin (round-30 independent
+    review, issue #1375): round 28's own "clear on later static
+    reassignment" fix was applied only inside `_names_reassigned_from_
+    a_static_value`, leaving `_names_appended_to`/`_names_reassigned_by_
+    untracked_construct` (the OTHER two components of `_names_poisoned_
+    for_gh_api_and_b1`'s own union) poisoning a name forever once
+    appended to, even after a later static value fully restores trust.
+    Confirmed live via a stand-in `uv` binary on PATH that this
+    genuinely runs `uv safe foo` -- "safe" is not a watched verb."""
+    verdict = checker.classify("TOOL=uv; VERB=inst; VERB+=all; VERB=safe; $TOOL $VERB foo")
+    assert verdict.deny is False
+
+
+def test_classify_allows_a_gh_api_method_appended_then_given_a_later_static_value() -> None:
+    """Companion to the B1b pin above, for `_rule_gh_api_write`.
+    Confirmed live via a stand-in `gh` binary on PATH that this
+    genuinely runs `gh api repos/o/r/issues -X GET`, a read method."""
+    verdict = checker.classify("M=P; M+=OST; M=GET; gh api repos/o/r/issues -X $M")
+    assert verdict.deny is False
+
+
+def test_classify_allows_a_b1b_tool_and_verb_read_into_then_given_a_later_static_value() -> None:
+    """Same round, the `read` counterpart. Confirmed live via a stand-in
+    `uv` binary on PATH that this genuinely runs `uv safe foo`."""
+    verdict = checker.classify("TOOL=uv; read VERB <<< status; VERB=safe; $TOOL $VERB foo")
+    assert verdict.deny is False
+
+
+def test_classify_allows_a_b1b_tool_and_verb_array_element_assigned_then_given_a_later_static_value() -> None:
+    """Same round, the array-element-assignment counterpart. Confirmed
+    live via a stand-in `uv` binary on PATH that this genuinely runs
+    `uv safe foo`."""
+    verdict = checker.classify("TOOL=uv; VERB[0]=install; VERB=safe; $TOOL $VERB foo")
+    assert verdict.deny is False
+
+
+def test_classify_still_denies_a_b1b_tool_and_verb_given_a_static_value_then_appended_to() -> None:
+    """No under-correction: a name given a static value and THEN
+    appended to must stay denied -- the append is the name's latest
+    assignment-class event, so its own combined value is still
+    unrecoverable, regardless of how harmless the earlier static value
+    looked."""
+    verdict = checker.classify("TOOL=uv; VERB=safe; VERB+=x; $TOOL $VERB foo")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_subshell_clear() -> None:
+    """CRITICAL bypass regression pin (round-31 independent review,
+    issue #1375): a static reassignment written INSIDE a `(...)`
+    subshell grouping never actually reaches the parent shell's own
+    copy of the name -- `_names_reassigned_from_a_static_value`'s own
+    pre-round-31 form let it wrongly clear a genuinely poisoned name.
+    Confirmed live via a stand-in `uv` binary on PATH that this
+    genuinely runs `uv install foo`, NOT `safe foo`."""
+    verdict = checker.classify("TOOL=uv; VERB=harmless; VERB=$(echo install); (VERB=safe); $TOOL $VERB foo")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_gh_api_method_reassigned_from_a_static_value_via_a_subshell_clear() -> None:
+    """Companion to the B1b pin above, for `_rule_gh_api_write`.
+    Confirmed live via a stand-in `gh` binary on PATH that this
+    genuinely runs `gh api repos/o/r/pulls/1/merge -X POST`, a genuine
+    unreviewed write."""
+    verdict = checker.classify("M=safe; M=$(echo POST); (M=GET); gh api repos/o/r/pulls/1/merge -X $M")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_appended_then_cleared_via_a_subshell() -> None:
+    """Same round, the append counterpart (`_names_cleared_by_a_later_
+    static_reassignment`'s own subshell-blindness). Confirmed live via a
+    stand-in `uv` binary on PATH that this genuinely runs `uv install
+    foo`, NOT `safe foo`."""
+    verdict = checker.classify("TOOL=uv; VERB=inst; VERB+=all; (VERB=safe); $TOOL $VERB foo")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_array_element_assigned_then_cleared_via_a_subshell() -> None:
+    verdict = checker.classify("TOOL=uv; VERB=x; VERB[0]=install; (VERB=safe); $TOOL $VERB foo")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_read_into_then_cleared_via_a_subshell() -> None:
+    verdict = checker.classify("TOOL=uv; read VERB <<< install; (VERB=safe); $TOOL $VERB foo")
+    assert verdict.deny is True
+
+
+def test_classify_allows_an_unrelated_harmless_subshell_alongside_a_never_poisoned_name() -> None:
+    """No over-correction: an ordinary, unrelated subshell elsewhere in
+    the command must not spuriously deny a command whose watched name
+    was never poisoned at all."""
+    verdict = checker.classify("TOOL=uv; VERB=safe; (echo hi); $TOOL $VERB foo")
+    assert verdict.deny is False
+
+
+def test_classify_allows_a_real_top_level_static_clear_after_a_harmless_subshell() -> None:
+    """No over-correction: a harmless subshell assignment earlier in the
+    command must not block a LATER, genuine top-level static
+    reassignment from clearing poisoning normally."""
+    verdict = checker.classify("TOOL=uv; (VERB=harmless); VERB=safe; $TOOL $VERB foo")
+    assert verdict.deny is False
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_pipe_stage_clear() -> None:
+    """CRITICAL bypass regression pin (round-32 independent review,
+    issue #1375): every stage of a `|` pipeline runs in its OWN forked
+    subshell by default (including the LAST stage, absent `shopt -s
+    lastpipe`), so a static reassignment inside a pipe stage never
+    reaches the parent shell's own copy of the name. Confirmed live via
+    a stand-in `uv` binary on PATH that this genuinely runs `uv install
+    foo`, NOT `safe foo`."""
+    verdict = checker.classify("TOOL=uv; VERB=harmless; VERB=$(echo install); true | VERB=safe; $TOOL $VERB foo")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_gh_api_method_reassigned_from_a_static_value_via_a_pipe_stage_clear() -> None:
+    """Companion to the B1b pin above, for `_rule_gh_api_write`.
+    Confirmed live via a stand-in `gh` binary on PATH that this
+    genuinely runs `gh api repos/o/r/pulls/1/merge -X POST`, a genuine
+    unreviewed write."""
+    verdict = checker.classify("M=safe; M=$(echo POST); true | M=GET; gh api repos/o/r/pulls/1/merge -X $M")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_background_job_clear() -> None:
+    """Same round, the backgrounded-job counterpart: `cmd &` forks a
+    subshell for `cmd` alone. Confirmed live via a stand-in `uv` binary
+    on PATH that this genuinely runs `uv install foo`, NOT `safe foo`."""
+    verdict = checker.classify("TOOL=uv; VERB=harmless; VERB=$(echo install); VERB=safe & wait; $TOOL $VERB foo")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_gh_api_method_reassigned_from_a_static_value_via_a_background_job_clear() -> None:
+    verdict = checker.classify("M=safe; M=$(echo POST); M=GET & wait; gh api repos/o/r/pulls/1/merge -X $M")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_local_declaration_clear() -> None:
+    """Same round, the function-local counterpart: bash functions do NOT
+    get their own variable scope by default, but `local` explicitly
+    opts a single assignment out of leaking to the caller. Confirmed
+    live via a stand-in `uv` binary on PATH that this genuinely runs `uv
+    install foo`, NOT `safe foo`."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); f() { local VERB=safe; }; f; $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_gh_api_method_reassigned_from_a_static_value_via_a_local_declaration_clear() -> None:
+    verdict = checker.classify("M=safe; M=$(echo POST); f() { local M=GET; }; f; gh api repos/o/r/pulls/1/merge -X $M")
+    assert verdict.deny is True
+
+
+def test_classify_allows_an_unrelated_harmless_pipeline_alongside_a_never_poisoned_name() -> None:
+    """No over-correction: an ordinary, unrelated pipeline elsewhere in
+    the command must not spuriously deny a command whose watched name
+    was never poisoned at all."""
+    verdict = checker.classify("TOOL=uv; VERB=safe; true | cat; $TOOL $VERB foo")
+    assert verdict.deny is False
+
+
+def test_classify_allows_an_unrelated_harmless_background_job_alongside_a_never_poisoned_name() -> None:
+    verdict = checker.classify("TOOL=uv; VERB=safe; sleep 0 & wait; $TOOL $VERB foo")
+    assert verdict.deny is False
+
+
+def test_classify_allows_an_unrelated_harmless_function_call_alongside_a_never_poisoned_name() -> None:
+    verdict = checker.classify("TOOL=uv; f() { echo hi; }; f; VERB=safe; $TOOL $VERB foo")
+    assert verdict.deny is False
+
+
+def test_classify_allows_a_real_top_level_static_clear_after_a_harmless_pipeline() -> None:
+    """No over-correction: a harmless pipeline earlier in the command
+    must not block a LATER, genuine top-level static reassignment from
+    clearing poisoning normally."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); true | echo hi; VERB=safe; $TOOL $VERB foo"
+    )
+    assert verdict.deny is False
+
+
+def test_classify_denies_arithmetic_double_paren_content_as_a_disclosed_residual() -> None:
+    """DISCLOSED, deliberately NOT fixed (round 32, issue #1375): this
+    classifier's own tokenizer produces the IDENTICAL token sequence for
+    bash's `((EXPR))` arithmetic-command syntax and a deliberately-
+    spaced, genuinely double-nested `( (cmd) )` subshell grouping,
+    discarding the space that real bash's own lexer uses to disambiguate
+    them. Treating adjacent `((`/`))` as depth-neutral (the "obviously
+    correct" fix for the resulting over-denial on harmless arithmetic
+    usage) was independently tried and REJECTED: real bash's own
+    arithmetic evaluation can only ever assign a NUMBER to the target
+    name (confirmed live: `((VERB=safe))` sets `$VERB` to `"0"`, not the
+    string "safe" -- bash reads the bare word as an unset variable
+    reference), but the genuinely-double-nested-subshell reading of the
+    SAME tokens can assign an ARBITRARY STRING that stays fully isolated
+    from the parent scope (confirmed live: `( (VERB=totallysafe) )`
+    leaves the parent's own `$VERB` completely unchanged). Treating the
+    ambiguous pair as depth-neutral would let this classifier's own
+    literal-text extraction trust that arbitrary string as VERB's new
+    value and wrongly clear a genuine poisoning -- a NEW bypass, reopening
+    exactly the class of defect `_names_reassigned_from_a_static_value`
+    exists to close. The over-denial on genuine arithmetic usage is kept
+    deliberately, matching this file's own established deny-on-
+    ambiguity posture; closing it soundly would require the upstream
+    tokenizer to preserve the presence/absence of a space between
+    adjacent parens."""
+    verdict = checker.classify("TOOL=uv; VERB=harmless; VERB=$(echo install); ((VERB=1)); $TOOL $VERB foo")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_deliberately_spaced_double_subshell_distractor() -> None:
+    """No under-correction: confirms the rejected "arithmetic-neutral"
+    fix was correctly NOT applied -- a genuinely double-nested, spaced
+    subshell carrying a plausible-looking distractor value must stay
+    denied, since real bash's own parent scope is unaffected by it."""
+    verdict = checker.classify("TOOL=uv; VERB=harmless; VERB=$(echo install); ( (VERB=totallysafe) ); $TOOL $VERB foo")
+    assert verdict.deny is True
+
+
+def test_classify_allows_a_quoted_open_paren_as_a_disclosed_over_denial_residual() -> None:
+    """DISCLOSED, deliberately NOT fixed (round 39 independent review,
+    issue #1375, tracked as https://github.com/tvna/gitapex/issues/1502):
+    `_raw_segments_with_boundaries` recognizes a real subshell opener
+    purely by a token's TEXT (`tok in _SUBSHELL_OPEN_TOKENS`) --
+    `tokenize()`'s own shlex dequotes every token first, so a QUOTED
+    `"("` argument with no matching close tokenizes identically to a
+    real, unquoted subshell opener, inflating tracked depth for the
+    REST of the command with nothing to ever balance it. Confirmed live
+    via a stand-in `uv` binary on PATH that real bash genuinely runs the
+    harmless `uv safe foo` (`echo "("` just prints a literal `(`, and
+    `VERB=safe` is an ordinary top-level clearing assignment) -- but
+    this classifier wrongly denies it. This is the FALSE-POSITIVE
+    direction of the same shlex quote-information-loss class as the
+    `quoted-paren-inside-a-subshell-clears-a-poisoning-bypass` entry in
+    `hooks/test_gitapex_check_bash_safety.py`'s own
+    `KNOWN_BYPASS_COMMANDS` (that entry pins the BYPASS direction);
+    fixing either soundly needs `tokenize()` itself to preserve
+    per-token quote/escape provenance, the same tokenizer-level change
+    issues #1404/#1412 already require -- deliberately not attempted
+    here, matching this module's own established convention for that
+    disclosed residual class. This is currently expected (denied)
+    behavior, not a should-be-fixed assertion -- if this ever starts
+    passing, the underlying gap closed; update this test (and issue
+    #1502) together."""
+    verdict = checker.classify('TOOL=uv; VERB=harmless; VERB=$(echo install); echo "("; VERB=safe; $TOOL $VERB foo')
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_heredoc_body_phrase_as_a_disclosed_over_denial_residual() -> None:
+    """DISCLOSED, deliberately NOT fixed (round 41 independent review,
+    issue #1375, the PR's own designated final review round; tracked as
+    https://github.com/tvna/gitapex/issues/1520): `tokenize()` has no
+    here-document boundary awareness at all -- a heredoc body's own text
+    is tokenized as if it were live command source, so a denied phrase
+    sitting in pure heredoc DATA (handed to the receiving command's
+    stdin, never re-parsed as shell syntax by real bash) triggers a
+    denial. A DIFFERENT mechanism from the #1404/#1412/#1502 shlex
+    quote-information-loss class (a missing lexical construct, not
+    quote-provenance loss on an otherwise-correctly-segmented stream) --
+    deliberately not attempted here, matching this module's own
+    established convention for a broad, cross-rule tokenizer limitation.
+    This is currently expected (denied) behavior, not a should-be-fixed
+    assertion -- if this ever starts passing, the underlying gap closed;
+    update this test (and issue #1520) together."""
+    verdict = checker.classify("cat <<EOF\npip install foo\nEOF")
+    assert verdict.deny is True
+
+
+def test_classify_surfaces_a_heredoc_body_checkout_path_as_a_disclosed_over_denial_residual() -> None:
+    """Companion to the residual above, specific to issue #1375's own new
+    detection surface: a heredoc body merely DESCRIBING a checkout
+    command in prose populates `checkout_restore_paths`, even though the
+    heredoc never actually runs that checkout -- the same missing
+    heredoc-body-boundary gap, reaching into this PR's own new feature."""
+    verdict = checker.classify("cat <<EOF\ngit checkout -- file.py\nEOF")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("file.py",)
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_process_substitution_clear() -> None:
+    """CRITICAL bypass regression pin (round-33 independent review,
+    issue #1375): a process substitution runs its own content in a
+    separate, isolated subshell, exactly like `$(...)` command
+    substitution -- but this classifier's own tokenizer fuses `<(`/`>(`
+    into their own distinct tokens, never a bare `(`, so the pre-round-
+    33 code neither isolated its content nor correctly paired its
+    matching close, corrupting depth tracking too. Confirmed live via a
+    stand-in `uv` binary on PATH that this genuinely runs `uv install
+    foo`, NOT `safe foo`."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); cat <(VERB=safe) >/dev/null; $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_gh_api_method_reassigned_from_a_static_value_via_a_process_substitution_clear() -> None:
+    """Companion to the B1b pin above, for `_rule_gh_api_write`.
+    Confirmed live via a stand-in `gh` binary on PATH that this
+    genuinely runs `gh api repos/o/r/pulls/1/merge -X POST`, a genuine
+    unreviewed write."""
+    verdict = checker.classify("M=safe; M=$(echo POST); cat <(M=GET) >/dev/null; gh api repos/o/r/pulls/1/merge -X $M")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_process_substitution_that_corrupts_an_enclosing_subshells_depth() -> None:
+    """The depth-corruption variant: a process substitution's own
+    phantom close must not prematurely decrement tracked depth for a
+    GENUINELY enclosing `(...)` subshell around it. Confirmed live that
+    the outer subshell genuinely still isolates `VERB=safe` in real bash
+    (`VERB=install; (cat <(true); VERB=safe); echo "VERB is now: $VERB"`
+    prints `VERB is now: install`)."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); (cat <(true); VERB=safe); $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_declare_declaration_clear() -> None:
+    """Same round, the `declare`-inside-a-function counterpart: bash
+    localizes `declare`/`typeset` inside a function body exactly like
+    `local`. Confirmed live via a stand-in `uv` binary on PATH that this
+    genuinely runs `uv install foo`, NOT `safe foo`."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); f() { declare VERB=safe; }; f; $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_typeset_declaration_clear() -> None:
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); f() { typeset VERB=safe; }; f; $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_gh_api_method_reassigned_from_a_static_value_via_a_declare_declaration_clear() -> None:
+    verdict = checker.classify(
+        "M=safe; M=$(echo POST); f() { declare M=GET; }; f; gh api repos/o/r/pulls/1/merge -X $M"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_allows_an_unrelated_harmless_process_substitution_alongside_a_never_poisoned_name() -> None:
+    """No over-correction: an ordinary, unrelated process substitution
+    elsewhere in the command must not spuriously deny a command whose
+    watched name was never poisoned at all."""
+    verdict = checker.classify("TOOL=uv; VERB=safe; cat <(echo hi) >/dev/null; $TOOL $VERB foo")
+    assert verdict.deny is False
+
+
+def test_classify_allows_a_top_level_declare_that_was_never_poisoned() -> None:
+    """No over-correction: `declare`/`typeset` at the TOP LEVEL of a
+    script (not inside any function) behaves as an ordinary global
+    assignment in real bash -- a name that was never poisoned to begin
+    with must still be allowed even though `declare` is conservatively
+    treated as always-isolating for the CLEARING check specifically."""
+    verdict = checker.classify("TOOL=uv; declare VERB=safe; $TOOL $VERB foo")
+    assert verdict.deny is False
+
+
+def test_classify_allows_a_real_top_level_static_clear_after_a_harmless_process_substitution() -> None:
+    """No over-correction: a harmless process substitution earlier in
+    the command must not block a LATER, genuine top-level static
+    reassignment from clearing poisoning normally."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); cat <(echo hi) >/dev/null; VERB=safe; $TOOL $VERB foo"
+    )
+    assert verdict.deny is False
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_coproc_clear() -> None:
+    """CRITICAL bypass regression pin (round-34 independent review,
+    issue #1375): `coproc { ... }` forks its body to run asynchronously
+    in a subshell connected by a pipe, exactly like `cmd &`, with no
+    non-isolating usage at all. Confirmed live via a stand-in `uv`
+    binary on PATH that this genuinely runs `uv install foo`, NOT
+    `safe foo`."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); coproc { VERB=safe; }; wait; $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_gh_api_method_reassigned_from_a_static_value_via_a_coproc_clear() -> None:
+    """Companion to the B1b pin above, for `_rule_gh_api_write`.
+    Confirmed live via a stand-in `gh` binary on PATH that this
+    genuinely runs `gh api repos/o/r/pulls/1/merge -X POST`, a genuine
+    unreviewed write."""
+    verdict = checker.classify("M=safe; M=$(echo POST); coproc { M=GET; }; wait; gh api repos/o/r/pulls/1/merge -X $M")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_dollar_quoted_local_clear() -> None:
+    """Same round, the `$"local"`-fused-token counterpart: bash's own
+    locale-translated-string syntax fuses the `$` prefix onto the
+    dequoted string content, so `$"local"` tokenizes as a single token
+    `$local`, never a bare `local`, but genuinely invokes the `local`
+    builtin in command-starting position. Confirmed live via a stand-in
+    `uv` binary on PATH that this genuinely runs `uv install foo`, NOT
+    `safe foo`."""
+    verdict = checker.classify(
+        'TOOL=uv; VERB=harmless; VERB=$(echo install); f() { $"local" VERB=safe; }; f; $TOOL $VERB foo'
+    )
+    assert verdict.deny is True
+
+
+def test_classify_allows_an_unrelated_harmless_coproc_alongside_a_never_poisoned_name() -> None:
+    """No over-correction: an ordinary, unrelated coproc elsewhere in
+    the command must not spuriously deny a command whose watched name
+    was never poisoned at all."""
+    verdict = checker.classify("TOOL=uv; VERB=safe; coproc { echo hi; }; wait; $TOOL $VERB foo")
+    assert verdict.deny is False
+
+
+def test_classify_allows_an_unrelated_plain_dollar_local_variable_reference() -> None:
+    """No over-correction: an ordinary `$local` variable reference (not
+    the `$"local"` locale-string form) in a DIFFERENT segment from a
+    genuine top-level clearing assignment must not spuriously deny."""
+    verdict = checker.classify("TOOL=uv; echo $local; VERB=safe; $TOOL $VERB foo")
+    assert verdict.deny is False
+
+
+def test_classify_allows_a_real_top_level_static_clear_after_a_harmless_coproc() -> None:
+    """No over-correction: a harmless coproc earlier in the command must
+    not block a LATER, genuine top-level static reassignment from
+    clearing poisoning normally."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); coproc { echo hi; }; wait; VERB=safe; $TOOL $VERB foo"
+    )
+    assert verdict.deny is False
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_backgrounded_brace_group_clear() -> (
+    None
+):
+    """CRITICAL bypass regression pin (round-35 independent review,
+    issue #1375): a `{...}` brace group forks as one unit when
+    backgrounded, exactly like `cmd &` -- with no non-isolating usage
+    from that boundary alone. Confirmed live via a stand-in `uv` binary
+    on PATH that this genuinely runs `uv install foo`, NOT `safe foo`."""
+    verdict = checker.classify("TOOL=uv; VERB=harmless; VERB=$(echo install); { VERB=safe; } & wait; $TOOL $VERB foo")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_piped_brace_group_clear() -> None:
+    """Same round, the piped counterpart: every stage of a `|` pipeline
+    forks its own subshell, including a brace group used as a stage."""
+    verdict = checker.classify("TOOL=uv; VERB=harmless; VERB=$(echo install); { VERB=safe; } | cat; $TOOL $VERB foo")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_gh_api_method_reassigned_from_a_static_value_via_a_backgrounded_brace_group_clear() -> None:
+    """Companion to the B1b pin above, for `_rule_gh_api_write`.
+    Confirmed live via a stand-in `gh` binary on PATH that this
+    genuinely runs `gh api repos/o/r/pulls/1/merge -X POST`, a genuine
+    unreviewed write."""
+    verdict = checker.classify("M=safe; M=$(echo POST); { true; M=GET; } & wait; gh api repos/o/r/pulls/1/merge -X $M")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_piped_while_loop_clear() -> None:
+    """Same round, the `while`-loop-as-a-piped-unit counterpart --
+    absent `shopt -s lastpipe`, EVERY pipeline stage forks, including
+    the loop itself when it is one."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); while true; do VERB=safe; break; done | cat; $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_backgrounded_if_clear() -> None:
+    """Same round, the `if` counterpart."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); if true; then VERB=safe; fi & wait; $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_backgrounded_for_loop_clear() -> None:
+    """Same round, the `for` counterpart."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); for i in 1; do VERB=safe; done & wait; $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_doubly_nested_piped_group_clear() -> (
+    None
+):
+    """Same round, the doubly-nested counterpart: bash's own grammar
+    places no requirement that a nested group's own opener be separated
+    from an enclosing group's opener by anything but whitespace."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); { { VERB=safe; }; } | cat; $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_pipe_receiving_groups_later_statement() -> (
+    None
+):
+    """Same round: the group is the RECEIVING side of a pipe, and the
+    assignment is not even the group's own first statement."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); echo x | { true; VERB=safe; }; wait; $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_group_containing_a_literal_fi_argument() -> (
+    None
+):
+    """SAFETY regression pin (round-35 own design review): a literal,
+    non-syntactic `fi` argument (inside `echo fi`) sitting lexically
+    inside the same brace group must not desync detection of the
+    group's own real, later `}`."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); { echo fi; VERB=safe; } & wait; $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_allows_a_bare_brace_group_with_no_trailing_background_or_pipe() -> None:
+    """No over-correction: a bare `{...}` with NO trailing `&`/`|`
+    genuinely LEAKS its assignment to the parent shell in real bash
+    (confirmed live: the stand-in `uv` call captures `uv called with:
+    safe foo`, not `install foo`) -- must stay allowed."""
+    verdict = checker.classify("TOOL=uv; VERB=harmless; VERB=$(echo install); { VERB=safe; }; $TOOL $VERB foo")
+    assert verdict.deny is False
+
+
+def test_classify_allows_a_bare_if_with_no_trailing_background_or_pipe() -> None:
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); if true; then VERB=safe; fi; $TOOL $VERB foo"
+    )
+    assert verdict.deny is False
+
+
+def test_classify_allows_a_bare_for_loop_with_no_trailing_background_or_pipe() -> None:
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); for i in 1; do VERB=safe; done; $TOOL $VERB foo"
+    )
+    assert verdict.deny is False
+
+
+def test_classify_allows_an_unrelated_harmless_backgrounded_brace_group_alongside_a_never_poisoned_name() -> None:
+    """No over-correction: an ordinary, unrelated backgrounded brace
+    group elsewhere in the command must not spuriously deny a command
+    whose watched name was never poisoned at all."""
+    verdict = checker.classify("TOOL=uv; VERB=safe; { echo hi; } & wait; $TOOL $VERB foo")
+    assert verdict.deny is False
+
+
+def test_classify_allows_a_real_top_level_static_clear_after_a_harmless_backgrounded_brace_group() -> None:
+    """No over-correction: a harmless, UNRELATED backgrounded brace
+    group earlier in the command must not block a LATER, genuine
+    top-level static reassignment from clearing poisoning normally."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); { echo hi; } & wait; VERB=safe; $TOOL $VERB foo"
+    )
+    assert verdict.deny is False
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_backgrounded_case_clear() -> None:
+    """CRITICAL bypass regression pin (round-36 independent review,
+    issue #1375): `case ... esac` is bash's remaining compound-command
+    form -- it forks as one unit when backgrounded, exactly like
+    `{...}`/`while`/`until`/`for`/`select`/`if` (round 35), but
+    `case`/`esac` were never added to the group-isolation keyword sets.
+    Confirmed live via a stand-in `uv` binary on PATH that this
+    genuinely runs `uv install foo`, NOT `safe foo`."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); case 1 in 1) VERB=safe ;; esac & wait; $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_piped_case_clear() -> None:
+    """Same round, the piped counterpart: every stage of a `|` pipeline
+    forks its own subshell, including a `case` used as a stage."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); case 1 in 1) VERB=safe ;; esac | cat; $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_gh_api_method_reassigned_from_a_static_value_via_a_backgrounded_case_clear() -> None:
+    """Companion to the B1b pin above, for `_rule_gh_api_write`.
+    Confirmed live via a stand-in `gh` binary on PATH that this
+    genuinely runs `gh api repos/o/r/pulls/1/merge -X POST`, a genuine
+    unreviewed write."""
+    verdict = checker.classify(
+        "M=safe; M=$(echo POST); case 1 in 1) M=GET ;; esac & wait; gh api repos/o/r/pulls/1/merge -X $M"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_case_in_subshell_depth_corruption() -> (
+    None
+):
+    """CRITICAL bypass regression pin (round-36 independent review,
+    issue #1375): a `case` arm's own pattern-terminating `)` must not
+    be mistaken for a real subshell close -- reproduces with NO `&`/`|`
+    at all, purely by nesting a `case` inside a genuine `(...)`
+    subshell. Confirmed live via a stand-in `uv` binary on PATH that
+    the outer subshell genuinely still isolates `VERB=safe` in real
+    bash."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); ( case 1 in 1) true ;; esac; VERB=safe ); $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_allows_a_bare_case_with_no_trailing_background_or_pipe() -> None:
+    """No over-correction: a bare `case ... esac` with NO trailing
+    `&`/`|` genuinely LEAKS its assignment to the parent shell in real
+    bash (confirmed live: the stand-in `uv` call captures `uv called
+    with: safe foo`, not `install foo`) -- must stay allowed."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); case 1 in 1) VERB=safe ;; esac; $TOOL $VERB foo"
+    )
+    assert verdict.deny is False
+
+
+def test_classify_allows_a_real_subshell_nested_inside_a_case_arm_that_genuinely_leaks_after() -> None:
+    """No over-correction: a GENUINE `(...)` subshell lexically inside a
+    case arm's own body must still decrement depth normally once its
+    own pattern-terminating `)` has already been consumed -- confirmed
+    live that the later, real top-level `VERB=safe` genuinely leaks."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); "
+        "case 1 in 1) ( VERB=x ); true ;; esac; VERB=safe; $TOOL $VERB foo"
+    )
+    assert verdict.deny is False
+
+
+def test_classify_denies_despite_a_nested_for_in_inside_a_case_arm_not_desyncing_pattern_tracking() -> None:
+    """SAFETY regression pin (round-36 own design review): only the
+    case's own FIRST `in` may arm the pattern-close expectation -- a
+    LATER, unrelated `in` from a nested `for i in ...` lexically inside
+    an arm's body must never desync tracking of a genuinely enclosing
+    subshell's own real closing `)`."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); "
+        "( case 1 in 1) for i in 1; do true; done ;; esac; VERB=safe ); $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_nested_case_whose_outer_is_piped() -> None:
+    """Same round, the doubly-nested counterpart: an inner `case` that
+    is itself plain must not prevent the OUTER case's own piping from
+    isolating everything inside it."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); "
+        "case A in x) case B in y) VERB=safe;; esac ;; esac | cat; $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_allows_an_unrelated_harmless_backgrounded_case_alongside_a_never_poisoned_name() -> None:
+    """No over-correction: an ordinary, unrelated backgrounded `case`
+    elsewhere in the command must not spuriously deny a command whose
+    watched name was never poisoned at all."""
+    verdict = checker.classify("TOOL=uv; VERB=safe; case 1 in 1) echo hi ;; esac & wait; $TOOL $VERB foo")
+    assert verdict.deny is False
+
+
+def test_classify_allows_a_real_top_level_static_clear_after_a_harmless_backgrounded_case() -> None:
+    """No over-correction: a harmless, UNRELATED backgrounded `case`
+    earlier in the command must not block a LATER, genuine top-level
+    static reassignment from clearing poisoning normally."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); case 1 in 1) echo hi ;; esac & wait; VERB=safe; $TOOL $VERB foo"
+    )
+    assert verdict.deny is False
+
+
+def test_classify_allows_a_real_top_level_static_clear_after_a_harmless_bare_decorated_case() -> None:
+    """FALSE-POSITIVE regression pin (round-37 independent review, issue
+    #1375): bash's `case` syntax allows an OPTIONAL leading `(`
+    decorator on a pattern arm (`(1) cmd ;;` -- common, POSIX/ksh-
+    compatible style) -- lexically identical to a real subshell opener,
+    but must not inflate `(...)`-nesting depth. Confirmed live via a
+    stand-in `uv` binary on PATH that this genuinely runs `uv safe
+    foo`, NOT `uv install foo` -- the decorated case has nothing to do
+    with the later, genuinely top-level clearing reassignment."""
+    verdict = checker.classify("TOOL=uv; VERB=inst; VERB+=all; case 1 in (1) true ;; esac; VERB=safe; $TOOL $VERB foo")
+    assert verdict.deny is False
+
+
+def test_classify_allows_an_alternation_decorated_case_pattern_after_a_real_top_level_clear() -> None:
+    """Same round, the `(1|2)`-alternation-pattern counterpart, and the
+    `_rule_gh_api_write` consumer. Confirmed live via a stand-in `gh`
+    binary on PATH that this genuinely runs `gh api ... -X safe`."""
+    tool_verdict = checker.classify(
+        "TOOL=uv; VERB=inst; VERB+=all; case 2 in (1|2) true ;; esac; VERB=safe; $TOOL $VERB foo"
+    )
+    assert tool_verdict.deny is False
+    gh_verdict = checker.classify("M=GE; M+=T; case 1 in (1) true ;; esac; M=safe; gh api repos/o/r/issues -X $M")
+    assert gh_verdict.deny is False
+
+
+def test_classify_denies_a_decorated_case_pattern_that_is_genuinely_backgrounded() -> None:
+    """No over-correction: the decorator-paren fix must not disable the
+    round-35/36 group-isolation mechanism -- a decorated case that IS
+    genuinely backgrounded, or nested inside a real enclosing subshell,
+    must still deny exactly as before this round's fix."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); case 1 in (1) VERB=safe ;; esac & wait; $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_case_subject_word_matching_esac() -> (
+    None
+):
+    """CRITICAL bypass regression pin (round-38 independent review,
+    issue #1375): `case`/`esac` are only reserved words in COMMAND-
+    starting position -- the case statement's own SUBJECT word (between
+    `case` and `in`) is an ordinary word position where a literal
+    `esac` is valid, unremarkable bash (`case esac in a) true ;; esac`
+    genuinely switches on the literal string "esac", confirmed live via
+    `bash -n`). Confirmed live via a stand-in `uv` binary on PATH that
+    the GENUINE enclosing subshell here still isolates `VERB=safe` in
+    real bash, so this must deny -- captured argv `uv called with:
+    install foo`, NOT `safe foo`."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); ( case esac in a) true ;; esac; VERB=safe ); $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_gh_api_method_reassigned_from_a_static_value_via_a_case_subject_word_matching_esac() -> None:
+    """Companion to the B1b pin above, for `_rule_gh_api_write`.
+    Confirmed live via a stand-in `gh` binary on PATH that this
+    genuinely runs `gh api repos/o/r/pulls/1/merge -X POST`, a genuine
+    unreviewed write."""
+    verdict = checker.classify(
+        "M=safe; M=$(echo POST); ( case esac in a) true ;; esac; M=GET ); gh api repos/o/r/pulls/1/merge -X $M"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_case_subject_word_matching_case_itself() -> None:
+    """Same round, the `case`-as-its-own-subject counterpart -- a
+    literal `case` subject must not spuriously push a second, unmatched
+    case-tracking stack frame."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); ( case case in a) true ;; esac; VERB=safe ); $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_resolve_path_tokens_denies_a_name_with_a_dynamic_assignment_elsewhere() -> None:
+    """End-to-end regression pin for the round-24 finding at the
+    `_resolve_path_tokens` level. Confirmed live before this fix: `DIR=
+    sub; DIR=$(echo other); git checkout -- $DIR` resolved `checkout_
+    restore_paths` to `('sub',)` -- confidently the WRONG, STALE value
+    (real bash: `$DIR` genuinely was whatever the substitution evaluated
+    to, not `sub`, at its actual point of use)."""
+    reason, resolved = checker._resolve_path_tokens(["$DIR"], {"DIR": "sub"}, {}, {"DIR"})
+    assert reason is not None
+    assert "also assigned a dynamically-constructed value" in reason
+    assert resolved == ()
+
+
+def test_resolve_path_tokens_ignores_a_dynamic_assignment_to_an_unrelated_name() -> None:
+    """No false positive: NAMES_WITH_DYNAMIC_ASSIGNMENT poisons only the
+    SPECIFIC name it names -- a dynamic reassignment of a completely
+    unrelated variable must not affect resolving this token."""
+    reason, resolved = checker._resolve_path_tokens(["$DIR"], {"DIR": "sub"}, {}, {"OTHER"})
+    assert reason is None
+    assert resolved == ("sub",)
+
+
+def test_classify_extracts_every_historical_path_when_a_checkout_path_is_reassigned_after_use() -> None:
+    """End-to-end regression pin for the round-21 finding at the
+    `classify()` level. Confirmed live before this fix: `F=dirty.py; git
+    checkout -- $F; F=other.py` resolved to `checkout_restore_paths=
+    ('other.py',)` -- a CONFIDENT, WRONG claim, since `$F` genuinely was
+    `dirty.py` at its actual point of use -- instead of including the
+    real, at-risk path at all."""
+    verdict = checker.classify("F=dirty.py; git checkout -- $F; F=other.py")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("dirty.py", "other.py")
+
+
+def test_classify_extracts_every_historical_path_when_a_restore_path_is_reassigned_after_use() -> None:
+    """Companion to the checkout pin above, for `git restore` -- the
+    round-21 finding was confirmed live for both subcommands."""
+    verdict = checker.classify("F=dirty.py; git restore $F; F=other.py")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("dirty.py", "other.py")
+
+
+def test_classify_extracts_every_historical_path_behind_a_command_substitution() -> None:
+    """Companion to the two pins above, for the command-substitution
+    shape: the SAME reassignment-after-use gap, reached through
+    `_rule_command_substitution_content`'s own outer-scope threading
+    (rounds 18-21)."""
+    verdict = checker.classify("F=dirty.py; x=$(git checkout -- $F); F=other.py")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("dirty.py", "other.py")
 
 
 @_PROPERTIES
@@ -1743,7 +4681,7 @@ def test_rule_array_literal_content_detects_a_braced_subscript_decoy() -> None:
     the subscript decoy blocked it from ever firing until it collapsed
     away."""
     tokens = ["dummy=", "(", "${NEVERSET[0]}", "uv", "$VERB", ")"]
-    reason, _ = checker._rule_array_literal_content(tokens, {}, {})
+    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {}, {}, {}, set())
     assert reason is not None
 
 
@@ -1754,7 +4692,7 @@ def test_rule_array_literal_content_detects_a_fused_reference_chain_decoy() -> N
     before a fused chain of two bare references was recognized as
     vanishing as a unit."""
     tokens = ["dummy=", "(", "$A_UNSET$B_UNSET", "gh", "pr", "merge", "1", ")"]
-    reason, _ = checker._rule_array_literal_content(tokens, {}, {})
+    reason, _, _ = checker._rule_array_literal_content(tokens, {}, {}, {}, {}, {}, {}, {}, set())
     assert reason is not None
 
 
@@ -1887,7 +4825,7 @@ def test_rule_command_substitution_content_scans_second_fused_span_in_same_token
     this test only proves that fix reached end-to-end through
     `_rule_command_substitution_content`'s own scan loop."""
     tokens = ["echo", "$(echo ok)$(pip install evil-pkg)"]
-    reason, _ = checker._rule_command_substitution_content(tokens)
+    reason, _, _ = checker._rule_command_substitution_content(tokens, {}, {}, {}, {}, {}, {}, {}, set())
     assert reason is not None
 
 
@@ -1896,20 +4834,20 @@ def test_rule_command_substitution_content_skips_blank_fused_span_then_finds_den
     skipped without denying by itself, but scanning continues to the next
     fused span in the same token."""
     tokens = ["echo", "$( )$(pip install evil-pkg)"]
-    reason, _ = checker._rule_command_substitution_content(tokens)
+    reason, _, _ = checker._rule_command_substitution_content(tokens, {}, {}, {}, {}, {}, {}, {}, set())
     assert reason is not None
 
 
 def test_rule_command_substitution_content_both_fused_spans_harmless() -> None:
     tokens = ["echo", "$(echo ok)$(echo also-ok)"]
-    assert checker._rule_command_substitution_content(tokens) == (None, False)
+    assert checker._rule_command_substitution_content(tokens, {}, {}, {}, {}, {}, {}, {}, set()) == (None, False, ())
 
 
 def test_rule_command_substitution_content_empty_unquoted_span_skipped() -> None:
     """An empty, unquoted `$()` substitution has no inner tokens to
     recurse into -- distinct from the fused/quoted empty-span case above."""
     tokens = ["$", "(", ")"]
-    assert checker._rule_command_substitution_content(tokens) == (None, False)
+    assert checker._rule_command_substitution_content(tokens, {}, {}, {}, {}, {}, {}, {}, set()) == (None, False, ())
 
 
 def test_tokenize_raises_on_unbalanced_quote() -> None:
@@ -2613,3 +5551,1853 @@ def test_main_denies_a_real_denied_command(monkeypatch: pytest.MonkeyPatch, caps
 def test_main_allows_a_harmless_command(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     payload = {"tool_name": "Bash", "tool_input": {"command": "echo hi"}}
     assert _run_main(payload, monkeypatch, capsys)["decision"] == "allow"
+
+
+# --- Issue #1375: git checkout/restore path extraction. `classify()` stays
+# I/O-free (this module's own established architecture); this section only
+# extracts every candidate path a checkout/restore invocation could
+# discard, for hooks/check-bash-safety.sh's own new wrapper step to check
+# live against the real working tree. See hooks/gitapex_check_bash_safety.py's
+# own "git checkout/restore path extraction" section for the full design
+# rationale and the live-git verification (git 2.43.0) it is built on.
+
+_PATH_TOKENS = st.text(alphabet=string.ascii_letters + string.digits + "_./", min_size=1, max_size=12).filter(
+    lambda p: not p.startswith("-") and p not in (".", "..")
+)
+
+
+@_PROPERTIES
+@given(paths=st.lists(_PATH_TOKENS, min_size=1, max_size=5))
+def test_resolve_path_tokens_returns_literal_tokens_unchanged(paths: list[str]) -> None:
+    """Model-based: every literal (non-dynamic) token is returned as-is, in
+    order, with no deny reason."""
+    reason, resolved = checker._resolve_path_tokens(paths, {}, {}, set())
+    assert reason is None
+    assert resolved == tuple(paths)
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value=_PATH_TOKENS)
+def test_resolve_path_tokens_resolves_a_braced_reference_case_preserved(name: str, value: str) -> None:
+    """Model-based: a dynamic `${NAME}` path token resolves to NAME's own
+    CASE-PRESERVED raw value -- unlike every other caller of
+    `_substitute_var_refs_candidates` in this module (which compares a
+    resolved value case-insensitively against a known tool/verb/flag
+    literal via the lowercased `name_to_value`), a filesystem path is
+    case-sensitive, so this must resolve against the raw, case-preserving
+    map. Regression pin: an earlier version of this function resolved
+    against the lowercased map and would have silently mismatched a
+    mixed-case path like `README.md` against `readme.md`."""
+    mixed_case_value = value.swapcase()
+    reason, resolved = checker._resolve_path_tokens([f"${{{name}}}"], {name: mixed_case_value}, {}, set())
+    assert reason is None
+    assert resolved == (mixed_case_value,)
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS)
+def test_resolve_path_tokens_denies_an_unresolvable_dynamic_token(name: str) -> None:
+    """Fail-closed: a dynamic token referencing a name that is never
+    assigned cannot be resolved to a literal -- denied outright here
+    rather than passed to the live wrapper check empty-handed, since
+    `git diff --quiet HEAD -- PATH` exits 0 (clean) for a path that does
+    not exist (issue #1375 Fact 5, confirmed live), which would be
+    fail-open."""
+    reason, resolved = checker._resolve_path_tokens([f"${name}"], {}, {}, set())
+    assert reason is not None
+    assert resolved == ()
+
+
+def test_resolve_path_tokens_denies_an_array_subscript_token() -> None:
+    """Regression pin, found during this function's own development: bash
+    array-subscript syntax (`${paths[@]}`) is not matched by
+    `_substitute_var_refs_candidates`'s own `_VAR_REF_FULL_RE` at all
+    (issue #1375 Fact 5 cites this exact limitation), so with no `$NAME`
+    match found inside the token, that function harmlessly returns the
+    token's own text UNCHANGED -- silently treating an unexpanded shell
+    construct as though it were already a resolved literal path. Must
+    deny, not pass `${paths[@]}` through as a literal filename."""
+    reason, resolved = checker._resolve_path_tokens(["${paths[@]}"], {}, {}, set())
+    assert reason is not None
+    assert resolved == ()
+
+
+@_PROPERTIES
+@given(paths=st.lists(_PATH_TOKENS, min_size=1, max_size=4))
+def test_git_checkout_paths_extracts_every_token_after_double_dash(paths: list[str]) -> None:
+    """Model-based, sub-case (a): every token after a literal `--` is a
+    path -- the near-miss's own exact shape (`git checkout -- PATH`)."""
+    reason, resolved = checker._git_checkout_paths(["--", *paths], {}, {}, set())
+    assert reason is None
+    assert resolved == tuple(paths)
+
+
+def test_git_checkout_paths_denies_double_dash_with_nothing_following() -> None:
+    """`git checkout --` with no paths following denies outright: a
+    harmless no-op in real git by itself, but a downstream pipe/loop could
+    still append paths at runtime this classifier cannot see, and denying
+    a genuine no-op costs nothing."""
+    reason, resolved = checker._git_checkout_paths(["--"], {}, {}, set())
+    assert reason is not None
+    assert resolved == ()
+
+
+@_PROPERTIES
+@given(paths=st.lists(_PATH_TOKENS, min_size=2, max_size=4))
+def test_git_checkout_paths_extracts_two_or_more_positionals_with_no_double_dash(paths: list[str]) -> None:
+    """Model-based, sub-case (b): with no `--`, 2+ non-flag-shaped
+    positionals are ALL read as paths -- confirmed live that
+    `git checkout no-such-ref no-such-file` reports a pathspec error for
+    BOTH arguments, so every position past the first is a pathspec under
+    every resolution real git can take once one exists at all."""
+    reason, resolved = checker._git_checkout_paths(paths, {}, {}, set())
+    assert reason is None
+    assert resolved == tuple(paths)
+
+
+@_PROPERTIES
+@given(dot=st.sampled_from([".", ".."]))
+def test_git_checkout_paths_treats_a_single_dot_or_dotdot_positional_as_a_path(dot: str) -> None:
+    """Model-based, sub-case (c): a lone `.`/`..` positional (no `--`) is
+    a path, not a ref -- both are syntactically invalid git ref names
+    (confirmed live: `git check-ref-format --branch .`/`--branch ..` both
+    fail), and `git checkout .` on a dirty tracked file was confirmed live
+    to silently discard the change."""
+    reason, resolved = checker._git_checkout_paths([dot], {}, {}, set())
+    assert reason is None
+    assert resolved == (dot,)
+
+
+@_PROPERTIES
+@given(name=_PATH_TOKENS)
+def test_git_checkout_paths_is_a_non_goal_for_a_single_bare_positional(name: str) -> None:
+    """No false positive: a single positional that is not `.`/`..` (e.g.
+    a branch name) is a deliberate Non-goal -- disambiguating a bare
+    `git checkout SOMENAME` from a branch/ref name needs a live
+    ref-existence lookup this pure classifier does not perform."""
+    assume(name not in (".", ".."))
+    reason, resolved = checker._git_checkout_paths([name], {}, {}, set())
+    assert reason is None
+    assert resolved == ()
+
+
+def test_git_checkout_paths_allows_a_flag_only_invocation() -> None:
+    """No false positive: `git checkout -b new-branch` has one
+    flag-shaped and one non-flag-shaped token, but the non-flag token is
+    a branch name, not `.`/`..` -- stays the Non-goal, empty paths."""
+    reason, resolved = checker._git_checkout_paths(["-b", "new-branch"], {}, {}, set())
+    assert reason is None
+    assert resolved == ()
+
+
+@_PROPERTIES
+@given(flag=st.sampled_from(["--ours", "--theirs", "-2", "-3"]), name=_PATH_TOKENS)
+def test_git_checkout_paths_treats_a_single_positional_as_a_path_with_a_conflict_side_flag(
+    flag: str, name: str
+) -> None:
+    """CRITICAL bypass regression pin (round-40 independent review, issue
+    #1375): unlike `-b`/`-B`/`--orphan`, `--ours`/`--theirs`/`-2`/`-3`
+    do NOT preserve the ref-vs-path ambiguity that justifies the
+    bare-SOMENAME Non-goal -- real git flatly refuses to combine them
+    with branch switching (confirmed live: `git checkout --ours
+    otherbranch`, where `otherbranch` is a real ref, reports `fatal:
+    '--ours/--theirs' cannot be used with switching branches`), so a
+    single remaining positional is unambiguously a path."""
+    assume(name not in (".", ".."))
+    reason, resolved = checker._git_checkout_paths([flag, name], {}, {}, set())
+    assert reason is None
+    assert resolved == (name,)
+
+
+def test_git_checkout_paths_stays_a_non_goal_for_conflict_style_value_flag() -> None:
+    """No over-correction: `--conflict=<style>` (unlike `--ours`/
+    `--theirs`/`-2`/`-3`) does NOT remove the ref-vs-path ambiguity --
+    confirmed live that `git checkout --conflict=merge otherbranch`, with
+    `otherbranch` a real ref, genuinely still switches branches -- so a
+    single remaining positional stays the bare-SOMENAME Non-goal."""
+    reason, resolved = checker._git_checkout_paths(["--conflict=merge", "otherbranch"], {}, {}, set())
+    assert reason is None
+    assert resolved == ()
+
+
+@_PROPERTIES
+@given(staged=st.sampled_from(["--staged", "-S"]), paths=st.lists(_PATH_TOKENS, min_size=0, max_size=3))
+def test_git_restore_paths_empty_when_staged_without_worktree(staged: str, paths: list[str]) -> None:
+    """Model-based: `--staged`/`-S` without `--worktree` never touches the
+    working tree -- empty `checkout_restore_paths`, never live-checked,
+    regardless of what path arguments are also present."""
+    reason, resolved = checker._git_restore_paths([staged, *paths], {}, {}, set())
+    assert reason is None
+    assert resolved == ()
+
+
+@_PROPERTIES
+@given(worktree=st.sampled_from(["--worktree", "-W"]), paths=st.lists(_PATH_TOKENS, min_size=1, max_size=3))
+def test_git_restore_paths_checked_when_staged_and_worktree_both_present(worktree: str, paths: list[str]) -> None:
+    """Model-based, regression pin for issue #1375's own Fact 5: `--staged
+    --worktree PATH` is a real working-tree-affecting restore despite
+    `--staged` being present -- `saw_worktree=True` must still force the
+    path to be checked."""
+    reason, resolved = checker._git_restore_paths(["--staged", worktree, *paths], {}, {}, set())
+    assert reason is None
+    assert resolved == tuple(paths)
+
+
+@_PROPERTIES
+@given(paths=st.lists(_PATH_TOKENS, min_size=1, max_size=3))
+def test_git_restore_paths_checked_with_no_flags_at_all(paths: list[str]) -> None:
+    """Model-based: a bare `git restore PATH` with no flags at all is
+    never staged-only-safe -- always checked."""
+    reason, resolved = checker._git_restore_paths(paths, {}, {}, set())
+    assert reason is None
+    assert resolved == tuple(paths)
+
+
+@_PROPERTIES
+@given(ref=_PATH_TOKENS, paths=st.lists(_PATH_TOKENS, min_size=1, max_size=3))
+def test_git_restore_paths_checked_for_source_short_flag_not_conflated_with_staged(ref: str, paths: list[str]) -> None:
+    """Model-based, regression pin for issue #1375's own Fact 5: `-s`
+    (`--source`, value-taking) must never be conflated with `-S`
+    (`--staged`, boolean) the way a lower-casing flag scan (like
+    `_is_git_push_segment`'s own) would -- `git restore -s main PATH`
+    stays checked, not wrongly read as staged-only-safe."""
+    reason, resolved = checker._git_restore_paths(["-s", ref, *paths], {}, {}, set())
+    assert reason is None
+    assert resolved == tuple(paths)
+
+
+@_PROPERTIES
+@given(last=st.sampled_from(["--staged", "--no-staged"]))
+def test_git_restore_paths_last_occurrence_wins_for_staged(last: str) -> None:
+    """Model-based: `saw_staged` is last-occurrence-wins -- `--staged
+    --no-staged` ends with `saw_staged=False` (checked), and `--no-staged
+    --staged` ends with `saw_staged=True` (empty, iff no `--worktree`)."""
+    flags = ["--no-staged", "--staged"] if last == "--staged" else ["--staged", "--no-staged"]
+    reason, resolved = checker._git_restore_paths([*flags, "f.py"], {}, {}, set())
+    assert reason is None
+    if last == "--staged":
+        assert resolved == ()
+    else:
+        assert resolved == ("f.py",)
+
+
+@_PROPERTIES
+@given(paths=st.lists(_PATH_TOKENS, min_size=1, max_size=3))
+def test_git_restore_paths_last_occurrence_wins_for_worktree(paths: list[str]) -> None:
+    """Model-based: `saw_worktree` is last-occurrence-wins too --
+    `--staged --worktree --no-worktree` ends with `saw_worktree=False`,
+    so the invocation is safe (staged, not worktree) and never
+    live-checked -- exercises the `--no-worktree` branch directly."""
+    reason, resolved = checker._git_restore_paths(["--staged", "--worktree", "--no-worktree", *paths], {}, {}, set())
+    assert reason is None
+    assert resolved == ()
+
+
+@_PROPERTIES
+@given(
+    flag=st.sampled_from(sorted(checker._RESTORE_BOOLEAN_FLAGS)),
+    paths=st.lists(_PATH_TOKENS, min_size=1, max_size=3),
+)
+def test_git_restore_paths_every_boolean_flag_consumes_no_value(flag: str, paths: list[str]) -> None:
+    """Model-based: every flag in the enumerated boolean vocabulary
+    (`--quiet`/`-q`, `--progress`/`--no-progress`, `--overlay`/
+    `--no-overlay`, `--ours`/`--theirs`, `--merge`/`-m`,
+    `--ignore-unmerged`, `--ignore-skip-worktree-bits`) is skipped without
+    consuming the token after it as a value -- the following path tokens
+    are still extracted."""
+    reason, resolved = checker._git_restore_paths([flag, *paths], {}, {}, set())
+    assert reason is None
+    assert resolved == tuple(paths)
+
+
+@_PROPERTIES
+@given(value=st.sampled_from(["yes", "no"]), paths=st.lists(_PATH_TOKENS, min_size=1, max_size=3))
+def test_git_restore_paths_recurse_submodules_bare_and_fused(value: str, paths: list[str]) -> None:
+    """Model-based: `--recurse-submodules` (bare, consumes nothing) and
+    `--recurse-submodules=VALUE` (fused, self-contained) are both skipped
+    without treating the next token as a value or as part of the flag."""
+    reason, resolved = checker._git_restore_paths(["--recurse-submodules", *paths], {}, {}, set())
+    assert reason is None
+    assert resolved == tuple(paths)
+    reason, resolved = checker._git_restore_paths([f"--recurse-submodules={value}", *paths], {}, {}, set())
+    assert reason is None
+    assert resolved == tuple(paths)
+
+
+def test_find_git_checkout_restore_none_when_only_global_flags_and_no_subcommand_follow() -> None:
+    """No false positive, and direct coverage for the flag-skip loop's own
+    normal (non-`break`, non-ambiguous) exit: `git -C /tmp/x` with global
+    flags consuming every remaining token and nothing left over is not a
+    checkout/restore invocation -- the while loop runs off the end of the
+    segment (`j == n`) rather than finding a literal `checkout`/`restore`
+    token."""
+    subcommand, tokens_after, saw_tree_relocation = checker._find_git_checkout_restore(["git", "-C", "/tmp/x"], {}, {})
+    assert subcommand is None
+    assert tokens_after == []
+    assert saw_tree_relocation is False
+
+
+# --- Two LOW-severity false positives, found by the same independent
+# adversarial review round that found the round-2 vanishing-decoy bypass
+# above: `git restore` denied two entirely legitimate, harmless
+# invocations outright as "unrecognized flag" because neither shape was in
+# the enumerated vocabulary.
+
+
+@_PROPERTIES
+@given(paths=st.lists(_PATH_TOKENS, min_size=1, max_size=3))
+def test_git_restore_paths_extracts_every_token_after_double_dash(paths: list[str]) -> None:
+    """`--` disambiguates every remaining token as a pathspec for `git
+    restore`, the identical role it plays for `git checkout` -- must be
+    recognized, not denied as an unrecognized flag."""
+    reason, resolved = checker._git_restore_paths(["--", *paths], {}, {}, set())
+    assert reason is None
+    assert resolved == tuple(paths)
+
+
+@_PROPERTIES
+@given(
+    flag_value=st.sampled_from([("--source", "main"), ("--conflict", "diff3")]),
+    paths=st.lists(_PATH_TOKENS, min_size=1, max_size=3),
+)
+def test_git_restore_paths_recognizes_fused_value_flags(flag_value: tuple[str, str], paths: list[str]) -> None:
+    """`--source=VALUE`/`--conflict=VALUE` (fused with `=`) are equally
+    legitimate git syntax as the separate-token form already recognized --
+    must not be denied as an unrecognized flag."""
+    flag, value = flag_value
+    reason, resolved = checker._git_restore_paths([f"{flag}={value}", *paths], {}, {}, set())
+    assert reason is None
+    assert resolved == tuple(paths)
+
+
+def test_classify_allows_restore_double_dash_when_clean() -> None:
+    verdict = checker.classify("git restore -- f.py")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("f.py",)
+
+
+@_PROPERTIES
+@given(flag=st.sampled_from(["--pathspec-from-file=list.txt", "--pathspec-from-file", "--pathspec-file-nul"]))
+def test_git_restore_paths_denies_pathspec_from_file(flag: str) -> None:
+    """Paths sourced from a file this classifier cannot inspect deny
+    outright rather than silently under-extracting (an empty
+    `checkout_restore_paths` would be exactly issue #1375 Fact 5's own
+    fail-open shape)."""
+    reason, resolved = checker._git_restore_paths([flag], {}, {}, set())
+    assert reason is not None
+    assert resolved == ()
+
+
+@_PROPERTIES
+@given(flag=st.text(alphabet=string.ascii_lowercase, min_size=1, max_size=8).map(lambda s: f"--{s}"))
+def test_git_restore_paths_denies_an_unrecognized_flag(flag: str) -> None:
+    """Fail-closed: any flag-shaped token outside the enumerated
+    vocabulary denies outright -- this classifier cannot safely guarantee
+    correct path extraction past a flag whose own value-consumption
+    behavior it does not know."""
+    assume(flag not in checker._RESTORE_BOOLEAN_FLAGS | checker._RESTORE_VALUE_FLAGS)
+    assume(not flag.startswith("--pathspec-from-file") and not flag.startswith("--recurse-submodules"))
+    assume(flag not in ("--staged", "--no-staged", "--worktree", "--no-worktree"))
+    reason, resolved = checker._git_restore_paths([flag], {}, {}, set())
+    assert reason is not None
+    assert resolved == ()
+
+
+@_PROPERTIES
+@given(prefix=st.lists(_PATH_TOKENS, min_size=0, max_size=3), paths=st.lists(_PATH_TOKENS, min_size=1, max_size=3))
+def test_find_git_checkout_restore_finds_git_at_any_segment_position(prefix: list[str], paths: list[str]) -> None:
+    """Model-based, regression pin found during this function's own
+    development: scans for a literal `git` token at ANY position in the
+    segment, not just `seg[0]` -- like `_is_git_push_segment`'s own scan.
+    A `for VAR in ...; do ...; done` loop is one real reason this matters:
+    bash's `for`/`do`/`done`/`in` keywords are not shell control
+    operators, so `segment_tokens` never splits a segment at them, and
+    `git checkout -- PATH` sitting after a literal `do` would never be
+    found at `seg[0]`."""
+    assume(all(p != "git" for p in prefix))
+    seg = [*prefix, "git", "checkout", "--", *paths]
+    subcommand, tokens_after, saw_tree_relocation = checker._find_git_checkout_restore(seg, {}, {})
+    assert subcommand == "checkout"
+    assert tokens_after == ["--", *paths]
+    assert saw_tree_relocation is False
+
+
+def test_find_git_checkout_restore_none_for_a_segment_with_no_git() -> None:
+    """No false positive: a segment with no literal `git` token at all is
+    never treated as a checkout/restore invocation."""
+    subcommand, _tokens_after, _saw = checker._find_git_checkout_restore(["echo", "checkout", "restore"], {}, {})
+    assert subcommand is None
+
+
+@_PROPERTIES
+@given(flag=st.sampled_from(["-C", "--git-dir", "--work-tree"]))
+def test_find_git_checkout_restore_flags_tree_relocation(flag: str) -> None:
+    """Model-based: `-C`/`--git-dir`/`--work-tree` (global flags that
+    relocate which working tree git operates against) are flagged
+    regardless of their own value -- the caller uses this to deny outright
+    rather than let the live wrapper check the wrong tree (issue #1375's
+    own Fact 5 cwd finding)."""
+    seg = ["git", flag, "/some/path", "checkout", "--", "f.py"]
+    subcommand, _tokens_after, saw_tree_relocation = checker._find_git_checkout_restore(seg, {}, {})
+    assert subcommand == "checkout"
+    assert saw_tree_relocation is True
+
+
+def test_find_git_checkout_restore_does_not_flag_lowercase_c_config_flag() -> None:
+    """No false positive: `-c` (lowercase, sets a config value) is
+    case-sensitively distinct from `-C` (uppercase, relocates the working
+    tree) and must never be conflated with it (issue #1375's own Fact 5)."""
+    seg = ["git", "-c", "user.name=x", "checkout", "--", "f.py"]
+    subcommand, _tokens_after, saw_tree_relocation = checker._find_git_checkout_restore(seg, {}, {})
+    assert subcommand == "checkout"
+    assert saw_tree_relocation is False
+
+
+def test_find_git_checkout_restore_is_a_non_goal_for_a_dynamic_subcommand() -> None:
+    """No false positive (disclosed Non-goal): a dynamically constructed
+    subcommand name (`V=checkout; git $V -- f.py`) is not honest-accident-
+    shaped and is not detected -- the same disclosed-residual convention
+    this module's own `KNOWN_BYPASS_COMMANDS` test list already uses for
+    the analogous dynamic-tool/dynamic-verb case."""
+    subcommand, _tokens_after, _saw = checker._find_git_checkout_restore(["git", "$V", "--", "f.py"], {}, {})
+    assert subcommand is None
+
+
+# --- Regression pins for two real findings from this PR's own independent
+# adversarial review (issue #1375), both confirmed live before being fixed.
+
+
+def test_find_git_checkout_restore_skips_a_vanishing_decoy_between_git_and_subcommand() -> None:
+    """CRITICAL regression pin. A genuinely-unset, unquoted `$NEVERSET`
+    sitting between `git` and `checkout`/`restore` word-splits away to
+    nothing at real bash runtime (confirmed live via a real bash proxy,
+    stand-in `git` binary on PATH, capturing its own argv: `git $NEVERSET
+    checkout -- file.py` genuinely runs `git checkout -- file.py`). Before
+    this fix, `_find_git_checkout_restore` treated ANY dynamic token in
+    this position as ambiguous and gave up, so this exact near-zero-effort
+    decoy silently bypassed the entire checkout/restore safety feature --
+    the same vanishing-decoy bug class `_is_git_push_segment` already
+    closed for `git push` over rounds 20-24 of issue #1326, using the same
+    `_token_is_all_unassigned_refs` primitive this fix now reuses here."""
+    seg = ["git", "$NEVERSET", "checkout", "--", "file.py"]
+    subcommand, tokens_after, saw_tree_relocation = checker._find_git_checkout_restore(seg, {}, {})
+    assert subcommand == "checkout"
+    assert tokens_after == ["--", "file.py"]
+    assert saw_tree_relocation is False
+
+
+def test_classify_denies_checkout_with_a_vanishing_decoy_when_dirty() -> None:
+    """End-to-end regression pin for the same finding: `classify()` must
+    surface the resolved path, not silently allow with an empty
+    `checkout_restore_paths`, when a vanishing decoy sits between `git`
+    and `checkout`."""
+    verdict = checker.classify("git $NEVERSET checkout -- file.py")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("file.py",)
+
+
+# --- Round 2: an empty-default/alt-clause decoy in the SAME position,
+# found by a second, independent adversarial review pass after the first
+# fix above landed. `${NEVERSET:-}`/`${NEVERSET-}`/`${NEVERSET:+x}` all
+# vanish identically to a bare `$NEVERSET` when NEVERSET is genuinely
+# unset (confirmed live via a real bash proxy), but `_token_is_all_
+# unassigned_refs`'s own regex never matches these clause shapes at all --
+# its own docstring deliberately excludes them for a non-empty default,
+# which is correct, but does not carve out the empty-default case.
+
+
+@_PROPERTIES
+@given(
+    clause=st.sampled_from(
+        ["${NEVERSET:-}", "${NEVERSET-}", "${NEVERSET:=}", "${NEVERSET=}", "${NEVERSET:+x}", "${NEVERSET+x}"]
+    )
+)
+def test_classify_denies_checkout_with_an_empty_default_or_alt_clause_decoy(clause: str) -> None:
+    """CRITICAL regression pin, round 2 (plus the `${NAME:=}`/`${NAME=}`
+    assign-default shapes found immediately afterward, same root cause).
+    Every one of these six clause shapes, with NEVERSET genuinely never
+    assigned, must be recognized as vanishing -- the same near-zero-effort
+    bypass class as the bare `$NEVERSET` case, just spelled differently."""
+    verdict = checker.classify(f"git {clause} checkout -- file.py")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("file.py",)
+
+
+@_PROPERTIES
+@given(
+    name=_IDENTIFIERS,
+    shape=st.sampled_from(
+        ["${{{name}:-}}", "${{{name}-}}", "${{{name}:=}}", "${{{name}=}}", "${{{name}:+x}}", "${{{name}+x}}"]
+    ),
+)
+def test_token_is_a_vanishing_default_or_alt_clause_true_for_any_unassigned_name(name: str, shape: str) -> None:
+    """Model-based, direct coverage of `_token_is_a_vanishing_default_or_
+    alt_clause` itself: for ANY identifier never assigned, all six
+    empty-default/assign-default/alt-clause shapes are recognized as
+    vanishing."""
+    token = shape.format(name=name)
+    assert checker._token_is_a_vanishing_default_or_alt_clause(token, {}) is True
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value=_VALUES)
+def test_token_is_a_vanishing_default_or_alt_clause_false_for_any_assigned_non_empty_name(
+    name: str, value: str
+) -> None:
+    """Model-based: for ANY identifier assigned a real, non-empty value,
+    the colon-form clauses never vanish."""
+    assert checker._token_is_a_vanishing_default_or_alt_clause(f"${{{name}:-}}", {name: value}) is False
+    assert checker._token_is_a_vanishing_default_or_alt_clause(f"${{{name}:+x}}", {name: value}) is False
+
+
+def test_token_is_a_vanishing_default_or_alt_clause_true_for_empty_default_unassigned() -> None:
+    assert checker._token_is_a_vanishing_default_or_alt_clause("${NEVERSET:-}", {}) is True
+    assert checker._token_is_a_vanishing_default_or_alt_clause("${NEVERSET-}", {}) is True
+
+
+def test_token_is_a_vanishing_default_or_alt_clause_true_for_empty_assign_default_unassigned() -> None:
+    """`${NAME:=}`/`${NAME=}` (assign-default, empty text) also vanishes
+    to nothing when NAME is unassigned -- confirmed live that this both
+    substitutes the empty string AND assigns NAME the empty string as a
+    side effect, but the side effect does not change whether THIS token
+    itself occupies an argv position."""
+    assert checker._token_is_a_vanishing_default_or_alt_clause("${NEVERSET:=}", {}) is True
+    assert checker._token_is_a_vanishing_default_or_alt_clause("${NEVERSET=}", {}) is True
+
+
+def test_token_is_a_vanishing_default_or_alt_clause_false_for_error_message_clause() -> None:
+    """No false positive: `${NAME:?}`/`${NAME?}` is deliberately NOT
+    recognized -- real bash terminates the whole command with an error
+    when NAME is unset for this clause, rather than silently vanishing,
+    so there is no real invocation for a missed detection to miss."""
+    assert checker._token_is_a_vanishing_default_or_alt_clause("${NEVERSET:?}", {}) is False
+    assert checker._token_is_a_vanishing_default_or_alt_clause("${NEVERSET?}", {}) is False
+
+
+def test_token_is_a_vanishing_default_or_alt_clause_true_for_alt_clause_unassigned() -> None:
+    assert checker._token_is_a_vanishing_default_or_alt_clause("${NEVERSET:+x}", {}) is True
+    assert checker._token_is_a_vanishing_default_or_alt_clause("${NEVERSET+x}", {}) is True
+
+
+def test_token_is_a_vanishing_default_or_alt_clause_false_for_non_empty_default() -> None:
+    """No false positive: a NON-empty default text supplies real
+    substitute text regardless of NAME's own state, so it never
+    vanishes."""
+    assert checker._token_is_a_vanishing_default_or_alt_clause("${NEVERSET:-x}", {}) is False
+
+
+def test_token_is_a_vanishing_default_or_alt_clause_false_when_name_is_assigned_non_empty() -> None:
+    """No false positive: a NAME assigned a real, non-empty value does not
+    vanish under the colon forms."""
+    assert checker._token_is_a_vanishing_default_or_alt_clause("${SET:-}", {"SET": "-C"}) is False
+    assert checker._token_is_a_vanishing_default_or_alt_clause("${SET:+x}", {"SET": "-C"}) is False
+
+
+def test_token_is_a_vanishing_default_or_alt_clause_no_colon_plus_requires_strictly_unset() -> None:
+    """The no-colon `+` form checks "is NAME set AT ALL" (ignoring
+    emptiness), a stricter condition than the colon form's "set and
+    non-empty" -- a NAME assigned the empty string still counts as SET
+    for this form, so `${NAME+word}` does NOT vanish (WORD is genuinely
+    substituted at real bash runtime), unlike `${NAME:+word}` for the
+    identical assigned-empty NAME."""
+    assert checker._token_is_a_vanishing_default_or_alt_clause("${SET+x}", {"SET": ""}) is False
+    assert checker._token_is_a_vanishing_default_or_alt_clause("${SET:+x}", {"SET": ""}) is True
+
+
+def test_find_git_checkout_restore_does_not_skip_an_assigned_dynamic_token() -> None:
+    """No false positive from the vanishing-decoy fix itself: a dynamic
+    token that IS assigned a real (non-empty) value does not
+    unambiguously vanish, so it still makes this `git` occurrence
+    ambiguous -- unchanged from the pre-fix behavior for this case."""
+    seg = ["git", "$SET", "checkout", "--", "file.py"]
+    subcommand, _tokens_after, _saw = checker._find_git_checkout_restore(seg, {"SET": "-C"}, {})
+    assert subcommand is None
+
+
+def test_tokenize_splits_on_an_unquoted_newline() -> None:
+    """MEDIUM regression pin. shlex's own default `whitespace` set
+    includes `\\n`, silently swallowing an unquoted newline as ordinary
+    inter-token whitespace and never producing it as its own token --
+    making `_SINGLE_OPS`'s inclusion of `"\\n"` (and `segment_tokens`'s
+    own documented newline-boundary behavior) dead code. Confirmed live
+    that this let an ordinary two-line script (`git checkout` on one
+    line, something unrelated with a `$` token on the next) get the
+    second line's own token swept into the first line's own checkout
+    path candidates and spuriously denied -- not a security miss (the
+    fail-closed direction), but a real false-positive regression for a
+    very common multi-line Bash tool-call shape."""
+    tokens = checker.tokenize("echo a\necho b")
+    assert tokens == ["echo", "a", "\n", "echo", "b"]
+
+
+def test_tokenize_preserves_a_newline_inside_a_quoted_string() -> None:
+    """No false positive from the newline fix itself: a newline INSIDE a
+    quoted string is real string content, not a shell control operator,
+    and must stay fused into its own token exactly as before."""
+    tokens = checker.tokenize('echo "multi\nline"')
+    assert tokens == ["echo", "multi\nline"]
+
+
+def test_classify_does_not_leak_a_later_lines_token_into_an_earlier_checkout() -> None:
+    """End-to-end regression pin for the newline finding: an ordinary
+    two-line script with `git checkout` on the first line and an
+    unrelated `$`-containing token on the second line must classify the
+    checkout using only its own line's tokens. Deliberately avoids `-b`
+    (which the round-4 branch-creation-flag fix folds into the Non-goal
+    regardless of what follows on either line, no longer exercising
+    sub-case (b)'s own 2-positional path extraction this test targets) --
+    two ordinary non-flag positionals exercise the identical sub-case."""
+    verdict = checker.classify('git checkout a.py b.py\necho "exit=$?"')
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("a.py", "b.py")
+
+
+def test_shlex_default_punctuation_chars_still_matches_the_hardcoded_extension() -> None:
+    """Pins the stdlib assumption `tokenize()`'s own newline fix depends
+    on: shlex's documented default `punctuation_chars` value for
+    `punctuation_chars=True`, which `tokenize()` now hardcodes (extended
+    with `\\n`) rather than deriving at runtime. If a future Python
+    version ever changes this default, this test fails loudly instead of
+    `tokenize()` silently drifting from it."""
+    default_lexer = shlex.shlex("x", posix=True, punctuation_chars=True)
+    assert default_lexer.punctuation_chars == "();<>|&"
+
+
+def test_strip_line_continuations_removes_an_unquoted_backslash_newline() -> None:
+    """CRITICAL regression pin (round-3 independent review). An ordinary
+    line-continued command -- backslash immediately followed by a newline,
+    outside any quoting -- must vanish entirely, exactly as real bash
+    resolves it, joining the two physical lines with nothing left behind."""
+    assert checker._strip_line_continuations("git checkout -- \\\nfile.py") == "git checkout -- file.py"
+
+
+def test_strip_line_continuations_removes_a_double_quoted_backslash_newline() -> None:
+    """Real bash also removes a backslash-newline pair INSIDE double
+    quotes (backslash retains its escaping meaning there), unlike shlex's
+    own posix-mode escape handling, which left both characters untouched."""
+    assert checker._strip_line_continuations('echo "a\\\nb"') == 'echo "ab"'
+
+
+def test_strip_line_continuations_preserves_a_single_quoted_backslash_newline() -> None:
+    """Inside single quotes, backslash has no special meaning at all, so a
+    literal backslash-newline pair there must stay exactly as written --
+    confirmed live real bash does not join these two lines."""
+    assert checker._strip_line_continuations("echo 'a\\\nb'") == "echo 'a\\\nb'"
+
+
+def test_strip_line_continuations_does_not_double_consume_an_escaped_backslash() -> None:
+    """An escaped literal backslash (`\\\\`) must consume its own pair
+    atomically so the second backslash is never re-examined as a fresh,
+    wrongly-applied escape-introducer for the newline that follows it --
+    confirmed live real bash keeps this newline (the second backslash was
+    already spent escaping the first)."""
+    assert checker._strip_line_continuations('echo "a\\\\\nb"') == 'echo "a\\\\\nb"'
+
+
+def test_strip_line_continuations_preserves_a_raw_quoted_newline() -> None:
+    """A genuine embedded newline inside a quoted string, with no
+    preceding backslash at all, is real string content, not a line
+    continuation, and must never be stripped."""
+    assert checker._strip_line_continuations('echo "line1\nline2"') == 'echo "line1\nline2"'
+
+
+@_PROPERTIES
+@given(text=st.text(alphabet=st.characters(blacklist_characters="\\'\"\n"), max_size=40))
+def test_strip_line_continuations_is_a_no_op_without_backslash_or_quote(text: str) -> None:
+    """Property: with no backslash, quote, or newline in the input at
+    all, `_strip_line_continuations` cannot find anything to remove, so it
+    must return the input byte-for-byte unchanged."""
+    assert checker._strip_line_continuations(text) == text
+
+
+@_PROPERTIES
+@given(text=st.text(alphabet="ab\\'\"\n", max_size=12))
+def test_strip_line_continuations_is_idempotent(text: str) -> None:
+    """Property: running the pass twice must equal running it once -- once
+    every unescaped, non-single-quoted backslash-newline pair is removed,
+    a second pass over the result finds nothing further to remove."""
+    once = checker._strip_line_continuations(text)
+    twice = checker._strip_line_continuations(once)
+    assert once == twice
+
+
+def test_classify_denies_a_line_continued_checkout_path_that_used_to_bypass() -> None:
+    """End-to-end regression pin for the round-3 independent-review
+    finding: an ordinary `\\`-then-newline-wrapped `git checkout --
+    file.py` must resolve to the real path (`file.py`), not a path with a
+    literal leading newline baked in (`'\\nfile.py'`, which the live `git
+    diff` wrapper check would silently run against a nonexistent path and
+    allow through)."""
+    verdict = checker.classify("git checkout -- \\\nfile.py")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("file.py",)
+
+
+def test_strip_comments_preserves_boundary_status_across_a_line_continuation() -> None:
+    """CRITICAL regression pin (round-6 independent review, issue #1375).
+    A genuine line continuation vanishes with nothing left behind once
+    `_strip_line_continuations` runs afterward -- `_strip_comments` only
+    passes the pair through unchanged, so the boundary status right after
+    it must be whatever it was right BEFORE the backslash, not forced to
+    False the way every other escaped pair correctly is. A `#` right
+    after a continuation must still start a comment."""
+    result = checker._strip_comments("echo a \\\n#comment\necho b")
+    assert result == "echo a \\\n\necho b"
+
+
+def test_strip_comments_passes_through_a_double_quoted_line_continuation_unchanged() -> None:
+    """The round-6 fix's own double-quoted branch: a continuation pair
+    INSIDE an open double-quoted string is passed through unchanged (no
+    comment can start there regardless of boundary status, since `#` is
+    only ever checked in the top-level unquoted branch), covering the
+    `nxt == "\\n"` skip-path this function's double-quoted backslash
+    handling shares with its unquoted twin."""
+    result = checker._strip_comments('echo "a \\\nb"')
+    assert result == 'echo "a \\\nb"'
+
+
+def test_strip_comments_still_clears_boundary_for_a_non_continuation_escape() -> None:
+    """No regression from the round-6 fix: an escaped, non-newline
+    character is still real word content, not a boundary -- `\\#` right
+    after it must NOT be read as a comment-starter."""
+    result = checker._strip_comments("echo a\\x#notacomment")
+    assert result == "echo a\\x#notacomment"
+
+
+def test_classify_no_longer_leaks_a_comment_past_a_line_continuation() -> None:
+    """End-to-end regression pin for the round-6 independent-review
+    finding: a `#`-comment sitting on the continued line right after a
+    `\\<newline>` must be recognized and stripped, not swept into
+    `checkout_restore_paths` as a phantom path candidate that could name
+    an unrelated, genuinely dirty file and produce a misleading deny."""
+    verdict = checker.classify("git checkout -- clean.py \\\n# TODO revisit auth.py later\n")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("clean.py",)
+
+
+def test_strip_comments_strips_a_comment_nested_inside_a_double_quoted_substitution() -> None:
+    """CRITICAL, full-classifier-bypass regression pin (round-7
+    independent review, issue #1375). Real bash recursively re-enters
+    ordinary, comment-aware command parsing for a `$(...)` embedded
+    inside an outer double-quoted string -- a `)` inside a `#`-comment
+    inside such a substitution does NOT end the substitution. The old
+    inline double-quote handling here did not know this, leaving the
+    comment (and its embedded `)`) unstripped; that stray `)` then made
+    `_find_fused_command_substitution`'s own naive paren counter mistake
+    it for the substitution's real closing paren, silently truncating
+    everything after it -- including a real `git checkout` on the next
+    line -- from all classification. Live-verified this let a genuine,
+    dirty-file checkout run for real while `classify()` reported
+    `deny=False` with an empty `checkout_restore_paths`."""
+    result = checker._strip_comments('x="$(echo hi #comment with paren ) here\ngit checkout -- dirty.py)"')
+    assert result == 'x="$(echo hi \ngit checkout -- dirty.py)"'
+
+
+def test_classify_no_longer_loses_a_checkout_behind_a_commented_paren_in_a_substitution() -> None:
+    """End-to-end regression pin for the round-7 finding at the
+    `classify()` level: the real `git checkout -- dirty.py` embedded
+    past the decoy comment must be found, not silently dropped."""
+    verdict = checker.classify('x="$(echo hi #comment with paren ) here\ngit checkout -- dirty.py)"')
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("dirty.py",)
+
+
+def test_strip_comments_strips_a_comment_inside_a_substitution_nested_two_levels_deep() -> None:
+    """No shortcut taken for nesting depth: a comment inside a `$(...)`
+    that is itself nested inside ANOTHER `$(...)` inside the outer
+    double-quoted string must also be recognized and stripped, mirroring
+    bash's own arbitrarily-recursive re-entrant grammar."""
+    result = checker._strip_comments('x="$(echo $(echo hi #comment\n) tail)"')
+    assert result == 'x="$(echo $(echo hi \n) tail)"'
+
+
+def test_strip_comments_still_treats_a_literal_hash_inside_a_substitution_string_as_literal() -> None:
+    """No over-stripping regression: a `#` inside a QUOTED span within
+    the substitution's own content is still ordinary literal text, not a
+    comment-starter -- matching the same rule this function already
+    enforces at the top level."""
+    result = checker._strip_comments("x=\"$(echo 'a#b' tail)\"")
+    assert result == "x=\"$(echo 'a#b' tail)\""
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        'x="$(echo \'abc)"',
+        'x="$(echo "inner" tail)"',
+        'x="$(echo a\\\\x)"',
+        'x="$(echo (nested) tail)"',
+        'x="$(echo abc',
+    ],
+    ids=[
+        "unterminated-single-quote-inside-substitution",
+        "nested-double-quote-inside-substitution",
+        "non-newline-escape-inside-substitution",
+        "nested-unquoted-parens-inside-substitution",
+        "unterminated-substitution",
+    ],
+)
+def test_strip_comments_is_a_no_op_without_a_comment_inside_a_substitution(command: str) -> None:
+    """No crash and no unintended stripping on every other shape
+    `_consume_command_substitution_content` must walk through correctly
+    to find (or fail to find, for the unterminated case) its own
+    matching close-paren -- none of these contain a `#`, so the result
+    must be byte-for-byte identical to the input; a real unbalanced
+    quote/substitution is `tokenize()`'s own concern to fail closed on,
+    not this function's, which never itself validates balance."""
+    assert checker._strip_comments(command) == command
+
+
+def test_strip_comments_preserves_a_line_continuation_inside_a_substitution() -> None:
+    """The round-6 boundary-preserving fix applies inside a substitution
+    too, not only at the top level: a genuine `\\<newline>` there must
+    not clear AT_BOUNDARY, so a `#`-comment right after it is still
+    correctly recognized and stripped."""
+    result = checker._strip_comments('x="$(echo a \\\nb #c\nd)"')
+    assert result == 'x="$(echo a \\\nb \nd)"'
+
+
+@pytest.mark.parametrize("flag", ["-b", "-B", "--orphan"])
+def test_git_checkout_paths_folds_branch_creation_flags_into_the_non_goal(flag: str) -> None:
+    """CRITICAL regression pin (round-4 independent review, issue #1375).
+    `-b`/`-B`/`--orphan` take the immediately following token as their own
+    new-branch-NAME value, which does not start with `-` -- sub-case (b)'s
+    dash-prefix positional filter used to sweep that value (and a
+    start-point after it) into `checkout_restore_paths` as if they were
+    file paths, so `git checkout -f -b newbranch other` reported
+    `('newbranch', 'other')` -- neither the real at-risk file -- and the
+    wrapper's live check against those two nonexistent paths found "clean"
+    and silently allowed a real, forced branch switch that discarded an
+    uncommitted change elsewhere. Live-verified end-to-end that real git
+    discards the change while the old code reported this as checked-safe.
+    Must now fold into the same honest, no-claim Non-goal bare `git
+    checkout SOMENAME` already carries -- empty paths, not a false claim."""
+    reason, paths = checker._git_checkout_paths([flag, "newbranch", "other"], {}, {}, set())
+    assert reason is None
+    assert paths == ()
+
+
+def test_git_checkout_paths_branch_creation_flag_wins_even_with_a_double_dash() -> None:
+    """`-b`/`-B`/`--orphan` is git's own branch-creation mode, mutually
+    exclusive with every pathspec-checkout mode (per `git checkout -h`'s
+    own synopsis) -- the Non-goal fold must fire before sub-case (a)'s own
+    `--`-present branch is ever reached, not only when `--` is absent."""
+    reason, paths = checker._git_checkout_paths(["-b", "newbranch", "--", "file.py"], {}, {}, set())
+    assert reason is None
+    assert paths == ()
+
+
+@_PROPERTIES
+@given(flag=st.sampled_from(["-b", "-B", "--orphan", "--orphan=x"]))
+def test_git_checkout_paths_resolves_a_branch_creation_flag_shaped_path_after_double_dash(flag: str) -> None:
+    """CRITICAL bypass regression pin (round-41 independent review, issue
+    #1375, the PR's own final review round): unlike a genuine `-b`/`-B`/
+    `--orphan` flag appearing BEFORE `--` (which stays the honest Non-goal,
+    per the sibling test above), a token that merely LOOKS like one of
+    these flags but sits AFTER a literal `--` is unambiguously a path --
+    real git guarantees every token after `--` is a pathspec, never a
+    flag. Live-verified end-to-end through the actual shipped wrapper
+    against a real, genuinely dirty tracked file literally named `-b`:
+    before this fix, `git checkout -- -b` folded the whole invocation into
+    the bare-SOMENAME Non-goal (empty `checkout_restore_paths`), silently
+    skipping the wrapper's own live dirty-file check, and running the real
+    checkout discarded the dirty content."""
+    reason, paths = checker._git_checkout_paths(["--", flag], {}, {}, set())
+    assert reason is None
+    assert paths == (flag,)
+
+
+def test_git_checkout_paths_resolves_every_path_after_double_dash_even_beside_a_flag_shaped_one() -> None:
+    """Companion to the property test above: a flag-shaped decoy after
+    `--` must not suppress extraction of the OTHER, ordinarily-named paths
+    listed alongside it in the same invocation."""
+    reason, paths = checker._git_checkout_paths(["--", "-b", "realfile.py"], {}, {}, set())
+    assert reason is None
+    assert paths == ("-b", "realfile.py")
+
+
+def test_classify_surfaces_a_branch_creation_flag_shaped_path_after_double_dash() -> None:
+    """End-to-end regression pin for the round-41 finding at the
+    `classify()` level."""
+    verdict = checker.classify("git checkout -- -b realfile.py")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("-b", "realfile.py")
+
+
+def test_git_checkout_paths_still_extracts_a_real_path_without_a_branch_creation_flag() -> None:
+    """No regression from the branch-creation fold: an ordinary two-
+    positional pathspec checkout with no `-b`/`-B`/`--orphan` present is
+    unaffected."""
+    reason, paths = checker._git_checkout_paths(["a.py", "b.py"], {}, {}, set())
+    assert reason is None
+    assert paths == ("a.py", "b.py")
+
+
+def test_classify_no_longer_falsely_claims_safety_for_a_forced_branch_creation() -> None:
+    """End-to-end regression pin for the round-4 independent-review
+    finding: `git checkout -f -b newbranch other` must resolve to an empty
+    `checkout_restore_paths` (the honest Non-goal), never a claim naming
+    the branch name/start-point as though they were the checked paths."""
+    verdict = checker.classify("git checkout -f -b newbranch other")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ()
+
+
+@_PROPERTIES
+@given(flag=st.sampled_from(["--pathspec-from-file=list.txt", "--pathspec-from-file", "--pathspec-file-nul"]))
+def test_git_checkout_paths_denies_pathspec_from_file(flag: str) -> None:
+    """CRITICAL regression pin (round-5 independent review, issue #1375).
+    `_git_restore_paths` already hard-denies this exact flag pair ("paths
+    come from a file this classifier cannot inspect"), but
+    `_git_checkout_paths` never recognized it at all -- a single
+    positional after it fell through to the honest bare-SOMENAME Non-goal,
+    which is the WRONG treatment for a flag whose own value-consumption is
+    a file containing the real pathspecs, not an ambiguous ref/path.
+    Live-verified end-to-end that this silently discarded a dirty tracked
+    file listed in the control file."""
+    reason, resolved = checker._git_checkout_paths([flag, "files.txt"], {}, {}, set())
+    assert reason is not None
+    assert resolved == ()
+
+
+def test_classify_denies_checkout_pathspec_from_file() -> None:
+    """End-to-end regression pin for the round-5 finding at the
+    `classify()` level, mirroring the already-existing restore-side pin."""
+    verdict = checker.classify("git checkout --pathspec-from-file files.txt")
+    assert verdict.deny is True
+    assert "pathspec-from-file" in verdict.reason
+
+
+def test_git_checkout_paths_treats_a_pathspec_from_file_shaped_token_after_double_dash_as_a_path() -> None:
+    """Companion no-over-denial fix pinned alongside the round-41 bypass
+    fix above: a file merely NAMED `--pathspec-from-file` after a literal
+    `--` is an ordinary, unambiguous path (real git guarantees every token
+    after `--` is a pathspec, never a flag) -- must resolve as a path
+    candidate, not deny the whole invocation the way the pre-fix
+    whole-list scan did."""
+    reason, paths = checker._git_checkout_paths(["--", "--pathspec-from-file"], {}, {}, set())
+    assert reason is None
+    assert paths == ("--pathspec-from-file",)
+
+
+@_PROPERTIES
+@given(command_paths=st.lists(_PATH_TOKENS, min_size=1, max_size=3))
+def test_rule_git_checkout_restore_accumulates_paths_across_segments(command_paths: list[str]) -> None:
+    """Model-based: multiple checkout/restore invocations chained in one
+    command (`git checkout -- a.py; git restore b.py`) accumulate paths
+    from every segment, not just the first."""
+    segments = [["git", "checkout", "--", *command_paths], ["git", "restore", *command_paths]]
+    reason, resolved = checker._rule_git_checkout_restore(segments, {}, {}, {}, {}, set())
+    assert reason is None
+    assert resolved == (*command_paths, *command_paths)
+
+
+def test_rule_git_checkout_restore_denies_when_git_dir_env_var_assigned() -> None:
+    """Model-based, regression pin for issue #1375's own Fact 5: a
+    `GIT_DIR=`/`GIT_WORK_TREE=`/`GIT_INDEX_FILE=` assignment anywhere in
+    the command makes the wrapper's own fixed `.cwd` reference point
+    unsound -- denied outright by the classifier itself (I/O-free, a
+    token-shape fact) rather than letting the live wrapper check the
+    wrong tree."""
+    segments = [["git", "checkout", "--", "f.py"]]
+    reason, resolved = checker._rule_git_checkout_restore(segments, {"GIT_DIR": "/tmp/x.git"}, {}, {}, {}, set())
+    assert reason is not None
+    assert resolved == ()
+
+
+def test_rule_git_checkout_restore_denies_when_an_earlier_segment_is_cd() -> None:
+    """Model-based, regression pin for issue #1375's own Fact 5: an
+    earlier segment in the same command containing a literal `cd` makes
+    the wrapper's own fixed `.cwd` unsound for a LATER checkout/restore
+    segment -- denied outright."""
+    segments = [["cd", "/tmp"], ["git", "checkout", "--", "f.py"]]
+    reason, resolved = checker._rule_git_checkout_restore(segments, {}, {}, {}, {}, set())
+    assert reason is not None
+    assert resolved == ()
+
+
+def test_rule_git_checkout_restore_allows_cd_after_the_checkout_segment() -> None:
+    """No false positive: `_rule_git_checkout_restore` only denies for a
+    `cd` in an EARLIER segment -- a `cd` AFTER the checkout/restore segment
+    does not retroactively make the already-scanned segment unsound."""
+    segments = [["git", "checkout", "--", "f.py"], ["cd", "/tmp"]]
+    reason, resolved = checker._rule_git_checkout_restore(segments, {}, {}, {}, {}, set())
+    assert reason is None
+    assert resolved == ("f.py",)
+
+
+@pytest.mark.parametrize("relocator", ["pushd", "popd"])
+def test_rule_git_checkout_restore_denies_when_an_earlier_segment_is_pushd_or_popd(relocator: str) -> None:
+    """CRITICAL regression pin (round-9 independent review, issue #1375).
+    `pushd`/`popd` relocate the shell's own working directory exactly
+    like `cd` does, but only a literal `cd` token was recognized here --
+    live-verified this let `pushd sub && git checkout -- dirty.py`
+    (dirty.py dirty relative to `sub`, absent at the PreToolUse payload's
+    own `.cwd`) resolve to a CONFIDENT, WRONG `checkout_restore_paths`
+    claim that the wrapper's live check then found clean at the wrong
+    `.cwd`, silently allowing a real, uncommitted-change discard."""
+    segments = [[relocator, "/tmp"], ["git", "checkout", "--", "f.py"]]
+    reason, resolved = checker._rule_git_checkout_restore(segments, {}, {}, {}, {}, set())
+    assert reason is not None
+    assert resolved == ()
+
+
+def test_classify_denies_a_checkout_hidden_behind_pushd() -> None:
+    """End-to-end regression pin for the round-9 finding at the
+    `classify()` level: the previously wrong, confident
+    `checkout_restore_paths=('dirty.py',)` claim must become an honest
+    outright deny instead."""
+    verdict = checker.classify("pushd sub && git checkout -- dirty.py")
+    assert verdict.deny is True
+    assert "pushd" in verdict.reason
+
+
+def test_rule_git_checkout_restore_denies_when_an_earlier_segment_starts_with_a_dynamic_non_vanishing_word() -> None:
+    """CRITICAL regression pin (round-10 independent review, issue
+    #1375). Round 9's literal-token scan only ever recognized
+    `cd`/`pushd`/`popd` written out directly -- a dynamic command word
+    (e.g. `$X` with `X=cd`) that resolves to one of those at real bash
+    runtime was not recognized at all, live-verified to let `X=cd; $X
+    sub; git checkout -- file.py` resolve to a CONFIDENT, WRONG
+    `checkout_restore_paths` claim the same way round 9's own fix closed
+    for the literal case."""
+    segments = [["$X", "sub"], ["git", "checkout", "--", "f.py"]]
+    reason, resolved = checker._rule_git_checkout_restore(segments, {"X": "cd"}, {}, {}, {}, set())
+    assert reason is not None
+    assert resolved == ()
+
+
+def test_rule_git_checkout_restore_allows_a_genuinely_vanishing_dynamic_word() -> None:
+    """No false positive: a dynamic `seg[0]` that unambiguously vanishes
+    (word-splits to nothing at real bash runtime, e.g. an unset
+    parameter with no default) is NOT flagged as a possible relocator --
+    real bash would run whatever token follows as the actual command
+    word instead, and that token is scanned on its own merits."""
+    segments = [["${NEVERSET}", "sub"], ["git", "checkout", "--", "f.py"]]
+    reason, resolved = checker._rule_git_checkout_restore(segments, {}, {}, {}, {}, set())
+    assert reason is None
+    assert resolved == ("f.py",)
+
+
+def test_classify_denies_a_checkout_hidden_behind_a_dynamic_cd() -> None:
+    """End-to-end regression pin for the round-10 finding at the
+    `classify()` level: a variable holding `cd` (or `pushd`) must deny
+    the same way a literal `cd`/`pushd` does."""
+    for cmd in (
+        "X=cd; $X sub; git checkout -- file.py",
+        "X=pushd; $X sub; git checkout -- file.py",
+    ):
+        verdict = checker.classify(cmd)
+        assert verdict.deny is True, cmd
+        assert verdict.checkout_restore_paths == ()
+
+
+def test_rule_git_checkout_restore_allows_a_dynamic_word_resolving_to_something_harmless() -> None:
+    """CRITICAL false-positive regression pin (round-11 independent
+    review, issue #1375). Round 10's own first version flagged EVERY
+    non-vanishing dynamic `seg[0]` regardless of what it could actually
+    resolve to -- live-verified to wrongly deny `EDITOR=vim; $EDITOR sub;
+    git checkout -- f.py`, a completely safe, ordinary command (an
+    `$EDITOR`/`$TOOL` dispatch idiom followed by an unrelated, clean
+    checkout), purely because `$EDITOR` is dynamic and non-vanishing.
+    `_dynamic_word_may_resolve_to_a_cwd_relocator` must resolve the
+    word's actual candidate value and only flag when it could genuinely
+    be `cd`/`pushd`/`popd`.
+
+    RAW_ASSIGNED_CD_BIASED here mirrors RAW_ASSIGNED exactly (round 20,
+    issue #1375's own fourth argument) -- in real production use it is
+    always built from the SAME token stream as RAW_ASSIGNED and so
+    always carries the SAME entry for a name never assigned `cd`/`pushd`/
+    `popd`; an EMPTY dict here would NOT be equivalent (unlike the
+    git-biased fallback's own fail-toward-"not git" posture, `_dynamic_
+    word_may_resolve_to_a_cwd_relocator`'s own posture fails toward
+    "might be a relocator" on an unresolvable name, so a dict missing
+    EDITOR's own entry would wrongly flag it once the first, correctly-
+    resolving `raw_assigned` reading is bypassed by this test's own
+    construction -- this is a hand-built-test-consistency requirement,
+    not a live production gap, since production always keeps the two
+    dicts' own key sets in sync)."""
+    segments = [["$EDITOR", "sub"], ["git", "checkout", "--", "f.py"]]
+    reason, resolved = checker._rule_git_checkout_restore(segments, {"EDITOR": "vim"}, {}, {"EDITOR": "vim"}, {}, set())
+    assert reason is None
+    assert resolved == ("f.py",)
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value=_VALUES)
+def test_dynamic_word_may_resolve_to_a_cwd_relocator_matches_relocator_set(name: str, value: str) -> None:
+    """Model-based: `_dynamic_word_may_resolve_to_a_cwd_relocator` flags a
+    resolvable dynamic word if and only if its resolved value is exactly
+    one of `cd`/`pushd`/`popd` -- case-sensitively, matching real bash's
+    own case-sensitive command-name lookup."""
+    result = checker._dynamic_word_may_resolve_to_a_cwd_relocator(f"${name}", {name: value})
+    assert result == (value in checker._CWD_RELOCATING_COMMANDS)
+
+
+def test_dynamic_word_may_resolve_to_a_cwd_relocator_true_for_a_matching_assignment() -> None:
+    assert checker._dynamic_word_may_resolve_to_a_cwd_relocator("$X", {"X": "cd"}) is True
+    assert checker._dynamic_word_may_resolve_to_a_cwd_relocator("$X", {"X": "pushd"}) is True
+
+
+def test_dynamic_word_may_resolve_to_a_cwd_relocator_false_for_a_harmless_assignment() -> None:
+    assert checker._dynamic_word_may_resolve_to_a_cwd_relocator("$EDITOR", {"EDITOR": "vim"}) is False
+
+
+def test_dynamic_word_may_resolve_to_a_cwd_relocator_is_case_sensitive() -> None:
+    """`cd`/`pushd`/`popd` are real bash command names, case-SENSITIVE --
+    an assignment of `CD` (uppercase) must not be treated as resolving to
+    the `cd` builtin, unlike this module's usual lowercased write-method
+    comparisons elsewhere."""
+    assert checker._dynamic_word_may_resolve_to_a_cwd_relocator("$X", {"X": "CD"}) is False
+
+
+def test_dynamic_word_may_resolve_to_a_cwd_relocator_true_when_unresolvable() -> None:
+    """A token whose dynamism this classifier cannot decompose into
+    `$NAME`-shaped references at all (e.g. a folded command-substitution
+    placeholder) fails closed, preserving round 10's own blanket-flag
+    behavior for this shape -- this primitive only ever narrows what
+    round 10 already flagged, never widens it."""
+    assert checker._dynamic_word_may_resolve_to_a_cwd_relocator("__CMDSUB_PLACEHOLDER__", {}) is True
+
+
+def test_dynamic_word_may_resolve_to_a_cwd_relocator_true_for_an_unresolvable_reference() -> None:
+    """A `$NAME`-shaped reference this classifier cannot resolve at all
+    (NAME never assigned) also fails closed, via
+    `_substitute_var_refs_candidates`'s own empty-list return -- a
+    narrower unit-level pin than the vanishing-check short-circuit
+    `_rule_git_checkout_restore` applies before ever reaching this helper
+    in that context."""
+    assert checker._dynamic_word_may_resolve_to_a_cwd_relocator("$NEVERSET", {}) is True
+
+
+def test_classify_allows_a_checkout_hidden_behind_an_unrelated_dynamic_word() -> None:
+    """End-to-end regression pin for the round-11 finding at the
+    `classify()` level."""
+    verdict = checker.classify("EDITOR=vim; $EDITOR sub; git checkout -- f.py")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("f.py",)
+
+
+def test_dynamic_word_may_resolve_to_a_cwd_relocator_true_for_a_still_dynamic_candidate() -> None:
+    """CRITICAL bypass regression pin (round-12 independent review, issue
+    #1375). `_substitute_var_refs_candidates` does NOT recursively
+    re-expand a `${NAME:-default}` clause's own DEFAULT text (a
+    disclosed residual of that primitive itself) -- so when the default
+    text is itself a `$OTHER` reference, the one returned candidate is
+    the literal, still-unexpanded string `"$OTHER"`, never equal to
+    `cd`/`pushd`/`popd` as plain text even when `$OTHER` genuinely holds
+    one of those at real bash runtime. Live-verified before this fix:
+    `${UNSET:-$OTHER}` with `OTHER=cd` resolved to a false `False`
+    (not-a-relocator) verdict instead of failing closed, mirroring the
+    identical still-dynamic-candidate check `_resolve_path_tokens`
+    already carries for the same reason."""
+    assert checker._dynamic_word_may_resolve_to_a_cwd_relocator("${UNSET:-$OTHER}", {"OTHER": "cd"}) is True
+    assert checker._dynamic_word_may_resolve_to_a_cwd_relocator("${UNSET:-$OTHER}", {"OTHER": "pushd"}) is True
+
+
+def test_rule_git_checkout_restore_denies_a_still_dynamic_candidate() -> None:
+    segments = [["${UNSET:-$OTHER}", "sub"], ["git", "checkout", "--", "f.py"]]
+    reason, resolved = checker._rule_git_checkout_restore(segments, {"OTHER": "cd"}, {}, {}, {}, set())
+    assert reason is not None
+    assert resolved == ()
+
+
+def test_classify_denies_a_checkout_hidden_behind_a_still_dynamic_default_clause() -> None:
+    """End-to-end regression pin for the round-12 finding at the
+    `classify()` level."""
+    verdict = checker.classify("OTHER=cd; ${UNSET:-$OTHER} sub; git checkout -- dirty.py")
+    assert verdict.deny is True
+    assert verdict.checkout_restore_paths == ()
+
+
+def test_first_surviving_segment_word_skips_a_leading_vanishing_run() -> None:
+    """A leading run of vanishing decoys (bare-unassigned, then an empty
+    default clause) is skipped, landing on the real surviving word --
+    whether that word is dynamic or a plain literal."""
+    assert checker._first_surviving_segment_word(["$NEVERSET", "${OTHER:-}", "$X"], {"X": "cd"}) == "$X"
+    assert checker._first_surviving_segment_word(["$NEVERSET", "sub"], {}) == "sub"
+
+
+def test_first_surviving_segment_word_none_when_everything_vanishes() -> None:
+    assert checker._first_surviving_segment_word(["$NEVERSET", "${OTHER:-}"], {}) is None
+
+
+def test_rule_git_checkout_restore_denies_a_dynamic_relocator_behind_a_leading_vanishing_decoy() -> None:
+    """CRITICAL bypass regression pin (round-13 independent review, issue
+    #1375). The prior `seg[0]`-only check silently skipped the whole
+    segment whenever `seg[0]` itself genuinely vanished, even though the
+    token that actually survives to become bash's real command word was
+    never itself checked. Live-verified before this fix: `X=cd; $NEVERSET
+    $X sub; git checkout -- dirty.py` (`NEVERSET` genuinely never
+    assigned) resolved to a CONFIDENT, WRONG `checkout_restore_paths`
+    claim -- real bash genuinely runs `cd sub` there."""
+    segments = [["$NEVERSET", "$X", "sub"], ["git", "checkout", "--", "f.py"]]
+    reason, resolved = checker._rule_git_checkout_restore(segments, {"X": "cd"}, {}, {}, {}, set())
+    assert reason is not None
+    assert resolved == ()
+
+
+def test_classify_denies_a_checkout_hidden_behind_a_leading_vanishing_decoy() -> None:
+    """End-to-end regression pin for the round-13 finding at the
+    `classify()` level."""
+    for cmd in (
+        "X=cd; $NEVERSET $X sub; git checkout -- dirty.py",
+        "X=pushd; $NEVERSET $X sub; git checkout -- dirty.py",
+        "X=cd; ${NEVERSET:-} $X sub; git checkout -- dirty.py",
+    ):
+        verdict = checker.classify(cmd)
+        assert verdict.deny is True, cmd
+        assert verdict.checkout_restore_paths == ()
+
+
+def test_redirect_span_length_recognizes_operator_and_target() -> None:
+    assert checker._redirect_span_length([">", "/dev/null", "x"], 0) == 2
+    assert checker._redirect_span_length([">&", "1", "x"], 0) == 2
+
+
+def test_redirect_span_length_zero_when_no_redirect_present() -> None:
+    assert checker._redirect_span_length(["checkout", "--", "f.py"], 0) == 0
+    assert checker._redirect_span_length(["2", "checkout", "--", "f.py"], 0) == 0
+    assert checker._redirect_span_length([">"], 0) == 0
+
+
+def test_first_surviving_segment_word_skips_a_leading_redirect() -> None:
+    assert checker._first_surviving_segment_word([">", "/dev/null", "$X"], {"X": "cd"}) == "$X"
+    assert checker._first_surviving_segment_word(["$NEVERSET", ">", "/dev/null", "$X"], {"X": "cd"}) == "$X"
+
+
+def test_rule_git_checkout_restore_denies_a_dynamic_relocator_behind_a_leading_redirect() -> None:
+    """CRITICAL bypass regression pin (round-14 independent review, issue
+    #1375). A leading redirect clause (ordinary, legal bash syntax) made
+    `_first_surviving_segment_word` return the redirect operator token
+    itself -- neither vanishing nor dynamic -- as the "surviving word,"
+    so the real, cd-resolving `$X` one position later was never checked.
+    Live-verified before this fix: `X=cd; > /dev/null $X sub; git
+    checkout -- dirty.py` resolved to a confident, wrong ALLOW."""
+    segments = [[">", "/dev/null", "$X", "sub"], ["git", "checkout", "--", "f.py"]]
+    reason, resolved = checker._rule_git_checkout_restore(segments, {"X": "cd"}, {}, {}, {}, set())
+    assert reason is not None
+    assert resolved == ()
+
+
+def test_classify_denies_a_checkout_hidden_behind_a_leading_redirect() -> None:
+    """End-to-end regression pin for the round-14 redirect-before-dynamic-
+    word finding at the `classify()` level."""
+    verdict = checker.classify("X=cd; > /dev/null $X sub; git checkout -- dirty.py")
+    assert verdict.deny is True
+    assert verdict.checkout_restore_paths == ()
+
+
+def test_find_git_checkout_restore_skips_a_redirect_between_git_and_subcommand() -> None:
+    """CRITICAL bypass regression pin (round-14 independent review, issue
+    #1375). A fully literal command with a redirect between `git` and its
+    subcommand was invisible to detection -- the redirect operator token
+    was mistaken for the subcommand position and the scan gave up.
+    Live-verified before this fix: `git > /dev/null checkout -- dirty.py`
+    resolved to an empty, wrong `checkout_restore_paths`."""
+    subcommand, tokens_after, saw_tree_relocation = checker._find_git_checkout_restore(
+        ["git", ">", "/dev/null", "checkout", "--", "f.py"], {}, {}
+    )
+    assert subcommand == "checkout"
+    assert tokens_after == ["--", "f.py"]
+    assert saw_tree_relocation is False
+
+
+def test_classify_extracts_paths_behind_a_redirect_between_git_and_subcommand() -> None:
+    """End-to-end regression pin for the round-14 redirect-between-git-
+    and-subcommand finding at the `classify()` level."""
+    verdict = checker.classify("git > /dev/null checkout -- dirty.py")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("dirty.py",)
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value=_VALUES)
+def test_dynamic_token_resolves_only_to_literal_matches_the_resolved_value(name: str, value: str) -> None:
+    """Model-based: `_dynamic_token_resolves_only_to_literal` returns
+    `True` if and only if the token's one resolved candidate equals the
+    target literal, case-insensitively."""
+    result = checker._dynamic_token_resolves_only_to_literal(f"${name}", {name: value}, "git")
+    assert result == (value.lower() == "git")
+
+
+def test_dynamic_token_resolves_only_to_literal_true_for_an_unambiguous_match() -> None:
+    assert checker._dynamic_token_resolves_only_to_literal("$G", {"G": "git"}, "git") is True
+    assert checker._dynamic_token_resolves_only_to_literal("$G", {"G": "GIT"}, "git") is True
+
+
+def test_dynamic_token_resolves_only_to_literal_false_for_an_unrelated_value() -> None:
+    assert checker._dynamic_token_resolves_only_to_literal("$G", {"G": "svn"}, "git") is False
+
+
+def test_dynamic_token_resolves_only_to_literal_false_when_unresolvable() -> None:
+    """A false positive here would mis-attribute an unrelated tool's own
+    subcommand (e.g. `$TOOL checkout` where TOOL is not git) as a git
+    checkout/restore invocation, so an ambiguous or unresolvable token
+    declines rather than assumes the positive case -- the mirror image of
+    `_dynamic_word_may_resolve_to_a_cwd_relocator`'s own fail-closed
+    posture, appropriate here because the risk direction is reversed."""
+    assert checker._dynamic_token_resolves_only_to_literal("$UNKNOWN", {}, "git") is False
+
+
+def test_find_git_checkout_restore_recognizes_a_dynamic_git_token() -> None:
+    """CRITICAL bypass regression pin (round-14 independent review, issue
+    #1375). Only a LITERAL `git` token was ever recognized as the start
+    of a checkout/restore invocation -- live-verified before this fix:
+    `G=git; $G checkout -- dirty.py` resolved to an empty, wrong
+    `checkout_restore_paths` even though `$G` unambiguously resolves to
+    `git`."""
+    subcommand, tokens_after, saw_tree_relocation = checker._find_git_checkout_restore(
+        ["$G", "checkout", "--", "f.py"], {"G": "git"}, {}
+    )
+    assert subcommand == "checkout"
+    assert tokens_after == ["--", "f.py"]
+    assert saw_tree_relocation is False
+
+
+def test_find_git_checkout_restore_declines_an_unresolvable_dynamic_first_word() -> None:
+    """No false positive: a dynamic first token that does not unambiguously
+    resolve to `git` (unrelated tool, or unresolvable) is not mistaken for
+    a git invocation."""
+    subcommand, _tokens_after, _saw_tree_relocation = checker._find_git_checkout_restore(
+        ["$TOOL", "checkout", "--", "f.py"], {"TOOL": "svn"}, {}
+    )
+    assert subcommand is None
+
+
+def test_classify_extracts_paths_behind_a_dynamic_git_token() -> None:
+    """End-to-end regression pin for the round-14 dynamic-git-token
+    finding at the `classify()` level."""
+    verdict = checker.classify("G=git; $G checkout -- dirty.py")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("dirty.py",)
+
+
+def test_classify_does_not_extract_paths_from_an_unrelated_dynamic_tool() -> None:
+    """No false positive: `$TOOL checkout -- x` where TOOL resolves to a
+    non-git tool must not be mistaken for a git checkout."""
+    verdict = checker.classify("TOOL=svn; $TOOL checkout -- x")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ()
+
+
+def test_strip_redirect_clauses_removes_a_redirect_wherever_it_occurs() -> None:
+    assert checker._strip_redirect_clauses(["f.py", ">>", "log.txt"]) == ["f.py"]
+    assert checker._strip_redirect_clauses([">>", "log.txt", "f.py"]) == ["f.py"]
+    assert checker._strip_redirect_clauses(["f.py", ">&", "1"]) == ["f.py"]
+    assert checker._strip_redirect_clauses(["f.py", "g.py"]) == ["f.py", "g.py"]
+
+
+def test_strip_redirect_clauses_preserves_a_leading_digit_as_a_real_token() -> None:
+    """CRITICAL data-loss regression pin (round-16 independent review,
+    issue #1375): the strict, path-extraction-facing variant must NOT
+    guess "consumed by the redirect" for a leading digit token -- see
+    `_redirect_span_length`'s own docstring for why."""
+    assert checker._strip_redirect_clauses(["f.py", "2", ">", "target.txt"]) == ["f.py", "2"]
+
+
+def test_git_checkout_paths_excludes_a_trailing_redirect_clause() -> None:
+    """CRITICAL false-positive regression pin (round-15 independent
+    review, issue #1375). Round 14 taught `_find_git_checkout_restore`
+    and `_first_surviving_segment_word` to skip a redirect clause, but
+    never taught the path-extraction functions the same lesson -- a
+    redirect operator and its target were swept into
+    `checkout_restore_paths` as if they were real git path arguments.
+    Live-verified before this fix: `git checkout -- f.py >>
+    unrelated_append_target.py` resolved to `checkout_restore_paths=
+    ('f.py', '>>', 'unrelated_append_target.py')`, causing the live
+    wrapper check to wrongly deny whenever the unrelated append target
+    happened to be dirty, even though an append redirect can never
+    discard that file's existing content."""
+    deny_reason, paths = checker._git_checkout_paths(["--", "f.py", ">>", "unrelated_append_target.py"], {}, {}, set())
+    assert deny_reason is None
+    assert paths == ("f.py",)
+
+
+def test_git_restore_paths_excludes_a_trailing_redirect_clause() -> None:
+    deny_reason, paths = checker._git_restore_paths(["f.py", ">>", "unrelated_append_target.py"], {}, {}, set())
+    assert deny_reason is None
+    assert paths == ("f.py",)
+
+
+def test_classify_does_not_flag_a_redirect_target_as_a_checkout_path() -> None:
+    """End-to-end regression pin for the round-15 finding at the
+    `classify()` level."""
+    for cmd in (
+        "git checkout -- f.py >> unrelated_append_target.py",
+        "git restore f.py >> unrelated_append_target.py",
+    ):
+        verdict = checker.classify(cmd)
+        assert verdict.deny is False, cmd
+        assert verdict.checkout_restore_paths == ("f.py",), cmd
+
+
+def test_redirect_span_length_never_consumes_a_leading_digit() -> None:
+    """CRITICAL data-loss regression pin (round-16 independent review,
+    issue #1375). `tokenize()`'s own shlex punctuation-splitting cannot
+    distinguish a fused `2>file` (a genuine fd-redirect prefix, no
+    argument) from a spaced `2 >file` (the literal word `2` followed by
+    a separate redirect) -- both produce the identical token sequence.
+    The strict, path-extraction-facing `_redirect_span_length` must NOT
+    guess "consumed by the redirect" for the leading digit: doing so
+    silently drops a real argument from `checkout_restore_paths`."""
+    assert checker._redirect_span_length(["2", ">", "target.txt"], 0) == 0
+    assert checker._redirect_span_length([">", "target.txt"], 0) == 2
+
+
+def test_git_checkout_paths_does_not_drop_a_digit_shaped_path() -> None:
+    """CRITICAL data-loss regression pin (round-16 independent review,
+    issue #1375). Live-verified before this fix: `git checkout --
+    realfile.py 2 >target.txt` resolved to
+    `checkout_restore_paths=('realfile.py',)`, silently dropping `2` (a
+    real, dirty, tracked file) -- the classifier's own former digit-
+    consuming redirect heuristic wrongly treated `2` as an fd-redirect
+    prefix rather than a real path argument."""
+    deny_reason, paths = checker._git_checkout_paths(["--", "realfile.py", "2", ">", "target.txt"], {}, {}, set())
+    assert deny_reason is None
+    assert paths == ("realfile.py", "2")
+
+
+def test_git_restore_paths_does_not_drop_a_real_path_behind_a_digit_redirect() -> None:
+    """CRITICAL data-loss regression pin (round-16 independent review,
+    issue #1375). Live-verified before this fix: `git restore --source 2
+    >target.txt file.py` resolved to an EMPTY `checkout_restore_paths` --
+    once `2` vanished into the wrongly-recognized redirect, `--source`'s
+    own value-consumption swallowed `file.py` itself, the actual restore
+    target, leaving nothing for the live wrapper check to examine."""
+    deny_reason, paths = checker._git_restore_paths(["--source", "2", ">", "target.txt", "file.py"], {}, {}, set())
+    assert deny_reason is None
+    assert paths == ("file.py",)
+
+
+def test_classify_does_not_drop_a_digit_shaped_path_behind_a_redirect() -> None:
+    """End-to-end regression pin for the round-16 finding at the
+    `classify()` level."""
+    verdict = checker.classify("git checkout -- realfile.py 2 >target.txt")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("realfile.py", "2")
+
+
+def test_redirect_span_length_with_optional_fd_recognizes_a_fused_fd_redirect() -> None:
+    """CRITICAL false-negative regression pin (round-16 independent
+    review, issue #1375, own follow-up). The strict, digit-free
+    `_redirect_span_length` alone made the subcommand-finding/cwd-
+    relocation walks stop on a bare digit token sitting in front of a
+    genuine `2>&1`-shaped redirect, so a fully literal, unambiguous `git
+    > out.log 2>&1 checkout -- dirty.py` went entirely unrecognized as a
+    checkout invocation (empty `checkout_restore_paths`, the live
+    wrapper check never runs at all) -- the FAIL-OPEN direction for this
+    walk. `_redirect_span_length_with_optional_fd` (used only by the
+    skip-PAST-a-possible-redirect walks, never by path extraction)
+    closes this by also consuming an optional leading digit."""
+    assert checker._redirect_span_length_with_optional_fd(["2", ">&", "1", "checkout"], 0) == 3
+    assert checker._redirect_span_length_with_optional_fd([">", "out.log", "checkout"], 0) == 2
+    assert checker._redirect_span_length_with_optional_fd(["checkout"], 0) == 0
+
+
+def test_find_git_checkout_restore_skips_a_digit_prefixed_redirect_between_git_and_subcommand() -> None:
+    subcommand, tokens_after, saw_tree_relocation = checker._find_git_checkout_restore(
+        ["git", ">", "out.log", "2", ">&", "1", "checkout", "--", "f.py"], {}, {}
+    )
+    assert subcommand == "checkout"
+    assert tokens_after == ["--", "f.py"]
+    assert saw_tree_relocation is False
+
+
+def test_classify_extracts_paths_behind_multiple_redirects_including_a_digit_prefixed_one() -> None:
+    """End-to-end regression pin for the round-16 follow-up finding at
+    the `classify()` level."""
+    verdict = checker.classify("git > out.log 2>&1 checkout -- dirty.py")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("dirty.py",)
+
+
+# --- End-to-end classify() coverage, pinning every explicit safe/deny case
+# issue #1375's own Acceptance Criteria Map and "Explicit safe cases"
+# section name by hand.
+
+
+@_PROPERTIES
+@given(ref=st.sampled_from(["main", "HEAD~1", "some-branch"]))
+def test_classify_allows_ordinary_branch_switching(ref: str) -> None:
+    verdict = checker.classify(f"git checkout {ref}")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ()
+
+
+def test_classify_allows_checkout_dash_b() -> None:
+    verdict = checker.classify("git checkout -b new-branch")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ()
+
+
+def test_classify_allows_restore_staged_only() -> None:
+    verdict = checker.classify("git restore --staged f.py")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ()
+
+
+def test_classify_extracts_path_for_checkout_double_dash() -> None:
+    verdict = checker.classify("git checkout -- f.py")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("f.py",)
+
+
+def test_classify_extracts_dot_for_checkout_dot() -> None:
+    verdict = checker.classify("git checkout .")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == (".",)
+
+
+def test_classify_extracts_path_for_bare_restore() -> None:
+    verdict = checker.classify("git restore f.py")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("f.py",)
+
+
+@_PROPERTIES
+@given(flag=st.sampled_from(["--ours", "--theirs", "-2", "-3"]))
+def test_classify_surfaces_a_conflict_side_flag_checkout_path(flag: str) -> None:
+    """Regression pin (round-40 independent review, issue #1375): before
+    this fix, `git checkout --ours/--theirs/-2/-3 realfile.py` resolved
+    to an EMPTY `checkout_restore_paths`, the same as the genuinely
+    ref-ambiguous `-b`/`-B`/`--orphan` Non-goal -- silently skipping the
+    wrapper's own live dirty-file check even though real git flatly
+    refuses to combine a conflict side flag with branch switching (live-
+    confirmed: `git checkout --ours otherbranch` on a real ref reports
+    `fatal: '--ours/--theirs' cannot be used with switching branches`),
+    so the single remaining positional is unambiguously a path, never a
+    ref. Must surface it as a candidate so the wrapper's live check can
+    catch a genuinely dirty `realfile.py`."""
+    verdict = checker.classify(f"git checkout {flag} realfile.py")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("realfile.py",)
+
+
+def test_classify_stays_a_non_goal_for_conflict_style_value_flag_checkout() -> None:
+    """Negative control for the round-40 fix above: `--conflict=<style>`
+    does NOT share the `--ours`/`--theirs`/`-2`/`-3` property -- live-
+    confirmed that `git checkout --conflict=merge otherbranch`, with
+    `otherbranch` a real ref, genuinely still switches branches -- so a
+    single remaining positional correctly stays the bare-SOMENAME
+    Non-goal, unresolved, exactly as before this fix."""
+    verdict = checker.classify("git checkout --conflict=merge otherbranch")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ()
+
+
+def test_classify_resolves_a_same_command_assignment_to_a_literal_path() -> None:
+    """A dynamic path token that resolves to a literal via a same-command
+    assignment (`f=README.md; git checkout -- "$f"`) is substituted and
+    surfaced as a candidate, not denied."""
+    verdict = checker.classify('f=README.md; git checkout -- "$f"')
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("README.md",)
+
+
+def test_classify_denies_a_loop_fed_dynamic_checkout_path() -> None:
+    """Regression pin for issue #1375's own Acceptance Criteria Map: a
+    `for`-loop-fed dynamic path with no same-command assignment for the
+    loop variable is unresolvable and denies outright, rather than
+    silently passing through with an empty `checkout_restore_paths`."""
+    verdict = checker.classify('for f in $(git diff --name-only); do git checkout -- "$f"; done')
+    assert verdict.deny is True
+
+
+def test_classify_denies_an_array_subscript_fed_checkout_path() -> None:
+    """Regression pin for issue #1375's own Acceptance Criteria Map: the
+    `${paths[@]}`-shaped array-subscript indirection is a real, pinned
+    `KNOWN_BYPASS` shape (this module's own `array-literal-assignment-
+    indirection` entry) for the same underlying `_VAR_REF_FULL_RE`
+    limitation -- must deny, not silently pass an unresolved literal
+    string through as a path."""
+    verdict = checker.classify('paths=(a.py b.py); git checkout -- "${paths[@]}"')
+    assert verdict.deny is True
+
+
+def test_classify_threads_checkout_restore_paths_through_command_substitution() -> None:
+    """Regression pin, mirroring the fifteenth-round `is_git_push`
+    recursion-drop fix this module already carries: a checkout/restore
+    invocation embedded in a `$(...)` command substitution must still
+    surface its own `checkout_restore_paths` in the outer `Verdict`, not
+    silently drop it the way an earlier version of this function would
+    have."""
+    verdict = checker.classify("x=$(git checkout -- f.py)")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("f.py",)
+
+
+def test_classify_threads_checkout_restore_paths_through_array_literal() -> None:
+    """Regression pin, mirroring `_rule_array_literal_content`'s own
+    nineteenth-round outer-scope fix: a checkout/restore invocation
+    embedded in a `NAME=(...)` array literal must still surface its own
+    `checkout_restore_paths` in the outer `Verdict`."""
+    verdict = checker.classify('A=(git checkout -- f.py); "${A[@]}"')
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("f.py",)
+
+
+def test_classify_denies_checkout_with_a_tree_relocation_flag() -> None:
+    """Regression pin for issue #1375's own Fact 5 cwd finding: a `-C`
+    global flag makes the wrapper's fixed `.cwd` unsound for this
+    invocation -- denied outright by the classifier."""
+    verdict = checker.classify("git -C /tmp/some-repo checkout -- f.py")
+    assert verdict.deny is True
+
+
+def test_classify_denies_checkout_after_an_earlier_cd() -> None:
+    """Regression pin for issue #1375's own Fact 5 cwd finding: an
+    earlier `cd` in the same command makes the wrapper's fixed `.cwd`
+    unsound for a later checkout -- denied outright."""
+    verdict = checker.classify("cd /tmp; git checkout -- f.py")
+    assert verdict.deny is True
+
+
+def test_classify_does_not_flag_checkout_restore_prose_inside_a_commit_message() -> None:
+    """No false positive: this module's own established convention (see
+    its module docstring's own "no substring/prose fallback" constraint)
+    -- `git checkout`-shaped TEXT sitting inside an unrelated command's own
+    quoted string argument is not a real invocation and must never be
+    flagged, unlike `_rule_a_literal`'s own deliberate same-token
+    literal-phrase fallback for install verbs (a `deny`-severity false
+    positive here would fire exactly when files are legitimately dirty,
+    which this gate cannot tolerate the way a `warn` could)."""
+    verdict = checker.classify('git commit -m "revert via git checkout -- foo.py"')
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ()
+
+
+def test_classify_leaves_ordinary_git_push_unaffected() -> None:
+    """No regression: this is purely additive detection surface -- an
+    ordinary `git push` must still classify exactly as before, with no
+    checkout_restore_paths."""
+    verdict = checker.classify("git push origin main")
+    assert verdict.deny is False
+    assert verdict.is_git_push is True
+    assert verdict.checkout_restore_paths == ()
+
+
+def test_main_output_includes_checkout_restore_paths_for_a_checkout_command(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """End-to-end: the stdin-JSON entrypoint surfaces `checkout_restore_
+    paths` as a genuine JSON array (issue #1375: not a newline-joined
+    string, so hooks/check-bash-safety.sh's own new wrapper step can
+    base64-decode each element safely even if a path contains a
+    newline)."""
+    payload = {"tool_name": "Bash", "tool_input": {"command": "git checkout -- f.py"}}
+    out = _run_main(payload, monkeypatch, capsys)
+    assert out["decision"] == "allow"
+    assert out["checkout_restore_paths"] == ["f.py"]
+
+
+def test_main_output_includes_empty_checkout_restore_paths_for_a_harmless_command(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    payload = {"tool_name": "Bash", "tool_input": {"command": "echo hi"}}
+    out = _run_main(payload, monkeypatch, capsys)
+    assert out["checkout_restore_paths"] == []
+
+
+def test_assigned_literals_biased_toward_stays_on_literal_once_assigned() -> None:
+    """Model-based, regression pin for the real bypass found live by Step
+    8 independent review, twenty-second round (issue #1375): the
+    lowercased counterpart of `_assigned_raw_values_biased_toward` --
+    once a name is assigned a value matching a member of LITERALS at any
+    point, it stays on that (lowercased) reading regardless of a later,
+    different reassignment, exactly mirroring the raw-case function's own
+    behavior."""
+    assert checker._assigned_literals_biased_toward(["TOOL=UV", "TOOL=npm"], frozenset({"uv"})) == {"TOOL": "uv"}
+
+
+def test_assigned_literals_biased_toward_falls_back_to_last_assignment_when_literal_never_seen() -> None:
+    """A name never assigned a biased-toward literal anywhere resolves
+    exactly as `_assigned_literals`'s own plain last-occurrence-wins
+    collapse would (lowercased)."""
+    assert checker._assigned_literals_biased_toward(["TOOL=NPM", "TOOL=Yarn"], frozenset({"uv"})) == {"TOOL": "yarn"}
+
+
+def test_assigned_literals_biased_toward_matches_lowered_raw_bias() -> None:
+    """`_assigned_literals_biased_toward` is a thin lowering wrapper around
+    `_assigned_raw_values_biased_toward`, not a separate bias computation
+    of its own -- both dicts must agree for the same NAME, up to case, by
+    construction."""
+    tokens = ["A=UV", "B=Install", "A=somethingelse"]
+    raw = checker._assigned_raw_values_biased_toward(tokens, checker._WATCHED_WRITE_BIAS)
+    literals = checker._assigned_literals_biased_toward(tokens, checker._WATCHED_WRITE_BIAS)
+    assert literals == {name: value.lower() for name, value in raw.items()}
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, decoy_value=_VALUES, tail=st.lists(_IDENTIFIERS, max_size=2))
+def test_assigned_literals_biased_toward_matches_plain_collapse_when_never_reassigned_to_literal(
+    name: str, decoy_value: str, tail: list[str]
+) -> None:
+    """Model-based: for a single assignment never matching the biased-
+    toward literal, `_assigned_literals_biased_toward` agrees exactly with
+    the plain, order-blind `_assigned_literals`."""
+    assume(decoy_value.lower() != "uv")
+    tokens = [f"{name}={decoy_value}", *tail]
+    assert checker._assigned_literals_biased_toward(tokens, frozenset({"uv"})) == checker._assigned_literals(tokens)
+
+
+def test_classify_denies_tool_and_verb_indirection_when_verb_is_reassigned_after_use() -> None:
+    """End-to-end regression pin for the round-22 finding at the
+    `classify()` level, top-level shape: B1a/B1b's own tool+verb
+    reconstruction was fed the ordinary, order-blind ASSIGNED/RAW_
+    ASSIGNED dicts, the SAME reassignment-ambiguity class rounds 19-20
+    already closed for the checkout/restore consumer, left open on this
+    HARD-DENY consumer. Confirmed live via a real bash proxy (stand-in
+    `uv` binary on PATH): `$B` genuinely was "install" at its actual
+    point of use one statement earlier, and real bash genuinely ran `uv
+    install foo` -- but this module wrongly classified `deny=False`
+    before this fix."""
+    verdict = checker.classify("A=uv; B=install; $A $B foo; B=somethingelse")
+    assert verdict.deny is True
+
+
+def test_classify_denies_gh_api_write_when_method_value_is_reassigned_after_use() -> None:
+    """Companion to the tool+verb pin above, for `_rule_gh_api_write`'s
+    own dynamic -X/--method value resolution. Confirmed live via a real
+    bash proxy (stand-in `gh` binary on PATH): `$M` genuinely was "POST"
+    at its actual point of use; real bash genuinely ran `gh api
+    repos/o/r/pulls/1/merge -X POST` -- a genuine, unreviewed write API
+    call (e.g. merging a pull request) -- but this module wrongly
+    classified `deny=False` before this fix."""
+    verdict = checker.classify("M=POST; gh api repos/o/r/pulls/1/merge -X $M; M=safe")
+    assert verdict.deny is True
+
+
+def test_classify_denies_tool_and_verb_indirection_reassigned_across_a_command_substitution() -> None:
+    """End-to-end regression pin for round 22's own recursive-threading
+    correction, mirroring round 21's correction of round 20's initially
+    scoped-down cd-biased fix: the tool+verb pair is used entirely WITHIN
+    a `$(...)` span, but the reassignment-ambiguity poisoning lives in
+    the OUTER token stream -- `A=uv; x=$($A install foo); A=somethingelse`
+    -- so the write-biased dict must be threaded through the SAME
+    recursive chain as every other bias dict, not merely computed at the
+    top-level segment scope."""
+    verdict = checker.classify("A=uv; x=$($A install foo); A=somethingelse")
+    assert verdict.deny is True
+
+
+def test_classify_denies_gh_api_write_reassigned_across_a_command_substitution() -> None:
+    """Companion to the command-substitution pin above, for the gh-api-
+    write consumer."""
+    verdict = checker.classify("M=POST; x=$(gh api repos/o/r/pulls/1/merge -X $M); M=safe")
+    assert verdict.deny is True
+
+
+def test_classify_leaves_reassigned_but_unrelated_dynamic_word_allowed() -> None:
+    """No false positive: a name reassigned across statements, none of
+    whose values are ever a watched tool/verb/write-method, must not be
+    denied merely because it participates in this bias mechanism -- the
+    bias only ever widens toward a member of `_WATCHED_WRITE_BIAS`, never
+    invents a match out of nothing."""
+    verdict = checker.classify("TOOL=echo; $TOOL hello; TOOL=world")
+    assert verdict.deny is False
+
+
+def test_classify_denies_checkout_path_reassigned_to_a_dynamic_value_after_use() -> None:
+    """End-to-end regression pin for the round-24 finding at the
+    `classify()` level, top-level shape. Confirmed live before this fix:
+    `DIR=sub; DIR=$(echo other); git checkout -- $DIR` resolved `checkout_
+    restore_paths` to `('sub',)` -- confidently the WRONG, STALE value.
+    Confirmed live via a real bash proxy (stand-in shell function) that
+    real bash genuinely resolves `$DIR` to whatever the substitution
+    evaluates to, not `sub`, at its actual point of use; and end-to-end
+    through the real wrapper against a scratch repo, wrongly allowed
+    before this fix, with the uncommitted edit silently discarded once
+    actually executed."""
+    verdict = checker.classify("DIR=sub; DIR=$(echo other); git checkout -- $DIR")
+    assert verdict.deny is True
+
+
+def test_classify_denies_restore_path_reassigned_to_a_dynamic_value_after_use() -> None:
+    """Companion to the checkout pin above, for `git restore` -- the
+    round-24 finding was confirmed live for both subcommands."""
+    verdict = checker.classify("DIR=sub; DIR=$(echo other); git restore $DIR")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_fused_checkout_path_reassigned_to_a_dynamic_value_after_use() -> None:
+    """The fused-reference shape (round 23's own scope) combined with the
+    dynamic-reassignment shape (round 24's own finding): `"$DIR/f"`
+    resolves through the SAME poisoned name."""
+    verdict = checker.classify('DIR=sub; DIR=$(echo other); git checkout -- "$DIR/f"')
+    assert verdict.deny is True
+
+
+def test_classify_leaves_a_dynamic_reassignment_of_an_unrelated_name_unaffected() -> None:
+    """No false positive: a dynamic reassignment of a name NOT referenced
+    by the checkout/restore path argument must not poison an unrelated
+    resolution."""
+    verdict = checker.classify("DIR=sub; OTHER=$(echo x); git checkout -- $DIR")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("sub",)
+
+
+def test_classify_widens_an_indirect_reference_checkout_path_reassigned_after_use() -> None:
+    """End-to-end regression pin for the round-24 finding's second class,
+    at the `classify()` level. Confirmed live before this fix: `TARGET=
+    sub; C=TARGET; git checkout -- ${!C}; TARGET=other` resolved `checkout_
+    restore_paths` to `('other',)` alone -- the WRONG, order-blind-
+    collapsed last value of TARGET (real bash: `${!C}` genuinely was
+    `sub` at its actual point of use). Confirmed live via a real bash
+    proxy and end-to-end through the real wrapper against a scratch repo
+    with `sub` genuinely dirty: wrongly allowed before this fix, with the
+    uncommitted edit silently discarded once actually executed. `deny`
+    itself stays False here (this module never unconditionally denies
+    checkout/restore); the live wrapper's own `git diff --quiet` check
+    against the now-widened `sub` candidate is what turns this into an
+    actual deny -- see `hooks/test_gitapex_check_bash_safety.py`'s own
+    companion end-to-end pin."""
+    verdict = checker.classify("TARGET=sub; C=TARGET; git checkout -- ${!C}; TARGET=other")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("sub", "other")
+
+
+def test_classify_widens_an_indirect_reference_restore_path_reassigned_after_use() -> None:
+    """Companion to the checkout pin above, for `git restore`."""
+    verdict = checker.classify("TARGET=sub; C=TARGET; git restore ${!C}; TARGET=other")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("sub", "other")
+
+
+def test_classify_denies_a_checkout_path_dynamically_appended_to_after_use() -> None:
+    """End-to-end regression pin for the round-25 finding at the
+    `classify()` level. Confirmed live before this fix: `DIR=sub; for i
+    in 1; do DIR+=$(echo other); done; git checkout -- $DIR` resolved
+    `checkout_restore_paths` to `('sub',)` -- the STALE, pre-append value
+    (real bash: `$DIR` genuinely becomes `subother`, confirmed live via
+    `bash -c`). Confirmed live end-to-end through the real wrapper
+    against a scratch repo with the genuinely-appended-to path dirty:
+    wrongly allowed before this fix, with the uncommitted edit silently
+    discarded once actually executed."""
+    verdict = checker.classify("DIR=sub; for i in 1; do DIR+=$(echo other); done; git checkout -- $DIR")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_restore_path_dynamically_appended_to_after_use() -> None:
+    """Companion to the checkout pin above, for `git restore` -- the
+    round-25 finding was confirmed live for both subcommands."""
+    verdict = checker.classify("DIR=sub; for i in 1; do DIR+=$(echo other); done; git restore $DIR")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_checkout_path_statically_appended_to_after_use() -> None:
+    """A STATIC append shares the identical exposure (see
+    `_names_with_dynamic_assignment`'s own docstring): reconstructing the
+    real concatenated value would need genuine execution-order tracking
+    this classifier does not perform."""
+    verdict = checker.classify("DIR=sub; DIR+=txt; git checkout -- $DIR")
+    assert verdict.deny is True
+
+
+def test_classify_leaves_an_append_to_an_unrelated_name_unaffected() -> None:
+    """No false positive: an append to a name NOT referenced by the
+    checkout/restore path argument must not poison an unrelated
+    resolution."""
+    verdict = checker.classify("DIR=sub; OTHER=x; OTHER+=y; git checkout -- $DIR")
+    assert verdict.deny is False
+    assert verdict.checkout_restore_paths == ("sub",)
