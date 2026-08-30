@@ -102,8 +102,10 @@ from elsewhere rather than re-deriving one.
 ## Worked example: dimension 12, redistribution-boundary-aware resolution
 
 `hooks/gitapex_check_skill_audit_disclosure_or_waiver.py`'s own docstring
-(verified verbatim except one `[elided]` mid-docstring paragraph about a
-later applicability-computation move, unrelated to this worked example):
+(verified verbatim except two `[elided]` spans: a mid-docstring paragraph
+about a later applicability-computation move, and a trailing clause about
+a second, unrelated sync-tested file family -- neither bears on this
+worked example's own point):
 "Per docs/repository-layout.md, only skills/ and hooks/ are deployed
 runtime primitives when this repository is installed as a plugin --
 .github/ is dev-only CI tooling and is never installed into a consumer
@@ -111,7 +113,8 @@ repository. [elided] **Deliberately not imported** from
 .github/scripts/gitapex_gate_skill_audit_disclosure.py or any other copy:
 this file must work standalone from inside a distributed plugin bundle
 with no access to .github/. **Kept in sync** with that script's own
-logic by `tests/test_gitapex_check_skill_audit_disclosure_hook_sync.py`."
+[elided] logic by
+`tests/test_gitapex_check_skill_audit_disclosure_hook_sync.py`[elided]."
 
 This is dimension 12 resolved correctly under a redistribution-boundary
 mismatch: `.github/scripts/gitapex_gate_skill_audit_disclosure.py` (never

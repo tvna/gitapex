@@ -809,6 +809,17 @@ spec:
       outcome:
         checks: "61/61"
         tests: 43
+    - kind: audit
+      anchor: "method:pr-drafting-inner-layer-review"
+      summary: "This PR's own drafting-a-pr-to-merge Step 8 inner-layer adversarial review found the prior fix above marked only the first of two non-adjacent docstring splices in the worked-example quotation: the sentence's actual continuation ('the same sync-test pattern tests/test_gitapex_check_acm_present_sync.py uses for the ACM-disclosure family') was silently dropped with a substituted period, no second `[elided]` marker, contradicting the sidecar's own 'spans' (plural) claim above."
+      outcome:
+        verdict: FAIL
+        found: 1
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1456"
+      summary: "Added the missing second `[elided]` marker for the dropped ACM-disclosure-family clause, and generalized the quotation's own preamble from 'one elided span' to 'two elided spans' to match. Re-run confirmed 61/61 shape checks unchanged."
+      outcome:
+        lines: "branch-final, measured against the working tree at the final commit: gitapex-worked-examples.md 595->598 (second elision marker), dimensions.md unchanged at 638"
   skillDependencies:
     requires:
       - evaluating-skill-quality
