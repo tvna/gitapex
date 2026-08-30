@@ -489,6 +489,33 @@ catch -- named as a residual risk here rather than assumed away, matching
 this skill's own established disclosure convention for every other
 similarly-shaped gap in this reference.
 
+**Known, disclosed limitation, not solved here: the gate can self-tamper
+its own copy (found by `evaluating-context-channel-maturity`, issue
+`#1476`).** `check_task_full_verification.sh` resolves its own classifier
+via `script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"` -- the
+literal, identical pattern `check_task_bash_safety.sh` above already uses,
+and the same empirically-confirmed fact applies to both: this resolves to
+the task's own worktree copy of the file, not a copy outside that
+worktree's reach. A `branch-plan-task` dispatch retains Edit/Write tool
+access (only specific Bash patterns are excluded, never Edit/Write), so
+nothing in this mechanism stops a task from rewriting its own worktree's
+copy of either this script or `gitapex_check_task_full_verification.py`
+to unconditionally emit `{"decision": "allow"}` before ever attempting to
+stop -- neutralizing this exit condition entirely from inside the very
+dispatch it exists to constrain. This is not a new class of risk this PR
+introduces: it is the identical, already-accepted residual the sibling
+`check_task_bash_safety.sh`/`gitapex_check_task_bash_safety.py` pair above
+already carries for the exact same reason (the `PreToolUse` hook's own
+matcher is scoped to `Bash`, never `Edit`/`Write`, so a task could equally
+rewrite that pair's own worktree copy), tracked there as the still-open
+"Stage 2 (execution-boundary enforcement)" follow-up rather than solved.
+Named here explicitly for this new hook rather than left for a reader to
+infer from the sibling's own disclosure -- closing it would require the
+same Stage 2 mechanism (e.g. a git pre-push hook, or verifying a script's
+content against a trusted reference independent of the worktree it runs
+in) that pair's own residual already awaits, not something this PR
+introduces a fix for unilaterally.
+
 **Relationship to the main thread's own aggregate checks, stated rather
 than left implicit.** The main thread's own steps run the aggregate diff
 across every task the wave has produced so far, not a single task's own

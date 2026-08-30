@@ -243,6 +243,86 @@ def test_default_steps_pin_the_real_production_commands() -> None:
 
 
 # --------------------------------------------------------------------------
+# Output truncation and timeout-reason distinction
+# (evaluating-deterministic-gate-quality dimensions 18, 24 -- issue #1476)
+# --------------------------------------------------------------------------
+
+
+def test_run_step_truncates_very_long_output_to_the_tail(tmp_path: pathlib.Path) -> None:
+    code = "import sys; sys.stdout.write('x' * 10000); sys.exit(1)"
+    step = under_test.VerificationStep("noisy", ("python3", "-c", code))
+    result = under_test.run_step(step, tmp_path, timeout=10)
+    assert len(result.output) < 10000
+    assert result.output.endswith("x" * under_test._MAX_OUTPUT_CHARS)
+    assert "truncated" in result.output
+
+
+def test_run_step_does_not_truncate_short_output(tmp_path: pathlib.Path) -> None:
+    step = _step("short", 1, "a short failure")
+    result = under_test.run_step(step, tmp_path, timeout=10)
+    assert result.output == "a short failure"
+
+
+def test_run_step_marks_a_timeout_as_timed_out(tmp_path: pathlib.Path) -> None:
+    step = under_test.VerificationStep("hangs", ("sleep", "5"))
+    result = under_test.run_step(step, tmp_path, timeout=1)
+    assert result.timed_out is True
+    assert result.passed is False
+
+
+def test_run_step_does_not_mark_an_ordinary_failure_as_timed_out(tmp_path: pathlib.Path) -> None:
+    result = under_test.run_step(_step("fails", 1), tmp_path, timeout=10)
+    assert result.timed_out is False
+
+
+def test_run_verification_flags_a_timeout_as_possibly_transient(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    timed_out_result = under_test.StepResult("slow", False, "timed out after 1s", timed_out=True)
+    monkeypatch.setattr(under_test, "run_step", lambda step, cwd, timeout: timed_out_result)
+    result = under_test.run_verification((under_test.VerificationStep("slow", ("sleep", "999")),), tmp_path)
+    assert result["decision"] == "deny"
+    assert "transient" in str(result["reason"])
+
+
+def test_run_verification_does_not_call_an_ordinary_failure_transient(tmp_path: pathlib.Path) -> None:
+    steps = (_step("fails", 1, "a real regression"),)
+    result = under_test.run_verification(steps, tmp_path)
+    assert result["decision"] == "deny"
+    assert "transient" not in str(result["reason"])
+
+
+# --------------------------------------------------------------------------
+# Cross-file drift: the registered SubagentStop hook timeout vs. the
+# classifier's own per-step timeout (evaluating-deterministic-gate-quality
+# dimension 12, issue #1476) -- a future edit to either alone, with no test
+# asserting the relationship, would silently desync them.
+# --------------------------------------------------------------------------
+
+
+def _subagent_stop_hook_timeout() -> int:
+    import yaml
+
+    agent_md = pathlib.Path(__file__).resolve().parents[3] / ".claude" / "agents" / "branch-plan-task.md"
+    text = agent_md.read_text(encoding="utf-8")
+    _, frontmatter, _ = text.split("---", 2)
+    parsed = yaml.safe_load(frontmatter)
+    timeout: int = parsed["hooks"]["SubagentStop"][0]["hooks"][0]["timeout"]
+    return timeout
+
+
+def test_registered_hook_timeout_stays_above_the_worst_case_classifier_runtime() -> None:
+    """The SubagentStop hook's own registered `timeout` in
+    .claude/agents/branch-plan-task.md must stay above every step's own
+    DEFAULT_TIMEOUT_SECONDS combined -- Claude Code discards a timed-out
+    command hook's output entirely and SubagentStop is not one of the two
+    documented exceptions that still block on timeout, so an outer
+    timeout too short silently fails this whole gate OPEN."""
+    worst_case = under_test.DEFAULT_TIMEOUT_SECONDS * len(under_test.DEFAULT_STEPS)
+    assert _subagent_stop_hook_timeout() >= worst_case
+
+
+# --------------------------------------------------------------------------
 # check_task_full_verification.sh: wrapper-level defensive paths
 # --------------------------------------------------------------------------
 

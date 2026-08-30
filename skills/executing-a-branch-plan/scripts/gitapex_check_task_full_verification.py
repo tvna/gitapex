@@ -136,11 +136,26 @@ DEFAULT_STEPS: tuple[VerificationStep, ...] = (
 )
 
 
+# Bounds how much of a step's own captured stdout+stderr reaches the
+# SubagentStop deny reason (issue #1476, evaluating-deterministic-gate-
+# quality dimension 18): this hook has no secret-redaction pass of its
+# own, so an unbounded embed would carry forward any credential a
+# verification command's own output happened to echo, straight into a
+# chat-visible field. Truncating to the tail (where a real failure's own
+# signal usually lives, matching how CI tooling generally surfaces "last N
+# lines") bounds exposure; it does not solve secret redaction in general --
+# a secret inside the retained tail still leaks. Full detection is this
+# repository's own dedicated `scanning-leaked-secrets`/`betterleaks`
+# mechanism's job, not reinvented here.
+_MAX_OUTPUT_CHARS = 4000
+
+
 @dataclass(frozen=True)
 class StepResult:
     label: str
     passed: bool
     output: str
+    timed_out: bool = False
 
 
 def run_step(step: VerificationStep, cwd: Path, timeout: int = DEFAULT_TIMEOUT_SECONDS) -> StepResult:
@@ -160,10 +175,12 @@ def run_step(step: VerificationStep, cwd: Path, timeout: int = DEFAULT_TIMEOUT_S
             stdin=subprocess.DEVNULL,
         )
     except subprocess.TimeoutExpired:
-        return StepResult(step.label, False, f"timed out after {timeout}s")
+        return StepResult(step.label, False, f"timed out after {timeout}s", timed_out=True)
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         return StepResult(step.label, False, f"failed to run: {error}")
     output = f"{completed.stdout}{completed.stderr}".strip()
+    if len(output) > _MAX_OUTPUT_CHARS:
+        output = f"...(truncated, {len(output)} chars total)...\n{output[-_MAX_OUTPUT_CHARS:]}"
     return StepResult(step.label, completed.returncode == 0, output)
 
 
@@ -174,9 +191,22 @@ def run_verification(
     for step in steps:
         result = run_step(step, cwd, timeout)
         if not result.passed:
+            # A timeout is flagged as possibly transient (a slow but not
+            # broken run, or a momentarily overloaded machine) rather than
+            # phrased identically to a genuine command failure -- a task
+            # reading this reason should retry once before assuming its
+            # own change is the regression (evaluating-deterministic-gate-
+            # quality dimension 24, issue #1476).
+            transient_note = (
+                " -- this may be a transient timeout rather than a real "
+                "regression; retry once before assuming your own change "
+                "broke this"
+                if result.timed_out
+                else ""
+            )
             reason = (
                 f"task-level full verification failed at '{result.label}' "
-                f"(exit condition per issue #1476, design doc Decision 20): "
+                f"(exit condition per issue #1476, design doc Decision 20){transient_note}: "
                 f"{result.output or '(no output)'}"
             )
             return {"decision": "deny", "reason": reason}
