@@ -121,6 +121,39 @@ defends its own arithmetic defensively against a `partition` or
 shape, in case that gate has not (yet) run over the same file, rather than
 assuming upstream validation always precedes this one.
 
+Check E (issue #192 item 6, Refs #49 repair 1, #115 repair 1). Check C's own
+`###`-heading declare-and-verify convention requires a `split.json` (both to
+scope which skills are checked at all, and to know which fixtures are
+"declared" via `assignment.selection`). Issue #115 originally proposed a
+"key term" extraction from each numbered Procedure/Checks item, tested
+against its own originating incident and found not to work (see the design
+doc, `docs/superpowers/specs/2026-08-30-issue-192-untrusted-consistency-and-
+item-coverage-design.md`, Item 6). This check instead extends the SAME
+declare-and-verify shape Check C already established to two more target
+kinds, usable by an "ordinary" SKILL.md that needs no `split.json` at all: a
+`Step N` ordinal (or a numbered item's own literal text) under a
+`## Procedure`/`## Steps` heading, and a `## Stop boundaries`/
+`## Stop boundary` bullet's own first-line text -- the latter using the
+identical content-keyed `collections.Counter` identity
+`gitapex_gate_skill_branch_fixture_coverage.py` (issue #49) already
+established, duplicated here (not imported -- see that module's own
+docstring on why `.github/scripts/` files stay independently self-
+contained) so the two gates agree on what counts as "the same branch." Two
+independent rules, the same layering Check C and the `#49` gate already
+use: an absolute resolution check with no retrofit (any
+`evals/<skill>/tasks/*.yaml` fixture that already declares
+`expected.exercises` must have every label resolve against a real target,
+`###` heading included, per the file's own shape; a fixture with no
+`exercises` field is never required to add one), and a delta-scoped
+coverage demand reusing the `#49` gate's own `after_counter -
+before_counter` machinery (a diff introducing a *new* Stop-boundary bullet
+or Procedure/Steps item must, in that same diff, add a fixture whose
+`exercises` resolves to it). Deliberately excludes the `#49` gate's OTHER
+decision-branch kind, named dispatch branches -- no `expected.exercises`
+resolution target is defined for one anywhere in this design, so that kind
+stays covered exclusively by that gate's own pre-existing count-based
+check, never duplicated here.
+
 Mirrors `gitapex_gate_retro_title_convention_citation.py`'s shape: the calling
 workflow computes which `split.md`/`SKILL.md` files this PR actually added
 or modified (pre-existing, already-shipped content is out of scope for a
@@ -128,6 +161,9 @@ gate whose job is to catch a gap before it ships), this script only grades
 those files (and, for Checks A/B/C/D, each file's sibling `split.json`,
 resolved by this repository's own `evals/<skill>/split.json` <->
 `evals/<skill>/split.md` <-> `skills/<skill>/SKILL.md` naming convention).
+Check E runs unconditionally against every `--skill-md` file's own
+`evals/<skill>/tasks/` directly, independent of whether that skill has a
+`split.json` at all.
 
 Usage::
 
@@ -150,6 +186,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from collections import Counter
 from pathlib import Path
 from typing import TypeGuard
 
@@ -630,6 +667,272 @@ def check_partition_arithmetic(path: Path, data: dict[str, object]) -> str | Non
 
 
 # ---------------------------------------------------------------------------
+# Check E (issue #192 item 6, Refs #49 repair 1, #115 repair 1):
+# Procedure/Steps item + Stop-boundary bullet exercises-label resolution
+# ---------------------------------------------------------------------------
+
+_PROC_FENCE_OPEN_RE = re.compile(r"^[ \t]{0,3}(`{3,}|~{3,})")
+_PROC_FENCE_CLOSE_RE = re.compile(r"^[ \t]{0,3}(`{3,}|~{3,})[ \t]*$")
+_ANY_HEADING_RE = re.compile(r"^#{1,6}[ \t]+\S", re.MULTILINE)
+_PROCEDURE_STEPS_HEADING_RE = re.compile(r"^#{1,6}[ \t]+(?:Procedure|Steps)\b", re.IGNORECASE | re.MULTILINE)
+_STOP_BOUNDARY_HEADING_RE = re.compile(r"^#{1,6}[ \t]+Stop boundar(?:y|ies)\b", re.IGNORECASE | re.MULTILINE)
+_TOP_LEVEL_NUMBERED_ITEM_RE = re.compile(r"^(\d+)\.[ \t]+(.+?)[ \t]*$", re.MULTILINE)
+_TOP_LEVEL_DASH_BULLET_RE = re.compile(r"^-[ \t]+")
+
+
+def _blank_fenced_blocks_length_aware(text: str) -> str:
+    """Length/character-aware fence blanking, mirroring
+    `gitapex_gate_skill_branch_fixture_coverage.py`'s own
+    `_blank_fenced_blocks` (issue #49) so a Stop-boundary bullet's identity
+    agrees exactly between the two gates, including CommonMark's own
+    nested-fence rule (an inner 3-backtick line never closes an outer
+    4+-backtick fence). Duplicated rather than imported -- see this
+    section's own module-docstring paragraph on why `.github/scripts/`
+    files stay independently self-contained."""
+    lines = text.split("\n")
+    out: list[str] = []
+    in_fence = False
+    fence_char = ""
+    fence_len = 0
+    for line in lines:
+        if not in_fence:
+            match = _PROC_FENCE_OPEN_RE.match(line)
+            if match:
+                in_fence = True
+                fence_char = match.group(1)[0]
+                fence_len = len(match.group(1))
+                out.append("")
+                continue
+            out.append(line)
+            continue
+        match = _PROC_FENCE_CLOSE_RE.match(line)
+        if match and match.group(1)[0] == fence_char and len(match.group(1)) >= fence_len:
+            in_fence = False
+            fence_char = ""
+            fence_len = 0
+        out.append("")
+    return "\n".join(out)
+
+
+def _normalize_for_span_scan(text: str) -> list[str]:
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    return _blank_fenced_blocks_length_aware(text).split("\n")
+
+
+def _heading_section_span(lines: list[str], heading_index: int) -> tuple[int, int]:
+    """(start, end) line-index range (end exclusive) of the content
+    strictly after the heading at `heading_index`, up to the next heading
+    of any level or EOF -- mirrors the `#49` gate's own
+    `_section_content_span`."""
+    end = len(lines)
+    for i in range(heading_index + 1, len(lines)):
+        if _ANY_HEADING_RE.match(lines[i]):
+            end = i
+            break
+    return heading_index + 1, end
+
+
+def stop_boundary_identity_counter(skill_md_text: str) -> Counter[str]:
+    """Content-keyed multiset of top-level (column-0) '- ' bullets directly
+    under every '## Stop boundary'/'## Stop boundaries' heading (any
+    heading level, case-insensitive) -- the identical identity convention
+    `gitapex_gate_skill_branch_fixture_coverage.py`'s own
+    `stop_boundary_bullet_counter` already established (issue #49), so the
+    two gates agree on what counts as "the same branch"."""
+    lines = _normalize_for_span_scan(skill_md_text)
+    counter: Counter[str] = Counter()
+    for i, line in enumerate(lines):
+        if _STOP_BOUNDARY_HEADING_RE.match(line):
+            start, end = _heading_section_span(lines, i)
+            for j in range(start, end):
+                if _TOP_LEVEL_DASH_BULLET_RE.match(lines[j]):
+                    counter[f"stop-boundary:{lines[j].strip()}"] += 1
+    return counter
+
+
+def parse_procedure_steps(skill_md_text: str) -> list[str]:
+    """Ordered (source order) list of every top-level (column-0) numbered
+    item's own stripped text, from every '## Procedure'/'## Steps' heading
+    (any heading level, case-insensitive). Positional: item text at index
+    N-1 is what a declared 'Step N' label resolves against (issue #192
+    item 6's own design -- positional resolution is the only viable
+    reading, since no skill in this repository writes a Procedure/Steps
+    item's own text as literal 'Step N:')."""
+    lines = _normalize_for_span_scan(skill_md_text)
+    items: list[str] = []
+    for i, line in enumerate(lines):
+        if _PROCEDURE_STEPS_HEADING_RE.match(line):
+            start, end = _heading_section_span(lines, i)
+            for j in range(start, end):
+                match = _TOP_LEVEL_NUMBERED_ITEM_RE.match(lines[j])
+                if match:
+                    items.append(match.group(2).strip())
+    return items
+
+
+def procedure_step_identity_counter(skill_md_text: str) -> Counter[str]:
+    """Content-keyed multiset of Procedure/Steps items -- delta-scoping
+    identity only, deliberately position-independent (unlike
+    `parse_procedure_steps`'s own positional reading, used only for label
+    resolution): an unrelated insertion earlier in the list must not make
+    every later item register as 'new' just because its ordinal shifted."""
+    counter: Counter[str] = Counter()
+    for item_text in parse_procedure_steps(skill_md_text):
+        counter[f"procedure-step:{item_text}"] += 1
+    return counter
+
+
+def _stop_boundary_bullet_label(counter_key: str) -> str:
+    """The casefolded, declarable label form of a `stop_boundary_identity_counter`
+    key: the bullet's own text with its leading '- ' marker stripped (a
+    fixture author declares the bullet's own wording, not raw Markdown
+    syntax). The counter key itself keeps the marker -- see
+    `stop_boundary_identity_counter`'s own docstring -- since that identity
+    must agree byte-for-byte with `gitapex_gate_skill_branch_fixture_coverage.py`'s
+    own convention; this stripping is resolution-only."""
+    _, _, bullet_text = counter_key.partition(":")
+    return _TOP_LEVEL_DASH_BULLET_RE.sub("", bullet_text, count=1).casefold()
+
+
+def resolvable_exercise_labels(skill_md_text: str) -> set[str]:
+    """Casefolded union of every real `expected.exercises` target this
+    SKILL.md exposes: its own '###'-level section labels (Check C's
+    existing convention, reused via `parse_section_labels`), a 'Step N'
+    ordinal or the literal text of a Procedure/Steps item, and a
+    Stop-boundary bullet's own first-line text (marker stripped). Empty
+    when the file uses none of the three conventions -- callers treat
+    that as out of scope."""
+    labels: set[str] = set(parse_section_labels(skill_md_text))
+    steps = parse_procedure_steps(skill_md_text)
+    for index, item_text in enumerate(steps, start=1):
+        labels.add(f"step {index}")
+        labels.add(item_text.casefold())
+    for key in stop_boundary_identity_counter(skill_md_text):
+        labels.add(_stop_boundary_bullet_label(key))
+    return labels
+
+
+def check_procedure_stop_boundary_exercises_coverage(
+    skill_md_path: Path, skill_md_text: str, repo_root: Path
+) -> str | None:
+    """Issue #192 item 6 (Refs #49 repair 1, #115 repair 1): absolute
+    resolution, no retrofit. Any `evals/<skill>/tasks/*.yaml` fixture that
+    already declares `expected.exercises` must have every label resolve
+    against a real target `resolvable_exercise_labels` exposes for this
+    SKILL.md. Unlike Check C's own selection-scoped rule, a fixture with
+    no `exercises` field is never required to add one -- passes untouched.
+    Runs unconditionally, independent of whether this skill has a
+    `split.json` at all: reads every task YAML under
+    `evals/<skill>/tasks/` directly rather than a `split.json`-declared
+    `selection` subset -- the inline `fixtureWithExpected` declaration
+    form Check C also supports is out of scope here (no real `split.json`
+    in this repository uses it today; a disclosed, deliberate narrowing).
+    Out of scope (returns None) when the SKILL.md uses none of the three
+    resolvable conventions, or the skill has no `evals/<skill>/tasks/`
+    directory at all."""
+    targets = resolvable_exercise_labels(skill_md_text)
+    if not targets:
+        return None
+    skill_name = skill_md_path.parent.name
+    tasks_dir = repo_root / "evals" / skill_name / "tasks"
+    if not tasks_dir.is_dir():
+        return None
+    problems: list[str] = []
+    for fixture_path in sorted(tasks_dir.glob("*.yaml")):
+        try:
+            fixture_data = yaml.safe_load(fixture_path.read_text(encoding="utf-8")) or {}
+        except (yaml.YAMLError, UnicodeDecodeError) as error:
+            problems.append(f"{fixture_path.name}: could not parse YAML ({error})")
+            continue
+        expected = fixture_data.get("expected") if isinstance(fixture_data, dict) else None
+        if not isinstance(expected, dict) or "exercises" not in expected:
+            continue
+        exercises = expected.get("exercises")
+        if not _is_real_exercises_declaration(exercises):
+            problems.append(
+                f"{fixture_path.name}: no well-formed exercises declaration (a non-empty list of section labels)"
+            )
+            continue
+        unmatched = [label for label in exercises if label.casefold() not in targets]
+        if unmatched:
+            problems.append(
+                f"{fixture_path.name}: exercises {unmatched!r} match no Step-N ordinal, Procedure/Steps "
+                f"item, or Stop-boundary bullet in {skill_md_path}"
+            )
+    if not problems:
+        return None
+    return f"{skill_md_path}: procedure/stop-boundary exercises-declaration gap -- {'; '.join(problems)}"
+
+
+def new_procedure_stop_boundary_content(before_text: str | None, after_text: str) -> list[str]:
+    """Every Stop-boundary-bullet or Procedure/Steps-item content key this
+    diff newly introduces -- a Counter key whose after-count exceeds its
+    before-count, mirroring `gitapex_gate_skill_branch_fixture_coverage.py`'s
+    own `after_counter - before_counter` delta-scoping (issue #49).
+    `before_text=None` (a brand-new SKILL.md) counts every item as new."""
+    after_counter = stop_boundary_identity_counter(after_text) + procedure_step_identity_counter(after_text)
+    if before_text is None:
+        return sorted(after_counter.elements())
+    before_counter = stop_boundary_identity_counter(before_text) + procedure_step_identity_counter(before_text)
+    delta = after_counter - before_counter
+    return sorted(delta.elements())
+
+
+def check_new_procedure_stop_boundary_fixture_demand(
+    skill_md_path: Path, before_text: str | None, after_text: str, repo_root: Path
+) -> str | None:
+    """Issue #192 item 6: delta-scoped coverage demand. A diff that
+    introduces a new Stop-boundary bullet or Procedure/Steps item (per
+    `new_procedure_stop_boundary_content`) must, in that same diff, add at
+    least one `evals/<skill>/tasks/*.yaml` fixture whose declared
+    `expected.exercises` resolves to it. A pre-existing gap this diff did
+    not create is never retroactively flagged -- when nothing is new,
+    there is nothing to check. Deliberately scoped to only the two kinds
+    this design built a resolution target for; a new named dispatch
+    branch stays covered exclusively by the `#49` gate's own pre-existing
+    count-based check (see this Check E section's own module-docstring
+    paragraph)."""
+    new_content = new_procedure_stop_boundary_content(before_text, after_text)
+    if not new_content:
+        return None
+    skill_name = skill_md_path.parent.name
+    tasks_dir = repo_root / "evals" / skill_name / "tasks"
+    covered_labels: set[str] = set()
+    if tasks_dir.is_dir():
+        for fixture_path in sorted(tasks_dir.glob("*.yaml")):
+            try:
+                fixture_data = yaml.safe_load(fixture_path.read_text(encoding="utf-8")) or {}
+            except (yaml.YAMLError, UnicodeDecodeError):
+                continue
+            expected = fixture_data.get("expected") if isinstance(fixture_data, dict) else None
+            exercises = expected.get("exercises") if isinstance(expected, dict) else None
+            if not _is_real_exercises_declaration(exercises):
+                continue
+            covered_labels.update(label.casefold() for label in exercises)
+
+    after_items = parse_procedure_steps(after_text)
+    uncovered: list[str] = []
+    for key in new_content:
+        kind, _, text = key.partition(":")
+        if kind == "stop-boundary":
+            resolved = _stop_boundary_bullet_label(key) in covered_labels
+        else:
+            resolved = text.casefold() in covered_labels or any(
+                f"step {index}" in covered_labels
+                for index, item_text in enumerate(after_items, start=1)
+                if item_text == text
+            )
+        if not resolved:
+            uncovered.append(f"{kind}: {text!r}")
+    if not uncovered:
+        return None
+    return (
+        f"{skill_md_path}: this diff introduces new Stop-boundary bullet/Procedure-Steps item(s) with no "
+        f"evals/{skill_name}/tasks/*.yaml fixture whose exercises resolves to them -- {'; '.join(uncovered)}"
+    )
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -649,8 +952,34 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--repo-root", default=".", help="Repository root, for resolving a skill's split.json/SKILL.md/tasks."
     )
+    parser.add_argument(
+        "--skill-md-before-map",
+        help="Optional path to a '<skill-md-after-path><TAB><before-content-path-or-empty>' "
+        "entries file (workflow-computed, one line per --skill-md file), enabling Check E's "
+        "delta-scoped coverage demand. Omit to skip that demand check entirely -- Check E's "
+        "absolute resolution check still runs unconditionally against every --skill-md file.",
+    )
     args = parser.parse_args(argv)
     repo_root = Path(args.repo_root)
+
+    before_map: dict[str, str] = {}
+    if args.skill_md_before_map:
+        try:
+            before_map_text = Path(args.skill_md_before_map).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as before_map_error:
+            print(f"error: could not read --skill-md-before-map file: {before_map_error}", file=sys.stderr)
+            return 1
+        for line in before_map_text.splitlines():
+            if not line.strip():
+                continue
+            parts = line.split("\t")
+            if len(parts) != 2:
+                print(
+                    f"error: malformed --skill-md-before-map line (expected 2 tab-separated fields): {line!r}",
+                    file=sys.stderr,
+                )
+                return 1
+            before_map[parts[0]] = parts[1]
 
     offenders: list[str] = []
     # Check C (issue #631) is keyed by split.json path, but must fire
@@ -712,6 +1041,22 @@ def main(argv: list[str] | None = None) -> int:
                 offender = check_exercises_declaration_coverage(sibling_split_json, sibling_data, repo_root)
                 if offender:
                     offenders.append(offender)
+
+        offender = check_procedure_stop_boundary_exercises_coverage(path, text, repo_root)
+        if offender:
+            offenders.append(offender)
+
+        if raw_path in before_map:
+            before_raw = before_map[raw_path]
+            before_text: str | None = None
+            if before_raw:
+                try:
+                    before_text = Path(before_raw).read_text(encoding="utf-8")
+                except (OSError, UnicodeDecodeError):
+                    before_text = None
+            offender = check_new_procedure_stop_boundary_fixture_demand(path, before_text, text, repo_root)
+            if offender:
+                offenders.append(offender)
 
     if not offenders:
         print("PASS: split.md fixture-table coverage checks satisfied")
