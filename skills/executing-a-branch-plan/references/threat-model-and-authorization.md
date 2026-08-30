@@ -11,6 +11,7 @@ lighter-weight case.
 - [Authorization gate](#authorization-gate)
 - [Per-task screening](#per-task-screening)
 - [The branch-plan-task subagent type](#the-branch-plan-task-subagent-type)
+- [Full-verification exit condition (Decision 20)](#full-verification-exit-condition-decision-20)
 
 ## Authorization gate
 
@@ -375,6 +376,99 @@ unverified by either variant above**, and must still be re-verified
 there before this skill relies on that separate hook for anything beyond
 the honest, weaker accounting just given for the plugin-distributed
 variant.
+
+## Full-verification exit condition (Decision 20)
+
+**The gap this closes (issue `#1476`, retro `#1475` repair 2).** A task's
+own dispatch previously verified only what it judged relevant to its own
+file-ownership scope (Decision 3). A pre-existing test asserting against a
+schema one task's own rewrite removed, and a shape-check regression from a
+new bundled script, both sat outside every task's own declared
+file-ownership map in the motivating PR, so neither surfaced until the
+main thread ran the full repo test suite during that wave's own
+merge-back screening (step 6 above) -- after the wave had already reported
+complete, requiring the main thread itself to clean up a defect a task's
+own dispatch caused, rather than that task fixing its own regression
+before ever reporting done.
+
+**The fix: an exit condition, not only a later screening step.** Before a
+task-level dispatch may report complete, the full repo verification suite
+must pass inside that task's own worktree: `uv run --frozen python3 -m
+pytest --no-cov -q` (with the same four real-bash-oracle test files
+excluded that `.github/workflows/test.yml`'s own `pytest` job already
+excludes, issue `#1365` -- each spawns genuine `bash -c` subprocesses under
+this runner's own eBPF tracer and has caused resource-exhaustion flakes
+and, once, a full job hang there; paying that cost again inside every
+task-level worktree, potentially several concurrently per wave, would
+multiply exactly the contention that job split exists to avoid, for files
+this gate's own motivating defect never involved -- a deliberate,
+disclosed deviation from issue `#1476`'s own literal proof-method text,
+not an oversight), then `uv run --frozen python3
+.github/scripts/gitapex_gate_local_preflight.py` -- the existing
+consolidated runner for every deterministic gate carrying a working-tree-
+only form (issue `#876`), which already *is* "every deterministic
+shape/gate checker" the issue's own proof method names, not a new
+enumeration invented here. Step 6's own merge-back screening (above) is
+unchanged and still runs afterward -- this exit condition narrows how
+often it needs to catch anything, it does not replace it.
+
+**Same two-variant asymmetry as the Bash-safety hook above, for the same
+reason.**
+
+1. **Project-local variant.** `.claude/agents/branch-plan-task.md` embeds
+   a `hooks.SubagentStop` block invoking `check_task_full_verification.sh`
+   (a thin bash+jq wrapper around `gitapex_check_task_full_verification.py`,
+   mirroring `check_task_bash_safety.sh`'s own structure), scoped by Claude
+   Code's own subagent-hooks documentation to fire only while this
+   specific subagent type is active. `SubagentStop` fires when the
+   subagent finishes; the hook exits 2 to deny stopping (Claude Code's own
+   documented behavior: "Prevents the subagent from stopping"), feeding
+   its `reason` back for the subagent to act on, exactly as `PreToolUse`'s
+   own exit-2 deny already does for a disallowed Bash command. This is a
+   deterministic backstop -- the task cannot report complete by simply
+   choosing not to run the suite, the same structural guarantee Decision
+   17's own hook gives the Bash exclusion list.
+2. **Plugin-distributed variant.** `agents/branch-plan-task.md` carries
+   the identical exit condition as an in-band prompt instruction only, for
+   the identical reason Decision 17's own Bash exclusion is prompt-only
+   there: Claude Code's plugin-agent frontmatter supports no `hooks` field
+   at all. There is no deterministic backstop of any kind for this
+   exit condition in that deployment mode -- weaker than even the
+   plugin variant's own Bash exclusion, which at least gets partial,
+   session-wide coverage from `hooks/check-bash-safety.sh` where that hook
+   is registered; nothing plays an equivalent role for a missing
+   verification run, since "did the subagent actually run these two
+   commands before its last message" is not a Bash-command pattern any
+   PreToolUse hook could classify.
+
+**Known, disclosed limitation, not solved here: no bound on repeated
+denial.** A genuinely persistent failure -- an unrelated pre-existing
+break elsewhere in the repository, or an environment issue such as `uv`
+missing from PATH -- denies every stop attempt, with nothing in this hook
+enforcing a retry ceiling or circuit breaker of its own; the subagent may
+spend many turns retrying before a human notices. This is a deliberate,
+disclosed choice, not an oversight: this skill's own [Freshness and hang
+detection](domain-events-and-failure-handling.md#freshness-and-hang-detection)
+already exists specifically to catch a wave that never returns for
+whatever reason, and inventing a second, narrower circuit breaker inside
+this one hook would duplicate that existing backstop rather than close a
+gap it does not already cover. A task genuinely unable to fix an
+unrelated failure is expected to say so in its own final message once it
+exhausts reasonable attempts, which the main thread's own step-6 screening
+(and, failing that, the hang-detection check above) is positioned to
+catch -- named as a residual risk here rather than assumed away, matching
+this skill's own established disclosure convention for every other
+similarly-shaped gap in this reference.
+
+**Relationship to the main thread's own aggregate checks, stated rather
+than left implicit.** The main thread's own steps run the aggregate diff
+across every task the wave has produced so far, not a single task's own
+isolated worktree -- Step 6's own merge-back screening (above) already
+runs the full suite there, and Step 8's mandatory refactor/adversarial-
+review gate runs it again over the accumulated diff. This exit condition
+is additive to both, scoped specifically to catching a regression at the
+earliest point it can be attributed to the one task that caused it, not a
+replacement for either aggregate check.
 
 **Why not a repository-wide `.claude/settings.json` deny rule instead
 (or in addition)?** Considered and rejected for three of the four

@@ -1117,6 +1117,82 @@ full Decision heading each.
   before step 9 -- the last gate before hand-off does not rest on an
   unverified "the fix didn't break anything else" assumption.
 
+## Decision 20: task-level full-verification exit condition (retrospective-requested addition, post-implementation)
+
+Added after this design's own implementation shipped and ran for real,
+not during the original design session -- issue `#1476` (retro `#1475`
+repair 2 on PR `#1417`, itself an execution of this same design):
+`executing-a-branch-plan/SKILL.md` and its `references/` are updated to
+match, the same amend-a-shipped-design-doc convention retro `#1475`
+repair 9 already established for a sibling design doc rather than leaving
+this one to silently drift from its own implementation.
+
+**The gap: step 6's own per-task screening (Decision 6/19) checks the
+diff for injected instructions and canonical-governance-path edits, but
+nothing verified the task's own change actually left the *whole repository*
+in a working state before the task reported complete.** A task-level
+dispatch verified only what it judged relevant to its own file-ownership
+map (Decision 3) -- a pre-existing test asserting against a schema one
+task's own rewrite removed, and a shape-check regression from a new
+bundled script, both sat outside every task's own declared scope in the
+motivating PR, so neither surfaced until the main thread ran the full
+repo test suite during that wave's own merge-back screening (step 6) --
+after the wave had already reported complete.
+
+**Decision: a task-level dispatch may not report complete until the full
+repo verification suite (`uv run --frozen python3 -m pytest --no-cov -q`
+plus every deterministic shape/gate checker, via the existing
+`gitapex_gate_local_preflight.py` consolidated runner, issue `#876`) has
+passed inside that task's own worktree.** This is additive to, not a
+replacement for, step 6's own merge-back screening and step 8's aggregate
+refactor/adversarial-review gate -- both already run the full suite again
+over the accumulated diff; this decision narrows how often either needs
+to actually catch something, by attributing a regression to the one task
+that caused it at the earliest point that is possible.
+
+**Mechanism: the same custom-subagent-type pattern Decision 17 already
+established, not a new one.** The project-local `branch-plan-task`
+variant (`.claude/agents/branch-plan-task.md`) gains an embedded
+`hooks.SubagentStop` block -- Claude Code's own documented mechanism for
+denying a subagent's stop event (exit code 2: "Prevents the subagent from
+stopping") -- invoking `check_task_full_verification.sh`, a sibling of
+Decision 17's own `check_task_bash_safety.sh` wrapper. The
+plugin-distributed variant (`agents/branch-plan-task.md`) carries the
+identical requirement as a prompt-only instruction, for the identical
+reason Decision 17's own Bash exclusion is prompt-only there (plugin-agent
+frontmatter supports no `hooks` field at all) -- with, in this case,
+**no** compensating session-wide hook of any kind standing in (unlike
+Decision 17's own Bash exclusion, which gets partial coverage from
+`hooks/check-bash-safety.sh` where registered): "did the subagent actually
+run these two commands" is not a Bash-command pattern any PreToolUse hook
+could classify, so the plugin-distributed variant's own backstop for this
+specific exit condition is strictly weaker than its backstop for Decision
+17's exclusion list. Named explicitly, matching this design's own
+established practice of stating a mechanism's real strength rather than
+overclaiming it (Decision 7's own accounting is the precedent).
+
+**Deliberate deviation from the issue's own literal proof-method text,
+disclosed rather than silent:** the pytest invocation excludes the same
+four real-bash-oracle test files `.github/workflows/test.yml`'s own
+`pytest` job already excludes (issue `#1365`) -- each spawns genuine
+`bash -c` subprocesses under this repository's own harden-runner eBPF
+tracer and has caused resource-exhaustion flakes and, once, a full job
+hang there; paying that cost again inside every task-level worktree
+dispatch, potentially several concurrently per parallel wave, would
+multiply exactly the contention that job split exists to avoid, for files
+this decision's own motivating defect never involved.
+
+**Known, disclosed residual, not solved here:** neither variant's
+mechanism bounds how many times a subagent may be denied in a row --
+a genuinely persistent, unrelated failure (a pre-existing repo-wide break,
+or `uv` missing from PATH) denies every stop attempt with no retry
+ceiling of its own. This design's own existing Freshness and hang
+detection mechanism (Decision 8's Domain Events, extended in
+`domain-events-and-failure-handling.md`) is the intended backstop for a
+wave that never returns for this reason; a second, narrower circuit
+breaker inside this one hook would duplicate that existing mechanism
+rather than close a gap it does not already cover.
+
 ## Considered and not adopted this pass: four productivity items
 
 The same primary-source pass surfaced four productivity-oriented
@@ -1187,7 +1263,9 @@ only scope).
    with no wave/run boundary at all when the Workflow tool is
    unavailable. Within each task, Red-Green order applies where the
    task's inherited Proof method is an automatable test (Decision 14) --
-   Refactor is not run per task, deferred entirely to step 8. Once a
+   Refactor is not run per task, deferred entirely to step 8. Before a
+   task may report complete, the full repo verification suite must pass
+   inside its own worktree (Decision 20). Once a
    wave's run returns, back in the main thread (not the script, which
    has no filesystem/shell access at all -- Decision 16): each task's
    own `BASE..HEAD` diff (Decision 19) is screened (Decision 6) before
@@ -1399,6 +1477,17 @@ sourced from #274's blind-spot pass):**
       dropped): model-tier routing, tracer-first execution ordering, a
       trivial-Branch-Plan fast path, and saved-workflow reuse -- see
       "Considered and not adopted this pass" above.
+
+**Added post-implementation, from a retrospective gate-proposal on this
+design's own first real execution (not part of the original design
+session):**
+
+- [x] Task-level full-verification exit condition: Decision 20 (issue
+      `#1476`, retro `#1475` repair 2) -- a task-level dispatch must pass
+      the full repo verification suite inside its own worktree before it
+      may report complete, closing the gap where a regression outside a
+      task's own file-ownership scope surfaced only in the main thread's
+      later merge-back screening.
 
 Follow-up implementation PR's own first steps (not this pass, per Non-
 goals above, but listed here so they are not lost between docs):
