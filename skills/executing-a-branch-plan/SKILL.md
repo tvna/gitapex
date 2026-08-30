@@ -120,8 +120,19 @@ first, not skimmed.
    for the same distinction. Within
    each task, apply Red-Green order when the task's inherited proof
    method is an automatable test; Refactor is never per-task, deferred
-   entirely to step 8. Once a wave's run returns, in the main thread (the
-   Workflow script itself has no filesystem/shell access): screen each
+   entirely to step 8. When writing a task's own implementation code,
+   apply the principles in [the code quality principles
+   reference](references/code-quality-principles.md) -- this runs inside
+   this step's own dispatched `agent()` call, a separate context from the
+   main thread that read this file, so each task's own dispatch prompt
+   cites this reference's path explicitly, in-band, the same way Decision
+   17's exclusion list already must be (see [the threat-model
+   reference](references/threat-model-and-authorization.md#the-branch-plan-task-subagent-type));
+   the dispatched agent retains Read access (its own exclusion list bars
+   `mcp__github__*` and specific Bash patterns, not file reads) and reads
+   the reference from its own worktree checkout once cited. Once a wave's
+   run returns, in the main thread (the Workflow script itself has no
+   filesystem/shell access): screen each
    task's own `BASE..HEAD` diff -- `scripts/gitapex_check_canonical_governance_paths.py`
    pre-filters the literal/canonical cases first, then the model's own
    full review (the pinned residual judgment step 2 already introduced)
@@ -195,7 +206,13 @@ first, not skimmed.
    12, mandatory, non-skippable). Two separate fresh subagent dispatches
    over the full diff -- a refactor/simplify pass (behavior-preserving
    only), then an independent adversarial code review -- findings
-   verified and fixed before proceeding. Both dispatches carry a
+   verified and fixed before proceeding. The independent adversarial code
+   review also specifically re-checks [Migrate Callers Then Delete Legacy
+   APIs](references/code-quality-principles.md#4-migrate-callers-then-delete-legacy-apis),
+   confirming a caller migration begun by one task actually completed
+   cleanly rather than being left half-done by another -- a
+   behavior-affecting correctness question, not the refactor/simplify
+   pass's own behavior-preserving scope. Both dispatches carry a
    model/effort pin; see [refactor and review gate
    reference](references/refactor-and-review-gate.md#mandatory-aggregate-refactor--adversarial-review-step-8)
    for the rationale. After
@@ -426,7 +443,7 @@ interface-dependency-edge judgment (after
 file-ownership edge, which needs no pin), and step 8's
 refactor/adversarial-review dispatch. The other five steps run at
 whatever model/effort the calling session already uses. `Adaptive` is a
-reasoned fit given this skill's own existing lean-body-plus-five-
+reasoned fit given this skill's own existing lean-body-plus-six-
 reference-file structure -- not a rubric-compelled choice (`Broad`, a
 different, unattempted target, would additionally require auditing every
 currently-unpinned step against the rubric's own weak-tier-sufficiency
