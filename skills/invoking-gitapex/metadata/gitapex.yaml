@@ -18,6 +18,9 @@ spec:
       - drafting-a-pr-to-merge
       - merge-retrospective
       - drafting-issues
+      - eliciting-a-design
+      - reviewing-an-artifact
+      - diagnosing-a-failure
   executionRequirements:
     tools:
       read: []
@@ -39,3 +42,6 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1173"
       summary: "Step 2's 'no issue yet' row named `.github/ISSUE_TEMPLATE/` type selection instead of a skill -- that enumeration is drafting-issues' own internal Step 2 classification, not a routing target. Re-checked against merge-pipeline-redesign's Section 0 diagram, which names `drafting-issues` as the real entry-point skill (already implemented here). Restored to a table naming `drafting-issues`; added to relatedTo and Related skills."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1173"
+      summary: "Operator review found the table still missed three real, already-implemented gitapex situations: an unshaped idea (`eliciting-a-design`), a direct review request on any artifact (`reviewing-an-artifact`), and an unknown-cause failure (`diagnosing-a-failure`). Added all three rows; renamed the column from Stage to Situation since these are not linear lifecycle stages. Added to relatedTo and Related skills."
