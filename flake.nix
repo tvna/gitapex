@@ -239,11 +239,11 @@
                     echo "WARNING: git hooks in the shared hooks directory are missing or unusable:" >&2
                     echo "         $hooks" >&2
                     echo "         This is a linked worktree, which must not install them itself." >&2
-                    echo "         Run this in the main checkout: uv run prek install --overwrite -t pre-commit -t pre-push" >&2
+                    echo "         Run this in the main checkout: uv run prek install --overwrite -t pre-commit -t pre-push -t commit-msg" >&2
                   fi
-                elif ! (cd "$root" && uv run prek install --quiet -t pre-commit -t pre-push); then
+                elif ! (cd "$root" && uv run prek install --quiet -t pre-commit -t pre-push -t commit-msg); then
                   echo "WARNING: prek install failed -- git hooks are NOT active." >&2
-                  echo "         Fix it with: uv run prek install -t pre-commit -t pre-push" >&2
+                  echo "         Fix it with: uv run prek install -t pre-commit -t pre-push -t commit-msg" >&2
                 else
                   if prek_shim_broken "$hooks/pre-commit"; then
                     echo "WARNING: $hooks/pre-commit is missing or unusable." >&2

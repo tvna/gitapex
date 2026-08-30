@@ -9,9 +9,9 @@
 # pyproject.toml/uv.lock, rather than declaring a second copy of
 # select/ignore/strict settings here -- see issue #725's own "Constraints".
 #
-# Setup: `uv run prek install -t pre-commit -t pre-push` (documented in
-# CONTRIBUTING.md; also wired into flake.nix's devShell so `nix develop`
-# installs it automatically).
+# Setup: `uv run prek install -t pre-commit -t pre-push -t commit-msg`
+# (documented in CONTRIBUTING.md; also wired into flake.nix's devShell so
+# `nix develop` installs it automatically).
 
 # Issue #890 installs a pre-push shim as well as a pre-commit one. Without
 # this, the ruff/mypy hooks below -- which declare no `stages` -- would start
@@ -128,6 +128,29 @@ repos:
         pass_filenames: false
         require_serial: true
 
+      # Issue #1212: CLAUDE.md section 3 requires an issue citation in
+      # every commit, but nothing enforced it -- this is the fast local
+      # first pass. `.github/scripts/gitapex_gate_commit_citation.py`'s own
+      # `--mode pr-range` (wired into CI via
+      # .github/workflows/commit-citation-gate.yml, and into this repo's
+      # own local-preflight via .gitapex/ssot.json's `commit-citation-gate`
+      # entry) is the actual no-exceptions backstop: it also passes when the
+      # PR title/body carries the citation instead, so this local hook
+      # bypassable with `git commit --no-verify` -- is a convenience, not
+      # the enforcement boundary itself.
+      #
+      # No `pass_filenames` override: prek's own `commit-msg` stage always
+      # hands the hook the commit-message file path as its sole positional
+      # argument (git's own commit-msg hook contract), live-verified against
+      # a real `prek install -t commit-msg` run rather than assumed -- see
+      # this script's own module docstring.
+      - id: commit-citation
+        name: commit message cites an issue
+        entry: uv run --frozen python3 .github/scripts/gitapex_gate_commit_citation.py --mode commit-msg
+        language: system
+        stages: [commit-msg]
+        require_serial: true
+
       # Issue #876. The three hooks above are pre-commit-stage and cover
       # ruff/mypy only; every other gate with a working-tree-only form ran
       # exclusively in CI, so a gap surfaced one red check at a time on an
@@ -135,7 +158,7 @@ repos:
       # the last local moment before a gap becomes a CI round-trip, and
       # deliberately not pre-commit: it grades committed state (HEAD vs
       # origin/main), not a staged index, and at ~15 s
-      # warm end to end for all 43 wired gates it is too slow to sit on every
+      # warm end to end for all 44 wired gates it is too slow to sit on every
       # single commit.
       #
       # The wired set is not listed here: the runner discovers it from
