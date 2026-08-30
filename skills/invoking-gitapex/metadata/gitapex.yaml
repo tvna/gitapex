@@ -3,7 +3,7 @@ kind: SkillMetadata
 metadata:
   name: invoking-gitapex
 spec:
-  portability: Mixed
+  portability: Repository-scoped
   capabilityAssumption: Broad
   lifecycle:
     experimental:
@@ -54,3 +54,6 @@ spec:
     - kind: audit
       anchor: "https://github.com/tvna/gitapex/issues/1173"
       summary: "An independent, non-isolated evaluating-skill-quality dispatch returned WELL-FORMED-NOT-MATURE, blocked solely by Dimension 5: Mixed portability's own requirement that repository-specific content live in a references/ file, not the portable core. Proposed a `compatibility` field disclosing the SessionStart-hook dependency; added verbatim. The routing-table/Related-skills split is a separate, larger call, not applied here."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1173"
+      summary: "Operator caught that Dimension 5's finding actually indicts the Mixed declaration, not this file's structure: this skill is entirely gitapex-specific routing, with no portable core distinct from a repo-specific extension -- Mixed's own 'split the repo-specific part into references/' requirement never applied here. Corrected portability to Repository-scoped; the first decision entry above (Step 5 restated inline) stays valid, unaffected."
