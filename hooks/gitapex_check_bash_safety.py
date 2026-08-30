@@ -141,6 +141,49 @@ text matching, not nested double-quote state) from #1404's own finding;
 pinned as `quoted-redirect-operator-shaped-filename-bypass` in
 hooks/test_gitapex_check_bash_safety.py's own `KNOWN_BYPASS_COMMANDS`.
 
+CRITICAL, disclosed, third instance of the SAME shlex-quote-information-
+loss class as #1404/#1412 above (found live by Step 8 independent
+review, round 39 of issue #1375's own checkout/restore feature review,
+while stress-testing rounds 30-38's own scope-isolation reassignment-
+clearing story): `_raw_segments_with_boundaries` (the `(...)`-subshell
+depth tracker underlying `_names_reassigned_from_a_static_value`/
+`_names_cleared_by_a_later_static_reassignment`, and by extension
+`_rule_gh_api_write`/B1a/B1b) recognizes a real subshell open/close
+purely by a token's TEXT (`tok in _SUBSHELL_OPEN_TOKENS`, `tok == ")"`)
+-- but `tokenize()`'s own shlex dequoting makes a QUOTED literal `"("`/
+`")"` argument tokenize to the identical bare string as a genuine,
+unquoted operator, with no way to recover which one the source actually
+was, exactly the same information loss #1404/#1412 already document for
+different consumers. TWO distinct manifestations confirmed live: a
+quoted `)` inside a genuinely enclosing `(...)` subshell (`TOOL=uv;
+VERB=harmless; VERB=$(echo install); ( true ")" ; VERB=safe ); $TOOL
+$VERB foo`) prematurely decrements tracked depth, wrongly letting the
+still-isolated `VERB=safe` clear an earlier poisoning -- confirmed live
+via a stand-in `uv` binary on PATH that real bash genuinely still runs
+`uv install foo`, NOT `safe foo` (the `_rule_gh_api_write` counterpart
+reproduces identically, a genuine bypass, not a false positive); and a
+quoted `(` with no matching close (`echo "("`) inflates depth for the
+rest of the command with nothing to ever balance it, wrongly denying an
+ordinary, harmless, genuinely top-level clearing reassignment that
+follows -- confirmed live via a stand-in `uv` binary that real bash
+genuinely runs the harmless command, a false positive this time. More
+severe in reach than #1404/#1412, since the mechanism it defeats is the
+one every round-30-38 finding exists to protect. Deliberately NOT
+attempted here, for the identical reason #1412 already gives: a narrow
+patch confined to this one function risks reintroducing a worse,
+far-more-common false-positive class, and a genuinely sound fix needs
+`tokenize()` itself to preserve per-token quote/escape provenance --
+the same tokenizer-level architectural change #1404/#1412 already
+require, ideally landed once for all three rather than three
+independently-drifting patches. Tracked as its own dedicated issue,
+https://github.com/tvna/gitapex/issues/1502; pinned as
+`quoted-paren-inside-a-subshell-clears-a-poisoning-bypass`/
+`gh-api-quoted-paren-inside-a-subshell-clears-a-poisoning-bypass` in
+hooks/test_gitapex_check_bash_safety.py's own `KNOWN_BYPASS_COMMANDS`
+(the bypass direction), and as a disclosed over-denial residual (the
+false-positive direction) alongside this module's own other accepted
+over-denials.
+
 A second, distinct, round-17 finding in the SAME redirect-handling area
 is NOT a bypass and is NOT tracked separately: `_redirect_span_length`'s
 own deliberate choice (round 16) to leave a leading digit token OUT of

@@ -4020,6 +4020,35 @@ def test_classify_denies_a_deliberately_spaced_double_subshell_distractor() -> N
     assert verdict.deny is True
 
 
+def test_classify_allows_a_quoted_open_paren_as_a_disclosed_over_denial_residual() -> None:
+    """DISCLOSED, deliberately NOT fixed (round 39 independent review,
+    issue #1375, tracked as https://github.com/tvna/gitapex/issues/1502):
+    `_raw_segments_with_boundaries` recognizes a real subshell opener
+    purely by a token's TEXT (`tok in _SUBSHELL_OPEN_TOKENS`) --
+    `tokenize()`'s own shlex dequotes every token first, so a QUOTED
+    `"("` argument with no matching close tokenizes identically to a
+    real, unquoted subshell opener, inflating tracked depth for the
+    REST of the command with nothing to ever balance it. Confirmed live
+    via a stand-in `uv` binary on PATH that real bash genuinely runs the
+    harmless `uv safe foo` (`echo "("` just prints a literal `(`, and
+    `VERB=safe` is an ordinary top-level clearing assignment) -- but
+    this classifier wrongly denies it. This is the FALSE-POSITIVE
+    direction of the same shlex quote-information-loss class as the
+    `quoted-paren-inside-a-subshell-clears-a-poisoning-bypass` entry in
+    `hooks/test_gitapex_check_bash_safety.py`'s own
+    `KNOWN_BYPASS_COMMANDS` (that entry pins the BYPASS direction);
+    fixing either soundly needs `tokenize()` itself to preserve
+    per-token quote/escape provenance, the same tokenizer-level change
+    issues #1404/#1412 already require -- deliberately not attempted
+    here, matching this module's own established convention for that
+    disclosed residual class. This is currently expected (denied)
+    behavior, not a should-be-fixed assertion -- if this ever starts
+    passing, the underlying gap closed; update this test (and issue
+    #1502) together."""
+    verdict = checker.classify('TOOL=uv; VERB=harmless; VERB=$(echo install); echo "("; VERB=safe; $TOOL $VERB foo')
+    assert verdict.deny is True
+
+
 def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_process_substitution_clear() -> None:
     """CRITICAL bypass regression pin (round-33 independent review,
     issue #1375): a process substitution runs its own content in a

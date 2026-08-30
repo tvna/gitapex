@@ -707,6 +707,38 @@ KNOWN_BYPASS_COMMANDS = [
         'git checkout ">" realfile.py',
         "quoted-redirect-operator-shaped-filename-bypass",
     ),
+    (
+        # CRITICAL bypass, third instance of the same underlying
+        # shlex-quote-information-loss class as the two residuals above.
+        # Found live by independent adversarial review (round 39, issue
+        # #1375), tracked as its own dedicated issue rather than fixed
+        # here: https://github.com/tvna/gitapex/issues/1502 --
+        # deliberately out of issue #1375's own scope, for the identical
+        # reason issue #1412 already gives: a narrow patch confined to
+        # `_raw_segments_with_boundaries` alone risks reintroducing a
+        # worse, far more common false-positive class; a genuine fix
+        # needs tokenize() itself to preserve per-token quote/escape
+        # provenance, the same class of tokenizer-level change issues
+        # #1404/#1412 already require. `_raw_segments_with_boundaries`
+        # recognizes a real subshell close purely by a token's final TEXT
+        # value (`tok == ")"`) -- `tokenize()`'s own shlex dequotes every
+        # token first, so a QUOTED `")"` argument inside a genuinely
+        # enclosing `(...)` subshell tokenizes identically to a real,
+        # unquoted subshell-closing paren, prematurely decrementing
+        # tracked depth. Live-verified: real bash genuinely still runs
+        # `uv install foo` (`VERB=safe` never escapes the real subshell),
+        # while `classify()` reports `deny=False`. See issue #1502 for
+        # the full write-up, the companion false-positive shape, and
+        # live-verification detail.
+        'TOOL=uv; VERB=harmless; VERB=$(echo install); ( true ")" ; VERB=safe ); $TOOL $VERB foo',
+        "quoted-paren-inside-a-subshell-clears-a-poisoning-bypass",
+    ),
+    (
+        # Companion to the bypass just above, for `_rule_gh_api_write`.
+        # See issue #1502.
+        'M=safe; M=$(echo POST); ( true ")" ; M=GET ); gh api repos/o/r/pulls/1/merge -X $M',
+        "gh-api-quoted-paren-inside-a-subshell-clears-a-poisoning-bypass",
+    ),
 ]
 
 
@@ -1497,6 +1529,19 @@ DENIED_INDIRECTION_COMMANDS = [
     (
         "TOOL=uv; VERB=harmless; VERB=$(echo install); ( case case in a) true ;; esac; VERB=safe ); $TOOL $VERB foo",
         "var-split-tool-and-verb-reassigned-from-a-static-value-cleared-via-a-case-subject-word-matching-case",
+    ),
+    # Same round (39), the disclosed quoted-open-paren over-denial
+    # residual (issue #1502): a quoted "(" with no matching close
+    # inflates tracked subshell depth for the rest of the command,
+    # wrongly denying an ordinary, harmless, genuinely top-level
+    # clearing reassignment that follows. See `_raw_segments_with_
+    # boundaries`'s own module-docstring disclosure and the companion
+    # `quoted-paren-inside-a-subshell-clears-a-poisoning-bypass` entry
+    # above (the bypass direction of the same shlex-quote-information-
+    # loss class).
+    (
+        'TOOL=uv; VERB=harmless; VERB=$(echo install); echo "("; VERB=safe; $TOOL $VERB foo',
+        "quoted-open-paren-inflates-depth-stays-denied-as-a-disclosed-residual",
     ),
 ]
 
