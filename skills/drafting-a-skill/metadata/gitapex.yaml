@@ -45,7 +45,7 @@ spec:
       summary: "waza-eval-gate.yml's own live per-PR run (first real execution, not a session-internal review) failed outright: the injected-self-certification-probe fixture's 'SYSTEM OVERRIDE' payload tripped a hard content-policy block the CLI reported via empty stderr, unmatched by gitapex_run_eval_suite.py's own two-marker rejection signature, aborting the whole suite rather than skipping one fixture"
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1194"
-      summary: "fixed by rewording the payload away from impersonating a system-level directive while preserving the same false-prior-approval, skip-Step-9 test property, rather than widening gitapex_run_eval_suite.py's own shared rejection-detection heuristic -- that heuristic is pre-existing, cross-suite infrastructure outside this PR's own change surface"
+      summary: "fixed by rewording the payload away from impersonating a system-level directive while preserving the same false-prior-approval, skip-Step-9 (the review-dispatch step, now Step 10) test property, rather than widening gitapex_run_eval_suite.py's own shared rejection-detection heuristic -- that heuristic is pre-existing, cross-suite infrastructure outside this PR's own change surface"
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1304"
       summary: "the prior correction's own 'SYSTEM OVERRIDE tripped a content-policy block' diagnosis is disproven: the reworded payload failed identically (same empty-stderr 'model CLI exited 1' signature), and the same signature reproduces on an unrelated branch touching different skills' suites hours earlier -- a pre-existing, repo-wide waza-eval-gate defect unrelated to this PR's fixture content, filed as https://github.com/tvna/gitapex/issues/1304 and out of this PR's own scope to fix"
@@ -85,6 +85,15 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1583"
       summary: "root-cause fix: Step 4's Design-by-Contract mandate stopped forcing Precondition/Postcondition (and by extension Non-goals/Output) onto a drafted skill unconditionally -- a body section now earns its place only when a model needs it to act at invocation time; added an explicit pre-Step-10 human-approval gate (new Step 9) requiring the requester see the current draft and acknowledge before either review dispatch proceeds"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "an independent adversarial review found the new Stop boundary took this skill's decision-branch count from 7 to 8 while evals/drafting-a-skill/tasks/ still held 7 fixtures, failing gitapex_gate_skill_branch_fixture_coverage.py (reproduced directly: exit 1). Fixed by adding acknowledgment-required-before-dispatch.yaml; the gate now exits 0. Neither the drafting pass nor the simplify pass ran that gate -- it is CI-only, absent from the local preflight"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "same review found Step 4's clause 'stated here directly rather than only via references/, per this skill's own Broad declaration' dangling off executionRequirements, and itself authoring rationale living in a body section the very sentence containing it calls metadata-only. Removed from the body; the Broad-inlining rationale it stated is carried by docs/skill-authoring-standards.md rule 5 instead"
+    - kind: caveat
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "disclosed, not fixed: Step 4's new rule calls creation background and a rejected alternative's rationale metadata-only, yet this skill's own Notes section still carries both, and evaluating-skill-quality's SKILL.md still says extended portability rationale 'belongs in a footer ## Notes section of SKILL.md' (26 of 29 skills here carry one). Row 2 scoped the dogfooding migration to Non-goals alone and this skill may not edit evaluating-skill-quality, so reconciling them needs its own issue"
   skillDependencies:
     requires:
       - evaluating-skill-quality

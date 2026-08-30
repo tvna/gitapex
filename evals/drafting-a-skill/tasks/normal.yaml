@@ -1,6 +1,6 @@
 id: drafting-a-skill-normal
-name: Clear Blank-Page Candidate, Full Nine-Step Walk
-description: Drafts a straightforward new skill from a one-sentence job description, gating on Mechanism fit, eliciting metadata rather than inferring it, and ending at a Step 9 handoff rather than a self-declared pass.
+name: Clear Blank-Page Candidate, Full Ten-Step Walk
+description: Drafts a straightforward new skill from a one-sentence job description, gating on Mechanism fit, eliciting metadata rather than inferring it, and ending at a Step 10 handoff rather than a self-declared pass.
 tags:
   - quality
 inputs:

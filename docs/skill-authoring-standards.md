@@ -184,6 +184,20 @@ something categorically absent regardless of context (a bare-prose
 any consumer of a skill as a plugin), only content whose validity
 genuinely varies by context.
 
+Known conflict, disclosed rather than silently resolved:
+`skills/evaluating-skill-quality/SKILL.md`'s own Portability section
+still instructs the opposite for one content class -- "Extended
+rationale belongs in a footer `## Notes` section of `SKILL.md`" -- and
+26 of this repository's 29 skills carry exactly such a footer today,
+`drafting-a-skill`'s own included. Issue #1583 scoped its dogfooding
+migration to that one skill's `Non-goals` section alone, and a skill may
+not edit `evaluating-skill-quality` from inside its own change, so this
+rule is stated here without a retroactive sweep and without amending
+that instruction. Which of the two wins for portability/capability
+rationale is an open decision needing its own issue; until it is made,
+an existing `## Notes` footer is not a finding against this rule, and a
+new skill's author should record that rationale in the sidecar.
+
 Found via: `skills/drafting-a-skill/SKILL.md`'s own Step 4 forced every
 drafted skill to carry Precondition/Postcondition sections
 unconditionally, and its own Non-goals section was itself an example of
