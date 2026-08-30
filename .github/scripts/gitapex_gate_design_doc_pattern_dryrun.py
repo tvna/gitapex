@@ -48,6 +48,65 @@ wrong, matching the same `<name>: WAIVED: <reason>` vocabulary
 `gitapex_gate_provenance_disclosure.py` and `gitapex_gate_skill_audit_disclosure.py`
 already use elsewhere in this repository.
 
+Fail-closed by construction on malformed input, not by a separate
+validation branch: a nonexistent `--repo-root`, a `--repo-root` pointing
+at a plain file rather than a directory, and a `--corpus-glob` that
+resolves to nothing all make `dry_run_corpus` return zero matches for
+every candidate the same way a genuinely absent live target would --
+which this gate already treats as FAIL, never as "nothing to check."
+Live-verified directly (not merely reasoned about) against all three
+inputs before shipping, matching
+`skills/evaluating-deterministic-gate-quality/references/dimensions.md`
+dimension 15's own "independently construct and run a malformed,
+boundary, or missing-dependency input directly against the gate" bar.
+
+Known limitations, disclosed rather than solved (same heuristic-miss
+class the module-level Residual risk paragraph above already commits
+to; a `checker-script-adversarial-review` dispatch against this script
+found two further items below, in addition to the two an earlier pass
+already disclosed here):
+
+- The quoted target must appear *after* the "literal-text search" cue
+  within `_TARGET_WINDOW_CHARS` -- a paragraph phrased with the quote
+  first (e.g. "The string \"Step N:\" is what a literal-text search
+  would look for.") is not detected, a false negative.
+- The rejection-cue check is paragraph-scoped, not clause-scoped: a
+  paragraph discussing two different candidate mechanisms, only one of
+  which is rejected, can have its live proposal's own candidate
+  suppressed by a rejection phrase that actually describes the *other*
+  mechanism.
+- `dry_run_corpus`'s case-insensitive matching uses `str.lower()`, which
+  applies Python's full Unicode special-casing (e.g. Turkish `İ` U+0130
+  lowercases to a two-codepoint sequence, `i` + a combining dot above) --
+  a quoted target containing such a character can fail to match plain-
+  ASCII corpus content a human would read as the same word. Not expected
+  to matter given this repository's own English-only corpus.
+- `_WAIVER_RE`'s line-anchored pattern (matching
+  `gitapex_gate_provenance_disclosure.py` and
+  `gitapex_gate_skill_audit_disclosure.py`'s own established convention
+  for this disclosure-marker shape) does not recognize the marker
+  wrapped in Markdown bold (`**corpus-dryrun-disclosure**: WAIVED: ...`)
+  or embedded inside a table cell -- both fail closed (the gate still
+  FAILs rather than silently passing), so this is a usability gap, not a
+  correctness or security one: a legitimately owner-approved waiver
+  written in either form would need reformatting to the plain
+  line-start form to be recognized.
+
+None of the four is expected to matter for this gate's actual scope (a
+design doc's own literal-text-search proposal, stated directly, and a
+waiver line written the same plain way this repository's sibling gates
+already expect) but all four are real, live-verified gaps, not
+hypothesized ones.
+
+`dry_run_corpus` never executes, writes, or shells out to anything -- it
+only reads text under `--repo-root`/`--corpus-glob` and reports which
+files matched. `--corpus-glob` carries no path-containment check against
+`--repo-root` (a value like `../secret.md` would escape it), but neither
+flag ever carries untrusted (PR-controlled) input in this gate's real CI
+wiring -- both are fixed CLI arguments the calling workflow sets, never
+diff- or PR-body-derived -- so this is a disclosed defense-in-depth gap,
+not a currently reachable one.
+
 Deliberately stdlib-only, matching this repository's existing
 `.github/scripts/*.py` convention of not importing across files.
 
@@ -111,8 +170,11 @@ _REJECTION_RE = re.compile(
 # A short quoted literal, single line only (the resolution targets this
 # gate cares about -- e.g. "Step N", `Step N:` -- are always short labels,
 # never a multi-line excerpt).
+_QUOTED_LITERAL_MAX_LEN = 80
 _QUOTED_LITERAL_RE = re.compile(
-    r"`([^`\n]{1,80})`" r'|"([^"\n]{1,80})"' r"|“([^”\n]{1,80})”",
+    r"`([^`\n]{1," + str(_QUOTED_LITERAL_MAX_LEN) + r"})`"
+    r'|"([^"\n]{1,' + str(_QUOTED_LITERAL_MAX_LEN) + r"})\""
+    r"|“([^”\n]{1," + str(_QUOTED_LITERAL_MAX_LEN) + r"})”",
 )
 
 _WAIVER_RE = re.compile(
@@ -153,24 +215,35 @@ _TARGET_WINDOW_CHARS = 60
 def find_candidate_patterns(text: str) -> list[Candidate]:
     """Return every stated literal-text-search pattern in `text`: for each
     paragraph carrying a "literal-text search" cue with no rejection cue
-    of its own, the first quoted literal found within
-    `_TARGET_WINDOW_CHARS` characters after each cue occurrence -- not
-    every quoted span anywhere in the paragraph, which would also catch
-    an unrelated later quote (e.g. a heading name cited afterward) as if
-    it were the stated pattern."""
+    of its own, every quoted literal whose *opening* delimiter starts
+    within `_TARGET_WINDOW_CHARS` characters after each cue occurrence.
+
+    Two properties, both load-bearing (found by adversarial review against
+    an earlier single-first-match design): every such quote is taken, not
+    only the first -- a decoy quote closer to the cue than the real
+    target (e.g. "a literal-text search (as used for "temporary")
+    resolves against "Step N:" in the doc") must not make the real,
+    zero-match target invisible just because it is scanned second. And the
+    search region extends `_QUOTED_LITERAL_MAX_LEN` characters past the
+    window boundary so a quote whose *opening* delimiter falls inside the
+    window is never truncated mid-content merely because its *closing*
+    delimiter would otherwise land just past a hard window cutoff -- only
+    each match's own start position is compared against the window bound,
+    never its end."""
     candidates: list[Candidate] = []
+    search_region_len = _TARGET_WINDOW_CHARS + _QUOTED_LITERAL_MAX_LEN + 2
     for paragraph in _paragraphs(text):
         if _REJECTION_RE.search(paragraph):
             continue
         first_line = paragraph.strip().splitlines()[0]
         for cue_match in _SEARCH_INTENT_RE.finditer(paragraph):
-            window = paragraph[cue_match.end() : cue_match.end() + _TARGET_WINDOW_CHARS]
-            quote_match = _QUOTED_LITERAL_RE.search(window)
-            if quote_match is None:
-                continue
-            literal = next(group for group in quote_match.groups() if group is not None)
-            if literal:
-                candidates.append(Candidate(pattern=literal, paragraph_first_line=first_line))
+            search_region = paragraph[cue_match.end() : cue_match.end() + search_region_len]
+            for quote_match in _QUOTED_LITERAL_RE.finditer(search_region):
+                if quote_match.start() > _TARGET_WINDOW_CHARS:
+                    continue
+                literal = next(group for group in quote_match.groups() if group is not None)
+                if literal:
+                    candidates.append(Candidate(pattern=literal, paragraph_first_line=first_line))
     return candidates
 
 
