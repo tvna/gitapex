@@ -327,6 +327,30 @@ ALLOWED_DYNAMIC_COMMANDS = [
     # OWN command word (`seg[0]`) is itself dynamic -- an unrelated `read`
     # elsewhere in the command must stay allowed.
     ('read UNRELATED <<< "x"; echo hello', "read-into-unrelated-name-stays-allowed"),
+    # False-positive guard for the round-28 fix to
+    # `_names_reassigned_from_a_static_value` (issue #1375): the
+    # round-27 form only ever ADDED to its own poisoned set, never
+    # removed from it, so a name reassigned static -> dynamic -> static
+    # again (a THIRD assignment fully restoring a trustworthy value)
+    # stayed poisoned forever. Confirmed live via a stand-in `uv` binary
+    # on PATH that `TOOL=uv; VERB=harmless; VERB=$(echo x); VERB=status;
+    # $TOOL $VERB foo` genuinely runs `uv status foo` -- `status` is not
+    # a watched verb.
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo x); VERB=status; $TOOL $VERB foo",
+        "var-split-tool-and-verb-reassigned-static-dynamic-static-stays-allowed",
+    ),
+    # Same round, the gh-api-write counterpart -- deliberately using a
+    # read-method pair (GET/HEAD) that never triggers the SEPARATE,
+    # deliberately sticky write-bias mechanism (round 22), which would
+    # otherwise mask this specific fix's own effect. Confirmed live via
+    # a stand-in `gh` binary on PATH that `M=GET; M=$(echo x); M=HEAD;
+    # gh api repos/o/r/issues -X $M` genuinely runs `gh api
+    # repos/o/r/issues -X HEAD`, a read method.
+    (
+        "M=GET; M=$(echo x); M=HEAD; gh api repos/o/r/issues -X $M",
+        "gh-api-method-value-reassigned-static-dynamic-static-stays-allowed",
+    ),
 ]
 
 # --- Known, disclosed, unresolved regex/token-gate bypasses ----------------
@@ -964,6 +988,17 @@ DENIED_INDIRECTION_COMMANDS = [
     (
         "M=safe; M=$(echo POST); gh api repos/o/r/pulls/1/merge -X $M",
         "gh-api-method-value-reassigned-from-a-static-value",
+    ),
+    # Round 28's own no-under-correction guard: a name that carries a
+    # watched write method (POST) at ANY point must stay denied even
+    # after a later, static reassignment to a read method (GET) --
+    # `_assigned_raw_values_biased_toward`'s own independent, sticky
+    # write-bias mechanism (round 22) must keep denying this regardless
+    # of round 28's own fix to a SEPARATE mechanism (`_names_reassigned_
+    # from_a_static_value`'s own poisoned-set clearing).
+    (
+        "M=POST; M=$(echo x); M=GET; gh api repos/o/r/issues -X $M",
+        "gh-api-method-value-ever-a-watched-write-method-stays-denied",
     ),
 ]
 

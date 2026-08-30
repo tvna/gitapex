@@ -2538,6 +2538,41 @@ def test_names_reassigned_from_a_static_value_ignores_an_unrelated_name() -> Non
     assert result == {"VERB"}
 
 
+def test_names_reassigned_from_a_static_value_clears_on_a_later_static_reassignment() -> None:
+    """Regression pin for the real false-positive over-denial found live
+    by Step 8 independent review, twenty-eighth round (issue #1375):
+    this function's own round-27 form only ever ADDED to POISONED, never
+    removed from it, so a name reassigned static -> dynamic -> static
+    again (a THIRD assignment that fully restores a trustworthy,
+    resolvable value) stayed poisoned forever, contradicting real bash's
+    own final, genuinely-static value at the point of use."""
+    assert checker._names_reassigned_from_a_static_value(["M=GET", "M=$(echo x)", "M=HEAD"]) == set()
+
+
+def test_names_reassigned_from_a_static_value_re_poisons_after_a_further_dynamic_reassignment() -> None:
+    """No under-correction: a name that IS poisoned, then briefly
+    cleared by a static reassignment, must be poisoned again by a
+    FURTHER dynamic reassignment after that -- EVER_STATIC alone must
+    not permanently disable poisoning for a name once it has ever seen
+    one static value."""
+    tokens = ["M=GET", "M=$(echo x)", "M=HEAD", "M=$(echo other)"]
+    assert checker._names_reassigned_from_a_static_value(tokens) == {"M"}
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, static_value=_VALUES, dynamic_value=_VALUES, final_static_value=_VALUES)
+def test_names_reassigned_from_a_static_value_matches_model_for_a_static_dynamic_static_sequence(
+    name: str, static_value: str, dynamic_value: str, final_static_value: str
+) -> None:
+    """Model-based: for ANY identifier reassigned static -> dynamic ->
+    static again, `_names_reassigned_from_a_static_value` never includes
+    it -- the final static reassignment is the genuine, trustworthy
+    value real bash uses at the point of use, and this function must not
+    poison a name whose latest assignment is static."""
+    tokens = [f"{name}={static_value}", f"{name}=$({dynamic_value})", f"{name}={final_static_value}"]
+    assert name not in checker._names_reassigned_from_a_static_value(tokens)
+
+
 @_PROPERTIES
 @given(name=_IDENTIFIERS, static_value=_VALUES, dynamic_value=_VALUES)
 def test_names_reassigned_from_a_static_value_matches_model(name: str, static_value: str, dynamic_value: str) -> None:
@@ -2638,6 +2673,48 @@ def test_classify_leaves_the_graphql_mutation_known_bypass_unaffected() -> None:
     allowed exactly as before round 27."""
     verdict = checker.classify('A=muta; B=tion; Q="${A}${B} { x }"; gh api graphql -f query="$Q"')
     assert verdict.deny is False
+
+
+def test_classify_allows_a_b1b_tool_and_verb_reassigned_from_static_to_dynamic_to_static() -> None:
+    """End-to-end regression pin for the round-28 finding at the
+    `classify()` level, against B1b. Confirmed live before this fix via
+    a stand-in `uv` binary on PATH: `TOOL=uv; VERB=harmless;
+    VERB=$(echo x); VERB=status; $TOOL $VERB foo` genuinely runs `uv
+    status foo` (captured argv: "status foo") -- `status` is not a
+    watched verb -- but was wrongly denied (poisoned forever once ANY
+    dynamic reassignment was ever seen, regardless of a later static one
+    fully restoring a trustworthy value)."""
+    verdict = checker.classify("TOOL=uv; VERB=harmless; VERB=$(echo x); VERB=status; $TOOL $VERB foo")
+    assert verdict.deny is False
+
+
+def test_classify_allows_a_gh_api_method_reassigned_from_static_to_dynamic_to_static() -> None:
+    """Companion to the B1b pin above, for `_rule_gh_api_write`, using a
+    method pair (GET/HEAD) that never triggers the SEPARATE,
+    deliberately sticky `_assigned_raw_values_biased_toward` write-bias
+    mechanism (round 22) -- that mechanism keeps denying a POST-then-GET
+    sequence regardless of this fix, by its own independent, documented
+    design (a watched-write-method value seen at ANY point stays sticky),
+    which is not what this pin is testing. Confirmed live before this
+    fix via a stand-in `gh` binary on PATH: `M=GET; M=$(echo x); M=HEAD;
+    gh api repos/o/r/issues -X $M` genuinely runs `gh api
+    repos/o/r/issues -X HEAD` (captured argv confirms it) -- a read
+    method -- but was wrongly denied."""
+    verdict = checker.classify("M=GET; M=$(echo x); M=HEAD; gh api repos/o/r/issues -X $M")
+    assert verdict.deny is False
+
+
+def test_classify_still_denies_a_gh_api_method_that_was_ever_a_watched_write_method() -> None:
+    """No under-correction: the round-28 fix to `_names_reassigned_from_
+    a_static_value` must NOT weaken the SEPARATE, pre-existing,
+    deliberately sticky write-bias mechanism (`_assigned_raw_values_
+    biased_toward`, round 22) -- a name that carries a watched write
+    method (POST) at ANY point stays denied even after a later, static
+    reassignment to a read method (GET), by that mechanism's own
+    independent, documented design (extra scrutiny once a dangerous
+    value is ever seen, regardless of a later overwrite)."""
+    verdict = checker.classify("M=POST; M=$(echo x); M=GET; gh api repos/o/r/issues -X $M")
+    assert verdict.deny is True
 
 
 def test_resolve_path_tokens_denies_a_name_with_a_dynamic_assignment_elsewhere() -> None:

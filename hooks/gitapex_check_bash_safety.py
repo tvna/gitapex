@@ -4099,7 +4099,47 @@ def _names_reassigned_from_a_static_value(tokens: list[str]) -> set[str]:
     own history (19-26) already closes for its own specific consumer --
     this function closes it here too, without reopening the graphql-
     mutation regression, because it only fires when EVER_STATIC already
-    recorded a real prior static assignment for that exact name."""
+    recorded a real prior static assignment for that exact name.
+
+    CRITICAL bug found by independent adversarial review (round 28,
+    issue #1375) and independently reproduced live, both via
+    `classify()` and via real bash execution with a stand-in `uv`/`gh`
+    binary on PATH: this function's own round-27 form only ever ADDED to
+    POISONED, never removed from it -- so a name reassigned static ->
+    dynamic -> static again (a THIRD assignment that fully restores a
+    trustworthy, resolvable value, the genuine value real bash uses at
+    the point of use) stayed poisoned forever, a FALSE-POSITIVE over-
+    denial of an actually-safe command, contradicting this function's
+    own docstring above (which already claimed to test "is the name's
+    LATEST assignment dynamic" but actually implemented "was the name
+    EVER dynamically reassigned anywhere"). `TOOL=uv; VERB=harmless;
+    VERB=$(echo x); VERB=status; $TOOL $VERB foo` -- real bash's final
+    value of `$VERB` is `status`, not a watched verb at all (confirmed
+    live via a stand-in `uv` binary on PATH: captured argv `uv called
+    with: status foo`) -- was wrongly denied by B1a/B1b before this fix.
+    `M=GET; M=$(echo x); M=HEAD; gh api repos/o/r/issues -X $M`
+    reproduces the identical shape for `_rule_gh_api_write` (both GET
+    and HEAD are read methods, confirmed live via a stand-in `gh` binary
+    on PATH: captured argv `gh called with: api repos/o/r/issues -X
+    HEAD`) -- also wrongly denied before this fix. (A superficially
+    similar case, `M=POST; M=$(echo x); M=GET; ...`, is NOT a
+    counter-example to test against: `_assigned_raw_values_biased_
+    toward`'s own independent, deliberate "once a name is assigned a
+    watched-write-method value at ANY point, it stays biased toward that
+    value" posture -- round 22's own established, documented design,
+    see that function's own docstring -- correctly keeps denying that
+    specific case regardless of this fix, since `POST` genuinely was
+    assigned at some point and this module's own established posture
+    treats that as reason enough for extra scrutiny; this function's own
+    fix only concerns names that never carried a watched-write-biased
+    value at all, like `status`/`HEAD` above.) Closed by having a LATER
+    static reassignment clear the name from POISONED (`poisoned.
+    discard(name)`, not just skip adding to it): EVER_STATIC still
+    records that a static value was seen at all (so a FURTHER dynamic
+    reassignment after this one still correctly re-poisons the name --
+    verified live: `M=GET; M=$(echo x); M=HEAD; M=$(echo other)` leaves
+    `M` poisoned again, matching real bash's own final, genuinely-
+    dynamic value)."""
     ever_static: set[str] = set()
     poisoned: set[str] = set()
     for token in tokens:
@@ -4112,6 +4152,7 @@ def _names_reassigned_from_a_static_value(tokens: list[str]) -> set[str]:
                 poisoned.add(name)
         else:
             ever_static.add(name)
+            poisoned.discard(name)
     return poisoned
 
 
