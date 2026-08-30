@@ -22,6 +22,14 @@ def _write(tmp_path: pathlib.Path, name: str, content: str) -> pathlib.Path:
     return workflows_dir
 
 
+def _write_hook(tmp_path: pathlib.Path, name: str, content: str) -> pathlib.Path:
+    hooks_dir = tmp_path / "hooks"
+    hooks_dir.mkdir(parents=True, exist_ok=True)
+    path = hooks_dir / name
+    path.write_text(content, encoding="utf-8")
+    return hooks_dir
+
+
 # --- happy paths ---
 
 
@@ -394,6 +402,135 @@ def test_main_returns_one_and_prints_findings_on_bare_invocation(
     out = capsys.readouterr().out
     assert "bare.yml" in out
     assert "x.py" in out
+
+
+# --- hooks/*.sh shell-variable-indirected invocations (WARNING tier,
+# issue #1446 Item 2): a hooks/*.sh script almost never invokes a
+# `.github/scripts/*.py` gate directly on the same line -- it assigns the
+# path to a shell variable on one line, then invokes `python3 "$var"` on a
+# later line, which `find_bare_invocations`'s same-line regex cannot see.
+# `find_hooks_shell_indirected_invocations` closes that blind spot with a
+# two-step static scan scoped to the direct single-assignment-then-
+# invocation shape this repository's real hooks/*.sh files actually use. ---
+
+
+def test_hooks_shell_indirected_bare_invocation_is_flagged(tmp_path: pathlib.Path) -> None:
+    # Reproduces hooks/check-pr-skill-audit-disclosure.sh's real shape:
+    # a variable assignment targeting a .github/scripts/*.py path, then a
+    # bare `python3 "$var"` invocation several lines later.
+    hooks_dir = _write_hook(
+        tmp_path,
+        "check-pr-skill-audit-disclosure.sh",
+        "#!/bin/bash\n"
+        'repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || repo_root=""\n'
+        'full_gate="${repo_root}/.github/scripts/gitapex_gate_skill_audit_disclosure.py"\n'
+        "\n"
+        'if [ -f "$full_gate" ]; then\n'
+        '  if full_output=$(cd "$repo_root" && python3 "$full_gate" \\\n'
+        '      --check-diff "$merge_base" HEAD --body-file "$body_file" 2>&1); then\n'
+        "    full_exit=0\n"
+        "  fi\n"
+        "fi\n",
+    )
+    findings = gate.find_hooks_shell_indirected_invocations(hooks_dir)
+    assert len(findings) == 1
+    path, lineno, line = findings[0]
+    assert "check-pr-skill-audit-disclosure.sh" in path
+    assert lineno == 6
+    assert "full_gate" in line
+
+
+def test_hooks_shell_indirected_invocation_uv_run_wrapped_is_not_flagged(tmp_path: pathlib.Path) -> None:
+    hooks_dir = _write_hook(
+        tmp_path,
+        "wrapped.sh",
+        "#!/bin/bash\n"
+        'full_gate="${repo_root}/.github/scripts/gitapex_gate_skill_audit_disclosure.py"\n'
+        'uv run --frozen python3 "$full_gate" --check-diff a b\n',
+    )
+    assert gate.find_hooks_shell_indirected_invocations(hooks_dir) == []
+
+
+def test_hooks_shell_indirected_variable_targeting_hooks_py_is_not_flagged(tmp_path: pathlib.Path) -> None:
+    # A hooks/*.py sibling script is deliberately stdlib-only,
+    # self-contained, and bare-invoked by design (docs/repository-layout.md)
+    # -- a shell variable pointing at one must never be flagged even
+    # though it is invoked bare, exactly like every other real hooks/*.sh
+    # file in this repository (only .github/scripts/*.py targets are
+    # in scope).
+    hooks_dir = _write_hook(
+        tmp_path,
+        "check-bash-safety.sh",
+        "#!/bin/bash\n"
+        'classifier="${repo_root}/hooks/gitapex_check_bash_safety.py"\n'
+        'classifier_output=$(printf %s "$input" | python3 "$classifier" 2>/dev/null)\n',
+    )
+    assert gate.find_hooks_shell_indirected_invocations(hooks_dir) == []
+
+
+def test_hooks_shell_indirected_unquoted_invocation_is_flagged(tmp_path: pathlib.Path) -> None:
+    hooks_dir = _write_hook(
+        tmp_path,
+        "unquoted.sh",
+        '#!/bin/bash\ngate_script="${repo_root}/.github/scripts/gitapex_gate_foo.py"\npython3 $gate_script --flag\n',
+    )
+    findings = gate.find_hooks_shell_indirected_invocations(hooks_dir)
+    assert len(findings) == 1
+    assert "gate_script" in findings[0][2]
+
+
+def test_hooks_shell_indirected_no_matching_assignment_passes(tmp_path: pathlib.Path) -> None:
+    hooks_dir = _write_hook(
+        tmp_path,
+        "clean.sh",
+        "#!/bin/bash\necho hi\n",
+    )
+    assert gate.find_hooks_shell_indirected_invocations(hooks_dir) == []
+
+
+def test_hooks_shell_indirected_missing_dir_returns_empty(tmp_path: pathlib.Path) -> None:
+    # Non-blocking WARNING tier: unlike find_bare_invocations's fail-closed
+    # hard-fail behavior for a missing workflows dir, a missing hooks dir
+    # simply has nothing to warn about.
+    assert gate.find_hooks_shell_indirected_invocations(tmp_path / "does-not-exist") == []
+
+
+# --- main() composition: the new WARNING-tier hooks/*.sh scan must never
+# change find_bare_invocations's existing hard-fail exit-code behavior ---
+
+
+def test_main_exit_code_stays_zero_with_only_a_hooks_warning_finding(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workflows_dir = _write(
+        tmp_path,
+        "clean.yml",
+        "jobs:\n  a:\n    steps:\n      - name: run\n        run: uv run --frozen python3 .github/scripts/x.py\n",
+    )
+    hooks_dir = _write_hook(
+        tmp_path,
+        "indirect.sh",
+        '#!/bin/bash\nfull_gate="${repo_root}/.github/scripts/gitapex_gate_foo.py"\npython3 "$full_gate"\n',
+    )
+    monkeypatch.setattr("sys.argv", ["prog", str(workflows_dir), str(hooks_dir)])
+    assert gate.main() == 0
+    out = capsys.readouterr().out
+    assert "full_gate" in out
+
+
+def test_main_exit_code_stays_one_with_a_workflow_finding_regardless_of_hooks(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workflows_dir = _write(
+        tmp_path,
+        "bare.yml",
+        "jobs:\n  a:\n    steps:\n      - name: run\n        run: python3 .github/scripts/x.py\n",
+    )
+    hooks_dir = _write_hook(tmp_path, "clean.sh", "#!/bin/bash\necho hi\n")
+    monkeypatch.setattr("sys.argv", ["prog", str(workflows_dir), str(hooks_dir)])
+    assert gate.main() == 1
+    out = capsys.readouterr().out
+    assert "bare.yml" in out
 
 
 # --- live proof against this repository's own real workflow files: after
