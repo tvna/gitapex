@@ -25,29 +25,19 @@ below.
    excuse skipping the check itself.
 
 2. **Skill Priority.** Route by stage in gitapex's own Issue-to-PR
-   lifecycle, not by an abstract process-vs-implementation label. A
-   brand-new piece of work is typed first, through this repository's own
-   `.github/ISSUE_TEMPLATE/` set (feat/fix/docs/chore/ci/refactor/generic/
-   tracking) -- that type shapes which issue gets filed before any branch
-   or plan exists. Once an issue exists, this repository's own current
-   pipeline shape is illustrative, not exhaustive, and is expected to
-   change as gitapex's own skill inventory grows: the issue becomes a
-   Branch Plan and Acceptance Criteria Map first
-   (`planning-a-branch-from-an-issue`), then gets decomposed and executed
-   (`executing-a-branch-plan`), then driven to a mergeable pull request
-   (`drafting-a-pr-to-merge`), then followed by a retrospective once
-   merged (`merge-retrospective`) -- each of those skills' own text cites
-   the next, so that chain is this repository's own live source of truth
-   for its current membership, not a copy kept here. A fuller,
-   diagram-form statement of this same ordering is maintained separately,
-   in a `merge-pipeline-redesign` design record -- named here as a
-   disclosed, currently-unresolved limitation: that record is not (as of
-   this writing) checked into this repository, so it cannot yet be linked
-   or read directly from here. This Step states the routing *principle*
-   and cites the current stage-routing signals instead of a hardcoded
-   skill list, precisely so that a future change to either the issue-type
-   set or the pipeline's own membership does not also require an edit
-   here.
+   lifecycle:
+
+   - New work, no issue yet -- type it via `.github/ISSUE_TEMPLATE/`
+     (feat/fix/docs/chore/ci/refactor/generic/tracking)
+   - Issue exists, no plan yet -- `planning-a-branch-from-an-issue`
+   - Plan approved -- `executing-a-branch-plan`
+   - PR open -- `drafting-a-pr-to-merge`
+   - PR merged -- `merge-retrospective`
+
+   Each skill's own text cites the next, so this list is illustrative,
+   not the canonical source -- a fuller diagram lives in a separate
+   `merge-pipeline-redesign` design record, not yet checked into this
+   repository.
 
 3. **Never blanket-exempt a dispatched subagent.** A subagent's own
    context does not automatically carry this file's content forward, so
