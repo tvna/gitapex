@@ -1474,6 +1474,30 @@ DENIED_INDIRECTION_COMMANDS = [
         "TOOL=uv; VERB=harmless; VERB=$(echo install); case 1 in (1) VERB=safe ;; esac & wait; $TOOL $VERB foo",
         "var-split-tool-and-verb-reassigned-from-a-static-value-cleared-via-a-backgrounded-decorated-case",
     ),
+    # CRITICAL bypass found live by Step 8 independent review,
+    # thirty-eighth round (issue #1375): `case`/`esac` are only reserved
+    # words in COMMAND-starting position -- the case statement's own
+    # SUBJECT word (between `case` and `in`) is an ordinary word
+    # position where a literal `esac` (or `case`) is valid, unremarkable
+    # bash. The round-36/37 case-tracking state machine matched purely
+    # on token text with no position check, so a literal `esac` subject
+    # immediately popped the tracking stack before the real `in` was
+    # even reached, corrupting a GENUINELY enclosing real subshell's own
+    # tracked depth. Confirmed live via a stand-in `uv`/`gh` binary on
+    # PATH that each genuinely keeps the reassignment isolated inside
+    # the real subshell.
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); ( case esac in a) true ;; esac; VERB=safe ); $TOOL $VERB foo",
+        "var-split-tool-and-verb-reassigned-from-a-static-value-cleared-via-a-case-subject-word-matching-esac",
+    ),
+    (
+        "M=safe; M=$(echo POST); ( case esac in a) true ;; esac; M=GET ); gh api repos/o/r/pulls/1/merge -X $M",
+        "gh-api-method-value-reassigned-from-a-static-value-cleared-via-a-case-subject-word-matching-esac",
+    ),
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); ( case case in a) true ;; esac; VERB=safe ); $TOOL $VERB foo",
+        "var-split-tool-and-verb-reassigned-from-a-static-value-cleared-via-a-case-subject-word-matching-case",
+    ),
 ]
 
 

@@ -2759,6 +2759,33 @@ def test_raw_segments_with_boundaries_a_decorated_case_pattern_stays_isolating_w
     assert depths_by_segment == [0, 0, 0, 0]
 
 
+def test_raw_segments_with_boundaries_a_case_subject_word_matching_esac_does_not_desync_pattern_tracking() -> None:
+    """CRITICAL bypass regression pin (round-38 independent review, issue
+    #1375): `case`/`esac` are only reserved words in COMMAND-starting
+    position -- the case statement's own SUBJECT word (between `case`
+    and `in`) is an ordinary word position where a literal `esac` is
+    valid, unremarkable bash. A literal `esac` subject must not be
+    mistaken for the real closing keyword, or the real enclosing
+    subshell's own tracked depth gets prematurely decremented on the
+    arm's own genuine pattern-terminating `)`."""
+    tokens = ["(", "case", "esac", "in", "a", ")", "true", ";", ";", "esac", ";", "VERB=safe", ")"]
+    result = checker._raw_segments_with_boundaries(tokens)
+    assert result[0] == ([], 0, "(")
+    assert result[1] == (["case", "esac", "in", "a"], 1, ")")
+    assert result[-2] == (["VERB=safe"], 1, ")")
+    assert result[-1] == ([], 0, None)
+
+
+def test_raw_segments_with_boundaries_a_case_subject_word_matching_case_does_not_desync_pattern_tracking() -> None:
+    """Same round, the `case`-as-its-own-subject counterpart -- a
+    literal `case` subject must not spuriously push a SECOND,
+    unmatched case-tracking stack frame."""
+    tokens = ["(", "case", "case", "in", "a", ")", "true", ";", ";", "esac", ";", "VERB=safe", ")"]
+    result = checker._raw_segments_with_boundaries(tokens)
+    assert result[1] == (["case", "case", "in", "a"], 1, ")")
+    assert result[-2] == (["VERB=safe"], 1, ")")
+
+
 def test_raw_segments_with_boundaries_a_nested_for_in_inside_a_case_arm_does_not_desync_pattern_tracking() -> None:
     """SAFETY regression pin (round-36 own design review): only the
     case's own FIRST `in` (right after `case WORD`) may arm the
@@ -3250,6 +3277,36 @@ def test_names_reassigned_from_a_static_value_allows_a_real_top_level_clear_afte
         "VERB=safe",
     ]
     assert checker._names_reassigned_from_a_static_value(tokens) == set()
+
+
+def test_names_reassigned_from_a_static_value_stays_poisoned_despite_a_case_subject_word_matching_esac() -> None:
+    """CRITICAL bypass regression pin (round-38 independent review, issue
+    #1375): a literal `esac` used as a case statement's own SUBJECT
+    word (an ordinary word position, not the reserved-word position)
+    must not be mistaken for the real closing keyword -- a static
+    reassignment inside a GENUINELY enclosing subshell around such a
+    case must still stay poisoned even with no `&`/`|` involved at
+    all."""
+    tokens = [
+        "VERB=harmless",
+        ";",
+        "VERB=$(echo install)",
+        ";",
+        "(",
+        "case",
+        "esac",
+        "in",
+        "a",
+        ")",
+        "true",
+        ";",
+        ";",
+        "esac",
+        ";",
+        "VERB=safe",
+        ")",
+    ]
+    assert checker._names_reassigned_from_a_static_value(tokens) == {"VERB"}
 
 
 @_PROPERTIES
@@ -4394,6 +4451,46 @@ def test_classify_denies_a_decorated_case_pattern_that_is_genuinely_backgrounded
     must still deny exactly as before this round's fix."""
     verdict = checker.classify(
         "TOOL=uv; VERB=harmless; VERB=$(echo install); case 1 in (1) VERB=safe ;; esac & wait; $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_case_subject_word_matching_esac() -> (
+    None
+):
+    """CRITICAL bypass regression pin (round-38 independent review,
+    issue #1375): `case`/`esac` are only reserved words in COMMAND-
+    starting position -- the case statement's own SUBJECT word (between
+    `case` and `in`) is an ordinary word position where a literal
+    `esac` is valid, unremarkable bash (`case esac in a) true ;; esac`
+    genuinely switches on the literal string "esac", confirmed live via
+    `bash -n`). Confirmed live via a stand-in `uv` binary on PATH that
+    the GENUINE enclosing subshell here still isolates `VERB=safe` in
+    real bash, so this must deny -- captured argv `uv called with:
+    install foo`, NOT `safe foo`."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); ( case esac in a) true ;; esac; VERB=safe ); $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_gh_api_method_reassigned_from_a_static_value_via_a_case_subject_word_matching_esac() -> None:
+    """Companion to the B1b pin above, for `_rule_gh_api_write`.
+    Confirmed live via a stand-in `gh` binary on PATH that this
+    genuinely runs `gh api repos/o/r/pulls/1/merge -X POST`, a genuine
+    unreviewed write."""
+    verdict = checker.classify(
+        "M=safe; M=$(echo POST); ( case esac in a) true ;; esac; M=GET ); gh api repos/o/r/pulls/1/merge -X $M"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_case_subject_word_matching_case_itself() -> None:
+    """Same round, the `case`-as-its-own-subject counterpart -- a
+    literal `case` subject must not spuriously push a second, unmatched
+    case-tracking stack frame."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); ( case case in a) true ;; esac; VERB=safe ); $TOOL $VERB foo"
     )
     assert verdict.deny is True
 

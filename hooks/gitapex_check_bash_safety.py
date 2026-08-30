@@ -4231,7 +4231,60 @@ def _raw_segments_with_boundaries(tokens: list[str]) -> list[tuple[list[str], in
     token consumes the "first token" slot before its `(` is ever seen
     -- a deliberately narrower, disclosed residual (an over-denial on a
     rare, opt-in bash feature, never a bypass) rather than a fully
-    general case-pattern-syntax parser."""
+    general case-pattern-syntax parser.
+
+    CRITICAL bypass found by independent adversarial review (round 38,
+    issue #1375) and independently reproduced live, both via
+    `classify()` and via real bash execution with a stand-in `uv`/`gh`
+    binary on PATH: the round-36/37 `case`/`esac` recognition above
+    matched purely on TOKEN TEXT, with no restriction that the token
+    actually occupy real bash's own syntactic keyword position -- but
+    `case`/`esac` are only reserved words in COMMAND-starting position;
+    the word between `case` and `in` (the statement's own SUBJECT) is
+    an ordinary word position where a literal `esac` (or `case`) is
+    valid, unremarkable bash (`case esac in a) true ;; esac` genuinely
+    switches on the literal string `"esac"`, confirmed live via `bash
+    -n`). `( case esac in a) true ;; esac; VERB=safe )` -- with a
+    GENUINE, real enclosing subshell -- resolved to `deny=False` even
+    though real bash genuinely keeps `VERB=safe` isolated inside that
+    subshell (confirmed live via a stand-in `uv` binary on PATH:
+    `TOOL=uv; VERB=harmless; VERB=$(echo install); ( case esac in a)
+    true ;; esac; VERB=safe ); $TOOL $VERB foo` captures `uv called
+    with: install foo`) -- because the literal `esac` SUBJECT token
+    immediately popped the case-tracking stack frame the real `case`
+    keyword one token earlier had just pushed, before the real `in` was
+    even reached; the pattern's own genuinely-terminating `)` (after
+    `a`) then fell through to the ordinary subshell-close branch and
+    wrongly decremented the REAL enclosing subshell's own tracked
+    depth, deflating it relative to real bash's true nesting -- the
+    opposite direction from round 37's over-denial, and therefore a
+    genuine bypass, not a false positive. `_rule_gh_api_write`
+    reproduces identically (`M=safe; M=$(echo POST); ( case esac in a)
+    true ;; esac; M=GET ); gh api repos/o/r/pulls/1/merge -X $M` --
+    real bash genuinely issues an unreviewed `-X POST` write).
+
+    Closed by requiring `case`/`esac` to additionally sit at position 0
+    of the CURRENT in-progress raw segment (`not segments[-1]` at the
+    moment each is seen, before it is itself appended) -- the exact
+    same position-0 discipline `_segment_indices_isolated_by_a_piped_
+    or_backgrounded_compound_group` already applies to its own
+    `_GROUP_OPEN_KEYWORDS`/`_GROUP_CLOSE_KEYWORDS` matching, for the
+    identical reason: real bash's grammar guarantees `case`/`esac` only
+    ever start a fresh command, so a token seen after other tokens have
+    already accumulated in the current segment (e.g. immediately after
+    `case`, in subject position) can safely be treated as ordinary
+    literal text. `in` is deliberately NOT given the same position-0
+    gate -- unlike `case`/`esac`, the real syntactic `in` keyword is
+    normally NOT segment-position-0 (it shares a segment with the
+    case's own subject word, e.g. `["case", "1", "in"]`), so a
+    position-0 requirement would break the legitimate case instead of
+    only the collision; `in`'s own existing `case_seen_in`-gated
+    once-only consumption was independently verified live to still
+    resolve `case in in a) ...`'s own literal-`in`-as-subject collision
+    correctly (both interpretations of which `in` is "the real one"
+    coincidentally land on the same correct pattern-close outcome for
+    the arm's own terminating `)`), so no separate fix was needed
+    there."""
     segments: list[list[str]] = [[]]
     seg_depths: list[int] = [0]
     terminators: list[str | None] = []
@@ -4242,7 +4295,7 @@ def _raw_segments_with_boundaries(tokens: list[str]) -> list[tuple[list[str], in
     prev_tok: str | None = None
     for tok in tokens:
         is_case_setup_token = False
-        if tok == "case":
+        if tok == "case" and not segments[-1]:
             case_awaiting_pattern_close.append(False)
             case_seen_in.append(False)
             case_pattern_started.append(False)
@@ -4252,7 +4305,7 @@ def _raw_segments_with_boundaries(tokens: list[str]) -> list[tuple[list[str], in
             case_awaiting_pattern_close[-1] = True
             case_pattern_started[-1] = False
             is_case_setup_token = True
-        elif tok == "esac" and case_awaiting_pattern_close:
+        elif tok == "esac" and case_awaiting_pattern_close and not segments[-1]:
             case_awaiting_pattern_close.pop()
             case_seen_in.pop()
             case_pattern_started.pop()
