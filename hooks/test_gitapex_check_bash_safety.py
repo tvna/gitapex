@@ -351,6 +351,19 @@ ALLOWED_DYNAMIC_COMMANDS = [
         "M=GET; M=$(echo x); M=HEAD; gh api repos/o/r/issues -X $M",
         "gh-api-method-value-reassigned-static-dynamic-static-stays-allowed",
     ),
+    # False-positive guard for the twenty-ninth-round `_segment_
+    # references_a_name` indirect-reference fix (issue #1375): VERB is
+    # genuinely poisoned (static "harmless" then dynamic "install"), but
+    # the segment never references VERB itself -- only OTHER, indirectly,
+    # through MREF. The two-level resolution the fix now delegates to
+    # must not over-reach and treat every poisoned name anywhere in scope
+    # as reachable through an unrelated indirection. Confirmed live via a
+    # stand-in `uv` binary on PATH that this genuinely runs `uv status
+    # foo` -- "status" is not a watched verb.
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); OTHER=status; MREF=OTHER; $TOOL ${!MREF} foo",
+        "indirect-ref-to-unrelated-name-stays-allowed-despite-a-poisoned-name-elsewhere",
+    ),
 ]
 
 # --- Known, disclosed, unresolved regex/token-gate bypasses ----------------
@@ -999,6 +1012,37 @@ DENIED_INDIRECTION_COMMANDS = [
     (
         "M=POST; M=$(echo x); M=GET; gh api repos/o/r/issues -X $M",
         "gh-api-method-value-ever-a-watched-write-method-stays-denied",
+    ),
+    # Found live by Step 8 independent review, twenty-ninth round (issue
+    # #1375): `_segment_references_a_name`'s own round-26 single-level
+    # `${!NAME}` indirect-reference scan defeated EVERY poisoning class
+    # above (static-then-dynamic, append, read/array-element/printf-v)
+    # once the poisoned name was referenced through one extra layer of
+    # indirection -- the direct reference (no `${!MREF}`) already denied
+    # correctly; only wrapping it in an indirect reference bypassed
+    # detection. Confirmed live via a stand-in `uv` binary on PATH
+    # (captured argv: "install foo") that this genuinely runs `uv install
+    # foo`.
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); MREF=VERB; $TOOL ${!MREF} foo",
+        "var-split-tool-and-verb-reassigned-from-static-referenced-indirectly",
+    ),
+    # Same round, the append counterpart referenced indirectly.
+    (
+        "TOOL=uv; VERB=inst; VERB+=all; MREF=VERB; $TOOL ${!MREF} foo",
+        "var-split-tool-and-verb-reassigned-via-static-append-referenced-indirectly",
+    ),
+    # Same round, the `read` counterpart referenced indirectly.
+    (
+        'A=harmless; read A <<< "uv"; B=harmless2; read B <<< "install"; AREF=A; BREF=B; ${!AREF} ${!BREF} foo',
+        "var-split-tool-and-verb-reassigned-via-read-referenced-indirectly",
+    ),
+    # Same round, the gh-api-write counterpart: real bash genuinely ran
+    # `gh api repos/o/r/pulls/1/merge -X POST` (captured argv confirms
+    # it), a genuine, unreviewed write API call.
+    (
+        "M=safe; M=$(echo POST); MREF=M; gh api repos/o/r/pulls/1/merge -X ${!MREF}",
+        "gh-api-method-value-reassigned-from-a-static-value-referenced-indirectly",
     ),
 ]
 

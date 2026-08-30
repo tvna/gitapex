@@ -3468,35 +3468,58 @@ def _gh_api_field_fused_flagname_dynamic_hit(
     return False
 
 
-def _segment_references_a_name(seg: list[str], names: set[str]) -> bool:
+def _segment_references_a_name(
+    seg: list[str],
+    names: set[str],
+    name_to_raw_value: dict[str, str],
+    name_to_raw_value_history: dict[str, tuple[str, ...]],
+) -> bool:
     """True when any token in SEG references (as a bare `$NAME`, braced
-    `${NAME}`, default-clause `${NAME:-x}`, or indirect `${!NAME}`
-    reference) any name in NAMES. A coarse, single-level scan via the
-    same `_VAR_REF_FULL_RE` `_referenced_names` uses for its own first
-    level -- deliberately NOT that function's full two-level indirect
-    expansion (this only needs to know whether a POISONED name itself is
-    mentioned, not what an indirect reference through it might resolve
-    to), so it needs neither NAME_TO_RAW_VALUE nor NAME_TO_RAW_VALUE_
-    HISTORY -- both absent from `_rule_gh_api_write`'s and `_segment_
-    loop_hit`'s own signatures.
+    `${NAME}`, default-clause `${NAME:-x}`, or indirect `${!NAME}`,
+    TWO-level-resolved) any name in NAMES. Delegates directly to
+    `_referenced_names` (per-token) so this shares that function's own
+    two-level indirect-reference resolution exactly, rather than
+    re-deriving a narrower subset of the same logic.
 
     Added by round 26 (issue #1375) alongside `_names_with_dynamic_
     assignment`'s own extension -- see that function's own docstring for
     the live `_rule_gh_api_write`/B1a/B1b bypasses this closes, and for
     why simply deleting a poisoned name's dict entry (the first approach
     considered) would have made those two consumers LESS safe rather
-    than more."""
+    than more.
+
+    CRITICAL bug found by independent adversarial review (round 29,
+    issue #1375) and independently reproduced live, both via
+    `classify()` and via real bash execution with a stand-in `uv`/`gh`
+    binary on PATH: this function's own round-26 form deliberately did
+    ONLY a single-level scan (its own docstring argued "this only needs
+    to know whether a POISONED name itself is mentioned, not what an
+    indirect reference through it might resolve to") -- that reasoning
+    was WRONG: wrapping an already-poisoned name behind one extra
+    `${!MREF}` indirection layer defeated detection entirely, for every
+    poisoning class this function guards (round 27's static-then-
+    dynamic reassignment, round 25's append, and round 26's own read/
+    array-element/printf-v classes alike). `TOOL=uv; VERB=harmless;
+    VERB=$(echo install); MREF=VERB; $TOOL ${!MREF} foo` resolved to
+    `deny=False, reason='no denied pattern matched'` even though real
+    bash genuinely runs `uv install foo` (confirmed live via a stand-in
+    `uv` binary on PATH: captured argv `uv called with: install foo`) --
+    the DIRECT reference (`$TOOL $VERB foo`, no indirection) already
+    correctly denied via round 27's own fix; only the added `${!MREF}`
+    layer defeated it. Reproduced identically for `_rule_gh_api_write`
+    (`M=safe; M=$(echo POST); MREF=M; gh api repos/o/r/pulls/1/merge -X
+    ${!MREF}` -- real bash genuinely runs the write call with `-X POST`,
+    a genuine unreviewed write, e.g. merging a pull request) and for the
+    round-26 append/read/array-element classes threaded the identical
+    way. The sibling checkout/restore consumer (`_referenced_names`,
+    via `_resolve_path_tokens`) was NEVER affected -- it already does
+    the correct two-level resolution this function now also delegates
+    to, closing the asymmetry round 26 introduced when it added THIS
+    function as a narrower, parallel mechanism instead of reusing the
+    existing one."""
     if not names:
         return False
-    for token in seg:
-        for match in _VAR_REF_FULL_RE.finditer(token):
-            braced_name, default_name, _default_text, indirect_name, unbraced_run = match.groups()
-            for name in (braced_name, default_name, indirect_name):
-                if name is not None and name in names:
-                    return True
-            if unbraced_run is not None and any(unbraced_run[:i] in names for i in range(len(unbraced_run), 0, -1)):
-                return True
-    return False
+    return any(_referenced_names(token, name_to_raw_value, name_to_raw_value_history) & names for token in seg)
 
 
 _POISONED_REASSIGNMENT_GH_API_HIT = (
@@ -3513,6 +3536,7 @@ def _rule_gh_api_write(
     name_to_value: dict[str, str],
     name_to_raw_value: dict[str, str],
     names_poisoned_for_gh_api_and_b1: set[str] | None = None,
+    name_to_raw_value_history: dict[str, tuple[str, ...]] | None = None,
 ) -> str | None:
     """`literals` is already lowercased, matching the predecessor script's
     own case-insensitive match against its whole lowered command -- so
@@ -3535,12 +3559,13 @@ def _rule_gh_api_write(
     already confirmed, rather than by deleting the name from NAME_TO_
     VALUE/NAME_TO_RAW_VALUE."""
     poisoned = names_poisoned_for_gh_api_and_b1 or set()
+    raw_history = name_to_raw_value_history or {}
     for seg in segments:
         literals = [t.lower() for t in seg if not _is_dynamic(t)]
         has_gh_api = any(literals[i : i + 2] == ["gh", "api"] for i in range(len(literals) - 1))
         if not has_gh_api:
             continue
-        if _segment_references_a_name(seg, poisoned):
+        if _segment_references_a_name(seg, poisoned, name_to_raw_value, raw_history):
             return _POISONED_REASSIGNMENT_GH_API_HIT
         has_graphql = any(literals[i : i + 3] == ["gh", "api", "graphql"] for i in range(len(literals) - 2))
         if has_graphql and "mutation" in lowered_command:
@@ -5474,6 +5499,7 @@ def _segment_loop_hit(
     name_to_value: dict[str, str],
     name_to_raw_value: dict[str, str],
     names_poisoned_for_gh_api_and_b1: set[str] | None = None,
+    name_to_raw_value_history: dict[str, tuple[str, ...]] | None = None,
 ) -> tuple[str | None, bool]:
     """The B1a/B1b/B2/obfuscated-git-push-second-token loop -- factored
     out of `_classify_tokens` so it can be run TWICE: once against
@@ -5518,8 +5544,9 @@ def _segment_loop_hit(
     every reference anywhere as a hit."""
     is_git_push = False
     poisoned = names_poisoned_for_gh_api_and_b1 or set()
+    raw_history = name_to_raw_value_history or {}
     for seg in segments:
-        if seg and _is_dynamic(seg[0]) and _segment_references_a_name(seg, poisoned):
+        if seg and _is_dynamic(seg[0]) and _segment_references_a_name(seg, poisoned, name_to_raw_value, raw_history):
             return (
                 "a Bash command word is dynamically constructed from a variable that was reassigned "
                 "after an earlier value in a way this classifier cannot soundly resolve (a compound "
@@ -5802,22 +5829,34 @@ def _classify_tokens(
         return Verdict(True, literal_hit, is_git_push, checkout_restore_paths)
 
     gh_api_hit = _rule_gh_api_write(
-        segments, lowered_command, assigned, raw_assigned, names_poisoned_for_gh_api_and_b1
+        segments,
+        lowered_command,
+        assigned,
+        raw_assigned,
+        names_poisoned_for_gh_api_and_b1,
+        raw_assigned_history,
     ) or _rule_gh_api_write(
         segments,
         lowered_command,
         assigned_write_biased,
         raw_assigned_write_biased,
         names_poisoned_for_gh_api_and_b1,
+        raw_assigned_history,
     )
     if gh_api_hit:
         return Verdict(True, gh_api_hit, is_git_push, checkout_restore_paths)
 
-    loop_hit, loop_is_git_push = _segment_loop_hit(segments, assigned, raw_assigned, names_poisoned_for_gh_api_and_b1)
+    loop_hit, loop_is_git_push = _segment_loop_hit(
+        segments, assigned, raw_assigned, names_poisoned_for_gh_api_and_b1, raw_assigned_history
+    )
     is_git_push = is_git_push or loop_is_git_push
     if not loop_hit:
         loop_hit, biased_loop_is_git_push = _segment_loop_hit(
-            segments, assigned_write_biased, raw_assigned_write_biased, names_poisoned_for_gh_api_and_b1
+            segments,
+            assigned_write_biased,
+            raw_assigned_write_biased,
+            names_poisoned_for_gh_api_and_b1,
+            raw_assigned_history,
         )
         is_git_push = is_git_push or biased_loop_is_git_push
     if loop_hit:
@@ -5828,7 +5867,7 @@ def _classify_tokens(
     ]
     if collapsed_segments != segments:
         collapsed_hit, collapsed_is_git_push = _segment_loop_hit(
-            collapsed_segments, assigned, raw_assigned, names_poisoned_for_gh_api_and_b1
+            collapsed_segments, assigned, raw_assigned, names_poisoned_for_gh_api_and_b1, raw_assigned_history
         )
         is_git_push = is_git_push or collapsed_is_git_push
         if not collapsed_hit:
@@ -5837,6 +5876,7 @@ def _classify_tokens(
                 assigned_write_biased,
                 raw_assigned_write_biased,
                 names_poisoned_for_gh_api_and_b1,
+                raw_assigned_history,
             )
             is_git_push = is_git_push or collapsed_biased_is_git_push
         if collapsed_hit:

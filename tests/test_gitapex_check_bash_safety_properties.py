@@ -2342,24 +2342,71 @@ def test_names_reassigned_by_read_or_printf_matches_model_for_a_printf_v_target(
 def test_segment_references_a_name_finds_a_bare_reference() -> None:
     """`_segment_references_a_name` recognizes a plain `$NAME` reference
     to a poisoned name."""
-    assert checker._segment_references_a_name(["gh", "api", "repos/x/y", "-X", "$M"], {"M"}) is True
+    assert checker._segment_references_a_name(["gh", "api", "repos/x/y", "-X", "$M"], {"M"}, {}, {}) is True
 
 
 def test_segment_references_a_name_finds_a_braced_reference() -> None:
-    assert checker._segment_references_a_name(["echo", "${M}"], {"M"}) is True
+    assert checker._segment_references_a_name(["echo", "${M}"], {"M"}, {}, {}) is True
 
 
 def test_segment_references_a_name_ignores_an_unrelated_reference() -> None:
     """No false positive: a reference to a name that is NOT in the
     poisoned set is ignored."""
-    assert checker._segment_references_a_name(["echo", "$OTHER"], {"M"}) is False
+    assert checker._segment_references_a_name(["echo", "$OTHER"], {"M"}, {}, {}) is False
 
 
 def test_segment_references_a_name_empty_names_is_always_false() -> None:
     """No poisoned names at all -- the common case for every pre-existing
     call site -- never reports a reference, regardless of segment
     content."""
-    assert checker._segment_references_a_name(["gh", "api", "repos/x/y", "-X", "$M"], set()) is False
+    assert checker._segment_references_a_name(["gh", "api", "repos/x/y", "-X", "$M"], set(), {}, {}) is False
+
+
+def test_segment_references_a_name_finds_an_indirect_reference() -> None:
+    """Round 29 (issue #1375): a poisoned name referenced through one
+    extra `${!MREF}` indirection layer is still found -- `_segment_
+    references_a_name` now delegates to `_referenced_names`'s own
+    two-level resolution instead of the round-26 single-level scan that
+    missed this. MREF's raw value is "M" (the poisoned name itself), so
+    `${!MREF}` resolves through MREF to M."""
+    assert (
+        checker._segment_references_a_name(
+            ["gh", "api", "repos/x/y", "-X", "${!MREF}"],
+            {"M"},
+            {"MREF": "M"},
+            {},
+        )
+        is True
+    )
+
+
+def test_segment_references_a_name_ignores_an_unrelated_indirect_reference() -> None:
+    """No false positive: an indirect reference through a name whose
+    value does NOT point at a poisoned name is ignored."""
+    assert (
+        checker._segment_references_a_name(
+            ["gh", "api", "repos/x/y", "-X", "${!MREF}"],
+            {"M"},
+            {"MREF": "OTHER"},
+            {},
+        )
+        is False
+    )
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, ref_name=_IDENTIFIERS)
+def test_segment_references_a_name_matches_model_for_any_indirect_reference(name: str, ref_name: str) -> None:
+    """Model-based: for ANY poisoned NAME and any distinct REF_NAME whose
+    own raw value names it, a segment referencing NAME only through
+    `${!REF_NAME}` is still found -- the round-29 fix's own two-level
+    delegation to `_referenced_names` must hold for every identifier
+    shape `_IDENTIFIERS` generates, not just the specific example pinned
+    above. A REF_NAME colliding with NAME itself degenerates to the
+    already-covered direct-reference case, so it is excluded here."""
+    assume(ref_name != name)
+    seg = ["gh", "api", "repos/x/y", "-X", f"${{!{ref_name}}}"]
+    assert checker._segment_references_a_name(seg, {name}, {ref_name: name}, {}) is True
 
 
 def test_rule_gh_api_write_denies_a_reference_to_a_poisoned_name() -> None:
@@ -2715,6 +2762,43 @@ def test_classify_still_denies_a_gh_api_method_that_was_ever_a_watched_write_met
     value is ever seen, regardless of a later overwrite)."""
     verdict = checker.classify("M=POST; M=$(echo x); M=GET; gh api repos/o/r/issues -X $M")
     assert verdict.deny is True
+
+
+def test_classify_denies_a_static_then_dynamic_tool_and_verb_referenced_indirectly() -> None:
+    """CRITICAL bypass regression pin (round-29 independent review, issue
+    #1375): `_segment_references_a_name`'s own round-26 single-level
+    `${!NAME}` indirect-reference scan missed a poisoned name referenced
+    through one extra layer of indirection -- the direct reference
+    (round 27's own pin, `test_classify_denies_a_var_split_tool_and_verb_
+    reassigned_from_a_static_value` or equivalent) already denied
+    correctly; only wrapping it in `${!MREF}` bypassed detection.
+    Confirmed live via a stand-in `uv` binary on PATH that this genuinely
+    runs `uv install foo`."""
+    verdict = checker.classify("TOOL=uv; VERB=harmless; VERB=$(echo install); MREF=VERB; $TOOL ${!MREF} foo")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_gh_api_method_reassigned_from_a_static_value_referenced_indirectly() -> None:
+    """Companion to the B1b pin above, for `_rule_gh_api_write` (round 29,
+    issue #1375). Confirmed live via a stand-in `gh` binary on PATH: this
+    genuinely runs `gh api repos/o/r/pulls/1/merge -X POST`, a genuine,
+    unreviewed write API call."""
+    verdict = checker.classify("M=safe; M=$(echo POST); MREF=M; gh api repos/o/r/pulls/1/merge -X ${!MREF}")
+    assert verdict.deny is True
+
+
+def test_classify_allows_an_indirect_reference_to_an_unrelated_name_despite_a_poisoned_name_elsewhere() -> None:
+    """No over-denial: an indirect `${!MREF}` reference resolving to a
+    name that was never poisoned must stay allowed, even though a
+    DIFFERENT, genuinely poisoned name exists elsewhere in scope -- the
+    round-29 fix's two-level resolution must not treat every poisoned
+    name anywhere as reachable through an unrelated indirection.
+    Confirmed live via a stand-in `uv` binary on PATH that this genuinely
+    runs `uv status foo` -- "status" is not a watched verb."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); OTHER=status; MREF=OTHER; $TOOL ${!MREF} foo"
+    )
+    assert verdict.deny is False
 
 
 def test_resolve_path_tokens_denies_a_name_with_a_dynamic_assignment_elsewhere() -> None:
