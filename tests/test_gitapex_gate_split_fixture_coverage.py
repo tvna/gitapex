@@ -969,6 +969,20 @@ def test_procedure_stop_boundary_coverage_fails_on_malformed_declaration(tmp_pat
     assert "no well-formed exercises declaration" in offender
 
 
+def test_procedure_stop_boundary_coverage_fails_loudly_on_unparseable_yaml(tmp_path: pathlib.Path):
+    skill_md = _write_skill_and_tasks(
+        tmp_path,
+        "widget-polisher",
+        _PROCEDURE_STOP_BOUNDARY_SKILL_MD,
+        {"a.yaml": "expected:\n  exercises: [\n"},
+    )
+    offender = gate.check_procedure_stop_boundary_exercises_coverage(
+        skill_md, _PROCEDURE_STOP_BOUNDARY_SKILL_MD, tmp_path
+    )
+    assert offender is not None
+    assert "could not parse YAML" in offender
+
+
 def test_procedure_stop_boundary_coverage_none_when_no_tasks_dir(tmp_path: pathlib.Path):
     skill_md = tmp_path / "skills" / "widget-polisher" / "SKILL.md"
     skill_md.parent.mkdir(parents=True)
@@ -1077,6 +1091,50 @@ def test_fixture_demand_brand_new_skill_md_requires_coverage(tmp_path: pathlib.P
     assert offender is not None
 
 
+def test_fixture_demand_uncovered_when_no_tasks_dir_at_all(tmp_path: pathlib.Path):
+    after = _PROCEDURE_STOP_BOUNDARY_SKILL_MD + "- A brand new boundary.\n"
+    skill_md = tmp_path / "skills" / "widget-polisher" / "SKILL.md"
+    skill_md.parent.mkdir(parents=True)
+    skill_md.write_text(after, encoding="utf-8")
+    offender = gate.check_new_procedure_stop_boundary_fixture_demand(
+        skill_md, _PROCEDURE_STOP_BOUNDARY_SKILL_MD, after, tmp_path
+    )
+    assert offender is not None
+    assert "A brand new boundary." in offender
+
+
+def test_fixture_demand_skips_an_unparseable_fixture_when_scanning_for_coverage(tmp_path: pathlib.Path):
+    after = _PROCEDURE_STOP_BOUNDARY_SKILL_MD + "- A brand new boundary.\n"
+    skill_md = _write_skill_and_tasks(
+        tmp_path,
+        "widget-polisher",
+        after,
+        {"a.yaml": "expected:\n  exercises: [\n"},
+    )
+    offender = gate.check_new_procedure_stop_boundary_fixture_demand(
+        skill_md, _PROCEDURE_STOP_BOUNDARY_SKILL_MD, after, tmp_path
+    )
+    assert offender is not None
+    assert "A brand new boundary." in offender
+
+
+def test_fixture_demand_skips_a_malformed_exercises_declaration_when_scanning_for_coverage(
+    tmp_path: pathlib.Path,
+):
+    after = _PROCEDURE_STOP_BOUNDARY_SKILL_MD + "- A brand new boundary.\n"
+    skill_md = _write_skill_and_tasks(
+        tmp_path,
+        "widget-polisher",
+        after,
+        {"a.yaml": "expected:\n  exercises: true\n"},
+    )
+    offender = gate.check_new_procedure_stop_boundary_fixture_demand(
+        skill_md, _PROCEDURE_STOP_BOUNDARY_SKILL_MD, after, tmp_path
+    )
+    assert offender is not None
+    assert "A brand new boundary." in offender
+
+
 def test_main_wires_check_e_absolute_resolution(tmp_path: pathlib.Path):
     skill_md = _write_skill_and_tasks(
         tmp_path,
@@ -1134,6 +1192,53 @@ def test_main_before_map_new_file_treated_as_brand_new(tmp_path: pathlib.Path):
         ]
     )
     assert rc == 1
+
+
+def test_main_before_map_ignores_a_blank_line(tmp_path: pathlib.Path):
+    skill_md = _write_skill_and_tasks(tmp_path, "widget-polisher", _PROCEDURE_STOP_BOUNDARY_SKILL_MD, {})
+    before_map_file = tmp_path / "before_map.tsv"
+    before_map_file.write_text(f"\n{skill_md}\t\n\n", encoding="utf-8")
+    rc = gate.main(
+        [
+            "--skill-md",
+            str(skill_md),
+            "--skill-md-before-map",
+            str(before_map_file),
+            "--repo-root",
+            str(tmp_path),
+        ]
+    )
+    assert rc == 1
+
+
+def test_main_processes_a_second_skill_md_after_a_clean_delta_demand(tmp_path: pathlib.Path):
+    # Regression: the offender-collection loop must continue to a second
+    # --skill-md file after the delta-demand check for the first finds
+    # nothing new, not stop short. skill_md_1's own delta-demand check
+    # sees no change (before == after); skill_md_2's new boundary has no
+    # before-map entry, so only its absolute check runs -- and that
+    # passes too, since it declares no fixtures at all. rc == 0 confirms
+    # the loop actually reached and finished processing skill_md_2 rather
+    # than silently stopping after skill_md_1.
+    skill_md_1 = _write_skill_and_tasks(tmp_path, "widget-polisher", _PROCEDURE_STOP_BOUNDARY_SKILL_MD, {})
+    after_2 = _PROCEDURE_STOP_BOUNDARY_SKILL_MD + "- A brand new boundary.\n"
+    skill_md_2 = _write_skill_and_tasks(tmp_path, "second-widget", after_2, {})
+    before_map_file = tmp_path / "before_map.tsv"
+    before_1 = tmp_path / "before_1.md"
+    before_1.write_text(_PROCEDURE_STOP_BOUNDARY_SKILL_MD, encoding="utf-8")
+    before_map_file.write_text(f"{skill_md_1}\t{before_1}\n", encoding="utf-8")
+    rc = gate.main(
+        [
+            "--skill-md",
+            str(skill_md_1),
+            str(skill_md_2),
+            "--skill-md-before-map",
+            str(before_map_file),
+            "--repo-root",
+            str(tmp_path),
+        ]
+    )
+    assert rc == 0
 
 
 def test_main_before_map_malformed_line_fails_closed(tmp_path: pathlib.Path):
