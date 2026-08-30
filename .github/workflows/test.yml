@@ -65,18 +65,36 @@ jobs:
       # map to whole-codebase average / per-module average / per-block
       # absolute respectively (confirmed against xenon's own source,
       # xenon/core.py, not assumed from the flag names' surface reading).
-      # gitapex_check_skill_shape.py (CC 99/64, rank F, MI 0.00) is excluded as
-      # pre-existing, already-tracked debt -- re-measure trigger: drop the
-      # exclude once its two named functions (_parse_manifest,
-      # check_shape) are refactored below rank F. apm_modules/* is
-      # excluded defensively even though no workflow here populates it
-      # (it is apm's gitignored package cache), consistent with every
-      # other gate's scope never reaching into it. Source-tree-based, not
-      # test-result-based -- unaffected by the pytest-job split above.
+      # Issue #1330 split the shape-check families out of the hub file into
+      # shape_checks/*.py (verbatim, zero behavior change), then task 2
+      # internally decomposed every function across that package. That
+      # decomposition brought every shape_checks/*.py module except one back
+      # under the -m B ceiling with no exclude at all -- including
+      # shape_checks/manifest.py, whose _parse_manifest() itself still
+      # individually measures rank E, because the rest of that module's own
+      # functions pull its module average back under B. Two files remain
+      # genuinely un-decomposed and are excluded on that basis alone:
+      # gitapex_check_skill_shape.py -- check_shape() (rank D/22) and main()
+      # (rank C/13) keep this module's own average at C; format_report()
+      # (rank B/6) is already clean.
+      # shape_checks/execution_requirements.py -- _execution_requirements_network_problems()
+      # (rank C/19), _execution_requirements_checks() (rank C/14), and
+      # _execution_requirements_tools_problems() (rank C/11) keep this
+      # module's own average at C; its other 3 functions are already A/B.
+      # Re-measure trigger: drop the gitapex_check_skill_shape.py entry once
+      # check_shape()'s own worst-function rank drops enough to pull that
+      # module's average back under C (below the -m B ceiling); drop the
+      # shape_checks/execution_requirements.py entry once its own
+      # worst-function rank does the same for that module.
+      # apm_modules/* is excluded defensively even though no workflow here
+      # populates it (it is apm's gitignored package cache), consistent
+      # with every other gate's scope never reaching into it.
+      # Source-tree-based, not test-result-based -- unaffected by the
+      # pytest-job split above.
       - name: Enforce cyclomatic-complexity ceiling
         run: |
           uv run --frozen xenon --max-absolute E --max-modules B --max-average A \
-            --exclude "apm_modules/*,skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py" \
+            --exclude "apm_modules/*,skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py,skills/evaluating-skill-quality/scripts/shape_checks/execution_requirements.py" \
             .
 
       # Uploaded as a raw coverage DATA file (never a report -- see the

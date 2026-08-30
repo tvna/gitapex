@@ -18,6 +18,7 @@ import re
 import gitapex_check_skill_shape as css
 import gitapex_scan_skill_metadata_schema as scanner
 import pytest
+import shape_checks.constants as shape_checks_constants
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 SKILLS_DIR = REPO_ROOT / "skills"
@@ -327,7 +328,15 @@ def test_skill_dep_list_item_re_indent_matches_its_docstrings():
     )
     numeral = numeral_match.group(1)
 
-    source_lines = pathlib.Path(css.__file__).read_text(encoding="utf-8").splitlines()
+    # SKILL_DEP_LIST_ITEM_RE's own definition (and the comment block above
+    # it) now live in shape_checks/constants.py, not in css.__file__ itself
+    # (issue #1330's package split) -- css.SKILL_DEP_LIST_ITEM_RE still
+    # resolves fine as a re-exported attribute, but this drift check scans
+    # physical source text, so it must follow the definition to its actual
+    # file. Imported (rather than path-joined off css.__file__'s directory)
+    # so it tracks the real module location the same way css's own
+    # `from shape_checks.constants import ...` does.
+    source_lines = pathlib.Path(shape_checks_constants.__file__).read_text(encoding="utf-8").splitlines()
     definition_index = next(
         i for i, line in enumerate(source_lines) if line.startswith("SKILL_DEP_LIST_ITEM_RE = re.compile(")
     )
