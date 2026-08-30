@@ -264,7 +264,23 @@ def test_call_json_json_loads_is_unguarded_and_raises_jsondecodeerror_not_apierr
 
 
 # ---------------------------------------------------------------------------
-# graphql_call -- moved verbatim from gitapex_sync_pr_publish.py.
+# format_code -- direct unit coverage of both branches. Exercised
+# indirectly above through GitHubApiError messages, but never asserted on
+# its own until now.
+# ---------------------------------------------------------------------------
+
+
+def test_format_code_renders_network_error_sentinel_as_words() -> None:
+    assert _gitapex_github_http.format_code(0) == "network error"
+
+
+def test_format_code_renders_real_status_code_as_its_number() -> None:
+    assert _gitapex_github_http.format_code(502) == "502"
+
+
+# ---------------------------------------------------------------------------
+# graphql_call -- moved from gitapex_sync_pr_publish.py (see this
+# function's own docstring for the two edits made on arrival).
 # ---------------------------------------------------------------------------
 
 
@@ -389,6 +405,30 @@ def test_graphql_call_retries_url_error_then_succeeds() -> None:
         attempts.append(1)
         if len(attempts) < 2:
             raise urllib.error.URLError("connection refused")
+        return Response(200, json.dumps({"data": {"ok": True}}))
+
+    code, body = _gitapex_github_http.graphql_call(
+        query="query", variables={}, token="tok", opener=opener, sleeper=lambda _: None
+    )
+    assert code == 200
+    assert body == {"data": {"ok": True}}
+    assert len(attempts) == 2
+
+
+def test_graphql_call_retries_incomplete_read_then_succeeds() -> None:
+    # Regression test (issue #729, Step 8 adversarial review):
+    # graphql_call arrived catching only urllib.error.URLError, which
+    # does not cover http.client.IncompleteRead (not a URLError/OSError
+    # subclass) -- a stalled/truncated body read on the GraphQL endpoint
+    # used to escape uncaught instead of retrying, unlike
+    # request_with_retry's own (OSError, http.client.IncompleteRead)
+    # handling. This must retry exactly like a URLError does.
+    attempts: list[int] = []
+
+    def opener(request: urllib.request.Request) -> Response:
+        attempts.append(1)
+        if len(attempts) < 2:
+            raise http.client.IncompleteRead(b"7 bytes read")
         return Response(200, json.dumps({"data": {"ok": True}}))
 
     code, body = _gitapex_github_http.graphql_call(

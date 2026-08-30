@@ -278,14 +278,22 @@ def graphql_call(
     """Execute a GitHub GraphQL query/mutation, retrying transient
     failures.
 
-    Moved verbatim from `gitapex_sync_pr_publish.py` (issue #729,
-    criterion 1) -- not redesigned, it was already correct: it retries on
-    5xx/network failures AND on a 200 response whose body contains a
-    GraphQL transient-error marker (`_GRAPHQL_TRANSIENT_ERROR_MARKER`,
-    via `_graphql_is_transient`), and it already guards its own
-    `json.loads` with `try/except json.JSONDecodeError`, degrading to an
-    empty dict on an unparseable/empty body. The one edit made on arrival:
-    its four hand-written `add_header` calls now go through this module's
+    Moved from `gitapex_sync_pr_publish.py` (issue #729, criterion 1),
+    with two edits made on arrival rather than a verbatim copy: it
+    retries on 5xx/network failures AND on a 200 response whose body
+    contains a GraphQL transient-error marker
+    (`_GRAPHQL_TRANSIENT_ERROR_MARKER`, via `_graphql_is_transient`), and
+    it already guards its own `json.loads` with `try/except
+    json.JSONDecodeError`, degrading to an empty dict on an
+    unparseable/empty body -- that part really was already correct. But
+    its own network-failure handling was narrower than
+    `request_with_retry`'s: `except urllib.error.URLError` alone misses
+    `http.client.IncompleteRead` (not a `URLError`/`OSError` subclass),
+    so a body read that starts but stalls or is cut short escaped
+    uncaught here instead of retrying (found by this issue's own Step 8
+    adversarial review, fixed to match `request_with_retry`'s own
+    `except (OSError, http.client.IncompleteRead)` shape). Its four
+    hand-written `add_header` calls also now go through this module's
     own `build_headers`, which already produced that exact header set for
     the REST path -- keeping them re-declared here would have re-created,
     inside the shared module, the very header duplication this module
@@ -310,9 +318,18 @@ def graphql_call(
         except urllib.error.HTTPError as error:
             code = int(error.code)
             body_str = error.read().decode("utf-8", errors="replace")
-        except urllib.error.URLError:
+        except (OSError, http.client.IncompleteRead) as error:
+            # Matches request_with_retry's own except clause (issue #729,
+            # Step 8 adversarial review): http.client.IncompleteRead is
+            # not an OSError subclass, so a body read that starts but
+            # stalls or is cut short needs its own arm here too -- the
+            # narrower `except urllib.error.URLError` this function
+            # carried on arrival (URLError IS an OSError subclass, so it
+            # stays covered) missed that case, and an IncompleteRead
+            # would otherwise escape this loop uncaught instead of
+            # retrying like every other failure mode here does.
             code = 0
-            body_str = ""
+            body_str = str(error)
         try:
             parsed = json.loads(body_str) if body_str else {}
         except json.JSONDecodeError:

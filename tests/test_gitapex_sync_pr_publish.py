@@ -147,90 +147,25 @@ def test_apply_call_uses_default_opener(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 # ---------------------------------------------------------------------------
-# graphql_call
+# graphql_call (issue #729): this module no longer defines its own
+# graphql_call -- `from _gitapex_github_http import ... graphql_call` at
+# the top of this module imports the real one directly, unwrapped, so
+# `spp.graphql_call` and `_gitapex_github_http.graphql_call` are the exact
+# same function object. Unlike `add_label` in
+# test_gitapex_gate_acm_issue_disclosure.py (a local function that
+# delegates to the shared module internally), there is no local wrapping
+# behavior left here to exercise -- the retry/backoff/transient-marker/
+# degrade mechanics this block used to re-test through `spp.graphql_call`
+# are already covered, more precisely (down to `_graphql_is_transient`'s
+# own branches), by tests/test_gitapex_github_http.py. The identity
+# assertion below is what is left to check: that this module's import
+# still resolves to the real thing and was not accidentally shadowed by a
+# local redefinition.
 # ---------------------------------------------------------------------------
 
 
-def test_graphql_call_happy_path() -> None:
-    def opener(request: urllib.request.Request) -> Response:
-        return Response(200, '{"data":{"x":1}}')
-
-    code, body = spp.graphql_call(query="q", variables={}, token="tok", opener=opener)
-    assert code == 200
-    assert body == {"data": {"x": 1}}
-
-
-def test_graphql_call_retries_5xx_then_succeeds() -> None:
-    responses: list[urllib.error.HTTPError | Response] = [http_error(502, ""), Response(200, '{"data":{}}')]
-    sleeps: list[float] = []
-
-    def opener(request: urllib.request.Request) -> Response:
-        response = responses.pop(0)
-        if isinstance(response, urllib.error.HTTPError):
-            raise response
-        return response
-
-    code, _body = spp.graphql_call(query="q", variables={}, token="tok", opener=opener, sleeper=sleeps.append)
-    assert code == 200
-    assert sleeps == [5]
-
-
-def test_graphql_call_retries_transient_marker_then_succeeds() -> None:
-    transient_body = json.dumps({"errors": [{"message": "Something went wrong while executing your query."}]})
-    responses = [Response(200, transient_body), Response(200, '{"data":{}}')]
-    sleeps: list[float] = []
-
-    def opener(request: urllib.request.Request) -> Response:
-        return responses.pop(0)
-
-    code, body = spp.graphql_call(query="q", variables={}, token="tok", opener=opener, sleeper=sleeps.append)
-    assert code == 200
-    assert body == {"data": {}}
-    assert sleeps == [5]
-
-
-def test_graphql_call_non_transient_error_no_retry() -> None:
-    calls = 0
-
-    def opener(request: urllib.request.Request) -> Response:
-        nonlocal calls
-        calls += 1
-        return Response(200, json.dumps({"errors": [{"message": "Validation failed"}]}))
-
-    code, body = spp.graphql_call(query="q", variables={}, token="tok", opener=opener)
-    assert calls == 1
-    assert code == 200
-    assert "errors" in body
-
-
-def test_graphql_call_network_failure_degrades_to_empty_body() -> None:
-    sleeps: list[float] = []
-
-    def opener(request: urllib.request.Request) -> Response:
-        raise urllib.error.URLError("boom")
-
-    code, body = spp.graphql_call(query="q", variables={}, token="tok", opener=opener, sleeper=sleeps.append)
-    assert code == 0
-    assert body == {}
-    assert sleeps == [5, 10]
-
-
-def test_graphql_call_invalid_json_body() -> None:
-    def opener(request: urllib.request.Request) -> Response:
-        return Response(200, "not json")
-
-    code, body = spp.graphql_call(query="q", variables={}, token="tok", opener=opener)
-    assert code == 200
-    assert body == {}
-
-
-def test_graphql_call_uses_default_opener(monkeypatch: pytest.MonkeyPatch) -> None:
-    def fake_urlopen(request: urllib.request.Request, timeout: float | None = None) -> Response:
-        return Response(200, '{"data":{}}')
-
-    monkeypatch.setattr(spp.urllib.request, "urlopen", fake_urlopen)
-    code, _body = spp.graphql_call(query="q", variables={}, token="tok")
-    assert code == 200
+def test_graphql_call_is_the_shared_modules_graphql_call() -> None:
+    assert spp.graphql_call is _gitapex_github_http.graphql_call
 
 
 # ---------------------------------------------------------------------------
