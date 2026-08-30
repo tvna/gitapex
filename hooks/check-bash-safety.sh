@@ -200,4 +200,82 @@ if [ "$is_git_push" = "true" ]; then
   fi
 fi
 
+# --- Finding 5: git checkout/restore gated on a live git-diff check (issue #1375) ---
+# `git checkout -- PATH` / `git restore PATH` / `git checkout .` can discard
+# uncommitted work on a tracked path with no warning at all. gitapex_check_bash_safety.py's
+# own classifier already extracted every candidate path such an invocation
+# could discard (its own "git checkout/restore path extraction" section),
+# soundly and with no live git call of its own. Unlike Finding 4's own
+# advisory provenance scan (surfaces candidates, does not decide -- warn,
+# not deny), "does git diff report a difference at this path" is a binary,
+# deterministic fact about repo state with no judgment-call axis, so a hit
+# here denies.
+checkout_restore_paths_count=$(printf '%s' "$classifier_output" | jq -r '.checkout_restore_paths | length // 0')
+if [ "$checkout_restore_paths_count" -gt 0 ]; then
+  # Read `.cwd` from the ORIGINAL tool-call payload, not
+  # `${CLAUDE_PROJECT_DIR:-$(pwd)}` the way Finding 4 above does -- a push
+  # is not cwd-relative, but a `git diff -- PATH` pathspec check is, and
+  # `.cwd` is Claude Code's own record of the Bash tool call's actual
+  # working directory (updated on every `cd` the session runs), not this
+  # hook runner's own. Replaying the near-miss's own exact command from a
+  # subdirectory must resolve the pathspec against the SAME tree bash
+  # itself would use.
+  cwd=$(printf '%s' "$input" | jq -r '.cwd // empty')
+  if [ -z "$cwd" ]; then
+    deny "Blocked by hooks/check-bash-safety.sh: this git checkout/restore command needs the PreToolUse payload's own .cwd field to check the right working tree against, but it was missing or empty. Failing closed."
+  fi
+  if ! git -C "$cwd" rev-parse --show-toplevel >/dev/null 2>&1; then
+    deny "Blocked by hooks/check-bash-safety.sh: '$cwd' is not inside a git working tree -- cannot verify this git checkout/restore command is safe. Failing closed."
+  fi
+  # A fresh repo with no commits yet has no HEAD to diff against
+  # (`git diff --quiet HEAD -- PATH` fails with "fatal: bad revision
+  # 'HEAD'", confirmed live, exit 128, not the "differs" exit 1) --
+  # compare against git's own well-known empty-tree object instead, so a
+  # genuinely clean fresh repo is not denied outright.
+  if git -C "$cwd" rev-parse --verify -q HEAD >/dev/null 2>&1; then
+    diff_base="HEAD"
+  else
+    diff_base="4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+  fi
+  # Disclosed, accepted residual (round-3 independent review, issue #1375):
+  # a bare `git checkout -- PATH` / `git restore PATH` restores the
+  # WORKING TREE from the INDEX, not from HEAD -- so a path that was
+  # `git add`-ed with no further unstaged edit (worktree == index, but
+  # index != HEAD) is a genuine no-op checkout/restore, yet this check
+  # diffs against HEAD/the empty tree and denies it as if it would
+  # discard something. Confirmed live: stage a change with no further
+  # edit, then `git checkout -- PATH` changes nothing on disk, but this
+  # diff_base comparison still reports a difference. Deliberately left
+  # as-is rather than special-cased per flag combination (`--staged`
+  # alone already skips this check entirely below, since unstaging alone
+  # never discards file content) -- the failure direction is safe
+  # (over-denial only, matching every other explicit-source variant this
+  # check already treats the same conservative way; it never under-denies
+  # a real discard), and the existing deny message's `git checkout -m --`
+  # / `git add` remedies still resolve it as a false alarm the caller can
+  # work around.
+  # Fed via process substitution (`< <(...)`), not a pipe
+  # (`... | while read`) -- bash runs a pipe's right-hand side in a
+  # subshell, where `deny`'s own `exit 2` would only exit that subshell,
+  # letting this script fall through to its own `exit 0` past the loop
+  # instead of actually denying. Process substitution keeps the loop in
+  # THIS shell, so `exit 2` inside it really does exit the whole script.
+  while IFS= read -r encoded_path; do
+    [ -z "$encoded_path" ] && continue
+    # Each line is one base64-encoded path (issue #1375: a genuine JSON
+    # array from the classifier, base64-encoded here too) -- a path
+    # containing a newline or other shell-hazardous byte would otherwise
+    # split across `read` calls or corrupt this loop's own field
+    # splitting; base64 has neither.
+    path=$(printf '%s' "$encoded_path" | base64 -d)
+    diff_exit=0
+    git -C "$cwd" diff --quiet "$diff_base" -- "$path" || diff_exit=$?
+    if [ "$diff_exit" -eq 1 ]; then
+      deny "Blocked by hooks/check-bash-safety.sh: this git checkout/restore command would discard uncommitted changes at '$path'. Stash first (git stash push -- '$path') if this is not resolving a merge conflict; if it is, resolve and git add the path, or use git checkout -m -- '$path' to regenerate conflict markers instead of discarding them."
+    elif [ "$diff_exit" -ne 0 ]; then
+      deny "Blocked by hooks/check-bash-safety.sh: could not verify whether '$path' has uncommitted changes (git diff exited $diff_exit). Failing closed."
+    fi
+  done < <(printf '%s' "$classifier_output" | jq -r '.checkout_restore_paths[] | @base64')
+fi
+
 exit 0
