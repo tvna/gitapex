@@ -1,0 +1,86 @@
+# Issue #1498 (filed from merge-retrospective issue #1492's own repair 11).
+# A new or materially changed function body, added by a PR diff to a
+# skills/*/scripts/*.py or .github/scripts/*.py checker script, must have a
+# new or changed test in the same diff covering it -- see
+# .github/scripts/gitapex_gate_function_body_test_coverage.py's own module
+# docstring for the exact coverage rule, the motivating gap (commit
+# 379c0fde shipping with zero test changes), and the disclosed scope limits
+# and known misses/over-reports. This job runs that scan against exactly the
+# in-scope files a diff actually adds function-body lines to.
+#
+# Deliberately no `paths:` filter -- drift gate:
+# tests/test_gitapex_gate_function_body_test_coverage.py's own
+# test_the_workflow_has_no_paths_filter. See that test's docstring for why
+# (GitHub's own skipped-vs-never-ran distinction for a required check).
+name: Function-body test-coverage gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  function-body-test-coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      # `ref:`/`fetch-depth: '0'` below is this gate's own diff-post-image
+      # checkout pin -- drift gate: tests/test_gitapex_gate_function_body_test_coverage.py's
+      # own test_the_workflow_checks_out_the_head_sha_with_full_history. See
+      # that test's docstring for why (this gate correlates diff-derived
+      # line numbers with tree content, the same requirement
+      # detection-logic-property-coverage-gate.yml states for itself and
+      # for the identical reason -- this gate additionally reads the
+      # corresponding tests/*.py files' own tree content at the same head,
+      # not only the graded source file's).
+      #
+      # The accepted cost, stated rather than discovered later: this runs
+      # the PR branch's own copy of the gate, so a branch that forked before
+      # a hardening of the gate landed on main is graded by the older rules.
+      # Branch protection's "Require branches to be up to date" closes that,
+      # and it is a GitHub-side setting no in-repo file can record.
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+        with:
+          fetch-depth: '0'
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      # git merge-base below -- drift gate:
+      # tests/test_gitapex_gate_function_body_test_coverage.py's own
+      # test_the_workflow_uses_merge_base_not_base_sha.
+      #
+      # The two `git diff` flags below (--no-renames, -c
+      # core.quotePath=false) -- drift gate:
+      # tests/test_gitapex_gate_function_body_test_coverage.py's own
+      # test_the_workflow_passes_the_two_flags_the_gate_depends_on. See that
+      # test's docstring for why each matters.
+      #
+      # Issue #1035: every `.github/scripts/*.py` invocation goes through
+      # `uv run` regardless of whether the script needs a third-party
+      # dependency. This gate carries a real `pydantic` import (its own
+      # --root validation), so `uv run` is load-bearing here too.
+      - name: Grade the function-body changes this diff adds
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if ! merge_base=$(git merge-base "$BASE_SHA" "$HEAD_SHA"); then
+            echo "::error::git merge-base failed between $BASE_SHA and $HEAD_SHA" >&2
+            exit 1
+          fi
+          git -c core.quotePath=false diff -U0 --no-renames "$merge_base" "$HEAD_SHA" -- '*.py' \
+            | uv run --frozen python3 .github/scripts/gitapex_gate_function_body_test_coverage.py

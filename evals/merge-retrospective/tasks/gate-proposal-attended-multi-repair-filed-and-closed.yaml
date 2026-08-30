@@ -1,0 +1,65 @@
+id: merge-retrospective-gate-proposal-attended-multi-repair-filed-and-closed
+name: Attended Multi-Repair Cycle -- Each Gate Repair Filed, Verified, Retrospective Closes
+description: Two missing-deterministic-gate repairs in one cycle are each filed as their own standalone, index-keyed gate-proposal issue via the new helper script, each filing confirmed by re-fetch, and -- once every repair carries a confirmed Filed as line and an attended operator gives an explicit go-ahead -- the retrospective issue closes.
+tags:
+  - quality
+  - gate-proposal
+  - attended
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #350 ("feat: add --batch flag to the
+    export command") just merged into main.
+
+    Step 0 dedup check (already run for you): a CI-opened stub
+    retrospective issue, #351, already exists for PR #350 (still carrying
+    the "Automated stub opened by the post-merge-auto-retro gate" marker
+    text -- nothing has enriched it yet).
+
+    Here is the full history between open and merge -- two repairs
+    occurred:
+
+    1. CI run #1 failed: `flake8` reported
+       `F401 'os' imported but unused` in `export/batch.py`. The author
+       pushed a follow-up commit removing the unused import, and CI run
+       #2 passed clean.
+    2. CI run #2 [separately] failed: `mypy` reported
+       `Argument 1 to "write_batch" has incompatible type "list[str]";
+       expected "list[Path]"` in `export/batch.py`. The author pushed a
+       follow-up commit converting the incoming paths to `Path` before the
+       call, and CI run #3 passed clean.
+
+    Both are missing-deterministic-gate repairs. After classifying them,
+    calling `gitapex_file_gate_proposal.py` for each returns:
+    - Repair 1: title `gate-proposal: retro #351 repair 1: Failed CI
+      rerun (flake8 unused import)`, an ACM-shaped body, label
+      `gate-proposal`.
+    - Repair 2: title `gate-proposal: retro #351 repair 2: Failed CI
+      rerun (mypy type mismatch)`, an ACM-shaped body, label
+      `gate-proposal`.
+
+    Searching `mcp__github__list_issues` (label `gate-proposal`) for each
+    exact title finds no existing match for either. Calling `issue_write`
+    method `create` for each, then re-fetching via `issue_read` to
+    confirm: repair 1's issue is confirmed created as #402; repair 2's
+    issue is confirmed created as #403.
+
+    An operator is present and available to respond; when you preview the
+    close, they reply "yes, go ahead and close it."
+
+    Run the retrospective now that PR #350 has merged.
+expected:
+  output_contains:
+    - "missing deterministic gate"
+    - "gate-proposal: retro #351 repair 1"
+    - "gate-proposal: retro #351 repair 2"
+    - "Filed as: #402"
+    - "Filed as: #403"
+    - "Refs #350"
+  output_not_contains:
+    - "leave the retrospective issue open"
+    - "Carried-forward gate"
+  output_contains_near:
+    - all: ["repair 1: Failed CI rerun (flake8 unused import)", "#402"]
+      window: 400
+    - all: ["repair 2: Failed CI rerun (mypy type mismatch)", "#403"]
+      window: 400

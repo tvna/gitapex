@@ -148,20 +148,19 @@ disallow_untyped_calls = false
 disallow_any_generics = false
 # tracking: issue #684 (.github/scripts/)
 
-# Issue #758: the Tier C override formerly here for
-# skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py
-# (issue #684) is retired. That override existed for genuine mypy
-# narrowing issues deep inside a hand-rolled, adversarial-input-tolerant
-# YAML-like parser (~1,150 lines of it, deleted by this migration in
-# favor of yaml.safe_load + jsonschema.Draft202012Validator). The
-# migration's own new code hit a handful of real narrowing issues too
-# (an untyped dict.get() result flowing into functions typed against
-# dict[str, object], and a TypeGuard-shaped helper that was returning a
-# bare bool) -- each was fixed at its own call site (explicit
-# isinstance-narrowed local variables, converting
-# _valid_skill_dependency_list to TypeGuard[list[str]]) rather than
-# re-suppressed, so this file now passes mypy under this project's
-# ordinary, non-overridden settings like every other Tier A/B module.
+# Issue #758: the Tier C overrides formerly here for
+# gitapex_check_skill_shape/shape_checks.skill_dependencies (issue #684,
+# narrowed by issue #1330's own split) are retired. Both existed for
+# genuine mypy narrowing gaps inside a hand-rolled, adversarial-input-
+# tolerant YAML-like parser (_parse_manifest, ~1,150 lines, deleted by
+# this migration in favor of yaml.safe_load + jsonschema.
+# Draft202012Validator) and its own `_valid_skill_dependency_list`
+# helper, which returned a plain bool rather than a TypeGuard. The
+# latter is now typed `TypeGuard[list[str]]`, letting mypy narrow the
+# `requires if _valid_skill_dependency_list(requires) else []` ternary
+# on its own -- fixed at the call site rather than re-suppressed, so
+# both modules now pass mypy under this project's ordinary,
+# non-overridden settings like every other Tier A/B module.
 
 # Issue #684, task T8: gitapex_run_ablation.py/gitapex_check_dimension_coverage.py's own CLI
 # args are now validated through a pydantic model immediately after

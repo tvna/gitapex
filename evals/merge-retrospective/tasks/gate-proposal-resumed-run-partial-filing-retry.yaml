@@ -1,0 +1,73 @@
+id: merge-retrospective-gate-proposal-resumed-run-partial-filing-retry
+name: Resumed Run After A Partial Filing Failure Retries Only The Unfiled Repair
+description: A retrospective issue already carries one repair's confirmed Filed as line from an earlier, interrupted session, and a second repair whose create call was attempted but never confirmed. Resuming must retry filing only the still-unfiled repair -- the already-filed repair is recognized as already filed and not re-created or duplicated.
+tags:
+  - quality
+  - gate-proposal
+  - resumed-run
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #370 ("feat: add rate-limiting to the
+    public API") merged into main. The retrospective issue #371 already
+    exists, created by an earlier, interrupted invocation of this same
+    procedure. Its body already carries the full enumerated repair list
+    and both repair entries in full, exactly as follows:
+
+    1. [Failed CI rerun (missing await)] `pytest -k rate_limit` failed
+       with `RuntimeWarning: coroutine 'check_limit' was never awaited`
+       because the new rate-limiting call site was written as
+       `check_limit(...)` instead of `await check_limit(...)`. The author
+       pushed a follow-up commit adding the missing `await`, and CI run #2
+       passed clean.
+       Classification: missing deterministic gate.
+       Status: `missing-deterministic-gate`
+       Proposed gate: add a lint rule (or a `--strict` type-checker flag)
+       that flags an un-awaited coroutine call at its own call site.
+       Filed as: #501
+
+    2. [Failed CI rerun (hardcoded limit)] A separate CI run failed:
+       `pytest -k rate_limit_config` reported the per-route rate limit was
+       hardcoded to `100` instead of reading
+       `settings.RATE_LIMIT_PER_MINUTE`. The author pushed a follow-up
+       commit reading the value from settings instead, and CI run #3
+       passed clean.
+       Classification: missing deterministic gate.
+       Status: `missing-deterministic-gate`
+       Proposed gate: add a lint rule flagging a literal integer passed
+       where a named settings constant already exists for the same
+       purpose.
+
+    Repair 1's filing was already confirmed in the interrupted session:
+    `gate-proposal: retro #371 repair 1: Failed CI rerun (missing await)`
+    was created and re-fetch-verified as issue #501 before that session
+    ended. Repair 2's filing was attempted in that same interrupted
+    session -- `issue_write` method `create` was called with title
+    `gate-proposal: retro #371 repair 2: Failed CI rerun (hardcoded
+    limit)`, but the follow-up `issue_read` re-fetch to confirm it never
+    completed before the session ended, so repair 2's `Filed as:` line was
+    never recorded.
+
+    You are resuming this same retrospective now, to finish the filing. An
+    operator is present and available to respond. Searching
+    `mcp__github__list_issues` (label `gate-proposal`) for the exact title
+    `gate-proposal: retro #371 repair 2: Failed CI rerun (hardcoded
+    limit)` finds no existing match (the earlier `create` call must not
+    have actually gone through). Calling `issue_write` method `create` for
+    repair 2 with that same title succeeds this time, and the follow-up
+    `issue_read` re-fetch confirms it as issue #588. You preview the
+    close for the operator, who replies "go ahead, close it."
+
+    Finish filing PR #370's retrospective (issue #371) now.
+expected:
+  output_contains:
+    - "Filed as: #588"
+    - "gate-proposal: retro #371 repair 2"
+    - "already filed"
+    - "Refs #370"
+  output_not_contains:
+    - "Filed as: #502"
+    - "Filed as: #589"
+    - "Carried-forward gate"
+  output_contains_near:
+    - all: ["#501", "already filed"]
+      window: 300

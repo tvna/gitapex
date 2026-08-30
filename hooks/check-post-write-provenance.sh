@@ -2,12 +2,12 @@
 # PostToolUse hook (matchers: mcp__github__create_pull_request,
 # mcp__github__update_pull_request, mcp__github__issue_write): re-fetch the
 # body GitHub actually stored and re-run the outward-artifact-preflight
-# provenance (check 1) and ASCII-only (check 3) scans against it.
+# provenance (check 1) and ASCII-only (check 2) scans against it.
 #
 # Issue #878: every existing scan runs against the drafted text, before the
 # write executes. skills/outward-artifact-preflight/SKILL.md's own Stop
 # boundary states the gap -- "no hook re-checks what the platform actually
-# stores" -- and makes its check 2 post-creation re-check mandatory by
+# stores" -- and makes its check 4 post-creation re-check mandatory by
 # hand. This is the deterministic backstop for that manual step.
 #
 # This is this repository's FIRST PostToolUse hook; every other entry in
@@ -57,7 +57,7 @@ set -euo pipefail
 # prevent. A fixed, statically-escaped JSON literal (no interpolation, so
 # no escaping risk) covers that case before anything else runs.
 if ! command -v jq >/dev/null 2>&1; then
-  printf '%s\n' "{\"decision\": \"block\", \"reason\": \"hooks/check-post-write-provenance.sh could not verify the stored PR/issue body: jq is not available on PATH. The artifact this call just published is UNVERIFIED -- run skills/outward-artifact-preflight/SKILL.md check 2 by hand.\", \"systemMessage\": \"post-write provenance re-check could not run: jq is not available on PATH. The published artifact is unverified.\"}"
+  printf '%s\n' "{\"decision\": \"block\", \"reason\": \"hooks/check-post-write-provenance.sh could not verify the stored PR/issue body: jq is not available on PATH. The artifact this call just published is UNVERIFIED -- run skills/outward-artifact-preflight/SKILL.md check 4 by hand.\", \"systemMessage\": \"post-write provenance re-check could not run: jq is not available on PATH. The published artifact is unverified.\"}"
   exit 0
 fi
 

@@ -404,6 +404,25 @@ check does not rely on.
     caller-created and not written by the dispatch, not an OS-enforced
     guarantee; state which of the two a given run actually had rather than
     implying the stronger one.
+- **Reconfirmed 2026-08-30, at a newer CLI version, Same-run, unreviewed.**
+  Same identifying signals as above (`CLAUDE_CODE_REMOTE=true`,
+  `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=cloud_default`), except `claude
+  --version` now reports `2.1.251 (Claude Code)`, a version none of the
+  entries above cover, so this is a fresh Verification procedure run, not a
+  restatement. Run while battle-testing `executing-a-branch-plan` via
+  `battle-testing-a-skill`. Auth check first: `claude -p` authenticated
+  successfully with a bare, freshly created isolated `$HOME` (no
+  `.credentials.json` copied) -- this environment authenticates via an
+  env-supplied OAuth token/file descriptor, not a `~/.claude/.credentials.json`
+  file, so the recipe's `$HOME`-copy step can use an empty directory here
+  rather than a scrubbed copy of the real one. Positive control (isolated
+  `$HOME`, cwd holding a synthetic sentinel `CLAUDE.md` outside any real
+  repository): correctly reported the sentinel phrase. Negative control
+  (identical isolated `$HOME`, cwd with no `CLAUDE.md`/`AGENTS.md` in its
+  full ancestry, independently confirmed): correctly reported none loaded.
+  The verified alternative still holds at this version. Marked
+  Same-run, unreviewed per Trust class above until this entry itself merges
+  through this repository's own review gate.
 
 #### `claude -p --plugin-dir` combined with cwd/HOME isolation
 

@@ -9,8 +9,8 @@ read one red check, fix, push again. Issue #876 records that same proposal
 being independently re-raised and left unresolved across #707, #622, #616
 (twice) and #670.
 
-``python3 .github/scripts/gitapex_gate_local_preflight.py`` runs every such gate
-in one pass and prints one aggregate verdict.
+``uv run --frozen python3 .github/scripts/gitapex_gate_local_preflight.py``
+runs every such gate in one pass and prints one aggregate verdict.
 
 **The wired set is discovered, never hardcoded here.** ``.gitapex/ssot.json``
 is already this repository's registry of its own gates; issue #876's third
@@ -78,21 +78,26 @@ reasons.
   (issue #890), which closes the "configured here but never actually
   installed" half; nothing closes the ``--no-verify`` half. CI remains the
   authoritative merge gate for every gate carrying a ``ci`` plane -- true
-  for 38 of the 40 wired gates. ``behind-base`` (issue #985) and
+  for 41 of the 43 wired gates. ``behind-base`` (issue #985) and
   ``real-checkout-git-write`` (issue #991) are the two exceptions: each
   carries only ``local``, so for those two gates specifically this
   pre-push hook -- bypassable the same way as any other -- is the *only*
   enforcement, with no CI-side backstop. Named as a real gap in
   ``behind-base``'s own docstring and issue #985's Acceptance Criteria
   Map; the same gap now applies to ``real-checkout-git-write`` too.
-- **Every wired gate runs through ``uv``.** CONTRIBUTING.md invokes this
-  file with plain ``python3``, and so does the pre-push hook, because the
-  runner itself needs no dependencies -- but all 40 wired argvs begin with
-  ``uv``, since each gate carries its own pinned invocation. Without ``uv``
-  on PATH every one of them reports ``FAIL ... failed to run``, which
-  reads as a whole broken wired set rather than one missing tool. ``uv`` is
-  already a documented prerequisite for this repository; it is named here so
-  the failure mode is legible.
+- **The runner itself, and every wired gate, runs through ``uv``.** Issue
+  #1485: the runner imports ``_gitapex_schema_validation.py``, which needs
+  ``jsonschema`` -- a real, non-stdlib dependency, contrary to an earlier
+  revision of this paragraph's own "the runner itself needs no
+  dependencies" claim. A bare system ``python3`` with no ``jsonschema``
+  installed crashed the whole runner on import before any of the 43 wired
+  gates got a chance to run individually, so CONTRIBUTING.md's standalone
+  example and the pre-push hook's own ``entry`` both now invoke it as ``uv
+  run --frozen python3`` too, the same pin every wired gate's own argv
+  already begins with. Without ``uv`` on PATH every wired gate still
+  reports ``FAIL ... failed to run`` for its own subprocess, which reads as
+  a whole broken wired set rather than one missing tool; ``uv`` is already
+  a documented prerequisite for this repository.
 - Gates run **sequentially**, in registry-id order, for legible output on a
   terminal. ``mypy-type-check`` and ``cyclomatic-complexity-floor`` dominate
   the wall clock; parallelism was not added because interleaved failure
@@ -141,9 +146,10 @@ other name every future edit to a module that executes registry-declared
 argv on contributor machines would escape this repository's own
 gate-quality disclosure requirement.
 
-Run standalone: ``python3 .github/scripts/gitapex_gate_local_preflight.py``
-(exit 1 if any wired gate fails, exit 0 when all pass), ``--list`` to print
-the wired set without running anything, or via the pytest gate in
+Run standalone: ``uv run --frozen python3
+.github/scripts/gitapex_gate_local_preflight.py`` (exit 1 if any wired gate
+fails, exit 0 when all pass), ``--list`` to print the wired set without
+running anything, or via the pytest gate in
 ``tests/test_gitapex_gate_local_preflight.py``.
 """
 
@@ -171,11 +177,14 @@ SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
 # own _GROUP_TIMEOUT_SECONDS = 600 -- so that one gate's own theoretical
 # worst case is ~4200 s, not 600 s. A ceiling matching that would be useless
 # as a hang guard (80 minutes of a silent pre-push), so this is a judgment
-# call in the other direction. For scale: a warm run of all 40 wired gates
-# combined measures roughly 17 s end to end (the
-# prior 39-gate set measured roughly 12 s, the 38-gate set before that
-# measured roughly 11 s, the 37-gate set before that measured roughly 11 s,
-# the 36-gate set before that measured roughly 11 s,
+# call in the other direction. For scale: a warm run of all 43 wired gates
+# combined measures roughly 15 s end to end in this measurement (the
+# prior 42-gate set measured roughly 18 s, the 41-gate set before that
+# measured roughly 18 s, the 40-gate set before that
+# measured roughly 17 s, the 39-gate set before that
+# measured roughly 12 s, the 38-gate set before that
+# measured roughly 11 s, the 37-gate set before that
+# measured roughly 11 s, the 36-gate set before that measured roughly 11 s,
 # the 35-gate set before that measured roughly 13 s,
 # the 34-gate set before that measured roughly 11 s, up from ~7 s measured
 # for the 31-gate set, 4-6 s measured for the 24-gate set before issue #985's

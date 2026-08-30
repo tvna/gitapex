@@ -1,0 +1,81 @@
+name: Design doc pattern dry-run gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+    paths:
+      - "docs/superpowers/specs/*.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  design-doc-pattern-dryrun:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+        with:
+          fetch-depth: '0'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      # Issue #1507 (retro #1504 repair 3, refs #1499): a design doc's
+      # first draft stated a literal-text-search resolution pattern that
+      # matched nothing in the real repository corpus, caught only because
+      # a dispatched adversarial-review subagent happened to think to
+      # check by hand. This step dry-runs that same check automatically.
+      # Added-line extraction (not the whole file): pre-existing,
+      # already-reviewed design-doc prose is out of this gate's scope,
+      # only what this diff introduces -- same rationale and same script
+      # provenance-disclosure-gate.yml already uses for its own doc/eval/
+      # skill Markdown scope. -U1000000 requests enough diff context that
+      # git never needs to split one file's changes into more than one
+      # hunk for any realistic docs/superpowers/specs/*.md file size.
+      - name: Extract added lines from changed design docs
+        id: diff
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          added_file="$RUNNER_TEMP/added_design_doc_lines.txt"
+          if ! git diff -U1000000 "$BASE_SHA...$HEAD_SHA" -- 'docs/superpowers/specs/*.md' \
+              | uv run -qq --frozen python3 .github/scripts/gitapex_extract_diff_added_lines.py > "$added_file"; then
+            echo "::error::git diff/extraction failed between $BASE_SHA and $HEAD_SHA" >&2
+            exit 1
+          fi
+          echo "added-file=$added_file" >> "$GITHUB_OUTPUT"
+
+      # PR_BODY carries untrusted external text (anyone with PR-author
+      # access controls it) -- written to a file via env, never
+      # interpolated directly into the shell script, avoiding GitHub
+      # Actions expression/script injection (same rationale as
+      # skill-audit-gate.yml / provenance-disclosure-gate.yml's own
+      # PR_BODY handling). It contributes to disclosure-marker detection
+      # only, never to pattern detection itself -- see the gate script's
+      # own module docstring.
+      - name: Write PR body to file
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$PR_BODY" > "$RUNNER_TEMP/pr_body.txt"
+
+      - name: Dry-run stated design-doc patterns against the live repository
+        run: |
+          set -euo pipefail
+          uv run --frozen python3 .github/scripts/gitapex_gate_design_doc_pattern_dryrun.py \
+            --diff-added "${{ steps.diff.outputs.added-file }}" \
+            --body "$RUNNER_TEMP/pr_body.txt" \
+            --repo-root .
