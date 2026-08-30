@@ -2503,6 +2503,143 @@ def test_classify_leaves_a_read_of_an_unrelated_name_unaffected() -> None:
     assert verdict.checkout_restore_paths == ("sub/file.txt",)
 
 
+def test_names_reassigned_from_a_static_value_finds_a_static_then_dynamic_reassignment() -> None:
+    """Regression pin for the real bypass found live by Step 8 independent
+    review, twenty-seventh round (issue #1375): round 26's own
+    `_names_reassigned_by_untracked_construct` deliberately excluded the
+    ENTIRE round-24 dynamic-RHS-reassignment class from `_rule_gh_api_
+    write`/`_segment_loop_hit`, not just its genuinely-unresolvable
+    sub-case -- leaving a name with an earlier STATIC value, later
+    reassigned dynamically, with no protection at all in those two
+    consumers. This function restores exactly that narrower case."""
+    assert checker._names_reassigned_from_a_static_value(["VERB=harmless", "VERB=$(echo install)"]) == {"VERB"}
+
+
+def test_names_reassigned_from_a_static_value_ignores_a_dynamic_only_name() -> None:
+    """No false positive, and the exact distinction that keeps the
+    `graphql-mutation-keyword-variable-concatenation` known bypass
+    (`Q="${A}${B} { x }"`, Q never has an earlier static value) from
+    regressing: a name assigned ONLY dynamically, with no earlier static
+    value anywhere, is not poisoned by this function."""
+    assert checker._names_reassigned_from_a_static_value(["Q=$A$B"]) == set()
+
+
+def test_names_reassigned_from_a_static_value_ignores_a_static_only_name() -> None:
+    """No false positive: a name assigned only static values anywhere is
+    not flagged, matching every other reassignment-detector in this
+    module."""
+    assert checker._names_reassigned_from_a_static_value(["VERB=harmless", "VERB=other"]) == set()
+
+
+def test_names_reassigned_from_a_static_value_ignores_an_unrelated_name() -> None:
+    """No false positive: a static-then-dynamic reassignment of one name
+    does not poison a completely different name."""
+    result = checker._names_reassigned_from_a_static_value(["DIR=sub", "VERB=harmless", "VERB=$(echo install)"])
+    assert result == {"VERB"}
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, static_value=_VALUES, dynamic_value=_VALUES)
+def test_names_reassigned_from_a_static_value_matches_model(name: str, static_value: str, dynamic_value: str) -> None:
+    """Model-based: for ANY identifier assigned a static value and then
+    reassigned a dynamic one, `_names_reassigned_from_a_static_value`
+    always includes it -- and a second, entirely unrelated identifier
+    that is only ever assigned dynamically (no earlier static value) is
+    never included alongside it."""
+    other_name = name + "_OTHER"
+    tokens = [f"{name}={static_value}", f"{name}=$({dynamic_value})", f"{other_name}=$({dynamic_value})"]
+    result = checker._names_reassigned_from_a_static_value(tokens)
+    assert name in result
+    assert other_name not in result
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, static_value=_VALUES, appended_value=_VALUES)
+def test_names_appended_to_matches_model(name: str, static_value: str, appended_value: str) -> None:
+    """Model-based, exercising the round-27-extracted `_names_appended_
+    to` helper directly (round 25's own append-detection logic, factored
+    out so `_names_with_dynamic_assignment` and `_names_poisoned_for_gh_
+    api_and_b1` can share it): for ANY identifier assigned a static value
+    and then appended to (`+=`), `_names_appended_to` always includes it
+    -- and a second, entirely unrelated identifier that is only ever
+    assigned statically is never included alongside it."""
+    other_name = name + "_OTHER"
+    tokens = [f"{name}={static_value}", f"{name}+=$({appended_value})", f"{other_name}={static_value}"]
+    result = checker._names_appended_to(tokens)
+    assert name in result
+    assert other_name not in result
+
+
+def test_names_poisoned_for_gh_api_and_b1_unions_all_three_components() -> None:
+    """`_names_poisoned_for_gh_api_and_b1` is the union of append
+    (round 25), static-then-dynamic reassignment (round 27), and
+    untracked-construct (round 26) poisoning -- confirm all three
+    classes are actually reachable through the single combined
+    function `_rule_gh_api_write`/`_segment_loop_hit` consume."""
+    tokens = [
+        "APPENDED=x",
+        "APPENDED+=y",
+        "STATIC_THEN_DYNAMIC=harmless",
+        "STATIC_THEN_DYNAMIC=$(echo install)",
+        "arr=x",
+        "arr[0]=other",
+    ]
+    result = checker._names_poisoned_for_gh_api_and_b1(tokens)
+    assert result == {"APPENDED", "STATIC_THEN_DYNAMIC", "arr"}
+
+
+def test_names_poisoned_for_gh_api_and_b1_excludes_a_dynamic_only_name() -> None:
+    """The whole point of round 27's narrowing: a name assigned ONLY
+    dynamically must still be excluded from the combined poisoned set,
+    exactly as `_names_reassigned_from_a_static_value` excludes it on
+    its own -- this is what keeps the graphql-mutation known bypass
+    from regressing."""
+    assert checker._names_poisoned_for_gh_api_and_b1(["Q=$A$B"]) == set()
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_via_plain_dynamic_reassignment() -> None:
+    """End-to-end regression pin for the round-27 finding at the
+    `classify()` level, against B1b. Confirmed live before this fix via
+    a stand-in `uv` binary on PATH: `TOOL=uv; VERB=harmless;
+    VERB=$(echo install); $TOOL $VERB foo` genuinely runs `uv install
+    foo` (captured argv: "install foo"), but classified as allowed
+    ('no denied pattern matched') -- VERB's stale static value
+    ('harmless') stayed trusted in `_assigned_raw_values`."""
+    verdict = checker.classify("TOOL=uv; VERB=harmless; VERB=$(echo install); $TOOL $VERB foo")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_via_a_static_append() -> None:
+    """Companion to the plain-dynamic-reassignment pin above, for the
+    append shape. Confirmed live before this fix via a stand-in `uv`
+    binary on PATH: `TOOL=uv; VERB=inst; VERB+=all; $TOOL $VERB foo`
+    genuinely runs `uv install foo` (captured argv: "install foo")."""
+    verdict = checker.classify("TOOL=uv; VERB=inst; VERB+=all; $TOOL $VERB foo")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_gh_api_write_method_reassigned_via_plain_dynamic_reassignment() -> None:
+    """Companion to the B1b pins above, for `_rule_gh_api_write`.
+    Confirmed live before this fix via a stand-in `gh` binary on PATH:
+    `M=safe; M=$(echo POST); gh api repos/o/r/pulls/1/merge -X $M`
+    genuinely runs `gh api repos/o/r/pulls/1/merge -X POST` (a real,
+    unreviewed write, e.g. merging a pull request), but classified as
+    allowed."""
+    verdict = checker.classify("M=safe; M=$(echo POST); gh api repos/o/r/pulls/1/merge -X $M")
+    assert verdict.deny is True
+
+
+def test_classify_leaves_the_graphql_mutation_known_bypass_unaffected() -> None:
+    """Regression guard: the round-27 fix must NOT reopen the pre-
+    existing, deliberately-disclosed `graphql-mutation-keyword-
+    variable-concatenation` known bypass (`KNOWN_BYPASS_COMMANDS`) --
+    `Q` here is assigned ONLY dynamically, with no earlier static value,
+    so it must stay outside the poisoned set and this command must stay
+    allowed exactly as before round 27."""
+    verdict = checker.classify('A=muta; B=tion; Q="${A}${B} { x }"; gh api graphql -f query="$Q"')
+    assert verdict.deny is False
+
+
 def test_resolve_path_tokens_denies_a_name_with_a_dynamic_assignment_elsewhere() -> None:
     """End-to-end regression pin for the round-24 finding at the
     `_resolve_path_tokens` level. Confirmed live before this fix: `DIR=

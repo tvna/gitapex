@@ -939,6 +939,32 @@ DENIED_INDIRECTION_COMMANDS = [
         'M=GET; printf -v M "%s" POST; gh api repos/o/r/pulls/1/merge -X $M',
         "gh-api-method-value-reassigned-via-printf-v",
     ),
+    # Found live by Step 8 independent review, twenty-seventh round
+    # (issue #1375): round 26's own fix (the two `_names_reassigned_by_
+    # untracked_construct` cases just above) deliberately excluded the
+    # round-24 plain-dynamic-reassignment and round-25 append classes
+    # ENTIRELY from B1a/B1b and gh-api-write, not just their genuinely-
+    # unresolvable sub-case -- leaving a name with an earlier STATIC
+    # value, later reassigned dynamically, with NO protection at all.
+    # Confirmed live via a stand-in `uv` binary on PATH (captured argv:
+    # "install foo") that `TOOL=uv; VERB=harmless; VERB=$(echo install);
+    # $TOOL $VERB foo` genuinely runs `uv install foo`.
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); $TOOL $VERB foo",
+        "var-split-tool-and-verb-reassigned-from-a-static-value",
+    ),
+    # Same round, the append counterpart.
+    (
+        "TOOL=uv; VERB=inst; VERB+=all; $TOOL $VERB foo",
+        "var-split-tool-and-verb-reassigned-via-static-append",
+    ),
+    # Same round, the gh-api-write counterpart: real bash genuinely ran
+    # `gh api repos/o/r/pulls/1/merge -X POST` (captured argv confirms
+    # it), a genuine, unreviewed write API call.
+    (
+        "M=safe; M=$(echo POST); gh api repos/o/r/pulls/1/merge -X $M",
+        "gh-api-method-value-reassigned-from-a-static-value",
+    ),
 ]
 
 
