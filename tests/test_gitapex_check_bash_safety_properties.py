@@ -2706,6 +2706,109 @@ def test_raw_segments_with_boundaries_process_substitution_does_not_corrupt_an_e
     assert result[5] == ([], 0, None)
 
 
+def test_raw_segments_with_boundaries_treats_a_case_pattern_close_as_not_a_subshell_close() -> None:
+    """CRITICAL bypass regression pin (round-36 independent review, issue
+    #1375): a `case` arm's own pattern-terminating `)` is lexically
+    indistinguishable from a subshell-closing `)`, but must NOT
+    decrement `(...)`-nesting depth -- a case nested inside a GENUINELY
+    enclosing subshell must keep that subshell's own depth tracking
+    intact through the case's own pattern arms."""
+    tokens = ["(", "case", "1", "in", "1", ")", "true", ";", ";", "esac", ";", "VERB=safe", ")"]
+    result = checker._raw_segments_with_boundaries(tokens)
+    assert result[0] == ([], 0, "(")
+    assert result[1] == (["case", "1", "in", "1"], 1, ")")
+    assert result[5] == (["VERB=safe"], 1, ")")
+    assert result[6] == ([], 0, None)
+
+
+def test_raw_segments_with_boundaries_a_real_subshell_nested_inside_a_case_arm_still_decrements() -> None:
+    """No over-correction: a GENUINE `(...)` subshell lexically inside a
+    case arm's own body (after that arm's pattern-terminating `)` has
+    already been consumed) must still decrement depth normally."""
+    tokens = ["case", "1", "in", "1", ")", "(", "VERB=x", ")", ";", "true", ";", ";", "esac"]
+    result = checker._raw_segments_with_boundaries(tokens)
+    depths_by_segment = [depth for seg, depth, _term in result if seg]
+    assert depths_by_segment == [0, 1, 0, 0]
+
+
+def test_raw_segments_with_boundaries_a_nested_for_in_inside_a_case_arm_does_not_desync_pattern_tracking() -> None:
+    """SAFETY regression pin (round-36 own design review): only the
+    case's own FIRST `in` (right after `case WORD`) may arm the
+    pattern-close expectation -- a LATER, unrelated `in` from a nested
+    `for i in ...`/`select i in ...` lexically inside an arm's body must
+    never be mistaken for the case's own, or a genuinely enclosing
+    subshell's own real closing `)` would be wrongly swallowed as a
+    phantom case-pattern close instead of decrementing depth."""
+    tokens = [
+        "(",
+        "case",
+        "1",
+        "in",
+        "1",
+        ")",
+        "for",
+        "i",
+        "in",
+        "1",
+        ";",
+        "do",
+        "true",
+        ";",
+        "done",
+        ";",
+        ";",
+        "esac",
+        ")",
+    ]
+    result = checker._raw_segments_with_boundaries(tokens)
+    assert result[-1] == ([], 0, None)
+
+
+def test_segment_indices_isolated_by_a_piped_or_backgrounded_compound_group_marks_a_backgrounded_case() -> None:
+    """CRITICAL bypass regression pin (round-36 independent review, issue
+    #1375): `case ... esac` is bash's remaining compound-command form --
+    it forks as one unit when backgrounded, exactly like `{...}`/
+    `while`/`until`/`for`/`select`/`if` (round 35), but `case`/`esac`
+    were never added to `_GROUP_OPEN_KEYWORDS`/`_GROUP_CLOSE_KEYWORDS`."""
+    raw = checker._raw_segments_with_boundaries(
+        ["case", "1", "in", "1", ")", "VERB=safe", ";", ";", "esac", "&", "wait"]
+    )
+    result = checker._segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(raw)
+    isolated_segments = [raw[i][0] for i in sorted(result)]
+    assert ["VERB=safe"] in isolated_segments
+
+
+def test_segment_indices_isolated_by_a_piped_or_backgrounded_compound_group_allows_a_bare_case() -> None:
+    """No over-correction: a bare `case ... esac` with NO trailing
+    `&`/`|` genuinely LEAKS its assignments to the parent shell in real
+    bash -- must not be marked isolated."""
+    raw = checker._raw_segments_with_boundaries(["case", "1", "in", "1", ")", "VERB=safe", ";", ";", "esac"])
+    result = checker._segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(raw)
+    assert result == set()
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value=_VALUES)
+def test_segment_indices_isolated_by_a_piped_or_backgrounded_compound_group_matches_model_for_a_backgrounded_case(
+    name: str, value: str
+) -> None:
+    """Model-based, exercising `_segment_indices_isolated_by_a_piped_or_
+    backgrounded_compound_group` directly (issue #1178's own detection-
+    logic property-coverage requirement): for ANY identifier assigned a
+    value inside a `case ... esac` that is itself backgrounded, the
+    segment carrying that assignment is included in the isolated set --
+    and the same case with NO trailing `&`/`|` is not."""
+    backgrounded = checker._raw_segments_with_boundaries(
+        ["case", "1", "in", "1", ")", f"{name}={value}", ";", ";", "esac", "&", "wait"]
+    )
+    result = checker._segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(backgrounded)
+    isolated_segments = [backgrounded[i][0] for i in sorted(result)]
+    assert [f"{name}={value}"] in isolated_segments
+
+    bare = checker._raw_segments_with_boundaries(["case", "1", "in", "1", ")", f"{name}={value}", ";", ";", "esac"])
+    assert checker._segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(bare) == set()
+
+
 def test_segment_tokens_with_scope_isolation_marks_a_declare_declaration_isolated() -> None:
     tokens = ["{", "declare", "VERB=safe"]
     result = checker._segment_tokens_with_scope_isolation(tokens)
@@ -3039,6 +3142,60 @@ def test_names_reassigned_from_a_static_value_allows_a_real_top_level_clear_afte
     assert checker._names_reassigned_from_a_static_value(tokens) == set()
 
 
+def test_names_reassigned_from_a_static_value_stays_poisoned_despite_a_backgrounded_case_clear() -> None:
+    """CRITICAL bypass regression pin (round-36 independent review, issue
+    #1375): `case ... esac` forks as one unit when backgrounded, exactly
+    like `{...}`/`while`/`until`/`for`/`select`/`if` -- a static
+    reassignment inside it never reaches the parent shell's own copy of
+    the name."""
+    tokens = [
+        "VERB=harmless",
+        ";",
+        "VERB=$(echo install)",
+        ";",
+        "case",
+        "1",
+        "in",
+        "1",
+        ")",
+        "VERB=safe",
+        ";",
+        ";",
+        "esac",
+        "&",
+        "wait",
+    ]
+    assert checker._names_reassigned_from_a_static_value(tokens) == {"VERB"}
+
+
+def test_names_reassigned_from_a_static_value_stays_poisoned_despite_a_case_in_subshell_depth_corruption() -> None:
+    """CRITICAL bypass regression pin (round-36 independent review, issue
+    #1375): a case arm's own pattern-terminating `)` must not be
+    mistaken for a real subshell close -- a static reassignment inside a
+    GENUINELY enclosing subshell around a `case` must still stay
+    poisoned even with no `&`/`|` involved at all."""
+    tokens = [
+        "VERB=harmless",
+        ";",
+        "VERB=$(echo install)",
+        ";",
+        "(",
+        "case",
+        "1",
+        "in",
+        "1",
+        ")",
+        "true",
+        ";",
+        ";",
+        "esac",
+        ";",
+        "VERB=safe",
+        ")",
+    ]
+    assert checker._names_reassigned_from_a_static_value(tokens) == {"VERB"}
+
+
 @_PROPERTIES
 @given(name=_IDENTIFIERS, static_value=_VALUES, dynamic_value=_VALUES, isolated_value=_VALUES)
 def test_names_reassigned_from_a_static_value_matches_model_for_a_backgrounded_brace_group_clear_attempt(
@@ -3298,6 +3455,23 @@ def test_names_cleared_by_a_later_static_reassignment_clears_after_a_harmless_ba
     genuinely leaks its assignment to the parent -- a name reassigned
     static this way must be cleared normally."""
     tokens = ["VERB=inst", "VERB+=all", ";", "{", "VERB=safe", ";", "}"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == {"VERB"}
+
+
+def test_names_cleared_by_a_later_static_reassignment_does_not_clear_via_a_backgrounded_case() -> None:
+    """CRITICAL bypass regression pin (round-36 independent review, issue
+    #1375): `case ... esac` forks as one unit when backgrounded -- a
+    static reassignment inside it never reaches the parent shell's own
+    copy of the name -- must not clear an append-poisoned candidate."""
+    tokens = ["VERB=inst", "VERB+=all", ";", "case", "1", "in", "1", ")", "VERB=safe", ";", ";", "esac", "&", "wait"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == set()
+
+
+def test_names_cleared_by_a_later_static_reassignment_clears_after_a_harmless_bare_case() -> None:
+    """No over-correction: a bare (not backgrounded or piped) `case ...
+    esac` genuinely leaks its assignment to the parent -- a name
+    reassigned static this way must be cleared normally."""
+    tokens = ["VERB=inst", "VERB+=all", ";", "case", "1", "in", "1", ")", "VERB=safe", ";", ";", "esac"]
     assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == {"VERB"}
 
 
@@ -4002,6 +4176,121 @@ def test_classify_allows_a_real_top_level_static_clear_after_a_harmless_backgrou
     top-level static reassignment from clearing poisoning normally."""
     verdict = checker.classify(
         "TOOL=uv; VERB=harmless; VERB=$(echo install); { echo hi; } & wait; VERB=safe; $TOOL $VERB foo"
+    )
+    assert verdict.deny is False
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_backgrounded_case_clear() -> None:
+    """CRITICAL bypass regression pin (round-36 independent review,
+    issue #1375): `case ... esac` is bash's remaining compound-command
+    form -- it forks as one unit when backgrounded, exactly like
+    `{...}`/`while`/`until`/`for`/`select`/`if` (round 35), but
+    `case`/`esac` were never added to the group-isolation keyword sets.
+    Confirmed live via a stand-in `uv` binary on PATH that this
+    genuinely runs `uv install foo`, NOT `safe foo`."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); case 1 in 1) VERB=safe ;; esac & wait; $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_piped_case_clear() -> None:
+    """Same round, the piped counterpart: every stage of a `|` pipeline
+    forks its own subshell, including a `case` used as a stage."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); case 1 in 1) VERB=safe ;; esac | cat; $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_gh_api_method_reassigned_from_a_static_value_via_a_backgrounded_case_clear() -> None:
+    """Companion to the B1b pin above, for `_rule_gh_api_write`.
+    Confirmed live via a stand-in `gh` binary on PATH that this
+    genuinely runs `gh api repos/o/r/pulls/1/merge -X POST`, a genuine
+    unreviewed write."""
+    verdict = checker.classify(
+        "M=safe; M=$(echo POST); case 1 in 1) M=GET ;; esac & wait; gh api repos/o/r/pulls/1/merge -X $M"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_case_in_subshell_depth_corruption() -> (
+    None
+):
+    """CRITICAL bypass regression pin (round-36 independent review,
+    issue #1375): a `case` arm's own pattern-terminating `)` must not
+    be mistaken for a real subshell close -- reproduces with NO `&`/`|`
+    at all, purely by nesting a `case` inside a genuine `(...)`
+    subshell. Confirmed live via a stand-in `uv` binary on PATH that
+    the outer subshell genuinely still isolates `VERB=safe` in real
+    bash."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); ( case 1 in 1) true ;; esac; VERB=safe ); $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_allows_a_bare_case_with_no_trailing_background_or_pipe() -> None:
+    """No over-correction: a bare `case ... esac` with NO trailing
+    `&`/`|` genuinely LEAKS its assignment to the parent shell in real
+    bash (confirmed live: the stand-in `uv` call captures `uv called
+    with: safe foo`, not `install foo`) -- must stay allowed."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); case 1 in 1) VERB=safe ;; esac; $TOOL $VERB foo"
+    )
+    assert verdict.deny is False
+
+
+def test_classify_allows_a_real_subshell_nested_inside_a_case_arm_that_genuinely_leaks_after() -> None:
+    """No over-correction: a GENUINE `(...)` subshell lexically inside a
+    case arm's own body must still decrement depth normally once its
+    own pattern-terminating `)` has already been consumed -- confirmed
+    live that the later, real top-level `VERB=safe` genuinely leaks."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); "
+        "case 1 in 1) ( VERB=x ); true ;; esac; VERB=safe; $TOOL $VERB foo"
+    )
+    assert verdict.deny is False
+
+
+def test_classify_denies_despite_a_nested_for_in_inside_a_case_arm_not_desyncing_pattern_tracking() -> None:
+    """SAFETY regression pin (round-36 own design review): only the
+    case's own FIRST `in` may arm the pattern-close expectation -- a
+    LATER, unrelated `in` from a nested `for i in ...` lexically inside
+    an arm's body must never desync tracking of a genuinely enclosing
+    subshell's own real closing `)`."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); "
+        "( case 1 in 1) for i in 1; do true; done ;; esac; VERB=safe ); $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_nested_case_whose_outer_is_piped() -> None:
+    """Same round, the doubly-nested counterpart: an inner `case` that
+    is itself plain must not prevent the OUTER case's own piping from
+    isolating everything inside it."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); "
+        "case A in x) case B in y) VERB=safe;; esac ;; esac | cat; $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_allows_an_unrelated_harmless_backgrounded_case_alongside_a_never_poisoned_name() -> None:
+    """No over-correction: an ordinary, unrelated backgrounded `case`
+    elsewhere in the command must not spuriously deny a command whose
+    watched name was never poisoned at all."""
+    verdict = checker.classify("TOOL=uv; VERB=safe; case 1 in 1) echo hi ;; esac & wait; $TOOL $VERB foo")
+    assert verdict.deny is False
+
+
+def test_classify_allows_a_real_top_level_static_clear_after_a_harmless_backgrounded_case() -> None:
+    """No over-correction: a harmless, UNRELATED backgrounded `case`
+    earlier in the command must not block a LATER, genuine top-level
+    static reassignment from clearing poisoning normally."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); case 1 in 1) echo hi ;; esac & wait; VERB=safe; $TOOL $VERB foo"
     )
     assert verdict.deny is False
 

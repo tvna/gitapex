@@ -499,6 +499,32 @@ ALLOWED_DYNAMIC_COMMANDS = [
         "TOOL=uv; VERB=harmless; VERB=$(echo install); { echo hi; } & wait; VERB=safe; $TOOL $VERB foo",
         "real-top-level-static-clear-after-a-harmless-backgrounded-brace-group-stays-allowed",
     ),
+    # No-over-correction guards for the thirty-sixth-round case/esac
+    # group-isolation fix (issue #1375): a bare `case ... esac` with NO
+    # trailing `&`/`|` genuinely LEAKS its assignment to the parent shell
+    # in real bash (confirmed live: `uv called with: safe foo`), a
+    # GENUINE `(...)` subshell nested inside a case arm's own body must
+    # still decrement depth normally once that arm's own pattern-
+    # terminating `)` has already been consumed, and an unrelated,
+    # never-poisoned name must not be spuriously denied by a harmless
+    # case elsewhere in the command.
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); case 1 in 1) VERB=safe ;; esac; $TOOL $VERB foo",
+        "bare-case-with-no-trailing-background-or-pipe-stays-allowed",
+    ),
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); "
+        "case 1 in 1) ( VERB=x ); true ;; esac; VERB=safe; $TOOL $VERB foo",
+        "real-subshell-nested-inside-a-case-arm-that-genuinely-leaks-after-stays-allowed",
+    ),
+    (
+        "TOOL=uv; VERB=safe; case 1 in 1) echo hi ;; esac & wait; $TOOL $VERB foo",
+        "unrelated-harmless-backgrounded-case-alongside-a-never-poisoned-name-stays-allowed",
+    ),
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); case 1 in 1) echo hi ;; esac & wait; VERB=safe; $TOOL $VERB foo",
+        "real-top-level-static-clear-after-a-harmless-backgrounded-case-stays-allowed",
+    ),
 ]
 
 # --- Known, disclosed, unresolved regex/token-gate bypasses ----------------
@@ -1385,6 +1411,44 @@ DENIED_INDIRECTION_COMMANDS = [
     (
         "TOOL=uv; VERB=harmless; VERB=$(echo install); { echo fi; VERB=safe; } & wait; $TOOL $VERB foo",
         "var-split-tool-and-verb-reassigned-from-a-static-value-cleared-via-a-brace-group-containing-a-literal-fi-argument",
+    ),
+    # Found live by Step 8 independent review, thirty-sixth round (issue
+    # #1375): `case ... esac` is bash's remaining compound-command form
+    # -- it forks as one unit when backgrounded or piped, exactly like
+    # `{...}`/`while`/`until`/`for`/`select`/`if` (round 35), but
+    # `case`/`esac` were never added to the group-isolation keyword
+    # sets. Separately, a case arm's own pattern-terminating `)` is
+    # lexically indistinguishable from a subshell-closing `)` and was
+    # unconditionally decrementing `(...)`-nesting depth, corrupting
+    # tracking for a genuinely enclosing real subshell -- reproducing
+    # with no `&`/`|` at all. Confirmed live via a stand-in `uv`/`gh`
+    # binary on PATH that each genuinely runs the dangerous command,
+    # NOT the case-scoped distractor value.
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); case 1 in 1) VERB=safe ;; esac & wait; $TOOL $VERB foo",
+        "var-split-tool-and-verb-reassigned-from-a-static-value-cleared-via-a-backgrounded-case",
+    ),
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); case 1 in 1) VERB=safe ;; esac | cat; $TOOL $VERB foo",
+        "var-split-tool-and-verb-reassigned-from-a-static-value-cleared-via-a-piped-case",
+    ),
+    (
+        "M=safe; M=$(echo POST); case 1 in 1) M=GET ;; esac & wait; gh api repos/o/r/pulls/1/merge -X $M",
+        "gh-api-method-value-reassigned-from-a-static-value-cleared-via-a-backgrounded-case",
+    ),
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); ( case 1 in 1) true ;; esac; VERB=safe ); $TOOL $VERB foo",
+        "var-split-tool-and-verb-reassigned-from-a-static-value-cleared-via-a-case-in-subshell-depth-corruption",
+    ),
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); "
+        "( case 1 in 1) for i in 1; do true; done ;; esac; VERB=safe ); $TOOL $VERB foo",
+        "var-split-tool-and-verb-reassigned-from-a-static-value-cleared-via-a-case-in-subshell-with-a-nested-for-in-not-desyncing",
+    ),
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); "
+        "case A in x) case B in y) VERB=safe;; esac ;; esac | cat; $TOOL $VERB foo",
+        "var-split-tool-and-verb-reassigned-from-a-static-value-cleared-via-a-nested-case-whose-outer-is-piped",
     ),
 ]
 

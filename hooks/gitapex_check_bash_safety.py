@@ -4129,12 +4129,76 @@ def _raw_segments_with_boundaries(tokens: list[str]) -> list[tuple[list[str], in
     Closed by recognizing every token in `_SUBSHELL_OPEN_TOKENS` (not
     just a bare `(`) as a depth-opening boundary -- `<(`/`>(` each still
     pair with an ordinary bare `)` close exactly like a bare `(` does,
-    so no change to the closing side was needed."""
+    so no change to the closing side was needed.
+
+    CRITICAL bypass found by independent adversarial review (round 36,
+    issue #1375) and independently reproduced live, both via
+    `classify()` and via real bash execution with a stand-in `uv`/`gh`
+    binary on PATH: every bash `case` statement's own pattern arm ends
+    with a bare `)` (`1) ...`, `a|b) ...`) that is lexically
+    INDISTINGUISHABLE, at the token level, from a subshell-closing `)`
+    -- there is no corresponding OPEN token for it at all, unlike
+    `<(`/`>(` above. The pre-round-36 code decremented `depth`
+    unconditionally on every bare `)`, so a `case` nested inside a
+    GENUINELY enclosing `(...)` subshell prematurely "closed" that
+    subshell's own tracked depth on the case's first pattern arm, long
+    before the real closing `)` was reached. `TOOL=uv; VERB=harmless;
+    VERB=$(echo install); ( case 1 in 1) true ;; esac; VERB=safe );
+    $TOOL $VERB foo` resolved to `deny=False` even though real bash
+    genuinely runs `uv install foo` (confirmed live via a stand-in `uv`
+    binary on PATH: captured argv `uv called with: install foo`) -- the
+    outer `(...)` genuinely still isolates `VERB=safe` in real bash
+    (confirmed live: `VERB=install; ( case 1 in 1) true ;; esac;
+    VERB=safe ); echo "VERB is now: $VERB"` prints `VERB is now:
+    install`), but the case arm's own phantom `)` had already
+    decremented the tracked depth to 0 by the time `VERB=safe` was
+    reached, wrongly treating it as a top-level assignment. No `&`/`|`
+    is needed to reproduce this -- ordinary subshell nesting alone
+    triggers it, distinct from `_segment_indices_isolated_by_a_piped_
+    or_backgrounded_compound_group`'s own round-35/36 pipe/background
+    mechanism (see that function's own docstring for the SEPARATE,
+    companion round-36 fix closing `case`/`esac` there).
+
+    Closed by tracking, per currently-open `case` block (a stack, since
+    `case` statements nest), whether the NEXT bare `)` is that case
+    block's own pattern-arm terminator rather than a real subshell
+    close: armed once, right after that case's own first `in` keyword
+    (a per-block `case_seen_in` flag ensures a LATER, unrelated `in`
+    lexically inside an arm's body -- e.g. from a nested `for i in
+    ...`/`select i in ...` -- is never mistaken for the case's own,
+    since only the FIRST `in` after each `case` push counts); disarmed
+    the instant a `)` is consumed as that arm's own pattern terminator
+    (segmenting exactly as before, but leaving `depth` UNCHANGED rather
+    than decrementing it); re-armed on the next `;;` (detected as two
+    consecutive bare `;` tokens, confirmed via `tokenize()`: `1) VERB=
+    safe ;; esac` produces `[..., "VERB=safe", ";", ";", "esac"]`, never
+    a single fused token) while that case block is still open; and
+    popped off the stack entirely at `esac`, regardless of its own
+    armed/disarmed state at that point. A `(...)` subshell genuinely
+    nested INSIDE a case arm's own body (after its pattern-terminating
+    `)` has already been consumed, so the block's own flag is
+    disarmed) is unaffected -- its own bare `)` decrements depth
+    normally, exactly as before this fix."""
     segments: list[list[str]] = [[]]
     seg_depths: list[int] = [0]
     terminators: list[str | None] = []
     depth = 0
+    case_awaiting_pattern_close: list[bool] = []
+    case_seen_in: list[bool] = []
+    prev_tok: str | None = None
     for tok in tokens:
+        if tok == "case":
+            case_awaiting_pattern_close.append(False)
+            case_seen_in.append(False)
+        elif tok == "in" and case_seen_in and not case_seen_in[-1]:
+            case_seen_in[-1] = True
+            case_awaiting_pattern_close[-1] = True
+        elif tok == "esac" and case_awaiting_pattern_close:
+            case_awaiting_pattern_close.pop()
+            case_seen_in.pop()
+        elif tok == ";" and case_awaiting_pattern_close and prev_tok == ";":
+            case_awaiting_pattern_close[-1] = True
+
         if tok in _SUBSHELL_OPEN_TOKENS:
             terminators.append(tok)
             depth += 1
@@ -4142,7 +4206,10 @@ def _raw_segments_with_boundaries(tokens: list[str]) -> list[tuple[list[str], in
             seg_depths.append(depth)
         elif tok == ")":
             terminators.append(tok)
-            depth = max(depth - 1, 0)
+            if case_awaiting_pattern_close and case_awaiting_pattern_close[-1]:
+                case_awaiting_pattern_close[-1] = False
+            else:
+                depth = max(depth - 1, 0)
             segments.append([])
             seg_depths.append(depth)
         elif tok in _SINGLE_OPS or tok in _MULTI_OPS:
@@ -4151,6 +4218,7 @@ def _raw_segments_with_boundaries(tokens: list[str]) -> list[tuple[list[str], in
             seg_depths.append(depth)
         else:
             segments[-1].append(tok)
+        prev_tok = tok
     terminators.append(None)
     return list(zip(segments, seg_depths, terminators, strict=True))
 
@@ -4182,8 +4250,8 @@ def _seg_has_a_scope_localizing_keyword(seg: list[str]) -> bool:
     return False
 
 
-_GROUP_OPEN_KEYWORDS = frozenset({"{", "while", "until", "for", "select", "if"})
-_GROUP_CLOSE_KEYWORDS = frozenset({"}", "done", "fi"})
+_GROUP_OPEN_KEYWORDS = frozenset({"{", "while", "until", "for", "select", "if", "case"})
+_GROUP_CLOSE_KEYWORDS = frozenset({"}", "done", "fi", "esac"})
 """The compound-command delimiters `_segment_indices_isolated_by_a_
 piped_or_backgrounded_compound_group` bracket-matches. Unlike `_SUBSHELL_
 OPEN_TOKENS`, none of these tokens themselves make their own content
@@ -4193,7 +4261,13 @@ real bash (confirmed live, see the round-35 paragraph below) -- isolation
 here depends entirely on whether the GROUP AS A WHOLE is itself a
 pipeline stage or a backgrounded job, the same test already applied to an
 ordinary segment, evaluated once at the group's own matching open/close
-pair. Added by round 35 (issue #1375)."""
+pair. Added by round 35 (`{`/`while`/`until`/`for`/`select`/`if`) and
+round 36 (`case`/`esac`), issue #1375 -- see this function's own
+docstring for the round-36 `case`/`esac` bypass and why `case` still
+satisfies the leading-contiguous-open-run detection this function relies
+on (a `case WORD in` segment's own leading token is always `case`, with
+the case's own pattern text and `in` keyword following in the SAME
+segment, never opening a nested level of their own)."""
 
 
 def _segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(
@@ -4289,7 +4363,38 @@ def _segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(
     non-final-or-final pipe stage, or because it is backgrounded), OR
     when the raw segment immediately preceding the group's own opening
     raw segment terminates with `|` (the group is itself the RECEIVING
-    side of a pipe -- case H above)."""
+    side of a pipe -- case H above).
+
+    ONE further gap found by independent adversarial review (round 36,
+    issue #1375) and independently reproduced live, both via
+    `classify()` and via real bash execution with a stand-in `uv`/`gh`
+    binary on PATH: `case ... esac` is bash's remaining compound-command
+    form -- it forks exactly like `{...}`/`while`/`until`/`for`/
+    `select`/`if` when the ENTIRE statement is piped or backgrounded --
+    but neither `case` nor `esac` were ever added to `_GROUP_OPEN_
+    KEYWORDS`/`_GROUP_CLOSE_KEYWORDS`. `TOOL=uv; VERB=harmless; VERB=
+    $(echo install); case 1 in 1) VERB=safe ;; esac & wait; $TOOL $VERB
+    foo` resolved to `deny=False` even though real bash genuinely runs
+    `uv install foo` (confirmed live via a stand-in `uv` binary on PATH:
+    captured argv `uv called with: install foo`); the piped form (`esac
+    | cat`) and the `_rule_gh_api_write` counterpart both reproduce
+    identically. A bare `case ... esac` with NO trailing `&`/`|`
+    genuinely leaks to the parent in real bash (confirmed live: `uv
+    called with: safe foo`) and stays correctly allowed post-fix, the
+    same negative-control shape already established above for the
+    other five keywords. Closed by adding `case`/`esac` to the two
+    keyword sets -- `case` satisfies the leading-contiguous-open-run
+    detection the same way every other opener does (a `case WORD in`
+    segment's own leading token is always `case`, with the WORD and
+    `in` keyword following in the SAME segment, never opening a nested
+    level of their own), and `esac` satisfies the position-0-of-its-own-
+    segment requirement the same way `}`/`done`/`fi` do (always preceded
+    by a `;`/`;;` boundary in valid bash). A SEPARATE, companion
+    round-36 bug in the `(...)`-subshell depth tracking this function's
+    own `raw` parameter is built from -- a case arm's own pattern-
+    terminating `)` being mistaken for a real subshell close -- is fixed
+    in `_raw_segments_with_boundaries` itself; see that function's own
+    docstring."""
     stack: list[int] = []
     isolated: set[int] = set()
     for i, (seg, _depth, terminator) in enumerate(raw):
