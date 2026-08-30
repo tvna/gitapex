@@ -741,6 +741,18 @@ def test_main_commit_msg_non_utf8_file_exits_two(tmp_path: pathlib.Path, capsys:
     assert "not valid UTF-8" in capsys.readouterr().err
 
 
+def test_extract_citations_or_raise_direct_call_passes_through_a_real_citation() -> None:
+    resolving, context = gate._extract_citations_or_raise(None, None, None, "Closes #1212")
+    assert resolving == (1212,)
+    assert context == ()
+
+
+def test_extract_citations_or_raise_direct_call_converts_value_error() -> None:
+    huge_digit_run = "9" * 5000
+    with pytest.raises(gate.CitationGateError, match="could not parse a citation number"):
+        gate._extract_citations_or_raise(None, None, None, f"Closes #{huge_digit_run}")
+
+
 def test_check_commit_message_an_implausibly_long_digit_run_raises_not_crashes() -> None:
     """Dimension 15 (`skills/evaluating-deterministic-gate-quality`): before
     this fix, a citation-shaped `#<thousands of digits>` string made
