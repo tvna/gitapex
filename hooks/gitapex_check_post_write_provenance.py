@@ -194,6 +194,17 @@ import gitapex_check_pr_issue_acm_disclosure as pr_issue_checker
 # CLAUDE_PROJECT_DIR-relative lookup.
 _SCANNER_RELATIVE_PATH = Path("skills") / "outward-artifact-preflight" / "scripts" / "gitapex_scan_provenance.py"
 
+# CONTRIBUTING.md's own ratified answer for the FLAGGED message below
+# (issue #1446). Resolved the same way _SCANNER_RELATIVE_PATH is above --
+# from this script's own path, not CLAUDE_PROJECT_DIR -- but unlike the
+# scanner, CONTRIBUTING.md is never guaranteed to exist at that path:
+# docs/repository-layout.md states only skills/ and hooks/ are deployed
+# into a plugin-installed consumer checkout, CONTRIBUTING.md never is. See
+# ratified_trailer_disclosure_text()'s own docstring for the fallback that
+# constraint requires.
+_CONTRIBUTING_RELATIVE_PATH = Path("CONTRIBUTING.md")
+_RATIFIED_TRAILER_SECTION_HEADING = "## outward-artifact-preflight: PR-body trailer disclosure"
+
 # The three write tools issue #878 names. issue_write covers both its
 # "create" and "update" methods: both submit a body, so both can have one
 # transformed downstream. A method this gate does not recognize is treated
@@ -564,6 +575,70 @@ def _format_hits(provenance_hits: list[tuple[int, str, str]], ascii_hits: list[t
     return " and ".join(parts)
 
 
+def extract_markdown_section(text: str, heading: str) -> str | None:
+    """Return the body text of the markdown section introduced by
+    `heading`, or None when `heading` does not appear in `text` as its
+    own line.
+
+    `heading` must match a whole line of `text` exactly (e.g.
+    ``"## some heading"``) -- a coincidental substring mention inside a
+    longer line does not count. The returned text starts on the line
+    after the heading and runs up to, but not including, the next line
+    that starts with ``"## "``, or to the end of `text` when there is no
+    such later line. Leading/trailing blank lines around the body are
+    stripped; internal blank lines are preserved.
+    """
+    lines = text.split("\n")
+    try:
+        start = lines.index(heading)
+    except ValueError:
+        return None
+    body_lines: list[str] = []
+    for line in lines[start + 1 :]:
+        if line.startswith("## "):
+            break
+        body_lines.append(line)
+    return "\n".join(body_lines).strip("\n")
+
+
+def ratified_trailer_disclosure_text(contributing_path: Path | None = None) -> str:
+    """Return CONTRIBUTING.md's own "outward-artifact-preflight: PR-body
+    trailer disclosure" section, quoted, for inclusion in the FLAGGED
+    message below (issue #1446) -- so that message states the
+    repository's own ratified rule directly, instead of only naming a
+    file the reader must go open separately to see it.
+
+    Unlike load_provenance_scanner()'s VerificationError, a lookup
+    failure here is never fatal to the gate: hooks/ is also shipped
+    standalone to plugin-distributed consumer checkouts that may not
+    carry this repository's own CONTRIBUTING.md at all
+    (docs/repository-layout.md -- only skills/ and hooks/ are deployed).
+    Both a missing file and a heading that has since moved or been
+    renamed degrade to naming the section instead of quoting it; either
+    way the judgment-call framing this text feeds into must still reach
+    the FLAGGED message, never be silently dropped.
+    """
+    section_name = _RATIFIED_TRAILER_SECTION_HEADING.removeprefix("## ")
+    path = (
+        contributing_path
+        if contributing_path is not None
+        else Path(__file__).resolve().parents[1] / _CONTRIBUTING_RELATIVE_PATH
+    )
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        section = None
+    else:
+        section = extract_markdown_section(text, _RATIFIED_TRAILER_SECTION_HEADING)
+    if section is None:
+        return (
+            f'CONTRIBUTING.md\'s "{section_name}" section -- named here, not quoted, because it could '
+            "not be located in this checkout (hooks/ ships standalone to consumer checkouts that may not "
+            "carry CONTRIBUTING.md at all)"
+        )
+    return f'CONTRIBUTING.md\'s "{section_name}" section, quoted verbatim:\n\n{section}'
+
+
 def scan_body(body: str, scanner: ModuleType) -> tuple[bool, str]:
     """Run both checklist scans against `body`; return (clean, message)."""
     provenance_hits = list(scanner.scan(body))
@@ -578,6 +653,7 @@ def evaluate(
     token: str | None,
     fetcher: Any = None,
     scanner_path: Path | None = None,
+    contributing_path: Path | None = None,
 ) -> tuple[str, str]:
     """Return ``(verdict, message)`` where verdict is SKIP, PASS,
     CONTENT_LOSS, FLAGGED, or INDETERMINATE.
@@ -587,6 +663,10 @@ def evaluate(
     mapping. Defaults to hooks/gitapex_check_pr_issue_acm_disclosure.py's
     own `fetch_issue`, so the retry/backoff behavior here is that
     already-tested one, not a second copy.
+
+    `contributing_path` is the injection seam for
+    ratified_trailer_disclosure_text()'s CONTRIBUTING.md lookup, mirroring
+    `scanner_path` above; see that function's own docstring.
     """
     tool_name = payload.get("tool_name")
     tool_input = _coerce_mapping(payload.get("tool_input"))
@@ -732,6 +812,7 @@ def evaluate(
 
     if clean:
         return "PASS", f"{owner}/{repo}#{number}'s stored body re-scanned clean -- {message}"
+    ratified_answer = ratified_trailer_disclosure_text(contributing_path)
     return "FLAGGED", (
         f"{owner}/{repo}#{number}'s STORED body (not the draft that was submitted) carries {message}. "
         "This surfaces candidates; it does not decide. Per skills/outward-artifact-preflight/SKILL.md check 1 "
@@ -739,7 +820,8 @@ def evaluate(
         "ratified in its own contributor-facing docs -- if so, it is agreed, not a leak, and must not be "
         "suppressed with an ignore pattern or allowlist. Otherwise the content is already public: per that "
         "skill's check 4, strip it via mcp__github__update_pull_request / mcp__github__issue_write, then "
-        "re-fetch and re-scan to confirm it was not force-reinjected."
+        "re-fetch and re-scan to confirm it was not force-reinjected.\n\n"
+        f"This repository's own ratified answer is {ratified_answer}"
     )
 
 

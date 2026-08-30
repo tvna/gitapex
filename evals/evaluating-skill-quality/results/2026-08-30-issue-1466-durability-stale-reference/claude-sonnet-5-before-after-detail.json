@@ -1,0 +1,24 @@
+{
+  "model_id": "claude-sonnet-5",
+  "n_runs": 2,
+  "scores": [
+    {
+      "iteration": "durability-stale-reference-annotation-selection",
+      "fixture_id": "evaluating-skill-quality-durability-stale-reference-annotation-selection",
+      "split": "selection",
+      "condition": "before",
+      "commit": "8d2e958b0593a44cc97158256f27824f25eeb1ac",
+      "score": 0.833333,
+      "artifact": "artifacts/durability-stale-reference-annotation-selection-before.md"
+    },
+    {
+      "iteration": "durability-stale-reference-annotation-selection",
+      "fixture_id": "evaluating-skill-quality-durability-stale-reference-annotation-selection",
+      "split": "selection",
+      "condition": "after",
+      "commit": "0ad382bc48765e28f579d4463152613a374a9809",
+      "score": 1.0,
+      "artifact": "artifacts/durability-stale-reference-annotation-selection-after.md"
+    }
+  ]
+}

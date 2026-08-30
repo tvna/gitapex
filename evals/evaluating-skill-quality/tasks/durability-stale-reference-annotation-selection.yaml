@@ -1,0 +1,28 @@
+id: evaluating-skill-quality-durability-stale-reference-annotation-selection
+name: Stale Skill Reference Annotated With Commit Provenance Instead of Removed
+description: The target skill's references file fixes a stale/dangling reference to a retired sibling skill by annotating it in place with a commit hash instead of removing or generalizing it, duplicating what git log/git blame already track permanently. Tests whether the review flags this as a Durability defect distinct from the pre-existing time-sensitive-content and bare-issue-citation checks, and recommends removing or generalizing the reference instead of annotating it.
+tags:
+  - quality
+  - durability
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft references/handoff.md
+    excerpt for a skill called "release-captain" (assume SKILL.md and the
+    rest of references/ already pass review cleanly):
+
+    ## Handoff step
+
+    After tagging the release, hand off to the `notifying-stakeholders`
+    skill -- retired since, commit 7c7ca82 -- to post the announcement.
+    That skill was folded into `announcing-releases` and no longer exists
+    under its old name; this file still names it so a reader knows where
+    the step used to route.
+expected:
+  output_contains:
+    - "provenance"
+    - "generaliz"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"
+    - "no durability concerns"
+    - "acceptable as written"

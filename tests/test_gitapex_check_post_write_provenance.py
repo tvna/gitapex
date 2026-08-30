@@ -145,6 +145,94 @@ def test_unnamed_codepoint_does_not_crash_the_scan() -> None:
     assert hits == [(1, 1, "U+E000 unnamed character")]
 
 
+# --- CONTRIBUTING.md ratified-trailer section quoting (issue #1446) -------
+
+
+def test_extract_markdown_section_returns_body_up_to_next_heading() -> None:
+    text = "# Title\n\n## first\n\nfirst body line one\nfirst body line two\n\n## second\n\nsecond body\n"
+    assert checker.extract_markdown_section(text, "## first") == "first body line one\nfirst body line two"
+
+
+def test_extract_markdown_section_runs_to_end_of_file_when_no_next_heading() -> None:
+    text = "## only\n\nlast body line\nmore text\n"
+    assert checker.extract_markdown_section(text, "## only") == "last body line\nmore text"
+
+
+def test_extract_markdown_section_returns_none_when_heading_absent() -> None:
+    assert checker.extract_markdown_section("## other\n\nbody\n", "## missing") is None
+
+
+def test_extract_markdown_section_requires_an_exact_line_match() -> None:
+    """A heading that only appears as a substring of a longer line (not on
+    its own line) must not match -- otherwise a coincidental prose mention
+    of the heading text could be read as the section itself."""
+    text = "prefix ## first suffix\n\nbody\n"
+    assert checker.extract_markdown_section(text, "## first") is None
+
+
+def test_extract_markdown_section_heading_with_trailing_whitespace_does_not_match() -> None:
+    """Defeat case (issue #1446 step 8 adversarial review): a heading line
+    carrying trailing whitespace must NOT match the clean heading constant
+    -- `lines.index(heading)` requires byte-for-byte equality, by design
+    (see this function's own docstring), so a stray trailing space
+    silently degrades extraction to None rather than matching loosely.
+    Confirmed today's real CONTRIBUTING.md heading carries no such
+    whitespace, so this is a live non-issue, not a live bug."""
+    text = "# Title\n\n## first   \n\nbody\n\n## second\n"
+    assert checker.extract_markdown_section(text, "## first") is None
+
+
+def test_extract_markdown_section_duplicate_heading_returns_first_occurrence() -> None:
+    """Defeat case: when a heading text appears twice, `list.index()`
+    picks the first occurrence deterministically. Pinned as the intended
+    behavior (not a defect) -- a well-formed CONTRIBUTING.md has no
+    duplicate headings, and "first wins" is a reasonable, deterministic
+    default for the degenerate case where one does."""
+    text = "## dup\n\nfirst body\n\n## other\n\n## dup\n\nsecond body\n"
+    assert checker.extract_markdown_section(text, "## dup") == "first body"
+
+
+def test_extract_markdown_section_final_line_at_eof_is_not_truncated() -> None:
+    """Defeat case: the last section in a file, with no trailing newline
+    at all, must not off-by-one drop its final line."""
+    text = "## only\n\nlast body line"
+    assert checker.extract_markdown_section(text, "## only") == "last body line"
+
+
+def test_default_contributing_path_extracts_the_real_ratified_section() -> None:
+    """The relative path this hook resolves for CONTRIBUTING.md must
+    really find the ratified section in this repository's own checkout --
+    a hook that silently could not locate its own CONTRIBUTING.md would
+    fall back to the named-section message forever, and no unit test
+    injecting a contributing_path would notice."""
+    text = checker.ratified_trailer_disclosure_text()
+    assert "agreed, disclosed convention" in text
+    assert "issues/687" in text
+
+
+def test_ratified_trailer_disclosure_falls_back_when_contributing_md_is_missing(tmp_path: Path) -> None:
+    """hooks/ is also shipped standalone to plugin-distributed consumer
+    checkouts that may not carry CONTRIBUTING.md at all
+    (docs/repository-layout.md) -- a missing file must degrade to naming
+    the section, never crash and never silently drop the judgment-call
+    framing this text feeds into."""
+    text = checker.ratified_trailer_disclosure_text(tmp_path / "absent-CONTRIBUTING.md")
+    assert "outward-artifact-preflight: PR-body trailer disclosure" in text
+    assert "could not be located" in text
+
+
+def test_ratified_trailer_disclosure_falls_back_when_heading_is_absent(tmp_path: Path) -> None:
+    """A CONTRIBUTING.md that exists but whose section has since moved or
+    been renamed must also degrade to the named-section fallback, not
+    raise and not quote unrelated content."""
+    contributing = tmp_path / "CONTRIBUTING.md"
+    contributing.write_text("## some other section\n\nunrelated body\n", encoding="utf-8")
+    text = checker.ratified_trailer_disclosure_text(contributing)
+    assert "outward-artifact-preflight: PR-body trailer disclosure" in text
+    assert "could not be located" in text
+    assert "unrelated body" not in text
+
+
 # --- target resolution ----------------------------------------------------
 
 
@@ -594,6 +682,64 @@ def test_a_non_ascii_only_body_is_flagged_too() -> None:
     )
     assert verdict == "FLAGGED"
     assert "U+2014" in message
+
+
+def test_flagged_message_quotes_the_ratified_contributing_section_verbatim() -> None:
+    """The FLAGGED path must not just point at CONTRIBUTING.md's ratified-
+    trailer section -- it must quote that section's own text, so an
+    operator applying the judgment call does not have to go open a second
+    file to see the rule being applied. The pre-fix message only named the
+    file/section, never its content."""
+    verdict, message = checker.evaluate(
+        payload(tool_response={"number": 5}), "tok", fetcher=fetcher_returning(_LEAKED_BODY)
+    )
+    assert verdict == "FLAGGED"
+    # The existing judgment-call framing must survive unweakened.
+    assert "This surfaces candidates; it does not decide." in message
+    # The section's own text, not merely a pointer/filename reference.
+    assert "agreed, disclosed convention" in message
+    assert "issues/687" in message
+
+
+def test_flagged_message_for_an_unratified_leak_does_not_claim_it_is_ratified() -> None:
+    """A genuine, unratified leak -- a bare model identifier plus a
+    session URL, but not CONTRIBUTING.md's specific 'Generated by ...
+    during session ...' GitHub-appended trailer shape -- must still
+    FLAG, and the message must never assert this particular hit IS the
+    ratified one; it states the judgment call conditionally, same as
+    before this fix."""
+    body = (
+        "See output from claude-sonnet-5 at https://claude.ai/code/session_01Unrelated12345 (a leak, not a trailer).\n"
+    )
+    scanner = checker.load_provenance_scanner()
+    assert scanner.scan(body), "fixture must actually trip the scan for this test to mean anything"
+
+    verdict, message = checker.evaluate(payload(tool_response={"number": 5}), "tok", fetcher=fetcher_returning(body))
+    assert verdict == "FLAGGED"
+    assert "if so, it is agreed" in message
+    assert "Otherwise the content is already public" in message
+    # The quoted section's own scope bullet states plainly that only the
+    # GitHub-appended trailer is covered -- this hit is neither, and the
+    # quoted text itself makes that explicit rather than the message
+    # asserting it is ratified.
+    assert "Does not cover a model identifier, session URL" in message
+
+
+def test_flagged_message_falls_back_when_contributing_md_cannot_be_found(tmp_path: Path) -> None:
+    """The injectable seam for CONTRIBUTING.md resolution, mirroring
+    scanner_path's own injection pattern on load_provenance_scanner: when
+    CONTRIBUTING.md cannot be found, the FLAGGED message still fires,
+    still names the section, and never crashes."""
+    verdict, message = checker.evaluate(
+        payload(tool_response={"number": 5}),
+        "tok",
+        fetcher=fetcher_returning(_LEAKED_BODY),
+        contributing_path=tmp_path / "absent-CONTRIBUTING.md",
+    )
+    assert verdict == "FLAGGED"
+    assert "This surfaces candidates; it does not decide." in message
+    assert "outward-artifact-preflight: PR-body trailer disclosure" in message
+    assert "could not be located" in message
 
 
 def test_the_draft_is_never_the_scan_input() -> None:

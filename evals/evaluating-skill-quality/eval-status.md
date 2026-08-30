@@ -496,6 +496,50 @@ covering the full corpus, `trials_per_task: 3`, and/or the compatibility
 axis specifically (given where Phase 1's gap concentrated) is the natural
 next step, not yet scheduled. Refs #500.
 
+## Corpus saturation, computed from the Phase 1 run (issue #1461)
+
+Phase 1's committed per-model scores answer a question its own headline did
+not ask: how much of this corpus can still separate one model from another.
+`evals/scripts/gitapex_compute_corpus_saturation.py` computes that from the
+committed JSON alone -- no model invocation, no credential -- by counting,
+per fixture, how many distinct `model_id` results scored exactly 1.0.
+Reproduce with:
+
+    uv run --frozen python3 evals/scripts/gitapex_compute_corpus_saturation.py \
+        evals/evaluating-skill-quality/results/2026-07-28-issue-500-phase1
+
+**Measured, over the 23 fixtures all three tiers scored:**
+
+- **saturated (every model 1.0): 5 of 23, 21.7 percent.** These cannot
+  separate any two models in this run; more fixtures like them grow the
+  case count without growing the information.
+- **discriminating (at least one model below 1.0): 18 of 23, 78.3 percent.**
+  The corpus is not exhausted of discriminating power.
+- **uniformly hard: 2**, a labelled subset of those 18 --
+  `scoring-axis-uncontrolled-speed-claim` (0.833333 on all three tiers) and
+  `tool-capability-verification-selection` (0.750000 on all three). Every
+  model scored the same value below 1.0, so neither separates anything
+  either. Flagged as assertion-defect candidates rather than as difficulty,
+  following Swayamdipta et al.'s finding that hard-to-learn instances often
+  correspond to labeling errors; whether their assertions are actually
+  defective is a separate read, deliberately not made here.
+
+Read alongside the ceiling entry below (three consecutive held-out gates
+tied at 1.0): the ceiling is a property of the *subset each gate scored*,
+not of the corpus, which still discriminates on 78.3 percent of its
+fixtures at a weaker tier.
+
+Scope and limits, disclosed rather than assumed. This figure exists for
+exactly one run: the 2026-07-28 Phase 1 directory is the only committed run
+repository-wide carrying more than one `model_id`, and every gate run
+committed since (issues #1124, #1142, #1346, #1347) is `claude-sonnet-5`
+only, for which the script reports the rate as not computable rather than
+as zero. Three responses per fixture is far below the roughly 90 per item
+Vania et al. use to fit an item-response model, so this is a count over the
+tiers this run happened to include, never a difficulty or discrimination
+parameter. No threshold is attached and nothing gates on the number: that
+decision needs more than one run. Refs #1461, #500.
+
 ## Confidentiality awareness (issue #537)
 
 Found via conversational Q&A, not a proactive audit: no axis checked
@@ -1238,3 +1282,9 @@ The "Dimension 5/6 boundary clarifications" entry above's own final isolated sel
 **Also updated**, for citation fidelity: `worked-example-self-review.md`'s dimension 6 subsection, which quoted the pre-fix `SKILL.md`/`adversarial-self-audit.md` spans as live Fail evidence. Re-written to record axis 9 as closed in full (both its earlier-closed governance-gating half and the now-closed unconditional-recheck half), axis 3 as closed, and axis 2 (identity binding -- entries keyed by platform signal, not by author or last live confirmation) as still open and unaddressed by this change. Its quotations of current-file text (`SKILL.md`'s new bullet, the unchanged axis 3/9 rubric criteria) were re-derived from the current files; its two quotations of pre-fix text (the old Caveat wording, the old `SKILL.md` wording), kept as evidence of the gap this change closes, were matched against that actual pre-fix content instead, and the subsection's own closing citation-check paragraph now states which is which rather than folding both under one "current files" claim -- an independent adversarial review of this same diff caught the original, inaccurate blanket claim, a wrong `adversarial-self-audit.md`/`state-management-quality.md` attribution, and an off-by-one physical-line count, all now corrected.
 
 **Not done in this pass, disclosed as scope, not silently deferred.** The issue's own proof-method column proposed a formal `scorer-gated-skill-edits` held-out-fixture gate cycle (a new/updated selection fixture, paired before/after isolated dispatch scores) on top of the live re-verification above; that heavier cycle was not run here, matching the issue's own Residual-risk column, which already flagged the cost of an unconditional re-check that could force every dispatch through a full live re-run -- the design adopted here (a cheap, mechanical signal comparison that only *escalates* to a full re-run on mismatch) is meant to avoid exactly that cost, but the fixture-based gate proving the rubric's own scoring corpus reflects it has not itself been executed. Axis 2 (identity binding) remains a named, open dimension-6 gap, out of this issue's scope. Refs #1351.
+
+## Durability example: stale reference vs. commit-provenance annotation (issue #1466)
+
+Issue #260 (merge retrospective for PR #258), Repair 1, proposed a durable rubric example for a real, repeated pattern: PR #258's first commit fixed a stale/dangling reference (a retired sibling skill name) by *annotating* it in place with a commit hash instead of removing or generalizing it, duplicating what `git log`/`git blame` already track permanently, before a second commit reworded it to drop the name outright instead. `references/rubric.md`'s dimension 6 (Durability) gained a bullet naming this exact pattern -- prefer removing or generalizing a stale in-repo reference over annotating it with commit provenance -- plus one clause each in the section's existing combined Fail:/Pass: block. `SKILL.md` needed no companion edit, matching the #185 entry's own precedent above.
+
+Went through `scorer-gated-skill-edits`' own held-out gate: 1 new selection fixture added to `split.json`'s split (41 total selection, 35:41:18). One fresh isolated `claude -p` dispatch pair against the new selection fixture moved **0.833333 -> 1.000000, KEEP** -- the before-edit dispatch already reasoned to the correct remedy through general reasoning alone, the after-edit dispatch additionally grounding it in the new rubric text's own Fail/Pass wording, the same axis-did-not-exist-yet shape several prior iterations in this file already established. Full record, deterministic-check results, and both incidental pre-push-gate fixes found along the way: `evals/evaluating-skill-quality/split.md`'s Kept-edit log. Refs #1466, #260.

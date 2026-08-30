@@ -134,8 +134,8 @@ repos:
       # already-open PR. This runs all of them in one pass at pre-push --
       # the last local moment before a gap becomes a CI round-trip, and
       # deliberately not pre-commit: it grades committed state (HEAD vs
-      # origin/main), not a staged index, and at ~17 s
-      # warm end to end for all 40 wired gates it is too slow to sit on every
+      # origin/main), not a staged index, and at ~15 s
+      # warm end to end for all 43 wired gates it is too slow to sit on every
       # single commit.
       #
       # The wired set is not listed here: the runner discovers it from
@@ -151,11 +151,14 @@ repos:
       # enforcement for the ordinary path, not a command a contributor has
       # to remember to type.
       #
-      # `python3`, not `uv run`: the runner itself is stdlib-only, and each
-      # gate's own local_invocation carries whatever `uv run` pin it needs.
+      # `uv run --frozen python3`, not a bare `python3`: the runner imports
+      # _gitapex_schema_validation.py, which needs jsonschema -- not
+      # guaranteed present on a bare system python3 (issue #1485). Each
+      # gate's own local_invocation separately carries whatever `uv run`
+      # pin it needs.
       - id: local-preflight
         name: local preflight (every working-tree-runnable gate)
-        entry: python3 .github/scripts/gitapex_gate_local_preflight.py
+        entry: uv run --frozen python3 .github/scripts/gitapex_gate_local_preflight.py
         language: system
         stages: [pre-push]
         pass_filenames: false

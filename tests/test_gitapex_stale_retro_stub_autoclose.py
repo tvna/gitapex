@@ -14,7 +14,6 @@ test_gitapex_post_merge_retro.py's own fixture style.
 
 from __future__ import annotations
 
-import http.client
 import json
 import pathlib
 import urllib.error
@@ -198,56 +197,30 @@ def test_list_open_retro_issues_paginates():
     assert len(result) == 101
 
 
-def test_list_open_retro_issues_retries_5xx_then_succeeds():
-    responses = [http_error(503, "{}"), Response(200, json.dumps([]))]
-    sleeps: list[float] = []
-
-    def opener(request: urllib.request.Request) -> Response:
-        response = responses.pop(0)
-        if isinstance(response, urllib.error.HTTPError):
-            raise response
-        return response
-
-    result = sra.list_open_retro_issues("tvna", "gitapex", "tok", opener=opener, sleeper=sleeps.append)
-    assert result == []
-    assert sleeps == [5]
+# ---------------------------------------------------------------------------
+# Retry-loop delegation (issue #729): the retry/backoff mechanics themselves
+# (5xx retry, IncompleteRead retry, repeated-network-failure raise) no
+# longer live in this module -- `list_open_retro_issues` now delegates to
+# `_gitapex_github_http.fetch_json_page`, itself built on
+# `request_with_retry`, and that mechanics is covered by
+# tests/test_gitapex_github_http.py. The one integration test below
+# confirms only that this module's own public API still surfaces
+# `GitHubApiError` correctly once retries are exhausted -- i.e. that the
+# migration itself didn't break this module's observable behavior.
+# ---------------------------------------------------------------------------
 
 
-def test_list_open_retro_issues_raises_on_persistent_4xx():
-    def opener(request: urllib.request.Request) -> Response:
-        raise http_error(422, "unprocessable")
-
-    with pytest.raises(sra.GitHubApiError):
-        sra.list_open_retro_issues("tvna", "gitapex", "tok", opener=opener, sleeper=lambda _: None)
-
-
-def test_list_open_retro_issues_raises_after_repeated_network_failure():
+def test_list_open_retro_issues_raises_github_api_error_after_repeated_5xx():
     calls = 0
 
     def opener(request: urllib.request.Request) -> Response:
         nonlocal calls
         calls += 1
-        raise urllib.error.URLError("boom")
+        raise http_error(503, "{}")
 
     with pytest.raises(sra.GitHubApiError):
         sra.list_open_retro_issues("tvna", "gitapex", "tok", opener=opener, sleeper=lambda _: None)
     assert calls == 3
-
-
-def test_list_open_retro_issues_retries_incomplete_body_read_then_succeeds():
-    class FlakyResponse(Response):
-        def read(self) -> bytes:
-            raise http.client.IncompleteRead(b"partial")
-
-    responses = [FlakyResponse(200), Response(200, json.dumps([]))]
-    sleeps: list[float] = []
-
-    def opener(request: urllib.request.Request) -> Response:
-        return responses.pop(0)
-
-    result = sra.list_open_retro_issues("tvna", "gitapex", "tok", opener=opener, sleeper=sleeps.append)
-    assert result == []
-    assert sleeps == [5]
 
 
 # ---------------------------------------------------------------------------
@@ -376,7 +349,13 @@ def test_close_stub_issue_does_not_retry_the_non_idempotent_comment_post():
 
 def test_close_stub_issue_patch_close_still_retries_5xx_then_succeeds():
     """The PATCH close is naturally idempotent and keeps the default retry
-    count, unlike the comment POST above."""
+    count, unlike the comment POST above. One retry-then-succeed case is
+    enough to prove this call site's own max_attempts wiring (issue #729):
+    the retry mechanism's own correctness across failure modes (5xx,
+    IncompleteRead, ...) is the shared `_gitapex_github_http` module's job
+    and is already covered exhaustively by tests/test_gitapex_github_http.py
+    -- a second variant here for IncompleteRead specifically would only
+    re-test that same mechanism, not this call site's own wiring."""
     responses = [Response(200, json.dumps([])), Response(201, "{}"), http_error(503, "{}"), Response(200, "{}")]
     sleeps: list[float] = []
 
@@ -385,21 +364,6 @@ def test_close_stub_issue_patch_close_still_retries_5xx_then_succeeds():
         if isinstance(response, urllib.error.HTTPError):
             raise response
         return response
-
-    sra.close_stub_issue("tvna", "gitapex", 314, 48, "tok", opener=opener, sleeper=sleeps.append)
-    assert sleeps == [5]
-
-
-def test_close_stub_issue_patch_close_retries_incomplete_body_read_then_succeeds():
-    class FlakyResponse(Response):
-        def read(self) -> bytes:
-            raise http.client.IncompleteRead(b"partial")
-
-    responses = [Response(200, json.dumps([])), Response(201, "{}"), FlakyResponse(200), Response(200, "{}")]
-    sleeps: list[float] = []
-
-    def opener(request: urllib.request.Request) -> Response:
-        return responses.pop(0)
 
     sra.close_stub_issue("tvna", "gitapex", 314, 48, "tok", opener=opener, sleeper=sleeps.append)
     assert sleeps == [5]

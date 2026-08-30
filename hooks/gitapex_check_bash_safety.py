@@ -79,6 +79,166 @@ instead of a command/verb token. Deliberately not attempted in Stage 1;
 pinned as `graphql-mutation-keyword-variable-concatenation` in
 hooks/test_gitapex_check_bash_safety.py's own `KNOWN_BYPASS_COMMANDS`.
 
+CRITICAL, disclosed, whole-module limitation, NOT specific to any one rule
+(found live by Step 8 independent review, round 8 of issue #1375's own
+checkout/restore feature review, while stress-testing an unrelated,
+narrower fix): `tokenize()`'s own reliance on the standard library's
+`shlex` tracks double-quote state as one flat, whole-command toggle, with
+no concept of bash's own recursive quote-context reset inside a `$(...)`
+command substitution. A double-quoted span nested inside a `$(...)` that
+is itself nested inside an outer double-quoted string desynchronizes
+`shlex`'s own quote parity from real bash's actual parse while keeping
+the TOTAL double-quote count even across the whole command -- so
+`tokenize()`'s own `TokenizeError` fail-closed path never fires, unlike
+the structurally-safe, always-unbalanced quote-decoy shape documented
+elsewhere in this module. Live-verified real, silent data loss: `x="$(echo
+"y)" && git checkout -- dirty.py)"` genuinely discards a dirty tracked
+file when actually executed, while `classify()` reports `deny=False` with
+"git"/"checkout" never appearing as their own separate tokens at all --
+fused into what `shlex` mis-reads as inert quoted content. This is a
+property of `shlex` itself, not any rule built on top of it (checkout/
+restore, git push, pip install, gh api all share this exposure equally),
+and predates issue #1375. Deliberately NOT attempted here -- tracked as
+its own dedicated issue, https://github.com/tvna/gitapex/issues/1404,
+since a genuine fix needs a command-substitution-aware recursive
+tokenizer, not a narrow patch; pinned as `shlex-nested-double-quote-
+inside-command-substitution-full-bypass` in
+hooks/test_gitapex_check_bash_safety.py's own `KNOWN_BYPASS_COMMANDS`.
+
+CRITICAL, disclosed, redirect-handling-specific limitation, the same
+underlying `shlex`-quote-information-loss class as the residual just
+above (found live by Step 8 independent review, round 17 of issue
+#1375's own checkout/restore feature review, while stress-testing
+rounds 14-16's own newly-added redirect-clause handling):
+`_REDIRECT_OPERATORS`/`_redirect_span_length`/`_redirect_span_length_
+with_optional_fd`/`_strip_redirect_clauses` recognize a redirect
+operator purely by a token's final TEXT value -- `tokenize()`'s own
+`shlex` dequotes every token before this check ever runs, so a real,
+tracked file whose name is literally one of these operator strings
+(e.g. a file named `>`) tokenizes to the exact same text as a genuine,
+unquoted redirect operator, with no way to recover which one the
+source actually was. Live-verified real, silent data loss: with a
+real tracked file literally named `>` and a second file `realfile.py`
+genuinely dirty, `git checkout ">" realfile.py` genuinely discards
+`realfile.py`'s uncommitted content when actually executed, while
+`classify()` reports `deny=False` with an EMPTY `checkout_restore_
+paths` -- `_strip_redirect_clauses` misreads the quoted `">"` as a
+real operator and `realfile.py` as its "target," stripping BOTH and
+leaving nothing for `_git_checkout_paths` to extract. Reachability is
+narrow (the decoy path must already exist as a real tracked file, or
+git's own atomic multi-pathspec validation aborts first, confirmed
+live), but the underlying gap is real and this is a full, confirmed
+bypass for that shape. Deliberately NOT attempted here: a narrow fix
+confined to the redirect-handling functions alone does not exist
+without reintroducing round 15's own, far more common false-positive
+(denying an ordinary `git checkout -- f.py >> log.txt`-style output
+redirect) -- a genuine fix needs `tokenize()` itself to preserve
+per-token quote/escape provenance, the same class of tokenizer-level
+change issue #1404 above already requires, not a narrow patch; tracked
+as its own dedicated issue, https://github.com/tvna/gitapex/issues/1412,
+since it is a distinct shlex-information-loss shape (redirect-operator
+text matching, not nested double-quote state) from #1404's own finding;
+pinned as `quoted-redirect-operator-shaped-filename-bypass` in
+hooks/test_gitapex_check_bash_safety.py's own `KNOWN_BYPASS_COMMANDS`.
+
+CRITICAL, disclosed, third instance of the SAME shlex-quote-information-
+loss class as #1404/#1412 above (found live by Step 8 independent
+review, round 39 of issue #1375's own checkout/restore feature review,
+while stress-testing rounds 30-38's own scope-isolation reassignment-
+clearing story): `_raw_segments_with_boundaries` (the `(...)`-subshell
+depth tracker underlying `_names_reassigned_from_a_static_value`/
+`_names_cleared_by_a_later_static_reassignment`, and by extension
+`_rule_gh_api_write`/B1a/B1b) recognizes a real subshell open/close
+purely by a token's TEXT (`tok in _SUBSHELL_OPEN_TOKENS`, `tok == ")"`)
+-- but `tokenize()`'s own shlex dequoting makes a QUOTED literal `"("`/
+`")"` argument tokenize to the identical bare string as a genuine,
+unquoted operator, with no way to recover which one the source actually
+was, exactly the same information loss #1404/#1412 already document for
+different consumers. TWO distinct manifestations confirmed live: a
+quoted `)` inside a genuinely enclosing `(...)` subshell (`TOOL=uv;
+VERB=harmless; VERB=$(echo install); ( true ")" ; VERB=safe ); $TOOL
+$VERB foo`) prematurely decrements tracked depth, wrongly letting the
+still-isolated `VERB=safe` clear an earlier poisoning -- confirmed live
+via a stand-in `uv` binary on PATH that real bash genuinely still runs
+`uv install foo`, NOT `safe foo` (the `_rule_gh_api_write` counterpart
+reproduces identically, a genuine bypass, not a false positive); and a
+quoted `(` with no matching close (`echo "("`) inflates depth for the
+rest of the command with nothing to ever balance it, wrongly denying an
+ordinary, harmless, genuinely top-level clearing reassignment that
+follows -- confirmed live via a stand-in `uv` binary that real bash
+genuinely runs the harmless command, a false positive this time. More
+severe in reach than #1404/#1412, since the mechanism it defeats is the
+one every round-30-38 finding exists to protect. Deliberately NOT
+attempted here, for the identical reason #1412 already gives: a narrow
+patch confined to this one function risks reintroducing a worse,
+far-more-common false-positive class, and a genuinely sound fix needs
+`tokenize()` itself to preserve per-token quote/escape provenance --
+the same tokenizer-level architectural change #1404/#1412 already
+require, ideally landed once for all three rather than three
+independently-drifting patches. Tracked as its own dedicated issue,
+https://github.com/tvna/gitapex/issues/1502; pinned as
+`quoted-paren-inside-a-subshell-clears-a-poisoning-bypass`/
+`gh-api-quoted-paren-inside-a-subshell-clears-a-poisoning-bypass` in
+hooks/test_gitapex_check_bash_safety.py's own `KNOWN_BYPASS_COMMANDS`
+(the bypass direction), and as a disclosed over-denial residual (the
+false-positive direction) alongside this module's own other accepted
+over-denials.
+
+CRITICAL, disclosed, whole-module limitation, a DIFFERENT mechanism from
+the #1404/#1412/#1502 shlex quote-information-loss class above (found
+live by Step 8 independent review, round 41 of issue #1375's own
+checkout/restore feature review, the PR's own designated final review
+round, while auditing areas outside the heavily-reviewed scope-isolation
+and checkout/restore-path-resolution areas): `tokenize()` has no
+here-document (`<<DELIM`/`<<'DELIM'`/`<<-DELIM`) or here-string (`<<<`)
+awareness at all. Real bash treats a heredoc's body as inert data handed
+to the receiving command's stdin, never re-parsed as shell syntax -- but
+this classifier's shlex-based tokenizer keeps tokenizing straight
+through the `<<DELIM` marker into the body text as if it were more
+command source, so any denied phrase appearing in pure heredoc DATA
+triggers a denial bash never actually executes. Unlike #1404/#1412/#1502
+(quote-provenance loss on an otherwise-correctly-segmented token
+stream), this is a missing LEXICAL CONSTRUCT entirely -- the tokenizer
+has no representation of "text after `<<DELIM` up to the closing
+delimiter line is not shell syntax." Live-verified: `cat <<EOF\npip
+install foo\nEOF` returns `deny=True` naming the pip+install denied verb
+sequence, though real bash only prints the two lines via `cat`; `cat
+<<EOF\ngit checkout -- file.py\nEOF` populates `checkout_restore_paths=
+('file.py',)` even though the heredoc never runs that checkout, meaning
+this PR's own new detection surface also reaches into heredoc bodies.
+Safe direction only (over-denial, never a bypass): no shape was found
+where a heredoc body causes an under-detection. Deliberately NOT
+attempted here -- a genuine fix needs a heredoc-body-boundary
+pre-processing pass (structurally similar to, but distinct from, this
+module's own existing `_strip_comments`/`_strip_line_continuations`
+passes) whose own edge cases (an unterminated heredoc, multiple
+heredocs on one line, `<<-`'s own leading-tab-stripping rule, quoted-
+vs-unquoted `DELIM` controlling body expansion) deserve their own
+dedicated verification pass rather than a rushed patch; tracked as its
+own dedicated issue, https://github.com/tvna/gitapex/issues/1520.
+
+A second, distinct, round-17 finding in the SAME redirect-handling area
+is NOT a bypass and is NOT tracked separately: `_redirect_span_length`'s
+own deliberate choice (round 16) to leave a leading digit token OUT of
+a redirect span, rather than risk dropping a real path argument (see
+that function's own docstring), is INHERENTLY indistinguishable at the
+token level from the case where the digit genuinely is consumed by a
+fused `N>file`-shaped redirect with no `--` present -- `git checkout
+realfile.py 2>target.txt` (fused, no `--`) and `git checkout realfile.py
+2 >target.txt` (spaced, no `--`) tokenize identically, but only the
+spaced form genuinely passes `2` to git as a second positional. Since
+this classifier cannot tell the two apart, it deliberately treats BOTH
+the same way -- as `_git_checkout_paths`'s own sub-case (b), extracting
+BOTH `realfile.py` and `2` -- rather than silently assuming the
+fused-and-therefore-safe reading. This can produce a false deny when a
+file named `2` happens to be dirty even though the fused form never
+actually touches it, but that is the SAME "when a token-level ambiguity
+cannot be soundly resolved, prefer extra scrutiny over a silent miss"
+posture this module takes everywhere else (see round 12's own still-
+dynamic-candidate fail-closed choice for the identical trade-off
+direction) -- an accepted, intentional cost of round 16's own data-loss
+fix, not a new defect.
+
 Closed by fifth-round Step 8 independent review: `_gh_api_method_dynamic_
 value`/`_gh_api_field_dynamic_hit` (and the earlier literal-token scans)
 only ever recognized a dynamic VALUE fused onto a literal `-X`/`--method`/
@@ -398,6 +558,7 @@ hooks that already shell out to python3).
 
 from __future__ import annotations
 
+import itertools
 import json
 import re
 import shlex
@@ -415,6 +576,37 @@ from typing import NamedTuple
 _SINGLE_OPS = {";", "|", "&", "(", ")", "\n"}
 _MULTI_OPS = {"&&", "||"}
 _ASSIGN_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
+
+# Matches bash's own compound/append-assignment operator (`NAME+=value`)
+# by NAME alone -- deliberately NOT anchored at the end (`re.match`, not
+# `re.fullmatch`), so it still matches the shlex-tokenizer-split form a
+# `NAME+=$(...)` assignment produces (e.g. the single token `DIR+=$`, with
+# `(`/`echo`/`other`/`)` as their own separate following tokens -- shlex is
+# punctuation-aware around `(`/`)`). `_ASSIGN_RE` above never matches a
+# `+=` token at all (its own greedy identifier-char class cannot consume
+# past the literal `+`, so the required `=` immediately after never lines
+# up) -- used only by `_names_with_dynamic_assignment`, see that
+# function's own docstring for the live bypass this closes.
+_APPEND_ASSIGN_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\+=")
+
+# Matches bash's own array-element assignment (`NAME[subscript]=value` or
+# `NAME[subscript]+=value`) by NAME alone -- neither `_ASSIGN_RE` nor
+# `_APPEND_ASSIGN_RE` matches this shape at all (both anchor immediately
+# after NAME's own identifier characters, with no `[...]` in between) --
+# used only by `_names_with_dynamic_assignment`, see that function's own
+# docstring (round 26) for the live bypass this closes.
+_ARRAY_ELEMENT_ASSIGN_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\[[^\]]*\]\+?=")
+
+# Command words whose whole purpose is to reassign one or more existing
+# names from runtime input (`read`/`readarray`/`mapfile`'s own target
+# operands) -- see `_names_with_dynamic_assignment`'s own docstring
+# (round 26) for how these are scanned and why.
+_READ_COMMAND_WORDS = frozenset({"read", "readarray", "mapfile"})
+
+# A bare, unqualified bash identifier -- used only to recognize a `read`/
+# `readarray`/`mapfile`/`printf -v` operand as a plausible reassignment
+# target, not to validate real bash identifier rules exhaustively.
+_BARE_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 # Matches one `$NAME`/`${NAME}`/`${NAME:-default}`/`${!NAME}` reference
 # anywhere in a token, capturing its full span (including the braces, when
@@ -762,7 +954,17 @@ def _is_unresolvable_substitution(token: str) -> bool:
     return "$(" in token or "`" in token
 
 
-def _rule_command_substitution_content(tokens: list[str]) -> tuple[str | None, bool]:
+def _rule_command_substitution_content(
+    tokens: list[str],
+    name_to_value: dict[str, str],
+    name_to_raw_value: dict[str, str],
+    name_to_raw_value_git_biased: dict[str, str],
+    name_to_raw_value_cd_biased: dict[str, str],
+    name_to_raw_value_history: dict[str, tuple[str, ...]],
+    name_to_value_write_biased: dict[str, str],
+    name_to_raw_value_write_biased: dict[str, str],
+    names_with_dynamic_assignment: set[str],
+) -> tuple[str | None, bool, tuple[str, ...]]:
     """Recursively classify each `$(...)` command-substitution span's OWN
     inner content through this module's full rule set -- bash genuinely
     RUNS that inner text as a complete command the instant the
@@ -797,18 +999,18 @@ def _rule_command_substitution_content(tokens: list[str]) -> tuple[str | None, b
     classifying the span's own inner content directly, instead of
     requiring the outer, now-opaque token to itself carry the phrase.
 
-    Returns `(reason_or_None, is_git_push)` -- ALWAYS a tuple, never a
-    bare `None` -- this module's own `Verdict` carries a THIRD, warn-only
-    `is_git_push` field the task-scoped sibling module's `Verdict` does
-    not, and `git push` alone is WARN-only here (`deny=False,
-    is_git_push=True`), not a hard deny. An earlier version of this
-    function only returned `is_git_push` alongside a DENY, discarding it
-    whenever the inner substitution's own verdict was `deny=False` --
-    found live by Step 8 independent review, fifteenth round (issue
-    #1326): `x=$(git push origin main)` (confirmed live end-to-end
-    through the real hook entrypoint) silently dropped the warn signal
-    entirely, since folding made `git`/`push`/`origin`/`main` one opaque
-    token invisible to `_is_git_push_segment`'s own scan, and the
+    Returns `(reason_or_None, is_git_push, checkout_restore_paths)` --
+    ALWAYS a 3-tuple, never a bare `None` -- this module's own `Verdict`
+    carries a THIRD, warn-only `is_git_push` field the task-scoped sibling
+    module's `Verdict` does not, and `git push` alone is WARN-only here
+    (`deny=False, is_git_push=True`), not a hard deny. An earlier version
+    of this function only returned `is_git_push` alongside a DENY,
+    discarding it whenever the inner substitution's own verdict was
+    `deny=False` -- found live by Step 8 independent review, fifteenth
+    round (issue #1326): `x=$(git push origin main)` (confirmed live
+    end-to-end through the real hook entrypoint) silently dropped the warn
+    signal entirely, since folding made `git`/`push`/`origin`/`main` one
+    opaque token invisible to `_is_git_push_segment`'s own scan, and the
     recursive check's own early-return-only-on-deny never propagated the
     inner `classify()`/`_classify_tokens()` call's OWN `is_git_push=True`
     result outward. This gated the outward-artifact-preflight provenance
@@ -819,19 +1021,89 @@ def _rule_command_substitution_content(tokens: list[str]) -> tuple[str | None, b
     each inner verdict's own `is_git_push` into a running total,
     returned regardless of whether any span was itself denied.
 
-    Disclosed residual (found live by Step 8 independent review,
-    nineteenth round, issue #1326): unlike `_rule_array_literal_content`'s
-    own nineteenth-round fix, the recursive `_classify_tokens(inner_
-    tokens)`/`classify(inner_text)` calls below pass no outer scope, so a
-    tool/verb built from a variable assigned OUTSIDE a `$(...)` span's own
-    text (e.g. `T=pip; V=install; x=$($T $V foo)`) is still invisible to
-    this recursive check, even though it resolves to a real denied
-    invocation at bash runtime. Not fixed here: closing it needs the
-    string-based `classify()` entry point (used for the quoted/fused
-    `$(...)` shape) to also accept an outer scope, a larger change than
-    the finding that prompted `_rule_array_literal_content`'s own fix
-    warranted."""
+    Issue #1375 threads `checkout_restore_paths` through this exact same
+    shape: every span's own inner `checkout_restore_paths` is concatenated
+    into a running tuple, unconditionally, so `x=$(git checkout -- f.py)`
+    is not silently dropped the same way the fifteenth round's own
+    `is_git_push` bug would have dropped it -- the identical bug class,
+    for a tuple instead of a bool.
+
+    NAME_TO_VALUE/NAME_TO_RAW_VALUE are the OUTER command's own assigned
+    variables, already merged with this span's own containing token
+    list's assignments by `_classify_tokens` before this function is ever
+    called -- mirrors `_rule_array_literal_content`'s own NAME_TO_VALUE/
+    NAME_TO_RAW_VALUE parameters exactly (see that function's own
+    docstring), since a bare `$G` inside a `$(...)` span genuinely
+    resolves against the SAME shell scope as the rest of the command at
+    real bash runtime, not just against whatever the substitution's own
+    inner tokens happen to assign.
+
+    CRITICAL bug found live by Step 8 independent review, eighteenth
+    round (issue #1375): an earlier version of this function passed no
+    scope at all to either recursive call, re-deriving nothing from the
+    substitution's own inner tokens either -- so a `git` token itself
+    held in a variable assigned OUTSIDE the `$(...)` span (e.g. `G=git;
+    x=$($G checkout -- dirty.py)`, an ordinary "hold the tool name in a
+    variable" idiom, not an exotic precondition) defeated checkout/
+    restore recognition ENTIRELY, not merely under-extracted it: since
+    "checkout"/"restore" are not in `_WATCHED_VERBS`, there is no B1a/B1b
+    fallback the way there might be for a `pip install`-shaped denial,
+    so an unresolvable `$G` left the substitution's own inner content
+    invisible to `_find_git_checkout_restore`'s own git-token recognition
+    entirely, producing a silently EMPTY `checkout_restore_paths` and
+    `deny=False` -- the exact failure mode issue #1375 exists to prevent.
+    Confirmed live end-to-end through the real wrapper against a scratch
+    git repo with a genuinely dirty, tracked `dirty.py`: the wrapper
+    returned exit 0 (allow) for `G=git; x=$($G checkout -- dirty.py)`,
+    and actually running that command afterward reverted `dirty.py` to
+    its committed content, discarding the uncommitted edit. Closed by
+    threading NAME_TO_VALUE/NAME_TO_RAW_VALUE into both the unquoted
+    `_classify_tokens(inner_tokens, ...)` and the quoted/fused
+    `classify(inner_text, ...)` recursive calls below -- the latter
+    required extending `classify()`'s own public, string-based entry
+    point to accept the same optional outer-scope pair
+    `_classify_tokens` already did -- the exact extension
+    `_rule_array_literal_content`'s own nineteenth-round paragraph (see
+    that function's docstring) once deferred as a larger change than its
+    own, narrower finding warranted.
+
+    NAME_TO_RAW_VALUE_GIT_BIASED (round 19, issue #1375) is threaded
+    through the same two recursive calls alongside NAME_TO_VALUE/NAME_TO_
+    RAW_VALUE, so a `git` token held in a variable that is reassigned
+    elsewhere in the OUTER command -- e.g. `G=git; x=$($G checkout --
+    dirty.py); G=notgit` -- is still recognized inside the substitution's
+    own inner content; see `_find_git_checkout_restore`'s own docstring
+    for what this parameter means and the live bypass it closes.
+    NAME_TO_RAW_VALUE_CD_BIASED and NAME_TO_RAW_VALUE_HISTORY (round 21,
+    issue #1375) are threaded the same way, for the analogous cd/pushd/
+    popd-relocation and path-argument reassignment bypasses -- see
+    `_assigned_raw_values_biased_toward`'s own second CRITICAL-bug
+    paragraph and `_assigned_raw_value_history`'s own docstring.
+
+    NAME_TO_VALUE_WRITE_BIASED and NAME_TO_RAW_VALUE_WRITE_BIASED (round
+    22, issue #1375) are threaded the same way, for the analogous B1a/B1b
+    tool+verb and `_rule_gh_api_write` method/field reassignment bypasses
+    on THIS module's own HARD-DENY paths -- see `_assigned_literals_
+    biased_toward`'s own docstring for the live bypass this closes and
+    `_classify_tokens`'s own docstring for where the OR-fallback calls
+    that actually consume these two dicts live (`_rule_gh_api_write` and
+    `_segment_loop_hit` are both called against SEGMENTS derived from the
+    top-level token stream, not against this function's own recursive
+    inner content directly -- these two parameters exist here only so a
+    `pip install`/`gh api` write hidden ENTIRELY WITHIN a `$(...)` span,
+    with the reassignment-ambiguity poisoning the OUTER token stream the
+    same way round 21 found for the cd-biased case, still resolves
+    correctly once the inner content reaches ITS OWN recursive
+    `_classify_tokens`/`classify` call's own local `_rule_gh_api_write`/
+    `_segment_loop_hit` invocations).
+
+    NAMES_WITH_DYNAMIC_ASSIGNMENT (round 24, issue #1375) is threaded the
+    same way, so a name assigned a dynamic value inside a `$(...)` span
+    still poisons confidence in a checkout/restore path resolved from
+    that same name OUTSIDE the span (or vice versa) -- see `_names_with_
+    dynamic_assignment`'s own docstring for the live bypass it closes."""
     is_git_push = False
+    checkout_restore_paths: list[str] = []
     i = 0
     n = len(tokens)
     while i < n:
@@ -857,11 +1129,22 @@ def _rule_command_substitution_content(tokens: list[str]) -> tuple[str | None, b
             # check would only change how often an empty-content recursive
             # `classify()` call is skipped, never a real verdict.
             if inner_text.strip():
-                inner_verdict = classify(inner_text)
+                inner_verdict = classify(
+                    inner_text,
+                    name_to_value,
+                    name_to_raw_value,
+                    name_to_raw_value_git_biased,
+                    name_to_raw_value_cd_biased,
+                    name_to_raw_value_history,
+                    name_to_value_write_biased,
+                    name_to_raw_value_write_biased,
+                    names_with_dynamic_assignment,
+                )
                 is_git_push = is_git_push or inner_verdict.is_git_push
+                checkout_restore_paths.extend(inner_verdict.checkout_restore_paths)
                 if inner_verdict.deny:
                     reason = f"a command substitution $(...) embeds a denied command -- {inner_verdict.reason}"
-                    return reason, is_git_push
+                    return reason, is_git_push, tuple(checkout_restore_paths)
             search_from = end
         if found_fused:
             i += 1
@@ -870,15 +1153,26 @@ def _rule_command_substitution_content(tokens: list[str]) -> tuple[str | None, b
         if span_end is not None:
             inner_tokens = tokens[i + 2 : span_end - 1]
             if inner_tokens:
-                inner_verdict = _classify_tokens(inner_tokens)
+                inner_verdict = _classify_tokens(
+                    inner_tokens,
+                    name_to_value,
+                    name_to_raw_value,
+                    name_to_raw_value_git_biased,
+                    name_to_raw_value_cd_biased,
+                    name_to_raw_value_history,
+                    name_to_value_write_biased,
+                    name_to_raw_value_write_biased,
+                    names_with_dynamic_assignment,
+                )
                 is_git_push = is_git_push or inner_verdict.is_git_push
+                checkout_restore_paths.extend(inner_verdict.checkout_restore_paths)
                 if inner_verdict.deny:
                     reason = f"a command substitution $(...) embeds a denied command -- {inner_verdict.reason}"
-                    return reason, is_git_push
+                    return reason, is_git_push, tuple(checkout_restore_paths)
             i = span_end
             continue
         i += 1
-    return None, is_git_push
+    return None, is_git_push, tuple(checkout_restore_paths)
 
 
 _COMMENT_BOUNDARY_CHARS = frozenset(" \t\r\n;|&()<>")
@@ -949,10 +1243,69 @@ def _strip_comments(command: str) -> str:
     backslash inert) -- a comment always ends at the very next raw
     newline in COMMAND, full stop, which is exactly what searching for the
     next raw `\\n` (rather than delegating to `_strip_line_continuations`
-    first) gives here."""
+    first) gives here.
+
+    A genuine line continuation (`\\` immediately followed by a raw
+    newline) is the ONE backslash-pair shape that does NOT clear
+    AT_BOUNDARY -- CRITICAL bug found by independent adversarial review
+    (round 6, issue #1375, during this PR's own merge with issue #1350's
+    already-merged `_strip_comments`): a continuation vanishes with
+    NOTHING left behind once `_strip_line_continuations` runs afterward
+    (this function only passes the pair through unchanged; it does not
+    itself delete it), so the boundary status right after a continuation
+    must be whatever it was right BEFORE the backslash, exactly as if the
+    continuation were not there at all -- every OTHER escaped pair (an
+    escaped literal character that genuinely survives into the output,
+    like `\\#`) correctly still clears it, since that character is real,
+    non-boundary word content. Confirmed live this was a real, security-
+    relevant leak once combined with issue #1375's own checkout/restore
+    feature: `git checkout -- clean.py \\` + newline + `# TODO revisit
+    auth.py later` used to tokenize with `#` never recognized as a
+    comment-starter (AT_BOUNDARY wrongly cleared by the continuation
+    pair), sweeping `auth.py` (an unrelated filename that merely happens
+    to appear in the comment text) into `checkout_restore_paths` as a
+    phantom candidate, and denying an entirely safe checkout with a
+    misleading message naming a file the command never referenced. Only
+    an over-denial (never a missed real discard), but a confusing one.
+
+    A double-quoted string's own content delegates to `_consume_double_
+    quoted_content` rather than being handled inline -- CRITICAL, full-
+    classifier-bypass bug found by independent adversarial review (round
+    7, issue #1375): the PRIOR inline double-quote handling treated
+    everything inside an open double quote as opaque literal text with
+    NO comment recognition at all, correct for genuine literal content
+    (`"a#b"` really is one literal word in real bash) but WRONG for a
+    `$(...)` embedded inside that double-quoted string -- real bash
+    recursively re-enters full, ordinary command grammar for a
+    substitution's own content regardless of what quote encloses the
+    `$(` that opened it, so a `#` inside it DOES start a real comment
+    (confirmed live: a `)` inside a `#`-comment inside `"$(...)"` does
+    NOT end the substitution). Left unstripped, that comment's own
+    embedded `)` survived into shlex's dequoted token, where
+    `_find_fused_command_substitution`'s own paren-depth counter (see
+    that function's own docstring) -- comment- and quote-blind by
+    design -- mistook it for the substitution's REAL closing paren,
+    silently truncating everything after that point, INCLUDING a
+    genuine, undisguised `git checkout` on the next physical line, from
+    ALL classification, not merely this module's own checkout/restore
+    rule. Live-verified real, silent data loss: `x="$(echo hi #comment
+    with paren ) here` + a real newline + `git checkout -- dirty.py)"`
+    ran the embedded checkout for real and discarded an uncommitted
+    change, while `classify()` reported `deny=False` with an EMPTY
+    `checkout_restore_paths` -- a confident, wrong "nothing to see here"
+    instead of an honest non-goal, precisely the failure class this
+    whole module exists to avoid. The analogous decoy built from a
+    literal `)` inside a nested QUOTED span (rather than a comment) does
+    NOT need this fix and was checked live: any balanced quoted span
+    containing a literal `)` necessarily leaves an ODD, unbalanced quote
+    count in text naively truncated partway through it, which already
+    trips `tokenize()`'s own `TokenizeError` fail-closed path -- only a
+    comment can hide an unbalanced `)` without requiring an unbalanced
+    quote in the truncated prefix, which is why this fix is scoped to
+    comment-handling specifically rather than a general rewrite of the
+    paren-depth counter itself."""
     out: list[str] = []
     in_single_quote = False
-    in_double_quote = False
     at_boundary = True
     i = 0
     n = len(command)
@@ -965,33 +1318,23 @@ def _strip_comments(command: str) -> str:
                 at_boundary = False
             i += 1
             continue
-        if in_double_quote:
-            if char == "\\" and i + 1 < n:
-                out.append(char)
-                out.append(command[i + 1])
-                i += 2
-                at_boundary = False
-                continue
+        if char == '"':
             out.append(char)
-            if char == '"':
-                in_double_quote = False
-                at_boundary = False
             i += 1
+            inner, i = _consume_double_quoted_content(command, i)
+            out.append(inner)
+            at_boundary = False
             continue
         if char == "\\" and i + 1 < n:
+            nxt = command[i + 1]
             out.append(char)
-            out.append(command[i + 1])
+            out.append(nxt)
             i += 2
-            at_boundary = False
+            if nxt != "\n":
+                at_boundary = False
             continue
         if char == "'":
             in_single_quote = True
-            out.append(char)
-            i += 1
-            at_boundary = False
-            continue
-        if char == '"':
-            in_double_quote = True
             out.append(char)
             i += 1
             at_boundary = False
@@ -1006,6 +1349,136 @@ def _strip_comments(command: str) -> str:
     return "".join(out)
 
 
+def _consume_double_quoted_content(command: str, i: int) -> tuple[str, int]:
+    """Process the content of a double-quoted string starting at
+    COMMAND[i] (the character right after the opening `"`, already
+    appended by the caller): everything is literal EXCEPT a nested
+    `$(...)`, which re-enters ordinary, comment-aware command parsing
+    via `_consume_command_substitution_content` -- see that function's
+    own docstring, and `_strip_comments`'s own round-7 addendum, for the
+    live-verified bypass this closes. Returns (the content up to and
+    including its own matching `"`, or the remainder of COMMAND if
+    unterminated -- an unbalanced double quote is `tokenize()`'s own
+    concern to fail closed on via `TokenizeError`, not this function's,
+    which only strips comments and never itself validates quote
+    balance -- the index one past that point)."""
+    out: list[str] = []
+    n = len(command)
+    while i < n:
+        char = command[i]
+        if char == '"':
+            out.append(char)
+            i += 1
+            return "".join(out), i
+        if char == "\\" and i + 1 < n:
+            out.append(char)
+            out.append(command[i + 1])
+            i += 2
+            continue
+        if char == "$" and i + 1 < n and command[i + 1] == "(":
+            out.append("$(")
+            i += 2
+            inner, i = _consume_command_substitution_content(command, i)
+            out.append(inner)
+            continue
+        out.append(char)
+        i += 1
+    return "".join(out), i
+
+
+def _consume_command_substitution_content(command: str, i: int) -> tuple[str, int]:
+    """Process the content of a `$(...)` starting at COMMAND[i] (the
+    character right after the opening `$(`, already appended by the
+    caller), mirroring real bash's own re-entrant grammar: a command
+    substitution's own content is parsed as ordinary, top-level shell
+    text regardless of what quote (if any) encloses the `$(` that opened
+    it -- comments are live again, and a nested `'`/`"`/`$(` inside gets
+    its own, independent handling (a nested `"..."` delegates back to
+    `_consume_double_quoted_content`, which can itself contain a FURTHER
+    nested `$(...)`, exactly mirroring bash's own mutual recursion
+    between quote parsing and command parsing). Tracks its own raw,
+    unquoted paren DEPTH (starting at 1, for the substitution this call
+    itself is inside) to find its own matching closing `)` -- a nested
+    unquoted `(`/`)` (a subshell, or arithmetic-looking text this module
+    does not otherwise interpret) increments/decrements it exactly like
+    `_find_fused_command_substitution`'s own counter does, but unlike
+    that counter, a `(`/`)` sitting inside a quote or a stripped comment
+    here is correctly never counted at all, since this function consumes
+    those spans as opaque units before ever inspecting their content for
+    a bare paren. Returns (the content up to and including its own
+    matching `)`, with every comment inside it deleted, the index one
+    past that `)`) -- or, if COMMAND ends before depth returns to 0, the
+    remainder of COMMAND with whatever comments were found still
+    stripped (an unbalanced `$(...)` is `tokenize()`'s own concern to
+    fail closed on via `TokenizeError`, not this function's).
+
+    See `_strip_comments`'s own round-7 docstring addendum (issue #1375)
+    for the live-verified, real-data-loss bypass this function exists to
+    close, and for why the analogous decoy built from a quoted (rather
+    than commented) literal `)` needs no fix here."""
+    out: list[str] = []
+    at_boundary = True
+    depth = 1
+    n = len(command)
+    while i < n:
+        char = command[i]
+        if char == "'":
+            out.append(char)
+            i += 1
+            while i < n and command[i] != "'":
+                out.append(command[i])
+                i += 1
+            if i < n:
+                out.append(command[i])
+                i += 1
+            at_boundary = False
+            continue
+        if char == '"':
+            out.append(char)
+            i += 1
+            inner, i = _consume_double_quoted_content(command, i)
+            out.append(inner)
+            at_boundary = False
+            continue
+        if char == "\\" and i + 1 < n:
+            nxt = command[i + 1]
+            out.append(char)
+            out.append(nxt)
+            i += 2
+            if nxt != "\n":
+                at_boundary = False
+            continue
+        if char == "$" and i + 1 < n and command[i + 1] == "(":
+            out.append("$(")
+            i += 2
+            inner, i = _consume_command_substitution_content(command, i)
+            out.append(inner)
+            at_boundary = False
+            continue
+        if char == "(":
+            depth += 1
+            out.append(char)
+            at_boundary = False
+            i += 1
+            continue
+        if char == ")":
+            depth -= 1
+            out.append(char)
+            i += 1
+            if depth == 0:
+                return "".join(out), i
+            at_boundary = False
+            continue
+        if char == "#" and at_boundary:
+            end = command.find("\n", i)
+            i = n if end == -1 else end
+            continue
+        out.append(char)
+        at_boundary = char in _COMMENT_BOUNDARY_CHARS
+        i += 1
+    return "".join(out), i
+
+
 def _strip_line_continuations(command: str) -> str:
     """Delete every bash line-continuation pair (an unescaped `\\` directly
     followed by a real newline) from COMMAND, outside single-quoted spans --
@@ -1014,43 +1487,56 @@ def _strip_line_continuations(command: str) -> str:
     physical source lines into one logical line with NOTHING inserted in
     the continuation's place (not even a space).
 
-    Found live by issue #1350, filed separately from #1326 (a materially
-    different bypass shape -- segment-boundary loss, not verb-token-
-    splitting) after `tokenize()`'s own attempted fix for that issue's own
-    newline-as-statement-separator gap (see this function's caller) turned
-    up a second, related gap while verifying the fix against the backslash-
-    newline continuation case: Python's `shlex` (posix mode) treats a
-    backslash as a generic single-character escape -- `\\<newline>` keeps
-    the escaped newline CHARACTER verbatim in the token (`tokenize("echo a
-    \\\\\\nb")` produced `['echo', 'a', '\\nb']` before this fix) -- but
-    real bash's own line-continuation rule instead DELETES both the
-    backslash and the newline entirely, with no character left behind
-    (confirmed live via a real bash proxy: `dump() { for a in "$@"; do
-    printf '[%s]\\n' "$a"; done; }` then `dump echo a \\` + a real newline +
-    `b` prints `[echo][a][b]`, three plain args, never a fused `\\nb`).
-    Left uncorrected, this divergence was on track to become a NEW
-    false-negative once newline was wired up as a real statement-separator
-    token: a line-continued command spanning two physical lines would have
-    tokenized with a stray literal `\\n` character glued onto the next
-    word, which is a plain literal token indistinguishable from any other
-    -- not, on its own, a bypass of this fix -- but a design that special-
-    cased only the "real separator" newline shape while leaving the
-    "continuation" newline shape producing wrong tokens is exactly the kind
-    of unverified partial fix issue #1350's own body flagged as needing a
-    dedicated pass before landing, rather than being carried forward
-    silently.
+    Found live independently, TWICE, by two different issues investigating
+    two different bugs: issue #1375's own round-3 checkout/restore review
+    (an everyday `git checkout -- \\` + newline + `file.py` line-wrap
+    tokenized to a path with a literal leading newline baked in, silently
+    bypassing that feature's whole guard) and issue #1350 (filed separately
+    from #1326, a materially different bypass shape -- segment-boundary
+    loss, not verb-token-splitting -- found while verifying #1350's own
+    newline-as-statement-separator fix against the identical backslash-
+    newline continuation case). Both confirm the same root cause: Python's
+    `shlex` (posix mode) treats a backslash as a generic single-character
+    escape -- `\\<newline>` keeps the escaped newline CHARACTER verbatim in
+    the token (`tokenize("echo a \\\\\\nb")` produced `['echo', 'a',
+    '\\nb']` before this fix) -- but real bash's own line-continuation rule
+    instead DELETES both the backslash and the newline entirely, with no
+    character left behind (confirmed live via a real bash proxy: `dump() {
+    for a in "$@"; do printf '[%s]\\n' "$a"; done; }` then `dump echo a \\`
+    + a real newline + `b` prints `[echo][a][b]`, three plain args, never a
+    fused `\\nb`). Reconciled into one shared implementation and docstring
+    during this PR's own merge with #1350's already-merged fix, rather than
+    keeping two independently-written copies of the identical function.
 
     Single quotes are the ONE bash quoting context where backslash has NO
     special meaning at all (confirmed live: `dump 'a \\` + a real newline +
     `b'` prints the backslash and the newline both preserved literally,
-    `[a \\` + newline + `b]`) -- tracked here via a simple, un-nestable
-    toggle on each `'` character encountered outside an already-open single
-    quote, independent of any double-quote/`$(...)`/array-literal nesting
-    elsewhere in COMMAND, since bash's own single-quote rule is exactly
-    that simple regardless of surrounding structure. Continuation removal
-    is applied uniformly everywhere else (unquoted AND double-quoted alike)
-    -- confirmed live that both shapes delete the pair identically (`dump
-    "a \\` + newline + `b"` also prints `[a b]`).
+    `[a \\` + newline + `b]`). Continuation removal is applied uniformly to
+    every OTHER context -- both fully unquoted AND double-quoted alike --
+    confirmed live that both shapes delete the pair identically (`dump "a
+    \\` + newline + `b"` also prints `[a b]`).
+
+    Tracks BOTH single-quote AND double-quote state (not single-quote
+    alone): an in-progress issue #1350 draft of this same function tracked
+    only a single-quote toggle, on the reasoning that continuation-removal
+    itself behaves identically whether unquoted or double-quoted -- true,
+    but that draft used the SAME undifferentiated "not single-quoted" state
+    to also decide when a literal `'` character should OPEN a new single-
+    quoted region, which is wrong the moment that `'` sits INSIDE an
+    already-open double-quoted string (bash gives an apostrophe zero
+    special meaning there, confirmed live: `printf '[%s]' "don't strip \\`
+    + a real newline + `this"` prints `[don't strip this]`, one continuous
+    argument with the continuation removed) -- the undifferentiated draft
+    would misread that inner apostrophe as a real quote-opener, wrongly
+    stop removing continuations from that point on, and then hunt for a
+    non-existent SECOND apostrophe to "close" it, potentially miscounting
+    quote state for the rest of the command. An ordinary contraction inside
+    a line-continued double-quoted string (a commit-message-shaped string
+    literal, for instance) is exactly the honest-accident-shaped case this
+    whole preprocessing pass exists to get right, so this divergence was
+    caught and fixed here rather than carried forward. Found and fixed
+    during this same merge-conflict reconciliation, verified against the
+    live case above.
 
     A backslash is consumed together with whatever character immediately
     follows it (newline or not) so an already-escaped backslash can never
@@ -1069,6 +1555,7 @@ def _strip_line_continuations(command: str) -> str:
     handling still performs that collapse exactly as it already did."""
     out: list[str] = []
     in_single_quote = False
+    in_double_quote = False
     i = 0
     n = len(command)
     while i < n:
@@ -1079,11 +1566,6 @@ def _strip_line_continuations(command: str) -> str:
                 in_single_quote = False
             i += 1
             continue
-        if char == "'":
-            in_single_quote = True
-            out.append(char)
-            i += 1
-            continue
         if char == "\\" and i + 1 < n:
             nxt = command[i + 1]
             if nxt == "\n":
@@ -1092,6 +1574,22 @@ def _strip_line_continuations(command: str) -> str:
             out.append(char)
             out.append(nxt)
             i += 2
+            continue
+        if in_double_quote:
+            if char == '"':
+                in_double_quote = False
+            out.append(char)
+            i += 1
+            continue
+        if char == "'":
+            in_single_quote = True
+            out.append(char)
+            i += 1
+            continue
+        if char == '"':
+            in_double_quote = True
+            out.append(char)
+            i += 1
             continue
         out.append(char)
         i += 1
@@ -1107,6 +1605,27 @@ def tokenize(command: str) -> list[str]:
     spans` itself, AFTER first running `_rule_command_substitution_
     content` against these still-unfolded tokens, which needs each
     span's own inner tokens still separable.
+
+    Also independently found live by adversarial review of issue #1375's
+    own new checkout/restore detection, the identical newline-swallowing
+    bug below described from issue #1350's own side: unlike every prior
+    rule in this module (none of which depend on a segment actually ending
+    where a real multi-line script's own line breaks fall),
+    `_git_checkout_paths`/`_git_restore_paths` consume every token up to
+    the (wrongly unbroken) end of the segment as candidate path data --
+    confirmed live that `git checkout -b newbranch master\\necho
+    "exit=$?"` (an ordinary two-line script, checkout on the first line,
+    something unrelated on the second) had the second line's own
+    `exit=$?` swept in as a checkout path candidate and spuriously denied
+    the whole command as an unresolvable dynamic path, purely because the
+    newline between the two lines was never recognized as a boundary --
+    and, separately, that an ordinary line-continued `git checkout --
+    \\` + newline + `file.py` tokenized to a path with a literal leading
+    newline baked in, silently bypassing that feature's own guard (closed
+    by `_strip_line_continuations` below). Reconciled into this one
+    shared fix during this PR's own merge with issue #1350's
+    already-merged fix for the same underlying gap, rather than landing a
+    second, independent implementation.
 
     Found live by issue #1350: `segment_tokens`'s own `_SINGLE_OPS` set
     was deliberately written to include a literal `"\\n"`, showing clear
@@ -1170,9 +1689,9 @@ def tokenize(command: str) -> list[str]:
     command = _strip_line_continuations(command)
     try:
         lexer = shlex.shlex(command, posix=True, punctuation_chars="();<>|&\n")
-        lexer.whitespace = lexer.whitespace.replace("\n", "")
         lexer.commenters = ""
         lexer.whitespace_split = True
+        lexer.whitespace = lexer.whitespace.replace("\n", "")
         raw_tokens = list(lexer)
     except ValueError as error:
         raise TokenizeError(str(error)) from error
@@ -1240,6 +1759,314 @@ def _assigned_raw_values(tokens: list[str]) -> dict[str, str]:
         if match:
             values[match.group(1)] = match.group(2)
     return values
+
+
+def _assigned_raw_values_biased_toward(tokens: list[str], literals: frozenset[str]) -> dict[str, str]:
+    """Like `_assigned_raw_values`, but once a name is assigned a value
+    that is a member of LITERALS (case-insensitively) at ANY point among
+    TOKENS, that name STAYS on that member here regardless of any later,
+    different reassignment -- unlike `_assigned_raw_values`'s own plain
+    last-occurrence-in-token-order-wins collapse, which has no concept of
+    which assignment is actually in effect at bash's own real, sequential
+    runtime relative to a specific point of use. A name never assigned
+    any member of LITERALS anywhere resolves exactly as `_assigned_raw_
+    values` itself would. LITERALS is a set rather than a single string
+    so one caller can bias toward several interchangeable candidates at
+    once (round 20, issue #1375: `_CWD_RELOCATING_COMMANDS` -- `cd`,
+    `pushd`, `popd` are three DIFFERENT literals that all answer the same
+    "was the working tree possibly relocated" question, see this
+    function's own second CRITICAL-bug paragraph below); round 19's own
+    single-literal `git` caller passes a one-element set.
+
+    CRITICAL bug found by independent adversarial review (round 19, issue
+    #1375) and independently reproduced live: `_find_git_checkout_
+    restore`'s own outer git-token-recognition (`_dynamic_token_resolves_
+    only_to_literal`) is fed the ordinary, order-blind `_assigned_raw_
+    values` dict, so an entirely ordinary shell idiom -- reusing a
+    variable name for a later, unrelated purpose after it was already
+    used as `git` -- silently defeats recognition entirely: `TOOL=git;
+    $TOOL checkout -- dirty.py; TOOL=npm` resolves `$TOOL`'s own dict
+    entry to `"npm"` (the LAST assignment in token order), even though
+    `$TOOL` genuinely was `git` at the actual point of use one statement
+    earlier. Confirmed live end-to-end through the real wrapper against a
+    scratch repo with a genuinely dirty, tracked `dirty.py`: the control
+    command (no trailing reassignment) correctly denies with exit 2; the
+    same command with a trailing `TOOL=npm` wrongly allows with exit 0,
+    and actually running it afterward silently discards the uncommitted
+    edit. Identically reproducible for the command-substitution path
+    (`G=git; x=$($G checkout -- dirty.py); G=notgit`) and for `restore`.
+    This is not itself a new gap -- `_assigned_raw_values`'s own
+    order-blind collapse is a pre-existing, whole-module primitive used
+    since this module's own earliest rounds, and the module already
+    discloses the identical class of gap for `$IFS` reassignment
+    elsewhere as an accepted limitation -- but the checkout/restore
+    surface is the one consumer where a silent miss means real,
+    irreversible data loss rather than a missed advisory warning, so a
+    narrow, targeted mitigation is applied here rather than left
+    disclosed-only, matching the same "when a token-level ambiguity
+    cannot be soundly resolved, prefer extra scrutiny over a silent miss"
+    posture this module already applies pervasively elsewhere (e.g.
+    `_dynamic_word_may_resolve_to_a_cwd_relocator`'s own OR-based fail-
+    closed choice for the analogous cd/pushd/popd question).
+
+    Deliberately NOT full execution-order tracking (a far larger,
+    Stage-2-class change -- this module's own header docstring already
+    scopes real bash execution semantics out of Stage 1's static token
+    analysis): this is a bounded, one-directional bias toward the single
+    safe-to-over-recognize reading (an unrelated tool's own dynamic
+    `checkout`/`restore`-shaped subcommand at worst triggers a spurious,
+    reversible live `git diff` check and possible false deny -- the same
+    safe direction every other ambiguity in this module resolves toward
+    -- never toward silently missing a real git invocation, which is the
+    unsafe direction here). Used to feed the outer git-token-recognition
+    fallback in `_find_git_checkout_restore`, AND (round 20, below) the
+    cd/pushd/popd-relocation fallback in `_rule_git_checkout_restore`.
+
+    CORRECTION (round 22, issue #1375): this paragraph previously claimed
+    every OTHER consumer of `name_to_raw_value` in this module could keep
+    using the ordinary, order-blind `_assigned_raw_values` unchanged,
+    since a reassignment-ambiguity miss for one of those risked only a
+    missed advisory warning or an unrecognized non-destructive write, not
+    irreversible data loss -- the same reasoning that scoped round 19's
+    own original, narrower fix. That claim was FALSE for two consumers:
+    B1a/B1b's own tool+verb reconstruction (guarding `pip`/`uv
+    install`-shaped invocations) and `_rule_gh_api_write`'s own dynamic
+    -X/--method and -f/-F/--field/--raw-field resolution (guarding `gh
+    api` write calls, including a PR merge) are both HARD-DENY paths, not
+    advisory-only, and a reassignment-ambiguity miss on either is a
+    genuine, unrecognized package install or unreviewed write API call --
+    see `_assigned_literals_biased_toward`'s own docstring for the live
+    reproduction and fix. The claim remains accurate for this module's
+    remaining `name_to_raw_value` consumers not covered by that fix (e.g.
+    the warn-only `git push` detection, and the graphql-mutation-keyword
+    substring residual disclosed in this module's own header docstring).
+
+    CRITICAL bug found by independent adversarial review (round 20, issue
+    #1375) and independently reproduced live: `_rule_git_checkout_
+    restore`'s own dynamic-cd-relocation check
+    (`_dynamic_word_may_resolve_to_a_cwd_relocator`) was fed only the
+    ordinary, order-blind `raw_assigned` -- the IDENTICAL gap round 19
+    closed for the sibling git-token-recognition consumer in the same
+    function, just left open here. `X=cd; $X sub; git checkout --
+    dirty.py; X=somethingelse` (reusing a variable name for a later,
+    unrelated purpose, the same ordinary idiom round 19's own finding
+    used) resolved to a CONFIDENT, WRONG `checkout_restore_paths` claim
+    -- `$X` genuinely was `cd` at its actual point of use one statement
+    earlier, but the trailing reassignment made the collapsed dict show
+    `"somethingelse"` instead, so the earlier relocation was silently
+    missed entirely. Confirmed live end-to-end through the real wrapper
+    against a scratch repo with `sub/dirty.py` genuinely dirty relative
+    to `sub`: the control command (no trailing reassignment) correctly
+    denies with exit 2; the same command with a trailing
+    `X=somethingelse` wrongly allows with exit 0, and actually running it
+    afterward silently discarded the uncommitted edit. Identically
+    reproducible for `pushd`. Closed the same way round 19 closed the
+    git-token case: `_rule_git_checkout_restore`'s own cd-relocation
+    check now also tries `_dynamic_word_may_resolve_to_a_cwd_relocator`
+    against a `raw_assigned_cd_biased` reading -- `_assigned_raw_values_
+    biased_toward(tokens, _CWD_RELOCATING_COMMANDS)` -- as a fallback
+    when the ordinary reading declines.
+
+    Round 20's own original version scoped RAW_ASSIGNED_CD_BIASED to the
+    current `_classify_tokens` invocation's own top-level segments only
+    (merged with plain OUTER_RAW, not threaded as a fourth outer-scope
+    parameter through the whole recursive chain the way round 19's own
+    git-biased dict was), reasoning that a `cd`/`pushd`/`popd` occurring
+    INSIDE a `$(...)`/array-literal span runs in an isolated subshell and
+    never relocates the OUTER shell's own cwd, so no equivalent bypass
+    existed to close by threading further. CRITICAL bug found by
+    independent adversarial review (round 21, issue #1375), independently
+    reproduced live: that subshell reasoning is correct as far as it
+    goes, but incomplete -- it does not cover a reassignment straddling
+    the substitution's OWN boundary, where the ambiguity lives in the
+    OUTER token stream, not inside the subshell. `X=cd; y=$($X sub; git
+    checkout -- dirty.py); X=somethingelse` (the relocator `$X` used
+    entirely WITHIN the substitution, no relocation crossing the subshell
+    boundary at all) still silently missed the relocation, since the
+    scoped-down RAW_ASSIGNED_CD_BIASED never saw the OUTER `X=
+    somethingelse` reassignment that poisoned the recursive call's own
+    merged OUTER_RAW. Confirmed live end-to-end through the real wrapper
+    against a scratch repo with `sub/dirty.py` genuinely dirty relative
+    to `sub`: this command wrongly allowed with exit 0, and actually
+    running it afterward silently discarded the uncommitted edit; the
+    identical command with no trailing reassignment correctly denies.
+    Closed by threading RAW_ASSIGNED_CD_BIASED as a fourth outer-scope
+    parameter through the full recursive chain after all, mirroring round
+    19's own git-biased threading exactly -- see `_classify_tokens`'s own
+    docstring."""
+    values: dict[str, str] = {}
+    for token in tokens:
+        if _is_dynamic(token):
+            continue
+        match = _ASSIGN_RE.match(token)
+        if not match:
+            continue
+        name = match.group(1)
+        if values.get(name, "").lower() in literals:
+            continue
+        values[name] = match.group(2)
+    return values
+
+
+def _assigned_literals_biased_toward(tokens: list[str], literals: frozenset[str]) -> dict[str, str]:
+    """Lowercased counterpart of `_assigned_raw_values_biased_toward`
+    above, for a consumer that needs the `name_to_value`-shaped
+    (already-lowercased) dict as its own resolution source -- e.g.
+    `_substitute_var_refs_candidates`'s own first argument -- not the
+    raw-case dict that function itself returns. A thin lowering wrapper
+    around the same bias computation, not a separate one of its own, so
+    both dicts stay in lockstep for the same NAME by construction; see
+    `_assigned_raw_values_biased_toward`'s own docstring for the bias
+    rule this applies (sticks to the first value seen that is a member of
+    LITERALS, case-insensitively, ignoring any later, different
+    reassignment).
+
+    CRITICAL bug found by independent adversarial review (round 22, issue
+    #1375) and independently reproduced live: `_rule_b1a_dynamic_word_
+    same_segment_verb`/`_rule_b1b_dynamic_word_assigned_tool_and_verb`
+    (B1a/B1b, the tool+verb dynamic-indirection HARD-DENY rules guarding
+    `pip`/`uv install`-shaped invocations) and every `_rule_gh_api_write`
+    helper that resolves a dynamic `-X`/`--method` or `-f`/`--field`
+    value or flag name were, before this fix, all fed the ordinary,
+    order-blind `assigned`/`raw_assigned` dicts -- the SAME reassignment-
+    ambiguity class round 19 (git-token) and round 20 (cd/pushd/popd-
+    relocation) already closed for the checkout/restore consumer, left
+    open on these two entirely different, HARD-DENY consumers. `A=uv;
+    B=install; $A $B foo; B=somethingelse` resolved `$B` to `"somethingelse"`
+    (the LAST assignment in token order) even though `$B` genuinely was
+    `"install"` at its actual point of use one statement earlier;
+    `M=POST; gh api repos/o/r/pulls/1/merge -X $M; M=safe` resolved `$M`
+    the same way. Confirmed live end-to-end via a real bash proxy (stand-in
+    `uv`/`gh` binaries on PATH, capturing their own argv): both commands
+    were wrongly classified `deny=False` by this module, while real bash
+    genuinely executed `uv install foo` and `gh api .../merge -X POST`
+    respectively -- a genuine, unrecognized package install and a genuine,
+    unrecognized write API call (e.g. merging a pull request), not merely
+    a missed advisory warning. This directly contradicts `_assigned_raw_
+    values_biased_toward`'s own prior claim (see that function's own
+    docstring, corrected alongside this fix) that every consumer other
+    than checkout/restore only risked "a missed advisory warning or an
+    unrecognized non-destructive write, not irreversible data loss" -- a
+    supply-chain package install and an unreviewed write to a live GitHub
+    repository (including a PR merge) are exactly the kind of consequence
+    that claim was meant to exclude.
+
+    Closed the same way rounds 19/20 closed their own consumers: every
+    call site that resolves a dynamic token for B1a/B1b or `_rule_gh_api_
+    write` now tries the ordinary reading first, OR-ed with a second
+    attempt against this bias mechanism fed `_WATCHED_WRITE_BIAS` (see
+    that constant's own comment for why one combined set covers both
+    consumers safely) -- see `_classify_tokens`'s own docstring for
+    exactly where the OR-fallback calls live and how the corresponding
+    raw-case bias dict (`_assigned_raw_values_biased_toward(tokens,
+    _WATCHED_WRITE_BIAS)`) is threaded alongside this one. Deliberately
+    NOT full execution-order tracking, the same bounded, one-directional,
+    safe-to-over-recognize posture every other bias fix in this module
+    already takes -- see `_assigned_raw_values_biased_toward`'s own
+    docstring for why that scoping is deliberate, not an oversight."""
+    return {name: value.lower() for name, value in _assigned_raw_values_biased_toward(tokens, literals).items()}
+
+
+def _assigned_raw_value_history(tokens: list[str]) -> dict[str, tuple[str, ...]]:
+    """Like `_assigned_raw_values`, but maps each assigned name to the
+    TUPLE of every DISTINCT raw value assigned to it anywhere in TOKENS
+    (first-seen order, deduplicated) -- not collapsed to the single
+    last-occurrence-wins value `_assigned_raw_values` itself returns.
+
+    CRITICAL bug found by independent adversarial review (round 21, issue
+    #1375) and independently reproduced live: `_resolve_path_tokens`'s
+    own dynamic-path-argument resolution is a THIRD consumer of the
+    order-blind `_assigned_raw_values` collapse -- a THIRD instance of
+    the identical reassignment-ambiguity class rounds 19 and 20 already
+    closed for the git-token and cd-relocation consumers in this same
+    feature, just left open here, and the most severely reachable of the
+    three: no command substitution, no cd/pushd/popd, not even multiple
+    statements are required -- `F=dirty.py; git checkout -- $F;
+    F=other.py` resolves `$F` to `"other.py"` (the LAST assignment in
+    token order), even though `$F` genuinely was `dirty.py` at its actual
+    point of use. Unlike the other two consumers, this one does not
+    merely MISS a real invocation -- it produces a CONFIDENT, WRONG path
+    claim: `checkout_restore_paths=('other.py',)` instead of `('dirty.py',
+    )`, so the live wrapper's own `git diff --quiet` check runs against
+    the WRONG, harmless file while the REAL, genuinely dirty `dirty.py`
+    is never checked at all. Confirmed live end-to-end through the real
+    wrapper against a scratch repo with a genuinely dirty, tracked
+    `dirty.py` and a clean `other.py`: this command wrongly allowed with
+    exit 0, and actually running it afterward silently discarded the
+    uncommitted edit to `dirty.py`. Identically reproducible for `git
+    restore $F`, and reachable through a command substitution's own
+    inner content the same way rounds 19/20's own findings were (see
+    `_classify_tokens`'s own docstring for the outer-scope threading this
+    needs).
+
+    There is no single fixed literal to bias toward here (unlike `git` or
+    `cd`/`pushd`/`popd` -- an arbitrary path has no small, enumerable
+    target set), so the fix this history dict feeds is different in kind
+    from `_assigned_raw_values_biased_toward`'s own single-reading bias:
+    `_resolve_path_tokens` extracts EVERY distinct historical value for
+    every name a dynamic token references as its own SEPARATE candidate
+    path, rather than picking one. This over-includes (an extra, harmless
+    candidate path gets checked for dirtiness) rather than ever silently
+    dropping the one that matters -- the same safe direction every other
+    ambiguity in this module resolves toward.
+
+    CORRECTION (round 23, issue #1375): this paragraph previously claimed
+    the widening was deliberately narrowed to a token that is EXACTLY one
+    bare/braced whole-token reference, with a token that FUSES a
+    reference with literal text, a default-value clause, or an indirect
+    `${!NAME}` reference left un-widened as an accepted scoping choice.
+    That scoping was not merely narrower-but-safe -- it was itself the
+    identical order-blind-collapse bug class, just left open for the
+    fused case: `DIR=sub; FILE=dirty.py; git checkout -- "$DIR/$FILE";
+    DIR=other` (the ordinary path-join idiom) produced a CONFIDENT, WRONG
+    `checkout_restore_paths` claim, live-confirmed to silently discard
+    real uncommitted work -- see `_resolve_path_tokens`'s own docstring
+    for the full reproduction and fix. Every name a dynamic token
+    references (bare, braced, default-clause, or indirect, including
+    every reference fused with other text in the same token) with more
+    than one historical value is now widened, via the cartesian product
+    of `_multi_valued_names_referenced`'s own found names
+    (`_bounded_history_combinations`, bounded the same way `_substitute_
+    var_refs_candidates`'s own quote-boundary expansion already is)."""
+    history: dict[str, list[str]] = {}
+    for token in tokens:
+        if _is_dynamic(token):
+            continue
+        match = _ASSIGN_RE.match(token)
+        if not match:
+            continue
+        name, value = match.group(1), match.group(2)
+        values = history.setdefault(name, [])
+        if value not in values:
+            values.append(value)
+    return {name: tuple(values) for name, values in history.items()}
+
+
+def _merge_raw_value_histories(
+    outer: dict[str, tuple[str, ...]], inner: dict[str, tuple[str, ...]]
+) -> dict[str, tuple[str, ...]]:
+    """Union OUTER's and INNER's own historical-value tuples per name,
+    deduplicated, rather than letting INNER's own entry for a shared name
+    silently replace OUTER's (the plain `{**outer, **inner}` shadowing
+    convention every other scope dict in this module uses). A name
+    reassigned INSIDE a `$(...)`/array-literal span's own recursive scope
+    does shadow the outer value for every OTHER purpose in this module
+    (an inner reassignment genuinely does take effect for the rest of
+    that subshell's own execution) -- but for HISTORY specifically,
+    dropping OUTER's own candidates would silently lose a value `$NAME`
+    might still resolve to at real bash runtime if it is referenced
+    BEFORE the inner reassignment takes effect, which this module's own
+    static analysis (no execution-order tracking, see `_assigned_raw_
+    values_biased_toward`'s own docstring) cannot rule out -- so both
+    scopes' own candidates are kept."""
+    merged: dict[str, tuple[str, ...]] = {}
+    for name in {*outer, *inner}:
+        seen: list[str] = []
+        for value in (*outer.get(name, ()), *inner.get(name, ())):
+            if value not in seen:
+                seen.append(value)
+        merged[name] = tuple(seen)
+    return merged
 
 
 def _strip_leading_assignments(seg: list[str]) -> list[str]:
@@ -1916,8 +2743,16 @@ def _strip_array_literal_newlines(tokens: list[str]) -> list[str]:
 
 
 def _rule_array_literal_content(
-    tokens: list[str], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
-) -> tuple[str | None, bool]:
+    tokens: list[str],
+    name_to_value: dict[str, str],
+    name_to_raw_value: dict[str, str],
+    name_to_raw_value_git_biased: dict[str, str],
+    name_to_raw_value_cd_biased: dict[str, str],
+    name_to_raw_value_history: dict[str, tuple[str, ...]],
+    name_to_value_write_biased: dict[str, str],
+    name_to_raw_value_write_biased: dict[str, str],
+    names_with_dynamic_assignment: set[str],
+) -> tuple[str | None, bool, tuple[str, ...]]:
     """Recursively classify each `NAME=(...)` array-literal span's OWN
     inner content through this module's full rule set -- bash genuinely
     expands `"${NAME[@]}"` into that content as real argv the instant the
@@ -1982,14 +2817,17 @@ def _rule_array_literal_content(
     (confirmed live via `declare -p`) the SAME way they would if `$G $P
     $M` appeared directly at the top level of the command instead of
     inside an array literal. Closed by threading the outer scope through.
-    Disclosed residual: `_rule_command_substitution_content`'s own,
-    pre-existing (since the fourteenth round) recursive checks have the
-    identical outer-scope gap and are NOT fixed by this round -- a tool/
-    verb built from a variable assigned outside a `$(...)` span's own
-    text is still invisible to that recursive check. Not closed here:
-    closing it needs `classify()`'s own string-based entry point (used
-    for the quoted/fused `$(...)` shape) to also accept an outer scope,
-    a larger change than this round's own confirmed finding warranted.
+    At the time of this round, `_rule_command_substitution_content`'s own,
+    pre-existing (since the fourteenth round) recursive checks had the
+    identical outer-scope gap and were left as a disclosed residual, since
+    closing it needed `classify()`'s own string-based entry point (used
+    for the quoted/fused `$(...)` shape) to also accept an outer scope --
+    a larger change than this round's own confirmed finding warranted. A
+    later round (eighteenth, issue #1375) found that gap defeated
+    checkout/restore recognition entirely, not merely under-extracted it,
+    and closed it the same way this round closed the array-literal
+    equivalent -- see `_rule_command_substitution_content`'s own
+    docstring for that finding and fix.
 
     Found live during independent adversarial review of issue #1350's own
     newline fix: `NAME=(...)` parens denote a bash WORD LIST (a compound
@@ -2016,8 +2854,27 @@ def _rule_array_literal_content(
     the same way `_array_literal_token_span` itself does), so a newline
     genuinely nested inside a `$(...)`/`(...)` construct WITHIN the
     array's own inner content (still a real command list there) is left
-    untouched for the recursive call to classify correctly."""
+    untouched for the recursive call to classify correctly.
+
+    NAME_TO_RAW_VALUE_GIT_BIASED (round 19, issue #1375) is threaded
+    through the recursive `_classify_tokens` call below alongside NAME_TO_
+    VALUE/NAME_TO_RAW_VALUE, mirroring `_rule_command_substitution_
+    content`'s own identical parameter exactly -- see `_find_git_
+    checkout_restore`'s own docstring for what it means and the live
+    bypass it closes. NAME_TO_RAW_VALUE_CD_BIASED and NAME_TO_RAW_VALUE_
+    HISTORY (round 21, issue #1375) are threaded the same way -- see
+    `_assigned_raw_values_biased_toward`'s own second CRITICAL-bug
+    paragraph and `_assigned_raw_value_history`'s own docstring.
+    NAME_TO_VALUE_WRITE_BIASED and NAME_TO_RAW_VALUE_WRITE_BIASED (round
+    22, issue #1375) are threaded the same way -- see `_rule_command_
+    substitution_content`'s own identical parameters' docstring paragraph
+    for what they mean and why they are threaded here even though this
+    function's own recursive call site does not itself invoke
+    `_rule_gh_api_write`/`_segment_loop_hit` directly. NAMES_WITH_
+    DYNAMIC_ASSIGNMENT (round 24, issue #1375) is threaded the same way
+    -- see `_names_with_dynamic_assignment`'s own docstring."""
     is_git_push = False
+    checkout_restore_paths: list[str] = []
     i = 0
     n = len(tokens)
     while i < n:
@@ -2032,13 +2889,24 @@ def _rule_array_literal_content(
             if collapsed and collapsed != inner:
                 readings.append((collapsed, " once its own leading unassigned reference(s) word-split away"))
             for reading, suffix in readings:
-                reading_verdict = _classify_tokens(reading, name_to_value, name_to_raw_value)
+                reading_verdict = _classify_tokens(
+                    reading,
+                    name_to_value,
+                    name_to_raw_value,
+                    name_to_raw_value_git_biased,
+                    name_to_raw_value_cd_biased,
+                    name_to_raw_value_history,
+                    name_to_value_write_biased,
+                    name_to_raw_value_write_biased,
+                    names_with_dynamic_assignment,
+                )
                 is_git_push = is_git_push or reading_verdict.is_git_push
+                checkout_restore_paths.extend(reading_verdict.checkout_restore_paths)
                 if reading_verdict.deny:
                     reason = f"an array literal NAME=(...) embeds a denied command{suffix} -- {reading_verdict.reason}"
-                    return reason, is_git_push
+                    return reason, is_git_push, tuple(checkout_restore_paths)
         i = end
-    return None, is_git_push
+    return None, is_git_push, tuple(checkout_restore_paths)
 
 
 # --- Denylists -----------------------------------------------------------
@@ -2151,11 +3019,43 @@ _GIT_PUSH_VERB = "push"
 
 _WRITE_METHODS = {"post", "put", "patch", "delete"}
 
+# The combined literal set B1a/B1b's own tool+verb reconstruction
+# (`_rule_b1a_dynamic_word_same_segment_verb`/`_rule_b1b_dynamic_word_
+# assigned_tool_and_verb`) and `_rule_gh_api_write`'s own -X/--method and
+# -f/-F/--field/--raw-field flag/value reconstruction each bias toward,
+# for the same reassignment-ambiguity reason `_assigned_raw_values_biased_
+# toward`'s own docstring documents for the git-token and cd/pushd/popd-
+# relocation consumers -- see `_assigned_literals_biased_toward`'s own
+# docstring for the live bypass this closes on these two HARD-DENY paths.
+# One shared, combined set (rather than a separate bias set per consumer)
+# is safe: the bias mechanism only decides whether a NAME's own
+# resolution STICKS to a qualifying value once assigned one; every actual
+# comparison downstream still filters against its own narrower target set
+# (`_WATCHED_TOOLS`, a specific VERB_SET, `_WRITE_METHODS`, or a specific
+# flag-name literal) unchanged, so biasing toward the union cannot make a
+# check fire on the wrong literal.
+_WATCHED_WRITE_BIAS = frozenset(
+    _WATCHED_TOOLS
+    | _WATCHED_VERBS
+    | {_GIT_PUSH_VERB}
+    | _WRITE_METHODS
+    | {"-x", "--method", "-f", "--field", "--raw-field"}
+)
+
 
 class Verdict(NamedTuple):
     deny: bool
     reason: str
     is_git_push: bool
+    # Issue #1375: every path a `git checkout`/`git restore` invocation in
+    # this command could discard, extracted soundly with no live I/O (see
+    # the "git checkout/restore path extraction" section below). Defaults
+    # to `()` -- every pre-existing `Verdict(...)` call site in this module
+    # denies for a reason unrelated to checkout/restore, where this field
+    # is never read (hooks/check-bash-safety.sh's own new wrapper step,
+    # like its existing `is_git_push` step, only ever runs on the "allow"
+    # decision), so none of them need updating for this new field.
+    checkout_restore_paths: tuple[str, ...] = ()
 
 
 def _rule_a_literal(segments: list[list[str]]) -> str | None:
@@ -2644,8 +3544,75 @@ def _gh_api_field_fused_flagname_dynamic_hit(
     return False
 
 
+def _segment_references_a_name(
+    seg: list[str],
+    names: set[str],
+    name_to_raw_value: dict[str, str],
+    name_to_raw_value_history: dict[str, tuple[str, ...]],
+) -> bool:
+    """True when any token in SEG references (as a bare `$NAME`, braced
+    `${NAME}`, default-clause `${NAME:-x}`, or indirect `${!NAME}`,
+    TWO-level-resolved) any name in NAMES. Delegates directly to
+    `_referenced_names` (per-token) so this shares that function's own
+    two-level indirect-reference resolution exactly, rather than
+    re-deriving a narrower subset of the same logic.
+
+    Added by round 26 (issue #1375) alongside `_names_with_dynamic_
+    assignment`'s own extension -- see that function's own docstring for
+    the live `_rule_gh_api_write`/B1a/B1b bypasses this closes, and for
+    why simply deleting a poisoned name's dict entry (the first approach
+    considered) would have made those two consumers LESS safe rather
+    than more.
+
+    CRITICAL bug found by independent adversarial review (round 29,
+    issue #1375) and independently reproduced live, both via
+    `classify()` and via real bash execution with a stand-in `uv`/`gh`
+    binary on PATH: this function's own round-26 form deliberately did
+    ONLY a single-level scan (its own docstring argued "this only needs
+    to know whether a POISONED name itself is mentioned, not what an
+    indirect reference through it might resolve to") -- that reasoning
+    was WRONG: wrapping an already-poisoned name behind one extra
+    `${!MREF}` indirection layer defeated detection entirely, for every
+    poisoning class this function guards (round 27's static-then-
+    dynamic reassignment, round 25's append, and round 26's own read/
+    array-element/printf-v classes alike). `TOOL=uv; VERB=harmless;
+    VERB=$(echo install); MREF=VERB; $TOOL ${!MREF} foo` resolved to
+    `deny=False, reason='no denied pattern matched'` even though real
+    bash genuinely runs `uv install foo` (confirmed live via a stand-in
+    `uv` binary on PATH: captured argv `uv called with: install foo`) --
+    the DIRECT reference (`$TOOL $VERB foo`, no indirection) already
+    correctly denied via round 27's own fix; only the added `${!MREF}`
+    layer defeated it. Reproduced identically for `_rule_gh_api_write`
+    (`M=safe; M=$(echo POST); MREF=M; gh api repos/o/r/pulls/1/merge -X
+    ${!MREF}` -- real bash genuinely runs the write call with `-X POST`,
+    a genuine unreviewed write, e.g. merging a pull request) and for the
+    round-26 append/read/array-element classes threaded the identical
+    way. The sibling checkout/restore consumer (`_referenced_names`,
+    via `_resolve_path_tokens`) was NEVER affected -- it already does
+    the correct two-level resolution this function now also delegates
+    to, closing the asymmetry round 26 introduced when it added THIS
+    function as a narrower, parallel mechanism instead of reusing the
+    existing one."""
+    if not names:
+        return False
+    return any(_referenced_names(token, name_to_raw_value, name_to_raw_value_history) & names for token in seg)
+
+
+_POISONED_REASSIGNMENT_GH_API_HIT = (
+    "a 'gh api' call references a variable that was reassigned after an earlier value in a way this "
+    "classifier cannot soundly resolve (a compound `+=` append, a dynamic reassignment after an "
+    "earlier static value, or `read`/`readarray`/`mapfile`/`printf -v`/an array-element assignment) "
+    "-- rewrite as a plain literal command so it can be checked"
+)
+
+
 def _rule_gh_api_write(
-    segments: list[list[str]], lowered_command: str, name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
+    segments: list[list[str]],
+    lowered_command: str,
+    name_to_value: dict[str, str],
+    name_to_raw_value: dict[str, str],
+    names_poisoned_for_gh_api_and_b1: set[str] | None = None,
+    name_to_raw_value_history: dict[str, tuple[str, ...]] | None = None,
 ) -> str | None:
     """`literals` is already lowercased, matching the predecessor script's
     own case-insensitive match against its whole lowered command -- so
@@ -2655,12 +3622,27 @@ def _rule_gh_api_write(
     --raw-field field flag -- literal, dynamic-value, dynamic-flag-name,
     and fused-flag-name-and-value, per side); kept deliberately thin
     (each pass owns its own branching) so this function's own cyclomatic
-    complexity stays low."""
+    complexity stays low.
+
+    NAMES_POISONED_FOR_GH_API_AND_B1 (round 26, widened round 27, issue
+    #1375) defaults to `None` (treated as empty) so every pre-existing
+    call site keeps its exact prior behavior; `_classify_tokens`'s own
+    call sites are the only ones that supply it, deliberately NOT the
+    same (wider) NAMES_WITH_DYNAMIC_ASSIGNMENT `_resolve_path_tokens`
+    (checkout/restore) consumes -- see `_names_poisoned_for_gh_api_and_
+    b1`'s own docstring for why. See `_segment_references_a_name`'s own
+    docstring for why a poisoned name is checked here, once has_gh_api is
+    already confirmed, rather than by deleting the name from NAME_TO_
+    VALUE/NAME_TO_RAW_VALUE."""
+    poisoned = names_poisoned_for_gh_api_and_b1 or set()
+    raw_history = name_to_raw_value_history or {}
     for seg in segments:
         literals = [t.lower() for t in seg if not _is_dynamic(t)]
         has_gh_api = any(literals[i : i + 2] == ["gh", "api"] for i in range(len(literals) - 1))
         if not has_gh_api:
             continue
+        if _segment_references_a_name(seg, poisoned, name_to_raw_value, raw_history):
+            return _POISONED_REASSIGNMENT_GH_API_HIT
         has_graphql = any(literals[i : i + 3] == ["gh", "api", "graphql"] for i in range(len(literals) - 2))
         if has_graphql and "mutation" in lowered_command:
             return "a 'gh api graphql' call containing a 'mutation' keyword"
@@ -2839,6 +3821,2549 @@ def _is_git_push_segment(seg: list[str], name_to_raw_value: dict[str, str]) -> b
     return any("git push" in lit for lit in (t.lower() for t in seg if not _is_dynamic(t)))
 
 
+# --- git checkout/restore path extraction (issue #1375) --------------------
+# `git checkout -- PATH` / `git restore PATH` / `git checkout .` can discard
+# uncommitted work on a tracked path with no warning (the near-miss issue
+# #1375 documents, issue #1128 repair 4). `classify()` stays I/O-free (this
+# module's own established architecture, see `_is_git_push_segment`'s own
+# `is_git_push`-then-live-wrapper-check split): this section only extracts
+# every candidate path a checkout/restore invocation *could* discard,
+# soundly and with no live git call, for hooks/check-bash-safety.sh's own
+# new wrapper step to check against the real working tree via `git diff
+# --quiet HEAD -- PATH`. An unresolved or unresolvable dynamic path token
+# denies outright HERE rather than being passed through empty-handed --
+# `git diff --quiet HEAD -- PATH` exits 0 (clean) for a path that does not
+# exist, so treating an unresolved token as "nothing to check" would be
+# fail-OPEN, not fail-closed (confirmed live, git 2.43.0).
+#
+# Disclosed residual, matching this module's own established convention
+# (see the module docstring's own "Known, disclosed limitation" paragraph
+# above): a decoy token between `git` and `checkout`/`restore` that
+# vanishes via a bash parameter-expansion operator OTHER than a bare
+# reference or the default/assign-default/alt-value clauses (`${NAME:-}`/
+# `${NAME-}`, `${NAME:=}`/`${NAME=}`, `${NAME:+x}`/`${NAME+x}`) -- e.g.
+# substring expansion, prefix/suffix removal, pattern substitution, or
+# case modification, all of which also evaluate to the empty string on an
+# unset variable -- is not recognized as vanishing; that `git` occurrence
+# is correctly treated as ambiguous rather than silently misread as a safe
+# checkout/restore. Pinned as `checkout-restore-exotic-parameter-
+# expansion-decoy` in hooks/test_gitapex_check_bash_safety.py's own
+# `KNOWN_BYPASS_COMMANDS`.
+
+_GIT_TREE_RELOCATION_LONG_FLAGS = {"--git-dir", "--work-tree"}
+_GIT_GLOBAL_SHORT_VALUE_FLAGS = {"-c", "-C"}
+_GIT_TREE_ENV_VARS = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE")
+
+_RESTORE_BOOLEAN_FLAGS = {
+    "--quiet",
+    "-q",
+    "--progress",
+    "--no-progress",
+    "--overlay",
+    "--no-overlay",
+    "--ours",
+    "--theirs",
+    "--merge",
+    "-m",
+    "--ignore-unmerged",
+    "--ignore-skip-worktree-bits",
+}
+_RESTORE_VALUE_FLAGS = {"--source", "-s", "--conflict"}
+_CHECKOUT_BRANCH_CREATION_FLAGS = {"-b", "-B", "--orphan"}
+_CHECKOUT_CONFLICT_SIDE_FLAGS = {"--ours", "--theirs", "-2", "-3"}
+
+
+def _referenced_names(
+    token: str, name_to_raw_value: dict[str, str], name_to_raw_value_history: dict[str, tuple[str, ...]]
+) -> set[str]:
+    """Every variable NAME referenced anywhere in TOKEN -- braced
+    (`${NAME}`), default-clause (`${NAME:-x}`), indirect (`${!NAME}`,
+    TWO levels: NAME itself, PLUS every name NAME's own current or
+    historical value could itself name -- see the CRITICAL-bug paragraph
+    below for why the second level is the one that actually matters), or
+    unbraced (`$NAME`, including every non-empty PREFIX of an unbraced
+    run, mirroring `_unbraced_ref_options`'s own prefix enumeration,
+    since an unbraced reference is ambiguous about where the name ends).
+
+    CRITICAL bug found by independent adversarial review (round 24, issue
+    #1375) and independently reproduced live, in this function's own
+    prior form (then named `_multi_valued_names_referenced`, collecting
+    only names with multi-valued history directly): for an indirect
+    `${!C}` reference, only C ITSELF was ever checked for multi-valued
+    history -- never the SECOND-level name C's own value actually points
+    to, which is the one `_substitute_var_refs_candidates`'s own
+    indirect-reference resolution (see that function's own docstring)
+    genuinely reads at the point of use. `TARGET=sub; C=TARGET; git
+    checkout -- ${!C}; TARGET=other` -- `${!C}` resolves through C (which
+    has only ONE historical value, "TARGET", so C itself was never a
+    widening candidate) to TARGET, which DOES have two historical values
+    ("sub" then "other") -- but TARGET was never added to the widening
+    set at all, so `checkout_restore_paths` resolved to `('other',)`
+    alone, the WRONG, order-blind-collapsed last value of TARGET (real
+    bash: `${!C}` genuinely was `sub` at its actual point of use).
+    Confirmed live end-to-end through the real wrapper against a scratch
+    repo with `sub` genuinely dirty and `other` clean: wrongly allowed
+    with exit 0, and actually running the command afterward silently
+    discarded the uncommitted edit to `sub`. Closed by treating EVERY
+    name C's own current value (NAME_TO_RAW_VALUE) or any historical
+    value (NAME_TO_RAW_VALUE_HISTORY) could itself name as a referenced
+    name in its own right, not just C."""
+    names: set[str] = set()
+    for match in _VAR_REF_FULL_RE.finditer(token):
+        braced_name, default_name, _default_text, indirect_name, unbraced_run = match.groups()
+        for name in (braced_name, default_name):
+            if name is not None:
+                names.add(name)
+        if indirect_name is not None:
+            names.add(indirect_name)
+            second_level = set(name_to_raw_value_history.get(indirect_name, ()))
+            current = name_to_raw_value.get(indirect_name)
+            if current is not None:
+                second_level.add(current)
+            names.update(second_level)
+        if unbraced_run is not None:
+            names.update(unbraced_run[:i] for i in range(len(unbraced_run), 0, -1))
+    return names
+
+
+def _multi_valued_names_referenced(
+    token: str, name_to_raw_value: dict[str, str], name_to_raw_value_history: dict[str, tuple[str, ...]]
+) -> set[str]:
+    """Every name `_referenced_names` finds in TOKEN whose own NAME_TO_
+    RAW_VALUE_HISTORY entry carries MORE than one distinct value. A name
+    assigned only once (or never) is excluded: its single reading already
+    matches the ordinary, un-widened resolution, so there is nothing to
+    widen. Used by `_resolve_path_tokens`'s own fused-reference history
+    widening (see that function's own docstring) to find which names'
+    history actually needs enumerating, not to resolve the token itself
+    -- `_substitute_var_refs_candidates` still does the real, quote/
+    fusion-aware resolution, once per combination."""
+    return {
+        name
+        for name in _referenced_names(token, name_to_raw_value, name_to_raw_value_history)
+        if len(name_to_raw_value_history.get(name, ())) > 1
+    }
+
+
+def _names_appended_to(tokens: list[str]) -> set[str]:
+    """Every NAME with at least one `NAME+=value` compound/append-
+    assignment token in TOKENS (via `_APPEND_ASSIGN_RE`), regardless of
+    whether the appended text is itself static or dynamic -- round 25's
+    own posture (see `_names_with_dynamic_assignment`'s own round-25
+    paragraph): an append always makes the name's own combined value
+    unrecoverable without genuine execution-order tracking this
+    classifier does not perform, so it is poisoned unconditionally.
+    Factored out so both `_names_with_dynamic_assignment` (checkout/
+    restore's own full union) and `_names_poisoned_for_gh_api_and_b1`
+    (round 27, issue #1375) can share the identical append-detection
+    logic without duplicating it."""
+    names: set[str] = set()
+    for token in tokens:
+        match = _APPEND_ASSIGN_RE.match(token)
+        if match:
+            names.add(match.group(1))
+    return names
+
+
+def _names_with_dynamic_assignment(tokens: list[str]) -> set[str]:
+    """Every NAME whose own value, at some point in TOKENS, is genuinely
+    UNKNOWN to this classifier -- either a DYNAMIC value (containing
+    `$`/backtick) via a plain `NAME=value` assignment, or ANY compound
+    `NAME+=value` (append) assignment regardless of whether the appended
+    text is itself static or dynamic (see the round-25 paragraph below
+    for why the static case needs the same treatment).
+
+    CRITICAL bug found by independent adversarial review (round 24, issue
+    #1375) and independently reproduced live: `_assigned_raw_values`/
+    `_assigned_raw_value_history` both skip a dynamic-RHS assignment
+    token entirely (`if _is_dynamic(token): continue`) -- correct in
+    isolation (this classifier genuinely cannot know what a `$(...)`
+    substitution will evaluate to), but this means a name's own EARLIER,
+    STATIC assignment stays in NAME_TO_RAW_VALUE/NAME_TO_RAW_VALUE_
+    HISTORY completely untouched, silently trusted as still current, even
+    though a LATER, dynamic reassignment of the SAME name means its
+    actual value at the point of use is genuinely unknown. `DIR=sub;
+    DIR=$(echo other); git checkout -- $DIR` resolved `checkout_restore_
+    paths` to `('sub',)` -- confidently the WRONG, STALE value (real
+    bash: `$DIR` genuinely was `other`, whatever the substitution
+    evaluates to, at its actual point of use). Confirmed live end-to-end
+    through the real wrapper against a scratch repo with `other`
+    genuinely dirty and `sub` clean: wrongly allowed with exit 0, and
+    actually running the command afterward silently discarded the
+    uncommitted edit to `other`. Also reproduced identically for the
+    fused-reference form (`"$DIR/f"`).
+
+    CRITICAL bug found by independent adversarial review (round 25, issue
+    #1375) and independently reproduced live: `_ASSIGN_RE` never matches
+    bash's own `NAME+=value` compound/append-assignment operator at all
+    (its own greedy identifier-char class cannot consume past the
+    literal `+`, so the required `=` immediately after never lines up) --
+    this function's own round-24 form, keyed entirely off `_ASSIGN_RE`,
+    was completely blind to an appended name regardless of whether the
+    appended text was itself dynamic. `DIR=sub; for i in 1; do
+    DIR+=$(echo other); done; git checkout -- $DIR` resolved
+    `checkout_restore_paths` to `('sub',)` -- the STALE, pre-append value
+    (real bash: `$DIR` genuinely becomes `subother`, confirmed live via
+    `bash -c 'DIR=sub; for i in 1; do DIR+=$(echo other); done; echo
+    $DIR'`). Confirmed live end-to-end through the real wrapper against a
+    scratch repo with the genuinely-appended-to path dirty and the stale
+    pre-append path clean: wrongly allowed with exit 0, and actually
+    running the command afterward silently discarded the uncommitted
+    edit. Reproduced identically for `git restore`. A STATIC append
+    (`DIR+=txt`, no `$`/backtick in the appended text) shares the
+    identical exposure for a DIFFERENT reason: reconstructing the real
+    concatenated value would need genuine execution-order tracking this
+    classifier does not perform (which static assignment among several
+    was actually in effect immediately before the append), so a static
+    append is poisoned here too, via `_APPEND_ASSIGN_RE` alone,
+    independent of `_is_dynamic`.
+
+    Closed by `_resolve_path_tokens` treating a name in this set as
+    forced-unresolvable (deny outright) wherever referenced -- the same
+    posture this module already takes for a name that was NEVER assigned
+    any value at all (a name with a static-only history of plain `=`
+    assignments, or no history, resolves exactly as before; a name with
+    even one dynamic OR append assignment anywhere loses all confidence,
+    matching how this classifier already treats a name with NO recorded
+    static value).
+
+    CRITICAL bug found by independent adversarial review (round 26, issue
+    #1375) and independently reproduced live, both via `classify()` and
+    via real bash execution: this function's own round-24/25 form, keyed
+    entirely off `_ASSIGN_RE`/`_APPEND_ASSIGN_RE`, is completely BLIND to
+    every OTHER bash construct that reassigns an existing name -- `read
+    NAME`/`readarray NAME`/`mapfile NAME` (reading runtime input into
+    NAME), `printf -v NAME ...` (writing a formatted result into NAME),
+    and `NAME[i]=value`/`NAME[i]+=value` (array-element assignment)
+    neither of `_ASSIGN_RE`/`_APPEND_ASSIGN_RE` matches at all (both
+    anchor immediately after NAME's own bare identifier characters, with
+    no `read `/`-v `/`[i]` in between). `DIR=sub; read DIR <<< "other";
+    git checkout -- $DIR` and `DIR=sub; DIR[0]=other; git checkout --
+    $DIR` both resolved `checkout_restore_paths` to `('sub',)` -- the
+    STALE, pre-reassignment value (real bash: `$DIR` genuinely becomes
+    "other" in both cases, confirmed live via `bash -c 'DIR=sub; read DIR
+    <<< "other"; echo "DIR=[$DIR]"'` -> `DIR=[other]` and `bash -c
+    'arr=x; arr[0]=other; echo "arr=[$arr]"'` -> `arr=[other]`).
+    Independently confirmed live end-to-end through the real wrapper
+    against a scratch repo, same wrongly-allowed-then-silently-discarded
+    shape as every prior round in this family.
+
+    More severely, the SAME shapes (`read`/`readarray`/`mapfile`/
+    `printf -v`/array-element assignment) ALSO defeat `_rule_gh_api_write`
+    and `_segment_loop_hit` (B1a/B1b): `A=harmless; read A <<< "uv";
+    B=harmless2; read B <<< "install"; $A $B foo` and `M=GET; M[0]=POST;
+    gh api repos/x/y/issues -X $M` were both wrongly ALLOWED -- confirmed
+    live via a stand-in `uv` binary on PATH (captured argv: `uv called
+    with: install foo`, the genuine `pip`/`uv install` bypass B1a/B1b
+    exist specifically to deny) and via direct `classify()` calls
+    (`reason == 'no denied pattern matched'` for the `gh api` case).
+    `_names_reassigned_by_untracked_construct` (see its own docstring) is
+    the DEDICATED, NARROWER function those two consumers actually use --
+    NOT this function's own full union. Threading the FULL union used
+    here (which also includes the round-24/25 dynamic-RHS-assignment/
+    append classes) into gh-api-write/B1a-B1b was tried first and
+    reverted: `A=muta; B=tion; Q="${A}${B} { x }"; gh api graphql -f
+    query="$Q"` -- an EXISTING, deliberately-disclosed, unrelated bypass
+    (`KNOWN_BYPASS_COMMANDS`'s own `graphql-mutation-keyword-variable-
+    concatenation` case, predating round 26 entirely) -- regressed to a
+    wrongly-denied false positive, since `Q`'s own single dynamic
+    assignment already satisfied the round-24 class (ANY dynamic-RHS `=`
+    assignment, not specifically a REASSIGNMENT after a static one) even
+    though gh-api-write's own EXISTING `_substitute_var_refs_candidates`-
+    based resolution already handles that class soundly (an unresolvable
+    candidate list reads as "no evidence of a write," not "deny
+    outright" -- the deliberately different, narrower posture this rule
+    already had for that specific, previously-accepted gap). `_segment_
+    references_a_name` (see its own docstring) is the mechanism `_rule_
+    gh_api_write`/`_segment_loop_hit` use to apply the NARROWER poisoned-
+    names set to their own scope, since simply deleting a poisoned name's
+    dict entry -- traced through `_write_method_candidate_hit`'s own
+    `candidates is None: True` vs. `candidates == []: False` branches
+    before writing any code -- would make those two consumers LESS safe
+    (an empty candidate list reads as "vacuously safe," the opposite of
+    the fail-closed direction this fix needs).
+
+    CORRECTION (round 27, issue #1375): the round-26 paragraph above
+    overstated the exclusion's own precision. Round 26 excluded the
+    ENTIRE round-24 dynamic-RHS-reassignment class from `_rule_gh_api_
+    write`/`_segment_loop_hit`, when only the NARROWER sub-case actually
+    needed excluding: a name that is ONLY EVER assigned dynamically (no
+    earlier static value at all, e.g. `Q` above) is genuinely
+    unresolvable and already handled soundly by those rules' own
+    existing `_substitute_var_refs_candidates`-based resolution; a name
+    that carries an EARLIER STATIC value and is LATER dynamically
+    reassigned (e.g. `VERB=harmless; VERB=$(echo install)`) is a
+    genuine, confidently-wrong-value reassignment that round 26's own
+    blanket exclusion left completely unprotected in those two
+    consumers -- see `_names_reassigned_from_a_static_value`'s own
+    docstring for the live bypass this closes and
+    `_names_poisoned_for_gh_api_and_b1`'s own docstring for the actual,
+    corrected set those two consumers now use."""
+    names = _names_appended_to(tokens)
+    for token in tokens:
+        if not _is_dynamic(token):
+            continue
+        match = _ASSIGN_RE.match(token)
+        if match:
+            names.add(match.group(1))
+    names.update(_names_reassigned_by_untracked_construct(tokens))
+    return names
+
+
+def _names_reassigned_by_untracked_construct(tokens: list[str]) -> set[str]:
+    """Every NAME reassigned in TOKENS via a bash construct this
+    classifier's `_ASSIGN_RE`/`_APPEND_ASSIGN_RE` (the round-24/25 classes
+    `_names_with_dynamic_assignment` also covers) do not recognize AT
+    ALL: array-element assignment (`NAME[i]=value`/`NAME[i]+=value`, via
+    `_ARRAY_ELEMENT_ASSIGN_RE`) and `read`/`readarray`/`mapfile`/
+    `printf -v` reassignment (via `_names_reassigned_by_read_or_printf`).
+
+    Deliberately NARROWER than `_names_with_dynamic_assignment`'s own
+    full union -- NOT the full one `_resolve_path_tokens` (checkout/
+    restore) consumes -- see `_names_with_dynamic_assignment`'s own
+    round-26 paragraph for why threading the FULL union into `_rule_gh_
+    api_write`/`_segment_loop_hit` (B1a/B1b) regressed an existing,
+    unrelated, deliberately-disclosed bypass. Computed fresh from TOKENS
+    only (no outer-scope union, unlike `_names_with_dynamic_assignment`'s
+    own recursive threading) -- a `read`/array-element reassignment
+    occurring OUTSIDE a `$(...)`/array-literal span but referenced only
+    INSIDE it is a disclosed, narrower residual this pass does not
+    cover; every round-26 finding actually verified live was a flat,
+    top-level case, which this fully covers.
+
+    CORRECTION (round 27, issue #1375): this function alone is no longer
+    the set `_rule_gh_api_write`/`_segment_loop_hit` actually consume --
+    round 26's own claim that it was turned out to be too narrow, since
+    excluding the round-24/25 classes ENTIRELY (not just their genuinely
+    unresolvable sub-case) left those two consumers unprotected against
+    a real reassignment. See `_names_poisoned_for_gh_api_and_b1`'s own
+    docstring for the actual, corrected set those two consumers now
+    use -- this function remains one component of that union, still
+    responsible for exactly the array-element/read/printf-v shapes its
+    own name and docstring describe."""
+    names: set[str] = set()
+    for token in tokens:
+        array_match = _ARRAY_ELEMENT_ASSIGN_RE.match(token)
+        if array_match:
+            names.add(array_match.group(1))
+    names.update(_names_reassigned_by_read_or_printf(tokens))
+    return names
+
+
+_SUBSHELL_OPEN_TOKENS = frozenset({"(", "<(", ">("})
+"""Every token that opens a `(...)`-nesting level `_raw_segments_with_
+boundaries` must track: a bare `(` (subshell grouping/function-
+definition parameter list) AND bash's own process-substitution openers
+`<(`/`>(`, which this file's own tokenizer fuses into a single token
+distinct from a bare `(` (confirmed directly: `tokenize("cat <(VERB=
+safe)")` produces `[..., "<(", "VERB=safe", ")", ...]` -- one token for
+`<(`, matching a bare `)` for the close, never a bare `(` on its own).
+Added by round 33 (issue #1375) -- see `_raw_segments_with_boundaries`'s
+own docstring for the live bypass this closes."""
+
+
+def _raw_segments_with_boundaries(tokens: list[str]) -> list[tuple[list[str], int, str | None]]:
+    """Every segment TOKENS splits into (including EMPTY ones, unlike
+    `segment_tokens`'s own filtered output -- an empty segment, e.g.
+    between `(` and `)` in a parameterless `f()` function definition,
+    still needs to occupy its own position in this list so a caller can
+    look at its neighbors), each paired with its own `(...)`-nesting
+    depth (see the round-31 paragraph in `_names_reassigned_from_a_
+    static_value`'s own docstring) and the single boundary token that
+    TERMINATES it (`None` for the final segment, which runs to the end
+    of TOKENS with no terminator). Building block for `_segment_tokens_
+    with_scope_isolation`'s own pipe/background-job detection, which
+    needs to know each segment's own NEIGHBORING boundary tokens, not
+    just its depth.
+
+    CRITICAL bypass found by independent adversarial review (round 33,
+    issue #1375) and independently reproduced live, both via
+    `classify()` and via real bash execution with a stand-in `uv`/`gh`
+    binary on PATH: this function's own pre-round-33 form only
+    recognized a BARE `(` as a depth-opening boundary -- but bash's
+    process-substitution openers `<(`/`>(` tokenize as their OWN fused,
+    distinct tokens (`"<("`/`">("`, never a bare `"("`), so a process
+    substitution's own content was swept into whatever segment was
+    already active (never isolated) -- and WORSE, its matching, bare `)`
+    close token WAS recognized and unconditionally decremented the
+    tracked depth, corrupting tracking for a GENUINELY enclosing `(...)`
+    subshell around it, prematurely treating tokens still lexically
+    inside that real subshell as top-level again. `TOOL=uv;
+    VERB=harmless; VERB=$(echo install); cat <(VERB=safe) >/dev/null;
+    $TOOL $VERB foo` resolved to `deny=False` even though real bash
+    genuinely runs `uv install foo`, NOT `safe foo` (confirmed live via
+    a stand-in `uv` binary on PATH: captured argv `uv called with:
+    install foo`) -- process substitution runs its own content in a
+    separate subshell, exactly like `$(...)` command substitution, so it
+    never leaks back to the parent. The depth-corruption variant,
+    `TOOL=uv; VERB=harmless; VERB=$(echo install); (cat <(true);
+    VERB=safe); $TOOL $VERB foo`, reproduces identically (confirmed live
+    that the OUTER `(...)` genuinely still isolates `VERB=safe` in real
+    bash: `VERB=install; (cat <(true); VERB=safe); echo "VERB is now:
+    $VERB"` prints `VERB is now: install`) -- but the pre-fix code
+    tracked the `VERB=safe` segment at depth 0, having already been
+    dropped back down by the process substitution's own phantom close.
+    Closed by recognizing every token in `_SUBSHELL_OPEN_TOKENS` (not
+    just a bare `(`) as a depth-opening boundary -- `<(`/`>(` each still
+    pair with an ordinary bare `)` close exactly like a bare `(` does,
+    so no change to the closing side was needed.
+
+    CRITICAL bypass found by independent adversarial review (round 36,
+    issue #1375) and independently reproduced live, both via
+    `classify()` and via real bash execution with a stand-in `uv`/`gh`
+    binary on PATH: every bash `case` statement's own pattern arm ends
+    with a bare `)` (`1) ...`, `a|b) ...`) that is lexically
+    INDISTINGUISHABLE, at the token level, from a subshell-closing `)`
+    -- there is no corresponding OPEN token for it at all, unlike
+    `<(`/`>(` above. The pre-round-36 code decremented `depth`
+    unconditionally on every bare `)`, so a `case` nested inside a
+    GENUINELY enclosing `(...)` subshell prematurely "closed" that
+    subshell's own tracked depth on the case's first pattern arm, long
+    before the real closing `)` was reached. `TOOL=uv; VERB=harmless;
+    VERB=$(echo install); ( case 1 in 1) true ;; esac; VERB=safe );
+    $TOOL $VERB foo` resolved to `deny=False` even though real bash
+    genuinely runs `uv install foo` (confirmed live via a stand-in `uv`
+    binary on PATH: captured argv `uv called with: install foo`) -- the
+    outer `(...)` genuinely still isolates `VERB=safe` in real bash
+    (confirmed live: `VERB=install; ( case 1 in 1) true ;; esac;
+    VERB=safe ); echo "VERB is now: $VERB"` prints `VERB is now:
+    install`), but the case arm's own phantom `)` had already
+    decremented the tracked depth to 0 by the time `VERB=safe` was
+    reached, wrongly treating it as a top-level assignment. No `&`/`|`
+    is needed to reproduce this -- ordinary subshell nesting alone
+    triggers it, distinct from `_segment_indices_isolated_by_a_piped_
+    or_backgrounded_compound_group`'s own round-35/36 pipe/background
+    mechanism (see that function's own docstring for the SEPARATE,
+    companion round-36 fix closing `case`/`esac` there).
+
+    Closed by tracking, per currently-open `case` block (a stack, since
+    `case` statements nest), whether the NEXT bare `)` is that case
+    block's own pattern-arm terminator rather than a real subshell
+    close: armed once, right after that case's own first `in` keyword
+    (a per-block `case_seen_in` flag ensures a LATER, unrelated `in`
+    lexically inside an arm's body -- e.g. from a nested `for i in
+    ...`/`select i in ...` -- is never mistaken for the case's own,
+    since only the FIRST `in` after each `case` push counts); disarmed
+    the instant a `)` is consumed as that arm's own pattern terminator
+    (segmenting exactly as before, but leaving `depth` UNCHANGED rather
+    than decrementing it); re-armed on the next `;;` (detected as two
+    consecutive bare `;` tokens, confirmed via `tokenize()`: `1) VERB=
+    safe ;; esac` produces `[..., "VERB=safe", ";", ";", "esac"]`, never
+    a single fused token) while that case block is still open; and
+    popped off the stack entirely at `esac`, regardless of its own
+    armed/disarmed state at that point. A `(...)` subshell genuinely
+    nested INSIDE a case arm's own body (after its pattern-terminating
+    `)` has already been consumed, so the block's own flag is
+    disarmed) is unaffected -- its own bare `)` decrements depth
+    normally, exactly as before this fix.
+
+    FALSE-POSITIVE bug found by independent adversarial review (round
+    37, issue #1375) and independently reproduced live, both via
+    `classify()` and via real bash execution with a stand-in `uv`/`gh`
+    binary on PATH, in the round-36 fix above: bash's `case` syntax
+    allows an OPTIONAL leading `(` decorator on a pattern arm (`(1)
+    cmd ;;`, `(1|2) cmd ;;` -- common, POSIX/ksh-compatible style, no
+    `shopt` needed). That `(` is lexically identical to a real subshell
+    opener, so it hit the ordinary `_SUBSHELL_OPEN_TOKENS` branch and
+    unconditionally incremented `depth` -- but the round-36 state
+    machine only consulted `case_awaiting_pattern_close` on the
+    CLOSING `)`, never the opening `(`, so the SAME `)` that correctly
+    skipped decrementing (recognizing it as the arm's own pattern
+    terminator) left the phantom `+1` from the decorator's own `(`
+    permanently unbalanced -- `depth` stayed inflated by 1 for the rest
+    of the token stream (the `max(depth - 1, 0)` clamp only guards
+    against going negative, not against this kind of unmatched-open
+    drift). `TOOL=uv; VERB=inst; VERB+=all; case 1 in (1) true ;; esac;
+    VERB=safe; $TOOL $VERB foo` resolved to `deny=True` even though
+    real bash genuinely runs `uv safe foo` (confirmed live via a
+    stand-in `uv` binary on PATH: captured argv `uv called with: safe
+    foo`) -- the case block has nothing to do with `VERB`'s own later,
+    genuinely top-level clearing reassignment, which should have been
+    trusted normally; `_rule_gh_api_write` and the `(1|2)`-alternation
+    form both reproduce identically. Unlike every round-30-36 finding
+    in this same area, this is a FALSE POSITIVE (over-denial), not a
+    bypass -- confirmed by tracing that `depth` can only ever be
+    inflated relative to real bash's own true nesting by this bug
+    (never deflated, since a phantom `+1` from the decorator is simply
+    never balanced, and the clamp only prevents going negative), so
+    `isolated` can wrongly read `True` when it should be `False`, but
+    never the reverse.
+
+    Closed by tracking, per currently-open case block, whether its
+    CURRENT pattern arm has consumed any real token yet since being
+    armed (`case_pattern_started`, reset to `False` on the same events
+    that arm/re-arm `case_awaiting_pattern_close`: the block's own
+    first `in`, and each subsequent `;;`) -- a bare `(` is treated as
+    the harmless decorator, and its would-be depth increment
+    suppressed, ONLY when it is the very first token of the current
+    arm (`case_awaiting_pattern_close[-1] and not case_pattern_started[
+    -1]`); every token processed while a block is armed sets `case_
+    pattern_started[-1] = True` immediately afterward (except the
+    arm/re-arm setup tokens themselves -- `case`/`in`/`esac`/the second
+    `;` of a `;;` -- which must not count as the pattern's own first
+    token or the decorator would never be recognized at all). This
+    correctly leaves an extglob pattern's own internal `(` (e.g. bash's
+    `@(foo|bar)` syntax, which requires `shopt -s extglob` and is off
+    by default) NOT specially suppressed, since its own leading `@`
+    token consumes the "first token" slot before its `(` is ever seen
+    -- a deliberately narrower, disclosed residual (an over-denial on a
+    rare, opt-in bash feature, never a bypass) rather than a fully
+    general case-pattern-syntax parser.
+
+    CRITICAL bypass found by independent adversarial review (round 38,
+    issue #1375) and independently reproduced live, both via
+    `classify()` and via real bash execution with a stand-in `uv`/`gh`
+    binary on PATH: the round-36/37 `case`/`esac` recognition above
+    matched purely on TOKEN TEXT, with no restriction that the token
+    actually occupy real bash's own syntactic keyword position -- but
+    `case`/`esac` are only reserved words in COMMAND-starting position;
+    the word between `case` and `in` (the statement's own SUBJECT) is
+    an ordinary word position where a literal `esac` (or `case`) is
+    valid, unremarkable bash (`case esac in a) true ;; esac` genuinely
+    switches on the literal string `"esac"`, confirmed live via `bash
+    -n`). `( case esac in a) true ;; esac; VERB=safe )` -- with a
+    GENUINE, real enclosing subshell -- resolved to `deny=False` even
+    though real bash genuinely keeps `VERB=safe` isolated inside that
+    subshell (confirmed live via a stand-in `uv` binary on PATH:
+    `TOOL=uv; VERB=harmless; VERB=$(echo install); ( case esac in a)
+    true ;; esac; VERB=safe ); $TOOL $VERB foo` captures `uv called
+    with: install foo`) -- because the literal `esac` SUBJECT token
+    immediately popped the case-tracking stack frame the real `case`
+    keyword one token earlier had just pushed, before the real `in` was
+    even reached; the pattern's own genuinely-terminating `)` (after
+    `a`) then fell through to the ordinary subshell-close branch and
+    wrongly decremented the REAL enclosing subshell's own tracked
+    depth, deflating it relative to real bash's true nesting -- the
+    opposite direction from round 37's over-denial, and therefore a
+    genuine bypass, not a false positive. `_rule_gh_api_write`
+    reproduces identically (`M=safe; M=$(echo POST); ( case esac in a)
+    true ;; esac; M=GET ); gh api repos/o/r/pulls/1/merge -X $M` --
+    real bash genuinely issues an unreviewed `-X POST` write).
+
+    Closed by requiring `case`/`esac` to additionally sit at position 0
+    of the CURRENT in-progress raw segment (`not segments[-1]` at the
+    moment each is seen, before it is itself appended) -- the exact
+    same position-0 discipline `_segment_indices_isolated_by_a_piped_
+    or_backgrounded_compound_group` already applies to its own
+    `_GROUP_OPEN_KEYWORDS`/`_GROUP_CLOSE_KEYWORDS` matching, for the
+    identical reason: real bash's grammar guarantees `case`/`esac` only
+    ever start a fresh command, so a token seen after other tokens have
+    already accumulated in the current segment (e.g. immediately after
+    `case`, in subject position) can safely be treated as ordinary
+    literal text. `in` is deliberately NOT given the same position-0
+    gate -- unlike `case`/`esac`, the real syntactic `in` keyword is
+    normally NOT segment-position-0 (it shares a segment with the
+    case's own subject word, e.g. `["case", "1", "in"]`), so a
+    position-0 requirement would break the legitimate case instead of
+    only the collision; `in`'s own existing `case_seen_in`-gated
+    once-only consumption was independently verified live to still
+    resolve `case in in a) ...`'s own literal-`in`-as-subject collision
+    correctly (both interpretations of which `in` is "the real one"
+    coincidentally land on the same correct pattern-close outcome for
+    the arm's own terminating `)`), so no separate fix was needed
+    there."""
+    segments: list[list[str]] = [[]]
+    seg_depths: list[int] = [0]
+    terminators: list[str | None] = []
+    depth = 0
+    case_awaiting_pattern_close: list[bool] = []
+    case_seen_in: list[bool] = []
+    case_pattern_started: list[bool] = []
+    prev_tok: str | None = None
+    for tok in tokens:
+        is_case_setup_token = False
+        if tok == "case" and not segments[-1]:
+            case_awaiting_pattern_close.append(False)
+            case_seen_in.append(False)
+            case_pattern_started.append(False)
+            is_case_setup_token = True
+        elif tok == "in" and case_seen_in and not case_seen_in[-1]:
+            case_seen_in[-1] = True
+            case_awaiting_pattern_close[-1] = True
+            case_pattern_started[-1] = False
+            is_case_setup_token = True
+        elif tok == "esac" and case_awaiting_pattern_close and not segments[-1]:
+            case_awaiting_pattern_close.pop()
+            case_seen_in.pop()
+            case_pattern_started.pop()
+            is_case_setup_token = True
+        elif tok == ";" and case_awaiting_pattern_close and prev_tok == ";":
+            case_awaiting_pattern_close[-1] = True
+            case_pattern_started[-1] = False
+            is_case_setup_token = True
+
+        is_case_pattern_decorator_paren = (
+            tok == "("
+            and case_awaiting_pattern_close
+            and case_awaiting_pattern_close[-1]
+            and not case_pattern_started[-1]
+        )
+
+        if tok in _SUBSHELL_OPEN_TOKENS and not is_case_pattern_decorator_paren:
+            terminators.append(tok)
+            depth += 1
+            segments.append([])
+            seg_depths.append(depth)
+        elif tok in _SUBSHELL_OPEN_TOKENS:
+            terminators.append(tok)
+            segments.append([])
+            seg_depths.append(depth)
+        elif tok == ")":
+            terminators.append(tok)
+            if case_awaiting_pattern_close and case_awaiting_pattern_close[-1]:
+                case_awaiting_pattern_close[-1] = False
+            else:
+                depth = max(depth - 1, 0)
+            segments.append([])
+            seg_depths.append(depth)
+        elif tok in _SINGLE_OPS or tok in _MULTI_OPS:
+            terminators.append(tok)
+            segments.append([])
+            seg_depths.append(depth)
+        else:
+            segments[-1].append(tok)
+
+        if case_awaiting_pattern_close and case_awaiting_pattern_close[-1] and not is_case_setup_token:
+            case_pattern_started[-1] = True
+        prev_tok = tok
+    terminators.append(None)
+    return list(zip(segments, seg_depths, terminators, strict=True))
+
+
+_SCOPE_LOCALIZING_KEYWORDS = frozenset({"local", "declare", "typeset", "coproc"})
+"""Every bash keyword `_segment_tokens_with_scope_isolation` treats as
+ALWAYS scope-isolating wherever it appears in a segment (see that
+function's own docstring for why each is safe to treat this way even
+though `declare`/`typeset` are genuinely ambiguous outside a function).
+Added by round 32 (`local`/`declare`/`typeset`) and round 34 (`coproc`),
+issue #1375."""
+
+
+def _seg_has_a_scope_localizing_keyword(seg: list[str]) -> bool:
+    """True when SEG contains any of `_SCOPE_LOCALIZING_KEYWORDS` as one
+    of its own tokens, checking each token BOTH as-is and with a single
+    leading `$` stripped -- bash's own `$"..."` locale-translated-string
+    syntax fuses the `$` prefix onto the dequoted string content (e.g.
+    `$"local"` tokenizes as the single token `$local`, never a bare
+    `local`), so an exact, unstripped membership check misses it even
+    though it genuinely invokes the keyword in real bash when used in
+    command-starting position. Added by round 34 (issue #1375) -- see
+    `_segment_tokens_with_scope_isolation`'s own docstring for the live
+    bypass this closes."""
+    for tok in seg:
+        bare = tok[1:] if tok.startswith("$") else tok
+        if bare in _SCOPE_LOCALIZING_KEYWORDS:
+            return True
+    return False
+
+
+_GROUP_OPEN_KEYWORDS = frozenset({"{", "while", "until", "for", "select", "if", "case"})
+_GROUP_CLOSE_KEYWORDS = frozenset({"}", "done", "fi", "esac"})
+"""The compound-command delimiters `_segment_indices_isolated_by_a_
+piped_or_backgrounded_compound_group` bracket-matches. Unlike `_SUBSHELL_
+OPEN_TOKENS`, none of these tokens themselves make their own content
+isolated -- a bare `{ VERB=safe; }`/`while ...; done`/`if ...; fi` with no
+trailing `&`/`|` genuinely LEAKS its assignments to the parent shell in
+real bash (confirmed live, see the round-35 paragraph below) -- isolation
+here depends entirely on whether the GROUP AS A WHOLE is itself a
+pipeline stage or a backgrounded job, the same test already applied to an
+ordinary segment, evaluated once at the group's own matching open/close
+pair. Added by round 35 (`{`/`while`/`until`/`for`/`select`/`if`) and
+round 36 (`case`/`esac`), issue #1375 -- see this function's own
+docstring for the round-36 `case`/`esac` bypass and why `case` still
+satisfies the leading-contiguous-open-run detection this function relies
+on (a `case WORD in` segment's own leading token is always `case`, with
+the case's own pattern text and `in` keyword following in the SAME
+segment, never opening a nested level of their own)."""
+
+
+def _segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(
+    raw: list[tuple[list[str], int, str | None]],
+) -> set[int]:
+    """Every index into RAW (the `_raw_segments_with_boundaries` output)
+    that lies inside a `{...}`/`while`/`until`/`for`/`select`/`if`...
+    `done`/`fi` compound-command group whose own OUTER closing boundary
+    is itself a pipe stage, is immediately followed by `&`, or is itself
+    the RECEIVING side of a pipe -- bash forks the ENTIRE group as one
+    unit in each of these cases, so a plain static assignment anywhere
+    inside it, at any nesting depth, must never be trusted to clear an
+    earlier poisoning.
+
+    CRITICAL bypass found by independent adversarial review (round 35,
+    issue #1375) and independently reproduced live, both via `classify()`
+    and via real bash execution with a stand-in `uv`/`gh` binary on PATH:
+    rounds 31-34 taught `_raw_segments_with_boundaries`/`_segment_tokens_
+    with_scope_isolation` about `(...)` subshells, `<(`/`>(` process
+    substitution, `|` pipeline stages, `cmd &` backgrounding, and `local`/
+    `declare`/`typeset`/`coproc` -- but none of `{`, `}`, `while`, `do`,
+    `done`, `until`, `for`, `select`, `if`, `then`, `fi` were ever
+    recognized at all, even though a `{...}` brace group or a `while`/
+    `until`/`for`/`select`/`if` compound command, backgrounded or piped
+    AS A WHOLE, forks exactly like a subshell -- a fake "the value is
+    safe now" reassignment written inside one can never actually reach
+    the parent shell's own copy of the name, but the pre-round-35 code
+    trusted it exactly like an ordinary top-level reassignment. `TOOL=uv;
+    VERB=harmless; VERB=$(echo install); { VERB=safe; } & wait; $TOOL
+    $VERB foo` resolved to `deny=False` even though real bash genuinely
+    runs `uv install foo` (confirmed live via a stand-in `uv` binary on
+    PATH: captured argv `uv called with: install foo`) -- the brace
+    group's own `VERB=safe` never reaches the parent shell once the whole
+    group is backgrounded. `{ VERB=safe; } | cat` (piped instead of
+    backgrounded), `if true; then VERB=safe; fi & wait`, `for i in 1; do
+    VERB=safe; done & wait`, a doubly-nested `{ { VERB=safe; }; } | cat`,
+    and a pipe-RECEIVING group whose assignment is not even the group's
+    OWN first statement (`echo x | { true; VERB=safe; }; wait`) all
+    reproduce identically (captured argv in every case: `uv called with:
+    install foo`, never `safe foo`); `_rule_gh_api_write` reproduces
+    identically too (e.g. `M=safe; M=$(echo POST); { true; M=GET; } &
+    wait; gh api repos/o/r/pulls/1/merge -X $M` -- real bash genuinely
+    runs `-X POST`, a genuine unreviewed write). Confirmed through the
+    real wrapper: every shape now denies with exit 2 where it previously
+    allowed with exit 0.
+
+    Two negative controls confirm a correct fix cannot simply treat every
+    `{`/`while`/`until`/`for`/`select`/`if` as UNCONDITIONALLY isolating
+    (the same false-positive trade-off already navigated for `(...)` in
+    round 31/32 and deliberately NOT extended to `((...))` -- see
+    `_segment_tokens_with_scope_isolation`'s own `((...))` paragraph): a
+    bare `{ VERB=safe; }`/`if true; then VERB=safe; fi`/`for i in 1; do
+    VERB=safe; done` with NO trailing `&`/`|` genuinely LEAKS to the
+    parent in real bash (confirmed live: each variant's stand-in `uv`
+    call captures `uv called with: safe foo`, not `install foo`) and
+    `classify()` already agreed even before this fix -- isolation here
+    is conditioned on the group's own outer boundary, never on the mere
+    presence of one of these keywords.
+
+    A group is recognized by treating a maximal, CONTIGUOUS run of
+    `_GROUP_OPEN_KEYWORDS` tokens starting at position 0 of a raw segment
+    as that many nested opens (bash's own grammar requires each of these
+    reserved words to start a fresh command, but places no requirement
+    that a nested group's own opener be separated from an enclosing
+    group's opener by anything but whitespace -- confirmed live:
+    `tokenize("{ { echo hi; }; }")` produces adjacent `"{"`, `"{"` tokens
+    in the SAME raw segment, with no boundary token between them, since
+    `{` is not itself one of `_raw_segments_with_boundaries`'s own
+    boundary tokens) -- and any `_GROUP_CLOSE_KEYWORDS` token found ONLY
+    at position 0 of a raw segment as closing one level. The position-0
+    requirement for BOTH is not an arbitrary restriction: it mirrors what
+    real bash's own grammar already guarantees -- `}`/`done`/`fi` (and
+    an opener that begins a genuine nested group) must always be the
+    first word of the command they start, so a literal, non-syntactic
+    occurrence of one of these words LATER in a segment (e.g. `echo fi`,
+    where `fi` is merely `echo`'s own argument) can never be its real,
+    syntactic use. This matters for SAFETY, not just accuracy: an
+    earlier stack-based design that scanned every token position for a
+    close (not just position 0) was found, during this round's own
+    design review, to desync against exactly this kind of literal
+    argument -- `{ echo fi; VERB=safe; } & wait` would have popped the
+    real group's own stack entry against the SPURIOUS `fi` inside `echo
+    fi`'s own segment, leaving the REAL closing `}` unmatched and
+    `VERB=safe` wrongly left unisolated, reopening the very bypass this
+    function exists to close. Verified live that this classifier's own
+    fixed position-0-only close check does NOT reopen that hole: `TOOL=
+    uv; VERB=harmless; VERB=$(echo install); { echo fi; VERB=safe; } &
+    wait; $TOOL $VERB foo` denies correctly post-fix (real bash: `uv
+    called with: install foo`, matching `classify()`'s own `deny=True`).
+
+    A group is isolated when its own outermost closing raw segment's
+    terminator is `|` or `&` (the group forks because it is itself a
+    non-final-or-final pipe stage, or because it is backgrounded), OR
+    when the raw segment immediately preceding the group's own opening
+    raw segment terminates with `|` (the group is itself the RECEIVING
+    side of a pipe -- case H above).
+
+    ONE further gap found by independent adversarial review (round 36,
+    issue #1375) and independently reproduced live, both via
+    `classify()` and via real bash execution with a stand-in `uv`/`gh`
+    binary on PATH: `case ... esac` is bash's remaining compound-command
+    form -- it forks exactly like `{...}`/`while`/`until`/`for`/
+    `select`/`if` when the ENTIRE statement is piped or backgrounded --
+    but neither `case` nor `esac` were ever added to `_GROUP_OPEN_
+    KEYWORDS`/`_GROUP_CLOSE_KEYWORDS`. `TOOL=uv; VERB=harmless; VERB=
+    $(echo install); case 1 in 1) VERB=safe ;; esac & wait; $TOOL $VERB
+    foo` resolved to `deny=False` even though real bash genuinely runs
+    `uv install foo` (confirmed live via a stand-in `uv` binary on PATH:
+    captured argv `uv called with: install foo`); the piped form (`esac
+    | cat`) and the `_rule_gh_api_write` counterpart both reproduce
+    identically. A bare `case ... esac` with NO trailing `&`/`|`
+    genuinely leaks to the parent in real bash (confirmed live: `uv
+    called with: safe foo`) and stays correctly allowed post-fix, the
+    same negative-control shape already established above for the
+    other five keywords. Closed by adding `case`/`esac` to the two
+    keyword sets -- `case` satisfies the leading-contiguous-open-run
+    detection the same way every other opener does (a `case WORD in`
+    segment's own leading token is always `case`, with the WORD and
+    `in` keyword following in the SAME segment, never opening a nested
+    level of their own), and `esac` satisfies the position-0-of-its-own-
+    segment requirement the same way `}`/`done`/`fi` do (always preceded
+    by a `;`/`;;` boundary in valid bash). A SEPARATE, companion
+    round-36 bug in the `(...)`-subshell depth tracking this function's
+    own `raw` parameter is built from -- a case arm's own pattern-
+    terminating `)` being mistaken for a real subshell close -- is fixed
+    in `_raw_segments_with_boundaries` itself; see that function's own
+    docstring."""
+    stack: list[int] = []
+    isolated: set[int] = set()
+    for i, (seg, _depth, terminator) in enumerate(raw):
+        opens = 0
+        for tok in seg:
+            if tok not in _GROUP_OPEN_KEYWORDS:
+                break
+            opens += 1
+        for _ in range(opens):
+            stack.append(i)
+        if stack and seg and seg[0] in _GROUP_CLOSE_KEYWORDS:
+            start = stack.pop()
+            preceding = raw[i - 1][2] if i > 0 else None
+            preceding_of_open = raw[start - 1][2] if start > 0 else None
+            if terminator in ("|", "&") or preceding == "|" or preceding_of_open == "|":
+                isolated.update(range(start, i + 1))
+    return isolated
+
+
+def _segment_tokens_with_scope_isolation(tokens: list[str]) -> list[tuple[list[str], bool]]:
+    """Like `segment_tokens`, but pairs each returned (non-empty)
+    segment with whether it is ISOLATED from the parent shell's own
+    scope -- unable to affect a reference outside itself, so any plain
+    static assignment inside it must never be trusted to CLEAR an
+    earlier poisoning (though a dynamic/append/array-element/read/
+    printf-v event inside it may still POISON, staying conservative is
+    always the safe direction). A segment is isolated when:
+
+    - its own `(...)`-subshell nesting depth is 1+ (round 31's own
+      mechanism, generalized here rather than replaced);
+    - it is any stage of a `|` pipeline -- bash forks a SEPARATE
+      subshell for EVERY pipeline stage by default, INCLUDING THE LAST
+      ONE, absent `shopt -s lastpipe` (which this classifier has no way
+      to know is set), so a caller must never trust a pipe stage's own
+      assignment regardless of its position in the pipe chain;
+    - it is itself backgrounded via a trailing `&` (the segment BEFORE
+      `&` forks into its own subshell; the segment AFTER `&` runs in the
+      parent shell as normal and is NOT isolated by that `&` alone --
+      only what precedes it is);
+    - it contains the literal `local`, `declare`, `typeset`, or `coproc`
+      keyword as one of its own tokens anywhere, not necessarily first
+      -- a function body's own opening `{` (not itself a `segment_
+      tokens` boundary, so it shares the SAME segment as the statement
+      that follows it, e.g. `["{", "local", "VERB=safe"]` for `f() {
+      local VERB=safe; }`) would otherwise sit at position 0 and hide
+      the keyword from a first-token-only check; a token is also
+      checked with a single leading `$` stripped (see `_SCOPE_
+      LOCALIZING_KEYWORDS`'s own docstring for why -- bash's `$"..."`
+      locale-string syntax fuses onto the dequoted keyword text, e.g.
+      `$"local"` tokenizes as `$local`, never a bare `local`). `local`
+      and `coproc` are ALWAYS isolating in real bash (`local` outside a
+      function is invalid; `coproc`'s own body always runs
+      asynchronously in a forked subshell connected by a pipe, exactly
+      like `cmd &`, with no non-isolating usage at all), so treating
+      either as isolating is never wrong; `declare`/`typeset` are
+      genuinely AMBIGUOUS -- they localize a variable ONLY when used
+      INSIDE a function, and behave as an ordinary, non-isolating global
+      assignment at the top level of a script, a distinction this
+      function does not attempt to track (doing so would require
+      knowing whether the CURRENT segment sits inside a function body's
+      own `{...}`/`NAME() ...` definition, a form of tracking this file
+      does not otherwise perform) -- so both are conservatively treated
+      as ALWAYS isolating, matching this file's own established
+      deny-on-uncertainty posture; the accepted cost is a narrow false-
+      positive class (an ordinary, harmless top-level `declare NAME=
+      value`/`typeset NAME=value` clearing assignment stays
+      conservatively un-cleared), never a bypass.
+
+    CRITICAL bypasses found by independent adversarial review (round
+    32, issue #1375) and independently reproduced live, both via
+    `classify()` and via real bash execution with a stand-in `uv`/`gh`
+    binary on PATH: round 31's own `_paren_depths`/`_segment_tokens_
+    with_subshell_depth` covered ONLY `(...)` subshell grouping, leaving
+    three SIBLING scope-isolating constructs equally exploitable via the
+    identical trick -- wrap a fake "the value is safe now" reassignment
+    in one of them to escape a genuine poisoning a prior append/read/
+    array-element/dynamic reassignment already established.
+    `TOOL=uv; VERB=harmless; VERB=$(echo install); true | VERB=safe;
+    $TOOL $VERB foo` resolved to `deny=False` even though real bash
+    genuinely runs `uv install foo`, NOT `safe foo` (confirmed live via
+    a stand-in `uv` binary on PATH: captured argv `uv called with:
+    install foo`) -- the pipe stage's own `VERB=safe` never reaches the
+    parent shell. `TOOL=uv; VERB=harmless; VERB=$(echo install);
+    VERB=safe & wait; $TOOL $VERB foo` reproduces identically for a
+    backgrounded job (captured argv: `uv called with: install foo`,
+    NOT `safe foo`). `TOOL=uv; VERB=harmless; VERB=$(echo install); f()
+    { local VERB=safe; }; f; $TOOL $VERB foo` reproduces identically for
+    a function-local reassignment (captured argv: `uv called with:
+    install foo`) -- bash functions do NOT get their own variable scope
+    by default (a plain `VERB=safe` inside a function body genuinely
+    WOULD leak to the caller), but `local` explicitly opts a single
+    assignment out of that leak, and the pre-round-32 code had no
+    concept of `local` at all, so it trusted the assignment exactly like
+    an ordinary top-level one. All three reproduce identically for
+    `_rule_gh_api_write` too (e.g. `M=safe; M=$(echo POST); true | M=GET;
+    gh api repos/o/r/pulls/1/merge -X $M` -- real bash genuinely runs
+    `-X POST`, a genuine unreviewed write). Confirmed through the real
+    wrapper: all six (three constructs x two consumers) now deny with
+    exit 2 where they previously allowed with exit 0.
+
+    A FOURTH candidate was investigated and deliberately NOT folded into
+    this isolation model: bash's `((EXPR))` arithmetic-command syntax
+    also uses two characters that individually tokenize as bare `(`/`)`
+    in this file's own tokenizer (confirmed directly: `tokenize()`
+    produces the IDENTICAL token sequence `['(', '(', 'VERB=1', ')',
+    ')']` for BOTH `((VERB=1))` and the deliberately-spaced `( (VERB=1)
+    )` -- real bash's own lexer distinguishes the two by the ABSENCE or
+    PRESENCE of a space between the parens, a distinction this
+    classifier's tokenizer already discards before this function ever
+    runs), so `((VERB=1))` is currently treated as TWO nested subshells
+    (depth 2), denying a harmless, genuinely-numeric arithmetic
+    assignment (`TOOL=uv; VERB=harmless; VERB=$(echo install);
+    ((VERB=1)); $TOOL $VERB foo` -- real bash genuinely sets `$VERB` to
+    the number `1`, never a watched verb) -- but the naive fix (treating
+    adjacent `((`/`))` as depth-neutral, since REAL arithmetic never
+    leaks a non-numeric value to the parent) was independently tried and
+    REJECTED after live verification proved it unsafe: `((VERB=safe))`
+    (a non-numeric RHS) does NOT set `$VERB` to
+    the string "safe" in real bash at all -- arithmetic context
+    evaluates the bare word "safe" as an (unset) variable reference,
+    defaulting to `0`, so `$VERB` becomes `"0"`, never a watched-verb-
+    matching string -- but the deliberately-spaced double-subshell
+    `( (VERB=totallysafe) )`, which this tokenizer cannot distinguish
+    from `((VERB=totallysafe))` at all, genuinely assigns the STRING
+    "totallysafe" INSIDE the isolated inner subshell while leaving the
+    parent's own `$VERB` completely untouched (confirmed live: `TOOL=uv;
+    VERB=harmless; VERB=$(echo install); ( (VERB=totallysafe) );
+    echo "VERB is now: $VERB"` prints `VERB is now: install` -- the
+    parent's own poisoned value survives unchanged). Treating the
+    ambiguous adjacent-paren pair as depth-neutral would have let THIS
+    classifier's own literal-text extraction read "totallysafe" as
+    VERB's new, trusted value and clear the poisoning -- a NEW security
+    bypass, reopening exactly the class of defect this whole function
+    exists to close, in exchange for fixing an over-denial. The
+    over-denial on genuine `((...))` arithmetic usage is therefore kept,
+    deliberately NOT fixed -- the same deny-on-genuine-ambiguity posture
+    this file has followed in every prior round; closing it soundly
+    would require the upstream tokenizer to preserve the presence/
+    absence of a space between adjacent parens, which is out of this
+    round's scope.
+
+    TWO further gaps found by independent adversarial review (round 33,
+    issue #1375) and independently reproduced live, both via
+    `classify()` and via real bash execution with a stand-in `uv`/`gh`
+    binary on PATH:
+
+    Process substitution (`<(cmd)`/`>(cmd)`) also runs its own content
+    in a separate, isolated subshell, exactly like `$(...)` command
+    substitution -- but this file's own tokenizer fuses `<(`/`>(` into
+    their OWN distinct tokens, never a bare `(`, so the pre-round-33
+    `_raw_segments_with_boundaries` (which only recognized a bare `(`)
+    neither isolated a process substitution's own content NOR correctly
+    paired its matching, bare `)` close, which prematurely decremented
+    the tracked depth and corrupted isolation tracking for a genuinely
+    enclosing REAL subshell around it. `TOOL=uv; VERB=harmless;
+    VERB=$(echo install); cat <(VERB=safe) >/dev/null; $TOOL $VERB foo`
+    resolved to `deny=False` even though real bash genuinely runs `uv
+    install foo` (confirmed live via a stand-in `uv` binary on PATH:
+    captured argv `uv called with: install foo`). Closed by
+    `_raw_segments_with_boundaries`'s own `_SUBSHELL_OPEN_TOKENS` fix --
+    see that function's own docstring for the full live-verified
+    bypass, including the depth-corruption variant.
+
+    `declare`/`typeset` used INSIDE a function body implicitly localize
+    a variable exactly like `local` does (confirmed live: `VERB=
+    harmless; f() { declare VERB=safe; }; f; echo "VERB=$VERB"` prints
+    `VERB=harmless`, unchanged) -- but the pre-round-33 isolation check
+    recognized only the literal `local` keyword. `TOOL=uv; VERB=
+    harmless; VERB=$(echo install); f() { declare VERB=safe; }; f;
+    $TOOL $VERB foo` resolved to `deny=False` even though real bash
+    genuinely runs `uv install foo`, NOT `safe foo` (confirmed live via
+    a stand-in `uv` binary on PATH: captured argv `uv called with:
+    install foo`); the `typeset` form reproduces identically. Both
+    reproduce identically for `_rule_gh_api_write` too. Closed by also
+    checking for `declare`/`typeset` anywhere in the segment, treated
+    identically to `local` -- see this function's own docstring bullet
+    above for why both are conservatively treated as ALWAYS isolating
+    even though real bash only localizes them inside a function body.
+
+    TWO further gaps found by independent adversarial review (round 34,
+    issue #1375) and independently reproduced live, both via
+    `classify()` and via real bash execution with a stand-in `uv`/`gh`
+    binary on PATH:
+
+    `coproc { ... }` (bash's own coprocess syntax) forks its body to run
+    asynchronously in a subshell connected by a pipe, exactly like
+    `cmd &`, with no non-isolating usage at all -- but the pre-round-34
+    isolation check had no concept of `coproc` whatsoever. `TOOL=uv;
+    VERB=harmless; VERB=$(echo install); coproc { VERB=safe; }; wait;
+    $TOOL $VERB foo` resolved to `deny=False` even though real bash
+    genuinely runs `uv install foo` (confirmed live via a stand-in `uv`
+    binary on PATH: captured argv `uv called with: install foo`).
+    Closed by also checking for `coproc` anywhere in the segment,
+    treated the same as `local` (always isolating, no ambiguous usage).
+
+    Bash's `$"..."` locale-translated-string syntax fuses the `$` prefix
+    onto the dequoted string content -- `$"local"` tokenizes as a SINGLE
+    token `$local`, never a bare `local`, so the exact-membership check
+    above (`"local" in seg`) never matched it, even though `$"local"`
+    genuinely invokes the `local` builtin in real bash when used in
+    command-starting position (confirmed live: `f() { $"local" VERB=
+    safe; }; f` leaves the caller's own `$VERB` untouched, exactly like
+    a bare `local VERB=safe` would). `TOOL=uv; VERB=harmless; VERB=
+    $(echo install); f() { $"local" VERB=safe; }; f; $TOOL $VERB foo`
+    resolved to `deny=False` even though real bash genuinely runs `uv
+    install foo` (confirmed live via a stand-in `uv` binary on PATH:
+    captured argv `uv called with: install foo`). Closed by checking
+    each token with a single leading `$` stripped too (via
+    `_SCOPE_LOCALIZING_KEYWORDS`/`_seg_has_a_scope_localizing_keyword`),
+    catching the fused `$"..."` form for all four keywords uniformly.
+
+    ONE further gap found by independent adversarial review (round 35,
+    issue #1375): none of `{`, `}`, `while`, `until`, `for`, `select`,
+    `if`, `do`, `then`, `done`, `fi` were recognized at all -- a `{...}`
+    brace group or a `while`/`until`/`for`/`select`/`if` compound command
+    forks exactly like a subshell when the group AS A WHOLE is piped or
+    backgrounded, but isolation is conditional on that outer boundary,
+    never automatic the way a bare `(...)` subshell is -- see
+    `_segment_indices_isolated_by_a_piped_or_backgrounded_compound_
+    group`'s own docstring for the full live-verified bypass, its
+    negative controls, and the position-0-only close-matching design
+    that keeps a literal argument like `echo fi` from desyncing
+    detection of a real, later group."""
+    raw = _raw_segments_with_boundaries(tokens)
+    group_isolated = _segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(raw)
+    result: list[tuple[list[str], bool]] = []
+    for i, (seg, depth, terminator) in enumerate(raw):
+        if not seg:
+            continue
+        preceding = raw[i - 1][2] if i > 0 else None
+        isolated = (
+            depth > 0
+            or terminator in ("|", "&")
+            or preceding == "|"
+            or _seg_has_a_scope_localizing_keyword(seg)
+            or i in group_isolated
+        )
+        result.append((seg, isolated))
+    return result
+
+
+def _names_reassigned_from_a_static_value(tokens: list[str]) -> set[str]:
+    """Every NAME that carried a trustworthy STATIC value at some point
+    in TOKENS and was LATER reassigned a DYNAMIC (`$`/backtick-
+    containing) value via a plain `NAME=value` assignment -- a genuine
+    reassignment that leaves the name's earlier static value stale and
+    CONFIDENTLY WRONG, not merely unknown.
+
+    CRITICAL bug found by independent adversarial review (round 27,
+    issue #1375) and independently reproduced live, both via
+    `classify()` and via real bash execution with a stand-in `uv`/`gh`
+    binary on PATH: round 26's own `_names_reassigned_by_untracked_
+    construct` deliberately excludes the round-24 dynamic-RHS-
+    reassignment class ENTIRELY from `_rule_gh_api_write`/`_segment_
+    loop_hit` (B1a/B1b) -- correctly avoiding a regression of the
+    `graphql-mutation-keyword-variable-concatenation` known bypass
+    (`Q="${A}${B} { x }"`, where Q never has an earlier static value at
+    all) -- but that exclusion was coarser than it needed to be, and
+    also silently dropped protection for the genuinely dangerous case
+    where a name DOES carry an earlier static value that a later
+    dynamic reassignment makes stale. `TOOL=uv; VERB=harmless;
+    VERB=$(echo install); $TOOL $VERB foo` resolved to `deny=False,
+    reason='no denied pattern matched'` even though real bash genuinely
+    runs `uv install foo` (confirmed live via a stand-in `uv` binary on
+    PATH: captured argv `uv called with: install foo`) -- VERB's own
+    STALE static value (`harmless`) stayed trusted in `_assigned_raw_
+    values` (which silently skips a dynamic-RHS token, per that
+    function's own docstring) instead of VERB losing all confidence the
+    way checkout/restore's own `_names_with_dynamic_assignment` already
+    treats it. A static append variant (`VERB=inst; VERB+=all`)
+    reproduces identically (captured argv: `uv called with: install
+    foo`) -- already covered by `_names_appended_to`, not this
+    function, cited here only as confirmation the two gaps compound.
+    Reproduced identically for `_rule_gh_api_write`: `M=safe;
+    M=$(echo POST); gh api repos/o/r/pulls/1/merge -X $M` also resolved
+    to `deny=False` -- real bash genuinely runs `gh api
+    repos/o/r/pulls/1/merge -X POST` (captured argv confirms it), a
+    genuine unreviewed write (e.g. merging a pull request).
+
+    The distinguishing test that safely separates this case from the
+    graphql-mutation one, so this function can close the gap above
+    without reopening that regression: a name with NO earlier static
+    assignment was never trustworthy to begin with (unresolvable, so
+    gh-api-write's own existing `_substitute_var_refs_candidates`-based
+    resolution already reads it as "no evidence of a write" -- the
+    deliberately-accepted posture for that specific, disclosed gap); a
+    name WITH an earlier static assignment that is later dynamically
+    reassigned goes from trustworthy to stale, which is exactly the
+    order-blind-collapse defect class every other round in this file's
+    own history (19-26) already closes for its own specific consumer --
+    this function closes it here too, without reopening the graphql-
+    mutation regression, because it only fires when EVER_STATIC already
+    recorded a real prior static assignment for that exact name.
+
+    CRITICAL bug found by independent adversarial review (round 28,
+    issue #1375) and independently reproduced live, both via
+    `classify()` and via real bash execution with a stand-in `uv`/`gh`
+    binary on PATH: this function's own round-27 form only ever ADDED to
+    POISONED, never removed from it -- so a name reassigned static ->
+    dynamic -> static again (a THIRD assignment that fully restores a
+    trustworthy, resolvable value, the genuine value real bash uses at
+    the point of use) stayed poisoned forever, a FALSE-POSITIVE over-
+    denial of an actually-safe command, contradicting this function's
+    own docstring above (which already claimed to test "is the name's
+    LATEST assignment dynamic" but actually implemented "was the name
+    EVER dynamically reassigned anywhere"). `TOOL=uv; VERB=harmless;
+    VERB=$(echo x); VERB=status; $TOOL $VERB foo` -- real bash's final
+    value of `$VERB` is `status`, not a watched verb at all (confirmed
+    live via a stand-in `uv` binary on PATH: captured argv `uv called
+    with: status foo`) -- was wrongly denied by B1a/B1b before this fix.
+    `M=GET; M=$(echo x); M=HEAD; gh api repos/o/r/issues -X $M`
+    reproduces the identical shape for `_rule_gh_api_write` (both GET
+    and HEAD are read methods, confirmed live via a stand-in `gh` binary
+    on PATH: captured argv `gh called with: api repos/o/r/issues -X
+    HEAD`) -- also wrongly denied before this fix. (A superficially
+    similar case, `M=POST; M=$(echo x); M=GET; ...`, is NOT a
+    counter-example to test against: `_assigned_raw_values_biased_
+    toward`'s own independent, deliberate "once a name is assigned a
+    watched-write-method value at ANY point, it stays biased toward that
+    value" posture -- round 22's own established, documented design,
+    see that function's own docstring -- correctly keeps denying that
+    specific case regardless of this fix, since `POST` genuinely was
+    assigned at some point and this module's own established posture
+    treats that as reason enough for extra scrutiny; this function's own
+    fix only concerns names that never carried a watched-write-biased
+    value at all, like `status`/`HEAD` above.) Closed by having a LATER
+    static reassignment clear the name from POISONED (`poisoned.
+    discard(name)`, not just skip adding to it): EVER_STATIC still
+    records that a static value was seen at all (so a FURTHER dynamic
+    reassignment after this one still correctly re-poisons the name --
+    verified live: `M=GET; M=$(echo x); M=HEAD; M=$(echo other)` leaves
+    `M` poisoned again, matching real bash's own final, genuinely-
+    dynamic value).
+
+    CRITICAL bypass found by independent adversarial review (round 31,
+    issue #1375) and independently reproduced live, both via
+    `classify()` and via real bash execution with a stand-in `uv`/`gh`
+    binary on PATH: round 28's own "clear on later static reassignment"
+    fix above did not account for bash's own subshell scoping at all --
+    a `(...)` grouping runs in a forked, isolated shell whose own
+    assignments never propagate back to the parent, but this function's
+    own flat, depth-blind scan over TOKENS treated a static assignment
+    written INSIDE `(...)` exactly like an ordinary top-level one,
+    letting it wrongly clear a genuinely poisoned name. `TOOL=uv;
+    VERB=harmless; VERB=$(echo install); (VERB=safe); $TOOL $VERB foo`
+    resolved to `deny=False, reason='no denied pattern matched'` even
+    though real bash genuinely runs `uv install foo` -- the parenthesized
+    `VERB=safe` never actually reaches the parent shell's own `$VERB` at
+    all (confirmed live via a stand-in `uv` binary on PATH: captured
+    argv `uv called with: install foo`, NOT `safe foo`). Reproduced
+    identically for `_rule_gh_api_write`: `M=safe; M=$(echo POST);
+    (M=GET); gh api repos/o/r/pulls/1/merge -X $M` also resolved to
+    `deny=False` -- real bash genuinely runs `-X POST` (captured argv
+    confirms it), a genuine unreviewed write. Closed by tracking each
+    assignment token's own scope isolation (originally just `(...)`-
+    nesting depth via `_paren_depths`, GENERALIZED by round 32 -- see
+    `_segment_tokens_with_scope_isolation`'s own docstring -- to also
+    cover pipe stages, backgrounded jobs, and `local` scoping) and only
+    letting a static reassignment clear POISONED when it occurs in a
+    non-isolated (true top-level) segment; an isolated one is treated as
+    invisible to the parent scope -- neither clearing nor registering
+    EVER_STATIC -- while a DYNAMIC reassignment in ANY segment still
+    poisons unconditionally, since staying conservative about what an
+    isolated context might have done is always the safe direction, never
+    the dangerous one. Checkout/restore's own `_names_with_dynamic_
+    assignment` was independently confirmed unaffected by this exact
+    bypass shape (it never clears at all, regardless of scope, so it
+    already denied this shape correctly)."""
+    ever_static: set[str] = set()
+    poisoned: set[str] = set()
+    for seg, isolated in _segment_tokens_with_scope_isolation(tokens):
+        for tok in seg:
+            match = _ASSIGN_RE.match(tok)
+            if not match:
+                continue
+            name = match.group(1)
+            if _is_dynamic(tok):
+                if name in ever_static:
+                    poisoned.add(name)
+            elif not isolated:
+                ever_static.add(name)
+                poisoned.discard(name)
+    return poisoned
+
+
+def _names_cleared_by_a_later_static_reassignment(tokens: list[str], candidates: set[str]) -> set[str]:
+    """Every NAME in CANDIDATES whose LAST reassignment-class event
+    anywhere in TOKENS -- a compound `+=` append, an array-element
+    assignment, a `read`/`readarray`/`mapfile`/`printf -v` reassignment,
+    or a plain `NAME=value` assignment (static or dynamic) -- is a
+    plain, non-dynamic assignment, strictly after every other kind of
+    event for that name. A later static assignment fully overwrites and
+    restores a known, trustworthy value -- the genuine value real bash
+    uses at the point of use -- regardless of what unresolvable state
+    came before it: the same "trust only the name's LATEST assignment"
+    principle round 28 already established for `_names_reassigned_
+    from_a_static_value`'s own narrower static-then-dynamic class,
+    generalized here across ALL of `_names_poisoned_for_gh_api_and_b1`'s
+    own component classes.
+
+    CRITICAL bug found by independent adversarial review (round 30,
+    issue #1375) and independently reproduced live, both via
+    `classify()` and via real bash execution with a stand-in `uv`/`gh`
+    binary on PATH: round 28's own "clear on later static reassignment"
+    fix was applied ONLY inside `_names_reassigned_from_a_static_value`
+    -- `_names_appended_to` and `_names_reassigned_by_untracked_
+    construct` (the OTHER two components of `_names_poisoned_for_gh_
+    api_and_b1`'s own union) still only ever ADD to their own result,
+    never clear it, so a name reassigned via append/`read`/an array-
+    element assignment and THEN later given an ordinary, fully-
+    trustworthy static value stayed poisoned forever -- the identical
+    false-positive over-denial shape round 28 already fixed, just left
+    open for these two other classes. `TOOL=uv; VERB=inst; VERB+=all;
+    VERB=safe; $TOOL $VERB foo` -- real bash's final value of `$VERB` is
+    `safe`, not a watched verb at all (confirmed live via a stand-in
+    `uv` binary on PATH: captured argv `uv called with: safe foo`) --
+    was wrongly denied by B1a/B1b before this fix. `M=P; M+=OST; M=GET;
+    gh api repos/o/r/issues -X $M` reproduces the identical shape for
+    `_rule_gh_api_write` (GET is a read method, confirmed live via a
+    stand-in `gh` binary on PATH: captured argv `gh called with: api
+    repos/o/r/issues -X GET`). The `read`- and array-element-reassigned
+    counterparts (`TOOL=uv; read VERB <<< status; VERB=safe; $TOOL
+    $VERB foo` and `TOOL=uv; VERB[0]=install; VERB=safe; $TOOL $VERB
+    foo`) reproduce identically (captured argv: `uv called with: safe
+    foo` for both).
+
+    Deliberately NOT applied to `_names_appended_to`/`_names_
+    reassigned_by_untracked_construct` themselves -- those two functions
+    are also shared by `_names_with_dynamic_assignment` (checkout/
+    restore's own full union), whose own "poison outright, never clear"
+    posture for these classes was independently confirmed correct and
+    deliberate during round 27's own review (see that function's own
+    docstring); this function instead post-processes only the poisoned
+    set `_names_poisoned_for_gh_api_and_b1` itself returns, leaving
+    those two shared functions -- and checkout/restore's own
+    consumption of them -- completely unchanged.
+
+    CRITICAL bypass found by independent adversarial review (round 31,
+    issue #1375) and independently reproduced live, both via
+    `classify()` and via real bash execution with a stand-in `uv`/`gh`
+    binary on PATH: this function's own original form was, like
+    `_names_reassigned_from_a_static_value`'s own pre-round-31 form,
+    completely blind to bash's own subshell scoping -- a static
+    assignment written INSIDE a `(...)` grouping never actually reaches
+    the parent shell's own copy of the name, but the original per-
+    segment scan treated it exactly like an ordinary top-level clearing
+    assignment. `TOOL=uv; VERB=inst; VERB+=all; (VERB=safe); $TOOL
+    $VERB foo` resolved to `deny=False` even though real bash genuinely
+    runs `uv install foo`, NOT `safe foo` (confirmed live via a stand-in
+    `uv` binary on PATH: captured argv `uv called with: install foo`);
+    the `read`- and array-element-reassigned counterparts reproduce
+    identically. Closed the same way as `_names_reassigned_from_a_
+    static_value`'s own round-31 fix: each segment's own scope isolation
+    (originally just `(...)`-nesting depth via `_segment_tokens_with_
+    subshell_depth`, GENERALIZED by round 32 -- see `_segment_tokens_
+    with_scope_isolation`'s own docstring -- to also cover pipe stages,
+    backgrounded jobs, and `local` scoping) gates whether a plain static
+    assignment in that segment may set a candidate's own LAST-event
+    state to "cleared" -- only a non-isolated (true top-level) static
+    assignment may do so; an isolated one is treated as invisible to the
+    parent scope, leaving whatever state a prior event already recorded
+    untouched. Every OTHER event class (append, array-element, read/
+    printf-v, and a dynamic plain assignment) still marks the candidate
+    "not cleared" regardless of scope, since staying conservative about
+    what an isolated context might have done is always the safe
+    direction, never the dangerous one."""
+    if not candidates:
+        return set()
+    last_is_static: dict[str, bool] = {}
+    for seg, isolated in _segment_tokens_with_scope_isolation(tokens):
+        if seg and not _is_dynamic(seg[0]):
+            head = seg[0].lower()
+            if head in _READ_COMMAND_WORDS:
+                for tok in seg[1:]:
+                    if not _is_dynamic(tok) and tok in candidates and _BARE_IDENTIFIER_RE.match(tok):
+                        last_is_static[tok] = False
+            elif head == "printf":
+                for i, tok in enumerate(seg):
+                    if tok == "-v" and i + 1 < len(seg):
+                        target = seg[i + 1]
+                        if not _is_dynamic(target) and target in candidates and _BARE_IDENTIFIER_RE.match(target):
+                            last_is_static[target] = False
+        for token in seg:
+            array_match = _ARRAY_ELEMENT_ASSIGN_RE.match(token)
+            if array_match:
+                name = array_match.group(1)
+                if name in candidates:
+                    last_is_static[name] = False
+                continue
+            append_match = _APPEND_ASSIGN_RE.match(token)
+            if append_match:
+                name = append_match.group(1)
+                if name in candidates:
+                    last_is_static[name] = False
+                continue
+            match = _ASSIGN_RE.match(token)
+            if match:
+                name = match.group(1)
+                if name not in candidates:
+                    continue
+                if _is_dynamic(token):
+                    last_is_static[name] = False
+                elif not isolated:
+                    last_is_static[name] = True
+                # isolated and static: a scope-isolated reassignment
+                # (subshell/pipe-stage/background job/`local`) never
+                # reaches the parent scope -- leave any existing state
+                # untouched (round 31/32).
+    return {name for name, is_static in last_is_static.items() if is_static}
+
+
+def _names_poisoned_for_gh_api_and_b1(tokens: list[str]) -> set[str]:
+    """The full poisoned-names set `_rule_gh_api_write` and `_segment_
+    loop_hit` (B1a/B1b) actually consume -- the union of every class of
+    reassignment that makes a name's own recorded value stale or
+    unrecoverable for those two consumers specifically:
+
+    - `_names_appended_to`: any `NAME+=value` compound-assignment
+      (round 25), poisoned unconditionally regardless of whether the
+      appended text is static or dynamic.
+    - `_names_reassigned_from_a_static_value`: a name reassigned a
+      dynamic value AFTER an earlier static one (round 27's own
+      narrowing of the round-24 class -- see that function's own
+      docstring for the live bypass this restores and why it does not
+      reopen the graphql-mutation regression).
+    - `_names_reassigned_by_untracked_construct`: array-element
+      assignment and `read`/`readarray`/`mapfile`/`printf -v`
+      reassignment (round 26), constructs `_ASSIGN_RE`/`_APPEND_
+      ASSIGN_RE` never recognize at all.
+
+    Deliberately EXCLUDES a name that is assigned ONLY dynamically, with
+    no earlier static value anywhere in TOKENS -- that case is the
+    `graphql-mutation-keyword-variable-concatenation` known bypass's own
+    shape, already handled soundly by these two consumers' own existing
+    `_substitute_var_refs_candidates`-based resolution (an unresolvable
+    candidate list reads as "no evidence of a write," the deliberately-
+    accepted posture for that specific, disclosed gap) -- poisoning it
+    here would regress that case into a false-positive deny, exactly
+    what round 26's own (too-broad) exclusion was trying to prevent.
+
+    Round 30 (issue #1375): the raw union above still only ever ADDS a
+    name -- `_names_reassigned_from_a_static_value`'s own internal
+    clearing only covers ITS OWN static-then-dynamic class, not the
+    append/untracked-construct classes. `_names_cleared_by_a_later_
+    static_reassignment` (see that function's own docstring for the
+    live bypass this restores) is applied as a final subtraction so the
+    combined result genuinely tracks each name's LATEST assignment-class
+    event, whichever of the three classes it came from."""
+    poisoned = (
+        _names_appended_to(tokens)
+        | _names_reassigned_from_a_static_value(tokens)
+        | _names_reassigned_by_untracked_construct(tokens)
+    )
+    return poisoned - _names_cleared_by_a_later_static_reassignment(tokens, poisoned)
+
+
+def _names_reassigned_by_read_or_printf(tokens: list[str]) -> set[str]:
+    """Every NAME that `read`/`readarray`/`mapfile` (any bare-identifier-
+    shaped operand following the command word, skipping option flags,
+    which never match `_BARE_IDENTIFIER_RE` since they start with `-`) or
+    `printf -v NAME` (the separate-token `-v` form only -- the fused
+    `-vNAME` form is a known, disclosed residual, not attempted here) can
+    reassign somewhere in TOKENS. Segment-aware (via `segment_tokens`) so
+    a `read`/`printf` command word is only recognized as one when it
+    genuinely starts its own simple command, not merely because the
+    literal word appears as an ordinary argument elsewhere.
+
+    Deliberately coarse and over-inclusive rather than modeling each
+    command's own exact flag grammar (e.g. `read -d END VAR` also treats
+    "END" as a candidate name, since this function does not know `-d`
+    takes its own value argument): see `_names_with_dynamic_assignment`'s
+    own docstring for why a name added here only ever makes this
+    classifier MORE conservative wherever it is later referenced, never
+    less -- over-including a flag's own literal argument costs nothing
+    but a redundant, harmless entry."""
+    names: set[str] = set()
+    for seg in segment_tokens(tokens):
+        if not seg or _is_dynamic(seg[0]):
+            continue
+        head = seg[0].lower()
+        if head in _READ_COMMAND_WORDS:
+            for tok in seg[1:]:
+                if not _is_dynamic(tok) and _BARE_IDENTIFIER_RE.match(tok):
+                    names.add(tok)
+        elif head == "printf":
+            for i, tok in enumerate(seg):
+                if tok == "-v" and i + 1 < len(seg):
+                    target = seg[i + 1]
+                    if not _is_dynamic(target) and _BARE_IDENTIFIER_RE.match(target):
+                        names.add(target)
+    return names
+
+
+def _bounded_history_combinations(
+    names: set[str], name_to_raw_value_history: dict[str, tuple[str, ...]]
+) -> list[dict[str, str]] | None:
+    """Every combination of one historical value per NAME in NAMES, as a
+    NAME -> value override dict ready to merge over an existing
+    NAME_TO_RAW_VALUE for one `_substitute_var_refs_candidates` call per
+    combination -- the cartesian product across each name's own history
+    tuple. Returns `None` (too many combinations to enumerate soundly) if
+    the product would exceed `_MAX_SUBSTITUTION_CANDIDATES`, the same
+    bound and the same fail-closed convention `_substitute_var_refs_
+    candidates`'s own quote-boundary expansion already uses -- an empty
+    NAMES returns `[{}]` (exactly one, no-op combination), never `None`,
+    so a caller with nothing to widen still gets a single pass through."""
+    ordered = sorted(names)
+    histories = [name_to_raw_value_history[name] for name in ordered]
+    total = 1
+    for history in histories:
+        total *= len(history)
+        if total > _MAX_SUBSTITUTION_CANDIDATES:
+            return None
+    return [dict(zip(ordered, combo, strict=True)) for combo in itertools.product(*histories)]
+
+
+def _resolve_path_tokens(
+    tokens: list[str],
+    name_to_raw_value: dict[str, str],
+    name_to_raw_value_history: dict[str, tuple[str, ...]],
+    names_with_dynamic_assignment: set[str],
+) -> tuple[str | None, tuple[str, ...]]:
+    """Resolve every token in TOKENS to one or more literal path
+    candidates for a `git checkout`/`git restore` invocation. A literal
+    token is used as-is. A dynamic token is resolved via this module's
+    existing `_substitute_var_refs_candidates`, called with the
+    CASE-PRESERVING NAME_TO_RAW_VALUE as both its value map and its
+    raw-value map -- unlike every other caller of that function in this
+    module (which resolves against the lowercased `name_to_value`, since
+    they only ever compare a resolved value case-insensitively against a
+    known tool/verb/flag literal), a filesystem path is case-sensitive, so
+    lowercasing it here would resolve to the wrong path. An unresolvable
+    token (empty candidate list), a too-large candidate set (`None`, the
+    same fail-closed convention `_substitute_var_refs_candidates`'s own
+    callers already use), or a candidate that ITSELF still contains `$`/
+    backtick after substitution all deny outright here rather than being
+    passed to the live wrapper check empty-handed -- see this section's
+    own module-level comment for why that would be fail-open.
+
+    The still-dynamic-candidate check closes a real gap found while
+    building this function: `_substitute_var_refs_candidates`'s own
+    `_VAR_REF_FULL_RE` does not match bash array-subscript syntax
+    (`${paths[@]}`, `${paths[0]}`) at all (issue #1375's own Fact 5 cites
+    this exact limitation, and it is the same gap this module's own
+    `array-literal-assignment-indirection` `KNOWN_BYPASS_COMMANDS` entry
+    documents for verb reconstruction) -- with no `$NAME`-shaped match
+    found inside the token, the function harmlessly returns the token's
+    own text UNCHANGED as if it were already a resolved literal, so
+    `paths=(a.py b.py); git checkout -- "${paths[@]}"` would otherwise
+    silently pass the literal string `${paths[@]}` through as a
+    "resolved" candidate instead of being recognized as still-unresolved.
+    Confirmed live during this function's own development (before this
+    check was added).
+
+    NAME_TO_RAW_VALUE_HISTORY (round 21, issue #1375) widens a dynamic
+    token to every DISTINCT value ever assigned to each name it
+    references, not just the single, possibly-stale one NAME_TO_RAW_
+    VALUE's own order-blind collapse gives -- see `_assigned_raw_value_
+    history`'s own docstring for the live bypass this originally closed.
+
+    CRITICAL bug found by independent adversarial review (round 23, issue
+    #1375) and independently reproduced live: round 21's own widening was
+    scoped to a token that is EXACTLY one bare/braced whole-token
+    reference (`_BARE_OR_BRACED_VAR_REF_RE`) -- a token that fuses a
+    reference with other text (the ordinary `"$DIR/$FILE"` path-join
+    idiom, or `"${F}.bak"`) fell through to the ordinary, un-widened,
+    order-blind resolution below, unchanged. `DIR=sub; FILE=dirty.py; git
+    checkout -- "$DIR/$FILE"; DIR=other` resolved to `checkout_restore_
+    paths=('other/dirty.py',)` -- a CONFIDENT, WRONG claim, not merely a
+    missed one: `$DIR` genuinely was `sub` at its actual point of use one
+    statement earlier. Confirmed live via a real bash proxy (stand-in
+    `git` binary on PATH, capturing its own argv) that real bash resolves
+    this to `checkout -- sub/dirty.py`, and end-to-end through the real
+    wrapper against a scratch repo with `sub/dirty.py` genuinely dirty:
+    the control command (no trailing reassignment) correctly denies
+    citing `sub/dirty.py`; the same command with the trailing `DIR=other`
+    wrongly ALLOWED (the live `git diff --quiet` check ran against the
+    wrong, nonexistent `other/dirty.py` and found it "clean"), while the
+    real, dirty file was never checked at all -- worse than the
+    already-accepted single-positional-ref Non-goal elsewhere in this
+    module, which at least makes NO claim rather than a wrong one (see
+    `_git_checkout_paths`'s own fourth-round paragraph for that same
+    "confident-wrong beats honest-silent" severity distinction).
+
+    Closed by widening EVERY name referenced anywhere in a dynamic token
+    (not only a whole-token reference) that has more than one historical
+    value: `_multi_valued_names_referenced` finds those names,
+    `_bounded_history_combinations` builds the cartesian product of one
+    historical value per name (bounded by `_MAX_SUBSTITUTION_CANDIDATES`,
+    the same bound `_substitute_var_refs_candidates`'s own quote-boundary
+    expansion already uses), and `_substitute_var_refs_candidates` itself
+    -- unchanged, still the sole authority on quote/fusion-aware
+    resolution -- is called once per combination, with every combination's
+    own candidates unioned together. A name with only one historical
+    value (or none) contributes no combinations of its own, so a token
+    referencing no multiply-assigned name resolves in exactly one pass,
+    identical to before this fix.
+
+    NAMES_WITH_DYNAMIC_ASSIGNMENT (round 24, issue #1375) closes a
+    DIFFERENT bug in the same family, found live independently of the
+    fused-reference fix above: `_assigned_raw_values`/`_assigned_raw_
+    value_history` both build NAME_TO_RAW_VALUE/NAME_TO_RAW_VALUE_HISTORY
+    by skipping a dynamic-RHS assignment token entirely, so a name's
+    EARLIER, static assignment stays on file completely untouched by a
+    LATER, dynamic reassignment of the SAME name -- silently trusted as
+    still current, even though the real value at the point of use is now
+    genuinely unknown. See `_names_with_dynamic_assignment`'s own
+    docstring for the live reproduction. Every name a dynamic token
+    references (via `_referenced_names`, the same two-level-indirect-
+    aware extraction `_multi_valued_names_referenced` itself now uses) is
+    checked against this set BEFORE any resolution is attempted; a match
+    denies outright, the same posture this function already takes for a
+    name with no recorded value at all -- a dynamic reassignment does not
+    get to silently fall back to a stale earlier reading."""
+    paths: list[str] = []
+    for tok in tokens:
+        if not _is_dynamic(tok):
+            paths.append(tok)
+            continue
+        referenced = _referenced_names(tok, name_to_raw_value, name_to_raw_value_history)
+        if referenced & names_with_dynamic_assignment:
+            return (
+                f"a git checkout/restore command has a dynamic path argument ({tok!r}) that references a name "
+                "also assigned a dynamically-constructed value elsewhere in the command -- that name's actual "
+                "value at the point of use cannot be soundly trusted, so this is denied outright",
+                (),
+            )
+        multi_valued = _multi_valued_names_referenced(tok, name_to_raw_value, name_to_raw_value_history)
+        combinations = _bounded_history_combinations(multi_valued, name_to_raw_value_history)
+        if combinations is None:
+            return (
+                f"a git checkout/restore command has a dynamic path argument ({tok!r}) with too many "
+                "historically-assigned readings to soundly enumerate -- an unresolved path cannot be safely "
+                "checked against the working tree, so this is denied outright",
+                (),
+            )
+        candidates: list[str] = []
+        for override in combinations:
+            variant = {**name_to_raw_value, **override}
+            variant_candidates = _substitute_var_refs_candidates(tok, variant, variant)
+            if not variant_candidates:
+                continue
+            candidates.extend(candidate for candidate in variant_candidates if candidate not in candidates)
+        if not candidates or any(_is_dynamic(candidate) for candidate in candidates):
+            return (
+                f"a git checkout/restore command has a dynamic path argument ({tok!r}) that could not be "
+                "resolved to a literal value -- an unresolved path cannot be safely checked against the "
+                "working tree, so this is denied outright",
+                (),
+            )
+        for candidate in candidates:
+            if candidate not in paths:
+                paths.append(candidate)
+    return None, tuple(paths)
+
+
+def _git_checkout_paths(
+    tokens_after: list[str],
+    name_to_raw_value: dict[str, str],
+    name_to_raw_value_history: dict[str, tuple[str, ...]],
+    names_with_dynamic_assignment: set[str],
+) -> tuple[str | None, tuple[str, ...]]:
+    """checkout_restore_paths for a `git checkout` invocation, TOKENS_AFTER
+    being every segment token following the literal `checkout` word.
+    Three sound sub-cases, none requiring a live ref-existence lookup
+    (issue #1375's own Fact 5 documents the live-git verification each
+    relies on, git 2.43.0):
+
+    (a) `--` present -- every token after it is a path (git's own
+        pathspec-disambiguation syntax, and the near-miss's own exact
+        shape). `git checkout --` with nothing following denies outright:
+        real git treats this as a harmless no-op, but a downstream pipe or
+        loop (`git checkout -- | xargs ...`-shaped) could still append
+        paths at runtime this classifier cannot see, and denying a
+        genuine no-op costs nothing.
+    (b) No `--`, 2+ non-flag-shaped positional tokens -- confirmed live
+        that `git checkout no-such-ref no-such-file` (two unresolvable
+        positionals, no `--`) reports a pathspec error for BOTH, meaning
+        whenever real git is given 2+ positionals with no `--` AND no
+        `-b`/`-B`/`--orphan` (see below), every position past the first is
+        a pathspec under every resolution git can take. Over-including a
+        token that also happens to be a valid ref name just checks a path
+        that likely does not exist, which is harmless. A digit token that
+        survived `_strip_redirect_clauses`'s own deliberately strict,
+        never-consume-a-leading-digit choice (see `_redirect_span_length`'s
+        own docstring, round-16 finding) can flip a genuinely single-
+        positional, no-`--` invocation (case Non-goal below) into THIS
+        case when the digit was actually consumed by a real, fused
+        `N>file`-shaped redirect at real bash runtime -- an accepted,
+        intentional cost of that fix (see the module docstring's own
+        round-17 paragraph for the full trade-off), not a defect.
+    (c) No `--`, exactly one positional token, and it is the literal `.`
+        or `..` -- both are syntactically invalid git ref names (confirmed
+        live: `git check-ref-format --branch .`/`--branch ..` both fail,
+        "not a valid branch name"), so this is unambiguously a path, not a
+        ref, with no live lookup needed. `git checkout .` on a dirty
+        tracked file was confirmed live to silently discard the change.
+
+    Bare `git checkout SOMENAME` (single positional, not `.`/`..`, no
+    `--`) is a deliberate Non-goal: SOMENAME might be a branch/ref name or
+    a path, and disambiguating soundly needs a live ref-existence lookup
+    this pure classifier does not perform.
+
+    `-b`/`-B`/`--orphan` (git's own branch-creation/reset mode, mutually
+    exclusive with every pathspec-checkout mode above per `git checkout
+    -h`'s own synopsis) is checked FIRST, before any sub-case above, and
+    folded into that same Non-goal -- CRITICAL bug found by independent
+    adversarial review (round 4, issue #1375) and independently
+    reproduced live: `-b`/`-B` take the immediately following token as
+    their own new-branch-NAME value, which does not start with `-`, so
+    sub-case (b)'s own dash-prefix positional filter swept a value like
+    `git checkout -f -b newbranch other` into `checkout_restore_paths =
+    ('newbranch', 'other')` -- neither of which is the actual at-risk
+    file -- and the wrapper's live `git diff --quiet` check against those
+    two nonexistent paths found "clean" and silently ALLOWED a real,
+    forced branch switch that discarded an uncommitted change to an
+    entirely different, unchecked file. Worse than the already-accepted
+    bare-SOMENAME Non-goal above: that one makes NO claim at all (falls
+    through with an empty `checkout_restore_paths`, the same as if this
+    classifier had never seen the command, honestly matching real git's
+    own built-in switch-protection minus whatever `-f` already bypasses);
+    sub-case (b)'s old behavior here instead made a CONFIDENT, WRONG claim
+    that specific paths were checked and clean. Folding this case into the
+    Non-goal (rather than a live-git-lookup-free sound extraction, which
+    would need to reproduce git's own internal "would this branch switch
+    overwrite ANY dirty tracked file in the whole working tree" logic --
+    out of a pure classifier's reach) restores the honest, no-claim
+    behavior and removes the false-confidence gap; it does not newly
+    regress anything `-f`/`-b` could already do to an unguarded working
+    tree before this classifier existed at all.
+
+    `--pathspec-from-file`/`--pathspec-file-nul` (real git accepts both on
+    `checkout`, not just `restore`) is checked next and DENIES outright --
+    CRITICAL bug found by independent adversarial review (round 5, issue
+    #1375) and independently reproduced live: `_git_restore_paths` already
+    hard-denies this exact flag pair ("paths come from a file this
+    classifier cannot inspect"), but `_git_checkout_paths` never
+    recognized it at all, so `git checkout --pathspec-from-file
+    files.txt` (a single positional, `files.txt`, itself not `.`/`..`)
+    fell all the way through to the bare-SOMENAME Non-goal above -- an
+    HONEST no-claim shape for an ordinary ambiguous ref/path, but not for
+    a flag whose own value-consumption is a FILE CONTAINING THE REAL
+    PATHSPECS this classifier cannot read. Live-verified: with a tracked
+    file listed in that control file dirtied, the wrapper allowed the
+    command (exit 0, no check performed) and the real `git checkout
+    --pathspec-from-file` silently discarded the change. Denying here,
+    matching restore's own established treatment, rather than folding
+    into the Non-goal: unlike the `-b`/`-B` case above (where an
+    unresolvable "would this overwrite anything" question is inherent to
+    branch switching itself, matching git's own already-imperfect native
+    protection), a pathspec-from-file's paths are knowable in principle --
+    this classifier simply cannot read the named file -- so silently
+    granting no-claim safety here would under-serve the exact opaque-path
+    threat model this whole feature exists to close, not merely decline
+    to extend coverage.
+
+    A redirect clause (`_strip_redirect_clauses`, see its own docstring)
+    is stripped from TOKENS_AFTER FIRST, before any check below runs --
+    CRITICAL bug found by independent adversarial review (round 15, issue
+    #1375): a redirect operator and its target were otherwise swept into
+    `checkout_restore_paths` as if they were real git path arguments.
+
+    `--ours`/`--theirs`/`-2`/`-3` (git's own conflict-resolution side
+    flags) resolve a SINGLE remaining positional as a path, not folded
+    into the bare-SOMENAME Non-goal above -- CRITICAL bug found by
+    independent adversarial review (round 40, issue #1375) and
+    independently reproduced live, both via `classify()` and via a real
+    `git checkout` against a genuinely dirty tracked file: unlike
+    `-b`/`-B`/`--orphan`, these flags do NOT preserve the ref-vs-path
+    ambiguity that justifies the Non-goal -- real git flatly REFUSES to
+    combine them with branch switching (confirmed live: `git checkout
+    --conflict=merge otherbranch`, where `otherbranch` is a real ref,
+    still genuinely switches branches, so `--conflict` stays correctly
+    folded into the Non-goal; but `git checkout --ours otherbranch`
+    where `otherbranch` is a real ref reports `fatal: '--ours/--theirs'
+    cannot be used with switching branches` -- there is no ref
+    interpretation left once one of these four flags is present, only a
+    path). `git checkout --ours realfile.py` (also `-2`/`--theirs`/`-3`
+    in place of `--ours`) -- the exact idiom shown in git's own docs for
+    resolving a merge conflict, fully reachable outside any active
+    merge too -- resolved to `checkout_restore_paths=()` even with a
+    genuinely dirty `realfile.py`, because the single positional fell
+    through every sub-case above to the bare-SOMENAME Non-goal.
+    Live-verified real, silent data loss through the actual shipped
+    `hooks/check-bash-safety.sh` wrapper (not just `classify()` in
+    isolation): with `realfile.py` tracked and genuinely dirty, no
+    active merge conflict, the wrapper allowed `git checkout --ours
+    realfile.py` outright (exit 0, no live check performed), and running
+    it for real silently discarded the dirty content (`git diff --stat
+    realfile.py` empty afterward) -- reproduced identically for `-2`,
+    `--theirs`, and `-3`.
+
+    The branch-creation-flag and `--pathspec-from-file`/`--pathspec-file-nul`
+    checks above scan only the region BEFORE a `--`, never the tokens after
+    it -- CRITICAL bug found by independent adversarial review (round 41,
+    issue #1375, the PR's own final review round) and independently
+    reproduced live, both via `classify()` and via the actual shipped
+    `hooks/check-bash-safety.sh` wrapper against a real, genuinely dirty
+    tracked file: real git guarantees every token after a literal `--` is a
+    pathspec, never a flag (case (a) above), but the pre-fix code scanned
+    the WHOLE `tokens_after` list for `-b`/`-B`/`--orphan` and
+    `--pathspec-from-file` before ever honoring that boundary. A tracked
+    file that happens to be NAMED `-b` (or `-B`/`--orphan`/`--pathspec-
+    from-file`) and is referenced after `--` (`git checkout -- -b`, a
+    syntactically ordinary, fully unambiguous path reference) made the
+    branch-creation-flag check fire on that positional's own name, folding
+    the WHOLE invocation into the Non-goal (`None, ()`) -- silently
+    skipping the wrapper's own live dirty-file check for `-b` and every
+    other path listed alongside it. Live-verified: with a tracked file
+    literally named `-b` genuinely dirty, no branch-creation flag actually
+    present, the wrapper allowed `git checkout -- -b` outright (exit 0, no
+    live check performed), and running it for real silently discarded the
+    dirty content. The `--pathspec-from-file` counterpart has the same
+    boundary flaw but denies rather than allows (a file positionally named
+    `--pathspec-from-file` after `--` triggers an over-denial, the safe
+    direction, not a bypass) -- fixed in the same change for correctness.
+    Fixed by restricting both checks to the tokens strictly before the
+    first `--`, matching every other sub-case's own treatment of that
+    boundary."""
+    tokens_after = _strip_redirect_clauses(tokens_after)
+    double_dash_index = tokens_after.index("--") if "--" in tokens_after else None
+    flag_region = tokens_after[:double_dash_index] if double_dash_index is not None else tokens_after
+    if any(tok in _CHECKOUT_BRANCH_CREATION_FLAGS or tok.startswith("--orphan=") for tok in flag_region):
+        return None, ()
+    if any(
+        tok == "--pathspec-from-file" or tok.startswith("--pathspec-from-file=") or tok == "--pathspec-file-nul"
+        for tok in flag_region
+    ):
+        return (
+            "a 'git checkout --pathspec-from-file'/'--pathspec-file-nul' flag reads paths from a file this "
+            "classifier cannot inspect, so this is denied outright",
+            (),
+        )
+    if double_dash_index is not None:
+        after = tokens_after[double_dash_index + 1 :]
+        if not after:
+            return (
+                "a 'git checkout --' with no paths following it in this command -- a downstream pipe or loop "
+                "could append paths at runtime this classifier cannot see, so this is denied outright",
+                (),
+            )
+        return _resolve_path_tokens(after, name_to_raw_value, name_to_raw_value_history, names_with_dynamic_assignment)
+    positionals = [t for t in tokens_after if not t.startswith("-")]
+    if len(positionals) >= 2:
+        return _resolve_path_tokens(
+            positionals, name_to_raw_value, name_to_raw_value_history, names_with_dynamic_assignment
+        )
+    if len(positionals) == 1 and not _is_dynamic(positionals[0]) and positionals[0] in (".", ".."):
+        return _resolve_path_tokens(
+            positionals, name_to_raw_value, name_to_raw_value_history, names_with_dynamic_assignment
+        )
+    if len(positionals) == 1 and any(tok in _CHECKOUT_CONFLICT_SIDE_FLAGS for tok in tokens_after):
+        return _resolve_path_tokens(
+            positionals, name_to_raw_value, name_to_raw_value_history, names_with_dynamic_assignment
+        )
+    return None, ()
+
+
+def _git_restore_paths(
+    tokens_after: list[str],
+    name_to_raw_value: dict[str, str],
+    name_to_raw_value_history: dict[str, tuple[str, ...]],
+    names_with_dynamic_assignment: set[str],
+) -> tuple[str | None, tuple[str, ...]]:
+    """checkout_restore_paths for a `git restore` invocation, TOKENS_AFTER
+    being every segment token following the literal `restore` word.
+    Case-sensitive flag walk over an explicit, enumerated vocabulary --
+    deliberately NOT reusing `_is_git_push_segment`'s own lower-casing
+    step, which would collapse `-S` (`--staged`, boolean) and `-s`
+    (`--source`, value-taking) into the same token and misread a
+    working-tree-destroying `git restore -s main file.py` as
+    staged-only-safe (issue #1375's own Fact 5). `saw_staged`/
+    `saw_worktree` are last-occurrence-wins (`--staged --no-staged` ends
+    with `saw_staged=False`); this invocation is safe (empty
+    checkout_restore_paths, never live-checked) iff `saw_staged` and not
+    `saw_worktree`. Any flag-shaped token not in this vocabulary --
+    including `--pathspec-from-file`/`--pathspec-file-nul`, whose paths
+    come from a file this classifier cannot inspect -- denies outright
+    rather than risk under-extracting paths past a flag whose own
+    value-consumption behavior is unknown here.
+
+    A redirect clause (`_strip_redirect_clauses`, see its own docstring)
+    is stripped from TOKENS_AFTER FIRST, before this walk runs -- CRITICAL
+    bug found by independent adversarial review (round 15, issue #1375):
+    a redirect operator and its target were otherwise swept into
+    `checkout_restore_paths` as if they were real git path arguments."""
+    tokens_after = _strip_redirect_clauses(tokens_after)
+    saw_staged = False
+    saw_worktree = False
+    path_tokens: list[str] = []
+    i = 0
+    n = len(tokens_after)
+    while i < n:
+        tok = tokens_after[i]
+        if tok == "--":
+            # Real git syntax: `--` disambiguates every remaining token as
+            # a pathspec, the identical role it plays for `git checkout`
+            # (see `_git_checkout_paths`'s own sub-case (a)). Found by
+            # independent adversarial review of this PR: the pre-fix
+            # version had no case for a literal `--` at all, so it fell
+            # into the unrecognized-flag branch below and denied an
+            # entirely ordinary, harmless `git restore -- PATH` outright.
+            path_tokens.extend(tokens_after[i + 1 :])
+            i = n
+            break
+        if tok == "--pathspec-from-file" or tok.startswith("--pathspec-from-file=") or tok == "--pathspec-file-nul":
+            return (
+                "a 'git restore --pathspec-from-file'/'--pathspec-file-nul' flag reads paths from a file this "
+                "classifier cannot inspect, so this is denied outright",
+                (),
+            )
+        if tok in ("--staged", "-S"):
+            saw_staged = True
+            i += 1
+            continue
+        if tok == "--no-staged":
+            saw_staged = False
+            i += 1
+            continue
+        if tok in ("--worktree", "-W"):
+            saw_worktree = True
+            i += 1
+            continue
+        if tok == "--no-worktree":
+            saw_worktree = False
+            i += 1
+            continue
+        if tok == "--recurse-submodules" or tok.startswith("--recurse-submodules="):
+            i += 1
+            continue
+        if tok in _RESTORE_BOOLEAN_FLAGS:
+            i += 1
+            continue
+        if tok in _RESTORE_VALUE_FLAGS:
+            i += 2
+            continue
+        if any(tok.startswith(f"{flag}=") for flag in _RESTORE_VALUE_FLAGS):
+            # Fused `--source=main`/`--conflict=diff3`: self-contained,
+            # unlike the separate-token form above -- no extra token to
+            # skip. Found by independent adversarial review of this PR:
+            # the pre-fix version only recognized the bare, separate-token
+            # spelling and denied this equally legitimate fused one as an
+            # unrecognized flag.
+            i += 1
+            continue
+        if tok.startswith("-"):
+            return (
+                f"an unrecognized 'git restore' flag ({tok!r}) -- this classifier cannot safely guarantee "
+                "correct path extraction past an unrecognized flag that might itself consume the next token, "
+                "so this is denied outright",
+                (),
+            )
+        path_tokens.append(tok)
+        i += 1
+    if saw_staged and not saw_worktree:
+        return None, ()
+    return _resolve_path_tokens(
+        path_tokens, name_to_raw_value, name_to_raw_value_history, names_with_dynamic_assignment
+    )
+
+
+# A whole token that is EXACTLY one `${NAME-}`/`${NAME:-}` (empty default
+# text), `${NAME=}`/`${NAME:=}` (empty ASSIGN-default text -- also
+# assigns NAME the empty string as a side effect, which does not change
+# whether THIS token itself vanishes), or `${NAME+anything}`/
+# `${NAME:+anything}` (alternate-value clause) construct -- nothing else
+# fused in. Deliberately narrower than `_ONE_REF_SRC`'s own general
+# reference-run matching (this is a single, whole-token check, not a "run
+# of references" one): the clause shapes below need their own NAME
+# extracted and their own vanishing rule applied (see
+# `_token_is_a_vanishing_default_or_alt_clause`'s own docstring), unlike a
+# bare/braced/subscript reference where any run of them can be fused
+# together and each one either independently vanishes or doesn't.
+#
+# `${NAME:?}`/`${NAME?}` (empty error-message clause) is deliberately NOT
+# included here: unlike every clause above, this one does not silently
+# vanish when NAME is unset -- real bash prints the message to stderr and
+# TERMINATES the command entirely (non-interactively) with a non-zero
+# status, confirmed live, so `checkout`/`restore` never even runs. Treating
+# it as ambiguous (the default, unrecognized-dynamic-token fallback) is
+# already safe: there is no real invocation for a missed detection to miss.
+_EMPTY_DEFAULT_CLAUSE_RE = re.compile(r"^\$\{(?P<name>[A-Za-z_][A-Za-z0-9_]*):?[-=]\}$")
+_ALT_VALUE_CLAUSE_RE = re.compile(r"^\$\{(?P<name>[A-Za-z_][A-Za-z0-9_]*)(?P<colon>:)?\+[^}]*\}$")
+
+
+def _token_is_a_vanishing_default_or_alt_clause(token: str, name_to_raw_value: dict[str, str]) -> bool:
+    """TOKEN word-splits away to NOTHING, unquoted, at real bash runtime,
+    because it is an `${NAME-}`/`${NAME:-}` (empty default), `${NAME=}`/
+    `${NAME:=}` (empty assign-default -- confirmed live this also
+    vanishes to nothing the identical way, the assignment side effect
+    notwithstanding), or `${NAME+word}`/`${NAME:+word}` (alternate-value)
+    construct whose own substitution is empty. Deliberately narrow and
+    LOCAL to this module's own checkout/restore detection (issue #1375)
+    rather than folded into
+    `_token_is_all_unassigned_refs` itself: that function's own docstring
+    explicitly and, for a NON-empty default/alt text, CORRECTLY excludes
+    every default-clause shape ("a default-clause reference supplies REAL
+    substitute text regardless of whether NAME is assigned, so it never
+    vanishes to nothing") -- widening that already heavily-scrutinized,
+    many-times-revised shared primitive (28+ documented rounds of narrow
+    fixes and reverted over-generalizations, per its own docstring) is a
+    materially larger, riskier change than this specific, live-confirmed
+    gap warrants; every existing caller of that function keeps its exact
+    prior behavior unchanged.
+
+    Found live by independent adversarial review of this PR, in the SAME
+    position the already-fixed `$NEVERSET`-shaped bug occupied: that
+    function's own blanket exclusion is only sound when the default/alt
+    text is non-empty -- `${NEVERSET:-}`, `${NEVERSET-}`, and
+    `${NEVERSET:+x}` (NEVERSET genuinely never assigned) all confirmed
+    live (a real bash proxy capturing argv) to word-split away to nothing
+    identically to a bare `$NEVERSET`, making `git ${NEVERSET:-} checkout
+    -- file.py` genuinely run as `git checkout -- file.py` -- the same
+    near-zero-effort bypass of the entire feature the bare-reference fix
+    closed, in a shape that fix's own primitive does not recognize.
+
+    Two sound, narrow cases, both delegating the actual "does NAME itself
+    vanish" question back to `_token_is_all_unassigned_refs` on a
+    synthesized plain `${NAME}` reference (reusing its own already-correct,
+    already-tested per-name rule -- assigned-empty and assigned-all-IFS-
+    whitespace both count as vanishing there too -- rather than
+    re-deriving it here):
+    - `${NAME-}`/`${NAME:-}` (default text is the empty string, checked
+      via the regex itself, not a resolved value): the whole construct
+      substitutes NAME's own value if NAME is set (colon form: set AND
+      non-empty), else the empty default text -- either way, this
+      construct vanishes exactly when NAME itself does.
+    - `${NAME:+word}` (colon form): substitutes WORD only when NAME is set
+      AND non-empty, else nothing -- so this construct vanishes exactly
+      when NAME itself does, regardless of WORD's own content (WORD is
+      never evaluated in the vanishing branch).
+    - `${NAME+word}` (no-colon form): substitutes WORD when NAME is set at
+      ALL (even assigned-empty), else nothing -- a stricter condition than
+      `_token_is_all_unassigned_refs`'s own "set but empty/IFS-whitespace
+      still counts as vanishing," so this form is only recognized when
+      NAME is not a key in NAME_TO_RAW_VALUE at all, not delegated to that
+      broader check."""
+    match = _EMPTY_DEFAULT_CLAUSE_RE.match(token)
+    if match:
+        return _token_is_all_unassigned_refs(f"${{{match.group('name')}}}", name_to_raw_value)
+    match = _ALT_VALUE_CLAUSE_RE.match(token)
+    if match:
+        if match.group("colon"):
+            return _token_is_all_unassigned_refs(f"${{{match.group('name')}}}", name_to_raw_value)
+        return match.group("name") not in name_to_raw_value
+    return False
+
+
+_REDIRECT_OPERATORS = {"<", ">", ">>", "<<", "<<<", "&>", ">&", "&>>", "<>"}
+
+
+def _redirect_span_length(seg: list[str], j: int) -> int:
+    """The number of tokens, starting at SEG[j], that make up one bash
+    I/O-redirection clause -- a redirect operator (`_REDIRECT_OPERATORS`)
+    and exactly one target token. `segment_tokens` never splits a segment
+    at `<`/`>` (see `_SINGLE_OPS`'s own docstring -- a redirect may
+    legally sit anywhere before a command word without being that word
+    itself), so each piece of the clause survives here as its own
+    separate token (confirmed via `tokenize()`: `git > /dev/null
+    checkout` tokenizes to `['git', '>', '/dev/null', 'checkout']`).
+    Returns 0 when SEG[j:] does not start with this shape, so a caller
+    can treat 0 as "not a redirect, do not skip" without a separate
+    boolean check.
+
+    CRITICAL bug found by independent adversarial review (round 14, issue
+    #1375) and independently reproduced live: every existing skip-past-
+    decoy walk in this file's checkout/restore detection --
+    `_find_git_checkout_restore`'s own global-flag-skip loop and
+    `_first_surviving_segment_word`'s own leading-vanishing-run walk --
+    had no concept of a redirect clause at all, so a bare `>`/`<` token
+    (ordinary, legal bash syntax) broke both: `git > /dev/null checkout
+    -- dirty.py` (a fully literal command, no dynamic content at all)
+    resolved to an empty, wrong `checkout_restore_paths` (the redirect
+    operator token itself was mistaken for the subcommand position and
+    the scan gave up), and `X=cd; > /dev/null $X sub; git checkout --
+    dirty.py` resolved to a confident, wrong ALLOW (the redirect made
+    `_first_surviving_segment_word` return the operator token itself,
+    which is neither vanishing nor dynamic, so the real, cd-resolving
+    `$X` one position later was never checked) -- both live-verified
+    (real bash, and end-to-end through the real wrapper against a
+    scratch git repo) to silently discard a genuinely dirty file.
+
+    Deliberately does NOT also recognize an optional leading bare
+    file-descriptor number (`2>`) as part of the clause, despite that
+    being real bash syntax -- CRITICAL data-loss bug found by independent
+    adversarial review (round 16, issue #1375) and independently
+    reproduced live: this function's own first version did consume a
+    leading digit token, but `tokenize()`'s own shlex punctuation-based
+    splitting produces the IDENTICAL token sequence for `2>file` (a
+    fused, genuine fd-redirect prefix -- no argument) and `2 >file` (the
+    literal word `2` followed by a separate, ordinary stdout redirect --
+    a real argument this classifier must not lose) -- the raw source's
+    own whitespace adjacency between the digit and the operator, the only
+    signal that actually distinguishes the two, is already gone by the
+    time this function ever sees the tokens. Confirmed live (a real-bash
+    argv-capture proxy) that the spaced form genuinely passes `2` through
+    as a real, separate argument. Consuming the digit unconditionally
+    silently dropped that argument from `checkout_restore_paths` --
+    `git checkout -- realfile.py 2 >target.txt` (`2` a real, dirty,
+    tracked file) resolved to `checkout_restore_paths=('realfile.py',)`,
+    missing `2` entirely, and `git restore --source 2 >target.txt
+    file.py` resolved to an EMPTY `checkout_restore_paths` (worse: once
+    `2` vanished, `--source`'s own value-consumption swallowed `file.py`
+    itself, the actual restore target) -- both live-verified end-to-end
+    through the real wrapper to silently discard a genuinely dirty file.
+    Leaving a leading digit token OUT of the redirect span instead makes
+    it survive as an ordinary candidate word wherever this function's
+    callers use it as one (a path token, a possible command word) --
+    over-inclusion in the rarer, genuinely-fused case, the safe direction
+    this module takes everywhere else, rather than the file-descriptor
+    heuristic's own proven under-inclusion."""
+    if j < len(seg) and seg[j] in _REDIRECT_OPERATORS and j + 1 < len(seg):
+        return 2
+    return 0
+
+
+def _redirect_span_length_with_optional_fd(seg: list[str], j: int) -> int:
+    """Like `_redirect_span_length`, but ALSO recognizes an optional
+    leading bare file-descriptor number (`2>`) as part of the clause --
+    for callers trying to SKIP PAST a possible redirect to find something
+    else beyond it (`_find_git_checkout_restore`'s own global-flag-skip
+    loop, `_first_surviving_segment_word`'s own leading-decoy walk), never
+    for callers extracting `checkout_restore_paths` candidates
+    (`_strip_redirect_clauses`, which deliberately uses the strict,
+    digit-free `_redirect_span_length` instead -- see that function's own
+    docstring for why the two contexts need OPPOSITE defaults for the
+    same digit-adjacency ambiguity).
+
+    `tokenize()`'s own shlex punctuation-splitting cannot distinguish a
+    fused `2>file` (a genuine fd-redirect prefix, no argument) from a
+    spaced `2 >file` (the literal word `2` followed by a separate
+    redirect) -- both produce the identical token sequence, so this
+    ambiguity is undecidable at the token level regardless of which
+    default a caller picks (see `_redirect_span_length`'s own docstring,
+    round-16 finding, for the live-verified data-loss risk of guessing
+    "consumed by the redirect" in a PATH-extraction context). Here, in a
+    skip-PAST context, the risk runs the other way: NOT skipping a
+    genuine fd-prefixed redirect (e.g. `2>&1`) makes the walk stop on the
+    bare digit token itself -- neither a flag, a vanishing decoy, nor
+    `checkout`/`restore` -- so a fully literal, unambiguous `git > out.log
+    2>&1 checkout -- dirty.py` would go entirely unrecognized as a
+    checkout invocation at all, the FAIL-OPEN direction for this walk
+    (an empty `checkout_restore_paths` means the live wrapper check never
+    even runs) -- confirmed live as a regression the strict, digit-free
+    version introduces here specifically, during this same round's own
+    fix. Skipping the digit here, even when it was actually a real
+    argument in the spaced-form reading, costs nothing extra: the
+    literal-token scan these callers sit alongside already checks every
+    token in the segment regardless of position, so a real decoy or
+    relocator sitting at that position is not hidden by this skip."""
+    n = len(seg)
+    i = j
+    if i < n and seg[i].isdigit():
+        i += 1
+    if i < n and seg[i] in _REDIRECT_OPERATORS and i + 1 < n:
+        return i + 2 - j
+    return 0
+
+
+def _strip_redirect_clauses(tokens: list[str]) -> list[str]:
+    """TOKENS with every I/O-redirection clause (`_redirect_span_length`,
+    see its own docstring) removed, wherever it occurs -- the shell
+    consumes a redirect clause itself; it is never passed to the command
+    (here, `git checkout`/`git restore`) as one of its own arguments.
+
+    CRITICAL bug found by independent adversarial review (round 15, issue
+    #1375) and independently reproduced live: round 14 taught
+    `_find_git_checkout_restore` (finding the `checkout`/`restore` word
+    itself) and `_first_surviving_segment_word` (finding a possible cwd
+    relocator) to skip a redirect clause, but never taught the PATH-
+    EXTRACTION functions (`_git_checkout_paths`, `_git_restore_paths`,
+    both of which call this on TOKENS_AFTER before doing anything else)
+    the same lesson -- so a redirect operator and its target token were
+    swept into `checkout_restore_paths` as if they were real git path
+    arguments. `git checkout -- f.py >> unrelated_append_target.py`
+    resolved to `checkout_restore_paths=('f.py', '>>',
+    'unrelated_append_target.py')` -- a CONFIDENT, WRONG claim (redirect
+    operators never start with `-`, so every existing positional/path
+    filter in this section swept them in) that made the live wrapper
+    check deny a checkout that provably never touches
+    `unrelated_append_target.py` at all (an append redirect can only add
+    to a file, never discard its existing content) whenever that
+    unrelated file happened to be dirty. Confirmed live end-to-end
+    through the real wrapper against a scratch git repo: the flagged
+    file's content was byte-for-byte unchanged after the real command
+    actually ran.
+
+    Applied ONCE, up front, to the whole TOKENS_AFTER in both callers --
+    before any `--`-split, positional-count, or flag walk runs -- rather
+    than taught separately to `_resolve_path_tokens` and each caller's
+    own positional-gathering logic: stripping late would still leave a
+    redirect's own token COUNT distorting `_git_checkout_paths`'s own
+    sub-case (b) decision (2+ real positionals with no `--`), since real
+    git never sees the redirect's tokens as positionals at all."""
+    result: list[str] = []
+    i = 0
+    n = len(tokens)
+    while i < n:
+        redirect_len = _redirect_span_length(tokens, i)
+        if redirect_len:
+            i += redirect_len
+            continue
+        result.append(tokens[i])
+        i += 1
+    return result
+
+
+def _dynamic_token_resolves_only_to_literal(token: str, name_to_raw_value: dict[str, str], literal: str) -> bool:
+    """Whether TOKEN unambiguously resolves, at real bash runtime, to
+    exactly LITERAL (case-insensitively, matching this function's own
+    caller's existing case-insensitive literal comparison) and nothing
+    else -- narrower than "could plausibly resolve to LITERAL": an
+    ambiguous or unresolvable token declines (returns `False`) rather
+    than assuming the positive case, since a false positive here would
+    mis-attribute an unrelated dynamic command word's own subcommand
+    (e.g. `$TOOL checkout` where TOOL is some other, non-git tool that
+    also happens to have a `checkout` subcommand) as a git checkout/
+    restore invocation -- unlike the cwd-relocation check's own
+    fail-closed posture, `_find_git_checkout_restore`'s own docstring
+    already establishes that an ambiguous "is this actually git" question
+    here declines to resolve rather than assumes the worst (see its own
+    "genuinely ambiguous... this pure classifier declines to resolve"
+    paragraph, for the analogous ambiguous-token-after-`git` case this
+    mirrors for the `git` token itself).
+
+    CRITICAL bug found by independent adversarial review (round 14, issue
+    #1375) and independently reproduced live: `_find_git_checkout_
+    restore`'s own outer scan only ever recognized a LITERAL `git` token
+    -- `G=git; $G checkout -- dirty.py` resolved to an empty, wrong
+    `checkout_restore_paths` even though `$G` unambiguously resolves to
+    `git`. Live-verified this genuinely runs `git checkout -- dirty.py`
+    once bash resolves it. Reuses `_substitute_var_refs_candidates`
+    exactly like `_dynamic_word_may_resolve_to_a_cwd_relocator` does for
+    the analogous cd/pushd/popd question, but requires EVERY candidate
+    reading to match LITERAL (not just one), the mirror-image of that
+    function's OR-based check -- appropriate here because a false
+    positive in THIS position risks a wrong `checkout_restore_paths`
+    CLAIM about an unrelated tool, while that function's own false
+    positive would only over-deny (the safer direction)."""
+    if _VAR_REF_FULL_RE.search(token) is None:
+        return False
+    candidates = _substitute_var_refs_candidates(token, name_to_raw_value, name_to_raw_value)
+    if candidates is None or not candidates:
+        return False
+    return all(candidate.lower() == literal for candidate in candidates)
+
+
+def _find_git_checkout_restore(
+    seg: list[str], name_to_raw_value: dict[str, str], name_to_raw_value_git_biased: dict[str, str]
+) -> tuple[str | None, list[str], bool]:
+    """Scan SEG (already assignment-stripped, see `_strip_leading_
+    assignments`) for a `git checkout`/`git restore` invocation, skipping
+    past git's own global value-taking options the same way
+    `_is_git_push_segment` skips past them to find `push` -- but
+    CASE-SENSITIVELY for the `-C`/`-c` distinction (issue #1375's own Fact
+    5: only uppercase `-C`, not lowercase `-c`, relocates which working
+    tree git operates against; `-c` only sets a config value).
+
+    Scans for a literal `git` token at ANY position in SEG, not just
+    `seg[0]` -- like `_is_git_push_segment`'s own scan, not anchored to
+    position 0. A `for VAR in ...; do ...; done` loop is one, real,
+    non-honest-accident-shaped reason this matters: bash's `for`/`do`/
+    `done`/`in` keywords are not shell control operators, so
+    `segment_tokens` never splits a segment at them, and `git checkout --
+    "$f"` sitting after a literal `do` would never be found at `seg[0]`.
+    Confirmed live during this function's own development that a
+    seg[0]-anchored version of this scan let `for f in $(git diff
+    --name-only); do git checkout -- "$f"; done` (this module's own
+    Acceptance Criteria Map names this exact shape) through with an empty
+    `checkout_restore_paths` instead of denying on the unresolvable `$f`.
+
+    A DYNAMIC token encountered while skip-parsing global flags is
+    resolved via `_token_is_all_unassigned_refs` (the same primitive
+    `_is_git_push_segment` already uses for the identical position) rather
+    than always treated as ambiguous: a token that unambiguously vanishes
+    at real bash runtime (a genuinely unset, unquoted `$NEVERSET`-shaped
+    reference) is skipped over, not given up on. Found live by
+    independent adversarial review of this PR: `git $NEVERSET checkout --
+    file.py` (NEVERSET never assigned) was wrongly allowed with an empty
+    `checkout_restore_paths` before this check -- confirmed live via a
+    real bash proxy (stand-in `git` binary on PATH, capturing its own
+    argv) that the decoy word-splits away to nothing and this genuinely
+    runs `git checkout -- file.py`, silently bypassing the whole feature
+    with one trivial unset variable. A dynamic token that does NOT
+    unambiguously vanish (assigned, or an indirect/default-clause
+    reference this primitive does not cover) still makes this `git`
+    occurrence ambiguous, per the paragraph below.
+
+    Returns `(subcommand, tokens_after_subcommand,
+    saw_tree_relocation_flag)`; `subcommand` is `None` when SEG has no
+    checkout/restore invocation at all (including when a dynamic token
+    sits in a position that could be either a global flag/value or the
+    subcommand itself, immediately after a literal `git`, and does not
+    unambiguously vanish -- a genuinely ambiguous, non-honest-accident
+    shape this pure classifier declines to resolve at that specific `git`
+    occurrence, the same disclosed-residual convention this module's own
+    `KNOWN_BYPASS_COMMANDS` test list already uses for the analogous
+    dynamic-tool/dynamic-verb case; scanning continues past it to any
+    later `git` occurrence in the same segment), in which case the other
+    two return values are meaningless.
+
+    A DYNAMIC `tok` that unambiguously resolves to `git` (per
+    `_dynamic_token_resolves_only_to_literal`, see its own docstring) is
+    ALSO recognized as this `git` occurrence -- CRITICAL bug found by
+    independent adversarial review (round 14, issue #1375) and
+    independently reproduced live: `G=git; $G checkout -- dirty.py`
+    resolved to an empty, wrong `checkout_restore_paths` before this fix,
+    even though `$G` unambiguously resolves to `git` and this genuinely
+    runs `git checkout -- dirty.py` once bash resolves it. An ambiguous
+    or unresolvable dynamic `tok` still declines here (returns to the
+    outer scan without treating it as `git`), the same "decline, don't
+    assume" posture already established above for an ambiguous token
+    AFTER a literal `git`.
+
+    The flag-skip loop below also skips a redirect clause
+    (`_redirect_span_length`, see its own docstring) wherever it would
+    otherwise land -- CRITICAL bug found by independent adversarial
+    review (round 14, issue #1375) and independently reproduced live:
+    `git > /dev/null checkout -- dirty.py` (fully literal, no dynamic
+    content at all) resolved to an empty, wrong `checkout_restore_paths`
+    before this fix, since the redirect operator token itself was
+    mistaken for the subcommand position and the scan gave up there.
+
+    NAME_TO_RAW_VALUE_GIT_BIASED is a second reading, alongside NAME_TO_
+    RAW_VALUE, tried for a DYNAMIC `tok` that the ordinary reading
+    declines -- CRITICAL bug found by independent adversarial review
+    (round 19, issue #1375) and independently reproduced live:
+    NAME_TO_RAW_VALUE alone is `_assigned_raw_values`'s own order-blind,
+    last-occurrence-wins collapse, so `TOOL=git; $TOOL checkout --
+    dirty.py; TOOL=npm` -- reusing a variable name for a later, unrelated
+    purpose, an entirely ordinary idiom, not an exotic construction --
+    resolved `$TOOL` to `"npm"` even though it genuinely was `git` at the
+    actual point of use, silently defeating recognition entirely.
+    NAME_TO_RAW_VALUE_GIT_BIASED (`_assigned_raw_values_biased_toward`,
+    see its own docstring) instead reads as `git` whenever `git` was
+    EVER assigned to that name anywhere in the command, so this second
+    attempt still recognizes the `git` occurrence. Only ever WIDENS
+    recognition (an unrelated tool's own dynamic `checkout`/`restore`-
+    shaped subcommand at worst triggers a spurious, reversible live
+    `git diff` check), never narrows it -- trying NAME_TO_RAW_VALUE
+    first, unchanged, preserves this function's own existing "ambiguous
+    declines" posture for every case that was already resolvable."""
+    n = len(seg)
+    for i, tok in enumerate(seg):
+        if _is_dynamic(tok):
+            if not (
+                _dynamic_token_resolves_only_to_literal(tok, name_to_raw_value, "git")
+                or _dynamic_token_resolves_only_to_literal(tok, name_to_raw_value_git_biased, "git")
+            ):
+                continue
+        elif tok.lower() != "git":
+            continue
+        saw_tree_relocation = False
+        j = i + 1
+        ambiguous = False
+        while j < n:
+            candidate = seg[j]
+            if _is_dynamic(candidate):
+                if _token_is_all_unassigned_refs(
+                    candidate, name_to_raw_value
+                ) or _token_is_a_vanishing_default_or_alt_clause(candidate, name_to_raw_value):
+                    j += 1
+                    continue
+                ambiguous = True
+                break
+            redirect_len = _redirect_span_length_with_optional_fd(seg, j)
+            if redirect_len:
+                j += redirect_len
+                continue
+            if (
+                candidate == "-C"
+                or candidate in _GIT_TREE_RELOCATION_LONG_FLAGS
+                or any(candidate.startswith(f"{flag}=") for flag in _GIT_TREE_RELOCATION_LONG_FLAGS)
+            ):
+                saw_tree_relocation = True
+            if not candidate.startswith("-"):
+                break
+            flag_bare = candidate.split("=", 1)[0]
+            j += 1
+            if "=" not in candidate and (
+                flag_bare in _GIT_GLOBAL_SHORT_VALUE_FLAGS or flag_bare in _GIT_LONG_VALUE_FLAGS
+            ):
+                j += 1
+        if ambiguous:
+            continue
+        if j < n and seg[j] in ("checkout", "restore"):
+            return seg[j], seg[j + 1 :], saw_tree_relocation
+    return None, [], False
+
+
+_CWD_RELOCATING_COMMANDS = frozenset({"cd", "pushd", "popd"})
+
+
+def _dynamic_word_may_resolve_to_a_cwd_relocator(token: str, name_to_raw_value: dict[str, str]) -> bool:
+    """Whether a DYNAMIC command word (already confirmed non-vanishing by
+    the caller) could plausibly resolve, at real bash runtime, to a
+    literal `cd`/`pushd`/`popd` -- narrower than round 10's own original
+    fix, which flagged EVERY non-vanishing dynamic `seg[0]` regardless of
+    what it could actually resolve to.
+
+    CRITICAL false-positive bug found by independent adversarial review
+    (round 11, issue #1375) and independently reproduced live: round 10's
+    blanket flag denied `EDITOR=vim; $EDITOR sub; git checkout -- f.py`
+    outright -- a completely safe, ordinary command (an `$EDITOR`/`$TOOL`/
+    positional-parameter dispatch idiom, followed by an unrelated, clean
+    checkout) -- purely because `$EDITOR` is dynamic and does not vanish,
+    with no attempt to check what it could actually resolve to. This is
+    the same over-broad "deny every dynamic word" policy this module's
+    own opening docstring already measured at a 28% false-positive rate
+    and rejected everywhere else; round 10 had reintroduced it in this one
+    narrow spot.
+
+    Resolves TOKEN via `_substitute_var_refs_candidates`, reusing it with
+    NAME_TO_RAW_VALUE passed as BOTH of that function's parameters (rather
+    than the module's usual lowercased `name_to_value`) so every candidate
+    stays case-PRESERVED -- `cd`/`pushd`/`popd` are real bash command
+    names, case-SENSITIVE unlike the write-method literals every other
+    caller of that primitive compares case-insensitively; lowercasing here
+    would make an assignment like `X=CD` (which real bash would try to run
+    as literal, non-existent command `CD`, not the `cd` builtin) a false
+    positive of its own.
+
+    Four cases:
+    - No `$NAME`-shaped reference found in TOKEN at all
+      (`_VAR_REF_FULL_RE.search` finds nothing) -- TOKEN's dynamism comes
+      from something this resolution primitive cannot decompose (e.g. a
+      folded command-substitution placeholder). Fails closed (`True`),
+      preserving round 10's own blanket-flag behavior for this shape
+      exactly -- this function only ever NARROWS what round 10 already
+      flagged, never widens it.
+    - `_substitute_var_refs_candidates` returns `None` (too many candidate
+      readings to enumerate) or `[]` (some referenced name has no
+      assigned-and-in-range reading this classifier can resolve) -- both
+      genuine ambiguity, not a resolved-safe value. Fails closed (`True`).
+    - A returned candidate is ITSELF still dynamic (contains `$`/backtick
+      after substitution) -- CRITICAL bypass found by independent
+      adversarial review (round 12, issue #1375) and independently
+      reproduced live: `_substitute_var_refs_candidates` does NOT
+      recursively re-expand a `${NAME:-default}` clause's own DEFAULT
+      text (a disclosed residual of that primitive itself, see its own
+      docstring), so `OTHER=cd; ${UNSET:-$OTHER} sub; git checkout --
+      dirty.py` resolved `${UNSET:-$OTHER}`'s one candidate to the
+      literal, still-unexpanded string `"$OTHER"` -- never equal to
+      `cd`/`pushd`/`popd` as plain text, even though `$OTHER` genuinely
+      holds `cd` at real bash runtime -- silently discarding uncommitted
+      work exactly like round 10's own original bypass. Fails closed
+      (`True`), mirroring the identical still-dynamic-candidate check
+      `_resolve_path_tokens` already carries for the same reason (see its
+      own docstring).
+    - A concrete, fully-resolved candidate list -- flags (`True`) only if
+      some candidate is exactly `cd`/`pushd`/`popd`; otherwise the word
+      demonstrably resolves to something else, so returns `False`."""
+    if _VAR_REF_FULL_RE.search(token) is None:
+        return True
+    candidates = _substitute_var_refs_candidates(token, name_to_raw_value, name_to_raw_value)
+    if candidates is None or not candidates or any(_is_dynamic(candidate) for candidate in candidates):
+        return True
+    return any(candidate in _CWD_RELOCATING_COMMANDS for candidate in candidates)
+
+
+def _first_surviving_segment_word(seg: list[str], name_to_raw_value: dict[str, str]) -> str | None:
+    """The first token of SEG that would actually survive as bash's real
+    command word once every LEADING vanishing decoy -- a bare/braced
+    unassigned reference (`_token_is_all_unassigned_refs`) or an
+    empty-default/alt-value clause (`_token_is_a_vanishing_default_or_
+    alt_clause`) -- has word-split away to nothing. `None` if the whole
+    leading run (up to and including every token in SEG) vanishes.
+
+    CRITICAL bug found by independent adversarial review (round 13, issue
+    #1375) and independently reproduced live: `_rule_git_checkout_restore`
+    only ever checked `seg[0]` itself for a possible cwd-relocator, the
+    same way `_find_git_checkout_restore` checks `seg[0]` for the git/
+    subcommand-position question -- but when `seg[0]` genuinely vanishes,
+    the classifier already knows (per this module's own established
+    convention, e.g. `_strip_leading_unassigned_bare_refs`'s use in
+    `_classify_tokens`'s own `collapsed_segments` pass) that whatever
+    token follows becomes the REAL command word at real bash runtime, and
+    that word was never itself checked here. Confirmed live: `X=cd;
+    $NEVERSET $X sub; git checkout -- dirty.py` (`NEVERSET` genuinely
+    never assigned) -- `$NEVERSET` vanishes, so the previous `seg[0]`-only
+    check silently skipped the whole segment, even though `$X` (which
+    resolves to `cd`) is what bash actually runs first. Real bash
+    (confirmed via an argv-capturing `cd` proxy) genuinely executes `cd
+    sub` there. Same result for `X=pushd` and for a vanishing
+    `${NEVERSET:-}` decoy in place of the bare `$NEVERSET`.
+
+    Callers should feed the RESULT of this function to
+    `_dynamic_word_may_resolve_to_a_cwd_relocator` (when dynamic) or the
+    existing literal `_CWD_RELOCATING_COMMANDS` membership check (when
+    not), exactly like they would have used `seg[0]` directly before this
+    fix -- this function only changes WHICH token that check runs
+    against, never the check itself.
+
+    Also skips a leading redirect clause (`_redirect_span_length`, see
+    its own docstring) -- CRITICAL bug found by independent adversarial
+    review (round 14, issue #1375) and independently reproduced live:
+    `X=cd; > /dev/null $X sub; git checkout -- dirty.py` resolved to a
+    confident, wrong ALLOW before this fix, since the redirect made this
+    walk return the `>` operator token itself (neither vanishing nor
+    dynamic) as the "surviving word," so the real, cd-resolving `$X` one
+    position later was never checked. A vanishing decoy and a redirect
+    clause may interleave in either order (`$NEVERSET > /dev/null $X
+    sub`), so both skips run in the SAME loop until neither applies."""
+    i = 0
+    n = len(seg)
+    while i < n:
+        if _token_is_all_unassigned_refs(seg[i], name_to_raw_value) or _token_is_a_vanishing_default_or_alt_clause(
+            seg[i], name_to_raw_value
+        ):
+            i += 1
+            continue
+        redirect_len = _redirect_span_length_with_optional_fd(seg, i)
+        if redirect_len:
+            i += redirect_len
+            continue
+        break
+    return seg[i] if i < n else None
+
+
+def _rule_git_checkout_restore(
+    segments: list[list[str]],
+    raw_assigned: dict[str, str],
+    raw_assigned_git_biased: dict[str, str],
+    raw_assigned_cd_biased: dict[str, str],
+    raw_assigned_history: dict[str, tuple[str, ...]],
+    names_with_dynamic_assignment: set[str],
+) -> tuple[str | None, tuple[str, ...]]:
+    """Extract every `checkout_restore_paths` candidate across every
+    segment of one command, denying outright on any segment where this
+    classifier cannot soundly determine which working tree is at risk: a
+    `-C`/`--git-dir`/`--work-tree` global flag on the checkout/restore
+    segment itself, a `GIT_DIR=`/`GIT_WORK_TREE=`/`GIT_INDEX_FILE=`
+    assignment anywhere in the command, or a literal `cd`/`pushd`/`popd`
+    in an earlier segment of the same command. hooks/check-bash-safety.sh's
+    own new wrapper step always checks a path against `.cwd` from the
+    PreToolUse payload (issue #1375's own Fact 5, the cwd-mismatch
+    finding) -- any of these makes that single, fixed `.cwd` reference
+    point unsound for this particular invocation, so this denies here
+    (I/O-free -- a token-shape fact, not a live check) rather than letting
+    the wrapper check the wrong tree.
+
+    `pushd`/`popd` join `cd` in `_CWD_RELOCATING_COMMANDS` -- CRITICAL bug
+    found by independent adversarial review (round 9, issue #1375) and
+    independently reproduced live: only a literal `cd` token was
+    recognized here, but `pushd <dir>` relocates the shell's own working
+    directory exactly like `cd` does (confirmed live: `pushd sub &&
+    git checkout -- dirty.py`, with `dirty.py` dirty relative to `sub`
+    but absent at the PreToolUse payload's own `.cwd`, resolved
+    `checkout_restore_paths` to `('dirty.py',)` -- a CONFIDENT, WRONG
+    claim, since the wrapper's live `git diff` check against that
+    filename at the wrong `.cwd` found no such path and reported clean --
+    and the real command silently discarded the uncommitted change when
+    actually executed). `popd` joins for the same reason: it also
+    relocates the shell's cwd, to whatever the directory stack's own
+    prior entry was, which this classifier has no way to know either.
+
+    A DYNAMIC command word at `seg[0]` (after `_classify_tokens`'s own
+    uniform `_strip_leading_assignments`, so `seg[0]` is always the real
+    command word here) that does not unambiguously vanish, AND could
+    plausibly resolve to `cd`/`pushd`/`popd`, is ALSO treated as a
+    possible relocator -- CRITICAL bug found by independent adversarial
+    review (round 10, issue #1375) and independently reproduced live: the
+    literal-token scan above only ever recognized `cd`/`pushd`/`popd`
+    written out directly, so `X=cd; $X sub; git checkout -- file.py`
+    (dirty relative to `sub`, absent at the PreToolUse payload's own
+    `.cwd`) resolved to the same CONFIDENT, WRONG `checkout_restore_paths`
+    claim round 9's fix closed for the literal case, and the real command
+    silently discarded the uncommitted change when actually executed;
+    same result for `X=pushd`. A token that unambiguously vanishes
+    (`_token_is_all_unassigned_refs`/`_token_is_a_vanishing_default_or_
+    alt_clause`, the same primitives `_find_git_checkout_restore` already
+    uses for the identical git/subcommand-position question) is NOT
+    flagged here, since real bash then runs whatever token follows as the
+    actual command word instead -- and the existing literal scan above,
+    which checks every token in the segment regardless of position,
+    already covers a literal `cd`/`pushd`/`popd` sitting after such a
+    decoy without this addition needing its own skip-past loop.
+
+    Round 10's own first version flagged EVERY non-vanishing dynamic
+    `seg[0]`, with no attempt to check what it could actually resolve to
+    -- CRITICAL false-positive bug found by independent adversarial review
+    (round 11, issue #1375) and independently reproduced live:
+    `EDITOR=vim; $EDITOR sub; git checkout -- f.py`, a completely safe,
+    ordinary command with an unrelated, clean checkout, was denied
+    outright purely because `$EDITOR` is dynamic and non-vanishing.
+    `_dynamic_word_may_resolve_to_a_cwd_relocator` narrows this to
+    actually resolve the word's candidate value(s) (see its own
+    docstring) and only flags when a candidate could genuinely be
+    `cd`/`pushd`/`popd`, or resolution is itself ambiguous/unresolvable --
+    never widening beyond what round 10 already flagged, only narrowing
+    it.
+
+    The dynamic-word check above runs against `_first_surviving_segment_
+    word(seg, raw_assigned)`, not `seg[0]` directly -- CRITICAL bug found
+    by independent adversarial review (round 13, issue #1375) and
+    independently reproduced live: a `seg[0]`-only check silently skips
+    the whole segment when `seg[0]` itself genuinely vanishes, even
+    though the token that actually survives to become bash's real command
+    word (per that same vanishing logic this function already trusts
+    elsewhere) was never itself checked. `X=cd; $NEVERSET $X sub; git
+    checkout -- dirty.py` (`NEVERSET` genuinely never assigned) resolved
+    to the same CONFIDENT, WRONG `checkout_restore_paths` claim every
+    earlier round in this area has closed for a different gap -- see
+    `_first_surviving_segment_word`'s own docstring for the full
+    reproduction. The literal scan above is unaffected: it already checks
+    every token in the segment regardless of position, so a literal
+    `cd`/`pushd`/`popd` sitting after a vanishing decoy was already
+    covered.
+
+    RAW_ASSIGNED_GIT_BIASED is passed straight through as `_find_git_
+    checkout_restore`'s own third argument -- see that function's own
+    docstring for what it means and the live bypass it closes (round 19,
+    issue #1375). RAW_ASSIGNED_CD_BIASED feeds a SECOND fallback, for the
+    cd/pushd/popd-relocation check just below (round 20, issue #1375) --
+    see `_assigned_raw_values_biased_toward`'s own second CRITICAL-bug
+    paragraph for the live bypass this one closes. RAW_ASSIGNED_HISTORY
+    is passed straight through into `_git_checkout_paths`/`_git_restore_
+    paths` (round 21, issue #1375) -- see `_assigned_raw_value_history`'s
+    own docstring for what it means and the live bypass it closes.
+    NAMES_WITH_DYNAMIC_ASSIGNMENT (round 24, issue #1375) is threaded the
+    same way into both -- see `_names_with_dynamic_assignment`'s own
+    docstring for what it means and the live bypass it closes."""
+    saw_cd = False
+    all_paths: list[str] = []
+    for seg in segments:
+        subcommand, tokens_after, saw_tree_relocation = _find_git_checkout_restore(
+            seg, raw_assigned, raw_assigned_git_biased
+        )
+        if subcommand is None:
+            first = _first_surviving_segment_word(seg, raw_assigned)
+            if any(not _is_dynamic(t) and t in _CWD_RELOCATING_COMMANDS for t in seg) or (
+                first is not None
+                and _is_dynamic(first)
+                and (
+                    _dynamic_word_may_resolve_to_a_cwd_relocator(first, raw_assigned)
+                    or _dynamic_word_may_resolve_to_a_cwd_relocator(first, raw_assigned_cd_biased)
+                )
+            ):
+                saw_cd = True
+            continue
+        if saw_tree_relocation or saw_cd or any(name in raw_assigned for name in _GIT_TREE_ENV_VARS):
+            return (
+                f"a 'git {subcommand}' command carries a -C/--git-dir/--work-tree flag, a GIT_DIR=/"
+                "GIT_WORK_TREE=/GIT_INDEX_FILE= assignment, or an earlier 'cd'/'pushd'/'popd' in the same "
+                "command -- this classifier cannot soundly determine which working tree is at risk, so this "
+                "is denied outright",
+                (),
+            )
+        if subcommand == "checkout":
+            deny_reason, paths = _git_checkout_paths(
+                tokens_after, raw_assigned, raw_assigned_history, names_with_dynamic_assignment
+            )
+        else:
+            deny_reason, paths = _git_restore_paths(
+                tokens_after, raw_assigned, raw_assigned_history, names_with_dynamic_assignment
+            )
+        if deny_reason:
+            return deny_reason, ()
+        all_paths.extend(paths)
+    return None, tuple(all_paths)
+
+
 def _resolve_seg_tokens_candidates(
     tokens: list[str], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
 ) -> set[str] | None:
@@ -2976,7 +6501,11 @@ def _rule_b2_watched_tool_dynamic_verb_position(seg: list[str]) -> bool:
 
 
 def _segment_loop_hit(
-    segments: list[list[str]], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
+    segments: list[list[str]],
+    name_to_value: dict[str, str],
+    name_to_raw_value: dict[str, str],
+    names_poisoned_for_gh_api_and_b1: set[str] | None = None,
+    name_to_raw_value_history: dict[str, tuple[str, ...]] | None = None,
 ) -> tuple[str | None, bool]:
     """The B1a/B1b/B2/obfuscated-git-push-second-token loop -- factored
     out of `_classify_tokens` so it can be run TWICE: once against
@@ -3001,9 +6530,37 @@ def _segment_loop_hit(
     rule at all (confirmed live: even a plain `curl <url> | bash` with no
     decoy already classifies "no denied pattern matched" here), so there
     is no equivalent gap for that shape in this file specifically -- only
-    B2's own literal-`seg[0]` requirement is affected."""
+    B2's own literal-`seg[0]` requirement is affected.
+
+    NAMES_POISONED_FOR_GH_API_AND_B1 (round 26, widened round 27, issue
+    #1375) defaults to `None` (treated as empty) so every pre-existing
+    call site keeps its exact prior behavior; `_classify_tokens`'s own
+    call sites are the only ones that supply it, deliberately NOT the
+    same (wider) NAMES_WITH_DYNAMIC_ASSIGNMENT `_resolve_path_tokens`
+    (checkout/restore) consumes -- see `_names_poisoned_for_gh_api_and_
+    b1`'s own docstring for why. Checked ONLY when `seg[0]` is itself
+    dynamic -- the same precondition B1a/B1b already require before
+    either even runs (see each rule's own docstring) -- so a poisoned
+    name referenced in an otherwise-harmless, literal-command-word
+    segment (e.g. `echo $M` where M was reassigned via `read`) is never
+    flagged here: B1a/B1b's own bypass only exists where a poisoned name
+    feeds the SAME position (the dynamically-constructed command word
+    itself, or a same-segment verb token) those two rules already
+    resolve, so this check is scoped identically rather than treating
+    every reference anywhere as a hit."""
     is_git_push = False
+    poisoned = names_poisoned_for_gh_api_and_b1 or set()
+    raw_history = name_to_raw_value_history or {}
     for seg in segments:
+        if seg and _is_dynamic(seg[0]) and _segment_references_a_name(seg, poisoned, name_to_raw_value, raw_history):
+            return (
+                "a Bash command word is dynamically constructed from a variable that was reassigned "
+                "after an earlier value in a way this classifier cannot soundly resolve (a compound "
+                "`+=` append, a dynamic reassignment after an earlier static value, or `read`/"
+                "`printf -v`/an array-element assignment) -- rewrite as a plain literal command so it "
+                "can be checked",
+                is_git_push,
+            )
         if _rule_b1a_dynamic_word_same_segment_verb(seg, _WATCHED_VERBS, name_to_value, name_to_raw_value):
             return (
                 "a Bash command word is dynamically constructed, alongside a denied verb literally "
@@ -3034,22 +6591,69 @@ def _segment_loop_hit(
     return None, is_git_push
 
 
-def classify(command: str) -> Verdict:
+def classify(
+    command: str,
+    outer_name_to_value: dict[str, str] | None = None,
+    outer_name_to_raw_value: dict[str, str] | None = None,
+    outer_name_to_raw_value_git_biased: dict[str, str] | None = None,
+    outer_name_to_raw_value_cd_biased: dict[str, str] | None = None,
+    outer_name_to_raw_value_history: dict[str, tuple[str, ...]] | None = None,
+    outer_name_to_value_write_biased: dict[str, str] | None = None,
+    outer_name_to_raw_value_write_biased: dict[str, str] | None = None,
+    outer_names_with_dynamic_assignment: set[str] | None = None,
+) -> Verdict:
     """Classify one Bash tool_input.command string. Fails closed (deny) on
     anything shlex cannot tokenize -- an unparseable command is exactly the
     "cannot confidently classify" case dimension 15 requires denying, not
-    silently allowing."""
+    silently allowing.
+
+    OUTER_NAME_TO_VALUE/OUTER_NAME_TO_RAW_VALUE, when given, are passed
+    straight through to `_classify_tokens` -- see that function's own
+    docstring for what they mean and who supplies them. Every ordinary
+    caller (the module's own entrypoint, tests) omits them and gets this
+    function's original, scope-free behavior exactly; `_rule_command_
+    substitution_content`'s own recursive call (issue #1375, eighteenth
+    round) is the one caller that supplies them, so a quoted/fused
+    `$(...)` span's own inner content can resolve a variable assigned
+    OUTSIDE the span against the same shell scope real bash would use.
+
+    OUTER_NAME_TO_RAW_VALUE_GIT_BIASED (round 19, issue #1375),
+    OUTER_NAME_TO_RAW_VALUE_CD_BIASED and OUTER_NAME_TO_RAW_VALUE_HISTORY
+    (round 21, issue #1375), OUTER_NAME_TO_VALUE_WRITE_BIASED/
+    OUTER_NAME_TO_RAW_VALUE_WRITE_BIASED (round 22, issue #1375), and
+    OUTER_NAMES_WITH_DYNAMIC_ASSIGNMENT (round 24, issue #1375) are the
+    same recursive call's own analogous further arguments -- see
+    `_classify_tokens`'s own docstring and `_find_git_checkout_restore`'s/
+    `_assigned_raw_value_history`'s/`_assigned_literals_biased_toward`'s/
+    `_names_with_dynamic_assignment`'s own docstrings for what each means
+    and the live bypass each closes."""
     try:
         tokens = tokenize(command)
     except TokenizeError as error:
         return Verdict(True, f"the command could not be parsed as shell syntax ({error}). Failing closed", False)
-    return _classify_tokens(tokens)
+    return _classify_tokens(
+        tokens,
+        outer_name_to_value,
+        outer_name_to_raw_value,
+        outer_name_to_raw_value_git_biased,
+        outer_name_to_raw_value_cd_biased,
+        outer_name_to_raw_value_history,
+        outer_name_to_value_write_biased,
+        outer_name_to_raw_value_write_biased,
+        outer_names_with_dynamic_assignment,
+    )
 
 
 def _classify_tokens(
     tokens: list[str],
     outer_name_to_value: dict[str, str] | None = None,
     outer_name_to_raw_value: dict[str, str] | None = None,
+    outer_name_to_raw_value_git_biased: dict[str, str] | None = None,
+    outer_name_to_raw_value_cd_biased: dict[str, str] | None = None,
+    outer_name_to_raw_value_history: dict[str, tuple[str, ...]] | None = None,
+    outer_name_to_value_write_biased: dict[str, str] | None = None,
+    outer_name_to_raw_value_write_biased: dict[str, str] | None = None,
+    outer_names_with_dynamic_assignment: set[str] | None = None,
 ) -> Verdict:
     """The token-level core of `classify` -- split out so `_rule_command_
     substitution_content` can recurse into a `$(...)` span's own inner
@@ -3069,62 +6673,239 @@ def _classify_tokens(
     inner-scope reassignment does shadow the outer one). Named to match
     every other function in this module that takes this same pair
     (`name_to_value`/`name_to_raw_value`), not a new vocabulary of their
-    own. Used only by `_rule_array_literal_content`'s own recursive call,
-    to give an array literal's own inner content access to the SAME
-    shell scope as the rest of the command (see that function's own
-    docstring, nineteenth-round paragraph, for the live bypass this
-    closes) -- `None` (every other caller, including the top-level
-    `classify` and `_rule_command_substitution_content`'s own recursive
-    calls -- see that function's own docstring for the disclosed residual
-    this leaves there) preserves this function's prior, scope-free
-    behavior exactly."""
+    own. Threaded into BOTH `_rule_array_literal_content`'s and
+    `_rule_command_substitution_content`'s own recursive calls, so an
+    array literal's or a `$(...)` span's own inner content each get
+    access to the SAME shell scope as the rest of the command (see each
+    function's own docstring -- the nineteenth-round paragraph for the
+    array-literal fix, the eighteenth-round paragraph for the command-
+    substitution fix -- for the live bypass each closes) -- `None` (the
+    top-level `classify` entry point, when its own caller has no outer
+    scope of its own to supply) preserves this function's behavior for a
+    genuinely top-level command exactly.
+
+    OUTER_NAME_TO_RAW_VALUE_GIT_BIASED (round 19, issue #1375) is a third,
+    parallel outer-scope argument, merged with TOKENS's own `_assigned_
+    raw_values_biased_toward(tokens, "git")` (see that function's own
+    docstring) the same way OUTER_NAME_TO_RAW_VALUE is merged with the
+    plain `_assigned_raw_values(tokens)` above -- threaded into the same
+    two recursive calls, AND into `_rule_git_checkout_restore`'s own
+    third argument below, so a `git` token that is reassigned to
+    something else LATER in the same command (in an outer scope, inside
+    a `$(...)`/array-literal span, or both) still resolves to `git` for
+    checkout/restore recognition specifically. See `_find_git_checkout_
+    restore`'s own docstring for the live bypass this closes.
+
+    OUTER_NAME_TO_RAW_VALUE_CD_BIASED and OUTER_NAME_TO_RAW_VALUE_HISTORY
+    (round 21, issue #1375) are two further, parallel outer-scope
+    arguments, merged the identical way -- `_assigned_raw_values_biased_
+    toward(tokens, _CWD_RELOCATING_COMMANDS)` for the former, `_merge_
+    raw_value_histories(outer, _assigned_raw_value_history(tokens))` (a
+    UNION merge, not the plain `{**outer, **inner}` shadowing every other
+    dict here uses -- see that function's own docstring for why) for the
+    latter -- and threaded the same way into the same two recursive
+    calls plus `_rule_git_checkout_restore`'s own fourth and fifth
+    arguments. CD_BIASED closes the cd/pushd/popd-relocation analogue of
+    the git-token bypass just above; HISTORY closes a live path-argument-
+    resolution bypass round 20's own scoped-down (non-recursively-
+    threaded) cd-biased fix did NOT cover -- see `_assigned_raw_values_
+    biased_toward`'s own second CRITICAL-bug paragraph and `_assigned_
+    raw_value_history`'s own docstring for both bypasses.
+
+    OUTER_NAME_TO_VALUE_WRITE_BIASED and OUTER_NAME_TO_RAW_VALUE_
+    WRITE_BIASED (round 22, issue #1375) are two further, parallel
+    outer-scope arguments, merged the identical way -- `_assigned_
+    literals_biased_toward(tokens, _WATCHED_WRITE_BIAS)` and `_assigned_
+    raw_values_biased_toward(tokens, _WATCHED_WRITE_BIAS)` respectively --
+    and threaded the same way into the same two recursive calls. Unlike
+    every prior bias pair above, these two are NOT threaded into `_rule_
+    git_checkout_restore` (that rule has no B1a/B1b/gh-api-write concern
+    at all); instead they feed a second, OR-ed attempt at `_rule_gh_api_
+    write` and `_segment_loop_hit` below, alongside the ordinary ASSIGNED/
+    RAW_ASSIGNED attempt -- see `_assigned_literals_biased_toward`'s own
+    docstring for the live bypass this closes on those two HARD-DENY
+    consumers specifically.
+
+    OUTER_NAMES_WITH_DYNAMIC_ASSIGNMENT (round 24, issue #1375) is a
+    further, parallel outer-scope argument -- a UNION merge (`outer |
+    _names_with_dynamic_assignment(tokens)`, the same union convention
+    OUTER_NAME_TO_RAW_VALUE_HISTORY already uses, not the plain
+    `{**outer, **inner}` shadowing every dict-shaped pair above uses),
+    threaded the same way into the same two recursive calls plus `_rule_
+    git_checkout_restore`'s own sixth argument. Unlike the write-biased
+    pair above, this one IS threaded into `_rule_git_checkout_restore`
+    (this bug lives in checkout/restore path resolution specifically) --
+    see `_names_with_dynamic_assignment`'s own docstring for the live
+    bypass this closes."""
     outer_literals = outer_name_to_value or {}
     outer_raw = outer_name_to_raw_value or {}
+    outer_raw_git_biased = outer_name_to_raw_value_git_biased or {}
+    outer_raw_cd_biased = outer_name_to_raw_value_cd_biased or {}
+    outer_raw_history = outer_name_to_raw_value_history or {}
+    outer_write_biased = outer_name_to_value_write_biased or {}
+    outer_raw_write_biased = outer_name_to_raw_value_write_biased or {}
+    outer_dynamic_names = outer_names_with_dynamic_assignment or set()
+    merged_name_to_value = {**outer_literals, **_assigned_literals(tokens)}
+    merged_name_to_raw_value = {**outer_raw, **_assigned_raw_values(tokens)}
+    merged_name_to_raw_value_git_biased = {
+        **outer_raw_git_biased,
+        **_assigned_raw_values_biased_toward(tokens, frozenset({"git"})),
+    }
+    merged_name_to_raw_value_cd_biased = {
+        **outer_raw_cd_biased,
+        **_assigned_raw_values_biased_toward(tokens, _CWD_RELOCATING_COMMANDS),
+    }
+    merged_name_to_raw_value_history = _merge_raw_value_histories(
+        outer_raw_history, _assigned_raw_value_history(tokens)
+    )
+    merged_name_to_value_write_biased = {
+        **outer_write_biased,
+        **_assigned_literals_biased_toward(tokens, _WATCHED_WRITE_BIAS),
+    }
+    merged_name_to_raw_value_write_biased = {
+        **outer_raw_write_biased,
+        **_assigned_raw_values_biased_toward(tokens, _WATCHED_WRITE_BIAS),
+    }
+    merged_names_with_dynamic_assignment = outer_dynamic_names | _names_with_dynamic_assignment(tokens)
 
-    content_reason, content_is_git_push = _rule_command_substitution_content(tokens)
-    if content_reason:
-        return Verdict(True, content_reason, content_is_git_push)
-
-    array_content_reason, array_content_is_git_push = _rule_array_literal_content(
+    content_reason, content_is_git_push, content_checkout_restore_paths = _rule_command_substitution_content(
         tokens,
-        {**outer_literals, **_assigned_literals(tokens)},
-        {**outer_raw, **_assigned_raw_values(tokens)},
+        merged_name_to_value,
+        merged_name_to_raw_value,
+        merged_name_to_raw_value_git_biased,
+        merged_name_to_raw_value_cd_biased,
+        merged_name_to_raw_value_history,
+        merged_name_to_value_write_biased,
+        merged_name_to_raw_value_write_biased,
+        merged_names_with_dynamic_assignment,
+    )
+    if content_reason:
+        return Verdict(True, content_reason, content_is_git_push, content_checkout_restore_paths)
+
+    array_content_reason, array_content_is_git_push, array_content_checkout_restore_paths = _rule_array_literal_content(
+        tokens,
+        merged_name_to_value,
+        merged_name_to_raw_value,
+        merged_name_to_raw_value_git_biased,
+        merged_name_to_raw_value_cd_biased,
+        merged_name_to_raw_value_history,
+        merged_name_to_value_write_biased,
+        merged_name_to_raw_value_write_biased,
+        merged_names_with_dynamic_assignment,
     )
     is_git_push = content_is_git_push or array_content_is_git_push
+    checkout_restore_paths = content_checkout_restore_paths + array_content_checkout_restore_paths
     if array_content_reason:
-        return Verdict(True, array_content_reason, is_git_push)
+        return Verdict(True, array_content_reason, is_git_push, checkout_restore_paths)
 
     tokens = _fold_array_literal_spans(_fold_command_substitution_spans(tokens))
     segments = [s for s in (_strip_leading_assignments(seg) for seg in segment_tokens(tokens)) if s]
     assigned = {**outer_literals, **_assigned_literals(tokens)}
     raw_assigned = {**outer_raw, **_assigned_raw_values(tokens)}
+    raw_assigned_git_biased = {
+        **outer_raw_git_biased,
+        **_assigned_raw_values_biased_toward(tokens, frozenset({"git"})),
+    }
+    raw_assigned_cd_biased = {
+        **outer_raw_cd_biased,
+        **_assigned_raw_values_biased_toward(tokens, _CWD_RELOCATING_COMMANDS),
+    }
+    raw_assigned_history = _merge_raw_value_histories(outer_raw_history, _assigned_raw_value_history(tokens))
+    assigned_write_biased = {
+        **outer_write_biased,
+        **_assigned_literals_biased_toward(tokens, _WATCHED_WRITE_BIAS),
+    }
+    raw_assigned_write_biased = {
+        **outer_raw_write_biased,
+        **_assigned_raw_values_biased_toward(tokens, _WATCHED_WRITE_BIAS),
+    }
+    names_with_dynamic_assignment = outer_dynamic_names | _names_with_dynamic_assignment(tokens)
+    # Deliberately narrower than NAMES_WITH_DYNAMIC_ASSIGNMENT above, and
+    # computed fresh from TOKENS only (no outer-scope union) -- see
+    # `_names_poisoned_for_gh_api_and_b1`'s own docstring for why
+    # `_rule_gh_api_write`/`_segment_loop_hit` below consume THIS set,
+    # not the full one just above.
+    names_poisoned_for_gh_api_and_b1 = _names_poisoned_for_gh_api_and_b1(tokens)
     lowered_command = " ".join(tokens).lower()
 
     is_git_push = is_git_push or any(_is_git_push_segment(seg, raw_assigned) for seg in segments)
 
     literal_hit = _rule_a_literal(segments)
     if literal_hit:
-        return Verdict(True, literal_hit, is_git_push)
+        return Verdict(True, literal_hit, is_git_push, checkout_restore_paths)
 
-    gh_api_hit = _rule_gh_api_write(segments, lowered_command, assigned, raw_assigned)
+    gh_api_hit = _rule_gh_api_write(
+        segments,
+        lowered_command,
+        assigned,
+        raw_assigned,
+        names_poisoned_for_gh_api_and_b1,
+        raw_assigned_history,
+    ) or _rule_gh_api_write(
+        segments,
+        lowered_command,
+        assigned_write_biased,
+        raw_assigned_write_biased,
+        names_poisoned_for_gh_api_and_b1,
+        raw_assigned_history,
+    )
     if gh_api_hit:
-        return Verdict(True, gh_api_hit, is_git_push)
+        return Verdict(True, gh_api_hit, is_git_push, checkout_restore_paths)
 
-    loop_hit, loop_is_git_push = _segment_loop_hit(segments, assigned, raw_assigned)
+    loop_hit, loop_is_git_push = _segment_loop_hit(
+        segments, assigned, raw_assigned, names_poisoned_for_gh_api_and_b1, raw_assigned_history
+    )
     is_git_push = is_git_push or loop_is_git_push
+    if not loop_hit:
+        loop_hit, biased_loop_is_git_push = _segment_loop_hit(
+            segments,
+            assigned_write_biased,
+            raw_assigned_write_biased,
+            names_poisoned_for_gh_api_and_b1,
+            raw_assigned_history,
+        )
+        is_git_push = is_git_push or biased_loop_is_git_push
     if loop_hit:
-        return Verdict(True, loop_hit, is_git_push)
+        return Verdict(True, loop_hit, is_git_push, checkout_restore_paths)
 
     collapsed_segments = [
         collapsed for seg in segments if (collapsed := _strip_leading_unassigned_bare_refs(seg, raw_assigned))
     ]
     if collapsed_segments != segments:
-        collapsed_hit, collapsed_is_git_push = _segment_loop_hit(collapsed_segments, assigned, raw_assigned)
+        collapsed_hit, collapsed_is_git_push = _segment_loop_hit(
+            collapsed_segments, assigned, raw_assigned, names_poisoned_for_gh_api_and_b1, raw_assigned_history
+        )
         is_git_push = is_git_push or collapsed_is_git_push
+        if not collapsed_hit:
+            collapsed_hit, collapsed_biased_is_git_push = _segment_loop_hit(
+                collapsed_segments,
+                assigned_write_biased,
+                raw_assigned_write_biased,
+                names_poisoned_for_gh_api_and_b1,
+                raw_assigned_history,
+            )
+            is_git_push = is_git_push or collapsed_biased_is_git_push
         if collapsed_hit:
-            return Verdict(True, f"{collapsed_hit}, once a leading unassigned reference word-split away", is_git_push)
+            return Verdict(
+                True,
+                f"{collapsed_hit}, once a leading unassigned reference word-split away",
+                is_git_push,
+                checkout_restore_paths,
+            )
 
-    return Verdict(False, "no denied pattern matched", is_git_push)
+    own_checkout_restore_hit, own_checkout_restore_paths = _rule_git_checkout_restore(
+        segments,
+        raw_assigned,
+        raw_assigned_git_biased,
+        raw_assigned_cd_biased,
+        raw_assigned_history,
+        names_with_dynamic_assignment,
+    )
+    checkout_restore_paths = checkout_restore_paths + own_checkout_restore_paths
+    if own_checkout_restore_hit:
+        return Verdict(True, own_checkout_restore_hit, is_git_push, checkout_restore_paths)
+
+    return Verdict(False, "no denied pattern matched", is_git_push, checkout_restore_paths)
 
 
 # --- stdin JSON entrypoint ------------------------------------------------
@@ -3174,6 +6955,12 @@ def main() -> int:
                 "decision": "deny" if verdict.deny else "allow",
                 "reason": verdict.reason,
                 "is_git_push": verdict.is_git_push,
+                # Issue #1375: a genuine JSON array, not a newline-joined
+                # string -- a path containing a newline would otherwise
+                # split into fragments that each match nothing on the live
+                # `git diff` check and silently pass. `json.dumps` encodes
+                # a tuple as a JSON array natively.
+                "checkout_restore_paths": verdict.checkout_restore_paths,
             }
         )
     )

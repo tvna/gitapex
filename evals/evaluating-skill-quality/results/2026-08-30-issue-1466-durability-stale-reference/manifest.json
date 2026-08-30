@@ -1,0 +1,61 @@
+{
+  "date": "2026-08-30",
+  "issue": "https://github.com/tvna/gitapex/issues/1466",
+  "commit": "8d2e958b0593a44cc97158256f27824f25eeb1ac",
+  "record_contract": "gate-run",
+  "runner": {
+    "name": "evals/scripts/gitapex_run_eval_suite.py",
+    "version": "a045f8b967ae042d8c3e8f5829ccf5d2e81520d1"
+  },
+  "fixture_set": "1 new selection fixture under evals/evaluating-skill-quality/tasks/: durability-stale-reference-annotation-selection.yaml, gating dimension 6 (Durability) new stale-reference-vs-commit-provenance-annotation bullet. Formally gated (before/after, strict improve-or-reject, ordinary class -- a new rule addition, not pruning).",
+  "trials_per_fixture": 1,
+  "models": {
+    "default": "claude-sonnet-5"
+  },
+  "dispatch_mechanism": "Isolated `claude -p` subprocess (CLI 2.1.251 (Claude Code)), prompt passed as a single self-contained CLI argument, run from a scratch working directory outside any repository CLAUDE.md/AGENTS.md ancestry (confirmed directly via a filesystem-ancestry walk before the run), with an isolated $HOME (an empty freshly created directory -- this environment authenticates via an env-supplied OAuth token/file descriptor, not a ~/.claude/.credentials.json file, per adversarial-self-audit.md's own 2026-08-30 Known-entries note for this exact platform/version). Identifying signal (CLAUDE_CODE_REMOTE=true, CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=cloud_default, claude --version 2.1.251) confirmed to match adversarial-self-audit.md's own 2026-08-30 Same-run entry for this exact platform/version exactly, so the Verification procedure controls were not independently re-run for this gate (reusing that entry per its own stated scope, not a fresh Same-run entry). --allowedTools Read,Glob,Grep only (no Bash), with an explicit prompt instruction to perform the entire review synchronously with no nested Task/Agent/dispatch, per the already-documented 'too slow, background polling' and ambient-session-state-leak workarounds recorded in split.md's #1346/#1347 entries; the same four ambient session-state environment variables (CLAUDE_CODE_MESSAGING_SOCKET, CLAUDE_CODE_WEBSOCKET_AUTH_FILE_DESCRIPTOR, CLAUDE_CODE_REMOTE_SESSION_ID, CLAUDE_CODE_CHILD_SESSION) plus CLAUDE_PROJECT_DIR were unset for both dispatches as a precaution; no contamination symptom was actually observed this run. The isolated cwd for each dispatch was a full copy of skills/evaluating-skill-quality/ (SKILL.md plus every references/ file) at the relevant commit -- the before copy taken via `git archive 8d2e958b -- skills/evaluating-skill-quality`, the after copy taken from the post-edit working tree -- with the dispatch instructed to read SKILL.md and references/ from its own cwd and follow the Procedure by hand rather than relying on the Skill tool (no plugin-dir/marketplace install was performed for either isolated $HOME), matching the disclosed methodology eval-status.md's issue #149 entry already established for this same skill.",
+  "scorer": "skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py, scoring the fixture's own output_contains/output_not_contains assertions deterministically. `gitapex_score_contract.py --compare-to 0.833333`, score 1.000000 -> `1.000000 KEEP`.",
+  "run_shape": "before/after (pre-edit skills/evaluating-skill-quality/ at commit 8d2e958b vs. the edited working tree, committed as 0ad382bc) for the one gated selection fixture -- deviates from this directory's own README schema, written for a fixed-rubric/multi-model run; the deviation is intentional and disclosed here, matching this same directory's 2026-07-29/2026-08-15/2026-08-17/2026-08-26 records own precedent. `score_files[]` points at a standard eval-scores.schema.json-shaped summary of the fixture AFTER-edit score only; `nonstandard_score_files[]` carries the richer before/after detail the `gate` verdict below was actually computed from.",
+  "iterations": [
+    {
+      "label": "durability-stale-reference-annotation-selection",
+      "rubric_change": "Added a new Durability bullet to references/rubric.md (placed after the existing no-time-sensitive-content bullet) naming the pattern: when fixing a stale/dangling reference to something the repository's own commit history already tracks (a rename, a retirement, a move), prefer removing or generalizing the reference over annotating it with commit provenance, since git log/git blame already carry that record durably. Extended the section existing combined Fail:/Pass: block with one clause each. Did not exist before this run at all.",
+      "before_commit": "8d2e958b0593a44cc97158256f27824f25eeb1ac",
+      "after_commit": "0ad382bc48765e28f579d4463152613a374a9809",
+      "fixture_id": "evaluating-skill-quality-durability-stale-reference-annotation-selection",
+      "before_score": 0.833333,
+      "after_score": 1.0
+    }
+  ],
+  "score_files": [
+    {
+      "model_id": "claude-sonnet-5",
+      "file": "claude-sonnet-5-after.json"
+    }
+  ],
+  "gate": {
+    "verdict": "KEEP",
+    "candidate_class": "ordinary",
+    "split": "selection",
+    "prior_mean": "0.833333",
+    "candidate_mean": "1.000000"
+  },
+  "artifacts": [
+    "claude-sonnet-5-after.json",
+    "claude-sonnet-5-before-after-detail.json",
+    "artifacts/durability-stale-reference-annotation-selection-before.md",
+    "artifacts/durability-stale-reference-annotation-selection-after.md"
+  ],
+  "nonstandard_score_files": [
+    {
+      "file": "claude-sonnet-5-before-after-detail.json",
+      "deviation": "Scored by the same scorer a standard record uses, but before/after per-iteration (before_commit/after_commit, before_score/after_score) rather than eval-scores.schema.json's flat one-score-per-fixture_id shape -- same declared deviation as this directory's 2026-07-29/2026-08-15/2026-08-17/2026-08-26 records. This is the file the gate[] verdict above was actually computed from; claude-sonnet-5-after.json (score_files[]) is a same-run, standard-shape derivative summarizing only the AFTER-edit score."
+    }
+  ],
+  "known_gaps": [
+    "Only this one new selection fixture was live-dispatched; the pre-existing 40 selection fixtures were not re-scored on both sides. This edit diff (a pure rubric.md bullet addition to Durability, plus a fixture/split.json/generated-doc addition with no behavior change to any existing rule) was reasoned content-disjoint from the pre-existing corpus by direct inspection rather than confirmed by live re-dispatch -- the same disclosed methodology this skill's own split.md log has used for a pure-insertion edit in multiple prior iterations (issues #537, #1124, #1142, #1346, #1347).",
+    "trials_per_fixture=1 -- no repeat-run variance data; a single sample generalizing correctly is not proof a weaker tier or a different sample would.",
+    "No transfer check (an adjacent model/harness re-run) was performed before this record was written -- deferred as a same-class disclosed gap to prior iterations in this same directory that also did not complete one inline.",
+    "substring-scorer only. The pre-edit (before) transcript already reasoned correctly about the underlying defect (recommending the commit hash be dropped) through general reasoning alone, independent of the new rubric bullet -- it used the word 'provenance' but not 'generaliz', which is the actual source of the 0.833333 before-score rather than a wrong verdict. The after-edit transcript grounds the identical verdict explicitly in the new rubric text's own Fail/Pass wording, quoting it near-verbatim. The 0.833->1.0 delta reflects the after-edit review citing the new rubric section by name and its exact remedy vocabulary, not a change in the surface Pass/Fail conclusion, which was already correct before the edit for this particular fixture -- disclosed per the same convention issue #1142/#1347 manifest.json used for an analogous finding."
+  ],
+  "headline_pattern": "Issue #260 Repair 1 (retrospective for PR #258, where a stale in-repo reference was first fixed by annotating it with commit provenance instead of removing it, duplicating what git log already tracks) is addressed by a new rubric.md Durability bullet naming this exact pattern, plus matching Fail/Pass clauses. The new selection fixture gated KEEP under strict improve-or-reject (0.833333->1.0). As with several prior iterations in this skill's own split.md log, the fixture surface Pass/Fail verdict did not change between before and after -- a strong tier (Sonnet 5) already reasoned to the correct remedy through general reasoning alone -- but only the after-edit transcript grounds that conclusion in the new rubric text's own citable vocabulary."
+}

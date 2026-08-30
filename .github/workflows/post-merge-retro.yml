@@ -11,8 +11,9 @@ name: Post-merge retrospective
 # restated here rather than left implicit:
 #   - Job-level `timeout-minutes: 10` below bounds total wall-clock time
 #     per run regardless of what the script does internally.
-#   - The script's own `_call()` retry ceiling (see
-#     .github/scripts/gitapex_post_merge_retro.py's docstring and `_call` signature)
+#   - The script's own retry ceiling (see
+#     .github/scripts/gitapex_post_merge_retro.py's docstring and its
+#     `_gitapex_github_http.call_json` calls, issue #729)
 #     caps GitHub API retries at 3 attempts for idempotent GET/search calls
 #     and 1 attempt (no retry) for the non-idempotent issue-creation POST,
 #     per RFC 9110 SS9.2.2 -- a lost/truncated response after GitHub already
