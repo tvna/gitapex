@@ -723,6 +723,97 @@ def test_root_must_exist_accepts_a_real_directory(tmp_path: pathlib.Path) -> Non
     assert gate.GateFunctionBodyTestCoverageArgs._root_must_exist(tmp_path) == tmp_path
 
 
+def test_parse_added_lines_skips_added_lines_for_a_deleted_file() -> None:
+    """`path is None` (the `+++ /dev/null` deletion case) skips recording
+    into `added` even when a hunk line itself starts with `+` -- a
+    contrived shape a hand-fed diff could produce, never a real `git diff`
+    deletion (which carries only `-` lines), but the guard must not crash
+    or misattribute either way."""
+    diff_text = "--- a/old.py\n+++ /dev/null\n@@ -0,0 +1,1 @@\n+phantom\n"
+    assert gate.parse_added_lines(diff_text) == {}
+
+
+def test_parse_added_lines_raises_on_an_over_declared_hunk_that_drains_into_a_real_header_pair() -> None:
+    """The bypass two independent adversarial reviews found against the
+    boundary-check fix: an over-declared hunk whose excess is small enough
+    to be fully absorbed as the next file's own real `--- `/`+++ ` header
+    pair, draining both counters to exactly zero one line early -- caught
+    only by recognising the pair's own header shape plus what follows it
+    also looking like a new hunk or file boundary."""
+    diff_text = (
+        "--- a/hooks/gitapex_check_file1.py\n"
+        "+++ b/hooks/gitapex_check_file1.py\n"
+        "@@ -1,1 +1,1 @@\n"
+        "--- a/hooks/gitapex_check_file2.py\n"
+        "+++ b/hooks/gitapex_check_file2.py\n"
+        "@@ -1,1 +1,2 @@\n"
+    )
+    with pytest.raises(gate.ScanError, match="closes exactly on a line shaped like"):
+        gate.parse_added_lines(diff_text)
+
+
+def test_a_dash_plus_shaped_hunk_with_nothing_following_it_is_not_an_error() -> None:
+    """The false-positive guard's own non-error branch: a single,
+    accurately-declared hunk whose real content edits a line starting
+    `-- ` into one starting `++ ` looks header-pair-shaped, but nothing
+    follows it -- no missing `diff --git `, no disguised file transition,
+    just an ordinary edit to a changelog-marker-shaped line. Must not
+    raise: the ambiguous shape only actually raises when the line *after*
+    it also looks like a new hunk or file header (see the sibling raising
+    test above), which is not true here."""
+    diff_text = (
+        "diff --git a/hooks/gitapex_check_dashplus.py b/hooks/gitapex_check_dashplus.py\n"
+        "--- a/hooks/gitapex_check_dashplus.py\n"
+        "+++ b/hooks/gitapex_check_dashplus.py\n"
+        '@@ -6 +6 @@ DIVIDER = """\n'
+        "--- old changelog marker\n"
+        "+++ new changelog marker\n"
+    )
+    assert gate.parse_added_lines(diff_text) == {"hooks/gitapex_check_dashplus.py": {6}}
+
+
+def test_a_real_looking_absorbed_header_pair_with_no_boundary_following_it_does_not_raise() -> None:
+    """The header-pair-shape signal alone is not sufficient to raise: the
+    hunk here closes exactly on file2's own real-shaped `--- `/`+++ `
+    header pair (`_looks_like_real_header_pair` reads True), but what
+    follows is ordinary content, not a new `@@` or `diff --git ` boundary
+    -- so the ambiguity check's own second, required signal is absent and
+    this must not raise. Exercises the boundary check's own False branch:
+    header-shaped but not followed by a real boundary."""
+    diff_text = (
+        "diff --git a/file1.py b/file1.py\n"
+        "--- a/file1.py\n"
+        "+++ b/file1.py\n"
+        "@@ -1,1 +1,1 @@\n"
+        "--- a/file2.py\n"
+        "+++ b/file2.py\n"
+        "some ordinary content here\n"
+    )
+    assert gate.parse_added_lines(diff_text) == {"file1.py": {1}}
+
+
+def test_diff_adds_a_covering_test_skips_a_touched_but_unparseable_test_file(tmp_path: pathlib.Path) -> None:
+    """The test file is genuinely touched by this diff (`test_added` is
+    non-empty) but its own content cannot be parsed as Python -- treated
+    as contributing no coverage, the same conservative verdict
+    `_test_tree` already documents, reached this time through
+    `_diff_adds_a_covering_test`'s own call path rather than a direct call."""
+    _write(tmp_path, _TEST_PATH, "def broken(:\n")
+    assert not gate._diff_adds_a_covering_test(tmp_path, "gitapex_check_fixture", "check_value", {_TEST_PATH: {1}})
+
+
+def test_find_violations_raises_scan_error_for_a_non_utf8_source_file(tmp_path: pathlib.Path) -> None:
+    """A source file named by the diff exists but is not valid UTF-8 (nor
+    UTF-8-with-BOM) -- read as text raises `UnicodeDecodeError`, which
+    `find_violations` turns into a `ScanError` rather than crashing or
+    silently skipping the file."""
+    path = tmp_path / _FIXTURE_PATH
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"\xff\xfe not valid utf-8 or utf-8-sig \x80\x81")
+    with pytest.raises(gate.ScanError, match="cannot be read as UTF-8 text"):
+        gate.find_violations(_partial_diff(_FIXTURE_PATH, "x = 1\n", [1]), tmp_path)
+
+
 # --- workflow drift tests ----------------------------------------------------
 
 _WORKFLOW_NAME = "function-body-test-coverage-gate.yml"
