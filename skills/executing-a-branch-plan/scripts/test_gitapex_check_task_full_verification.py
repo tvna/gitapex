@@ -274,7 +274,7 @@ def test_sh_denies_on_malformed_json_payload() -> None:
     )
     assert result.returncode == 2
     payload = json.loads(result.stderr)
-    assert payload["hookSpecificOutput"]["decision"] == "continue"
+    assert payload["hookSpecificOutput"]["decision"] == "block"
     assert payload["hookSpecificOutput"]["hookEventName"] == "SubagentStop"
     assert payload["hookSpecificOutput"]["reason"]
 

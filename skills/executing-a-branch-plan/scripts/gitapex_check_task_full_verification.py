@@ -108,7 +108,17 @@ DEFAULT_PREFLIGHT_ARGV: tuple[str, ...] = (
 # Matches gitapex_gate_local_preflight.py's own DEFAULT_TIMEOUT_SECONDS and
 # its rationale: a hang guard, not a budget -- a cold mypy cache (run inside
 # the local-preflight step) can legitimately take longer than a warm-run
-# measurement would suggest.
+# measurement would suggest. Applied PER STEP to two sequential steps
+# (pytest, then local-preflight) -- .claude/agents/branch-plan-task.md's
+# own SubagentStop hook `timeout` (the OUTER Claude Code hook-process
+# ceiling, a materially different thing from this per-subprocess value)
+# must stay comfortably above 2x this number, or a legitimately slow
+# (not failing) run can hit Claude Code's own hook timeout first, which
+# discards this classifier's output entirely and silently fails OPEN
+# (SubagentStop is not one of the two documented exceptions -- only
+# PreModelSwitch, and Agent-SDK PreToolUse callbacks -- that still block
+# on a timeout) rather than denying. Keep the two values in sync if
+# either changes.
 DEFAULT_TIMEOUT_SECONDS = 1800
 
 

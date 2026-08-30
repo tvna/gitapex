@@ -1155,7 +1155,11 @@ established, not a new one.** The project-local `branch-plan-task`
 variant (`.claude/agents/branch-plan-task.md`) gains an embedded
 `hooks.SubagentStop` block -- Claude Code's own documented mechanism for
 denying a subagent's stop event (exit code 2: "Prevents the subagent from
-stopping") -- invoking `check_task_full_verification.sh`, a sibling of
+stopping"; the `SubagentStop` event itself "fires when a subagent
+finishes"), fetched directly from `https://code.claude.com/docs/en/hooks`
+this session (2026-08-30), the same primary-source-fetch discipline
+Decisions 4/16's own Workflow-tool citations already establish for this
+doc -- invoking `check_task_full_verification.sh`, a sibling of
 Decision 17's own `check_task_bash_safety.sh` wrapper. The
 plugin-distributed variant (`agents/branch-plan-task.md`) carries the
 identical requirement as a prompt-only instruction, for the identical
@@ -1232,7 +1236,7 @@ Decision this pass:
 ## New skill: consolidated sequence (for the follow-up implementation issue)
 
 Provided so the follow-up issue does not need to re-derive step ordering
-from the eleven decisions above. Not implemented by this pass (Design-
+from the twenty decisions above. Not implemented by this pass (Design-
 only scope).
 
 1. **Authorization gate** (Decision 5). Check for a platform-verified
@@ -1346,6 +1350,14 @@ three systems specifically.** Decisions 2 (both citation corrections),
 15, 16, 17, 18, 19, and the "Considered and not adopted" section above
 are this second pass's confirmed findings, applied or explicitly
 declined with a stated reason.
+
+**Decision 20 (added 2026-08-30, a later, separate session -- not part
+of either pass above):** the `SubagentStop` hook-event facts it cites
+(fires when a subagent finishes; exit code 2 "prevents the subagent from
+stopping") were fetched directly from
+`https://code.claude.com/docs/en/hooks` in that later session, the same
+discipline the two passes above already apply to their own citations, not
+carried over unverified from either earlier pass.
 
 **Speculation, named as such:** the row-2 Residual risk this doc
 originally flagged ("primary-source drift -- an external plugin's docs/

@@ -14,7 +14,7 @@ hooks:
       hooks:
         - type: command
           command: "\"${CLAUDE_PROJECT_DIR:-$(pwd)}/skills/executing-a-branch-plan/scripts/check_task_full_verification.sh\""
-          timeout: 1800
+          timeout: 3900
 ---
 
 Task-level dispatch target for `executing-a-branch-plan`. Do all Decision 3
@@ -33,3 +33,14 @@ denies stopping until both pass (design doc Decision 20, issue #1476) --
 this is a deterministic backstop, not only this paragraph's own
 instruction, but fixing a verification failure it reports is still this
 task's own responsibility to act on, the same as any other blocked stop.
+
+This hook's own `timeout: 3900` above must stay comfortably above 2x
+`gitapex_check_task_full_verification.py`'s own `DEFAULT_TIMEOUT_SECONDS`
+(1800s, applied per step to two sequential steps): Claude Code cancels a
+`command` hook that reaches its own `timeout` and discards its output
+entirely, and `SubagentStop` is not one of the two documented exceptions
+that still block on a timeout (only `PreModelSwitch`, and Agent-SDK
+callback hooks on `PreToolUse`, do) -- so a `timeout` here set too low
+would let a legitimately slow (not failing) verification run silently
+fail OPEN instead of denying, defeating this whole gate. Keep the two
+values in sync if either changes.

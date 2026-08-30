@@ -25,14 +25,14 @@
 set -euo pipefail
 
 if ! command -v jq >/dev/null 2>&1; then
-  printf '%s\n' "{\"hookSpecificOutput\": {\"hookEventName\": \"SubagentStop\", \"decision\": \"continue\", \"reason\": \"Blocked by executing-a-branch-plan's task-agent full-verification gate: jq is not available on PATH -- cannot verify the SubagentStop payload. Failing closed.\"}}" >&2
+  printf '%s\n' "{\"hookSpecificOutput\": {\"hookEventName\": \"SubagentStop\", \"decision\": \"block\", \"reason\": \"Blocked by executing-a-branch-plan's task-agent full-verification gate: jq is not available on PATH -- cannot verify the SubagentStop payload. Failing closed.\"}}" >&2
   exit 2
 fi
 
 deny() {
   local reason="$1"
   printf '%s' "$reason" | jq -Rs \
-    '{"hookSpecificOutput": {"hookEventName": "SubagentStop", "decision": "continue", "reason": .}}' >&2
+    '{"hookSpecificOutput": {"hookEventName": "SubagentStop", "decision": "block", "reason": .}}' >&2
   exit 2
 }
 

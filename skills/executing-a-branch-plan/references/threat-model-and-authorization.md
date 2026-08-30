@@ -1,6 +1,6 @@
 # Threat Model and Authorization
 
-Steps 1, 2, and 6's own detail. Source: design doc Decisions 5, 6, 7, 17.
+Steps 1, 2, and 6's own detail. Source: design doc Decisions 5, 6, 7, 17, 20.
 This is the highest-blast-radius surface this skill catalog owns to
 date -- turning untrusted issue text into committed code and an opened
 PR -- and every section below is written accordingly, not as a
@@ -440,6 +440,35 @@ reason.**
    verification run, since "did the subagent actually run these two
    commands before its last message" is not a Bash-command pattern any
    PreToolUse hook could classify.
+
+**Found and fixed by this PR's own `checker-script-adversarial-review`
+(issue `#1476`), not shipped with either defect:**
+
+- **The `decision` value.** An earlier revision emitted
+  `"decision": "continue"` in `check_task_full_verification.sh`'s own
+  deny path -- the wrong value, confirmed against this repository's own
+  already-shipped `hooks/check-stop-review-obligation.sh` (a real Stop
+  hook using `"decision": "block"` correctly, and one this same session
+  directly observed working) and against Claude Code's own hooks
+  documentation, which lists `"block"` as the value that denies a
+  Stop/SubagentStop event. Fixed to `"block"` in both of this script's
+  own deny paths.
+- **The outer hook `timeout` vs. the classifier's own per-step timeout.**
+  `gitapex_check_task_full_verification.py`'s own `DEFAULT_TIMEOUT_SECONDS`
+  (1800s) applies PER STEP to two sequential steps (pytest, then
+  local-preflight) -- up to 3600s combined in the worst case -- but the
+  `SubagentStop` hook registration in `.claude/agents/branch-plan-task.md`
+  originally set `timeout: 1800` for the whole wrapper. Claude Code
+  cancels a `command` hook that reaches its own `timeout` and discards
+  its output entirely; `SubagentStop` is not one of the two documented
+  exceptions that still block on a timeout (only `PreModelSwitch`, and
+  Agent-SDK callback hooks on `PreToolUse`, do) -- so a legitimately
+  slow, not-failing verification run could have hit Claude Code's own
+  hook timeout first and silently failed OPEN, exactly the defect this
+  whole mechanism exists to close. Fixed by raising the registered
+  `timeout` to 3900s (comfortably above 2x the per-step ceiling); the two
+  values are cross-referenced in both files so a future edit to one is
+  less likely to silently desync from the other.
 
 **Known, disclosed limitation, not solved here: no bound on repeated
 denial.** A genuinely persistent failure -- an unrelated pre-existing
