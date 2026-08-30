@@ -786,6 +786,66 @@ STEP_LOCATION_ASSERTION_RE = re.compile(
 # ISSUE_CITATION_HEDGE_PHRASES already use.
 STEP_LOCATION_CEDING_PHRASE = "authoritative"
 
+# Grounded in the exact historical incident this check mechanizes (issue
+# #79's PR #75 retrospective, re-scoped by issue #577 after #192 carried the
+# original proposal's "every Fail/Pass example needs a backtick" framing
+# too far): battle-testing-a-skill's own SKILL.md Procedure requires "quote
+# the exact offending line" for every finding, with dimension 14 (a
+# regression-corpus check evidenced by inspecting the target's `evals/`
+# directory, not a SKILL.md line) named as the one exception. The defect
+# #79 found was this exception drifting out of sync across the two files --
+# dimension 14's catalog entry was reworded to be structural before
+# SKILL.md's own Procedure text was updated to exempt it. This check
+# mechanizes exactly that cross-file consistency, not a blanket
+# every-example-needs-a-backtick rule: issue #577 found the blanket
+# reading would fail CI on roughly 18 of 22 real dimensions in the current,
+# already-reviewed adversarial-dimensions.md corpus, none of which make any
+# "quote a SKILL.md line" claim in the first place.
+#
+# Every inter-word gap below is `\s+`, not a literal space -- a review
+# finding: battle-testing-a-skill's own real SKILL.md hard-wraps "quote the
+# exact offending" and "line" across a line break, so a literal-space
+# pattern never matches the exact prose this check exists to read, and the
+# whole check silently no-ops (QUOTED_LINE_RULE_RE finds nothing, so
+# _dimension_quote_exemption_offenders returns early) rather than actually
+# comparing the two files. `\s+` matches across that wrap the same way
+# every other multi-word phrase constant in this module already does (e.g.
+# STEP_NUM_RE above).
+DIMENSION_QUOTE_EXEMPTION_RE = re.compile(
+    r"except\s+dimensions?\s+(\d+(?:\s*(?:,|and)\s*\d+)*)",
+    re.IGNORECASE,
+)
+# Presence marks that SKILL.md's Procedure states the blanket "quote a
+# line" rule at all -- when absent, there is no blanket rule for a
+# references/ catalog's own structural exemption to contradict, so the
+# check below is trivially satisfied (the same "not applicable, contributes
+# zero offenders" shape _mechanism_fit_citation_offenders already uses for
+# a document with no '## Mechanism fit' heading). Deliberately the exact
+# phrase battle-testing-a-skill's own SKILL.md uses, not a generic "cites a
+# line" linter -- see DIMENSION_QUOTE_EXEMPTION_RE's own comment for why a
+# narrow, incident-grounded phrase beats a broader vocabulary with no
+# evidence base, and for why every gap below is `\s+`.
+QUOTED_LINE_RULE_RE = re.compile(r"quote\s+the\s+exact\s+offending\s+line", re.IGNORECASE)
+# A references/ catalog's own numbered dimension section marks itself
+# structurally exempt from the quoted-line rule with one of these two
+# phrasings -- both drawn verbatim from adversarial-dimensions.md's real
+# dimension 14 section (its intro uses the first, its Fail bullet the
+# second). Two fixed alternatives, not a paraphrase-matching linter: the
+# same narrow, evidence-grounded posture as every other closed-vocabulary
+# marker in this module.
+CATALOG_QUOTE_EXEMPTION_MARKER_RE = re.compile(
+    r"not\s+(?:by\s+)?quoting\s+a\s+line|not\s+a\s+skill\.md\s+line",
+    re.IGNORECASE,
+)
+# A references/ file's own numbered dimension/rubric-item heading, e.g.
+# adversarial-dimensions.md's "## 14. Reusable, versioned adversarial
+# regression corpus". Matched generically over ANY references/*.md file's
+# top-level numbered headings -- not hardcoded to adversarial-dimensions.md
+# by filename -- the same generic-over-any-document posture
+# _mechanism_fit_citation_offenders already documents for its own heading
+# scan.
+NUMBERED_CATALOG_HEADING_RE = re.compile(r"^##\s+(\d+)\.\s+.+$", re.MULTILINE)
+
 
 @dataclass(frozen=True)
 class CheckResult:

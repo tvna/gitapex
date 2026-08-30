@@ -7,8 +7,14 @@ out of what used to be one large orchestrating function in
 Pure structural extraction: each function below owns one cohesive slice
 of what ``gitapex_check_skill_shape.check_shape`` used to compute inline
 -- the exact same CheckResult values/evidence/order, copy-pasted
-verbatim out of that function's own body. Zero detection-logic change;
-see ``verify_shape_check_output_diff.py`` for the load-bearing proof.
+verbatim out of that function's own body. Zero detection-logic change; the
+load-bearing proof was ``verify_shape_check_output_diff.py``, a one-time
+differential oracle pinned to the pre-split commit (issue #1330's own PR
+#1450, merge commit aa33e6f7) -- retired by issue #577 once its job was
+done, since its pinned-commit design could never pass again after any
+later, legitimate detection-logic change. See PR #1450's own merged diff
+for the original proof; `git show aa33e6f7:skills/evaluating-skill-quality/scripts/verify_shape_check_output_diff.py`
+recovers the retired script.
 """
 
 from __future__ import annotations
