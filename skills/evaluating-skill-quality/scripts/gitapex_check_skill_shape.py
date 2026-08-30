@@ -1353,6 +1353,56 @@ STEP_LOCATION_ASSERTION_RE = re.compile(
 # ISSUE_CITATION_HEDGE_PHRASES already use.
 STEP_LOCATION_CEDING_PHRASE = "authoritative"
 
+# Grounded in the exact historical incident this check mechanizes (issue
+# #79's PR #75 retrospective, re-scoped by issue #577 after #192 carried the
+# original proposal's "every Fail/Pass example needs a backtick" framing
+# too far): battle-testing-a-skill's own SKILL.md Procedure requires "quote
+# the exact offending line" for every finding, with dimension 14 (a
+# regression-corpus check evidenced by inspecting the target's `evals/`
+# directory, not a SKILL.md line) named as the one exception. The defect
+# #79 found was this exception drifting out of sync across the two files --
+# dimension 14's catalog entry was reworded to be structural before
+# SKILL.md's own Procedure text was updated to exempt it. This check
+# mechanizes exactly that cross-file consistency, not a blanket
+# every-example-needs-a-backtick rule: issue #577 found the blanket
+# reading would fail CI on roughly 18 of 22 real dimensions in the current,
+# already-reviewed adversarial-dimensions.md corpus, none of which make any
+# "quote a SKILL.md line" claim in the first place.
+DIMENSION_QUOTE_EXEMPTION_RE = re.compile(
+    r"except dimensions?\s+(\d+(?:\s*(?:,|and)\s*\d+)*)",
+    re.IGNORECASE,
+)
+# Presence marks that SKILL.md's Procedure states the blanket "quote a
+# line" rule at all -- when absent, there is no blanket rule for a
+# references/ catalog's own structural exemption to contradict, so the
+# check below is trivially satisfied (the same "not applicable, contributes
+# zero offenders" shape _mechanism_fit_citation_offenders already uses for
+# a document with no '## Mechanism fit' heading). Deliberately the exact
+# phrase battle-testing-a-skill's own SKILL.md uses, not a generic "cites a
+# line" linter -- see DIMENSION_QUOTE_EXEMPTION_RE's own comment for why a
+# narrow, incident-grounded phrase beats a broader vocabulary with no
+# evidence base.
+QUOTED_LINE_RULE_RE = re.compile(r"quote the exact offending line", re.IGNORECASE)
+# A references/ catalog's own numbered dimension section marks itself
+# structurally exempt from the quoted-line rule with one of these two
+# phrasings -- both drawn verbatim from adversarial-dimensions.md's real
+# dimension 14 section (its intro uses the first, its Fail bullet the
+# second). Two fixed alternatives, not a paraphrase-matching linter: the
+# same narrow, evidence-grounded posture as every other closed-vocabulary
+# marker in this module.
+CATALOG_QUOTE_EXEMPTION_MARKER_RE = re.compile(
+    r"not\s+(?:by\s+)?quoting\s+a\s+line|not\s+a\s+skill\.md\s+line",
+    re.IGNORECASE,
+)
+# A references/ file's own numbered dimension/rubric-item heading, e.g.
+# adversarial-dimensions.md's "## 14. Reusable, versioned adversarial
+# regression corpus". Matched generically over ANY references/*.md file's
+# top-level numbered headings -- not hardcoded to adversarial-dimensions.md
+# by filename -- the same generic-over-any-document posture
+# _mechanism_fit_citation_offenders already documents for its own heading
+# scan.
+NUMBERED_CATALOG_HEADING_RE = re.compile(r"^##\s+(\d+)\.\s+.+$", re.MULTILINE)
+
 
 @dataclass(frozen=True)
 class CheckResult:
@@ -4641,6 +4691,7 @@ def check_shape(target: Path) -> list[CheckResult]:
     results.extend(_illustrative_model_id_checks(skill_md, skill_dir, body))
     results.extend(_raw_placeholder_checks(skill_md, skill_dir, body))
     results.extend(_step_location_checks(skill_md, skill_dir, body))
+    results.extend(_dimension_quote_exemption_checks(skill_md, skill_dir, body))
     results.extend(_no_voodoo_constant_checks(skill_md, skill_dir, body))
     results.extend(_script_execution_intent_checks(skill_md, skill_dir, body))
     if _is_portable(body, sidecar_portability):
@@ -5077,6 +5128,80 @@ def _step_location_checks(skill_md: Path, skill_dir: Path, body: list[str]) -> l
             "two different locations without one explicitly ceding "
             f"authority (a nearby {STEP_LOCATION_CEDING_PHRASE!r})",
             "none" if not offenders else "found: " + ", ".join(offenders),
+        ),
+    ]
+
+
+def _dimension_quote_exemption_offenders(skill_text: str, ref_sources: list[tuple[str, str]]) -> list[str]:
+    """Return one offender string per dimension number where SKILL.md's
+    quoted-line-rule exemption clause and a references/ catalog's own
+    structural-exemption marker disagree about whether that dimension is
+    exempt (Refs #79 repair 1, re-scoped by #577 from #192's row 5).
+
+    Trivially returns no offenders when ``skill_text`` states no blanket
+    "quote the exact offending line" rule at all (``QUOTED_LINE_RULE_RE``)
+    -- with no blanket rule, a catalog's own structural-exemption marker
+    contradicts nothing. This is deliberately NOT "every Fail/Pass example
+    needs a backtick or an exemption marker": #577 found that reading fails
+    CI on roughly 18 of adversarial-dimensions.md's 22 real dimensions
+    today, none of which ever claim to quote a SKILL.md line in the first
+    place -- only the dimension(s) SKILL.md itself names as exempt, and any
+    catalog section that claims the same structural exemption, are in
+    scope here.
+    """
+    if not QUOTED_LINE_RULE_RE.search(skill_text):
+        return []
+
+    skillmd_exempt: set[str] = set()
+    for m in DIMENSION_QUOTE_EXEMPTION_RE.finditer(skill_text):
+        skillmd_exempt.update(re.findall(r"\d+", m.group(1)))
+
+    catalog_exempt: set[str] = set()
+    for _label, ref_text in ref_sources:
+        defenced = _blank_fenced_blocks(ref_text)
+        headings = [(m.start(), m.group(1)) for m in NUMBERED_CATALOG_HEADING_RE.finditer(defenced)]
+        for i, (start, num) in enumerate(headings):
+            end = headings[i + 1][0] if i + 1 < len(headings) else len(defenced)
+            if CATALOG_QUOTE_EXEMPTION_MARKER_RE.search(defenced[start:end]):
+                catalog_exempt.add(num)
+
+    offenders: list[str] = []
+    for num in sorted(skillmd_exempt - catalog_exempt, key=int):
+        offenders.append(
+            f"dimension {num}: SKILL.md's quoted-line rule names it exempt, but no "
+            "references/ catalog section marks it structurally exempt"
+        )
+    for num in sorted(catalog_exempt - skillmd_exempt, key=int):
+        offenders.append(
+            f"dimension {num}: a references/ catalog section marks it structurally "
+            "exempt from quoting a SKILL.md line, but SKILL.md's quoted-line rule "
+            "does not name it exempt"
+        )
+    return offenders
+
+
+def _dimension_quote_exemption_checks(skill_md: Path, skill_dir: Path, body: list[str]) -> list[CheckResult]:
+    """The check_shape() entry point for _dimension_quote_exemption_offenders.
+    Runs unconditionally, at every portability level -- a same-repo
+    cross-file exemption contradiction is a completeness/consistency
+    defect, not a portability one, the same reasoning
+    _step_location_checks above already uses.
+
+    SKILL.md is always ``_citation_sources``'s own first entry (see that
+    function's own body); every remaining entry is a references/ file, the
+    only place a catalog's own structural-exemption marker can live.
+    """
+    sources = _citation_sources(skill_md, skill_dir, body)
+    skill_text = sources[0][1]
+    ref_sources = sources[1:]
+    offenders = _dedup(_dimension_quote_exemption_offenders(skill_text, ref_sources))
+    return [
+        CheckResult(
+            "dimension-quote-exemption-cross-reference",
+            not offenders,
+            "Every dimension SKILL.md's quoted-line rule names as exempt is marked "
+            "structurally exempt in a references/ catalog section, and vice versa",
+            "none" if not offenders else "found: " + "; ".join(offenders),
         ),
     ]
 

@@ -7018,6 +7018,83 @@ def test_step_location_contradiction_in_reference_file_fails(tmp_path):
     assert "references/notes.md:step 3" in result.evidence
 
 
+def test_dimension_quote_exemption_no_blanket_rule_trivially_passes(tmp_path):
+    # Refs #79 repair 1, re-scoped by #577 from #192 row 5: with no "quote
+    # the exact offending line" rule stated at all, a references/ catalog's
+    # own structural-exemption marker contradicts nothing.
+    d = _write_raw(
+        tmp_path,
+        _simple_body("A clean body with no quoted-line rule at all."),
+        references={"dims.md": "## 14. Something\n\nnot a SKILL.md line either way.\n"},
+    )
+    result = _by_name(css.check_shape(d))["dimension-quote-exemption-cross-reference"]
+    assert result.passed is True
+    assert result.evidence == "none"
+
+
+def test_dimension_quote_exemption_matching_exemption_passes(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        _simple_body(
+            "For every problem, quote the exact offending line -- except "
+            "dimension 14, whose evidence is the target's `evals/` "
+            "directory contents; cite that instead."
+        ),
+        references={
+            "dims.md": (
+                "## 14. Reusable, versioned adversarial regression corpus\n\n"
+                "Unlike the other dimensions, this one is evidenced by "
+                "inspecting the target's actual `evals/` directory, not by "
+                "quoting a line from its SKILL.md.\n"
+            )
+        },
+    )
+    result = _by_name(css.check_shape(d))["dimension-quote-exemption-cross-reference"]
+    assert result.passed is True
+    assert result.evidence == "none"
+
+
+def test_dimension_quote_exemption_alternate_marker_phrase_passes(tmp_path):
+    # dimension 14's own Fail bullet uses the second closed-vocabulary
+    # phrasing ("not a SKILL.md line") rather than the section intro's
+    # "not by quoting a line from its SKILL.md" -- both must resolve.
+    d = _write_raw(
+        tmp_path,
+        _simple_body("Quote the exact offending line -- except dimension 9, cited separately."),
+        references={"dims.md": "## 9. Something structural\n\n- Fail: cite the evidence, not a SKILL.md line.\n"},
+    )
+    result = _by_name(css.check_shape(d))["dimension-quote-exemption-cross-reference"]
+    assert result.passed is True
+
+
+def test_dimension_quote_exemption_skillmd_names_exempt_catalog_silent_fails(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        _simple_body("Quote the exact offending line -- except dimension 14, cited separately."),
+        references={"dims.md": "## 14. Reusable, versioned adversarial regression corpus\n\nOrdinary prose.\n"},
+    )
+    result = _by_name(css.check_shape(d))["dimension-quote-exemption-cross-reference"]
+    assert result.passed is False
+    assert "dimension 14" in result.evidence
+    assert "no references/ catalog section marks it structurally exempt" in result.evidence
+
+
+def test_dimension_quote_exemption_catalog_marks_exempt_skillmd_silent_fails(tmp_path):
+    d = _write_raw(
+        tmp_path,
+        _simple_body("Quote the exact offending line for every finding."),
+        references={
+            "dims.md": (
+                "## 9. Something structural\n\nEvidenced differently, not by quoting a line from its SKILL.md.\n"
+            )
+        },
+    )
+    result = _by_name(css.check_shape(d))["dimension-quote-exemption-cross-reference"]
+    assert result.passed is False
+    assert "dimension 9" in result.evidence
+    assert "SKILL.md's quoted-line rule does not name it exempt" in result.evidence
+
+
 # ---- Regressions found by an adversarial review pass (issue #192) ----
 
 
