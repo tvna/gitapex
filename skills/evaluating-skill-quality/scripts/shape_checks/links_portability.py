@@ -318,8 +318,8 @@ def _is_bare_skill_name(entry: str) -> bool:
     treated as potentially resolving. Mirrors
     ``.github/scripts/gitapex_scan_skill_metadata_schema.py``'s own
     ``_is_bare_skill_name``; kept as an independent copy rather than a
-    shared import because this file is stdlib-only by design (see the
-    module docstring) and that module is not (issue #757)."""
+    shared import because this checker is stdlib-only by design and that
+    module is not (issue #757)."""
     return entry not in ("", ".", "..") and "/" not in entry and "\\" not in entry
 
 

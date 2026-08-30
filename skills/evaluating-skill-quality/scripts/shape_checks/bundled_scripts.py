@@ -373,12 +373,26 @@ def _script_execution_intent_offenders(
     check. The result is deduplicated by filename -- a script mentioned in
     multiple files with no qualifying phrase in any of them is reported
     once, labelled by the first source it was found unqualified in.
+
+    Two (or more) scripts in different ``scripts/`` subdirectories sharing
+    the same basename -- reachable only since ``_bundled_scripts`` started
+    scanning recursively -- are never allowed to satisfy each other: the
+    inline-code token this check matches against (`` `filename` ``) carries
+    no directory information, so a doc paragraph naming that bare filename
+    cannot be attributed to one specific colliding file over the other. Each
+    such basename is treated as ambiguous rather than silently letting one
+    file's genuine "Run `filename`" mention satisfy every same-named file --
+    which would fail open exactly where a real, undocumented script sits.
     """
     sources = _citation_sources(skill_md, skill_dir, body)
+    basename_counts: dict[str, int] = {}
+    for script in scripts:
+        basename_counts[script.name] = basename_counts.get(script.name, 0) + 1
     offenders: list[str] = []
     seen: set[str] = set()
     for script in scripts:
         filename = script.name
+        ambiguous_basename = basename_counts[filename] > 1
         token = f"`{filename}`"
         # Case-insensitive: "run"/"see" mid-sentence ("...also run `x.py`
         # to...") is natural, grammatically-required lowercase prose, not
@@ -399,7 +413,7 @@ def _script_execution_intent_offenders(
                 if token not in para:
                     continue
                 mentioned = True
-                if run_re.search(para) or see_re.search(para):
+                if not ambiguous_basename and (run_re.search(para) or see_re.search(para)):
                     satisfied = True
                     break
                 if first_offending_label is None:
