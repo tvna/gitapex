@@ -573,6 +573,7 @@ from shape_checks.bundled_scripts import (
 )
 from shape_checks.citation_checks import (
     _cross_skill_citation_checks,
+    _dimension_quote_exemption_checks,
     _illustrative_model_id_checks,
     _issue_citation_checks,
     _mechanism_fit_checks,
@@ -1008,6 +1009,7 @@ def check_shape(target: Path) -> list[CheckResult]:
     results.extend(_illustrative_model_id_checks(skill_md, skill_dir, body))
     results.extend(_raw_placeholder_checks(skill_md, skill_dir, body))
     results.extend(_step_location_checks(skill_md, skill_dir, body))
+    results.extend(_dimension_quote_exemption_checks(skill_md, skill_dir, body))
     results.extend(_no_voodoo_constant_checks(skill_md, skill_dir, body))
     results.extend(_script_execution_intent_checks(skill_md, skill_dir, body))
     if _is_portable(body, sidecar_portability):
