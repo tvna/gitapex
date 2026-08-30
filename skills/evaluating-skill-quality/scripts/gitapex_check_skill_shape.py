@@ -1368,8 +1368,18 @@ STEP_LOCATION_CEDING_PHRASE = "authoritative"
 # reading would fail CI on roughly 18 of 22 real dimensions in the current,
 # already-reviewed adversarial-dimensions.md corpus, none of which make any
 # "quote a SKILL.md line" claim in the first place.
+#
+# Every inter-word gap below is `\s+`, not a literal space -- a review
+# finding: battle-testing-a-skill's own real SKILL.md hard-wraps "quote the
+# exact offending" and "line" across a line break, so a literal-space
+# pattern never matches the exact prose this check exists to read, and the
+# whole check silently no-ops (QUOTED_LINE_RULE_RE finds nothing, so
+# _dimension_quote_exemption_offenders returns early) rather than actually
+# comparing the two files. `\s+` matches across that wrap the same way
+# every other multi-word phrase constant in this module already does (e.g.
+# STEP_NUM_RE above).
 DIMENSION_QUOTE_EXEMPTION_RE = re.compile(
-    r"except dimensions?\s+(\d+(?:\s*(?:,|and)\s*\d+)*)",
+    r"except\s+dimensions?\s+(\d+(?:\s*(?:,|and)\s*\d+)*)",
     re.IGNORECASE,
 )
 # Presence marks that SKILL.md's Procedure states the blanket "quote a
@@ -1381,8 +1391,8 @@ DIMENSION_QUOTE_EXEMPTION_RE = re.compile(
 # phrase battle-testing-a-skill's own SKILL.md uses, not a generic "cites a
 # line" linter -- see DIMENSION_QUOTE_EXEMPTION_RE's own comment for why a
 # narrow, incident-grounded phrase beats a broader vocabulary with no
-# evidence base.
-QUOTED_LINE_RULE_RE = re.compile(r"quote the exact offending line", re.IGNORECASE)
+# evidence base, and for why every gap below is `\s+`.
+QUOTED_LINE_RULE_RE = re.compile(r"quote\s+the\s+exact\s+offending\s+line", re.IGNORECASE)
 # A references/ catalog's own numbered dimension section marks itself
 # structurally exempt from the quoted-line rule with one of these two
 # phrasings -- both drawn verbatim from adversarial-dimensions.md's real
@@ -5148,17 +5158,26 @@ def _dimension_quote_exemption_offenders(skill_text: str, ref_sources: list[tupl
     place -- only the dimension(s) SKILL.md itself names as exempt, and any
     catalog section that claims the same structural exemption, are in
     scope here.
+
+    Both ``skill_text`` and every ``ref_sources`` entry are passed through
+    ``_strip_illustrative_spans(_blank_fenced_blocks(...))`` first, the same
+    as ``_step_location_offenders`` above -- a review finding: an earlier
+    revision scanned raw, un-defenced text, so a fenced "do not write like
+    this" illustration of the quoted-line rule (the same issue #93 pattern
+    _step_location_offenders' own docstring guards against) was read as a
+    real assertion.
     """
-    if not QUOTED_LINE_RULE_RE.search(skill_text):
+    bare_skill_text = _strip_illustrative_spans(_blank_fenced_blocks(skill_text))
+    if not QUOTED_LINE_RULE_RE.search(bare_skill_text):
         return []
 
     skillmd_exempt: set[str] = set()
-    for m in DIMENSION_QUOTE_EXEMPTION_RE.finditer(skill_text):
+    for m in DIMENSION_QUOTE_EXEMPTION_RE.finditer(bare_skill_text):
         skillmd_exempt.update(re.findall(r"\d+", m.group(1)))
 
     catalog_exempt: set[str] = set()
     for _label, ref_text in ref_sources:
-        defenced = _blank_fenced_blocks(ref_text)
+        defenced = _strip_illustrative_spans(_blank_fenced_blocks(ref_text))
         headings = [(m.start(), m.group(1)) for m in NUMBERED_CATALOG_HEADING_RE.finditer(defenced)]
         for i, (start, num) in enumerate(headings):
             end = headings[i + 1][0] if i + 1 < len(headings) else len(defenced)

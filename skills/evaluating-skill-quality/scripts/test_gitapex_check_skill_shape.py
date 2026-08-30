@@ -7095,6 +7095,41 @@ def test_dimension_quote_exemption_catalog_marks_exempt_skillmd_silent_fails(tmp
     assert "SKILL.md's quoted-line rule does not name it exempt" in result.evidence
 
 
+def test_dimension_quote_exemption_line_wrapped_phrase_matches(tmp_path):
+    # A code-review defeat test (issue #577): the real battle-testing-a-skill
+    # SKILL.md hard-wraps "quote the exact offending" and "line" across a
+    # line break -- a literal-space pattern never matches that prose, so an
+    # earlier revision of this check silently no-opped (evidence == "none"
+    # for the wrong reason: no blanket rule found, not "no contradiction
+    # found") on its own real motivating example. This fixture reproduces
+    # that exact wrap and requires the check to genuinely detect the
+    # contradiction, not trivially skip it.
+    d = _write_raw(
+        tmp_path,
+        _simple_body("For every problem, quote the exact offending\n   line -- except dimension 9, cited below."),
+        references={"dims.md": "## 9. Something structural\n\nOrdinary prose, no exemption marker.\n"},
+    )
+    result = _by_name(css.check_shape(d))["dimension-quote-exemption-cross-reference"]
+    assert result.passed is False
+    assert "dimension 9" in result.evidence
+
+
+def test_dimension_quote_exemption_fenced_illustration_excluded(tmp_path):
+    # A code-review defeat test (issue #577): a fenced "do not write like
+    # this" illustration of the quoted-line rule and its exemption clause
+    # must not be read as a real SKILL.md assertion, the same issue #93
+    # pattern _step_location_offenders' own fenced-block test already
+    # guards against for that check.
+    d = _write_raw(
+        tmp_path,
+        _simple_body("```\nquote the exact offending line -- except dimension 9, cited below.\n```\n\nOrdinary prose."),
+        references={"dims.md": "## 9. Something structural\n\nOrdinary prose, no exemption marker.\n"},
+    )
+    result = _by_name(css.check_shape(d))["dimension-quote-exemption-cross-reference"]
+    assert result.passed is True
+    assert result.evidence == "none"
+
+
 # ---- Regressions found by an adversarial review pass (issue #192) ----
 
 
