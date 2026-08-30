@@ -2731,6 +2731,34 @@ def test_raw_segments_with_boundaries_a_real_subshell_nested_inside_a_case_arm_s
     assert depths_by_segment == [0, 1, 0, 0]
 
 
+def test_raw_segments_with_boundaries_a_case_patterns_leading_decorator_paren_does_not_inflate_depth() -> None:
+    """FALSE-POSITIVE regression pin (round-37 independent review, issue
+    #1375): bash's `case` syntax allows an OPTIONAL leading `(`
+    decorator on a pattern arm (`(1) cmd ;;`) -- lexically identical to
+    a real subshell opener, but must NOT increment depth, or the SAME
+    round-36 fix that correctly skips decrementing depth for the arm's
+    own matching `)` leaves that phantom `+1` permanently unbalanced."""
+    tokens = ["case", "1", "in", "(", "1", ")", "true", ";", ";", "esac", ";", "VERB=safe"]
+    result = checker._raw_segments_with_boundaries(tokens)
+    assert result[0] == (["case", "1", "in"], 0, "(")
+    assert result[1] == (["1"], 0, ")")
+    assert result[-1] == (["VERB=safe"], 0, None)
+
+
+def test_raw_segments_with_boundaries_a_decorated_case_pattern_stays_isolating_when_backgrounded() -> None:
+    """No over-correction: the decorator-paren fix must not disable the
+    round-35/36 group-isolation mechanism itself -- a decorated case
+    that is genuinely backgrounded or piped still needs its own segments
+    to carry depth 0 here (isolation for that case comes from
+    `_segment_indices_isolated_by_a_piped_or_backgrounded_compound_
+    group`, a separate mechanism, not from this function's own depth
+    field)."""
+    tokens = ["case", "1", "in", "(", "1", ")", "VERB=safe", ";", ";", "esac"]
+    result = checker._raw_segments_with_boundaries(tokens)
+    depths_by_segment = [depth for seg, depth, _term in result if seg]
+    assert depths_by_segment == [0, 0, 0, 0]
+
+
 def test_raw_segments_with_boundaries_a_nested_for_in_inside_a_case_arm_does_not_desync_pattern_tracking() -> None:
     """SAFETY regression pin (round-36 own design review): only the
     case's own FIRST `in` (right after `case WORD`) may arm the
@@ -3196,6 +3224,34 @@ def test_names_reassigned_from_a_static_value_stays_poisoned_despite_a_case_in_s
     assert checker._names_reassigned_from_a_static_value(tokens) == {"VERB"}
 
 
+def test_names_reassigned_from_a_static_value_allows_a_real_top_level_clear_after_a_harmless_decorated_case() -> None:
+    """FALSE-POSITIVE regression pin (round-37 independent review, issue
+    #1375): a case pattern's OPTIONAL leading `(` decorator (`(1) ...`)
+    must not inflate `(...)`-nesting depth -- an EARLIER, harmless
+    (bare, not backgrounded or piped) decorated case must not block a
+    LATER, genuine top-level static reassignment from clearing
+    poisoning normally."""
+    tokens = [
+        "VERB=harmless",
+        ";",
+        "VERB=$(echo install)",
+        ";",
+        "case",
+        "1",
+        "in",
+        "(",
+        "1",
+        ")",
+        "true",
+        ";",
+        ";",
+        "esac",
+        ";",
+        "VERB=safe",
+    ]
+    assert checker._names_reassigned_from_a_static_value(tokens) == set()
+
+
 @_PROPERTIES
 @given(name=_IDENTIFIERS, static_value=_VALUES, dynamic_value=_VALUES, isolated_value=_VALUES)
 def test_names_reassigned_from_a_static_value_matches_model_for_a_backgrounded_brace_group_clear_attempt(
@@ -3472,6 +3528,17 @@ def test_names_cleared_by_a_later_static_reassignment_clears_after_a_harmless_ba
     esac` genuinely leaks its assignment to the parent -- a name
     reassigned static this way must be cleared normally."""
     tokens = ["VERB=inst", "VERB+=all", ";", "case", "1", "in", "1", ")", "VERB=safe", ";", ";", "esac"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == {"VERB"}
+
+
+def test_names_cleared_by_a_later_static_reassignment_clears_after_a_harmless_decorated_case() -> None:
+    """FALSE-POSITIVE regression pin (round-37 independent review, issue
+    #1375): a case pattern's OPTIONAL leading `(` decorator (`(1) ...`)
+    must not inflate `(...)`-nesting depth -- a bare (not backgrounded
+    or piped) decorated case genuinely leaks its assignment to the
+    parent shell in real bash, so a name reassigned static this way
+    must be cleared normally."""
+    tokens = ["VERB=inst", "VERB+=all", ";", "case", "1", "in", "(", "1", ")", "VERB=safe", ";", ";", "esac"]
     assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == {"VERB"}
 
 
@@ -4293,6 +4360,42 @@ def test_classify_allows_a_real_top_level_static_clear_after_a_harmless_backgrou
         "TOOL=uv; VERB=harmless; VERB=$(echo install); case 1 in 1) echo hi ;; esac & wait; VERB=safe; $TOOL $VERB foo"
     )
     assert verdict.deny is False
+
+
+def test_classify_allows_a_real_top_level_static_clear_after_a_harmless_bare_decorated_case() -> None:
+    """FALSE-POSITIVE regression pin (round-37 independent review, issue
+    #1375): bash's `case` syntax allows an OPTIONAL leading `(`
+    decorator on a pattern arm (`(1) cmd ;;` -- common, POSIX/ksh-
+    compatible style) -- lexically identical to a real subshell opener,
+    but must not inflate `(...)`-nesting depth. Confirmed live via a
+    stand-in `uv` binary on PATH that this genuinely runs `uv safe
+    foo`, NOT `uv install foo` -- the decorated case has nothing to do
+    with the later, genuinely top-level clearing reassignment."""
+    verdict = checker.classify("TOOL=uv; VERB=inst; VERB+=all; case 1 in (1) true ;; esac; VERB=safe; $TOOL $VERB foo")
+    assert verdict.deny is False
+
+
+def test_classify_allows_an_alternation_decorated_case_pattern_after_a_real_top_level_clear() -> None:
+    """Same round, the `(1|2)`-alternation-pattern counterpart, and the
+    `_rule_gh_api_write` consumer. Confirmed live via a stand-in `gh`
+    binary on PATH that this genuinely runs `gh api ... -X safe`."""
+    tool_verdict = checker.classify(
+        "TOOL=uv; VERB=inst; VERB+=all; case 2 in (1|2) true ;; esac; VERB=safe; $TOOL $VERB foo"
+    )
+    assert tool_verdict.deny is False
+    gh_verdict = checker.classify("M=GE; M+=T; case 1 in (1) true ;; esac; M=safe; gh api repos/o/r/issues -X $M")
+    assert gh_verdict.deny is False
+
+
+def test_classify_denies_a_decorated_case_pattern_that_is_genuinely_backgrounded() -> None:
+    """No over-correction: the decorator-paren fix must not disable the
+    round-35/36 group-isolation mechanism -- a decorated case that IS
+    genuinely backgrounded, or nested inside a real enclosing subshell,
+    must still deny exactly as before this round's fix."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); case 1 in (1) VERB=safe ;; esac & wait; $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
 
 
 def test_resolve_path_tokens_denies_a_name_with_a_dynamic_assignment_elsewhere() -> None:

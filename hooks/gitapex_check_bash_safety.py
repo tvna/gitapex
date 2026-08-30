@@ -4178,30 +4178,104 @@ def _raw_segments_with_boundaries(tokens: list[str]) -> list[tuple[list[str], in
     nested INSIDE a case arm's own body (after its pattern-terminating
     `)` has already been consumed, so the block's own flag is
     disarmed) is unaffected -- its own bare `)` decrements depth
-    normally, exactly as before this fix."""
+    normally, exactly as before this fix.
+
+    FALSE-POSITIVE bug found by independent adversarial review (round
+    37, issue #1375) and independently reproduced live, both via
+    `classify()` and via real bash execution with a stand-in `uv`/`gh`
+    binary on PATH, in the round-36 fix above: bash's `case` syntax
+    allows an OPTIONAL leading `(` decorator on a pattern arm (`(1)
+    cmd ;;`, `(1|2) cmd ;;` -- common, POSIX/ksh-compatible style, no
+    `shopt` needed). That `(` is lexically identical to a real subshell
+    opener, so it hit the ordinary `_SUBSHELL_OPEN_TOKENS` branch and
+    unconditionally incremented `depth` -- but the round-36 state
+    machine only consulted `case_awaiting_pattern_close` on the
+    CLOSING `)`, never the opening `(`, so the SAME `)` that correctly
+    skipped decrementing (recognizing it as the arm's own pattern
+    terminator) left the phantom `+1` from the decorator's own `(`
+    permanently unbalanced -- `depth` stayed inflated by 1 for the rest
+    of the token stream (the `max(depth - 1, 0)` clamp only guards
+    against going negative, not against this kind of unmatched-open
+    drift). `TOOL=uv; VERB=inst; VERB+=all; case 1 in (1) true ;; esac;
+    VERB=safe; $TOOL $VERB foo` resolved to `deny=True` even though
+    real bash genuinely runs `uv safe foo` (confirmed live via a
+    stand-in `uv` binary on PATH: captured argv `uv called with: safe
+    foo`) -- the case block has nothing to do with `VERB`'s own later,
+    genuinely top-level clearing reassignment, which should have been
+    trusted normally; `_rule_gh_api_write` and the `(1|2)`-alternation
+    form both reproduce identically. Unlike every round-30-36 finding
+    in this same area, this is a FALSE POSITIVE (over-denial), not a
+    bypass -- confirmed by tracing that `depth` can only ever be
+    inflated relative to real bash's own true nesting by this bug
+    (never deflated, since a phantom `+1` from the decorator is simply
+    never balanced, and the clamp only prevents going negative), so
+    `isolated` can wrongly read `True` when it should be `False`, but
+    never the reverse.
+
+    Closed by tracking, per currently-open case block, whether its
+    CURRENT pattern arm has consumed any real token yet since being
+    armed (`case_pattern_started`, reset to `False` on the same events
+    that arm/re-arm `case_awaiting_pattern_close`: the block's own
+    first `in`, and each subsequent `;;`) -- a bare `(` is treated as
+    the harmless decorator, and its would-be depth increment
+    suppressed, ONLY when it is the very first token of the current
+    arm (`case_awaiting_pattern_close[-1] and not case_pattern_started[
+    -1]`); every token processed while a block is armed sets `case_
+    pattern_started[-1] = True` immediately afterward (except the
+    arm/re-arm setup tokens themselves -- `case`/`in`/`esac`/the second
+    `;` of a `;;` -- which must not count as the pattern's own first
+    token or the decorator would never be recognized at all). This
+    correctly leaves an extglob pattern's own internal `(` (e.g. bash's
+    `@(foo|bar)` syntax, which requires `shopt -s extglob` and is off
+    by default) NOT specially suppressed, since its own leading `@`
+    token consumes the "first token" slot before its `(` is ever seen
+    -- a deliberately narrower, disclosed residual (an over-denial on a
+    rare, opt-in bash feature, never a bypass) rather than a fully
+    general case-pattern-syntax parser."""
     segments: list[list[str]] = [[]]
     seg_depths: list[int] = [0]
     terminators: list[str | None] = []
     depth = 0
     case_awaiting_pattern_close: list[bool] = []
     case_seen_in: list[bool] = []
+    case_pattern_started: list[bool] = []
     prev_tok: str | None = None
     for tok in tokens:
+        is_case_setup_token = False
         if tok == "case":
             case_awaiting_pattern_close.append(False)
             case_seen_in.append(False)
+            case_pattern_started.append(False)
+            is_case_setup_token = True
         elif tok == "in" and case_seen_in and not case_seen_in[-1]:
             case_seen_in[-1] = True
             case_awaiting_pattern_close[-1] = True
+            case_pattern_started[-1] = False
+            is_case_setup_token = True
         elif tok == "esac" and case_awaiting_pattern_close:
             case_awaiting_pattern_close.pop()
             case_seen_in.pop()
+            case_pattern_started.pop()
+            is_case_setup_token = True
         elif tok == ";" and case_awaiting_pattern_close and prev_tok == ";":
             case_awaiting_pattern_close[-1] = True
+            case_pattern_started[-1] = False
+            is_case_setup_token = True
 
-        if tok in _SUBSHELL_OPEN_TOKENS:
+        is_case_pattern_decorator_paren = (
+            tok == "("
+            and case_awaiting_pattern_close
+            and case_awaiting_pattern_close[-1]
+            and not case_pattern_started[-1]
+        )
+
+        if tok in _SUBSHELL_OPEN_TOKENS and not is_case_pattern_decorator_paren:
             terminators.append(tok)
             depth += 1
+            segments.append([])
+            seg_depths.append(depth)
+        elif tok in _SUBSHELL_OPEN_TOKENS:
+            terminators.append(tok)
             segments.append([])
             seg_depths.append(depth)
         elif tok == ")":
@@ -4218,6 +4292,9 @@ def _raw_segments_with_boundaries(tokens: list[str]) -> list[tuple[list[str], in
             seg_depths.append(depth)
         else:
             segments[-1].append(tok)
+
+        if case_awaiting_pattern_close and case_awaiting_pattern_close[-1] and not is_case_setup_token:
+            case_pattern_started[-1] = True
         prev_tok = tok
     terminators.append(None)
     return list(zip(segments, seg_depths, terminators, strict=True))

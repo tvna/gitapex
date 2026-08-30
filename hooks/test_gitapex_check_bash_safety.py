@@ -525,6 +525,26 @@ ALLOWED_DYNAMIC_COMMANDS = [
         "TOOL=uv; VERB=harmless; VERB=$(echo install); case 1 in 1) echo hi ;; esac & wait; VERB=safe; $TOOL $VERB foo",
         "real-top-level-static-clear-after-a-harmless-backgrounded-case-stays-allowed",
     ),
+    # FALSE-POSITIVE fix found live by Step 8 independent review,
+    # thirty-seventh round (issue #1375): bash's `case` syntax allows an
+    # OPTIONAL leading `(` decorator on a pattern arm (`(1) cmd ;;`,
+    # `(1|2) cmd ;;` -- common, POSIX/ksh-compatible style, no `shopt`
+    # needed) -- lexically identical to a real subshell opener, but the
+    # round-36 fix only consulted its own case-tracking state on the
+    # CLOSING paren, never the opening one, so the decorator's own
+    # phantom depth increment was never balanced, permanently inflating
+    # tracked depth and wrongly denying an unrelated, genuinely
+    # top-level static reassignment later in the command. Confirmed live
+    # via a stand-in `uv`/`gh` binary on PATH that each genuinely runs
+    # the harmless, cleared value.
+    (
+        "TOOL=uv; VERB=inst; VERB+=all; case 1 in (1) true ;; esac; VERB=safe; $TOOL $VERB foo",
+        "real-top-level-static-clear-after-a-harmless-bare-decorated-case-stays-allowed",
+    ),
+    (
+        "TOOL=uv; VERB=inst; VERB+=all; case 2 in (1|2) true ;; esac; VERB=safe; $TOOL $VERB foo",
+        "real-top-level-static-clear-after-an-alternation-decorated-case-stays-allowed",
+    ),
 ]
 
 # --- Known, disclosed, unresolved regex/token-gate bypasses ----------------
@@ -1449,6 +1469,10 @@ DENIED_INDIRECTION_COMMANDS = [
         "TOOL=uv; VERB=harmless; VERB=$(echo install); "
         "case A in x) case B in y) VERB=safe;; esac ;; esac | cat; $TOOL $VERB foo",
         "var-split-tool-and-verb-reassigned-from-a-static-value-cleared-via-a-nested-case-whose-outer-is-piped",
+    ),
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); case 1 in (1) VERB=safe ;; esac & wait; $TOOL $VERB foo",
+        "var-split-tool-and-verb-reassigned-from-a-static-value-cleared-via-a-backgrounded-decorated-case",
     ),
 ]
 
