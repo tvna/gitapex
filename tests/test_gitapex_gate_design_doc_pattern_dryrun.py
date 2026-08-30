@@ -88,6 +88,58 @@ def test_dry_run_corpus_finds_a_live_match(tmp_path: Path) -> None:
     assert len(matches) == 1
 
 
+def test_dry_run_corpus_skips_a_glob_match_that_is_not_a_plain_file(tmp_path: Path) -> None:
+    """A directory can itself match a `*.md` glob (e.g. `weird.md/` as a
+    directory name) -- `dry_run_corpus` must skip it via `is_file()`
+    rather than attempting to read it as text."""
+    skill_dir = tmp_path / "skills" / "example"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "weird.md").mkdir()
+    matches = gate.dry_run_corpus("Step N:", tmp_path, gate._DEFAULT_CORPUS_GLOB)
+    assert matches == []
+
+
+def test_dry_run_corpus_never_follows_a_symlink_outside_the_corpus(tmp_path: Path) -> None:
+    """checker-script-adversarial-review finding (fixed): a symlink under
+    the corpus root pointing outside `repo_root` (e.g. at arbitrary runner
+    filesystem content) must never be dry-run -- `is_file()`/`read_text()`
+    alone would transparently follow it, turning this gate's PASS/FAIL
+    status into an arbitrary-file-content membership oracle."""
+    skill_dir = tmp_path / "skills" / "evil"
+    skill_dir.mkdir(parents=True)
+    outside_target = tmp_path.parent / f"outside-{tmp_path.name}.txt"
+    outside_target.write_text("Step N: appears only here, outside the corpus root.\n", encoding="utf-8")
+    try:
+        (skill_dir / "link.md").symlink_to(outside_target)
+        matches = gate.dry_run_corpus("Step N:", tmp_path, gate._DEFAULT_CORPUS_GLOB)
+        assert matches == []
+    finally:
+        outside_target.unlink()
+
+
+def test_dry_run_corpus_skips_a_file_that_raises_oserror_on_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A glob match that is a plain file but fails to read (e.g. a
+    permission error) must be skipped, not raise -- deterministic
+    regardless of the runtime's own UID/permission model."""
+    skill_dir = tmp_path / "skills" / "example"
+    skill_dir.mkdir(parents=True)
+    unreadable = skill_dir / "SKILL.md"
+    unreadable.write_text("Do the Step N: thing.\n", encoding="utf-8")
+
+    original_read_text = Path.read_text
+
+    def fake_read_text(self: Path, *args: object, **kwargs: object) -> str:
+        if self == unreadable:
+            raise OSError("simulated read failure")
+        return original_read_text(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(Path, "read_text", fake_read_text)
+    matches = gate.dry_run_corpus("Step N:", tmp_path, gate._DEFAULT_CORPUS_GLOB)
+    assert matches == []
+
+
 def test_dry_run_corpus_case_insensitive(tmp_path: Path) -> None:
     skill_dir = tmp_path / "skills" / "example"
     skill_dir.mkdir(parents=True)

@@ -242,19 +242,33 @@ def find_candidate_patterns(text: str) -> list[Candidate]:
             for quote_match in _QUOTED_LITERAL_RE.finditer(search_region):
                 if quote_match.start() > _TARGET_WINDOW_CHARS:
                     continue
+                # Always non-None and non-empty: each alternation branch in
+                # _QUOTED_LITERAL_RE requires {1,80} characters, so a match
+                # can only exist with a captured group of length >= 1.
                 literal = next(group for group in quote_match.groups() if group is not None)
-                if literal:
-                    candidates.append(Candidate(pattern=literal, paragraph_first_line=first_line))
+                candidates.append(Candidate(pattern=literal, paragraph_first_line=first_line))
     return candidates
 
 
 def dry_run_corpus(pattern: str, repo_root: Path, corpus_glob: str) -> list[Path]:
     """Return every file under `repo_root` matching `corpus_glob` whose
-    text contains `pattern` as a case-insensitive literal substring."""
+    text contains `pattern` as a case-insensitive literal substring.
+
+    `checker-script-adversarial-review` finding (fixed): `Path.glob` /
+    `is_file()` / `read_text()` all transparently follow symlinks, so a
+    symlink placed under the corpus root and pointing outside it (e.g.
+    `skills/evil/link.md` -> `/etc/passwd`) would otherwise let a PR that
+    controls both a design-doc pattern and a corpus-tree symlink turn this
+    gate's PASS/FAIL status into a boolean membership oracle against
+    arbitrary runner filesystem content. `is_symlink()` is checked before
+    `is_file()` (a symlink to a real file passes `is_file()`, so checking
+    only that would not catch this) to keep every matched candidate
+    genuinely inside `repo_root`.
+    """
     needle = pattern.lower()
     matches: list[Path] = []
     for candidate_file in sorted(repo_root.glob(corpus_glob)):
-        if not candidate_file.is_file():
+        if candidate_file.is_symlink() or not candidate_file.is_file():
             continue
         try:
             content = candidate_file.read_text(encoding="utf-8", errors="replace")

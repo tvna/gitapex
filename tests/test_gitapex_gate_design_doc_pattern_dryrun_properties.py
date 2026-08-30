@@ -71,12 +71,15 @@ def test_find_candidate_patterns_detects_any_quote_starting_within_the_window(
 
 
 @_PROPERTIES
-@given(pattern=_NON_EMPTY_SAFE_TEXT, cue=st.sampled_from(_CUE_FORMS))
-def test_find_candidate_patterns_never_fires_without_a_search_intent_cue(pattern: str, cue: str) -> None:
+@given(pattern=_NON_EMPTY_SAFE_TEXT)
+def test_find_candidate_patterns_never_fires_without_a_search_intent_cue(pattern: str) -> None:
     """Robustness: a quoted string with no "literal-text search" cue
     anywhere in the paragraph never becomes a candidate, across generated
     pattern content -- the cue requirement is load-bearing, not
-    incidental to the hand-picked fixtures."""
+    incidental to the hand-picked fixtures. No `cue` parameter: this test
+    deliberately constructs text with no cue present at all, so
+    generating cue *forms* here would be dead/misleading -- a
+    correctness-review finding against an earlier draft that did."""
     bounded_pattern = pattern[: gate._QUOTED_LITERAL_MAX_LEN]
     text = f'This paragraph merely quotes "{bounded_pattern}" with no search cue nearby.\n'
     assert gate.find_candidate_patterns(text) == []

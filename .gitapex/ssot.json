@@ -1803,6 +1803,7 @@
       "target": [
         {"kind": "file-glob", "ref": "docs/superpowers/specs/*.md"},
         {"kind": "file-glob", "ref": "skills/**/*.md"},
+        {"kind": "runtime-resolved-reference", "ref": "github.event.pull_request.body"},
         {"kind": "workflow-event", "ref": "design-doc-pattern-dryrun-gate.yml:pull_request"}
       ]
     }
