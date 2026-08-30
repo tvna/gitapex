@@ -4182,6 +4182,133 @@ def _seg_has_a_scope_localizing_keyword(seg: list[str]) -> bool:
     return False
 
 
+_GROUP_OPEN_KEYWORDS = frozenset({"{", "while", "until", "for", "select", "if"})
+_GROUP_CLOSE_KEYWORDS = frozenset({"}", "done", "fi"})
+"""The compound-command delimiters `_segment_indices_isolated_by_a_
+piped_or_backgrounded_compound_group` bracket-matches. Unlike `_SUBSHELL_
+OPEN_TOKENS`, none of these tokens themselves make their own content
+isolated -- a bare `{ VERB=safe; }`/`while ...; done`/`if ...; fi` with no
+trailing `&`/`|` genuinely LEAKS its assignments to the parent shell in
+real bash (confirmed live, see the round-35 paragraph below) -- isolation
+here depends entirely on whether the GROUP AS A WHOLE is itself a
+pipeline stage or a backgrounded job, the same test already applied to an
+ordinary segment, evaluated once at the group's own matching open/close
+pair. Added by round 35 (issue #1375)."""
+
+
+def _segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(
+    raw: list[tuple[list[str], int, str | None]],
+) -> set[int]:
+    """Every index into RAW (the `_raw_segments_with_boundaries` output)
+    that lies inside a `{...}`/`while`/`until`/`for`/`select`/`if`...
+    `done`/`fi` compound-command group whose own OUTER closing boundary
+    is itself a pipe stage, is immediately followed by `&`, or is itself
+    the RECEIVING side of a pipe -- bash forks the ENTIRE group as one
+    unit in each of these cases, so a plain static assignment anywhere
+    inside it, at any nesting depth, must never be trusted to clear an
+    earlier poisoning.
+
+    CRITICAL bypass found by independent adversarial review (round 35,
+    issue #1375) and independently reproduced live, both via `classify()`
+    and via real bash execution with a stand-in `uv`/`gh` binary on PATH:
+    rounds 31-34 taught `_raw_segments_with_boundaries`/`_segment_tokens_
+    with_scope_isolation` about `(...)` subshells, `<(`/`>(` process
+    substitution, `|` pipeline stages, `cmd &` backgrounding, and `local`/
+    `declare`/`typeset`/`coproc` -- but none of `{`, `}`, `while`, `do`,
+    `done`, `until`, `for`, `select`, `if`, `then`, `fi` were ever
+    recognized at all, even though a `{...}` brace group or a `while`/
+    `until`/`for`/`select`/`if` compound command, backgrounded or piped
+    AS A WHOLE, forks exactly like a subshell -- a fake "the value is
+    safe now" reassignment written inside one can never actually reach
+    the parent shell's own copy of the name, but the pre-round-35 code
+    trusted it exactly like an ordinary top-level reassignment. `TOOL=uv;
+    VERB=harmless; VERB=$(echo install); { VERB=safe; } & wait; $TOOL
+    $VERB foo` resolved to `deny=False` even though real bash genuinely
+    runs `uv install foo` (confirmed live via a stand-in `uv` binary on
+    PATH: captured argv `uv called with: install foo`) -- the brace
+    group's own `VERB=safe` never reaches the parent shell once the whole
+    group is backgrounded. `{ VERB=safe; } | cat` (piped instead of
+    backgrounded), `if true; then VERB=safe; fi & wait`, `for i in 1; do
+    VERB=safe; done & wait`, a doubly-nested `{ { VERB=safe; }; } | cat`,
+    and a pipe-RECEIVING group whose assignment is not even the group's
+    OWN first statement (`echo x | { true; VERB=safe; }; wait`) all
+    reproduce identically (captured argv in every case: `uv called with:
+    install foo`, never `safe foo`); `_rule_gh_api_write` reproduces
+    identically too (e.g. `M=safe; M=$(echo POST); { true; M=GET; } &
+    wait; gh api repos/o/r/pulls/1/merge -X $M` -- real bash genuinely
+    runs `-X POST`, a genuine unreviewed write). Confirmed through the
+    real wrapper: every shape now denies with exit 2 where it previously
+    allowed with exit 0.
+
+    Two negative controls confirm a correct fix cannot simply treat every
+    `{`/`while`/`until`/`for`/`select`/`if` as UNCONDITIONALLY isolating
+    (the same false-positive trade-off already navigated for `(...)` in
+    round 31/32 and deliberately NOT extended to `((...))` -- see
+    `_segment_tokens_with_scope_isolation`'s own `((...))` paragraph): a
+    bare `{ VERB=safe; }`/`if true; then VERB=safe; fi`/`for i in 1; do
+    VERB=safe; done` with NO trailing `&`/`|` genuinely LEAKS to the
+    parent in real bash (confirmed live: each variant's stand-in `uv`
+    call captures `uv called with: safe foo`, not `install foo`) and
+    `classify()` already agreed even before this fix -- isolation here
+    is conditioned on the group's own outer boundary, never on the mere
+    presence of one of these keywords.
+
+    A group is recognized by treating a maximal, CONTIGUOUS run of
+    `_GROUP_OPEN_KEYWORDS` tokens starting at position 0 of a raw segment
+    as that many nested opens (bash's own grammar requires each of these
+    reserved words to start a fresh command, but places no requirement
+    that a nested group's own opener be separated from an enclosing
+    group's opener by anything but whitespace -- confirmed live:
+    `tokenize("{ { echo hi; }; }")` produces adjacent `"{"`, `"{"` tokens
+    in the SAME raw segment, with no boundary token between them, since
+    `{` is not itself one of `_raw_segments_with_boundaries`'s own
+    boundary tokens) -- and any `_GROUP_CLOSE_KEYWORDS` token found ONLY
+    at position 0 of a raw segment as closing one level. The position-0
+    requirement for BOTH is not an arbitrary restriction: it mirrors what
+    real bash's own grammar already guarantees -- `}`/`done`/`fi` (and
+    an opener that begins a genuine nested group) must always be the
+    first word of the command they start, so a literal, non-syntactic
+    occurrence of one of these words LATER in a segment (e.g. `echo fi`,
+    where `fi` is merely `echo`'s own argument) can never be its real,
+    syntactic use. This matters for SAFETY, not just accuracy: an
+    earlier stack-based design that scanned every token position for a
+    close (not just position 0) was found, during this round's own
+    design review, to desync against exactly this kind of literal
+    argument -- `{ echo fi; VERB=safe; } & wait` would have popped the
+    real group's own stack entry against the SPURIOUS `fi` inside `echo
+    fi`'s own segment, leaving the REAL closing `}` unmatched and
+    `VERB=safe` wrongly left unisolated, reopening the very bypass this
+    function exists to close. Verified live that this classifier's own
+    fixed position-0-only close check does NOT reopen that hole: `TOOL=
+    uv; VERB=harmless; VERB=$(echo install); { echo fi; VERB=safe; } &
+    wait; $TOOL $VERB foo` denies correctly post-fix (real bash: `uv
+    called with: install foo`, matching `classify()`'s own `deny=True`).
+
+    A group is isolated when its own outermost closing raw segment's
+    terminator is `|` or `&` (the group forks because it is itself a
+    non-final-or-final pipe stage, or because it is backgrounded), OR
+    when the raw segment immediately preceding the group's own opening
+    raw segment terminates with `|` (the group is itself the RECEIVING
+    side of a pipe -- case H above)."""
+    stack: list[int] = []
+    isolated: set[int] = set()
+    for i, (seg, _depth, terminator) in enumerate(raw):
+        opens = 0
+        for tok in seg:
+            if tok not in _GROUP_OPEN_KEYWORDS:
+                break
+            opens += 1
+        for _ in range(opens):
+            stack.append(i)
+        if stack and seg and seg[0] in _GROUP_CLOSE_KEYWORDS:
+            start = stack.pop()
+            preceding = raw[i - 1][2] if i > 0 else None
+            preceding_of_open = raw[start - 1][2] if start > 0 else None
+            if terminator in ("|", "&") or preceding == "|" or preceding_of_open == "|":
+                isolated.update(range(start, i + 1))
+    return isolated
+
+
 def _segment_tokens_with_scope_isolation(tokens: list[str]) -> list[tuple[list[str], bool]]:
     """Like `segment_tokens`, but pairs each returned (non-empty)
     segment with whether it is ISOLATED from the parent shell's own
@@ -4372,14 +4499,34 @@ def _segment_tokens_with_scope_isolation(tokens: list[str]) -> list[tuple[list[s
     captured argv `uv called with: install foo`). Closed by checking
     each token with a single leading `$` stripped too (via
     `_SCOPE_LOCALIZING_KEYWORDS`/`_seg_has_a_scope_localizing_keyword`),
-    catching the fused `$"..."` form for all four keywords uniformly."""
+    catching the fused `$"..."` form for all four keywords uniformly.
+
+    ONE further gap found by independent adversarial review (round 35,
+    issue #1375): none of `{`, `}`, `while`, `until`, `for`, `select`,
+    `if`, `do`, `then`, `done`, `fi` were recognized at all -- a `{...}`
+    brace group or a `while`/`until`/`for`/`select`/`if` compound command
+    forks exactly like a subshell when the group AS A WHOLE is piped or
+    backgrounded, but isolation is conditional on that outer boundary,
+    never automatic the way a bare `(...)` subshell is -- see
+    `_segment_indices_isolated_by_a_piped_or_backgrounded_compound_
+    group`'s own docstring for the full live-verified bypass, its
+    negative controls, and the position-0-only close-matching design
+    that keeps a literal argument like `echo fi` from desyncing
+    detection of a real, later group."""
     raw = _raw_segments_with_boundaries(tokens)
+    group_isolated = _segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(raw)
     result: list[tuple[list[str], bool]] = []
     for i, (seg, depth, terminator) in enumerate(raw):
         if not seg:
             continue
         preceding = raw[i - 1][2] if i > 0 else None
-        isolated = depth > 0 or terminator in ("|", "&") or preceding == "|" or _seg_has_a_scope_localizing_keyword(seg)
+        isolated = (
+            depth > 0
+            or terminator in ("|", "&")
+            or preceding == "|"
+            or _seg_has_a_scope_localizing_keyword(seg)
+            or i in group_isolated
+        )
         result.append((seg, isolated))
     return result
 

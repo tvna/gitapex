@@ -473,6 +473,32 @@ ALLOWED_DYNAMIC_COMMANDS = [
         "TOOL=uv; VERB=harmless; VERB=$(echo install); coproc { echo hi; }; wait; VERB=safe; $TOOL $VERB foo",
         "real-top-level-static-clear-after-a-harmless-coproc-stays-allowed",
     ),
+    # No-over-correction guards for the thirty-fifth-round group-isolation
+    # fix (issue #1375): a bare `{...}`/`if`/`for` compound command with NO
+    # trailing `&`/`|` genuinely LEAKS its assignments to the parent shell
+    # in real bash (confirmed live: each variant's stand-in `uv` call
+    # captures `uv called with: safe foo`, not `install foo`) -- these must
+    # stay allowed exactly as before this round's fix.
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); { VERB=safe; }; $TOOL $VERB foo",
+        "bare-brace-group-with-no-trailing-background-or-pipe-stays-allowed",
+    ),
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); if true; then VERB=safe; fi; $TOOL $VERB foo",
+        "bare-if-with-no-trailing-background-or-pipe-stays-allowed",
+    ),
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); for i in 1; do VERB=safe; done; $TOOL $VERB foo",
+        "bare-for-loop-with-no-trailing-background-or-pipe-stays-allowed",
+    ),
+    (
+        "TOOL=uv; VERB=safe; { echo hi; } & wait; $TOOL $VERB foo",
+        "unrelated-harmless-backgrounded-brace-group-alongside-a-never-poisoned-name-stays-allowed",
+    ),
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); { echo hi; } & wait; VERB=safe; $TOOL $VERB foo",
+        "real-top-level-static-clear-after-a-harmless-backgrounded-brace-group-stays-allowed",
+    ),
 ]
 
 # --- Known, disclosed, unresolved regex/token-gate bypasses ----------------
@@ -1315,6 +1341,50 @@ DENIED_INDIRECTION_COMMANDS = [
     (
         'M=safe; M=$(echo POST); f() { $"local" M=GET; }; f; gh api repos/o/r/pulls/1/merge -X $M',
         "gh-api-method-value-reassigned-from-a-static-value-cleared-via-a-dollar-quoted-local",
+    ),
+    # Found live by Step 8 independent review, thirty-fifth round (issue
+    # #1375): none of `{`, `}`, `while`, `do`, `done`, `until`, `for`,
+    # `select`, `if`, `then`, `fi` were recognized by the scope-isolation
+    # check at all -- but a `{...}` brace group or a `while`/`until`/
+    # `for`/`select`/`if` compound command, backgrounded or piped AS A
+    # WHOLE, forks exactly like a subshell. Confirmed live via a stand-in
+    # `uv`/`gh` binary on PATH that each genuinely runs the dangerous
+    # command, NOT the group-scoped distractor value.
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); { VERB=safe; } & wait; $TOOL $VERB foo",
+        "var-split-tool-and-verb-reassigned-from-a-static-value-cleared-via-a-backgrounded-brace-group",
+    ),
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); { VERB=safe; } | cat; $TOOL $VERB foo",
+        "var-split-tool-and-verb-reassigned-from-a-static-value-cleared-via-a-piped-brace-group",
+    ),
+    (
+        "M=safe; M=$(echo POST); { true; M=GET; } & wait; gh api repos/o/r/pulls/1/merge -X $M",
+        "gh-api-method-value-reassigned-from-a-static-value-cleared-via-a-backgrounded-brace-group",
+    ),
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); while true; do VERB=safe; break; done | cat; $TOOL $VERB foo",
+        "var-split-tool-and-verb-reassigned-from-a-static-value-cleared-via-a-piped-while-loop",
+    ),
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); if true; then VERB=safe; fi & wait; $TOOL $VERB foo",
+        "var-split-tool-and-verb-reassigned-from-a-static-value-cleared-via-a-backgrounded-if",
+    ),
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); for i in 1; do VERB=safe; done & wait; $TOOL $VERB foo",
+        "var-split-tool-and-verb-reassigned-from-a-static-value-cleared-via-a-backgrounded-for-loop",
+    ),
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); { { VERB=safe; }; } | cat; $TOOL $VERB foo",
+        "var-split-tool-and-verb-reassigned-from-a-static-value-cleared-via-a-doubly-nested-piped-brace-group",
+    ),
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); echo x | { true; VERB=safe; }; wait; $TOOL $VERB foo",
+        "var-split-tool-and-verb-reassigned-from-a-static-value-cleared-via-a-pipe-receiving-groups-second-statement",
+    ),
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); { echo fi; VERB=safe; } & wait; $TOOL $VERB foo",
+        "var-split-tool-and-verb-reassigned-from-a-static-value-cleared-via-a-brace-group-containing-a-literal-fi-argument",
     ),
 ]
 

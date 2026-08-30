@@ -2771,6 +2771,120 @@ def test_seg_has_a_scope_localizing_keyword_matches_model_for_a_dollar_quoted_ke
     assert checker._seg_has_a_scope_localizing_keyword([f"{name}={value}"]) is False
 
 
+def test_segment_indices_isolated_by_a_piped_or_backgrounded_compound_group_marks_a_backgrounded_brace_group() -> None:
+    """CRITICAL bypass regression pin (round-35 independent review, issue
+    #1375): a `{...}` brace group forks as one unit when backgrounded --
+    a plain static assignment anywhere inside it can never reach the
+    parent shell's own copy of the name."""
+    raw = checker._raw_segments_with_boundaries(["{", "VERB=safe", ";", "}", "&", "wait"])
+    result = checker._segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(raw)
+    isolated_segments = [raw[i][0] for i in sorted(result)]
+    assert ["{", "VERB=safe"] in isolated_segments
+    assert ["}"] in isolated_segments
+    assert ["wait"] not in isolated_segments
+
+
+def test_segment_indices_isolated_by_a_piped_or_backgrounded_compound_group_marks_a_piped_brace_group() -> None:
+    raw = checker._raw_segments_with_boundaries(["{", "VERB=safe", ";", "}", "|", "cat"])
+    result = checker._segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(raw)
+    isolated_segments = [raw[i][0] for i in sorted(result)]
+    assert ["{", "VERB=safe"] in isolated_segments
+
+
+def test_segment_indices_isolated_by_a_piped_or_backgrounded_compound_group_marks_a_piped_while_loop() -> None:
+    raw = checker._raw_segments_with_boundaries(
+        ["while", "true", ";", "do", "VERB=safe", ";", "break", ";", "done", "|", "cat"]
+    )
+    result = checker._segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(raw)
+    isolated_segments = [raw[i][0] for i in sorted(result)]
+    assert ["do", "VERB=safe"] in isolated_segments
+
+
+def test_segment_indices_isolated_by_a_piped_or_backgrounded_compound_group_marks_a_backgrounded_if() -> None:
+    raw = checker._raw_segments_with_boundaries(["if", "true", ";", "then", "VERB=safe", ";", "fi", "&", "wait"])
+    result = checker._segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(raw)
+    isolated_segments = [raw[i][0] for i in sorted(result)]
+    assert ["then", "VERB=safe"] in isolated_segments
+
+
+def test_segment_indices_isolated_by_a_piped_or_backgrounded_compound_group_marks_a_backgrounded_for_loop() -> None:
+    raw = checker._raw_segments_with_boundaries(
+        ["for", "i", "in", "1", ";", "do", "VERB=safe", ";", "done", "&", "wait"]
+    )
+    result = checker._segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(raw)
+    isolated_segments = [raw[i][0] for i in sorted(result)]
+    assert ["do", "VERB=safe"] in isolated_segments
+
+
+def test_segment_indices_isolated_by_a_piped_or_backgrounded_compound_group_marks_a_doubly_nested_piped_group() -> None:
+    """The double-open `{ {` case: bash's own grammar places no
+    requirement that a nested group's own opener be separated from an
+    enclosing group's opener by anything but whitespace, so both land in
+    the SAME raw segment -- the isolation scan must still count both."""
+    raw = checker._raw_segments_with_boundaries(["{", "{", "VERB=safe", ";", "}", ";", "}", "|", "cat"])
+    result = checker._segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(raw)
+    isolated_segments = [raw[i][0] for i in sorted(result)]
+    assert ["{", "{", "VERB=safe"] in isolated_segments
+
+
+def test_segment_indices_isolated_by_a_piped_or_backgrounded_compound_group_marks_a_pipe_receiving_groups_later_statement() -> (
+    None
+):
+    """The group is the RECEIVING side of a pipe, and the assignment is
+    not even the group's own first statement -- must still be isolated."""
+    raw = checker._raw_segments_with_boundaries(["echo", "x", "|", "{", "true", ";", "VERB=safe", ";", "}"])
+    result = checker._segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(raw)
+    isolated_segments = [raw[i][0] for i in sorted(result)]
+    assert ["VERB=safe"] in isolated_segments
+
+
+def test_segment_indices_isolated_by_a_piped_or_backgrounded_compound_group_survives_a_literal_close_keyword_argument() -> (
+    None
+):
+    """SAFETY regression pin (round-35 own design review): an earlier
+    stack-based design that scanned every token position (not just
+    position 0) for a close keyword desynced against a literal, non-
+    syntactic argument like `fi` inside `echo fi`'s own segment -- it
+    popped the real group's own stack entry against that spurious match,
+    leaving the REAL closing `}` unmatched and the assignment wrongly
+    left unisolated. The position-0-only close check must not reopen
+    this: `echo fi` inside the group must never desync detection of the
+    group's own real, later `}`."""
+    raw = checker._raw_segments_with_boundaries(["{", "echo", "fi", ";", "VERB=safe", ";", "}", "&", "wait"])
+    result = checker._segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(raw)
+    isolated_segments = [raw[i][0] for i in sorted(result)]
+    assert ["VERB=safe"] in isolated_segments
+
+
+def test_segment_indices_isolated_by_a_piped_or_backgrounded_compound_group_allows_a_bare_brace_group() -> None:
+    """No over-correction: a bare `{...}`/`if`/`for` with NO trailing
+    `&`/`|` genuinely LEAKS its assignments to the parent shell in real
+    bash -- must not be marked isolated."""
+    raw = checker._raw_segments_with_boundaries(["{", "VERB=safe", ";", "}", ";", "echo", "done"])
+    result = checker._segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(raw)
+    assert result == set()
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value=_VALUES)
+def test_segment_indices_isolated_by_a_piped_or_backgrounded_compound_group_matches_model_for_a_backgrounded_group(
+    name: str, value: str
+) -> None:
+    """Model-based, exercising `_segment_indices_isolated_by_a_piped_or_
+    backgrounded_compound_group` directly (issue #1178's own detection-
+    logic property-coverage requirement): for ANY identifier assigned a
+    value inside a `{...}` brace group that is itself backgrounded, the
+    segment carrying that assignment is included in the isolated set --
+    and the same group with NO trailing `&`/`|` is not."""
+    backgrounded = checker._raw_segments_with_boundaries(["{", f"{name}={value}", ";", "}", "&", "wait"])
+    result = checker._segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(backgrounded)
+    isolated_segments = [backgrounded[i][0] for i in sorted(result)]
+    assert ["{", f"{name}={value}"] in isolated_segments
+
+    bare = checker._raw_segments_with_boundaries(["{", f"{name}={value}", ";", "}"])
+    assert checker._segment_indices_isolated_by_a_piped_or_backgrounded_compound_group(bare) == set()
+
+
 def test_names_reassigned_from_a_static_value_stays_poisoned_despite_a_subshell_clear() -> None:
     """CRITICAL bypass regression pin (round-31 independent review, issue
     #1375): a static reassignment written INSIDE a `(...)` subshell
@@ -2884,6 +2998,69 @@ def test_names_reassigned_from_a_static_value_stays_poisoned_despite_a_dollar_qu
     """Same round, the `$"local"`-fused-token counterpart."""
     tokens = ["VERB=harmless", ";", "VERB=$(echo install)", ";", "{", "$local", "VERB=safe", "}"]
     assert checker._names_reassigned_from_a_static_value(tokens) == {"VERB"}
+
+
+def test_names_reassigned_from_a_static_value_stays_poisoned_despite_a_backgrounded_brace_group_clear() -> None:
+    """CRITICAL bypass regression pin (round-35 independent review, issue
+    #1375): a `{...}` brace group forks as one unit when backgrounded --
+    a static reassignment inside it never reaches the parent shell's own
+    copy of the name."""
+    tokens = ["VERB=harmless", ";", "VERB=$(echo install)", ";", "{", "VERB=safe", ";", "}", "&", "wait"]
+    assert checker._names_reassigned_from_a_static_value(tokens) == {"VERB"}
+
+
+def test_names_reassigned_from_a_static_value_stays_poisoned_despite_a_piped_while_loop_clear() -> None:
+    """Same round, the `while`-loop-as-a-piped-unit counterpart."""
+    tokens = [
+        "VERB=harmless",
+        ";",
+        "VERB=$(echo install)",
+        ";",
+        "while",
+        "true",
+        ";",
+        "do",
+        "VERB=safe",
+        ";",
+        "break",
+        ";",
+        "done",
+        "|",
+        "cat",
+    ]
+    assert checker._names_reassigned_from_a_static_value(tokens) == {"VERB"}
+
+
+def test_names_reassigned_from_a_static_value_allows_a_real_top_level_clear_after_a_harmless_brace_group() -> None:
+    """No over-correction: an EARLIER, harmless (bare, not backgrounded or
+    piped) brace group must not block a LATER, genuine top-level static
+    reassignment from clearing poisoning normally."""
+    tokens = ["VERB=harmless", ";", "VERB=$(echo install)", ";", "{", "true", ";", "}", ";", "VERB=safe"]
+    assert checker._names_reassigned_from_a_static_value(tokens) == set()
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, static_value=_VALUES, dynamic_value=_VALUES, isolated_value=_VALUES)
+def test_names_reassigned_from_a_static_value_matches_model_for_a_backgrounded_brace_group_clear_attempt(
+    name: str, static_value: str, dynamic_value: str, isolated_value: str
+) -> None:
+    """Model-based: for ANY identifier reassigned static -> dynamic and
+    then given a static value ONLY inside a backgrounded `{...}` brace
+    group, the name stays poisoned regardless of the group's own
+    assigned value."""
+    tokens = [
+        f"{name}={static_value}",
+        ";",
+        f"{name}=$({dynamic_value})",
+        ";",
+        "{",
+        f"{name}={isolated_value}",
+        ";",
+        "}",
+        "&",
+        "wait",
+    ]
+    assert name in checker._names_reassigned_from_a_static_value(tokens)
 
 
 @_PROPERTIES
@@ -3100,6 +3277,28 @@ def test_names_cleared_by_a_later_static_reassignment_does_not_clear_via_a_copro
 def test_names_cleared_by_a_later_static_reassignment_does_not_clear_via_a_dollar_quoted_local() -> None:
     tokens = ["VERB=inst", "VERB+=all", ";", "{", "$local", "VERB=safe", "}"]
     assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == set()
+
+
+def test_names_cleared_by_a_later_static_reassignment_does_not_clear_via_a_backgrounded_brace_group() -> None:
+    """CRITICAL bypass regression pin (round-35 independent review, issue
+    #1375): a `{...}` brace group forks as one unit when backgrounded --
+    a static reassignment inside it never reaches the parent shell's own
+    copy of the name -- must not clear an append-poisoned candidate."""
+    tokens = ["VERB=inst", "VERB+=all", ";", "{", "VERB=safe", ";", "}", "&", "wait"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == set()
+
+
+def test_names_cleared_by_a_later_static_reassignment_does_not_clear_via_a_piped_if() -> None:
+    tokens = ["VERB=inst", "VERB+=all", ";", "if", "true", ";", "then", "VERB=safe", ";", "fi", "|", "cat"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == set()
+
+
+def test_names_cleared_by_a_later_static_reassignment_clears_after_a_harmless_bare_brace_group() -> None:
+    """No over-correction: a bare (not backgrounded or piped) brace group
+    genuinely leaks its assignment to the parent -- a name reassigned
+    static this way must be cleared normally."""
+    tokens = ["VERB=inst", "VERB+=all", ";", "{", "VERB=safe", ";", "}"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == {"VERB"}
 
 
 def test_names_cleared_by_a_later_static_reassignment_clears_after_a_printf_v() -> None:
@@ -3672,6 +3871,137 @@ def test_classify_allows_a_real_top_level_static_clear_after_a_harmless_coproc()
     clearing poisoning normally."""
     verdict = checker.classify(
         "TOOL=uv; VERB=harmless; VERB=$(echo install); coproc { echo hi; }; wait; VERB=safe; $TOOL $VERB foo"
+    )
+    assert verdict.deny is False
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_backgrounded_brace_group_clear() -> (
+    None
+):
+    """CRITICAL bypass regression pin (round-35 independent review,
+    issue #1375): a `{...}` brace group forks as one unit when
+    backgrounded, exactly like `cmd &` -- with no non-isolating usage
+    from that boundary alone. Confirmed live via a stand-in `uv` binary
+    on PATH that this genuinely runs `uv install foo`, NOT `safe foo`."""
+    verdict = checker.classify("TOOL=uv; VERB=harmless; VERB=$(echo install); { VERB=safe; } & wait; $TOOL $VERB foo")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_piped_brace_group_clear() -> None:
+    """Same round, the piped counterpart: every stage of a `|` pipeline
+    forks its own subshell, including a brace group used as a stage."""
+    verdict = checker.classify("TOOL=uv; VERB=harmless; VERB=$(echo install); { VERB=safe; } | cat; $TOOL $VERB foo")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_gh_api_method_reassigned_from_a_static_value_via_a_backgrounded_brace_group_clear() -> None:
+    """Companion to the B1b pin above, for `_rule_gh_api_write`.
+    Confirmed live via a stand-in `gh` binary on PATH that this
+    genuinely runs `gh api repos/o/r/pulls/1/merge -X POST`, a genuine
+    unreviewed write."""
+    verdict = checker.classify("M=safe; M=$(echo POST); { true; M=GET; } & wait; gh api repos/o/r/pulls/1/merge -X $M")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_piped_while_loop_clear() -> None:
+    """Same round, the `while`-loop-as-a-piped-unit counterpart --
+    absent `shopt -s lastpipe`, EVERY pipeline stage forks, including
+    the loop itself when it is one."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); while true; do VERB=safe; break; done | cat; $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_backgrounded_if_clear() -> None:
+    """Same round, the `if` counterpart."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); if true; then VERB=safe; fi & wait; $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_backgrounded_for_loop_clear() -> None:
+    """Same round, the `for` counterpart."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); for i in 1; do VERB=safe; done & wait; $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_doubly_nested_piped_group_clear() -> (
+    None
+):
+    """Same round, the doubly-nested counterpart: bash's own grammar
+    places no requirement that a nested group's own opener be separated
+    from an enclosing group's opener by anything but whitespace."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); { { VERB=safe; }; } | cat; $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_pipe_receiving_groups_later_statement() -> (
+    None
+):
+    """Same round: the group is the RECEIVING side of a pipe, and the
+    assignment is not even the group's own first statement."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); echo x | { true; VERB=safe; }; wait; $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_group_containing_a_literal_fi_argument() -> (
+    None
+):
+    """SAFETY regression pin (round-35 own design review): a literal,
+    non-syntactic `fi` argument (inside `echo fi`) sitting lexically
+    inside the same brace group must not desync detection of the
+    group's own real, later `}`."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); { echo fi; VERB=safe; } & wait; $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_allows_a_bare_brace_group_with_no_trailing_background_or_pipe() -> None:
+    """No over-correction: a bare `{...}` with NO trailing `&`/`|`
+    genuinely LEAKS its assignment to the parent shell in real bash
+    (confirmed live: the stand-in `uv` call captures `uv called with:
+    safe foo`, not `install foo`) -- must stay allowed."""
+    verdict = checker.classify("TOOL=uv; VERB=harmless; VERB=$(echo install); { VERB=safe; }; $TOOL $VERB foo")
+    assert verdict.deny is False
+
+
+def test_classify_allows_a_bare_if_with_no_trailing_background_or_pipe() -> None:
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); if true; then VERB=safe; fi; $TOOL $VERB foo"
+    )
+    assert verdict.deny is False
+
+
+def test_classify_allows_a_bare_for_loop_with_no_trailing_background_or_pipe() -> None:
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); for i in 1; do VERB=safe; done; $TOOL $VERB foo"
+    )
+    assert verdict.deny is False
+
+
+def test_classify_allows_an_unrelated_harmless_backgrounded_brace_group_alongside_a_never_poisoned_name() -> None:
+    """No over-correction: an ordinary, unrelated backgrounded brace
+    group elsewhere in the command must not spuriously deny a command
+    whose watched name was never poisoned at all."""
+    verdict = checker.classify("TOOL=uv; VERB=safe; { echo hi; } & wait; $TOOL $VERB foo")
+    assert verdict.deny is False
+
+
+def test_classify_allows_a_real_top_level_static_clear_after_a_harmless_backgrounded_brace_group() -> None:
+    """No over-correction: a harmless, UNRELATED backgrounded brace
+    group earlier in the command must not block a LATER, genuine
+    top-level static reassignment from clearing poisoning normally."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); { echo hi; } & wait; VERB=safe; $TOOL $VERB foo"
     )
     assert verdict.deny is False
 
