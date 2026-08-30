@@ -626,7 +626,7 @@ def ratified_trailer_disclosure_text(contributing_path: Path | None = None) -> s
     )
     try:
         text = path.read_text(encoding="utf-8")
-    except OSError:
+    except (OSError, UnicodeDecodeError):
         section = None
     else:
         section = extract_markdown_section(text, _RATIFIED_TRAILER_SECTION_HEADING)
