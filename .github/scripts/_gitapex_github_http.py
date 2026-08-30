@@ -358,8 +358,10 @@ def format_code(code: int) -> str:
     `gitapex_gate_retro_title_convention_citation.py` raises itself, from
     a `request_with_retry` result this module never sees again -- has to
     render a code the same way, or the same failure reads differently
-    depending on which caller reported it. Every other cross-module
-    import in `.github/scripts/` names public symbols only; this one
-    should not be the exception.
+    depending on which caller reported it. `gitapex_apply_rulesets.py`
+    (pre-existing, untouched by issue #729) is this repository's one
+    established exception, importing the private `_HTTP_TIMEOUT_SECONDS`
+    alongside this module's public symbols -- a narrower gap this
+    function's own publicness does not need to repeat.
     """
     return str(code) if code else "network error"

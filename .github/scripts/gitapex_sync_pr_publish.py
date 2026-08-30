@@ -25,16 +25,17 @@ multi-commit batching) rather than a general-purpose PR-publishing library.
 Issue #729: the retry/backoff HTTP machinery this script needs (previously
 a hand-copied local ``apply_call`` loop plus a local ``graphql_call``) now
 delegates to ``_gitapex_github_http.request_with_retry`` and
-``_gitapex_github_http.graphql_call`` -- the latter moved there wholesale,
-since this script's copy was the correct one every other carrier's was
-measured against. That module is the one deliberate, generic exception to
-this repository's ``.github/scripts/*.py`` independence convention (see its
-own docstring, and gitapex_scan_retrospective_gate_drift.py's docstring for
-the convention itself) -- this script otherwise stays dependency-light
+``_gitapex_github_http.graphql_call`` -- the latter moved there, with two
+edits made on arrival rather than a verbatim copy (see its own docstring
+in ``_gitapex_github_http.py`` for what changed and why). That module is
+the one deliberate, generic exception to this repository's
+``.github/scripts/*.py`` independence convention (see its own docstring,
+and gitapex_scan_retrospective_gate_drift.py's docstring for the
+convention itself) -- this script otherwise stays dependency-light
 (stdlib plus ``pydantic``, this repository's own pinned CLI-arg validation
 dependency) and does not import any other carrier script. Public function
-signatures are unchanged; ``apply_call``'s own docstring notes the one
-observable difference the delegation introduces.
+signatures are unchanged; ``apply_call``'s own docstring notes the
+observable differences the delegation introduces.
 
 Usage::
 
@@ -102,13 +103,26 @@ def apply_call(
     `_create_branch_ref`, `_delete_branch`, and others), whose own
     signatures and `apply_call=apply_call` wiring are untouched.
 
-    One disclosed, accepted difference: on a network failure the returned
-    body text is now urllib's own `"<urlopen error boom>"` wrapper rather
-    than the bare `"boom"` this function's former `URLError`-specific
-    handler read off `error.reason`, because `request_with_retry` catches
-    the same failure one level higher as a plain `OSError`. No caller
-    branches on that text -- every one of them branches on the status
-    code, which (like the retry count and backoff timing) is unchanged.
+    Three disclosed, accepted differences from this function's former
+    local retry loop, none of which any caller branches on -- every one
+    of them branches on the status code, which (like the retry count and
+    backoff timing) is unchanged:
+
+    1. On a network failure the returned body text is now urllib's own
+       `"<urlopen error boom>"` wrapper rather than the bare `"boom"` this
+       function's former `URLError`-specific handler read off
+       `error.reason`, because `request_with_retry` catches the same
+       failure one level higher as a plain `OSError`.
+    2. Outgoing REST bodies are now JSON-encoded with default separators
+       (`json.dumps(body)`, via `request_with_retry`) instead of this
+       function's former compact `separators=(",", ":")` -- functionally
+       identical (RFC 8259 SS2.7: insignificant whitespace is non-semantic,
+       and `Content-Length` is recomputed from the encoded bytes either
+       way), just more spaced out on the wire.
+    3. A network-failure/no-response attempt now logs as `HTTP network
+       error` in this function's retry-attempt stderr line (via the
+       shared module's own `format_code` convention) rather than this
+       function's former local `"000"` rendering.
     """
     sleeper = sleeper if sleeper is not None else time.sleep
     return request_with_retry(method, url, token, opener, sleeper, body=payload)
