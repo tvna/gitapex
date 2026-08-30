@@ -6,6 +6,14 @@ the new ``_UV_WRAPPED_INVOCATION_RE``/``_SHELL_ASSIGNMENT_RE``/
 ``_GITHUB_SCRIPTS_PATH_RE`` module-level compiles and the
 ``.startswith()``/regex call sites inside ``_scan_hook``).
 
+Every property below calls ``gate._scan_hook`` directly (not
+``find_hooks_shell_indirected_invocations``'s directory-level wrapper)
+from inside each ``@given``-decorated test's own body -- this
+repository's ``detection-logic-property-coverage`` gate (issue #1178)
+checks for the covered function's own name inside the decorated test
+function's body, not inside a shared helper it merely calls, so a
+helper-indirected call would not register as coverage.
+
 This module resolves via ``import gitapex_gate_bare_python3_invocation``
 -- ``.github/scripts`` is on pyproject.toml's own ``pythonpath``, the same
 resolution ``tests/test_gitapex_gate_bare_python3_invocation.py`` already
@@ -36,22 +44,6 @@ _SCRIPT_STEMS = st.from_regex(r"[a-z][a-z0-9_]{0,16}", fullmatch=True)
 _PREFIXES = st.sampled_from(["", "${repo_root}", "$repo_root", "/abs/path"])
 
 
-def _find_hooks_findings(content: str) -> list[tuple[str, int, str]]:
-    """Write `content` to a fresh hooks/*.sh file in a throwaway
-    directory and return the scan's findings. A plain `tempfile`
-    context manager, not a pytest `tmp_path` fixture -- `tmp_path` is
-    function-scoped and hypothesis's own health check flags reusing one
-    directory across many generated examples per test as a footgun (see
-    https://hypothesis.readthedocs.io/en/latest/reference/api.html#hypothesis.HealthCheck),
-    so each generated example gets its own fresh directory here instead.
-    """
-    with tempfile.TemporaryDirectory() as tmp:
-        hooks_dir = pathlib.Path(tmp) / "hooks"
-        hooks_dir.mkdir(parents=True, exist_ok=True)
-        (hooks_dir / "generated.sh").write_text(content, encoding="utf-8")
-        return gate.find_hooks_shell_indirected_invocations(hooks_dir)
-
-
 @_PROPERTIES
 @given(varname=_VARNAMES, stem=_SCRIPT_STEMS, prefix=_PREFIXES)
 def test_assignment_then_bare_invocation_is_always_detected(varname: str, stem: str, prefix: str) -> None:
@@ -64,7 +56,10 @@ def test_assignment_then_bare_invocation_is_always_detected(varname: str, stem: 
     uses, driven across generated variable/script names instead of that
     one fixture."""
     content = f'{varname}="{prefix}/.github/scripts/{stem}.py"\n...\npython3 "${varname}"\n'
-    findings = _find_hooks_findings(content)
+    with tempfile.TemporaryDirectory() as tmp:
+        hook_path = pathlib.Path(tmp) / "generated.sh"
+        hook_path.write_text(content, encoding="utf-8")
+        findings = gate._scan_hook(hook_path)
     assert any(varname in label for label, _lineno, _line in findings)
 
 
@@ -77,7 +72,11 @@ def test_uv_run_wrapped_invocation_is_never_flagged(varname: str, stem: str, pre
     flagged -- `uv run` wrapping is exactly what this WARNING exists to
     NOT complain about."""
     content = f'{varname}="{prefix}/.github/scripts/{stem}.py"\n...\nuv run --frozen python3 "${varname}"\n'
-    assert _find_hooks_findings(content) == []
+    with tempfile.TemporaryDirectory() as tmp:
+        hook_path = pathlib.Path(tmp) / "generated.sh"
+        hook_path.write_text(content, encoding="utf-8")
+        findings = gate._scan_hook(hook_path)
+    assert findings == []
 
 
 @_PROPERTIES
@@ -89,7 +88,11 @@ def test_hooks_py_targeting_variable_is_never_flagged(varname: str, stem: str) -
     must never be flagged even when invoked bare, for any generated
     variable/script name, not just one hand-picked example."""
     content = f'{varname}="${{repo_root}}/hooks/{stem}.py"\n...\npython3 "${varname}"\n'
-    assert _find_hooks_findings(content) == []
+    with tempfile.TemporaryDirectory() as tmp:
+        hook_path = pathlib.Path(tmp) / "generated.sh"
+        hook_path.write_text(content, encoding="utf-8")
+        findings = gate._scan_hook(hook_path)
+    assert findings == []
 
 
 @_PROPERTIES
@@ -101,7 +104,11 @@ def test_commented_out_assignment_and_invocation_are_ignored(varname: str, stem:
     variable/script name, must never produce a finding -- neither line
     ever executes."""
     content = f'# {varname}="${{repo_root}}/.github/scripts/{stem}.py"\n# python3 "${varname}"\n'
-    assert _find_hooks_findings(content) == []
+    with tempfile.TemporaryDirectory() as tmp:
+        hook_path = pathlib.Path(tmp) / "generated.sh"
+        hook_path.write_text(content, encoding="utf-8")
+        findings = gate._scan_hook(hook_path)
+    assert findings == []
 
 
 @_PROPERTIES
@@ -112,7 +119,10 @@ def test_scan_hook_never_raises_and_is_deterministic(text: str) -> None:
     content, generated rather than hand-picked, must always produce a
     result rather than an uncaught exception, and the same input must
     always produce the same result."""
-    first = _find_hooks_findings(text)
-    second = _find_hooks_findings(text)
+    with tempfile.TemporaryDirectory() as tmp:
+        hook_path = pathlib.Path(tmp) / "generated.sh"
+        hook_path.write_text(text, encoding="utf-8")
+        first = gate._scan_hook(hook_path)
+        second = gate._scan_hook(hook_path)
     assert first == second
     assert isinstance(first, list)
