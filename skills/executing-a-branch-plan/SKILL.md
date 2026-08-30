@@ -138,8 +138,12 @@ first, not skimmed.
    full review (the pinned residual judgment step 2 already introduced)
    still runs regardless of that pre-filter's result. **Also scan that
    same task's own new commit messages** (issue `#1477`, gate-proposal,
-   retro `#1475` repair 3) via
-   `git log --format=%B -z BASE..HEAD | python3 scripts/gitapex_check_task_commit_provenance.py`
+   retro `#1475` repair 3) via two separate Bash calls, never piped
+   directly together (a `git log` failure must not be masked as an empty,
+   clean scan -- see the script's own docstring for why): first
+   `git log --format=%B -z BASE..HEAD > <tmpfile>`, confirming that call's
+   own exit code is 0 before proceeding; then
+   `python3 scripts/gitapex_check_task_commit_provenance.py --messages <tmpfile>`
    -- reusing `outward-artifact-preflight`'s own `gitapex_scan_provenance.py`,
    the identical scanner `check-bash-safety.sh` already runs (advisory-only)
    on `git push`. Unlike that advisory path, a FLAGGED result here is a hard
@@ -438,8 +442,9 @@ literal/canonical governance-path pre-filter on its own; run
 `gitapex_check_branch_plan_reverified.py` to mechanize step 1's own
 re-verification-marker structural precondition on its own (issue `#1306`);
 and run `gitapex_check_task_commit_provenance.py` to mechanize step 6's own
-task-commit-message provenance scan on its own, fed with
-`git log --format=%B -z BASE..HEAD` output (issue `#1477`).
+task-commit-message provenance scan on its own, fed via `--messages` with
+`git log --format=%B -z BASE..HEAD` output captured to a file -- never
+piped directly, per that script's own docstring -- (issue `#1477`).
 `gitapex_check_file_ownership_conflicts.py` and
 `gitapex_check_canonical_governance_paths.py` call the same shared
 normalization helper before comparing paths as strings -- see

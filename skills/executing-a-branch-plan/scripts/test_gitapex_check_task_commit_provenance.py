@@ -85,6 +85,20 @@ def test_flags_only_the_dirty_commit_among_several_clean_ones() -> None:
     assert "commit 3" not in result.stderr
 
 
+def test_an_interior_empty_message_commit_does_not_shift_later_indices() -> None:
+    # Defeat case (issue #1477's own correctness review): a real, if
+    # unusual, empty-message commit (`git commit --allow-empty-message`)
+    # sitting between the clean and the flagged commit must not shift the
+    # flagged commit's own reported index or shrink the reported total --
+    # confirmed reproducing the exact scenario the review constructed
+    # (clean, empty, flagged, clean -> "1 of 4", flagged is commit 3).
+    messages = [_CLEAN_MESSAGE, "", _UNDISCLOSED_TRAILER, _CLEAN_MESSAGE]
+    result = run(_nul_join(messages))
+    assert result.returncode == 1
+    assert "1 of 4 commit message(s)" in result.stderr
+    assert "commit 3" in result.stderr
+
+
 def test_flags_the_last_commit_in_a_multi_commit_range() -> None:
     # Defeat case: an off-by-one in commit indexing could silently misname
     # or drop the final entry in a range -- construct the boundary directly
@@ -200,6 +214,19 @@ def test_messages_flag_reports_error_for_a_missing_file(tmp_path: Path) -> None:
     assert "error: messages file not found" in result.stderr
 
 
+def test_messages_flag_reports_error_for_a_directory(tmp_path: Path) -> None:
+    # Found by this script's own convention review (issue #1477): pointing
+    # --messages at a directory raises IsADirectoryError, which is NOT a
+    # FileNotFoundError -- the exact defect class
+    # test_gitapex_check_branch_plan_reverified.py's own
+    # test_body_flag_reports_error_for_a_directory already regression-tests
+    # for its sibling script (issue #1306).
+    result = run("", extra_args=["--messages", str(tmp_path)])
+    assert result.returncode == 2
+    assert "error: could not read messages file" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
 def test_messages_flag_reports_error_for_non_utf8_file(tmp_path: Path) -> None:
     messages_file = tmp_path / "messages.bin"
     messages_file.write_bytes(b"\xff\xfe bad")
@@ -259,11 +286,18 @@ def test_load_provenance_scanner_loads_the_real_bundled_scanner() -> None:
     assert callable(scanner.scan)
 
 
-def test_split_commit_messages_drops_only_empty_entries() -> None:
+def test_split_commit_messages_strips_only_the_one_trailing_nul() -> None:
     assert checker.split_commit_messages("a\0b\0") == ["a", "b"]
-    assert checker.split_commit_messages("a\0\0b\0") == ["a", "b"]
     assert checker.split_commit_messages("") == []
-    assert checker.split_commit_messages("\0") == []
+    # An interior empty message (a real `git commit --allow-empty-message`
+    # commit) is a legitimate zero-length entry, not something to drop --
+    # dropping it would shift every later commit's own reported index.
+    # Found by this script's own correctness review (issue #1477).
+    assert checker.split_commit_messages("a\0\0b\0") == ["a", "", "b"]
+    # Distinguishable from "no commits at all": one byte of input (a
+    # single trailing NUL) means exactly one commit whose own message is
+    # empty, not zero commits.
+    assert checker.split_commit_messages("\0") == [""]
 
 
 def test_find_flagged_commits_reports_1_indexed_positions() -> None:

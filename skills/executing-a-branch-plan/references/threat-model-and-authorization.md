@@ -385,7 +385,7 @@ have *warned* about (advisory, per that scanner's own "surfaces candidates,
 it does not decide" design, since a PR/issue-body hit can legitimately be a
 ratified trailer). No such ratified exception exists for a commit message
 (CONTRIBUTING.md's own PR-body trailer disclosure section states a commit
-message "stays in scope by default"), and the hit had already reached the
+message and its kin "stay in scope by default"), and the hit had already reached the
 shared branch and the remote before merge-back review caught it, needing a
 history rewrite and a force-with-lease push to fix. The row-1 ACM entry for
 that issue asked whether a hook enforcing this inside the task's own

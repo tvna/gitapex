@@ -9,7 +9,7 @@ PR-body trailer disclosure" section ratifies ONLY the server-appended
 PR-body trailer as a disclosed convention; it states plainly that a model
 identifier, session URL, or internal tooling fingerprint appearing anywhere
 else -- "a commit message, code comment, issue body, generated file, or
-review comment" -- "stays in scope by default." The offending commit had
+review comment. Those stay in scope by default." The offending commit had
 already been merged onto the shared branch and pushed to the remote before
 merge-back review caught it, requiring a git commit-tree history rewrite
 and a force-with-lease push to remediate -- exactly the destructive-repair
@@ -30,8 +30,8 @@ path.** That hook's own `warn()` on `git push` is deliberately advisory
 not decide") because a PR/issue-body hit can legitimately be the one
 ratified trailer CONTRIBUTING.md discloses. No equivalent ratified exception
 exists for a commit message -- see that same CONTRIBUTING.md section, which
-states a commit message "stays in scope by default" -- so a hit here has no
-legitimate reading to preserve judgment for, and this script's own exit
+states a commit message and its kin "stay in scope by default" -- so a hit
+here has no legitimate reading to preserve judgment for, and this script's own exit
 code is meant to gate the merge, not merely advise on it.
 
 **Runs in the main thread, not inside the branch-plan-task's own isolated
@@ -58,12 +58,32 @@ commit message, disclosed residuals included -- widening that scanner's own
 regex coverage is out of this issue's scope, which is extending an existing,
 already-trusted discipline to a new surface, not improving its accuracy.
 
-Usage::
+Usage -- two separate steps, deliberately never piped directly together::
 
-    git log --format=%B -z BASE..HEAD | python3 gitapex_check_task_commit_provenance.py
+    git log --format=%B -z BASE..HEAD > /tmp/task-commit-messages.bin
+    python3 gitapex_check_task_commit_provenance.py --messages /tmp/task-commit-messages.bin
 
 `-z` NUL-terminates each commit's own raw message body, so a multi-line
 message is never mistaken for a boundary between two commits.
+
+**Never invoke as `git log ... | python3 ...` in an ordinary (non-`pipefail`)
+shell.** A bare pipe hides `git log`'s own failure: an unresolvable `BASE`
+(a stale ref, a rebase, a shallow worktree, or an agent copying this
+docstring's own `BASE..HEAD` placeholder text verbatim without substituting
+real refs) makes `git log` exit non-zero and write nothing to stdout, but a
+plain shell pipeline's own exit status is the RIGHT-hand command's -- this
+script's own, which then reads empty stdin, correctly reports "PASS: no
+commits in range" per its own contract, and exits 0. A caller checking only
+`$?` after the pipe sees a clean PASS even though no commit was ever
+actually scanned -- exactly the "never a silent PASS" contract this
+docstring's own Exit codes section states, silently defeated one layer
+above this script's own control, for exactly the class of incident (issue
+#1477) this gate exists to prevent. The two-step form above closes this by
+construction: `git log`'s own exit code is a separate, directly observable
+signal on its own command, confirmed non-zero before this script ever
+runs, not a masked one that would otherwise still route to a python
+process this script does not own or protect. Found live by this script's
+own security review (issue #1477's implementing PR).
 
 Exit codes:
     0  PASS -- no commits in range, or every commit message scanned clean.
@@ -142,14 +162,28 @@ def split_commit_messages(raw: str) -> list[str]:
     """Split NUL-terminated `git log --format=%B -z` output into individual
     commit messages, in order.
 
-    A trailing NUL (git always emits one after the last message) leaves a
-    final empty string; an interior empty entry is likewise possible if the
-    input carries two adjacent NULs. Both are dropped, not appended as an
-    empty "commit" with nothing to scan -- an empty message contributes no
-    possible hit either way, so dropping it changes no verdict, only avoids
-    a phantom entry in commit-index reporting.
+    Strips exactly the one trailing NUL git always emits after the last
+    message -- never every empty string in the input. An interior empty
+    message (a real, if unusual, commit made with `git commit
+    --allow-empty-message`) is a legitimate zero-length entry in the
+    result, not something to drop: dropping it would shift every later
+    commit's own 1-based index in `find_flagged_commits`'s reporting and
+    undercount `len(messages)`, misdirecting an operator toward the wrong
+    commit when told which one to amend. Confirmed live: filtering every
+    empty string (an earlier version of this function) reported a range of
+    4 real commits (clean, empty-message, flagged, clean) as "1 of 3", with
+    the flagged one mislabeled commit 2 instead of its real position 3.
+
+    `raw == ""` (no commits at all) and `raw == "\\0"` (one commit whose
+    message is itself empty) are distinguishable by this function precisely
+    because only ONE trailing NUL is ever stripped: the former returns `[]`,
+    the latter returns `[""]`.
     """
-    return [message for message in raw.split("\0") if message]
+    if raw == "":
+        return []
+    if raw.endswith("\0"):
+        raw = raw[:-1]
+    return raw.split("\0")
 
 
 def find_flagged_commits(messages: list[str], scanner: ModuleType) -> list[tuple[int, list[tuple[int, str, str]]]]:
@@ -209,6 +243,15 @@ def main(argv: list[str] | None = None) -> int:
         )
     except FileNotFoundError:
         print(f"error: messages file not found: {args.messages}", file=sys.stderr)
+        return 2
+    except OSError as error:
+        # Broader than FileNotFoundError above -- IsADirectoryError (a
+        # directory passed to --messages) and PermissionError both
+        # otherwise surface as an uncaught traceback instead of this
+        # module's own established `error: ...` convention, the same gap
+        # gitapex_check_branch_plan_reverified.py's own adversarial review
+        # (issue #1306) already found and fixed for its `--body` flag.
+        print(f"error: could not read messages file: {args.messages} ({error})", file=sys.stderr)
         return 2
     except UnicodeDecodeError as error:
         source = args.messages if args.messages else "standard input"

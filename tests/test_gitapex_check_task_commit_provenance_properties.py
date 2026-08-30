@@ -137,15 +137,28 @@ def test_arbitrary_file_content_never_raises_an_uncaught_exception(source: str, 
 
 
 @_PROPERTIES
-@given(messages=st.lists(st.text(max_size=50), max_size=10))
-def test_split_commit_messages_never_produces_an_empty_entry(messages: list[str]) -> None:
-    """Robustness: for any list of generated message strings (including
-    ones already containing NUL, empty strings, or both), splitting their
-    NUL-joined form never yields an empty entry -- ``find_flagged_commits``
-    relies on this to keep commit indices meaningful."""
+@given(messages=st.lists(st.text(max_size=50, alphabet=st.characters(blacklist_characters="\0")), max_size=10))
+def test_split_commit_messages_round_trips_exactly(messages: list[str]) -> None:
+    """**Model-based, detects a real gap the fixed example tests cannot:**
+    for any generated list of message strings that do not themselves
+    contain a NUL (git itself refuses to create a commit whose message
+    does -- verified live, "error: a NUL byte in commit log message not
+    allowed" -- so this is the real-world domain, not an arbitrary
+    restriction), joining them with a trailing NUL each (the exact shape
+    ``git log --format=%B -z`` produces) and splitting the result back
+    apart always reproduces the original list exactly, including any
+    interior empty-string message, in order and at the same positions.
+
+    Confirmed to have teeth (issue #1477's own correctness review): the
+    prior version of ``split_commit_messages`` filtered every empty
+    string rather than stripping only the one trailing NUL, which fails
+    this property immediately on any generated list containing an empty
+    message anywhere but at the very end -- ``find_flagged_commits``
+    then numbers every later commit under the wrong 1-based index.
+    """
     raw = "".join(message + "\0" for message in messages)
     result = checker.split_commit_messages(raw)
-    assert all(entry for entry in result)
+    assert result == messages
 
 
 @_PROPERTIES
