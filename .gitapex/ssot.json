@@ -1785,6 +1785,53 @@
         {"kind": "mcp-tool", "ref": "mcp__github__resolve_review_thread"},
         {"kind": "mcp-tool", "ref": "mcp__github__pull_request_read"}
       ]
+    },
+    {
+      "id": "function-body-test-coverage",
+      "kind": "script",
+      "script": [
+        ".github/scripts/gitapex_gate_function_body_test_coverage.py",
+        ".github/scripts/gitapex_run_base_diff.py",
+        ".github/scripts/_gitapex_base_ref.py",
+        ".github/workflows/function-body-test-coverage-gate.yml"
+      ],
+      "rule": "A FunctionDef/AsyncFunctionDef (at any nesting depth) whose own body -- not a nested function's -- contains a line newly added by a PR diff inside a skills/*/scripts/*.py or .github/scripts/*.py file (test_*.py and conftest.py excluded) must be covered by this same diff also adding or changing a line, inside tests/test_<source-stem>.py or tests/test_<source-stem>_properties.py, that falls inside a test_-named function whose own body references the touched function by name. Unlike detection-logic-property-coverage, module-level changes are never graded and a pre-existing test that already covered the function but that this diff does not itself touch does not clear it -- generalizes that gate (issue #1178) past its own narrower regex/path-resolution/string-comparison AST trigger set, per merge-retrospective issue #1492's own repair 11 (commit 379c0fde shipped a function-body fix with zero test changes in the same diff). Scope is the diff, not the repository. An inline '# function-body-test-coverage: WAIVED: <reason>' comment anywhere within the touched function's own line range waives it. Exits 2 rather than pass silently on a malformed diff or an in-scope file that cannot be read or parsed. See the script's own module docstring for the disclosed known misses and over-reports.",
+      "planes": ["ci", "local"],
+      "local_invocation": [
+        "uv",
+        "run",
+        "--frozen",
+        "python3",
+        ".github/scripts/gitapex_gate_function_body_test_coverage.py"
+      ],
+      "local_stdin": [
+        "uv",
+        "run",
+        "--frozen",
+        "python3",
+        ".github/scripts/gitapex_run_base_diff.py",
+        "--",
+        "*.py"
+      ],
+      "trigger": ".github/workflows/function-body-test-coverage-gate.yml on pull_request, plus tests/test_gitapex_gate_function_body_test_coverage.py and tests/test_gitapex_gate_function_body_test_coverage_properties.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "test-integrity",
+      "tracking_issue": 1498,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "skills/*/scripts/*.py"},
+        {"kind": "file-glob", "ref": ".github/scripts/*.py"},
+        {"kind": "file-glob", "ref": "tests/test_*.py"},
+        {
+          "kind": "cross-registry-consistency",
+          "ref": "new/changed function bodies in skills/*/scripts/*.py, .github/scripts/*.py <-> a new/changed test_-named test in the same diff, in the co-located tests/test_<stem>.py or tests/test_<stem>_properties.py"
+        },
+        {"kind": "workflow-event", "ref": "function-body-test-coverage-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     }
   ],
   "clusters": {
