@@ -433,6 +433,26 @@ ALLOWED_DYNAMIC_COMMANDS = [
         "TOOL=uv; VERB=harmless; VERB=$(echo install); true | echo hi; VERB=safe; $TOOL $VERB foo",
         "real-top-level-static-clear-after-a-harmless-pipeline-stays-allowed",
     ),
+    # False-positive guards for the thirty-third-round process-
+    # substitution and declare/typeset fixes (issue #1375): an ordinary,
+    # unrelated process substitution elsewhere in the command, or a
+    # top-level `declare` (never inside a function, so real bash treats
+    # it as an ordinary global assignment) on a name that was never
+    # poisoned, must not spuriously deny -- and a harmless process
+    # substitution earlier in the command must not block a LATER,
+    # genuine top-level static reassignment from clearing normally.
+    (
+        "TOOL=uv; VERB=safe; cat <(echo hi) >/dev/null; $TOOL $VERB foo",
+        "unrelated-harmless-process-substitution-alongside-a-never-poisoned-name-stays-allowed",
+    ),
+    (
+        "TOOL=uv; declare VERB=safe; $TOOL $VERB foo",
+        "top-level-declare-that-was-never-poisoned-stays-allowed",
+    ),
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); cat <(echo hi) >/dev/null; VERB=safe; $TOOL $VERB foo",
+        "real-top-level-static-clear-after-a-harmless-process-substitution-stays-allowed",
+    ),
 ]
 
 # --- Known, disclosed, unresolved regex/token-gate bypasses ----------------
@@ -1211,6 +1231,43 @@ DENIED_INDIRECTION_COMMANDS = [
     (
         "TOOL=uv; VERB=harmless; VERB=$(echo install); ( (VERB=totallysafe) ); $TOOL $VERB foo",
         "deliberately-spaced-double-subshell-distractor-stays-denied",
+    ),
+    # Found live by Step 8 independent review, thirty-third round (issue
+    # #1375): process substitution (`<(...)`/`>(...)`) runs its own
+    # content in a separate, isolated subshell, exactly like `$(...)`
+    # command substitution, but this classifier's own tokenizer fuses
+    # `<(`/`>(` into their own distinct tokens, never a bare `(` -- the
+    # pre-round-33 code neither isolated its content nor correctly
+    # paired its matching close, corrupting depth tracking for a
+    # genuinely enclosing real subshell too. `declare`/`typeset` used
+    # INSIDE a function body also implicitly localize a variable exactly
+    # like `local` does, which the pre-round-33 code had no concept of.
+    # Confirmed live via a stand-in `uv`/`gh` binary on PATH that each
+    # genuinely runs the dangerous command, NOT the process-substitution/
+    # declare-scoped distractor value.
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); cat <(VERB=safe) >/dev/null; $TOOL $VERB foo",
+        "var-split-tool-and-verb-reassigned-from-a-static-value-cleared-via-a-process-substitution",
+    ),
+    (
+        "M=safe; M=$(echo POST); cat <(M=GET) >/dev/null; gh api repos/o/r/pulls/1/merge -X $M",
+        "gh-api-method-value-reassigned-from-a-static-value-cleared-via-a-process-substitution",
+    ),
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); (cat <(true); VERB=safe); $TOOL $VERB foo",
+        "process-substitution-does-not-corrupt-an-enclosing-subshells-depth",
+    ),
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); f() { declare VERB=safe; }; f; $TOOL $VERB foo",
+        "var-split-tool-and-verb-reassigned-from-a-static-value-cleared-via-a-declare-declaration",
+    ),
+    (
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); f() { typeset VERB=safe; }; f; $TOOL $VERB foo",
+        "var-split-tool-and-verb-reassigned-from-a-static-value-cleared-via-a-typeset-declaration",
+    ),
+    (
+        "M=safe; M=$(echo POST); f() { declare M=GET; }; f; gh api repos/o/r/pulls/1/merge -X $M",
+        "gh-api-method-value-reassigned-from-a-static-value-cleared-via-a-declare-declaration",
     ),
 ]
 

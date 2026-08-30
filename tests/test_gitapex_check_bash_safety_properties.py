@@ -2680,6 +2680,56 @@ def test_segment_tokens_with_scope_isolation_matches_model_for_a_pipe_stage(name
     assert result == [([f"{name}=first"], False), (["true"], True), ([f"{name}={value}"], True)]
 
 
+def test_raw_segments_with_boundaries_treats_process_substitution_open_as_a_depth_boundary() -> None:
+    """CRITICAL bypass regression pin (round-33 independent review, issue
+    #1375): `<(`/`>(` tokenize as their OWN fused tokens, never a bare
+    `(` -- `_raw_segments_with_boundaries` must recognize them as
+    depth-opening boundaries too, or a process substitution's own
+    content is swept into whatever segment was already active."""
+    tokens = ["cat", "<(", "VERB=safe", ")"]
+    result = checker._raw_segments_with_boundaries(tokens)
+    assert result == [(["cat"], 0, "<("), (["VERB=safe"], 1, ")"), ([], 0, None)]
+
+
+def test_raw_segments_with_boundaries_process_substitution_does_not_corrupt_an_enclosing_subshells_depth() -> None:
+    """A process substitution's own matching `)` must decrement depth by
+    exactly the amount its own `<(`/`>(` incremented it -- never
+    prematurely closing a GENUINELY enclosing `(...)` subshell around
+    it."""
+    tokens = ["(", "cat", "<(", "true", ")", ";", "VERB=safe", ")"]
+    result = checker._raw_segments_with_boundaries(tokens)
+    assert result[0] == ([], 0, "(")
+    assert result[1] == (["cat"], 1, "<(")
+    assert result[2] == (["true"], 2, ")")
+    assert result[3] == ([], 1, ";")
+    assert result[4] == (["VERB=safe"], 1, ")")
+    assert result[5] == ([], 0, None)
+
+
+def test_segment_tokens_with_scope_isolation_marks_a_declare_declaration_isolated() -> None:
+    tokens = ["{", "declare", "VERB=safe"]
+    result = checker._segment_tokens_with_scope_isolation(tokens)
+    assert result == [(["{", "declare", "VERB=safe"], True)]
+
+
+def test_segment_tokens_with_scope_isolation_marks_a_typeset_declaration_isolated() -> None:
+    tokens = ["{", "typeset", "VERB=safe"]
+    result = checker._segment_tokens_with_scope_isolation(tokens)
+    assert result == [(["{", "typeset", "VERB=safe"], True)]
+
+
+@_PROPERTIES
+@given(name=_IDENTIFIERS, value=_VALUES)
+def test_segment_tokens_with_scope_isolation_matches_model_for_a_process_substitution(name: str, value: str) -> None:
+    """Model-based, exercising `_segment_tokens_with_scope_isolation`
+    directly (issue #1178's own detection-logic property-coverage
+    requirement): for ANY identifier assigned a value inside a `<(...)`
+    process substitution, that segment is marked isolated."""
+    tokens = ["cat", "<(", f"{name}={value}", ")"]
+    result = checker._segment_tokens_with_scope_isolation(tokens)
+    assert result == [(["cat"], False), ([f"{name}={value}"], True)]
+
+
 def test_names_reassigned_from_a_static_value_stays_poisoned_despite_a_subshell_clear() -> None:
     """CRITICAL bypass regression pin (round-31 independent review, issue
     #1375): a static reassignment written INSIDE a `(...)` subshell
@@ -2759,6 +2809,24 @@ def test_names_reassigned_from_a_static_value_matches_model_for_a_pipe_stage_cle
     poisoned regardless of the pipe stage's own assigned value."""
     tokens = [f"{name}={static_value}", ";", f"{name}=$({dynamic_value})", ";", "true", "|", f"{name}={isolated_value}"]
     assert name in checker._names_reassigned_from_a_static_value(tokens)
+
+
+def test_names_reassigned_from_a_static_value_stays_poisoned_despite_a_process_substitution_clear() -> None:
+    """CRITICAL bypass regression pin (round-33 independent review, issue
+    #1375): a process substitution runs its own content in a separate,
+    isolated subshell, exactly like `$(...)` command substitution -- a
+    static reassignment inside `<(...)` can never reach the parent
+    shell's own copy of the name."""
+    tokens = ["VERB=harmless", ";", "VERB=$(echo install)", ";", "cat", "<(", "VERB=safe", ")"]
+    assert checker._names_reassigned_from_a_static_value(tokens) == {"VERB"}
+
+
+def test_names_reassigned_from_a_static_value_stays_poisoned_despite_a_declare_clear() -> None:
+    """Same round, the `declare`-inside-a-function counterpart: bash
+    localizes `declare`/`typeset` inside a function body exactly like
+    `local`."""
+    tokens = ["VERB=harmless", ";", "VERB=$(echo install)", ";", "{", "declare", "VERB=safe", "}"]
+    assert checker._names_reassigned_from_a_static_value(tokens) == {"VERB"}
 
 
 @_PROPERTIES
@@ -2947,6 +3015,20 @@ def test_names_cleared_by_a_later_static_reassignment_matches_model_for_a_pipe_s
     in the cleared set."""
     tokens = [f"{name}=x", f"{name}+={appended_value}", ";", "true", "|", f"{name}={isolated_value}"]
     assert name not in checker._names_cleared_by_a_later_static_reassignment(tokens, {name})
+
+
+def test_names_cleared_by_a_later_static_reassignment_does_not_clear_via_a_process_substitution() -> None:
+    """CRITICAL bypass regression pin (round-33 independent review, issue
+    #1375): a static reassignment inside a `<(...)` process substitution
+    never reaches the parent shell's own copy of the name -- must not
+    clear an append-poisoned candidate."""
+    tokens = ["VERB=inst", "VERB+=all", ";", "cat", "<(", "VERB=safe", ")"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == set()
+
+
+def test_names_cleared_by_a_later_static_reassignment_does_not_clear_via_a_declare_declaration() -> None:
+    tokens = ["VERB=inst", "VERB+=all", ";", "{", "declare", "VERB=safe", "}"]
+    assert checker._names_cleared_by_a_later_static_reassignment(tokens, {"VERB"}) == set()
 
 
 def test_names_cleared_by_a_later_static_reassignment_clears_after_a_printf_v() -> None:
@@ -3368,6 +3450,97 @@ def test_classify_denies_a_deliberately_spaced_double_subshell_distractor() -> N
     denied, since real bash's own parent scope is unaffected by it."""
     verdict = checker.classify("TOOL=uv; VERB=harmless; VERB=$(echo install); ( (VERB=totallysafe) ); $TOOL $VERB foo")
     assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_process_substitution_clear() -> None:
+    """CRITICAL bypass regression pin (round-33 independent review,
+    issue #1375): a process substitution runs its own content in a
+    separate, isolated subshell, exactly like `$(...)` command
+    substitution -- but this classifier's own tokenizer fuses `<(`/`>(`
+    into their own distinct tokens, never a bare `(`, so the pre-round-
+    33 code neither isolated its content nor correctly paired its
+    matching close, corrupting depth tracking too. Confirmed live via a
+    stand-in `uv` binary on PATH that this genuinely runs `uv install
+    foo`, NOT `safe foo`."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); cat <(VERB=safe) >/dev/null; $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_gh_api_method_reassigned_from_a_static_value_via_a_process_substitution_clear() -> None:
+    """Companion to the B1b pin above, for `_rule_gh_api_write`.
+    Confirmed live via a stand-in `gh` binary on PATH that this
+    genuinely runs `gh api repos/o/r/pulls/1/merge -X POST`, a genuine
+    unreviewed write."""
+    verdict = checker.classify("M=safe; M=$(echo POST); cat <(M=GET) >/dev/null; gh api repos/o/r/pulls/1/merge -X $M")
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_process_substitution_that_corrupts_an_enclosing_subshells_depth() -> None:
+    """The depth-corruption variant: a process substitution's own
+    phantom close must not prematurely decrement tracked depth for a
+    GENUINELY enclosing `(...)` subshell around it. Confirmed live that
+    the outer subshell genuinely still isolates `VERB=safe` in real bash
+    (`VERB=install; (cat <(true); VERB=safe); echo "VERB is now: $VERB"`
+    prints `VERB is now: install`)."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); (cat <(true); VERB=safe); $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_declare_declaration_clear() -> None:
+    """Same round, the `declare`-inside-a-function counterpart: bash
+    localizes `declare`/`typeset` inside a function body exactly like
+    `local`. Confirmed live via a stand-in `uv` binary on PATH that this
+    genuinely runs `uv install foo`, NOT `safe foo`."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); f() { declare VERB=safe; }; f; $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_b1b_tool_and_verb_reassigned_from_a_static_value_via_a_typeset_declaration_clear() -> None:
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); f() { typeset VERB=safe; }; f; $TOOL $VERB foo"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_denies_a_gh_api_method_reassigned_from_a_static_value_via_a_declare_declaration_clear() -> None:
+    verdict = checker.classify(
+        "M=safe; M=$(echo POST); f() { declare M=GET; }; f; gh api repos/o/r/pulls/1/merge -X $M"
+    )
+    assert verdict.deny is True
+
+
+def test_classify_allows_an_unrelated_harmless_process_substitution_alongside_a_never_poisoned_name() -> None:
+    """No over-correction: an ordinary, unrelated process substitution
+    elsewhere in the command must not spuriously deny a command whose
+    watched name was never poisoned at all."""
+    verdict = checker.classify("TOOL=uv; VERB=safe; cat <(echo hi) >/dev/null; $TOOL $VERB foo")
+    assert verdict.deny is False
+
+
+def test_classify_allows_a_top_level_declare_that_was_never_poisoned() -> None:
+    """No over-correction: `declare`/`typeset` at the TOP LEVEL of a
+    script (not inside any function) behaves as an ordinary global
+    assignment in real bash -- a name that was never poisoned to begin
+    with must still be allowed even though `declare` is conservatively
+    treated as always-isolating for the CLEARING check specifically."""
+    verdict = checker.classify("TOOL=uv; declare VERB=safe; $TOOL $VERB foo")
+    assert verdict.deny is False
+
+
+def test_classify_allows_a_real_top_level_static_clear_after_a_harmless_process_substitution() -> None:
+    """No over-correction: a harmless process substitution earlier in
+    the command must not block a LATER, genuine top-level static
+    reassignment from clearing poisoning normally."""
+    verdict = checker.classify(
+        "TOOL=uv; VERB=harmless; VERB=$(echo install); cat <(echo hi) >/dev/null; VERB=safe; $TOOL $VERB foo"
+    )
+    assert verdict.deny is False
 
 
 def test_resolve_path_tokens_denies_a_name_with_a_dynamic_assignment_elsewhere() -> None:

@@ -4073,6 +4073,18 @@ def _names_reassigned_by_untracked_construct(tokens: list[str]) -> set[str]:
     return names
 
 
+_SUBSHELL_OPEN_TOKENS = frozenset({"(", "<(", ">("})
+"""Every token that opens a `(...)`-nesting level `_raw_segments_with_
+boundaries` must track: a bare `(` (subshell grouping/function-
+definition parameter list) AND bash's own process-substitution openers
+`<(`/`>(`, which this file's own tokenizer fuses into a single token
+distinct from a bare `(` (confirmed directly: `tokenize("cat <(VERB=
+safe)")` produces `[..., "<(", "VERB=safe", ")", ...]` -- one token for
+`<(`, matching a bare `)` for the close, never a bare `(` on its own).
+Added by round 33 (issue #1375) -- see `_raw_segments_with_boundaries`'s
+own docstring for the live bypass this closes."""
+
+
 def _raw_segments_with_boundaries(tokens: list[str]) -> list[tuple[list[str], int, str | None]]:
     """Every segment TOKENS splits into (including EMPTY ones, unlike
     `segment_tokens`'s own filtered output -- an empty segment, e.g.
@@ -4085,13 +4097,45 @@ def _raw_segments_with_boundaries(tokens: list[str]) -> list[tuple[list[str], in
     of TOKENS with no terminator). Building block for `_segment_tokens_
     with_scope_isolation`'s own pipe/background-job detection, which
     needs to know each segment's own NEIGHBORING boundary tokens, not
-    just its depth."""
+    just its depth.
+
+    CRITICAL bypass found by independent adversarial review (round 33,
+    issue #1375) and independently reproduced live, both via
+    `classify()` and via real bash execution with a stand-in `uv`/`gh`
+    binary on PATH: this function's own pre-round-33 form only
+    recognized a BARE `(` as a depth-opening boundary -- but bash's
+    process-substitution openers `<(`/`>(` tokenize as their OWN fused,
+    distinct tokens (`"<("`/`">("`, never a bare `"("`), so a process
+    substitution's own content was swept into whatever segment was
+    already active (never isolated) -- and WORSE, its matching, bare `)`
+    close token WAS recognized and unconditionally decremented the
+    tracked depth, corrupting tracking for a GENUINELY enclosing `(...)`
+    subshell around it, prematurely treating tokens still lexically
+    inside that real subshell as top-level again. `TOOL=uv;
+    VERB=harmless; VERB=$(echo install); cat <(VERB=safe) >/dev/null;
+    $TOOL $VERB foo` resolved to `deny=False` even though real bash
+    genuinely runs `uv install foo`, NOT `safe foo` (confirmed live via
+    a stand-in `uv` binary on PATH: captured argv `uv called with:
+    install foo`) -- process substitution runs its own content in a
+    separate subshell, exactly like `$(...)` command substitution, so it
+    never leaks back to the parent. The depth-corruption variant,
+    `TOOL=uv; VERB=harmless; VERB=$(echo install); (cat <(true);
+    VERB=safe); $TOOL $VERB foo`, reproduces identically (confirmed live
+    that the OUTER `(...)` genuinely still isolates `VERB=safe` in real
+    bash: `VERB=install; (cat <(true); VERB=safe); echo "VERB is now:
+    $VERB"` prints `VERB is now: install`) -- but the pre-fix code
+    tracked the `VERB=safe` segment at depth 0, having already been
+    dropped back down by the process substitution's own phantom close.
+    Closed by recognizing every token in `_SUBSHELL_OPEN_TOKENS` (not
+    just a bare `(`) as a depth-opening boundary -- `<(`/`>(` each still
+    pair with an ordinary bare `)` close exactly like a bare `(` does,
+    so no change to the closing side was needed."""
     segments: list[list[str]] = [[]]
     seg_depths: list[int] = [0]
     terminators: list[str | None] = []
     depth = 0
     for tok in tokens:
-        if tok == "(":
+        if tok in _SUBSHELL_OPEN_TOKENS:
             terminators.append(tok)
             depth += 1
             segments.append([])
@@ -4131,16 +4175,27 @@ def _segment_tokens_with_scope_isolation(tokens: list[str]) -> list[tuple[list[s
       `&` forks into its own subshell; the segment AFTER `&` runs in the
       parent shell as normal and is NOT isolated by that `&` alone --
       only what precedes it is);
-    - it contains the literal `local` keyword as one of its own tokens
-      anywhere, not necessarily first -- a function body's own opening
-      `{` (not itself a `segment_tokens` boundary, so it shares the
-      SAME segment as the `local` statement that follows it, e.g.
-      `["{", "local", "VERB=safe"]` for `f() { local VERB=safe; }`)
-      would otherwise sit at position 0 and hide the keyword from a
-      first-token-only check (bash's own function-local variable
-      scoping: a `local NAME=value` inside a function body never leaks
-      to the function's caller, unlike a plain `NAME=value` in the same
-      position, which WOULD leak).
+    - it contains the literal `local`, `declare`, or `typeset` keyword
+      as one of its own tokens anywhere, not necessarily first -- a
+      function body's own opening `{` (not itself a `segment_tokens`
+      boundary, so it shares the SAME segment as the statement that
+      follows it, e.g. `["{", "local", "VERB=safe"]` for `f() { local
+      VERB=safe; }`) would otherwise sit at position 0 and hide the
+      keyword from a first-token-only check. `local` is ALWAYS function-
+      scoped in real bash (using it outside a function is invalid), so
+      treating it as isolating is never wrong; `declare`/`typeset` are
+      genuinely AMBIGUOUS -- they localize a variable ONLY when used
+      INSIDE a function, and behave as an ordinary, non-isolating global
+      assignment at the top level of a script, a distinction this
+      function does not attempt to track (doing so would require
+      knowing whether the CURRENT segment sits inside a function body's
+      own `{...}`/`NAME() ...` definition, a form of tracking this file
+      does not otherwise perform) -- so both are conservatively treated
+      as ALWAYS isolating, matching this file's own established
+      deny-on-uncertainty posture; the accepted cost is a narrow false-
+      positive class (an ordinary, harmless top-level `declare NAME=
+      value`/`typeset NAME=value` clearing assignment stays
+      conservatively un-cleared), never a bypass.
 
     CRITICAL bypasses found by independent adversarial review (round
     32, issue #1375) and independently reproduced live, both via
@@ -4213,14 +4268,59 @@ def _segment_tokens_with_scope_isolation(tokens: list[str]) -> list[tuple[list[s
     this file has followed in every prior round; closing it soundly
     would require the upstream tokenizer to preserve the presence/
     absence of a space between adjacent parens, which is out of this
-    round's scope."""
+    round's scope.
+
+    TWO further gaps found by independent adversarial review (round 33,
+    issue #1375) and independently reproduced live, both via
+    `classify()` and via real bash execution with a stand-in `uv`/`gh`
+    binary on PATH:
+
+    Process substitution (`<(cmd)`/`>(cmd)`) also runs its own content
+    in a separate, isolated subshell, exactly like `$(...)` command
+    substitution -- but this file's own tokenizer fuses `<(`/`>(` into
+    their OWN distinct tokens, never a bare `(`, so the pre-round-33
+    `_raw_segments_with_boundaries` (which only recognized a bare `(`)
+    neither isolated a process substitution's own content NOR correctly
+    paired its matching, bare `)` close, which prematurely decremented
+    the tracked depth and corrupted isolation tracking for a genuinely
+    enclosing REAL subshell around it. `TOOL=uv; VERB=harmless;
+    VERB=$(echo install); cat <(VERB=safe) >/dev/null; $TOOL $VERB foo`
+    resolved to `deny=False` even though real bash genuinely runs `uv
+    install foo` (confirmed live via a stand-in `uv` binary on PATH:
+    captured argv `uv called with: install foo`). Closed by
+    `_raw_segments_with_boundaries`'s own `_SUBSHELL_OPEN_TOKENS` fix --
+    see that function's own docstring for the full live-verified
+    bypass, including the depth-corruption variant.
+
+    `declare`/`typeset` used INSIDE a function body implicitly localize
+    a variable exactly like `local` does (confirmed live: `VERB=
+    harmless; f() { declare VERB=safe; }; f; echo "VERB=$VERB"` prints
+    `VERB=harmless`, unchanged) -- but the pre-round-33 isolation check
+    recognized only the literal `local` keyword. `TOOL=uv; VERB=
+    harmless; VERB=$(echo install); f() { declare VERB=safe; }; f;
+    $TOOL $VERB foo` resolved to `deny=False` even though real bash
+    genuinely runs `uv install foo`, NOT `safe foo` (confirmed live via
+    a stand-in `uv` binary on PATH: captured argv `uv called with:
+    install foo`); the `typeset` form reproduces identically. Both
+    reproduce identically for `_rule_gh_api_write` too. Closed by also
+    checking for `declare`/`typeset` anywhere in the segment, treated
+    identically to `local` -- see this function's own docstring bullet
+    above for why both are conservatively treated as ALWAYS isolating
+    even though real bash only localizes them inside a function body."""
     raw = _raw_segments_with_boundaries(tokens)
     result: list[tuple[list[str], bool]] = []
     for i, (seg, depth, terminator) in enumerate(raw):
         if not seg:
             continue
         preceding = raw[i - 1][2] if i > 0 else None
-        isolated = depth > 0 or terminator in ("|", "&") or preceding == "|" or "local" in seg
+        isolated = (
+            depth > 0
+            or terminator in ("|", "&")
+            or preceding == "|"
+            or "local" in seg
+            or "declare" in seg
+            or "typeset" in seg
+        )
         result.append((seg, isolated))
     return result
 
