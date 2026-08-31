@@ -467,11 +467,11 @@ choice, applying this skill's own Step 3 self-referentially. Every
 Step's core judgment call -- the Mechanism-fit criteria, the axis
 option lists, the DbC definitions, the SDO test, a domain-gap example
 -- is inlined directly in this body, satisfying dimension 9's Broad bar
-per `references/rubric.md`'s own wording. Five of six `references/`
-files stay genuinely on-demand, loaded only when the body's own floor
-isn't enough; `gitapex-cross-links.md` is the one exception, carrying
-Step 8's own exact flags, found nowhere else, so it *is* required
-reading on the in-repo ordinary path.
+per `references/rubric.md`'s own wording. Four of six `references/` files stay
+genuinely on-demand, loaded only when the body's own floor isn't enough; two are
+required reading on the in-repo ordinary path: `gitapex-cross-links.md` (Step
+8's own exact checker flags, found nowhere else) and `formative-quality-
+dimensions.md`, which that same Step mandates sweeping against unconditionally.
 **Declaration-vs-structure fit** (disclosed per `rubric.md`'s own
 requirement once a Broad body nears `BODY_MAX_LINES`): Adaptive was
 considered and rejected, not relabeled away from (`metadata/

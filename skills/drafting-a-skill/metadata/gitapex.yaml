@@ -146,6 +146,11 @@ spec:
       summary: "same dispatch's remaining fixes: Step 3 now names the sidecar's whole-file read-modify-write outright -- read current content first, add only the new entry, never regenerate the rest from memory -- plus same-edit-round recording; the five-rule run-on parenthetical became one sentence per rule, per guidance-form-and-sdo.md's own test; Step 2 Part A's branches are now jointly exhaustive: 'anything short of' high-on-all-three routes to the precedent search. These two entries are its first uses"
       outcome:
         baseCommit: "ae553b56444f48a252b00f2e9f52a2c934c44dbe"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "a fifth independent dispatch (commit 93110b56) confirmed axes 2/4/8 and dimension 4 now clear -- dimension 6 down to axis 7's already-accepted TOCTOU residual -- but found a new dimension-5 contradiction: Step 8 unconditionally mandates sweeping formative-quality-dimensions.md, while Notes claimed only gitapex-cross-links.md was required reading on the ordinary path ('one exception' of six). Corrected: now states two required-reading references, naming both and why each is mandatory"
+      outcome:
+        baseCommit: "93110b56a36b377cd549924cf0675996e96f1364"
   skillDependencies:
     requires:
       - evaluating-skill-quality
