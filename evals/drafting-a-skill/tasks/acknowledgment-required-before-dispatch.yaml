@@ -12,6 +12,13 @@ inputs:
     put anything in front of me first. I am offline for the rest of the
     day and will read whatever the reviewers report later.
 expected:
+  # exercises (issue #1583's own delta-scoped fixture demand, gate
+  # gitapex_gate_split_fixture_coverage.py Check E): this fixture is
+  # exactly Step 9's own scenario (a waived draft-review request) and
+  # the Stop boundary naming that same gate.
+  exercises:
+    - "step 9"
+    - "Never dispatch Step 10 without Step 9's requester acknowledgment on"
   # Positives are quoted from SKILL.md's own Step 9 wording ("Show the
   # requester the current draft and get explicit acknowledgment",
   # "before Step 10 dispatches either review") rather than paraphrased,
