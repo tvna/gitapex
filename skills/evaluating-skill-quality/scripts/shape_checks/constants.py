@@ -876,7 +876,7 @@ CROSS_SKILL_CITATION_RE = re.compile(
 MECHANISM_FIT_HEADING_RE = re.compile(r"^[ ]{0,3}(#{1,6})[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$", re.MULTILINE)
 # A "[label]"-style citation bracket -- this repository's own established
 # reference-style-link-label convention (e.g. "[sd]", "[ab]",
-# "[modeleffort]"), the same shape a Agentic operation mechanism-fit subsection already uses
+# "[modeleffort]"), the same shape an Agentic operation mechanism-fit subsection already uses
 # today wherever it cites a primary source. Presence-only: this check does
 # not verify the label resolves to a real "[label]: url" definition
 # elsewhere in the document (a distinct, narrower question this check
@@ -884,7 +884,7 @@ MECHANISM_FIT_HEADING_RE = re.compile(r"^[ ]{0,3}(#{1,6})[ \t]+(.+?)(?:[ \t]+#+)
 # rather than none.
 MECHANISM_FIT_CITATION_RE = re.compile(r"\[[a-z0-9][a-z0-9-]*\]")
 # The literal disclosure phrase this repository's own rubric.md already
-# uses (verbatim, twice) to mark a Agentic operation mechanism-fit claim as its own reasoned
+# uses (verbatim, twice) to mark an Agentic operation mechanism-fit claim as its own reasoned
 # extension rather than an Anthropic-sourced one.
 MECHANISM_FIT_REASONED_EXTENSION_PHRASE = "this repository's own reasoned extension"
 

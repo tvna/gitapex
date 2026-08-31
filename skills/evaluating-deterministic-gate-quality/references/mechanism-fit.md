@@ -17,7 +17,7 @@ scope -- asks which of the four domains named in `SKILL.md`'s Scope
 section (git hook subprocess, agent-harness hook subprocess, CI job step,
 MCP server subprocess) should own it. Skipping straight to domain
 placement without asking the first two is the same mistake
-`evaluating-skill-quality`'s own Deterministic-gate mechanism-fit section exists to prevent
+`evaluating-skill-quality`'s own Agentic operation mechanism-fit section exists to prevent
 for skills: a well-implemented control in the wrong mechanism, in a layer
 that never needed to own it, or in no mechanism that needed building at
 all, is not fixed by polishing its implementation further.
@@ -26,8 +26,8 @@ all, is not fixed by polishing its implementation further.
 
 Before asking which domain should own a policy, ask whether a
 deterministic gate should own it at all. Grounded in the same primary
-source `evaluating-skill-quality`'s own `references/rubric.md` Mechanism
-fit section already cites -- Anthropic's "Steering Claude Code" guidance:
+source `evaluating-skill-quality`'s own `references/rubric.md` Agentic
+operation mechanism-fit section already cites -- Anthropic's "Steering Claude Code" guidance:
 a rule shaped like "every time X, always do Y" or "never do this" needs
 deterministic backing (a hook, a required check, a permission), because a
 model can fail to follow a prompted rule under pressure. The mirror image

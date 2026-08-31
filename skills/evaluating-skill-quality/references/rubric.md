@@ -97,8 +97,8 @@ territory):
 
 ### Blind spot pass
 
-A precondition step (`SKILL.md`'s Procedure step 2, alongside the Mechanism
-fit checks), not a tenth dimension -- the fixed **nine-dimension** count is
+A precondition step (`SKILL.md`'s Procedure step 2, alongside the Agentic
+operation mechanism-fit checks), not a tenth dimension -- the fixed **nine-dimension** count is
 unchanged by this section.
 
 Before walking dimensions 1-9, name explicitly whether the target's specific
@@ -661,7 +661,7 @@ grading below.
   - **The portability litmus test, applied to every sentence, not only
     executed steps**: for Portable-declared content, ask of each claim --
     including one the model never executes as a step, such as a Stop
-    boundary or a Agentic operation mechanism-fit assertion -- *"would this exact sentence
+    boundary or an Agentic operation mechanism-fit assertion -- *"would this exact sentence
     remain true, unchanged, if this file were copied into a repository
     carrying none of the origin repo's state?"* A runtime path-read
     failing this test is the same defect as a **declarative fact-claim**
@@ -1009,7 +1009,7 @@ The axis is warning-only:
 Classify independent evidence independently. For example, a step that logs
 an unredacted credential earns a confidentiality warning; a separate,
 unenforced "never log secrets" Stop boundary with no hook or permission
-backing it remains a Agentic operation mechanism-fit finding under its existing rules. Report
+backing it remains an Agentic operation mechanism-fit finding under its existing rules. Report
 both. Never downgrade one finding because the same lines also triggered the
 other, and never let either substitute for the other.
 

@@ -411,9 +411,9 @@ Capability assumption: **Broad**, the repository owner's explicit choice.
 Every Step's core judgment call -- the DbC definitions, the SDO test, a
 domain-gap example, the upstream-ambiguity escalation shape -- is inlined
 directly in this body, satisfying dimension 9's Broad bar per
-`references/rubric.md`'s own wording. Four of five `references/` files
+`references/rubric.md`'s own wording. Three of five `references/` files
 stay genuinely on-demand, loaded only when the body's own floor isn't
-enough; one is required reading on the in-repo ordinary path:
+enough; two are required reading on the in-repo ordinary path:
 `gitapex-cross-links.md` (Step 6's own exact checker flags, found nowhere
 else), alongside `formative-quality-dimensions.md`, which that same Step
 mandates sweeping against unconditionally.

@@ -66,8 +66,8 @@ gate whose guarded path the infrastructure beneath all four domains
 already owns -- a distinct answer, never a species of wrong domain -- or
 a gate built for a policy that was never gate material to begin with,
 the same way a well-written skill that should have been a hook is not
-fixed by improving its prose (`evaluating-skill-quality`'s own Mechanism
-fit section makes the identical move for skills). Full test, all three
+fixed by improving its prose (`evaluating-skill-quality`'s own Agentic
+operation mechanism-fit section makes the identical move for skills). Full test, all three
 questions: [references/mechanism-fit.md](references/mechanism-fit.md),
 which also carries the second question's own four outcome tokens, its
 decision procedure (the impossible-vs-tedious test from

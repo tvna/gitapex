@@ -742,7 +742,7 @@ or is enforced by this instruction alone depends on the environment this run
 is actually in -- check directly rather than assuming either way, the same
 self-audit `SKILL.md`'s own eval-tooling-install Stop boundary already
 applies to itself. An environment with no such backing is currently
-prose-only and worth naming as a Agentic operation mechanism-fit gap the same way that Stop
+prose-only and worth naming as an Agentic operation mechanism-fit gap the same way that Stop
 boundary already names its own, not a guarantee to assume holds.
 
 ## Contaminated-dispatch disclosure

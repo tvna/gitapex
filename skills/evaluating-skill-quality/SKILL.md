@@ -160,8 +160,8 @@ is still grading from a contaminated context.
   [references/adversarial-self-audit.md](references/adversarial-self-audit.md)'s
   structured-output-injection section for how).
 - When the target has Stop boundaries or Agentic operation mechanism-fit prose, instruct the
-  dispatch explicitly to check each such sentence against *both* Mechanism
-  fit's "is this backed" question and the portability litmus test's "would
+  dispatch explicitly to check each such sentence against *both* Agentic
+  operation mechanism-fit's "is this backed" question and the portability litmus test's "would
   this exact wording survive being read in an unrelated repository" question
   (`references/rubric.md`'s Portability level section) -- its default
   nine-dimension walk answers the first by habit and can silently skip the
@@ -433,7 +433,7 @@ actually specifies.
   dispatch is actually running in -- check directly rather than assuming
   either way; if a target repository has such a hook, that is real
   enforcement, and if it does not, this boundary is currently prose-only
-  and worth naming as a Agentic operation mechanism-fit gap the same way any other
+  and worth naming as an Agentic operation mechanism-fit gap the same way any other
   unenforced safety-critical prohibition would be. The skill's own
   bundled `scripts/gitapex_check_skill_shape.py` is not such an install -- it
   ships with the skill and only reads.
