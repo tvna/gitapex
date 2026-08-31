@@ -351,22 +351,6 @@ that determination is `evaluating-skill-quality`'s and
 | `drafting-an-adr` | The shared-bundled-script-parent policy's own last-resort escalation records its decision through that skill. |
 | `grounding-in-primary-sources` | The guidance-form "cite primary sources" rule applies that skill's discipline, not re-derived. |
 
-- **Live collision, from a vendored copy `apm install` does not prune:**
-  this repository retired the `obra/superpowers` dependency (no longer
-  in `apm.yml`/`apm.lock.yaml`), but `apm install` does not remove an
-  already-deployed directory once its own manifest entry is gone -- so
-  the vendored `writing-skills` (`.claude/skills/writing-skills/`, not
-  a native `skills/*/` sibling) can still be present, and can still
-  trigger on "creating a new skill" phrasing, in any checkout that ran
-  `apm install` before the retirement (a fresh clone will not have it).
-  The separately-installed `skill-creator` collides the same way
-  regardless -- it was never an `obra/superpowers` artifact, so
-  retiring that dependency does not affect it. Route to *this* skill
-  only via the `executing-a-branch-plan` pipeline dispatch described in
-  the Precondition above, never directly, and never either skill's own
-  RED-GREEN-REFACTOR loop or benchmark/packaging tooling (Notes names
-  what is deliberately not imported).
-
 ## Notes
 
 - **Portability: Mixed.** This body's own inlined content (Steps 1, 3-5,
@@ -401,7 +385,8 @@ that determination is `evaluating-skill-quality`'s and
   create for" list shape this skill's own drafting judgment is built on
   follows `writing-skills`' own structure, credited for the shape's
   origin -- that judgment itself now lives in `eliciting-a-design`'s own
-  mechanism-fit gate, not in this skill's own body. `skill-creator` is
-  named only as a rejected source for its benchmark loop,
-  description-optimization loop, and `.skill`-packaging, understood from
-  its installed description.
+  mechanism-fit gate, not in this skill's own body. Its own
+  RED-GREEN-REFACTOR testing methodology is a deliberately rejected
+  import, not adopted here. `skill-creator` is named only as a rejected
+  source for its benchmark loop, description-optimization loop, and
+  `.skill`-packaging, understood from its installed description.

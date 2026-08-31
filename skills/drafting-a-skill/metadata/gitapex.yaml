@@ -175,6 +175,11 @@ spec:
       summary: "the same issue's independent Step 8 adversarial review fixed three defects: row 8 named a fixture layout this repository does not use (a per-scenario *.md prompt file directly under evals/<skill>/), where the real shape is evals/<skill>/eval.yaml beside tasks/<scenario>.yaml; Step 6's scaffold sub-step was absent from that Step's own completion criterion, so a draft could finish with no scaffold; and the 'not required reading before Step 2' note contradicted Step 2's row-4 pointer."
       outcome:
         baseCommit: "39f3344a1af7c0fe12c3e92670f58ab5417eaf3b"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1630"
+      summary: "repository owner: the Related-skills Live-collision bullet's routing-risk framing is unnecessary, since this skill is dispatched via executing-a-branch-plan Step 6's own explicit branch-plan-task agent() call, not model description-routing -- a still-present vendored writing-skills/skill-creator copy creates no actual collision. Bullet removed; its never-import-RED-GREEN-REFACTOR fact folded into the existing Notes Attribution bullet"
+      outcome:
+        baseCommit: "b383faf966166a6bb6c2165e5ed73be3229727c6"
   skillDependencies:
     requires:
       - evaluating-skill-quality
