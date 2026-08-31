@@ -67,6 +67,9 @@ spec:
     - kind: caveat
       anchor: "https://github.com/tvna/gitapex/issues/1379"
       summary: "two of this issue's four entries above (same anchor) were appended once an independent evaluating-skill-quality dispatch caught their absence, not inline as their own commits landed -- a process lapse against this file's own Step 3 claim that entries are 'never backfilled,' disclosed here rather than silently left, not a retraction of that principle going forward"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "Step 4 cited `docs/skill-authoring-standards.md` rule 5 by path for the Portable sibling-skill hedge phrase -- `docs/` is never redistributed alongside the skills this repository ships, so the citation was a broken reference once vendored, regardless of Portability level. Replaced with the hedge-phrase wording inlined verbatim; the sibling reform PR for this issue confirmed this defect was introduced on the invoking-gitapex branch and deferred fixing it to whoever lands that PR"
   skillDependencies:
     requires:
       - evaluating-skill-quality
