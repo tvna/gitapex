@@ -2,7 +2,7 @@ name: Retrospective gate-drift meta-check
 
 on:
   schedule:
-    - cron: "0 7 * * *"  # daily 07:00 UTC, offset from sync-agent-instructions.yml's 06:00
+    - cron: "0 7 * * *"  # daily 07:00 UTC, first of the offset daily scans
   workflow_dispatch: {}
 
 permissions:

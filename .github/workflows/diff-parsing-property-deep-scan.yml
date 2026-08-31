@@ -12,7 +12,7 @@ name: Diff-parsing property deep scan
 # test body.
 on:
   schedule:
-    - cron: "0 10 * * *"  # daily 10:00 UTC, offset from the 06:00/07:00/08:00/09:00 scans
+    - cron: "0 10 * * *"  # daily 10:00 UTC, offset from the 07:00/08:00/09:00 scans
   workflow_dispatch: {}
 
 permissions:
