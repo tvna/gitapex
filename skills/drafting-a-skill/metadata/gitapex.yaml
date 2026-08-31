@@ -109,6 +109,9 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1583"
       summary: "those fixes were paid for by trimming wording, not meaning, across Steps 1-8, the Postcondition, the worked example, Related skills, and Notes: the body had 2 lines under BODY_MAX_LINES=500 and needed roughly 20. Both Stop boundaries' FIRST lines were left byte-identical on purpose -- the branch-fixture-coverage gate keys a branch on that text and the split gate's Check E resolves the existing fixture's exercises label against it, so no new fixture was needed"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "description too dense (904 chars) and Worked example insufficient (one case, earned side only). Compressed to 492 chars, dropping per-Step detail and lineage (dimension 1 needs trigger+boundary; lineage lives in Related skills and Notes). Added a second Worked example: a branch-rename candidate with an unearned Precondition/Postcondition/Non-goals trio, then the corrected version -- against the curl example. Paid for by tightening the curl wrap and Attribution; lands at BODY_MAX_LINES=500"
   skillDependencies:
     requires:
       - evaluating-skill-quality

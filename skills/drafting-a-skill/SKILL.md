@@ -1,6 +1,6 @@
 ---
 name: drafting-a-skill
-description: Use when authoring a brand-new Claude Code skill from a blank page. Gates on Mechanism fit before drafting begins, mandatorily elicits the four human-only metadata axes (Portability, Capability assumption, Invocation mode, Lifecycle) from the requester, drafts using Design-by-Contract structure, runs advisory cohesion and domain-gap self-checks, passes this repository's own deterministic shape and execution-requirements-drift checkers, and hands off to evaluating-skill-quality and battle-testing-a-skill for the authoritative review. gitapex-native successor to obra/superpowers' writing-skills and to Anthropic's skill-creator. Distinct from scorer-gated-skill-edits (iterates an existing SKILL.md across measured trials; never authors a new one) and evaluating-skill-quality (grades a finished, static artifact; this skill owns the formative decisions made while the draft is still being written).
+description: Use when authoring a brand-new Claude Code skill from a blank page. Gates on Mechanism fit, elicits Portability/Capability/Invocation/Lifecycle from the requester, drafts using Design-by-Contract structure, and hands off to evaluating-skill-quality and battle-testing-a-skill for review. Distinct from scorer-gated-skill-edits (iterates an existing SKILL.md; never authors a new one) and evaluating-skill-quality (grades a finished artifact; this skill owns the formative pre-ship decisions).
 compatibility: "Step 3 prefers the AskUserQuestion tool where the harness offers it; where it does not, use portable question handoff -- print 'AskUserQuestion:' followed by the same four axes and choices as plain text (the same convention drafting-issues and planning-a-branch-from-an-issue already use for the identical dependency). Step 8's checkers require python3 on PATH."
 ---
 
@@ -341,25 +341,26 @@ determination is `evaluating-skill-quality`'s and
 
 ## Worked example
 
-A requester wants a skill that reads a pasted `curl` command and explains
-what it does in plain English, no execution. Step 1: "given a pasted
-`curl` command, explain in one paragraph what request it makes -- no
-execution." Step 2 Part A: hard to get right unassisted -- worth
-building; no prior `eliciting-a-design` pass, so it runs in full
-(inheriting, it would quote and re-check that verdict). Part B clears its
-own four criteria too -- drafting continues. Step 3: elicited Portable,
-Adaptive (a lean body covers this fully), default invocation,
-experimental. Step 4: Precondition "a `curl` command is present in the
-request"; Steps parse flags, describe the method/URL/headers/body;
-Postcondition "one paragraph, no execution." Step 5: one outcome
-("explain the request"), passes the SDO test, no split needed. Step 6: no
-existing skill's description collides. Step 7: domain gap found --
-nothing yet states what to do with a flag that reads a secret from a file
-(`-H "Authorization: Bearer $(cat token)"`); added an explicit "never
-print a secret's own value, name only which flag reads one" boundary.
-Step 8: both checkers run clean. Step 9: draft shown as it stands and
-acknowledged, with nothing edited after, so it still holds. Step 10:
+A requester wants a skill that reads a pasted `curl` command and explains what it
+does in plain English, no execution. Step 1: "given a pasted `curl` command,
+explain in one paragraph what request it makes -- no execution." Step 2 Part A:
+hard to get right unassisted -- worth building; no prior `eliciting-a-design`
+pass, so it runs in full. Part B clears its own four criteria too -- drafting
+continues. Step 3: elicited Portable, Adaptive (a lean body covers this fully),
+default invocation, experimental. Step 4: Precondition "a `curl` command is
+present in the request"; Steps parse flags, describe the method/URL/headers/body;
+Postcondition "one paragraph, no execution." Step 5: one outcome, passes the SDO
+test, no split needed. Step 6: no existing skill's description collides. Step 7:
+domain gap found -- nothing yet states what to do with a flag that reads a secret
+from a file (`-H "Authorization: Bearer $(cat token)"`); added an explicit "never
+print a secret's own value, name only which flag reads one" boundary. Step 8: both
+checkers run clean. Step 9: draft shown as it stands and acknowledged. Step 10:
 handed off to `evaluating-skill-quality` and `battle-testing-a-skill`.
+
+A second candidate -- rename a git branch to convention -- fails Step 4's earning test:
+a Precondition, Postcondition, and Non-goals bullet added from habit each restate Step 1
+or don't exist in this vocabulary at all. Corrected: one Step only, the scope cut logged
+as an elision in `metadata/gitapex.yaml` instead.
 
 ## Stop boundaries
 
@@ -488,12 +489,12 @@ Lifecycle: **experimental**, tracking
 `evaluating-skill-quality` and `battle-testing-a-skill` review verdicts
 before graduating to stable.
 
-Attribution, not a live dependency: Step 2's "Create when / Don't create
-for" list shape follows `writing-skills`' own structure, written out here
-(not cited) so it survives that dependency's retirement -- credited for
-the shape's origin, not declared, since it isn't a native `skills/*/`
-skill. `skill-creator` is named in the frontmatter only as a rejected
-source for its benchmark loop, description-optimization loop, and
-`.skill`-packaging, understood from its installed description.
+Attribution, not a live dependency: Step 2's "Create when / Don't create for"
+list shape follows `writing-skills`' own structure, written out here (not
+cited) so it survives that dependency's retirement -- credited for the
+shape's origin, not declared, since it isn't a native `skills/*/` skill.
+`skill-creator` is named only as a rejected source for its benchmark loop,
+description-optimization loop, and `.skill`-packaging, understood from its
+installed description.
 
 [steering]: https://claude.com/blog/steering-claude-code-skills-hooks-rules-subagents-and-more "Anthropic -- Steering Claude Code: skills, hooks, subagents and more"
