@@ -32,7 +32,14 @@ dispatch to the `review-persona` subagent type (`agents/review-persona.md`
 -- a `tools: Read, Grep, Glob` allow-list, no Write/Edit/Bash/
 `mcp__github__*` access) whenever the caller already holds the literal
 diff as context, precisely the case check 1 above already covers ("or
-already supplied as the literal diff in context"). This moves the
+already supplied as the literal diff in context"). **One narrower
+exception inside checks 2-8: check 5's own registry-lookup sub-check
+(`npm view <pkg>@<resolved-version> scripts` below) needs shell access
+this dispatch target structurally does not have, so that specific
+sub-check always runs in the calling context too -- never inside the
+`review-persona` dispatch -- while check 5's remaining judgment (flagging
+new/transitive dependencies and any install-time script visible in this
+repository's own manifest diff) still dispatches normally.** This moves the
 reasoning that judges an adversarial contributor's own content out of
 whatever write/push/Bash privilege the calling context holds (e.g.
 `executing-a-branch-plan` step 6's main thread, which at that point also
@@ -157,7 +164,11 @@ execution context reads the content differs.
    `npm view <pkg>@<resolved-version> scripts`, not an unqualified
    `npm view <pkg> scripts` (which silently resolves to the registry's
    `latest` tag instead, possibly a different version than the one
-   pinned) -- whenever that lookup is available. "Not available"
+   pinned) -- whenever that lookup is available (never available inside a
+   `review-persona` dispatch specifically, per the Execution-context-
+   per-check paragraph above -- this sub-check runs in the calling
+   context there, structurally, not as a per-session "not available"
+   case). "Not available"
    means a session/tool limitation (no registry access in this
    environment, the lookup command itself is missing) -- never a
    judgment call about the package's apparent risk, which the no-skip

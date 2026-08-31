@@ -32,7 +32,10 @@ adds the new call site, rather than reusing this definition silently.
    Check 1 (diff completeness and provenance) is explicitly excluded: it
    requires a platform-integrated diff fetch this dispatch's read-only,
    file-scoped tool set cannot perform, so check 1 always runs in the
-   calling context, never here.
+   calling context, never here. Check 5's own registry-lookup sub-check
+   (`npm view <pkg>@<resolved-version> scripts`) is excluded the same
+   way, for the same reason -- no shell access here -- even though the
+   rest of check 5 dispatches normally.
 
 ## What this dispatch does and does not do
 
@@ -59,12 +62,16 @@ on it.
 ## Limits, disclosed rather than assumed away
 
 This isolates *tool privilege* inside the dispatch -- what this context
-can write, push, or install. It does not isolate *calling-context
-contamination*: whether this dispatch's own model context carries traces
-of the calling session's prior authoring or discussion of the same
-target is a separate, already-tracked axis (issues `#475`, closed, and
-`#1410`, closed/merged) this agent definition does not resolve and must
-not be described as resolving. Where the harness cannot perform a fresh,
+can write, push, or install. It does not isolate two other, independent
+properties: whether this dispatch's own model context carries traces of
+the calling session's prior authoring or discussion of the same target
+(session-history contamination), and separately, whether this dispatch is
+free of this repository's own `CLAUDE.md`/`AGENTS.md` auto-loaded
+influence -- a separate, already-tracked axis this harness has been
+observed to grant independently of the first (issues `#475`, closed, and
+`#1410`, closed/merged). This agent definition resolves neither property
+and must not be described as resolving either. Where the harness cannot
+perform a fresh,
 isolated dispatch at all, the calling skill's own compatibility note (see
 `reviewing-an-artifact`'s `compatibility` frontmatter field) governs the
 degraded fallback -- this agent definition provides no protection on that

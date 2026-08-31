@@ -164,7 +164,10 @@ itself grounds to skip the model's own full review below.
   Execution-context-per-check paragraph). Check 1 does not apply here --
   the diff is already the platform's own artifact (a `git diff` against
   the task's own worktree, not a paraphrase), not a fetch this step needs
-  to perform. This isolates *tool privilege* in the checks 2-8 reasoning
+  to perform -- but check 5's own registry-lookup sub-check still does
+  (that skill's own Execution-context-per-check paragraph excludes it
+  from this dispatch too, for the same no-shell-access reason). This
+  isolates *tool privilege* in the checks 2-8 reasoning
   context; it does not isolate this dispatch's own model context from
   this repository's `CLAUDE.md` influence, the separate, already-tracked
   axis issues `#475`/`#1410` cover -- see `agents/review-persona.md`'s own
