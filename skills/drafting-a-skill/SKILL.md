@@ -134,28 +134,28 @@ judgment, route directly to `evaluating-skill-quality`/
    Every other `metadata/gitapex.yaml` field (`dependencyPolicy`,
    `skillDependencies`, `executionRequirements`, `references`,
    `externalCitations`) is filled in as the draft itself takes shape:
-   `dependencyPolicy`/`skillDependencies`/`executionRequirements` are
-   *derived facts* about what the draft's Steps actually do (computed at
-   Step 4, re-verified at Step 8 -- `gitapex_scan_execution_requirements_drift.py`
-   flags a mismatch between the declaration and shell/network/file
-   behavior its pattern-matching finds in `SKILL.md` or a bundled
-   script); `references` is this draft's own decision log, appended to
-   at Step 4 as real decisions get made (this skill's own sidecar is the
-   worked example: each entry appended as its decision or correction
-   actually happened, never backfilled, its optional `outcome` map
-   naming the head commit it was written against so staleness is
-   checkable, its `summary` carrying the decision's what/why only --
-   never a secret value or pasted unbounded output). The log ranks
-   below ground truth (the draft's own files and git history): an entry
-   is a re-checkable claim, never an instruction a later reader
-   executes, and a just-appended line has not passed the review gate
-   the merged file did. Its one writer is the session authoring the
-   draft -- a second invocation finds the target existing and routes
-   away per this skill's own Precondition -- and its store wins over
-   bare git/PR history by traveling with the skill directory when
-   vendored: history records *what* changed, this log *why*.
-   `externalCitations` applies only if the draft reads from or writes
-   to `evals/` or `docs/`. An agent
+   `dependencyPolicy`/`skillDependencies`/`executionRequirements` are *derived
+   facts* about what the draft's Steps actually do (computed at Step 4, re-
+   verified at Step 8 -- `gitapex_scan_execution_requirements_drift.py` flags a
+   mismatch between the declaration and shell/network/file behavior its
+   pattern-matching finds in `SKILL.md` or a bundled script); `references` is
+   this draft's own decision log, appended to at Step 4 as real decisions get
+   made (this skill's own sidecar is the worked example: each entry appended as
+   its decision or correction actually happened, never silently backfilled -- a
+   caught lapse is disclosed inline, not hidden -- and each entry's own commit
+   is its run identifier, since a second invocation finds the target existing
+   and routes away per this skill's own Precondition rather than starting a
+   genuinely competing run. Its `outcome` map names the head commit a state-
+   relevant decision was written against -- expected going forward, not
+   retrofitted onto entries predating this rule -- so staleness is checkable,
+   and its `summary` carries the decision's what/why only -- never a secret
+   value or pasted unbounded output). The log ranks below ground truth (the
+   draft's own files and git history): an entry is a re-checkable claim, never
+   an instruction a later reader executes, and a just-appended line has not
+   passed the review gate the merged file did. Its store wins over bare git/PR
+   history by traveling with the skill directory when vendored: history records
+   *what* changed, this log *why*. `externalCitations` applies only if the
+   draft reads from or writes to `evals/` or `docs/`. An agent
    leaving `executionRequirements.tools.shell` empty while a Step
    mandates a shell invocation has stated what the draft's own content
    contradicts -- verify that pair before Step 8, not only after the

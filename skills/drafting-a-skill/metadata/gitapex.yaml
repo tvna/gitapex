@@ -126,6 +126,16 @@ spec:
       summary: "same dispatch, dimension-6's remaining axes: 8's recording half (no base-revision anchor) and 9 (no trust-class statement). Fixed in the same Step 3 edit as the entry above: outcome names the head commit an entry was written against; an entry is a re-checkable claim, never an instruction a later reader executes; summary carries only the decision's what/why, never a secret or pasted unbounded output. Axis 7's TOCTOU race on a simultaneous blank-page start stays open, disclosed not fixed"
       outcome:
         baseCommit: "63252ac6c98c21fd416302fd5918209d9e3620fa"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "a third independent dispatch (commit c3010a1a) reconfirmed dimension 1 closed, but found axes 2 and 4 -- not flagged by the two earlier dispatches -- still open, plus axis 8's recording mechanism used by only 1/38 entries. Axis 4: 'never backfilled' was self-contradicted by this file's own caveat entry admitting one lapse -- reworded to 'never silently backfilled', matching what that entry already does"
+      outcome:
+        baseCommit: "c3010a1a361d455901fca7113c642b38015c4233"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "same dispatch, remaining fixes: axis 2 now names each entry's own commit as its run identifier, since the Precondition already prevents a second invocation from starting a genuinely competing run; axis 8's outcome.baseCommit now states it is expected going forward, not retrofitted onto pre-existing entries. Axis 7's disclosed TOCTOU gap is unchanged -- still open by design, per the prior entry above"
+      outcome:
+        baseCommit: "c3010a1a361d455901fca7113c642b38015c4233"
   skillDependencies:
     requires:
       - evaluating-skill-quality
