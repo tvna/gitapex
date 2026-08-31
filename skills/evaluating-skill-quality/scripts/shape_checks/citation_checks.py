@@ -249,18 +249,18 @@ def _cross_skill_citation_checks(
 
 def _mechanism_fit_citation_offenders(body_text: str) -> list[str]:
     """Return each '### ' subsection heading text nested under
-    a '## Mechanism fit' heading in ``body_text`` that carries neither a
+    a '## Agentic operation mechanism-fit' heading in ``body_text`` that carries neither a
     '[label]'-style citation (MECHANISM_FIT_CITATION_RE) nor the literal
     phrase "this repository's own reasoned extension" --
     mechanizing the completeness rule references/rubric.md's own
-    Mechanism-fit section intro already states in prose ("the primary
+    Agentic operation mechanism-fit section intro already states in prose ("the primary
     source and the reasoning behind each check").
 
     Generic over ANY document, not hardcoded to rubric.md's filename -- a
-    document with no '## Mechanism fit' heading at all contributes zero
+    document with no '## Agentic operation mechanism-fit' heading at all contributes zero
     offenders (the same "not applicable, trivially passes" shape the
     references-flat/TOC checks already use for a precondition that does not
-    apply to every skill). Only a level-2 '## Mechanism fit' heading is
+    apply to every skill). Only a level-2 '## Agentic operation mechanism-fit' heading is
     recognized (case-insensitive on its text, exact heading level); its own
     section span runs from immediately after it to the next heading at
     level <= 2 (or end of document), and only '### ' (level-3) headings
@@ -272,7 +272,7 @@ def _mechanism_fit_citation_offenders(body_text: str) -> list[str]:
     headings = [(m.start(), len(m.group(1)), m.group(2)) for m in MECHANISM_FIT_HEADING_RE.finditer(defenced)]
     offenders: list[str] = []
     for i, (_start, level, text) in enumerate(headings):
-        if level != 2 or text.strip().lower() != "mechanism fit":
+        if level != 2 or text.strip().lower() != "agentic operation mechanism-fit":
             continue
         section_end = next((s for s, lv, _t in headings[i + 1 :] if lv <= 2), len(defenced))
         subsections = [(s, t) for s, lv, t in headings[i + 1 :] if s < section_end and lv == 3]
@@ -302,7 +302,7 @@ def _mechanism_fit_checks(skill_md: Path, skill_dir: Path, body: list[str]) -> l
         CheckResult(
             "mechanism-fit-subsections-cite-sources",
             not offenders,
-            "Every '### ' subsection under a '## Mechanism fit' heading "
+            "Every '### ' subsection under a '## Agentic operation mechanism-fit' heading "
             "carries a '[label]'-style citation or the literal phrase "
             '"this repository\'s own reasoned extension"',
             "none" if not offenders else "found: " + ", ".join(offenders),

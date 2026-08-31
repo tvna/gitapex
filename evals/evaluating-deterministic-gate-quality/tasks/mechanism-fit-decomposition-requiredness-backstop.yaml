@@ -4,7 +4,7 @@ description: A maintainer proposes deleting the branch-protection
   required-reviewers rule backing "a production deployment requires an
   independent approval," arguing the whole policy is a judgment call
   (whether a specific deployment should have been approved is indeed
-  judgment) and therefore no-gate-warranted. Mechanism-fit's own
+  judgment) and therefore no-gate-warranted. Deterministic-gate mechanism-fit's own
   decomposition rule requires splitting this into a deterministic fact
   (was an approval recorded at all) and a judgmental one (should it have
   been); the deterministic requiredness backstop must not be removed.

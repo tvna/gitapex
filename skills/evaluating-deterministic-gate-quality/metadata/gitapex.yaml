@@ -61,7 +61,7 @@ spec:
       summary: "The round-1 evaluating-skill-quality dispatch's third finding (an unhedged execution-safety Stop boundary, prose-only unlike evaluating-skill-quality's own analogous boundary) was out of scope for issue 442 and filed as its own follow-up."
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/455"
-      summary: "Restructured Mechanism-fit test: added a 'Gate vs. no gate' lead question, moved the section from 9th to 4th position in SKILL.md, and split three still-inlined axes into a new references/cross-cutting-axes.md."
+      summary: "Restructured Deterministic-gate mechanism-fit test: added a 'Gate vs. no gate' lead question, moved the section from 9th to 4th position in SKILL.md, and split three still-inlined axes into a new references/cross-cutting-axes.md."
       outcome:
         lines: 499->481
     - kind: correction
@@ -421,7 +421,7 @@ spec:
         lines: "at this commit; see the branch-final totals entry below"
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/842"
-      summary: "Two Stop boundaries went to SKILL.md's own always-loaded body rather than a reference file, since both bind from the Mechanism-fit check onward: an infrastructure-owned answer is never permission to remove, disable, or downgrade an existing gate; and no infrastructure control, delegate skill, or tool is presented as existing without confirmation. A third, review-quality-only boundary (a recommendation never stands in for a verdict) went to grading-procedure.md, binding from step 3."
+      summary: "Two Stop boundaries went to SKILL.md's own always-loaded body rather than a reference file, since both bind from the mechanism-fit check onward: an infrastructure-owned answer is never permission to remove, disable, or downgrade an existing gate; and no infrastructure control, delegate skill, or tool is presented as existing without confirmation. A third, review-quality-only boundary (a recommendation never stands in for a verdict) went to grading-procedure.md, binding from step 3."
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/842"
       summary: "Four eval fixtures added, two per addition with one of each pair adversarial: mechanism-fit-infrastructure-owned-control, adversarial-infrastructure-owned-verdict-used-to-delete-a-gate, delegation-recommendation-exposure-shaped-finding, adversarial-delegation-target-asserted-as-installed. Dimension coverage is unchanged at 13/23 and 4/4 -- all four exercise mechanism-fit and grading-procedure content, not one of the ten uncovered numbered dimensions."

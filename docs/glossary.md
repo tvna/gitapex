@@ -329,3 +329,52 @@ Adopted verbatim from the `clairvoyance` family into
 skill's own terminal step
 (`docs/superpowers/specs/2026-08-22-eliciting-a-design-design.md`,
 Decision 2, Decision 3, and Decision 4's rejected item 3).
+
+## `Agentic operation mechanism-fit` vs. `Deterministic-gate mechanism-fit`
+
+The bare, ambiguous term `Mechanism fit` split into two named concepts,
+sharing one underlying question ("which vehicle actually carries this?")
+asked from two opposite directions:
+
+- **`Agentic operation mechanism-fit`** -- the skill-candidate side,
+  owned by `evaluating-skill-quality`: given a candidate procedure, which
+  vehicle (Skill, Hook, CLAUDE.md, Subagent) should carry it? Its own
+  `references/rubric.md` `## Agentic operation mechanism-fit` section is
+  the elaboration; `eliciting-a-design`'s own vehicle-selection judgment
+  (migrated from `drafting-a-skill`'s former Step 2, see issue #1619) is
+  the same question asked before a draft exists rather than after.
+- **`Deterministic-gate mechanism-fit`** -- the gate-candidate side,
+  owned by `evaluating-deterministic-gate-quality`: given a candidate
+  deterministic check, should it be a gate at all, and if so, which
+  domain (a git hook, an agent-harness hook, a CI/CD job step, or an
+  MCP-server-level check) owns it? Its own
+  `references/mechanism-fit.md` is the elaboration.
+
+Both terms retain the shared word "mechanism-fit" deliberately -- the two
+checks are genuine mirror images of the same underlying question (per
+`evaluating-context-channel-maturity`'s own description, which names an
+analogous mirror-image relationship for a third artifact type) -- but are
+never used bare, unqualified, in either direction: every citation names
+which side it means.
+
+Superseded terms: bare `Mechanism fit` -- used unqualified throughout
+this repository before this resolution, ambiguous once a second,
+gate-side check of the same shape existed. A third candidate name,
+`Domain mechanism-fit`, was proposed for the skill-candidate side and
+explicitly rejected by the repository owner ("prefer the existing name
+(recommended)") -- `Core Domain check` (the separate,
+already-named Core-Domain-vs-Generic-Subdomain judgment `eliciting-a-design`
+and `drafting-a-skill`'s own former Step 2 Part A both used) stays
+unchanged and is not folded into either mechanism-fit term.
+
+Resolved via `establishing-ubiquitous-language`'s Elicit/Detect/Resolve
+procedure during the design dialogue that produced issue #1619, directly
+by the repository owner. Implemented by renaming `references/rubric.md`'s
+`## Mechanism fit` heading (plus its nine bold step-level labels'
+enclosing section) to `## Agentic operation mechanism-fit`, and
+`references/mechanism-fit.md`'s heading to `Deterministic-gate
+mechanism-fit`, sweeping every live repository cross-reference to match
+(excluding historical quotations in `docs/superpowers/plans|specs|reports/*`,
+`evals/*/results/*`, and other skills' own past decision-log/eval-status
+entries recording a specific past review session's own language, none of
+which this resolution rewrites).

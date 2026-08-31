@@ -123,7 +123,7 @@ skill's dimension 15 (a real, if partial, overlap the audit confirmed by
 direct comparison); the one reference file was linked only in the
 SKILL.md footer, not at the "five criteria" section where a reader
 actually needs it; the precondition's dependency on a sibling skill's
-prior Mechanism-fit verdict had no stated evidentiary bar; two
+prior Agentic operation mechanism-fit verdict had no stated evidentiary bar; two
 safety-critical Stop boundaries lacked the enforcement-status hedge the
 sibling skills consistently carry; and the lifecycle note's "no eval
 mechanism" framing was less precise than "this repository's own eval

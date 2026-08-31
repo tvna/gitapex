@@ -108,7 +108,7 @@ Classification uses three evidence states:
    behavior-affecting, not decorative: it decides
    whether the skill's own trigger prose can ever fire. Read those fields and
    compare them with the trigger the target claims for itself. That comparison
-   is a Mechanism-fit finding under
+   is a Agentic operation mechanism-fit finding under
    [rubric.md](rubric.md)'s Invocation-mode fit check; what belongs to *this*
    warning-only axis is only the runtime dependency the declaration creates,
    since the standard defines none of these fields.

@@ -26,7 +26,7 @@ skill's own folder.
 - [Unknowns framework](#unknowns-framework)
   - [Blind spot pass](#blind-spot-pass)
 - [Contract discipline](#contract-discipline)
-- [Mechanism fit](#mechanism-fit)
+- [Agentic operation mechanism-fit](#agentic-operation-mechanism-fit)
   - [Skill vs. multiple skills / cohesion](#skill-vs-multiple-skills--cohesion)
   - [Skill-step vs. bundled script](#skill-step-vs-bundled-script)
   - [Model/effort tier fit](#modeleffort-tier-fit)
@@ -65,7 +65,7 @@ level that still makes it available the moment it is needed.
 
 This layering is one instance of a single meta-principle the rest of this
 rubric decomposes into per-layer checks -- [separation of concerns][soc]:
-mechanism fit separates responsibility across artifacts, progressive
+Agentic operation mechanism-fit separates responsibility across artifacts, progressive
 disclosure (dimension 5) across load layers, and Contract discipline's
 "never both" rule keeps each check in exactly one place. There is no
 separate dimension for it because it is cross-cutting, not one more thing
@@ -86,10 +86,10 @@ territory):
   Dimensions 8-9's "name the gap explicitly, never silently skip" discipline
   is this review's existing outlet for them.
 - **Unknown knowns** -- judgment a reviewer would recognize on sight but this
-  rubric does not enumerate as a checklist item. Mechanism fit's qualitative
+  rubric does not enumerate as a checklist item. Agentic operation mechanism-fit's qualitative
   calls are this review's main outlet for them.
 - **Unknown unknowns** -- a gap in this fixed nine-dimension rubric itself,
-  for the specific target's domain, that no dimension, Mechanism fit check,
+  for the specific target's domain, that no dimension, Agentic operation mechanism-fit check,
   or Portability rule currently names. Left unaddressed, this quadrant is
   silently assumed empty rather than actually checked -- the
   [Blind spot pass](#blind-spot-pass) below is the one step that exists to
@@ -103,7 +103,7 @@ unchanged by this section.
 
 Before walking dimensions 1-9, name explicitly whether the target's specific
 domain exposes a quality concern that none of the nine dimensions,
-Mechanism fit, or Portability level already covers -- the same kind of gap
+Agentic operation mechanism-fit, or Portability level already covers -- the same kind of gap
 analysis that produced `battle-testing-a-skill`'s dimensions 18-22
 (`battle-testing-a-skill/references/provenance-and-caveats.md`, "Comparative
 gap review: dimensions 18-22"), applied here to this rubric's own coverage.
@@ -129,7 +129,7 @@ fixes where a fault actually lives when a review goes wrong.
 
 - **Precondition** -- what `SKILL.md`'s Procedure steps 1-4 establish
   before dimension grading starts: the target has actually been read
-  (step 1), its mechanism fit is checked and the Blind spot pass is run
+  (step 1), its Agentic operation mechanism-fit is checked and the Blind spot pass is run
   (step 2, see below and the Unknowns framework section above), its
   deterministic shape is checked (step 3), and its portability level,
   capability assumption, and dependency policy are established, including
@@ -165,7 +165,7 @@ Two operational rules follow directly, quoted from the same source:
 - **Fault attribution.** "A precondition violation indicates a bug in the
   client (caller). ... A postcondition violation is a bug in the supplier
   (the routine)." Applied here: if a verdict turns out wrong because the
-  mechanism fit, portability level, or deterministic shape was misjudged,
+  Agentic operation mechanism-fit, portability level, or deterministic shape was misjudged,
   that is a bug in how this review established its precondition -- not a
   flaw in dimensions 1-9 (the "supplier"). Redo the precondition steps; do
   not patch the rubric to route around a misclassification.
@@ -182,7 +182,7 @@ Two operational rules follow directly, quoted from the same source:
   *consumes* the portability level step 4 already produced, rather than
   re-classifying it).
 
-## Mechanism fit
+## Agentic operation mechanism-fit
 
 One of this review's own preconditions (see [Contract
 discipline](#contract-discipline) above) -- the mechanism decision
@@ -337,7 +337,7 @@ do, not in a generously abstract restatement of them.
   branches are independently triggerable, independently usable, or
   independently changeable -- a maintainer could edit or invoke one branch
   without the others ever mattering. Report it as a whole-artifact
-  Mechanism-fit finding naming the specific split this implies (candidate
+  Agentic operation mechanism-fit finding naming the specific split this implies (candidate
   skill boundaries), with the same headline standing as a wrong-mechanism
   finding: reported per `SKILL.md`'s Procedure step 2 and Stop boundaries
   regardless of how the rest of the review scores, never folded into the
@@ -638,7 +638,7 @@ so declaring one is also a runtime-specific dependency and [Compatibility
 awareness](#compatibility-awareness) fires on its own terms. Classify the
 two independently, per that section's own precedence rule: the
 compatibility warning never changes a verdict, while a dead trigger is a
-Mechanism-fit finding that does. Never let one absorb the other.
+Agentic operation mechanism-fit finding that does. Never let one absorb the other.
 
 ## Portability level
 
@@ -659,7 +659,7 @@ grading below.
   - **The portability litmus test, applied to every sentence, not only
     executed steps**: for Portable-declared content, ask of each claim --
     including one the model never executes as a step, such as a Stop
-    boundary or a Mechanism-fit assertion -- *"would this exact sentence
+    boundary or a Agentic operation mechanism-fit assertion -- *"would this exact sentence
     remain true, unchanged, if this file were copied into a repository
     carrying none of the origin repo's state?"* A runtime path-read
     failing this test is the same defect as a **declarative fact-claim**
@@ -670,14 +670,14 @@ grading below.
     backs a rule. Pass: a conditional check ("real deterministic backing
     if the current environment has one; verify directly rather than
     assuming either way").
-  - **Stop boundaries and Mechanism-fit prose are the highest-risk
+  - **Stop boundaries and Agentic operation mechanism-fit prose are the highest-risk
     locations for this failure**, because an author who correctly checked
     the *origin* repository and found a hook is tempted to record that
     finding as a flat, unconditional fact rather than as a conditional
     check -- the claim silently stops being portable at exactly the
     moment it stops being hedged. Read every Stop-boundaries and
-    Mechanism-fit sentence in Portable-declared content twice: once
-    answering "is this backed" (Mechanism fit's question), once answering
+    Agentic operation mechanism-fit sentence in Portable-declared content twice: once
+    answering "is this backed" (Agentic operation mechanism-fit's question), once answering
     "would this sentence's specific wording survive being read in an
     unrelated repository" (the portability litmus test) -- these are
     different questions, and Portable-declared content must pass both,
@@ -929,7 +929,7 @@ The axis is warning-only:
 Classify independent evidence independently. For example, `context: fork`
 without a declaration earns a compatibility warning; a separate false claim
 that `allowed-tools` makes every other tool unavailable remains a
-Mechanism-fit or correctness finding under its existing rules. Report both.
+Agentic operation mechanism-fit or correctness finding under its existing rules. Report both.
 Never downgrade the blocker because the same lines also triggered this
 warning, and never upgrade the warning into a blocker merely because another
 finding exists nearby.
@@ -937,9 +937,9 @@ finding exists nearby.
 ## Confidentiality awareness
 
 This is a warning-only evaluation axis, not a tenth maturity dimension and
-not another name for Mechanism fit's secret-exposure Stop-boundary example.
+not another name for Agentic operation mechanism-fit's secret-exposure Stop-boundary example.
 
-- **Mechanism fit** (Stop-boundary example) asks whether a target's own
+- **Agentic operation mechanism-fit** (Stop-boundary example) asks whether a target's own
   stated "never expose secrets" prohibition is backed by a hook or
   permission -- an enforcement question, and it fires only when the target
   actually states such a prohibition.
@@ -1002,12 +1002,12 @@ The axis is warning-only:
 - it does not change any dimension verdict or numeric score;
 - it cannot by itself block **Well-formed** or **Mature**;
 - it does not prove that the stated safeguard is actually enforced -- that
-  is Mechanism fit's question, not this axis's.
+  is Agentic operation mechanism-fit's question, not this axis's.
 
 Classify independent evidence independently. For example, a step that logs
 an unredacted credential earns a confidentiality warning; a separate,
 unenforced "never log secrets" Stop boundary with no hook or permission
-backing it remains a Mechanism-fit finding under its existing rules. Report
+backing it remains a Agentic operation mechanism-fit finding under its existing rules. Report
 both. Never downgrade one finding because the same lines also triggered the
 other, and never let either substitute for the other.
 
@@ -1792,7 +1792,7 @@ dimension-6 gap here) and never as `Indeterminate` (see
 one that was skipped. Findings from that pass are reported inside this
 dimension's entry, in this dimension's vocabulary: they are named dimension-6
 gaps, never the review's *headline finding* and never *step-level findings*,
-both of which [Verdicts](#verdicts) and [Mechanism fit](#mechanism-fit)
+both of which [Verdicts](#verdicts) and [Agentic operation mechanism-fit](#agentic-operation-mechanism-fit)
 reserve with different standing.
 
 ## 7. Bundled scripts (only if the skill ships code)
@@ -2222,7 +2222,7 @@ operator or a hostile target-repo owner controlling its own harness
 secrets, and states 2 and 3 remain disclosure obligations. Naming that
 residual limitation is itself required, the same way a safety-critical
 prose-only rule elsewhere in this rubric must say so rather than imply
-deterministic backing it does not have -- see Mechanism fit's "Skill vs.
+deterministic backing it does not have -- see Agentic operation mechanism-fit's "Skill vs.
 hook" reasoning, applied here to this sub-check's own limits rather than
 to the reviewed target's.
 
@@ -2385,7 +2385,7 @@ kinds of changes.
 fit and adequate cohesion -- the skill is the right container (not better
 as a hook, subagent, or CLAUDE.md content), and its content is not a
 coincidental or independently-triggerable/usable/changeable grouping that
-should split into several skills, per [Mechanism fit](#mechanism-fit)'s own
+should split into several skills, per [Agentic operation mechanism-fit](#agentic-operation-mechanism-fit)'s own
 ownership of that rule. A step-level finding (Skill-step vs. bundled
 script, Model/effort tier fit, or Tool-capability verification) is
 reported for triage but does not by itself block either verdict.

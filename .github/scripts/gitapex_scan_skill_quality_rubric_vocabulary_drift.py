@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Deterministic gate: evaluating-skill-quality's nine-dimension rubric and
-Mechanism-fit vocabulary stay internally consistent.
+Agentic operation mechanism-fit vocabulary stay internally consistent.
 
 Issue #993. evaluating-deterministic-gate-quality's fifth cross-cutting axis
 (Contract role / input-domain closure) already has a vocabulary/structure
@@ -9,7 +9,7 @@ issue #949): a script that asserts a declared count, named headings, and
 enumerated vocabulary all stay consistent with the real document, without
 ever judging whether the prose content itself is good. evaluating-skill-quality
 has never had the same class of lock: its own nine maturity dimensions and its
-Mechanism-fit section's nine named step-level checks are asserted only in
+Agentic operation mechanism-fit section's nine named step-level checks are asserted only in
 prose, with nothing keeping a future edit's declared count, range citation,
 or heading structure honest.
 
@@ -21,7 +21,7 @@ that stays review's job, and rubric.md's own nine dimensions are explicitly
 that a declared dimension count matches the real number of dimension
 headings, that a declared numeric range ("dimensions 1-9") matches that same
 count, that the nine numbered headings are present, non-duplicate, non-empty,
-and in order, and that the nine named Mechanism-fit step labels are still
+and in order, and that the nine named Agentic operation mechanism-fit step labels are still
 present verbatim.
 
 No schema-vocabulary check exists in this module, unlike the precedent it
@@ -45,7 +45,7 @@ Checks, grouped by the file they read:
        headings in `references/rubric.md`.
     2. Every literal `dimensions 1-N` full-span range citation matches that
        same count.
-    3. The `## Mechanism fit` section carries all nine bold step-level
+    3. The `## Agentic operation mechanism-fit` section carries all nine bold step-level
        check labels (Skill vs. subagent, Skill vs. hook, Skill vs.
        CLAUDE.md, Skill vs. multiple skills / cohesion, Skill-step vs.
        bundled script, Model/effort tier fit, Tool-capability
@@ -67,7 +67,7 @@ a span that literally starts at 1, so it is never mistaken for one.
 
 Fail-closed: a missing or unreadable file, zero dimension headings found at
 all (nothing to compute a count from), or a missing/duplicate/empty
-Mechanism-fit section, each exit 2 rather than degrading to "nothing to
+Agentic operation mechanism-fit section, each exit 2 rather than degrading to "nothing to
 check, pass".
 
 Usage::
@@ -98,7 +98,7 @@ DEFAULT_SKILL_DIR = REPO_ROOT / "skills" / "evaluating-skill-quality"
 SKILL_MD = "SKILL.md"
 RUBRIC_MD = "references/rubric.md"
 
-MECHANISM_FIT_HEADING = "## Mechanism fit"
+MECHANISM_FIT_HEADING = "## Agentic operation mechanism-fit"
 
 MECHANISM_FIT_STEP_LABELS = (
     "Skill vs. subagent",
@@ -236,13 +236,13 @@ def check_range_references(skill_text: str, rubric_text: str, heading_count: int
 
 
 def check_mechanism_fit_labels(skill_text: str) -> list[str]:
-    """The nine bold Mechanism-fit step labels against the real section
+    """The nine bold Agentic operation mechanism-fit step labels against the real section
     content -- each is a step-level check named in SKILL.md's own Two
-    lanes/Mechanism fit prose, not a rubric.md heading."""
+    lanes/Agentic operation mechanism-fit prose, not a rubric.md heading."""
     section = extract_section(skill_text, MECHANISM_FIT_HEADING, SKILL_MD)
     return [
-        f"{SKILL_MD}: lost Mechanism-fit step label -- expected literal text {f'**{label}**'!r} "
-        "in the Mechanism fit section"
+        f"{SKILL_MD}: lost Agentic operation mechanism-fit step label -- expected literal text {f'**{label}**'!r} "
+        "in the Agentic operation mechanism-fit section"
         for label in MECHANISM_FIT_STEP_LABELS
         if f"**{label}**" not in section
     ]

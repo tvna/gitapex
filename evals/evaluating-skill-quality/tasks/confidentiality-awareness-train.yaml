@@ -1,6 +1,6 @@
 id: evaluating-skill-quality-confidentiality-awareness-train
 name: Debug Logging Step Writes an Unredacted Bearer Token With No Stated Safeguard
-description: Motivates the Confidentiality awareness axis -- the target's own procedure fetches an upstream API response and logs it verbatim to a local debug file for troubleshooting, including the request's bearer token, with no redaction or scoping statement anywhere in the skill. The review must fire the new axis and propose a concrete safeguard, not treat this as a generic Mechanism-fit or Stop-boundary matter (no Stop boundary exists here at all).
+description: Motivates the Confidentiality awareness axis -- the target's own procedure fetches an upstream API response and logs it verbatim to a local debug file for troubleshooting, including the request's bearer token, with no redaction or scoping statement anywhere in the skill. The review must fire the new axis and propose a concrete safeguard, not treat this as a generic Agentic operation mechanism-fit or Stop-boundary matter (no Stop boundary exists here at all).
 tags:
   - quality
   - confidentiality-awareness

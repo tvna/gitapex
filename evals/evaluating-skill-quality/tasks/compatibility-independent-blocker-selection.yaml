@@ -30,7 +30,7 @@ expected:
     - "Claude Code"
     - "Devin"
     - "Conflict"
-    - "Mechanism fit"
+    - "Agentic operation mechanism-fit"
     - "pre-approval"
   output_not_contains:
     - "Compatibility awareness: COMPATIBILITY_ACKNOWLEDGED"

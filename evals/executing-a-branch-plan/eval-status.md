@@ -92,7 +92,7 @@ PASS:
   Overall Trial 3 verdict: FAIL, on dimension 14 alone.
 
 A companion `evaluating-skill-quality` pass rated the skill well-formed
-and mature, but raised two Mechanism-fit findings that must travel with
+and mature, but raised two Agentic operation mechanism-fit findings that must travel with
 that verdict, not be superseded by it: (1) the skill's original claim
 that its `branch-plan-task` subagent-embedded PreToolUse hook enforces
 the `gh`/`git push`/install exclusion "regardless of deployment" was

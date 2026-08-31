@@ -27,7 +27,7 @@ not this file.
 check: "This check has exactly one owner, per Contract discipline's
 'never both' rule: it decides the whole-artifact boundary once, here."
 And for its own Blind spot pass: it runs as "a precondition step
-(`SKILL.md`'s Procedure step 2, alongside the Mechanism fit checks)" of
+(`SKILL.md`'s Procedure step 2, alongside the Agentic operation mechanism-fit checks)" of
 `evaluating-skill-quality`'s own procedure -- not a step this skill could
 duplicate without also duplicating that ownership.
 

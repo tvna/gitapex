@@ -614,12 +614,12 @@ def test_main_reports_checker_script_and_design_doc_failures_together(monkeypatc
 _PR_558_BODY = """\
 ## Summary
 
-Adds the four deterministic citation-quality checks issue #514 requests to `gitapex_check_skill_shape.py`, each mechanizing a defect a separate retrospective issue previously found by hand: #482 (cross-skill file+heading citation resolution), #487 (unhedged sibling-skill fact-claim), #218 (Mechanism-fit subsection citation completeness), #453 (`links-inside-skill` scope extended to `references/*.md`).
+Adds the four deterministic citation-quality checks issue #514 requests to `gitapex_check_skill_shape.py`, each mechanizing a defect a separate retrospective issue previously found by hand: #482 (cross-skill file+heading citation resolution), #487 (unhedged sibling-skill fact-claim), #218 (Agentic operation mechanism-fit subsection citation completeness), #453 (`links-inside-skill` scope extended to `references/*.md`).
 
 ## Facts
 
 - `cross-skill-citation-resolves` (#482): a `"SKILL's \\`references/FILE.md\\` HEADING section"` prose citation must resolve to a real sibling skill directory, file, and heading -- reuses `anchor-targets-resolve`'s own GitHub heading-slug logic (`_github_slug`/`_heading_slugs`) verbatim.
-- `mechanism-fit-subsections-cite-sources` (#218): every `### ` subsection nested under a `## Mechanism fit` heading (in SKILL.md or any `references/*.md` file) must carry a `[label]`-style citation or the literal phrase "this repository's own reasoned extension". Verified directly: all 5 existing subsections in `evaluating-skill-quality/references/rubric.md` already satisfy this -- no content edits needed there.
+- `mechanism-fit-subsections-cite-sources` (#218): every `### ` subsection nested under a `## Agentic operation mechanism-fit` heading (in SKILL.md or any `references/*.md` file) must carry a `[label]`-style citation or the literal phrase "this repository's own reasoned extension". Verified directly: all 5 existing subsections in `evaluating-skill-quality/references/rubric.md` already satisfy this -- no content edits needed there.
 - `links-inside-skill:{ref.name}` (#453): extends the existing SKILL.md-only out-of-skill-link check to every `references/*.md` file, resolving a relative link against its own containing file's directory (not the skill root), mirroring `anchor-targets-resolve`'s existing file-relative resolution rule.
 - `portable-no-unhedged-skill-fact-claim` (#487): flags an unhedged, possessive (`"\\`NAME\\`'s own X already ..."`) declarative fact-claim about a named, resolving sibling skill inside Portable-declared content.
 
@@ -653,7 +653,7 @@ Scoped to `skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py`
 |---|---|
 | #482 cross-skill file+heading citation resolves | Implemented (`cross-skill-citation-resolves`); unit tests cover pass, missing-sibling, missing-file, missing-heading, fenced-block exclusion, references/*.md scope |
 | #487 unhedged sibling-skill fact-claim flagged | Implemented, narrowed per corpus validation above (`portable-no-unhedged-skill-fact-claim`); unit tests cover unhedged-fails, hedged-passes, non-resolving-name-never-flagged, possessive-without-"already"-never-flagged, non-possessive-never-flagged, Mixed-skips |
-| #218 Mechanism-fit subsection citation/phrase required | Implemented (`mechanism-fit-subsections-cite-sources`); unit tests cover citation-passes, phrase-passes, neither-fails, no-heading-trivially-passes, section-boundary |
+| #218 Agentic operation mechanism-fit subsection citation/phrase required | Implemented (`mechanism-fit-subsections-cite-sources`); unit tests cover citation-passes, phrase-passes, neither-fails, no-heading-trivially-passes, section-boundary |
 | #453 links-inside-skill scans references/*.md | Implemented (`links-inside-skill:{ref.name}`); unit tests cover out-of-skill-fails, same-directory-passes, skill-root-link-passes, SKILL.md-behavior-unchanged; also found and fixed one real pre-existing violation |
 
 ## Checklist

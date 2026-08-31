@@ -270,16 +270,16 @@ Checks (the canonical list -- the manual fallback is to apply these):
     catch, since a cross-skill target cannot legally resolve inside the
     CITING skill's own directory -- this is the dedicated backstop for
     exactly that gap. Runs unconditionally, at every portability level.
-  - Mechanism-fit subsection citation completeness (mechanism-fit-
+  - Agentic operation mechanism-fit subsection citation completeness (mechanism-fit-
     subsections-cite-sources): every "### " subsection nested
-    under a "## Mechanism fit" heading, in SKILL.md or references/*.md,
+    under a "## Agentic operation mechanism-fit" heading, in SKILL.md or references/*.md,
     must carry either a "[label]"-style citation bracket or the literal
     phrase "this repository's own reasoned extension" -- mechanizing the
     completeness rule such a section's own intro prose already states
     ("the primary source and the reasoning behind each check").
     Generic over any document with such a
     heading, not hardcoded to references/rubric.md's filename; a
-    document with no "## Mechanism fit" heading at all trivially passes
+    document with no "## Agentic operation mechanism-fit" heading at all trivially passes
     (zero subsections to check). Runs unconditionally, at every
     portability level.
   - Bare issue/PR-number citation (no-bare-issue-citation):
