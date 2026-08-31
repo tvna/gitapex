@@ -115,6 +115,17 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1583"
       summary: "requester flagged 'Claude Code skill' in the description as needlessly narrow -- this repository's own precedent (eliciting-a-design's compatibility field: 'any Agent Skills runtime') and this file's own Mixed portability declaration both treat the artifact as runtime-agnostic, not tied to one product. Dropped 'Claude Code' from the trigger phrase, now 'a brand-new skill from a blank page', matching formative-quality-dimensions.md's own dimension-1 example quote unchanged"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "dimension-1 gap-minor (description names no relationship to eliciting-a-design), re-examined: both blockers in the earlier deferral entry above no longer hold -- eval-coverage-disclosure is empty for this PR (gitapex_compute_skill_audit_flags.py; evals/drafting-a-skill/tasks/ already touched), and the description is one frontmatter line, so a new clause costs zero body lines. Added a third 'Distinct from eliciting-a-design' clause; supersedes that deferral, which stays as historical record"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "dimension-6 gap-minor (state-management sub-check; producer-only target for metadata/gitapex.yaml's own decision log): axes 1 (locus/precedence), 7 (single-writer), and 11 (store fit) unaddressed. Fixed in Step 3's references-field paragraph: the log ranks below git history; a second invocation finds the target existing and routes away per this skill's own Precondition; the log travels with the skill when vendored, unlike git history -- history records what changed, this log why"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "same dispatch, dimension-6's remaining axes: 8's recording half (no base-revision anchor) and 9 (no trust-class statement). Fixed in the same Step 3 edit as the entry above: outcome names the head commit an entry was written against; an entry is a re-checkable claim, never an instruction a later reader executes; summary carries only the decision's what/why, never a secret or pasted unbounded output. Axis 7's TOCTOU race on a simultaneous blank-page start stays open, disclosed not fixed"
+      outcome:
+        baseCommit: "63252ac6c98c21fd416302fd5918209d9e3620fa"
   skillDependencies:
     requires:
       - evaluating-skill-quality

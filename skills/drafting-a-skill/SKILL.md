@@ -1,6 +1,6 @@
 ---
 name: drafting-a-skill
-description: Use when authoring a brand-new skill from a blank page. Gates on Mechanism fit, elicits Portability/Capability/Invocation/Lifecycle from the requester, drafts using Design-by-Contract structure, and hands off to evaluating-skill-quality and battle-testing-a-skill for review. Distinct from scorer-gated-skill-edits (iterates an existing SKILL.md; never authors a new one) and evaluating-skill-quality (grades a finished artifact; this skill owns the formative pre-ship decisions).
+description: Use when authoring a brand-new skill from a blank page. Gates on Mechanism fit, elicits Portability/Capability/Invocation/Lifecycle from the requester, drafts using Design-by-Contract structure, and hands off to evaluating-skill-quality and battle-testing-a-skill for review. Distinct from scorer-gated-skill-edits (iterates an existing SKILL.md; never authors a new one), evaluating-skill-quality (grades a finished artifact; this skill owns the formative pre-ship decisions), and eliciting-a-design (owns the design dialogue while a candidate skill's shape is still genuinely open; this skill drafts once the candidate's job can be stated, inheriting its Core Domain verdict).
 compatibility: "Step 3 prefers the AskUserQuestion tool where the harness offers it; where it does not, use portable question handoff -- print 'AskUserQuestion:' followed by the same four axes and choices as plain text (the same convention drafting-issues and planning-a-branch-from-an-issue already use for the identical dependency). Step 8's checkers require python3 on PATH."
 ---
 
@@ -9,13 +9,11 @@ compatibility: "Step 3 prefers the AskUserQuestion tool where the harness offers
 Turns a candidate skill idea into a shape-checked, self-reviewed draft
 `SKILL.md` (plus its `references/` and `metadata/gitapex.yaml`) ready for
 `evaluating-skill-quality` and `battle-testing-a-skill` to independently
-review. This skill owns "how should this be" -- the formative decisions
-made while a draft is still being written. `evaluating-skill-quality`
-owns "is this OK to ship" -- a gate applied once to a finished, static
-artifact. The two are separate bounded contexts and never grade the same
-question twice: see `references/mechanism-fit-and-cohesion.md` for the
-two places (cohesion, domain-gap coverage) where this skill's own Steps
-sit close enough to that boundary that it has to be stated explicitly.
+review. This skill owns "how should this be" (formative,
+mid-write); `evaluating-skill-quality` owns "is this OK to ship" (a
+gate on a finished, static artifact) -- separate bounded contexts,
+never grading the same question twice; `references/mechanism-fit-and-cohesion.md`
+names the two places (cohesion, domain-gap coverage) where they touch.
 
 ## Precondition
 
@@ -144,17 +142,28 @@ judgment, route directly to `evaluating-skill-quality`/
    script); `references` is this draft's own decision log, appended to
    at Step 4 as real decisions get made (this skill's own sidecar is the
    worked example: each entry appended as its decision or correction
-   actually happened, never backfilled); `externalCitations` applies only
-   if the draft reads from or writes to `evals/` or `docs/`. An agent
+   actually happened, never backfilled, its optional `outcome` map
+   naming the head commit it was written against so staleness is
+   checkable, its `summary` carrying the decision's what/why only --
+   never a secret value or pasted unbounded output). The log ranks
+   below ground truth (the draft's own files and git history): an entry
+   is a re-checkable claim, never an instruction a later reader
+   executes, and a just-appended line has not passed the review gate
+   the merged file did. Its one writer is the session authoring the
+   draft -- a second invocation finds the target existing and routes
+   away per this skill's own Precondition -- and its store wins over
+   bare git/PR history by traveling with the skill directory when
+   vendored: history records *what* changed, this log *why*.
+   `externalCitations` applies only if the draft reads from or writes
+   to `evals/` or `docs/`. An agent
    leaving `executionRequirements.tools.shell` empty while a Step
    mandates a shell invocation has stated what the draft's own content
    contradicts -- verify that pair before Step 8, not only after the
    drift scan flags it. See `references/tacit-knowledge-elicitation.md`
-   for why the four elicited axes are mandatory (a prior skill was once
-   declared `Frontier` by reviewer assumption with no pin to justify it)
-   and for phrasing guidance beyond the options above. A follow-up round
-   runs only if a later Step's content contradicts an earlier answer --
-   see that file's "Follow-up round" section. **If no answer is
+   for why the four elicited axes are mandatory and for phrasing
+   guidance beyond the options above; a follow-up round runs only if a
+   later Step's content contradicts an earlier answer -- see that
+   file's "Follow-up round" section. **If no answer is
    obtainable at all** (the requester is unreachable, or the harness has
    no elicitation mechanism and no fallback path either), stop and hand
    back rather than proceeding on a self-chosen provisional value -- an
@@ -227,9 +236,8 @@ judgment, route directly to `evaluating-skill-quality`/
    A collision found is resolved one of two ways -- narrow one of the
    two descriptions' own trigger language so they no longer overlap, or
    add an explicit "Distinct from `<other-skill>`: ..." clause naming
-   the boundary (this skill's own frontmatter does this for
-   `scorer-gated-skill-edits` and `evaluating-skill-quality`; Related
-   skills below does it for two installed-but-not-native skills). This
+   the boundary (this skill's own frontmatter carries three such
+   clauses; Related skills below, two installed-but-not-native ones). This
    Step's completion criterion: every skill in the inventory has been
    read once, and every real collision either has a resolving edit or an
    explicit deferral with a stated reason -- never left unaddressed
@@ -397,14 +405,11 @@ as an elision in `metadata/gitapex.yaml` instead.
 
 ## Related skills
 
-- **vs. `evaluating-skill-quality`:** DDD bounded-context split --
-  drafting owns "how should this be" (formative, mid-write); evaluating
-  owns "is this OK to ship" (a gate on a finished artifact). Two Steps
-  sit close enough to that boundary to need disclosure -- see
-  `references/mechanism-fit-and-cohesion.md`. This skill also
-  `skillDependencies.requires` that skill directly: Step 8 mandatorily
-  invokes its bundled checker scripts, and Step 2's gate content is
-  adapted from its rubric, so this skill cannot function without it.
+- **vs. `evaluating-skill-quality`:** DDD bounded-context split, per
+  the opening above. This skill also `skillDependencies.requires` that
+  skill directly: Step 8 mandatorily invokes its bundled checker
+  scripts, and Step 2's gate content is adapted from its rubric, so
+  this skill cannot function without it.
 - **vs. `battle-testing-a-skill`:** a Step 10 handoff target for
   adversarial, hostile-input probing -- never performed by this skill
   itself.
@@ -435,15 +440,13 @@ as an elision in `metadata/gitapex.yaml` instead.
   last-resort escalation records its decision through that skill.
 - **vs. `grounding-in-primary-sources`:** the guidance-form "cite primary
   sources" rule applies that skill's discipline, not re-derived.
-- **Live collision, until `obra/superpowers` is retired:** this
-  repository's vendored `writing-skills` (`.claude/skills/writing-skills/`,
-  not a native `skills/*/` sibling) and the separately-installed
-  `skill-creator` can both still trigger on "creating a new skill"
-  phrasing today. Route to *this* skill for a gitapex-native draft
-  ending at a Step 10 handoff to `evaluating-skill-quality`/
-  `battle-testing-a-skill`, rather than either of those two skills' own
-  RED-GREEN-REFACTOR loop or benchmark/packaging tooling (see Notes for
-  what this skill deliberately does not import from either). Retiring
+- **Live collision, until `obra/superpowers` is retired:** the vendored
+  `writing-skills` (`.claude/skills/writing-skills/`, not a native
+  `skills/*/` sibling) and the separately-installed `skill-creator` can
+  both still trigger on "creating a new skill" phrasing today. Route to
+  *this* skill for a gitapex-native draft ending at Step 10's handoff,
+  not either skill's own RED-GREEN-REFACTOR loop or benchmark/packaging
+  tooling (Notes names what is deliberately not imported). Retiring
   `obra/superpowers` removes the first half; this bullet stays till then.
 
 ## Notes
@@ -457,20 +460,18 @@ elicitation.md`'s schema/decision-precedent citations, and
 `references/contract-structure.md`'s citation into `references/rubric.md`
 are all gitapex-specific -- named here, not narrowed to Step 8, since
 each is a real dependency a vendoring consumer must substitute, per
-`references/gitapex-cross-links.md`'s own opening note (that
-substitution's designated home, not the only place such content lives).
+`references/gitapex-cross-links.md`'s own opening note.
 
 Capability assumption: **Broad**, the repository owner's explicit
 choice, applying this skill's own Step 3 self-referentially. Every
 Step's core judgment call -- the Mechanism-fit criteria, the axis
 option lists, the DbC definitions, the SDO test, a domain-gap example
 -- is inlined directly in this body, satisfying dimension 9's Broad bar
-(`references/rubric.md`: "the skill must give a weak tier *enough*
-guidance ... a real, gradeable gap, not an unmeasured one"). Five of
-six `references/` files stay genuinely on-demand, loaded only when the
-body's own floor isn't enough; `gitapex-cross-links.md` is the one
-exception, carrying Step 8's own exact flags, found nowhere else, so it
-*is* required reading on the in-repo ordinary path.
+per `references/rubric.md`'s own wording. Five of six `references/`
+files stay genuinely on-demand, loaded only when the body's own floor
+isn't enough; `gitapex-cross-links.md` is the one exception, carrying
+Step 8's own exact flags, found nowhere else, so it *is* required
+reading on the in-repo ordinary path.
 **Declaration-vs-structure fit** (disclosed per `rubric.md`'s own
 requirement once a Broad body nears `BODY_MAX_LINES`): Adaptive was
 considered and rejected, not relabeled away from (`metadata/
@@ -485,9 +486,8 @@ Step 8 run says nothing about it. Verify it through the calling
 repository's own vendoring/install process, not this skill's own output.
 
 Lifecycle: **experimental**, tracking
-<https://github.com/tvna/gitapex/issues/1194> -- pending
-`evaluating-skill-quality` and `battle-testing-a-skill` review verdicts
-before graduating to stable.
+<https://github.com/tvna/gitapex/issues/1194> -- pending both Step 10
+reviews' verdicts before graduating to stable.
 
 Attribution, not a live dependency: Step 2's "Create when / Don't create for"
 list shape follows `writing-skills`' own structure, written out here (not
