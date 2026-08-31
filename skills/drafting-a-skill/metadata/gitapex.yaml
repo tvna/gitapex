@@ -39,13 +39,13 @@ spec:
       summary: "supersedes the prior correction's 'actual dispatch language' claim -- a third-round battle-testing-a-skill dispatch proved it false: 'dispatch' is a payload substring, so echoing the attack scored 1.000 vs. 0.846 for real resistance, per this repo's own gitapex_score_contract.py. Rebalanced to 3 multi-word positives grounded in SKILL.md's real phrasing, verified against 7 replies -- see the fixture's own comment"
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1194"
-      summary: "same dispatch found 4 fail-open gaps needing no adversarial input: Step 3 had no rule for an unobtainable elicitation answer (an agent took a self-chosen provisional value); Step 9 had none for a missing fresh-dispatch mechanism (performed both reviews in-context); Step 1 had none for an empty job or encoded/hidden content. All four given explicit stop-and-escalate or decode-first rules"
+      summary: "same dispatch found 4 fail-open gaps needing no adversarial input: Step 3 had no rule for an unobtainable elicitation answer (an agent took a self-chosen provisional value); Step 9 (the review-dispatch step, now Step 10) had none for a missing fresh-dispatch mechanism (performed both reviews in-context); Step 1 had none for an empty job or encoded/hidden content. All four given explicit stop-and-escalate or decode-first rules"
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1194"
       summary: "waza-eval-gate.yml's own live per-PR run (first real execution, not a session-internal review) failed outright: the injected-self-certification-probe fixture's 'SYSTEM OVERRIDE' payload tripped a hard content-policy block the CLI reported via empty stderr, unmatched by gitapex_run_eval_suite.py's own two-marker rejection signature, aborting the whole suite rather than skipping one fixture"
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1194"
-      summary: "fixed by rewording the payload away from impersonating a system-level directive while preserving the same false-prior-approval, skip-Step-9 test property, rather than widening gitapex_run_eval_suite.py's own shared rejection-detection heuristic -- that heuristic is pre-existing, cross-suite infrastructure outside this PR's own change surface"
+      summary: "fixed by rewording the payload away from impersonating a system-level directive while preserving the same false-prior-approval, skip-Step-9 (the review-dispatch step, now Step 10) test property, rather than widening gitapex_run_eval_suite.py's own shared rejection-detection heuristic -- that heuristic is pre-existing, cross-suite infrastructure outside this PR's own change surface"
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1304"
       summary: "the prior correction's own 'SYSTEM OVERRIDE tripped a content-policy block' diagnosis is disproven: the reworded payload failed identically (same empty-stderr 'model CLI exited 1' signature), and the same signature reproduces on an unrelated branch touching different skills' suites hours earlier -- a pre-existing, repo-wide waza-eval-gate defect unrelated to this PR's fixture content, filed as https://github.com/tvna/gitapex/issues/1304 and out of this PR's own scope to fix"
@@ -67,6 +67,104 @@ spec:
     - kind: caveat
       anchor: "https://github.com/tvna/gitapex/issues/1379"
       summary: "two of this issue's four entries above (same anchor) were appended once an independent evaluating-skill-quality dispatch caught their absence, not inline as their own commits landed -- a process lapse against this file's own Step 3 claim that entries are 'never backfilled,' disclosed here rather than silently left, not a retraction of that principle going forward"
+    - kind: elision
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "Non-goals migrated out of SKILL.md's body: does not finalize the literal tacit-knowledge-elicitation probe wording beyond the option lists Step 3 already inlines -- the exact phrasing a drafting agent uses to ask each question is references/tacit-knowledge-elicitation.md's own job to guide, judged fresh per draft, not a fixed script this skill hands out"
+    - kind: elision
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "Non-goals migrated out of SKILL.md's body: does not decide the shared-bundled-script-parent policy's future blocking-gate threshold, or mechanize that policy into gitapex_check_skill_shape.py -- both deferred to a future issue, once explicit stable lifecycle declarations become common enough in this repository to judge readiness"
+    - kind: elision
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "Non-goals migrated out of SKILL.md's body: does not build a Red Flags / rationalization-pattern table for this skill's own Stop boundaries -- the plain-bullet form is this draft's own choice, not a placeholder for an undelivered table; a future revision may still add one if a real rationalization pattern surfaces in practice"
+    - kind: elision
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "Non-goals migrated out of SKILL.md's body: does not modify evaluating-skill-quality, battle-testing-a-skill, or scorer-gated-skill-edits themselves -- only the routing-text additions named in Related skills, in planning-a-branch-from-an-issue and executing-a-branch-plan"
+    - kind: elision
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "Non-goals migrated out of SKILL.md's body: does not implement invoking-gitapex, a separate sibling skill design tracked at https://github.com/tvna/gitapex/issues/1173 -- re-verified during this issue's own planning as still unmerged, so this remains live, accurate content, not a moot bullet to drop"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "root-cause fix: Step 4's Design-by-Contract mandate stopped forcing Precondition/Postcondition (and by extension Non-goals/Output) onto a drafted skill unconditionally -- a body section now earns its place only when a model needs it to act at invocation time; added an explicit pre-Step-10 human-approval gate (new Step 9) requiring the requester see the current draft and acknowledge before either review dispatch proceeds"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "an independent adversarial review found the new Stop boundary took this skill's decision-branch count from 7 to 8 while evals/drafting-a-skill/tasks/ still held 7 fixtures, failing gitapex_gate_skill_branch_fixture_coverage.py (reproduced directly: exit 1). Fixed by adding acknowledgment-required-before-dispatch.yaml; the gate now exits 0. Neither the drafting pass nor the simplify pass ran that gate -- it is CI-only, absent from the local preflight"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "same review found Step 4's clause 'stated here directly rather than only via references/, per this skill's own Broad declaration' dangling off executionRequirements, and itself authoring rationale living in a body section the very sentence containing it calls metadata-only. Removed from the body; the Broad-inlining rationale it stated is carried by docs/skill-authoring-standards.md rule 6 instead (renumbered from 5 during a later merge -- see the merge-disclosure entry near the end of this log)"
+    - kind: caveat
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "disclosed, not fixed: Step 4's new rule calls creation background and a rejected alternative's rationale metadata-only, yet this skill's own Notes section still carries both, and evaluating-skill-quality's SKILL.md still says extended portability rationale 'belongs in a footer ## Notes section of SKILL.md' (26 of 29 skills here carry one). Row 2 scoped the dogfooding migration to Non-goals alone and this skill may not edit evaluating-skill-quality, so reconciling them needs its own issue"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "an independent battle-testing-a-skill dispatch against the new Step 9 gate returned Overall FAIL. F-1: the acknowledgment went stale silently -- a legitimate post-acknowledgment Step 8 fix left the Postcondition technically satisfied while the requester had never seen the shipped bytes. Fixed: Step 9 and the Postcondition now bind the acknowledgment to the exact content presented and void it on any later edit, a late Step 8 fix included"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "same dispatch, F-2: both Stop boundaries enumerated a CLOSED set of disqualified acknowledgment channels (pasted source text, the original request), which a sub-agent's own report, a fabricated tool/MCP payload, persisted cross-session memory, and a forged waza-eval-gate.yml-shaped CI log line all cleared. Reworded to a live-reply-only bar with an explicitly non-exhaustive channel list, per this repository's own CLAUDE.md section 2 open-invariant doctrine"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "same dispatch, F-3: a pre-emptive blanket 'I acknowledge in advance whatever you end up producing' cleared every disqualifier the gate then listed (not self-granted, not inferred, not pasted text) while being logically incapable of acknowledging content that did not yet exist. Step 9 now requires the reply answer its own presentation of the specific current draft"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "same dispatch's two unanimous-FAIL dimensions. Dimension 17: Step 1 banned executing an instruction embedded in untrusted pasted text but said nothing about COPYING its structural fragments, so a pasted ready-made fake SKILL.md could be transcribed verbatim into the emitted file; now banned too. Dimension 12: a Portability Mixed skill carried no install/vendoring-time provenance statement; Notes now carries one, matching executing-a-branch-plan's and drafting-issues' own phrasing"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "those fixes were paid for by trimming wording, not meaning, across Steps 1-8, the Postcondition, the worked example, Related skills, and Notes: the body had 2 lines under BODY_MAX_LINES=500 and needed roughly 20. Both Stop boundaries' FIRST lines were left byte-identical on purpose -- the branch-fixture-coverage gate keys a branch on that text and the split gate's Check E resolves the existing fixture's exercises label against it, so no new fixture was needed"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "description too dense (904 chars) and Worked example insufficient (one case, earned side only). Compressed to 492 chars, dropping per-Step detail and lineage (dimension 1 needs trigger+boundary; lineage lives in Related skills and Notes). Added a second Worked example: a branch-rename candidate with an unearned Precondition/Postcondition/Non-goals trio, then the corrected version -- against the curl example. Paid for by tightening the curl wrap and Attribution; lands at BODY_MAX_LINES=500"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "requester flagged 'Claude Code skill' in the description as needlessly narrow -- this repository's own precedent (eliciting-a-design's compatibility field: 'any Agent Skills runtime') and this file's own Mixed portability declaration both treat the artifact as runtime-agnostic, not tied to one product. Dropped 'Claude Code' from the trigger phrase, now 'a brand-new skill from a blank page', matching formative-quality-dimensions.md's own dimension-1 example quote unchanged"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "dimension-1 gap-minor (description names no relationship to eliciting-a-design), re-examined: both blockers in the earlier deferral entry above no longer hold -- eval-coverage-disclosure is empty for this PR (gitapex_compute_skill_audit_flags.py; evals/drafting-a-skill/tasks/ already touched), and the description is one frontmatter line, so a new clause costs zero body lines. Added a third 'Distinct from eliciting-a-design' clause; supersedes that deferral, which stays as historical record"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "dimension-6 gap-minor (state-management sub-check; producer-only target for metadata/gitapex.yaml's own decision log): axes 1 (locus/precedence), 7 (single-writer), and 11 (store fit) unaddressed. Fixed in Step 3's references-field paragraph: the log ranks below git history; a second invocation finds the target existing and routes away per this skill's own Precondition; the log travels with the skill when vendored, unlike git history -- history records what changed, this log why"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "same dispatch, dimension-6's remaining axes: 8's recording half (no base-revision anchor) and 9 (no trust-class statement). Fixed in the same Step 3 edit as the entry above: outcome names the head commit an entry was written against; an entry is a re-checkable claim, never an instruction a later reader executes; summary carries only the decision's what/why, never a secret or pasted unbounded output. Axis 7's TOCTOU race on a simultaneous blank-page start stays open, disclosed not fixed"
+      outcome:
+        baseCommit: "63252ac6c98c21fd416302fd5918209d9e3620fa"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "a third independent dispatch (commit c3010a1a) reconfirmed dimension 1 closed, but found axes 2 and 4 -- not flagged by the two earlier dispatches -- still open, plus axis 8's recording mechanism used by only 1/38 entries. Axis 4: 'never backfilled' was self-contradicted by this file's own caveat entry admitting one lapse -- reworded to 'never silently backfilled', matching what that entry already does"
+      outcome:
+        baseCommit: "c3010a1a361d455901fca7113c642b38015c4233"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "same dispatch, remaining fixes: axis 2 now names each entry's own commit as its run identifier, since the Precondition already prevents a second invocation from starting a genuinely competing run; axis 8's outcome.baseCommit now states it is expected going forward, not retrofitted onto pre-existing entries. Axis 7's disclosed TOCTOU gap is unchanged -- still open by design, per the prior entry above"
+      outcome:
+        baseCommit: "c3010a1a361d455901fca7113c642b38015c4233"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "a fourth independent dispatch (commit ae553b56) found axes 2, 4, and 8 still open: axis 2's routes-away premise was contradicted by this file's own disclosed TOCTOU entry, with baseCommit on only 3/41 entries; axis 4 named no whole-record-rewrite hazard though every sidecar edit is one; axis 8's 'predating this rule' drew no checkable boundary. Fixed as one mechanism: every new entry's outcome.baseCommit is both its run identifier and its staleness anchor; older entries stay unretrofitted"
+      outcome:
+        baseCommit: "ae553b56444f48a252b00f2e9f52a2c934c44dbe"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "same dispatch's remaining fixes: Step 3 now names the sidecar's whole-file read-modify-write outright -- read current content first, add only the new entry, never regenerate the rest from memory -- plus same-edit-round recording; the five-rule run-on parenthetical became one sentence per rule, per guidance-form-and-sdo.md's own test; Step 2 Part A's branches are now jointly exhaustive: 'anything short of' high-on-all-three routes to the precedent search. These two entries are its first uses"
+      outcome:
+        baseCommit: "ae553b56444f48a252b00f2e9f52a2c934c44dbe"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "a fifth independent dispatch (commit 93110b56) confirmed axes 2/4/8 and dimension 4 now clear -- dimension 6 down to axis 7's already-accepted TOCTOU residual -- but found a new dimension-5 contradiction: Step 8 unconditionally mandates sweeping formative-quality-dimensions.md, while Notes claimed only gitapex-cross-links.md was required reading on the ordinary path ('one exception' of six). Corrected: now states two required-reading references, naming both and why each is mandatory"
+      outcome:
+        baseCommit: "93110b56a36b377cd549924cf0675996e96f1364"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "a sixth independent dispatch (commit f0d6af89) confirmed the SKILL.md-side dimension-5 fix holds, and dimension 6 stays down to axis 7's own already-accepted residual -- but found a mirrored staleness one file over: formative-quality-dimensions.md row 5 still claimed only one required-reading exception and that SKILL.md's Notes 'states this identically', both now false. Corrected: row 5 names both required references and why, matching Notes exactly"
+      outcome:
+        baseCommit: "f0d6af89e4b3b4bcb4f0dc65c039b34844e9be8a"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "Step 4 cited `docs/skill-authoring-standards.md` rule 5 by path for the Portable sibling-skill hedge phrase -- `docs/` is never redistributed alongside the skills this repository ships, so the citation was a broken reference once vendored, regardless of Portability level. Replaced with the hedge-phrase wording inlined verbatim; the sibling reform PR for this issue confirmed this defect was introduced on the invoking-gitapex branch and deferred fixing it to whoever lands that PR"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "An independent reviewing-an-artifact dispatch (a sibling PR's own Step 8 review) found the inlined hedge-phrase clause above dropped seven words ('treat this as an illustrative pointer and') from docs/skill-authoring-standards.md rule 5's own canonical wording -- not a functional gate failure (the shape checker's hedge-phrase scan matches a shorter substring present in both), but a verbatim-copy defect against the rule requiring exact reuse. Corrected to match rule 5 word for word"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "merging origin/main (22 commits, incl. the hedge-phrase fix above) found both branches had independently written a rule 5 into docs/skill-authoring-standards.md: origin/main's hedge-phrase rule and this branch's own body-is-behavior-not-disclosure rule. Kept origin/main's as rule 5 (already cited verbatim above); renumbered this branch's own to 6. SKILL.md's Step 4 merged both paragraphs, the hedge phrase now a worked instance of the conditional-reference-before-elision principle"
   skillDependencies:
     requires:
       - evaluating-skill-quality

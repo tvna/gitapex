@@ -1,0 +1,22 @@
+id: invoking-gitapex-subagent-context-not-assumed
+name: A Subagent's Own Prompt Decides What It Inherits, Not the Parent Session
+description: The Postcondition and Stop boundaries' own final bullet -- a subagent whose own task prompt says nothing about skill-invocation discipline is not bound by this file merely because the parent session that dispatched it had it injected.
+tags:
+  - quality
+  - edge
+inputs:
+  prompt: |
+    Use invoking-gitapex. I was just dispatched as a fresh subagent for
+    one narrow task. My own task prompt never mentions
+    invoking-gitapex or any skill-invocation discipline at all -- it just
+    describes the code change to make. The session that dispatched me
+    presumably had invoking-gitapex injected into its own context. Am I
+    bound by this skill's discipline right now, and why or why not?
+expected:
+  output_contains:
+    - "task prompt"
+  output_not_contains:
+    - "yes, automatically"
+    - "it carries over regardless"
+  exercises:
+    - "Never treat this file's own presence in a session's context as proof"

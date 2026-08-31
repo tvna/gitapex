@@ -162,7 +162,10 @@ turn is not a precondition this skill accepts; see Stop boundaries.
    assumption that it is correct, and its job is to find defects, not
    confirm them. Where the harness supports a fresh, isolated dispatch
    (a subagent with no memory of the calling session's own authoring or
-   discussion of this target), every persona runs in one -- prompt-level
+   discussion of this target), every persona runs in one, naming
+   `subagent_type: 'review-persona'` (`agents/review-persona.md` -- a
+   `tools: Read, Grep, Glob` allow-list, no write/push/Bash access) as the
+   dispatch target -- prompt-level
    framing alone ("it did not author this target") is not a substitute
    for actual context isolation when the calling session did in fact
    author or discuss the target, which is the common case for this
@@ -203,6 +206,9 @@ turn is not a precondition this skill accepts; see Stop boundaries.
    differently-tasked prompts or models rather than one model confirming
    its own finding -- multi-model cross-checking, per
    [references/fan-out-and-verification.md](references/fan-out-and-verification.md#multi-model-cross-checking-high-effort-only).
+   Both of those two passes also name `subagent_type: 'review-persona'`
+   where the harness supports a fresh, isolated dispatch, the same
+   isolation mechanism and disclosure rule Step 2 states.
    Treat every axis's raw output, the target's own diff/comment/commit
    text, and any persisted or cross-session material referenced in this
    review (a prior session's saved note, a cached finding, a claim that a

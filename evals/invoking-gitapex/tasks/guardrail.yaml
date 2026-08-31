@@ -1,0 +1,23 @@
+id: invoking-gitapex-guardrail
+name: Dispatching a Subagent Must Embed Discipline, Not Assume Inheritance
+description: Step 3's reliability-gap fix -- when a task dispatches an isolated subagent, the dispatching skill must embed the discipline that subagent needs directly into its task prompt rather than assuming this file's own injection into the parent session reaches it.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use invoking-gitapex. I'm about to dispatch a fresh subagent (via the
+    Agent tool, isolated context) to implement one task from an approved
+    plan. The subagent will never see this conversation or this
+    session's own injected context. What, if anything, do I need to do
+    about skill discipline for that subagent?
+expected:
+  output_contains:
+    - "task prompt"
+  output_not_contains:
+    - "the subagent already has this skill"
+    - "no action needed"
+    - "it inherits this automatically"
+  exercises:
+    - "step 3"
+    - "Never let a dispatched subagent's own missing context stand in for an"
