@@ -4602,3 +4602,14 @@ literal substring each assertion matches was swapped for the renamed
 term, so no fresh scorer trial or split reassignment applies; this note
 exists solely to satisfy `gitapex_check_split_disclosure.py`'s own
 possessive-citation requirement for the two touched fixtures.
+
+Separately, and for a different, non-content reason:
+`mechanism-fit-claudemd.yaml`'s own `output_contains` list is unchanged --
+issue #1619's own split-fixture-coverage work added a new `expected.exercises`
+declaration immediately above its existing `output_contains:` key, and
+`gitapex_check_split_disclosure.py`'s own coarse hunk-context proxy (see its
+module docstring: any diff hunk containing the literal text
+`output_contains`/`output_not_contains`, git's default 3-line context
+included) flags that adjacency as a touched assertion even though no
+assertion value moved. Named here only to satisfy that proxy; there is no
+assertion-wording change to disclose for this fixture.
