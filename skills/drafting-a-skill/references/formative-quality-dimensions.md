@@ -1,19 +1,6 @@
 # Formative quality dimensions
 
-Loaded on demand, typically as a post-draft sweep once Step 2 has
-produced a first draft (see "How to use this table" below) -- not
-required reading before Step 2 begins, which is why that Step's own
-row-4 pointer names its five structural topics inline; `SKILL.md`'s own
-body already covers the load-bearing judgment calls for the ordinary
-path. Nine
-formative concerns, one per row, each a writing-time precursor to one
-of `evaluating-skill-quality`'s own nine review dimensions
-(`references/rubric.md`). The two lists share numbering and a name on
-purpose -- they are the same nine concerns, viewed from opposite sides of
-the DDD boundary this skill's own `SKILL.md` describes: this table asks
-"how do I write this well," the rubric asks "is what got written good
-enough to ship." Neither owns the other's verdict; a row here is a
-drafting habit, not a passing grade.
+Loaded on demand, typically as a post-draft sweep once Step 2 has produced a first draft (see "How to use this table" below) -- not required reading before Step 2 begins, which is why that Step's own row-4 pointer names its five structural topics inline; `SKILL.md`'s own body already covers the load-bearing judgment calls for the ordinary path. Nine formative concerns, one per row, each a writing-time precursor to one of `evaluating-skill-quality`'s own nine review dimensions (`references/rubric.md`). The two lists share numbering and a name on purpose -- they are the same nine concerns, viewed from opposite sides of the DDD boundary this skill's own `SKILL.md` describes: this table asks "how do I write this well," the rubric asks "is what got written good enough to ship." Neither owns the other's verdict; a row here is a drafting habit, not a passing grade.
 
 | # | Formative dimension | Writing-time instruction | Example pair | Gate-side cross-reference |
 |---|---|---|---|---|
@@ -29,10 +16,4 @@ drafting habit, not a passing grade.
 
 ## How to use this table while drafting
 
-Load it once a first draft exists (per this file's own opening note --
-not before Step 2 begins), then treat it as a checklist pass over that
-draft, not a constraint to satisfy sentence by sentence while writing.
-Trying to hit all nine rows on the first pass produces prose optimized
-for the checklist rather than for the reader; draft first, using
-`SKILL.md`'s own inlined guidance, then sweep against this table once
-there's a real draft to sweep.
+Load it once a first draft exists (per this file's own opening note -- not before Step 2 begins), then treat it as a checklist pass over that draft, not a constraint to satisfy sentence by sentence while writing. Trying to hit all nine rows on the first pass produces prose optimized for the checklist rather than for the reader; draft first, using `SKILL.md`'s own inlined guidance, then sweep against this table once there's a real draft to sweep.
