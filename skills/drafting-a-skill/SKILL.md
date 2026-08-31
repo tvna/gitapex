@@ -1,6 +1,6 @@
 ---
 name: drafting-a-skill
-description: Pipeline-only task, dispatched exclusively by executing-a-branch-plan (Step 6, agentType branch-plan-task) whenever a Branch Plan's ACM calls for a brand-new SKILL.md -- never invoked directly, never the entry point for "should this even be a skill." Drafts a shape-checked, self-reviewed skill via Design-by-Contract structure from metadata eliciting-a-design already resolved, then hands off to evaluating-skill-quality and battle-testing-a-skill for independent review. Distinct from scorer-gated-skill-edits (iterates an existing SKILL.md), evaluating-skill-quality (grades the finished artifact), and eliciting-a-design (owns the design dialogue upstream of this skill).
+description: Pipeline-only task, dispatched exclusively by executing-a-branch-plan (Step 6, agentType branch-plan-task) whenever a Branch Plan's ACM calls for a brand-new SKILL.md -- never invoked directly, never the entry point for "should this even be a skill."
 compatibility: "Step 6's checkers require python3 on PATH. This skill asks no live question of its own -- it runs inside an isolated, non-interactive branch-plan-task dispatch with no requester to ask -- so it carries no AskUserQuestion dependency; every metadata choice it once elicited directly is now resolved upstream by eliciting-a-design and arrives pre-resolved via the ACM's own Planned-ops quoting discipline."
 ---
 
@@ -57,7 +57,7 @@ Turns an already-elicited candidate skill idea into a shape-checked, self-review
 4. **Check for collision and reconcile dependencies.**
    - Read every description in this session's actual skill inventory -- every native `skills/*/` directory and every other invocable skill, vendored or separately installed (finitely many either way; stop once all are read).
    - For each: would a plausible, concretely-stated user request reasonably route to both this draft and that skill?
-   - Real collision found? Narrow one of the two descriptions' own trigger language, or add an explicit "Distinct from `<other-skill>`: ..." clause naming the boundary.
+   - Real collision found? Narrow one of the two descriptions' own trigger language so the triggers no longer overlap. Reach for an explicit "Distinct from `<other-skill>`: ..." clause only when the triggers themselves stay genuinely adjacent even after narrowing -- it is a targeted workaround for that specific case, not a routine response to merely similar functionality; inserting one into every skill regardless of actual trigger overlap defeats its own purpose.
    - Separately, reconcile this draft's own predecessor/successor relationships with `skillDependencies.relatedTo` and Related skills below -- a skill named in prose but absent from both is an unreconciled dependency.
 
 5. **Domain-gap sweep.**
@@ -114,7 +114,7 @@ A draft `SKILL.md` (plus `references/` and `metadata/gitapex.yaml`) that:
   ```yaml
   ---
   name: curl-command-explainer
-  description: Use whenever a curl command appears in chat and needs a plain-English summary of the request it makes. Explains, in one paragraph, what request a pasted curl command makes -- no execution.
+  description: Use whenever a curl command appears in chat and needs a plain-English summary of the request it makes.
   ---
   ```
 

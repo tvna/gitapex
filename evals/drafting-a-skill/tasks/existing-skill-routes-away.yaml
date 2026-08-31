@@ -11,6 +11,8 @@ inputs:
     description and tighten its Steps. Walk through your normal
     procedure and draft the improved version.
 expected:
+  exercises:
+    - "Never loop back into `scorer-gated-skill-edits`-shaped iterative editing once a first draft exists -- that is a separate skill's job, entered fresh, not a continuation of this one."
   output_icontains:
     - "scorer-gated-skill-edits"
   output_not_icontains:

@@ -180,6 +180,16 @@ spec:
       summary: "repository owner: the Related-skills Live-collision bullet's routing-risk framing is unnecessary, since this skill is dispatched via executing-a-branch-plan Step 6's own explicit branch-plan-task agent() call, not model description-routing -- a still-present vendored writing-skills/skill-creator copy creates no actual collision. Bullet removed; its never-import-RED-GREEN-REFACTOR fact folded into the existing Notes Attribution bullet"
       outcome:
         baseCommit: "b383faf966166a6bb6c2165e5ed73be3229727c6"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1630"
+      summary: "repository owner: a description's 'what it does' clause should be minimized wherever possible, and its 'when' clause may be omitted entirely for a pipeline-only skill like this one, since no model ever reads it to make a live routing decision. Applying that to this skill's own description: dropped the workflow-summary sentence and all three Distinct-from clauses, keeping only the pipeline-only dispatch-condition sentence. description now 250/1024 chars (24.4%, was 675)"
+      outcome:
+        baseCommit: "ad834c94f784dfdd5605934e69bd28a0a956914a"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1630"
+      summary: "Step 4's remedy conflated two things -- Distinct-from is a fallback for triggers still adjacent after narrowing, not a routine response to merely similar functionality; blanket insertion defeats its own purpose (this skill's own removed clauses were that misuse). Reworded to state narrow-first, Distinct-from-as-fallback explicitly. Also trimmed the Worked example's curl-command-explainer sample description to its trigger clause only, as a second worked instance"
+      outcome:
+        baseCommit: "ad834c94f784dfdd5605934e69bd28a0a956914a"
   skillDependencies:
     requires:
       - evaluating-skill-quality
