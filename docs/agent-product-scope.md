@@ -109,10 +109,8 @@ when vendored into a different repository.
 **Current scope:** GitHub, exclusively, for this repository's own
 operational tooling -- `hooks/check-bash-safety.sh` denylists `gh` CLI
 write subcommands specifically, `.github/` CI is inherently GitHub
-Actions, `apm.lock.yaml` pins both of GitApex's own apm dependencies to
-`host: github.com`, and `CONTRIBUTING.md`'s signed-commit-bot mechanism
-is a GitHub App + GraphQL `createCommitOnBranch` construct with no
-GitLab equivalent. GitHub and GitLab are both supported at the
+Actions, and `apm.lock.yaml` pins both of GitApex's own apm dependencies
+to `host: github.com`. GitHub and GitLab are both supported at the
 skill-portability level by `skills/scanning-attack-surfaces/`, whose
 Mode B audits either platform's hosting-configuration surface when a
 skill copy is used against a target repository -- Gitea and Bitbucket are not

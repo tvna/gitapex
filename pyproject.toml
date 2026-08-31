@@ -284,7 +284,6 @@ module = [
     "test_gitapex_skill_metadata_sidecar",
     "test_gitapex_skill_security_relevance",
     "test_gitapex_stale_retro_stub_autoclose",
-    "test_gitapex_sync_pr_publish",
 ]
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
