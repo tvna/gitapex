@@ -1,0 +1,68 @@
+apiVersion: gitapex.io/v1alpha1
+kind: SkillMetadata
+metadata:
+  name: invoking-gitapex
+spec:
+  portability: Repository-scoped
+  capabilityAssumption: Broad
+  lifecycle:
+    experimental:
+      reason: "Newly drafted; pending evaluating-skill-quality and battle-testing-a-skill review verdicts before graduating to stable."
+      trackingIssue: "https://github.com/tvna/gitapex/issues/1173"
+  skillDependencies:
+    requires: []
+    relatedTo:
+      - executing-a-branch-plan
+      - untrusted-input-triage
+      - planning-a-branch-from-an-issue
+      - drafting-a-pr-to-merge
+      - merge-retrospective
+      - drafting-issues
+      - eliciting-a-design
+      - reviewing-an-artifact
+      - diagnosing-a-failure
+  executionRequirements:
+    tools:
+      read: []
+      write: []
+      shell: []
+  references:
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1173"
+      summary: "Step 3 elicitation (drafting-a-skill): Portability declared Mixed, with an explicit repository-owner directive that Step 5's instruction-precedence rule must not be a live dependency on CLAUDE.md's own continued existence -- the rule is restated in full inline rather than left as a bare citation in Step 5 itself."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1173"
+      summary: "spec.executionRequirements.tools: all three categories empty -- this skill is a passively-read discipline statement injected by a SessionStart hook; it never itself reads or writes a file or invokes a shell command as part of its own procedure."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1173"
+      summary: "Step 2 (Skill Priority) deliberately names gitapex's own current pipeline skills as an illustrative, non-exhaustive chain rather than citing the separate merge-pipeline-redesign design record's own section 0 diagram directly -- that record is confirmed, as of this drafting pass, not checked into this repository, so a direct reference to it would be a broken link for any reader without separate access. Named as a disclosed residual risk in Step 2 itself, not silently resolved."
+    - kind: elision
+      anchor: "https://github.com/tvna/gitapex/issues/1173"
+      summary: "Precondition, Postcondition, Non-goals, and Output sections were drafted, then removed across several operator-directed passes -- none stated a real caller-side gate, handoff guarantee, or a fact a running model needed; each restated a Step or disclosed scope only. Root cause (drafting-a-skill's Step 4 has no branch for a standing skill, no stated metadata home for scope disclosure) is a separate fix, out of this issue's own scope: https://github.com/tvna/gitapex/issues/1583."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1173"
+      summary: "Step 2's 'no issue yet' row named `.github/ISSUE_TEMPLATE/` type selection instead of a skill -- that enumeration is drafting-issues' own internal Step 2 classification, not a routing target. Re-checked against merge-pipeline-redesign's Section 0 diagram, which names `drafting-issues` as the real entry-point skill (already implemented here). Restored to a table naming `drafting-issues`; added to relatedTo and Related skills."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1173"
+      summary: "Operator review found the table still missed three real, already-implemented gitapex situations: an unshaped idea (`eliciting-a-design`), a direct review request on any artifact (`reviewing-an-artifact`), and an unknown-cause failure (`diagnosing-a-failure`). Added all three rows; renamed the column from Stage to Situation since these are not linear lifecycle stages. Added to relatedTo and Related skills."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1173"
+      summary: "An independent battle-testing-a-skill dispatch found Step 5 lacked a flag/report clause and a claimed-prior-approval fixture, used 'trusted instruction source' undefined in-file, and Step 2/4 lacked a no-matching-row fallback and a per-session-not-per-turn Red Flags row. Fixed all four inline."
+    - kind: caveat
+      anchor: "https://github.com/tvna/gitapex/issues/1173"
+      summary: "Same dispatch found Step 3's own subagent-dispatch discipline structurally cannot cover an ad hoc Task/Agent call made outside any dispatching skill's own procedure -- such a call is invisible to this file and has no self-detection mechanism. Disclosed as a residual limitation, not fixed: no in-file rule can bind a dispatch this file's own discipline was never consulted for in the first place."
+    - kind: audit
+      anchor: "https://github.com/tvna/gitapex/issues/1173"
+      summary: "An independent, non-isolated evaluating-skill-quality dispatch returned WELL-FORMED-NOT-MATURE, blocked solely by Dimension 5: Mixed portability's own requirement that repository-specific content live in a references/ file, not the portable core. Proposed a `compatibility` field disclosing the SessionStart-hook dependency; added verbatim. The routing-table/Related-skills split is a separate, larger call, not applied here."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1173"
+      summary: "Operator caught that Dimension 5's finding actually indicts the Mixed declaration, not this file's structure: this skill is entirely gitapex-specific routing, with no portable core distinct from a repo-specific extension -- Mixed's own 'split the repo-specific part into references/' requirement never applied here. Corrected portability to Repository-scoped; the first decision entry above (Step 5 restated inline) stays valid, unaffected."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1173"
+      summary: "Operator caught that Step 2's own body still named the 'merge-pipeline-redesign' design record by that bare name -- a Claude Artifact title with no repository-relative meaning, unresolvable by any reader without that specific session's own access, not merely a broken link once checked in like a docs/ path. Removed from the body; the decision entry above already carries this same disclosure at the metadata layer, where a reviewer-only citation belongs."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1173"
+      summary: "Operator caught the `compatibility` field presupposed Claude Code: it named 'a Claude Code, Cursor, or Copilot SessionStart hook' as one shared mechanism, but 'SessionStart' is Claude Code's own event name -- the other two use differently-named equivalents, per `hooks/gitapex-session-start.sh`'s own per-platform output shapes. Reworded to state the generic requirement first, platforms demoted to non-exhaustive examples."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1173"
+      summary: "An independent reviewing-an-artifact dispatch, re-checking the compatibility-field fix, found `hooks/hooks.json`'s own top-level description still described only 'PreToolUse/PostToolUse gates ... Claude Code tool-call matchers,' unchanged by this PR's own new SessionStart entry -- a SessionStart hook is neither. Fixed: description now names both."

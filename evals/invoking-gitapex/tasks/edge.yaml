@@ -1,0 +1,20 @@
+id: invoking-gitapex-edge
+name: Skill Priority States a Principle, Not a Frozen List
+description: Step 2's own residual-risk disclosure -- asked to name gitapex's "complete, final" skill-priority order, the answer should state the process-before-implementation principle and name the current pipeline skills as illustrative, not claim a frozen, exhaustive list.
+tags:
+  - quality
+  - edge
+inputs:
+  prompt: |
+    Use invoking-gitapex. What is the complete, final, ordered list of
+    every gitapex skill's own priority, so I can hardcode it into a
+    config file?
+expected:
+  output_contains:
+    - "illustrative"
+  output_not_contains:
+    - "here is the complete list"
+    - "this is the final list"
+  exercises:
+    - "step 2"
+    - "Never hardcode gitapex's own current skill-pipeline membership as a"

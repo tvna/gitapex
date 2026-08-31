@@ -14,15 +14,16 @@ in the first place. Rules 1 and 4 are enforced by
 `no-illustrative-model-identifier` and `no-raw-angle-bracket-placeholder`
 checks) against every `SKILL.md` and `references/*.md` file in this
 repository's own `skills/` tree, run by `tests/test_gitapex_repository_skill_shape.py`
-on every push and PR. Rules 2, 3, and 5 stay judgment calls -- detecting
-a git-log-position assertion, grading test-fixture completeness, or
-judging whether a given body section is genuinely load-bearing for an
-invoking model all need semantic understanding a script cannot reliably
-provide -- apply them by hand at authoring and review time, the same way
-this file's own source retrospectives (#20, #122) already did, until a
-broader eval-suite or `check_skills.py`-equivalent gate exists for that
-category (tracked separately, see issue #11 and #20's gate proposal 1).
-Content outside `skills/` (this file included) is not covered by the deterministic
+on every push and PR. Rules 2, 3, 5, and 6 stay judgment calls -- detecting a
+git-log-position assertion, grading test-fixture completeness, matching a
+citation's own wording against a canon, or judging whether a given body
+section is genuinely load-bearing for an invoking model all need semantic
+understanding a script cannot reliably provide -- apply them by hand at
+authoring and review time, the same way this file's own source retrospectives
+(#20, #122) already did, until a broader eval-suite or `check_skills.py`-
+equivalent gate exists for that category (tracked separately, see issue
+#11 and #20's gate proposal 1). Content outside
+`skills/` (this file included) is not covered by the deterministic
 checker; the outward-artifact-preflight checklist's own scope is
 different again (an outgoing artifact's text, not a skill's source
 files).
@@ -149,7 +150,49 @@ placeholder (see `skills/untrusted-input-triage/SKILL.md`'s own worked
 example, which quotes a fake `<system-reminder>...</system-reminder>`
 payload as adversarial-input content).
 
-## 5. A skill's body is behavior, not disclosure
+## 5. Canonical hedge phrase for citing a sibling skill under a Portable declaration
+
+A `SKILL.md` declared `Portable` (works unmodified if vendored to another
+repository) that needs to name a specific sibling skill by name cannot
+lean on a runtime reference to a third skill to excuse that citation --
+`gitapex_check_skill_shape.py`'s own hedge-phrase scan
+(`GENERIC_ROLE_HEDGE_PHRASES`) is evaluated sentence by sentence: a citing
+sentence has to read as sensible on its own, copied into an unrelated
+repository, with nothing else present to rescue it. Use this wording,
+copied verbatim as a self-contained clause into the citing sentence
+itself, never referenced at runtime from another skill:
+
+> (gitapex's own name for this role; if the calling repository has no
+> same-named skill, treat this as an illustrative pointer and substitute
+> that repository's own skill filling the same role instead)
+
+This unifies the *wording* every Portable skill reaches for, not runtime
+resolution: no skill is consulted while a session runs to resolve a
+citation this way -- the citing skill's own sentence must already be
+correct and readable standalone once vendored elsewhere, exactly the same
+way `planning-a-branch-from-an-issue`'s own illustrative-default-plus-
+inline-fallback convention already states its own repository-specific
+content directly rather than deferring to a third file at read time.
+
+Disclosed non-fix: this wording never rescues a hedge for a dependency
+file (a bundled script, a `references/` entry) that lives outside the
+citing skill's own directory -- `rubric.md`'s own out-of-folder-dependency
+rule allows no hedge at all for that case, Portable or not; the only fix
+there is bundling a copy inside the citing skill's own directory.
+
+Found via: `drafting-a-skill`'s own authoring pass named a sibling skill
+(`evaluating-skill-quality`) under a `Portable`-shaped citation that did
+not satisfy `rubric.md`'s own sentence-level hedge scan; tracked and
+re-scoped into this doc via `tvna/gitapex#1173`'s own gap-analysis Update,
+after the same finding was first proposed as a citation-time dependency
+on a different skill's own runtime presence and found, on inspection, not
+to satisfy the sentence-level test that motivated it in the first place.
+
+Enforcement: none yet -- a judgment call at authoring/review time, the
+same as Rules 2 and 3 above, until a future checker can verify a
+citation's own wording matches this canon.
+
+## 6. A skill's body is behavior, not disclosure
 
 A `SKILL.md` body section (Precondition, Postcondition, Non-goals,
 Output, or any other named section) earns its place only when a model

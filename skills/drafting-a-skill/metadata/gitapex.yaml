@@ -90,7 +90,7 @@ spec:
       summary: "an independent adversarial review found the new Stop boundary took this skill's decision-branch count from 7 to 8 while evals/drafting-a-skill/tasks/ still held 7 fixtures, failing gitapex_gate_skill_branch_fixture_coverage.py (reproduced directly: exit 1). Fixed by adding acknowledgment-required-before-dispatch.yaml; the gate now exits 0. Neither the drafting pass nor the simplify pass ran that gate -- it is CI-only, absent from the local preflight"
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1583"
-      summary: "same review found Step 4's clause 'stated here directly rather than only via references/, per this skill's own Broad declaration' dangling off executionRequirements, and itself authoring rationale living in a body section the very sentence containing it calls metadata-only. Removed from the body; the Broad-inlining rationale it stated is carried by docs/skill-authoring-standards.md rule 5 instead"
+      summary: "same review found Step 4's clause 'stated here directly rather than only via references/, per this skill's own Broad declaration' dangling off executionRequirements, and itself authoring rationale living in a body section the very sentence containing it calls metadata-only. Removed from the body; the Broad-inlining rationale it stated is carried by docs/skill-authoring-standards.md rule 6 instead (renumbered from 5 during a later merge -- see the merge-disclosure entry near the end of this log)"
     - kind: caveat
       anchor: "https://github.com/tvna/gitapex/issues/1583"
       summary: "disclosed, not fixed: Step 4's new rule calls creation background and a rejected alternative's rationale metadata-only, yet this skill's own Notes section still carries both, and evaluating-skill-quality's SKILL.md still says extended portability rationale 'belongs in a footer ## Notes section of SKILL.md' (26 of 29 skills here carry one). Row 2 scoped the dogfooding migration to Non-goals alone and this skill may not edit evaluating-skill-quality, so reconciling them needs its own issue"
@@ -156,6 +156,15 @@ spec:
       summary: "a sixth independent dispatch (commit f0d6af89) confirmed the SKILL.md-side dimension-5 fix holds, and dimension 6 stays down to axis 7's own already-accepted residual -- but found a mirrored staleness one file over: formative-quality-dimensions.md row 5 still claimed only one required-reading exception and that SKILL.md's Notes 'states this identically', both now false. Corrected: row 5 names both required references and why, matching Notes exactly"
       outcome:
         baseCommit: "f0d6af89e4b3b4bcb4f0dc65c039b34844e9be8a"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "Step 4 cited `docs/skill-authoring-standards.md` rule 5 by path for the Portable sibling-skill hedge phrase -- `docs/` is never redistributed alongside the skills this repository ships, so the citation was a broken reference once vendored, regardless of Portability level. Replaced with the hedge-phrase wording inlined verbatim; the sibling reform PR for this issue confirmed this defect was introduced on the invoking-gitapex branch and deferred fixing it to whoever lands that PR"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "An independent reviewing-an-artifact dispatch (a sibling PR's own Step 8 review) found the inlined hedge-phrase clause above dropped seven words ('treat this as an illustrative pointer and') from docs/skill-authoring-standards.md rule 5's own canonical wording -- not a functional gate failure (the shape checker's hedge-phrase scan matches a shorter substring present in both), but a verbatim-copy defect against the rule requiring exact reuse. Corrected to match rule 5 word for word"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "merging origin/main (22 commits, incl. the hedge-phrase fix above) found both branches had independently written a rule 5 into docs/skill-authoring-standards.md: origin/main's hedge-phrase rule and this branch's own body-is-behavior-not-disclosure rule. Kept origin/main's as rule 5 (already cited verbatim above); renumbered this branch's own to 6. SKILL.md's Step 4 merged both paragraphs, the hedge phrase now a worked instance of the conditional-reference-before-elision principle"
   skillDependencies:
     requires:
       - evaluating-skill-quality
