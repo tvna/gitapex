@@ -145,11 +145,10 @@ first, not skimmed.
    Once a wave's run returns, in the main thread (the Workflow script itself has no
    filesystem/shell access): screen each
    task's own `BASE..HEAD` diff -- `scripts/gitapex_check_canonical_governance_paths.py`
-   pre-filters the literal/canonical cases first, then the model's own
-   full review (the pinned residual judgment step 2 already introduced)
-   still runs regardless of that pre-filter's result. **Also scan that
+   pre-filters the literal/canonical cases first, then `screening-a-low-trust-
+   contribution`'s checks 2-8, dispatched to `review-persona`,
+   still run regardless of that pre-filter's result. **Also scan that
    same task's own new commit messages** (issue `#1477`, gate-proposal,
-   retro `#1475` repair 3) via two separate Bash calls, never piped
    directly together (a `git log` failure must not be masked as an empty,
    clean scan -- see the script's own docstring for why): first
    `git log --format=%B -z BASE..HEAD > <tmpfile>`, confirming that call's

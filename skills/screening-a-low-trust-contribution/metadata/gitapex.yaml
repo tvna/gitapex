@@ -22,3 +22,6 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/823"
       summary: "Declared spec.executionRequirements.tools (W3 third slice, https://github.com/tvna/gitapex/issues/307): check 1 forbids a hand-invoked git/gh CLI for the diff fetch (a platform tool call or API wrapper only, not a local read); check 5 names a registry lookup (e.g. npm view <pkg> scripts) for a new/version-bumped dependency (shell) -- local-CLI-vs-hosted-API is flagged as residual risk in issue 823, not resolved here."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1558"
+      summary: "Checks 2-8's content-reasoning dispatches to agents/review-persona.md (tools: Read, Grep, Glob) whenever the caller already holds the literal diff as context; check 1 (platform-integrated fetch) always stays in the calling context. Depends on review-persona.md, implemented together in this same change. Isolates tool privilege in the reasoning context only -- the separate calling-context-contamination axis is disclosed in review-persona.md's own Limits section, not resolved here."

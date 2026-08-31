@@ -39,3 +39,6 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1476"
       summary: "Design doc Decision 20: a branch-plan-task dispatch must pass the full repo verification suite before reporting complete, via a new SubagentStop hook (check_task_full_verification.sh). spec.executionRequirements.tools.shell/write stay [], distinct from row 1's read-only rationale: the new script's subprocess/write calls run only inside Claude Code's own hook runner, never a step this skill's orchestrating instructions direct a calling session to perform."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1558"
+      summary: "Step 6's per-task screening dispatches screening-a-low-trust-contribution's checks 2-8 to the new agents/review-persona.md subagent type (tools: Read, Grep, Glob) instead of reasoning about the task's own diff directly in the main thread, which at that point holds mcp__github write access, git push, and unrestricted Bash. Isolates tool privilege only -- the separate calling-context-contamination axis is disclosed in review-persona.md's own Limits section, not resolved here."
