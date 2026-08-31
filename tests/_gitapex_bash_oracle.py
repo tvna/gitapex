@@ -526,8 +526,10 @@ def run_bash_oracle(
 
     bash_path = resolve_bash()
     env: dict[str, str] = {"PATH": str(stand_in_dir), "LC_ALL": "C"}
-    effective_nproc = _ambient_task_count_for_real_uid() + nproc
-    preexec = _resource_limit_prologue(cpu_seconds, effective_nproc) if enable_resource_limits else None
+    preexec = None
+    if enable_resource_limits:
+        effective_nproc = _ambient_task_count_for_real_uid() + nproc
+        preexec = _resource_limit_prologue(cpu_seconds, effective_nproc)
 
     process: subprocess.Popen[str] = subprocess.Popen(
         [bash_path, "-c", command],
