@@ -107,6 +107,10 @@ bounded contexts, never grading the same question twice.
      edit; regenerating it from memory can silently destroy entries the
      edit did not author. Every new entry names `outcome.baseCommit` (the
      head commit it was written against).
+   - Hold each Step's own prose to `references/formative-quality-
+     dimensions.md` row 4's structural-legibility bar (terminology,
+     checklists, feedback loops, templates, branch triggers) -- don't
+     restate that bar here.
    - **Completion criterion:** the drafted `SKILL.md` has Steps, plus
      exactly the earned optional sections, and `metadata/gitapex.yaml`
      carries every axis from the ACM's quoted resolution with none left
@@ -178,6 +182,15 @@ bounded contexts, never grading the same question twice.
    - Sweep the draft against `references/formative-quality-
      dimensions.md`'s nine formative dimensions -- a prose quality pass
      the deterministic checkers below can't perform.
+   - Prepare the eval scaffold row 8 (Eval preparation) requires:
+     enumerate at least three scenarios the draft must handle correctly --
+     including the guardrail/failure case it exists to prevent -- and
+     sketch a fixture skeleton under `evals/<skill>/` (one prompt file per
+     scenario, each naming its expected behavior). This is preparation
+     only: it does not run a with/without-skill baseline and does not
+     build new eval-execution infrastructure -- running and scoring that
+     baseline is `evaluating-skill-quality`'s own Behavioural evidence
+     pass at Step 7, not this Step's job.
    - Run this repository's own deterministic checkers against the draft
      directory, gitapex-repo only (see `references/gitapex-cross-
      links.md` for the exact flags):
@@ -281,40 +294,50 @@ fresh at Step 7.
 
 ## Worked example
 
-`executing-a-branch-plan` dispatches this skill with an ACM row whose
-Planned ops quote: job statement "given a pasted `curl` command, explain
-in one paragraph what request it makes -- no execution"; Core Domain
-verdict "hard to get right unassisted -- worth building"; Agentic
-operation mechanism-fit verdict "clears all four create-when criteria, no
-redirect"; axes
-Portable, Adaptive, default invocation, experimental (tracking issue
-quoted in full). Step 1: job statement captured verbatim, source cited.
-Step 2: Precondition "a `curl` command is present in the request"; Steps
-parse flags, describe the method/URL/headers/body; Postcondition "one
-paragraph, no execution"; `metadata/gitapex.yaml` filled from the quoted
-axes, none re-elicited. Step 3: one outcome, passes the SDO test, no
-split needed. Step 4: no existing skill's description collides. Step 5:
-domain gap found -- nothing yet states what to do with a flag that reads
-a secret from a file (`-H "Authorization: Bearer $(cat token)"`); added an
-explicit "never print a secret's own value, name only which flag reads
-one" boundary. Step 6: both checkers run clean. Step 7: handed off to
-`evaluating-skill-quality` and `battle-testing-a-skill`; both findings are
-ordinary drafting nits, fixed in place -- no escalation branch fires.
+**First candidate -- curl command explainer.**
 
-A second candidate -- rename a git branch to convention -- fails Step 2's
-earning test: a Precondition, Postcondition, and Non-goals bullet added
-from habit each restate Step 1 or don't exist in this vocabulary at all.
-Corrected: one Step only, the scope cut logged as an elision in
-`metadata/gitapex.yaml` instead.
+- Dispatch: `executing-a-branch-plan` dispatches this skill with an ACM
+  row whose Planned ops quote: job statement "given a pasted `curl`
+  command, explain in one paragraph what request it makes -- no
+  execution"; Core Domain verdict "hard to get right unassisted -- worth
+  building"; Agentic operation mechanism-fit verdict "clears all four
+  create-when criteria, no redirect"; axes Portable, Adaptive, default
+  invocation, experimental (tracking issue quoted in full).
+- Step 1: job statement captured verbatim, source cited.
+- Step 2: Precondition "a `curl` command is present in the request";
+  Steps parse flags, describe the method/URL/headers/body; Postcondition
+  "one paragraph, no execution"; `metadata/gitapex.yaml` filled from the
+  quoted axes, none re-elicited.
+- Step 3: one outcome, passes the SDO test, no split needed.
+- Step 4: no existing skill's description collides.
+- Step 5: domain gap found -- nothing yet states what to do with a flag
+  that reads a secret from a file (`-H "Authorization: Bearer
+  $(cat token)"`); added an explicit "never print a secret's own value,
+  name only which flag reads one" boundary.
+- Step 6: both checkers run clean.
+- Step 7: handed off to `evaluating-skill-quality` and
+  `battle-testing-a-skill`; both findings are ordinary drafting nits,
+  fixed in place -- no escalation branch fires.
 
-A third candidate reaches Step 7 with a `battle-testing-a-skill` finding
-that the elicited Capability assumption (`Frontier`) is wrong for a body
-this thin -- but that call was `eliciting-a-design`'s own Part-adjacent
-axis resolution, not anything this skill's own Steps produced. This
-skill's own dispatch context cannot reopen that dialogue: it emits
-`StageDeviated{action: escalate, reason: "Capability assumption
-Frontier does not fit a lean body; needs eliciting-a-design re-run"}` and
-stops, rather than silently overriding the axis or looping the review.
+**Second candidate -- rename a git branch to convention.**
+
+- Step 2: fails the earning test -- a Precondition, Postcondition, and
+  Non-goals bullet added from habit each restate Step 1 or don't exist in
+  this vocabulary at all.
+- Corrected: one Step only, the scope cut logged as an elision in
+  `metadata/gitapex.yaml` instead.
+
+**Third candidate.**
+
+- Step 7: reaches this step with a `battle-testing-a-skill` finding that
+  the elicited Capability assumption (`Frontier`) is wrong for a body this
+  thin -- but that call was `eliciting-a-design`'s own Part-adjacent axis
+  resolution, not anything this skill's own Steps produced. This skill's
+  own dispatch context cannot reopen that dialogue: it emits
+  `StageDeviated{action: escalate, reason: "Capability assumption
+  Frontier does not fit a lean body; needs eliciting-a-design re-run"}`
+  and stops, rather than silently overriding the axis or looping the
+  review.
 
 ## Stop boundaries
 
