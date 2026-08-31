@@ -10,6 +10,7 @@ Step 3's own detail. Source: design doc Decisions 3, 15, 19.
 - [Verbatim-quotation discipline](#verbatim-quotation-discipline)
 - [Two dependency-edge types](#two-dependency-edge-types-both-computed-before-wave-assignment)
 - [Irreversibility classification](#irreversibility-classification)
+- [Existing-skill-file edit floor](#existing-skill-file-edit-floor)
 - [Per-task diff BASE](#per-task-diff-base-screening-precondition-used-at-step-6)
 - [Worked example](#worked-example)
 
@@ -162,6 +163,33 @@ classified irreversible carries that flag into step 6/7: it requires the
 same authorization-gate confirmation step 1 already defines, re-run for
 that specific task, before its own wave dispatches -- not only at the
 Branch-Plan-wide entry point.
+
+## Existing-skill-file edit floor
+
+Classify each task's own Planned ops, at this same decomposition step,
+for whether they edit an *existing* `SKILL.md` -- the sibling case to
+`drafting-a-skill`'s own brand-new-directory trigger (`SKILL.md`'s own
+Related skills section, `vs. drafting-a-skill` bullet). A task in this
+category is `scorer-gated-skill-edits`'s own job only when its Planned
+ops themselves state a scorer and a held-out split, per that skill's own
+Precondition gate; absent that stated precondition, this floor applies
+instead -- an addition to Decision 20's own full-verification-suite gate
+(step 6), never a replacement for it, and never a re-entry into that
+skill's own measured-iteration procedure or `drafting-a-skill`'s own
+Design-by-Contract structure, neither of which this floor invokes:
+
+- Run `python3
+  skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py`
+  against the edited skill's own directory and fix every finding it
+  reports.
+- Sweep every section the task actually touched against
+  `drafting-a-skill`'s `references/formative-quality-dimensions.md`
+  Formative quality dimensions section and fix what the sweep finds.
+
+Both checks must run clean before that task may report complete -- carry
+this requirement forward the same way the Irreversibility classification
+above carries its own flag into step 6/7, not as a separately tracked
+concept.
 
 ## Per-task diff BASE (screening precondition, used at step 6)
 
