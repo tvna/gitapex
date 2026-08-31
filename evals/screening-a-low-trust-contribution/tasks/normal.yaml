@@ -20,3 +20,5 @@ expected:
   output_not_contains:
     - "hard flag"
     - "Merged"
+  exercises:
+    - "Do not claim the checks 2-8 dispatch to `review-persona` resolves the"

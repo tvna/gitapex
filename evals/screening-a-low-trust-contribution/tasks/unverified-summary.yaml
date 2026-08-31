@@ -24,3 +24,5 @@ expected:
     - "Merged"
     - "no flags"
     - "fully clean"
+  exercises:
+    - "Do not dispatch checks 2-8 to `review-persona` when the literal diff is"
