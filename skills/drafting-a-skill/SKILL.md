@@ -1,6 +1,6 @@
 ---
 name: drafting-a-skill
-description: Use when authoring a brand-new Claude Code skill from a blank page. Gates on Mechanism fit, elicits Portability/Capability/Invocation/Lifecycle from the requester, drafts using Design-by-Contract structure, and hands off to evaluating-skill-quality and battle-testing-a-skill for review. Distinct from scorer-gated-skill-edits (iterates an existing SKILL.md; never authors a new one) and evaluating-skill-quality (grades a finished artifact; this skill owns the formative pre-ship decisions).
+description: Use when authoring a brand-new skill from a blank page. Gates on Mechanism fit, elicits Portability/Capability/Invocation/Lifecycle from the requester, drafts using Design-by-Contract structure, and hands off to evaluating-skill-quality and battle-testing-a-skill for review. Distinct from scorer-gated-skill-edits (iterates an existing SKILL.md; never authors a new one) and evaluating-skill-quality (grades a finished artifact; this skill owns the formative pre-ship decisions).
 compatibility: "Step 3 prefers the AskUserQuestion tool where the harness offers it; where it does not, use portable question handoff -- print 'AskUserQuestion:' followed by the same four axes and choices as plain text (the same convention drafting-issues and planning-a-branch-from-an-issue already use for the identical dependency). Step 8's checkers require python3 on PATH."
 ---
 

@@ -112,6 +112,9 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1583"
       summary: "description too dense (904 chars) and Worked example insufficient (one case, earned side only). Compressed to 492 chars, dropping per-Step detail and lineage (dimension 1 needs trigger+boundary; lineage lives in Related skills and Notes). Added a second Worked example: a branch-rename candidate with an unearned Precondition/Postcondition/Non-goals trio, then the corrected version -- against the curl example. Paid for by tightening the curl wrap and Attribution; lands at BODY_MAX_LINES=500"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "requester flagged 'Claude Code skill' in the description as needlessly narrow -- this repository's own precedent (eliciting-a-design's compatibility field: 'any Agent Skills runtime') and this file's own Mixed portability declaration both treat the artifact as runtime-agnostic, not tied to one product. Dropped 'Claude Code' from the trigger phrase, now 'a brand-new skill from a blank page', matching formative-quality-dimensions.md's own dimension-1 example quote unchanged"
   skillDependencies:
     requires:
       - evaluating-skill-quality
