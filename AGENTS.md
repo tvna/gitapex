@@ -38,7 +38,6 @@ Build the harness before you scale.
 - Open a GitHub issue before any branch, commit, or PR; cite its number in every commit and PR. No exceptions (typos, docs, hotfixes included) (see drafting-issues, planning-a-branch-from-an-issue).
 - Push deterministic work into hooks, pre-commit, and CI/CD (deps, codegen, file ops, secret scans).
 - When a deterministic gate enforces a time-boxed precondition (a freshness observation with a finite TTL), refresh it immediately before each guarded operation, not once per session: a long multi-step flow otherwise expires the window mid-stream and the gate denies an action that is actually safe. The per-operation refresh is the interim contract; the durable fix folds the refresh into the gate itself; re-establish automatically whenever the precondition is verifiably current.
-- Run review/repair agents at one concentrated point, only after the deterministic gates pass; they handle the semantic judgment determinism cannot, not artifact code (section 1 owns execution; see executing-a-branch-plan, reviewing-an-artifact).
 - Manage modules declaratively (nix, uv, microsoft/apm) to block drift and supply-chain attacks.
 - Audit every outward-facing artifact for undisclosed provenance markers before any public push or release (see outward-artifact-preflight).
 - For GitHub operations, use platform-integrated tool calls (write operations require a paired PreToolUse safety hook) or the repository's approved REST API wrapper for read operations to reduce token consumption. Do not invoke command-line GitHub tools directly.
