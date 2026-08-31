@@ -349,6 +349,31 @@ needed. If the retry also fails, dispatch on what actually failed:
   irreversible-task confirmation** -> escalate, same as an unobvious
   execution failure -- these are not proof-method failures and get no
   retry at all.
+- **An upstream-ambiguity-rooted finding, originating from a
+  `drafting-a-skill` task** -> escalate, but with a narrower human-facing
+  instruction than the ordinary "execution was wrong" case above.
+  `drafting-a-skill`'s own Step 7 already distinguishes this case from an
+  ordinary drafting defect: when `evaluating-skill-quality` or
+  `battle-testing-a-skill` finds a real problem rooted in the *upstream*
+  Mechanism-fit vehicle-selection call or one of the four elicited axes
+  (`eliciting-a-design`'s own resolution, not anything `drafting-a-skill`'s
+  own Steps produced), that task cannot fix it in place -- it has no
+  interactive-dialogue tooling to re-open `eliciting-a-design` from its
+  own isolated `branch-plan-task` dispatch -- so it emits
+  `StageDeviated{run_id, task_id, reason, action: escalate}` itself,
+  naming the specific upstream call in question. This skill's own step 7
+  recognizes that reason text (rather than re-deriving whether the
+  finding is upstream-rooted itself, which is `drafting-a-skill`'s own
+  judgment to make, not this skill's to second-guess) and, in the
+  escalation comment, names **"return to `eliciting-a-design`"** as the
+  legitimate response: whoever picks up the escalation re-runs that
+  design dialogue (Checklist item 4, "Agentic operation mechanism-fit and
+  metadata elicitation") for the specific axis or vehicle-selection call
+  named, producing a corrected ACM row before this Branch Plan resumes --
+  never a silent local override of the elicited metadata, and never a
+  same-task retry against the one-retry budget above, since retrying the
+  drafting task again would only reproduce the same upstream-rooted
+  finding.
 
 ## Rollback (offered, not automatic)
 
