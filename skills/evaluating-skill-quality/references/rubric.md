@@ -121,6 +121,8 @@ gap review: dimensions 18-22"), applied here to this rubric's own coverage.
 
 ## Contract discipline
 
+<!-- contract-discipline-ack: terminology substitution only (Mechanism fit -> Agentic operation mechanism-fit, see https://github.com/tvna/gitapex/issues/1619), no change to either rule's substance; contract-structure.md needs no matching edit. -->
+
 This review's own procedure is itself a contract, in [Meyer's][dbc] sense
 of the term (Design by Contract: preconditions, postconditions, and
 invariants, as formalized for Eiffel and applied generally to reliable

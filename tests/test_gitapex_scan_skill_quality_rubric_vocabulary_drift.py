@@ -254,6 +254,30 @@ def test_no_dimension_headings_is_a_scan_error(tmp_path: Path) -> None:
 # --- Agentic operation mechanism-fit step-label lock ----------------------------------------------
 
 
+def test_check_mechanism_fit_labels_clean_on_real_skill_text() -> None:
+    """Direct unit coverage of check_mechanism_fit_labels: the real,
+    shipped SKILL.md carries every one of the nine bold step labels
+    under the renamed heading, so a direct call returns no problems."""
+    skill_text = (G.DEFAULT_SKILL_DIR / G.SKILL_MD).read_text(encoding="utf-8")
+    assert G.check_mechanism_fit_labels(skill_text) == []
+
+
+def test_check_mechanism_fit_labels_flags_a_missing_label() -> None:
+    """Direct unit coverage of check_mechanism_fit_labels against a
+    minimal synthetic SKILL.md: dropping one bold label from the
+    section produces exactly one problem naming that label, using the
+    renamed heading constant and error-message text."""
+    synthetic = (
+        "## Agentic operation mechanism-fit\n\n"
+        + "\n".join(f"- **{label}**: stub." for label in G.MECHANISM_FIT_STEP_LABELS[1:])
+        + "\n\n## Next section\n"
+    )
+    problems = G.check_mechanism_fit_labels(synthetic)
+    assert len(problems) == 1
+    assert G.MECHANISM_FIT_STEP_LABELS[0] in problems[0]
+    assert "Agentic operation mechanism-fit" in problems[0]
+
+
 @pytest.mark.parametrize(
     ("old", "new"),
     [
