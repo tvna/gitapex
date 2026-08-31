@@ -166,7 +166,7 @@ spec:
       summary: "GitApex's own eval suite has no trace-producing mechanism today, so its fixtures still resolve through the unchanged fallback paragraph; the three-state framework is forward-looking for a future target repository with real CI/telemetry infrastructure."
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/495"
-      summary: "Added a Dimension 2 grounded Fail instance (generic verification/self-correction instructions are duplication against a frontier model's own default behavior) and a new step-level Mechanism-fit check, Subagent delegation scope, both grounded in Anthropic's Prompting Claude Opus 5 guide."
+      summary: "Added a Dimension 2 grounded Fail instance (generic verification/self-correction instructions are duplication against a frontier model's own default behavior) and a new step-level Agentic operation mechanism-fit check, Subagent delegation scope, both grounded in Anthropic's Prompting Claude Opus 5 guide."
     - kind: audit
       anchor: "https://github.com/tvna/gitapex/issues/495"
       summary: "scorer-gated-skill-edits held-out gate: 5 new fixtures added (57 total, 22:23:12). Both new selection fixtures moved 0.75->1.0 on live isolated claude -p dispatches; 20 pre-existing selection fixtures confirmed content-disjoint by direct inspection. KEEP. Full record: evals/evaluating-skill-quality/split.md."
@@ -194,7 +194,7 @@ spec:
         found: 2
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/537"
-      summary: "Added a Confidentiality awareness cross-cutting axis, mirroring Compatibility awareness's warning-only three-state structure, distinguishing it from Mechanism fit's secret-exposure Stop-boundary check (backing vs. disclosure). Wired into references/rubric.md's TOC, SKILL.md's merged Compatibility-and-confidentiality-awareness section, and Procedure step 4."
+      summary: "Added a Confidentiality awareness cross-cutting axis, mirroring Compatibility awareness's warning-only three-state structure, distinguishing it from Agentic operation mechanism-fit's secret-exposure Stop-boundary check (backing vs. disclosure). Wired into references/rubric.md's TOC, SKILL.md's merged Compatibility-and-confidentiality-awareness section, and Procedure step 4."
     - kind: audit
       anchor: "https://github.com/tvna/gitapex/issues/537"
       summary: "scorer-gated-skill-edits held-out gate: 2 new fixtures added (59 total, 23:24:12). Isolated before/after dispatch on the new selection fixture moved 0.666667->1.000000, KEEP; 23 pre-existing selection fixtures confirmed unaffected by inspection. Full scores in split.md's Kept-edit log."
@@ -284,7 +284,7 @@ spec:
       summary: "An independent adversarial pass over the new code found and fixed two real defects before merge: empty-string --marketplace-source/--plugin-name values fell through the mutual-requirement bool() check as if omitted, silently skipping registration (the same silent-degradation class this fix exists to close); a relative --marketplace-source was never resolved before the subprocess calls, unlike --isolated-home. Both fixed, regression-tested, re-verified live."
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/652"
-      summary: "Added a ninth Mechanism-fit check, Invocation-mode fit: the review had no step establishing who may invoke a target at all, so a skill whose description promises an automatic trigger while disable-model-invocation switches model invocation off graded as a dimension-1 pass. Re-verified the Claude Code runtime-compatibility row on 2026-08-01 (the field was recorded only on the Cursor row, as a Cursor-only extension); recorded the two runtimes' identical meaning as an agreement, not a Conflict."
+      summary: "Added a ninth mechanism-fit check, Invocation-mode fit: the review had no step establishing who may invoke a target at all, so a skill whose description promises an automatic trigger while disable-model-invocation switches model invocation off graded as a dimension-1 pass. Re-verified the Claude Code runtime-compatibility row on 2026-08-01 (recorded only on the Cursor row before); recorded the two runtimes' identical meaning as an agreement, not a Conflict."
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/652"
       summary: "Split the same gap across both lanes rather than prose alone: the semantic mode-vs-trigger contradiction stays model-judged in rubric.md, while gitapex_check_skill_shape.py's new invocation-mode-well-formed gates only what a script can decide -- a value outside Claude Code's documented boolean literals, and the disable-model-invocation + user-invocable: false combination that leaves a skill invocable by nobody. capabilityAssumption stays Broad."

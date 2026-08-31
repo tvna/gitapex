@@ -759,7 +759,7 @@ DIMENSION_QUOTE_EXEMPTION_RE = re.compile(
 # references/ catalog's own structural exemption to contradict, so the
 # check below is trivially satisfied (the same "not applicable, contributes
 # zero offenders" shape _mechanism_fit_citation_offenders already uses for
-# a document with no '## Mechanism fit' heading). Deliberately the exact
+# a document with no '## Agentic operation mechanism-fit' heading). Deliberately the exact
 # phrase battle-testing-a-skill's own SKILL.md uses, not a generic "cites a
 # line" linter -- see DIMENSION_QUOTE_EXEMPTION_RE's own comment for why a
 # narrow, incident-grounded phrase beats a broader vocabulary with no
@@ -867,16 +867,16 @@ CROSS_SKILL_CITATION_RE = re.compile(
     r"([A-Za-z0-9][A-Za-z0-9 '/-]*?)\s+[Ss]ection\b"
 )
 
-# Mechanism-fit subsection completeness: every ATX heading in a
+# Agentic operation mechanism-fit subsection completeness: every ATX heading in a
 # document, this time captured WITH its own '#'-run (unlike HEADING_RE,
 # which only needs a heading's text for anchor-slug purposes and is
-# level-agnostic) -- the Mechanism-fit check below needs to tell a level-2
-# "## Mechanism fit" heading apart from a level-3 "### " subsection nested
+# level-agnostic) -- the Agentic operation mechanism-fit check below needs to tell a level-2
+# "## Agentic operation mechanism-fit" heading apart from a level-3 "### " subsection nested
 # under it, so it cannot reuse HEADING_RE's own single-capture-group shape.
 MECHANISM_FIT_HEADING_RE = re.compile(r"^[ ]{0,3}(#{1,6})[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$", re.MULTILINE)
 # A "[label]"-style citation bracket -- this repository's own established
 # reference-style-link-label convention (e.g. "[sd]", "[ab]",
-# "[modeleffort]"), the same shape a Mechanism-fit subsection already uses
+# "[modeleffort]"), the same shape an Agentic operation mechanism-fit subsection already uses
 # today wherever it cites a primary source. Presence-only: this check does
 # not verify the label resolves to a real "[label]: url" definition
 # elsewhere in the document (a distinct, narrower question this check
@@ -884,7 +884,7 @@ MECHANISM_FIT_HEADING_RE = re.compile(r"^[ ]{0,3}(#{1,6})[ \t]+(.+?)(?:[ \t]+#+)
 # rather than none.
 MECHANISM_FIT_CITATION_RE = re.compile(r"\[[a-z0-9][a-z0-9-]*\]")
 # The literal disclosure phrase this repository's own rubric.md already
-# uses (verbatim, twice) to mark a Mechanism-fit claim as its own reasoned
+# uses (verbatim, twice) to mark an Agentic operation mechanism-fit claim as its own reasoned
 # extension rather than an Anthropic-sourced one.
 MECHANISM_FIT_REASONED_EXTENSION_PHRASE = "this repository's own reasoned extension"
 

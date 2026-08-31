@@ -1444,7 +1444,7 @@
       "id": "skill-quality-rubric-vocabulary-drift",
       "kind": "script",
       "script": ".github/scripts/gitapex_scan_skill_quality_rubric_vocabulary_drift.py",
-      "rule": "evaluating-skill-quality's own nine-dimension rubric and Mechanism-fit vocabulary must stay internally consistent: every bold dimension-count declaration in SKILL.md and references/rubric.md matches the real number of '## N. <Name>' headings in rubric.md, every literal 'dimensions 1-N' full-span range citation in either file matches that same count, rubric.md's nine dimension headings are present exactly once each, numbered 1 through the real count with no gap or duplicate, in ascending order, and non-empty, and SKILL.md's Mechanism fit section carries all nine named step-level check labels. A missing or unreadable file, zero dimension headings found, or a missing/duplicate/empty Mechanism-fit section fails closed rather than passing.",
+      "rule": "evaluating-skill-quality's own nine-dimension rubric and Agentic operation mechanism-fit vocabulary must stay internally consistent: every bold dimension-count declaration in SKILL.md and references/rubric.md matches the real number of '## N. <Name>' headings in rubric.md, every literal 'dimensions 1-N' full-span range citation in either file matches that same count, rubric.md's nine dimension headings are present exactly once each, numbered 1 through the real count with no gap or duplicate, in ascending order, and non-empty, and SKILL.md's Agentic operation mechanism-fit section carries all nine named step-level check labels. A missing or unreadable file, zero dimension headings found, or a missing/duplicate/empty Agentic operation mechanism-fit section fails closed rather than passing.",
       "planes": ["ci", "local"],
       "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_skill_quality_rubric_vocabulary_drift.py"],
       "trigger": "tests/test_gitapex_scan_skill_quality_rubric_vocabulary_drift.py inside the pytest step of .github/workflows/test.yml",
@@ -1457,7 +1457,7 @@
       "target": [
         {"kind": "file-glob", "ref": "skills/evaluating-skill-quality/SKILL.md"},
         {"kind": "file-glob", "ref": "skills/evaluating-skill-quality/references/rubric.md"},
-        {"kind": "cross-registry-consistency", "ref": "SKILL.md dimension-count/'dimensions 1-N' range declarations + Mechanism-fit step labels <-> references/rubric.md '## N. <Name>' dimension headings (numbering/order/non-empty)"},
+        {"kind": "cross-registry-consistency", "ref": "SKILL.md dimension-count/'dimensions 1-N' range declarations + Agentic operation mechanism-fit step labels <-> references/rubric.md '## N. <Name>' dimension headings (numbering/order/non-empty)"},
         {"kind": "workflow-event", "ref": "test.yml:pull_request"},
         {"kind": "workflow-event", "ref": "test.yml:push"}
       ]

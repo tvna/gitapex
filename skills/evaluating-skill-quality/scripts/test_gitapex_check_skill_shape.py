@@ -1445,7 +1445,7 @@ def test_mechanism_fit_subsection_with_citation_passes(tmp_path):
     d = _write_raw(
         tmp_path,
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
-        "## Mechanism fit\n\n"
+        "## Agentic operation mechanism-fit\n\n"
         "### Tool-capability verification\n\n"
         "Grounded in the platform docs [pd].\n\n"
         "[pd]: https://platform.claude.com/docs\n",
@@ -1458,7 +1458,7 @@ def test_mechanism_fit_subsection_with_reasoned_extension_phrase_passes(tmp_path
     d = _write_raw(
         tmp_path,
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
-        "## Mechanism fit\n\n"
+        "## Agentic operation mechanism-fit\n\n"
         "### Tool-capability verification\n\n"
         "Labelled here as this repository's own reasoned extension rather "
         "than an Anthropic-sourced claim.\n",
@@ -1471,7 +1471,7 @@ def test_mechanism_fit_subsection_with_neither_fails(tmp_path):
     d = _write_raw(
         tmp_path,
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
-        "## Mechanism fit\n\n"
+        "## Agentic operation mechanism-fit\n\n"
         "### Tool-capability verification\n\n"
         "Just a claim with nothing backing it up.\n",
     )
@@ -1490,9 +1490,28 @@ def test_no_mechanism_fit_heading_trivially_passes(tmp_path):
     assert result.passed
 
 
+def test_mechanism_fit_heading_with_irregular_whitespace_still_recognized(tmp_path):
+    # An adversarial re-run against this exact comparison found that a
+    # heading rewrapped or pasted with a doubled internal space (still the
+    # same heading to a human reader) was silently NOT recognized as the
+    # Agentic operation mechanism-fit section by a bare strip().lower()
+    # equality check -- the section's own subsections then went unchecked
+    # entirely rather than being flagged. Defeat-test for the whitespace-
+    # collapse fix.
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "## Agentic  operation mechanism-fit\n\n"
+        "### Uncited subsection\n\nNo citation here.\n",
+    )
+    result = _result(css.check_shape(d), "mechanism-fit-subsections-cite-sources")
+    assert not result.passed
+    assert "Uncited subsection" in result.evidence
+
+
 def test_mechanism_fit_multiple_subsections_each_checked_independently(tmp_path):
     # The [ok] reference-style definition is deliberately kept OUT of the
-    # Mechanism-fit section entirely (this check only requires a citation
+    # Agentic operation mechanism-fit section entirely (this check only requires a citation
     # BRACKET to appear textually inside a subsection's own body, not that
     # it resolve to a real definition -- see the check's own docstring) --
     # placing it after "Bad subsection" would otherwise land inside that
@@ -1502,7 +1521,7 @@ def test_mechanism_fit_multiple_subsections_each_checked_independently(tmp_path)
         tmp_path,
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
         "[ok]: https://example.com\n\n"
-        "## Mechanism fit\n\n"
+        "## Agentic operation mechanism-fit\n\n"
         "### Good subsection\n\nCited [ok].\n\n"
         "### Bad subsection\n\nNo citation.\n",
     )
@@ -1514,11 +1533,11 @@ def test_mechanism_fit_multiple_subsections_each_checked_independently(tmp_path)
 
 def test_mechanism_fit_section_stops_at_next_level_2_heading(tmp_path):
     # A subsection AFTER the next '## ' heading belongs to that later
-    # section, not to Mechanism fit, and must not be scanned by this check.
+    # section, not to Agentic operation mechanism-fit, and must not be scanned by this check.
     d = _write_raw(
         tmp_path,
         "---\nname: s\ndescription: d. Use when x.\n---\n\n"
-        "## Mechanism fit\n\n"
+        "## Agentic operation mechanism-fit\n\n"
         "### Covered subsection\n\nCited [ok].\n\n"
         "## Something else entirely\n\n"
         "### Unrelated subsection\n\nNo citation, but out of scope.\n\n"

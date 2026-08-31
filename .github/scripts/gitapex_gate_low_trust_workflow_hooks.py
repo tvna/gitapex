@@ -2,7 +2,7 @@
 """CI gate: a diff touching `.github/workflows/**` or `hooks/**` from a
 low-trust PR author must be explicitly maintainer-reviewed.
 
-Issue #136 (Mechanism-fit finding from #128's evaluating-skill-quality
+Issue #136 (Agentic operation mechanism-fit finding from #128's evaluating-skill-quality
 pass): `screening-a-low-trust-contribution/SKILL.md`'s checks 2 and 4
 call every such edit a "hard flag, not a sampled subset", but that
 guarantee depended entirely on an agent choosing to invoke the skill --

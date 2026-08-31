@@ -1,6 +1,6 @@
 ---
 name: evaluating-context-channel-maturity
-description: Review whether a non-skill, non-gate instruction channel -- CLAUDE.md (root or subdirectory), a Subagent definition, an Output style, a system-prompt-append configuration, or Auto-memory content -- is engineered to a mature standard on five points -- ownership/review gating, bounded growth, placement/disclosure fit, enforcement-fit, and provenance/adversarial independence. Use once the target is confirmed to be one of these five channels, not a Skill (evaluating-skill-quality's own job), a deterministic gate/hook (evaluating-deterministic-gate-quality's own job), or a Rule (out of scope -- Claude Code's own proprietary, non-portable mechanism). One disclosed adjacency -- criterion 3 mirrors evaluating-skill-quality's own Mechanism-fit check from the opposite artifact -- that skill asks whether a SKILL.md candidate should be one of these channels instead; this skill asks whether content already living in one of these channels should be a skill instead.
+description: Review whether a non-skill, non-gate instruction channel -- CLAUDE.md (root or subdirectory), a Subagent definition, an Output style, a system-prompt-append configuration, or Auto-memory content -- is engineered to a mature standard on five points -- ownership/review gating, bounded growth, placement/disclosure fit, enforcement-fit, and provenance/adversarial independence. Use once the target is confirmed to be one of these five channels, not a Skill (evaluating-skill-quality's own job), a deterministic gate/hook (evaluating-deterministic-gate-quality's own job), or a Rule (out of scope -- Claude Code's own proprietary, non-portable mechanism). One disclosed adjacency -- criterion 3 mirrors evaluating-skill-quality's own Agentic operation mechanism-fit check from the opposite artifact -- that skill asks whether a SKILL.md candidate should be one of these channels instead; this skill asks whether content already living in one of these channels should be a skill instead.
 ---
 
 # Evaluating Context-Channel Maturity
@@ -35,7 +35,7 @@ fail.
 Out of scope, each for a stated reason rather than left implicit:
 
 - **Skills** (`SKILL.md` and its own references/scripts) -- fully owned
-  by `evaluating-skill-quality`. That skill's own Mechanism fit section
+  by `evaluating-skill-quality`. That skill's own Agentic operation mechanism-fit section
   already asks, from a `SKILL.md` candidate's own side, whether it should
   instead be CLAUDE.md/a subagent/a hook -- citing the same primary
   source ([Steering Claude Code][steering]) this skill cites. Criterion 3
@@ -111,7 +111,7 @@ is reported not-applicable with the reason, never forced.
    loaded only when relevant -- rather than paying a high-context-cost,
    always-loaded channel's tax for narrowly relevant material? This
    criterion also asks the mirror-image of `evaluating-skill-quality`'s
-   own Mechanism-fit check: not whether a skill candidate should be one
+   own Agentic operation mechanism-fit check: not whether a skill candidate should be one
    of these channels instead, but whether content already living in one
    of these channels -- a multi-step procedure inside a root CLAUDE.md is
    the canonical failure -- should instead be a skill, loaded only when

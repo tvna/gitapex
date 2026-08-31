@@ -47,13 +47,13 @@ and the bug fixes: `evals/evaluating-skill-quality/split.md`'s Kept-edit
 log. Refs #149.
 
 **Issue #155 (model/effort tier fit):** `references/rubric.md` gained a
-fifth Mechanism-fit check, `### Model/effort tier fit`, grounded in
+fifth Agentic operation mechanism-fit check, `### Model/effort tier fit`, grounded in
 Anthropic's own guidance on choosing a model tier and reasoning-effort
 level in Claude Code (Lydia Hallie, Claude Code team) -- checking
 whether a reviewed skill's own model/effort pins are justified per that
 guidance, when the skill pins one at all. A step-level finding, same
 standing as the existing Skill-step vs. bundled script check; wired into
-`SKILL.md`'s Mechanism-fit bullet list. Went through `scorer-gated-skill-edits`'
+`SKILL.md`'s Agentic operation mechanism-fit bullet list. Went through `scorer-gated-skill-edits`'
 own held-out gate: 3 new fixtures added to `split.md`'s split (19
 total). This gate reused the six pre-existing selection fixtures'
 already-measured after scores from the issue #149 gate directly above as
@@ -123,7 +123,7 @@ Refs #164.
 `references/rubric.md` gained an explicit portability litmus test ("would
 this exact sentence remain true, unchanged, if this file were copied into
 a repository carrying none of the origin repo's state?"), applied to
-every sentence including Stop-boundaries/Mechanism-fit prose, plus a
+every sentence including Stop-boundaries/Agentic operation mechanism-fit prose, plus a
 named dimension-6 sub-check banning bare/qualified GitHub issue-PR
 citations inside Portable-declared content; mirrored in `SKILL.md` and
 wired into the Subagent-dispatch instructions. Motivated by a real,
@@ -324,7 +324,7 @@ instance -- a generic re-verification/self-correction instruction with no
 domain-specific reason, on Frontier-declared (or Adaptive-body) content, is
 **duplication** against the model's own documented default behavior,
 distinguished from an instruction naming the skill's own actual task; (2) a
-new step-level Mechanism-fit check, `### Subagent delegation scope` --
+new step-level Agentic operation mechanism-fit check, `### Subagent delegation scope` --
 declaration-independent, checking whether a skill that instructs subagent
 dispatch states a delegation criterion and either defaults to a single
 dispatch or states a cap. Both grounded in a new `[opus5]` reference entry.
@@ -545,7 +545,7 @@ decision needs more than one run. Refs #1461, #500.
 Found via conversational Q&A, not a proactive audit: no axis checked
 whether a reviewed skill's own procedure discloses/guards its handling of
 secrets, credentials, PII, or private data -- the closest existing
-coverage, Mechanism fit's secret-exposure Stop-boundary check, only asks
+coverage, Agentic operation mechanism-fit's secret-exposure Stop-boundary check, only asks
 whether a *stated* prohibition is hook-backed, not whether the target
 discloses a sensitive-data-handling step at all. Added a new `##
 Confidentiality awareness` warning-only, cross-cutting axis to

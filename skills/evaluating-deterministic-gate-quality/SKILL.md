@@ -51,7 +51,7 @@ guarantees is **reproducibility of the decision**, not reuse of one
 literal artifact. Every axis and dimension below is an operationalization
 of this one principle, not an independent list of unrelated concerns.
 
-## Mechanism-fit test
+## Deterministic-gate mechanism-fit test
 
 Three questions, checked in order, before anything below this section:
 whether a deterministic decision is the right mechanism for a given
@@ -66,8 +66,8 @@ gate whose guarded path the infrastructure beneath all four domains
 already owns -- a distinct answer, never a species of wrong domain -- or
 a gate built for a policy that was never gate material to begin with,
 the same way a well-written skill that should have been a hook is not
-fixed by improving its prose (`evaluating-skill-quality`'s own Mechanism
-fit section makes the identical move for skills). Full test, all three
+fixed by improving its prose (`evaluating-skill-quality`'s own Agentic
+operation mechanism-fit section makes the identical move for skills). Full test, all three
 questions: [references/mechanism-fit.md](references/mechanism-fit.md),
 which also carries the second question's own four outcome tokens, its
 decision procedure (the impossible-vs-tedious test from
@@ -83,7 +83,7 @@ policy; none of them apply to a policy correctly left ungated.
 
 ## Evaluation model structure
 
-Applies once Mechanism-fit test above has already concluded a
+Applies once Deterministic-gate mechanism-fit test above has already concluded a
 deterministic gate is warranted for the policy under review.
 
 - **Two-lane split**: deterministic-shape checks (fixed rules) vs.
@@ -192,7 +192,7 @@ trigger and payload rule above govern here. Optional upgrade, once that trigger 
    division above). Never assume any specific path exists merely because
    this skill's own worked-examples file names one -- confirm the
    target's actual layout directly.
-2. **Mechanism-fit check.** For each discovered artifact (and, when
+2. **Deterministic-gate mechanism-fit check.** For each discovered artifact (and, when
    scoping a new or proposed policy rather than an existing artifact, for
    that policy directly), apply
    [references/mechanism-fit.md](references/mechanism-fit.md): first
@@ -296,7 +296,7 @@ trigger and payload rule above govern here. Optional upgrade, once that trigger 
 
 ## Stop boundaries
 
-Invariants below bind from the very first read (Discover, Mechanism-fit
+Invariants below bind from the very first read (Discover, Deterministic-gate mechanism-fit
 check) onward, and the first one earlier still -- from before the
 dispatch that carries the rest. They cover general integrity, injection,
 and resource-bound concerns, plus execution safety and live-testing
@@ -367,7 +367,7 @@ instead, so a no-gate-warranted verdict never pays for loading them.
   independent channel by construction and must mark the point
   indeterminate rather than waived unless the dispatching context itself
   supplies a verified waiver.
-- Never issue a bare "looks fine" verdict -- including a Mechanism-fit
+- Never issue a bare "looks fine" verdict -- including a Deterministic-gate mechanism-fit
   finding -- without citing evidence (a quote, a line, a concrete
   observed behavior). Quote it delimiter-safely -- an indented code
   block, or a fenced block whose delimiter run is longer than the longest
@@ -378,7 +378,7 @@ instead, so a no-gate-warranted verdict never pays for loading them.
 - Never claim a violation the reviewed artifact does not actually show.
   If a dimension cannot be assessed from available evidence, say so
   explicitly instead of guessing.
-- Never read an infrastructure-owned answer to the Mechanism-fit test's
+- Never read an infrastructure-owned answer to the Deterministic-gate mechanism-fit test's
   second question as permission to remove, disable, or downgrade a gate
   that already exists. That answer reassigns which control the target
   should describe as primary and grants nothing else; collapsing a real

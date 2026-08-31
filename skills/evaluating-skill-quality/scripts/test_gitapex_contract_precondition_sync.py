@@ -49,7 +49,7 @@ _RUBRIC_MD = _SKILL_DIR / "references" / "rubric.md"
 # mirror below; extend this in the same change that adds a new checkpoint to
 # a Procedure step (that is the invariant this gate exists to enforce).
 _CHECKPOINT_PHRASES = (
-    "mechanism fit",
+    "Agentic operation mechanism-fit",
     "Blind spot pass",
     "deterministic shape",
     "portability level",

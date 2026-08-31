@@ -170,7 +170,7 @@ is a Domain-2 artifact paired with a documented Domain-3 CI backstop
 `.github/scripts/gitapex_gate_acm_issue_disclosure.py`, its own backing issue
 also recorded in the sidecar).
 
-**Step 2, Mechanism-fit check:** all six criteria PASS, well-argued --
+**Step 2, Deterministic-gate mechanism-fit check:** all six criteria PASS, well-argued --
 reversibility window (only a pre-action hook can block issue creation
 before it happens), capability match (the paired CI gate's own comment
 states it "can only comment/label after the fact, never block it"),

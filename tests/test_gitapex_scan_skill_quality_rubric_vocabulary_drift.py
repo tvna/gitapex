@@ -251,7 +251,31 @@ def test_no_dimension_headings_is_a_scan_error(tmp_path: Path) -> None:
         G.scan(skill_dir)
 
 
-# --- Mechanism-fit step-label lock ----------------------------------------------
+# --- Agentic operation mechanism-fit step-label lock ----------------------------------------------
+
+
+def test_check_mechanism_fit_labels_clean_on_real_skill_text() -> None:
+    """Direct unit coverage of check_mechanism_fit_labels: the real,
+    shipped SKILL.md carries every one of the nine bold step labels
+    under the renamed heading, so a direct call returns no problems."""
+    skill_text = (G.DEFAULT_SKILL_DIR / G.SKILL_MD).read_text(encoding="utf-8")
+    assert G.check_mechanism_fit_labels(skill_text) == []
+
+
+def test_check_mechanism_fit_labels_flags_a_missing_label() -> None:
+    """Direct unit coverage of check_mechanism_fit_labels against a
+    minimal synthetic SKILL.md: dropping one bold label from the
+    section produces exactly one problem naming that label, using the
+    renamed heading constant and error-message text."""
+    synthetic = (
+        "## Agentic operation mechanism-fit\n\n"
+        + "\n".join(f"- **{label}**: stub." for label in G.MECHANISM_FIT_STEP_LABELS[1:])
+        + "\n\n## Next section\n"
+    )
+    problems = G.check_mechanism_fit_labels(synthetic)
+    assert len(problems) == 1
+    assert G.MECHANISM_FIT_STEP_LABELS[0] in problems[0]
+    assert "Agentic operation mechanism-fit" in problems[0]
 
 
 @pytest.mark.parametrize(
@@ -272,12 +296,12 @@ def test_renamed_mechanism_fit_label_fails(tmp_path: Path, old: str, new: str) -
     skill_dir = _copy_skill(tmp_path)
     _mutate(skill_dir, "SKILL.md", old, new)
     problems = G.scan(skill_dir)
-    assert any("lost Mechanism-fit step label" in p for p in problems), problems
+    assert any("lost Agentic operation mechanism-fit step label" in p for p in problems), problems
 
 
 def test_absent_mechanism_fit_heading_is_a_scan_error(tmp_path: Path) -> None:
     skill_dir = _copy_skill(tmp_path)
-    _mutate(skill_dir, "SKILL.md", "## Mechanism fit", "## Renamed section")
+    _mutate(skill_dir, "SKILL.md", "## Agentic operation mechanism-fit", "## Renamed section")
     with pytest.raises(G.ScanError, match="heading not found"):
         G.scan(skill_dir)
 
@@ -287,8 +311,8 @@ def test_duplicated_mechanism_fit_heading_is_a_scan_error(tmp_path: Path) -> Non
     _mutate(
         skill_dir,
         "SKILL.md",
-        "## Mechanism fit",
-        "## Mechanism fit\n\nStub.\n\n## Mechanism fit",
+        "## Agentic operation mechanism-fit",
+        "## Agentic operation mechanism-fit\n\nStub.\n\n## Agentic operation mechanism-fit",
     )
     with pytest.raises(G.ScanError, match="appears 2 times"):
         G.scan(skill_dir)
@@ -298,7 +322,7 @@ def test_empty_mechanism_fit_section_is_a_scan_error(tmp_path: Path) -> None:
     skill_dir = _copy_skill(tmp_path)
     path = skill_dir / "SKILL.md"
     text = path.read_text(encoding="utf-8")
-    marker = "## Mechanism fit"
+    marker = "## Agentic operation mechanism-fit"
     idx = text.index(marker)
     tail_marker = "## Subagent dispatch"
     tail_idx = text.index(tail_marker)

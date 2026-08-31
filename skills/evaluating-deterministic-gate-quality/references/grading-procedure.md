@@ -1,6 +1,6 @@
 # Grading procedure: once a deterministic gate is confirmed warranted
 
-Applies only after `SKILL.md`'s Mechanism-fit test -- specifically
+Applies only after `SKILL.md`'s Deterministic-gate mechanism-fit test -- specifically
 [references/mechanism-fit.md](mechanism-fit.md)'s Gate vs. no gate
 question -- has already concluded a deterministic gate is warranted for
 the artifact or policy under review. This file carries the content
@@ -182,7 +182,7 @@ is reported as partially covered, not covered, in the summary.
 Bind from `SKILL.md` Procedure step 3 onward -- once a gate has been
 confirmed warranted and grading of its actual implementation begins.
 `SKILL.md`'s own Stop boundaries section carries the invariants that bind
-from the very first read (Discover, Mechanism-fit check) onward instead;
+from the very first read (Discover, Deterministic-gate mechanism-fit check) onward instead;
 these do not duplicate those. This set is deliberately limited to
 review-quality/epistemic-honesty rules -- forgetting one produces a
 weaker or overconfident *verdict*, not a dangerous *action* -- unlike the

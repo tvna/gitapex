@@ -80,7 +80,7 @@ check is the one part of this gate that is platform-verified (GitHub's
 own field, not self-asserted text); the "does the text actually approve
 this" half stays a model judgment call, same as `planning-a-branch-from-an-issue`'s own
 Step 3 stale-comment-detection judgment. Named here explicitly per this
-skill's own Mechanism-fit discipline, rather than left as an implicit gap
+skill's own Agentic operation mechanism-fit discipline, rather than left as an implicit gap
 a reviewer has to find.
 
 **Model/effort pin.** This gate's own text-approval judgment carries an

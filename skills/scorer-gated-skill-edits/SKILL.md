@@ -127,7 +127,7 @@ evaluation. Name the gap; never fake a score to proceed.
    directory and `evals/<skill>/` docs for every such reference to the
    changed item before scoring, and fix each one found in the same
    patch, not a follow-up. A real incident found exactly this gap:
-   inserting a new fourth Mechanism-fit check pushed an existing
+   inserting a new fourth Agentic operation mechanism-fit check pushed an existing
    "fourth" ordinal citation in a sibling worked example to fifth, and a
    corpus-size math note in a sibling doc went stale the same way --
    both slipped past review because nothing in this step prompted the

@@ -11,13 +11,12 @@ one.
 
 ## Contents
 
-1. [Deterministic-checker commands (Step 8)](#deterministic-checker-commands-step-8)
+1. [Deterministic-checker commands (Step 6)](#deterministic-checker-commands-step-6)
 2. [Metadata schema and shape checker](#metadata-schema-and-shape-checker)
 3. [PR-body skill-audit disclosure convention](#pr-body-skill-audit-disclosure-convention)
 4. [If the draft's own bundled script would be a deterministic gate](#if-the-drafts-own-bundled-script-would-be-a-deterministic-gate)
-5. [Step 2 redirect targets, live paths](#step-2-redirect-targets-live-paths)
 
-## Deterministic-checker commands (Step 8)
+## Deterministic-checker commands (Step 6)
 
 ```
 python3 skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py --allowed-root <repo-root> skills/<new-skill-name>
@@ -25,14 +24,14 @@ python3 skills/evaluating-skill-quality/scripts/gitapex_scan_execution_requireme
 ```
 
 Both are read-only against the target directory; run them once the draft
-directory exists on disk, before Step 10's handoff, and fix every finding
-they report -- Step 10 does not run either check itself.
+directory exists on disk, before Step 7's handoff, and fix every finding
+they report -- Step 7 does not run either check itself.
 
 ## Metadata schema and shape checker
 
 `skills/evaluating-skill-quality/references/skill-metadata.schema.json` is
 the authoritative schema for `metadata/gitapex.yaml`. Validate a draft's
-sidecar against it before Step 8 (the shape checker above also reads this
+sidecar against it before Step 6 (the shape checker above also reads this
 schema, but validating directly first gives a faster failure loop while
 still drafting).
 
@@ -68,12 +67,8 @@ before it is even registered. This is a rare case for a freshly drafted
 skill -- most bundled scripts check only their own skill's shape, per
 `references/mechanism-fit-and-cohesion.md`'s bundled-script placement
 policy -- but when it applies, route through `evaluating-deterministic-
-gate-quality` per Step 2's own redirect before shipping it.
-
-## Step 2 redirect targets, live paths
-
-- `skills/evaluating-deterministic-gate-quality/` -- hook/CI-gate
-  placement and design.
-- `skills/evaluating-context-channel-maturity/` -- CLAUDE.md/subagent/
-  output-style/system-prompt-append/auto-memory placement, the
-  mirror-image question to this skill's own Step 2.
+gate-quality` directly before shipping it (this skill's own former Step 2
+vehicle-selection redirect now lives in `eliciting-a-design`'s Agentic
+operation mechanism-fit check -- see that skill's own Checklist item 4 --
+since this skill only drafts once that call has already landed on
+Skill).

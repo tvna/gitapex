@@ -12,6 +12,14 @@ inputs:
     risk criteria, whether that PR is safe to auto-merge without human
     review. Put both in the same skill since they're both "PR-related."
 expected:
+  # exercises (gate gitapex_gate_split_fixture_coverage.py Check E): this
+  # fixture's own scenario is exactly the Stop boundary against treating
+  # Step 3's cohesion finding or Step 5's domain-gap finding as
+  # authoritative -- the split finding here must land as advisory, never
+  # a self-declared cohesion pass/fail, which is what the
+  # output_not_contains assertions below check for directly.
+  exercises:
+    - "Never treat Step 3's cohesion finding or Step 5's domain-gap finding as"
   output_contains:
     - "split"
     - "Step 1"

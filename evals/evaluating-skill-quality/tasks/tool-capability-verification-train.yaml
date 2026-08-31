@@ -1,6 +1,6 @@
 id: evaluating-skill-quality-tool-capability-verification-train
 name: Detection Claim Assumes a Tool Can Reconstruct History It Only Observes Now
-description: Motivates the Tool-capability verification Mechanism-fit check -- the target's Stop boundary claims a pull-request read tool's commit-listing subcall can detect whether an earlier commit was force-pushed, when that subcall only returns the PR's current commit list and cannot see a ref that was already overwritten. The review must flag this as an unverified tool-capability claim, not accept it because the claim reads plausibly.
+description: Motivates the Tool-capability verification Agentic operation mechanism-fit check -- the target's Stop boundary claims a pull-request read tool's commit-listing subcall can detect whether an earlier commit was force-pushed, when that subcall only returns the PR's current commit list and cannot see a ref that was already overwritten. The review must flag this as an unverified tool-capability claim, not accept it because the claim reads plausibly.
 tags:
   - quality
   - mechanism-fit

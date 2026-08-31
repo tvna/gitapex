@@ -21,5 +21,12 @@ inputs:
 
     Give me the mechanism-fit verdict for this policy.
 expected:
+  # exercises (gate gitapex_gate_split_fixture_coverage.py Check E): this
+  # fixture dispatches directly into the Deterministic-gate mechanism-fit
+  # check's own Procedure step (the "Gate vs. no gate" question the
+  # mechanism-fit test asks first, before domain placement is even
+  # reachable).
+  exercises:
+    - "**Deterministic-gate mechanism-fit check.** For each discovered artifact (and, when"
   output_contains:
     - "no-gate-warranted"

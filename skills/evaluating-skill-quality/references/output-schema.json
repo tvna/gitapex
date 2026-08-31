@@ -107,7 +107,7 @@
         },
         "stepLevelFindings": {
           "type": "array",
-          "description": "check is a free-form string, not a closed enum: the named step-level Mechanism-fit checks have grown by name more than once already (e.g. Subagent delegation scope, Invocation-mode fit) and a closed enum would need a schema bump on every future addition.",
+          "description": "check is a free-form string, not a closed enum: the named step-level Agentic operation mechanism-fit checks have grown by name more than once already (e.g. Subagent delegation scope, Invocation-mode fit) and a closed enum would need a schema bump on every future addition.",
           "items": {
             "type": "object",
             "required": ["check", "finding"],

@@ -13,7 +13,7 @@ current. Re-run the procedure for a live verdict.
 
 ## Table of contents
 
-- [Mechanism fit](#mechanism-fit)
+- [Agentic operation mechanism-fit](#agentic-operation-mechanism-fit)
 - [Portability level](#portability-level)
 - [Deterministic shape](#deterministic-shape)
 - [Probabilistic dimensions](#probabilistic-dimensions)
@@ -21,9 +21,9 @@ current. Re-run the procedure for a live verdict.
 - [Verification: subagent dispatch (dated addendum)](#verification-subagent-dispatch-dated-addendum)
 - [References](#references)
 
-## Mechanism fit
+## Agentic operation mechanism-fit
 
-Read per [rubric.md's Mechanism fit](rubric.md#mechanism-fit) section
+Read per [rubric.md's Agentic operation mechanism-fit](rubric.md#agentic-operation-mechanism-fit) section
 (itself added this same review pass).
 
 **Skill vs. subagent**: good fit, on a revised basis from an earlier pass
@@ -35,7 +35,7 @@ judgment-bearing step (Procedure steps 1, 2, 4, 5 -- the nine-dimension
 walk) now runs inside a fresh subagent dispatch rather than directly in
 whatever context invoked the skill, per `SKILL.md`'s new Subagent
 dispatch section and rubric.md's *isolation for neutrality* trigger
-(Mechanism fit section). The earlier verdict here ("stays fully in the
+(Agentic operation mechanism-fit section). The earlier verdict here ("stays fully in the
 main thread ... not a side task whose intermediate results go
 unreferenced") was correct about the *unreferenced-results* trigger but
 missed the neutrality trigger: a main thread reviewing a skill it just
@@ -47,7 +47,7 @@ steer) while adding the isolation the earlier pass lacked. See the
 Verification addendum below for a live run of the revised procedure.
 
 **Skill vs. CLAUDE.md**: good fit. The six-step Procedure (read,
-mechanism fit, shape, portability, nine-dimension walk, verdict) is a
+Agentic operation mechanism-fit, shape, portability, nine-dimension walk, verdict) is a
 real procedure invoked situationally, not a fact Claude should hold in
 every session regardless of task -- exactly what belongs in a skill
 rather than always-loaded CLAUDE.md content.
@@ -59,7 +59,7 @@ boundary that is safety-adjacent rather than purely judgment -- "Never
 install eval tooling ... without the operator's go-ahead" -- checks its
 own backing conditionally against whatever environment it actually runs
 in: real deterministic backing (a PreToolUse hook, a permission rule) if
-that environment has one, an explicit Mechanism-fit gap if it does not.
+that environment has one, an explicit Agentic operation mechanism-fit gap if it does not.
 This is the correct portable posture for a safety-adjacent Stop boundary
 in a Portable-declared skill -- asserting a fixed answer either way (that
 it is always backed, or always prose-only) would itself be a defect,
@@ -69,7 +69,7 @@ reached its current state lives in this repository's own bookkeeping.
 
 **Skill-step vs. bundled script**: passes. This skill's own deterministic
 shape lane was delegated to `scripts/gitapex_check_skill_shape.py`, so applying
-the fifth Mechanism-fit check to this skill's own procedure finds no
+the fifth Agentic operation mechanism-fit check to this skill's own procedure finds no
 remaining step-level delegate-to-script finding.
 
 ## Portability level
@@ -447,7 +447,7 @@ it is matched too.
 
 Applicable, not N/A -- this skill ships `scripts/gitapex_check_skill_shape.py`
 (and its test, `scripts/test_gitapex_check_skill_shape.py`), the deterministic
-shape checker Step 3 above delegates to, per the Mechanism-fit section's
+shape checker Step 3 above delegates to, per the Agentic operation mechanism-fit section's
 own citation of that script as the shape lane's implementation.
 
 Walking the actual checklist: **solve, don't punt** -- the script raises
@@ -716,7 +716,7 @@ Established on the live subagent re-walk, not by inference.
 
 ## Verdict
 
-**Mechanism fit**: good fit overall. The one safety-adjacent Stop
+**Agentic operation mechanism-fit**: good fit overall. The one safety-adjacent Stop
 boundary (eval-tooling installs) checks its own backing conditionally
 against whatever environment it actually runs in, rather than asserting
 a fixed answer -- the correct portable posture for a Portable-declared

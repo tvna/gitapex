@@ -114,7 +114,7 @@
           ]
         }
       },
-      "description": "When gateWarranted is false, this is the review's own final verdict per SKILL.md's Mechanism-fit short-circuit -- findings, crossCuttingAxes, and coverageAttestation stay absent for that item, not empty-and-silent."
+      "description": "When gateWarranted is false, this is the review's own final verdict per SKILL.md's Deterministic-gate mechanism-fit short-circuit -- findings, crossCuttingAxes, and coverageAttestation stay absent for that item, not empty-and-silent."
     },
 
     "findings": {
