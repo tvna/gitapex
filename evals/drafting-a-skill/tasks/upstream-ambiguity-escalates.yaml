@@ -29,7 +29,7 @@ expected:
   # against invoking eliciting-a-design directly from the escalation
   # branch, and the escalation branch itself.
   exercises:
-    - "Never attempt to invoke `eliciting-a-design` directly from Step 7's"
+    - "Never attempt to invoke `eliciting-a-design` directly from Step 7's upstream-ambiguity escalation branch -- a `branch-plan-task` dispatch has no interactive-dialogue tooling to do so with; emit the `StageDeviated{action: escalate}` event and stop instead."
     - "step 7"
   output_icontains:
     - "escalate"

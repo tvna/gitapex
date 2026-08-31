@@ -17,6 +17,7 @@ spec:
       - untrusted-input-triage
       - screening-a-low-trust-contribution
       - diagnosing-a-failure
+      - scorer-gated-skill-edits
   executionRequirements:
     tools:
       read:
@@ -42,3 +43,9 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1558"
       summary: "Step 6's per-task screening dispatches screening-a-low-trust-contribution's checks 2-8 to the new agents/review-persona.md subagent type (tools: Read, Grep, Glob) instead of reasoning about the task's own diff directly in the main thread, which at that point holds mcp__github write access, git push, and unrestricted Bash. Isolates tool privilege only -- the separate calling-context-contamination axis is disclosed in review-persona.md's own Limits section, not resolved here."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1630"
+      summary: "Step 3 now also classifies whether a task's Planned ops edit an existing SKILL.md; task-decomposition.md's new Existing-skill-file edit floor section requires gitapex_check_skill_shape.py plus a formative-quality-dimensions.md sweep before such a task reports complete, unless the task's own Planned ops route it to scorer-gated-skill-edits via a stated scorer/held-out-split precondition; added to relatedTo."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1630"
+      summary: "the same issue's independent Step 8 adversarial review found the floor over- and under-reaching. Over: the sibling task rewrote formative-quality-dimensions.md row 8 into an artifact-producing Eval preparation instruction, so an unqualified sweep obliged every ordinary SKILL.md edit to author evals/ fixtures; the sweep now excludes row 8. Under: the floor binds the worktree-isolated task agent, which never reads this file -- both checks now go into its dispatch prompt in-band."
