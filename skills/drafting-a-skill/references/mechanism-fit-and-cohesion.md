@@ -1,52 +1,27 @@
-# Mechanism fit and cohesion: ownership boundaries
+# Cohesion and shared-script-parent policy: ownership boundaries
 
-Loaded when Step 2's gate, Step 5's cohesion self-check, or Step 7's
-domain-gap sweep is not already an obvious call -- for example, the
-candidate plausibly fits more than one mechanism, or a drafted Step
-touches multiple loosely-related outcomes and it isn't clear whether
-that's one skill or two. This file exists because three of this skill's
-own Steps sit close enough to `evaluating-skill-quality`'s own review
-procedure that the boundary has to be stated explicitly, not left to be
-inferred from each Step's own one-line description.
+Loaded when Step 3's cohesion self-check or Step 5's domain-gap sweep is
+not already an obvious call -- for example, a drafted Step touches
+multiple loosely-related outcomes and it isn't clear whether that's one
+skill or two. This file exists because two of this skill's own Steps sit
+close enough to `evaluating-skill-quality`'s own review procedure that
+the boundary has to be stated explicitly, not left to be inferred from
+each Step's own one-line description.
+
+`eliciting-a-design` owns the redirect-target judgment this file once
+carried for `drafting-a-skill`'s own former Step 2 (see
+<https://github.com/tvna/gitapex/issues/1619>: the Agentic operation
+mechanism-fit vehicle-selection gate, including the "this isn't a skill,
+redirect to X instead" criteria, moved upstream into that skill entirely)
+-- see that skill's own body for the current version of that judgment,
+not this file.
 
 ## Contents
 
-1. [Step 2's redirect targets, named](#step-2s-redirect-targets-named)
-2. [Step 5 and Step 7 are advisory, not a second grading](#step-5-and-step-7-are-advisory-not-a-second-grading)
-3. [Shared bundled-script parent: a placement policy](#shared-bundled-script-parent-a-placement-policy)
+1. [Step 3 and Step 5 are advisory, not a second grading](#step-3-and-step-5-are-advisory-not-a-second-grading)
+2. [Shared bundled-script parent: a placement policy](#shared-bundled-script-parent-a-placement-policy)
 
-## Step 2's redirect targets, named
-
-Step 2's own gate (in `SKILL.md`) lists four criteria for "this isn't a
-skill." Each has a concrete destination, not a vague "consider a
-different mechanism":
-
-- **Unconditionally-reliable action, or an absolute prohibition** -->
-  `evaluating-deterministic-gate-quality`. That skill owns hook/CI-gate
-  placement and design -- "deciding which of several possible mechanisms
-  should own a new policy" is explicitly named in its own description.
-  This skill does not write hooks itself (see `SKILL.md`'s Stop
-  boundaries); it stops at naming the redirect.
-- **Always-true fact, for a CLAUDE.md-shaped need** --> CLAUDE.md
-  directly, if the target is the root or a subdirectory instruction
-  file.
-- **Always-true fact or absolute rule, for a Subagent definition, Output
-  style, system-prompt-append configuration, or Auto-memory-shaped
-  need** --> `evaluating-context-channel-maturity`. That skill's own
-  description states the mirror-image relationship directly: "criterion
-  3 mirrors evaluating-skill-quality's own Mechanism-fit check from the
-  opposite artifact -- that skill asks whether a SKILL.md candidate
-  should be one of these channels instead; this skill asks whether
-  content already living in one of these channels should be a skill
-  instead." This skill is that first question, asked from the SKILL.md
-  side; `evaluating-context-channel-maturity` is the second, asked from
-  the channel side. Route a non-hook, non-CLAUDE.md channel-shaped need
-  there rather than guessing at that skill's own placement rules.
-- **Side task with results never referenced again** --> a subagent
-  dispatch inside whatever procedure needed the side task, not a new
-  skill of its own.
-
-## Step 5 and Step 7 are advisory, not a second grading
+## Step 3 and Step 5 are advisory, not a second grading
 
 `evaluating-skill-quality`'s own rubric states plainly, for the cohesion
 check: "This check has exactly one owner, per Contract discipline's
@@ -56,7 +31,7 @@ And for its own Blind spot pass: it runs as "a precondition step
 `evaluating-skill-quality`'s own procedure -- not a step this skill could
 duplicate without also duplicating that ownership.
 
-Step 5 (cohesion) and Step 7 (domain-gap sweep) exist anyway, for a
+Step 3 (cohesion) and Step 5 (domain-gap sweep) exist anyway, for a
 narrower reason than "grade this against the rubric": a draft with an
 obvious split or an obvious blind spot, caught here, avoids a wasted round
 trip to `evaluating-skill-quality`'s own review and back. Both Steps are
@@ -66,11 +41,11 @@ since this section's own job is the ownership rationale above (why the
 rubric's exact-owner language applies), not the output-format instruction
 itself.
 
-Practically, this means Step 5 borrows `evaluating-skill-quality`'s own
+Practically, this means Step 3 borrows `evaluating-skill-quality`'s own
 seven-way cohesion taxonomy (functional / sequential / communicational /
 procedural / temporal / logical / coincidental, from Stevens/Myers/
 Constantine, extended by Yourdon and Constantine) as a lens for looking at
-the draft, and Step 7 asks the same shape of question the Blind spot pass
+the draft, and Step 5 asks the same shape of question the Blind spot pass
 asks ("does this target's specific domain expose a quality concern no
 generic check would catch") -- without either Step re-deriving or
 restating a verdict evaluating-skill-quality will produce on its own
@@ -112,10 +87,10 @@ sources rather than invented for this skill:
 
 `evaluating-skill-quality`'s own bundled checkers
 (`gitapex_check_skill_shape.py`, `gitapex_scan_execution_requirements_drift.py`,
-which Step 8 runs against every draft) already satisfy this policy under
+which Step 6 runs against every draft) already satisfy this policy under
 all three tiers today: that skill is this repository's de facto stable,
 closure-consistent owner of "does a skill directory have the right
-shape," so Step 8 reaches into its `scripts/` directory rather than
+shape," so Step 6 reaches into its `scripts/` directory rather than
 vendoring a copy. This policy's own future blocking-gate threshold, and
 whether it should be mechanized into `gitapex_check_skill_shape.py`
 itself, are explicitly out of scope here -- deferred to a future issue,
