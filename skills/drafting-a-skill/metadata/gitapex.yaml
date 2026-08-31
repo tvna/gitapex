@@ -151,6 +151,11 @@ spec:
       summary: "a fifth independent dispatch (commit 93110b56) confirmed axes 2/4/8 and dimension 4 now clear -- dimension 6 down to axis 7's already-accepted TOCTOU residual -- but found a new dimension-5 contradiction: Step 8 unconditionally mandates sweeping formative-quality-dimensions.md, while Notes claimed only gitapex-cross-links.md was required reading on the ordinary path ('one exception' of six). Corrected: now states two required-reading references, naming both and why each is mandatory"
       outcome:
         baseCommit: "93110b56a36b377cd549924cf0675996e96f1364"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "a sixth independent dispatch (commit f0d6af89) confirmed the SKILL.md-side dimension-5 fix holds, and dimension 6 stays down to axis 7's own already-accepted residual -- but found a mirrored staleness one file over: formative-quality-dimensions.md row 5 still claimed only one required-reading exception and that SKILL.md's Notes 'states this identically', both now false. Corrected: row 5 names both required references and why, matching Notes exactly"
+      outcome:
+        baseCommit: "f0d6af89e4b3b4bcb4f0dc65c039b34844e9be8a"
   skillDependencies:
     requires:
       - evaluating-skill-quality
