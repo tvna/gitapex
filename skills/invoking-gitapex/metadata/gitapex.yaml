@@ -60,3 +60,6 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1173"
       summary: "Operator caught that Step 2's own body still named the 'merge-pipeline-redesign' design record by that bare name -- a Claude Artifact title with no repository-relative meaning, unresolvable by any reader without that specific session's own access, not merely a broken link once checked in like a docs/ path. Removed from the body; the decision entry above already carries this same disclosure at the metadata layer, where a reviewer-only citation belongs."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1173"
+      summary: "Operator caught the `compatibility` field presupposed Claude Code: it named 'a Claude Code, Cursor, or Copilot SessionStart hook' as one shared mechanism, but 'SessionStart' is Claude Code's own event name -- the other two use differently-named equivalents, per `hooks/gitapex-session-start.sh`'s own per-platform output shapes. Reworded to state the generic requirement first, platforms demoted to non-exhaustive examples."

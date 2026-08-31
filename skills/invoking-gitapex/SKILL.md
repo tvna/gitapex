@@ -1,7 +1,7 @@
 ---
 name: invoking-gitapex
 description: Use at every session start -- establishes gitapex's own skill-invocation discipline, requiring a relevant skill be checked for and invoked before any response or action, including a clarifying question.
-compatibility: "Reliable session-start delivery depends on a Claude Code, Cursor, or Copilot SessionStart hook; on a surface without hook support this skill only fires via ordinary Skill-tool invocation."
+compatibility: "Reliable session-start delivery depends on the calling harness supporting a session-start hook that can inject text into a fresh session's own context -- Claude Code, Cursor, and Copilot are confirmed to have one as of this writing, not an exhaustive list. On a harness without one, this skill only fires via ordinary Skill-tool invocation."
 ---
 
 # Invoking gitapex
