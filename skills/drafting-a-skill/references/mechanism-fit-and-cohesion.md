@@ -120,4 +120,5 @@ vendoring a copy. This policy's own future blocking-gate threshold, and
 whether it should be mechanized into `gitapex_check_skill_shape.py`
 itself, are explicitly out of scope here -- deferred to a future issue,
 once explicit `stable` declarations are common enough in this repository
-to judge readiness (see this skill's own `SKILL.md` Non-goals).
+to judge readiness (see this skill's own `metadata/gitapex.yaml`
+`references` decision log, `kind: elision`).

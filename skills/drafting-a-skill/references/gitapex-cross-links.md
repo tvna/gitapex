@@ -25,8 +25,8 @@ python3 skills/evaluating-skill-quality/scripts/gitapex_scan_execution_requireme
 ```
 
 Both are read-only against the target directory; run them once the draft
-directory exists on disk, before Step 9's handoff, and fix every finding
-they report -- Step 9 does not run either check itself.
+directory exists on disk, before Step 10's handoff, and fix every finding
+they report -- Step 10 does not run either check itself.
 
 ## Metadata schema and shape checker
 

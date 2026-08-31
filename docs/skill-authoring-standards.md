@@ -14,12 +14,13 @@ in the first place. Rules 1 and 4 are enforced by
 `no-illustrative-model-identifier` and `no-raw-angle-bracket-placeholder`
 checks) against every `SKILL.md` and `references/*.md` file in this
 repository's own `skills/` tree, run by `tests/test_gitapex_repository_skill_shape.py`
-on every push and PR. Rules 2, 3, and 5 stay judgment calls -- detecting a
-git-log-position assertion, grading test-fixture completeness, or matching
-a citation's own wording against a canon needs semantic understanding a
-script cannot reliably provide -- apply them by hand at authoring and
-review time, the same way this file's own source retrospectives (#20,
-#122) already did, until a broader eval-suite or `check_skills.py`-
+on every push and PR. Rules 2, 3, 5, and 6 stay judgment calls -- detecting a
+git-log-position assertion, grading test-fixture completeness, matching a
+citation's own wording against a canon, or judging whether a given body
+section is genuinely load-bearing for an invoking model all need semantic
+understanding a script cannot reliably provide -- apply them by hand at
+authoring and review time, the same way this file's own source retrospectives
+(#20, #122) already did, until a broader eval-suite or `check_skills.py`-
 equivalent gate exists for that category (tracked separately, see issue
 #11 and #20's gate proposal 1). Content outside
 `skills/` (this file included) is not covered by the deterministic
@@ -190,3 +191,58 @@ to satisfy the sentence-level test that motivated it in the first place.
 Enforcement: none yet -- a judgment call at authoring/review time, the
 same as Rules 2 and 3 above, until a future checker can verify a
 citation's own wording matches this canon.
+
+## 6. A skill's body is behavior, not disclosure
+
+A `SKILL.md` body section (Precondition, Postcondition, Non-goals,
+Output, or any other named section) earns its place only when a model
+reading the drafted skill at invocation time needs it to act -- a real
+caller-side gate, a real handoff guarantee, or a real report the
+conductor must hand back. Body content is earned by being Steps a model
+executes, or one of two confirmed-operative non-Step exceptions: `Stop
+boundaries` (real execution-time constraints) and `Related skills`
+(real collision or dependency information a model needs to route
+correctly). Everything else non-behavioral -- creation background,
+change history, a deliberate scope cut, why a rejected alternative
+lost, that a discipline is passively injected with no discrete
+entry/exit condition -- belongs in the skill's own
+`metadata/gitapex.yaml` sidecar (its `references` decision log, `kind:
+elision` for a deliberate scope cut, or `executionRequirements`), never
+restated in the body.
+
+This rule is background/rationale for a skill author to apply by hand
+while drafting or reviewing; no skill body may cite this document to
+satisfy it -- `skills/drafting-a-skill/SKILL.md`'s own Step 4 states the
+operative version of this rule directly, inline, consistent with that
+skill's own `Broad` capability declaration (a `Broad` skill inlines
+enough guidance directly rather than relying only on an on-demand
+reference). When a repository-level prohibition would otherwise
+invalidate a piece of content a skill's body wants to carry (this file's
+own non-redistribution outside `skills/`, for example), try a
+conditional reference first -- a stated fallback such as "if X, treat
+this as illustrative and substitute Y" -- before falling back to
+metadata-only recording; that fallback never rescues a citation to
+something categorically absent regardless of context (a bare-prose
+`docs/*.md` citation, since this directory is never redistributed to
+any consumer of a skill as a plugin), only content whose validity
+genuinely varies by context.
+
+Known conflict, disclosed rather than silently resolved:
+`skills/evaluating-skill-quality/SKILL.md`'s own Portability section
+still instructs the opposite for one content class -- "Extended
+rationale belongs in a footer `## Notes` section of `SKILL.md`" -- and
+26 of this repository's 29 skills carry exactly such a footer today,
+`drafting-a-skill`'s own included. Issue #1583 scoped its dogfooding
+migration to that one skill's `Non-goals` section alone, and a skill may
+not edit `evaluating-skill-quality` from inside its own change, so this
+rule is stated here without a retroactive sweep and without amending
+that instruction. Which of the two wins for portability/capability
+rationale is an open decision needing its own issue; until it is made,
+an existing `## Notes` footer is not a finding against this rule, and a
+new skill's author should record that rationale in the sidecar.
+
+Found via: `skills/drafting-a-skill/SKILL.md`'s own Step 4 forced every
+drafted skill to carry Precondition/Postcondition sections
+unconditionally, and its own Non-goals section was itself an example of
+reviewer-only content sitting in the body instead of the metadata
+sidecar (issue #1583).

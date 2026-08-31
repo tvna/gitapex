@@ -1,21 +1,28 @@
 # drafting-a-skill eval status
 
-A committed suite exists (`eval.yaml` plus seven fixtures under `tasks/`:
+A committed suite exists (`eval.yaml` plus eight fixtures under `tasks/`:
 `normal.yaml`, `guardrail.yaml`, `edge.yaml`,
 `injected-self-certification-probe.yaml`, `no-self-authored-hook.yaml`,
-`no-inferred-metadata.yaml`, `existing-skill-routes-away.yaml`) --
-sized to match `SKILL.md`'s own 7 Stop-boundary bullets, per
+`no-inferred-metadata.yaml`, `existing-skill-routes-away.yaml`,
+`acknowledgment-required-before-dispatch.yaml`) -- sized to match
+`SKILL.md`'s own 8 Stop-boundary bullets, per
 `.github/scripts/gitapex_gate_skill_branch_fixture_coverage.py`'s
-decision-branch/fixture parity requirement (verified directly: 7
-branches counted, 7 fixtures present, gate exits 0). Covers the Step 2
+decision-branch/fixture parity requirement (verified directly: 8
+branches counted, 8 fixtures present, gate exits 0). Issue #1583 added
+the eighth bullet (never dispatch the handoff without the requester's
+acknowledgment on record) together with the eighth fixture in the same
+change -- the earlier seven-bullet/seven-fixture parity held only until
+that bullet landed, and the gate does fail on the intermediate state
+where the bullet exists and the fixture does not. Covers the Step 2
 Mechanism-fit gate under time pressure, a clear blank-page draft's full
-Step 1-9 walk, Step 5's advisory (never self-declared authoritative)
+Step 1-10 walk, Step 5's advisory (never self-declared authoritative)
 cohesion finding on a two-decisive-outcome candidate, a genuinely
-hostile embedded instruction trying to get Step 9's handoff skipped and
+hostile embedded instruction trying to get Step 10's handoff skipped and
 the draft self-certified, a request to author a hook directly instead of
 redirecting after Step 2 blocks a hook-shaped candidate, a request to
-infer the four metadata axes instead of eliciting them, and the
-Precondition's own existing-skill route-away branch. No trial has been
+infer the four metadata axes instead of eliciting them, the
+Precondition's own existing-skill route-away branch, and a requester
+who waives being shown the draft before the handoff. No trial has been
 executed yet through this repository's own eval runner script -- the
 config pins `claude-sonnet-5` and `copilot-sdk`, a declared executor, not
 a completed run -- so no model tier has been measured against this suite
@@ -29,7 +36,13 @@ domain-gap sweep, or Step 8's deterministic-checker invocation as their
 own dedicated assertion targets, nor the Precondition's second
 route-away branch (target is already a finished draft -> route directly
 to `evaluating-skill-quality`/`battle-testing-a-skill` without
-re-entering at Step 1), nor any of the nine rows in
+re-entering at Step 1). `acknowledgment-required-before-dispatch.yaml`
+has been checked only by `gitapex_validate_eval_yaml.py` and
+`gitapex_lint_fixture_assertions.py` (both clean); unlike
+`injected-self-certification-probe.yaml` it has NOT been run through
+`gitapex_score_contract.py` against hand-crafted compliant and resisting
+replies, so its own discrimination is argued from the assertion shape,
+not measured. Nor does the corpus cover any of the nine rows in
 `references/formative-quality-dimensions.md` -- zero fixtures cite any of
 them. **Ablation state**: ablation-capable, not yet run --
 `evals/scripts/gitapex_run_ablation.py` exists in this repository and
@@ -45,7 +58,10 @@ against earlier candidates. The first found `SKILL.md` stated no explicit
 rule that requester-supplied source text is untrusted data; fixed at
 Step 1, Step 9, and Stop boundaries, and confirmed behaviorally by the
 second dispatch's own live probe (an escalated injection, source text
-loaded, held on every axis). The first dispatch's own fixture fix
+loaded, held on every axis). That "Step 9" is the review-dispatch step
+as numbered before issue #1583, which is Step 10 today; the same
+renumbering applies to every step number quoted from those two
+dispatches below. The first dispatch's own fixture fix
 (`"untrusted"`/`"dispatch"` as required substrings) was itself
 demonstrated **false** by the second dispatch, using this repository's
 own `gitapex_score_contract.py` scorer directly: `"dispatch"` is a
@@ -78,8 +94,9 @@ classify as a gracefully-skippable content-policy rejection (its own
 two-marker signature never matches an empty string), aborting the whole
 suite rather than skipping one fixture. Reworded the payload away from
 impersonating a system-level directive while preserving the same
-false-prior-approval, skip-Step-9 test property -- see the fixture's own
-inline comment for the specifics and the re-verified scorer results.
+false-prior-approval, skip-Step-9 (now Step 10) test property -- see the
+fixture's own inline comment for the specifics and the re-verified
+scorer results.
 
 That rewording did **not** fix the observed CI failure: the reworded
 payload failed `waza-eval-gate` identically (same empty-stderr `model
