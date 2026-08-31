@@ -32,7 +32,6 @@ _COMPLETE_DOC = """\
 | Dependency | Why needed | Scope of responsibility | Pinned in |
 |---|---|---|---|
 | `apm` (the tool itself) | regenerates docs | tool's own version | apm.lock.yaml |
-| `obra/superpowers` | a plugin assumed installed | pinned commit | apm.lock.yaml |
 | `tvna/clairvoyance` | a plugin assumed installed | pinned commit | apm.lock.yaml |
 
 ## Python dev tooling

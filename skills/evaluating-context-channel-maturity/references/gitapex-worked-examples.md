@@ -190,17 +190,14 @@ exact actor class this file's content steers, since it is Claude Code's
 own root-level project instructions; `37c7621e`, the commit that reduced
 `CLAUDE.md` to its import line, shares that author too. Four data points
 from the same actor class strengthens this finding rather than weakening
-it. Per
-Criterion 1 above, the repository's own checkable review gate does not
-require a human approval before any of these commits merges
-(`required_approving_review_count: 0`, and `.github/CODEOWNERS` does not
-cover either file); its one commit-scoped independent-review safeguard,
-`independent-review-pending`, is a presence check on recorded text that a
-same-actor-class dispatch can itself satisfy, not a verified
-different-reviewer guarantee; and the separate `PreToolUse` deny on
-`mcp__github__merge_pull_request` guarantees only that a human executes
-the merge action, not that a human authored or independently reviewed the
-content beforehand. Nothing here infers an answer from the file's own
+it. Per Criterion 1 above, none of this repository's checkable
+review-gate mechanisms (the zero-required-approval ruleset setting,
+`.github/CODEOWNERS`'s narrow scope, `independent-review-pending`'s
+presence-only check, or the merge-execution-only `PreToolUse` deny)
+requires or verifies that a different actor than the content's own
+author reviewed it before merge -- this criterion adds only the one fact
+Criterion 1 did not: all five commits touching `AGENTS.md`/`CLAUDE.md`
+share that same author. Nothing here infers an answer from the file's own
 polish, the way the Stop boundaries warn against -- it is read directly
 from `git log` and the ruleset file Criterion 1 already cites, the same
 two checkable sources this criterion's own definition asks a reviewer to

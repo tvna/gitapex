@@ -62,7 +62,7 @@ that is a normal outcome, not a failure to work around. The server itself needs
 no package install: `server.cjs` imports only Node's own `crypto`/`http`/`fs`/
 `path` and speaks WebSocket directly, so there is nothing to `npm install`.
 
-**No outbound third-party requests.** The obra/superpowers `brainstorming`
+**No outbound third-party requests.** The `obra/superpowers` `brainstorming`
 companion this was derived from - a dependency since retired - embedded an
 upstream brand logo fetched from `primeradiant.com` on each screen load. This
 native rewrite is a diverged, gitapex-owned skill under a different name, not

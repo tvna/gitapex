@@ -28,27 +28,21 @@ edge on Tasks 1 and 2).
 **Source ACM rows (quoted verbatim from issue #1597's re-verified
 Acceptance Criteria Map):**
 
-Original row 1: "`CLAUDE.md`'s skill-name call-outs should not duplicate
-what the named skill's own description already covers | For each of the
-six call-outs, keep the section's principle (e.g. \"enumerate assumptions
-before implementing\", \"don't settle for LGTM\") and drop or rephrase
-only the \"the X skill does Y\" clause once X's own `description` already
-states it | Edit `CLAUDE.md` sections 1, 2, 3, 4, and 6 -- section by
-section, since section 3's `dispatching-parallel-agents`/`subagent-
-driven-development` pairing and section 6's `receiving-code-review`
-reference gitapex skills that absorbed the function rather than kept the
-name (`executing-a-branch-plan`, `drafting-a-pr-to-merge`/`reviewing-an-
-artifact`)."
+Original row 1:
 
-Scope-update row "The original six-call-out trim's target file changes
-once AGENTS.md becomes canonical": "Apply this issue's original first ACM
-row's edits to `AGENTS.md` instead of `CLAUDE.md`."
+| Criterion | Interpretation | Planned ops |
+|---|---|---|
+| `CLAUDE.md`'s skill-name call-outs should not duplicate what the named skill's own description already covers | For each of the six call-outs, keep the section's principle (e.g. "enumerate assumptions before implementing", "don't settle for LGTM") and drop or rephrase only the "the X skill does Y" clause once X's own `description` already states it | Edit `CLAUDE.md` sections 1, 2, 3, 4, and 6 -- section by section, since section 3's `dispatching-parallel-agents`/`subagent-driven-development` pairing and section 6's `receiving-code-review` reference gitapex skills that absorbed the function rather than kept the name (`executing-a-branch-plan`, `drafting-a-pr-to-merge`/`reviewing-an-artifact`) |
 
-Scope-update row "AGENTS.md's remaining sections should not duplicate what
-a gitapex-authored (gitapex:*) skill's own description already covers,
-beyond the original six call-outs": "Edit `AGENTS.md` sections 1, 2, 3 for
-the newly-identified lines, same drop-or-rephrase discipline as the
-original row" -- the newly-identified lines being section 1's
+Scope-update rows:
+
+| Criterion | Planned ops |
+|---|---|
+| The original six-call-out trim's target file changes once AGENTS.md becomes canonical | Apply this issue's original first ACM row's edits to `AGENTS.md` instead of `CLAUDE.md` |
+| AGENTS.md's remaining sections should not duplicate what a gitapex-authored (gitapex:*) skill's own description already covers, beyond the original six call-outs | Edit `AGENTS.md` sections 1, 2, 3 for the newly-identified lines, same drop-or-rephrase discipline as the original row |
+| Stop apm compile from being AGENTS.md's/CLAUDE.md's content source; AGENTS.md becomes a plain, hand-maintained canonical file | Strip the HTML-comment header lines (compile-tool name, build identifier, source) and the italic regenerate-instruction footer from `AGENTS.md`, leaving only the hand-maintained heading and body content |
+
+The second scope-update row's "newly-identified lines" are: section 1's
 self-correcting-phrase STOP rule (`gitapex:stop-and-replan`), section 2's
 "See the systematic-debugging skill" line (`gitapex:diagnosing-a-failure`),
 section 3's "auto-subscribe to CI... drive to a terminal state" and
@@ -58,12 +52,6 @@ issue... classify each repair" rules (`gitapex:merge-retrospective`), and
 section 3's "Keep GitHub posts ASCII" / "Audit every outward-facing
 artifact... for provenance markers" rules
 (`gitapex:outward-artifact-preflight`).
-
-Scope-update row "Stop apm compile from being AGENTS.md's/CLAUDE.md's
-content source; AGENTS.md becomes a plain, hand-maintained canonical
-file": "Strip the HTML-comment header lines (compile-tool name, build
-identifier, source) and the italic regenerate-instruction footer from
-`AGENTS.md`, leaving only the hand-maintained heading and body content."
 
 **Implementation guidance:**
 
@@ -103,12 +91,9 @@ identifier, source) and the italic regenerate-instruction footer from
 
 **Source ACM row (quoted verbatim, scope-update section):**
 
-"`CLAUDE.md` becomes a one-line pointer to the new canonical `AGENTS.md`
-| Per the repository owner's explicit instruction, `CLAUDE.md`'s entire
-content becomes the single line `@AGENTS.md` (Claude Code's own
-file-import syntax), replacing the current full duplicate body and
-compiled-file header/footer | Replace `CLAUDE.md`'s full content with
-`@AGENTS.md`."
+| Criterion | Interpretation | Planned ops |
+|---|---|---|
+| `CLAUDE.md` becomes a one-line pointer to the new canonical `AGENTS.md` | Per the repository owner's explicit instruction, `CLAUDE.md`'s entire content becomes the single line `@AGENTS.md` (Claude Code's own file-import syntax), replacing the current full duplicate body and compiled-file header/footer | Replace `CLAUDE.md`'s full content with `@AGENTS.md` |
 
 **Implementation guidance:**
 
@@ -128,13 +113,9 @@ compiled-file header/footer | Replace `CLAUDE.md`'s full content with
 
 **Source ACM row (quoted verbatim, original issue #1597 row 2):**
 
-"Remove the `obra/superpowers` apm dependency | The package should no
-longer be declared or vendored | Remove `obra/superpowers` from
-`apm.yml`'s `devDependencies.apm`; prune `apm_modules/obra/superpowers/`;
-re-run the apm lock step so `apm.lock.yaml` reflects the removal | `apm.yml`
-no longer lists it; `apm_modules/obra/superpowers/` is absent;
-`.github/scripts/gitapex_scan_apm_manifest_drift.py`'s drift gate still
-passes."
+| Criterion | Interpretation | Planned ops | Proof method |
+|---|---|---|---|
+| Remove the `obra/superpowers` apm dependency | The package should no longer be declared or vendored | Remove `obra/superpowers` from `apm.yml`'s `devDependencies.apm`; prune `apm_modules/obra/superpowers/`; re-run the apm lock step so `apm.lock.yaml` reflects the removal | `apm.yml` no longer lists it; `apm_modules/obra/superpowers/` is absent; `.github/scripts/gitapex_scan_apm_manifest_drift.py`'s drift gate still passes |
 
 **Implementation guidance:**
 
@@ -168,12 +149,9 @@ passes."
 
 **Source ACM row (quoted verbatim, original issue #1597 row 3):**
 
-"`docs/motivation.md`'s sequence diagrams should reflect the current
-review mechanism, not the retired `requesting-code-review` reference |
-The `[superpowers, Task subagent]` tag is a stale label for a step now
-served by `drafting-a-pr-to-merge`/`reviewing-an-artifact` | Update both
-occurrences (lines 40, 103) to name the current mechanism instead of
-`requesting-code-review [superpowers, Task subagent]`."
+| Criterion | Interpretation | Planned ops |
+|---|---|---|
+| `docs/motivation.md`'s sequence diagrams should reflect the current review mechanism, not the retired `requesting-code-review` reference | The `[superpowers, Task subagent]` tag is a stale label for a step now served by `drafting-a-pr-to-merge`/`reviewing-an-artifact` | Update both occurrences (lines 40, 103) to name the current mechanism instead of `requesting-code-review [superpowers, Task subagent]` |
 
 **Implementation guidance:**
 
@@ -196,11 +174,9 @@ occurrences (lines 40, 103) to name the current mechanism instead of
 
 **Source ACM row (quoted verbatim, original issue #1597 row 4):**
 
-"`skills/setup-gitapex-toolchain/SKILL.md` should describe the
-post-removal dependency set | Its `obra/superpowers` references describe
-a devDependency that will no longer exist | Update the file's `apm.yml`
-devDependency list and apm-managed hook-entry description to drop
-`obra/superpowers`."
+| Criterion | Interpretation | Planned ops |
+|---|---|---|
+| `skills/setup-gitapex-toolchain/SKILL.md` should describe the post-removal dependency set | Its `obra/superpowers` references describe a devDependency that will no longer exist | Update the file's `apm.yml` devDependency list and apm-managed hook-entry description to drop `obra/superpowers` |
 
 **Implementation guidance:**
 
@@ -220,19 +196,10 @@ devDependency list and apm-managed hook-entry description to drop
 
 **Source ACM rows (quoted verbatim):**
 
-Original row 5: "`skills/auditing-agent-product-scope/references/
-middleware-inventory.md`'s scope ledger should reflect the removal | Its
-`obra/superpowers` row currently states gitapex's own skills assume it is
-installed, which becomes false | Update or remove that table row once the
-dependency is gone."
-
-Scope-update row: "`skills/auditing-agent-product-scope/references/
-middleware-inventory.md`'s two apm-compile-regenerates-CLAUDE.md/AGENTS.md
-descriptions should reflect the retirement | Both the Class B tools table
-row and the dedicated `## apm` section's row describe a role `apm` no
-longer has for these two files | Update both rows to describe `apm`'s
-remaining role (plugin-dependency installer via `apm install`) without
-the apm-compile/regenerates-CLAUDE.md/AGENTS.md claim."
+| Row | Criterion | Interpretation | Planned ops |
+|---|---|---|---|
+| Original row 5 | `skills/auditing-agent-product-scope/references/middleware-inventory.md`'s scope ledger should reflect the removal | Its `obra/superpowers` row currently states gitapex's own skills assume it is installed, which becomes false | Update or remove that table row once the dependency is gone |
+| Scope-update row | `skills/auditing-agent-product-scope/references/middleware-inventory.md`'s two apm-compile-regenerates-CLAUDE.md/AGENTS.md descriptions should reflect the retirement | Both the Class B tools table row and the dedicated `## apm` section's row describe a role `apm` no longer has for these two files | Update both rows to describe `apm`'s remaining role (plugin-dependency installer via `apm install`) without the apm-compile/regenerates-CLAUDE.md/AGENTS.md claim |
 
 **Implementation guidance:**
 
@@ -259,16 +226,9 @@ the apm-compile/regenerates-CLAUDE.md/AGENTS.md claim."
 
 **Source ACM row (quoted verbatim, original issue #1597 row 6):**
 
-"`skills/eliciting-a-design/`'s Supersession note and `.superpowers/
-brainstorm/` directory name should reflect that the superseded skill is
-no longer installed | The Supersession note is a migration-era
-compatibility note (per the repository owner), not evidence of an active
-dependency, so it needs wording cleanup rather than removal of the
-concept it records | Tidy the wording in `skills/eliciting-a-design/
-SKILL.md` and `references/visual-companion.md`'s Supersession sections to
-state the dependency has been retired; consider renaming the
-`.superpowers/brainstorm/` runtime-state directory to drop the
-now-inaccurate vendor name."
+| Criterion | Interpretation | Planned ops |
+|---|---|---|
+| `skills/eliciting-a-design/`'s Supersession note and `.superpowers/brainstorm/` directory name should reflect that the superseded skill is no longer installed | The Supersession note is a migration-era compatibility note (per the repository owner), not evidence of an active dependency, so it needs wording cleanup rather than removal of the concept it records | Tidy the wording in `skills/eliciting-a-design/SKILL.md` and `references/visual-companion.md`'s Supersession sections to state the dependency has been retired; consider renaming the `.superpowers/brainstorm/` runtime-state directory to drop the now-inaccurate vendor name |
 
 **Implementation guidance:**
 
@@ -298,16 +258,9 @@ shared branch.
 
 **Source ACM row (quoted verbatim, scope-update section):**
 
-"`skills/evaluating-context-channel-maturity/references/gitapex-worked-
-examples.md`'s root-CLAUDE.md worked example should not reason from the
-now-false apm-compiled-file premise | Criterion 1's narrative (the
-compiled-file footer quote, apm-compile regeneration-commit history, and
-the note that sibling AGENTS.md shares that same compile-step origin)
-describes a mechanism this issue retires | Rewrite Criterion 1's
-narrative and re-derive its verdict from the new hand-maintained-file
-provenance (direct commits, no compile step); spot-check whether this
-changes the criterion's PASS/PLAUSIBLE verdict rather than assuming it is
-unchanged."
+| Criterion | Interpretation | Planned ops |
+|---|---|---|
+| `skills/evaluating-context-channel-maturity/references/gitapex-worked-examples.md`'s root-CLAUDE.md worked example should not reason from the now-false apm-compiled-file premise | Criterion 1's narrative (the compiled-file footer quote, apm-compile regeneration-commit history, and the note that sibling AGENTS.md shares that same compile-step origin) describes a mechanism this issue retires | Rewrite Criterion 1's narrative and re-derive its verdict from the new hand-maintained-file provenance (direct commits, no compile step); spot-check whether this changes the criterion's PASS/PLAUSIBLE verdict rather than assuming it is unchanged |
 
 **Implementation guidance:**
 
