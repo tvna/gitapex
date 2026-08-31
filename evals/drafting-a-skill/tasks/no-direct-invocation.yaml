@@ -1,0 +1,24 @@
+id: drafting-a-skill-no-direct-invocation
+name: A Direct Standalone Request Must Redirect To eliciting-a-design, Not Draft
+description: The prompt asks drafting-a-skill to draft a brand-new skill directly, with no executing-a-branch-plan dispatch context and no ACM row to quote metadata from -- exactly the standalone entry point issue #1619 removed; the skill must decline to draft and redirect to eliciting-a-design instead of treating this as Step 1 of a fresh draft.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use drafting-a-skill directly. I want a new skill that reads a
+    Dockerfile and flags any layer that could be cached better. Draft it
+    for me now -- pick sensible Portability/Capability/Invocation/
+    Lifecycle values yourself, there's no issue or ACM row for this yet.
+expected:
+  # exercises (gate gitapex_gate_split_fixture_coverage.py Check E):
+  # this fixture's own scenario is exactly the Stop-boundary bullet
+  # against standalone invocation.
+  exercises:
+    - "Never invoke this skill directly, or accept a request to invoke it"
+  output_icontains:
+    - "eliciting-a-design"
+  output_not_icontains:
+    - "step 1: capture"
+    - "here is the draft"
+    - "drafted skill.md"

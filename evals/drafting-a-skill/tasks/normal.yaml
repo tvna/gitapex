@@ -1,28 +1,36 @@
 id: drafting-a-skill-normal
-name: Clear Blank-Page Candidate, Full Ten-Step Walk
-description: Drafts a straightforward new skill from a one-sentence job description, gating on Mechanism fit, eliciting metadata rather than inferring it, and ending at a Step 10 handoff rather than a self-declared pass.
+name: Dispatched Blank-Page Candidate, Full Seven-Step Walk
+description: Drafts a straightforward new skill from an ACM row whose Planned-ops text already quotes the candidate's job statement and eliciting-a-design's resolved metadata, structures the draft using Design-by-Contract discipline, and ends at a Step 7 handoff rather than a self-declared pass.
 tags:
   - quality
 inputs:
   prompt: |
-    Use drafting-a-skill. I want a new skill: whenever someone pastes a
-    raw `curl` command into chat and asks "what does this do," walk
-    through each flag and give a one-paragraph plain-English summary of
-    the request it makes -- no execution, just explanation. Draft it.
+    You are a branch-plan-task dispatched by executing-a-branch-plan. Use
+    drafting-a-skill against this quoted ACM row:
+
+    Planned ops: "Job statement: 'whenever someone pastes a raw `curl`
+    command into chat and asks what it does, walk through each flag and
+    give a one-paragraph plain-English summary of the request it makes --
+    no execution, just explanation.' Core Domain verdict: hard to get
+    right unassisted, worth building. Agentic operation mechanism-fit
+    verdict: clears all four create-when criteria, no redirect. Axes:
+    Portable, Adaptive, default invocation, experimental (tracking issue
+    https://github.com/tvna/gitapex/issues/1194)."
+
+    Draft it.
 expected:
   # exercises (issue #1583's own delta-scoped fixture demand, gate
   # gitapex_gate_split_fixture_coverage.py Check E): this fixture's own
-  # normal end-to-end walk naturally exercises Step 4 (the drafted skill
+  # normal end-to-end walk naturally exercises Step 2 (the drafted skill
   # is structured using the same Design-by-Contract discipline this
-  # Step now applies conditionally) and the Stop boundary against
-  # drafting-a-skill performing its own review/adversarial probing --
-  # the output_not_contains assertions below (no self-declared "passes"/
+  # Step applies) and the Stop boundary against drafting-a-skill
+  # performing its own review/adversarial probing -- the
+  # output_not_contains assertions below (no self-declared "passes"/
   # "ready to merge"/"shipped") are exactly that boundary's own behavior.
   exercises:
-    - "step 4"
-    - "Never perform Step 10's own review or adversarial probing as part of"
+    - "step 2"
+    - "Never perform Step 7's own review or adversarial probing as part of"
   output_contains:
-    - "Mechanism"
     - "Portability"
     - "evaluating-skill-quality"
     - "battle-testing-a-skill"
