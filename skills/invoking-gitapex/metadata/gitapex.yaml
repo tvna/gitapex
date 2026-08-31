@@ -63,3 +63,6 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1173"
       summary: "Operator caught the `compatibility` field presupposed Claude Code: it named 'a Claude Code, Cursor, or Copilot SessionStart hook' as one shared mechanism, but 'SessionStart' is Claude Code's own event name -- the other two use differently-named equivalents, per `hooks/gitapex-session-start.sh`'s own per-platform output shapes. Reworded to state the generic requirement first, platforms demoted to non-exhaustive examples."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1173"
+      summary: "An independent reviewing-an-artifact dispatch, re-checking the compatibility-field fix, found `hooks/hooks.json`'s own top-level description still described only 'PreToolUse/PostToolUse gates ... Claude Code tool-call matchers,' unchanged by this PR's own new SessionStart entry -- a SessionStart hook is neither. Fixed: description now names both."
