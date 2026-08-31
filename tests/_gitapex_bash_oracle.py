@@ -111,9 +111,11 @@ capture file, then exit 0. No ``eval``, no argument parsing, no branching
 on its own input -- it cannot be made to do anything other than record how
 it was called, regardless of what a generated command passes it.
 
-The one exception is :func:`_write_self_backgrounding_stand_in` below,
-private to this module's own timeout/process-group proof test (never used
-by a real classifier consumer) -- see its own docstring for why it is
+The two exceptions are :func:`_write_self_backgrounding_stand_in` and
+:func:`_write_rlimit_reporting_stand_in` below, each private to one of
+this module's own proof-method tests (the timeout/process-group proof and
+issue #1606's own headroom regression test respectively), never used by a
+real classifier consumer -- see their own docstrings for why they are
 deliberately not inert.
 
 Safety design of the runner
@@ -184,7 +186,8 @@ directly.
 
 Proof-method tests
 -------------------
-Four tests below prove the design claims above, each directly:
+Five tests below exercise this module directly -- (a)-(d) prove the design
+claims above, (e) is issue #1606's own regression test:
 
 (a) :func:`test_stand_in_tool_resolves_but_real_system_binary_is_unreachable`
     -- a stand-in-only tool name resolves and runs; a real system binary
@@ -208,6 +211,12 @@ Four tests below prove the design claims above, each directly:
     ``>``, a space, a backtick, ``$``, ...), and accepts every real
     vocabulary token both classifier tables carry today, so that closure
     claim is enforced rather than merely asserted in prose.
+(e) :func:`test_default_nproc_headroom_survives_ambient_process_load` --
+    issue #1606's own regression test: under deliberately inflated
+    real-uid ambient process load, the ``RLIMIT_NPROC`` value actually
+    applied to the generated command's own child (read back from that
+    child) still clears the pre-#1606 fixed default by the whole ambient
+    count, and the run does not falsely time out.
 """
 
 from __future__ import annotations
@@ -269,6 +278,57 @@ def resolve_bash() -> str:
     return path
 
 
+def write_stand_ins(tool_names: Iterable[str], stand_in_dir: pathlib.Path, capture_file: pathlib.Path) -> None:
+    """Write one genuinely inert stand-in script per name in ``tool_names``
+    into ``stand_in_dir`` (created if missing). Each stand-in, however
+    invoked, only appends its own ``sys.argv`` (as one JSON array, this
+    module's own documented capture-file line format) to ``capture_file``
+    and exits 0 -- no ``eval``, no interpretation of its own arguments, so
+    it cannot be made to do anything else regardless of what a generated
+    command passes it.
+
+    ``stand_in_dir`` and ``capture_file`` are always caller-supplied and
+    must be derived from the per-test ``tmp_path``/``tmp_path_factory``
+    fixture -- never a fixed or shared path -- so this is safe under this
+    repository's own ``pytest -n auto`` addopts.
+    """
+    stand_in_dir.mkdir(parents=True, exist_ok=True)
+    source = _inert_stand_in_source(capture_file)
+    for name in tool_names:
+        if not name or "/" in name or "\\" in name or name in (".", ".."):
+            raise ValueError(f"unsafe stand-in tool name: {name!r}")
+        _write_stand_in_script(stand_in_dir / name, source)
+
+
+def _inert_stand_in_source(capture_file: pathlib.Path) -> str:
+    """The stand-in script body shared by every name :func:`write_stand_ins`
+    writes -- see this module's own "Stand-ins are genuinely inert" section
+    above. The shebang is ``sys.executable``'s own absolute path (a literal
+    baked in at write time, not looked up again at run time), since a
+    shebang interpreter is always resolved by the kernel directly, never
+    via the invoked process's own ``$PATH``."""
+    return (
+        f"#!{sys.executable}\n"
+        "import json\n"
+        "import sys\n"
+        "\n"
+        f'with open({str(capture_file)!r}, "a", encoding="utf-8") as fh:\n'
+        '    fh.write(json.dumps(list(sys.argv)) + "\\n")\n'
+    )
+
+
+def _write_stand_in_script(script_path: pathlib.Path, source: str) -> None:
+    """Write one stand-in script's own ``source`` to ``script_path`` and make
+    it executable -- the single place this module's own owner-only ``0o700``
+    mode and UTF-8 write are spelled out, shared by :func:`write_stand_ins`
+    above and by the two deliberately-non-inert private stand-in writers its
+    proof-method tests use below, so a future stand-in writer cannot forget
+    either. The parent directory is the caller's own responsibility (each
+    caller already creates it, once, rather than per script)."""
+    script_path.write_text(source, encoding="utf-8")
+    script_path.chmod(0o700)
+
+
 # One /proc/<pid>/status line's own real-uid field: "Uid:\t<real>\t<eff>\t
 # <saved>\t<fs>" -- the FIRST number is the real uid, matching the exact
 # accounting basis Linux's own RLIMIT_NPROC uses (issue #1606), not the
@@ -276,14 +336,14 @@ def resolve_bash() -> str:
 _STATUS_REAL_UID_LINE = re.compile(r"^Uid:\s+(\d+)", re.MULTILINE)
 
 
-def _real_uid_from_status_file(status_path: str) -> int | None:
+def _real_uid_from_status_file(status_path: pathlib.Path) -> int | None:
     """Read one ``/proc/<pid>/status`` file and return its own ``Uid:``
     line's real-uid field, or ``None`` if the file is unreadable (most
     commonly: the process already exited between the caller's own
     ``/proc`` directory listing and this read -- a live system, not a
     snapshot) or carries no such line at all. Never raises."""
     try:
-        contents = pathlib.Path(status_path).read_text(encoding="utf-8")
+        contents = status_path.read_text(encoding="utf-8")
     except OSError:
         return None
     match = _STATUS_REAL_UID_LINE.search(contents)
@@ -322,50 +382,7 @@ def _ambient_process_count_for_real_uid() -> int:
     except OSError:
         return 0
     return sum(
-        1
-        for entry in proc_entries
-        if entry.name.isdigit() and _real_uid_from_status_file(str(entry / "status")) == real_uid
-    )
-
-
-def write_stand_ins(tool_names: Iterable[str], stand_in_dir: pathlib.Path, capture_file: pathlib.Path) -> None:
-    """Write one genuinely inert stand-in script per name in ``tool_names``
-    into ``stand_in_dir`` (created if missing). Each stand-in, however
-    invoked, only appends its own ``sys.argv`` (as one JSON array, this
-    module's own documented capture-file line format) to ``capture_file``
-    and exits 0 -- no ``eval``, no interpretation of its own arguments, so
-    it cannot be made to do anything else regardless of what a generated
-    command passes it.
-
-    ``stand_in_dir`` and ``capture_file`` are always caller-supplied and
-    must be derived from the per-test ``tmp_path``/``tmp_path_factory``
-    fixture -- never a fixed or shared path -- so this is safe under this
-    repository's own ``pytest -n auto`` addopts.
-    """
-    stand_in_dir.mkdir(parents=True, exist_ok=True)
-    source = _inert_stand_in_source(capture_file)
-    for name in tool_names:
-        if not name or "/" in name or "\\" in name or name in (".", ".."):
-            raise ValueError(f"unsafe stand-in tool name: {name!r}")
-        script_path = stand_in_dir / name
-        script_path.write_text(source, encoding="utf-8")
-        script_path.chmod(0o700)
-
-
-def _inert_stand_in_source(capture_file: pathlib.Path) -> str:
-    """The stand-in script body shared by every name :func:`write_stand_ins`
-    writes -- see this module's own "Stand-ins are genuinely inert" section
-    above. The shebang is ``sys.executable``'s own absolute path (a literal
-    baked in at write time, not looked up again at run time), since a
-    shebang interpreter is always resolved by the kernel directly, never
-    via the invoked process's own ``$PATH``."""
-    return (
-        f"#!{sys.executable}\n"
-        "import json\n"
-        "import sys\n"
-        "\n"
-        f'with open({str(capture_file)!r}, "a", encoding="utf-8") as fh:\n'
-        '    fh.write(json.dumps(list(sys.argv)) + "\\n")\n'
+        1 for entry in proc_entries if entry.name.isdigit() and _real_uid_from_status_file(entry / "status") == real_uid
     )
 
 
@@ -590,8 +607,8 @@ def run_oracle_in(command: str, tool_names: Iterable[str], work_dir: pathlib.Pat
 # --- Proof-method tests -----------------------------------------------------
 #
 # See this module's own "Proof-method tests" docstring section above for
-# what each of the three proves and why. All three are collected the moment
-# this file is passed to pytest directly (`pytest tests/_gitapex_bash_oracle.py
+# what each of them proves and why. Every one is collected the moment this
+# file is passed to pytest directly (`pytest tests/_gitapex_bash_oracle.py
 # -v`) regardless of not matching pytest's own `python_files` glob, since
 # that glob only gates *directory* recursion, not an explicitly-named path --
 # confirmed directly against this repository's own installed pytest before
@@ -748,9 +765,7 @@ def _write_self_backgrounding_stand_in(
         "else:\n"
         f"    time.sleep({sleep_seconds!r})\n"
     )
-    path = stand_in_dir / name
-    path.write_text(source, encoding="utf-8")
-    path.chmod(0o700)
+    _write_stand_in_script(stand_in_dir / name, source)
 
 
 @pytest.mark.slow
@@ -818,9 +833,7 @@ def _write_rlimit_reporting_stand_in(name: str, stand_in_dir: pathlib.Path, repo
         f'with open({str(report_file)!r}, "w", encoding="utf-8") as fh:\n'
         '    fh.write(f"{soft} {hard}")\n'
     )
-    path = stand_in_dir / name
-    path.write_text(source, encoding="utf-8")
-    path.chmod(0o700)
+    _write_stand_in_script(stand_in_dir / name, source)
 
 
 @pytest.mark.slow
