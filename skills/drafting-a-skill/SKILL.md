@@ -91,13 +91,11 @@ judgment, route directly to `evaluating-skill-quality`/
    - A **side task whose results are never referenced again.** "Use a
      subagent when a side task ... would clutter your main conversation
      with intermediate results you won't reference again." That's a
-     subagent dispatch inside whatever procedure needed it, not a new
-     skill.
+     subagent dispatch inside whatever procedure needed it, not a new skill.
 
    **Create when**, by contrast: a multi-step procedure a human wants to
    see play out and steer, not intuitively obvious on its own, reusable
-   rather than a one-off, and general rather than one project's own local
-   convention.
+   rather than a one-off, and general rather than one project's own local convention.
 
    **When the candidate genuinely fits neither list cleanly** -- not
    confidently an unconditionally-reliable action, absolute prohibition,
@@ -106,8 +104,7 @@ judgment, route directly to `evaluating-skill-quality`/
    with the specific ambiguity named, rather than silently picking
    either side. A wrong silent guess costs a wasted draft (if this
    gate should have blocked and didn't) or a wrongly-redirected request
-   (if it should have created and didn't); one clarifying question costs
-   less than either.
+   (if it should have created and didn't); one clarifying question costs less than either.
 
    This skill does not write hooks, and does not itself decide CLAUDE.md/
    subagent placement -- see Stop boundaries.
@@ -119,8 +116,7 @@ judgment, route directly to `evaluating-skill-quality`/
    - **Portability** -- `Portable` (works unmodified if vendored to
      another repository), `Repository-scoped` (hardcodes this
      repository's own conventions), or `Mixed` (partial dependency: some
-     Steps portable, one or two Steps name a repository-specific tool or
-     path).
+     Steps portable, one or two Steps name a repository-specific tool or path).
    - **Capability assumption** -- `Broad` (must give a weak/economical
      model enough guidance directly, not only via on-demand references),
      `Frontier` (assumes a strong-reasoning model; no weak-tier bar),
@@ -129,8 +125,7 @@ judgment, route directly to `evaluating-skill-quality`/
    - **Invocation mode** -- both model- and user-invocable (the default),
      or narrowed via the `disable-model-invocation`/`user-invocable`
      `SKILL.md` frontmatter booleans (not a `metadata/gitapex.yaml`
-     field) when an irreversible-operation skill should never trigger
-     autonomously.
+     field) when an irreversible-operation skill should never trigger autonomously.
    - **Lifecycle** -- `experimental` (name a `trackingIssue`, its full
      URL, and what graduating to `stable` requires), `stable`, or
      `deprecated` (name a `replacement`).
@@ -182,7 +177,14 @@ judgment, route directly to `evaluating-skill-quality`/
    violation is the drafted skill's own bug), deeper worked examples, and
    a drafting checklist -- load it when this body's own three-part
    definition above isn't enough to resolve a real drafting question, not
-   as required reading before Step 4 begins.
+   as required reading before Step 4 begins. A `Portable` draft naming a
+   sibling skill by name adds this verbatim clause to the citing sentence:
+   "(gitapex's own name for this role; if the calling repository has no
+   same-named skill, treat this as an illustrative pointer and substitute
+   that repository's own skill filling the same role instead)" -- never a
+   runtime reference to another skill, and
+   never a citation of `docs/`, which this repository never distributes
+   alongside the skills it ships.
 
 5. **Cohesion self-check.** Ask, for the whole draft and for each Step:
    *can its one outcome be named in one sentence, with no "and"?* A Step
@@ -316,8 +318,7 @@ that determination is `evaluating-skill-quality`'s and
 - Does not build a Red Flags / rationalization-pattern table for this
   skill's own Stop boundaries -- the plain-bullet form below is this
   draft's own choice, not a placeholder for an undelivered table; a
-  future revision may still add one if a real rationalization pattern
-  surfaces in practice.
+  future revision may still add one if a real rationalization pattern surfaces in practice.
 - Does not modify `evaluating-skill-quality`, `battle-testing-a-skill`,
   or `scorer-gated-skill-edits` themselves -- only the routing-text
   additions named in Related skills, in `planning-a-branch-from-an-issue`
@@ -479,8 +480,7 @@ requirement once a Broad body nears `BODY_MAX_LINES`): Adaptive was
 considered and rejected, not relabeled away from (`metadata/gitapex.yaml`'s
 decision log) -- the near-ceiling content is each Step's own load-bearing
 judgment call, not rare-path/schema material that would fit an
-Adaptive-style split better; there's no rare-path fraction here to move
-out.
+Adaptive-style split better; there's no rare-path fraction here to move out.
 
 Lifecycle: **experimental**, tracking
 <https://github.com/tvna/gitapex/issues/1194> -- pending
