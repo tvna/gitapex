@@ -190,6 +190,11 @@ spec:
       summary: "Step 4's remedy conflated two things -- Distinct-from is a fallback for triggers still adjacent after narrowing, not a routine response to merely similar functionality; blanket insertion defeats its own purpose (this skill's own removed clauses were that misuse). Reworded to state narrow-first, Distinct-from-as-fallback explicitly. Also trimmed the Worked example's curl-command-explainer sample description to its trigger clause only, as a second worked instance"
       outcome:
         baseCommit: "ad834c94f784dfdd5605934e69bd28a0a956914a"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "redivided responsibility with scorer-gated-skill-edits along a how-to-rewrite-vs-evaluate-the-result axis: this skill now owns every SKILL.md rewrite, new or existing, dispatched by executing-a-branch-plan Step 6 (ordinary path, Step 7 runs unconditionally) or scorer-gated-skill-edits's Step 3 (one iteration, Step 7 deferred to its pre-ship step -- gated on dispatch identity, never a claim). Removed the routing-away-if-existing bullet; Postcondition/Output/Stop boundaries/Related skills updated"
+      outcome:
+        baseCommit: "2ff00c34c897074a619d390c208d66e9c52cf7d3"
   skillDependencies:
     requires:
       - evaluating-skill-quality
