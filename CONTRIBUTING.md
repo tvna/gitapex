@@ -256,9 +256,10 @@ To enable this:
    broader-scoped key).
 2. In this repository's settings, add it as a repository secret named
    `ANTHROPIC_API_KEY` (Settings -> Secrets and variables -> Actions).
-   No GitHub Environment gate is used here (unlike the sync-bot App
-   above): this key grants no repository write capability, only Claude
-   API usage, so its blast radius is lower than a signing key.
+   No GitHub Environment gate is used here: this key grants no
+   repository write capability, only Claude API usage, so its blast
+   radius is lower than a repository-write-capable signing key would
+   have.
 3. **Minimum permissions:** this key only needs Claude API access; it
    grants nothing GitHub-side. The workflow's own `permissions:` block
    (`contents: read`, `issues: read`, `pull-requests: read`) is what
