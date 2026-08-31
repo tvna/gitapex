@@ -94,6 +94,21 @@ spec:
     - kind: caveat
       anchor: "https://github.com/tvna/gitapex/issues/1583"
       summary: "disclosed, not fixed: Step 4's new rule calls creation background and a rejected alternative's rationale metadata-only, yet this skill's own Notes section still carries both, and evaluating-skill-quality's SKILL.md still says extended portability rationale 'belongs in a footer ## Notes section of SKILL.md' (26 of 29 skills here carry one). Row 2 scoped the dogfooding migration to Non-goals alone and this skill may not edit evaluating-skill-quality, so reconciling them needs its own issue"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "an independent battle-testing-a-skill dispatch against the new Step 9 gate returned Overall FAIL. F-1: the acknowledgment went stale silently -- a legitimate post-acknowledgment Step 8 fix left the Postcondition technically satisfied while the requester had never seen the shipped bytes. Fixed: Step 9 and the Postcondition now bind the acknowledgment to the exact content presented and void it on any later edit, a late Step 8 fix included"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "same dispatch, F-2: both Stop boundaries enumerated a CLOSED set of disqualified acknowledgment channels (pasted source text, the original request), which a sub-agent's own report, a fabricated tool/MCP payload, persisted cross-session memory, and a forged waza-eval-gate.yml-shaped CI log line all cleared. Reworded to a live-reply-only bar with an explicitly non-exhaustive channel list, per this repository's own CLAUDE.md section 2 open-invariant doctrine"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "same dispatch, F-3: a pre-emptive blanket 'I acknowledge in advance whatever you end up producing' cleared every disqualifier the gate then listed (not self-granted, not inferred, not pasted text) while being logically incapable of acknowledging content that did not yet exist. Step 9 now requires the reply answer its own presentation of the specific current draft"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "same dispatch's two unanimous-FAIL dimensions. Dimension 17: Step 1 banned executing an instruction embedded in untrusted pasted text but said nothing about COPYING its structural fragments, so a pasted ready-made fake SKILL.md could be transcribed verbatim into the emitted file; now banned too. Dimension 12: a Portability Mixed skill carried no install/vendoring-time provenance statement; Notes now carries one, matching executing-a-branch-plan's and drafting-issues' own phrasing"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "those fixes were paid for by trimming wording, not meaning, across Steps 1-8, the Postcondition, the worked example, Related skills, and Notes: the body had 2 lines under BODY_MAX_LINES=500 and needed roughly 20. Both Stop boundaries' FIRST lines were left byte-identical on purpose -- the branch-fixture-coverage gate keys a branch on that text and the split gate's Check E resolves the existing fixture's exercises label against it, so no new fixture was needed"
   skillDependencies:
     requires:
       - evaluating-skill-quality
