@@ -43,10 +43,17 @@ _SESSION_START_NEGATION = "!/.claude/hooks/session-start.sh"
 
 
 def test_apm_vendored_hooks_still_gitignored() -> None:
-    # Representative real files (not hypothetical paths) under both
-    # apm-vendored subtrees. The clairvoyance one is nested two levels
-    # under its own hooks/ dir, proving the glob fix still ignores an
-    # entire excluded child directory's contents recursively -- excluding
+    # Representative files under both apm-vendored subtrees. The
+    # superpowers one is a leftover an `apm install` re-run no longer
+    # deploys (issue #1597 dropped `obra/superpowers` from apm.yml/
+    # apm.lock.yaml, but apm install does not prune an already-deployed
+    # directory once its manifest entry is gone) -- still a real path in
+    # any checkout that ran apm install before the retirement, though no
+    # longer guaranteed on a fresh clone; the gitignore pattern itself is
+    # path-based and does not require the file to exist either way. The
+    # clairvoyance one is nested two levels under its own hooks/ dir,
+    # proving the glob fix still ignores an entire excluded child
+    # directory's contents recursively -- excluding
     # `.claude/hooks/clairvoyance` itself (a directory) via the `*` glob
     # still prunes traversal *into* that one subdirectory, same as before;
     # only `.claude/hooks/` itself is no longer pruned as a whole.

@@ -386,15 +386,21 @@ stops, rather than silently overriding the axis or looping the review.
   last-resort escalation records its decision through that skill.
 - **vs. `grounding-in-primary-sources`:** the guidance-form "cite primary
   sources" rule applies that skill's discipline, not re-derived.
-- **Live collision, until `obra/superpowers` is retired:** the vendored
-  `writing-skills` (`.claude/skills/writing-skills/`, not a native
-  `skills/*/` sibling) and the separately-installed `skill-creator` can
-  both still trigger on "creating a new skill" phrasing today. Route to
-  *this* skill only via the `executing-a-branch-plan` pipeline dispatch
-  described in the Precondition above, never directly, and never either
-  skill's own RED-GREEN-REFACTOR loop or benchmark/packaging tooling
-  (Notes names what is deliberately not imported). Retiring
-  `obra/superpowers` removes the first half; this bullet stays till then.
+- **Live collision, from a vendored copy `apm install` does not prune:**
+  this repository retired the `obra/superpowers` dependency (no longer
+  in `apm.yml`/`apm.lock.yaml`), but `apm install` does not remove an
+  already-deployed directory once its own manifest entry is gone -- so
+  the vendored `writing-skills` (`.claude/skills/writing-skills/`, not
+  a native `skills/*/` sibling) can still be present, and can still
+  trigger on "creating a new skill" phrasing, in any checkout that ran
+  `apm install` before the retirement (a fresh clone will not have it).
+  The separately-installed `skill-creator` collides the same way
+  regardless -- it was never an `obra/superpowers` artifact, so
+  retiring that dependency does not affect it. Route to *this* skill
+  only via the `executing-a-branch-plan` pipeline dispatch described in
+  the Precondition above, never directly, and never either skill's own
+  RED-GREEN-REFACTOR loop or benchmark/packaging tooling (Notes names
+  what is deliberately not imported).
 
 ## Notes
 

@@ -37,7 +37,7 @@ sequenceDiagram
     Note over Author: implementation + deviation log in implementation-notes
     Author->>CI: run hermetic verification locally (pytest / scan_*)
     CI-->>Author: result (CI does not execute body commands, author runs locally)
-    Note over Author: diff correctness review: requesting-code-review [superpowers, Task subagent] -> findings -> fix [validate -> fix]. Just before PR creation, or just before merge
+    Note over Author: diff correctness review: reviewing-an-artifact [drafting-a-pr-to-merge] -> findings -> fix [validate -> fix]. Just before PR creation, or just before merge
     Author->>Hooks: mcp__github__create_pull_request (each criterion -> command:result / invariant declaration)
     Note over Hooks: PreToolUse gate: preflight_pr_template_shape [client mirror of body_policy], required_sections, title, retro_issue_link, branch_base, non-ascii, secrets, plus [new] contract-join preflight
     Hooks->>GitHub: pass -> PR created
@@ -100,7 +100,7 @@ sequenceDiagram
     Note over Author: implementation + deviation log in implementation-notes
     Author->>CI: run hermetic verification locally (pytest / scan_*)
     CI-->>Author: result (CI does not execute body commands, author runs locally)
-    Note over Author: diff correctness review: requesting-code-review [superpowers, Task subagent] -> findings -> fix [validate -> fix]. Just before PR creation, or just before merge
+    Note over Author: diff correctness review: reviewing-an-artifact [drafting-a-pr-to-merge] -> findings -> fix [validate -> fix]. Just before PR creation, or just before merge
     Author->>Hooks: mcp__github__create_pull_request (each criterion -> command:result / invariant declaration)
     Note over Hooks: PreToolUse: pr_template_shape mirror + contract-join preflight -> passes on first try
     Hooks->>GitHub: pass -> PR created

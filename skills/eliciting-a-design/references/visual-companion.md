@@ -62,14 +62,15 @@ that is a normal outcome, not a failure to work around. The server itself needs
 no package install: `server.cjs` imports only Node's own `crypto`/`http`/`fs`/
 `path` and speaks WebSocket directly, so there is nothing to `npm install`.
 
-**No outbound third-party requests.** The vendored `obra/superpowers`
-`brainstorming` companion this was derived from embedded an upstream brand logo
-fetched from `primeradiant.com` on each screen load. This native rewrite is a
-diverged, gitapex-owned skill under a different name, not a re-served copy of
-that project, so it does not carry that request forward: `brandMarkup()` in
-`scripts/server.cjs` renders a text-only attribution line naming its origin,
-with no image and no network call. The companion is entirely local: it binds a
-port on the user's own machine and contacts nothing else.
+**No outbound third-party requests.** The `obra/superpowers` `brainstorming`
+companion this was derived from - a dependency since retired - embedded an
+upstream brand logo fetched from `primeradiant.com` on each screen load. This
+native rewrite is a diverged, gitapex-owned skill under a different name, not
+a re-served copy of that project, so it does not carry that request forward:
+`brandMarkup()` in `scripts/server.cjs` renders a text-only attribution line
+naming its origin, with no image and no network call. The companion is
+entirely local: it binds a port on the user's own machine and contacts
+nothing else.
 
 ## When to Use
 

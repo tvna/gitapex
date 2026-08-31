@@ -27,10 +27,15 @@ same role under a different name for the same or a different harness --
 for example `AGENTS.md`), a Subagent definition (`.claude/agents/*.md` or
 equivalent), an Output style, a system-prompt-append configuration, and
 Auto-memory content or its curation policy. A repository carrying more
-than one such file (a `CLAUDE.md` and an `AGENTS.md` compiled from the
-same source) is graded per file, not folded into a single verdict --
-each is its own instance of this channel, and can independently pass or
-fail.
+than one such file (a `CLAUDE.md` and an `AGENTS.md` independently
+maintained or compiled from a shared source) is graded per file, not
+folded into a single verdict -- each is its own instance of this
+channel, and can independently pass or fail. The one exception: when
+one file's entire content is a single-line, verbatim import pointer at
+the other (Claude Code's own `@AGENTS.md`-style import syntax is the
+current example), grade the pair as one instance instead -- a verbatim
+import resolves to the pointed-at file's own content exactly, so it
+carries no drift risk of its own to grade separately.
 
 Out of scope, each for a stated reason rather than left implicit:
 
