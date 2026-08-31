@@ -182,15 +182,12 @@ bounded contexts, never grading the same question twice.
    - Sweep the draft against `references/formative-quality-
      dimensions.md`'s nine formative dimensions -- a prose quality pass
      the deterministic checkers below can't perform.
-   - Prepare the eval scaffold row 8 (Eval preparation) requires:
-     enumerate at least three scenarios the draft must handle correctly --
-     including the guardrail/failure case it exists to prevent -- and
-     sketch a fixture skeleton under `evals/<skill>/` (one prompt file per
-     scenario, each naming its expected behavior). This is preparation
-     only: it does not run a with/without-skill baseline and does not
-     build new eval-execution infrastructure -- running and scoring that
-     baseline is `evaluating-skill-quality`'s own Behavioural evidence
-     pass at Step 7, not this Step's job.
+   - Prepare the eval scaffold `references/formative-quality-
+     dimensions.md` row 8 (Eval preparation) requires -- its scenario
+     enumeration and its `evals/<skill>/` fixture skeleton, to that
+     row's own bar -- and don't restate that bar here. Preparation
+     only: the baseline run itself stays `evaluating-skill-quality`'s
+     own Behavioural evidence pass at Step 7.
    - Run this repository's own deterministic checkers against the draft
      directory, gitapex-repo only (see `references/gitapex-cross-
      links.md` for the exact flags):
