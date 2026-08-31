@@ -57,3 +57,6 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1173"
       summary: "Operator caught that Dimension 5's finding actually indicts the Mixed declaration, not this file's structure: this skill is entirely gitapex-specific routing, with no portable core distinct from a repo-specific extension -- Mixed's own 'split the repo-specific part into references/' requirement never applied here. Corrected portability to Repository-scoped; the first decision entry above (Step 5 restated inline) stays valid, unaffected."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1173"
+      summary: "Operator caught that Step 2's own body still named the 'merge-pipeline-redesign' design record by that bare name -- a Claude Artifact title with no repository-relative meaning, unresolvable by any reader without that specific session's own access, not merely a broken link once checked in like a docs/ path. Removed from the body; the decision entry above already carries this same disclosure at the metadata layer, where a reviewer-only citation belongs."

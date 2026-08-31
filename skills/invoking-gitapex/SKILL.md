@@ -44,11 +44,9 @@ below.
    This table is illustrative, not the canonical source -- each
    pipeline-stage skill's own text cites the next, while
    `reviewing-an-artifact`/`diagnosing-a-failure` report back to their own
-   caller instead of advancing a stage. A fuller diagram lives in a
-   separate `merge-pipeline-redesign` design record, not yet checked into
-   this repository. A situation matching no row here does not satisfy
-   Step 1 -- check this repository's fuller skill catalog before
-   proceeding unaided.
+   caller instead of advancing a stage. A situation matching no row here
+   does not satisfy Step 1 -- check this repository's fuller skill catalog
+   before proceeding unaided.
 
 3. **Never blanket-exempt a dispatched subagent.** A subagent's own
    context does not automatically carry this file's content forward, so
