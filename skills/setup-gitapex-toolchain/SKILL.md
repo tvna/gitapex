@@ -135,8 +135,9 @@ binaries without running `apm install` afterward. Add `--tool NAME`
 
 The committed `.claude/settings.json` carries only this skill's own
 `SessionStart` entry. `apm install` (this skill's own final step) re-adds
-the apm-managed hook entries (clairvoyance, diagram-design, and any future
-ones), tagged via the gitignored `.claude/apm-hooks.json`, only on the
+the apm-managed hook entries (clairvoyance, and any future ones that
+actually deploy a hook -- diagram-design does not), tagged via the
+gitignored `.claude/apm-hooks.json`, only on the
 sessions where it actually re-runs -- now the exception rather than every
 session, since a matching lockfile and installed `apm` binary make it a
 fast `UNCHANGED: apm install` no-op instead (see Output above). On those

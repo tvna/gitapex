@@ -7,9 +7,9 @@ coverage.json
 
 # APM dependencies: apm_modules/ is apm's package cache; .claude/skills/,
 # .claude/commands/, and the apm-vendored .claude/hooks/<vendor>/ subtrees are
-# what `apm install` deploys from apm.lock.yaml (obra/superpowers,
-# tvna/clairvoyance, cathrynlavery/diagram-design) -- reproducible from the
-# lockfile, so not committed.
+# what `apm install` deploys from apm.lock.yaml (tvna/clairvoyance,
+# cathrynlavery/diagram-design) -- reproducible from the lockfile, so not
+# committed.
 apm_modules/
 /.claude/skills/
 /.claude/commands/

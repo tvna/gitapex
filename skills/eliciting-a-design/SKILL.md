@@ -401,7 +401,10 @@ obra/superpowers `brainstorming` dependency has since been retired - this note
 records that migration rather than describing a still-active overlap. The
 frontmatter `description`'s "prefer this one when both are installed" line
 remains accurate as conditional guidance for any repository state where a copy
-of the superseded skill still exists; it is not a claim that one exists here.
+of the superseded skill is still a declared dependency; it is not a claim that
+this repository still declares one (a vendored copy can still be physically
+present on disk without being declared -- `apm install` does not prune a
+dependency's own deployed files once its manifest entry is removed).
 
 Bundled-code provenance: `scripts/` derives from that upstream skill's companion
 server. The upstream version fetched a brand logo from a third-party host on
