@@ -136,6 +136,16 @@ spec:
       summary: "same dispatch, remaining fixes: axis 2 now names each entry's own commit as its run identifier, since the Precondition already prevents a second invocation from starting a genuinely competing run; axis 8's outcome.baseCommit now states it is expected going forward, not retrofitted onto pre-existing entries. Axis 7's disclosed TOCTOU gap is unchanged -- still open by design, per the prior entry above"
       outcome:
         baseCommit: "c3010a1a361d455901fca7113c642b38015c4233"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "a fourth independent dispatch (commit ae553b56) found axes 2, 4, and 8 still open: axis 2's routes-away premise was contradicted by this file's own disclosed TOCTOU entry, with baseCommit on only 3/41 entries; axis 4 named no whole-record-rewrite hazard though every sidecar edit is one; axis 8's 'predating this rule' drew no checkable boundary. Fixed as one mechanism: every new entry's outcome.baseCommit is both its run identifier and its staleness anchor; older entries stay unretrofitted"
+      outcome:
+        baseCommit: "ae553b56444f48a252b00f2e9f52a2c934c44dbe"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1583"
+      summary: "same dispatch's remaining fixes: Step 3 now names the sidecar's whole-file read-modify-write outright -- read current content first, add only the new entry, never regenerate the rest from memory -- plus same-edit-round recording; the five-rule run-on parenthetical became one sentence per rule, per guidance-form-and-sdo.md's own test; Step 2 Part A's branches are now jointly exhaustive: 'anything short of' high-on-all-three routes to the precedent search. These two entries are its first uses"
+      outcome:
+        baseCommit: "ae553b56444f48a252b00f2e9f52a2c934c44dbe"
   skillDependencies:
     requires:
       - evaluating-skill-quality

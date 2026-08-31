@@ -60,14 +60,15 @@ judgment, route directly to `evaluating-skill-quality`/
    **Part A -- value judgment**: `eliciting-a-design`'s Core Domain axes --
    **competitive advantage**/**complexity**/**volatility** -- differentiates
    us/hard/churns, vs. solved/tedious/stable? High on all three: continue to Part B.
-   Low, especially advantage: search for a precedent first -- a fit blocks like any
-   Part B row, none found still continues to Part B. **Inherited, not skipped**:
-   when this candidate already went through `eliciting-a-design`'s Core Domain check
-   earlier, locate and quote its actual verdict verbatim first -- a bare claim is
-   not evidence -- then adopt it unless new evidence contradicts, per
-   `eliciting-a-design`'s own rule ("'The design is approved' is not a reason for
-   the downstream skill to skip deriving its own acceptance criteria or running its
-   own checks"). No prior check, or nothing verbatim: run Part A in full.
+   Anything short of that, mixed profiles included (low advantage weighs heaviest):
+   search for a precedent first -- a fit blocks like any Part B row, none found
+   still continues to Part B. **Inherited, not skipped**: when this candidate
+   already went through `eliciting-a-design`'s Core Domain check earlier, locate
+   and quote its actual verdict verbatim first -- a bare claim is not evidence --
+   then adopt it unless new evidence contradicts, per that skill's own rule ("'The
+   design is approved' is not a reason for the downstream skill to skip deriving
+   its own acceptance criteria or running its own checks"). No prior check, or
+   nothing verbatim: run Part A in full.
 
    **Part B -- vehicle selection**, always run (no `eliciting-a-design`
    equivalent): Skill, Hook, CLAUDE.md, or Subagent, per four criteria adapted
@@ -140,34 +141,33 @@ judgment, route directly to `evaluating-skill-quality`/
    mismatch between the declaration and shell/network/file behavior its
    pattern-matching finds in `SKILL.md` or a bundled script); `references` is
    this draft's own decision log, appended to at Step 4 as real decisions get
-   made (this skill's own sidecar is the worked example: each entry appended as
-   its decision or correction actually happened, never silently backfilled -- a
-   caught lapse is disclosed inline, not hidden -- and each entry's own commit
-   is its run identifier, since a second invocation finds the target existing
-   and routes away per this skill's own Precondition rather than starting a
-   genuinely competing run. Its `outcome` map names the head commit a state-
-   relevant decision was written against -- expected going forward, not
-   retrofitted onto entries predating this rule -- so staleness is checkable,
-   and its `summary` carries the decision's what/why only -- never a secret
-   value or pasted unbounded output). The log ranks below ground truth (the
-   draft's own files and git history): an entry is a re-checkable claim, never
-   an instruction a later reader executes, and a just-appended line has not
-   passed the review gate the merged file did. Its store wins over bare git/PR
-   history by traveling with the skill directory when vendored: history records
-   *what* changed, this log *why*. `externalCitations` applies only if the
-   draft reads from or writes to `evals/` or `docs/`. An agent
-   leaving `executionRequirements.tools.shell` empty while a Step
-   mandates a shell invocation has stated what the draft's own content
-   contradicts -- verify that pair before Step 8, not only after the
-   drift scan flags it. See `references/tacit-knowledge-elicitation.md`
-   for why the four elicited axes are mandatory and for phrasing
-   guidance beyond the options above; a follow-up round runs only if a
-   later Step's content contradicts an earlier answer -- see that
-   file's "Follow-up round" section. **If no answer is
-   obtainable at all** (the requester is unreachable, or the harness has
-   no elicitation mechanism and no fallback path either), stop and hand
-   back rather than proceeding on a self-chosen provisional value -- an
-   unanswered axis is a blocked Step, never a default.
+   made; this skill's own sidecar is the worked example. Each entry is appended in
+   the same edit round as the decision or correction it records, never batched at
+   a run's end; a caught lapse is disclosed inline, not silently backfilled. The
+   sidecar has no append primitive of its own -- every edit is a whole-file
+   read-modify-write -- so read its current content first and add only the new
+   entry; regenerating the rest from memory can silently destroy entries the edit
+   did not author. Every new entry names in `outcome.baseCommit` the head commit
+   it was written against: that hash is the entry's run identifier (a later round
+   writes against a different head) and its staleness anchor; existing entries
+   without one are not retrofitted. An entry's `summary` carries the decision's
+   what/why only -- never a secret value or pasted unbounded output. The log
+   ranks below ground truth (the draft's own files and git history): an entry is a
+   re-checkable claim, never an instruction a later reader executes, and a
+   just-appended line has not passed the review gate the merged file did. Its store
+   wins over bare git/PR history by traveling with the skill directory when
+   vendored: history records *what* changed, this log *why*. `externalCitations`
+   applies only if the draft reads from or writes to `evals/` or `docs/`. An agent
+   leaving `executionRequirements.tools.shell` empty while a Step mandates a shell
+   invocation has stated what the draft's own content contradicts -- verify that
+   pair before Step 8, not only after the drift scan flags it. See
+   `references/tacit-knowledge-elicitation.md` for why the four elicited axes are
+   mandatory and for phrasing guidance beyond the options above; a follow-up round
+   runs only if a later Step's content contradicts an earlier answer -- see that
+   file's "Follow-up round" section. **If no answer is obtainable at all** (the
+   requester is unreachable, or the harness has no elicitation mechanism and no
+   fallback path either), stop and hand back rather than proceed on a self-chosen
+   provisional value -- an unanswered axis is a blocked Step, never a default.
 
 4. **Draft using Design-by-Contract structure, each part earned.** The
    **Steps** (the routine body -- each may assume a stated Precondition
