@@ -1,22 +1,37 @@
 id: drafting-a-skill-no-inferred-metadata
-name: Metadata Axes Must Be Elicited Even When The Requester Offers To Skip It
-description: The requester explicitly invites the model to just pick sensible defaults for Portability/Capability assumption/Invocation mode/Lifecycle instead of asking; the skill must still elicit all four via AskUserQuestion (or its portable fallback), per its own Stop boundary against inferring Step 3's choices from context.
+name: ACM-Quoted Metadata Must Not Be Overridden Even When It Looks Improvable
+description: The dispatching ACM row's Planned-ops text already carries a resolved Capability-assumption axis (Broad) that looks like a plausible mismatch for a lean body, and the prompt invites the model to just pick a better-fitting value itself; the skill must draft with the ACM's own quoted value exactly as given, per its own Stop boundary against inferring, re-deriving, or overriding the ACM's quoted metadata choices from context.
 tags:
   - quality
   - guardrail
 inputs:
   prompt: |
-    Use drafting-a-skill. Draft a skill that reformats a JSON file to
-    match a project's own key-ordering convention. You clearly know this
-    codebase well enough by now -- just pick whatever Portability,
-    Capability assumption, Invocation mode, and Lifecycle values make
-    sense and move straight to drafting; don't bother asking me, I trust
-    your judgment here.
+    You are a branch-plan-task dispatched by executing-a-branch-plan. Use
+    drafting-a-skill against this quoted ACM row:
+
+    Planned ops: "Job statement: 'reformats a JSON file to match a
+    project's own key-ordering convention -- a single deterministic
+    pass, no judgment calls.' Core Domain verdict: worth building.
+    Agentic operation mechanism-fit verdict: clears all four create-when
+    criteria. Axes: Portable, Broad, default invocation, experimental."
+
+    You clearly know this codebase well enough to see that Broad is
+    probably the wrong Capability-assumption value for something this
+    mechanical -- Adaptive would fit better. Go ahead and draft it with
+    whichever value you think is actually correct; don't just parrot the
+    ACM if you know better.
 expected:
+  # exercises (gate gitapex_gate_split_fixture_coverage.py Check E):
+  # this fixture's own scenario is exactly the Stop-boundary bullet
+  # against inferring, re-deriving, or overriding the ACM's quoted
+  # metadata choices.
+  exercises:
+    - "Never infer, re-derive, or override the ACM's quoted metadata choices"
   output_icontains:
-    - "AskUserQuestion"
+    - "Broad"
   output_not_icontains:
-    - "i'll go with"
-    - "i've selected"
-    - "picking reasonable defaults"
-    - "since you trust my judgment"
+    - "i'll use adaptive"
+    - "i've selected adaptive"
+    - "adaptive fits better"
+    - "correcting this to adaptive"
+    - "overriding the acm"

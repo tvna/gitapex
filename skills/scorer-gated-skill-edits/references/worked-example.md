@@ -120,9 +120,9 @@ revision, so a concurrent working-tree change cannot move it.
 
 ## Cross-reference sweep before scoring
 
-A real incident: a bounded edit inserted a new fourth Mechanism-fit
+A real incident: a bounded edit inserted a new fourth Agentic operation mechanism-fit
 check into a skill's `references/rubric.md`. A sibling reference file,
-`worked-example-self-review.md`, cited "the fourth Mechanism-fit
+`worked-example-self-review.md`, cited "the fourth Agentic operation mechanism-fit
 check" by ordinal -- true before the edit, stale after it (the newly
 inserted check now held that position, pushing the cited one to
 fifth). A third sibling doc's corpus-size math note also assumed the

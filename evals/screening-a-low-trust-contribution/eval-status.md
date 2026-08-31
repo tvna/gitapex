@@ -27,7 +27,7 @@ deterministic edit-distance computation or homoglyph coverage (converging
 independently with the same finding against `auditing-git-hosting-surface`);
 and it screens only a single diff snapshot with no re-screen-on-push
 guidance. A companion `evaluating-skill-quality` pass rated it well-formed
-but not mature, and separately raised a Mechanism-fit finding: checks 1-2 at
+but not mature, and separately raised an Agentic operation mechanism-fit finding: checks 1-2 at
 the time (workflow-file and hook/script edits respectively; see the note
 above)'s "always flag a workflow-file or hook/script edit" guarantee currently
 depends entirely on an agent choosing to invoke this skill, with no CI

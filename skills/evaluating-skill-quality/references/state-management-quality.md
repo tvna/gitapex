@@ -567,7 +567,7 @@ versus reading the true source directly? And is there exactly one source of
 truth for each question the procedure asks?
 
 `references/rubric.md` has no owner for the store-choice question. Its
-Mechanism fit section's Skill-step vs. bundled script lane asks a different
+Agentic operation mechanism-fit section's Skill-step vs. bundled script lane asks a different
 question -- model reasoning versus a bundled script for one step -- and
 routing there returns an answer to something else. Grade store choice here.
 
@@ -680,7 +680,7 @@ names its owner and what this file adds.
 | Is sensitive handling disclosed? | `references/rubric.md` Confidentiality awareness | Nothing on disclosure. Axis 9 rules separately on an unfiltered accumulation sink, and reports alongside. |
 | What portability level does the target claim? | `references/rubric.md` Portability level | A runtime-written state path, which Dependency file portability does not reach. |
 | Is a condition checked in exactly one place in *this review's* own procedure? | `references/rubric.md` Contract discipline | Nothing; this file defers. Axis 11's single-source-of-truth clause is a different subject -- the *target's* stores, not this review's precondition and postcondition -- and neither answers the other. |
-| Should a step be model reasoning or a bundled script? | `references/rubric.md` Mechanism fit, Skill-step vs. bundled script | Nothing. Axis 11's store-choice question is a different question with no owner there. |
+| Should a step be model reasoning or a bundled script? | `references/rubric.md` Agentic operation mechanism-fit, Skill-step vs. bundled script | Nothing. Axis 11's store-choice question is a different question with no owner there. |
 | Does a bundled script produce a machine-checkable plan file? | `references/rubric.md` dimension 7, Verifiable intermediate outputs | That bullet is gated on the target shipping code; this trigger is not, so a script-less orchestrator is graded here. |
 | Does the target survive hostile input probing? | `battle-testing-a-skill` | Axis 9's inbound half grades the *static design* question -- does the target state a trust class for its own record -- because adversarial probing is a separate lane a one-shot static review does not invoke. |
 

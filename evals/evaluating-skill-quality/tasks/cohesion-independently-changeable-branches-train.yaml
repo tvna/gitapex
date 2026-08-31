@@ -1,6 +1,6 @@
 id: evaluating-skill-quality-cohesion-independently-changeable-branches-train
 name: Repo-Hygiene Toolkit Bundles Three Unrelated Procedures
-description: Motivates the Skill vs. multiple skills / cohesion Mechanism-fit check -- the target bundles API-key rotation, commit-message reformatting, and changelog generation under one skill with no shared invariant, no data relationship between branches, and each branch independently triggerable and independently changeable. The review must name this a whole-artifact cohesion finding and recommend a split, not accept it because each individual branch is well-written.
+description: Motivates the Skill vs. multiple skills / cohesion Agentic operation mechanism-fit check -- the target bundles API-key rotation, commit-message reformatting, and changelog generation under one skill with no shared invariant, no data relationship between branches, and each branch independently triggerable and independently changeable. The review must name this a whole-artifact cohesion finding and recommend a split, not accept it because each individual branch is well-written.
 tags:
   - quality
   - mechanism-fit

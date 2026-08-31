@@ -1,5 +1,5 @@
 name: drafting-a-skill-eval
-description: Quality suite for the gitapex drafting-a-skill blank-page skill-authoring skill.
+description: Quality suite for the gitapex drafting-a-skill pipeline-only skill-authoring task.
 skill: drafting-a-skill
 version: "0.1.0"
 config:
@@ -12,6 +12,6 @@ metrics:
   - name: drafting_a_skill_quality
     weight: 1.0
     threshold: 0.8
-    description: Gates on Mechanism fit before drafting, elicits every metadata choice rather than inferring it, drafts using Design-by-Contract structure, treats the cohesion and domain-gap self-checks as advisory rather than authoritative, and hands off to evaluating-skill-quality and battle-testing-a-skill without performing either review itself.
+    description: Refuses standalone invocation and redirects to eliciting-a-design instead, drafts only when dispatched with an ACM row's already-resolved metadata (never re-eliciting or overriding it), uses Design-by-Contract structure, treats the cohesion and domain-gap self-checks as advisory rather than authoritative, hands off to evaluating-skill-quality and battle-testing-a-skill without performing either review itself, and escalates rather than loops or self-fixes an upstream-ambiguity-rooted finding.
 tasks:
   - "tasks/*.yaml"

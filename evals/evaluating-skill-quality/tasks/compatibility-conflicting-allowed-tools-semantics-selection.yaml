@@ -1,6 +1,6 @@
 id: evaluating-skill-quality-compatibility-conflicting-allowed-tools-semantics-selection
 name: Existing Compatibility Declaration Omits Conflicting Allowed-Tools Semantics
-description: Held-out warning-only case requiring correction of an incomplete compatibility declaration while retaining an independent Mechanism fit blocker.
+description: Held-out warning-only case requiring correction of an incomplete compatibility declaration while retaining an independent Agentic operation mechanism-fit blocker.
 tags:
   - quality
   - compatibility
@@ -16,7 +16,7 @@ inputs:
     restrictive allowlist. The existing standard compatibility declaration is
     therefore incomplete. Report that compatibility issue in the warning-only
     state and give the concrete corrected compatibility value. Separately,
-    assess the claimed deterministic read-only guarantee under Mechanism fit;
+    assess the claimed deterministic read-only guarantee under Agentic operation mechanism-fit;
     do not let the compatibility warning displace that blocker.
 
     ---
@@ -43,7 +43,7 @@ expected:
     - "Conflict"
     - "compatibility:"
     - "allowed-tools"
-    - "Mechanism fit"
+    - "Agentic operation mechanism-fit"
     - "blocker"
   output_not_contains:
     - "Compatibility awareness: COMPATIBILITY_ACKNOWLEDGED"

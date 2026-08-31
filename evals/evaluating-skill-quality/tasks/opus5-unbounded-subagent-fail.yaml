@@ -1,6 +1,6 @@
 id: evaluating-skill-quality-opus5-unbounded-subagent-fail
 name: Per-File Subagent Dispatch With No Criterion or Cap
-description: Motivates the new Subagent delegation scope Mechanism-fit check -- the target instructs dispatching a subagent for every file in the repository, with no stated criterion for when delegation is warranted and no cap on how many agents may be launched. The review must flag this as unjustified delegation, not accept it because dispatching subagents is otherwise a reasonable mechanism choice.
+description: Motivates the new Subagent delegation scope Agentic operation mechanism-fit check -- the target instructs dispatching a subagent for every file in the repository, with no stated criterion for when delegation is warranted and no cap on how many agents may be launched. The review must flag this as unjustified delegation, not accept it because dispatching subagents is otherwise a reasonable mechanism choice.
 tags:
   - quality
   - mechanism-fit

@@ -13,16 +13,16 @@ verdict.
 
 ## Table of contents
 
-- [Mechanism fit](#mechanism-fit)
+- [Agentic operation mechanism-fit](#agentic-operation-mechanism-fit)
 - [Portability level](#portability-level)
 - [Deterministic shape](#deterministic-shape)
 - [Probabilistic dimensions](#probabilistic-dimensions)
 - [Verdict](#verdict)
 - [References](#references)
 
-## Mechanism fit
+## Agentic operation mechanism-fit
 
-Read per [rubric.md's Mechanism fit](rubric.md#mechanism-fit) section.
+Read per [rubric.md's Agentic operation mechanism-fit](rubric.md#agentic-operation-mechanism-fit) section.
 
 **Skill vs. subagent**: good fit. Routing an explanation to How/What/
 Why/Why-not happens inline while writing code, comments, or a commit --
@@ -263,7 +263,7 @@ against portability.
 
 ## Verdict
 
-**Mechanism fit**: good fit, no finding -- reported first per rubric.md's
+**Agentic operation mechanism-fit**: good fit, no finding -- reported first per rubric.md's
 Verdicts section, alongside rather than instead of the shape/dimension
 verdict below.
 

@@ -149,7 +149,7 @@ differentiation from shape check 1 and dimension 15 below.
 
 ## Probabilistic-maturity dimensions
 
-7. **Mechanism fit, trigger/event direction.** Does the specific
+7. **Deterministic-gate mechanism-fit, trigger/event direction.** Does the specific
    event/trigger the gate is attached to actually match that domain's own
    documented semantics for when it fires and what it can still affect
    (e.g., a trigger that fires only after the guarded action has already

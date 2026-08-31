@@ -212,7 +212,7 @@ restated in the body.
 
 This rule is background/rationale for a skill author to apply by hand
 while drafting or reviewing; no skill body may cite this document to
-satisfy it -- `skills/drafting-a-skill/SKILL.md`'s own Step 4 states the
+satisfy it -- `skills/drafting-a-skill/SKILL.md`'s own Step 2 states the
 operative version of this rule directly, inline, consistent with that
 skill's own `Broad` capability declaration (a `Broad` skill inlines
 enough guidance directly rather than relying only on an on-demand
@@ -241,7 +241,7 @@ rationale is an open decision needing its own issue; until it is made,
 an existing `## Notes` footer is not a finding against this rule, and a
 new skill's author should record that rationale in the sidecar.
 
-Found via: `skills/drafting-a-skill/SKILL.md`'s own Step 4 forced every
+Found via: `skills/drafting-a-skill/SKILL.md`'s own Step 2 forced every
 drafted skill to carry Precondition/Postcondition sections
 unconditionally, and its own Non-goals section was itself an example of
 reviewer-only content sitting in the body instead of the metadata

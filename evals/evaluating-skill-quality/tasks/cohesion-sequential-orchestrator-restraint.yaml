@@ -1,6 +1,6 @@
 id: evaluating-skill-quality-cohesion-sequential-orchestrator-restraint
 name: New-Service-Onboarding Orchestrator Is Not Split Merely For Touching Several Systems
-description: Restraint check (test split, read once) for the Skill vs. multiple skills / cohesion Mechanism-fit check -- the target's four ordered steps (register in the service catalog, provision a database, configure monitoring, write the runbook) each feed the next and converge on one outcome, "a new service is fully onboarded and operable," even though the steps touch four different systems. This is sequential/functional cohesion, not a split candidate. The review must not flag a cohesion split finding merely because the skill has several steps or crosses systems -- checks the restraint side the issue that motivated this check explicitly requires.
+description: Restraint check (test split, read once) for the Skill vs. multiple skills / cohesion Agentic operation mechanism-fit check -- the target's four ordered steps (register in the service catalog, provision a database, configure monitoring, write the runbook) each feed the next and converge on one outcome, "a new service is fully onboarded and operable," even though the steps touch four different systems. This is sequential/functional cohesion, not a split candidate. The review must not flag a cohesion split finding merely because the skill has several steps or crosses systems -- checks the restraint side the issue that motivated this check explicitly requires.
 tags:
   - quality
   - mechanism-fit

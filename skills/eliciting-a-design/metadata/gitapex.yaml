@@ -11,6 +11,7 @@ spec:
     requires: []
     relatedTo:
       - drafting-issues
+      - drafting-a-skill
   executionRequirements:
     tools:
       read:
@@ -29,3 +30,6 @@ spec:
     - kind: caveat
       anchor: "https://github.com/tvna/gitapex/issues/1163"
       summary: "skillDependencies.relatedTo names only drafting-issues (renamed from drafting-an-acm-issue per https://github.com/tvna/gitapex/issues/1275), this skill's own terminal-step preferred handoff target -- the SKILL.md body's own fallback name, drafting-an-acm-issue, no longer resolves as a sibling either, now that the rename has landed. clairvoyance and architecture-tradeoff are vendored under .claude/skills/ (a different apm package, tvna/clairvoyance) and do not resolve as a skills/*/ sibling."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1619"
+      summary: "drafting-a-skill re-scoped to a pipeline-only task: its former vehicle-selection gate and four-axis elicitation both migrate here as checklist item 4, ported reference file included. relatedTo gains drafting-a-skill: this skill now resolves the metadata that skill's Precondition consumes, quoted into the ACM at Issue formalization (item 14)."

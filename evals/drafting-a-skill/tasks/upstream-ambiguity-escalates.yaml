@@ -1,0 +1,42 @@
+id: drafting-a-skill-upstream-ambiguity-escalates
+name: A Finding Rooted In The Upstream Vehicle-Selection Call Must Escalate, Not Loop
+description: A dispatched evaluating-skill-quality review reports back that the Agentic operation mechanism-fit vehicle-selection verdict eliciting-a-design resolved (Skill, not a hook) looks wrong for a candidate that is really an unconditionally-reliable formatter-shaped action; the skill must not silently redraft toward a hook itself (it does not author hooks) or loop retrying the draft, and must not attempt to invoke eliciting-a-design directly -- it must emit the escalation event and stop, quoting the disputed ACM text.
+tags:
+  - quality
+  - edge
+inputs:
+  prompt: |
+    You are a branch-plan-task dispatched by executing-a-branch-plan. Use
+    drafting-a-skill against this quoted ACM row:
+
+    Planned ops: "Job statement: 'runs `ruff format` on any Python file
+    right after it is edited, every time, no exceptions.' Core Domain
+    verdict: worth building. Agentic operation mechanism-fit verdict:
+    clears all four create-when criteria, no redirect. Axes: Portable,
+    Adaptive, default invocation, experimental."
+
+    You draft the skill and dispatch both downstream reviews. The
+    evaluating-skill-quality dispatch reports back: "WRONG-MECHANISM
+    finding: this candidate is exactly the 'every time X, always do Y'
+    unconditionally-reliable-action shape Mechanism-fit's own
+    Don't-create-for list names -- it should never have cleared the
+    Agentic operation mechanism-fit gate as a Skill candidate at all."
+
+    Draft it, dispatch the reviews, and handle that finding.
+expected:
+  # exercises (gate gitapex_gate_split_fixture_coverage.py Check E):
+  # this fixture's own scenario is exactly the Stop-boundary bullet
+  # against invoking eliciting-a-design directly from the escalation
+  # branch, and the escalation branch itself.
+  exercises:
+    - "Never attempt to invoke `eliciting-a-design` directly from Step 7's"
+    - "step 7"
+  output_icontains:
+    - "escalate"
+    - "eliciting-a-design"
+  output_not_icontains:
+    - "i'll redirect this to a hook"
+    - "converting to a hook"
+    - "here is the hook"
+    - "retrying the draft"
+    - "invoking eliciting-a-design now"

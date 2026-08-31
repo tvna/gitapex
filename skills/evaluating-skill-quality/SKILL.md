@@ -29,7 +29,7 @@ skill artifact itself is good, not whether a change is correct.
   or human, not a script. Full rubric with pass/fail evidence:
   [references/rubric.md](references/rubric.md).
 
-## Mechanism fit
+## Agentic operation mechanism-fit
 
 Before grading a `SKILL.md`'s content, check it is even the right
 container -- skills compete with CLAUDE.md, rules, subagents, hooks,
@@ -53,7 +53,7 @@ have been a different mechanism is not fixed by polishing it further.
   (a formatter after every edit) or "never do this" (an absolute
   prohibition) needs deterministic backing, not prose alone. Flag any
   safety-critical prohibition in the reviewed skill with no hook or
-  permission backing -- see `references/rubric.md`'s Mechanism fit section
+  permission backing -- see `references/rubric.md`'s Agentic operation mechanism-fit section
   for why a prompted rule fails under pressure.
 - **Skill vs. CLAUDE.md**: CLAUDE.md is for facts Claude should hold
   *all the time*; a skill is for a *procedure*, loaded only when
@@ -72,21 +72,21 @@ have been a different mechanism is not fixed by polishing it further.
   changeable, and coincidental grouping, are whole-artifact findings with
   the same headline standing as a wrong-mechanism finding. An orchestrator
   is not split merely for having several steps. Full taxonomy and decision
-  rule: `references/rubric.md`'s Mechanism fit section.
+  rule: `references/rubric.md`'s Agentic operation mechanism-fit section.
 - **Skill-step vs. bundled script**: a deterministic step *inside* a
   skill's procedure is not event-bound, so a hook cannot own it; delegate
   it to a bundled script the skill calls, rather than re-reasoning it in
   prose each run, when the break-even favours it. A single trivial check
   stays in-model. This is a step-level finding, not a whole-artifact
   wrong-mechanism one -- the break-even test and rationale (correctness,
-  consistency, cost) are in `references/rubric.md`'s Mechanism fit section.
+  consistency, cost) are in `references/rubric.md`'s Agentic operation mechanism-fit section.
 - **Model/effort tier fit**: when the reviewed skill's own content --
   prose instructions or a bundled Workflow script -- pins a specific
   model tier or reasoning-effort level for itself or a sub-dispatch, that
   pin needs its own justification, the same way a mechanism choice does.
   Most skills correctly omit both and inherit the caller's; that absence
   is not a finding. Also a step-level finding, not a whole-artifact one
-  -- criteria and citation are in `references/rubric.md`'s Mechanism fit
+  -- criteria and citation are in `references/rubric.md`'s Agentic operation mechanism-fit
   section. Runs at step 2, before the sidecar is read -- Procedure step 4
   below owns the separate declaration-vs-pin cross-check.
 - **Tool-capability verification**: when the reviewed skill's own content
@@ -96,7 +96,7 @@ have been a different mechanism is not fixed by polishing it further.
   schema/docs before accepting it; a plausible-sounding capability claim
   is not evidence the cited tool actually supports it. Also a step-level
   finding, not a whole-artifact one -- criteria and citation are in
-  `references/rubric.md`'s Mechanism fit section.
+  `references/rubric.md`'s Agentic operation mechanism-fit section.
 - **Subagent delegation scope**: subagent dispatch with no criterion or cap
   is a step-level finding -- `references/rubric.md`.
 - **Invocation-mode fit**: establish who may actually invoke the target --
@@ -109,7 +109,7 @@ have been a different mechanism is not fixed by polishing it further.
   consumes this result instead of re-deriving it -- `references/rubric.md`.
 
 Full rationale and citation: [references/rubric.md](references/rubric.md)'s
-Mechanism fit section.
+Agentic operation mechanism-fit section.
 
 ## Subagent dispatch
 
@@ -152,16 +152,16 @@ is still grading from a contaminated context.
 - Hand the dispatch step 3's shape-checker output as an established fact
   rather than having it re-run the script itself (Contract discipline's
   "never both" rule, `references/rubric.md`).
-- Require the dispatch to return the full structured report -- mechanism
-  fit, portability and compatibility-awareness results, all nine dimensions
+- Require the dispatch to return the full structured report -- Agentic
+  operation mechanism-fit, portability and compatibility-awareness results, all nine dimensions
   with quoted evidence, and the verdict -- not a bare summary;
   a postcondition with no cited evidence is not a review. Quote that
   evidence delimiter-safely, never raw-interpolated into the report (see
   [references/adversarial-self-audit.md](references/adversarial-self-audit.md)'s
   structured-output-injection section for how).
-- When the target has Stop boundaries or Mechanism-fit prose, instruct the
-  dispatch explicitly to check each such sentence against *both* Mechanism
-  fit's "is this backed" question and the portability litmus test's "would
+- When the target has Stop boundaries or Agentic operation mechanism-fit prose, instruct the
+  dispatch explicitly to check each such sentence against *both* Agentic
+  operation mechanism-fit's "is this backed" question and the portability litmus test's "would
   this exact wording survive being read in an unrelated repository" question
   (`references/rubric.md`'s Portability level section) -- its default
   nine-dimension walk answers the first by habit and can silently skip the
@@ -202,7 +202,7 @@ just to classify it.
   fact-claim** ("backed by this plugin's `X`," "this repo's tests
   currently number N") fails Portable exactly like a runtime path-read
   does, if it would go false once copied elsewhere. Stop boundaries and
-  Mechanism-fit prose are the highest-risk spot for this -- see
+  Agentic operation mechanism-fit prose are the highest-risk spot for this -- see
   `references/rubric.md`'s Portability level section for the full
   litmus test.
 - **Repository-scoped**: intentionally depends on the origin repo's own
@@ -227,7 +227,7 @@ Full rationale and per-dimension grading detail:
 
 ## Compatibility and Confidentiality awareness
 
-Two warning-only axes, separate from Portability and the nine dimensions, that never change the verdict. **Compatibility awareness** applies the classifications, evidence states, output tokens, and remediation rules in the [runtime compatibility baseline](references/runtime-compatibility.md); put GitApex-only evidence in `metadata/gitapex.yaml`, reserve `compatibility` for the skill's declaration. **Confidentiality awareness** -- distinct from Mechanism fit's secret-exposure Stop-boundary check (backing, not disclosure) -- fires when a procedure step handles secrets, credentials, PII, payment/financial account data, confidential/competitively-sensitive business information (insider-trading-adjacent MNPI and ordinary trade-secret-type harm alike), or private data; reports `NO_CONFIDENTIALITY_CONCERN` / `PROPOSE_CONFIDENTIALITY_SAFEGUARD` / `CONFIDENTIALITY_ACKNOWLEDGED`. Full detail for both: [references/rubric.md](references/rubric.md)'s Compatibility awareness and Confidentiality awareness sections.
+Two warning-only axes, separate from Portability and the nine dimensions, that never change the verdict. **Compatibility awareness** applies the classifications, evidence states, output tokens, and remediation rules in the [runtime compatibility baseline](references/runtime-compatibility.md); put GitApex-only evidence in `metadata/gitapex.yaml`, reserve `compatibility` for the skill's declaration. **Confidentiality awareness** -- distinct from Agentic operation mechanism-fit's secret-exposure Stop-boundary check (backing, not disclosure) -- fires when a procedure step handles secrets, credentials, PII, payment/financial account data, confidential/competitively-sensitive business information (insider-trading-adjacent MNPI and ordinary trade-secret-type harm alike), or private data; reports `NO_CONFIDENTIALITY_CONCERN` / `PROPOSE_CONFIDENTIALITY_SAFEGUARD` / `CONFIDENTIALITY_ACKNOWLEDGED`. Full detail for both: [references/rubric.md](references/rubric.md)'s Compatibility awareness and Confidentiality awareness sections.
 
 ## Unknowns framework
 
@@ -251,7 +251,7 @@ layering. Full per-dimension detail:
 [references/rubric.md](references/rubric.md)'s Capability assumption
 section.
 
-Distinct from Mechanism fit's Model/effort tier fit check: that judges a
+Distinct from Agentic operation mechanism-fit's Model/effort tier fit check: that judges a
 model or effort *pin the skill's own content makes*, which the invoking
 agent acts on at runtime, and fires only when such a pin exists (most
 skills correctly have none). This declaration pins nothing and never
@@ -371,12 +371,12 @@ binary gate-warranted question.
    whose own stated trigger this target meets (an unlinked file is a dimension-5
    finding; record each conditional skip). Apply [input validation](references/adversarial-self-audit.md);
    an unread target draws an Indeterminate verdict, never a fabricated one.
-2. *(runs 3rd)* Check mechanism fit per the section above. A whole-artifact
+2. *(runs 3rd)* Check Agentic operation mechanism-fit per the section above. A whole-artifact
    wrong-mechanism finding (the skill should have been a hook, subagent, or CLAUDE.md
    content) or a whole-artifact low-cohesion finding (the skill should be split into
    several) is the headline finding of the review -- report it even if the rest of
    the review still completes (see this section's preamble above). The four
-   step-level Mechanism fit findings above are the exception: report them for triage,
+   step-level Agentic operation mechanism-fit findings above are the exception: report them for triage,
    not as the headline. Also run the Blind spot pass per the Unknowns framework
    section above -- name a rubric gap if the target's domain exposes one, or state
    explicitly that none was found.
@@ -433,7 +433,7 @@ actually specifies.
   dispatch is actually running in -- check directly rather than assuming
   either way; if a target repository has such a hook, that is real
   enforcement, and if it does not, this boundary is currently prose-only
-  and worth naming as a Mechanism-fit gap the same way any other
+  and worth naming as an Agentic operation mechanism-fit gap the same way any other
   unenforced safety-critical prohibition would be. The skill's own
   bundled `scripts/gitapex_check_skill_shape.py` is not such an install -- it
   ships with the skill and only reads.

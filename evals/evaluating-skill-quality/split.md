@@ -131,7 +131,7 @@ these corrected contracts, not the invalidated earlier scores.
   standard `compatibility` self-declaration and Unknown restraint rather than
   generic compatibility prose. The independently authored conflicting-
   semantics fixture covers an existing but incomplete declaration and keeps
-  its separate Mechanism-fit blocker.
+  its separate Agentic operation mechanism-fit blocker.
 
 Blind spot pass: the corpus covers declared and undeclared limitations,
 standard and non-standard placement, warning-only severity, a mixed blocker,
@@ -142,7 +142,7 @@ Unknown and must be refreshed as product documentation changes.
 The `cohesion-independently-changeable-branches-train.yaml` /
 `cohesion-temporal-grouping-selection.yaml` / `cohesion-sequential-
 orchestrator-restraint.yaml` triple was added for issue #334 (the Skill vs.
-multiple skills / cohesion Mechanism-fit check), for the same reason as
+multiple skills / cohesion Agentic operation mechanism-fit check), for the same reason as
 every prior addition: none of the prior 37 fixtures probe whether the
 review can classify a target's cohesion type and decide whether it should
 split into several skills. `-train.yaml` sits in train (a
@@ -229,7 +229,7 @@ must still get an explicit "no blind spot found" rather than a silently
 skipped question or a fabricated one.
 
 The three `model-effort-tier-fit-*` fixtures were added for issue #155
-(the Model/effort tier fit Mechanism-fit check), for the same reason:
+(the Model/effort tier fit Agentic operation mechanism-fit check), for the same reason:
 none of the prior 16 fixtures probe whether the review checks a reviewed
 skill's own model-tier or effort-level pins for justification.
 `model-effort-tier-fit-unjustified-model.yaml` sits in train (a trivial
@@ -312,7 +312,7 @@ ablation-capability phrasing.
 
 The `tool-capability-verification-train.yaml` / `-selection.yaml` pair was
 added for issue #200's Tool-capability verification check (a sixth
-Mechanism-fit check), for the same reason as prior additions: none of the
+Agentic operation mechanism-fit check), for the same reason as prior additions: none of the
 prior 33 fixtures probe whether the review catches a target's own
 unverified claim that a named tool/MCP subcall can detect, verify, or
 reconstruct something. `-train.yaml` sits in train (a PR-history-audit
@@ -403,7 +403,7 @@ the prior fixtures' target skills contain such a step at all --
 mention a secret-rotation/secret-scanning tool by name, but neither
 fixture's own `expected` assertions reference confidentiality, secrets, or
 credentials, and the Confidentiality awareness axis is declaration-
-independent of those two fixtures' actual failure shape (Mechanism-fit
+independent of those two fixtures' actual failure shape (Agentic operation mechanism-fit
 Skill-vs.-multiple-skills cohesion and Portability's declarative-fact-claim
 litmus test, respectively) -- so this pair is the first to probe the new
 axis at all. `-train.yaml` sits in train (a `webhook-debugger` skill that
@@ -697,7 +697,7 @@ This edit is **not applied** to `references/rubric.md` in this PR.
 Candidate
 edit (already merged; this entry records the gate retroactively, per
 issue #398): deduplicate a near-verbatim triplicated "step-level finding"
-disclaimer across `references/rubric.md`'s three step-level Mechanism-fit
+disclaimer across `references/rubric.md`'s three step-level Agentic operation mechanism-fit
 subsections (Skill-step vs. bundled script, Model/effort tier fit,
 Tool-capability verification) to one canonical statement plus short
 back-references; extract dimension 7's ISTQB/xUnit Test Patterns block to
@@ -1099,9 +1099,9 @@ selection split -- not a partial or disclosed-limitation record.
 
 Candidate edit: add a new
 `### Model/effort tier fit` subsection to `references/rubric.md` (a fifth
-Mechanism-fit check, grounded in Anthropic's own guidance on choosing a
+Agentic operation mechanism-fit check, grounded in Anthropic's own guidance on choosing a
 model tier and reasoning-effort level in Claude Code); wire it into
-`SKILL.md`'s Mechanism-fit bullet list. Full text: see this PR's diff.
+`SKILL.md`'s Agentic operation mechanism-fit bullet list. Full text: see this PR's diff.
 
 Precondition and splits: satisfied (19 fixtures, 7:7:5 with this
 iteration's additions -- see Assignment above).
@@ -1200,12 +1200,12 @@ Candidate edit: add an explicit litmus test to
 `references/rubric.md`'s Portability level section ("would this exact
 sentence remain true, unchanged, if this file were copied into a
 repository carrying none of the origin repo's state?"), applied to every
-sentence including Stop-boundaries/Mechanism-fit prose, not only executed
+sentence including Stop-boundaries/Agentic operation mechanism-fit prose, not only executed
 steps; a named dimension-6 sub-check banning bare/qualified GitHub
 issue-PR citations inside Portable-declared content; a mirrored, terser
 version in `SKILL.md`'s Portability level section; a Subagent-dispatch
-instruction to check Stop-boundaries/Mechanism-fit prose against both the
-Mechanism-fit "is this backed" question and the new litmus test
+instruction to check Stop-boundaries/Agentic operation mechanism-fit prose against both the
+Agentic operation mechanism-fit "is this backed" question and the new litmus test
 separately; and a fallback in the Blind Spot Pass's "if a gap is found"
 branch, which previously named `gated-skill-edits` as the sole mechanism
 for a durable change with no fallback for a vendored context without that
@@ -1276,7 +1276,7 @@ Along the way, fixing the new fixture's own assertion caught a live
 demonstration of the exact "scorer construct validity" gap this
 session's Blind Spot Pass had already named as a still-open rubric gap
 (see the dogfooding update in `worked-example-self-review.md`'s
-Mechanism-fit section): the fresh **before** dispatch (pre-edit rubric,
+Agentic operation mechanism-fit section): the fresh **before** dispatch (pre-edit rubric,
 no litmus test yet) independently reasoned its way to a *hedged, explicitly
 unsupported-by-rubric* concern about the "issue #88" citation via the
 pre-existing Blind Spot Pass mechanism, and the first version of this
@@ -1769,14 +1769,14 @@ fresh against the real merged file rather than assumed, and a
 three-times-recurring fixture-assertion brittleness fixed at the root
 instead of disclosed a third time.
 
-## Iteration: issue #200, Tool-capability verification (sixth Mechanism-fit check) + consumer-repo issue/PR-convention deference (Dimension 6 bullet)
+## Iteration: issue #200, Tool-capability verification (sixth Agentic operation mechanism-fit check) + consumer-repo issue/PR-convention deference (Dimension 6 bullet)
 
 Candidate edit: add a `### Tool-capability verification`
-subsection to `references/rubric.md`'s Mechanism fit section (a target's
+subsection to `references/rubric.md`'s Agentic operation mechanism-fit section (a target's
 own claim that a named tool/MCP subcall can detect, verify, or reconstruct
 something must be checked against that tool's actual schema/docs, not
 accepted on plausibility alone) plus a matching bullet in `SKILL.md`'s
-Mechanism fit list and TOC entry; and a new Dimension 6 (Durability)
+Agentic operation mechanism-fit list and TOC entry; and a new Dimension 6 (Durability)
 bullet banning a hardcoded, unconditional origin-repo issue/PR title-body
 or workflow-ordering convention in Portable-declared content, distinct
 from the existing issue/PR-*number*-citation bullet. Full text: see this
@@ -1793,7 +1793,7 @@ iteration's additions -- see Assignment above).
 ### Gate result
 
 Methodology, disclosed reuse: the two edits land in disjoint rubric
-sections (Mechanism fit; Dimension 6), each new bullet is appended after
+sections (Agentic operation mechanism-fit; Dimension 6), each new bullet is appended after
 existing content rather than modifying it, and neither touches any other
 dimension. Of the 11 pre-existing selection fixtures, 7 assert on content
 neither edit touches at all (`third-party-not-authoritative.yaml`,
@@ -1870,7 +1870,7 @@ after-dispatches diverged more substantively: one directly cited the new
 Dimension 6 bullet's own Fail criterion verbatim ("asserts its convention
 unconditionally... hardcoded") and scored 1.000000; the other reasoned to
 a related but distinct finding via the *pre-existing* Skill-vs-hook
-Mechanism-fit check instead ("always use it as written" read as an
+Agentic operation mechanism-fit check instead ("always use it as written" read as an
 unenforced hook-shaped rule) without citing the new bullet at all, scoring
 0.500000 -- a genuine, disclosed signal that this specific defect shape is
 sometimes already caught by an existing check under a different
@@ -1955,7 +1955,7 @@ verdict, all fixed before merge.
    changes any already-recorded score: no scored fixture's target declares
    Repository-scoped, and none of the live transcripts depended on the
    demonstrative's exact wording.
-4. **Missing citation-status label.** The Mechanism fit section's own
+4. **Missing citation-status label.** The Agentic operation mechanism-fit section's own
    intro promises "the primary source and the reasoning behind each
    check," and `SKILL.md`'s Tool-capability verification bullet promises a
    citation in `rubric.md` that the new subsection did not carry. Fixed by
@@ -2002,11 +2002,11 @@ limitation is disclosed rather than concealed, and the rubric-text and
 citation fixes strictly improve the shipped content without touching the
 scored fixtures' assertions in a way that would change the table.
 
-## Iteration: issue #334, Skill vs. multiple skills / cohesion (fourth whole-artifact Mechanism-fit check)
+## Iteration: issue #334, Skill vs. multiple skills / cohesion (fourth whole-artifact Agentic operation mechanism-fit check)
 
 Candidate edit: add a `### Skill
 vs. multiple skills / cohesion` subsection to `references/rubric.md`'s
-Mechanism fit section, grounded in structured design's classic cohesion
+Agentic operation mechanism-fit section, grounded in structured design's classic cohesion
 taxonomy (Stevens/Myers/Constantine 1974's original six types; Yourdon/
 Constantine 1978's addition of procedural cohesion) -- maps a target's
 mandatory content and procedure branches to one user-visible outcome,
@@ -2028,7 +2028,7 @@ iteration's additions -- see Assignment above).
 ### Gate result
 
 Methodology, disclosed reuse and limitations: this edit lands entirely
-inside Mechanism fit plus the Verdicts section, so any selection fixture
+inside Agentic operation mechanism-fit plus the Verdicts section, so any selection fixture
 whose target sits in or adjacent to those sections (including a fixture
 affected only by the ordinal-label renumbering, e.g. "fifth" becoming
 "sixth") was treated as touched and given a genuine fresh **after**
@@ -2121,7 +2121,7 @@ The purpose-built fixture, `cohesion-temporal-grouping-selection.yaml`,
 moved cleanly from 0.000000 (before: the pre-edit rubric has no cohesion
 concept at all, so the before-dispatch reasoned its way to a similar
 qualitative "these three tasks don't belong together" conclusion via
-existing Mechanism-fit judgment, but could not and did not produce either
+existing Agentic operation mechanism-fit judgment, but could not and did not produce either
 required phrase, "Skill vs. multiple skills" or "temporal") to 1.000000
 (after: the post-edit dispatch named the new check by its exact heading,
 correctly classified the target as **Temporal** cohesion -- the taxonomy's
@@ -2650,12 +2650,12 @@ correction instruction with no domain-specific reason, on Frontier-declared
 (or Adaptive-body) content, classified as **duplication** against the
 model's own documented default behavior (grounded in Anthropic's "Prompting
 Claude Opus 5"), exempting an instruction naming the skill's own actual
-task; (Part 2) a new step-level Mechanism-fit check, `### Subagent
+task; (Part 2) a new step-level Agentic operation mechanism-fit check, `### Subagent
 delegation scope`, declaration-independent, checking whether a skill that
 instructs subagent dispatch states a delegation criterion and either
 defaults to a single dispatch or states a cap. A matching `[opus5]`
 reference entry was added. Small cross-references added to `SKILL.md`'s
-Mechanism-fit bullet list and Procedure step 2.
+Agentic operation mechanism-fit bullet list and Procedure step 2.
 
 Precondition and splits: satisfied by adding 5 new fixtures to the existing
 corpus (57 fixtures, 22:23:12 -- see Assignment above) --
@@ -2826,7 +2826,7 @@ awareness` pointer section in `SKILL.md`, and an extension to Procedure
 step 4 to run both axes. Full text: this PR's diff. Motivated by a
 conversational Q&A session finding no existing axis checks whether a
 reviewed skill's own procedure discloses/guards handling of secrets,
-credentials, PII, or private data -- distinct from Mechanism fit's
+credentials, PII, or private data -- distinct from Agentic operation mechanism-fit's
 secret-exposure Stop-boundary check, which only asks whether a *stated*
 prohibition is hook-backed.
 
@@ -3612,9 +3612,9 @@ separate link-reference-definition block to the definitions alone (both
 carry the same URL/title data; the definitions alone keep every inline
 `[label]` citation working, confirmed by a direct link-integrity check
 below); (2) trim the Verdicts section's closing paragraph, which restated
-Mechanism fit's own "well-formed/mature presuppose whole-artifact mechanism
+Agentic operation mechanism-fit's own "well-formed/mature presuppose whole-artifact mechanism
 fit" ownership; (3) drop the ordinal/recap opener ("A fourth/sixth/seventh/
-eighth/ninth ... check, distinct from the N above") on six Mechanism-fit
+eighth/ninth ... check, distinct from the N above") on six Agentic operation mechanism-fit
 subsections, keeping each check's own substantive "not X, but Y"
 differentiation; (4) drop the `guardrail.yaml` parenthetical, which the
 source text itself already called "illustrative confirmation, not something
@@ -3709,7 +3709,7 @@ requirement that a KEEP not rest on analytical reasoning alone.**
    own "Blind spot pass" prose happened to write lowercase "nine
    dimensions"). Checked directly whether either deleted/edited passage
    controls either heading or word choice: it does not -- the "Nine-
-   dimension walk"/"Mechanism fit findings" section headings are each
+   dimension walk"/"Agentic operation mechanism-fit findings" section headings are each
    dispatch's own output-formatting choice, not sourced from any rubric.md
    text this edit touched, and the underlying "fixed nine-dimension count"
    claim itself (`references/rubric.md` lines 90/100/104 in the edited
@@ -4573,3 +4573,43 @@ Not run this iteration, for the same reason as the #1346/#1347 entries above -- 
 ### Verdict
 
 KEEP. Refs #1466, #260.
+
+## Terminology sync: issue #1619, bare "Mechanism fit" renamed to "Agentic operation mechanism-fit"
+
+Not a `scorer-gated-skill-edits` iteration -- no `references/rubric.md` row was
+added, removed, or reweighted, so no `split.json` reassignment or scorer trial
+applies here. Recorded per this file's own split-disclosure convention
+(`evals/scripts/gitapex_check_split_disclosure.py`) because two selection
+fixtures' `expected.output_contains` assertions changed as a downstream
+consequence of `references/rubric.md`'s own `## Mechanism fit` heading
+renaming to `## Agentic operation mechanism-fit` (issue #1619's own
+repo-wide vocabulary split -- see `docs/glossary.md`'s
+`Agentic operation mechanism-fit` vs. `Deterministic-gate mechanism-fit`
+entry for the full resolution).
+
+`compatibility-conflicting-allowed-tools-semantics-selection.yaml`'s
+`description`, prompt, and `output_contains` list all substituted the bare
+term for the renamed one (the fixture still asserts the identical
+independent Agentic operation mechanism-fit blocker its held-out
+compatibility-awareness case always asserted; only the literal wording
+changed to match what `evaluating-skill-quality`'s own review output now
+says). `compatibility-independent-blocker-selection.yaml`'s
+`output_contains` list made the identical substitution, for the identical
+reason. Neither fixture's semantic content, split assignment, or
+assertion *count* changed -- `gitapex_gate_split_fixture_coverage.py`'s
+Check D partition arithmetic stays at the declared 35:41:18 -- only the
+literal substring each assertion matches was swapped for the renamed
+term, so no fresh scorer trial or split reassignment applies; this note
+exists solely to satisfy `gitapex_check_split_disclosure.py`'s own
+possessive-citation requirement for the two touched fixtures.
+
+Separately, and for a different, non-content reason:
+`mechanism-fit-claudemd.yaml`'s own `output_contains` list is unchanged --
+issue #1619's own split-fixture-coverage work added a new `expected.exercises`
+declaration immediately above its existing `output_contains:` key, and
+`gitapex_check_split_disclosure.py`'s own coarse hunk-context proxy (see its
+module docstring: any diff hunk containing the literal text
+`output_contains`/`output_not_contains`, git's default 3-line context
+included) flags that adjacency as a touched assertion even though no
+assertion value moved. Named here only to satisfy that proxy; there is no
+assertion-wording change to disclose for this fixture.
