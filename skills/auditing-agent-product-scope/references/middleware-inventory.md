@@ -38,7 +38,7 @@ waza/apm/rtk/betterleaks)."
 | `bun` | A (nixpkgs) | A JS/TS runtime and package manager, per the toolchain's own stated scope | Provisioned in the dev shell; no `package.json` or JS/TS source exists in this repository, and no script or workflow invokes it beyond `toolchain-nix.yml`'s own build-and-version smoke test | Dependabot `nix` ecosystem |
 | `lychee` | A (nixpkgs) | A link checker, per its own project purpose | Same as `bun` -- provisioned and version-smoke-tested only; no link-checking workflow runs it against this repository's docs today | Dependabot `nix` ecosystem |
 | `waza` | B (SHA256-pinned release binary, `microsoft/waza`) | Microsoft's skill/eval-running CLI | Invoked as `nix run .#waza -- run` (its `check` invocation was retired); see the dedicated [waza](#waza) section below for how CI actually wires it | Excluded from Dependabot -- see [Supply-chain coverage summary](#supply-chain-coverage-summary) |
-| `apm` | B (SHA256-pinned release binary, `microsoft/apm`) | Regenerates `CLAUDE.md`/`AGENTS.md` via `apm compile` | See the dedicated [apm](#apm) section below | Excluded from Dependabot -- see [Supply-chain coverage summary](#supply-chain-coverage-summary) |
+| `apm` | B (SHA256-pinned release binary, `microsoft/apm`) | Plugin-dependency installer via `apm install`, deploying `tvna/clairvoyance` and `cathrynlavery/diagram-design` | See the dedicated [apm](#apm) section below | Excluded from Dependabot -- see [Supply-chain coverage summary](#supply-chain-coverage-summary) |
 | `rtk` | B (SHA256-pinned release binary, `rtk-ai/rtk`) | "CLI proxy that reduces LLM token consumption by 60-90% on common dev commands" (the project's own README) | Provisioned and version-checked by `toolchain-nix.yml`'s own smoke test; no script, hook, or workflow in this repository invokes it today | Excluded from Dependabot -- see [Supply-chain coverage summary](#supply-chain-coverage-summary) |
 | `betterleaks` | B (SHA256-pinned release binary, `betterleaks/betterleaks`) | "A configurable, fast, and thorough secrets scanner" (the project's own README) | Consumed by three real wiring points: `.pre-commit-config.yaml`'s `betterleaks-staged` (pre-commit stage) and `betterleaks-history` (pre-push stage) hooks, both shelling out through `.github/scripts/gitapex_run_betterleaks.py` -- a local git-hook gate, not a CI workflow step; and `skills/scanning-leaked-secrets`, an on-demand, agent-invoked skill (not a hook) usable against any target repository | Excluded from Dependabot -- see [Supply-chain coverage summary](#supply-chain-coverage-summary) |
 
@@ -51,17 +51,16 @@ moment a pin bumps.
 ## apm
 
 `apm.yml`: gitapex is normally an apm *provider*, but declares itself a
-*consumer* of two plugins its own skills assume.
+*consumer* of a plugin its own skills assume.
 
 | Dependency | Why needed | Scope of responsibility | Pinned in |
 |---|---|---|---|
-| `apm` (the tool itself) | Regenerates `CLAUDE.md`/`AGENTS.md` via `apm compile` | The tool's own version | `apm.lock.yaml`'s `apm_version` field |
-| `obra/superpowers` | A plugin gitapex's own skills assume is installed | Resolved to `host: github.com`, a pinned commit and version | `apm.lock.yaml` |
+| `apm` (the tool itself) | Plugin-dependency installer via `apm install`, deploying `tvna/clairvoyance` and `cathrynlavery/diagram-design` | The tool's own version | `apm.lock.yaml`'s `apm_version` field |
 | `tvna/clairvoyance` | A plugin gitapex's own skills assume is installed | Resolved to `host: github.com`, a pinned commit and version | `apm.lock.yaml` |
 
 Read the exact pinned values in `apm.lock.yaml` itself rather than
 restating them here, where they would go stale on the next lockfile
-bump. Both plugin dependencies are pinned to `host: github.com`
+bump. The plugin dependency is pinned to `host: github.com`
 specifically -- apm's own lockfile format is GitHub-host-typed, a fact
 relevant to Axis E (git-hosting platform) but recorded here since it is
 apm's own behavior, not a platform-audit finding.

@@ -46,7 +46,7 @@ _EXPECTED_TABLES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     ),
     "apm": (
         ("Dependency", "Why needed", "Scope of responsibility", "Pinned in"),
-        ("`apm` (the tool itself)", "`obra/superpowers`", "`tvna/clairvoyance`"),
+        ("`apm` (the tool itself)", "`tvna/clairvoyance`"),
     ),
     "Python dev tooling": (
         ("Package", "Why needed", "Scope of responsibility"),
