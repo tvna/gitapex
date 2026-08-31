@@ -155,7 +155,14 @@ CLAUDE.md rule are procedures too). Run this after the Core Domain check
 lands on Core (or is not yet applicable) and before clarifying questions
 begin: the mechanism-fit judgment below decides whether a Skill is even
 the right vehicle, and the four-axis round only makes sense once that
-lands on yes.
+lands on yes. **This initial "is it a Skill candidate at all" judgment is
+deliberately coarse, not the vehicle-selection call itself** -- the four
+redirect criteria below are what actually decides hook/CLAUDE.md/subagent
+vs. Skill; a genuinely uncertain case (the target might be a procedure of
+some kind, but its exact shape isn't obvious yet) should run this section
+rather than skip it, since a false-positive run costs one extra judgment
+call while a false-negative skip lets an unfit vehicle through
+unexamined.
 
 *Agentic operation mechanism-fit -- vehicle selection.* Four criteria,
 adapted from `evaluating-skill-quality`'s own Agentic operation
@@ -400,3 +407,5 @@ server. The upstream version fetched a brand logo from a third-party host on
 every screen load; this rewrite drops that request and credits the origin in
 text instead, so the companion makes no outbound call at all. Attribution is
 preserved as a link the user may click, never as an automatic fetch.
+
+[steering]: https://claude.com/blog/steering-claude-code-skills-hooks-rules-subagents-and-more "Anthropic -- Steering Claude Code: skills, hooks, subagents and more"

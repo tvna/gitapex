@@ -89,7 +89,13 @@ bounded contexts, never grading the same question twice.
      upstream (Portability, Capability assumption, Invocation mode as the
      frontmatter `disable-model-invocation`/`user-invocable` pair,
      Lifecycle) are copied in from the ACM's own quoted resolution, never
-     re-elicited here. `dependencyPolicy`/`skillDependencies`/
+     re-elicited here. **If the ACM's Planned-ops text does not actually
+     carry all four axes** (one is missing, blank, or not quotable as a
+     direct resolution), do not infer or default the missing axis -- emit
+     a `StageDeviated{action: escalate}`-shaped finding per Step 7's
+     upstream-ambiguity branch instead, the same fail-closed rule Step 1
+     already applies to a missing job statement.
+     `dependencyPolicy`/`skillDependencies`/
      `executionRequirements` are *derived facts* about what the draft's
      Steps actually do -- computed here, re-verified at Step 6 (a
      mismatch between the declaration and shell/network/file behavior the
@@ -199,18 +205,24 @@ bounded contexts, never grading the same question twice.
      finding roots in the upstream elicitation itself (an Agentic
      operation mechanism-fit vehicle-selection call, or one of the four
      axes, that `eliciting-a-design` resolved wrong or left genuinely
-     ambiguous) --
-     not a drafting defect this skill's own Steps could have caught --
-     do not loop fixing it in place here. This skill's own dispatch
-     context is an isolated, non-interactive `branch-plan-task`: it
-     cannot itself invoke `eliciting-a-design`, an interactive,
-     human-dialogue skill, the same structural constraint that already
-     rules out a live requester-acknowledgment step in this skill. Emit a
-     `StageDeviated{action: escalate}`-shaped event instead (the same
-     event `executing-a-branch-plan` Step 7's failure-dispatch already
+     ambiguous) -- not a drafting defect this skill's own Steps could have
+     caught -- do not loop fixing it in place here. **Before taking this
+     branch, quote the specific ACM Planned-ops text the finding disputes**
+     (the exact vehicle-selection verdict or axis value in question): a
+     finding that cannot be pinned to specific quoted upstream text is not
+     yet established as upstream-rooted, and defaults to the ordinary
+     drafting-defect path (fix it, or Step 7's unobvious-execution-failure
+     escalate if the fix itself is unclear) rather than this branch -- this
+     branch is not a general-purpose way to defer a hard-to-fix finding.
+     This skill's own dispatch context is an isolated, non-interactive
+     `branch-plan-task`: it cannot itself invoke `eliciting-a-design`, an
+     interactive, human-dialogue skill, the same structural constraint that
+     already rules out a live requester-acknowledgment step in this skill.
+     Emit a `StageDeviated{action: escalate}`-shaped event instead (the
+     same event `executing-a-branch-plan` Step 7's failure-dispatch already
      consumes, and the same shape `diagnosing-a-failure`'s
-     `architecture-question` Verdict already produces) naming the
-     specific upstream call in question, and stop.
+     `architecture-question` Verdict already produces), its `reason` field
+     carrying the quoted upstream text above, and stop.
    - **Completion criterion:** both dispatches have run fresh and
      independently, every finding is either fixed (drafting defect) or
      has emitted the escalation event above (upstream-ambiguity finding)
@@ -238,7 +250,7 @@ fresh at Step 7.
 ## Non-goals
 
 - Does not finalize the literal elicitation-probe wording used to resolve
-  the four axes or the Mechanism-fit verdicts -- that phrasing is
+  the four axes or the Agentic operation mechanism-fit verdicts -- that phrasing is
   `eliciting-a-design`'s own job, upstream of this skill entirely.
 - Does not decide the shared-bundled-script-parent policy's future
   blocking-gate threshold, or mechanize that policy into
@@ -423,5 +435,3 @@ that judgment itself now lives in `eliciting-a-design`'s own Agentic
 operation mechanism-fit gate, not in this skill's own body. `skill-creator` is named only as a
 rejected source for its benchmark loop, description-optimization loop,
 and `.skill`-packaging, understood from its installed description.
-
-[steering]: https://claude.com/blog/steering-claude-code-skills-hooks-rules-subagents-and-more "Anthropic -- Steering Claude Code: skills, hooks, subagents and more"

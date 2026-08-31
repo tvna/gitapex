@@ -355,7 +355,7 @@ needed. If the retry also fails, dispatch on what actually failed:
   `drafting-a-skill`'s own Step 7 already distinguishes this case from an
   ordinary drafting defect: when `evaluating-skill-quality` or
   `battle-testing-a-skill` finds a real problem rooted in the *upstream*
-  Mechanism-fit vehicle-selection call or one of the four elicited axes
+  Agentic operation mechanism-fit vehicle-selection call or one of the four elicited axes
   (`eliciting-a-design`'s own resolution, not anything `drafting-a-skill`'s
   own Steps produced), that task cannot fix it in place -- it has no
   interactive-dialogue tooling to re-open `eliciting-a-design` from its
