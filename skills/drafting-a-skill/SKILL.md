@@ -180,8 +180,9 @@ judgment, route directly to `evaluating-skill-quality`/
    as required reading before Step 4 begins. A `Portable` draft naming a
    sibling skill by name adds this verbatim clause to the citing sentence:
    "(gitapex's own name for this role; if the calling repository has no
-   same-named skill, substitute that repository's own skill filling the
-   same role instead)" -- never a runtime reference to another skill, and
+   same-named skill, treat this as an illustrative pointer and substitute
+   that repository's own skill filling the same role instead)" -- never a
+   runtime reference to another skill, and
    never a citation of `docs/`, which this repository never distributes
    alongside the skills it ships.
 
@@ -317,8 +318,7 @@ that determination is `evaluating-skill-quality`'s and
 - Does not build a Red Flags / rationalization-pattern table for this
   skill's own Stop boundaries -- the plain-bullet form below is this
   draft's own choice, not a placeholder for an undelivered table; a
-  future revision may still add one if a real rationalization pattern
-  surfaces in practice.
+  future revision may still add one if a real rationalization pattern surfaces in practice.
 - Does not modify `evaluating-skill-quality`, `battle-testing-a-skill`,
   or `scorer-gated-skill-edits` themselves -- only the routing-text
   additions named in Related skills, in `planning-a-branch-from-an-issue`
