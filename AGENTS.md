@@ -1,9 +1,5 @@
 # AGENTS.md
 
-## Files matching `**/*`
-
-# Agent Instructions
-
 ## 1. Define the Goal with Plan Mode First
 
 *Layer: goal & plan structure; what the work is and how it will be verified.*
