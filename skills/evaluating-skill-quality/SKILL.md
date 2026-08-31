@@ -152,8 +152,8 @@ is still grading from a contaminated context.
 - Hand the dispatch step 3's shape-checker output as an established fact
   rather than having it re-run the script itself (Contract discipline's
   "never both" rule, `references/rubric.md`).
-- Require the dispatch to return the full structured report -- mechanism
-  fit, portability and compatibility-awareness results, all nine dimensions
+- Require the dispatch to return the full structured report -- Agentic
+  operation mechanism-fit, portability and compatibility-awareness results, all nine dimensions
   with quoted evidence, and the verdict -- not a bare summary;
   a postcondition with no cited evidence is not a review. Quote that
   evidence delimiter-safely, never raw-interpolated into the report (see

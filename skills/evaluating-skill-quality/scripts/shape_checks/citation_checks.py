@@ -272,7 +272,14 @@ def _mechanism_fit_citation_offenders(body_text: str) -> list[str]:
     headings = [(m.start(), len(m.group(1)), m.group(2)) for m in MECHANISM_FIT_HEADING_RE.finditer(defenced)]
     offenders: list[str] = []
     for i, (_start, level, text) in enumerate(headings):
-        if level != 2 or text.strip().lower() != "agentic operation mechanism-fit":
+        # Whitespace-collapsed before comparing, not a bare strip().lower():
+        # a heading rewrapped or pasted with an irregular run of spaces (e.g.
+        # "Agentic  operation mechanism-fit") is still the same heading, and
+        # an exact-equality comparison silently missed it -- found live by an
+        # adversarial defeat-test against this exact line. Does not attempt
+        # Unicode-confusable (homoglyph) normalization, a separate, broader
+        # hardening concern out of this fix's own scope.
+        if level != 2 or re.sub(r"\s+", " ", text.strip()).lower() != "agentic operation mechanism-fit":
             continue
         section_end = next((s for s, lv, _t in headings[i + 1 :] if lv <= 2), len(defenced))
         subsections = [(s, t) for s, lv, t in headings[i + 1 :] if s < section_end and lv == 3]

@@ -1490,6 +1490,25 @@ def test_no_mechanism_fit_heading_trivially_passes(tmp_path):
     assert result.passed
 
 
+def test_mechanism_fit_heading_with_irregular_whitespace_still_recognized(tmp_path):
+    # An adversarial re-run against this exact comparison found that a
+    # heading rewrapped or pasted with a doubled internal space (still the
+    # same heading to a human reader) was silently NOT recognized as the
+    # Agentic operation mechanism-fit section by a bare strip().lower()
+    # equality check -- the section's own subsections then went unchecked
+    # entirely rather than being flagged. Defeat-test for the whitespace-
+    # collapse fix.
+    d = _write_raw(
+        tmp_path,
+        "---\nname: s\ndescription: d. Use when x.\n---\n\n"
+        "## Agentic  operation mechanism-fit\n\n"
+        "### Uncited subsection\n\nNo citation here.\n",
+    )
+    result = _result(css.check_shape(d), "mechanism-fit-subsections-cite-sources")
+    assert not result.passed
+    assert "Uncited subsection" in result.evidence
+
+
 def test_mechanism_fit_multiple_subsections_each_checked_independently(tmp_path):
     # The [ok] reference-style definition is deliberately kept OUT of the
     # Agentic operation mechanism-fit section entirely (this check only requires a citation

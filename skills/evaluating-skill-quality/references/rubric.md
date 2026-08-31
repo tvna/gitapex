@@ -2383,8 +2383,8 @@ acknowledgment a live-proof gate requires -- it does not itself waive any
 live-proof check the reviewing repository applies before landing other
 kinds of changes.
 
-**Well-formed** and **mature** both presuppose *whole-artifact* mechanism
-fit and adequate cohesion -- the skill is the right container (not better
+**Well-formed** and **mature** both presuppose *whole-artifact* Agentic
+operation mechanism-fit and adequate cohesion -- the skill is the right container (not better
 as a hook, subagent, or CLAUDE.md content), and its content is not a
 coincidental or independently-triggerable/usable/changeable grouping that
 should split into several skills, per [Agentic operation mechanism-fit](#agentic-operation-mechanism-fit)'s own
