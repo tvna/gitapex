@@ -111,9 +111,11 @@ capture file, then exit 0. No ``eval``, no argument parsing, no branching
 on its own input -- it cannot be made to do anything other than record how
 it was called, regardless of what a generated command passes it.
 
-The one exception is :func:`_write_self_backgrounding_stand_in` below,
-private to this module's own timeout/process-group proof test (never used
-by a real classifier consumer) -- see its own docstring for why it is
+The two exceptions are :func:`_write_self_backgrounding_stand_in` and
+:func:`_write_rlimit_reporting_stand_in` below, each private to one of
+this module's own proof-method tests (the timeout/process-group proof and
+issue #1606's own headroom regression test respectively), never used by a
+real classifier consumer -- see their own docstrings for why they are
 deliberately not inert.
 
 Safety design of the runner
@@ -160,7 +162,16 @@ Safety design of the runner
   root) process at all, so :func:`_resource_limit_prologue` tolerates
   ``setrlimit`` failing or silently not being honored. The hard wall-clock
   timeout plus ``killpg`` above is the real, unconditional backstop; this is
-  an additional layer on top of it, not a substitute for it.
+  an additional layer on top of it, not a substitute for it. The
+  ``RLIMIT_NPROC`` value itself is never the caller-supplied ``nproc``
+  verbatim: since Linux's own ``RLIMIT_NPROC`` caps the real uid's
+  system-wide task count rather than descendants of this call, treating
+  ``nproc`` as a raw absolute ceiling collided with unrelated ambient
+  processes already running under the same real uid on a loaded CI runner
+  (issue #1606) -- so :func:`run_bash_oracle` adds
+  :func:`_ambient_task_count_for_real_uid`'s own live snapshot to
+  ``nproc`` first, making ``nproc`` a headroom budget over ambient load
+  rather than an absolute value.
 
 pytest-xdist safety
 --------------------
@@ -175,7 +186,8 @@ directly.
 
 Proof-method tests
 -------------------
-Four tests below prove the design claims above, each directly:
+Five tests below exercise this module directly -- (a)-(d) prove the design
+claims above, (e) is issue #1606's own regression test:
 
 (a) :func:`test_stand_in_tool_resolves_but_real_system_binary_is_unreachable`
     -- a stand-in-only tool name resolves and runs; a real system binary
@@ -199,6 +211,14 @@ Four tests below prove the design claims above, each directly:
     ``>``, a space, a backtick, ``$``, ...), and accepts every real
     vocabulary token both classifier tables carry today, so that closure
     claim is enforced rather than merely asserted in prose.
+(e) :func:`test_default_nproc_headroom_survives_ambient_process_load` --
+    issue #1606's own regression test: under deliberately inflated
+    real-uid ambient process load, the ``RLIMIT_NPROC`` value actually
+    applied to the generated command's own child (read back from that
+    child) still clears the pre-#1606 fixed default by at least the load
+    the test itself added, and a command that genuinely does fork (a
+    subshell, since ``bash -c`` execs a single simple command in place
+    without forking at all) does not falsely time out.
 """
 
 from __future__ import annotations
@@ -279,9 +299,7 @@ def write_stand_ins(tool_names: Iterable[str], stand_in_dir: pathlib.Path, captu
     for name in tool_names:
         if not name or "/" in name or "\\" in name or name in (".", ".."):
             raise ValueError(f"unsafe stand-in tool name: {name!r}")
-        script_path = stand_in_dir / name
-        script_path.write_text(source, encoding="utf-8")
-        script_path.chmod(0o700)
+        _write_stand_in_script(stand_in_dir / name, source)
 
 
 def _inert_stand_in_source(capture_file: pathlib.Path) -> str:
@@ -299,6 +317,123 @@ def _inert_stand_in_source(capture_file: pathlib.Path) -> str:
         f'with open({str(capture_file)!r}, "a", encoding="utf-8") as fh:\n'
         '    fh.write(json.dumps(list(sys.argv)) + "\\n")\n'
     )
+
+
+def _write_stand_in_script(script_path: pathlib.Path, source: str) -> None:
+    """Write one stand-in script's own ``source`` to ``script_path`` and make
+    it executable -- the single place this module's own owner-only ``0o700``
+    mode and UTF-8 write are spelled out, shared by :func:`write_stand_ins`
+    above and by the two deliberately-non-inert private stand-in writers its
+    proof-method tests use below, so a future stand-in writer cannot forget
+    either. The parent directory is the caller's own responsibility (each
+    caller already creates it, once, rather than per script)."""
+    script_path.write_text(source, encoding="utf-8")
+    script_path.chmod(0o700)
+
+
+# The two /proc/<pid>/status fields this module reads. "Uid:\t<real>\t
+# <eff>\t<saved>\t<fs>" -- the FIRST number is the real uid, matching the
+# exact accounting basis Linux's own RLIMIT_NPROC uses (issue #1606), not
+# the effective uid. "Threads:\t<n>" -- that process's own task count,
+# because RLIMIT_NPROC accounts THREADS, not processes (``man 2
+# setrlimit``: "a limit on the number of extant process (or, more precisely
+# on Linux, threads) for the real user ID of the calling process").
+# Confirmed directly on this repository's own dev sandbox before relying on
+# it, rather than taken from the wording alone: an unprivileged uid owning
+# exactly ONE process, with RLIMIT_NPROC set to that count plus 6, could
+# start exactly 6 further THREADS and then failed both
+# ``threading.Thread.start`` and ``fork`` with EAGAIN.
+_STATUS_REAL_UID_LINE = re.compile(r"^Uid:\s+(\d+)", re.MULTILINE)
+_STATUS_THREAD_COUNT_LINE = re.compile(r"^Threads:\s+(\d+)", re.MULTILINE)
+
+
+def _real_uid_and_task_count_from_status_file(status_path: pathlib.Path) -> tuple[int, int] | None:
+    """Read one ``/proc/<pid>/status`` file and return ``(real uid, that
+    process's own thread count)``, or ``None`` if the file is unreadable
+    (most commonly: the process already exited between the caller's own
+    ``/proc`` directory listing and this read -- a live system, not a
+    snapshot) or carries no ``Uid:`` line at all. Never raises.
+
+    Decoded with ``errors="replace"``, deliberately, never strict UTF-8: a
+    process's own ``Name:`` field is its raw ``comm`` bytes, which are under
+    no obligation to be valid UTF-8 at all, and a strict decode therefore
+    raises ``UnicodeDecodeError`` -- a ``ValueError``, NOT an ``OSError``,
+    so it escapes the ``except OSError`` guard below and propagates out of
+    every single :func:`run_bash_oracle` call made on that host. Reproduced
+    directly on this repository's own dev sandbox before this was written
+    rather than assumed: one orphaned ZOMBIE whose executable's name
+    carried a ``0xff`` byte failed 4 of this module's own 5 proof-method
+    tests -- and a zombie lingers until something reaps it, so such a
+    process poisons every later run rather than passing on its own. Only
+    the ``Uid:``/``Threads:``
+    fields, both pure ASCII digits, are ever read back out of the decoded
+    text, so replacement characters elsewhere in it cannot affect the
+    parse."""
+    try:
+        contents = status_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    uid_match = _STATUS_REAL_UID_LINE.search(contents)
+    if uid_match is None:
+        return None
+    thread_match = _STATUS_THREAD_COUNT_LINE.search(contents)
+    return int(uid_match.group(1)), int(thread_match.group(1)) if thread_match else 1
+
+
+def _ambient_task_count_for_real_uid() -> int:
+    """Count the TASKS (threads, not processes) on this system whose REAL
+    uid equals ``os.getuid()`` -- issue #1606's own root cause is that
+    Linux's ``RLIMIT_NPROC`` is a ceiling on exactly this system-wide
+    figure, not on descendants of the calling process, so a fixed absolute
+    ``RLIMIT_NPROC`` value collides with unrelated ambient load already
+    running under the same real uid (a CI runner's own harden-runner eBPF
+    monitor, ``Runner.Worker``, Node-based Actions steps, ``uv``, ...) well
+    before any descendant of a given :func:`run_bash_oracle` call exists at
+    all.
+
+    Tasks, not ``/proc``'s own top-level pid entries: those entries are
+    thread-group LEADERS only, while the kernel compares RLIMIT_NPROC
+    against the real uid's whole task count (see the two patterns above and
+    their own empirical confirmation). Counting leaders alone undercounts
+    the real figure -- by 40% even on this repository's own quiet dev
+    sandbox (73 processes, 102 tasks), and by more on the thread-heavy CI
+    runner issue #1606 actually reports -- and undercounting is the UNSAFE
+    direction here, not a conservative one: it computes a ceiling BELOW the
+    load already in flight, which is precisely the false-positive ``fork``
+    failure this whole computation exists to prevent.
+
+    Deliberately a standalone, PARENT-process-side function -- called from
+    :func:`run_bash_oracle` before it forks, never from inside
+    :func:`_resource_limit_prologue`'s own ``preexec_fn`` closure below,
+    which this module's own design keeps minimal (see the module
+    docstring's own "Safety design of the runner" section): walking
+    ``/proc`` is exactly the kind of non-trivial work that belongs before
+    the fork, not inside the freshly-forked child.
+
+    Standard-library only. Inherently a live, racy snapshot -- a process
+    can exit between the ``/proc`` directory listing and the read of its
+    own ``status`` file -- so a disappeared entry is simply skipped rather
+    than raising: an exact-at-a-single-instant count is not obtainable on a
+    live system by any method, and a process that has already exited has
+    released its own tasks too, so skipping it is the one undercount that
+    genuinely is safe. Returns 0 (rather than raising) on a host with no
+    readable ``/proc`` at all, leaving ``nproc`` its own pre-#1606 absolute
+    meaning there; the listing is materialized INSIDE the guard on purpose,
+    since ``pathlib.Path.iterdir`` is a generator function on this
+    repository's own pinned Python and does not touch the filesystem --
+    and so cannot raise -- until it is first iterated.
+    """
+    real_uid = os.getuid()
+    try:
+        pid_entries = [entry for entry in pathlib.Path("/proc").iterdir() if entry.name.isdigit()]
+    except OSError:
+        return 0
+    total = 0
+    for entry in pid_entries:
+        observed = _real_uid_and_task_count_from_status_file(entry / "status")
+        if observed is not None and observed[0] == real_uid:
+            total += observed[1]
+    return total
 
 
 def _resource_limit_prologue(cpu_seconds: int, nproc: int) -> Callable[[], None]:
@@ -369,7 +504,18 @@ def run_bash_oracle(
 
     ``enable_resource_limits`` (default on) additionally applies the
     ``RLIMIT_CPU``/``RLIMIT_NPROC`` defense-in-depth prologue documented on
-    :func:`_resource_limit_prologue` above.
+    :func:`_resource_limit_prologue` above. ``nproc`` is NOT the raw
+    ``RLIMIT_NPROC`` value applied -- it is a HEADROOM budget (issue #1606):
+    the number of additional tasks the generated command itself should be
+    allowed to fork, on top of whatever this real uid already owns on the
+    system at call time (:func:`_ambient_task_count_for_real_uid`).
+    Linux's own ``RLIMIT_NPROC`` caps the real uid's system-wide task
+    count, not descendants of this call, so treating ``nproc`` as a raw
+    absolute ceiling (the pre-#1606 behavior) collided with unrelated
+    ambient processes already running under the same real uid on a loaded
+    CI runner, making ``bash``'s own ``fork`` fail with "Resource
+    temporarily unavailable" well before any descendant of this call
+    existed -- a false-positive ``timed_out``, not a real fork-bomb.
     """
     stand_in_dir = stand_in_dir.resolve()
     cwd = cwd.resolve()
@@ -380,7 +526,10 @@ def run_bash_oracle(
 
     bash_path = resolve_bash()
     env: dict[str, str] = {"PATH": str(stand_in_dir), "LC_ALL": "C"}
-    preexec = _resource_limit_prologue(cpu_seconds, nproc) if enable_resource_limits else None
+    preexec = None
+    if enable_resource_limits:
+        effective_nproc = _ambient_task_count_for_real_uid() + nproc
+        preexec = _resource_limit_prologue(cpu_seconds, effective_nproc)
 
     process: subprocess.Popen[str] = subprocess.Popen(
         [bash_path, "-c", command],
@@ -510,8 +659,8 @@ def run_oracle_in(command: str, tool_names: Iterable[str], work_dir: pathlib.Pat
 # --- Proof-method tests -----------------------------------------------------
 #
 # See this module's own "Proof-method tests" docstring section above for
-# what each of the three proves and why. All three are collected the moment
-# this file is passed to pytest directly (`pytest tests/_gitapex_bash_oracle.py
+# what each of them proves and why. Every one is collected the moment this
+# file is passed to pytest directly (`pytest tests/_gitapex_bash_oracle.py
 # -v`) regardless of not matching pytest's own `python_files` glob, since
 # that glob only gates *directory* recursion, not an explicitly-named path --
 # confirmed directly against this repository's own installed pytest before
@@ -668,9 +817,7 @@ def _write_self_backgrounding_stand_in(
         "else:\n"
         f"    time.sleep({sleep_seconds!r})\n"
     )
-    path = stand_in_dir / name
-    path.write_text(source, encoding="utf-8")
-    path.chmod(0o700)
+    _write_stand_in_script(stand_in_dir / name, source)
 
 
 @pytest.mark.slow
@@ -716,3 +863,155 @@ def test_timeout_kills_the_whole_process_group(tmp_path: pathlib.Path) -> None:
     # survived, then confirm it never did.
     time.sleep(sleep_seconds)
     assert not marker_file.exists(), "background grandchild survived the process-group kill"
+
+
+def _write_rlimit_reporting_stand_in(name: str, stand_in_dir: pathlib.Path, report_file: pathlib.Path) -> None:
+    """Deliberately NOT inert -- like :func:`_write_self_backgrounding_stand_in`
+    above, private to this module's own issue #1606 regression test below,
+    never used by a real classifier consumer. Reports the ``RLIMIT_NPROC``
+    ``(soft, hard)`` pair actually in effect for ITSELF -- set by
+    :func:`_resource_limit_prologue`'s own ``preexec_fn`` on the ``bash``
+    process this stand-in's own invocation descends from, and inherited
+    unchanged across both the shebang re-exec and bash's own further
+    ``fork``/``exec`` of this stand-in (POSIX rlimits survive ``exec``;
+    only a further ``setrlimit`` call, which nothing here makes, could
+    change them) -- by writing ``f"{soft} {hard}"`` to ``report_file``."""
+    stand_in_dir.mkdir(parents=True, exist_ok=True)
+    source = (
+        f"#!{sys.executable}\n"
+        "import resource\n"
+        "\n"
+        "soft, hard = resource.getrlimit(resource.RLIMIT_NPROC)\n"
+        f'with open({str(report_file)!r}, "w", encoding="utf-8") as fh:\n'
+        '    fh.write(f"{soft} {hard}")\n'
+    )
+    _write_stand_in_script(stand_in_dir / name, source)
+
+
+@pytest.mark.slow
+def test_default_nproc_headroom_survives_ambient_process_load(tmp_path: pathlib.Path) -> None:
+    """Regression test for issue #1606.
+
+    Root cause: pre-fix, :func:`run_bash_oracle`'s own default ``nproc=64``
+    was applied to ``RLIMIT_NPROC`` as a raw absolute value, but Linux's own
+    ``RLIMIT_NPROC`` caps the calling real uid's SYSTEM-WIDE process count,
+    not descendants of this call -- so on a CI runner already carrying
+    background processes near or above 64 under the same real uid
+    (harden-runner's own eBPF monitor, ``Runner.Worker``, Node-based Actions
+    steps, ``uv``, ...), the fixed absolute ceiling collided with those
+    unrelated ambient processes and ``bash``'s own ``fork`` failed with
+    "Resource temporarily unavailable" -- a false-positive ``timed_out``,
+    not a real fork bomb.
+
+    This test deliberately inflates the CURRENT process's own real-uid
+    ambient process count well past the old fixed default (64) by spawning
+    several dozen background ``sleep`` processes, then calls
+    :func:`run_bash_oracle` with the default ``nproc=64`` completely
+    unchanged, and asserts the call still succeeds -- exactly the scenario
+    that used to time out.
+
+    The generated command is ``(rlimittool)``, a SUBSHELL, not the bare
+    word: ``bash -c`` execs a single simple command in place, forking
+    nothing at all, so a bare ``rlimittool`` could never exercise
+    ``RLIMIT_NPROC`` on any host, at any limit value, before or after this
+    fix. Confirmed directly rather than assumed, on an unprivileged uid
+    where the kernel really does enforce the limit: ``bash -c 'rlimittool'``
+    under ``RLIMIT_NPROC=(1, 1)`` exited 0, while ``bash -c '(rlimittool)'``
+    under the same limit could not fork its subshell and hung in ``bash``'s
+    own fork-retry loop until this harness's timeout killed it -- which is
+    exactly issue #1606's reported symptom.
+
+    Two independent assertions prove this, for two different reasons:
+
+    1. ``not result.timed_out`` -- the literal symptom issue #1606 reports,
+       and (given the forking subshell above) a real fork attempt made
+       under the limit actually applied. This one is privilege-dependent on
+       Linux: ``RLIMIT_NPROC`` is never enforced by the kernel for a
+       process holding ``CAP_SYS_RESOURCE``/``CAP_SYS_ADMIN`` (in practice,
+       real uid 0 in most container setups) regardless of the limit value
+       -- confirmed directly against this exact repository's own dev
+       sandbox before relying on it (a ``RLIMIT_NPROC`` of 1 let 100 real
+       forks through without a single ``EAGAIN``). So on such a host this
+       assertion is true both before and after the fix and cannot, by
+       itself, tell them apart here. It IS the discriminating assertion on
+       this suite's real target -- a GitHub Actions ``ubuntu-latest``
+       runner (``.github/workflows/*.yml``'s own ``runs-on:``), which
+       executes as an unprivileged ``runner`` user with neither capability,
+       so ``RLIMIT_NPROC`` really is enforced there.
+    2. ``applied_hard > 64 + background_count`` -- reads back the REAL, literal
+       ``RLIMIT_NPROC`` hard limit the kernel recorded for the generated
+       command's own child process (via a dedicated non-inert stand-in,
+       :func:`_write_rlimit_reporting_stand_in`, since ``setrlimit`` itself
+       always records the requested value regardless of whether the kernel
+       later enforces it during ``fork``). This is deterministic and
+       privilege-independent: pre-fix, ``nproc=64`` was applied verbatim
+       every time, so this reads back exactly ``64`` regardless of ambient
+       load; post-fix, the applied value is
+       ``_ambient_task_count_for_real_uid() + 64``. The bound is derived,
+       not a second magic number: every one of this test's own
+       ``background_count`` background processes is still alive when
+       :func:`run_bash_oracle` takes its snapshot, and the pytest process
+       running this test is itself one more task under the same real uid,
+       so the ambient term is strictly greater than ``background_count``
+       and the applied value strictly greater than
+       ``64 + background_count``. THIS is the assertion that actually
+       turns RED on the pre-fix code in a privileged sandbox like this
+       repository's own dev environment, where assertion 1 alone cannot.
+
+    Marked ``slow`` (spawns dozens of real subprocesses) per this
+    repository's own registered marker.
+    """
+    stand_in_dir = tmp_path / "stand_ins"
+    cwd = tmp_path / "cwd"
+    cwd.mkdir()
+    report_file = tmp_path / "rlimit_report.txt"
+    _write_rlimit_reporting_stand_in("rlimittool", stand_in_dir, report_file)
+
+    # Deliberately BELOW run_bash_oracle's own default nproc headroom of
+    # 64, not an arbitrary "several dozen": this file's own tests run under
+    # this repository's `-n auto` addopts, so another of them
+    # (test_timeout_kills_the_whole_process_group, whose stand-in really
+    # does fork) can be executing in a sibling xdist worker throughout the
+    # window these background processes are alive. That sibling snapshotted
+    # its OWN ambient count before they existed, so inflating the shared
+    # real-uid count by more than its 64-task headroom would make ITS fork
+    # fail with EAGAIN -- reproducing issue #1606's own symptom in a
+    # neighbouring test. Reproduced directly on an unprivileged uid before
+    # picking this bound rather than assumed: 80 background processes
+    # against a 64-task headroom timed the sibling's forking command out;
+    # this count cannot, since it leaves the whole headroom minus
+    # `background_count` still free.
+    background_count = 40
+    background_processes: list[subprocess.Popen[bytes]] = []
+    try:
+        for _ in range(background_count):
+            background_processes.append(
+                subprocess.Popen(["sleep", "30"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            )
+
+        # A SUBSHELL, not a bare `rlimittool`: see this test's own docstring
+        # -- `bash -c` execs a single simple command in place and forks
+        # nothing, so a bare word would never exercise RLIMIT_NPROC at all.
+        result = run_bash_oracle("(rlimittool)", stand_in_dir=stand_in_dir, cwd=cwd)
+        assert not result.timed_out, (result.returncode, result.stdout, result.stderr)
+        assert result.returncode == 0, result.stderr
+
+        applied_soft, applied_hard = (int(token) for token in report_file.read_text(encoding="utf-8").split())
+        assert applied_hard == applied_soft
+        assert applied_hard > 64 + background_count, (
+            f"RLIMIT_NPROC hard limit actually applied to the generated command's own "
+            f"child was {applied_hard}, not above the fixed pre-#1606 default of 64 by "
+            f"at least this test's own {background_count} background processes -- the "
+            f"ambient-load headroom in run_bash_oracle's own nproc computation is not "
+            f"taking effect"
+        )
+    finally:
+        for proc in background_processes:
+            proc.terminate()
+        for proc in background_processes:
+            # Narrow, like every other suppression in this module: only the
+            # wait's own timeout is tolerable here. Anything else (an OSError
+            # from a broken Popen handle, say) is a real defect in this
+            # cleanup path and must surface rather than be swallowed.
+            with contextlib.suppress(subprocess.TimeoutExpired):
+                proc.wait(timeout=5)
