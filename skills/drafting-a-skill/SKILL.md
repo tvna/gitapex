@@ -269,9 +269,20 @@ that determination is `evaluating-skill-quality`'s and
   create-when criteria, no redirect"; axes Portable, Adaptive, default
   invocation, experimental (tracking issue quoted in full).
 - Step 1: job statement captured verbatim, source cited.
-- Step 2: Precondition "a `curl` command is present in the request";
-  Steps parse flags, describe the method/URL/headers/body; Postcondition
-  "one paragraph, no execution"; `metadata/gitapex.yaml` filled from the
+- Step 2: drafted with earned sections only. Frontmatter:
+
+  ```yaml
+  ---
+  name: curl-command-explainer
+  description: Explains, in one paragraph, what request a pasted curl
+    command makes -- no execution. Use whenever a curl command appears
+    in chat and needs a plain-English summary of the request it makes.
+  ---
+  ```
+
+  Precondition "a `curl` command is present in the request"; Steps
+  parse flags, describe the method/URL/headers/body; Postcondition "one
+  paragraph, no execution"; `metadata/gitapex.yaml` filled from the
   quoted axes, none re-elicited.
 - Step 3: one outcome, passes the SDO test, no split needed.
 - Step 4: no existing skill's description collides.
@@ -286,11 +297,33 @@ that determination is `evaluating-skill-quality`'s and
 
 **Second candidate -- rename a git branch to convention.**
 
-- Step 2: fails the earning test -- a Precondition, Postcondition, and
-  Non-goals bullet added from habit each restate Step 1 or don't exist in
-  this vocabulary at all.
-- Corrected: one Step only, the scope cut logged as an elision in
-  `metadata/gitapex.yaml` instead.
+- Step 2 first draft fails the earning test -- a Precondition,
+  Postcondition, and Non-goals section added from habit each restate
+  Step 1 or assert nothing a caller needs to act on:
+
+  Bad:
+  ```markdown
+  ## Precondition
+  - A git branch needs renaming.
+
+  ## Steps
+  1. Rename the branch to match convention.
+
+  ## Postcondition
+  - The branch has been renamed.
+
+  ## Non-goals
+  - Does not rename branches on other remotes.
+  ```
+
+  Good:
+  ```markdown
+  ## Steps
+  1. Rename the branch to match convention.
+  ```
+- Corrected: one Step only. The scope cut ("does not rename branches on
+  other remotes") is logged as an elision in `metadata/gitapex.yaml`
+  instead of kept as a Non-goals bullet nobody needs at invocation time.
 
 **Third candidate.**
 
