@@ -196,8 +196,9 @@ bounded contexts, never grading the same question twice.
    - Fix every finding before Step 7 -- Step 7's handoff does not run
      either checker itself, and this Step has no deferral path the way
      Step 3/5 findings do: fix it or don't proceed.
-   - **Completion criterion:** both checkers exit clean against the
-     current draft, re-run after every fix until they do.
+   - **Completion criterion:** the row 8 scaffold exists, and both
+     checkers exit clean against the current draft, re-run after every
+     fix until they do.
 
 7. **Dispatch both `evaluating-skill-quality` and `battle-testing-a-skill`,
    unconditionally.**

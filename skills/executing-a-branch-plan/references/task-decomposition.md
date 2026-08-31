@@ -184,12 +184,18 @@ Design-by-Contract structure, neither of which this floor invokes:
   reports.
 - Sweep every section the task actually touched against
   `drafting-a-skill`'s `references/formative-quality-dimensions.md`
-  Formative quality dimensions section and fix what the sweep finds.
+  table and fix what the sweep finds -- every row except row 8 (Eval
+  preparation), whose `evals/<skill>/` scenario fixtures are
+  `drafting-a-skill`'s own Step 6 first-draft deliverable, not a prose
+  bar a touched section can be swept against.
 
-Both checks must run clean before that task may report complete -- carry
-this requirement forward the same way the Irreversibility classification
-above carries its own flag into step 6/7, not as a separately tracked
-concept.
+Both checks must run clean before that task may report complete. Unlike
+the Irreversibility classification above, whose flag the main thread
+itself consumes before dispatch, this one binds the dispatched task
+agent, whose worktree-isolated context never reads this file -- state
+both checks in that task's own dispatch prompt, in-band, the same way
+step 6 already cites `references/code-quality-principles.md`'s path
+explicitly, not as a separately tracked concept.
 
 ## Per-task diff BASE (screening precondition, used at step 6)
 

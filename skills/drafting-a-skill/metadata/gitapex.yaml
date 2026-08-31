@@ -165,6 +165,16 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1583"
       summary: "merging origin/main (22 commits, incl. the hedge-phrase fix above) found both branches had independently written a rule 5 into docs/skill-authoring-standards.md: origin/main's hedge-phrase rule and this branch's own body-is-behavior-not-disclosure rule. Kept origin/main's as rule 5 (already cited verbatim above); renumbered this branch's own to 6. SKILL.md's Step 4 merged both paragraphs, the hedge phrase now a worked instance of the conditional-reference-before-elision principle"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1630"
+      summary: "formative-quality-dimensions.md rows 4-7 extended to name every requirement their mapped rubric dimension states; row 8 rewritten from the mislabeled 'Concrete example coverage' into 'Eval preparation' (3+ scenarios including the guardrail case, plus an evals/<skill>/ fixture skeleton), its concrete-example instruction folded into row 4. SKILL.md Step 2 gained a row-4 pointer, Step 6 a scaffold sub-step, the Worked example Step-keyed lists; numbering (1-9) unchanged."
+      outcome:
+        baseCommit: "39f3344a1af7c0fe12c3e92670f58ab5417eaf3b"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1630"
+      summary: "the same issue's independent Step 8 adversarial review fixed three defects: row 8 named a fixture layout this repository does not use (a per-scenario *.md prompt file directly under evals/<skill>/), where the real shape is evals/<skill>/eval.yaml beside tasks/<scenario>.yaml; Step 6's scaffold sub-step was absent from that Step's own completion criterion, so a draft could finish with no scaffold; and the 'not required reading before Step 2' note contradicted Step 2's row-4 pointer."
+      outcome:
+        baseCommit: "39f3344a1af7c0fe12c3e92670f58ab5417eaf3b"
   skillDependencies:
     requires:
       - evaluating-skill-quality
