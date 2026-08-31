@@ -375,9 +375,9 @@ independent and never applied to each other's issue.
   keep. Filing always happens regardless of confirmation; only the close
   half waits on it (or is left open when unattended), and it never
   shortens the record to nothing.
-- Never invent a fourth taxonomy category (a `Recurrence note` is
-  additive only, never a fourth category), and never leave a repair
-  unclassified.
+- Never invent a fourth taxonomy category, and never leave a repair
+  unclassified. A `Recurrence note` is additive only, never a fourth
+  category or a substitute for `Classification`/`Status`.
 - Do not implement the durable gates proposed here in the same cycle --
   propose them (inline in the retrospective issue body, and in each
   missing-deterministic-gate repair's own standalone filed issue) and
