@@ -37,5 +37,13 @@ inputs:
 
     Give me the domain-placement verdict for this policy.
 expected:
+  # exercises (gate gitapex_gate_split_fixture_coverage.py Check E): this
+  # fixture's own scenario forces the verdict to be grounded in cited
+  # evidence (the reversibility-window criterion applied to the target's
+  # own inspected timing) rather than a bare "looks fine"/"well-formed"
+  # verdict with no citation -- exactly the Stop boundary against issuing
+  # an uncited Deterministic-gate mechanism-fit finding.
+  exercises:
+    - "Never issue a bare \"looks fine\" verdict -- including a Deterministic-gate mechanism-fit"
   output_contains:
     - "well-formed but misplaced"

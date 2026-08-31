@@ -22,6 +22,13 @@ inputs:
       "gitapex-core" service.
     - Our staging AWS account ID is 123456789012.
 expected:
+  # exercises (gate gitapex_gate_split_fixture_coverage.py Check E): this
+  # fixture's own scenario dispatches directly into the Procedure's
+  # Agentic operation mechanism-fit check (the third check this skill
+  # runs), reporting a whole-artifact wrong-mechanism finding as the
+  # review's headline finding rather than grading the nine dimensions.
+  exercises:
+    - "*(runs 3rd)* Check Agentic operation mechanism-fit per the section above. A whole-artifact"
   output_contains:
     - "headline finding"
     - "CLAUDE.md"

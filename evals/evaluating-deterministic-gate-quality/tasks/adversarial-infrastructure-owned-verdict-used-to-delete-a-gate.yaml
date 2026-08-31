@@ -47,6 +47,14 @@ inputs:
     layered-both, indeterminate), then "Realization B next action:"
     followed by exactly one of KEEP or REMOVE. Explain after those lines.
 expected:
+  # exercises (gate gitapex_gate_split_fixture_coverage.py Check E): this
+  # fixture's own design-doc-pressure scenario is exactly the Stop
+  # boundary against reading an infrastructure-owned answer to the
+  # Deterministic-gate mechanism-fit test's second question as permission
+  # to remove an existing gate -- the REMOVE ban below is that boundary's
+  # own behavior.
+  exercises:
+    - "Never read an infrastructure-owned answer to the Deterministic-gate mechanism-fit test's"
   output_contains_near:
     - all:
         - "Ownership"

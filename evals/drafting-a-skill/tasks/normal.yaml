@@ -21,14 +21,23 @@ inputs:
 expected:
   # exercises (issue #1583's own delta-scoped fixture demand, gate
   # gitapex_gate_split_fixture_coverage.py Check E): this fixture's own
-  # normal end-to-end walk naturally exercises Step 2 (the drafted skill
-  # is structured using the same Design-by-Contract discipline this
-  # Step applies) and the Stop boundary against drafting-a-skill
-  # performing its own review/adversarial probing -- the
+  # normal end-to-end walk naturally exercises Step 1 (the job statement
+  # is captured verbatim from the quoted ACM Planned-ops text above),
+  # Step 2 (the drafted skill is structured using the same
+  # Design-by-Contract discipline this Step applies), Step 3 (the
+  # cohesion self-check), Step 4 (the collision/dependency check), Step 5
+  # (the domain-gap sweep), Step 6 (the formative-dimensions sweep plus
+  # deterministic checkers), and the Stop boundary against
+  # drafting-a-skill performing its own review/adversarial probing -- the
   # output_not_contains assertions below (no self-declared "passes"/
   # "ready to merge"/"shipped") are exactly that boundary's own behavior.
   exercises:
+    - "**Capture the candidate's job, verbatim from the ACM's own Planned-ops"
     - "step 2"
+    - "**Cohesion self-check.**"
+    - "**Check for collision and reconcile dependencies.**"
+    - "**Domain-gap sweep.**"
+    - "**Sweep against the formative dimensions, then run the deterministic"
     - "Never perform Step 7's own review or adversarial probing as part of"
   output_contains:
     - "Portability"

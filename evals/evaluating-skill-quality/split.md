@@ -4573,3 +4573,32 @@ Not run this iteration, for the same reason as the #1346/#1347 entries above -- 
 ### Verdict
 
 KEEP. Refs #1466, #260.
+
+## Terminology sync: issue #1619, bare "Mechanism fit" renamed to "Agentic operation mechanism-fit"
+
+Not a `scorer-gated-skill-edits` iteration -- no `references/rubric.md` row was
+added, removed, or reweighted, so no `split.json` reassignment or scorer trial
+applies here. Recorded per this file's own split-disclosure convention
+(`evals/scripts/gitapex_check_split_disclosure.py`) because two selection
+fixtures' `expected.output_contains` assertions changed as a downstream
+consequence of `references/rubric.md`'s own `## Mechanism fit` heading
+renaming to `## Agentic operation mechanism-fit` (issue #1619's own
+repo-wide vocabulary split -- see `docs/glossary.md`'s
+`Agentic operation mechanism-fit` vs. `Deterministic-gate mechanism-fit`
+entry for the full resolution).
+
+`compatibility-conflicting-allowed-tools-semantics-selection.yaml`'s
+`description`, prompt, and `output_contains` list all substituted the bare
+term for the renamed one (the fixture still asserts the identical
+independent Agentic operation mechanism-fit blocker its held-out
+compatibility-awareness case always asserted; only the literal wording
+changed to match what `evaluating-skill-quality`'s own review output now
+says). `compatibility-independent-blocker-selection.yaml`'s
+`output_contains` list made the identical substitution, for the identical
+reason. Neither fixture's semantic content, split assignment, or
+assertion *count* changed -- `gitapex_gate_split_fixture_coverage.py`'s
+Check D partition arithmetic stays at the declared 35:41:18 -- only the
+literal substring each assertion matches was swapped for the renamed
+term, so no fresh scorer trial or split reassignment applies; this note
+exists solely to satisfy `gitapex_check_split_disclosure.py`'s own
+possessive-citation requirement for the two touched fixtures.
