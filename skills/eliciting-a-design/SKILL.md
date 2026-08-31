@@ -42,16 +42,17 @@ You MUST create a task for each of these items and complete them in order:
 1. **Explore project context** - check files, docs, recent commits. If there is nothing readable (empty or brand-new repository, no git history, an unreadable or missing path), say which check came back empty and continue from the user's own description alone. Never invent context, and never infer a project that is not there.
 2. **Converge a diffuse idea via Scenario Casting** - only when the idea is unscoped across many stakeholders: gather scenario fragments, prioritize, and combine the top-priority causally-linked ones into a single Orientation Scenario before narrowing further. This comes first because it decides *what* the dialogue is about; the check below judges that subject once it exists. See Scenario Casting below.
 3. **Core Domain check** - only when about to commit heavy custom-modeling effort anywhere in the design: judge competitive advantage, complexity, and volatility. If the target is Generic, search for a precedent - a published model, an analysis pattern, or an off-the-shelf solution - before designing from scratch. See Core Domain Check below.
-4. **Offer the visual companion just-in-time** - NOT upfront. The first time a question would genuinely be clearer shown than described, offer it then (its own message); on approval the selected path starts for you (a browser tab or a published page, depending on which path applies). If no visual question ever arises, never offer it. See the Visual Companion section below.
-5. **Ask clarifying questions** - one at a time, understand purpose/constraints/success criteria. Prefer the `AskUserQuestion` tool; if unavailable, use portable question handoff (print `AskUserQuestion:` followed by the same question and choices as plain text). Apply Domain Storytelling's facilitation patterns - see below.
-6. **Propose 2-3 approaches** - with trade-offs and your recommendation. Any system-level architecture trade-off surfaced here, or at any later point, gets agreed inline via the Architecture Trade-Off step below - not deferred to the end.
-7. **Fit-and-Gap** - only when the idea is a change to an existing system, not a greenfield build, once a candidate approach exists: make the user's current state and target state visible side by side, then surface the gap. See Fit-and-Gap below.
-8. **Present design** - in sections scaled to their complexity, get user approval after each section
-9. **Terminal decision handoff** - once every section is stable, close once via the decision-handoff shape below - not repeated per section. See Terminal Decision Handoff below.
-10. **Write design doc** - save to the calling repository's own `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` convention and commit
-11. **Spec self-review** - quick inline check for placeholders, contradictions, ambiguity, scope (see below)
-12. **User reviews written spec** - ask user to review the spec file before proceeding
-13. **Transition to issue formalization** - invoke `drafting-issues` if available in this repository; otherwise fall back to `drafting-an-acm-issue`. If this design converged a sub-project of a recorded decomposition, thread that decomposition's captured parent tracking-issue number into the invoked skill (see Issue formalization handoff below)
+4. **Agentic operation mechanism-fit and metadata elicitation** - only when the design target is a candidate for a brand-new gitapex Skill: judge Agentic operation mechanism-fit (which vehicle -- Skill, Hook, CLAUDE.md, or Subagent -- actually carries it), then, only once that lands on Skill, elicit the four axes (Portability, Capability assumption, Invocation mode, Lifecycle) the eventual `drafting-a-skill` dispatch will need already resolved. See Agentic Operation Mechanism-Fit and Metadata Elicitation below.
+5. **Offer the visual companion just-in-time** - NOT upfront. The first time a question would genuinely be clearer shown than described, offer it then (its own message); on approval the selected path starts for you (a browser tab or a published page, depending on which path applies). If no visual question ever arises, never offer it. See the Visual Companion section below.
+6. **Ask clarifying questions** - one at a time, understand purpose/constraints/success criteria. Prefer the `AskUserQuestion` tool; if unavailable, use portable question handoff (print `AskUserQuestion:` followed by the same question and choices as plain text). Apply Domain Storytelling's facilitation patterns - see below.
+7. **Propose 2-3 approaches** - with trade-offs and your recommendation. Any system-level architecture trade-off surfaced here, or at any later point, gets agreed inline via the Architecture Trade-Off step below - not deferred to the end.
+8. **Fit-and-Gap** - only when the idea is a change to an existing system, not a greenfield build, once a candidate approach exists: make the user's current state and target state visible side by side, then surface the gap. See Fit-and-Gap below.
+9. **Present design** - in sections scaled to their complexity, get user approval after each section
+10. **Terminal decision handoff** - once every section is stable, close once via the decision-handoff shape below - not repeated per section. See Terminal Decision Handoff below.
+11. **Write design doc** - save to the calling repository's own `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` convention and commit
+12. **Spec self-review** - quick inline check for placeholders, contradictions, ambiguity, scope (see below)
+13. **User reviews written spec** - ask user to review the spec file before proceeding
+14. **Transition to issue formalization** - invoke `drafting-issues` if available in this repository; otherwise fall back to `drafting-an-acm-issue`. If this design converged a sub-project of a recorded decomposition, thread that decomposition's captured parent tracking-issue number into the invoked skill (see Issue formalization handoff below). If the design target was a Skill candidate (checklist item 4), the drafted issue's own ACM Planned-ops quotes item 4's resolved metadata verbatim -- `drafting-a-skill`'s own Precondition consumes it from there, never re-eliciting it.
 
 **"Available in this repository" means checked, never assumed.** Several steps branch on whether a sibling skill is installed - the terminal handoff, the inline architecture trade-off, the decision handoff, the precedent grounding in the Core Domain check, and the writing pass over the spec. Treat every such "if available" the same way, including any added later. Before claiming one is or is not available, actually look: list the harness's own skill inventory, or check the skill directory on disk (`skills/<name>/SKILL.md`, `.claude/skills/<name>/SKILL.md`, or your harness's equivalent). State which you checked and what you found. If the check cannot be run at all, say so and take the fallback path. Never report "not available" from memory, and never let an absent sibling become a skipped step - each fallback is mandatory, not optional.
 
@@ -64,6 +65,9 @@ flowchart TD
     core{"Core Domain check"}
     precedent["Search precedent"]
     scenario["Scenario Casting convergence"]
+    skillcheck{"Skill candidate?"}
+    vehiclefit["Agentic operation<br/>mechanism-fit judgment"]
+    axes["Elicit four axes<br/>(Portability/Capability/<br/>Invocation/Lifecycle)"]
     ask["Ask clarifying questions"]
     stop(("Name the state and stop"))
     approaches["Propose 2-3 approaches"]
@@ -86,9 +90,14 @@ flowchart TD
     decompose --> scope
     scenario --> core
     core -->|"Generic"| precedent
-    core -->|"Core / not yet applicable"| ask
+    core -->|"Core / not yet applicable"| skillcheck
     precedent -->|"off-the-shelf answer fits:<br/>don't build it"| stop
-    precedent -->|"no precedent fits"| ask
+    precedent -->|"no precedent fits"| skillcheck
+    skillcheck -->|"yes, new SKILL.md candidate"| vehiclefit
+    skillcheck -->|"no"| ask
+    vehiclefit -->|"redirect to hook/CLAUDE.md/<br/>subagent/channel instead"| stop
+    vehiclefit -->|"clears vehicle-fit"| axes
+    axes --> ask
     ask -->|"contradiction, or<br/>cannot determine"| stop
     ask --> approaches
     approaches -->|"trade-off surfaces"| tradeoff
@@ -136,6 +145,100 @@ High on all three: this is Core Domain - invest custom modeling and dialogue dep
 If an axis genuinely cannot be judged from what you have - you do not know the user's competitive position, or whether the area churns - ask. If asking does not resolve it, record the axis as unknown and say the verdict is provisional. Never resolve an unknown axis by picking whichever value lets the dialogue continue.
 
 Ground any precedent you name before you lean on it: confirm the library, product, or published pattern actually exists and still does what you are claiming, via `grounding-in-primary-sources` if that skill is available, or a direct look at its own documentation otherwise. A precedent you could not confirm is carried into the design tagged unverified, not offered as a settled alternative to building custom.
+
+**Agentic Operation Mechanism-Fit and Metadata Elicitation:**
+
+Use only when the design target itself is a candidate for a brand-new
+gitapex Skill -- not for every design (most designs are not skills at
+all), and not merely because the target is a procedure (a hook or a
+CLAUDE.md rule are procedures too). Run this after the Core Domain check
+lands on Core (or is not yet applicable) and before clarifying questions
+begin: the mechanism-fit judgment below decides whether a Skill is even
+the right vehicle, and the four-axis round only makes sense once that
+lands on yes.
+
+*Agentic operation mechanism-fit -- vehicle selection.* Four criteria,
+adapted from `evaluating-skill-quality`'s own Agentic operation
+mechanism-fit check (`skills/evaluating-skill-quality/references/
+rubric.md`, citing Anthropic's ["Steering Claude Code"][steering]
+guidance). This is `drafting-a-skill`'s own former Step 2 vehicle-
+selection gate, migrated here in full (see
+<https://github.com/tvna/gitapex/issues/1619>; "Domain
+mechanism-fit" was considered and rejected as a name for the Core Domain
+check above, which stays unchanged) -- `drafting-a-skill` itself no
+longer makes this judgment; it only drafts once this call has already
+landed on Skill.
+
+Don't converge on a Skill design for:
+- An **unconditionally-reliable action** ("every time X, always do Y" -- a
+  formatter after every edit). "The model choosing to run a formatter is
+  different from the formatter running automatically." Redirect to a
+  hook -- name `evaluating-deterministic-gate-quality` as the owner of
+  hook/CI-gate placement and design, and stop this design here.
+- An **absolute prohibition** ("never do this," where failure under
+  pressure or injection is unacceptable). "A real guardrail needs to be
+  deterministic, and the enforcement methods are hooks and permissions."
+  Same redirect as above.
+- An **always-true fact** Claude should hold every session, not only when
+  a skill is invoked. "Procedures belong in skills. CLAUDE.md is for
+  facts Claude should hold all the time." Redirect to CLAUDE.md directly
+  for a root/subdirectory-instruction-shaped need, or to
+  `evaluating-context-channel-maturity` for a Subagent/Output-style/
+  system-prompt-append/Auto-memory-shaped need -- that skill's own
+  description states the mirror-image relationship directly: it asks
+  whether content already living in one of those channels should be a
+  skill instead, the same question asked here from the opposite
+  direction.
+- A **side task whose results are never referenced again.** "Use a
+  subagent when a side task ... would clutter your main conversation with
+  intermediate results you won't reference again." That's a subagent
+  dispatch inside whatever procedure needed it, not a new skill.
+
+Converge on a Skill design when, by contrast: a multi-step procedure a
+human wants to see play out and steer, not intuitively obvious on its
+own, reusable rather than a one-off, and general rather than one
+project's own local convention.
+
+When the candidate genuinely fits neither list cleanly, name the specific
+ambiguity to the user rather than silently picking either side -- a wrong
+guess costs a wasted design round or a wrongly-redirected request, either
+pricier than one clarifying question. This skill does not write hooks,
+edit CLAUDE.md, or author a Subagent/Output-style/system-prompt-append/
+Auto-memory file to satisfy a redirect -- name the redirect and stop; the
+receiving skill or mechanism owns the actual authoring.
+
+*Four-axis elicitation.* One `AskUserQuestion` round, up to four
+questions, never inferred -- run only once the mechanism-fit judgment
+above lands on Skill:
+
+- **Portability** -- `Portable` (works unmodified if vendored to another
+  repository), `Repository-scoped` (hardcodes this repository's own
+  conventions), or `Mixed` (partial dependency).
+- **Capability assumption** -- `Broad` (must give a weak/economical model
+  enough guidance directly), `Frontier` (assumes a strong-reasoning
+  model), or `Adaptive` (a lean body for a strong model, with a weak
+  tier's needs met by `references/` material pulled on demand).
+- **Invocation mode** -- both model- and user-invocable (the default), or
+  narrowed via the `disable-model-invocation`/`user-invocable` `SKILL.md`
+  frontmatter booleans when an irreversible-operation skill should never
+  trigger autonomously.
+- **Lifecycle** -- `experimental` (name a `trackingIssue`, its full URL,
+  and what graduating to `stable` requires), `stable`, or `deprecated`
+  (name a `replacement`).
+
+See `references/tacit-knowledge-elicitation.md` for why these four axes
+are mandatory and for phrasing guidance beyond the options above; a
+follow-up round runs only if later dialogue contradicts an earlier
+answer -- see that file's own "Follow-up round" section. **If no answer
+is obtainable at all**, name the state and stop (see Stopping,
+Rejecting, and Escalating below) rather than proceed on a self-chosen
+provisional value.
+
+Both the Agentic operation mechanism-fit verdict and the four elicited axes are carried forward
+verbatim into the design doc and, at Issue formalization, quoted into the
+drafted issue's own ACM Planned-ops text -- `drafting-a-skill`'s own
+Precondition consumes them from there when `executing-a-branch-plan`
+later dispatches it, never re-eliciting or re-gating either.
 
 **Scenario Casting (opening convergence):**
 
