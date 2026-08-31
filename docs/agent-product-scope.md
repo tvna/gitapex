@@ -137,7 +137,7 @@ this repository itself.
 the Nix-managed toolchain (`flake.nix`'s Class A nixpkgs tools and
 Class B SHA-pinned release binaries -- `waza`, `apm`, `rtk`,
 `betterleaks`), apm itself (`apm.yml`/`apm.lock.yaml`, consuming
-`obra/superpowers` and `tvna/clairvoyance`), Python dev tooling
+`tvna/clairvoyance` and `cathrynlavery/diagram-design`), Python dev tooling
 (`pyproject.toml`/`uv.lock`), and the GitHub MCP server (the one
 universal skill-level dependency; no GitLab MCP server exists).
 

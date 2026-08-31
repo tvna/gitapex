@@ -396,11 +396,15 @@ overrides, not as facts about any one repository. Declared level:
 `metadata/gitapex.yaml`.
 
 Supersession: this skill replaces the vendored obra/superpowers `brainstorming`
-skill, whose trigger it deliberately overlaps so it wins the same requests once
-that one is retired. Where both are installed, routing between them is genuinely
-ambiguous - the frontmatter `description` says which to prefer, but that is a
-tiebreak, not a fix. Retiring the superseded copy is a vendoring decision for
-whichever repository installs both; it cannot be resolved from inside this file.
+skill, whose trigger it deliberately overlaps so it wins the same requests. The
+obra/superpowers `brainstorming` dependency has since been retired - this note
+records that migration rather than describing a still-active overlap. The
+frontmatter `description`'s "prefer this one when both are installed" line
+remains accurate as conditional guidance for any repository state where a copy
+of the superseded skill is still a declared dependency; it is not a claim that
+this repository still declares one (a vendored copy can still be physically
+present on disk without being declared -- `apm install` does not prune a
+dependency's own deployed files once its manifest entry is removed).
 
 Bundled-code provenance: `scripts/` derives from that upstream skill's companion
 server. The upstream version fetched a brand logo from a third-party host on
