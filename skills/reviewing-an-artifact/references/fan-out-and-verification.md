@@ -51,8 +51,10 @@ extended with effort branching and named personas.
 Every persona's dispatch carries the adversarial-reviewer framing Step 2
 states: it did not author the target and its job is to find defects, not
 confirm them. Where the harness supports a fresh, isolated dispatch, every
-persona above runs in one -- see Step 2's own isolation requirement and
-its disclosure rule for when no such mechanism exists.
+persona above runs in one, naming `subagent_type: 'review-persona'`
+(`agents/review-persona.md`) as the dispatch target -- see Step 2's own
+isolation requirement and its disclosure rule for when no such mechanism
+exists.
 
 ## The three-stage verification pipeline (Step 3)
 
@@ -88,7 +90,9 @@ At `high` effort, stage 2 (independent verification) additionally splits
 across two differently-tasked prompts or models, rather than the single
 model that ran the originating persona dispatch also confirming its own
 finding. Each of the two verification passes runs the identical stage-2
-check independently; a finding is treated as independently verified only
+check independently, each naming `subagent_type: 'review-persona'` where
+the harness supports a fresh, isolated dispatch, the same isolation
+mechanism Step 2 uses; a finding is treated as independently verified only
 when both agree it holds. A disagreement between the two does not
 automatically drop the finding -- it demotes it to the `unconfirmed-concern`
 class (Step 4) with both passes' own reasoning disclosed in the
