@@ -92,6 +92,9 @@ spec:
     - kind: caveat
       anchor: "https://github.com/tvna/gitapex/issues/1133"
       summary: "The three fixtures naming waza literally were reworded to the new runner-confirmation shape so their assertions still match the updated SKILL.md. Not re-scored live: this repository still cannot issue an Anthropic API key for budget reasons, the same disclosed constraint the original four fixtures shipped under. Verified live instead: `--help` exits 0, `git log -1 --format=%H` resolves a commit, the extraction one-liner runs correctly, and every changed file validates against its own schema."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "Redivides the drafting-a-skill/scorer-gated-skill-edits boundary along a how-to-rewrite-vs-evaluate axis (design doc, 2026-08-31). Step 3 names drafting-a-skill as patch author, through its Step 6 only, Step 7 deferred. New required Step 9 dispatches drafting-a-skill's Step 7 once pre-ship, distinct from step 8's recommended pass. Two Stop boundaries reworded: step 9 as where review happens, drafting-a-skill as sole editor. Companion: drafting-a-skill's issue/1648 entry (a4d5465d)."
   skillDependencies:
     requires: []
     relatedTo:
