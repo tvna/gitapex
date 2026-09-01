@@ -121,3 +121,28 @@ and a wording tight enough to fit read as too cryptic to trust. Left as a
 disclosed, unclosed gap rather than a rushed edit; a future round should
 either free a few lines elsewhere first or accept the addition as the
 reason to grow past 500 explicitly. Refs #1648.
+
+**Writer-class-B worktree isolation (adversarial-review axis 7):** the
+Precondition gate gained a **Worktree isolation** bullet -- verify this
+invocation already runs inside a linked worktree (`git rev-parse
+--path-format=absolute --git-dir` vs `--git-common-dir`) or
+self-establish one via `git worktree add` under a high-entropy generated
+branch name, failing closed (STOP and escalate) when establishment fails
+-- plus a landing-time escalate rule inside that same bullet (a
+non-fast-forward push rejection or merge conflict on landing is never
+silently rebased-and-recommitted; the rebased candidate re-enters Step 4
+against a fresh baseline). Step 7's `dispatch_mechanism` field now names
+the worktree path, branch name, and how isolation was
+established/verified -- the existing schema field, no schema change. The
+Notes' Concurrency paragraph no longer defers same-tree isolation to the
+caller. One new enforced Stop-boundary bullet (worktree establishment
+fails), so one fixture was added: `worktree-establish-failure-stop.yaml`
+(a failed `git worktree add` is the STOP, never a cue to iterate
+unisolated in the shared checkout). Declared coverage, not scored
+coverage, the same disclosed limit the #932 and #1648 entries above
+carry: no before/after selection score exists for this edit. Same
+disclosed split gap as #1648: the new fixture is not assigned to
+`split.json`'s own `train`/`selection`/`test` arrays, and no
+negative/non-trigger control fixture pairs it yet -- a test-design task
+left open rather than a rushed split assignment. Fixture count for
+`evals/scorer-gated-skill-edits/tasks/` is now 24.
