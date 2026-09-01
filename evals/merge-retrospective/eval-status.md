@@ -6,10 +6,12 @@ compliance, not gap-closure. Only `claude-sonnet-4.6` has been evaluated;
 cross-model behavior is currently unmeasured.
 
 As of issue #312/#328 (a held-out fixture corpus, following the
-`evaluating-skill-quality/split.md` precedent), the suite has **26
-committed task files**: 20 across the 10:6:4 train/selection/test split
+`evaluating-skill-quality/split.md` precedent), the suite has **29
+committed task files**: 23 across the 11:7:5 train/selection/test split
 (see `evals/merge-retrospective/split.md` for the full equivalence-class
-table and blind-spot pass), plus 6 new, not-yet-split-assigned fixtures
+table and blind-spot pass -- issue #1621's own class 11 added 3 of these
+23, one per split, surfacing recurring same-thesis repairs as a
+plan-quality signal), plus 6 new, not-yet-split-assigned fixtures
 issue #1406 added covering the flat gate-proposal-issues redesign's own
 five named scenarios (zero-repair fast-close unchanged; zero-repair
 fast-close despite an out-of-scope legacy backlog; attended multi-repair

@@ -1,0 +1,41 @@
+id: merge-retrospective-recurring-unrelated-repairs-restraint
+name: Multiple Unclear-Instruction Repairs, No Shared Thesis -- No Recurrence Note
+description: Restraint check for "Recurrence is a signal classification cannot carry" -- three repairs in one cycle are all classified unclear agent instruction, but each addresses a distinct, unrelated concern (currency display, invoice numbering, timezone formatting), so no recurrence note should be produced merely because the repair count and category happen to match.
+tags:
+  - quality
+  - recurrence
+  - edge-case
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #512 ("feat: add multi-currency support to
+    the invoice generator") just merged into main. Here is the full
+    history between open and merge -- three repairs occurred, all review
+    comments (no CI failures):
+
+    1. A human reviewer commented that the new multi-currency amounts
+       rendered as "USD 100.00" while every existing invoice field uses
+       the "$100.00" symbol-prefixed style. The author pushed a follow-up
+       commit switching to the symbol-prefixed style. No lint rule or CI
+       check enforces this formatting convention.
+    2. On a separate, unrelated review comment, the reviewer noted that
+       the new invoice numbers were zero-padded to 6 digits
+       ("INV-000123") while every existing invoice number uses 8 digits
+       ("INV-00000123"). The author pushed a follow-up commit matching
+       the 8-digit padding. No lint rule or CI check enforces invoice
+       number width.
+    3. On a third, again unrelated review comment, the reviewer noted
+       that the new due-date field rendered in the server's local
+       timezone instead of UTC, unlike every other date field in the
+       invoice. The author pushed a follow-up commit switching the
+       due-date field to UTC. No lint rule or CI check enforces which
+       timezone a date field uses.
+
+    Run the retrospective now that PR #512 has merged.
+expected:
+  output_contains:
+    - "unclear agent instruction"
+    - "Refs #512"
+  output_not_contains:
+    - "Recurrence note"
+    - "missing deterministic gate"
+    - "external/human decision"

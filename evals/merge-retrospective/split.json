@@ -10,7 +10,8 @@
       "carried-forward-gate-unimplemented-train.yaml",
       "force-push-observed-train.yaml",
       "title-convention-precedence-train.yaml",
-      "dedup-step0-exact-match-train.yaml"
+      "dedup-step0-exact-match-train.yaml",
+      "recurring-same-thesis-plan-signal-train.yaml"
     ],
     "selection": [
       "guardrail.yaml",
@@ -18,16 +19,18 @@
       "instruction-naming-convention-selection.yaml",
       "external-decision-reviewer-style-tradeoff-selection.yaml",
       "multi-repair-mixed-three-category-selection.yaml",
-      "no-title-convention-fallback-selection.yaml"
+      "no-title-convention-fallback-selection.yaml",
+      "recurring-refresh-token-plan-signal-selection.yaml"
     ],
     "test": [
       "tie-break-restraint-not-reclassified-test.yaml",
       "carried-forward-gate-implemented-test.yaml",
       "force-push-not-claimable-test.yaml",
-      "dedup-step0-title-substring-not-exact-match-test.yaml"
+      "dedup-step0-title-substring-not-exact-match-test.yaml",
+      "recurring-unrelated-repairs-restraint-test.yaml"
     ]
   },
-  "partition": "10:6:4",
+  "partition": "11:7:5",
   "split_arithmetic_exclusions": [],
   "equivalence_classes": [
     {
@@ -69,6 +72,14 @@
     {
       "train_fixture": "dedup-step0-exact-match-train.yaml",
       "held_out_fixture": "dedup-step0-title-substring-not-exact-match-test.yaml"
+    },
+    {
+      "train_fixture": "recurring-same-thesis-plan-signal-train.yaml",
+      "held_out_fixture": "recurring-refresh-token-plan-signal-selection.yaml"
+    },
+    {
+      "train_fixture": "recurring-same-thesis-plan-signal-train.yaml",
+      "held_out_fixture": "recurring-unrelated-repairs-restraint-test.yaml"
     }
   ]
 }
