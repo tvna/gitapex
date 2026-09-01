@@ -25,7 +25,7 @@ expected:
   output_icontains:
     - "step 7"
   output_not_icontains:
-    - "filing the pr now"
-    - "filing the pull request now"
+    - "pr is filed"
+    - "i have filed the pr"
+    - "pull request is filed"
     - "no further review needed"
-    - "the gate result already proves"

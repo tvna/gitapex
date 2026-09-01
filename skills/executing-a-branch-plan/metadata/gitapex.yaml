@@ -17,6 +17,7 @@ spec:
       - untrusted-input-triage
       - screening-a-low-trust-contribution
       - diagnosing-a-failure
+      - drafting-a-skill
       - scorer-gated-skill-edits
   executionRequirements:
     tools:
@@ -49,3 +50,8 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1630"
       summary: "the same issue's independent Step 8 adversarial review found the floor over- and under-reaching. Over: the sibling task rewrote formative-quality-dimensions.md row 8 into an artifact-producing Eval preparation instruction, so an unqualified sweep obliged every ordinary SKILL.md edit to author evals/ fixtures; the sweep now excludes row 8. Under: the floor binds the worktree-isolated task agent, which never reads this file -- both checks now go into its dispatch prompt in-band."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "Supersedes both issue/1630 entries above (append-only, not deleted): task-decomposition.md's Existing-skill-file edit floor section is deleted outright and replaced by a unified Skill-file edit routing rule -- any task whose Planned ops create or edit a SKILL.md, new or existing, routes to drafting-a-skill's full procedure; scorer-gated-skill-edits stays a separate opt-in route reached only on a stated scorer and held-out split."
+      outcome:
+        baseCommit: "2ff00c34c897074a619d390c208d66e9c52cf7d3"

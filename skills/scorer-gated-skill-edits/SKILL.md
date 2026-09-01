@@ -5,7 +5,7 @@ description: Use when iteratively editing an existing SKILL.md across repeated m
 
 # Scorer-gated skill edits
 
-Sibling-skill mentions below are examples, not a dependency.
+Sibling-skill mentions of `battle-testing-a-skill` and `evaluating-skill-quality` below are examples, not a dependency; `drafting-a-skill` (steps 3 and 9) is a hard dependency, not an example.
 
 Improve an existing `SKILL.md` as bounded, measured edits gated on a
 held-out score, instead of unmeasured rewriting. Adapts SkillOpt
@@ -487,12 +487,12 @@ repository's own content, not an external, independently-versioned binary
 the way `waza` was: a copy of this skill vendored into
 another repository does not carry that script along with it, since it
 lives outside `skills/scorer-gated-skill-edits/` entirely, at a
-repository-wide `evals/scripts/` path. That is the one instruction in this
-file that does not resolve inside the skill's own directory, which is why
-`spec.portability` is declared `Mixed` rather than `Portable`. A
-repository vendoring this skill without also vendoring that runner (or an
-equivalent) restores step 1's original external-binary shape instead:
-confirm the binary, capture the real `--version` string it reports. For
+repository-wide `evals/scripts/` path -- one of two instructions here
+that do not resolve inside this skill's own directory, alongside steps
+3/9's `drafting-a-skill` dispatch -- why `spec.portability` is `Mixed`,
+not `Portable`. A vendoring repository substitutes an equivalent for
+both: confirm the runner's binary and `--version`, and vendor or
+substitute `drafting-a-skill` itself. For
 the same target-repository-generic reason step 7 names the target
 repository's own eval-results location rather than any literal directory
 layout; the two schemas it validates against travel inside this skill's

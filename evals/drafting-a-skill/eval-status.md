@@ -73,10 +73,11 @@ held only for the pre-#1619 skill shape:
   upstream vehicle-selection call must escalate (quoting the disputed
   ACM text) rather than loop-fixing in place or attempting to invoke
   `eliciting-a-design` directly, which an isolated dispatch cannot do.
-- `edge.yaml` and `existing-skill-routes-away.yaml` unchanged: neither
-  references Step 2/3/9/10 content, and their own exercised behavior
-  (Step 3's advisory cohesion finding, was Step 5; the Precondition's
-  existing-skill route-away branch) is unaffected by this re-scope.
+- `edge.yaml` unchanged: it does not reference Step 2/3/9/10 content, and
+  its own exercised behavior (Step 3's advisory cohesion finding, was
+  Step 5) is unaffected by this re-scope. (`existing-skill-routes-away.yaml`
+  was also unchanged by #1619; issue #1648 retired it outright -- see
+  above.)
 
 No trial has been executed yet through this repository's own eval runner
 script against the rebuilt suite -- the config pins `claude-sonnet-5` and

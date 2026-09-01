@@ -399,8 +399,8 @@ combined diff, then the draft PR converts to ready-for-review.
   than being re-derived; see [the threat-model
   reference](references/threat-model-and-authorization.md).
 - **vs. `drafting-a-skill`:** whenever a task decomposed at step 3 has
-  planned ops that create a new skill directory, that task applies
-  `drafting-a-skill` rather than free-authoring a `SKILL.md` from
+  planned ops that create or edit a `SKILL.md`, new or existing, that
+  task applies `drafting-a-skill` rather than hand-authoring one from
   scratch -- still routed through this skill's own step 8 refactor/
   adversarial-review gate and the PR-body skill-audit disclosure
   convention unchanged, not a separate review path.

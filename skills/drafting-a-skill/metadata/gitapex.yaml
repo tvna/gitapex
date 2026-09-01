@@ -207,6 +207,7 @@ spec:
       - untrusted-input-triage
       - drafting-an-adr
       - grounding-in-primary-sources
+      - scorer-gated-skill-edits
   executionRequirements:
     tools:
       read:

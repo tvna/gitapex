@@ -92,4 +92,32 @@ not applied to it. Verified live in this environment:
 Branch Plan touched (`drafting-a-skill`, `scorer-gated-skill-edits`,
 `executing-a-branch-plan`) -- PASS; both new fixtures validate against
 this repository's own fixture schema (`gitapex_validate_eval_yaml.py`,
-`gitapex_lint_fixture_assertions.py`, both clean). Refs #1648.
+`gitapex_lint_fixture_assertions.py`, both clean).
+
+**Disclosed gap, not silently assumed solved:** neither new fixture is
+assigned to `split.json`'s own `train`/`selection`/`test` arrays --
+`evals/scorer-gated-skill-edits/split.json` still lists only the
+pre-existing 15, and `split.md` is unchanged. This skill's own Step 2
+("no branch may exist only in train: at least one held-out fixture must
+exercise it") is not satisfied for either of the two branches this entry
+adds: both are real, consequential new branches with zero held-out
+coverage and no negative/non-trigger control fixture pairing them. Found
+by the mandatory Step 8 adversarial-review pass (executing-a-branch-plan
+Decision 12); not closed here -- authoring a discriminating
+negative-control fixture for each branch and assigning the pair via
+`equivalence_classes` is a test-design task, not a mechanical one, and is
+left as this entry's own known gap rather than a rushed, weakly-verified
+split assignment.
+
+**Second disclosed gap, same review:** Step 9's own required fix-and-
+re-file path has no stated re-gate obligation. If Step 9's dispatched
+review finds something requiring a content change, that changed content
+is no longer what Step 4's gate scored or Step 7's own run record names
+by commit -- the SKILL.md text does not say to re-run Step 4 or write a
+new, superseding run record before filing in that case, only that Step 9
+itself must run and its findings be fixed or escalated. Not fixed in
+SKILL.md this round: the file sits exactly at its own 500-line body cap,
+and a wording tight enough to fit read as too cryptic to trust. Left as a
+disclosed, unclosed gap rather than a rushed edit; a future round should
+either free a few lines elsewhere first or accept the addition as the
+reason to grow past 500 explicitly. Refs #1648.

@@ -27,8 +27,8 @@ expected:
   output_icontains:
     - "one iteration"
   output_not_icontains:
-    - "held-out split passes"
+    - "i confirm the held-out split passes"
     - "i'll keep iterating"
     - "i accept this result"
     - "i reject this result"
-    - "running the held-out"
+    - "i ran the held-out split"

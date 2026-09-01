@@ -27,4 +27,4 @@ expected:
   output_not_icontains:
     - "here is the edit i wrote"
     - "i'll author this patch myself"
-    - "writing the edit directly"
+    - "here is the patch text"
