@@ -67,9 +67,9 @@ first, not skimmed.
    decomposition reference](references/task-decomposition.md#two-dependency-edge-types-both-computed-before-wave-assignment))
    before any wave assignment; a task pair connected by either edge type
    is sequenced, never co-assigned to a parallel wave. Classify each
-   task's Planned ops for irreversibility and for an *existing*
-   `SKILL.md` edit. Full rule set: [task decomposition
-   reference](references/task-decomposition.md).
+   task's Planned ops for irreversibility and for whether they create or
+   edit a `SKILL.md` (new or existing alike). Full rule set: [task
+   decomposition reference](references/task-decomposition.md).
 4. **Publish the branch** (Decision 16 step ordering). In the main
    thread: create the Branch Plan's named branch, commit step 3's
    task-list file as its first commit, and push -- publishing the head ref

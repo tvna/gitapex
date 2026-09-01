@@ -10,7 +10,7 @@ Step 3's own detail. Source: design doc Decisions 3, 15, 19.
 - [Verbatim-quotation discipline](#verbatim-quotation-discipline)
 - [Two dependency-edge types](#two-dependency-edge-types-both-computed-before-wave-assignment)
 - [Irreversibility classification](#irreversibility-classification)
-- [Existing-skill-file edit floor](#existing-skill-file-edit-floor)
+- [Skill-file edit routing](#skill-file-edit-routing)
 - [Per-task diff BASE](#per-task-diff-base-screening-precondition-used-at-step-6)
 - [Worked example](#worked-example)
 
@@ -164,38 +164,26 @@ same authorization-gate confirmation step 1 already defines, re-run for
 that specific task, before its own wave dispatches -- not only at the
 Branch-Plan-wide entry point.
 
-## Existing-skill-file edit floor
+## Skill-file edit routing
 
 Classify each task's own Planned ops, at this same decomposition step,
-for whether they edit an *existing* `SKILL.md` -- the sibling case to
-`drafting-a-skill`'s own brand-new-directory trigger (`SKILL.md`'s own
-Related skills section, `vs. drafting-a-skill` bullet). A task in this
-category is `scorer-gated-skill-edits`'s own job only when its Planned
-ops themselves state a scorer and a held-out split, per that skill's own
-Precondition gate; absent that stated precondition, this floor applies
-instead -- an addition to Decision 20's own full-verification-suite gate
-(step 6), never a replacement for it, and never a re-entry into that
-skill's own measured-iteration procedure or `drafting-a-skill`'s own
-Design-by-Contract structure, neither of which this floor invokes:
+for whether they create or edit any `SKILL.md` -- brand-new or already
+existing, at any size. A task in this category routes to
+`drafting-a-skill`, the same dispatch mechanism `SKILL.md`'s own Related
+skills section already names for a brand-new skill directory
+(`vs. drafting-a-skill` bullet) -- unchanged for that case, now unified
+to cover an existing-`SKILL.md` edit too: every `SKILL.md` edit, however
+small, goes through `drafting-a-skill`'s own full Design-by-Contract
+procedure (collision check, formative-dimensions sweep, shape/drift
+checkers), never a lighter-weight substitute.
 
-- Run `python3
-  skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py`
-  against the edited skill's own directory and fix every finding it
-  reports.
-- Sweep every section the task actually touched against
-  `drafting-a-skill`'s `references/formative-quality-dimensions.md`
-  table and fix what the sweep finds -- every row except row 8 (Eval
-  preparation), whose `evals/<skill>/` scenario fixtures are
-  `drafting-a-skill`'s own Step 6 first-draft deliverable, not a prose
-  bar a touched section can be swept against.
-
-Both checks must run clean before that task may report complete. Unlike
-the Irreversibility classification above, whose flag the main thread
-itself consumes before dispatch, this one binds the dispatched task
-agent, whose worktree-isolated context never reads this file -- state
-both checks in that task's own dispatch prompt, in-band, the same way
-step 6 already cites `references/code-quality-principles.md`'s path
-explicitly, not as a separately tracked concept.
+`scorer-gated-skill-edits` stays a separate, opt-in route: it applies
+only when the task's own Planned ops themselves state a scorer and a
+held-out split, per that skill's own Precondition gate -- never a
+fallback this step reaches for on its own, and never triggered merely
+because a scorer or split already exists for the target skill. Absent
+that stated precondition, the task routes to `drafting-a-skill` as
+above.
 
 ## Per-task diff BASE (screening precondition, used at step 6)
 
