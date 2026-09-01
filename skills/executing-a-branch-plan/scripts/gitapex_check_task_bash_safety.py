@@ -242,7 +242,7 @@ def _unbraced_ref_options(name_run: str, name_to_value: dict[str, str]) -> list[
     ]
 
 
-def _substitute_var_refs_candidates(
+def _substitute_var_refs_candidates(  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     token: str, name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
 ) -> list[str] | None:
     """Every sound reconstruction of TOKEN with each `$NAME`/`${NAME}`/
@@ -345,7 +345,11 @@ def _split_punct_run(token: str) -> list[str]:
     return [token]
 
 
-def _command_substitution_token_span(tokens: list[str], i: int) -> int | None:
+def _command_substitution_token_span(
+    tokens: list[str], i: int
+) -> (
+    int | None
+):  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     """If `tokens[i]` ends with `$` and `tokens[i + 1]` is `(` (the shape
     an UNQUOTED `$(...)` command substitution takes once shlex has split
     it: `$` and `(` always land as separate tokens, since `(` is a
@@ -377,7 +381,11 @@ def _command_substitution_token_span(tokens: list[str], i: int) -> int | None:
     return j
 
 
-def _find_fused_command_substitution(token: str, search_from: int = 0) -> tuple[int, int] | None:
+def _find_fused_command_substitution(
+    token: str, search_from: int = 0
+) -> (
+    tuple[int, int] | None
+):  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     """If TOKEN itself contains a self-contained `$(...)` span STARTING AT
     OR AFTER `search_from` -- the shape shlex leaves fused as ONE token
     when the substitution appears inside double quotes (`"prefix $(cmd)
@@ -418,7 +426,11 @@ def _find_fused_command_substitution(token: str, search_from: int = 0) -> tuple[
     return start, j
 
 
-def _fold_command_substitution_spans(tokens: list[str]) -> list[str]:
+def _fold_command_substitution_spans(
+    tokens: list[str],
+) -> list[
+    str
+]:  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     """Fold each UNQUOTED bash command-substitution span (`$(...)`,
     including any literal prefix fused onto the leading `$` by an
     assignment, e.g. `X=$(...)`) into a single opaque token -- see
@@ -465,7 +477,9 @@ def _fold_command_substitution_spans(tokens: list[str]) -> list[str]:
     return folded
 
 
-def _is_unresolvable_substitution(token: str) -> bool:
+def _is_unresolvable_substitution(
+    token: str,
+) -> bool:  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     """A token embedding a command substitution (`$(...)`, either the
     unquoted-and-folded shape `_fold_command_substitution_spans` produces
     or the quoted shape shlex leaves fused as one token on its own) or
@@ -492,7 +506,11 @@ def _is_unresolvable_substitution(token: str) -> bool:
     return "$(" in token or "`" in token
 
 
-def _rule_command_substitution_content(tokens: list[str]) -> str | None:
+def _rule_command_substitution_content(
+    tokens: list[str],
+) -> (
+    str | None
+):  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     """Recursively classify each `$(...)` command-substitution span's OWN
     inner content through this module's full rule set -- bash genuinely
     RUNS that inner text as a complete command the instant the
@@ -570,7 +588,9 @@ def _rule_command_substitution_content(tokens: list[str]) -> str | None:
 _COMMENT_BOUNDARY_CHARS = frozenset(" \t\r\n;|&()<>")
 
 
-def _strip_comments(command: str) -> str:
+def _strip_comments(
+    command: str,
+) -> str:  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     """Delete every bash `#`-comment span from COMMAND -- from an unescaped,
     unquoted `#` sitting at a bash WORD-BOUNDARY position, up to (but NOT
     including) the next raw newline, or the end of COMMAND if there is no
@@ -646,7 +666,9 @@ def _strip_comments(command: str) -> str:
     return "".join(out)
 
 
-def _strip_line_continuations(command: str) -> str:
+def _strip_line_continuations(
+    command: str,
+) -> str:  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     """Delete every bash line-continuation pair (an unescaped `\\` directly
     followed by a real newline) from COMMAND, outside single-quoted spans.
     Ported from hooks/gitapex_check_bash_safety.py's own function of the
@@ -694,7 +716,11 @@ def _strip_line_continuations(command: str) -> str:
     return "".join(out)
 
 
-def tokenize(command: str) -> list[str]:
+def tokenize(
+    command: str,
+) -> list[
+    str
+]:  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     """Raises TokenizeError on anything shlex cannot parse (e.g. an
     unbalanced quote) -- the caller must fail closed on that, the same
     fail-closed discipline this hook's malformed-JSON guards already
@@ -755,7 +781,9 @@ def tokenize(command: str) -> list[str]:
     return tokens
 
 
-def segment_tokens(tokens: list[str]) -> list[list[str]]:
+def segment_tokens(  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
+    tokens: list[str],
+) -> list[list[str]]:
     """Split the flat token stream into simple-command segments at shell
     control-operator boundaries (; | & && || ( ) newline). Ported from
     hooks/gitapex_check_bash_safety.py's own function of the same name."""
@@ -768,7 +796,11 @@ def segment_tokens(tokens: list[str]) -> list[list[str]]:
     return [seg for seg in segments if seg]
 
 
-def _pipe_chains(tokens: list[str]) -> list[list[list[str]]]:
+def _pipe_chains(
+    tokens: list[str],
+) -> list[
+    list[list[str]]
+]:  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     """Like `segment_tokens`, but keeps segments still connected to each
     other by a literal `|` grouped into the same chain -- broken apart
     only at every OTHER statement-separating control operator (; & && ||
@@ -861,7 +893,11 @@ def _pipe_chains(tokens: list[str]) -> list[list[list[str]]]:
     return [[seg for seg in chain if seg] for chain in chains if any(seg for seg in chain)]
 
 
-def _assigned_literals(tokens: list[str]) -> dict[str, str]:
+def _assigned_literals(
+    tokens: list[str],
+) -> dict[
+    str, str
+]:  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     """Map each NAME=value assignment token's variable name to its
     (lowercased) RHS value. Keyed by variable name (not a flat set of
     values) so a caller can confirm a dynamic token *actually references*
@@ -880,7 +916,11 @@ def _assigned_literals(tokens: list[str]) -> dict[str, str]:
     return values
 
 
-def _assigned_raw_values(tokens: list[str]) -> dict[str, str]:
+def _assigned_raw_values(
+    tokens: list[str],
+) -> dict[
+    str, str
+]:  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     """Like `_assigned_literals`, but preserves the ORIGINAL case of each
     assignment's RHS value rather than lowercasing it -- needed for bash's
     own `${!NAME}` indirect-reference resolution (see
@@ -901,7 +941,11 @@ def _assigned_raw_values(tokens: list[str]) -> dict[str, str]:
     return values
 
 
-def _strip_leading_assignments(seg: list[str]) -> list[str]:
+def _strip_leading_assignments(
+    seg: list[str],
+) -> list[
+    str
+]:  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     """Bash's own simple-command grammar lets zero or more `NAME=value`
     environment-assignment tokens precede the actual command word (`X=foo
     gh pr merge 1` runs `gh pr merge 1` with `X=foo` set only in that one
@@ -965,7 +1009,9 @@ def _strip_leading_assignments(seg: list[str]) -> list[str]:
     return seg[i:]
 
 
-def _array_literal_token_span(tokens: list[str], i: int) -> int | None:
+def _array_literal_token_span(  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
+    tokens: list[str], i: int
+) -> int | None:
     """If `tokens[i]` is a bare `NAME=` (EMPTY-value) assignment token
     immediately followed by `tokens[i + 1] == "("` -- bash's own array-
     literal syntax (`NAME=(elem1 elem2)`, also `declare -a NAME=(...)`)
@@ -992,7 +1038,11 @@ def _array_literal_token_span(tokens: list[str], i: int) -> int | None:
     return j
 
 
-def _fold_array_literal_spans(tokens: list[str]) -> list[str]:
+def _fold_array_literal_spans(
+    tokens: list[str],
+) -> list[
+    str
+]:  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     """Fold each `NAME=(...)` array-literal span (found via `_array_
     literal_token_span`) into a single token -- the same "make the span's
     boundary visible as one atomic unit before segmenting" strategy
@@ -1120,7 +1170,9 @@ _REF_RUN_NAME_RE = re.compile(_ONE_REF_SRC)
 _BASH_DEFAULT_IFS = " \t\n"
 
 
-def _token_is_all_unassigned_refs(token: str, name_to_raw_value: dict[str, str]) -> bool:
+def _token_is_all_unassigned_refs(
+    token: str, name_to_raw_value: dict[str, str]
+) -> bool:  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     """TOKEN word-splits away to NOTHING, unquoted, at real bash runtime,
     because it is composed ENTIRELY of one or more back-to-back variable
     references -- bare (`$NAME`), braced (`${NAME}`), or braced with a
@@ -1390,7 +1442,11 @@ def _token_is_all_unassigned_refs(token: str, name_to_raw_value: dict[str, str])
     return True
 
 
-def _strip_leading_unassigned_bare_refs(tokens: list[str], name_to_raw_value: dict[str, str]) -> list[str]:
+def _strip_leading_unassigned_bare_refs(
+    tokens: list[str], name_to_raw_value: dict[str, str]
+) -> list[
+    str
+]:  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     """A leading run of tokens that each vanish to nothing at real bash
     runtime (per `_token_is_all_unassigned_refs`, see its own docstring)
     is stripped away -- used by `_rule_array_literal_content` to
@@ -1413,7 +1469,11 @@ def _strip_leading_unassigned_bare_refs(tokens: list[str], name_to_raw_value: di
     return tokens[i:]
 
 
-def _strip_array_literal_newlines(tokens: list[str]) -> list[str]:
+def _strip_array_literal_newlines(
+    tokens: list[str],
+) -> list[
+    str
+]:  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     """Remove every literal `"\\n"` token from TOKENS (an array literal's
     own inner element list, as `_rule_array_literal_content` below
     extracts it) EXCEPT one genuinely inside a nested `$(...)` command-
@@ -1448,7 +1508,7 @@ def _strip_array_literal_newlines(tokens: list[str]) -> list[str]:
     return out
 
 
-def _rule_array_literal_content(
+def _rule_array_literal_content(  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     tokens: list[str], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
 ) -> str | None:
     """Recursively classify each `NAME=(...)` array-literal span's OWN
@@ -1674,7 +1734,9 @@ class Verdict(NamedTuple):
     reason: str
 
 
-def _rule_a_literal(segments: list[list[str]]) -> str | None:
+def _rule_a_literal(  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
+    segments: list[list[str]],
+) -> str | None:
     """Sound: matches only against the dequoted literal-token stream, so
     quote-splitting and backslash-escaping (already resolved by shlex) and
     `${IFS}` substitution (already resolved by `_ifs_split`) are closed
@@ -1696,7 +1758,7 @@ def _rule_a_literal(segments: list[list[str]]) -> str | None:
     return None
 
 
-def _rule_bare_install(
+def _rule_bare_install(  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     segments: list[list[str]], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
 ) -> str | None:
     """Bare `pnpm`/`yarn` with no subcommand (or flags only) installs
@@ -1735,7 +1797,7 @@ def _rule_bare_install(
     return None
 
 
-def _rule_fetch_exec(
+def _rule_fetch_exec(  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     pipe_chains: list[list[list[str]]], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
 ) -> str | None:
     """curl/wget piped directly into a shell interpreter installs and
@@ -1802,7 +1864,9 @@ def _rule_fetch_exec(
     return None
 
 
-def _skip_fetch_exec_wrapper(seg: list[str], name_to_raw_value: dict[str, str] | None = None) -> int:
+def _skip_fetch_exec_wrapper(
+    seg: list[str], name_to_raw_value: dict[str, str] | None = None
+) -> int:  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     """Return the index of SEG's own interpreter candidate, skipping past
     a single leading wrapper token (`sudo`/`env`/`command`/`exec`), any
     number of BOOLEAN (no-separate-value) flag-shaped tokens after it, and
@@ -1885,7 +1949,7 @@ def _skip_fetch_exec_wrapper(seg: list[str], name_to_raw_value: dict[str, str] |
     return interp_index
 
 
-def _rule_process_sub_fetch_exec(
+def _rule_process_sub_fetch_exec(  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     segments: list[list[str]], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
 ) -> str | None:
     """An interpreter fed a fetched-content process substitution (`bash
@@ -1928,7 +1992,9 @@ def _rule_process_sub_fetch_exec(
     return None
 
 
-def _fetch_exec_cand_is_interp(cand: str, name_to_value: dict[str, str], name_to_raw_value: dict[str, str]) -> bool:
+def _fetch_exec_cand_is_interp(  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
+    cand: str, name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
+) -> bool:
     """Whether CAND (an interpreter candidate token) is, or could resolve
     to, a `_FETCH_EXEC_INTERPRETERS` member -- factored out of `_rule_
     process_sub_fetch_exec` to keep that function's own cyclomatic
@@ -1941,7 +2007,7 @@ def _fetch_exec_cand_is_interp(cand: str, name_to_value: dict[str, str], name_to
     return cand_candidates is None or any(c.lower() in _FETCH_EXEC_INTERPRETERS for c in cand_candidates)
 
 
-def _process_sub_feeds_fetch_tool(
+def _process_sub_feeds_fetch_tool(  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     rest: list[str], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
 ) -> bool:
     """Whether REST (the tokens after an interpreter's own command word)
@@ -1981,7 +2047,9 @@ def _process_sub_feeds_fetch_tool(
     return False
 
 
-def _fetch_tool_head(tokens: list[str]) -> bool:
+def _fetch_tool_head(
+    tokens: list[str],
+) -> bool:  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     """Whether TOKENS' own first segment starts with a fetch tool
     (curl/wget) -- literal, or resolved via indirection using ONLY
     TOKENS' own self-contained assignments (a `$(...)` substitution's
@@ -2020,7 +2088,11 @@ def _fetch_tool_head(tokens: list[str]) -> bool:
     return candidates is None or any(c.lower() in {"curl", "wget"} for c in candidates)
 
 
-def _command_spans(tokens: list[str]) -> list[list[str]]:
+def _command_spans(
+    tokens: list[str],
+) -> list[
+    list[str]
+]:  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     """Like `segment_tokens`, but treats a `$(...)` span (found via
     `_command_substitution_token_span`) as fully TRANSPARENT to
     segmentation -- every token inside it, INCLUDING its own `$`/`(`/`)`
@@ -2067,7 +2139,9 @@ def _command_spans(tokens: list[str]) -> list[list[str]]:
     return [seg for seg in segments if seg]
 
 
-def _rest_has_fetch_tool_substitution(rest: list[str]) -> bool:
+def _rest_has_fetch_tool_substitution(
+    rest: list[str],
+) -> bool:  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     """Whether REST (the tokens after an eval/interpreter's own command
     word, from `_command_spans` -- so still the ORIGINAL, un-folded
     tokens) contains a `$(...)` span whose own first token is, or could
@@ -2117,7 +2191,11 @@ def _rest_has_fetch_tool_substitution(rest: list[str]) -> bool:
     return False
 
 
-def _rule_eval_or_dashc_fetch_exec(tokens: list[str], name_to_raw_value: dict[str, str]) -> str | None:
+def _rule_eval_or_dashc_fetch_exec(
+    tokens: list[str], name_to_raw_value: dict[str, str]
+) -> (
+    str | None
+):  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     """`eval $(curl <url>)` and `bash -c "$(curl <url>)"` fetch a payload
     and feed its OUTPUT directly to `eval`/an interpreter's `-c` flag as
     the command text to run -- just as direct an exec of fetched content
@@ -2191,7 +2269,7 @@ def _rule_eval_or_dashc_fetch_exec(tokens: list[str], name_to_raw_value: dict[st
     return None
 
 
-def _rule_npx(
+def _rule_npx(  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     segments: list[list[str]], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
 ) -> str | None:
     """`npx` hidden behind indirection (`_resolve_seg_tokens_candidates`
@@ -2212,7 +2290,7 @@ def _rule_npx(
     return None
 
 
-def _rule_gh_any(
+def _rule_gh_any(  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     segments: list[list[str]], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
 ) -> str | None:
     """`gh` itself hidden behind a variable (`G=gh; $G pr merge 1`) needs
@@ -2263,7 +2341,9 @@ def _rule_gh_any(
 _GIT_LONG_VALUE_FLAGS = {"--git-dir", "--work-tree", "--namespace", "--super-prefix", "--config-env"}
 
 
-def _is_git_push_segment(seg: list[str], name_to_raw_value: dict[str, str]) -> bool:
+def _is_git_push_segment(
+    seg: list[str], name_to_raw_value: dict[str, str]
+) -> bool:  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     """The flag-skip loop below skips (rather than breaking on) a token
     that vanishes to nothing at real bash runtime (per
     `_token_is_all_unassigned_refs`): breaking the instant it meets ANY
@@ -2367,7 +2447,7 @@ def _is_git_push_segment(seg: list[str], name_to_raw_value: dict[str, str]) -> b
     return any("git push" in lit for lit in (t.lower() for t in seg if not _is_dynamic(t)))
 
 
-def _resolve_seg_tokens_candidates(
+def _resolve_seg_tokens_candidates(  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     tokens: list[str], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
 ) -> set[str] | None:
     """Resolve every DYNAMIC token in TOKENS via
@@ -2392,7 +2472,7 @@ def _resolve_seg_tokens_candidates(
     return values
 
 
-def _rule_git_push(
+def _rule_git_push(  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     segments: list[list[str]], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
 ) -> str | None:
     for seg in segments:
@@ -2442,7 +2522,7 @@ def _rule_git_push(
     return None
 
 
-def _rule_b1a_dynamic_word_same_segment_verb(
+def _rule_b1a_dynamic_word_same_segment_verb(  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     seg: list[str], verb_set: set[str], name_to_value: dict[str, str], name_to_raw_value: dict[str, str]
 ) -> bool:
     """A segment whose command word is dynamic, with a watched-verb token
@@ -2467,7 +2547,7 @@ def _rule_b1a_dynamic_word_same_segment_verb(
     return bool((literals | resolved) & verb_set)
 
 
-def _rule_b1b_dynamic_word_assigned_tool_and_verb(
+def _rule_b1b_dynamic_word_assigned_tool_and_verb(  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     seg: list[str], name_to_value: dict[str, str], verb_set: set[str], name_to_raw_value: dict[str, str]
 ) -> bool:
     """A segment with at least one dynamic token, where the segment's own
@@ -2504,7 +2584,9 @@ def _rule_b1b_dynamic_word_assigned_tool_and_verb(
     return bool(values & _WATCHED_TOOLS) and bool(values & verb_set)
 
 
-def _rule_b2_watched_tool_dynamic_verb_position(seg: list[str]) -> bool:
+def _rule_b2_watched_tool_dynamic_verb_position(  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
+    seg: list[str],
+) -> bool:
     """A literal watched-tool command word whose very next argument (the
     position a subcommand/verb normally occupies) is dynamically
     constructed (e.g. `uv $x foo`, `set -- install foo; uv "$@"`). `git`
@@ -2521,7 +2603,7 @@ def _rule_b2_watched_tool_dynamic_verb_position(seg: list[str]) -> bool:
     return _is_dynamic(seg[1])
 
 
-def _position_anchored_rules_hit(
+def _position_anchored_rules_hit(  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     segments: list[list[str]],
     pipe_chains: list[list[list[str]]],
     name_to_value: dict[str, str],
@@ -2623,7 +2705,7 @@ def classify(command: str) -> Verdict:
     return _classify_tokens(tokens)
 
 
-def _classify_tokens(
+def _classify_tokens(  # function-body-test-coverage: WAIVED: comment/docstring-only change (correction-provenance narration removed, no behavior change) -- this file's own pytest suite passes unchanged
     tokens: list[str],
     outer_name_to_value: dict[str, str] | None = None,
     outer_name_to_raw_value: dict[str, str] | None = None,
