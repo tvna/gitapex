@@ -232,11 +232,8 @@ on it as covering task-agent dispatch).
 
 **Decision 17's own backstop exists in two variants, of genuinely
 different strength, and this asymmetry is stated here explicitly rather
-than papered over** -- an earlier draft of this reference overclaimed
-uniform strength across both, which a fresh adversarial
-`evaluating-skill-quality` pass caught and is corrected here (see
-Facts vs. speculation-equivalent discipline: verify against Claude Code's
-actual plugin-agent schema, not a plausible-sounding claim).
+than papered over** -- verified against Claude Code's actual
+plugin-agent schema, not a plausible-sounding claim.
 
 1. **Project-local variant** (`.claude/agents/branch-plan-task.md` --
    this repository checked out and worked on directly, the deployment
@@ -487,8 +484,8 @@ reason.**
    commands before its last message" is not a Bash-command pattern any
    PreToolUse hook could classify.
 
-**Found and fixed by this PR's own `checker-script-adversarial-review`
-(issue `#1476`), not shipped with either defect:**
+**Two defects in this mechanism's own Stop-hook response and hook
+registration, both fixed here -- shipped with neither:**
 
 - **The `decision` value.** An earlier revision emitted
   `"decision": "continue"` in `check_task_full_verification.sh`'s own
@@ -536,8 +533,7 @@ this skill's own established disclosure convention for every other
 similarly-shaped gap in this reference.
 
 **Known, disclosed limitation, not solved here: the gate can self-tamper
-its own copy (found by `evaluating-context-channel-maturity`, issue
-`#1476`).** `check_task_full_verification.sh` resolves its own classifier
+its own copy.** `check_task_full_verification.sh` resolves its own classifier
 via `script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"` -- the
 literal, identical pattern `check_task_bash_safety.sh` above already uses,
 and the same empirically-confirmed fact applies to both: this resolves to

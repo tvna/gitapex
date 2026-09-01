@@ -2,7 +2,7 @@
 
 Step 6's own detail. Source: design doc Decisions 4, 13, 16.
 
-Renamed from "Execution and Waves" (found via `/code-review`): design doc
+Renamed from "Execution and Waves": design doc
 Decision 2/10 resolved "wave" as "not adopted as a named term; described
 in prose only... never surfaces as a first-class term" -- a file titled
 after the word, and a formal quoted definition once given for it

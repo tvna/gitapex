@@ -46,6 +46,17 @@ file-ownership assignment (task-decomposition.md) -- a `commit_sha` that
 does not
 resolve, or that touches files outside that task's own assignment, is
 treated as a screening flag (escalate), not as a completed task to trust.
+Then run the same reconciliation in the reverse direction: scan the
+branch's own commit history since the run's own task-list commit (the
+`run_id` anchor) for any commit that touches a task's assigned files but
+has no corresponding `TaskCompleted` entry in the log at all -- a worker
+that committed, then died before its wave's events were written -- the
+same "trust the ground truth over your own record" read [Loss and
+absence handling](#loss-and-absence-handling) below already applies to a
+lost log, applied here to an intact-but-incomplete one. A hit is the
+same screening flag (escalate), never a task to silently re-run as if
+nothing landed, since re-running would duplicate work the branch already
+carries.
 This closes the gap a naive "read the log, believe it" resume path would
 leave: a commit landing after the log's own write but before a session
 interruption, or a log entry edited after the fact, must not silently

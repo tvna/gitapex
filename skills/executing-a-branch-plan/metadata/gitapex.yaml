@@ -4,7 +4,7 @@ metadata:
   name: executing-a-branch-plan
 spec:
   portability: Mixed
-  capabilityAssumption: Adaptive
+  capabilityAssumption: Frontier
   lifecycle:
     renamedFrom: fixing-a-reported-issue
   skillDependencies:

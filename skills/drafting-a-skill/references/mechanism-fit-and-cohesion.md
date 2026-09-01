@@ -2,7 +2,7 @@
 
 Loaded when Step 3's cohesion self-check or Step 5's domain-gap sweep is not already an obvious call -- for example, a drafted Step touches multiple loosely-related outcomes and it isn't clear whether that's one skill or two. This file exists because two of this skill's own Steps sit close enough to `evaluating-skill-quality`'s own review procedure that the boundary has to be stated explicitly, not left to be inferred from each Step's own one-line description.
 
-`eliciting-a-design` owns the redirect-target judgment this file once carried for `drafting-a-skill`'s own former Step 2 (see <https://github.com/tvna/gitapex/issues/1619>: the Agentic operation mechanism-fit vehicle-selection gate, including the "this isn't a skill, redirect to X instead" criteria, moved upstream into that skill entirely) -- see that skill's own body for the current version of that judgment, not this file.
+The redirect-target judgment this file once carried for `drafting-a-skill`'s own former Step 2 -- the Agentic operation mechanism-fit vehicle-selection gate, including the "this isn't a skill, redirect to X instead" criteria -- no longer lives in this file: it moved upstream entirely, into a sibling skill. See this skill's own `references/gitapex-cross-links.md` for which sibling skill owns that judgment's current version and for the tracking issue recording the move.
 
 ## Contents
 
@@ -11,7 +11,7 @@ Loaded when Step 3's cohesion self-check or Step 5's domain-gap sweep is not alr
 
 ## Step 3 and Step 5 are advisory, not a second grading
 
-`evaluating-skill-quality`'s own rubric states plainly, for the cohesion check: "This check has exactly one owner, per Contract discipline's 'never both' rule: it decides the whole-artifact boundary once, here." And for its own Blind spot pass: it runs as "a precondition step (`SKILL.md`'s Procedure step 2, alongside the Agentic operation mechanism-fit checks)" of `evaluating-skill-quality`'s own procedure -- not a step this skill could duplicate without also duplicating that ownership.
+`evaluating-skill-quality`'s own rubric states plainly, in its own text, that the cohesion check has exactly one owner -- per Contract discipline's never-both rule, it decides the whole-artifact boundary once, there -- and that its own Blind spot pass runs as a precondition step of that skill's own procedure, alongside its Agentic operation mechanism-fit checks -- not a step this skill could duplicate without also duplicating that ownership. The rubric file stating this, and its exact quoted wording, are cited in this skill's own `references/gitapex-cross-links.md`.
 
 Step 3 (cohesion) and Step 5 (domain-gap sweep) exist anyway, for a narrower reason than "grade this against the rubric": a draft with an obvious split or an obvious blind spot, caught here, avoids a wasted round trip to `evaluating-skill-quality`'s own review and back. Both Steps are therefore advisory self-checks only, per the phrasing rule `SKILL.md` already states at each Step directly -- not repeated here a third time, since this section's own job is the ownership rationale above (why the rubric's exact-owner language applies), not the output-format instruction itself.
 

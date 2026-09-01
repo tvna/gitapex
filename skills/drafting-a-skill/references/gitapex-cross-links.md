@@ -8,6 +8,8 @@ Loaded when this copy of the skill's own files lives in the gitapex repository -
 2. [Metadata schema and shape checker](#metadata-schema-and-shape-checker)
 3. [PR-body skill-audit disclosure convention](#pr-body-skill-audit-disclosure-convention)
 4. [If the draft's own bundled script would be a deterministic gate](#if-the-drafts-own-bundled-script-would-be-a-deterministic-gate)
+5. [Design-by-Contract framing citation](#design-by-contract-framing-citation)
+6. [Cohesion-ownership cross-links](#cohesion-ownership-cross-links)
 
 ## Deterministic-checker commands (Step 6)
 
@@ -29,3 +31,14 @@ A PR that adds or modifies a `skills/**/SKILL.md` file must carry a `## Skill au
 ## If the draft's own bundled script would be a deterministic gate
 
 A drafted skill whose own bundled script enforces an invariant on other files (not just checks the drafted skill's own shape) is a deterministic gate in this repository's own sense, and should be registered in `.gitapex/ssot.json`'s `gates[]` array -- see any `self-governance`-cluster entry there (for example `contract-axis-vocabulary-drift`, `skill-quality-rubric-vocabulary-drift`) for the field shape, and `.github/scripts/gitapex_detect_changed_gate_scripts.py`'s naming convention (`.github/scripts/gitapex_gate_*.py` or `.github/scripts/gitapex_scan_*.py`) for how such a script gets picked up by `skill-audit-gate.yml`'s own disclosure requirement automatically, before it is even registered. This is a rare case for a freshly drafted skill -- most bundled scripts check only their own skill's shape, per `references/mechanism-fit-and-cohesion.md`'s bundled-script placement policy -- but when it applies, route through `evaluating-deterministic-gate-quality` directly before shipping it (this skill's own former Step 2 vehicle-selection redirect now lives in `eliciting-a-design`'s Agentic operation mechanism-fit check -- see that skill's own Checklist item 4 -- since this skill only drafts once that call has already landed on Skill).
+
+## Design-by-Contract framing citation
+
+`references/contract-structure.md`'s Design-by-Contract framing is the same framing `evaluating-skill-quality`'s own review procedure already applies to itself: `skills/evaluating-skill-quality/references/rubric.md`'s "## Contract discipline" section. Both of the verbatim quotes `references/contract-structure.md` carries -- the fault-attribution principle ("A precondition violation indicates a bug in the client (caller). ... A postcondition violation is a bug in the supplier (the routine).") and the never-both "absolute rule" ("either you have the condition in the [precondition], or you have it in an If instruction in the [routine's] body ... but never in both.") -- are taken from that section's own wording.
+
+## Cohesion-ownership cross-links
+
+Two facts `references/mechanism-fit-and-cohesion.md` points here for:
+
+- **The former Step 2 redirect's owner.** `eliciting-a-design` owns the redirect-target judgment `references/mechanism-fit-and-cohesion.md` once carried for `drafting-a-skill`'s own former Step 2 (see <https://github.com/tvna/gitapex/issues/1619>: the Agentic operation mechanism-fit vehicle-selection gate, including the "this isn't a skill, redirect to X instead" criteria, moved upstream into that skill entirely) -- see that skill's own body for the current version of that judgment, not `references/mechanism-fit-and-cohesion.md`.
+- **The cohesion check's and Blind spot pass's exact-owner wording.** `evaluating-skill-quality`'s own rubric (`skills/evaluating-skill-quality/references/rubric.md`) states plainly, for the cohesion check: "This check has exactly one owner, per Contract discipline's 'never both' rule: it decides the whole-artifact boundary once, here." And for its own Blind spot pass: it runs as "a precondition step (`SKILL.md`'s Procedure step 2, alongside the Agentic operation mechanism-fit checks)" of `evaluating-skill-quality`'s own procedure.
