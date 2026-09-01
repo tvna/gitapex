@@ -423,6 +423,40 @@ check does not rely on.
   The verified alternative still holds at this version. Marked
   Same-run, unreviewed per Trust class above until this entry itself merges
   through this repository's own review gate.
+- **Reconfirmed 2026-09-01, at a newer CLI version, Same-run, unreviewed,
+  cwd-isolation only (no `$HOME` override this run).** Same identifying
+  signals as above (`CLAUDE_CODE_REMOTE=true`), except `claude --version`
+  now reports `2.1.252 (Claude Code)`, a version none of the entries above
+  cover, so this is a fresh Verification procedure run, not a restatement.
+  Run to dispatch `evaluating-skill-quality` reviews for a real pull
+  request's `independent-review-pending` check (`drafting-a-pr-to-merge`
+  Step 8's inner layer, via `reviewing-an-artifact`'s Step 0 specialist
+  deferral). Positive control (real `$HOME`, cwd holding a synthetic
+  sentinel `CLAUDE.md` outside any real repository): correctly quoted the
+  sentinel phrase, both with a plain read-only ask and with `--allowedTools
+  "Read"` used to have the dispatch invoke the `Read` tool on the file
+  itself rather than relying on automatic context injection alone -- both
+  variants correctly surfaced the sentinel content. Negative control
+  (identical cwd change, no `CLAUDE.md`/`AGENTS.md` anywhere in its full
+  ancestry, independently confirmed via `find`): correctly reported none
+  loaded. The verified alternative (cwd isolation, no permission-bypass
+  flag) still holds at this version; `--allowedTools "Read,Glob,Grep"`
+  (pre-approving specific read-only tools rather than
+  `--dangerously-skip-permissions`) did not require a permission prompt
+  and did not reintroduce a leak. Scope note: this run isolated cwd only,
+  not `$HOME` -- per the `$HOME`-scoped task-list leak vector recorded
+  above (a distinct risk from the CLAUDE.md/AGENTS.md exclusion this
+  section verifies), a dispatch sharing the caller's real `$HOME` can still
+  surface the calling session's own live task list mid-run; that risk was
+  not re-tested or closed this round, so a caller needing to avoid it too
+  should still apply the `$HOME`-copy step recorded above. `--bare` was
+  also tried as a candidate CLAUDE.md-discovery-skip mechanism and
+  rejected: this session authenticates via an env-supplied OAuth
+  token/file descriptor, and `--bare`'s own documented behavior ("OAuth and
+  keychain are never read") broke authentication outright
+  (`Authentication error`) before isolation could even be tested -- not a
+  viable alternative on this platform, recorded so a future run does not
+  re-attempt it here.
 
 #### `claude -p --plugin-dir` combined with cwd/HOME isolation
 
