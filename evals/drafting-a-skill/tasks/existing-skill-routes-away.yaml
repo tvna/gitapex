@@ -11,8 +11,18 @@ inputs:
     description and tighten its Steps. Walk through your normal
     procedure and draft the improved version.
 expected:
+  # NOTE (issue #1648, Task A citation-sync only -- Task C owns this
+  # fixture's own file and its real semantic re-verification per that
+  # issue's Branch Plan): drafting-a-skill's Precondition no longer
+  # routes an existing-skill edit request away to scorer-gated-skill-edits
+  # at all -- that routing-away bullet was removed outright, and this
+  # fixture's own scenario/output_icontains below assert exactly the
+  # behavior the redivision removes. This citation is updated only so
+  # Check E (exercises-label resolution) stays green; the scenario and
+  # output_icontains/output_not_icontains assertions below are stale and
+  # need Task C's own update-or-retire judgment, not settled here.
   exercises:
-    - "Never loop back into `scorer-gated-skill-edits`-shaped iterative editing once a first draft exists -- that is a separate skill's job, entered fresh, not a continuation of this one."
+    - "Never treat this skill as itself the scorer-gated iterative-editing loop -- the held-out-split gate and its own measured accept/reject decision stay `scorer-gated-skill-edits`'s own job; this skill only authors one iteration's bounded patch when explicitly dispatched from that skill's own Step 3 (see Precondition), never a loop this skill initiates or continues on its own."
   output_icontains:
     - "scorer-gated-skill-edits"
   output_not_icontains:

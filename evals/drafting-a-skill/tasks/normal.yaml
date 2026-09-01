@@ -32,7 +32,7 @@ expected:
   # output_not_contains assertions below (no self-declared "passes"/
   # "ready to merge"/"shipped") are exactly that boundary's own behavior.
   exercises:
-    - "**Capture the candidate's job, verbatim from the ACM's own Planned-ops text.**"
+    - "**Capture the candidate's job, verbatim from the ACM's own Planned-ops text -- the same one-sentence job statement whether the Planned ops name a brand-new skill or a change to an existing one.**"
     - "step 2"
     - "**Cohesion self-check.**"
     - "**Check for collision and reconcile dependencies.**"
