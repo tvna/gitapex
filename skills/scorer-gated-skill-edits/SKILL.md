@@ -112,8 +112,22 @@ evaluation. Name the gap; never fake a score to proceed.
    each branch, and no branch may exist only in train: at least one held-out
    fixture must exercise it. Record this coverage or STOP and expand the
    corpus.
-3. **Propose bounded edits.** Cap the number of edits per iteration (the
-   learning-rate analogue). Prefer localized add / delete / replace patches
+3. **Propose bounded edits.** The bounded candidate patch for this
+   iteration is authored by dispatching `drafting-a-skill`, run through
+   its own Step 6 only (shape and drift checkers clean) -- `drafting-a-
+   skill`'s own Step 7 review handoff is explicitly deferred, per that
+   skill's own dispatch-context branch:
+
+   > **`scorer-gated-skill-edits` dispatch (one bounded iteration within
+   > its own Step 3): the handoff above does not run in this call.** The
+   > draft, already clean through Step 6, returns directly to the
+   > caller; `scorer-gated-skill-edits` runs `evaluating-skill-
+   > quality`/`battle-testing-a-skill` exactly once against the final
+   > accepted content, at its own pre-ship step -- never repeated per
+   > iteration here.
+
+   Cap the number of edits per iteration (the learning-rate analogue).
+   Prefer localized add / delete / replace patches
    over a full rewrite, so one bad iteration cannot erase working rules.
    Before scoring, classify the candidate as ordinary or pruning-only and,
    for pruning-only, predeclare the deterministic context-cost measure.
@@ -300,6 +314,23 @@ evaluation. Name the gap; never fake a score to proceed.
    belongs in the run record's `known_gaps` field (step 7) either way, so
    a later reader can tell whether this happened rather than silently
    assuming it did.
+9. **Required: run `drafting-a-skill`'s own Step 7 once, before filing
+   the PR.** Step 3's per-iteration dispatch runs `drafting-a-skill`
+   only through its own Step 6, deferring that skill's Step 7 review
+   handoff every time a candidate is authored -- cheap by design, so a
+   SkillOpt-style trial loop can dispatch many candidates without paying
+   for a full `evaluating-skill-quality`/`battle-testing-a-skill` review
+   on each one. That deferred review is not optional and is not
+   satisfied by step 8's own recommended pass above, which checks prose
+   and disclosure quality, not the same shape/drift/cohesion/adversarial
+   ground `drafting-a-skill`'s Step 7 covers. Once the iteration loop
+   concludes and the accepted content is about to ship, dispatch
+   `drafting-a-skill`'s own Step 7 exactly once against that final
+   accepted content -- never once per iteration, and never skipped. This
+   is a STOP boundary the same way step 4's gate is one: do not file the
+   PR before this step's handoff has actually run and its findings are
+   fixed or escalated, and record whether it ran in the run record's
+   `known_gaps` field (step 7) the same way step 8's pass is recorded.
 
 ## Authoring fixtures for a substring scorer
 
@@ -361,6 +392,10 @@ just measures the wrong thing.
 - **Prose/disclosure pass:** whether step 8's recommended adversarial pass
   ran and what it found, or that it was not run this iteration --
   recorded either way, per step 8's own `known_gaps` rule.
+- **Pre-ship full review:** confirmation that step 9's required
+  `drafting-a-skill` Step 7 handoff ran exactly once against the final
+  accepted content, and what it found -- never skipped, and never
+  reported as satisfied by step 8's own prose/disclosure pass.
 - **Next move:** the concrete next iteration or the ship/stop decision.
 
 ## Stop boundaries
@@ -376,8 +411,11 @@ just measures the wrong thing.
   cannot be filled honestly is a disclosed gap in `known_gaps`, stated in
   the record; it is never an absent key. The record and its own score
   files are the only things this skill writes: not a prior run's record,
-  not a fixture, and not the skill under test, which this skill proposes
-  patches for and never edits on the strength of its own gate result.
+  not a fixture, and not the skill under test. `drafting-a-skill` is the
+  one skill that performs the actual edit -- this skill dispatches it
+  (step 3) to author each candidate patch and never edits the skill
+  under test itself, on the strength of its own gate result or
+  otherwise.
 - Never iterate without a real checkable scorer and a held-out split --
   their absence is the STOP, not a prompt to invent a score.
 - Never motivate an edit from the selection or test split; that leaks the
@@ -400,7 +438,10 @@ just measures the wrong thing.
   working-tree changes by construction. See
   [references/worked-example.md](references/worked-example.md).
 - This skill iterates a skill document; it does not build a training-loop
-  executor, and it does not review a skill for merge.
+  executor, and it does not review a skill for merge itself --
+  `drafting-a-skill`'s own Step 7 carries that final review exactly
+  once, at this skill's own pre-ship step (step 9), before the PR is
+  filed, never repeated per iteration and never skipped.
 - Never report an isolated-dispatch selection score as this Gate step's
   "same model and harness" evidence when the scorer is itself a Skill-tool
   invocation, unless the isolated copy's plugin/marketplace registration was
