@@ -483,34 +483,30 @@ reason.**
    commands before its last message" is not a Bash-command pattern any
    PreToolUse hook could classify.
 
-**Two defects in this mechanism's own Stop-hook response and hook
-registration, both fixed here -- shipped with neither:**
+**Two properties of this mechanism's own Stop-hook response and hook
+registration, both load-bearing:**
 
-- **The `decision` value.** An earlier revision emitted
-  `"decision": "continue"` in `check_task_full_verification.sh`'s own
-  deny path -- the wrong value, confirmed against this repository's own
-  already-shipped `hooks/check-stop-review-obligation.sh` (a real Stop
-  hook using `"decision": "block"` correctly, and one this same session
-  directly observed working) and against Claude Code's own hooks
-  documentation, which lists `"block"` as the value that denies a
-  Stop/SubagentStop event. Fixed to `"block"` in both of this script's
-  own deny paths.
+- **The `decision` value.** `check_task_full_verification.sh`'s own deny
+  path emits `"decision": "block"` -- the value Claude Code's own hooks
+  documentation lists as denying a Stop/SubagentStop event, matching this
+  repository's own already-shipped `hooks/check-stop-review-obligation.sh`
+  (a real Stop hook using the same value, one this same session directly
+  observed working).
 - **The outer hook `timeout` vs. the classifier's own per-step timeout.**
   `gitapex_check_task_full_verification.py`'s own `DEFAULT_TIMEOUT_SECONDS`
   (1800s) applies PER STEP to two sequential steps (pytest, then
-  local-preflight) -- up to 3600s combined in the worst case -- but the
-  `SubagentStop` hook registration in `.claude/agents/branch-plan-task.md`
-  originally set `timeout: 1800` for the whole wrapper. Claude Code
-  cancels a `command` hook that reaches its own `timeout` and discards
-  its output entirely; `SubagentStop` is not one of the two documented
+  local-preflight) -- up to 3600s combined in the worst case. Claude Code
+  cancels a `command` hook that reaches its own `timeout` and discards its
+  output entirely; `SubagentStop` is not one of the two documented
   exceptions that still block on a timeout (only `PreModelSwitch`, and
-  Agent-SDK callback hooks on `PreToolUse`, do) -- so a legitimately
-  slow, not-failing verification run could have hit Claude Code's own
-  hook timeout first and silently failed OPEN, exactly the defect this
-  whole mechanism exists to close. Fixed by raising the registered
-  `timeout` to 3900s (comfortably above 2x the per-step ceiling); the two
-  values are cross-referenced in both files so a future edit to one is
-  less likely to silently desync from the other.
+  Agent-SDK callback hooks on `PreToolUse`, do) -- so a legitimately slow,
+  not-failing verification run hitting Claude Code's own hook timeout
+  first would silently fail OPEN, exactly the defect this whole mechanism
+  exists to close. The `SubagentStop` hook registration in
+  `.claude/agents/branch-plan-task.md` sets `timeout: 3900` (comfortably
+  above 2x the per-step ceiling); the two values are cross-referenced in
+  both files so a future edit to one is less likely to silently desync
+  from the other.
 
 **Known, disclosed limitation, not solved here: no bound on repeated
 denial.** A genuinely persistent failure -- an unrelated pre-existing
