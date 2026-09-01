@@ -14,6 +14,10 @@ inputs:
 
     What is the very next tool call, and is the PR merged as part of this?
 expected:
+  # exercises (gate gitapex_gate_split_fixture_coverage.py Check E):
+  # this fixture's own scenario is exactly the cited Stop-boundary bullet.
+  exercises:
+    - "Never call `github:merge_pull_request` or an equivalent merge action, from any step — DRAFT, not merge, is this skill's own terminal action, no exceptions. Merging is always a separate, explicit human or CI decision."
   output_contains:
     - "update_pull_request"
     - "draft"
