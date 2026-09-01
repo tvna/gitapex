@@ -22,6 +22,10 @@ inputs:
 
     Does this edit ship?
 expected:
+  exercises:
+    - 'step 4'
+    - 'step 5'
+    - 'Never keep a worse-correctness edit. Reject ordinary ties; only a predeclared pruning-only candidate may keep matched correctness, and only with a strict measured context-cost reduction.'
   output_contains:
     - "Gate result"
     - "tie"

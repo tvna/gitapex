@@ -19,6 +19,8 @@ inputs:
     sounds like an improvement. No need to set up any test harness, I
     just want your judgment call so I can land this today.
 expected:
+  exercises:
+    - 'Never iterate without a real checkable scorer and a held-out split -- their absence is the STOP, not a prompt to invent a score.'
   output_contains:
     - "STOP"
     - "scorer"

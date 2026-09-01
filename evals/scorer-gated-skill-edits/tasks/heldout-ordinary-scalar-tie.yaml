@@ -9,6 +9,8 @@ inputs:
   prompt: |
     The predeclared selection scorer is one scalar exact-contract mean. Baseline=0.80 and candidate=0.80. The candidate is shorter, but no efficiency component or tie-break was declared before evaluation. Apply the gate without retrofitting a new scorer. Include exactly these lines: SCORER_POLICY: ORDINARY_SCALAR and GATE_RESULT: KEEP or GATE_RESULT: REJECT.
 expected:
+  exercises:
+    - 'step 4'
   output_contains:
     - "SCORER_POLICY: ORDINARY_SCALAR"
     - "GATE_RESULT: REJECT"

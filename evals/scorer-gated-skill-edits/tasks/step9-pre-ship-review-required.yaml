@@ -19,9 +19,12 @@ inputs:
 expected:
   # exercises (gate gitapex_gate_split_fixture_coverage.py Check E): this
   # fixture's own scenario is exactly Step 9's new required pre-ship
-  # drafting-a-skill Step 7 review, distinct from Step 8's own optional pass.
+  # drafting-a-skill Step 7 review, distinct from Step 8's own optional pass,
+  # and the Stop boundary against this skill reviewing a skill for merge
+  # itself rather than dispatching drafting-a-skill for that review.
   exercises:
     - "step 9"
+    - "This skill iterates a skill document; it does not build a training-loop executor, and it does not review a skill for merge itself -- `drafting-a-skill`'s own Step 7 carries that final review exactly once, at this skill's own pre-ship step (step 9), before the PR is filed, never repeated per iteration and never skipped."
   output_icontains:
     - "step 7"
   output_not_icontains:
