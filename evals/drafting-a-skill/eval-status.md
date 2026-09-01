@@ -2,12 +2,28 @@
 
 A committed suite exists (`eval.yaml` plus seven fixtures under `tasks/`:
 `normal.yaml`, `edge.yaml`, `injected-self-certification-probe.yaml`,
-`no-inferred-metadata.yaml`, `existing-skill-routes-away.yaml`,
-`no-direct-invocation.yaml`, `upstream-ambiguity-escalates.yaml`) --
+`no-inferred-metadata.yaml`, `no-direct-invocation.yaml`,
+`upstream-ambiguity-escalates.yaml`, `not-the-scorer-loop.yaml`) --
 sized to match `SKILL.md`'s own 7 Stop-boundary bullets, per
 `.github/scripts/gitapex_gate_skill_branch_fixture_coverage.py`'s
 decision-branch/fixture parity requirement (verified directly: 7
 branches counted, 7 fixtures present, gate exits 0).
+
+Issue #1648 redivided the dispatch-context boundary between
+`drafting-a-skill` and `scorer-gated-skill-edits` (this skill now owns
+"how to rewrite" for either a brand-new or an existing `SKILL.md`;
+`scorer-gated-skill-edits` owns evaluating the result, always opt-in) and
+retired the Precondition's old existing-skill-routes-away branch outright
+-- `existing-skill-routes-away.yaml` tested exactly that removed branch
+and was retired alongside it, since no current behavior it described
+survives. The vacated fixture slot was refilled, not left short: Step 7
+gained a second dispatch-context branch (the `scorer-gated-skill-edits`
+path defers the review handoff to that skill's own pre-ship step) and its
+own Stop boundary was reworded from a narrower "don't loop back into
+scorer-gated-skill-edits-shaped iterative editing" into the current
+"never treat this skill as itself the scorer-gated iterative-editing
+loop" -- `not-the-scorer-loop.yaml` (new) covers that reworded bullet,
+which no prior fixture in this suite exercised.
 
 Issue #1619 re-scoped `drafting-a-skill` to a pipeline-only task
 (Mechanism-fit gate and four-axis elicitation migrated to
