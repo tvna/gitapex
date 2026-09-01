@@ -10,6 +10,7 @@ Loaded when this copy of the skill's own files lives in the gitapex repository -
 4. [If the draft's own bundled script would be a deterministic gate](#if-the-drafts-own-bundled-script-would-be-a-deterministic-gate)
 5. [Design-by-Contract framing citation](#design-by-contract-framing-citation)
 6. [Cohesion-ownership cross-links](#cohesion-ownership-cross-links)
+7. [Shared bundled-script parent policy: this repository's worked application](#shared-bundled-script-parent-policy-this-repositorys-worked-application)
 
 ## Deterministic-checker commands (Step 6)
 
@@ -42,3 +43,10 @@ Two facts `references/mechanism-fit-and-cohesion.md` points here for:
 
 - **The former Step 2 redirect's owner.** `eliciting-a-design` owns the redirect-target judgment `references/mechanism-fit-and-cohesion.md` once carried for `drafting-a-skill`'s own former Step 2 (see <https://github.com/tvna/gitapex/issues/1619>: the Agentic operation mechanism-fit vehicle-selection gate, including the "this isn't a skill, redirect to X instead" criteria, moved upstream into that skill entirely) -- see that skill's own body for the current version of that judgment, not `references/mechanism-fit-and-cohesion.md`.
 - **The cohesion check's and Blind spot pass's exact-owner wording.** `evaluating-skill-quality`'s own rubric (`skills/evaluating-skill-quality/references/rubric.md`) states plainly, for the cohesion check: "This check has exactly one owner, per Contract discipline's 'never both' rule: it decides the whole-artifact boundary once, here." And for its own Blind spot pass: it runs as "a precondition step (`SKILL.md`'s Procedure step 2, alongside the Agentic operation mechanism-fit checks)" of `evaluating-skill-quality`'s own procedure.
+
+## Shared bundled-script parent policy: this repository's worked application
+
+Two repository-state facts `references/mechanism-fit-and-cohesion.md`'s shared bundled-script parent placement policy points here for:
+
+- **Tier 1's stability census.** No skill in this repository currently declares `lifecycle: stable` explicitly (only `experimental` is ever declared; stable is today's implicit default for everything else) -- too few explicit declarations to gate on the stability axis, which is why that policy's tier 1 stays a preference, not a blocker, here.
+- **The policy's worked application, and the mechanization deferral.** `evaluating-skill-quality`'s own bundled checkers (`gitapex_check_skill_shape.py`, `gitapex_scan_execution_requirements_drift.py`, which Step 6 runs against every draft) already satisfy that policy under all three tiers today: that skill is this repository's de facto stable, closure-consistent owner of "does a skill directory have the right shape," so Step 6 reaches into its `scripts/` directory rather than vendoring a copy. The policy's own future blocking-gate threshold, and whether it should be mechanized into `gitapex_check_skill_shape.py` itself, are explicitly out of scope -- deferred to a future issue, once explicit `stable` declarations are common enough in this repository to judge readiness (see this skill's own `metadata/gitapex.yaml` `references` decision log, `kind: elision`).

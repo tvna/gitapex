@@ -226,6 +226,11 @@ spec:
     - kind: caveat
       anchor: "https://github.com/tvna/gitapex/issues/1619"
       summary: "the three entries above were backfilled once an independent evaluating-skill-quality re-review (issue https://github.com/tvna/gitapex/issues/1648) caught their absence -- the re-scope commit (5552931b) landed with no decision-log entry, leaving this file narrating a Step 2/3/9 apparatus the current content no longer contains. A process lapse against this file's own Step 3 claim that entries are never silently backfilled, disclosed here rather than left silent."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "axis 7's TOCTOU residual closed via two regime-specific mechanisms, superseding the open entries above (kept as historical record): shared filesystem view -- Step 2 makes a bare mkdir (no -p, no side-effect file write; shell gains mkdir) the first write, its atomic EEXIST failure routing away per the Precondition's target-already-exists branch; isolated worktrees -- blind to a disk check but never silent: git's own add/add conflict at merge-back, and the file-ownership edge within one run"
+      outcome:
+        baseCommit: "1b5626b6563a798e9b9479e841344d70bb67be4a"
   skillDependencies:
     requires:
       - evaluating-skill-quality
@@ -246,3 +251,4 @@ spec:
         - files
       shell:
         - python3
+        - mkdir

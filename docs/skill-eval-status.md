@@ -146,7 +146,7 @@ suites still assert on final text only).
 | `battle-testing-a-skill` | 3 | 24 | `claude-sonnet-5` | yes | [evals/battle-testing-a-skill/eval-status.md](../evals/battle-testing-a-skill/eval-status.md) |
 | `diagnosing-a-failure` | 3 | 7 | none | no | [evals/diagnosing-a-failure/eval-status.md](../evals/diagnosing-a-failure/eval-status.md) |
 | `drafting-a-pr-to-merge` | 3 | 27 | none | no | [evals/drafting-a-pr-to-merge/eval-status.md](../evals/drafting-a-pr-to-merge/eval-status.md) |
-| `drafting-a-skill` | 3 | 7 | none | no | [evals/drafting-a-skill/eval-status.md](../evals/drafting-a-skill/eval-status.md) |
+| `drafting-a-skill` | 3 | 8 | none | no | [evals/drafting-a-skill/eval-status.md](../evals/drafting-a-skill/eval-status.md) |
 | `drafting-an-adr` | 3 | 18 | none | no | [evals/drafting-an-adr/eval-status.md](../evals/drafting-an-adr/eval-status.md) |
 | `drafting-issues` | 3 | 18 | none | no | [evals/drafting-issues/eval-status.md](../evals/drafting-issues/eval-status.md) |
 | `eliciting-a-design` | 3 | 7 | none | no | [evals/eliciting-a-design/eval-status.md](../evals/eliciting-a-design/eval-status.md) |
@@ -167,7 +167,7 @@ suites still assert on final text only).
 | `scanning-attack-surfaces` | 3 | 15 | none | no | [evals/scanning-attack-surfaces/eval-status.md](../evals/scanning-attack-surfaces/eval-status.md) |
 | `scanning-ci-workflows` | 3 | 12 | none | no | [evals/scanning-ci-workflows/eval-status.md](../evals/scanning-ci-workflows/eval-status.md) |
 | `scanning-leaked-secrets` | 3 | 16 | none | no | [evals/scanning-leaked-secrets/eval-status.md](../evals/scanning-leaked-secrets/eval-status.md) |
-| `scorer-gated-skill-edits` | 3 | 23 | none | no | [evals/scorer-gated-skill-edits/eval-status.md](../evals/scorer-gated-skill-edits/eval-status.md) |
+| `scorer-gated-skill-edits` | 3 | 24 | none | no | [evals/scorer-gated-skill-edits/eval-status.md](../evals/scorer-gated-skill-edits/eval-status.md) |
 | `screening-a-low-trust-contribution` | 1 | 14 | none | no | [evals/screening-a-low-trust-contribution/eval-status.md](../evals/screening-a-low-trust-contribution/eval-status.md) |
 | `setup-gitapex-toolchain` | 3 | 4 | none | no | [evals/setup-gitapex-toolchain/eval-status.md](../evals/setup-gitapex-toolchain/eval-status.md) |
 | `stop-and-replan` | 3 | 3 | none | no | [evals/stop-and-replan/eval-status.md](../evals/stop-and-replan/eval-status.md) |

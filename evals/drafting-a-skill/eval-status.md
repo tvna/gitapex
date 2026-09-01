@@ -1,13 +1,25 @@
 # drafting-a-skill eval status
 
-A committed suite exists (`eval.yaml` plus seven fixtures under `tasks/`:
+A committed suite exists (`eval.yaml` plus eight fixtures under `tasks/`:
 `normal.yaml`, `edge.yaml`, `injected-self-certification-probe.yaml`,
 `no-inferred-metadata.yaml`, `no-direct-invocation.yaml`,
-`upstream-ambiguity-escalates.yaml`, `not-the-scorer-loop.yaml`) --
-sized to match `SKILL.md`'s own 7 Stop-boundary bullets, per
+`upstream-ambiguity-escalates.yaml`, `not-the-scorer-loop.yaml`,
+`mkdir-eexist-routes-away.yaml`) --
+sized to match `SKILL.md`'s own 8 Stop-boundary bullets, per
 `.github/scripts/gitapex_gate_skill_branch_fixture_coverage.py`'s
-decision-branch/fixture parity requirement (verified directly: 7
-branches counted, 7 fixtures present, gate exits 0).
+decision-branch/fixture parity requirement (verified directly: 8
+branches counted, 8 fixtures present, gate exits 0).
+
+Issue #1648 closed the decision log's disclosed axis-7 TOCTOU residual
+(a simultaneous blank-page start) with a Step 2 bare-mkdir-first rule
+and a matching new Stop-boundary bullet -- an `EEXIST` on that first
+write is the Precondition's target-already-exists branch: route to the
+reviewers, never draft over another writer's directory -- taking the
+bullet count from 7 to 8. `mkdir-eexist-routes-away.yaml` (new) covers
+that bullet. Like the two #1619-era additions below, it has been checked
+only by `gitapex_validate_eval_yaml.py` and
+`gitapex_lint_fixture_assertions.py`, not run through
+`gitapex_score_contract.py` against hand-crafted replies.
 
 Issue #1648 redivided the dispatch-context boundary between
 `drafting-a-skill` and `scorer-gated-skill-edits` (this skill now owns
