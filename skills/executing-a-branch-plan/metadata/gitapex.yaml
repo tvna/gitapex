@@ -10,6 +10,7 @@ spec:
   skillDependencies:
     requires:
       - planning-a-branch-from-an-issue
+      - outward-artifact-preflight
     relatedTo:
       - planning-a-branch-from-an-issue
       - drafting-a-pr-to-merge

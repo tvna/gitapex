@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/tvna/gitapex/blob/main/skills/scorer-gated-skill-edits/references/eval-run.schema.json",
+  "$id": "https://gitapex.io/schemas/scorer-gated-skill-edits/eval-run.schema.json",
   "title": "Skill eval run record",
   "description": "Shape of the run record SKILL.md's Procedure step 7 writes when a gate run completes: one record per run, written into the target repository's own eval-results location, never an edit to an earlier one. This file pins shape only. What a run must capture is stated by that Procedure step, and the split is deliberate -- a corpus of records can validate individually against a schema and still drift into disagreeing key spellings and unreferenced attachments when no procedure ever says what to record. Additional keys are permitted: a run may carry its own extra context (a run-shape note, a pointer to a superseded record) without needing this schema widened, and a repository migrating pre-existing records onto this contract is doing its own work, not being retro-graded by this file.",
   "type": "object",
