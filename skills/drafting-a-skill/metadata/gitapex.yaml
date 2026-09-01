@@ -206,6 +206,19 @@ spec:
       outcome:
         baseCommit: "5552931b26f0dafa5667a34b5b58b9bc87196d04"
     - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "the same re-scope also deleted state-management content from Step 2's own references-field paragraph -- a locus/precedence statement, a trust-boundary statement, and a store-fit rationale -- with no decision-log entry recording the removal. Restored, expanded with read-back-reconciliation and loss-handling rules the original text never had."
+      outcome:
+        baseCommit: "5552931b26f0dafa5667a34b5b58b9bc87196d04"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "the same re-scope left three stale cross-references behind: contract-structure.md and guidance-form-and-sdo.md both cited the deleted apparatus's own former Step numbering (the advisory-Step pair, and deleted Step 2 content) as if still current. Fixed all three to name the current Steps and a live example."
+      outcome:
+        baseCommit: "5552931b26f0dafa5667a34b5b58b9bc87196d04"
+    - kind: caveat
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "these two entries and the one above were backfilled once an independent evaluating-skill-quality re-review caught them -- the same class of lapse this file's own entries already disclosed once for the Step 2/3/9 apparatus, a second, undetected piece of collateral damage from the same re-scope commit. Disclosed here rather than left silent."
+    - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1619"
       summary: "skillDependencies.relatedTo's evaluating-context-channel-maturity entry -- the review-side mirror of the old Step 2 mechanism-fit judgment -- is removed in the same reconciliation, since that judgment no longer lives in this skill (it migrated to eliciting-a-design)."
       outcome:

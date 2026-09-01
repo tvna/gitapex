@@ -22,7 +22,7 @@ Applied while drafting:
 
 - Don't restate a Precondition bullet as an `if`-guard inside Step 1 -- the Precondition already owns that check. A Step that re-verifies its own Precondition is hedging against callers it should instead route away at the Precondition boundary.
 - Don't bury a real precondition inside a later Step's prose where a reader has to infer it actually applied before Step 1 too. If a condition must hold before the whole procedure starts, it belongs in the Precondition section, not smuggled into the middle of the Steps.
-- When two Steps could plausibly both check the same thing (for example, a metadata choice elicited at one Step and silently re-confirmed at another), pick exactly one owner and have the other Step consume that Step's own output instead of re-deriving it. This skill's own Step 5 and Step 7 apply this rule against a different kind of duplication -- see `references/mechanism-fit-and-cohesion.md` for why those two Steps are written as advisory self-checks rather than a second authoritative judgment of a question `evaluating-skill-quality` already owns exclusively.
+- When two Steps could plausibly both check the same thing (for example, a metadata choice elicited at one Step and silently re-confirmed at another), pick exactly one owner and have the other Step consume that Step's own output instead of re-deriving it. This skill's own Step 3 and Step 5 apply this rule against a different kind of duplication -- see `references/mechanism-fit-and-cohesion.md` for why those two Steps are written as advisory self-checks rather than a second authoritative judgment of a question `evaluating-skill-quality` already owns exclusively.
 
 ## A drafting checklist
 
