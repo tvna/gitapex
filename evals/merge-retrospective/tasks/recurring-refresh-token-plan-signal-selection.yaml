@@ -1,0 +1,55 @@
+id: merge-retrospective-recurring-refresh-token-plan-signal
+name: Recurring Same-Thesis Repairs Flagged as a Plan-Quality Signal (Auth Domain)
+description: Distinct domain from the train-split pagination fixture -- three review-comment repairs in one cycle all circle back to the same thesis (refresh-token validation should not reuse the access-token validation function), each still classified unclear agent instruction on its own line, with the recurrence itself also flagged as a plan-quality signal.
+tags:
+  - quality
+  - recurrence
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #455 ("fix: validate refresh tokens before
+    issuing new access tokens") just merged into main. Here is the full
+    history between open and merge -- three repairs occurred, all review
+    comments (no CI failures):
+
+    1. A human reviewer commented that the new refresh-token check reused
+       `validate_access_token()`'s own short expiry window, when a refresh
+       token is supposed to carry its own, much longer expiry. The author
+       pushed a follow-up commit adding a separate expiry check for refresh
+       tokens. There is no lint rule or CI check that enforces which
+       expiry window a token type uses; it was only caught because the
+       reviewer read the diff closely.
+    2. On the next review round, the same reviewer commented that the
+       refresh-token check still called `validate_access_token()`'s own
+       clock-skew leeway constant, which is tuned for short-lived access
+       tokens and much too tight for a long-lived refresh token. The
+       author pushed a follow-up commit adding a separate, wider leeway
+       constant for refresh tokens. Again, no lint rule or CI check could
+       have caught this -- it is a design reading, not a syntax error.
+    3. On a third review round, the reviewer commented that the whole
+       check was still routed through `validate_access_token()`, which
+       has no revocation-list lookup at all -- a refresh token needs one
+       and an access token does not, so reusing that function meant
+       revoked refresh tokens kept validating. The author pushed a
+       follow-up commit splitting refresh-token validation into its own
+       function with its own revocation check. No lint rule or CI check
+       exists for this either.
+
+    Run the retrospective now that PR #455 has merged.
+expected:
+  output_contains:
+    - "unclear agent instruction"
+    - "Recurrence note"
+    - "stop-and-replan"
+    - "Refs #455"
+  output_not_contains:
+    - "missing deterministic gate"
+    - "external/human decision"
+  # Same discrimination requirement as the train fixture: the recurrence
+  # note must name the actual shared thesis (reusing access-token
+  # validation for refresh tokens), not just contain the bare phrase
+  # detached from content.
+  output_contains_near:
+    - all: ["Recurrence note", "refresh token"]
+      window: 300
+    - all: ["Recurrence note", "access token"]
+      window: 300

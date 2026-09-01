@@ -1,0 +1,56 @@
+id: merge-retrospective-recurring-same-thesis-plan-signal
+name: Recurring Same-Thesis Repairs Flagged as a Plan-Quality Signal
+description: Three repairs in one cycle all circle back to the same underlying design thesis (cursor- vs offset-based pagination); each is still classified unclear agent instruction on its own line, but the recurrence itself is also flagged as a plan-quality signal per "Recurrence is a signal classification cannot carry", distinct from three isolated unclear-instruction repairs.
+tags:
+  - quality
+  - recurrence
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #301 ("feat: add cursor-based pagination to
+    the search results endpoint") just merged into main. Here is the full
+    history between open and merge -- three repairs occurred, all review
+    comments (no CI failures):
+
+    1. A human reviewer commented that the `next_page` token computation
+       was still adding a numeric `offset` to the query, not encoding the
+       last row's own cursor fields as the issue asked for. The author
+       pushed a follow-up commit removing the `offset` field from the
+       token. There is no lint rule or CI check that enforces cursor- vs
+       offset-based pagination; it was only caught because the reviewer
+       read the diff closely.
+    2. On the next review round, the same reviewer commented that the
+       token still carried a `page_number` field left over from the
+       original offset-based draft, so the pagination was still
+       effectively offset-based under a cursor-shaped wrapper. The author
+       pushed a follow-up commit removing `page_number` too. Again, no
+       lint rule or CI check could have caught this -- it is a design
+       reading, not a syntax error.
+    3. On a third review round, the reviewer commented that the
+       `has_next_page` check was still computed by comparing row counts
+       against a total, which only offset-based pagination needs -- a
+       true cursor design would just check whether another row exists
+       past the cursor. The author pushed a follow-up commit rewriting
+       `has_next_page` to a plain existence check. No lint rule or CI
+       check exists for this either.
+
+    Run the retrospective now that PR #301 has merged.
+expected:
+  output_contains:
+    - "unclear agent instruction"
+    - "Recurrence note"
+    - "stop-and-replan"
+    - "Refs #301"
+  output_not_contains:
+    - "missing deterministic gate"
+    - "external/human decision"
+  # The recurrence note must actually name the shared thesis (cursor- vs
+  # offset-based pagination design), not just contain the literal phrase
+  # "Recurrence note" detached from any real content -- a response that
+  # prints an empty or generic "Recurrence note: several repairs happened"
+  # without naming what recurred would otherwise still pass a bare
+  # substring check.
+  output_contains_near:
+    - all: ["Recurrence note", "cursor"]
+      window: 300
+    - all: ["Recurrence note", "offset"]
+      window: 300
