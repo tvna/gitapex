@@ -14,12 +14,12 @@ A Step is an instruction a capable-but-context-free reader will follow under tim
 
 ## Single Decisive Outcome (SDO)
 
-**A well-formed Step, and a well-formed skill, each produce exactly one decisive outcome.** This is the operational form of functional cohesion (Stevens/Myers/Constantine's strongest cohesion class -- see `references/mechanism-fit-and-cohesion.md` for how Step 5 uses the full seven-way taxonomy): rather than asking "is this cohesive?" in the abstract, ask "if I had to name the one thing this Step (or this whole draft) decides or produces, could I do it in one sentence, without an 'and'?"
+**A well-formed Step, and a well-formed skill, each produce exactly one decisive outcome.** This is the operational form of functional cohesion (Stevens/Myers/Constantine's strongest cohesion class -- see `references/mechanism-fit-and-cohesion.md` for how Step 3 uses the full seven-way taxonomy): rather than asking "is this cohesive?" in the abstract, ask "if I had to name the one thing this Step (or this whole draft) decides or produces, could I do it in one sentence, without an 'and'?"
 
 Apply the test at two levels:
 
 - **Per Step.** "Extract the issue's acceptance criteria" -- one outcome (a list of criteria). "Extract the issue's acceptance criteria and decide whether the branch needs rebasing" -- two outcomes fused into one Step; a reader who only needs the first has to read past the second to find it, and a failure in the second silently blocks the first.
-- **Per skill.** If a draft's own Steps decide two things that don't share a caller, a trigger, or a single Postcondition a reader could state in one sentence, that draft is probably two skills wearing one `SKILL.md`. This is exactly what Step 5 checks for, using the SDO test as its entry point before reaching for the full cohesion taxonomy.
+- **Per skill.** If a draft's own Steps decide two things that don't share a caller, a trigger, or a single Postcondition a reader could state in one sentence, that draft is probably two skills wearing one `SKILL.md`. This is exactly what Step 3 checks for, using the SDO test as its entry point before reaching for the full cohesion taxonomy.
 
 **A failed SDO test is a drafting signal, not a verdict.** Finding two outcomes in one Step means rewrite that Step (or split it into two numbered Steps); finding two outcomes across the whole draft means route back to Step 1 and draft two skills instead of one non-cohesive one. It is not, on its own, the authoritative cohesion finding `evaluating-skill-quality` produces at handoff -- see `references/mechanism-fit-and-cohesion.md`'s "Step 3 and Step 5 are advisory" section for why that distinction matters and how it's worded.
 

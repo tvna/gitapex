@@ -231,6 +231,11 @@ spec:
       summary: "axis 7's TOCTOU residual closed via two regime-specific mechanisms, superseding the open entries above (kept as historical record): shared filesystem view -- Step 2 makes a bare mkdir (no -p, no side-effect file write; shell gains mkdir) the first write, its atomic EEXIST failure routing away per the Precondition's target-already-exists branch; isolated worktrees -- blind to a disk check but never silent: git's own add/add conflict at merge-back, and the file-ownership edge within one run"
       outcome:
         baseCommit: "1b5626b6563a798e9b9479e841344d70bb67be4a"
+    - kind: caveat
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "an independent re-review found the entry above overclaims: the mkdir/git-conflict closure covers only the blank-page-creation writer class (two dispatches racing to create one new target), never named as scoped that narrowly. A second writer class -- two dispatches concurrently editing one existing target's sidecar -- is unaddressed. Step 2's own references-field paragraph now discloses this second class explicitly, not left silently uncovered by an unqualified 'closed' claim."
+      outcome:
+        baseCommit: "52213559dba876361a97683949e1cfa78dc218a9"
   skillDependencies:
     requires:
       - evaluating-skill-quality
