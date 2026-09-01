@@ -113,6 +113,27 @@ one-primitive constraint above means it cannot be eliminated without a
 platform-level conditional-write (e.g. an ETag/If-Match precondition),
 which is not assumed available here.
 
+**Concurrent-invocation guard, a distinct and coarser risk than the
+single-write race above.** That race is about one write landing
+mid-flight; this is about two entirely separate invocations of this
+skill running against the same Branch Plan's PR at once -- one already
+executing waves and appending events, another starting fresh or
+resuming into the same run. The `branch-plan-executing` label (applied
+at step 5, released only at step 8/9's own completion or escalation
+path) is already the ownership signal `drafting-a-pr-to-merge` checks
+before starting its own fix loop against a mid-execution draft; this
+skill checks it symmetrically against itself, as part of step 1 above
+(fetch), not as a separate call: the fetched label set must show
+`branch-plan-executing` present and applied by this same continuous
+run, never absent (this run never applied it and is about to write
+regardless) or present without this run having applied it (a second,
+independent invocation already owns it). Either mismatch is a stop and
+escalate (`StageDeviated{action: escalate}`), never a silent write.
+This narrows, not eliminates, the risk: a check-then-write window
+remains between confirming label ownership and completing the write
+-- the same class of gap the fetch-write race above already accepts as
+irreducible without a platform-level conditional-write.
+
 **The same discipline applies to the `branch-plan-executing` label**
 (granted/released below), not only the PR body: a label-write call (e.g.
 `github:issue_write` method `update`, `labels` field) replaces the PR's

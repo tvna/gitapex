@@ -308,9 +308,8 @@ plugin-agent schema, not a plausible-sounding claim.
    (see the implementation PR) named as untested; not left open.
 
    **What "empirically verified" and "hard deny" above do NOT cover,
-   stated explicitly rather than left for a reader to assume completeness
-   (found by a fourth battle-testing-a-skill trial, confirmed live; since
-   closed for the specific bypasses named below -- issue `#1326`, Stage 1):**
+   stated explicitly rather than left for a reader to assume completeness --
+   closed for the specific bypasses named below (issue `#1326`, Stage 1):**
    `check_task_bash_safety.sh` was originally a raw-text regex gate, and a
    regex gate cannot see through ordinary shell obfuscation that hides the
    verb itself -- `git${IFS}push origin HEAD`, `gi""t push origin HEAD`,
