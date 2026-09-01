@@ -145,7 +145,7 @@ suites still assert on final text only).
 | `auditing-agent-product-scope` | 3 | 9 | none | no | [evals/auditing-agent-product-scope/eval-status.md](../evals/auditing-agent-product-scope/eval-status.md) |
 | `battle-testing-a-skill` | 3 | 24 | `claude-sonnet-5` | yes | [evals/battle-testing-a-skill/eval-status.md](../evals/battle-testing-a-skill/eval-status.md) |
 | `diagnosing-a-failure` | 3 | 7 | none | no | [evals/diagnosing-a-failure/eval-status.md](../evals/diagnosing-a-failure/eval-status.md) |
-| `drafting-a-pr-to-merge` | 3 | 27 | none | no | [evals/drafting-a-pr-to-merge/eval-status.md](../evals/drafting-a-pr-to-merge/eval-status.md) |
+| `drafting-a-pr-to-merge` | 3 | 29 | none | no | [evals/drafting-a-pr-to-merge/eval-status.md](../evals/drafting-a-pr-to-merge/eval-status.md) |
 | `drafting-a-skill` | 3 | 7 | none | no | [evals/drafting-a-skill/eval-status.md](../evals/drafting-a-skill/eval-status.md) |
 | `drafting-an-adr` | 3 | 18 | none | no | [evals/drafting-an-adr/eval-status.md](../evals/drafting-an-adr/eval-status.md) |
 | `drafting-issues` | 3 | 18 | none | no | [evals/drafting-issues/eval-status.md](../evals/drafting-issues/eval-status.md) |
