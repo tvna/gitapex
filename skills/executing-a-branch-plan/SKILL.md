@@ -177,8 +177,8 @@ first, not skimmed.
    commits that actually exist on the remote -- a wave merged locally but
    never pushed would leave the draft PR showing only step 4's initial
    task-list commit regardless of how much task work actually completed
-   (found by a Codex review pass on this PR; step 4's own push is the
-   *first* push, not the *only* one). All of this is main-thread-only,
+   -- step 4's own push is the *first* push, not the *only* one. All of
+   this is main-thread-only,
    never delegated into a task `agent()`. The next wave's run dispatches
    only once this settles.
 
@@ -197,9 +197,9 @@ first, not skimmed.
    shared branch. A clean merge needs no further action. A conflicted one
    is resolved, then every already-completed task's own Red-Green
    regression check (step 8's own rule for a code-touching fix) is re-run
-   before continuing, and the resolution is disclosed via a PR comment --
-   this skill had no equivalent to `drafting-a-pr-to-merge` step 7's own
-   `"dirty"`-resolution comment rule until now; it does going forward. A
+   before continuing, and the resolution is disclosed via a PR comment,
+   matching `drafting-a-pr-to-merge` step 7's own `"dirty"`-resolution
+   comment rule. A
    conflict that cannot actually be resolved (a genuine semantic clash,
    not a mechanical one) dispatches through step 7's own failure rule
    below, the same as any other blocker this loop cannot resolve
@@ -476,25 +476,23 @@ as the GitHub connector calls and the Workflow tool this Notes section
 already discusses above, not a new kind of dependency this skill did not
 already have.
 
-Capability assumption: **Adaptive**. Was declared `Frontier` by review
-oversight, with no `model:`/`effort:` pin anywhere to justify targeting
-only a strong-reasoning tier -- corrected here, not merely relabeled: an
-explicit pin now sits on exactly the four steps whose own judgment a
-less capable model is most likely to miss or false-negative on, given
-the blast radius stated at the top of this file -- step 1's
-approval-comment judgment, the residual instruction-injection judgment
-in steps 2/6 (after `scripts/gitapex_check_canonical_governance_paths.py`
-mechanizes the literal/canonical sub-checks), step 3's
-interface-dependency-edge judgment (after
-`scripts/gitapex_check_file_ownership_conflicts.py` mechanizes the
-file-ownership edge, which needs no pin), and step 8's
-refactor/adversarial-review dispatch. The other five steps run at
-whatever model/effort the calling session already uses. `Adaptive` is a
-reasoned fit given this skill's own existing lean-body-plus-six-
-reference-file structure -- not a rubric-compelled choice (`Broad`, a
-different, unattempted target, would additionally require auditing every
-currently-unpinned step against the rubric's own weak-tier-sufficiency
-bar) -- since a weaker tier
-reading this body still finds the four pinned steps' own deeper
-judgment protocol one reference-file link away, on demand, rather than
-inlined into the body every tier pays for on every route.
+Capability assumption: **Frontier**. This is the highest-blast-radius
+skill this repository owns (stated at the top of this file): it turns
+issue-body-sourced text into committed code and an opened PR, so the
+body sits near this file's own 500-line ceiling by design -- the
+authorization gate, threat-model triage, event vocabulary,
+failure-dispatch table, and worked example are all spelled out
+explicitly rather than left for a reader to re-derive, because a wrong
+inference here converts directly into an autonomous commit/push/PR
+action. An explicit model/effort pin still sits on exactly the four
+steps whose own judgment carries the most blast radius even at a
+Frontier baseline -- step 1's approval-comment judgment, the residual
+instruction-injection judgment in steps 2/6 (after
+`scripts/gitapex_check_canonical_governance_paths.py` mechanizes the
+literal/canonical sub-checks), step 3's interface-dependency-edge
+judgment (after `scripts/gitapex_check_file_ownership_conflicts.py`
+mechanizes the file-ownership edge, which needs no pin), and step 8's
+refactor/adversarial-review dispatch: a stronger-reasoning model tier,
+at the invoking session's default effort or higher, never a
+weaker/economical tier or a lowered effort. The other five steps run at
+whatever model/effort the calling session already uses.

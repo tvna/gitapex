@@ -97,9 +97,8 @@ task merging several ACM rows (the file-contention case above) quotes
 each contributing row's own text into that one task's record, not a
 fused paraphrase combining them.
 
-**Residual risk, named explicitly rather than left implicit (found by an
-adversarial `battle-testing-a-skill` pass on this discipline's own
-addition).** Verbatim quotation is safe only because step 2's own
+**Residual risk, named explicitly rather than left implicit.** Verbatim
+quotation is safe only because step 2's own
 `untrusted-input-triage` pass already ran against the ACM's text before
 any row reaches this step -- see
 [threat-model-and-authorization.md's Per-task

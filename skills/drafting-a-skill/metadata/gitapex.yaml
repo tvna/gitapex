@@ -195,6 +195,24 @@ spec:
       summary: "redivided responsibility with scorer-gated-skill-edits along a how-to-rewrite-vs-evaluate-the-result axis: this skill now owns every SKILL.md rewrite, new or existing, dispatched by executing-a-branch-plan Step 6 (ordinary path, Step 7 runs unconditionally) or scorer-gated-skill-edits's Step 3 (one iteration, Step 7 deferred to its pre-ship step -- gated on dispatch identity, never a claim). Removed the routing-away-if-existing bullet; Postcondition/Output/Stop boundaries/Related skills updated"
       outcome:
         baseCommit: "2ff00c34c897074a619d390c208d66e9c52cf7d3"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1619"
+      summary: "pipeline-only re-scope: former Step 2 (mechanism-fit vehicle-selection gate) and Step 3 (four-axis elicitation) deleted, migrated to eliciting-a-design; former Step 9 (requester-acknowledgment gate) deleted as unreachable once direct invocation was removed; references/tacit-knowledge-elicitation.md removed with it. Surviving Steps renumbered into a copyable-checklist shape, per rubric.md Dimension 4."
+      outcome:
+        baseCommit: "5552931b26f0dafa5667a34b5b58b9bc87196d04"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1619"
+      summary: "supersedes every entry above describing the deleted apparatus's own evolution -- the Step 2 Part A/B split under issue https://github.com/tvna/gitapex/issues/1379; the Step 9 gate's correction rounds and tacit-knowledge-elicitation.md's own elision entries under issue https://github.com/tvna/gitapex/issues/1583. Those entries remain historical record, not retroactively edited."
+      outcome:
+        baseCommit: "5552931b26f0dafa5667a34b5b58b9bc87196d04"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1619"
+      summary: "skillDependencies.relatedTo's evaluating-context-channel-maturity entry -- the review-side mirror of the old Step 2 mechanism-fit judgment -- is removed in the same reconciliation, since that judgment no longer lives in this skill (it migrated to eliciting-a-design)."
+      outcome:
+        baseCommit: "5552931b26f0dafa5667a34b5b58b9bc87196d04"
+    - kind: caveat
+      anchor: "https://github.com/tvna/gitapex/issues/1619"
+      summary: "the three entries above were backfilled once an independent evaluating-skill-quality re-review (issue https://github.com/tvna/gitapex/issues/1648) caught their absence -- the re-scope commit (5552931b) landed with no decision-log entry, leaving this file narrating a Step 2/3/9 apparatus the current content no longer contains. A process lapse against this file's own Step 3 claim that entries are never silently backfilled, disclosed here rather than left silent."
   skillDependencies:
     requires:
       - evaluating-skill-quality
@@ -203,7 +221,6 @@ spec:
       - drafting-issues
       - eliciting-a-design
       - evaluating-deterministic-gate-quality
-      - evaluating-context-channel-maturity
       - untrusted-input-triage
       - drafting-an-adr
       - grounding-in-primary-sources
