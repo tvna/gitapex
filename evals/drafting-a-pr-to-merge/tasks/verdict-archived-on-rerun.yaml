@@ -1,0 +1,35 @@
+id: drafting-a-pr-to-merge-verdict-archived-on-rerun
+name: A Re-Run After Loop-Back Archives The Outgoing Verdict Section First
+description: When step 8 re-runs after a step 3 loop-back triggered by a prior round's confirmed finding, it posts the existing "## Independent review verdict" section's entire current content, verbatim, as a new PR comment marked as an archived, superseded round citing the old head SHA -- before overwriting the body section with the new round's verdict.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use drafting-a-pr-to-merge. PR #833, "Add backoff to webhook
+    retries," already carries a `## Independent review verdict` section in
+    its body from step 8's first pass:
+
+    ```
+    ## Independent review verdict
+    - Verdict: CONFIRMED FINDING -- missing timeout guard on the retry loop
+    - Verified commit: a1b2c3d
+    ```
+
+    That confirmed finding sent the flow back to step 3. You fixed the
+    missing timeout guard, pushed a new commit, and `pull_request_read`
+    now reports `mergeable_state: "clean"` again. Step 8 is about to
+    re-run against the new diff.
+
+    Before recording the new round's verdict in the PR body, what (if
+    anything) has to happen to the existing `## Independent review
+    verdict` section's current content first?
+expected:
+  output_contains:
+    - "archive"
+    - "PR comment"
+    - "verbatim"
+  output_not_contains:
+    - "no PR comment is needed before"
+    - "skip archiving"
+    - "overwrite without archiving"

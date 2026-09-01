@@ -229,18 +229,9 @@ truth for the procedure regardless of platform naming.
    indented code block, or a fenced code block whose delimiter run is
    longer than any such run inside the quoted text.
 
-   Record the validated, preflighted verdict from both layers (the outer
-   layer's own outcome, and `reviewing-an-artifact`'s own confirmed and
-   unconfirmed-concern findings alike -- or a citation to where each is
-   recorded) in the PR body (not only a comment — a required status check
-   reads the body) under a `## Independent review verdict` heading, with
-   `- Verdict: CLEAN` (or the current outcome) and `- Verified commit:
-   <current head SHA>` lines each kept on one raw-source line (a status
-   check's exact-match parser would not tolerate the literal whitespace a
-   mid-span line-wrap embeds) — the exact shape a required status check
-   (e.g. `independent-review-pending`) can parse, so a human or that
-   check can see it by inspection -- including which outer-layer
-   mechanism actually ran, or that neither did.
+   Before Step 8 (record) below overwrites an existing `## Independent review verdict` section, check whether that section is already present in the PR's current body -- a fresh `github:pull_request_read` method `get` call if the body is not already in hand this turn. Absent (this is Step 8's first run on this PR) -- there is nothing to archive; proceed straight to Step 8 (record) below, unchanged. Present (Step 8 is re-running after a Step 3 loop-back triggered by a prior round's confirmed finding) -- first post that section's entire current content, verbatim, as its own new PR comment via `github:add_issue_comment`: no summarization, no re-authoring, and no re-preflighting, since the content already cleared outward-artifact-preflight the first time it was recorded. Give that comment a heading marking it as an archived, superseded round and naming the commit SHA the archived round was verified against -- e.g. `## Independent review verdict (archived -- round ending at commit <old head SHA>)`, read off the outgoing section's own `Verified commit:` line -- so a later reader can tell at a glance which round the archive holds. The archive comment carries no re-derivation of that content, and the new body section Step 8 (record) writes after the overwrite carries no reference back to it either, no link and no mention: the body stays exactly the current round's own result, precisely as it already does today. Only once the archive comment has actually posted does Step 8 (record) proceed to overwrite the body section with the new round's verdict. This archive rule is scoped to this Step 8 loop-back alone -- Step 7's `"unstable"`/`"blocked"` and `"dirty"` branches also loop back to Step 3, but neither is in scope here; `"dirty"` already carries its own separate, unconditional PR-comment rule (documenting how a conflict was resolved, a different purpose than archiving a verdict), and this new rule leaves that rule untouched.
+
+   Record the validated, preflighted verdict from both layers (the outer layer's own outcome, and `reviewing-an-artifact`'s own confirmed and unconfirmed-concern findings alike -- or a citation to where each is recorded) in the PR body (not only a comment — a required status check reads the body) under a `## Independent review verdict` heading, with `- Verdict: CLEAN` (or the current outcome) and `- Verified commit: <current head SHA>` lines each kept on one raw-source line (a status check's exact-match parser would not tolerate the literal whitespace a mid-span line-wrap embeds) — the exact shape a required status check (e.g. `independent-review-pending`) can parse, so a human or that check can see it by inspection -- including which outer-layer mechanism actually ran, or that neither did.
    Any `unconfirmed-concern` finding `reviewing-an-artifact` reports is
    disclosed in this same recorded verdict, explicitly labeled speculative
    -- never silently folded into a CLEAN verdict and never treated as
@@ -447,6 +438,7 @@ acting, don't act on the index line alone.
 - Step 8 (record): run outward-artifact-preflight before posting any
   composed verdict -- quoting/fencing alone does not satisfy the
   ASCII-only and provenance-disclosure requirements.
+- Step 8 (record): never overwrite an existing `## Independent review verdict` section without first archiving its current content to a PR comment -- except on Step 8's very first run on a PR, when no such section yet exists to archive.
 - Step 11: never proceed past an access/secret/human-decision block
   without escalating.
 
