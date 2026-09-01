@@ -67,3 +67,29 @@ evals/scripts/gitapex_run_eval_suite.py --help` exits 0, `git log -1
 --format=%H -- evals/scripts/gitapex_run_eval_suite.py` resolves a real
 commit, and every edited YAML file still validates against this
 repository's own fixture/split schemas. Refs #1133, #1132, #1130.
+
+**Issue #1648 (dispatch-context boundary redivision with
+drafting-a-skill):** Step 3 was rewritten to name `drafting-a-skill` as
+the author of each iteration's bounded candidate patch (dispatched
+through that skill's own Step 6 only, its Step 7 deferred), and a new
+required Step 9 was added: dispatch `drafting-a-skill`'s own Step 7
+exactly once against the final accepted content before filing the PR,
+distinct from Step 8's own separate, recommended prose/disclosure pass.
+Both are real new enforced branches -- `gitapex_gate_split_fixture_coverage.py`'s
+delta-scoped Check E confirmed this directly on push (this fixture corpus
+had never declared `expected.exercises` before, so the check had never
+fired for this skill until now). Two fixtures were added:
+`step3-dispatches-drafting-a-skill.yaml` (the bounded patch must come from
+a `drafting-a-skill` dispatch, not be authored in place) and
+`step9-pre-ship-review-required.yaml` (the pre-ship review cannot be
+skipped by filing the PR on the gate result alone, nor satisfied by Step
+8's own optional pass). Declared coverage, not scored coverage, the same
+disclosed limit the #932 entry above carries: no before/after selection
+score exists for this edit, so the skill's own improve-or-reject gate was
+not applied to it. Verified live in this environment:
+`gitapex_gate_split_fixture_coverage.py` re-run directly against the real
+`origin/main` merge-base for all three `SKILL.md` files this issue's own
+Branch Plan touched (`drafting-a-skill`, `scorer-gated-skill-edits`,
+`executing-a-branch-plan`) -- PASS; both new fixtures validate against
+this repository's own fixture schema (`gitapex_validate_eval_yaml.py`,
+`gitapex_lint_fixture_assertions.py`, both clean). Refs #1648.

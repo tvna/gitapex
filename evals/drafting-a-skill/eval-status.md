@@ -88,7 +88,7 @@ execution path than an intentional trial) is covered below.
 Disclosed gaps, not silently assumed solved: this corpus does not yet
 cover Step 4's collision/dependency-reconciliation check, Step 5's
 domain-gap sweep, or Step 6's deterministic-checker invocation as their
-own dedicated assertion targets, nor the Precondition's second
+own dedicated assertion targets, nor the Precondition's one remaining
 route-away branch (target is already a finished draft -> route directly
 to `evaluating-skill-quality`/`battle-testing-a-skill` without
 re-entering at Step 1), nor the new Step 2 escalate-on-missing-axis
