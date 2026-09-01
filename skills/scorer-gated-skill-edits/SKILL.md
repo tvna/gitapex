@@ -114,21 +114,21 @@ evaluation. Name the gap; never fake a score to proceed.
    corpus.
 3. **Propose bounded edits.** The bounded candidate patch for this
    iteration is authored by dispatching `drafting-a-skill`, run through
-   its own Step 6 only (shape and drift checkers clean) -- `drafting-a-
-   skill`'s own Step 7 review handoff is explicitly deferred, per that
-   skill's own dispatch-context branch:
+   its own Step 6 only (shape and drift checkers clean) --
+   `drafting-a-skill`'s own Step 7 review handoff is explicitly
+   deferred, per that skill's own dispatch-context branch:
 
    > **`scorer-gated-skill-edits` dispatch (one bounded iteration within
    > its own Step 3): the handoff above does not run in this call.** The
    > draft, already clean through Step 6, returns directly to the
-   > caller; `scorer-gated-skill-edits` runs `evaluating-skill-
-   > quality`/`battle-testing-a-skill` exactly once against the final
-   > accepted content, at its own pre-ship step -- never repeated per
-   > iteration here.
+   > caller; `scorer-gated-skill-edits` runs
+   > `evaluating-skill-quality`/`battle-testing-a-skill` exactly once
+   > against the final accepted content, at its own pre-ship step --
+   > never repeated per iteration here.
 
    Cap the number of edits per iteration (the learning-rate analogue).
-   Prefer localized add / delete / replace patches
-   over a full rewrite, so one bad iteration cannot erase working rules.
+   Prefer localized add / delete / replace patches over a full rewrite,
+   so one bad iteration cannot erase working rules.
    Before scoring, classify the candidate as ordinary or pruning-only and,
    for pruning-only, predeclare the deterministic context-cost measure.
    Pruning-only is eligible only when the patch deletes text and adds or
