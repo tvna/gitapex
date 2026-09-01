@@ -184,7 +184,7 @@
     "attempt": {
       "type": "integer",
       "minimum": 1,
-      "description": "Optional ordinal distinguishing runs that share the same date and commit: a record is written per completed gate attempt, so two same-day attempts against one unedited commit are otherwise indistinguishable. A unique record filename (a sequence number or timestamp) satisfies the same rule; whichever means is used, no two distinct runs may collide under one identity."
+      "description": "Optional, human-readable ordinal for a reader distinguishing runs that share the same date and commit -- convenience labeling only, not itself what prevents a collision (a small integer is exactly what two independent, uncoordinated invocations could both compute). The actual collision-avoidance mechanism is the record's own filename, which must carry a high-entropy random component each invocation generates independently (see SKILL.md step 7); this field may echo that value or a separately assigned sequence number for readability."
     },
     "supersedes": {
       "type": "string",
